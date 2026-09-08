@@ -12,13 +12,11 @@ use super::{
     chunk_rendering::{spawn_chunk_mesh, TerrainMaterial},
     dimension::CurrentDimension,
     render_distance::chunk_coords_in_cylinder,
-    test_world::build_test_chunk,
+    test_world::{build_test_chunk, TERRAIN_MAX_CHUNK_Y, TERRAIN_MIN_CHUNK_Y},
 };
 
 const GRASS_BLOCK_ID: &str = "mineclone:grass";
 const INITIAL_HORIZONTAL_RADIUS_CHUNKS: i32 = 4;
-const INITIAL_MIN_CHUNK_Y: i32 = 0;
-const INITIAL_MAX_CHUNK_Y: i32 = 1;
 
 #[derive(Resource)]
 pub struct WorldLoadingState {
@@ -65,8 +63,8 @@ pub fn begin_world_loading(
     let coords = chunk_coords_in_cylinder(
         IVec3::ZERO,
         INITIAL_HORIZONTAL_RADIUS_CHUNKS,
-        INITIAL_MIN_CHUNK_Y,
-        INITIAL_MAX_CHUNK_Y,
+        TERRAIN_MIN_CHUNK_Y,
+        TERRAIN_MAX_CHUNK_Y,
     );
 
     commands.insert_resource(VoxelWorld::default());
