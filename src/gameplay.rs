@@ -55,7 +55,7 @@ fn setup_gameplay(
     commands.spawn((
         PointLight {
             intensity: 2_000_000.0,
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
         Transform::from_xyz(4.0, 4.0, 4.0),
