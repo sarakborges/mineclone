@@ -4,16 +4,28 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    content::{biome::BiomeRegistry, fluid::{FluidId, FluidRegistry}},
+    content::{
+        biome::BiomeRegistry,
+        fluid::{FluidId, FluidRegistry},
+    },
     voxel::{
-        chunk::{VoxelChunk, CHUNK_SIZE},
+        chunk::{CHUNK_SIZE, VoxelChunk},
         fluid_mesh::build_fluid_meshes,
-        mesh::{build_chunk_mesh, BlockFace},
+        mesh::{BlockFace, build_chunk_mesh},
         world::VoxelWorld,
     },
 };
 
 use super::biome_field::BiomeField;
+
+const CHUNK_NEIGHBORS: [IVec3; 6] = [
+    IVec3::X,
+    IVec3::NEG_X,
+    IVec3::Y,
+    IVec3::NEG_Y,
+    IVec3::Z,
+    IVec3::NEG_Z,
+];
 
 #[derive(Resource, Clone)]
 pub struct TerrainMaterials {
@@ -208,6 +220,78 @@ pub fn spawn_chunk_mesh(
     }
 
     render_pool.insert(coord, entities, mesh_handles);
+}
+
+pub fn refresh_adjacent_chunk_meshes(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    render_pool: &mut ChunkRenderPool,
+    world: &VoxelWorld,
+    coord: IVec3,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+    terrain_materials: &TerrainMaterials,
+    fluid_materials: &FluidMaterials,
+) {
+    for offset in CHUNK_NEIGHBORS {
+        let neighbor = coord + offset;
+
+        if !render_pool.contains(neighbor) {
+            continue;
+        }
+
+        refresh_chunk_mesh(
+            commands,
+            meshes,
+            render_pool,
+            world,
+            neighbor,
+            biomes,
+            biome_field,
+            terrain_materials,
+            fluid_materials,
+        );
+    }
+}
+
+fn refresh_chunk_mesh(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    render_pool: &mut ChunkRenderPool,
+    world: &VoxelWorld,
+    coord: IVec3,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+    terrain_materials: &TerrainMaterials,
+    fluid_materials: &FluidMaterials,
+) {
+    let Some(chunk) = world.chunk(coord) else {
+        return;
+    };
+
+    if let Some((entities, mesh_handles)) = render_pool.take(coord) {
+        for entity in entities {
+            commands.entity(entity).despawn();
+        }
+
+        for handle in mesh_handles {
+            let _ = meshes.remove(&handle);
+            render_pool.recycle_mesh_handle(handle);
+        }
+    }
+
+    spawn_chunk_mesh(
+        commands,
+        meshes,
+        render_pool,
+        world,
+        coord,
+        chunk,
+        biomes,
+        biome_field,
+        terrain_materials,
+        fluid_materials,
+    );
 }
 
 pub fn clear_chunk_render_pool(
