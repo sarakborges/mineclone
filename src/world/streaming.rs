@@ -10,12 +10,12 @@ use crate::{
 
 use super::{
     biome_field::BiomeField,
-    chunk_rendering::{spawn_chunk_mesh, RenderedChunk, TerrainMaterial},
+    chunk_rendering::{spawn_chunk_mesh, ChunkRenderPool, TerrainMaterial},
     render_distance::{chunk_coords_in_cylinder, RenderDistanceSettings},
     test_world::{build_test_chunk, TERRAIN_MAX_CHUNK_Y, TERRAIN_MIN_CHUNK_Y},
 };
 
-const CHUNKS_PER_FRAME: usize = 8;
+const CHUNKS_PER_FRAME: usize = 4;
 
 #[derive(Resource, Default)]
 pub struct ChunkStreamingState {
@@ -40,7 +40,7 @@ pub fn stream_chunks(
     render_distance: Res<RenderDistanceSettings>,
     mut world: ResMut<VoxelWorld>,
     mut streaming: ResMut<ChunkStreamingState>,
-    rendered_chunks: Query<&RenderedChunk>,
+    mut render_pool: ResMut<ChunkRenderPool>,
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = split_dimension_position(feet_position).chunk;
@@ -48,17 +48,17 @@ pub fn stream_chunks(
     let radius = render_distance.chunks();
 
     if streaming.center != Some(center) || streaming.render_distance != radius {
-        let rendered = rendered_chunks
-            .iter()
-            .map(|chunk| chunk.coord)
-            .collect::<HashSet<_>>();
-        rebuild_queue(&mut streaming, &rendered, center, radius);
+        rebuild_queue(&mut streaming, &render_pool, center, radius);
     }
 
     for _ in 0..CHUNKS_PER_FRAME {
         let Some(coord) = streaming.pending.pop_front() else {
             break;
         };
+
+        if render_pool.contains(coord) {
+            continue;
+        }
 
         if !world.has_generated_chunk(coord) {
             let chunk = build_test_chunk(coord, &blocks);
@@ -71,6 +71,7 @@ pub fn stream_chunks(
         spawn_chunk_mesh(
             &mut commands,
             &mut meshes,
+            &mut render_pool,
             &world,
             coord,
             chunk,
@@ -83,7 +84,7 @@ pub fn stream_chunks(
 
 fn rebuild_queue(
     streaming: &mut ChunkStreamingState,
-    rendered: &HashSet<IVec3>,
+    render_pool: &ChunkRenderPool,
     center: IVec2,
     radius: i32,
 ) {
@@ -99,7 +100,7 @@ fn rebuild_queue(
     let mut remaining = Vec::new();
 
     for coord in coords {
-        if rendered.contains(&coord) {
+        if render_pool.contains(coord) {
             continue;
         }
 
