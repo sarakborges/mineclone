@@ -1,7 +1,5 @@
 use bevy::{
-    asset::RenderAssetUsages,
     prelude::*,
-    render::view::screenshot::{Screenshot, ScreenshotCaptured},
     ui_widgets::{observe, Slider, SliderRange, SliderThumb, SliderValue, TrackClick, ValueChange},
 };
 
@@ -16,26 +14,39 @@ use crate::{
 
 const SLIDER_WIDTH: f32 = 360.0;
 const SLIDER_THUMB_SIZE: f32 = 16.0;
-const BACKDROP_DOWNSCALE: u32 = 4;
-const BACKDROP_BLUR_SIGMA: f32 = 4.5;
+const MENU_TRANSITION_SECONDS: f32 = 0.18;
+const MENU_START_SCALE: f32 = 0.965;
+const MENU_START_Y: f32 = 14.0;
 
 pub struct SettingsMenuPlugin;
 
 impl Plugin for SettingsMenuPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<SettingsState>()
-            .add_systems(OnEnter(SettingsState::Open), capture_settings_backdrop)
+            .add_systems(OnEnter(SettingsState::Open), spawn_settings_menu)
             .add_systems(
                 Update,
                 (
-                    handle_back_button,
-                    close_settings_with_escape,
+                    handle_close_requests,
+                    animate_settings_transition,
                     sync_render_distance_text,
                     sync_slider_thumb,
                 )
                     .run_if(in_state(SettingsState::Open)),
             );
     }
+}
+
+#[derive(Component)]
+struct SettingsMenuRoot;
+
+#[derive(Component)]
+struct SettingsMenuPanel;
+
+#[derive(Component)]
+struct SettingsMenuTransition {
+    progress: f32,
+    closing: bool,
 }
 
 #[derive(Component)]
@@ -50,52 +61,14 @@ struct RenderDistanceSliderThumb;
 #[derive(Component)]
 struct RenderDistanceValueText;
 
-fn capture_settings_backdrop(mut commands: Commands) {
-    commands
-        .spawn(Screenshot::primary_window())
-        .observe(build_settings_menu_from_capture);
-}
-
-fn build_settings_menu_from_capture(
-    capture: On<ScreenshotCaptured>,
-    mut commands: Commands,
-    mut images: ResMut<Assets<Image>>,
-    render_distance: Res<RenderDistanceSettings>,
-    settings_state: Res<State<SettingsState>>,
-) {
-    if *settings_state.get() != SettingsState::Open {
-        return;
-    }
-
-    let backdrop = capture
-        .image
-        .clone()
-        .try_into_dynamic()
-        .ok()
-        .map(|source| {
-            let width = (source.width() / BACKDROP_DOWNSCALE).max(1);
-            let height = (source.height() / BACKDROP_DOWNSCALE).max(1);
-            let softened = source
-                .resize_exact(width, height, ::image::imageops::FilterType::Triangle)
-                .blur(BACKDROP_BLUR_SIGMA);
-
-            images.add(Image::from_dynamic(
-                softened,
-                true,
-                RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
-            ))
-        });
-
-    spawn_settings_menu(&mut commands, backdrop, render_distance.chunks());
-}
-
-fn spawn_settings_menu(
-    commands: &mut Commands,
-    backdrop: Option<Handle<Image>>,
-    chunks: i32,
-) {
+fn spawn_settings_menu(mut commands: Commands, render_distance: Res<RenderDistanceSettings>) {
     commands
         .spawn((
+            SettingsMenuRoot,
+            SettingsMenuTransition {
+                progress: 0.0,
+                closing: false,
+            },
             DespawnOnExit(SettingsState::Open),
             Node {
                 width: percent(100),
@@ -107,44 +80,15 @@ fn spawn_settings_menu(
                 justify_content: JustifyContent::Center,
                 ..default()
             },
-            BackgroundColor(if backdrop.is_some() {
-                Color::NONE
-            } else {
-                theme::OVERLAY
-            }),
+            BackgroundColor(theme::OVERLAY),
         ))
         .with_children(|root| {
-            if let Some(backdrop) = backdrop {
-                root.spawn((
-                    ImageNode::new(backdrop),
-                    Node {
-                        position_type: PositionType::Absolute,
-                        left: px(0),
-                        right: px(0),
-                        top: px(0),
-                        bottom: px(0),
-                        width: percent(100),
-                        height: percent(100),
-                        ..default()
-                    },
-                    Pickable::IGNORE,
-                ));
-
-                root.spawn((
-                    Node {
-                        position_type: PositionType::Absolute,
-                        left: px(0),
-                        right: px(0),
-                        top: px(0),
-                        bottom: px(0),
-                        ..default()
-                    },
-                    BackgroundColor(theme::OVERLAY),
-                    Pickable::IGNORE,
-                ));
-            }
-
-            root.spawn(surface::modal_panel()).with_children(|panel| {
+            root.spawn((
+                surface::modal_panel(),
+                SettingsMenuPanel,
+                menu_panel_transform(0.0),
+            ))
+            .with_children(|panel| {
                 panel.spawn((
                     typography::title("SETTINGS"),
                     Node {
@@ -154,10 +98,10 @@ fn spawn_settings_menu(
                 ));
                 panel.spawn(typography::label("Render Distance"));
                 panel.spawn((
-                    typography::muted(render_distance_label(chunks)),
+                    typography::muted(render_distance_label(render_distance.chunks())),
                     RenderDistanceValueText,
                 ));
-                panel.spawn(render_distance_slider(chunks));
+                panel.spawn(render_distance_slider(render_distance.chunks()));
                 panel.spawn((
                     typography::caption("Applied when a world is loaded."),
                     Node {
@@ -239,23 +183,50 @@ fn render_distance_slider(chunks: i32) -> impl Bundle {
     )
 }
 
-fn handle_back_button(
+fn handle_close_requests(
+    keys: Res<ButtonInput<KeyCode>>,
     interactions: Query<&Interaction, (Changed<Interaction>, With<SettingsBackButton>)>,
-    mut next_settings_state: ResMut<NextState<SettingsState>>,
+    mut transitions: Query<&mut SettingsMenuTransition, With<SettingsMenuRoot>>,
 ) {
-    for interaction in &interactions {
-        if *interaction == Interaction::Pressed {
-            next_settings_state.set(SettingsState::Closed);
-        }
+    let back_pressed = interactions
+        .iter()
+        .any(|interaction| *interaction == Interaction::Pressed);
+
+    if !back_pressed && !keys.just_pressed(KeyCode::Escape) {
+        return;
+    }
+
+    for mut transition in &mut transitions {
+        transition.closing = true;
     }
 }
 
-fn close_settings_with_escape(
-    keys: Res<ButtonInput<KeyCode>>,
+fn animate_settings_transition(
+    time: Res<Time>,
+    mut roots: Query<(&mut SettingsMenuTransition, &Children), With<SettingsMenuRoot>>,
+    mut panels: Query<&mut UiTransform, With<SettingsMenuPanel>>,
     mut next_settings_state: ResMut<NextState<SettingsState>>,
 ) {
-    if keys.just_pressed(KeyCode::Escape) {
-        next_settings_state.set(SettingsState::Closed);
+    let step = time.delta_secs() / MENU_TRANSITION_SECONDS;
+
+    for (mut transition, children) in &mut roots {
+        if transition.closing {
+            transition.progress = (transition.progress - step).max(0.0);
+        } else {
+            transition.progress = (transition.progress + step).min(1.0);
+        }
+
+        let eased = ease_out_cubic(transition.progress);
+
+        for child in children.iter() {
+            if let Ok(mut transform) = panels.get_mut(child) {
+                *transform = menu_panel_transform(eased);
+            }
+        }
+
+        if transition.closing && transition.progress <= 0.0 {
+            next_settings_state.set(SettingsState::Closed);
+        }
     }
 }
 
@@ -283,6 +254,18 @@ fn sync_slider_thumb(
     for value in &sliders {
         thumb.left = percent(slider_position(value.0) * 100.0);
     }
+}
+
+fn menu_panel_transform(progress: f32) -> UiTransform {
+    UiTransform {
+        translation: Val2::px(0.0, MENU_START_Y * (1.0 - progress)),
+        scale: Vec2::splat(MENU_START_SCALE + (1.0 - MENU_START_SCALE) * progress),
+        ..default()
+    }
+}
+
+fn ease_out_cubic(value: f32) -> f32 {
+    1.0 - (1.0 - value).powi(3)
 }
 
 fn slider_position(value: f32) -> f32 {
