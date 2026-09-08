@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::game_state::GameState;
+
 const BACKGROUND_COLOR: Color = Color::srgb(0.055, 0.065, 0.08);
 const BUTTON_COLOR: Color = Color::srgb(0.12, 0.14, 0.18);
 const BUTTON_HOVER_COLOR: Color = Color::srgb(0.18, 0.21, 0.27);
@@ -10,8 +12,11 @@ pub struct StartingScreenPlugin;
 
 impl Plugin for StartingScreenPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_starting_screen)
-            .add_systems(Update, handle_menu_buttons);
+        app.add_systems(OnEnter(GameState::StartingScreen), setup_starting_screen)
+            .add_systems(
+                Update,
+                handle_menu_buttons.run_if(in_state(GameState::StartingScreen)),
+            );
     }
 }
 
@@ -23,9 +28,13 @@ enum StartingScreenAction {
 }
 
 fn setup_starting_screen(mut commands: Commands) {
-    commands.spawn(Camera2d);
+    commands.spawn((
+        Camera2d,
+        DespawnOnExit(GameState::StartingScreen),
+    ));
 
     commands.spawn((
+        DespawnOnExit(GameState::StartingScreen),
         Node {
             width: percent(100),
             height: percent(100),
@@ -86,6 +95,7 @@ fn handle_menu_buttons(
         (&Interaction, &StartingScreenAction, &mut BackgroundColor),
         Changed<Interaction>,
     >,
+    mut next_state: ResMut<NextState<GameState>>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
     for (interaction, action, mut background) in &mut interactions {
@@ -94,7 +104,10 @@ fn handle_menu_buttons(
                 *background = BUTTON_PRESSED_COLOR.into();
 
                 match action {
-                    StartingScreenAction::NewWorld | StartingScreenAction::LoadWorlds => {}
+                    StartingScreenAction::NewWorld => {
+                        next_state.set(GameState::Gameplay);
+                    }
+                    StartingScreenAction::LoadWorlds => {}
                     StartingScreenAction::ExitGame => {
                         app_exit.write(AppExit::Success);
                     }
