@@ -15,6 +15,7 @@ pub struct CelestialBodyDefinition {
     pub rise_azimuth_degrees: f32,
     pub set_azimuth_degrees: f32,
     pub max_altitude_degrees: f32,
+    pub light_fade_altitude_degrees: f32,
     pub tint: Rgb,
 }
 
