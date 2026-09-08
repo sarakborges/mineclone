@@ -1,6 +1,10 @@
+mod game_state;
+mod gameplay;
 mod starting_screen;
 
 use bevy::prelude::*;
+use game_state::GameState;
+use gameplay::GameplayPlugin;
 use starting_screen::StartingScreenPlugin;
 
 fn main() {
@@ -12,6 +16,8 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugins(StartingScreenPlugin)
+        .init_state::<GameState>()
+        .insert_resource(ClearColor(Color::srgb(0.02, 0.025, 0.04)))
+        .add_plugins((StartingScreenPlugin, GameplayPlugin))
         .run();
 }
