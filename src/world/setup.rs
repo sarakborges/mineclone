@@ -12,11 +12,12 @@ use super::{
     chunk_rendering::{spawn_chunk_mesh, ChunkRenderPool, TerrainMaterials},
     dimension::CurrentDimension,
     render_distance::chunk_coords_in_cylinder,
-    test_world::{build_test_chunk, TERRAIN_MAX_CHUNK_Y, TERRAIN_MIN_CHUNK_Y},
+    terrain::{build_chunk, chunk_y_bounds},
 };
 
 const GRASS_BLOCK_ID: &str = "mineclone:grass";
 const INITIAL_HORIZONTAL_RADIUS_CHUNKS: i32 = 4;
+const INITIAL_CHUNKS_PER_FRAME: usize = 4;
 
 #[derive(Resource)]
 pub struct WorldLoadingState {
@@ -70,11 +71,12 @@ pub fn begin_world_loading(
         front: create_material(&grass.textures.front),
         back: create_material(&grass.textures.back),
     };
+    let (min_chunk_y, max_chunk_y) = chunk_y_bounds(dimension, &biomes);
     let coords = chunk_coords_in_cylinder(
-        IVec3::ZERO,
+        IVec3::new(0, min_chunk_y, 0),
         INITIAL_HORIZONTAL_RADIUS_CHUNKS,
-        TERRAIN_MIN_CHUNK_Y,
-        TERRAIN_MAX_CHUNK_Y,
+        min_chunk_y,
+        max_chunk_y,
     );
 
     commands.insert_resource(VoxelWorld::default());
@@ -91,6 +93,8 @@ pub fn begin_world_loading(
 pub fn setup_world(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
+    current_dimension: Res<CurrentDimension>,
+    dimensions: Res<DimensionRegistry>,
     blocks: Res<BlockRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
@@ -109,34 +113,43 @@ pub fn setup_world(
         return;
     }
 
-    if loading_state.generated >= loading_state.coords.len() {
-        if !loading_state.transition_requested {
-            loading_state.transition_requested = true;
-            transition.request(ScreenTransitionTarget::game(GameState::Gameplay));
+    let dimension = dimensions
+        .get(&current_dimension.id)
+        .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
+
+    for _ in 0..INITIAL_CHUNKS_PER_FRAME {
+        if loading_state.generated >= loading_state.coords.len() {
+            break;
         }
-        return;
+
+        let coord = loading_state.coords[loading_state.generated];
+        let chunk = build_chunk(coord, &blocks, dimension, &biomes, &biome_field);
+        world.insert_chunk(coord, chunk);
+
+        let chunk = world
+            .chunk(coord)
+            .unwrap_or_else(|| panic!("generated chunk should exist at {coord:?}"));
+        spawn_chunk_mesh(
+            &mut commands,
+            &mut meshes,
+            &mut render_pool,
+            &world,
+            coord,
+            chunk,
+            &biomes,
+            &biome_field,
+            &materials,
+        );
+
+        loading_state.generated += 1;
     }
 
-    let coord = loading_state.coords[loading_state.generated];
-    let chunk = build_test_chunk(coord, &blocks);
-    world.insert_chunk(coord, chunk);
-
-    let chunk = world
-        .chunk(coord)
-        .unwrap_or_else(|| panic!("generated chunk should exist at {coord:?}"));
-    spawn_chunk_mesh(
-        &mut commands,
-        &mut meshes,
-        &mut render_pool,
-        &world,
-        coord,
-        chunk,
-        &biomes,
-        &biome_field,
-        &materials,
-    );
-
-    loading_state.generated += 1;
+    if loading_state.generated >= loading_state.coords.len()
+        && !loading_state.transition_requested
+    {
+        loading_state.transition_requested = true;
+        transition.request(ScreenTransitionTarget::game(GameState::Gameplay));
+    }
 }
 
 fn average_terrain_material(
