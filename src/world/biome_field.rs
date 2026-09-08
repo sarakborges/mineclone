@@ -16,10 +16,14 @@ pub struct BiomeField {
     site_spacing: Vec2,
 }
 
+pub struct BiomeInfluence<'a> {
+    pub id: &'a str,
+    pub weight: f32,
+}
+
 pub struct BiomeFieldSample<'a> {
     pub primary_id: &'a str,
-    pub secondary_id: &'a str,
-    pub secondary_weight: f32,
+    pub influences: Vec<BiomeInfluence<'a>>,
 }
 
 impl BiomeField {
@@ -62,8 +66,7 @@ impl BiomeField {
             let id = self.biome_ids[0].as_str();
             return BiomeFieldSample {
                 primary_id: id,
-                secondary_id: id,
-                secondary_weight: 0.0,
+                influences: vec![BiomeInfluence { id, weight: 1.0 }],
             };
         }
 
@@ -72,82 +75,80 @@ impl BiomeField {
             (warped.x / self.site_spacing.x).round() as i32,
             (warped.y / self.site_spacing.y).round() as i32,
         );
-
-        let mut nearest_distance_squared = f32::MAX;
-        let mut nearest_cell = center;
+        let mut sites = Vec::new();
+        let mut nearest_distance = f32::MAX;
         let mut primary_index = 0;
 
         for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
             for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
                 let cell = center + IVec2::new(x, z);
                 let site = site_position(cell, self.site_spacing);
-                let distance_squared = warped.distance_squared(site);
+                let distance = warped.distance(site);
+                let biome_index = biome_index(cell, self.biome_ids.len());
 
-                if distance_squared < nearest_distance_squared {
-                    nearest_distance_squared = distance_squared;
-                    nearest_cell = cell;
-                    primary_index = biome_index(cell, self.biome_ids.len());
+                if distance < nearest_distance {
+                    nearest_distance = distance;
+                    primary_index = biome_index;
                 }
+
+                sites.push((biome_index, distance));
             }
         }
 
-        let mut secondary_distance_squared = f32::MAX;
-        let mut secondary_index = primary_index;
+        let mut weights = vec![0.0_f32; self.biome_ids.len()];
 
-        for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
-            for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
-                let cell = nearest_cell + IVec2::new(x, z);
-                let candidate_index = biome_index(cell, self.biome_ids.len());
+        for (biome_index, distance) in sites {
+            let distance_gap = (distance - nearest_distance).max(0.0);
+            let border_progress =
+                1.0 - (distance_gap / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
+            let smooth_progress =
+                border_progress * border_progress * (3.0 - 2.0 * border_progress);
 
-                if candidate_index == primary_index {
-                    continue;
-                }
-
-                let site = site_position(cell, self.site_spacing);
-                let distance_squared = warped.distance_squared(site);
-
-                if distance_squared < secondary_distance_squared {
-                    secondary_distance_squared = distance_squared;
-                    secondary_index = candidate_index;
-                }
-            }
+            weights[biome_index] = weights[biome_index].max(smooth_progress);
         }
 
-        if secondary_index == primary_index || secondary_distance_squared == f32::MAX {
-            let id = self.biome_ids[primary_index].as_str();
-            return BiomeFieldSample {
-                primary_id: id,
-                secondary_id: id,
-                secondary_weight: 0.0,
-            };
-        }
+        let total_weight: f32 = weights.iter().sum();
+        let influences = weights
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, weight)| {
+                if weight <= 0.0 {
+                    return None;
+                }
 
-        let primary_distance = nearest_distance_squared.sqrt();
-        let secondary_distance = secondary_distance_squared.sqrt();
-        let distance_gap = (secondary_distance - primary_distance).max(0.0);
-        let border_progress = 1.0 - (distance_gap / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
-        let smooth_progress = border_progress * border_progress * (3.0 - 2.0 * border_progress);
+                Some(BiomeInfluence {
+                    id: self.biome_ids[index].as_str(),
+                    weight: weight / total_weight,
+                })
+            })
+            .collect();
 
         BiomeFieldSample {
             primary_id: self.biome_ids[primary_index].as_str(),
-            secondary_id: self.biome_ids[secondary_index].as_str(),
-            secondary_weight: smooth_progress * 0.5,
+            influences,
         }
     }
 
     pub fn grass_color(&self, position: Vec2, biomes: &BiomeRegistry) -> Rgb {
         let sample = self.sample(position);
-        let primary = biomes
-            .get(sample.primary_id)
-            .unwrap_or_else(|| panic!("missing biome definition: {}", sample.primary_id));
-        let secondary = biomes
-            .get(sample.secondary_id)
-            .unwrap_or_else(|| panic!("missing biome definition: {}", sample.secondary_id));
+        let mut color = Rgb {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+        };
 
-        primary
-            .visuals
-            .grass_color
-            .lerp(secondary.visuals.grass_color, sample.secondary_weight)
+        for influence in sample.influences {
+            let biome = biomes
+                .get(influence.id)
+                .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
+            let grass = biome.visuals.grass_color;
+
+            color.r += grass.r * influence.weight;
+            color.g += grass.g * influence.weight;
+            color.b += grass.b * influence.weight;
+        }
+
+        color
     }
 }
 
