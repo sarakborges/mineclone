@@ -15,6 +15,11 @@ use super::biome_field::BiomeField;
 #[derive(Resource, Clone)]
 pub struct TerrainMaterial(pub Handle<StandardMaterial>);
 
+#[derive(Component)]
+pub(crate) struct RenderedChunk {
+    pub coord: IVec3,
+}
+
 pub fn spawn_chunk_mesh(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
@@ -25,6 +30,11 @@ pub fn spawn_chunk_mesh(
     biome_field: &BiomeField,
     material: &Handle<StandardMaterial>,
 ) {
+    let mut entity = commands.spawn((
+        RenderedChunk { coord },
+        DespawnOnExit(GameState::Gameplay),
+    ));
+
     if chunk.is_empty() {
         return;
     }
@@ -36,10 +46,9 @@ pub fn spawn_chunk_mesh(
     }));
     let chunk_size = CHUNK_SIZE as f32;
 
-    commands.spawn((
+    entity.insert((
         Mesh3d(mesh),
         MeshMaterial3d(material.clone()),
         Transform::from_translation(coord.as_vec3() * chunk_size),
-        DespawnOnExit(GameState::Gameplay),
     ));
 }
