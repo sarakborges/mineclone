@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 use serde::Deserialize;
@@ -35,6 +35,7 @@ pub struct DayNightCycleDefinition {
     pub initial_time: f32,
     pub world_time_start_hour: f32,
     pub sun_angle_offset_degrees: f32,
+    pub sequence: [DayNightPhase; 4],
     pub phases: DayNightPhases<DayNightLightingPhase>,
 }
 
@@ -42,7 +43,7 @@ impl DayNightCycleDefinition {
     pub fn sample(&self, time: f32) -> DayNightSample {
         let elapsed_seconds = time.rem_euclid(1.0) * self.day_duration_seconds;
         let (phase, phase_elapsed_seconds) = self.phase_at_elapsed(elapsed_seconds);
-        let next_phase = DayNightPhases::<DayNightLightingPhase>::next(phase);
+        let next_phase = self.next_phase(phase);
         let current = self.phases.get(phase);
         let next = self.phases.get(next_phase);
         let transition = if current.duration_seconds <= f32::EPSILON {
@@ -79,20 +80,70 @@ impl DayNightCycleDefinition {
         (rounded_minutes / 60, rounded_minutes % 60)
     }
 
-    fn phase_at_elapsed(&self, elapsed_seconds: f32) -> (DayNightPhase, f32) {
-        let dawn_end = self.phases.dawn.duration_seconds;
-        let day_end = dawn_end + self.phases.day.duration_seconds;
-        let dusk_end = day_end + self.phases.dusk.duration_seconds;
+    pub fn progress_between_phases(
+        &self,
+        normalized_time: f32,
+        start_phase: DayNightPhase,
+        end_phase: DayNightPhase,
+    ) -> Option<f32> {
+        let start_seconds = self.phase_start_seconds(start_phase)?;
+        let mut end_seconds = self.phase_start_seconds(end_phase)?
+            + self.phases.get(end_phase).duration_seconds;
+        let mut current_seconds = normalized_time.rem_euclid(1.0) * self.day_duration_seconds;
 
-        if elapsed_seconds < dawn_end {
-            (DayNightPhase::Dawn, elapsed_seconds)
-        } else if elapsed_seconds < day_end {
-            (DayNightPhase::Day, elapsed_seconds - dawn_end)
-        } else if elapsed_seconds < dusk_end {
-            (DayNightPhase::Dusk, elapsed_seconds - day_end)
-        } else {
-            (DayNightPhase::Night, elapsed_seconds - dusk_end)
+        if end_seconds <= start_seconds {
+            end_seconds += self.day_duration_seconds;
         }
+        if current_seconds < start_seconds {
+            current_seconds += self.day_duration_seconds;
+        }
+        if current_seconds < start_seconds || current_seconds > end_seconds {
+            return None;
+        }
+
+        Some(((current_seconds - start_seconds) / (end_seconds - start_seconds)).clamp(0.0, 1.0))
+    }
+
+    fn phase_at_elapsed(&self, elapsed_seconds: f32) -> (DayNightPhase, f32) {
+        let mut cursor = 0.0;
+
+        for phase in self.sequence {
+            let duration = self.phases.get(phase).duration_seconds;
+            let end = cursor + duration;
+
+            if elapsed_seconds < end {
+                return (phase, elapsed_seconds - cursor);
+            }
+
+            cursor = end;
+        }
+
+        let phase = self.sequence[3];
+        (phase, self.phases.get(phase).duration_seconds)
+    }
+
+    fn next_phase(&self, phase: DayNightPhase) -> DayNightPhase {
+        let index = self
+            .sequence
+            .iter()
+            .position(|candidate| *candidate == phase)
+            .expect("validated day-night sequence must contain every phase");
+
+        self.sequence[(index + 1) % self.sequence.len()]
+    }
+
+    fn phase_start_seconds(&self, target: DayNightPhase) -> Option<f32> {
+        let mut cursor = 0.0;
+
+        for phase in self.sequence {
+            if phase == target {
+                return Some(cursor);
+            }
+
+            cursor += self.phases.get(phase).duration_seconds;
+        }
+
+        None
     }
 }
 
@@ -119,6 +170,13 @@ impl DayNightCycleRegistry {
             "day-night cycle {} phase durations ({phase_duration}) must equal day duration ({})",
             definition.id,
             definition.day_duration_seconds
+        );
+
+        let unique_phases = definition.sequence.iter().copied().collect::<HashSet<_>>();
+        assert!(
+            unique_phases.len() == 4,
+            "day-night cycle {} sequence must contain Dawn, Day, Dusk and Night exactly once",
+            definition.id
         );
 
         self.definitions.insert(definition.id.clone(), definition);
