@@ -1,6 +1,10 @@
 use bevy::prelude::*;
 
-use crate::{app::game_state::GameState, targeting::block::TargetedBlock};
+use crate::{
+    app::game_state::GameState,
+    content::block::BlockRegistry,
+    targeting::block::TargetedBlock,
+};
 
 pub struct TargetHudPlugin;
 
@@ -41,14 +45,19 @@ fn spawn_target_hud(mut commands: Commands) {
 
 fn update_target_hud(
     targeted: Res<TargetedBlock>,
+    blocks: Res<BlockRegistry>,
     mut target_text: Single<&mut Text, With<TargetBlockText>>,
 ) {
     target_text.0 = targeted.0.map_or_else(
         || "Block: -\nPosition: -".to_string(),
         |hit| {
+            let block_name = blocks
+                .get(hit.block_id)
+                .map_or(hit.block_id, |block| block.name.as_str());
+
             format!(
-                "Block: {}\nPosition: X {} | Z {} | Y {}",
-                hit.block_id, hit.voxel.x, hit.voxel.z, hit.voxel.y
+                "Block: {block_name}\nPosition: X {} | Z {} | Y {}",
+                hit.voxel.x, hit.voxel.z, hit.voxel.y
             )
         },
     );
