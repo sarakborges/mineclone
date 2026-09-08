@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::{
     app::game_state::GameState,
     content::{biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionRegistry},
+    ui::transition::{ScreenTransition, ScreenTransitionTarget},
     voxel::{chunk::CHUNK_SIZE, mesh::build_chunk_mesh},
 };
 
@@ -18,6 +19,7 @@ const GRASS_BLOCK_ID: &str = "mineclone:grass";
 #[derive(Resource, Default)]
 pub struct WorldLoadingState {
     rendered_frame: bool,
+    world_ready: bool,
 }
 
 pub fn begin_world_loading(mut commands: Commands) {
@@ -35,8 +37,12 @@ pub fn setup_world(
     blocks: Res<BlockRegistry>,
     render_distance: Res<RenderDistanceSettings>,
     mut loading_state: ResMut<WorldLoadingState>,
-    mut next_state: ResMut<NextState<GameState>>,
+    mut transition: ResMut<ScreenTransition>,
 ) {
+    if loading_state.world_ready {
+        return;
+    }
+
     if !loading_state.rendered_frame {
         loading_state.rendered_frame = true;
         return;
@@ -82,7 +88,8 @@ pub fn setup_world(
 
     commands.insert_resource(biome_field);
     commands.insert_resource(world);
-    next_state.set(GameState::Gameplay);
+    loading_state.world_ready = true;
+    transition.request(ScreenTransitionTarget::game(GameState::Gameplay));
 }
 
 fn average_terrain_material(
