@@ -1,5 +1,6 @@
 use std::{
     error::Error,
+    ffi::OsStr,
     fs,
     path::{Path, PathBuf},
 };
@@ -27,7 +28,7 @@ pub fn create_distribution(
 
     for entry in fs::read_dir(&source_assets)? {
         let entry = entry?;
-        if entry.file_name() == "data" {
+        if entry.file_name() == OsStr::new("data") {
             continue;
         }
 
