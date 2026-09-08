@@ -2,7 +2,7 @@
   "id": "mineclone:water",
   "name": "Water",
   "color": { "r": 0.08, "g": 0.38, "b": 0.78 },
-  "opacity": 0.58,
+  "opacity": 0.32,
   "roughness": 0.18,
   "metallic": 0.0
 }
