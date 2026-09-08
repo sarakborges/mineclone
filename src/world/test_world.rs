@@ -10,9 +10,15 @@ use crate::{
 };
 
 const GRASS_BLOCK_ID: &str = "mineclone:grass";
+pub const TERRAIN_MIN_CHUNK_Y: i32 = 0;
+pub const TERRAIN_MAX_CHUNK_Y: i32 = 0;
 
 pub fn build_test_chunk(coord: IVec3, blocks: &BlockRegistry) -> VoxelChunk {
     assert!(coord.y >= 0, "chunk Y cannot be negative: {}", coord.y);
+
+    if coord.y < TERRAIN_MIN_CHUNK_Y || coord.y > TERRAIN_MAX_CHUNK_Y {
+        return VoxelChunk::empty();
+    }
 
     let grass = blocks
         .get(GRASS_BLOCK_ID)
