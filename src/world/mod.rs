@@ -5,6 +5,7 @@ mod chunk_unloading;
 pub mod day_night;
 pub mod dimension;
 pub(crate) mod render_distance;
+mod save;
 mod seed;
 mod setup;
 mod streaming;
@@ -19,6 +20,7 @@ use chunk_unloading::unload_chunk_meshes;
 use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
 use render_distance::RenderDistanceSettings;
+pub(crate) use save::{InMemoryWorldSave, WorldLoadMode};
 pub(crate) use seed::WorldSeed;
 use setup::{begin_world_loading, setup_world};
 pub(crate) use setup::WorldLoadingState;
@@ -31,6 +33,8 @@ impl Plugin for WorldPlugin {
         app.init_resource::<CurrentDimension>()
             .init_resource::<CurrentBiome>()
             .init_resource::<WorldSeed>()
+            .init_resource::<WorldLoadMode>()
+            .init_resource::<InMemoryWorldSave>()
             .init_resource::<RenderDistanceSettings>()
             .init_resource::<ChunkStreamingState>()
             .init_resource::<ChunkRenderPool>()
