@@ -1,5 +1,6 @@
 pub mod cell;
 pub mod chunk;
+pub(crate) mod chunk_archive;
 pub mod collision;
 pub mod coordinates;
 pub mod mesh;
