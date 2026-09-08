@@ -10,7 +10,12 @@ use crate::{
         dimension::DimensionRegistry,
         sky::SkyRegistry,
     },
-    world::{day_night::DayNightClock, dimension::CurrentDimension},
+    voxel::chunk::CHUNK_SIZE,
+    world::{
+        day_night::DayNightClock,
+        dimension::CurrentDimension,
+        render_distance::RENDER_DISTANCE_RADIUS,
+    },
 };
 
 use super::{
@@ -18,8 +23,11 @@ use super::{
     environment::EnvironmentVisualState,
 };
 
-const SHADOW_MAP_SIZE: usize = 4096;
-const SHADOW_DISTANCE: f32 = 320.0;
+const SHADOW_MAP_SIZE: usize = 2048;
+const SHADOW_CASCADE_COUNT: usize = 4;
+const FIRST_CASCADE_DISTANCE: f32 = 48.0;
+const SHADOW_DISTANCE_MULTIPLIER: f32 = 2.25;
+const SHADOW_CASCADE_OVERLAP: f32 = 0.25;
 
 pub struct LightingPlugin;
 
@@ -40,6 +48,10 @@ impl Plugin for LightingPlugin {
 struct SunLight;
 
 fn spawn_sun(mut commands: Commands) {
+    let shadow_distance = RENDER_DISTANCE_RADIUS as f32
+        * CHUNK_SIZE as f32
+        * SHADOW_DISTANCE_MULTIPLIER;
+
     commands.spawn((
         DirectionalLight {
             shadow_maps_enabled: true,
@@ -47,8 +59,10 @@ fn spawn_sun(mut commands: Commands) {
             ..default()
         },
         CascadeShadowConfigBuilder {
-            num_cascades: 1,
-            maximum_distance: SHADOW_DISTANCE,
+            num_cascades: SHADOW_CASCADE_COUNT,
+            maximum_distance: shadow_distance,
+            first_cascade_far_bound: FIRST_CASCADE_DISTANCE,
+            overlap_proportion: SHADOW_CASCADE_OVERLAP,
             ..default()
         }
         .build(),
