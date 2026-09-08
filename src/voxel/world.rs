@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use super::chunk::{VoxelChunk, CHUNK_SIZE};
+use super::{
+    cell::VoxelCell,
+    chunk::{VoxelChunk, CHUNK_SIZE},
+};
 
 #[derive(Resource, Default)]
 pub struct VoxelWorld {
@@ -18,24 +21,22 @@ impl VoxelWorld {
         self.chunks.iter()
     }
 
-    pub fn is_solid(&self, world_position: IVec3) -> bool {
-        let Some((chunk_coord, local_position)) = split_world_position(world_position) else {
-            return false;
-        };
-
-        self.chunks
-            .get(&chunk_coord)
-            .is_some_and(|chunk| chunk.is_solid(local_position.x, local_position.y, local_position.z))
-    }
-
-    pub fn block_id_at(&self, world_position: IVec3) -> Option<&'static str> {
+    pub fn cell_at(&self, world_position: IVec3) -> Option<VoxelCell> {
         let (chunk_coord, local_position) = split_world_position(world_position)?;
 
-        self.chunks.get(&chunk_coord)?.block_id_at(
+        self.chunks.get(&chunk_coord)?.cell_at(
             local_position.x,
             local_position.y,
             local_position.z,
         )
+    }
+
+    pub fn is_solid(&self, world_position: IVec3) -> bool {
+        self.cell_at(world_position).is_some()
+    }
+
+    pub fn block_id_at(&self, world_position: IVec3) -> Option<&'static str> {
+        self.cell_at(world_position).map(|cell| cell.block_id)
     }
 }
 

@@ -7,6 +7,7 @@ use bevy::{
 
 use super::{
     chunk::{VoxelChunk, CHUNK_SIZE},
+    texture_rotation::TextureRotation,
     world::VoxelWorld,
 };
 
@@ -16,6 +17,7 @@ const EAST_SHADE: f32 = 0.94;
 const WEST_SHADE: f32 = 0.88;
 const SOUTH_SHADE: f32 = 0.92;
 const NORTH_SHADE: f32 = 0.86;
+const FACE_UVS: [[f32; 2]; 4] = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
 
 pub fn build_chunk_mesh<F>(
     world: &VoxelWorld,
@@ -28,6 +30,7 @@ where
 {
     let mut positions = Vec::<[f32; 3]>::new();
     let mut normals = Vec::<[f32; 3]>::new();
+    let mut uvs = Vec::<[f32; 2]>::new();
     let mut colors = Vec::<[f32; 4]>::new();
     let mut indices = Vec::<u32>::new();
     let chunk_size = CHUNK_SIZE as i32;
@@ -36,9 +39,9 @@ where
     for y in 0..CHUNK_SIZE {
         for z in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
-                if !chunk.is_solid(x as i32, y as i32, z as i32) {
+                let Some(cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
                     continue;
-                }
+                };
 
                 let local = IVec3::new(x as i32, y as i32, z as i32);
                 let world_voxel = chunk_origin + local;
@@ -54,10 +57,12 @@ where
                     push_face(
                         &mut positions,
                         &mut normals,
+                        &mut uvs,
                         &mut colors,
                         &mut indices,
                         [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]],
                         [1.0, 0.0, 0.0],
+                        cell.texture_rotation,
                         tint,
                         EAST_SHADE,
                     );
@@ -67,10 +72,12 @@ where
                     push_face(
                         &mut positions,
                         &mut normals,
+                        &mut uvs,
                         &mut colors,
                         &mut indices,
                         [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]],
                         [-1.0, 0.0, 0.0],
+                        cell.texture_rotation,
                         tint,
                         WEST_SHADE,
                     );
@@ -80,10 +87,12 @@ where
                     push_face(
                         &mut positions,
                         &mut normals,
+                        &mut uvs,
                         &mut colors,
                         &mut indices,
                         [[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]],
                         [0.0, 1.0, 0.0],
+                        cell.texture_rotation,
                         tint,
                         TOP_SHADE,
                     );
@@ -93,10 +102,12 @@ where
                     push_face(
                         &mut positions,
                         &mut normals,
+                        &mut uvs,
                         &mut colors,
                         &mut indices,
                         [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]],
                         [0.0, -1.0, 0.0],
+                        cell.texture_rotation,
                         tint,
                         BOTTOM_SHADE,
                     );
@@ -106,10 +117,12 @@ where
                     push_face(
                         &mut positions,
                         &mut normals,
+                        &mut uvs,
                         &mut colors,
                         &mut indices,
                         [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]],
                         [0.0, 0.0, 1.0],
+                        cell.texture_rotation,
                         tint,
                         SOUTH_SHADE,
                     );
@@ -119,10 +132,12 @@ where
                     push_face(
                         &mut positions,
                         &mut normals,
+                        &mut uvs,
                         &mut colors,
                         &mut indices,
                         [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]],
                         [0.0, 0.0, -1.0],
+                        cell.texture_rotation,
                         tint,
                         NORTH_SHADE,
                     );
@@ -137,6 +152,7 @@ where
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
     .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
     .with_inserted_indices(Indices::U32(indices))
 }
@@ -144,16 +160,19 @@ where
 fn push_face(
     positions: &mut Vec<[f32; 3]>,
     normals: &mut Vec<[f32; 3]>,
+    uvs: &mut Vec<[f32; 2]>,
     colors: &mut Vec<[f32; 4]>,
     indices: &mut Vec<u32>,
     vertices: [[f32; 3]; 4],
     normal: [f32; 3],
+    texture_rotation: TextureRotation,
     tint: [f32; 3],
     shade: f32,
 ) {
     let start = positions.len() as u32;
     positions.extend(vertices);
     normals.extend([normal; 4]);
+    uvs.extend(texture_rotation.rotate_uvs(FACE_UVS));
     colors.extend([[tint[0] * shade, tint[1] * shade, tint[2] * shade, 1.0]; 4]);
     indices.extend([start, start + 1, start + 2, start, start + 2, start + 3]);
 }

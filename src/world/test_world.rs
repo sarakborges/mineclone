@@ -1,23 +1,33 @@
 use bevy::prelude::*;
 
-use crate::voxel::{
-    chunk::{VoxelChunk, CHUNK_SIZE},
-    world::VoxelWorld,
+use crate::{
+    content::block::BlockRegistry,
+    voxel::{
+        cell::VoxelCell,
+        chunk::{VoxelChunk, CHUNK_SIZE},
+        texture_rotation::TextureRotation,
+        world::VoxelWorld,
+    },
 };
 
 use super::render_distance::chunk_coords_in_radius;
 
-pub fn build_test_world(center: IVec2, radius: i32) -> VoxelWorld {
+const GRASS_BLOCK_ID: &str = "mineclone:grass";
+
+pub fn build_test_world(center: IVec2, radius: i32, blocks: &BlockRegistry) -> VoxelWorld {
+    let grass = blocks
+        .get(GRASS_BLOCK_ID)
+        .unwrap_or_else(|| panic!("missing block definition: {GRASS_BLOCK_ID}"));
     let mut world = VoxelWorld::default();
 
     for coord in chunk_coords_in_radius(center, radius) {
-        world.insert_chunk(coord, varied_terrain_chunk(coord));
+        world.insert_chunk(coord, varied_terrain_chunk(coord, grass.rotate_texture));
     }
 
     world
 }
 
-fn varied_terrain_chunk(coord: IVec2) -> VoxelChunk {
+fn varied_terrain_chunk(coord: IVec2, rotate_texture: bool) -> VoxelChunk {
     let mut chunk = VoxelChunk::empty();
     let chunk_size = CHUNK_SIZE as i32;
 
@@ -28,12 +38,33 @@ fn varied_terrain_chunk(coord: IVec2) -> VoxelChunk {
             let height = terrain_height(world_x, world_z);
 
             for y in 0..height {
-                chunk.set_solid(local_x, y, local_z, true);
+                let world_position = IVec3::new(world_x, y as i32, world_z);
+                let rotation = texture_rotation_for(world_position, rotate_texture);
+                chunk.set_block(
+                    local_x,
+                    y,
+                    local_z,
+                    Some(VoxelCell::new(GRASS_BLOCK_ID, rotation)),
+                );
             }
         }
     }
 
     chunk
+}
+
+fn texture_rotation_for(position: IVec3, enabled: bool) -> TextureRotation {
+    if !enabled {
+        return TextureRotation::default();
+    }
+
+    let mut hash = position.x as u32;
+    hash ^= (position.y as u32).wrapping_mul(0x9e37_79b9);
+    hash = hash.rotate_left(13);
+    hash ^= (position.z as u32).wrapping_mul(0x85eb_ca6b);
+    hash ^= hash >> 16;
+
+    TextureRotation::from_quarter_turn((hash & 3) as u8)
 }
 
 fn terrain_height(world_x: i32, world_z: i32) -> usize {

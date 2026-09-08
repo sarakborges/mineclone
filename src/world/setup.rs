@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    content::{biome::BiomeRegistry, dimension::DimensionRegistry},
+    content::{biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionRegistry},
     voxel::{chunk::CHUNK_SIZE, mesh::build_chunk_mesh},
 };
 
@@ -20,13 +20,14 @@ pub fn setup_world(
     current_dimension: Res<CurrentDimension>,
     dimensions: Res<DimensionRegistry>,
     biomes: Res<BiomeRegistry>,
+    blocks: Res<BlockRegistry>,
 ) {
     let dimension = dimensions
         .get(&current_dimension.id)
         .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
     let biome_field = BiomeField::from_dimension(dimension, &biomes);
     let center = IVec2::ZERO;
-    let world = build_test_world(center, RENDER_DISTANCE_RADIUS);
+    let world = build_test_world(center, RENDER_DISTANCE_RADIUS, &blocks);
     let (roughness, metallic) = average_terrain_material(dimension, &biomes);
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
