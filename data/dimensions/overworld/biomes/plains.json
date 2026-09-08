@@ -6,6 +6,14 @@
     "z": { "min": 100.0, "max": 500.0 },
     "y": null
   },
+  "terrain": {
+    "type": "rolling",
+    "base_height": 4.0,
+    "amplitude": 3.0,
+    "scale": 0.012,
+    "detail_amplitude": 1.0,
+    "detail_scale": 0.045
+  },
   "visuals": {
     "sky_color": {
       "dawn": { "r": 0.50, "g": 0.69, "b": 0.94 },
