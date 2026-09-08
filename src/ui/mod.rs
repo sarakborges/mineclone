@@ -1,4 +1,5 @@
 pub mod button;
+pub mod cosmic_background;
 pub mod surface;
 pub mod theme;
 pub mod transition;
@@ -16,6 +17,7 @@ impl Plugin for UiDesignSystemPlugin {
                 Update,
                 (
                     button::animate_buttons,
+                    cosmic_background::animate_stars,
                     transition::animate_screen_transition,
                 ),
             );
