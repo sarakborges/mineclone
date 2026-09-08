@@ -14,6 +14,7 @@ use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
 use render_distance::RenderDistanceSettings;
 use setup::{begin_world_loading, setup_world};
+pub(crate) use setup::WorldLoadingState;
 
 pub struct WorldPlugin;
 
