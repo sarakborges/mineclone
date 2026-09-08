@@ -4,11 +4,12 @@ use crate::{
     app::game_state::GameState,
     content::{biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionRegistry},
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
-    voxel::{chunk::CHUNK_SIZE, mesh::build_chunk_mesh, world::VoxelWorld},
+    voxel::world::VoxelWorld,
 };
 
 use super::{
     biome_field::BiomeField,
+    chunk_rendering::{spawn_chunk_mesh, TerrainMaterial},
     dimension::CurrentDimension,
     render_distance::chunk_coords_in_cylinder,
     test_world::build_test_chunk,
@@ -25,7 +26,6 @@ pub struct WorldLoadingState {
     generated: usize,
     screen_rendered: bool,
     transition_requested: bool,
-    material: Handle<StandardMaterial>,
 }
 
 impl WorldLoadingState {
@@ -71,12 +71,12 @@ pub fn begin_world_loading(
 
     commands.insert_resource(VoxelWorld::default());
     commands.insert_resource(biome_field);
+    commands.insert_resource(TerrainMaterial(material));
     commands.insert_resource(WorldLoadingState {
         coords,
         generated: 0,
         screen_rendered: false,
         transition_requested: false,
-        material,
     });
 }
 
@@ -86,6 +86,7 @@ pub fn setup_world(
     blocks: Res<BlockRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
+    material: Res<TerrainMaterial>,
     mut world: ResMut<VoxelWorld>,
     mut loading_state: ResMut<WorldLoadingState>,
     mut transition: ResMut<ScreenTransition>,
@@ -114,23 +115,16 @@ pub fn setup_world(
     let chunk = world
         .chunk(coord)
         .unwrap_or_else(|| panic!("generated chunk should exist at {coord:?}"));
-    let mesh = meshes.add(build_chunk_mesh(&world, coord, chunk, |voxel| {
-        let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-        let grass = biome_field.grass_color(position, &biomes);
-        [grass.r, grass.g, grass.b]
-    }));
-    let chunk_size = CHUNK_SIZE as f32;
-
-    commands.spawn((
-        Mesh3d(mesh),
-        MeshMaterial3d(loading_state.material.clone()),
-        Transform::from_xyz(
-            coord.x as f32 * chunk_size,
-            coord.y as f32 * chunk_size,
-            coord.z as f32 * chunk_size,
-        ),
-        DespawnOnExit(GameState::Gameplay),
-    ));
+    spawn_chunk_mesh(
+        &mut commands,
+        &mut meshes,
+        &world,
+        coord,
+        chunk,
+        &biomes,
+        &biome_field,
+        &material.0,
+    );
 
     loading_state.generated += 1;
 }
