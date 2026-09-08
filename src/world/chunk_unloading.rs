@@ -31,7 +31,7 @@ pub fn unload_chunk_meshes(
         }
 
         if let Some(mesh) = mesh {
-            meshes.remove(mesh.id());
+            let _ = meshes.remove(mesh.id());
         }
 
         commands.entity(entity).despawn();
