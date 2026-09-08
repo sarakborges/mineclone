@@ -6,6 +6,7 @@ use super::{
     collision::{move_axis, player_collides, Axis},
     config::{GRAVITY, GROUND_PROBE, JUMP_SPEED},
     flight::FlightState,
+    swimming::SwimmingState,
 };
 
 #[derive(Component)]
@@ -29,9 +30,10 @@ pub(super) fn apply_gravity(
     world: Res<VoxelWorld>,
     mut transform: Single<&mut Transform, With<GameplayCamera>>,
     flight: Single<&FlightState>,
+    swimming: Single<&SwimmingState>,
     mut gravity: Single<&mut GravityState>,
 ) {
-    if flight.active {
+    if flight.active || swimming.active {
         return;
     }
 
