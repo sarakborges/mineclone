@@ -1,6 +1,10 @@
 use bevy::{prelude::*, time::Virtual};
 
-use crate::app::{game_state::GameState, pause_state::PauseState};
+use crate::app::{
+    game_state::GameState,
+    pause_state::PauseState,
+    settings_state::SettingsState,
+};
 
 pub struct PausePlugin;
 
@@ -8,7 +12,9 @@ impl Plugin for PausePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            toggle_pause.run_if(in_state(GameState::Gameplay)),
+            toggle_pause
+                .run_if(in_state(GameState::Gameplay))
+                .run_if(in_state(SettingsState::Closed)),
         )
         .add_systems(OnEnter(PauseState::Paused), pause_time)
         .add_systems(OnEnter(PauseState::Running), resume_time);
