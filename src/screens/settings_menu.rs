@@ -203,26 +203,23 @@ fn handle_close_requests(
 
 fn animate_settings_transition(
     time: Res<Time>,
-    mut roots: Query<(&mut SettingsMenuTransition, &Children), With<SettingsMenuRoot>>,
+    mut transitions: Query<&mut SettingsMenuTransition, With<SettingsMenuRoot>>,
     mut panels: Query<&mut UiTransform, With<SettingsMenuPanel>>,
     mut next_settings_state: ResMut<NextState<SettingsState>>,
 ) {
     let step = time.delta_secs() / MENU_TRANSITION_SECONDS;
+    let Ok(mut panel_transform) = panels.single_mut() else {
+        return;
+    };
 
-    for (mut transition, children) in &mut roots {
+    for mut transition in &mut transitions {
         if transition.closing {
             transition.progress = (transition.progress - step).max(0.0);
         } else {
             transition.progress = (transition.progress + step).min(1.0);
         }
 
-        let eased = ease_out_cubic(transition.progress);
-
-        for child in children.iter() {
-            if let Ok(mut transform) = panels.get_mut(child) {
-                *transform = menu_panel_transform(eased);
-            }
-        }
+        *panel_transform = menu_panel_transform(ease_out_cubic(transition.progress));
 
         if transition.closing && transition.progress <= 0.0 {
             next_settings_state.set(SettingsState::Closed);
