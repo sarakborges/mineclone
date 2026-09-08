@@ -7,8 +7,10 @@ use crate::{
 };
 
 const WALK_SPEED: f32 = 5.0;
+const FLY_SPEED_MULTIPLIER: f32 = 5.0;
 const GRAVITY: f32 = -18.0;
 const JUMP_SPEED: f32 = 7.0;
+const FLIGHT_TOGGLE_WINDOW_SECONDS: f32 = 0.30;
 const GROUND_PROBE: f32 = 0.05;
 const COLLISION_STEP: f32 = 0.05;
 
@@ -24,6 +26,8 @@ impl Plugin for PlayerMovementPlugin {
 pub struct PlayerMovement {
     vertical_velocity: f32,
     grounded: bool,
+    flying: bool,
+    flight_toggle_window: f32,
 }
 
 impl Default for PlayerMovement {
@@ -31,6 +35,8 @@ impl Default for PlayerMovement {
         Self {
             vertical_velocity: 0.0,
             grounded: true,
+            flying: false,
+            flight_toggle_window: 0.0,
         }
     }
 }
@@ -41,49 +47,118 @@ fn move_player(
     world: Res<VoxelWorld>,
     mut player: Single<(&mut Transform, &GameplayCamera, &mut PlayerMovement)>,
 ) {
-    let mut movement = Vec3::ZERO;
+    let delta_seconds = time.delta_secs();
+    player.2.flight_toggle_window =
+        (player.2.flight_toggle_window - delta_seconds).max(0.0);
+
+    handle_flight_toggle(&keys, &mut player.2);
+
     let yaw_rotation = Quat::from_rotation_y(player.1.yaw);
     let forward = yaw_rotation * Vec3::NEG_Z;
     let right = yaw_rotation * Vec3::X;
+    let mut horizontal_movement = Vec3::ZERO;
 
     if keys.pressed(KeyCode::KeyW) {
-        movement += forward;
+        horizontal_movement += forward;
     }
     if keys.pressed(KeyCode::KeyS) {
-        movement -= forward;
+        horizontal_movement -= forward;
     }
     if keys.pressed(KeyCode::KeyD) {
-        movement += right;
+        horizontal_movement += right;
     }
     if keys.pressed(KeyCode::KeyA) {
-        movement -= right;
+        horizontal_movement -= right;
     }
 
-    if movement.length_squared() > 0.0 {
-        let horizontal = movement.normalize() * WALK_SPEED * time.delta_secs();
+    if horizontal_movement.length_squared() > 0.0 {
+        let speed = if player.2.flying {
+            WALK_SPEED * FLY_SPEED_MULTIPLIER
+        } else {
+            WALK_SPEED
+        };
+        let horizontal = horizontal_movement.normalize() * speed * delta_seconds;
         move_axis(&mut player.0, &world, horizontal.x, Axis::X);
         move_axis(&mut player.0, &world, horizontal.z, Axis::Z);
     }
 
-    if player.2.grounded && !has_ground_support(&player.0, &world) {
-        player.2.grounded = false;
+    if player.2.flying {
+        move_flying_vertical(&keys, delta_seconds, &world, &mut player.0, &mut player.2);
+        return;
     }
 
-    if keys.just_pressed(KeyCode::Space) && player.2.grounded {
-        player.2.vertical_velocity = JUMP_SPEED;
-        player.2.grounded = false;
+    move_grounded_vertical(&keys, delta_seconds, &world, &mut player.0, &mut player.2);
+}
+
+fn handle_flight_toggle(keys: &ButtonInput<KeyCode>, movement: &mut PlayerMovement) {
+    if !keys.just_pressed(KeyCode::Space) {
+        return;
     }
 
-    player.2.vertical_velocity += GRAVITY * time.delta_secs();
-    let vertical_delta = player.2.vertical_velocity * time.delta_secs();
-    let hit_vertical_surface = move_axis(&mut player.0, &world, vertical_delta, Axis::Y);
+    if movement.flight_toggle_window > 0.0 {
+        movement.flying = !movement.flying;
+        movement.vertical_velocity = 0.0;
+        movement.grounded = false;
+        movement.flight_toggle_window = 0.0;
+    } else {
+        movement.flight_toggle_window = FLIGHT_TOGGLE_WINDOW_SECONDS;
+    }
+}
+
+fn move_flying_vertical(
+    keys: &ButtonInput<KeyCode>,
+    delta_seconds: f32,
+    world: &VoxelWorld,
+    transform: &mut Transform,
+    movement: &mut PlayerMovement,
+) {
+    movement.vertical_velocity = 0.0;
+    movement.grounded = false;
+
+    let mut vertical_direction = 0.0;
+
+    if keys.pressed(KeyCode::Space) {
+        vertical_direction += 1.0;
+    }
+    if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
+        vertical_direction -= 1.0;
+    }
+
+    if vertical_direction == 0.0 {
+        return;
+    }
+
+    let fly_speed = WALK_SPEED * FLY_SPEED_MULTIPLIER;
+    let vertical_delta = vertical_direction * fly_speed * delta_seconds;
+    move_axis(transform, world, vertical_delta, Axis::Y);
+}
+
+fn move_grounded_vertical(
+    keys: &ButtonInput<KeyCode>,
+    delta_seconds: f32,
+    world: &VoxelWorld,
+    transform: &mut Transform,
+    movement: &mut PlayerMovement,
+) {
+    if movement.grounded && !has_ground_support(transform, world) {
+        movement.grounded = false;
+    }
+
+    if keys.just_pressed(KeyCode::Space) && movement.grounded {
+        movement.vertical_velocity = JUMP_SPEED;
+        movement.grounded = false;
+    }
+
+    movement.vertical_velocity += GRAVITY * delta_seconds;
+    let vertical_delta = movement.vertical_velocity * delta_seconds;
+    let hit_vertical_surface = move_axis(transform, world, vertical_delta, Axis::Y);
 
     if hit_vertical_surface {
-        if player.2.vertical_velocity < 0.0 {
-            player.2.grounded = true;
+        if movement.vertical_velocity < 0.0 {
+            movement.grounded = true;
         }
 
-        player.2.vertical_velocity = 0.0;
+        movement.vertical_velocity = 0.0;
     }
 }
 
