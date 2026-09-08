@@ -1,6 +1,10 @@
 use bevy::prelude::*;
 
-use crate::app::{game_state::GameState, pause_state::PauseState};
+use crate::app::{
+    game_state::GameState,
+    pause_state::PauseState,
+    settings_state::SettingsState,
+};
 
 const OVERLAY_COLOR: Color = Color::srgba(0.0, 0.0, 0.0, 0.68);
 const BUTTON_COLOR: Color = Color::srgb(0.12, 0.14, 0.18);
@@ -15,7 +19,9 @@ impl Plugin for PauseMenuPlugin {
         app.add_systems(OnEnter(PauseState::Paused), spawn_pause_menu)
             .add_systems(
                 Update,
-                handle_pause_menu_buttons.run_if(in_state(PauseState::Paused)),
+                handle_pause_menu_buttons
+                    .run_if(in_state(PauseState::Paused))
+                    .run_if(in_state(SettingsState::Closed)),
             );
     }
 }
@@ -96,6 +102,7 @@ fn handle_pause_menu_buttons(
         Changed<Interaction>,
     >,
     mut next_pause_state: ResMut<NextState<PauseState>>,
+    mut next_settings_state: ResMut<NextState<SettingsState>>,
     mut next_game_state: ResMut<NextState<GameState>>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
@@ -106,7 +113,9 @@ fn handle_pause_menu_buttons(
 
                 match action {
                     PauseMenuAction::Resume => next_pause_state.set(PauseState::Running),
-                    PauseMenuAction::Settings => {}
+                    PauseMenuAction::Settings => {
+                        next_settings_state.set(SettingsState::Open);
+                    }
                     PauseMenuAction::LeaveWorld => {
                         next_pause_state.set(PauseState::Running);
                         next_game_state.set(GameState::StartingScreen);
