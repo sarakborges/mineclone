@@ -2,12 +2,11 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    content::fluid::FluidRegistry,
+    content::biome::BiomeRegistry,
     player::camera::GameplayCamera,
     voxel::world::VoxelWorld,
+    world::biome_field::BiomeField,
 };
-
-const SUBMERGED_TINT_OPACITY: f32 = 0.20;
 
 #[derive(Component)]
 struct UnderwaterTint;
@@ -44,7 +43,8 @@ fn spawn_underwater_tint(mut commands: Commands) {
 fn update_underwater_tint(
     camera: Single<&Transform, With<GameplayCamera>>,
     world: Res<VoxelWorld>,
-    fluids: Res<FluidRegistry>,
+    biomes: Res<BiomeRegistry>,
+    biome_field: Res<BiomeField>,
     mut tint: Single<(&mut BackgroundColor, &mut Visibility), With<UnderwaterTint>>,
 ) {
     let eye = camera.translation;
@@ -65,15 +65,13 @@ fn update_underwater_tint(
         return;
     }
 
-    let fluid = fluids
-        .get(cell.fluid_id)
-        .unwrap_or_else(|| panic!("missing fluid definition for id {}", cell.fluid_id));
+    let biome_tint = biome_field.underwater_tint(Vec2::new(eye.x, eye.z), &biomes);
 
     tint.0.0 = Color::srgba(
-        fluid.color.r,
-        fluid.color.g,
-        fluid.color.b,
-        SUBMERGED_TINT_OPACITY,
+        biome_tint.color.r,
+        biome_tint.color.g,
+        biome_tint.color.b,
+        biome_tint.opacity,
     );
     *tint.1 = Visibility::Visible;
 }

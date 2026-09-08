@@ -24,11 +24,18 @@ pub struct BiomeSize {
     pub y: Option<BiomeSizeAxis>,
 }
 
+#[derive(Clone, Copy, Deserialize)]
+pub struct BiomeUnderwaterTint {
+    pub color: Rgb,
+    pub opacity: f32,
+}
+
 #[derive(Clone, Deserialize)]
 pub struct BiomeVisuals {
     pub sky_color: DayNightPhases<Rgb>,
     pub fog_color: DayNightPhases<Rgb>,
     pub grass_color: Rgb,
+    pub underwater_tint: BiomeUnderwaterTint,
     #[serde(default)]
     pub stars: BiomeSkyLayerVisuals,
     #[serde(default)]
@@ -63,6 +70,11 @@ impl BiomeRegistry {
         assert!(
             (0.0..=1.0).contains(&definition.visuals.clouds.density),
             "biome {} clouds density must be between 0 and 1",
+            definition.id
+        );
+        assert!(
+            (0.0..=1.0).contains(&definition.visuals.underwater_tint.opacity),
+            "biome {} underwater tint opacity must be between 0 and 1",
             definition.id
         );
         definition.terrain.validate(&definition.id);

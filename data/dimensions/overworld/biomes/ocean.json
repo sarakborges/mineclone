@@ -27,6 +27,10 @@
       "night": { "r": 0.03, "g": 0.06, "b": 0.12 }
     },
     "grass_color": { "r": 0.18, "g": 0.48, "b": 0.34 },
+    "underwater_tint": {
+      "color": { "r": 0.05, "g": 0.32, "b": 0.68 },
+      "opacity": 0.20
+    },
     "stars": {
       "density": 0.60,
       "color": { "r": 0.88, "g": 0.93, "b": 1.0 }
