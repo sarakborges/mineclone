@@ -15,6 +15,7 @@ const SITE_SEARCH_RADIUS: i32 = 2;
 pub struct BiomeField {
     biome_ids: Vec<String>,
     site_spacing: Vec2,
+    seed: u64,
 }
 
 pub struct BiomeInfluence<'a> {
@@ -28,7 +29,11 @@ pub struct BiomeFieldSample<'a> {
 }
 
 impl BiomeField {
-    pub fn from_dimension(dimension: &DimensionDefinition, biomes: &BiomeRegistry) -> Self {
+    pub fn from_dimension(
+        dimension: &DimensionDefinition,
+        biomes: &BiomeRegistry,
+        seed: u64,
+    ) -> Self {
         assert!(
             !dimension.biomes.is_empty(),
             "dimension {} must define at least one biome",
@@ -59,7 +64,12 @@ impl BiomeField {
         Self {
             biome_ids: dimension.biomes.clone(),
             site_spacing,
+            seed,
         }
+    }
+
+    pub fn seed(&self) -> u64 {
+        self.seed
     }
 
     pub fn sample(&self, position: Vec2) -> BiomeFieldSample<'_> {
@@ -71,7 +81,7 @@ impl BiomeField {
             };
         }
 
-        let warped = warp_position(position);
+        let warped = warp_position(position, self.seed);
         let center = IVec2::new(
             (warped.x / self.site_spacing.x).round() as i32,
             (warped.y / self.site_spacing.y).round() as i32,
@@ -83,9 +93,9 @@ impl BiomeField {
         for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
             for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
                 let cell = center + IVec2::new(x, z);
-                let site = site_position(cell, self.site_spacing);
+                let site = site_position(cell, self.site_spacing, self.seed);
                 let distance = warped.distance(site);
-                let candidate_index = biome_index(cell, self.biome_ids.len());
+                let candidate_index = biome_index(cell, self.biome_ids.len(), self.seed);
 
                 if distance < nearest_distance {
                     nearest_distance = distance;
@@ -162,46 +172,50 @@ fn validate_size_axis(biome_id: &str, axis: &str, min: f32, max: f32) {
     );
 }
 
-fn warp_position(position: Vec2) -> Vec2 {
+fn warp_position(position: Vec2, seed: u64) -> Vec2 {
+    let phase_x = hash_component(seed) * std::f32::consts::TAU;
+    let phase_z = hash_component(seed.rotate_left(31)) * std::f32::consts::TAU;
+
     position
         + Vec2::new(
-            (position.y * 0.011).sin() * BORDER_WARP_AMPLITUDE,
-            (position.x * 0.009).sin() * BORDER_WARP_AMPLITUDE,
+            (position.y * 0.011 + phase_x).sin() * BORDER_WARP_AMPLITUDE,
+            (position.x * 0.009 + phase_z).sin() * BORDER_WARP_AMPLITUDE,
         )
 }
 
-fn site_position(cell: IVec2, spacing: Vec2) -> Vec2 {
+fn site_position(cell: IVec2, spacing: Vec2, seed: u64) -> Vec2 {
     let base = Vec2::new(cell.x as f32 * spacing.x, cell.y as f32 * spacing.y);
 
     if cell == IVec2::ZERO {
         return base;
     }
 
-    let hash = cell_hash(cell);
+    let hash = cell_hash(cell, seed);
     let jitter_x = hash_component(hash) * spacing.x * SITE_JITTER_FRACTION;
     let jitter_z = hash_component(hash.rotate_left(29)) * spacing.y * SITE_JITTER_FRACTION;
 
     base + Vec2::new(jitter_x, jitter_z)
 }
 
-fn biome_index(cell: IVec2, biome_count: usize) -> usize {
+fn biome_index(cell: IVec2, biome_count: usize, seed: u64) -> usize {
     if cell == IVec2::ZERO {
         return 0;
     }
 
-    cell_hash(cell) as usize % biome_count
+    cell_hash(cell, seed) as usize % biome_count
 }
 
-fn cell_hash(cell: IVec2) -> u64 {
-    let mut hash = (cell.x as i64 as u64).wrapping_mul(0x9E37_79B1_85EB_CA87);
-    hash ^= (cell.y as i64 as u64).wrapping_mul(0xC2B2_AE3D_27D4_EB4F);
+fn cell_hash(cell: IVec2, seed: u64) -> u64 {
+    let mut hash = seed ^ 0xa076_1d64_78bd_642f;
+    hash ^= (cell.x as i64 as u64).wrapping_mul(0x9e37_79b1_85eb_ca87);
+    hash ^= (cell.y as i64 as u64).wrapping_mul(0xc2b2_ae3d_27d4_eb4f);
     hash ^= hash >> 33;
-    hash = hash.wrapping_mul(0xFF51_AFD7_ED55_8CCD);
+    hash = hash.wrapping_mul(0xff51_afd7_ed55_8ccd);
     hash ^= hash >> 33;
     hash
 }
 
 fn hash_component(hash: u64) -> f32 {
-    let normalized = (hash & 0xFFFF) as f32 / u16::MAX as f32;
+    let normalized = (hash & 0xffff) as f32 / u16::MAX as f32;
     normalized * 2.0 - 1.0
 }

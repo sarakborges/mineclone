@@ -5,6 +5,7 @@ mod chunk_unloading;
 pub mod day_night;
 pub mod dimension;
 pub(crate) mod render_distance;
+mod seed;
 mod setup;
 mod streaming;
 pub(crate) mod terrain;
@@ -18,9 +19,10 @@ use chunk_unloading::unload_chunk_meshes;
 use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
 use render_distance::RenderDistanceSettings;
+pub(crate) use seed::WorldSeed;
 use setup::{begin_world_loading, setup_world};
-use streaming::{reset_chunk_streaming, stream_chunks, ChunkStreamingState};
 pub(crate) use setup::WorldLoadingState;
+use streaming::{reset_chunk_streaming, stream_chunks, ChunkStreamingState};
 
 pub struct WorldPlugin;
 
@@ -28,6 +30,7 @@ impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CurrentDimension>()
             .init_resource::<CurrentBiome>()
+            .init_resource::<WorldSeed>()
             .init_resource::<RenderDistanceSettings>()
             .init_resource::<ChunkStreamingState>()
             .init_resource::<ChunkRenderPool>()

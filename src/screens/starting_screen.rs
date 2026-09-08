@@ -9,6 +9,7 @@ use crate::{
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
     },
+    world::WorldSeed,
 };
 
 pub struct StartingScreenPlugin;
@@ -103,6 +104,7 @@ fn setup_starting_screen(mut commands: Commands, asset_server: Res<AssetServer>)
 }
 
 fn handle_menu_buttons(
+    mut commands: Commands,
     interactions: Query<(&Interaction, &StartingScreenAction), Changed<Interaction>>,
     mut transition: ResMut<ScreenTransition>,
     mut app_exit: MessageWriter<AppExit>,
@@ -114,6 +116,7 @@ fn handle_menu_buttons(
 
         match action {
             StartingScreenAction::NewWorld => {
+                commands.insert_resource(WorldSeed::fresh());
                 transition.request(ScreenTransitionTarget::game(GameState::Loading));
             }
             StartingScreenAction::LoadWorlds => {}

@@ -13,7 +13,29 @@ use super::{
     sky::{SkyDefinition, SkyRegistry},
 };
 
+pub(crate) struct LoadedContent {
+    pub biomes: BiomeRegistry,
+    pub blocks: BlockRegistry,
+    pub dimensions: DimensionRegistry,
+    pub day_night_cycles: DayNightCycleRegistry,
+    pub skies: SkyRegistry,
+}
+
+impl LoadedContent {
+    pub fn insert(self, commands: &mut Commands) {
+        commands.insert_resource(self.biomes);
+        commands.insert_resource(self.blocks);
+        commands.insert_resource(self.dimensions);
+        commands.insert_resource(self.day_night_cycles);
+        commands.insert_resource(self.skies);
+    }
+}
+
 pub fn load_content(mut commands: Commands) {
+    read_content().insert(&mut commands);
+}
+
+pub(crate) fn read_content() -> LoadedContent {
     let mut biome_registry = BiomeRegistry::default();
     let mut block_registry = BlockRegistry::default();
     let mut dimension_registry = DimensionRegistry::default();
@@ -34,11 +56,13 @@ pub fn load_content(mut commands: Commands) {
         );
     }
 
-    commands.insert_resource(biome_registry);
-    commands.insert_resource(block_registry);
-    commands.insert_resource(dimension_registry);
-    commands.insert_resource(day_night_cycle_registry);
-    commands.insert_resource(sky_registry);
+    LoadedContent {
+        biomes: biome_registry,
+        blocks: block_registry,
+        dimensions: dimension_registry,
+        day_night_cycles: day_night_cycle_registry,
+        skies: sky_registry,
+    }
 }
 
 fn load_definition(

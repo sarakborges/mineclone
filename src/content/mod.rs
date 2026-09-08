@@ -12,6 +12,7 @@ mod loader;
 
 use bevy::prelude::*;
 use loader::load_content;
+pub(crate) use loader::read_content;
 
 pub struct ContentPlugin;
 

@@ -2,7 +2,12 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    content::{biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionRegistry},
+    content::{
+        biome::BiomeRegistry,
+        block::BlockRegistry,
+        dimension::{DimensionDefinition, DimensionRegistry},
+        read_content,
+    },
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
     voxel::world::VoxelWorld,
 };
@@ -13,6 +18,7 @@ use super::{
     dimension::CurrentDimension,
     render_distance::chunk_coords_in_cylinder,
     terrain::{build_chunk, chunk_y_bounds},
+    WorldSeed,
 };
 
 const GRASS_BLOCK_ID: &str = "mineclone:grass";
@@ -42,18 +48,19 @@ pub fn begin_world_loading(
     asset_server: Res<AssetServer>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     current_dimension: Res<CurrentDimension>,
-    dimensions: Res<DimensionRegistry>,
-    biomes: Res<BiomeRegistry>,
-    blocks: Res<BlockRegistry>,
+    seed: Res<WorldSeed>,
 ) {
-    let dimension = dimensions
+    let content = read_content();
+    let dimension = content
+        .dimensions
         .get(&current_dimension.id)
         .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
-    let grass = blocks
+    let grass = content
+        .blocks
         .get(GRASS_BLOCK_ID)
         .unwrap_or_else(|| panic!("missing block definition: {GRASS_BLOCK_ID}"));
-    let biome_field = BiomeField::from_dimension(dimension, &biomes);
-    let (roughness, metallic) = average_terrain_material(dimension, &biomes);
+    let biome_field = BiomeField::from_dimension(dimension, &content.biomes, seed.0);
+    let (roughness, metallic) = average_terrain_material(dimension, &content.biomes);
     let mut create_material = |texture: &str| {
         materials.add(StandardMaterial {
             base_color: Color::WHITE,
@@ -71,7 +78,7 @@ pub fn begin_world_loading(
         front: create_material(&grass.textures.front),
         back: create_material(&grass.textures.back),
     };
-    let (min_chunk_y, max_chunk_y) = chunk_y_bounds(dimension, &biomes);
+    let (min_chunk_y, max_chunk_y) = chunk_y_bounds(dimension, &content.biomes);
     let coords = chunk_coords_in_cylinder(
         IVec3::new(0, min_chunk_y, 0),
         INITIAL_HORIZONTAL_RADIUS_CHUNKS,
@@ -88,6 +95,7 @@ pub fn begin_world_loading(
         screen_rendered: false,
         transition_requested: false,
     });
+    content.insert(&mut commands);
 }
 
 pub fn setup_world(
@@ -153,7 +161,7 @@ pub fn setup_world(
 }
 
 fn average_terrain_material(
-    dimension: &crate::content::dimension::DimensionDefinition,
+    dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
 ) -> (f32, f32) {
     let mut roughness = 0.0;
