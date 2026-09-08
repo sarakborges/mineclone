@@ -1,6 +1,7 @@
 mod game_state;
 mod gameplay;
 mod starting_screen;
+mod voxel_chunk;
 
 use bevy::prelude::*;
 use game_state::GameState;
