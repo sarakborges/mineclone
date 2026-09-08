@@ -1,6 +1,11 @@
 (
     id: "mineclone:overworld/plains",
     name: "Plains",
+    size: (
+        x: (min: 100.0, max: 500.0),
+        z: (min: 100.0, max: 500.0),
+        y: None,
+    ),
     visuals: (
         sky_color: (
             dawn: (r: 0.72, g: 0.48, b: 0.44),
@@ -14,7 +19,7 @@
             dusk: (r: 0.80, g: 0.48, b: 0.40),
             night: (r: 0.09, g: 0.11, b: 0.18),
         ),
-        terrain_color: (r: 0.44, g: 0.66, b: 0.36),
+        grass_color: (r: 0.44, g: 0.66, b: 0.36),
         terrain_roughness: 0.97,
         terrain_metallic: 0.0,
     ),
