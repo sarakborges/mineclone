@@ -18,6 +18,8 @@ use super::{
     dimension::CurrentDimension,
     render_distance::chunk_coords_in_cylinder,
     terrain::{build_chunk, chunk_y_bounds},
+    InMemoryWorldSave,
+    WorldLoadMode,
     WorldSeed,
 };
 
@@ -49,18 +51,35 @@ pub fn begin_world_loading(
     mut materials: ResMut<Assets<StandardMaterial>>,
     current_dimension: Res<CurrentDimension>,
     seed: Res<WorldSeed>,
+    load_mode: Res<WorldLoadMode>,
+    mut save: ResMut<InMemoryWorldSave>,
+    dimensions: Res<DimensionRegistry>,
+    biomes: Res<BiomeRegistry>,
+    blocks: Res<BlockRegistry>,
+    existing_world: Option<Res<VoxelWorld>>,
 ) {
-    let content = read_content();
-    let dimension = content
-        .dimensions
+    let fresh_content = if *load_mode == WorldLoadMode::New {
+        Some(read_content())
+    } else {
+        None
+    };
+    let dimensions_ref = fresh_content
+        .as_ref()
+        .map_or(&*dimensions, |content| &content.dimensions);
+    let biomes_ref = fresh_content
+        .as_ref()
+        .map_or(&*biomes, |content| &content.biomes);
+    let blocks_ref = fresh_content
+        .as_ref()
+        .map_or(&*blocks, |content| &content.blocks);
+    let dimension = dimensions_ref
         .get(&current_dimension.id)
         .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
-    let grass = content
-        .blocks
+    let grass = blocks_ref
         .get(GRASS_BLOCK_ID)
         .unwrap_or_else(|| panic!("missing block definition: {GRASS_BLOCK_ID}"));
-    let biome_field = BiomeField::from_dimension(dimension, &content.biomes, seed.0);
-    let (roughness, metallic) = average_terrain_material(dimension, &content.biomes);
+    let biome_field = BiomeField::from_dimension(dimension, biomes_ref, seed.0);
+    let (roughness, metallic) = average_terrain_material(dimension, biomes_ref);
     let mut create_material = |texture: &str| {
         materials.add(StandardMaterial {
             base_color: Color::WHITE,
@@ -78,7 +97,7 @@ pub fn begin_world_loading(
         front: create_material(&grass.textures.front),
         back: create_material(&grass.textures.back),
     };
-    let (min_chunk_y, max_chunk_y) = chunk_y_bounds(dimension, &content.biomes);
+    let (min_chunk_y, max_chunk_y) = chunk_y_bounds(dimension, biomes_ref);
     let coords = chunk_coords_in_cylinder(
         IVec3::new(0, min_chunk_y, 0),
         INITIAL_HORIZONTAL_RADIUS_CHUNKS,
@@ -86,7 +105,20 @@ pub fn begin_world_loading(
         max_chunk_y,
     );
 
-    commands.insert_resource(VoxelWorld::default());
+    match *load_mode {
+        WorldLoadMode::New => {
+            commands.insert_resource(VoxelWorld::default());
+            save.begin_new_world(*seed, &current_dimension.id);
+        }
+        WorldLoadMode::Load => {
+            assert!(save.has_world(), "cannot load a world that is not saved in memory");
+            assert!(
+                existing_world.is_some(),
+                "saved world voxel state is missing from memory"
+            );
+        }
+    }
+
     commands.insert_resource(biome_field);
     commands.insert_resource(terrain_materials);
     commands.insert_resource(WorldLoadingState {
@@ -95,7 +127,10 @@ pub fn begin_world_loading(
         screen_rendered: false,
         transition_requested: false,
     });
-    content.insert(&mut commands);
+
+    if let Some(content) = fresh_content {
+        content.insert(&mut commands);
+    }
 }
 
 pub fn setup_world(
@@ -131,8 +166,16 @@ pub fn setup_world(
         }
 
         let coord = loading_state.coords[loading_state.generated];
-        let chunk = build_chunk(coord, &blocks, dimension, &biomes, &biome_field);
-        world.insert_chunk(coord, chunk);
+
+        if world.has_generated_chunk(coord) {
+            assert!(
+                world.restore_chunk(coord),
+                "generated chunk must be resident or archived: {coord:?}"
+            );
+        } else {
+            let chunk = build_chunk(coord, &blocks, dimension, &biomes, &biome_field);
+            world.insert_chunk(coord, chunk);
+        }
 
         let chunk = world
             .chunk(coord)
