@@ -33,6 +33,7 @@ pub fn chunk_coords_in_cylinder(
     min_chunk_y: i32,
     max_chunk_y: i32,
 ) -> Vec<IVec3> {
+    assert!(min_chunk_y >= 0, "minimum chunk Y cannot be negative");
     assert!(
         min_chunk_y <= max_chunk_y,
         "minimum chunk Y must be less than or equal to maximum chunk Y"
