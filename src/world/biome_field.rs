@@ -40,6 +40,10 @@ impl BiomeField {
             validate_size_axis(biome_id, "x", biome.size.x.min, biome.size.x.max);
             validate_size_axis(biome_id, "z", biome.size.z.min, biome.size.z.max);
 
+            if let Some(vertical_size) = biome.size.y {
+                validate_size_axis(biome_id, "y", vertical_size.min, vertical_size.max);
+            }
+
             minimum_radius.x = minimum_radius.x.max(biome.size.x.min);
             minimum_radius.y = minimum_radius.y.max(biome.size.z.min);
         }
