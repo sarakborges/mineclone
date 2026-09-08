@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::app::game_state::GameState;
+use crate::app::{game_state::GameState, settings_state::SettingsState};
 
 const BACKGROUND_COLOR: Color = Color::srgb(0.055, 0.065, 0.08);
 const BUTTON_COLOR: Color = Color::srgb(0.12, 0.14, 0.18);
@@ -15,7 +15,9 @@ impl Plugin for StartingScreenPlugin {
         app.add_systems(OnEnter(GameState::StartingScreen), setup_starting_screen)
             .add_systems(
                 Update,
-                handle_menu_buttons.run_if(in_state(GameState::StartingScreen)),
+                handle_menu_buttons
+                    .run_if(in_state(GameState::StartingScreen))
+                    .run_if(in_state(SettingsState::Closed)),
             );
     }
 }
@@ -24,6 +26,7 @@ impl Plugin for StartingScreenPlugin {
 enum StartingScreenAction {
     NewWorld,
     LoadWorlds,
+    Settings,
     ExitGame,
 }
 
@@ -57,6 +60,7 @@ fn setup_starting_screen(mut commands: Commands) {
             ),
             menu_button("New World", StartingScreenAction::NewWorld),
             menu_button("Load Worlds", StartingScreenAction::LoadWorlds),
+            menu_button("Settings", StartingScreenAction::Settings),
             menu_button("Exit Game", StartingScreenAction::ExitGame),
         ],
     ));
@@ -92,7 +96,8 @@ fn handle_menu_buttons(
         (&Interaction, &StartingScreenAction, &mut BackgroundColor),
         Changed<Interaction>,
     >,
-    mut next_state: ResMut<NextState<GameState>>,
+    mut next_game_state: ResMut<NextState<GameState>>,
+    mut next_settings_state: ResMut<NextState<SettingsState>>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
     for (interaction, action, mut background) in &mut interactions {
@@ -101,8 +106,11 @@ fn handle_menu_buttons(
                 *background = BUTTON_PRESSED_COLOR.into();
 
                 match action {
-                    StartingScreenAction::NewWorld => next_state.set(GameState::Loading),
+                    StartingScreenAction::NewWorld => next_game_state.set(GameState::Loading),
                     StartingScreenAction::LoadWorlds => {}
+                    StartingScreenAction::Settings => {
+                        next_settings_state.set(SettingsState::Open);
+                    }
                     StartingScreenAction::ExitGame => {
                         app_exit.write(AppExit::Success);
                     }
