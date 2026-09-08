@@ -6,7 +6,13 @@ use crate::{
         pause_state::PauseState,
         settings_state::SettingsState,
     },
-    ui::{button::menu_button, surface, theme, typography},
+    ui::{
+        button::menu_button,
+        surface,
+        theme,
+        transition::{ScreenTransition, ScreenTransitionTarget},
+        typography,
+    },
 };
 
 pub struct PauseMenuPlugin;
@@ -87,9 +93,7 @@ fn show_pause_menu(mut roots: Query<&mut Visibility, With<PauseMenuRoot>>) {
 
 fn handle_pause_menu_buttons(
     interactions: Query<(&Interaction, &PauseMenuAction), Changed<Interaction>>,
-    mut next_pause_state: ResMut<NextState<PauseState>>,
-    mut next_settings_state: ResMut<NextState<SettingsState>>,
-    mut next_game_state: ResMut<NextState<GameState>>,
+    mut transition: ResMut<ScreenTransition>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
     for (interaction, action) in &interactions {
@@ -98,13 +102,17 @@ fn handle_pause_menu_buttons(
         }
 
         match action {
-            PauseMenuAction::Resume => next_pause_state.set(PauseState::Running),
+            PauseMenuAction::Resume => {
+                transition.request(ScreenTransitionTarget::pause(PauseState::Running));
+            }
             PauseMenuAction::Settings => {
-                next_settings_state.set(SettingsState::Open);
+                transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
             }
             PauseMenuAction::LeaveWorld => {
-                next_pause_state.set(PauseState::Running);
-                next_game_state.set(GameState::StartingScreen);
+                transition.request(
+                    ScreenTransitionTarget::game(GameState::StartingScreen)
+                        .with_pause(PauseState::Running),
+                );
             }
             PauseMenuAction::ExitGame => {
                 app_exit.write(AppExit::Success);
