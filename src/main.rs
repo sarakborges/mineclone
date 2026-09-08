@@ -19,7 +19,7 @@ use rendering::RenderingPlugin;
 use screens::{
     loading_screen::LoadingScreenPlugin,
     pause_menu::PauseMenuPlugin,
-    settings_menu::SettingsMenuPlugin,
+    settings_screen::SettingsScreenPlugin,
     starting_screen::StartingScreenPlugin,
 };
 use targeting::block::BlockTargetingPlugin;
@@ -47,7 +47,7 @@ fn main() {
         .add_plugins((
             UiDesignSystemPlugin,
             ContentPlugin,
-            SettingsMenuPlugin,
+            SettingsScreenPlugin,
             StartingScreenPlugin,
             LoadingScreenPlugin,
             PauseMenuPlugin,
