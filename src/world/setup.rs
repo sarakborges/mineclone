@@ -16,8 +16,8 @@ use super::{
 
 const GRASS_BLOCK_ID: &str = "mineclone:grass";
 const INITIAL_HORIZONTAL_RADIUS_CHUNKS: i32 = 4;
-const INITIAL_MIN_CHUNK_Y: i32 = -1;
-const INITIAL_MAX_CHUNK_Y: i32 = 0;
+const INITIAL_MIN_CHUNK_Y: i32 = 0;
+const INITIAL_MAX_CHUNK_Y: i32 = 1;
 
 #[derive(Resource)]
 pub struct WorldLoadingState {
