@@ -4,13 +4,14 @@ use crate::{
     app::game_state::GameState,
     content::{
         day_night_cycle::DayNightCycleRegistry,
-        day_night_phase::DayNightPhase,
         dimension::DimensionRegistry,
-        sky::SkyRegistry,
+        sky::{CelestialBodyDefinition, SkyRegistry},
     },
     player::camera::GameplayCamera,
     world::{day_night::DayNightClock, dimension::CurrentDimension},
 };
+
+use super::celestial_path::celestial_offset;
 
 pub struct CelestialPlugin;
 
@@ -25,14 +26,7 @@ impl Plugin for CelestialPlugin {
 }
 
 #[derive(Component)]
-struct CelestialBody {
-    orbit_radius: f32,
-    rise_phase: DayNightPhase,
-    set_phase: DayNightPhase,
-    rise_azimuth_radians: f32,
-    set_azimuth_radians: f32,
-    max_altitude_radians: f32,
-}
+struct CelestialBody(CelestialBodyDefinition);
 
 fn spawn_celestial_bodies(
     mut commands: Commands,
@@ -71,12 +65,12 @@ fn spawn_body(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     asset_server: &AssetServer,
-    definition: &crate::content::sky::CelestialBodyDefinition,
+    definition: &CelestialBodyDefinition,
 ) {
     let mesh = meshes.add(Rectangle::new(definition.size, definition.size));
     let material = materials.add(StandardMaterial {
         base_color: definition.tint.to_color(),
-        base_color_texture: Some(asset_server.load(definition.texture.clone())),
+        base_color_texture: Some(asset_server.load(&definition.texture)),
         alpha_mode: AlphaMode::Blend,
         unlit: true,
         fog_enabled: false,
@@ -90,14 +84,7 @@ fn spawn_body(
         MeshMaterial3d(material),
         Transform::default(),
         Visibility::Hidden,
-        CelestialBody {
-            orbit_radius: definition.orbit_radius,
-            rise_phase: definition.rise_phase,
-            set_phase: definition.set_phase,
-            rise_azimuth_radians: definition.rise_azimuth_degrees.to_radians(),
-            set_azimuth_radians: definition.set_azimuth_degrees.to_radians(),
-            max_altitude_radians: definition.max_altitude_degrees.to_radians(),
-        },
+        CelestialBody(definition.clone()),
         DespawnOnExit(GameState::Gameplay),
     ));
 }
@@ -119,37 +106,13 @@ fn update_celestial_bodies(
     let camera_position = camera.translation();
 
     for (body, mut transform, mut visibility) in &mut bodies {
-        let Some(progress) = cycle.progress_between_phases(
-            clock.normalized_time,
-            body.rise_phase,
-            body.set_phase,
-        ) else {
+        let Some(offset) = celestial_offset(&body.0, cycle, clock.normalized_time) else {
             *visibility = Visibility::Hidden;
             continue;
         };
-
-        let azimuth = lerp_angle(
-            body.rise_azimuth_radians,
-            body.set_azimuth_radians,
-            progress,
-        );
-        let altitude = (progress * std::f32::consts::PI).sin() * body.max_altitude_radians;
-        let horizontal_radius = body.orbit_radius * altitude.cos();
-        let offset = Vec3::new(
-            azimuth.sin() * horizontal_radius,
-            altitude.sin() * body.orbit_radius,
-            -azimuth.cos() * horizontal_radius,
-        );
 
         transform.translation = camera_position + offset;
         transform.look_at(camera_position, Vec3::Y);
         *visibility = Visibility::Visible;
     }
-}
-
-fn lerp_angle(start: f32, end: f32, t: f32) -> f32 {
-    let delta = (end - start + std::f32::consts::PI)
-        .rem_euclid(std::f32::consts::TAU)
-        - std::f32::consts::PI;
-    start + delta * t
 }
