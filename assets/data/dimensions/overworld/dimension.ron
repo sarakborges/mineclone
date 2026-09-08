@@ -1,6 +1,6 @@
 (
     id: "mineclone:overworld",
-    name: "Overworld",
+    name: "The Overworld",
     biomes: [
         "mineclone:overworld/plains",
         "mineclone:overworld/wasteland",
