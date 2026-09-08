@@ -2,8 +2,8 @@
     id: "mineclone:overworld/sky",
     sun: (
         texture: None,
-        size: 28.0,
-        orbit_radius: 180.0,
+        size: 93.0,
+        orbit_radius: 600.0,
         rise_phase: Dawn,
         set_phase: Dusk,
         rise_azimuth_degrees: 90.0,
@@ -13,8 +13,8 @@
     ),
     moon: (
         texture: None,
-        size: 22.0,
-        orbit_radius: 180.0,
+        size: 73.0,
+        orbit_radius: 600.0,
         rise_phase: Dusk,
         set_phase: Dawn,
         rise_azimuth_degrees: 90.0,
