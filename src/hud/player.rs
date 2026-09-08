@@ -1,6 +1,11 @@
 use bevy::prelude::*;
 
-use crate::{app::game_state::GameState, player::camera::GameplayCamera};
+use crate::{
+    app::game_state::GameState,
+    player::camera::GameplayCamera,
+    voxel::coordinates::split_dimension_position,
+    world::dimension::CurrentDimension,
+};
 
 pub struct PlayerHudPlugin;
 
@@ -28,7 +33,7 @@ fn spawn_player_hud(mut commands: Commands) {
         Pickable::IGNORE,
         DespawnOnExit(GameState::Gameplay),
         children![(
-            Text::new("X: 0.00\nZ: 0.00\nY: 0.00"),
+            Text::new("Dimension: -\nPosition: -\nChunk: -\nLocal: -"),
             TextFont {
                 font_size: FontSize::Px(18.0),
                 ..default()
@@ -41,12 +46,23 @@ fn spawn_player_hud(mut commands: Commands) {
 
 fn update_player_hud(
     player: Single<&Transform, With<GameplayCamera>>,
+    dimension: Res<CurrentDimension>,
     mut coordinates_text: Single<&mut Text, With<PlayerCoordinatesText>>,
 ) {
     let position = player.translation;
+    let coordinates = split_dimension_position(position);
 
     coordinates_text.0 = format!(
-        "X: {:.2}\nZ: {:.2}\nY: {:.2}",
-        position.x, position.z, position.y
+        "Dimension: {}\nPosition: X {:.2} | Z {:.2} | Y {:.2}\nChunk: X {} | Z {} | Y {}\nLocal: X {:.2} | Z {:.2} | Y {:.2}",
+        dimension.id,
+        position.x,
+        position.z,
+        position.y,
+        coordinates.chunk.x,
+        coordinates.chunk.z,
+        coordinates.chunk.y,
+        coordinates.local.x,
+        coordinates.local.z,
+        coordinates.local.y,
     );
 }
