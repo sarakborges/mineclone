@@ -77,6 +77,7 @@ pub fn setup_world(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     blocks: Res<BlockRegistry>,
+    biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
     mut world: ResMut<VoxelWorld>,
     mut loading_state: ResMut<WorldLoadingState>,
@@ -104,7 +105,7 @@ pub fn setup_world(
         .unwrap_or_else(|| panic!("generated chunk should exist at {coord}"));
     let mesh = meshes.add(build_chunk_mesh(&world, coord, chunk, |voxel| {
         let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-        let grass = biome_field.grass_color(position, &blocks_to_biomes_placeholder());
+        let grass = biome_field.grass_color(position, &biomes);
         [grass.r, grass.g, grass.b]
     }));
     let chunk_size = CHUNK_SIZE as f32;
@@ -121,10 +122,6 @@ pub fn setup_world(
     ));
 
     loading_state.generated += 1;
-}
-
-fn blocks_to_biomes_placeholder() -> BiomeRegistry {
-    unreachable!("biome registry is supplied by the loading system")
 }
 
 fn average_terrain_material(
