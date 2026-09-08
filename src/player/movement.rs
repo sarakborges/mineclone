@@ -9,7 +9,8 @@ mod collision;
 mod config;
 pub(crate) mod flight;
 pub(crate) mod gravity;
-mod walking;
+mod smoothing;
+pub(crate) mod walking;
 
 pub struct PlayerMovementPlugin;
 
