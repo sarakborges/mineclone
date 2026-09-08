@@ -18,6 +18,7 @@ use camera::GameplayCamera;
 use movement::{
     flight::FlightState,
     gravity::GravityState,
+    swimming::SwimmingState,
     walking::WalkingState,
 };
 
@@ -70,6 +71,7 @@ fn spawn_player(
         WalkingState::default(),
         FlightState::default(),
         GravityState::default(),
+        SwimmingState::default(),
         DespawnOnExit(GameState::Gameplay),
     ));
 }
