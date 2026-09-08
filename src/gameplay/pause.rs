@@ -1,9 +1,12 @@
 use bevy::{prelude::*, time::Virtual};
 
-use crate::app::{
-    game_state::GameState,
-    pause_state::PauseState,
-    settings_state::SettingsState,
+use crate::{
+    app::{
+        game_state::GameState,
+        pause_state::PauseState,
+        settings_state::SettingsState,
+    },
+    ui::transition::{ScreenTransition, ScreenTransitionTarget},
 };
 
 pub struct PausePlugin;
@@ -24,7 +27,7 @@ impl Plugin for PausePlugin {
 fn toggle_pause(
     keys: Res<ButtonInput<KeyCode>>,
     pause_state: Res<State<PauseState>>,
-    mut next_pause_state: ResMut<NextState<PauseState>>,
+    mut transition: ResMut<ScreenTransition>,
 ) {
     if !keys.just_pressed(KeyCode::Escape) {
         return;
@@ -35,7 +38,7 @@ fn toggle_pause(
         PauseState::Paused => PauseState::Running,
     };
 
-    next_pause_state.set(next);
+    transition.request(ScreenTransitionTarget::pause(next));
 }
 
 fn pause_time(mut time: ResMut<Time<Virtual>>) {
