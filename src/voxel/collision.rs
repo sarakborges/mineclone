@@ -1,35 +1,20 @@
 use bevy::prelude::*;
 
-use super::chunk::{VoxelChunk, CHUNK_SIZE};
+use super::world::VoxelWorld;
 
 const COLLISION_EPSILON: f32 = 0.0001;
 
-pub fn collides_aabb(chunk: &VoxelChunk, min: Vec3, max: Vec3) -> bool {
-    let chunk_size = CHUNK_SIZE as f32;
+pub fn collides_aabb(world: &VoxelWorld, min: Vec3, max: Vec3) -> bool {
     let min = min + Vec3::splat(COLLISION_EPSILON);
     let max = max - Vec3::splat(COLLISION_EPSILON);
 
-    if max.x <= 0.0
-        || max.y <= 0.0
-        || max.z <= 0.0
-        || min.x >= chunk_size
-        || min.y >= chunk_size
-        || min.z >= chunk_size
-    {
-        return false;
-    }
+    let min = min.floor().as_ivec3();
+    let max = max.floor().as_ivec3();
 
-    let min_x = min.x.floor().max(0.0) as i32;
-    let min_y = min.y.floor().max(0.0) as i32;
-    let min_z = min.z.floor().max(0.0) as i32;
-    let max_x = max.x.floor().min((CHUNK_SIZE - 1) as f32) as i32;
-    let max_y = max.y.floor().min((CHUNK_SIZE - 1) as f32) as i32;
-    let max_z = max.z.floor().min((CHUNK_SIZE - 1) as f32) as i32;
-
-    for y in min_y..=max_y {
-        for z in min_z..=max_z {
-            for x in min_x..=max_x {
-                if chunk.is_solid(x, y, z) {
+    for y in min.y..=max.y {
+        for z in min.z..=max.z {
+            for x in min.x..=max.x {
+                if world.is_solid(IVec3::new(x, y, z)) {
                     return true;
                 }
             }
