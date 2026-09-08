@@ -28,7 +28,7 @@ fn spawn_target_hud(mut commands: Commands) {
         Pickable::IGNORE,
         DespawnOnExit(GameState::Gameplay),
         children![(
-            Text::new("No block targeted"),
+            Text::new("Block: -\nPosition: -"),
             TextFont {
                 font_size: FontSize::Px(18.0),
                 ..default()
@@ -44,10 +44,10 @@ fn update_target_hud(
     mut target_text: Single<&mut Text, With<TargetBlockText>>,
 ) {
     target_text.0 = targeted.0.map_or_else(
-        || "No block targeted".to_string(),
+        || "Block: -\nPosition: -".to_string(),
         |hit| {
             format!(
-                "{}\nX: {}\nZ: {}\nY: {}",
+                "Block: {}\nPosition: X {} | Z {} | Y {}",
                 hit.block_id, hit.voxel.x, hit.voxel.z, hit.voxel.y
             )
         },
