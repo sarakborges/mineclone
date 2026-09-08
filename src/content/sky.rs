@@ -7,7 +7,7 @@ use super::{color::Rgb, day_night_phase::DayNightPhase};
 
 #[derive(Clone, Deserialize)]
 pub struct CelestialBodyDefinition {
-    pub texture: String,
+    pub texture: Option<String>,
     pub size: f32,
     pub orbit_radius: f32,
     pub rise_phase: DayNightPhase,
