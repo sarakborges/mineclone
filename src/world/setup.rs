@@ -9,7 +9,7 @@ use crate::{
 
 use super::{
     biome_field::BiomeField,
-    chunk_rendering::{spawn_chunk_mesh, TerrainMaterial},
+    chunk_rendering::{spawn_chunk_mesh, ChunkRenderPool, TerrainMaterial},
     dimension::CurrentDimension,
     render_distance::chunk_coords_in_cylinder,
     test_world::{build_test_chunk, TERRAIN_MAX_CHUNK_Y, TERRAIN_MIN_CHUNK_Y},
@@ -86,6 +86,7 @@ pub fn setup_world(
     biome_field: Res<BiomeField>,
     material: Res<TerrainMaterial>,
     mut world: ResMut<VoxelWorld>,
+    mut render_pool: ResMut<ChunkRenderPool>,
     mut loading_state: ResMut<WorldLoadingState>,
     mut transition: ResMut<ScreenTransition>,
 ) {
@@ -116,6 +117,7 @@ pub fn setup_world(
     spawn_chunk_mesh(
         &mut commands,
         &mut meshes,
+        &mut render_pool,
         &world,
         coord,
         chunk,
