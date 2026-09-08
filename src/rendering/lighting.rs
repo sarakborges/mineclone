@@ -16,6 +16,8 @@ const SHADOW_CASCADE_COUNT: usize = 4;
 const FIRST_CASCADE_DISTANCE: f32 = 48.0;
 const SHADOW_DISTANCE_MULTIPLIER: f32 = 2.25;
 const SHADOW_CASCADE_OVERLAP: f32 = 0.25;
+const SHADOW_DEPTH_BIAS: f32 = 0.02;
+const SHADOW_NORMAL_BIAS: f32 = 0.0;
 
 pub struct LightingPlugin;
 
@@ -44,7 +46,8 @@ fn spawn_sky_light(mut commands: Commands) {
     commands.spawn((
         DirectionalLight {
             shadow_maps_enabled: true,
-            shadow_depth_bias: 0.20,
+            shadow_depth_bias: SHADOW_DEPTH_BIAS,
+            shadow_normal_bias: SHADOW_NORMAL_BIAS,
             ..default()
         },
         CascadeShadowConfigBuilder {
