@@ -35,6 +35,8 @@ fn spawn_underwater_tint(mut commands: Commands) {
             ..default()
         },
         BackgroundColor(Color::NONE),
+        GlobalZIndex(-10),
+        Pickable::IGNORE,
         Visibility::Hidden,
         DespawnOnExit(GameState::Gameplay),
     ));
