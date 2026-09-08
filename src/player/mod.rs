@@ -10,6 +10,8 @@ use crate::{
         biome_field::BiomeField,
         dimension::CurrentDimension,
         terrain::surface_height,
+        InMemoryWorldSave,
+        WorldLoadMode,
     },
 };
 use camera::GameplayCamera;
@@ -40,28 +42,57 @@ fn spawn_player(
     dimensions: Res<DimensionRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
+    load_mode: Res<WorldLoadMode>,
+    save: Res<InMemoryWorldSave>,
 ) {
-    let dimension = dimensions
-        .get(&current_dimension.id)
-        .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
-    let feet_y = surface_height(
-        IVec2::new(SPAWN_X, SPAWN_Z),
-        dimension,
-        &biomes,
-        &biome_field,
-    ) as f32;
+    let translation = if *load_mode == WorldLoadMode::Load {
+        save.player_position().unwrap_or_else(|| {
+            default_spawn_position(
+                &current_dimension,
+                &dimensions,
+                &biomes,
+                &biome_field,
+            )
+        })
+    } else {
+        default_spawn_position(
+            &current_dimension,
+            &dimensions,
+            &biomes,
+            &biome_field,
+        )
+    };
 
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(
-            SPAWN_X as f32,
-            feet_y + PLAYER_EYE_HEIGHT,
-            SPAWN_Z as f32,
-        ),
+        Transform::from_translation(translation),
         GameplayCamera::default(),
         WalkingState::default(),
         FlightState::default(),
         GravityState::default(),
         DespawnOnExit(GameState::Gameplay),
     ));
+}
+
+fn default_spawn_position(
+    current_dimension: &CurrentDimension,
+    dimensions: &DimensionRegistry,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+) -> Vec3 {
+    let dimension = dimensions
+        .get(&current_dimension.id)
+        .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
+    let feet_y = surface_height(
+        IVec2::new(SPAWN_X, SPAWN_Z),
+        dimension,
+        biomes,
+        biome_field,
+    ) as f32;
+
+    Vec3::new(
+        SPAWN_X as f32,
+        feet_y + PLAYER_EYE_HEIGHT,
+        SPAWN_Z as f32,
+    )
 }
