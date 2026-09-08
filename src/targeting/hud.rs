@@ -22,10 +22,10 @@ fn spawn_target_hud(mut commands: Commands) {
             top: px(16),
             right: px(16),
             padding: UiRect::all(px(12)),
+            border_radius: BorderRadius::all(px(6)),
             ..default()
         },
         BackgroundColor(Color::srgba(0.02, 0.025, 0.04, 0.82)),
-        BorderRadius::all(px(6)),
         Pickable::IGNORE,
         DespawnOnExit(GameState::Gameplay),
         children![(
@@ -44,7 +44,7 @@ fn update_target_hud(
     targeted: Res<TargetedBlock>,
     mut target_text: Single<&mut Text, With<TargetBlockText>>,
 ) {
-    **target_text = targeted.0.map_or_else(
+    target_text.0 = targeted.0.map_or_else(
         || "No block targeted".to_string(),
         |hit| {
             format!(
