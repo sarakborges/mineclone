@@ -11,11 +11,11 @@ use crate::{
 
 use super::environment::EnvironmentVisualState;
 
-const SHADOW_MAP_SIZE: usize = 2048;
-const SHADOW_CASCADE_COUNT: usize = 4;
-const FIRST_CASCADE_DISTANCE: f32 = 48.0;
-const SHADOW_DISTANCE_MULTIPLIER: f32 = 2.25;
-const SHADOW_CASCADE_OVERLAP: f32 = 0.25;
+const SHADOW_MAP_SIZE: usize = 1024;
+const SHADOW_CASCADE_COUNT: usize = 2;
+const FIRST_CASCADE_DISTANCE: f32 = 40.0;
+const SHADOW_DISTANCE_MULTIPLIER: f32 = 1.5;
+const SHADOW_CASCADE_OVERLAP: f32 = 0.20;
 const SHADOW_DEPTH_BIAS: f32 = 0.02;
 const SHADOW_NORMAL_BIAS: f32 = 0.0;
 const MIN_AMBIENT_BRIGHTNESS: f32 = 30.0;
