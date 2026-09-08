@@ -1,18 +1,25 @@
 (
     id: "mineclone:overworld/sky",
-    orbit_tilt_degrees: 12.0,
     sun: (
         texture: "textures/celestial/overworld/sun.png",
         size: 28.0,
         orbit_radius: 180.0,
-        phase_offset_degrees: 0.0,
+        rise_phase: Dawn,
+        set_phase: Dusk,
+        rise_azimuth_degrees: 90.0,
+        set_azimuth_degrees: 270.0,
+        max_altitude_degrees: 72.0,
         tint: (r: 1.0, g: 0.96, b: 0.72),
     ),
     moon: (
         texture: "textures/celestial/overworld/moon.png",
         size: 22.0,
         orbit_radius: 180.0,
-        phase_offset_degrees: 180.0,
+        rise_phase: Dusk,
+        set_phase: Dawn,
+        rise_azimuth_degrees: 90.0,
+        set_azimuth_degrees: 270.0,
+        max_altitude_degrees: 64.0,
         tint: (r: 0.78, g: 0.84, b: 1.0),
     ),
 )
