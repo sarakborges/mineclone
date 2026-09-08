@@ -12,6 +12,8 @@ use crate::{
 const GRASS_BLOCK_ID: &str = "mineclone:grass";
 
 pub fn build_test_chunk(coord: IVec3, blocks: &BlockRegistry) -> VoxelChunk {
+    assert!(coord.y >= 0, "chunk Y cannot be negative: {}", coord.y);
+
     let grass = blocks
         .get(GRASS_BLOCK_ID)
         .unwrap_or_else(|| panic!("missing block definition: {GRASS_BLOCK_ID}"));
