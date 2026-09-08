@@ -10,7 +10,7 @@ mod voxel;
 mod world;
 
 use app::{game_state::GameState, pause_state::PauseState};
-use bevy::prelude::*;
+use bevy::{prelude::*, winit::WINIT_WINDOWS};
 use content::ContentPlugin;
 use gameplay::GameplayPlugin;
 use hud::HudPlugin;
@@ -22,13 +22,14 @@ use screens::{
     starting_screen::StartingScreenPlugin,
 };
 use targeting::block::BlockTargetingPlugin;
+use winit::window::Icon;
 use world::WorldPlugin;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "Mineclone".into(),
+                title: "Asteria".into(),
                 ..default()
             }),
             ..default()
@@ -48,5 +49,39 @@ fn main() {
             BlockTargetingPlugin,
             HudPlugin,
         ))
+        .add_systems(Update, set_window_icon)
         .run();
+}
+
+fn set_window_icon(mut icon_set: Local<bool>) {
+    if *icon_set {
+        return;
+    }
+
+    let mut applied = false;
+
+    WINIT_WINDOWS.with(|windows| {
+        let windows = windows.borrow();
+        if windows.windows.is_empty() {
+            return;
+        }
+
+        let icon_rgba = image::load_from_memory(include_bytes!(
+            "../assets/branding/asteria_icon.png"
+        ))
+        .expect("Asteria window icon should be a valid PNG")
+        .into_rgba8();
+        let (width, height) = icon_rgba.dimensions();
+        let icon = Icon::from_rgba(icon_rgba.into_raw(), width, height)
+            .expect("Asteria window icon should have valid RGBA dimensions");
+
+        for window in windows.windows.values() {
+            window.set_window_icon(Some(icon.clone()));
+            applied = true;
+        }
+    });
+
+    if applied {
+        *icon_set = true;
+    }
 }

@@ -30,8 +30,10 @@ enum StartingScreenAction {
     ExitGame,
 }
 
-fn setup_starting_screen(mut commands: Commands) {
+fn setup_starting_screen(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn((Camera2d, DespawnOnExit(GameState::StartingScreen)));
+
+    let logo = asset_server.load("branding/asteria_logo.png");
 
     commands.spawn((
         DespawnOnExit(GameState::StartingScreen),
@@ -47,14 +49,10 @@ fn setup_starting_screen(mut commands: Commands) {
         BackgroundColor(BACKGROUND_COLOR),
         children![
             (
-                Text::new("MINECLONE"),
-                TextFont {
-                    font_size: FontSize::Px(56.0),
-                    ..default()
-                },
-                TextColor(TEXT_COLOR),
+                ImageNode::new(logo),
                 Node {
-                    margin: UiRect::bottom(px(32)),
+                    width: px(512),
+                    margin: UiRect::bottom(px(24)),
                     ..default()
                 },
             ),
