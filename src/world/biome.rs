@@ -6,19 +6,26 @@ use super::biome_field::BiomeField;
 
 pub const DEFAULT_BIOME_ID: &str = "mineclone:overworld/plains";
 
+#[derive(Clone)]
+pub struct CurrentBiomeInfluence {
+    pub id: String,
+    pub weight: f32,
+}
+
 #[derive(Resource)]
 pub struct CurrentBiome {
     pub id: String,
-    pub secondary_id: String,
-    pub secondary_weight: f32,
+    pub influences: Vec<CurrentBiomeInfluence>,
 }
 
 impl Default for CurrentBiome {
     fn default() -> Self {
         Self {
             id: DEFAULT_BIOME_ID.to_owned(),
-            secondary_id: DEFAULT_BIOME_ID.to_owned(),
-            secondary_weight: 0.0,
+            influences: vec![CurrentBiomeInfluence {
+                id: DEFAULT_BIOME_ID.to_owned(),
+                weight: 1.0,
+            }],
         }
     }
 }
@@ -38,8 +45,12 @@ pub fn track_current_biome(
     if current_biome.id != sample.primary_id {
         current_biome.id = sample.primary_id.to_owned();
     }
-    if current_biome.secondary_id != sample.secondary_id {
-        current_biome.secondary_id = sample.secondary_id.to_owned();
-    }
-    current_biome.secondary_weight = sample.secondary_weight;
+
+    current_biome.influences.clear();
+    current_biome
+        .influences
+        .extend(sample.influences.into_iter().map(|influence| CurrentBiomeInfluence {
+            id: influence.id.to_owned(),
+            weight: influence.weight,
+        }));
 }
