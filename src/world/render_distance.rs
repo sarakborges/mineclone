@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-pub const RENDER_DISTANCE_RADIUS: i32 = 8;
+pub const RENDER_DISTANCE_RADIUS: i32 = 16;
 
 pub fn chunk_coords_in_radius(center: IVec2, radius: i32) -> Vec<IVec2> {
     let mut coords = Vec::new();
