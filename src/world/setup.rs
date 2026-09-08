@@ -10,15 +10,18 @@ use crate::{
 use super::{
     biome_field::BiomeField,
     dimension::CurrentDimension,
-    render_distance::{chunk_coords_in_radius, RenderDistanceSettings},
+    render_distance::chunk_coords_in_cylinder,
     test_world::build_test_chunk,
 };
 
 const GRASS_BLOCK_ID: &str = "mineclone:grass";
+const INITIAL_HORIZONTAL_RADIUS_CHUNKS: i32 = 4;
+const INITIAL_MIN_CHUNK_Y: i32 = -1;
+const INITIAL_MAX_CHUNK_Y: i32 = 0;
 
 #[derive(Resource)]
 pub struct WorldLoadingState {
-    coords: Vec<IVec2>,
+    coords: Vec<IVec3>,
     generated: usize,
     screen_rendered: bool,
     transition_requested: bool,
@@ -43,7 +46,6 @@ pub fn begin_world_loading(
     dimensions: Res<DimensionRegistry>,
     biomes: Res<BiomeRegistry>,
     blocks: Res<BlockRegistry>,
-    render_distance: Res<RenderDistanceSettings>,
 ) {
     let dimension = dimensions
         .get(&current_dimension.id)
@@ -60,7 +62,12 @@ pub fn begin_world_loading(
         metallic,
         ..default()
     });
-    let coords = chunk_coords_in_radius(IVec2::ZERO, render_distance.chunks());
+    let coords = chunk_coords_in_cylinder(
+        IVec3::ZERO,
+        INITIAL_HORIZONTAL_RADIUS_CHUNKS,
+        INITIAL_MIN_CHUNK_Y,
+        INITIAL_MAX_CHUNK_Y,
+    );
 
     commands.insert_resource(VoxelWorld::default());
     commands.insert_resource(biome_field);
@@ -119,8 +126,8 @@ pub fn setup_world(
         MeshMaterial3d(loading_state.material.clone()),
         Transform::from_xyz(
             coord.x as f32 * chunk_size,
-            0.0,
             coord.y as f32 * chunk_size,
+            coord.z as f32 * chunk_size,
         ),
         DespawnOnExit(GameState::Gameplay),
     ));
