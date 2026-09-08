@@ -1,5 +1,4 @@
 pub mod camera;
-pub mod hud;
 pub mod movement;
 
 use bevy::prelude::*;
