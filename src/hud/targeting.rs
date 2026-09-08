@@ -17,11 +17,16 @@ impl Plugin for TargetHudPlugin {
 }
 
 #[derive(Component)]
+struct TargetHudRoot;
+
+#[derive(Component)]
 struct TargetBlockText;
 
 fn spawn_target_hud(mut commands: Commands) {
     commands
         .spawn((
+            TargetHudRoot,
+            Visibility::Hidden,
             Node {
                 position_type: PositionType::Absolute,
                 top: px(16),
@@ -33,10 +38,7 @@ fn spawn_target_hud(mut commands: Commands) {
         ))
         .with_children(|root| {
             root.spawn(surface::hud_panel()).with_children(|panel| {
-                panel.spawn((
-                    typography::hud("Block: -\nPosition: -"),
-                    TargetBlockText,
-                ));
+                panel.spawn((typography::hud(""), TargetBlockText));
             });
         });
 }
@@ -44,19 +46,22 @@ fn spawn_target_hud(mut commands: Commands) {
 fn update_target_hud(
     targeted: Res<TargetedBlock>,
     blocks: Res<BlockRegistry>,
+    mut root_visibility: Single<&mut Visibility, With<TargetHudRoot>>,
     mut target_text: Single<&mut Text, With<TargetBlockText>>,
 ) {
-    target_text.0 = targeted.0.map_or_else(
-        || "Block: -\nPosition: -".to_string(),
-        |hit| {
-            let block_name = blocks
-                .get(hit.block_id)
-                .map_or(hit.block_id, |block| block.name.as_str());
+    let Some(hit) = targeted.0 else {
+        *root_visibility = Visibility::Hidden;
+        return;
+    };
 
-            format!(
-                "Block: {block_name}\nPosition: X {} | Z {} | Y {}",
-                hit.voxel.x, hit.voxel.z, hit.voxel.y
-            )
-        },
+    *root_visibility = Visibility::Visible;
+
+    let block_name = blocks
+        .get(hit.block_id)
+        .map_or(hit.block_id, |block| block.name.as_str());
+
+    target_text.0 = format!(
+        "Block: {block_name}\nPosition: X: {} | Y: {} | Z: {}",
+        hit.voxel.x, hit.voxel.y, hit.voxel.z
     );
 }
