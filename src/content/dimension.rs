@@ -9,6 +9,7 @@ pub struct DimensionDefinition {
     pub name: String,
     pub biomes: Vec<String>,
     pub day_night_cycle: String,
+    pub sky: String,
 }
 
 #[derive(Resource, Default)]
