@@ -5,22 +5,13 @@ use bevy::{
 
 use crate::{
     app::settings_state::SettingsState,
+    ui::{button::menu_button, theme, typography},
     voxel::chunk::CHUNK_SIZE,
     world::render_distance::{
         RenderDistanceSettings, MAX_RENDER_DISTANCE_CHUNKS, MIN_RENDER_DISTANCE_CHUNKS,
     },
 };
 
-const OVERLAY_COLOR: Color = Color::srgba(0.02, 0.025, 0.04, 0.96);
-const PANEL_COLOR: Color = Color::srgb(0.08, 0.095, 0.12);
-const BUTTON_COLOR: Color = Color::srgb(0.12, 0.14, 0.18);
-const BUTTON_HOVER_COLOR: Color = Color::srgb(0.18, 0.21, 0.27);
-const BUTTON_PRESSED_COLOR: Color = Color::srgb(0.09, 0.11, 0.14);
-const BORDER_COLOR: Color = Color::srgb(0.28, 0.32, 0.4);
-const TEXT_COLOR: Color = Color::srgb(0.92, 0.94, 0.97);
-const MUTED_TEXT_COLOR: Color = Color::srgb(0.66, 0.7, 0.78);
-const SLIDER_TRACK_COLOR: Color = Color::srgb(0.12, 0.14, 0.18);
-const SLIDER_THUMB_COLOR: Color = Color::srgb(0.76, 0.82, 0.94);
 const SLIDER_WIDTH: f32 = 360.0;
 const SLIDER_THUMB_SIZE: f32 = 16.0;
 
@@ -58,78 +49,66 @@ struct RenderDistanceValueText;
 fn spawn_settings_menu(mut commands: Commands, render_distance: Res<RenderDistanceSettings>) {
     let chunks = render_distance.chunks();
 
-    commands.spawn((
-        DespawnOnExit(SettingsState::Open),
-        Node {
-            width: percent(100),
-            height: percent(100),
-            position_type: PositionType::Absolute,
-            left: px(0),
-            top: px(0),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            ..default()
-        },
-        BackgroundColor(OVERLAY_COLOR),
-        children![(
+    commands
+        .spawn((
+            DespawnOnExit(SettingsState::Open),
             Node {
-                width: px(520),
-                padding: UiRect::all(px(32)),
-                flex_direction: FlexDirection::Column,
+                width: percent(100),
+                height: percent(100),
+                position_type: PositionType::Absolute,
+                left: px(0),
+                top: px(0),
                 align_items: AlignItems::Center,
-                row_gap: px(20),
-                border: UiRect::all(px(1)),
+                justify_content: JustifyContent::Center,
                 ..default()
             },
-            BackgroundColor(PANEL_COLOR),
-            BorderColor::all(BORDER_COLOR),
-            children![
-                (
-                    Text::new("SETTINGS"),
-                    TextFont {
-                        font_size: FontSize::Px(42.0),
-                        ..default()
-                    },
-                    TextColor(TEXT_COLOR),
+            BackgroundColor(theme::OVERLAY),
+        ))
+        .with_children(|root| {
+            root.spawn((
+                Node {
+                    width: px(560),
+                    padding: UiRect::all(px(34)),
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Center,
+                    row_gap: px(20),
+                    border_radius: BorderRadius::all(px(10)),
+                    ..default()
+                },
+                BackgroundColor(theme::FROSTED_SURFACE),
+                theme::frosted_surface_gradient(),
+                BoxShadow(vec![ShadowStyle {
+                    color: Color::srgba(0.0, 0.0, 0.0, 0.42),
+                    x_offset: px(0),
+                    y_offset: px(12),
+                    spread_radius: px(0),
+                    blur_radius: px(30),
+                }]),
+            ))
+            .with_children(|panel| {
+                panel.spawn((
+                    typography::title("SETTINGS"),
                     Node {
                         margin: UiRect::bottom(px(12)),
                         ..default()
                     },
-                ),
-                (
-                    Text::new("Render Distance"),
-                    TextFont {
-                        font_size: FontSize::Px(24.0),
-                        ..default()
-                    },
-                    TextColor(TEXT_COLOR),
-                ),
-                (
-                    Text::new(render_distance_label(chunks)),
-                    TextFont {
-                        font_size: FontSize::Px(18.0),
-                        ..default()
-                    },
-                    TextColor(MUTED_TEXT_COLOR),
+                ));
+                panel.spawn(typography::label("Render Distance"));
+                panel.spawn((
+                    typography::muted(render_distance_label(chunks)),
                     RenderDistanceValueText,
-                ),
-                render_distance_slider(chunks),
-                (
-                    Text::new("Applied when a world is loaded."),
-                    TextFont {
-                        font_size: FontSize::Px(15.0),
-                        ..default()
-                    },
-                    TextColor(MUTED_TEXT_COLOR),
+                ));
+                panel.spawn(render_distance_slider(chunks));
+                panel.spawn((
+                    typography::caption("Applied when a world is loaded."),
                     Node {
                         margin: UiRect::bottom(px(12)),
                         ..default()
                     },
-                ),
-                back_button(),
-            ],
-        )],
-    ));
+                ));
+                panel.spawn(menu_button("Back", SettingsBackButton));
+            });
+        });
 }
 
 fn render_distance_slider(chunks: i32) -> impl Bundle {
@@ -174,7 +153,7 @@ fn render_distance_slider(chunks: i32) -> impl Bundle {
                     border_radius: BorderRadius::all(px(3)),
                     ..default()
                 },
-                BackgroundColor(SLIDER_TRACK_COLOR),
+                BackgroundColor(theme::SLIDER_TRACK),
             ),
             (
                 SliderThumb,
@@ -188,52 +167,26 @@ fn render_distance_slider(chunks: i32) -> impl Bundle {
                     border_radius: BorderRadius::MAX,
                     ..default()
                 },
-                BackgroundColor(SLIDER_THUMB_COLOR),
+                BackgroundColor(theme::SLIDER_THUMB),
+                BoxShadow(vec![ShadowStyle {
+                    color: theme::CYAN_GLOW,
+                    x_offset: px(0),
+                    y_offset: px(0),
+                    spread_radius: px(0),
+                    blur_radius: px(12),
+                }]),
             ),
         ],
     )
 }
 
-fn back_button() -> impl Bundle {
-    (
-        Button,
-        SettingsBackButton,
-        Node {
-            width: px(280),
-            height: px(56),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            border: UiRect::all(px(1)),
-            ..default()
-        },
-        BackgroundColor(BUTTON_COLOR),
-        BorderColor::all(BORDER_COLOR),
-        children![(
-            Text::new("Back"),
-            TextFont {
-                font_size: FontSize::Px(24.0),
-                ..default()
-            },
-            TextColor(TEXT_COLOR),
-        )],
-    )
-}
-
 fn handle_back_button(
-    mut interactions: Query<
-        (&Interaction, &mut BackgroundColor),
-        (Changed<Interaction>, With<SettingsBackButton>),
-    >,
+    interactions: Query<&Interaction, (Changed<Interaction>, With<SettingsBackButton>)>,
     mut next_settings_state: ResMut<NextState<SettingsState>>,
 ) {
-    for (interaction, mut background) in &mut interactions {
-        match *interaction {
-            Interaction::Pressed => {
-                *background = BUTTON_PRESSED_COLOR.into();
-                next_settings_state.set(SettingsState::Closed);
-            }
-            Interaction::Hovered => *background = BUTTON_HOVER_COLOR.into(),
-            Interaction::None => *background = BUTTON_COLOR.into(),
+    for interaction in &interactions {
+        if *interaction == Interaction::Pressed {
+            next_settings_state.set(SettingsState::Closed);
         }
     }
 }
