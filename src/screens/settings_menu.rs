@@ -5,7 +5,13 @@ use bevy::{
 
 use crate::{
     app::settings_state::SettingsState,
-    ui::{button::menu_button, surface, theme, typography},
+    ui::{
+        button::menu_button,
+        surface,
+        theme,
+        transition::{ScreenTransition, ScreenTransitionTarget},
+        typography,
+    },
     voxel::chunk::CHUNK_SIZE,
     world::render_distance::{
         RenderDistanceSettings, MAX_RENDER_DISTANCE_CHUNKS, MIN_RENDER_DISTANCE_CHUNKS,
@@ -14,9 +20,6 @@ use crate::{
 
 const SLIDER_WIDTH: f32 = 360.0;
 const SLIDER_THUMB_SIZE: f32 = 16.0;
-const MENU_TRANSITION_SECONDS: f32 = 0.18;
-const MENU_START_SCALE: f32 = 0.965;
-const MENU_START_Y: f32 = 14.0;
 
 pub struct SettingsMenuPlugin;
 
@@ -28,25 +31,12 @@ impl Plugin for SettingsMenuPlugin {
                 Update,
                 (
                     handle_close_requests,
-                    animate_settings_transition,
                     sync_render_distance_text,
                     sync_slider_thumb,
                 )
                     .run_if(in_state(SettingsState::Open)),
             );
     }
-}
-
-#[derive(Component)]
-struct SettingsMenuRoot;
-
-#[derive(Component)]
-struct SettingsMenuPanel;
-
-#[derive(Component)]
-struct SettingsMenuTransition {
-    progress: f32,
-    closing: bool,
 }
 
 #[derive(Component)]
@@ -64,11 +54,6 @@ struct RenderDistanceValueText;
 fn spawn_settings_menu(mut commands: Commands, render_distance: Res<RenderDistanceSettings>) {
     commands
         .spawn((
-            SettingsMenuRoot,
-            SettingsMenuTransition {
-                progress: 0.0,
-                closing: false,
-            },
             DespawnOnExit(SettingsState::Open),
             Node {
                 width: percent(100),
@@ -83,12 +68,7 @@ fn spawn_settings_menu(mut commands: Commands, render_distance: Res<RenderDistan
             BackgroundColor(theme::OVERLAY),
         ))
         .with_children(|root| {
-            root.spawn((
-                surface::modal_panel(),
-                SettingsMenuPanel,
-                menu_panel_transform(0.0),
-            ))
-            .with_children(|panel| {
+            root.spawn(surface::modal_panel()).with_children(|panel| {
                 panel.spawn((
                     typography::title("SETTINGS"),
                     Node {
@@ -186,44 +166,14 @@ fn render_distance_slider(chunks: i32) -> impl Bundle {
 fn handle_close_requests(
     keys: Res<ButtonInput<KeyCode>>,
     interactions: Query<&Interaction, (Changed<Interaction>, With<SettingsBackButton>)>,
-    mut transitions: Query<&mut SettingsMenuTransition, With<SettingsMenuRoot>>,
+    mut transition: ResMut<ScreenTransition>,
 ) {
     let back_pressed = interactions
         .iter()
         .any(|interaction| *interaction == Interaction::Pressed);
 
-    if !back_pressed && !keys.just_pressed(KeyCode::Escape) {
-        return;
-    }
-
-    for mut transition in &mut transitions {
-        transition.closing = true;
-    }
-}
-
-fn animate_settings_transition(
-    time: Res<Time>,
-    mut transitions: Query<&mut SettingsMenuTransition, With<SettingsMenuRoot>>,
-    mut panels: Query<&mut UiTransform, With<SettingsMenuPanel>>,
-    mut next_settings_state: ResMut<NextState<SettingsState>>,
-) {
-    let step = time.delta_secs() / MENU_TRANSITION_SECONDS;
-    let Ok(mut panel_transform) = panels.single_mut() else {
-        return;
-    };
-
-    for mut transition in &mut transitions {
-        if transition.closing {
-            transition.progress = (transition.progress - step).max(0.0);
-        } else {
-            transition.progress = (transition.progress + step).min(1.0);
-        }
-
-        *panel_transform = menu_panel_transform(ease_out_cubic(transition.progress));
-
-        if transition.closing && transition.progress <= 0.0 {
-            next_settings_state.set(SettingsState::Closed);
-        }
+    if back_pressed || keys.just_pressed(KeyCode::Escape) {
+        transition.request(ScreenTransitionTarget::settings(SettingsState::Closed));
     }
 }
 
@@ -251,18 +201,6 @@ fn sync_slider_thumb(
     for value in &sliders {
         thumb.left = percent(slider_position(value.0) * 100.0);
     }
-}
-
-fn menu_panel_transform(progress: f32) -> UiTransform {
-    UiTransform {
-        translation: Val2::px(0.0, MENU_START_Y * (1.0 - progress)),
-        scale: Vec2::splat(MENU_START_SCALE + (1.0 - MENU_START_SCALE) * progress),
-        ..default()
-    }
-}
-
-fn ease_out_cubic(value: f32) -> f32 {
-    1.0 - (1.0 - value).powi(3)
 }
 
 fn slider_position(value: f32) -> f32 {
