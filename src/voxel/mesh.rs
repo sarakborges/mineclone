@@ -1,13 +1,15 @@
+mod face;
+
 use bevy::{
     asset::RenderAssetUsages,
     mesh::Indices,
     prelude::*,
     render::render_resource::PrimitiveTopology,
 };
+use face::push_face;
 
 use super::{
     chunk::{VoxelChunk, CHUNK_SIZE},
-    texture_rotation::TextureRotation,
     world::VoxelWorld,
 };
 
@@ -19,7 +21,6 @@ const SOUTH_SHADE: f32 = 0.92;
 const NORTH_SHADE: f32 = 0.86;
 const SIDE_NORMAL_HORIZONTAL: f32 = 0.8;
 const SIDE_NORMAL_UP: f32 = 0.6;
-const FACE_UVS: [[f32; 2]; 4] = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
 
 pub fn build_chunk_mesh<F>(
     world: &VoxelWorld,
@@ -100,7 +101,7 @@ where
                     );
                 }
 
-                if !world.is_solid(world_voxel - IVec3::Y) {
+                if world_voxel.y > 0 && !world.is_solid(world_voxel - IVec3::Y) {
                     push_face(
                         &mut positions,
                         &mut normals,
@@ -157,24 +158,4 @@ where
     .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
     .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
     .with_inserted_indices(Indices::U32(indices))
-}
-
-fn push_face(
-    positions: &mut Vec<[f32; 3]>,
-    normals: &mut Vec<[f32; 3]>,
-    uvs: &mut Vec<[f32; 2]>,
-    colors: &mut Vec<[f32; 4]>,
-    indices: &mut Vec<u32>,
-    vertices: [[f32; 3]; 4],
-    normal: [f32; 3],
-    texture_rotation: TextureRotation,
-    tint: [f32; 3],
-    shade: f32,
-) {
-    let start = positions.len() as u32;
-    positions.extend(vertices);
-    normals.extend([normal; 4]);
-    uvs.extend(texture_rotation.rotate_uvs(FACE_UVS));
-    colors.extend([[tint[0] * shade, tint[1] * shade, tint[2] * shade, 1.0]; 4]);
-    indices.extend([start, start + 1, start + 2, start, start + 2, start + 3]);
 }
