@@ -114,7 +114,7 @@ fn update_celestial_bodies(
             continue;
         };
 
-        transform.translation = camera_position + offset;
+        transform.translation = offset;
         transform.look_at(camera_position, Vec3::Y);
         *visibility = Visibility::Visible;
     }
