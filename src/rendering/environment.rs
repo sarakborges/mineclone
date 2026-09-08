@@ -4,6 +4,7 @@ use crate::{
     app::game_state::GameState,
     content::{
         biome::BiomeRegistry,
+        color::Rgb,
         day_night_cycle::DayNightCycleRegistry,
         dimension::DimensionRegistry,
     },
@@ -56,45 +57,47 @@ fn update_environment_visuals(
     let Some(dimension) = dimensions.get(&current_dimension.id) else {
         return;
     };
-    let Some(primary_biome) = biomes.get(&current_biome.id) else {
-        return;
-    };
-    let secondary_biome = biomes
-        .get(&current_biome.secondary_id)
-        .unwrap_or(primary_biome);
     let Some(cycle) = cycles.get(&dimension.day_night_cycle) else {
         return;
     };
 
     let sample = cycle.sample(clock.normalized_time);
+    let mut sky = Rgb {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+    };
+    let mut fog = Rgb {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+    };
 
-    let primary_sky = primary_biome
-        .visuals
-        .sky_color
-        .get(sample.phase)
-        .lerp(*primary_biome.visuals.sky_color.get(sample.next_phase), sample.transition);
-    let secondary_sky = secondary_biome
-        .visuals
-        .sky_color
-        .get(sample.phase)
-        .lerp(*secondary_biome.visuals.sky_color.get(sample.next_phase), sample.transition);
-    let primary_fog = primary_biome
-        .visuals
-        .fog_color
-        .get(sample.phase)
-        .lerp(*primary_biome.visuals.fog_color.get(sample.next_phase), sample.transition);
-    let secondary_fog = secondary_biome
-        .visuals
-        .fog_color
-        .get(sample.phase)
-        .lerp(*secondary_biome.visuals.fog_color.get(sample.next_phase), sample.transition);
+    for influence in &current_biome.influences {
+        let Some(biome) = biomes.get(&influence.id) else {
+            continue;
+        };
+        let biome_sky = biome
+            .visuals
+            .sky_color
+            .get(sample.phase)
+            .lerp(*biome.visuals.sky_color.get(sample.next_phase), sample.transition);
+        let biome_fog = biome
+            .visuals
+            .fog_color
+            .get(sample.phase)
+            .lerp(*biome.visuals.fog_color.get(sample.next_phase), sample.transition);
 
-    visuals.sky_color = primary_sky
-        .lerp(secondary_sky, current_biome.secondary_weight)
-        .to_color();
-    visuals.fog_color = primary_fog
-        .lerp(secondary_fog, current_biome.secondary_weight)
-        .to_color();
+        sky.r += biome_sky.r * influence.weight;
+        sky.g += biome_sky.g * influence.weight;
+        sky.b += biome_sky.b * influence.weight;
+        fog.r += biome_fog.r * influence.weight;
+        fog.g += biome_fog.g * influence.weight;
+        fog.b += biome_fog.b * influence.weight;
+    }
+
+    visuals.sky_color = sky.to_color();
+    visuals.fog_color = fog.to_color();
     visuals.light_color = sample.light_color.to_color();
     visuals.light_illuminance = sample.light_illuminance;
 }
