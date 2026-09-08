@@ -5,11 +5,6 @@ edition = "2024"
 build = "build.rs"
 default-run = "mineclone"
 
-[workspace]
-members = [".", "tools/dist"]
-default-members = ["."]
-resolver = "3"
-
 [dependencies]
 bevy = { version = "0.19.1", features = ["system_font_discovery"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
