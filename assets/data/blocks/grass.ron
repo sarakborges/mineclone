@@ -1,0 +1,6 @@
+(
+    id: "mineclone:grass",
+    name: "Grass",
+    texture: "textures/blocks/grass_base_64x64.png",
+    rotate_texture: true,
+)
