@@ -1,8 +1,19 @@
 use bevy::prelude::*;
 
-use crate::app::game_state::GameState;
+use crate::{
+    app::game_state::GameState,
+    content::{
+        day_night_cycle::DayNightCycleRegistry,
+        dimension::DimensionRegistry,
+        sky::SkyRegistry,
+    },
+    world::{day_night::DayNightClock, dimension::CurrentDimension},
+};
 
-use super::environment::EnvironmentVisualState;
+use super::{
+    celestial_path::celestial_direction,
+    environment::EnvironmentVisualState,
+};
 
 pub struct LightingPlugin;
 
@@ -34,6 +45,11 @@ fn spawn_sun(mut commands: Commands) {
 
 fn update_lighting(
     visuals: Res<EnvironmentVisualState>,
+    current_dimension: Res<CurrentDimension>,
+    dimensions: Res<DimensionRegistry>,
+    cycles: Res<DayNightCycleRegistry>,
+    skies: Res<SkyRegistry>,
+    clock: Res<DayNightClock>,
     mut ambient_light: ResMut<GlobalAmbientLight>,
     mut sun: Single<(&mut DirectionalLight, &mut Transform), With<SunLight>>,
 ) {
@@ -42,5 +58,24 @@ fn update_lighting(
 
     sun.0.color = visuals.sun_color;
     sun.0.illuminance = visuals.sun_illuminance;
-    sun.1.rotation = visuals.sun_rotation;
+
+    let Some(dimension) = dimensions.get(&current_dimension.id) else {
+        sun.0.illuminance = 0.0;
+        return;
+    };
+    let Some(cycle) = cycles.get(&dimension.day_night_cycle) else {
+        sun.0.illuminance = 0.0;
+        return;
+    };
+    let Some(sky) = skies.get(&dimension.sky) else {
+        sun.0.illuminance = 0.0;
+        return;
+    };
+    let Some(direction_to_sun) = celestial_direction(&sky.sun, cycle, clock.normalized_time) else {
+        sun.0.illuminance = 0.0;
+        return;
+    };
+
+    let light_direction = -direction_to_sun;
+    sun.1.rotation = Quat::from_rotation_arc(Vec3::NEG_Z, light_direction);
 }
