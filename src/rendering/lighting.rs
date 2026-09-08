@@ -6,7 +6,7 @@ use bevy::{
 use crate::{
     app::game_state::GameState,
     voxel::chunk::CHUNK_SIZE,
-    world::render_distance::RENDER_DISTANCE_RADIUS,
+    world::render_distance::RenderDistanceSettings,
 };
 
 use super::environment::EnvironmentVisualState;
@@ -37,8 +37,11 @@ impl Plugin for LightingPlugin {
 #[derive(Component)]
 struct SkyLight;
 
-fn spawn_sky_light(mut commands: Commands) {
-    let shadow_distance = RENDER_DISTANCE_RADIUS as f32
+fn spawn_sky_light(
+    mut commands: Commands,
+    render_distance: Res<RenderDistanceSettings>,
+) {
+    let shadow_distance = render_distance.chunks() as f32
         * CHUNK_SIZE as f32
         * SHADOW_DISTANCE_MULTIPLIER;
     let rotation = Quat::from_rotation_arc(Vec3::NEG_Z, Vec3::NEG_Y);
