@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::block::TargetedBlock;
 use crate::app::game_state::GameState;
 
-const HIGHLIGHT_SCALE: f32 = 1.01;
+const HIGHLIGHT_SCALE: f32 = 1.002;
 
 pub struct TargetHighlightPlugin;
 
