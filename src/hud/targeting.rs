@@ -46,9 +46,11 @@ fn spawn_target_hud(mut commands: Commands) {
 fn update_target_hud(
     targeted: Res<TargetedBlock>,
     blocks: Res<BlockRegistry>,
-    mut root_visibility: Single<&mut Visibility, With<TargetHudRoot>>,
+    root_visibility: Single<&mut Visibility, With<TargetHudRoot>>,
     mut target_text: Single<&mut Text, With<TargetBlockText>>,
 ) {
+    let mut root_visibility = root_visibility.into_inner();
+
     let Some(hit) = targeted.0 else {
         *root_visibility = Visibility::Hidden;
         return;
