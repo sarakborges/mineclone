@@ -2,8 +2,18 @@
     id: "mineclone:overworld/plains",
     name: "Plains",
     visuals: (
-        sky_color: (r: 0.38, g: 0.68, b: 1.00),
-        fog_color: (r: 0.52, g: 0.72, b: 0.90),
+        sky_color: (
+            dawn: (r: 0.72, g: 0.48, b: 0.44),
+            day: (r: 0.38, g: 0.68, b: 1.00),
+            dusk: (r: 0.78, g: 0.40, b: 0.34),
+            night: (r: 0.07, g: 0.09, b: 0.19),
+        ),
+        fog_color: (
+            dawn: (r: 0.78, g: 0.58, b: 0.52),
+            day: (r: 0.52, g: 0.72, b: 0.90),
+            dusk: (r: 0.80, g: 0.48, b: 0.40),
+            night: (r: 0.09, g: 0.11, b: 0.18),
+        ),
         terrain_color: (r: 0.32, g: 0.52, b: 0.27),
         terrain_roughness: 0.95,
         terrain_metallic: 0.0,
