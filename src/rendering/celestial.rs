@@ -1,4 +1,7 @@
-use bevy::prelude::*;
+use bevy::{
+    light::{NotShadowCaster, NotShadowReceiver},
+    prelude::*,
+};
 
 use crate::{
     app::game_state::GameState,
@@ -87,6 +90,8 @@ fn spawn_body(
         MeshMaterial3d(material),
         Transform::default(),
         Visibility::Hidden,
+        NotShadowCaster,
+        NotShadowReceiver,
         CelestialBody(definition.clone()),
         DespawnOnExit(GameState::Gameplay),
     ));
