@@ -55,10 +55,10 @@ fn advance_clock(
         return;
     };
 
-    if cycle.duration_seconds <= 0.0 {
+    if cycle.day_duration_seconds <= 0.0 {
         return;
     }
 
     clock.normalized_time =
-        (clock.normalized_time + time.delta_secs() / cycle.duration_seconds).rem_euclid(1.0);
+        (clock.normalized_time + time.delta_secs() / cycle.day_duration_seconds).rem_euclid(1.0);
 }
