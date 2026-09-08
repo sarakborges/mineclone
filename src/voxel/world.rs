@@ -14,10 +14,15 @@ pub struct VoxelWorld {
 
 impl VoxelWorld {
     pub fn insert_chunk(&mut self, coord: IVec3, chunk: VoxelChunk) {
+        assert!(coord.y >= 0, "chunk Y cannot be negative: {}", coord.y);
         self.chunks.insert(coord, chunk);
     }
 
     pub fn chunk(&self, coord: IVec3) -> Option<&VoxelChunk> {
+        if coord.y < 0 {
+            return None;
+        }
+
         self.chunks.get(&coord)
     }
 
@@ -26,6 +31,10 @@ impl VoxelWorld {
     }
 
     pub fn cell_at(&self, world_position: IVec3) -> Option<VoxelCell> {
+        if world_position.y < 0 {
+            return None;
+        }
+
         let (chunk_coord, local_position) = split_world_position(world_position);
 
         self.chunks.get(&chunk_coord)?.cell_at(
