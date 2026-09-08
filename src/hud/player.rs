@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    player::camera::GameplayCamera,
+    player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
     voxel::coordinates::split_dimension_position,
     world::dimension::CurrentDimension,
 };
@@ -49,7 +49,7 @@ fn update_player_hud(
     dimension: Res<CurrentDimension>,
     mut coordinates_text: Single<&mut Text, With<PlayerCoordinatesText>>,
 ) {
-    let position = player.translation;
+    let position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let coordinates = split_dimension_position(position);
 
     coordinates_text.0 = format!(
