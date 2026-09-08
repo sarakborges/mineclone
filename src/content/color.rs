@@ -20,12 +20,4 @@ impl Rgb {
             b: self.b + (other.b - self.b) * t,
         }
     }
-
-    pub fn multiply(self, other: Self) -> Self {
-        Self {
-            r: self.r * other.r,
-            g: self.g * other.g,
-            b: self.b * other.b,
-        }
-    }
 }
