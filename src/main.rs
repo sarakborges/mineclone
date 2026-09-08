@@ -9,13 +9,17 @@ mod targeting;
 mod voxel;
 mod world;
 
-use app::game_state::GameState;
+use app::{game_state::GameState, pause_state::PauseState};
 use bevy::prelude::*;
 use content::ContentPlugin;
 use gameplay::GameplayPlugin;
 use hud::HudPlugin;
 use rendering::RenderingPlugin;
-use screens::{loading_screen::LoadingScreenPlugin, starting_screen::StartingScreenPlugin};
+use screens::{
+    loading_screen::LoadingScreenPlugin,
+    pause_menu::PauseMenuPlugin,
+    starting_screen::StartingScreenPlugin,
+};
 use targeting::block::BlockTargetingPlugin;
 use world::WorldPlugin;
 
@@ -29,11 +33,13 @@ fn main() {
             ..default()
         }))
         .init_state::<GameState>()
+        .init_state::<PauseState>()
         .insert_resource(ClearColor(Color::srgb(0.02, 0.025, 0.04)))
         .add_plugins((
             ContentPlugin,
             StartingScreenPlugin,
             LoadingScreenPlugin,
+            PauseMenuPlugin,
             WorldPlugin,
             GameplayPlugin,
             RenderingPlugin,

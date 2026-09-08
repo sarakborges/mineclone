@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::app::game_state::GameState;
+use crate::app::{game_state::GameState, pause_state::PauseState};
 use flight::{handle_flight_toggle, move_flying};
 use gravity::apply_gravity;
 use walking::walk;
@@ -20,7 +20,8 @@ impl Plugin for PlayerMovementPlugin {
             Update,
             (handle_flight_toggle, walk, move_flying, apply_gravity)
                 .chain()
-                .run_if(in_state(GameState::Gameplay)),
+                .run_if(in_state(GameState::Gameplay))
+                .run_if(in_state(PauseState::Running)),
         );
     }
 }

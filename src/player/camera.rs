@@ -4,7 +4,7 @@ use bevy::{
     window::{CursorGrabMode, CursorOptions},
 };
 
-use crate::app::game_state::GameState;
+use crate::app::{game_state::GameState, pause_state::PauseState};
 
 const MOUSE_SENSITIVITY: f32 = 0.003;
 const MAX_PITCH: f32 = 1.54;
@@ -14,9 +14,20 @@ pub struct PlayerCameraPlugin;
 impl Plugin for PlayerCameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Gameplay), capture_cursor)
+            .add_systems(OnExit(GameState::Gameplay), release_cursor)
+            .add_systems(
+                OnEnter(PauseState::Paused),
+                release_cursor.run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                OnEnter(PauseState::Running),
+                capture_cursor.run_if(in_state(GameState::Gameplay)),
+            )
             .add_systems(
                 Update,
-                (handle_cursor_grab, look_with_mouse).run_if(in_state(GameState::Gameplay)),
+                (handle_cursor_grab, look_with_mouse)
+                    .run_if(in_state(GameState::Gameplay))
+                    .run_if(in_state(PauseState::Running)),
             );
     }
 }
@@ -32,16 +43,15 @@ fn capture_cursor(mut cursor_options: Single<&mut CursorOptions>) {
     cursor_options.grab_mode = CursorGrabMode::Locked;
 }
 
+fn release_cursor(mut cursor_options: Single<&mut CursorOptions>) {
+    cursor_options.visible = true;
+    cursor_options.grab_mode = CursorGrabMode::None;
+}
+
 fn handle_cursor_grab(
     mut cursor_options: Single<&mut CursorOptions>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
-    keys: Res<ButtonInput<KeyCode>>,
 ) {
-    if keys.just_pressed(KeyCode::Escape) {
-        cursor_options.visible = true;
-        cursor_options.grab_mode = CursorGrabMode::None;
-    }
-
     if mouse_buttons.just_pressed(MouseButton::Left) {
         cursor_options.visible = false;
         cursor_options.grab_mode = CursorGrabMode::Locked;
