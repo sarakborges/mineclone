@@ -25,7 +25,6 @@ pub struct ChunkStreamingState {
     min_chunk_y: i32,
     max_chunk_y: i32,
     desired: HashSet<IVec3>,
-    queued: HashSet<IVec3>,
     pending: VecDeque<IVec3>,
 }
 
@@ -71,8 +70,6 @@ pub fn stream_chunks(
         let Some(coord) = streaming.pending.pop_front() else {
             break;
         };
-
-        streaming.queued.remove(&coord);
 
         if world.has_generated_chunk(coord) {
             continue;
@@ -131,7 +128,6 @@ fn rebuild_queue(
     streaming.max_chunk_y = max_chunk_y;
     streaming.desired = desired;
     streaming.pending = newly_exposed.into_iter().chain(remaining).collect();
-    streaming.queued = streaming.pending.iter().copied().collect();
 }
 
 fn sort_by_distance(coords: &mut [IVec3], center: IVec3) {
