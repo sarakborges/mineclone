@@ -62,21 +62,45 @@ fn update_environment_visuals(
     let Some(dimension) = dimensions.get(&current_dimension.id) else {
         return;
     };
-    let Some(biome) = biomes.get(&current_biome.id) else {
+    let Some(primary_biome) = biomes.get(&current_biome.id) else {
         return;
     };
+    let secondary_biome = biomes
+        .get(&current_biome.secondary_id)
+        .unwrap_or(primary_biome);
     let Some(cycle) = cycles.get(&dimension.day_night_cycle) else {
         return;
     };
 
     let sample = cycle.sample(clock.normalized_time);
-    let sky_start = *biome.visuals.sky_color.get(sample.phase);
-    let sky_end = *biome.visuals.sky_color.get(sample.next_phase);
-    let fog_start = *biome.visuals.fog_color.get(sample.phase);
-    let fog_end = *biome.visuals.fog_color.get(sample.next_phase);
 
-    visuals.sky_color = sky_start.lerp(sky_end, sample.transition).to_color();
-    visuals.fog_color = fog_start.lerp(fog_end, sample.transition).to_color();
+    let primary_sky = primary_biome
+        .visuals
+        .sky_color
+        .get(sample.phase)
+        .lerp(*primary_biome.visuals.sky_color.get(sample.next_phase), sample.transition);
+    let secondary_sky = secondary_biome
+        .visuals
+        .sky_color
+        .get(sample.phase)
+        .lerp(*secondary_biome.visuals.sky_color.get(sample.next_phase), sample.transition);
+    let primary_fog = primary_biome
+        .visuals
+        .fog_color
+        .get(sample.phase)
+        .lerp(*primary_biome.visuals.fog_color.get(sample.next_phase), sample.transition);
+    let secondary_fog = secondary_biome
+        .visuals
+        .fog_color
+        .get(sample.phase)
+        .lerp(*secondary_biome.visuals.fog_color.get(sample.next_phase), sample.transition);
+
+    visuals.sky_color = primary_sky
+        .lerp(secondary_sky, current_biome.secondary_weight)
+        .to_color();
+    visuals.fog_color = primary_fog
+        .lerp(secondary_fog, current_biome.secondary_weight)
+        .to_color();
     visuals.ambient_color = sample.ambient_color.to_color();
     visuals.ambient_brightness = sample.ambient_brightness;
     visuals.sun_color = sample.sun_color.to_color();
