@@ -3,35 +3,27 @@ use bevy::prelude::*;
 use super::theme;
 
 pub fn modal_panel() -> impl Bundle {
-    (
-        Node {
-            width: px(560),
-            padding: UiRect::all(px(34)),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Center,
-            row_gap: px(20),
-            border_radius: BorderRadius::all(px(6)),
-            ..default()
-        },
-        BackgroundColor(theme::FROSTED_SURFACE),
-        theme::frosted_surface_gradient(),
-        BoxShadow(vec![
-            ShadowStyle {
-                color: Color::srgba(0.0, 0.0, 0.0, 0.44),
-                x_offset: px(0),
-                y_offset: px(12),
-                spread_radius: px(0),
-                blur_radius: px(30),
-            },
-            ShadowStyle {
-                color: Color::srgba(0.42, 0.24, 0.92, 0.12),
-                x_offset: px(0),
-                y_offset: px(0),
-                spread_radius: px(-6),
-                blur_radius: px(26),
-            },
-        ]),
-    )
+    frosted_surface(Node {
+        width: px(560),
+        padding: UiRect::all(px(34)),
+        flex_direction: FlexDirection::Column,
+        align_items: AlignItems::Center,
+        row_gap: px(20),
+        border_radius: BorderRadius::all(px(6)),
+        ..default()
+    })
+}
+
+pub fn settings_section() -> impl Bundle {
+    frosted_surface(Node {
+        width: percent(100),
+        padding: UiRect::all(px(30)),
+        flex_direction: FlexDirection::Column,
+        align_items: AlignItems::Stretch,
+        row_gap: px(18),
+        border_radius: BorderRadius::all(px(8)),
+        ..default()
+    })
 }
 
 pub fn hud_panel() -> impl Bundle {
@@ -54,5 +46,29 @@ pub fn hud_panel() -> impl Bundle {
             spread_radius: px(0),
             blur_radius: px(16),
         }]),
+    )
+}
+
+fn frosted_surface(node: Node) -> impl Bundle {
+    (
+        node,
+        BackgroundColor(theme::FROSTED_SURFACE),
+        theme::frosted_surface_gradient(),
+        BoxShadow(vec![
+            ShadowStyle {
+                color: Color::srgba(0.0, 0.0, 0.0, 0.44),
+                x_offset: px(0),
+                y_offset: px(12),
+                spread_radius: px(0),
+                blur_radius: px(30),
+            },
+            ShadowStyle {
+                color: Color::srgba(0.42, 0.24, 0.92, 0.12),
+                x_offset: px(0),
+                y_offset: px(0),
+                spread_radius: px(-6),
+                blur_radius: px(26),
+            },
+        ]),
     )
 }
