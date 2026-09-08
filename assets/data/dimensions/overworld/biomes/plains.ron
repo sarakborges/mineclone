@@ -14,8 +14,8 @@
             dusk: (r: 0.80, g: 0.48, b: 0.40),
             night: (r: 0.09, g: 0.11, b: 0.18),
         ),
-        terrain_color: (r: 0.32, g: 0.52, b: 0.27),
-        terrain_roughness: 0.95,
+        terrain_color: (r: 0.44, g: 0.66, b: 0.36),
+        terrain_roughness: 0.97,
         terrain_metallic: 0.0,
     ),
 )
