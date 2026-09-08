@@ -5,7 +5,7 @@ use crate::{
     content::{day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry},
 };
 
-use super::dimension::CurrentDimension;
+use super::{dimension::CurrentDimension, WorldLoadMode};
 
 #[derive(Resource)]
 pub struct DayNightClock {
@@ -39,8 +39,13 @@ fn initialize_clock(
     dimension: Res<CurrentDimension>,
     dimensions: Res<DimensionRegistry>,
     cycles: Res<DayNightCycleRegistry>,
+    load_mode: Res<WorldLoadMode>,
     mut clock: ResMut<DayNightClock>,
 ) {
+    if *load_mode == WorldLoadMode::Load {
+        return;
+    }
+
     let dimension = dimensions
         .get(&dimension.id)
         .unwrap_or_else(|| panic!("missing dimension definition: {}", dimension.id));
