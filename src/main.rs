@@ -1,9 +1,11 @@
+mod block_targeting;
 mod game_state;
 mod gameplay;
 mod starting_screen;
 mod voxel_chunk;
 
 use bevy::prelude::*;
+use block_targeting::BlockTargetingPlugin;
 use game_state::GameState;
 use gameplay::GameplayPlugin;
 use starting_screen::StartingScreenPlugin;
@@ -19,6 +21,6 @@ fn main() {
         }))
         .init_state::<GameState>()
         .insert_resource(ClearColor(Color::srgb(0.02, 0.025, 0.04)))
-        .add_plugins((StartingScreenPlugin, GameplayPlugin))
+        .add_plugins((StartingScreenPlugin, GameplayPlugin, BlockTargetingPlugin))
         .run();
 }
