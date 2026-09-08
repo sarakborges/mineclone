@@ -1,0 +1,11 @@
+(
+    id: "mineclone:overworld/plains",
+    name: "Plains",
+    visuals: (
+        sky_color: (r: 0.38, g: 0.68, b: 1.00),
+        fog_color: (r: 0.52, g: 0.72, b: 0.90),
+        terrain_color: (r: 0.32, g: 0.52, b: 0.27),
+        terrain_roughness: 0.95,
+        terrain_metallic: 0.0,
+    ),
+)
