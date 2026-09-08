@@ -31,7 +31,7 @@ pub fn menu_button<A: Component>(label: &'static str, action: A) -> impl Bundle 
 }
 
 pub fn animate_buttons(
-    time: Res<Time>,
+    time: Res<Time<Real>>,
     mut buttons: Query<
         (
             &Interaction,
