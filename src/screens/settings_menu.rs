@@ -1,5 +1,7 @@
 use bevy::{
+    asset::RenderAssetUsages,
     prelude::*,
+    render::view::screenshot::{Screenshot, ScreenshotCaptured},
     ui_widgets::{observe, Slider, SliderRange, SliderThumb, SliderValue, TrackClick, ValueChange},
 };
 
@@ -14,13 +16,15 @@ use crate::{
 
 const SLIDER_WIDTH: f32 = 360.0;
 const SLIDER_THUMB_SIZE: f32 = 16.0;
+const BACKDROP_DOWNSCALE: u32 = 4;
+const BACKDROP_BLUR_SIGMA: f32 = 4.5;
 
 pub struct SettingsMenuPlugin;
 
 impl Plugin for SettingsMenuPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<SettingsState>()
-            .add_systems(OnEnter(SettingsState::Open), spawn_settings_menu)
+            .add_systems(OnEnter(SettingsState::Open), capture_settings_backdrop)
             .add_systems(
                 Update,
                 (
@@ -46,9 +50,45 @@ struct RenderDistanceSliderThumb;
 #[derive(Component)]
 struct RenderDistanceValueText;
 
-fn spawn_settings_menu(mut commands: Commands, render_distance: Res<RenderDistanceSettings>) {
-    let chunks = render_distance.chunks();
+fn capture_settings_backdrop(mut commands: Commands) {
+    commands
+        .spawn(Screenshot::primary_window())
+        .observe(build_settings_menu_from_capture);
+}
 
+fn build_settings_menu_from_capture(
+    capture: On<ScreenshotCaptured>,
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    render_distance: Res<RenderDistanceSettings>,
+) {
+    let backdrop = capture
+        .image
+        .clone()
+        .try_into_dynamic()
+        .ok()
+        .map(|source| {
+            let width = (source.width() / BACKDROP_DOWNSCALE).max(1);
+            let height = (source.height() / BACKDROP_DOWNSCALE).max(1);
+            let softened = source
+                .resize_exact(width, height, ::image::imageops::FilterType::Triangle)
+                .blur(BACKDROP_BLUR_SIGMA);
+
+            images.add(Image::from_dynamic(
+                softened,
+                true,
+                RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+            ))
+        });
+
+    spawn_settings_menu(&mut commands, backdrop, render_distance.chunks());
+}
+
+fn spawn_settings_menu(
+    commands: &mut Commands,
+    backdrop: Option<Handle<Image>>,
+    chunks: i32,
+) {
     commands
         .spawn((
             DespawnOnExit(SettingsState::Open),
@@ -62,9 +102,43 @@ fn spawn_settings_menu(mut commands: Commands, render_distance: Res<RenderDistan
                 justify_content: JustifyContent::Center,
                 ..default()
             },
-            BackgroundColor(theme::OVERLAY),
+            BackgroundColor(if backdrop.is_some() {
+                Color::NONE
+            } else {
+                theme::OVERLAY
+            }),
         ))
         .with_children(|root| {
+            if let Some(backdrop) = backdrop {
+                root.spawn((
+                    ImageNode::new(backdrop),
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: px(0),
+                        right: px(0),
+                        top: px(0),
+                        bottom: px(0),
+                        width: percent(100),
+                        height: percent(100),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ));
+
+                root.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: px(0),
+                        right: px(0),
+                        top: px(0),
+                        bottom: px(0),
+                        ..default()
+                    },
+                    BackgroundColor(theme::OVERLAY),
+                    Pickable::IGNORE,
+                ));
+            }
+
             root.spawn((
                 Node {
                     width: px(560),
