@@ -9,6 +9,7 @@
         rise_azimuth_degrees: 90.0,
         set_azimuth_degrees: 270.0,
         max_altitude_degrees: 72.0,
+        light_fade_altitude_degrees: 25.0,
         tint: (r: 1.0, g: 0.96, b: 0.72),
     ),
     moon: (
@@ -20,6 +21,7 @@
         rise_azimuth_degrees: 90.0,
         set_azimuth_degrees: 270.0,
         max_altitude_degrees: 64.0,
+        light_fade_altitude_degrees: 0.0,
         tint: (r: 0.78, g: 0.84, b: 1.0),
     ),
 )
