@@ -2,18 +2,10 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    content::{
-        biome::BiomeRegistry,
-        day_night_cycle::DayNightCycleRegistry,
-        dimension::DimensionRegistry,
-    },
+    content::{biome::BiomeRegistry, dimension::DimensionRegistry},
     player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
-    ui::{surface, typography},
-    world::{
-        biome::CurrentBiome,
-        day_night::DayNightClock,
-        dimension::CurrentDimension,
-    },
+    ui::typography,
+    world::{biome::CurrentBiome, dimension::CurrentDimension},
 };
 
 pub struct WorldHudPlugin;
@@ -26,29 +18,54 @@ impl Plugin for WorldHudPlugin {
 }
 
 #[derive(Component)]
-struct WorldHudText;
+struct DimensionHudText;
+
+#[derive(Component)]
+struct BiomeHudText;
+
+#[derive(Component)]
+struct CoordinatesHudText;
 
 fn spawn_world_hud(mut commands: Commands) {
+    let shadow = TextShadow {
+        offset: Vec2::new(1.5, 1.5),
+        color: Color::srgba(0.0, 0.0, 0.0, 0.92),
+    };
+
     commands
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
-                top: px(16),
+                top: px(14),
                 left: px(0),
                 width: percent(100),
-                justify_content: JustifyContent::Center,
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                row_gap: px(2),
                 ..default()
             },
             Pickable::IGNORE,
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|root| {
-            root.spawn(surface::hud_panel()).with_children(|panel| {
-                panel.spawn((
-                    typography::hud("- - -\nDay 1 - 00:00\nX 0 | Z 0 | Y 0"),
-                    WorldHudText,
-                ));
-            });
+            root.spawn((
+                typography::hud_heading("-"),
+                TextLayout::justify(Justify::Center),
+                shadow,
+                DimensionHudText,
+            ));
+            root.spawn((
+                typography::hud_subheading("-"),
+                TextLayout::justify(Justify::Center),
+                shadow,
+                BiomeHudText,
+            ));
+            root.spawn((
+                typography::hud("X: 0 | Y: 0 | Z: 0"),
+                TextLayout::justify(Justify::Center),
+                shadow,
+                CoordinatesHudText,
+            ));
         });
 }
 
@@ -56,36 +73,27 @@ fn update_world_hud(
     player: Single<&Transform, With<GameplayCamera>>,
     dimension: Res<CurrentDimension>,
     biome: Res<CurrentBiome>,
-    clock: Res<DayNightClock>,
     dimensions: Res<DimensionRegistry>,
     biomes: Res<BiomeRegistry>,
-    cycles: Res<DayNightCycleRegistry>,
-    mut world_text: Single<&mut Text, With<WorldHudText>>,
+    mut dimension_text: Single<&mut Text, With<DimensionHudText>>,
+    mut biome_text: Single<&mut Text, With<BiomeHudText>>,
+    mut coordinates_text: Single<&mut Text, With<CoordinatesHudText>>,
 ) {
     let position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let block_position = position.floor().as_ivec3();
-    let dimension_definition = dimensions.get(&dimension.id);
-    let dimension_name = dimension_definition
+    let dimension_name = dimensions
+        .get(&dimension.id)
         .map(|definition| definition.name.as_str())
         .unwrap_or(dimension.id.as_str());
     let biome_name = biomes
         .get(&biome.id)
         .map(|definition| definition.name.as_str())
         .unwrap_or(biome.id.as_str());
-    let (hour, minute) = dimension_definition
-        .and_then(|definition| cycles.get(&definition.day_night_cycle))
-        .map(|cycle| cycle.world_time(clock.normalized_time))
-        .unwrap_or((0, 0));
 
-    world_text.0 = format!(
-        "{} - {}\nDay {} - {:02}:{:02}\nX {} | Z {} | Y {}",
-        dimension_name,
-        biome_name,
-        clock.day,
-        hour,
-        minute,
-        block_position.x,
-        block_position.z,
-        block_position.y,
+    dimension_text.0 = dimension_name.to_string();
+    biome_text.0 = biome_name.to_string();
+    coordinates_text.0 = format!(
+        "X: {} | Y: {} | Z: {}",
+        block_position.x, block_position.y, block_position.z
     );
 }
