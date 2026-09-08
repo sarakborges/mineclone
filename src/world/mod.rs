@@ -13,6 +13,7 @@ use bevy::prelude::*;
 
 use crate::app::game_state::GameState;
 use biome::{track_current_biome, CurrentBiome};
+use chunk_rendering::{clear_chunk_render_pool, ChunkRenderPool};
 use chunk_unloading::unload_chunk_meshes;
 use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
@@ -29,9 +30,11 @@ impl Plugin for WorldPlugin {
             .init_resource::<CurrentBiome>()
             .init_resource::<RenderDistanceSettings>()
             .init_resource::<ChunkStreamingState>()
+            .init_resource::<ChunkRenderPool>()
             .add_plugins(DayNightPlugin)
             .add_systems(OnEnter(GameState::Loading), begin_world_loading)
             .add_systems(OnEnter(GameState::Gameplay), reset_chunk_streaming)
+            .add_systems(OnExit(GameState::Gameplay), clear_chunk_render_pool)
             .add_systems(Update, setup_world.run_if(in_state(GameState::Loading)))
             .add_systems(
                 Update,
