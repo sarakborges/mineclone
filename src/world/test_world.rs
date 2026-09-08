@@ -6,23 +6,10 @@ use crate::{
         cell::VoxelCell,
         chunk::{VoxelChunk, CHUNK_SIZE},
         texture_rotation::TextureRotation,
-        world::VoxelWorld,
     },
 };
 
-use super::render_distance::chunk_coords_in_radius;
-
 const GRASS_BLOCK_ID: &str = "mineclone:grass";
-
-pub fn build_test_world(center: IVec2, radius: i32, blocks: &BlockRegistry) -> VoxelWorld {
-    let mut world = VoxelWorld::default();
-
-    for coord in chunk_coords_in_radius(center, radius) {
-        world.insert_chunk(coord, build_test_chunk(coord, blocks));
-    }
-
-    world
-}
 
 pub fn build_test_chunk(coord: IVec2, blocks: &BlockRegistry) -> VoxelChunk {
     let grass = blocks
