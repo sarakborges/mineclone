@@ -6,10 +6,12 @@ use crate::{
         biome_terrain::BiomeTerrain,
         block::BlockRegistry,
         dimension::DimensionDefinition,
+        fluid::FluidRegistry,
     },
     voxel::{
         cell::VoxelCell,
         chunk::{VoxelChunk, CHUNK_SIZE},
+        fluid::FluidCell,
         texture_rotation::TextureRotation,
     },
 };
@@ -23,6 +25,7 @@ const NOISE_OCTAVES: usize = 4;
 pub fn build_chunk(
     coord: IVec3,
     blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
@@ -44,28 +47,46 @@ pub fn build_chunk(
         for local_x in 0..CHUNK_SIZE {
             let world_x = chunk_origin.x + local_x as i32;
             let world_z = chunk_origin.z + local_z as i32;
-            let column_height = surface_height(
-                IVec2::new(world_x, world_z),
-                dimension,
-                biomes,
-                biome_field,
-            );
+            let position = IVec2::new(world_x, world_z);
+            let column_height = surface_height(position, dimension, biomes, biome_field);
+            let sample = biome_field.sample(position.as_vec2() + Vec2::splat(0.5));
+            let primary_biome = biomes
+                .get(sample.primary_id)
+                .unwrap_or_else(|| panic!("missing biome definition: {}", sample.primary_id));
+            let surface_fluid = primary_biome.surface_fluid.as_deref().map(|fluid_id| {
+                fluids.id_of(fluid_id).unwrap_or_else(|| {
+                    panic!(
+                        "biome {} references missing surface fluid: {fluid_id}",
+                        primary_biome.id
+                    )
+                })
+            });
 
             for local_y in 0..CHUNK_SIZE {
                 let world_y = chunk_origin.y + local_y as i32;
 
-                if world_y >= column_height {
+                if world_y < column_height {
+                    let world_position = IVec3::new(world_x, world_y, world_z);
+                    let rotation = texture_rotation_for(world_position, grass.rotate_texture);
+                    chunk.set_block(
+                        local_x,
+                        local_y,
+                        local_z,
+                        Some(VoxelCell::new(GRASS_BLOCK_ID, rotation)),
+                    );
                     continue;
                 }
 
-                let world_position = IVec3::new(world_x, world_y, world_z);
-                let rotation = texture_rotation_for(world_position, grass.rotate_texture);
-                chunk.set_block(
-                    local_x,
-                    local_y,
-                    local_z,
-                    Some(VoxelCell::new(GRASS_BLOCK_ID, rotation)),
-                );
+                if world_y < dimension.sea_level {
+                    if let Some(fluid_id) = surface_fluid {
+                        chunk.set_fluid(
+                            local_x,
+                            local_y,
+                            local_z,
+                            Some(FluidCell::source(fluid_id)),
+                        );
+                    }
+                }
             }
         }
     }

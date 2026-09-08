@@ -1,0 +1,76 @@
+use std::collections::HashMap;
+
+use bevy::prelude::*;
+use serde::Deserialize;
+
+use super::color::Rgb;
+
+pub type FluidId = u16;
+
+#[derive(Clone, Deserialize)]
+pub struct FluidDefinition {
+    pub id: String,
+    pub name: String,
+    pub color: Rgb,
+    pub opacity: f32,
+    pub roughness: f32,
+    #[serde(default)]
+    pub metallic: f32,
+}
+
+#[derive(Resource, Default)]
+pub struct FluidRegistry {
+    definitions: Vec<FluidDefinition>,
+    ids: HashMap<String, FluidId>,
+}
+
+impl FluidRegistry {
+    pub fn insert(&mut self, definition: FluidDefinition) {
+        assert!(
+            (0.0..=1.0).contains(&definition.opacity),
+            "fluid {} opacity must be between 0 and 1",
+            definition.id
+        );
+        assert!(
+            (0.0..=1.0).contains(&definition.roughness),
+            "fluid {} roughness must be between 0 and 1",
+            definition.id
+        );
+        assert!(
+            (0.0..=1.0).contains(&definition.metallic),
+            "fluid {} metallic must be between 0 and 1",
+            definition.id
+        );
+
+        if let Some(&fluid_id) = self.ids.get(&definition.id) {
+            self.definitions[fluid_id as usize] = definition;
+            return;
+        }
+
+        let index = self.definitions.len();
+        assert!(
+            index <= u16::MAX as usize,
+            "fluid registry cannot exceed {} definitions",
+            u16::MAX
+        );
+        let fluid_id = index as FluidId;
+
+        self.ids.insert(definition.id.clone(), fluid_id);
+        self.definitions.push(definition);
+    }
+
+    pub fn id_of(&self, id: &str) -> Option<FluidId> {
+        self.ids.get(id).copied()
+    }
+
+    pub fn get(&self, fluid_id: FluidId) -> Option<&FluidDefinition> {
+        self.definitions.get(fluid_id as usize)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (FluidId, &FluidDefinition)> {
+        self.definitions
+            .iter()
+            .enumerate()
+            .map(|(index, definition)| (index as FluidId, definition))
+    }
+}

@@ -9,6 +9,7 @@ use super::{
     block::{BlockDefinition, BlockRegistry},
     day_night_cycle::{DayNightCycleDefinition, DayNightCycleRegistry},
     dimension::{DimensionDefinition, DimensionRegistry},
+    fluid::{FluidDefinition, FluidRegistry},
     json_file::{collect_json_files, read_json_definition},
     sky::{SkyDefinition, SkyRegistry},
 };
@@ -18,6 +19,7 @@ pub(crate) struct LoadedContent {
     pub blocks: BlockRegistry,
     pub dimensions: DimensionRegistry,
     pub day_night_cycles: DayNightCycleRegistry,
+    pub fluids: FluidRegistry,
     pub skies: SkyRegistry,
 }
 
@@ -27,6 +29,7 @@ impl LoadedContent {
         commands.insert_resource(self.blocks);
         commands.insert_resource(self.dimensions);
         commands.insert_resource(self.day_night_cycles);
+        commands.insert_resource(self.fluids);
         commands.insert_resource(self.skies);
     }
 }
@@ -40,6 +43,7 @@ pub(crate) fn read_content() -> LoadedContent {
     let mut block_registry = BlockRegistry::default();
     let mut dimension_registry = DimensionRegistry::default();
     let mut day_night_cycle_registry = DayNightCycleRegistry::default();
+    let mut fluid_registry = FluidRegistry::default();
     let mut sky_registry = SkyRegistry::default();
     let mut files = Vec::new();
 
@@ -52,6 +56,7 @@ pub(crate) fn read_content() -> LoadedContent {
             &mut block_registry,
             &mut dimension_registry,
             &mut day_night_cycle_registry,
+            &mut fluid_registry,
             &mut sky_registry,
         );
     }
@@ -61,6 +66,7 @@ pub(crate) fn read_content() -> LoadedContent {
         blocks: block_registry,
         dimensions: dimension_registry,
         day_night_cycles: day_night_cycle_registry,
+        fluids: fluid_registry,
         skies: sky_registry,
     }
 }
@@ -71,6 +77,7 @@ fn load_definition(
     block_registry: &mut BlockRegistry,
     dimension_registry: &mut DimensionRegistry,
     day_night_cycle_registry: &mut DayNightCycleRegistry,
+    fluid_registry: &mut FluidRegistry,
     sky_registry: &mut SkyRegistry,
 ) {
     let file_name = path
@@ -88,6 +95,8 @@ fn load_definition(
         biome_registry.insert(read_json_definition::<BiomeDefinition>(path));
     } else if path_has_component(path, "blocks") {
         block_registry.insert(read_json_definition::<BlockDefinition>(path));
+    } else if path_has_component(path, "fluids") {
+        fluid_registry.insert(read_json_definition::<FluidDefinition>(path));
     }
 }
 

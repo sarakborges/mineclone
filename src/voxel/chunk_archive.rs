@@ -1,6 +1,9 @@
+use crate::content::fluid::FluidId;
+
 use super::{
     cell::VoxelCell,
     chunk::{VoxelChunk, CHUNK_SIZE},
+    fluid::FluidCell,
     texture_rotation::TextureRotation,
 };
 
@@ -14,10 +17,18 @@ struct ArchivedCell {
     rotation: u8,
 }
 
+#[derive(Clone, Copy)]
+struct ArchivedFluidCell {
+    fluid_id: FluidId,
+    level: u8,
+}
+
 pub struct ArchivedChunk {
     occupancy: [u64; OCCUPANCY_WORDS],
     palette: Vec<&'static str>,
     cells: Vec<ArchivedCell>,
+    fluid_occupancy: [u64; OCCUPANCY_WORDS],
+    fluid_cells: Vec<ArchivedFluidCell>,
 }
 
 impl ArchivedChunk {
@@ -25,6 +36,8 @@ impl ArchivedChunk {
         let mut occupancy = [0_u64; OCCUPANCY_WORDS];
         let mut palette = Vec::<&'static str>::new();
         let mut cells = Vec::new();
+        let mut fluid_occupancy = [0_u64; OCCUPANCY_WORDS];
+        let mut fluid_cells = Vec::new();
 
         for index in 0..CHUNK_VOLUME {
             let (x, y, z) = coordinates(index);
@@ -52,10 +65,26 @@ impl ArchivedChunk {
             });
         }
 
+        for index in 0..CHUNK_VOLUME {
+            let (x, y, z) = coordinates(index);
+            let Some(fluid) = chunk.fluid_at(x as i32, y as i32, z as i32) else {
+                continue;
+            };
+
+            fluid_occupancy[index / u64::BITS as usize] |=
+                1_u64 << (index % u64::BITS as usize);
+            fluid_cells.push(ArchivedFluidCell {
+                fluid_id: fluid.fluid_id,
+                level: fluid.level,
+            });
+        }
+
         Self {
             occupancy,
             palette,
             cells,
+            fluid_occupancy,
+            fluid_cells,
         }
     }
 
@@ -84,6 +113,28 @@ impl ArchivedChunk {
                     block_id,
                     TextureRotation::from_quarter_turn(archived.rotation),
                 )),
+            );
+        }
+
+        let mut archived_fluids = self.fluid_cells.iter();
+
+        for index in 0..CHUNK_VOLUME {
+            let occupied = self.fluid_occupancy[index / u64::BITS as usize]
+                & (1_u64 << (index % u64::BITS as usize))
+                != 0;
+            if !occupied {
+                continue;
+            }
+
+            let archived = archived_fluids
+                .next()
+                .expect("archived chunk fluid occupancy should match archived fluid cells");
+            let (x, y, z) = coordinates(index);
+            chunk.set_fluid(
+                x,
+                y,
+                z,
+                Some(FluidCell::new(archived.fluid_id, archived.level)),
             );
         }
 

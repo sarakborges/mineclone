@@ -7,6 +7,7 @@ use crate::{
         biome::BiomeRegistry,
         block::BlockRegistry,
         dimension::DimensionRegistry,
+        fluid::FluidRegistry,
     },
     player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
     voxel::{coordinates::split_dimension_position, world::VoxelWorld},
@@ -14,7 +15,9 @@ use crate::{
 
 use super::{
     biome_field::BiomeField,
-    chunk_rendering::{spawn_chunk_mesh, ChunkRenderPool, TerrainMaterials},
+    chunk_rendering::{
+        spawn_chunk_mesh, ChunkRenderPool, FluidMaterials, TerrainMaterials,
+    },
     dimension::CurrentDimension,
     render_distance::{chunk_coords_in_cylinder, RenderDistanceSettings},
     terrain::{build_chunk, chunk_y_bounds},
@@ -41,9 +44,11 @@ pub fn stream_chunks(
     current_dimension: Res<CurrentDimension>,
     dimensions: Res<DimensionRegistry>,
     blocks: Res<BlockRegistry>,
+    fluids: Res<FluidRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
-    materials: Res<TerrainMaterials>,
+    terrain_materials: Res<TerrainMaterials>,
+    fluid_materials: Res<FluidMaterials>,
     render_distance: Res<RenderDistanceSettings>,
     mut world: ResMut<VoxelWorld>,
     mut streaming: ResMut<ChunkStreamingState>,
@@ -84,7 +89,14 @@ pub fn stream_chunks(
                 "generated chunk must be resident or archived: {coord:?}"
             );
         } else {
-            let chunk = build_chunk(coord, &blocks, dimension, &biomes, &biome_field);
+            let chunk = build_chunk(
+                coord,
+                &blocks,
+                &fluids,
+                dimension,
+                &biomes,
+                &biome_field,
+            );
             world.insert_chunk(coord, chunk);
         }
 
@@ -100,7 +112,8 @@ pub fn stream_chunks(
             chunk,
             &biomes,
             &biome_field,
-            &materials,
+            &terrain_materials,
+            &fluid_materials,
         );
     }
 }

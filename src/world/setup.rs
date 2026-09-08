@@ -6,6 +6,7 @@ use crate::{
         biome::BiomeRegistry,
         block::BlockRegistry,
         dimension::{DimensionDefinition, DimensionRegistry},
+        fluid::FluidRegistry,
         read_content,
     },
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
@@ -14,7 +15,9 @@ use crate::{
 
 use super::{
     biome_field::BiomeField,
-    chunk_rendering::{spawn_chunk_mesh, ChunkRenderPool, TerrainMaterials},
+    chunk_rendering::{
+        spawn_chunk_mesh, ChunkRenderPool, FluidMaterials, TerrainMaterials,
+    },
     dimension::CurrentDimension,
     render_distance::chunk_coords_in_cylinder,
     terrain::{build_chunk, chunk_y_bounds},
@@ -56,6 +59,7 @@ pub fn begin_world_loading(
     dimensions: Res<DimensionRegistry>,
     biomes: Res<BiomeRegistry>,
     blocks: Res<BlockRegistry>,
+    fluids: Res<FluidRegistry>,
     existing_world: Option<Res<VoxelWorld>>,
 ) {
     let fresh_content = if *load_mode == WorldLoadMode::New {
@@ -72,6 +76,9 @@ pub fn begin_world_loading(
     let blocks_ref = fresh_content
         .as_ref()
         .map_or(&*blocks, |content| &content.blocks);
+    let fluids_ref = fresh_content
+        .as_ref()
+        .map_or(&*fluids, |content| &content.fluids);
     let dimension = dimensions_ref
         .get(&current_dimension.id)
         .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
@@ -97,6 +104,8 @@ pub fn begin_world_loading(
         front: create_material(&grass.textures.front),
         back: create_material(&grass.textures.back),
     };
+    drop(create_material);
+    let fluid_materials = FluidMaterials::from_registry(fluids_ref, &mut materials);
     let (min_chunk_y, max_chunk_y) = chunk_y_bounds(dimension, biomes_ref);
     let coords = chunk_coords_in_cylinder(
         IVec3::new(0, min_chunk_y, 0),
@@ -121,6 +130,7 @@ pub fn begin_world_loading(
 
     commands.insert_resource(biome_field);
     commands.insert_resource(terrain_materials);
+    commands.insert_resource(fluid_materials);
     commands.insert_resource(WorldLoadingState {
         coords,
         generated: 0,
@@ -139,9 +149,11 @@ pub fn setup_world(
     current_dimension: Res<CurrentDimension>,
     dimensions: Res<DimensionRegistry>,
     blocks: Res<BlockRegistry>,
+    fluids: Res<FluidRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
-    materials: Res<TerrainMaterials>,
+    terrain_materials: Res<TerrainMaterials>,
+    fluid_materials: Res<FluidMaterials>,
     mut world: ResMut<VoxelWorld>,
     mut render_pool: ResMut<ChunkRenderPool>,
     mut loading_state: ResMut<WorldLoadingState>,
@@ -173,7 +185,14 @@ pub fn setup_world(
                 "generated chunk must be resident or archived: {coord:?}"
             );
         } else {
-            let chunk = build_chunk(coord, &blocks, dimension, &biomes, &biome_field);
+            let chunk = build_chunk(
+                coord,
+                &blocks,
+                &fluids,
+                dimension,
+                &biomes,
+                &biome_field,
+            );
             world.insert_chunk(coord, chunk);
         }
 
@@ -189,7 +208,8 @@ pub fn setup_world(
             chunk,
             &biomes,
             &biome_field,
-            &materials,
+            &terrain_materials,
+            &fluid_materials,
         );
 
         loading_state.generated += 1;

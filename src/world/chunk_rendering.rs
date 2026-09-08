@@ -4,9 +4,10 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    content::biome::BiomeRegistry,
+    content::{biome::BiomeRegistry, fluid::{FluidId, FluidRegistry}},
     voxel::{
         chunk::{VoxelChunk, CHUNK_SIZE},
+        fluid_mesh::build_fluid_meshes,
         mesh::{build_chunk_mesh, BlockFace},
         world::VoxelWorld,
     },
@@ -34,6 +35,48 @@ impl TerrainMaterials {
             BlockFace::Front => &self.front,
             BlockFace::Back => &self.back,
         }
+    }
+}
+
+#[derive(Resource, Clone)]
+pub struct FluidMaterials {
+    materials: HashMap<FluidId, Handle<StandardMaterial>>,
+}
+
+impl FluidMaterials {
+    pub fn from_registry(
+        fluids: &FluidRegistry,
+        materials: &mut Assets<StandardMaterial>,
+    ) -> Self {
+        let materials = fluids
+            .iter()
+            .map(|(fluid_id, definition)| {
+                let material = materials.add(StandardMaterial {
+                    base_color: Color::srgba(
+                        definition.color.r,
+                        definition.color.g,
+                        definition.color.b,
+                        definition.opacity,
+                    ),
+                    perceptual_roughness: definition.roughness,
+                    metallic: definition.metallic,
+                    alpha_mode: AlphaMode::Blend,
+                    double_sided: true,
+                    cull_mode: None,
+                    ..default()
+                });
+
+                (fluid_id, material)
+            })
+            .collect();
+
+        Self { materials }
+    }
+
+    fn get(&self, fluid_id: FluidId) -> &Handle<StandardMaterial> {
+        self.materials
+            .get(&fluid_id)
+            .unwrap_or_else(|| panic!("missing material for fluid id {fluid_id}"))
     }
 }
 
@@ -102,7 +145,8 @@ pub fn spawn_chunk_mesh(
     chunk: &VoxelChunk,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
-    materials: &TerrainMaterials,
+    terrain_materials: &TerrainMaterials,
+    fluid_materials: &FluidMaterials,
 ) {
     if render_pool.contains(coord) {
         return;
@@ -118,10 +162,11 @@ pub fn spawn_chunk_mesh(
         let grass = biome_field.grass_color(position, biomes);
         [grass.r, grass.g, grass.b]
     });
+    let fluid_meshes = build_fluid_meshes(world, coord, chunk);
     let chunk_size = CHUNK_SIZE as f32;
     let transform = Transform::from_translation(coord.as_vec3() * chunk_size);
-    let mut entities = Vec::with_capacity(face_meshes.len());
-    let mut mesh_handles = Vec::with_capacity(face_meshes.len());
+    let mut entities = Vec::new();
+    let mut mesh_handles = Vec::new();
 
     for face_mesh in face_meshes {
         let mesh_handle = render_pool.acquire_mesh_handle(meshes);
@@ -132,7 +177,26 @@ pub fn spawn_chunk_mesh(
         let entity = commands
             .spawn((
                 Mesh3d(mesh_handle.clone()),
-                MeshMaterial3d(materials.for_face(face_mesh.face).clone()),
+                MeshMaterial3d(terrain_materials.for_face(face_mesh.face).clone()),
+                transform,
+                DespawnOnExit(GameState::Gameplay),
+            ))
+            .id();
+
+        entities.push(entity);
+        mesh_handles.push(mesh_handle);
+    }
+
+    for fluid_mesh in fluid_meshes {
+        let mesh_handle = render_pool.acquire_mesh_handle(meshes);
+        meshes
+            .insert(&mesh_handle, fluid_mesh.mesh)
+            .expect("reserved fluid mesh handle should remain valid");
+
+        let entity = commands
+            .spawn((
+                Mesh3d(mesh_handle.clone()),
+                MeshMaterial3d(fluid_materials.get(fluid_mesh.fluid_id).clone()),
                 transform,
                 DespawnOnExit(GameState::Gameplay),
             ))

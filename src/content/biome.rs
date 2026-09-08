@@ -43,6 +43,8 @@ pub struct BiomeDefinition {
     pub name: String,
     pub size: BiomeSize,
     pub terrain: BiomeTerrain,
+    #[serde(default)]
+    pub surface_fluid: Option<String>,
     pub visuals: BiomeVisuals,
 }
 

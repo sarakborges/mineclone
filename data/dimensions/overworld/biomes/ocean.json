@@ -12,6 +12,7 @@
     "amplitude": 4.0,
     "scale": 0.01
   },
+  "surface_fluid": "mineclone:water",
   "visuals": {
     "sky_color": {
       "dawn": { "r": 0.48, "g": 0.68, "b": 0.90 },
