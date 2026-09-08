@@ -76,3 +76,21 @@ pub fn hud(label: impl Into<String>) -> impl Bundle {
         TextColor(theme::TEXT_PRIMARY),
     )
 }
+
+pub fn hud_heading(label: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(label),
+        ui_font(27.0, FontWeight::SEMIBOLD),
+        LetterSpacing::Px(0.9),
+        TextColor(theme::TEXT_PRIMARY),
+    )
+}
+
+pub fn hud_subheading(label: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(label),
+        ui_font(21.0, FontWeight::MEDIUM),
+        LetterSpacing::Px(0.6),
+        TextColor(theme::TEXT_PRIMARY),
+    )
+}
