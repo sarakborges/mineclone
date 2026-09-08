@@ -4,7 +4,7 @@ use crate::{
     app::game_state::GameState,
     player::camera::GameplayCamera,
     voxel::chunk::CHUNK_SIZE,
-    world::render_distance::RENDER_DISTANCE_RADIUS,
+    world::render_distance::RenderDistanceSettings,
 };
 
 use super::environment::EnvironmentVisualState;
@@ -25,11 +25,13 @@ impl Plugin for FogPlugin {
 fn attach_fog(
     mut commands: Commands,
     visuals: Res<EnvironmentVisualState>,
+    render_distance: Res<RenderDistanceSettings>,
     cameras: Query<Entity, (With<GameplayCamera>, Without<DistanceFog>)>,
 ) {
     let chunk_size = CHUNK_SIZE as f32;
-    let fog_end = RENDER_DISTANCE_RADIUS as f32 * chunk_size;
-    let fog_start = (RENDER_DISTANCE_RADIUS as f32 - 1.0) * chunk_size;
+    let radius = render_distance.chunks() as f32;
+    let fog_end = radius * chunk_size;
+    let fog_start = (radius - 1.0).max(0.0) * chunk_size;
 
     for entity in &cameras {
         commands.entity(entity).insert(DistanceFog {
