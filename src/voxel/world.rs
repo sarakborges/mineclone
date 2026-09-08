@@ -26,10 +26,6 @@ impl VoxelWorld {
         self.chunks.get(&coord)
     }
 
-    pub fn chunks(&self) -> impl Iterator<Item = (&IVec3, &VoxelChunk)> {
-        self.chunks.iter()
-    }
-
     pub fn cell_at(&self, world_position: IVec3) -> Option<VoxelCell> {
         if world_position.y < 0 {
             return None;
