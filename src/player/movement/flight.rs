@@ -10,6 +10,7 @@ use super::{
     },
     gravity::GravityState,
     smoothing::approach_velocity,
+    swimming::SwimmingState,
 };
 
 #[derive(Component)]
@@ -32,10 +33,16 @@ impl Default for FlightState {
 pub(super) fn handle_flight_toggle(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
+    swimming: Single<&SwimmingState>,
     mut flight: Single<&mut FlightState>,
     mut gravity: Single<&mut GravityState>,
 ) {
     flight.toggle_window = (flight.toggle_window - time.delta_secs()).max(0.0);
+
+    if swimming.active && !flight.active {
+        flight.toggle_window = 0.0;
+        return;
+    }
 
     if !keys.just_pressed(KeyCode::Space) {
         return;
