@@ -1,6 +1,7 @@
 pub mod biome;
 pub mod color;
 pub mod day_night_cycle;
+pub mod day_night_phase;
 pub mod dimension;
 mod loader;
 
