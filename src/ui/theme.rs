@@ -9,7 +9,6 @@ pub const TEXT_PRIMARY: Color = Color::srgb(0.95, 0.96, 1.0);
 pub const TEXT_MUTED: Color = Color::srgb(0.68, 0.66, 0.78);
 pub const TEXT_SUBTLE: Color = Color::srgba(0.73, 0.75, 0.86, 0.58);
 
-pub const VIOLET_GLOW: Color = Color::srgba(0.50, 0.28, 1.0, 0.30);
 pub const CYAN_GLOW: Color = Color::srgba(0.25, 0.76, 1.0, 0.20);
 
 pub const SLIDER_TRACK: Color = Color::srgba(0.12, 0.09, 0.22, 0.90);
