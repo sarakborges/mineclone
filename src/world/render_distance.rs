@@ -52,5 +52,12 @@ pub fn chunk_coords_in_cylinder(
         }
     }
 
+    coords.sort_by_key(|coord| {
+        let dx = coord.x - center.x;
+        let dz = coord.z - center.z;
+
+        (dx * dx + dz * dz, -coord.y)
+    });
+
     coords
 }
