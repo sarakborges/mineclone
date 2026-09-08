@@ -1,4 +1,7 @@
-use bevy::prelude::*;
+use bevy::{
+    light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap},
+    prelude::*,
+};
 
 use crate::{
     app::game_state::GameState,
@@ -15,15 +18,21 @@ use super::{
     environment::EnvironmentVisualState,
 };
 
+const SHADOW_MAP_SIZE: usize = 4096;
+const SHADOW_DISTANCE: f32 = 320.0;
+
 pub struct LightingPlugin;
 
 impl Plugin for LightingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Gameplay), spawn_sun)
-            .add_systems(
-                PostUpdate,
-                update_lighting.run_if(in_state(GameState::Gameplay)),
-            );
+        app.insert_resource(DirectionalLightShadowMap {
+            size: SHADOW_MAP_SIZE,
+        })
+        .add_systems(OnEnter(GameState::Gameplay), spawn_sun)
+        .add_systems(
+            PostUpdate,
+            update_lighting.run_if(in_state(GameState::Gameplay)),
+        );
     }
 }
 
@@ -37,6 +46,12 @@ fn spawn_sun(mut commands: Commands) {
             shadow_depth_bias: 0.20,
             ..default()
         },
+        CascadeShadowConfigBuilder {
+            num_cascades: 1,
+            maximum_distance: SHADOW_DISTANCE,
+            ..default()
+        }
+        .build(),
         Transform::default(),
         SunLight,
         DespawnOnExit(GameState::Gameplay),
