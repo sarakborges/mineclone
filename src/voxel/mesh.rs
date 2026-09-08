@@ -17,7 +17,15 @@ const WEST_SHADE: f32 = 0.88;
 const SOUTH_SHADE: f32 = 0.92;
 const NORTH_SHADE: f32 = 0.86;
 
-pub fn build_chunk_mesh(world: &VoxelWorld, chunk_coord: IVec2, chunk: &VoxelChunk) -> Mesh {
+pub fn build_chunk_mesh<F>(
+    world: &VoxelWorld,
+    chunk_coord: IVec2,
+    chunk: &VoxelChunk,
+    tint_at: F,
+) -> Mesh
+where
+    F: Fn(IVec3) -> [f32; 3],
+{
     let mut positions = Vec::<[f32; 3]>::new();
     let mut normals = Vec::<[f32; 3]>::new();
     let mut colors = Vec::<[f32; 4]>::new();
@@ -34,6 +42,7 @@ pub fn build_chunk_mesh(world: &VoxelWorld, chunk_coord: IVec2, chunk: &VoxelChu
 
                 let local = IVec3::new(x as i32, y as i32, z as i32);
                 let world_voxel = chunk_origin + local;
+                let tint = tint_at(world_voxel);
                 let x0 = x as f32;
                 let y0 = y as f32;
                 let z0 = z as f32;
@@ -49,6 +58,7 @@ pub fn build_chunk_mesh(world: &VoxelWorld, chunk_coord: IVec2, chunk: &VoxelChu
                         &mut indices,
                         [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]],
                         [1.0, 0.0, 0.0],
+                        tint,
                         EAST_SHADE,
                     );
                 }
@@ -61,6 +71,7 @@ pub fn build_chunk_mesh(world: &VoxelWorld, chunk_coord: IVec2, chunk: &VoxelChu
                         &mut indices,
                         [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]],
                         [-1.0, 0.0, 0.0],
+                        tint,
                         WEST_SHADE,
                     );
                 }
@@ -73,6 +84,7 @@ pub fn build_chunk_mesh(world: &VoxelWorld, chunk_coord: IVec2, chunk: &VoxelChu
                         &mut indices,
                         [[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]],
                         [0.0, 1.0, 0.0],
+                        tint,
                         TOP_SHADE,
                     );
                 }
@@ -85,6 +97,7 @@ pub fn build_chunk_mesh(world: &VoxelWorld, chunk_coord: IVec2, chunk: &VoxelChu
                         &mut indices,
                         [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]],
                         [0.0, -1.0, 0.0],
+                        tint,
                         BOTTOM_SHADE,
                     );
                 }
@@ -97,6 +110,7 @@ pub fn build_chunk_mesh(world: &VoxelWorld, chunk_coord: IVec2, chunk: &VoxelChu
                         &mut indices,
                         [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]],
                         [0.0, 0.0, 1.0],
+                        tint,
                         SOUTH_SHADE,
                     );
                 }
@@ -109,6 +123,7 @@ pub fn build_chunk_mesh(world: &VoxelWorld, chunk_coord: IVec2, chunk: &VoxelChu
                         &mut indices,
                         [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]],
                         [0.0, 0.0, -1.0],
+                        tint,
                         NORTH_SHADE,
                     );
                 }
@@ -133,11 +148,12 @@ fn push_face(
     indices: &mut Vec<u32>,
     vertices: [[f32; 3]; 4],
     normal: [f32; 3],
+    tint: [f32; 3],
     shade: f32,
 ) {
     let start = positions.len() as u32;
     positions.extend(vertices);
     normals.extend([normal; 4]);
-    colors.extend([[shade, shade, shade, 1.0]; 4]);
+    colors.extend([[tint[0] * shade, tint[1] * shade, tint[2] * shade, 1.0]; 4]);
     indices.extend([start, start + 1, start + 2, start, start + 2, start + 3]);
 }
