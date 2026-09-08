@@ -6,6 +6,7 @@ mod player;
 mod rendering;
 mod screens;
 mod targeting;
+mod ui;
 mod voxel;
 mod world;
 
@@ -22,6 +23,7 @@ use screens::{
     starting_screen::StartingScreenPlugin,
 };
 use targeting::block::BlockTargetingPlugin;
+use ui::UiDesignSystemPlugin;
 #[cfg(target_os = "windows")]
 use winit::platform::windows::WindowExtWindows;
 use winit::window::Icon;
@@ -40,6 +42,7 @@ fn main() {
         .init_state::<PauseState>()
         .insert_resource(ClearColor(Color::srgb(0.02, 0.025, 0.04)))
         .add_plugins((
+            UiDesignSystemPlugin,
             ContentPlugin,
             SettingsMenuPlugin,
             StartingScreenPlugin,
