@@ -4,8 +4,8 @@ use super::highlight::TargetHighlightPlugin;
 use crate::{
     app::game_state::GameState,
     voxel::{
-        chunk::VoxelChunk,
         raycast::{raycast_voxels, VoxelHit},
+        world::VoxelWorld,
     },
 };
 
@@ -29,11 +29,11 @@ pub struct TargetedBlock(pub Option<VoxelHit>);
 
 fn update_targeted_block(
     camera: Single<&GlobalTransform, With<Camera3d>>,
-    chunk: Single<&VoxelChunk>,
+    world: Res<VoxelWorld>,
     mut targeted: ResMut<TargetedBlock>,
 ) {
     targeted.0 = raycast_voxels(
-        &chunk,
+        &world,
         camera.translation(),
         camera.forward().as_vec3(),
         TARGET_RANGE,
