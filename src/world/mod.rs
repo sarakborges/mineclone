@@ -1,4 +1,4 @@
-mod render_distance;
+pub(crate) mod render_distance;
 mod setup;
 mod test_world;
 
