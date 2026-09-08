@@ -50,19 +50,21 @@ fn update_player_hud(
     mut coordinates_text: Single<&mut Text, With<PlayerCoordinatesText>>,
 ) {
     let position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
+    let block_position = position.floor().as_ivec3();
     let coordinates = split_dimension_position(position);
+    let local_position = coordinates.local.floor().as_ivec3();
 
     coordinates_text.0 = format!(
-        "Dimension: {}\nPosition: X {:.2} | Z {:.2} | Y {:.2}\nChunk: X {} | Z {} | Y {}\nLocal: X {:.2} | Z {:.2} | Y {:.2}",
+        "Dimension: {}\nPosition: X {} | Z {} | Y {}\nChunk: X {} | Z {} | Y {}\nLocal: X {} | Z {} | Y {}",
         dimension.id,
-        position.x,
-        position.z,
-        position.y,
+        block_position.x,
+        block_position.z,
+        block_position.y,
         coordinates.chunk.x,
         coordinates.chunk.z,
         coordinates.chunk.y,
-        coordinates.local.x,
-        coordinates.local.z,
-        coordinates.local.y,
+        local_position.x,
+        local_position.z,
+        local_position.y,
     );
 }
