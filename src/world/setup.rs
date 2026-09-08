@@ -10,7 +10,7 @@ use crate::{
         read_content,
     },
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
-    voxel::world::VoxelWorld,
+    voxel::{coordinates::split_dimension_position, world::VoxelWorld},
 };
 
 use super::{
@@ -108,8 +108,18 @@ pub fn begin_world_loading(
     drop(create_material);
     let fluid_materials = FluidMaterials::from_registry(fluids_ref, &mut materials);
     let (min_chunk_y, max_chunk_y) = chunk_y_bounds(dimension, biomes_ref);
+    let initial_center = if *load_mode == WorldLoadMode::Load {
+        save.player_position()
+            .map(|position| {
+                let chunk = split_dimension_position(position).chunk;
+                IVec2::new(chunk.x, chunk.z)
+            })
+            .unwrap_or(IVec2::ZERO)
+    } else {
+        IVec2::ZERO
+    };
     let coords = chunk_coords_in_cylinder(
-        IVec3::new(0, min_chunk_y, 0),
+        IVec3::new(initial_center.x, min_chunk_y, initial_center.y),
         INITIAL_HORIZONTAL_RADIUS_CHUNKS,
         min_chunk_y,
         max_chunk_y,
