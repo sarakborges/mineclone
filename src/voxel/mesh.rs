@@ -17,6 +17,8 @@ const EAST_SHADE: f32 = 0.94;
 const WEST_SHADE: f32 = 0.88;
 const SOUTH_SHADE: f32 = 0.92;
 const NORTH_SHADE: f32 = 0.86;
+const SIDE_NORMAL_HORIZONTAL: f32 = 0.8;
+const SIDE_NORMAL_UP: f32 = 0.6;
 const FACE_UVS: [[f32; 2]; 4] = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
 
 pub fn build_chunk_mesh<F>(
@@ -61,7 +63,7 @@ where
                         &mut colors,
                         &mut indices,
                         [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]],
-                        [1.0, 0.0, 0.0],
+                        [SIDE_NORMAL_HORIZONTAL, SIDE_NORMAL_UP, 0.0],
                         cell.texture_rotation,
                         tint,
                         EAST_SHADE,
@@ -76,7 +78,7 @@ where
                         &mut colors,
                         &mut indices,
                         [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]],
-                        [-1.0, 0.0, 0.0],
+                        [-SIDE_NORMAL_HORIZONTAL, SIDE_NORMAL_UP, 0.0],
                         cell.texture_rotation,
                         tint,
                         WEST_SHADE,
@@ -121,7 +123,7 @@ where
                         &mut colors,
                         &mut indices,
                         [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]],
-                        [0.0, 0.0, 1.0],
+                        [0.0, SIDE_NORMAL_UP, SIDE_NORMAL_HORIZONTAL],
                         cell.texture_rotation,
                         tint,
                         SOUTH_SHADE,
@@ -136,7 +138,7 @@ where
                         &mut colors,
                         &mut indices,
                         [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]],
-                        [0.0, 0.0, -1.0],
+                        [0.0, SIDE_NORMAL_UP, -SIDE_NORMAL_HORIZONTAL],
                         cell.texture_rotation,
                         tint,
                         NORTH_SHADE,
