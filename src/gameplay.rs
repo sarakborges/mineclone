@@ -12,6 +12,9 @@ const WALK_SPEED: f32 = 5.0;
 const GRAVITY: f32 = -18.0;
 const JUMP_SPEED: f32 = 7.0;
 const PLAYER_EYE_HEIGHT: f32 = 1.7;
+const GROUND_SIZE: f32 = 40.0;
+const GROUND_HALF_EXTENT: f32 = GROUND_SIZE / 2.0;
+const GROUND_SURFACE_Y: f32 = 0.0;
 
 pub struct GameplayPlugin;
 
@@ -62,7 +65,7 @@ fn setup_gameplay(
     ));
 
     commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(40.0, 1.0, 40.0))),
+        Mesh3d(meshes.add(Cuboid::new(GROUND_SIZE, 1.0, GROUND_SIZE))),
         MeshMaterial3d(materials.add(Color::srgb(0.18, 0.22, 0.18))),
         Transform::from_xyz(0.0, -0.5, 0.0),
         DespawnOnExit(GameState::Gameplay),
@@ -151,6 +154,13 @@ fn move_player(
         player.0.translation += movement.normalize() * WALK_SPEED * time.delta_secs();
     }
 
+    let over_ground = player.0.translation.x.abs() <= GROUND_HALF_EXTENT
+        && player.0.translation.z.abs() <= GROUND_HALF_EXTENT;
+
+    if !over_ground {
+        player.2.grounded = false;
+    }
+
     if keys.just_pressed(KeyCode::Space) && player.2.grounded {
         player.2.vertical_velocity = JUMP_SPEED;
         player.2.grounded = false;
@@ -159,8 +169,10 @@ fn move_player(
     player.2.vertical_velocity += GRAVITY * time.delta_secs();
     player.0.translation.y += player.2.vertical_velocity * time.delta_secs();
 
-    if player.0.translation.y <= PLAYER_EYE_HEIGHT {
-        player.0.translation.y = PLAYER_EYE_HEIGHT;
+    let standing_height = GROUND_SURFACE_Y + PLAYER_EYE_HEIGHT;
+
+    if over_ground && player.0.translation.y <= standing_height && player.2.vertical_velocity <= 0.0 {
+        player.0.translation.y = standing_height;
         player.2.vertical_velocity = 0.0;
         player.2.grounded = true;
     }
