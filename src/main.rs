@@ -1,25 +1,15 @@
-mod block_targeting;
-mod crosshair;
-mod game_state;
+mod app;
 mod gameplay;
-mod gameplay_scene;
 mod player;
-mod player_camera;
-mod player_movement;
-mod starting_screen;
-mod target_highlight;
-mod target_hud;
-mod test_chunk;
-mod voxel_chunk;
-mod voxel_collision;
-mod voxel_mesh;
-mod voxel_raycast;
+mod screens;
+mod targeting;
+mod voxel;
 
+use app::game_state::GameState;
 use bevy::prelude::*;
-use block_targeting::BlockTargetingPlugin;
-use game_state::GameState;
 use gameplay::GameplayPlugin;
-use starting_screen::StartingScreenPlugin;
+use screens::starting_screen::StartingScreenPlugin;
+use targeting::block::BlockTargetingPlugin;
 
 fn main() {
     App::new()
