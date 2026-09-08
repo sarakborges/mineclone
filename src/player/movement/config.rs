@@ -1,5 +1,9 @@
 pub const WALK_SPEED: f32 = 5.0;
+pub const WALK_ACCELERATION: f32 = 28.0;
+pub const WALK_DECELERATION: f32 = 36.0;
 pub const FLY_SPEED_MULTIPLIER: f32 = 5.0;
+pub const FLY_ACCELERATION: f32 = 75.0;
+pub const FLY_DECELERATION: f32 = 90.0;
 pub const GRAVITY: f32 = -18.0;
 pub const JUMP_SPEED: f32 = 7.0;
 pub const FLIGHT_TOGGLE_WINDOW_SECONDS: f32 = 0.30;
