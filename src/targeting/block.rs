@@ -9,7 +9,7 @@ use crate::{
     },
 };
 
-const TARGET_RANGE: f32 = 5.0;
+const TARGET_RANGE: f32 = 8.0;
 
 pub struct BlockTargetingPlugin;
 
