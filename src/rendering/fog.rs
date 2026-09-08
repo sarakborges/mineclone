@@ -9,6 +9,8 @@ use crate::{
 
 use super::environment::EnvironmentVisualState;
 
+const FOG_START_FRACTION: f32 = 0.70;
+
 pub struct FogPlugin;
 
 impl Plugin for FogPlugin {
@@ -27,9 +29,8 @@ fn attach_fog(
     visuals: Res<EnvironmentVisualState>,
     cameras: Query<Entity, (With<GameplayCamera>, Without<DistanceFog>)>,
 ) {
-    let chunk_size = CHUNK_SIZE as f32;
-    let fog_end = RENDER_DISTANCE_RADIUS as f32 * chunk_size;
-    let fog_start = (RENDER_DISTANCE_RADIUS as f32 - 1.0) * chunk_size;
+    let fog_end = RENDER_DISTANCE_RADIUS as f32 * CHUNK_SIZE as f32;
+    let fog_start = fog_end * FOG_START_FRACTION;
 
     for entity in &cameras {
         commands.entity(entity).insert(DistanceFog {
