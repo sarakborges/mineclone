@@ -11,7 +11,7 @@ use crate::{
 
 const GRASS_BLOCK_ID: &str = "mineclone:grass";
 
-pub fn build_test_chunk(coord: IVec2, blocks: &BlockRegistry) -> VoxelChunk {
+pub fn build_test_chunk(coord: IVec3, blocks: &BlockRegistry) -> VoxelChunk {
     let grass = blocks
         .get(GRASS_BLOCK_ID)
         .unwrap_or_else(|| panic!("missing block definition: {GRASS_BLOCK_ID}"));
@@ -19,22 +19,29 @@ pub fn build_test_chunk(coord: IVec2, blocks: &BlockRegistry) -> VoxelChunk {
     varied_terrain_chunk(coord, grass.rotate_texture)
 }
 
-fn varied_terrain_chunk(coord: IVec2, rotate_texture: bool) -> VoxelChunk {
+fn varied_terrain_chunk(coord: IVec3, rotate_texture: bool) -> VoxelChunk {
     let mut chunk = VoxelChunk::empty();
     let chunk_size = CHUNK_SIZE as i32;
+    let chunk_origin = coord * chunk_size;
 
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
-            let world_x = coord.x * chunk_size + local_x as i32;
-            let world_z = coord.y * chunk_size + local_z as i32;
-            let height = terrain_height(world_x, world_z);
+            let world_x = chunk_origin.x + local_x as i32;
+            let world_z = chunk_origin.z + local_z as i32;
+            let surface_height = terrain_height(world_x, world_z);
 
-            for y in 0..height {
-                let world_position = IVec3::new(world_x, y as i32, world_z);
+            for local_y in 0..CHUNK_SIZE {
+                let world_y = chunk_origin.y + local_y as i32;
+
+                if world_y >= surface_height {
+                    continue;
+                }
+
+                let world_position = IVec3::new(world_x, world_y, world_z);
                 let rotation = texture_rotation_for(world_position, rotate_texture);
                 chunk.set_block(
                     local_x,
-                    y,
+                    local_y,
                     local_z,
                     Some(VoxelCell::new(GRASS_BLOCK_ID, rotation)),
                 );
@@ -59,7 +66,7 @@ fn texture_rotation_for(position: IVec3, enabled: bool) -> TextureRotation {
     TextureRotation::from_quarter_turn((hash & 3) as u8)
 }
 
-fn terrain_height(world_x: i32, world_z: i32) -> usize {
+fn terrain_height(world_x: i32, world_z: i32) -> i32 {
     let x = world_x as f32;
     let z = world_z as f32;
 
@@ -69,5 +76,5 @@ fn terrain_height(world_x: i32, world_z: i32) -> usize {
 
     (4.0 + broad_hills + crossing_ridge + small_variation)
         .round()
-        .clamp(1.0, 10.0) as usize
+        .clamp(1.0, 10.0) as i32
 }
