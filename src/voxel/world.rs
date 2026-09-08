@@ -17,6 +17,10 @@ impl VoxelWorld {
         self.chunks.insert(coord, chunk);
     }
 
+    pub fn chunk(&self, coord: IVec2) -> Option<&VoxelChunk> {
+        self.chunks.get(&coord)
+    }
+
     pub fn chunks(&self) -> impl Iterator<Item = (&IVec2, &VoxelChunk)> {
         self.chunks.iter()
     }
