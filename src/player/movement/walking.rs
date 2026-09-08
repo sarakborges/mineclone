@@ -4,43 +4,69 @@ use crate::{player::camera::GameplayCamera, voxel::world::VoxelWorld};
 
 use super::{
     collision::{move_axis, Axis},
-    config::WALK_SPEED,
+    config::{WALK_ACCELERATION, WALK_DECELERATION, WALK_SPEED},
     flight::FlightState,
+    smoothing::approach_velocity,
 };
+
+#[derive(Component, Default)]
+pub struct WalkingState {
+    velocity: Vec3,
+}
 
 pub(super) fn walk(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
     world: Res<VoxelWorld>,
-    mut player: Single<(&mut Transform, &GameplayCamera, &FlightState)>,
+    player: Single<(&mut Transform, &GameplayCamera, &FlightState, &mut WalkingState)>,
 ) {
-    if player.2.active {
+    let (mut transform, camera, flight, mut walking) = player.into_inner();
+
+    if flight.active {
+        walking.velocity = Vec3::ZERO;
         return;
     }
 
-    let yaw_rotation = Quat::from_rotation_y(player.1.yaw);
+    let yaw_rotation = Quat::from_rotation_y(camera.yaw);
     let forward = yaw_rotation * Vec3::NEG_Z;
     let right = yaw_rotation * Vec3::X;
-    let mut movement = Vec3::ZERO;
+    let mut input = Vec3::ZERO;
 
     if keys.pressed(KeyCode::KeyW) {
-        movement += forward;
+        input += forward;
     }
     if keys.pressed(KeyCode::KeyS) {
-        movement -= forward;
+        input -= forward;
     }
     if keys.pressed(KeyCode::KeyD) {
-        movement += right;
+        input += right;
     }
     if keys.pressed(KeyCode::KeyA) {
-        movement -= right;
+        input -= right;
     }
 
-    if movement.length_squared() == 0.0 {
-        return;
-    }
+    let target_velocity = if input.length_squared() > 0.0 {
+        input.normalize() * WALK_SPEED
+    } else {
+        Vec3::ZERO
+    };
+    let acceleration = if target_velocity == Vec3::ZERO {
+        WALK_DECELERATION
+    } else {
+        WALK_ACCELERATION
+    };
 
-    let horizontal = movement.normalize() * WALK_SPEED * time.delta_secs();
-    move_axis(&mut player.0, &world, horizontal.x, Axis::X);
-    move_axis(&mut player.0, &world, horizontal.z, Axis::Z);
+    walking.velocity = approach_velocity(
+        walking.velocity,
+        target_velocity,
+        acceleration * time.delta_secs(),
+    );
+
+    let velocity = walking.velocity;
+    if move_axis(&mut transform, &world, velocity.x * time.delta_secs(), Axis::X) {
+        walking.velocity.x = 0.0;
+    }
+    if move_axis(&mut transform, &world, velocity.z * time.delta_secs(), Axis::Z) {
+        walking.velocity.z = 0.0;
+    }
 }
