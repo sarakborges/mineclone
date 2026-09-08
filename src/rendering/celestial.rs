@@ -2,7 +2,12 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    content::{dimension::DimensionRegistry, sky::SkyRegistry},
+    content::{
+        day_night_cycle::DayNightCycleRegistry,
+        day_night_phase::DayNightPhase,
+        dimension::DimensionRegistry,
+        sky::SkyRegistry,
+    },
     player::camera::GameplayCamera,
     world::{day_night::DayNightClock, dimension::CurrentDimension},
 };
@@ -22,8 +27,11 @@ impl Plugin for CelestialPlugin {
 #[derive(Component)]
 struct CelestialBody {
     orbit_radius: f32,
-    phase_offset_radians: f32,
-    orbit_tilt_radians: f32,
+    rise_phase: DayNightPhase,
+    set_phase: DayNightPhase,
+    rise_azimuth_radians: f32,
+    set_azimuth_radians: f32,
+    max_altitude_radians: f32,
 }
 
 fn spawn_celestial_bodies(
@@ -48,7 +56,6 @@ fn spawn_celestial_bodies(
         &mut materials,
         &asset_server,
         &sky.sun,
-        sky.orbit_tilt_degrees,
     );
     spawn_body(
         &mut commands,
@@ -56,7 +63,6 @@ fn spawn_celestial_bodies(
         &mut materials,
         &asset_server,
         &sky.moon,
-        sky.orbit_tilt_degrees,
     );
 }
 
@@ -66,7 +72,6 @@ fn spawn_body(
     materials: &mut Assets<StandardMaterial>,
     asset_server: &AssetServer,
     definition: &crate::content::sky::CelestialBodyDefinition,
-    orbit_tilt_degrees: f32,
 ) {
     let mesh = meshes.add(Rectangle::new(definition.size, definition.size));
     let material = materials.add(StandardMaterial {
@@ -87,8 +92,11 @@ fn spawn_body(
         Visibility::Hidden,
         CelestialBody {
             orbit_radius: definition.orbit_radius,
-            phase_offset_radians: definition.phase_offset_degrees.to_radians(),
-            orbit_tilt_radians: orbit_tilt_degrees.to_radians(),
+            rise_phase: definition.rise_phase,
+            set_phase: definition.set_phase,
+            rise_azimuth_radians: definition.rise_azimuth_degrees.to_radians(),
+            set_azimuth_radians: definition.set_azimuth_degrees.to_radians(),
+            max_altitude_radians: definition.max_altitude_degrees.to_radians(),
         },
         DespawnOnExit(GameState::Gameplay),
     ));
@@ -96,26 +104,52 @@ fn spawn_body(
 
 fn update_celestial_bodies(
     clock: Res<DayNightClock>,
+    current_dimension: Res<CurrentDimension>,
+    dimensions: Res<DimensionRegistry>,
+    cycles: Res<DayNightCycleRegistry>,
     camera: Single<&GlobalTransform, With<GameplayCamera>>,
     mut bodies: Query<(&CelestialBody, &mut Transform, &mut Visibility)>,
 ) {
+    let Some(dimension) = dimensions.get(&current_dimension.id) else {
+        return;
+    };
+    let Some(cycle) = cycles.get(&dimension.day_night_cycle) else {
+        return;
+    };
     let camera_position = camera.translation();
 
     for (body, mut transform, mut visibility) in &mut bodies {
-        let angle = clock.normalized_time * std::f32::consts::TAU + body.phase_offset_radians;
-        let orbit_position = Vec3::new(
-            angle.cos() * body.orbit_radius,
-            angle.sin() * body.orbit_radius,
-            0.0,
+        let Some(progress) = cycle.progress_between_phases(
+            clock.normalized_time,
+            body.rise_phase,
+            body.set_phase,
+        ) else {
+            *visibility = Visibility::Hidden;
+            continue;
+        };
+
+        let azimuth = lerp_angle(
+            body.rise_azimuth_radians,
+            body.set_azimuth_radians,
+            progress,
         );
-        let offset = Quat::from_rotation_x(body.orbit_tilt_radians) * orbit_position;
+        let altitude = (progress * std::f32::consts::PI).sin() * body.max_altitude_radians;
+        let horizontal_radius = body.orbit_radius * altitude.cos();
+        let offset = Vec3::new(
+            azimuth.sin() * horizontal_radius,
+            altitude.sin() * body.orbit_radius,
+            -azimuth.cos() * horizontal_radius,
+        );
 
         transform.translation = camera_position + offset;
         transform.look_at(camera_position, Vec3::Y);
-        *visibility = if offset.y > 0.0 {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
+        *visibility = Visibility::Visible;
     }
+}
+
+fn lerp_angle(start: f32, end: f32, t: f32) -> f32 {
+    let delta = (end - start + std::f32::consts::PI)
+        .rem_euclid(std::f32::consts::TAU)
+        - std::f32::consts::PI;
+    start + delta * t
 }
