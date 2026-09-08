@@ -6,7 +6,7 @@ use crate::{
         biome_terrain::BiomeTerrain,
         block::BlockRegistry,
         dimension::DimensionDefinition,
-        fluid::FluidRegistry,
+        fluid::{FluidId, FluidRegistry},
     },
     voxel::{
         cell::VoxelCell,
@@ -16,7 +16,7 @@ use crate::{
     },
 };
 
-use super::biome_field::BiomeField;
+use super::biome_field::{BiomeField, BiomeFieldSample};
 
 const GRASS_BLOCK_ID: &str = "mineclone:grass";
 const TERRAIN_MIN_CHUNK_Y: i32 = 0;
@@ -48,19 +48,15 @@ pub fn build_chunk(
             let world_x = chunk_origin.x + local_x as i32;
             let world_z = chunk_origin.z + local_z as i32;
             let position = IVec2::new(world_x, world_z);
-            let column_height = surface_height(position, dimension, biomes, biome_field);
             let sample = biome_field.sample(position.as_vec2() + Vec2::splat(0.5));
-            let primary_biome = biomes
-                .get(sample.primary_id)
-                .unwrap_or_else(|| panic!("missing biome definition: {}", sample.primary_id));
-            let surface_fluid = primary_biome.surface_fluid.as_deref().map(|fluid_id| {
-                fluids.id_of(fluid_id).unwrap_or_else(|| {
-                    panic!(
-                        "biome {} references missing surface fluid: {fluid_id}",
-                        primary_biome.id
-                    )
-                })
-            });
+            let column_height = surface_height_from_sample(
+                position,
+                dimension,
+                biomes,
+                biome_field.seed(),
+                &sample,
+            );
+            let surface_fluid = surface_fluid_from_sample(&sample, biomes, fluids);
 
             for local_y in 0..CHUNK_SIZE {
                 let world_y = chunk_origin.y + local_y as i32;
@@ -101,22 +97,59 @@ pub fn surface_height(
     biome_field: &BiomeField,
 ) -> i32 {
     let sample = biome_field.sample(position.as_vec2() + Vec2::splat(0.5));
+
+    surface_height_from_sample(position, dimension, biomes, biome_field.seed(), &sample)
+}
+
+fn surface_height_from_sample(
+    position: IVec2,
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    world_seed: u64,
+    sample: &BiomeFieldSample<'_>,
+) -> i32 {
     let mut height = 0.0;
 
-    for influence in sample.influences {
+    for influence in &sample.influences {
         let biome = biomes
             .get(influence.id)
             .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
         height += biome_surface_height(
             position.as_vec2(),
             dimension.sea_level,
-            biome_field.seed(),
+            world_seed,
             biome.id.as_str(),
             &biome.terrain,
         ) * influence.weight;
     }
 
     height.round().max(1.0) as i32
+}
+
+fn surface_fluid_from_sample(
+    sample: &BiomeFieldSample<'_>,
+    biomes: &BiomeRegistry,
+    fluids: &FluidRegistry,
+) -> Option<FluidId> {
+    sample
+        .influences
+        .iter()
+        .filter_map(|influence| {
+            let biome = biomes
+                .get(influence.id)
+                .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
+            let fluid_id = biome.surface_fluid.as_deref()?;
+            let fluid = fluids.id_of(fluid_id).unwrap_or_else(|| {
+                panic!(
+                    "biome {} references missing surface fluid: {fluid_id}",
+                    biome.id
+                )
+            });
+
+            Some((fluid, influence.weight))
+        })
+        .max_by(|(_, left_weight), (_, right_weight)| left_weight.total_cmp(right_weight))
+        .map(|(fluid_id, _)| fluid_id)
 }
 
 pub fn chunk_y_bounds(
