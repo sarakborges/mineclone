@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{ffi::OsStr, path::Path};
 
 use bevy::prelude::*;
 
@@ -68,6 +68,7 @@ fn load_definition(
 }
 
 fn path_has_component(path: &Path, component: &str) -> bool {
+    let component = OsStr::new(component);
     path.components()
         .any(|candidate| candidate.as_os_str() == component)
 }
