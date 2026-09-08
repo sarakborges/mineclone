@@ -18,6 +18,7 @@ use rendering::RenderingPlugin;
 use screens::{
     loading_screen::LoadingScreenPlugin,
     pause_menu::PauseMenuPlugin,
+    settings_menu::SettingsMenuPlugin,
     starting_screen::StartingScreenPlugin,
 };
 use targeting::block::BlockTargetingPlugin;
@@ -37,6 +38,7 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb(0.02, 0.025, 0.04)))
         .add_plugins((
             ContentPlugin,
+            SettingsMenuPlugin,
             StartingScreenPlugin,
             LoadingScreenPlugin,
             PauseMenuPlugin,
