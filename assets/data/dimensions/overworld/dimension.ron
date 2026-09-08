@@ -1,0 +1,8 @@
+(
+    id: "mineclone:overworld",
+    name: "Overworld",
+    biomes: [
+        "mineclone:overworld/plains",
+    ],
+    day_night_cycle: "mineclone:overworld/day_night_cycle",
+)
