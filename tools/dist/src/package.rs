@@ -1,6 +1,5 @@
 use std::{
     error::Error,
-    ffi::OsStr,
     fs,
     path::{Path, PathBuf},
 };
@@ -19,28 +18,8 @@ pub fn create_distribution(
 
     fs::create_dir_all(&build_directory)?;
     fs::copy(executable, build_directory.join(distribution_executable_name()))?;
-
-    let source_assets = project_root.join("assets");
-    copy_directory(&source_assets.join("data"), &build_directory.join("data"))?;
-
-    let build_assets = build_directory.join("assets");
-    fs::create_dir_all(&build_assets)?;
-
-    for entry in fs::read_dir(&source_assets)? {
-        let entry = entry?;
-        if entry.file_name() == OsStr::new("data") {
-            continue;
-        }
-
-        let source = entry.path();
-        let destination = build_assets.join(entry.file_name());
-
-        if source.is_dir() {
-            copy_directory(&source, &destination)?;
-        } else {
-            fs::copy(source, destination)?;
-        }
-    }
+    copy_directory(&project_root.join("data"), &build_directory.join("data"))?;
+    copy_directory(&project_root.join("assets"), &build_directory.join("assets"))?;
 
     Ok(build_directory)
 }
