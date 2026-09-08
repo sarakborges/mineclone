@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
-    voxel::coordinates::split_dimension_position,
+    voxel::{coordinates::split_dimension_position, world::VoxelWorld},
 };
 
 use super::{
@@ -15,6 +15,7 @@ pub fn unload_chunk_meshes(
     mut meshes: ResMut<Assets<Mesh>>,
     player: Single<&Transform, With<GameplayCamera>>,
     render_distance: Res<RenderDistanceSettings>,
+    mut world: ResMut<VoxelWorld>,
     mut render_pool: ResMut<ChunkRenderPool>,
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
@@ -40,6 +41,7 @@ pub fn unload_chunk_meshes(
             render_pool.recycle_mesh_handle(mesh_handle);
         }
 
+        world.archive_chunk(coord);
         commands.entity(entity).despawn();
     }
 }
