@@ -12,6 +12,7 @@ use crate::app::game_state::GameState;
 use biome::{track_current_biome, CurrentBiome};
 use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
+use render_distance::RenderDistanceSettings;
 use setup::{begin_world_loading, setup_world};
 
 pub struct WorldPlugin;
@@ -20,6 +21,7 @@ impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CurrentDimension>()
             .init_resource::<CurrentBiome>()
+            .init_resource::<RenderDistanceSettings>()
             .add_plugins(DayNightPlugin)
             .add_systems(OnEnter(GameState::Loading), begin_world_loading)
             .add_systems(
