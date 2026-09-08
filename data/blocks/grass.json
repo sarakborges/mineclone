@@ -1,6 +1,6 @@
 {
   "id": "mineclone:grass",
-  "name": "Grass",
+  "name": "Grass Block",
   "textures": {
     "top": "textures/blocks/grass/top.png",
     "bottom": "textures/blocks/grass/bottom.png",
