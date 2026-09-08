@@ -4,6 +4,7 @@ use crate::{
     app::game_state::GameState,
     content::block::BlockRegistry,
     targeting::block::TargetedBlock,
+    ui::{theme, typography},
 };
 
 pub struct TargetHudPlugin;
@@ -28,16 +29,11 @@ fn spawn_target_hud(mut commands: Commands) {
             border_radius: BorderRadius::all(px(6)),
             ..default()
         },
-        BackgroundColor(Color::srgba(0.02, 0.025, 0.04, 0.82)),
+        BackgroundColor(theme::HUD_SURFACE),
         Pickable::IGNORE,
         DespawnOnExit(GameState::Gameplay),
         children![(
-            Text::new("Block: -\nPosition: -"),
-            TextFont {
-                font_size: FontSize::Px(18.0),
-                ..default()
-            },
-            TextColor(Color::WHITE),
+            typography::hud("Block: -\nPosition: -"),
             TargetBlockText,
         )],
     ));
