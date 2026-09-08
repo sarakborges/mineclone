@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use super::chunk::VoxelChunk;
+use super::world::VoxelWorld;
 
 #[derive(Clone, Copy)]
 pub struct VoxelHit {
@@ -9,7 +9,7 @@ pub struct VoxelHit {
 }
 
 pub fn raycast_voxels(
-    chunk: &VoxelChunk,
+    world: &VoxelWorld,
     origin: Vec3,
     direction: Vec3,
     max_distance: f32,
@@ -38,7 +38,7 @@ pub fn raycast_voxels(
     );
 
     loop {
-        if let Some(block_id) = chunk.block_id_at(voxel.x, voxel.y, voxel.z) {
+        if let Some(block_id) = world.block_id_at(voxel) {
             return Some(VoxelHit { voxel, block_id });
         }
 
