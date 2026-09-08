@@ -1,2 +1,2 @@
 [alias]
-dist = "run -p asteria-dist --"
+dist = "run --manifest-path tools/dist/Cargo.toml --"
