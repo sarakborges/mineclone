@@ -6,7 +6,7 @@ use crate::{
         pause_state::PauseState,
         settings_state::SettingsState,
     },
-    ui::{button::menu_button, theme, typography},
+    ui::{button::menu_button, surface, theme, typography},
 };
 
 pub struct PauseMenuPlugin;
@@ -50,26 +50,26 @@ fn spawn_pause_menu(mut commands: Commands) {
                 position_type: PositionType::Absolute,
                 left: px(0),
                 top: px(0),
-                flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
-                row_gap: px(11),
                 ..default()
             },
             BackgroundColor(theme::OVERLAY),
         ))
-        .with_children(|parent| {
-            parent.spawn((
-                typography::title("PAUSED"),
-                Node {
-                    margin: UiRect::bottom(px(26)),
-                    ..default()
-                },
-            ));
-            parent.spawn(menu_button("Resume", PauseMenuAction::Resume));
-            parent.spawn(menu_button("Settings", PauseMenuAction::Settings));
-            parent.spawn(menu_button("Leave World", PauseMenuAction::LeaveWorld));
-            parent.spawn(menu_button("Exit Game", PauseMenuAction::ExitGame));
+        .with_children(|root| {
+            root.spawn(surface::modal_panel()).with_children(|panel| {
+                panel.spawn((
+                    typography::title("PAUSED"),
+                    Node {
+                        margin: UiRect::bottom(px(10)),
+                        ..default()
+                    },
+                ));
+                panel.spawn(menu_button("Resume", PauseMenuAction::Resume));
+                panel.spawn(menu_button("Settings", PauseMenuAction::Settings));
+                panel.spawn(menu_button("Leave World", PauseMenuAction::LeaveWorld));
+                panel.spawn(menu_button("Exit Game", PauseMenuAction::ExitGame));
+            });
         });
 }
 
