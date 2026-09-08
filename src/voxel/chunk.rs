@@ -32,16 +32,8 @@ impl VoxelChunk {
         self.blocks[index(x as usize, y as usize, z as usize)]
     }
 
-    pub fn block_id_at(&self, x: i32, y: i32, z: i32) -> Option<&'static str> {
-        self.cell_at(x, y, z).map(|cell| cell.block_id)
-    }
-
     pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: Option<VoxelCell>) {
         self.blocks[index(x, y, z)] = block;
-    }
-
-    pub(crate) fn is_solid(&self, x: i32, y: i32, z: i32) -> bool {
-        self.cell_at(x, y, z).is_some()
     }
 }
 
