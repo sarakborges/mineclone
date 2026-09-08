@@ -16,7 +16,8 @@ use crate::{
 use super::{
     biome_field::BiomeField,
     chunk_rendering::{
-        spawn_chunk_mesh, ChunkRenderPool, FluidMaterials, TerrainMaterials,
+        refresh_adjacent_chunk_meshes, spawn_chunk_mesh, ChunkRenderPool, FluidMaterials,
+        TerrainMaterials,
     },
     dimension::CurrentDimension,
     render_distance::chunk_coords_in_cylinder,
@@ -206,6 +207,17 @@ pub fn setup_world(
             &world,
             coord,
             chunk,
+            &biomes,
+            &biome_field,
+            &terrain_materials,
+            &fluid_materials,
+        );
+        refresh_adjacent_chunk_meshes(
+            &mut commands,
+            &mut meshes,
+            &mut render_pool,
+            &world,
+            coord,
             &biomes,
             &biome_field,
             &terrain_materials,
