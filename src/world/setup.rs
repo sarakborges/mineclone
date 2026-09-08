@@ -15,6 +15,15 @@ use super::{
 
 const GRASS_BLOCK_ID: &str = "mineclone:grass";
 
+#[derive(Resource, Default)]
+pub struct WorldLoadingState {
+    rendered_frame: bool,
+}
+
+pub fn begin_world_loading(mut commands: Commands) {
+    commands.insert_resource(WorldLoadingState::default());
+}
+
 pub fn setup_world(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -24,7 +33,14 @@ pub fn setup_world(
     dimensions: Res<DimensionRegistry>,
     biomes: Res<BiomeRegistry>,
     blocks: Res<BlockRegistry>,
+    mut loading_state: ResMut<WorldLoadingState>,
+    mut next_state: ResMut<NextState<GameState>>,
 ) {
+    if !loading_state.rendered_frame {
+        loading_state.rendered_frame = true;
+        return;
+    }
+
     let dimension = dimensions
         .get(&current_dimension.id)
         .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
@@ -65,6 +81,7 @@ pub fn setup_world(
 
     commands.insert_resource(biome_field);
     commands.insert_resource(world);
+    next_state.set(GameState::Gameplay);
 }
 
 fn average_terrain_material(

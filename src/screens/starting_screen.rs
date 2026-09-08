@@ -101,7 +101,7 @@ fn handle_menu_buttons(
                 *background = BUTTON_PRESSED_COLOR.into();
 
                 match action {
-                    StartingScreenAction::NewWorld => next_state.set(GameState::Gameplay),
+                    StartingScreenAction::NewWorld => next_state.set(GameState::Loading),
                     StartingScreenAction::LoadWorlds => {}
                     StartingScreenAction::ExitGame => {
                         app_exit.write(AppExit::Success);

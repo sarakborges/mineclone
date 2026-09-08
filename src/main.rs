@@ -15,7 +15,7 @@ use content::ContentPlugin;
 use gameplay::GameplayPlugin;
 use hud::HudPlugin;
 use rendering::RenderingPlugin;
-use screens::starting_screen::StartingScreenPlugin;
+use screens::{loading_screen::LoadingScreenPlugin, starting_screen::StartingScreenPlugin};
 use targeting::block::BlockTargetingPlugin;
 use world::WorldPlugin;
 
@@ -33,6 +33,7 @@ fn main() {
         .add_plugins((
             ContentPlugin,
             StartingScreenPlugin,
+            LoadingScreenPlugin,
             WorldPlugin,
             GameplayPlugin,
             RenderingPlugin,
