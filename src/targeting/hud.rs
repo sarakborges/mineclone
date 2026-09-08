@@ -48,8 +48,8 @@ fn update_target_hud(
         || "No block targeted".to_string(),
         |hit| {
             format!(
-                "{}\n({}, {}, {})",
-                hit.block_id, hit.voxel.x, hit.voxel.y, hit.voxel.z
+                "{}\nX: {}\nZ: {}\nY: {}",
+                hit.block_id, hit.voxel.x, hit.voxel.z, hit.voxel.y
             )
         },
     );
