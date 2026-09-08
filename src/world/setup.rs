@@ -13,8 +13,11 @@ use super::{
     test_world::build_test_world,
 };
 
+const GRASS_BLOCK_ID: &str = "mineclone:grass";
+
 pub fn setup_world(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     current_dimension: Res<CurrentDimension>,
@@ -25,12 +28,16 @@ pub fn setup_world(
     let dimension = dimensions
         .get(&current_dimension.id)
         .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
+    let grass = blocks
+        .get(GRASS_BLOCK_ID)
+        .unwrap_or_else(|| panic!("missing block definition: {GRASS_BLOCK_ID}"));
     let biome_field = BiomeField::from_dimension(dimension, &biomes);
     let center = IVec2::ZERO;
     let world = build_test_world(center, RENDER_DISTANCE_RADIUS, &blocks);
     let (roughness, metallic) = average_terrain_material(dimension, &biomes);
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
+        base_color_texture: Some(asset_server.load(grass.texture.clone())),
         perceptual_roughness: roughness,
         metallic,
         ..default()
