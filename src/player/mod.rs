@@ -3,7 +3,7 @@ pub mod movement;
 
 use bevy::prelude::*;
 
-use crate::app::game_state::GameState;
+use crate::{app::game_state::GameState, voxel::chunk::CHUNK_SIZE};
 use camera::GameplayCamera;
 use movement::PlayerMovement;
 
@@ -20,9 +20,11 @@ impl Plugin for PlayerPlugin {
 }
 
 fn spawn_player(mut commands: Commands) {
+    let feet_y = CHUNK_SIZE as f32;
+
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(8.0, PLAYER_EYE_HEIGHT + 1.0, 8.0),
+        Transform::from_xyz(8.0, feet_y + PLAYER_EYE_HEIGHT, 8.0),
         GameplayCamera::default(),
         PlayerMovement::default(),
         DespawnOnExit(GameState::Gameplay),
