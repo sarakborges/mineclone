@@ -1,4 +1,5 @@
 mod celestial;
+mod celestial_path;
 mod environment;
 mod fog;
 mod lighting;
