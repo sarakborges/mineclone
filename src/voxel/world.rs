@@ -9,24 +9,24 @@ use super::{
 
 #[derive(Resource, Default)]
 pub struct VoxelWorld {
-    chunks: HashMap<IVec2, VoxelChunk>,
+    chunks: HashMap<IVec3, VoxelChunk>,
 }
 
 impl VoxelWorld {
-    pub fn insert_chunk(&mut self, coord: IVec2, chunk: VoxelChunk) {
+    pub fn insert_chunk(&mut self, coord: IVec3, chunk: VoxelChunk) {
         self.chunks.insert(coord, chunk);
     }
 
-    pub fn chunk(&self, coord: IVec2) -> Option<&VoxelChunk> {
+    pub fn chunk(&self, coord: IVec3) -> Option<&VoxelChunk> {
         self.chunks.get(&coord)
     }
 
-    pub fn chunks(&self) -> impl Iterator<Item = (&IVec2, &VoxelChunk)> {
+    pub fn chunks(&self) -> impl Iterator<Item = (&IVec3, &VoxelChunk)> {
         self.chunks.iter()
     }
 
     pub fn cell_at(&self, world_position: IVec3) -> Option<VoxelCell> {
-        let (chunk_coord, local_position) = split_world_position(world_position)?;
+        let (chunk_coord, local_position) = split_world_position(world_position);
 
         self.chunks.get(&chunk_coord)?.cell_at(
             local_position.x,
@@ -44,21 +44,18 @@ impl VoxelWorld {
     }
 }
 
-fn split_world_position(world_position: IVec3) -> Option<(IVec2, IVec3)> {
-    if world_position.y < 0 || world_position.y >= CHUNK_SIZE as i32 {
-        return None;
-    }
-
+fn split_world_position(world_position: IVec3) -> (IVec3, IVec3) {
     let chunk_size = CHUNK_SIZE as i32;
-    let chunk_coord = IVec2::new(
+    let chunk_coord = IVec3::new(
         world_position.x.div_euclid(chunk_size),
+        world_position.y.div_euclid(chunk_size),
         world_position.z.div_euclid(chunk_size),
     );
     let local_position = IVec3::new(
         world_position.x.rem_euclid(chunk_size),
-        world_position.y,
+        world_position.y.rem_euclid(chunk_size),
         world_position.z.rem_euclid(chunk_size),
     );
 
-    Some((chunk_coord, local_position))
+    (chunk_coord, local_position)
 }
