@@ -6,6 +6,8 @@ use std::{
 use bevy::prelude::*;
 use serde::de::DeserializeOwned;
 
+use crate::app::runtime_paths::data_root;
+
 use super::{
     biome::{BiomeDefinition, BiomeRegistry},
     block::{BlockDefinition, BlockRegistry},
@@ -14,8 +16,6 @@ use super::{
     sky::{SkyDefinition, SkyRegistry},
 };
 
-const DATA_ROOT: &str = "assets/data";
-
 pub fn load_content(mut commands: Commands) {
     let mut biome_registry = BiomeRegistry::default();
     let mut block_registry = BlockRegistry::default();
@@ -23,8 +23,9 @@ pub fn load_content(mut commands: Commands) {
     let mut day_night_cycle_registry = DayNightCycleRegistry::default();
     let mut sky_registry = SkyRegistry::default();
     let mut files = Vec::new();
+    let data_root = data_root();
 
-    collect_ron_files(Path::new(DATA_ROOT), &mut files);
+    collect_ron_files(&data_root, &mut files);
 
     for path in files {
         let file_name = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
