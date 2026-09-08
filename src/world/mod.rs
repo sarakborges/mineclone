@@ -1,4 +1,5 @@
 pub mod biome;
+pub mod day_night;
 pub mod dimension;
 pub(crate) mod render_distance;
 mod setup;
@@ -8,6 +9,7 @@ use bevy::prelude::*;
 
 use crate::app::game_state::GameState;
 use biome::CurrentBiome;
+use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
 use setup::setup_world;
 
@@ -17,6 +19,7 @@ impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CurrentDimension>()
             .init_resource::<CurrentBiome>()
+            .add_plugins(DayNightPlugin)
             .add_systems(OnEnter(GameState::Gameplay), setup_world);
     }
 }
