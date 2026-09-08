@@ -1,10 +1,6 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::path::Path;
 
 use bevy::prelude::*;
-use serde::de::DeserializeOwned;
 
 use crate::app::runtime_paths::data_root;
 
@@ -13,6 +9,7 @@ use super::{
     block::{BlockDefinition, BlockRegistry},
     day_night_cycle::{DayNightCycleDefinition, DayNightCycleRegistry},
     dimension::{DimensionDefinition, DimensionRegistry},
+    json_file::{collect_json_files, read_json_definition},
     sky::{SkyDefinition, SkyRegistry},
 };
 
@@ -23,30 +20,18 @@ pub fn load_content(mut commands: Commands) {
     let mut day_night_cycle_registry = DayNightCycleRegistry::default();
     let mut sky_registry = SkyRegistry::default();
     let mut files = Vec::new();
-    let data_root = data_root();
 
-    collect_ron_files(&data_root, &mut files);
+    collect_json_files(&data_root(), &mut files);
 
     for path in files {
-        let file_name = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
-
-        if file_name == "dimension.ron" {
-            dimension_registry.insert(read_definition::<DimensionDefinition>(&path));
-        } else if file_name == "day_night_cycle.ron" {
-            day_night_cycle_registry.insert(read_definition::<DayNightCycleDefinition>(&path));
-        } else if file_name == "sky.ron" {
-            sky_registry.insert(read_definition::<SkyDefinition>(&path));
-        } else if path
-            .components()
-            .any(|component| component.as_os_str().to_string_lossy() == "biomes")
-        {
-            biome_registry.insert(read_definition::<BiomeDefinition>(&path));
-        } else if path
-            .components()
-            .any(|component| component.as_os_str().to_string_lossy() == "blocks")
-        {
-            block_registry.insert(read_definition::<BlockDefinition>(&path));
-        }
+        load_definition(
+            &path,
+            &mut biome_registry,
+            &mut block_registry,
+            &mut dimension_registry,
+            &mut day_night_cycle_registry,
+            &mut sky_registry,
+        );
     }
 
     commands.insert_resource(biome_registry);
@@ -56,27 +41,33 @@ pub fn load_content(mut commands: Commands) {
     commands.insert_resource(sky_registry);
 }
 
-fn collect_ron_files(directory: &Path, files: &mut Vec<PathBuf>) {
-    let entries = fs::read_dir(directory)
-        .unwrap_or_else(|error| panic!("failed to read content directory {}: {error}", directory.display()));
+fn load_definition(
+    path: &Path,
+    biome_registry: &mut BiomeRegistry,
+    block_registry: &mut BlockRegistry,
+    dimension_registry: &mut DimensionRegistry,
+    day_night_cycle_registry: &mut DayNightCycleRegistry,
+    sky_registry: &mut SkyRegistry,
+) {
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
 
-    for entry in entries {
-        let path = entry
-            .unwrap_or_else(|error| panic!("failed to read content entry: {error}"))
-            .path();
-
-        if path.is_dir() {
-            collect_ron_files(&path, files);
-        } else if path.extension().and_then(|extension| extension.to_str()) == Some("ron") {
-            files.push(path);
-        }
+    if file_name == "dimension.json" {
+        dimension_registry.insert(read_json_definition::<DimensionDefinition>(path));
+    } else if file_name == "day_night_cycle.json" {
+        day_night_cycle_registry.insert(read_json_definition::<DayNightCycleDefinition>(path));
+    } else if file_name == "sky.json" {
+        sky_registry.insert(read_json_definition::<SkyDefinition>(path));
+    } else if path_has_component(path, "biomes") {
+        biome_registry.insert(read_json_definition::<BiomeDefinition>(path));
+    } else if path_has_component(path, "blocks") {
+        block_registry.insert(read_json_definition::<BlockDefinition>(path));
     }
 }
 
-fn read_definition<T: DeserializeOwned>(path: &Path) -> T {
-    let source = fs::read_to_string(path)
-        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
-
-    ron::from_str(&source)
-        .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()))
+fn path_has_component(path: &Path, component: &str) -> bool {
+    path.components()
+        .any(|candidate| candidate.as_os_str() == component)
 }
