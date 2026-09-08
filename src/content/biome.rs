@@ -3,12 +3,15 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::color::Rgb;
+use super::{
+    color::Rgb,
+    day_night_phase::DayNightPhases,
+};
 
 #[derive(Clone, Deserialize)]
 pub struct BiomeVisuals {
-    pub sky_color: Rgb,
-    pub fog_color: Rgb,
+    pub sky_color: DayNightPhases<Rgb>,
+    pub fog_color: DayNightPhases<Rgb>,
     pub terrain_color: Rgb,
     pub terrain_roughness: f32,
     pub terrain_metallic: f32,
