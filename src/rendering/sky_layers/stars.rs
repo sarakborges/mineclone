@@ -92,7 +92,7 @@ pub(super) fn update_stars(
         (visuals.star_density * time_factor * MAX_STARS as f32).round() as usize;
     let camera_position = camera.translation();
 
-    if let Some(material) = materials.get_mut(&assets.material) {
+    if let Some(mut material) = materials.get_mut(&assets.material) {
         let color = visuals.star_color;
         material.base_color = Color::srgba(color.r, color.g, color.b, time_factor);
     }
