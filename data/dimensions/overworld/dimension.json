@@ -8,5 +8,6 @@
     "mineclone:overworld/enchanted_realm"
   ],
   "day_night_cycle": "mineclone:overworld/day_night_cycle",
-  "sky": "mineclone:overworld/sky"
+  "sky": "mineclone:overworld/sky",
+  "sea_level": 90
 }
