@@ -1,4 +1,5 @@
 mod build_game;
+mod copy_tree;
 mod package;
 
 use std::{error::Error, path::PathBuf};
