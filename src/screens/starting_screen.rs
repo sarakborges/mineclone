@@ -9,7 +9,11 @@ use crate::{
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
     },
-    world::WorldSeed,
+    world::{
+        biome::CurrentBiome,
+        dimension::CurrentDimension,
+        WorldSeed,
+    },
 };
 
 pub struct StartingScreenPlugin;
@@ -116,6 +120,8 @@ fn handle_menu_buttons(
 
         match action {
             StartingScreenAction::NewWorld => {
+                commands.insert_resource(CurrentDimension::default());
+                commands.insert_resource(CurrentBiome::default());
                 commands.insert_resource(WorldSeed::fresh());
                 transition.request(ScreenTransitionTarget::game(GameState::Loading));
             }
