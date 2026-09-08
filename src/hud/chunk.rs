@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     app::game_state::GameState,
     player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
-    ui::{theme, typography},
+    ui::{surface, typography},
     voxel::coordinates::split_dimension_position,
 };
 
@@ -20,23 +20,25 @@ impl Plugin for ChunkHudPlugin {
 struct ChunkHudText;
 
 fn spawn_chunk_hud(mut commands: Commands) {
-    commands.spawn((
-        Node {
-            position_type: PositionType::Absolute,
-            top: px(16),
-            left: px(16),
-            padding: UiRect::all(px(12)),
-            border_radius: BorderRadius::all(px(6)),
-            ..default()
-        },
-        BackgroundColor(theme::HUD_SURFACE),
-        Pickable::IGNORE,
-        DespawnOnExit(GameState::Gameplay),
-        children![(
-            typography::hud("Chunk: X 0 | Z 0 | Y 0\nLocal: X 0 | Z 0 | Y 0"),
-            ChunkHudText,
-        )],
-    ));
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                top: px(16),
+                left: px(16),
+                ..default()
+            },
+            Pickable::IGNORE,
+            DespawnOnExit(GameState::Gameplay),
+        ))
+        .with_children(|root| {
+            root.spawn(surface::hud_panel()).with_children(|panel| {
+                panel.spawn((
+                    typography::hud("Chunk: X 0 | Z 0 | Y 0\nLocal: X 0 | Z 0 | Y 0"),
+                    ChunkHudText,
+                ));
+            });
+        });
 }
 
 fn update_chunk_hud(
