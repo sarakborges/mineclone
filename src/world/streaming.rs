@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 
 use bevy::prelude::*;
 
@@ -30,7 +30,6 @@ const CHUNKS_PER_FRAME: usize = 4;
 pub struct ChunkStreamingState {
     center: Option<IVec2>,
     render_distance: i32,
-    desired: HashSet<IVec3>,
     pending: VecDeque<IVec3>,
 }
 
@@ -145,35 +144,11 @@ fn rebuild_queue(
         min_chunk_y,
         max_chunk_y,
     );
-    let desired: HashSet<_> = coords.iter().copied().collect();
-    let mut newly_exposed = Vec::new();
-    let mut remaining = Vec::new();
-
-    for coord in coords {
-        if render_pool.contains(coord) {
-            continue;
-        }
-
-        if streaming.desired.contains(&coord) {
-            remaining.push(coord);
-        } else {
-            newly_exposed.push(coord);
-        }
-    }
-
-    sort_by_distance(&mut newly_exposed, center);
-    sort_by_distance(&mut remaining, center);
 
     streaming.center = Some(center);
     streaming.render_distance = radius;
-    streaming.desired = desired;
-    streaming.pending = newly_exposed.into_iter().chain(remaining).collect();
-}
-
-fn sort_by_distance(coords: &mut [IVec3], center: IVec2) {
-    coords.sort_by_key(|coord| {
-        let dx = coord.x - center.x;
-        let dz = coord.z - center.y;
-        dx * dx + dz * dz
-    });
+    streaming.pending = coords
+        .into_iter()
+        .filter(|coord| !render_pool.contains(*coord))
+        .collect();
 }
