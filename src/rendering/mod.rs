@@ -5,6 +5,7 @@ mod environment;
 mod fog;
 mod lighting;
 mod sky;
+mod sky_layers;
 
 use asset_upload::AssetUploadPlugin;
 use bevy::prelude::*;
@@ -13,6 +14,7 @@ use environment::EnvironmentPlugin;
 use fog::FogPlugin;
 use lighting::LightingPlugin;
 use sky::SkyPlugin;
+use sky_layers::SkyLayersPlugin;
 
 pub struct RenderingPlugin;
 
@@ -24,6 +26,7 @@ impl Plugin for RenderingPlugin {
             LightingPlugin,
             FogPlugin,
             SkyPlugin,
+            SkyLayersPlugin,
             CelestialPlugin,
         ));
     }
