@@ -5,11 +5,13 @@ use bevy::prelude::*;
 use super::{
     cell::VoxelCell,
     chunk::{VoxelChunk, CHUNK_SIZE},
+    chunk_archive::ArchivedChunk,
 };
 
 #[derive(Resource, Default)]
 pub struct VoxelWorld {
     chunks: HashMap<IVec3, VoxelChunk>,
+    archived_chunks: HashMap<IVec3, ArchivedChunk>,
     generated_chunks: HashSet<IVec3>,
 }
 
@@ -31,6 +33,28 @@ impl VoxelWorld {
         }
 
         self.chunks.get(&coord)
+    }
+
+    pub fn archive_chunk(&mut self, coord: IVec3) {
+        let Some(chunk) = self.chunks.remove(&coord) else {
+            return;
+        };
+
+        self.archived_chunks
+            .insert(coord, ArchivedChunk::from_chunk(&chunk));
+    }
+
+    pub fn restore_chunk(&mut self, coord: IVec3) -> bool {
+        if self.chunks.contains_key(&coord) {
+            return true;
+        }
+
+        let Some(archived) = self.archived_chunks.remove(&coord) else {
+            return false;
+        };
+
+        self.chunks.insert(coord, archived.restore());
+        true
     }
 
     pub fn has_generated_chunk(&self, coord: IVec3) -> bool {
