@@ -11,11 +11,11 @@ use super::{
 };
 
 const TOP_SHADE: f32 = 1.0;
-const BOTTOM_SHADE: f32 = 0.55;
-const EAST_SHADE: f32 = 0.88;
-const WEST_SHADE: f32 = 0.78;
-const SOUTH_SHADE: f32 = 0.84;
-const NORTH_SHADE: f32 = 0.72;
+const BOTTOM_SHADE: f32 = 0.78;
+const EAST_SHADE: f32 = 0.94;
+const WEST_SHADE: f32 = 0.88;
+const SOUTH_SHADE: f32 = 0.92;
+const NORTH_SHADE: f32 = 0.86;
 
 pub fn build_chunk_mesh(world: &VoxelWorld, chunk_coord: IVec2, chunk: &VoxelChunk) -> Mesh {
     let mut positions = Vec::<[f32; 3]>::new();
