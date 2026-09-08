@@ -17,6 +17,11 @@ pub struct PauseMenuPlugin;
 impl Plugin for PauseMenuPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(PauseState::Paused), spawn_pause_menu)
+            .add_systems(OnEnter(SettingsState::Open), hide_pause_menu)
+            .add_systems(
+                OnEnter(SettingsState::Closed),
+                show_pause_menu.run_if(in_state(PauseState::Paused)),
+            )
             .add_systems(
                 Update,
                 handle_pause_menu_buttons
@@ -25,6 +30,9 @@ impl Plugin for PauseMenuPlugin {
             );
     }
 }
+
+#[derive(Component)]
+struct PauseMenuRoot;
 
 #[derive(Component, Clone, Copy)]
 enum PauseMenuAction {
@@ -37,6 +45,7 @@ enum PauseMenuAction {
 fn spawn_pause_menu(mut commands: Commands) {
     commands.spawn((
         DespawnOnExit(PauseState::Paused),
+        PauseMenuRoot,
         Node {
             width: percent(100),
             height: percent(100),
@@ -94,6 +103,18 @@ fn pause_button(label: &'static str, action: PauseMenuAction) -> impl Bundle {
             TextColor(TEXT_COLOR),
         )],
     )
+}
+
+fn hide_pause_menu(mut roots: Query<&mut Visibility, With<PauseMenuRoot>>) {
+    for mut visibility in &mut roots {
+        *visibility = Visibility::Hidden;
+    }
+}
+
+fn show_pause_menu(mut roots: Query<&mut Visibility, With<PauseMenuRoot>>) {
+    for mut visibility in &mut roots {
+        *visibility = Visibility::Visible;
+    }
 }
 
 fn handle_pause_menu_buttons(
