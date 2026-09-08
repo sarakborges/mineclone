@@ -19,7 +19,15 @@
             dusk: (r: 0.18, g: 0.025, b: 0.07),
             night: (r: 0.07, g: 0.01, b: 0.03),
         ),
-        grass_color: (r: 0.08, g: 0.015, b: 1.0),
+        grass_color: (r: 0.035, g: 0.0, b: 1.0),
+        stars: (
+            density: 0.82,
+            color: (r: 0.56, g: 0.48, b: 1.0),
+        ),
+        clouds: (
+            density: 0.08,
+            color: (r: 0.24, g: 0.12, b: 0.36),
+        ),
         terrain_roughness: 0.94,
         terrain_metallic: 0.0,
     ),
