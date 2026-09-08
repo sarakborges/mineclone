@@ -1,6 +1,13 @@
 {
   "id": "mineclone:grass",
   "name": "Grass",
-  "texture": "textures/blocks/grass.png",
+  "textures": {
+    "top": "textures/blocks/grass/top.png",
+    "bottom": "textures/blocks/grass/bottom.png",
+    "left": "textures/blocks/grass/left.png",
+    "right": "textures/blocks/grass/right.png",
+    "front": "textures/blocks/grass/front.png",
+    "back": "textures/blocks/grass/back.png"
+  },
   "rotate_texture": true
 }

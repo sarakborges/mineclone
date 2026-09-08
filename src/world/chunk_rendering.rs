@@ -7,7 +7,7 @@ use crate::{
     content::biome::BiomeRegistry,
     voxel::{
         chunk::{VoxelChunk, CHUNK_SIZE},
-        mesh::build_chunk_mesh,
+        mesh::{build_chunk_mesh, BlockFace},
         world::VoxelWorld,
     },
 };
@@ -15,11 +15,31 @@ use crate::{
 use super::biome_field::BiomeField;
 
 #[derive(Resource, Clone)]
-pub struct TerrainMaterial(pub Handle<StandardMaterial>);
+pub struct TerrainMaterials {
+    pub top: Handle<StandardMaterial>,
+    pub bottom: Handle<StandardMaterial>,
+    pub left: Handle<StandardMaterial>,
+    pub right: Handle<StandardMaterial>,
+    pub front: Handle<StandardMaterial>,
+    pub back: Handle<StandardMaterial>,
+}
+
+impl TerrainMaterials {
+    fn for_face(&self, face: BlockFace) -> &Handle<StandardMaterial> {
+        match face {
+            BlockFace::Right => &self.right,
+            BlockFace::Left => &self.left,
+            BlockFace::Top => &self.top,
+            BlockFace::Bottom => &self.bottom,
+            BlockFace::Front => &self.front,
+            BlockFace::Back => &self.back,
+        }
+    }
+}
 
 struct ChunkRenderSlot {
-    entity: Entity,
-    mesh: Option<Handle<Mesh>>,
+    entities: Vec<Entity>,
+    meshes: Vec<Handle<Mesh>>,
 }
 
 #[derive(Resource, Default)]
@@ -37,10 +57,10 @@ impl ChunkRenderPool {
         self.active.keys().copied()
     }
 
-    pub fn take(&mut self, coord: IVec3) -> Option<(Entity, Option<Handle<Mesh>>)> {
+    pub fn take(&mut self, coord: IVec3) -> Option<(Vec<Entity>, Vec<Handle<Mesh>>)> {
         self.active
             .remove(&coord)
-            .map(|slot| (slot.entity, slot.mesh))
+            .map(|slot| (slot.entities, slot.meshes))
     }
 
     pub fn recycle_mesh_handle(&mut self, handle: Handle<Mesh>) {
@@ -49,7 +69,7 @@ impl ChunkRenderPool {
 
     pub fn clear(&mut self, meshes: &mut Assets<Mesh>) {
         for (_, slot) in self.active.drain() {
-            if let Some(handle) = slot.mesh {
+            for handle in slot.meshes {
                 let _ = meshes.remove(&handle);
                 self.free_mesh_handles.push(handle);
             }
@@ -62,8 +82,14 @@ impl ChunkRenderPool {
             .unwrap_or_else(|| meshes.reserve_handle())
     }
 
-    fn insert(&mut self, coord: IVec3, entity: Entity, mesh: Option<Handle<Mesh>>) {
-        self.active.insert(coord, ChunkRenderSlot { entity, mesh });
+    fn insert(
+        &mut self,
+        coord: IVec3,
+        entities: Vec<Entity>,
+        meshes: Vec<Handle<Mesh>>,
+    ) {
+        self.active
+            .insert(coord, ChunkRenderSlot { entities, meshes });
     }
 }
 
@@ -76,40 +102,47 @@ pub fn spawn_chunk_mesh(
     chunk: &VoxelChunk,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
-    material: &Handle<StandardMaterial>,
+    materials: &TerrainMaterials,
 ) {
     if render_pool.contains(coord) {
         return;
     }
 
     if chunk.is_empty() {
-        let entity = commands
-            .spawn(DespawnOnExit(GameState::Gameplay))
-            .id();
-        render_pool.insert(coord, entity, None);
+        render_pool.insert(coord, Vec::new(), Vec::new());
         return;
     }
 
-    let mesh = build_chunk_mesh(world, coord, chunk, |voxel| {
+    let face_meshes = build_chunk_mesh(world, coord, chunk, |voxel| {
         let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
         let grass = biome_field.grass_color(position, biomes);
         [grass.r, grass.g, grass.b]
     });
-    let mesh_handle = render_pool.acquire_mesh_handle(meshes);
-    meshes
-        .insert(&mesh_handle, mesh)
-        .expect("reserved chunk mesh handle should remain valid");
     let chunk_size = CHUNK_SIZE as f32;
-    let entity = commands
-        .spawn((
-            Mesh3d(mesh_handle.clone()),
-            MeshMaterial3d(material.clone()),
-            Transform::from_translation(coord.as_vec3() * chunk_size),
-            DespawnOnExit(GameState::Gameplay),
-        ))
-        .id();
+    let transform = Transform::from_translation(coord.as_vec3() * chunk_size);
+    let mut entities = Vec::with_capacity(face_meshes.len());
+    let mut mesh_handles = Vec::with_capacity(face_meshes.len());
 
-    render_pool.insert(coord, entity, Some(mesh_handle));
+    for face_mesh in face_meshes {
+        let mesh_handle = render_pool.acquire_mesh_handle(meshes);
+        meshes
+            .insert(&mesh_handle, face_mesh.mesh)
+            .expect("reserved chunk mesh handle should remain valid");
+
+        let entity = commands
+            .spawn((
+                Mesh3d(mesh_handle.clone()),
+                MeshMaterial3d(materials.for_face(face_mesh.face).clone()),
+                transform,
+                DespawnOnExit(GameState::Gameplay),
+            ))
+            .id();
+
+        entities.push(entity);
+        mesh_handles.push(mesh_handle);
+    }
+
+    render_pool.insert(coord, entities, mesh_handles);
 }
 
 pub fn clear_chunk_render_pool(

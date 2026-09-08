@@ -9,7 +9,7 @@ use crate::{
 
 use super::{
     biome_field::BiomeField,
-    chunk_rendering::{spawn_chunk_mesh, ChunkRenderPool, TerrainMaterial},
+    chunk_rendering::{spawn_chunk_mesh, ChunkRenderPool, TerrainMaterials},
     dimension::CurrentDimension,
     render_distance::chunk_coords_in_cylinder,
     test_world::{build_test_chunk, TERRAIN_MAX_CHUNK_Y, TERRAIN_MIN_CHUNK_Y},
@@ -53,13 +53,23 @@ pub fn begin_world_loading(
         .unwrap_or_else(|| panic!("missing block definition: {GRASS_BLOCK_ID}"));
     let biome_field = BiomeField::from_dimension(dimension, &biomes);
     let (roughness, metallic) = average_terrain_material(dimension, &biomes);
-    let material = materials.add(StandardMaterial {
-        base_color: Color::WHITE,
-        base_color_texture: Some(asset_server.load(&grass.texture)),
-        perceptual_roughness: roughness,
-        metallic,
-        ..default()
-    });
+    let mut create_material = |texture: &str| {
+        materials.add(StandardMaterial {
+            base_color: Color::WHITE,
+            base_color_texture: Some(asset_server.load(texture.to_owned())),
+            perceptual_roughness: roughness,
+            metallic,
+            ..default()
+        })
+    };
+    let terrain_materials = TerrainMaterials {
+        top: create_material(&grass.textures.top),
+        bottom: create_material(&grass.textures.bottom),
+        left: create_material(&grass.textures.left),
+        right: create_material(&grass.textures.right),
+        front: create_material(&grass.textures.front),
+        back: create_material(&grass.textures.back),
+    };
     let coords = chunk_coords_in_cylinder(
         IVec3::ZERO,
         INITIAL_HORIZONTAL_RADIUS_CHUNKS,
@@ -69,7 +79,7 @@ pub fn begin_world_loading(
 
     commands.insert_resource(VoxelWorld::default());
     commands.insert_resource(biome_field);
-    commands.insert_resource(TerrainMaterial(material));
+    commands.insert_resource(terrain_materials);
     commands.insert_resource(WorldLoadingState {
         coords,
         generated: 0,
@@ -84,7 +94,7 @@ pub fn setup_world(
     blocks: Res<BlockRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
-    material: Res<TerrainMaterial>,
+    materials: Res<TerrainMaterials>,
     mut world: ResMut<VoxelWorld>,
     mut render_pool: ResMut<ChunkRenderPool>,
     mut loading_state: ResMut<WorldLoadingState>,
@@ -123,7 +133,7 @@ pub fn setup_world(
         chunk,
         &biomes,
         &biome_field,
-        &material.0,
+        &materials,
     );
 
     loading_state.generated += 1;

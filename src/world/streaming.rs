@@ -10,7 +10,7 @@ use crate::{
 
 use super::{
     biome_field::BiomeField,
-    chunk_rendering::{spawn_chunk_mesh, ChunkRenderPool, TerrainMaterial},
+    chunk_rendering::{spawn_chunk_mesh, ChunkRenderPool, TerrainMaterials},
     render_distance::{chunk_coords_in_cylinder, RenderDistanceSettings},
     test_world::{build_test_chunk, TERRAIN_MAX_CHUNK_Y, TERRAIN_MIN_CHUNK_Y},
 };
@@ -36,7 +36,7 @@ pub fn stream_chunks(
     blocks: Res<BlockRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
-    material: Res<TerrainMaterial>,
+    materials: Res<TerrainMaterials>,
     render_distance: Res<RenderDistanceSettings>,
     mut world: ResMut<VoxelWorld>,
     mut streaming: ResMut<ChunkStreamingState>,
@@ -82,7 +82,7 @@ pub fn stream_chunks(
             chunk,
             &biomes,
             &biome_field,
-            &material.0,
+            &materials,
         );
     }
 }
