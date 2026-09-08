@@ -6,4 +6,5 @@
         "mineclone:overworld/wasteland",
     ],
     day_night_cycle: "mineclone:overworld/day_night_cycle",
+    sky: "mineclone:overworld/sky",
 )
