@@ -11,46 +11,10 @@ pub fn build_test_world(center: IVec2, radius: i32) -> VoxelWorld {
     let mut world = VoxelWorld::default();
 
     for coord in chunk_coords_in_radius(center, radius) {
-        let chunk = if coord == center {
-            central_test_chunk()
-        } else {
-            varied_terrain_chunk(coord)
-        };
-
-        world.insert_chunk(coord, chunk);
+        world.insert_chunk(coord, varied_terrain_chunk(coord));
     }
 
     world
-}
-
-fn central_test_chunk() -> VoxelChunk {
-    let mut chunk = VoxelChunk::empty();
-
-    for z in 0..CHUNK_SIZE {
-        for x in 0..CHUNK_SIZE {
-            chunk.set_solid(x, 0, z, true);
-        }
-    }
-
-    for z in 3..13 {
-        for y in 1..4 {
-            chunk.set_solid(4, y, z, true);
-        }
-    }
-
-    for x in 8..12 {
-        for z in 4..7 {
-            chunk.set_solid(x, 3, z, true);
-        }
-    }
-
-    for x in 10..13 {
-        for z in 10..13 {
-            chunk.set_solid(x, 1, z, true);
-        }
-    }
-
-    chunk
 }
 
 fn varied_terrain_chunk(coord: IVec2) -> VoxelChunk {
