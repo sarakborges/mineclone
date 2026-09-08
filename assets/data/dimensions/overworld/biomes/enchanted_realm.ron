@@ -19,7 +19,7 @@
             dusk: (r: 0.48, g: 0.89, b: 0.84),
             night: (r: 0.25, g: 0.67, b: 0.66),
         ),
-        grass_color: (r: 0.08, g: 0.92, b: 0.61),
+        grass_color: (r: 0.03, g: 0.88, b: 0.78),
         terrain_roughness: 0.90,
         terrain_metallic: 0.0,
     ),
