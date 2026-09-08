@@ -1,5 +1,6 @@
 mod app;
 mod gameplay;
+mod hud;
 mod player;
 mod screens;
 mod targeting;
@@ -8,6 +9,7 @@ mod voxel;
 use app::game_state::GameState;
 use bevy::prelude::*;
 use gameplay::GameplayPlugin;
+use hud::HudPlugin;
 use screens::starting_screen::StartingScreenPlugin;
 use targeting::block::BlockTargetingPlugin;
 
@@ -22,6 +24,11 @@ fn main() {
         }))
         .init_state::<GameState>()
         .insert_resource(ClearColor(Color::srgb(0.02, 0.025, 0.04)))
-        .add_plugins((StartingScreenPlugin, GameplayPlugin, BlockTargetingPlugin))
+        .add_plugins((
+            StartingScreenPlugin,
+            GameplayPlugin,
+            BlockTargetingPlugin,
+            HudPlugin,
+        ))
         .run();
 }
