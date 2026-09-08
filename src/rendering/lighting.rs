@@ -86,7 +86,6 @@ fn update_lighting(
     ambient_light.brightness = visuals.ambient_brightness;
 
     sun.0.color = visuals.sun_color;
-    sun.0.illuminance = visuals.sun_illuminance;
 
     let Some(dimension) = dimensions.get(&current_dimension.id) else {
         sun.0.illuminance = 0.0;
@@ -105,6 +104,23 @@ fn update_lighting(
         return;
     };
 
+    sun.0.illuminance = visuals.sun_illuminance
+        * horizon_light_factor(direction_to_sun, sky.sun.light_fade_altitude_degrees);
+
     let light_direction = -direction_to_sun;
     sun.1.rotation = Quat::from_rotation_arc(Vec3::NEG_Z, light_direction);
+}
+
+fn horizon_light_factor(direction_to_sun: Vec3, fade_altitude_degrees: f32) -> f32 {
+    if fade_altitude_degrees <= 0.0 {
+        return 1.0;
+    }
+
+    let fade_height = fade_altitude_degrees.to_radians().sin();
+    if fade_height <= f32::EPSILON {
+        return 1.0;
+    }
+
+    let t = (direction_to_sun.y.max(0.0) / fade_height).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
 }
