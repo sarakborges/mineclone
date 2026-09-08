@@ -8,6 +8,7 @@ use crate::{
         dimension::DimensionRegistry,
     },
     player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
+    ui::{theme, typography},
     world::{
         biome::CurrentBiome,
         day_night::DayNightClock,
@@ -45,14 +46,9 @@ fn spawn_world_hud(mut commands: Commands) {
                 border_radius: BorderRadius::all(px(6)),
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.02, 0.025, 0.04, 0.82)),
+            BackgroundColor(theme::HUD_SURFACE),
             children![(
-                Text::new("- - -\nDay 1 - 00:00\nX 0 | Z 0 | Y 0"),
-                TextFont {
-                    font_size: FontSize::Px(18.0),
-                    ..default()
-                },
-                TextColor(Color::WHITE),
+                typography::hud("- - -\nDay 1 - 00:00\nX 0 | Z 0 | Y 0"),
                 WorldHudText,
             )],
         )],
