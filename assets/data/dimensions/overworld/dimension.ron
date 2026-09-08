@@ -3,6 +3,7 @@
     name: "Overworld",
     biomes: [
         "mineclone:overworld/plains",
+        "mineclone:overworld/wasteland",
     ],
     day_night_cycle: "mineclone:overworld/day_night_cycle",
 )
