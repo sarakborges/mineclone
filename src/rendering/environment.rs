@@ -22,7 +22,6 @@ pub struct EnvironmentVisualState {
     pub ambient_brightness: f32,
     pub sun_color: Color,
     pub sun_illuminance: f32,
-    pub sun_rotation: Quat,
 }
 
 impl Default for EnvironmentVisualState {
@@ -34,7 +33,6 @@ impl Default for EnvironmentVisualState {
             ambient_brightness: 90.0,
             sun_color: Color::WHITE,
             sun_illuminance: 80_000.0,
-            sun_rotation: Quat::IDENTITY,
         }
     }
 }
@@ -105,8 +103,4 @@ fn update_environment_visuals(
     visuals.ambient_brightness = sample.ambient_brightness;
     visuals.sun_color = sample.sun_color.to_color();
     visuals.sun_illuminance = sample.sun_illuminance;
-
-    let sun_angle = clock.normalized_time * std::f32::consts::TAU
-        + cycle.sun_angle_offset_degrees.to_radians();
-    visuals.sun_rotation = Quat::from_euler(EulerRot::XYZ, sun_angle, -0.45, 0.0);
 }
