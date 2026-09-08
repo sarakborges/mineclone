@@ -2,12 +2,7 @@ mod scene;
 
 use bevy::prelude::*;
 
-use crate::player::{
-    camera::PlayerCameraPlugin,
-    hud::PlayerHudPlugin,
-    movement::PlayerMovementPlugin,
-    PlayerPlugin,
-};
+use crate::player::{camera::PlayerCameraPlugin, movement::PlayerMovementPlugin, PlayerPlugin};
 use scene::GameplayScenePlugin;
 
 pub struct GameplayPlugin;
@@ -19,7 +14,6 @@ impl Plugin for GameplayPlugin {
             PlayerPlugin,
             PlayerCameraPlugin,
             PlayerMovementPlugin,
-            PlayerHudPlugin,
         ));
     }
 }
