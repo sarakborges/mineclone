@@ -12,4 +12,5 @@ serde = { version = "1.0", features = ["derive"] }
 winit = { version = "0.30", default-features = false }
 
 [build-dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
 winresource = "0.1.31"
