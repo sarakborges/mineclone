@@ -13,6 +13,7 @@ mod world;
 use app::{
     game_state::GameState,
     pause_state::PauseState,
+    runtime_paths::prepare_runtime_directory,
     window_icon::WindowIconPlugin,
 };
 use bevy::prelude::*;
@@ -31,6 +32,8 @@ use ui::UiDesignSystemPlugin;
 use world::WorldPlugin;
 
 fn main() {
+    prepare_runtime_directory();
+
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
