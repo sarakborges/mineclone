@@ -6,7 +6,7 @@ fn main() {
     }
 
     let mut resource = winresource::WindowsResource::new();
-    resource.set_icon("assets/branding/asteria_icon.ico");
+    resource.set_icon_with_id("assets/branding/asteria_icon.ico", "1");
     resource
         .compile()
         .expect("Asteria Windows resources should compile");
