@@ -18,6 +18,10 @@ impl VoxelChunk {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.blocks.iter().all(Option::is_none)
+    }
+
     pub fn cell_at(&self, x: i32, y: i32, z: i32) -> Option<VoxelCell> {
         if x < 0
             || y < 0
