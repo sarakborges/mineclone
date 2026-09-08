@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 use bevy::prelude::*;
 
@@ -24,6 +24,8 @@ pub struct ChunkStreamingState {
     render_distance: i32,
     min_chunk_y: i32,
     max_chunk_y: i32,
+    desired: HashSet<IVec3>,
+    queued: HashSet<IVec3>,
     pending: VecDeque<IVec3>,
 }
 
@@ -70,7 +72,9 @@ pub fn stream_chunks(
             break;
         };
 
-        if world.chunk(coord).is_some() {
+        streaming.queued.remove(&coord);
+
+        if world.has_generated_chunk(coord) {
             continue;
         }
 
@@ -101,9 +105,36 @@ fn rebuild_queue(
     min_chunk_y: i32,
     max_chunk_y: i32,
 ) {
-    let mut coords = chunk_coords_in_cylinder(center, radius, min_chunk_y, max_chunk_y);
+    let coords = chunk_coords_in_cylinder(center, radius, min_chunk_y, max_chunk_y);
+    let desired: HashSet<_> = coords.iter().copied().collect();
+    let mut newly_exposed = Vec::new();
+    let mut remaining = Vec::new();
 
-    coords.retain(|coord| world.chunk(*coord).is_none());
+    for coord in coords {
+        if world.has_generated_chunk(coord) {
+            continue;
+        }
+
+        if streaming.desired.contains(&coord) {
+            remaining.push(coord);
+        } else {
+            newly_exposed.push(coord);
+        }
+    }
+
+    sort_by_distance(&mut newly_exposed, center);
+    sort_by_distance(&mut remaining, center);
+
+    streaming.center = Some(center);
+    streaming.render_distance = radius;
+    streaming.min_chunk_y = min_chunk_y;
+    streaming.max_chunk_y = max_chunk_y;
+    streaming.desired = desired;
+    streaming.pending = newly_exposed.into_iter().chain(remaining).collect();
+    streaming.queued = streaming.pending.iter().copied().collect();
+}
+
+fn sort_by_distance(coords: &mut [IVec3], center: IVec3) {
     coords.sort_by_key(|coord| {
         let dx = coord.x - center.x;
         let dz = coord.z - center.z;
@@ -112,10 +143,4 @@ fn rebuild_queue(
 
         (horizontal_distance_squared, vertical_distance)
     });
-
-    streaming.center = Some(center);
-    streaming.render_distance = radius;
-    streaming.min_chunk_y = min_chunk_y;
-    streaming.max_chunk_y = max_chunk_y;
-    streaming.pending = coords.into_iter().collect();
 }
