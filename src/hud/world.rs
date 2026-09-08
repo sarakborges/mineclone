@@ -8,7 +8,7 @@ use crate::{
         dimension::DimensionRegistry,
     },
     player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
-    ui::{theme, typography},
+    ui::{surface, typography},
     world::{
         biome::CurrentBiome,
         day_night::DayNightClock,
@@ -29,30 +29,27 @@ impl Plugin for WorldHudPlugin {
 struct WorldHudText;
 
 fn spawn_world_hud(mut commands: Commands) {
-    commands.spawn((
-        Node {
-            position_type: PositionType::Absolute,
-            top: px(16),
-            left: px(0),
-            width: percent(100),
-            justify_content: JustifyContent::Center,
-            ..default()
-        },
-        Pickable::IGNORE,
-        DespawnOnExit(GameState::Gameplay),
-        children![(
+    commands
+        .spawn((
             Node {
-                padding: UiRect::all(px(12)),
-                border_radius: BorderRadius::all(px(6)),
+                position_type: PositionType::Absolute,
+                top: px(16),
+                left: px(0),
+                width: percent(100),
+                justify_content: JustifyContent::Center,
                 ..default()
             },
-            BackgroundColor(theme::HUD_SURFACE),
-            children![(
-                typography::hud("- - -\nDay 1 - 00:00\nX 0 | Z 0 | Y 0"),
-                WorldHudText,
-            )],
-        )],
-    ));
+            Pickable::IGNORE,
+            DespawnOnExit(GameState::Gameplay),
+        ))
+        .with_children(|root| {
+            root.spawn(surface::hud_panel()).with_children(|panel| {
+                panel.spawn((
+                    typography::hud("- - -\nDay 1 - 00:00\nX 0 | Z 0 | Y 0"),
+                    WorldHudText,
+                ));
+            });
+        });
 }
 
 fn update_world_hud(
