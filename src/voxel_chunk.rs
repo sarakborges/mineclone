@@ -8,6 +8,7 @@ use bevy::{
 pub const CHUNK_SIZE: usize = 16;
 const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
 const CHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_SIZE;
+const COLLISION_EPSILON: f32 = 0.0001;
 
 #[derive(Component)]
 pub struct VoxelChunk {
@@ -15,7 +16,7 @@ pub struct VoxelChunk {
 }
 
 impl VoxelChunk {
-    pub fn flat_test() -> Self {
+    pub fn collision_test() -> Self {
         let mut chunk = Self {
             blocks: [false; CHUNK_VOLUME],
         };
@@ -23,6 +24,24 @@ impl VoxelChunk {
         for z in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
                 chunk.set_solid(x, 0, z, true);
+            }
+        }
+
+        for z in 3..13 {
+            for y in 1..4 {
+                chunk.set_solid(4, y, z, true);
+            }
+        }
+
+        for x in 8..12 {
+            for z in 4..7 {
+                chunk.set_solid(x, 3, z, true);
+            }
+        }
+
+        for x in 10..13 {
+            for z in 10..13 {
+                chunk.set_solid(x, 1, z, true);
             }
         }
 
@@ -120,17 +139,43 @@ impl VoxelChunk {
         .with_inserted_indices(Indices::U32(indices))
     }
 
-    pub fn top_surface_at(&self, world_x: f32, world_z: f32) -> Option<f32> {
-        let x = world_x.floor() as i32;
-        let z = world_z.floor() as i32;
+    pub fn collides_aabb(&self, min: Vec3, max: Vec3) -> bool {
+        let chunk_size = CHUNK_SIZE as f32;
 
-        for y in (0..CHUNK_SIZE as i32).rev() {
-            if self.is_solid(x, y, z) {
-                return Some(y as f32 + 1.0);
+        if max.x <= 0.0
+            || max.y <= 0.0
+            || max.z <= 0.0
+            || min.x >= chunk_size
+            || min.y >= chunk_size
+            || min.z >= chunk_size
+        {
+            return false;
+        }
+
+        let min_x = min.x.floor().max(0.0) as i32;
+        let min_y = min.y.floor().max(0.0) as i32;
+        let min_z = min.z.floor().max(0.0) as i32;
+        let max_x = (max.x - COLLISION_EPSILON)
+            .floor()
+            .min((CHUNK_SIZE - 1) as f32) as i32;
+        let max_y = (max.y - COLLISION_EPSILON)
+            .floor()
+            .min((CHUNK_SIZE - 1) as f32) as i32;
+        let max_z = (max.z - COLLISION_EPSILON)
+            .floor()
+            .min((CHUNK_SIZE - 1) as f32) as i32;
+
+        for y in min_y..=max_y {
+            for z in min_z..=max_z {
+                for x in min_x..=max_x {
+                    if self.is_solid(x, y, z) {
+                        return true;
+                    }
+                }
             }
         }
 
-        None
+        false
     }
 
     fn set_solid(&mut self, x: usize, y: usize, z: usize, solid: bool) {
