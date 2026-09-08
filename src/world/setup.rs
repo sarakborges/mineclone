@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{
-    biome::CurrentBiome,
+    biome_field::BiomeField,
     dimension::CurrentDimension,
     render_distance::RENDER_DISTANCE_RADIUS,
     test_world::build_test_world,
@@ -18,37 +18,30 @@ pub fn setup_world(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     current_dimension: Res<CurrentDimension>,
-    current_biome: Res<CurrentBiome>,
     dimensions: Res<DimensionRegistry>,
     biomes: Res<BiomeRegistry>,
 ) {
     let dimension = dimensions
         .get(&current_dimension.id)
         .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
-
-    if !dimension.biomes.iter().any(|id| id == &current_biome.id) {
-        panic!(
-            "biome {} is not eligible for dimension {}",
-            current_biome.id, current_dimension.id
-        );
-    }
-
-    let biome = biomes
-        .get(&current_biome.id)
-        .unwrap_or_else(|| panic!("missing biome definition: {}", current_biome.id));
-
+    let biome_field = BiomeField::from_dimension(dimension, &biomes);
     let center = IVec2::ZERO;
     let world = build_test_world(center, RENDER_DISTANCE_RADIUS);
+    let (roughness, metallic) = average_terrain_material(dimension, &biomes);
     let material = materials.add(StandardMaterial {
-        base_color: biome.visuals.terrain_color.to_color(),
-        perceptual_roughness: biome.visuals.terrain_roughness,
-        metallic: biome.visuals.terrain_metallic,
+        base_color: Color::WHITE,
+        perceptual_roughness: roughness,
+        metallic,
         ..default()
     });
     let chunk_size = CHUNK_SIZE as f32;
 
     for (coord, chunk) in world.chunks() {
-        let mesh = meshes.add(build_chunk_mesh(&world, *coord, chunk));
+        let mesh = meshes.add(build_chunk_mesh(&world, *coord, chunk, |voxel| {
+            let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
+            let grass = biome_field.grass_color(position, &biomes);
+            [grass.r, grass.g, grass.b]
+        }));
 
         commands.spawn((
             Mesh3d(mesh),
@@ -62,5 +55,26 @@ pub fn setup_world(
         ));
     }
 
+    commands.insert_resource(biome_field);
     commands.insert_resource(world);
+}
+
+fn average_terrain_material(
+    dimension: &crate::content::dimension::DimensionDefinition,
+    biomes: &BiomeRegistry,
+) -> (f32, f32) {
+    let mut roughness = 0.0;
+    let mut metallic = 0.0;
+    let mut count = 0.0;
+
+    for biome_id in &dimension.biomes {
+        let biome = biomes
+            .get(biome_id)
+            .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
+        roughness += biome.visuals.terrain_roughness;
+        metallic += biome.visuals.terrain_metallic;
+        count += 1.0;
+    }
+
+    (roughness / count, metallic / count)
 }
