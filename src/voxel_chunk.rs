@@ -9,6 +9,7 @@ pub const CHUNK_SIZE: usize = 16;
 const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
 const CHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_SIZE;
 const COLLISION_EPSILON: f32 = 0.0001;
+const TEST_BLOCK_ID: &str = "mineclone:test_block";
 
 #[derive(Component)]
 pub struct VoxelChunk {
@@ -176,6 +177,10 @@ impl VoxelChunk {
         }
 
         false
+    }
+
+    pub fn block_id_at(&self, x: i32, y: i32, z: i32) -> Option<&'static str> {
+        self.is_solid(x, y, z).then_some(TEST_BLOCK_ID)
     }
 
     fn set_solid(&mut self, x: usize, y: usize, z: usize, solid: bool) {
