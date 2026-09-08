@@ -12,18 +12,17 @@ use super::{
     biome_field::BiomeField,
     chunk_rendering::{spawn_chunk_mesh, TerrainMaterial},
     render_distance::{chunk_coords_in_cylinder, RenderDistanceSettings},
-    test_world::build_test_chunk,
+    test_world::{
+        build_test_chunk, TERRAIN_MAX_CHUNK_Y, TERRAIN_MIN_CHUNK_Y,
+    },
 };
 
-const VERTICAL_RENDER_RADIUS_CHUNKS: i32 = 1;
-const CHUNKS_PER_FRAME: usize = 1;
+const CHUNKS_PER_FRAME: usize = 8;
 
 #[derive(Resource, Default)]
 pub struct ChunkStreamingState {
-    center: Option<IVec3>,
+    center: Option<IVec2>,
     render_distance: i32,
-    min_chunk_y: i32,
-    max_chunk_y: i32,
     desired: HashSet<IVec3>,
     pending: VecDeque<IVec3>,
 }
@@ -46,24 +45,11 @@ pub fn stream_chunks(
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = split_dimension_position(feet_position).chunk;
-    let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
-    let min_chunk_y = (center.y - VERTICAL_RENDER_RADIUS_CHUNKS).max(0);
-    let max_chunk_y = center.y + VERTICAL_RENDER_RADIUS_CHUNKS;
+    let center = IVec2::new(player_chunk.x, player_chunk.z);
     let radius = render_distance.chunks();
 
-    if streaming.center != Some(center)
-        || streaming.render_distance != radius
-        || streaming.min_chunk_y != min_chunk_y
-        || streaming.max_chunk_y != max_chunk_y
-    {
-        rebuild_queue(
-            &mut streaming,
-            &world,
-            center,
-            radius,
-            min_chunk_y,
-            max_chunk_y,
-        );
+    if streaming.center != Some(center) || streaming.render_distance != radius {
+        rebuild_queue(&mut streaming, &world, center, radius);
     }
 
     for _ in 0..CHUNKS_PER_FRAME {
@@ -97,12 +83,16 @@ pub fn stream_chunks(
 fn rebuild_queue(
     streaming: &mut ChunkStreamingState,
     world: &VoxelWorld,
-    center: IVec3,
+    center: IVec2,
     radius: i32,
-    min_chunk_y: i32,
-    max_chunk_y: i32,
 ) {
-    let coords = chunk_coords_in_cylinder(center, radius, min_chunk_y, max_chunk_y);
+    let center_3d = IVec3::new(center.x, TERRAIN_MIN_CHUNK_Y, center.y);
+    let coords = chunk_coords_in_cylinder(
+        center_3d,
+        radius,
+        TERRAIN_MIN_CHUNK_Y,
+        TERRAIN_MAX_CHUNK_Y,
+    );
     let desired: HashSet<_> = coords.iter().copied().collect();
     let mut newly_exposed = Vec::new();
     let mut remaining = Vec::new();
@@ -124,19 +114,14 @@ fn rebuild_queue(
 
     streaming.center = Some(center);
     streaming.render_distance = radius;
-    streaming.min_chunk_y = min_chunk_y;
-    streaming.max_chunk_y = max_chunk_y;
     streaming.desired = desired;
     streaming.pending = newly_exposed.into_iter().chain(remaining).collect();
 }
 
-fn sort_by_distance(coords: &mut [IVec3], center: IVec3) {
+fn sort_by_distance(coords: &mut [IVec3], center: IVec2) {
     coords.sort_by_key(|coord| {
         let dx = coord.x - center.x;
-        let dz = coord.z - center.z;
-        let horizontal_distance_squared = dx * dx + dz * dz;
-        let vertical_distance = (coord.y - center.y).abs();
-
-        (horizontal_distance_squared, vertical_distance)
+        let dz = coord.z - center.y;
+        dx * dx + dz * dz
     });
 }
