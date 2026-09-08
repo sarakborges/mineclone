@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Copy, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum BiomeTerrain {
     Rolling {
