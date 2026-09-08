@@ -2,9 +2,17 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    content::{biome::BiomeRegistry, dimension::DimensionRegistry},
+    content::{
+        biome::BiomeRegistry,
+        day_night_cycle::DayNightCycleRegistry,
+        dimension::DimensionRegistry,
+    },
     player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
-    world::{biome::CurrentBiome, dimension::CurrentDimension},
+    world::{
+        biome::CurrentBiome,
+        day_night::DayNightClock,
+        dimension::CurrentDimension,
+    },
 };
 
 pub struct WorldHudPlugin;
@@ -39,7 +47,7 @@ fn spawn_world_hud(mut commands: Commands) {
             },
             BackgroundColor(Color::srgba(0.02, 0.025, 0.04, 0.82)),
             children![(
-                Text::new("- - -\nX 0 | Z 0 | Y 0"),
+                Text::new("- - -\n00:00\nX 0 | Z 0 | Y 0"),
                 TextFont {
                     font_size: FontSize::Px(18.0),
                     ..default()
@@ -55,25 +63,33 @@ fn update_world_hud(
     player: Single<&Transform, With<GameplayCamera>>,
     dimension: Res<CurrentDimension>,
     biome: Res<CurrentBiome>,
+    clock: Res<DayNightClock>,
     dimensions: Res<DimensionRegistry>,
     biomes: Res<BiomeRegistry>,
+    cycles: Res<DayNightCycleRegistry>,
     mut world_text: Single<&mut Text, With<WorldHudText>>,
 ) {
     let position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let block_position = position.floor().as_ivec3();
-    let dimension_name = dimensions
-        .get(&dimension.id)
+    let dimension_definition = dimensions.get(&dimension.id);
+    let dimension_name = dimension_definition
         .map(|definition| definition.name.as_str())
         .unwrap_or(dimension.id.as_str());
     let biome_name = biomes
         .get(&biome.id)
         .map(|definition| definition.name.as_str())
         .unwrap_or(biome.id.as_str());
+    let (hour, minute) = dimension_definition
+        .and_then(|definition| cycles.get(&definition.day_night_cycle))
+        .map(|cycle| cycle.world_time(clock.normalized_time))
+        .unwrap_or((0, 0));
 
     world_text.0 = format!(
-        "{} - {}\nX {} | Z {} | Y {}",
+        "{} - {}\n{:02}:{:02}\nX {} | Z {} | Y {}",
         dimension_name,
         biome_name,
+        hour,
+        minute,
         block_position.x,
         block_position.z,
         block_position.y,
