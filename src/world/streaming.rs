@@ -10,11 +10,9 @@ use crate::{
 
 use super::{
     biome_field::BiomeField,
-    chunk_rendering::{spawn_chunk_mesh, TerrainMaterial},
+    chunk_rendering::{spawn_chunk_mesh, RenderedChunk, TerrainMaterial},
     render_distance::{chunk_coords_in_cylinder, RenderDistanceSettings},
-    test_world::{
-        build_test_chunk, TERRAIN_MAX_CHUNK_Y, TERRAIN_MIN_CHUNK_Y,
-    },
+    test_world::{build_test_chunk, TERRAIN_MAX_CHUNK_Y, TERRAIN_MIN_CHUNK_Y},
 };
 
 const CHUNKS_PER_FRAME: usize = 8;
@@ -42,6 +40,7 @@ pub fn stream_chunks(
     render_distance: Res<RenderDistanceSettings>,
     mut world: ResMut<VoxelWorld>,
     mut streaming: ResMut<ChunkStreamingState>,
+    rendered_chunks: Query<&RenderedChunk>,
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = split_dimension_position(feet_position).chunk;
@@ -49,7 +48,11 @@ pub fn stream_chunks(
     let radius = render_distance.chunks();
 
     if streaming.center != Some(center) || streaming.render_distance != radius {
-        rebuild_queue(&mut streaming, &world, center, radius);
+        let rendered = rendered_chunks
+            .iter()
+            .map(|chunk| chunk.coord)
+            .collect::<HashSet<_>>();
+        rebuild_queue(&mut streaming, &rendered, center, radius);
     }
 
     for _ in 0..CHUNKS_PER_FRAME {
@@ -57,16 +60,14 @@ pub fn stream_chunks(
             break;
         };
 
-        if world.has_generated_chunk(coord) {
-            continue;
+        if !world.has_generated_chunk(coord) {
+            let chunk = build_test_chunk(coord, &blocks);
+            world.insert_chunk(coord, chunk);
         }
-
-        let chunk = build_test_chunk(coord, &blocks);
-        world.insert_chunk(coord, chunk);
 
         let chunk = world
             .chunk(coord)
-            .unwrap_or_else(|| panic!("streamed chunk should exist at {coord:?}"));
+            .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
         spawn_chunk_mesh(
             &mut commands,
             &mut meshes,
@@ -82,7 +83,7 @@ pub fn stream_chunks(
 
 fn rebuild_queue(
     streaming: &mut ChunkStreamingState,
-    world: &VoxelWorld,
+    rendered: &HashSet<IVec3>,
     center: IVec2,
     radius: i32,
 ) {
@@ -98,7 +99,7 @@ fn rebuild_queue(
     let mut remaining = Vec::new();
 
     for coord in coords {
-        if world.has_generated_chunk(coord) {
+        if rendered.contains(&coord) {
             continue;
         }
 
