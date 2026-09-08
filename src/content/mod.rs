@@ -1,5 +1,6 @@
 pub mod biome;
 pub mod biome_sky_layer;
+pub mod biome_terrain;
 pub mod block;
 pub mod color;
 pub mod day_night_cycle;
