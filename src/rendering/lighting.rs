@@ -23,6 +23,7 @@ fn spawn_sun(mut commands: Commands) {
     commands.spawn((
         DirectionalLight {
             shadow_maps_enabled: true,
+            shadow_depth_bias: 0.20,
             ..default()
         },
         Transform::default(),
