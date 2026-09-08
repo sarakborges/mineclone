@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
 pub enum DayNightPhase {
     Dawn,
     Day,
@@ -23,15 +23,6 @@ impl<T> DayNightPhases<T> {
             DayNightPhase::Day => &self.day,
             DayNightPhase::Dusk => &self.dusk,
             DayNightPhase::Night => &self.night,
-        }
-    }
-
-    pub fn next(phase: DayNightPhase) -> DayNightPhase {
-        match phase {
-            DayNightPhase::Dawn => DayNightPhase::Day,
-            DayNightPhase::Day => DayNightPhase::Dusk,
-            DayNightPhase::Dusk => DayNightPhase::Night,
-            DayNightPhase::Night => DayNightPhase::Dawn,
         }
     }
 }
