@@ -9,7 +9,7 @@ use crate::{
 use super::{
     biome_field::BiomeField,
     dimension::CurrentDimension,
-    render_distance::RENDER_DISTANCE_RADIUS,
+    render_distance::RenderDistanceSettings,
     test_world::build_test_world,
 };
 
@@ -33,6 +33,7 @@ pub fn setup_world(
     dimensions: Res<DimensionRegistry>,
     biomes: Res<BiomeRegistry>,
     blocks: Res<BlockRegistry>,
+    render_distance: Res<RenderDistanceSettings>,
     mut loading_state: ResMut<WorldLoadingState>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
@@ -49,7 +50,7 @@ pub fn setup_world(
         .unwrap_or_else(|| panic!("missing block definition: {GRASS_BLOCK_ID}"));
     let biome_field = BiomeField::from_dimension(dimension, &biomes);
     let center = IVec2::ZERO;
-    let world = build_test_world(center, RENDER_DISTANCE_RADIUS, &blocks);
+    let world = build_test_world(center, render_distance.chunks(), &blocks);
     let (roughness, metallic) = average_terrain_material(dimension, &biomes);
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
