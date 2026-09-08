@@ -40,7 +40,7 @@ fn setup_loading_screen(mut commands: Commands) {
         children![
             typography::heading("Loading world..."),
             (
-                typography::muted("0 out of 0 chunks generated"),
+                typography::muted("0 out 0 chunks generated"),
                 LoadingProgressText,
             ),
         ],
@@ -60,7 +60,7 @@ fn update_loading_progress(
     };
 
     **label = format!(
-        "{} out of {} chunks generated",
+        "{} out {} chunks generated",
         loading_state.generated(),
         loading_state.total(),
     );
