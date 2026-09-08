@@ -5,6 +5,7 @@ use serde::Deserialize;
 
 use super::{
     biome_sky_layer::BiomeSkyLayerVisuals,
+    biome_terrain::BiomeTerrain,
     color::Rgb,
     day_night_phase::DayNightPhases,
 };
@@ -41,6 +42,7 @@ pub struct BiomeDefinition {
     pub id: String,
     pub name: String,
     pub size: BiomeSize,
+    pub terrain: BiomeTerrain,
     pub visuals: BiomeVisuals,
 }
 
@@ -61,6 +63,7 @@ impl BiomeRegistry {
             "biome {} clouds density must be between 0 and 1",
             definition.id
         );
+        definition.terrain.validate(&definition.id);
 
         self.definitions.insert(definition.id.clone(), definition);
     }
