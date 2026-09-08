@@ -3,7 +3,11 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::{color::Rgb, day_night_phase::DayNightPhases};
+use super::{
+    biome_sky_layer::BiomeSkyLayerVisuals,
+    color::Rgb,
+    day_night_phase::DayNightPhases,
+};
 
 #[derive(Clone, Copy, Deserialize)]
 pub struct BiomeSizeAxis {
@@ -24,6 +28,10 @@ pub struct BiomeVisuals {
     pub sky_color: DayNightPhases<Rgb>,
     pub fog_color: DayNightPhases<Rgb>,
     pub grass_color: Rgb,
+    #[serde(default)]
+    pub stars: BiomeSkyLayerVisuals,
+    #[serde(default)]
+    pub clouds: BiomeSkyLayerVisuals,
     pub terrain_roughness: f32,
     pub terrain_metallic: f32,
 }
@@ -43,6 +51,17 @@ pub struct BiomeRegistry {
 
 impl BiomeRegistry {
     pub fn insert(&mut self, definition: BiomeDefinition) {
+        assert!(
+            (0.0..=1.0).contains(&definition.visuals.stars.density),
+            "biome {} stars density must be between 0 and 1",
+            definition.id
+        );
+        assert!(
+            (0.0..=1.0).contains(&definition.visuals.clouds.density),
+            "biome {} clouds density must be between 0 and 1",
+            definition.id
+        );
+
         self.definitions.insert(definition.id.clone(), definition);
     }
 
