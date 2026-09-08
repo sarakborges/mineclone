@@ -13,7 +13,15 @@ pub struct WorldHudPlugin;
 impl Plugin for WorldHudPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_world_hud)
-            .add_systems(Update, update_world_hud.run_if(in_state(GameState::Gameplay)));
+            .add_systems(
+                Update,
+                (
+                    update_dimension_hud,
+                    update_biome_hud,
+                    update_coordinates_hud,
+                )
+                    .run_if(in_state(GameState::Gameplay)),
+            );
     }
 }
 
@@ -69,29 +77,39 @@ fn spawn_world_hud(mut commands: Commands) {
         });
 }
 
-fn update_world_hud(
-    player: Single<&Transform, With<GameplayCamera>>,
+fn update_dimension_hud(
     dimension: Res<CurrentDimension>,
-    biome: Res<CurrentBiome>,
     dimensions: Res<DimensionRegistry>,
-    biomes: Res<BiomeRegistry>,
     mut dimension_text: Single<&mut Text, With<DimensionHudText>>,
-    mut biome_text: Single<&mut Text, With<BiomeHudText>>,
-    mut coordinates_text: Single<&mut Text, With<CoordinatesHudText>>,
 ) {
-    let position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
-    let block_position = position.floor().as_ivec3();
     let dimension_name = dimensions
         .get(&dimension.id)
         .map(|definition| definition.name.as_str())
         .unwrap_or(dimension.id.as_str());
+
+    dimension_text.0 = dimension_name.to_string();
+}
+
+fn update_biome_hud(
+    biome: Res<CurrentBiome>,
+    biomes: Res<BiomeRegistry>,
+    mut biome_text: Single<&mut Text, With<BiomeHudText>>,
+) {
     let biome_name = biomes
         .get(&biome.id)
         .map(|definition| definition.name.as_str())
         .unwrap_or(biome.id.as_str());
 
-    dimension_text.0 = dimension_name.to_string();
     biome_text.0 = biome_name.to_string();
+}
+
+fn update_coordinates_hud(
+    player: Single<&Transform, With<GameplayCamera>>,
+    mut coordinates_text: Single<&mut Text, With<CoordinatesHudText>>,
+) {
+    let position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
+    let block_position = position.floor().as_ivec3();
+
     coordinates_text.0 = format!(
         "X: {} | Y: {} | Z: {}",
         block_position.x, block_position.y, block_position.z
