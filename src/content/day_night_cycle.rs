@@ -3,19 +3,13 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::color::Rgb;
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum DayNightPhase {
-    Dawn,
-    Day,
-    Dusk,
-    Night,
-}
+use super::{
+    color::Rgb,
+    day_night_phase::{DayNightPhase, DayNightPhases},
+};
 
 #[derive(Clone, Copy, Deserialize)]
-pub struct DayNightPhaseDefinition {
-    pub phase: DayNightPhase,
+pub struct DayNightLightingPhase {
     pub start_time: f32,
     pub ambient_color: Rgb,
     pub ambient_brightness: f32,
@@ -40,27 +34,19 @@ pub struct DayNightCycleDefinition {
     pub duration_seconds: f32,
     pub initial_time: f32,
     pub sun_angle_offset_degrees: f32,
-    pub phases: Vec<DayNightPhaseDefinition>,
+    pub phases: DayNightPhases<DayNightLightingPhase>,
 }
 
 impl DayNightCycleDefinition {
-    pub fn sample(&self, time: f32) -> Option<DayNightSample> {
-        if self.phases.len() != 4 {
-            return None;
-        }
-
+    pub fn sample(&self, time: f32) -> DayNightSample {
         let time = time.rem_euclid(1.0);
-        let current_index = self
-            .phases
-            .iter()
-            .rposition(|phase| phase.start_time <= time)
-            .unwrap_or(self.phases.len() - 1);
-        let next_index = (current_index + 1) % self.phases.len();
-        let current = self.phases[current_index];
-        let next = self.phases[next_index];
+        let phase = self.phase_at(time);
+        let next_phase = DayNightPhases::<DayNightLightingPhase>::next(phase);
+        let current = self.phases.get(phase);
+        let next = self.phases.get(next_phase);
 
         let current_start = current.start_time;
-        let next_start = if next_index == 0 {
+        let next_start = if next.start_time <= current_start {
             next.start_time + 1.0
         } else {
             next.start_time
@@ -73,9 +59,9 @@ impl DayNightCycleDefinition {
             ((sample_time - current_start) / span).clamp(0.0, 1.0)
         };
 
-        Some(DayNightSample {
-            phase: current.phase,
-            next_phase: next.phase,
+        DayNightSample {
+            phase,
+            next_phase,
             transition,
             ambient_color: current.ambient_color.lerp(next.ambient_color, transition),
             ambient_brightness: lerp_scalar(
@@ -89,7 +75,25 @@ impl DayNightCycleDefinition {
                 next.sun_illuminance,
                 transition,
             ),
-        })
+        }
+    }
+
+    pub fn phase_at(&self, time: f32) -> DayNightPhase {
+        let time = time.rem_euclid(1.0);
+        let dawn = self.phases.dawn.start_time;
+        let day = self.phases.day.start_time;
+        let dusk = self.phases.dusk.start_time;
+        let night = self.phases.night.start_time;
+
+        if time >= night || time < dawn {
+            DayNightPhase::Night
+        } else if time >= dusk {
+            DayNightPhase::Dusk
+        } else if time >= day {
+            DayNightPhase::Day
+        } else {
+            DayNightPhase::Dawn
+        }
     }
 }
 
@@ -100,27 +104,13 @@ pub struct DayNightCycleRegistry {
 
 impl DayNightCycleRegistry {
     pub fn insert(&mut self, definition: DayNightCycleDefinition) {
-        assert_eq!(
-            definition.phases.len(),
-            4,
-            "day-night cycle {} must define exactly four phases",
+        assert!(
+            definition.phases.dawn.start_time < definition.phases.day.start_time
+                && definition.phases.day.start_time < definition.phases.dusk.start_time
+                && definition.phases.dusk.start_time < definition.phases.night.start_time,
+            "day-night cycle {} phase start times must be ordered dawn < day < dusk < night",
             definition.id
         );
-
-        let expected = [
-            DayNightPhase::Dawn,
-            DayNightPhase::Day,
-            DayNightPhase::Dusk,
-            DayNightPhase::Night,
-        ];
-
-        for (phase, expected_phase) in definition.phases.iter().zip(expected) {
-            assert_eq!(
-                phase.phase, expected_phase,
-                "day-night cycle {} phases must be ordered Dawn, Day, Dusk, Night",
-                definition.id
-            );
-        }
 
         self.definitions.insert(definition.id.clone(), definition);
     }
