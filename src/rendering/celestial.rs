@@ -67,10 +67,13 @@ fn spawn_body(
     asset_server: &AssetServer,
     definition: &CelestialBodyDefinition,
 ) {
-    let mesh = meshes.add(Rectangle::new(definition.size, definition.size));
+    let mesh = meshes.add(Circle::new(definition.size * 0.5));
     let material = materials.add(StandardMaterial {
         base_color: definition.tint.to_color(),
-        base_color_texture: Some(asset_server.load(&definition.texture)),
+        base_color_texture: definition
+            .texture
+            .as_ref()
+            .map(|texture| asset_server.load(texture.clone())),
         alpha_mode: AlphaMode::Blend,
         unlit: true,
         fog_enabled: false,
