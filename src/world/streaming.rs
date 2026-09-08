@@ -60,7 +60,12 @@ pub fn stream_chunks(
             continue;
         }
 
-        if !world.has_generated_chunk(coord) {
+        if world.has_generated_chunk(coord) {
+            assert!(
+                world.restore_chunk(coord),
+                "generated chunk must be resident or archived: {coord:?}"
+            );
+        } else {
             let chunk = build_test_chunk(coord, &blocks);
             world.insert_chunk(coord, chunk);
         }
