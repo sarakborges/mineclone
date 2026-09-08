@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::text::LetterSpacing;
 
 use crate::app::{game_state::GameState, settings_state::SettingsState};
 
