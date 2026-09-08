@@ -22,7 +22,6 @@ const SOUTH_SHADE: f32 = 0.92;
 const NORTH_SHADE: f32 = 0.86;
 const SIDE_NORMAL_HORIZONTAL: f32 = 0.8;
 const SIDE_NORMAL_UP: f32 = 0.6;
-const UNTINTED: [f32; 3] = [1.0, 1.0, 1.0];
 
 #[derive(Clone, Copy)]
 pub enum BlockFace {
@@ -130,7 +129,7 @@ where
                         [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]],
                         [SIDE_NORMAL_HORIZONTAL, SIDE_NORMAL_UP, 0.0],
                         TextureRotation::default(),
-                        UNTINTED,
+                        grass_tint,
                         EAST_SHADE,
                     );
                 }
@@ -140,7 +139,7 @@ where
                         [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]],
                         [-SIDE_NORMAL_HORIZONTAL, SIDE_NORMAL_UP, 0.0],
                         TextureRotation::default(),
-                        UNTINTED,
+                        grass_tint,
                         WEST_SHADE,
                     );
                 }
@@ -160,7 +159,7 @@ where
                         [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]],
                         [0.0, -1.0, 0.0],
                         cell.texture_rotation,
-                        UNTINTED,
+                        grass_tint,
                         BOTTOM_SHADE,
                     );
                 }
@@ -170,7 +169,7 @@ where
                         [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]],
                         [0.0, SIDE_NORMAL_UP, SIDE_NORMAL_HORIZONTAL],
                         TextureRotation::default(),
-                        UNTINTED,
+                        grass_tint,
                         SOUTH_SHADE,
                     );
                 }
@@ -180,7 +179,7 @@ where
                         [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]],
                         [0.0, SIDE_NORMAL_UP, -SIDE_NORMAL_HORIZONTAL],
                         TextureRotation::default(),
-                        UNTINTED,
+                        grass_tint,
                         NORTH_SHADE,
                     );
                 }
