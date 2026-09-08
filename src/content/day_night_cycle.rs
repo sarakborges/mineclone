@@ -5,11 +5,18 @@ use serde::Deserialize;
 
 use super::color::Rgb;
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub enum DayNightPhase {
+    Dawn,
+    Day,
+    Dusk,
+    Night,
+}
+
 #[derive(Clone, Copy, Deserialize)]
-pub struct DayNightKeyframe {
-    pub time: f32,
-    pub sky_tint: Rgb,
-    pub fog_tint: Rgb,
+pub struct DayNightPhaseDefinition {
+    pub phase: DayNightPhase,
+    pub start_time: f32,
     pub ambient_color: Rgb,
     pub ambient_brightness: f32,
     pub sun_color: Rgb,
@@ -18,8 +25,9 @@ pub struct DayNightKeyframe {
 
 #[derive(Clone, Copy)]
 pub struct DayNightSample {
-    pub sky_tint: Rgb,
-    pub fog_tint: Rgb,
+    pub phase: DayNightPhase,
+    pub next_phase: DayNightPhase,
+    pub transition: f32,
     pub ambient_color: Rgb,
     pub ambient_brightness: f32,
     pub sun_color: Rgb,
@@ -32,34 +40,56 @@ pub struct DayNightCycleDefinition {
     pub duration_seconds: f32,
     pub initial_time: f32,
     pub sun_angle_offset_degrees: f32,
-    pub keyframes: Vec<DayNightKeyframe>,
+    pub phases: Vec<DayNightPhaseDefinition>,
 }
 
 impl DayNightCycleDefinition {
     pub fn sample(&self, time: f32) -> Option<DayNightSample> {
-        let first = *self.keyframes.first()?;
-        let last = *self.keyframes.last()?;
-        let time = time.clamp(first.time, last.time);
-
-        for pair in self.keyframes.windows(2) {
-            let start = pair[0];
-            let end = pair[1];
-
-            if time < start.time || time > end.time {
-                continue;
-            }
-
-            let span = end.time - start.time;
-            let t = if span <= f32::EPSILON {
-                0.0
-            } else {
-                (time - start.time) / span
-            };
-
-            return Some(interpolate(start, end, t));
+        if self.phases.len() != 4 {
+            return None;
         }
 
-        Some(sample_from_keyframe(last))
+        let time = time.rem_euclid(1.0);
+        let current_index = self
+            .phases
+            .iter()
+            .rposition(|phase| phase.start_time <= time)
+            .unwrap_or(self.phases.len() - 1);
+        let next_index = (current_index + 1) % self.phases.len();
+        let current = self.phases[current_index];
+        let next = self.phases[next_index];
+
+        let current_start = current.start_time;
+        let next_start = if next_index == 0 {
+            next.start_time + 1.0
+        } else {
+            next.start_time
+        };
+        let sample_time = if time < current_start { time + 1.0 } else { time };
+        let span = next_start - current_start;
+        let transition = if span <= f32::EPSILON {
+            0.0
+        } else {
+            ((sample_time - current_start) / span).clamp(0.0, 1.0)
+        };
+
+        Some(DayNightSample {
+            phase: current.phase,
+            next_phase: next.phase,
+            transition,
+            ambient_color: current.ambient_color.lerp(next.ambient_color, transition),
+            ambient_brightness: lerp_scalar(
+                current.ambient_brightness,
+                next.ambient_brightness,
+                transition,
+            ),
+            sun_color: current.sun_color.lerp(next.sun_color, transition),
+            sun_illuminance: lerp_scalar(
+                current.sun_illuminance,
+                next.sun_illuminance,
+                transition,
+            ),
+        })
     }
 }
 
@@ -70,33 +100,33 @@ pub struct DayNightCycleRegistry {
 
 impl DayNightCycleRegistry {
     pub fn insert(&mut self, definition: DayNightCycleDefinition) {
+        assert_eq!(
+            definition.phases.len(),
+            4,
+            "day-night cycle {} must define exactly four phases",
+            definition.id
+        );
+
+        let expected = [
+            DayNightPhase::Dawn,
+            DayNightPhase::Day,
+            DayNightPhase::Dusk,
+            DayNightPhase::Night,
+        ];
+
+        for (phase, expected_phase) in definition.phases.iter().zip(expected) {
+            assert_eq!(
+                phase.phase, expected_phase,
+                "day-night cycle {} phases must be ordered Dawn, Day, Dusk, Night",
+                definition.id
+            );
+        }
+
         self.definitions.insert(definition.id.clone(), definition);
     }
 
     pub fn get(&self, id: &str) -> Option<&DayNightCycleDefinition> {
         self.definitions.get(id)
-    }
-}
-
-fn interpolate(start: DayNightKeyframe, end: DayNightKeyframe, t: f32) -> DayNightSample {
-    DayNightSample {
-        sky_tint: start.sky_tint.lerp(end.sky_tint, t),
-        fog_tint: start.fog_tint.lerp(end.fog_tint, t),
-        ambient_color: start.ambient_color.lerp(end.ambient_color, t),
-        ambient_brightness: lerp_scalar(start.ambient_brightness, end.ambient_brightness, t),
-        sun_color: start.sun_color.lerp(end.sun_color, t),
-        sun_illuminance: lerp_scalar(start.sun_illuminance, end.sun_illuminance, t),
-    }
-}
-
-fn sample_from_keyframe(keyframe: DayNightKeyframe) -> DayNightSample {
-    DayNightSample {
-        sky_tint: keyframe.sky_tint,
-        fog_tint: keyframe.fog_tint,
-        ambient_color: keyframe.ambient_color,
-        ambient_brightness: keyframe.ambient_brightness,
-        sun_color: keyframe.sun_color,
-        sun_illuminance: keyframe.sun_illuminance,
     }
 }
 
