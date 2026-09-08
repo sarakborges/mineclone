@@ -1,12 +1,14 @@
 mod crosshair;
 mod targeting;
 mod time;
+mod underwater;
 mod world;
 
 use bevy::prelude::*;
 use crosshair::CrosshairPlugin;
 use targeting::TargetHudPlugin;
 use time::TimeHudPlugin;
+use underwater::UnderwaterTintPlugin;
 use world::WorldHudPlugin;
 
 pub struct HudPlugin;
@@ -14,6 +16,7 @@ pub struct HudPlugin;
 impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
+            UnderwaterTintPlugin,
             CrosshairPlugin,
             TimeHudPlugin,
             WorldHudPlugin,
