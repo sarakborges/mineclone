@@ -6,6 +6,7 @@ pub mod day_night_cycle;
 pub mod day_night_phase;
 pub mod dimension;
 pub mod sky;
+mod json_file;
 mod loader;
 
 use bevy::prelude::*;
