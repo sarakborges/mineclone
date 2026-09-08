@@ -11,10 +11,8 @@ use super::{
 #[derive(Clone, Copy, Deserialize)]
 pub struct DayNightLightingPhase {
     pub duration_seconds: f32,
-    pub ambient_color: Rgb,
-    pub ambient_brightness: f32,
-    pub sun_color: Rgb,
-    pub sun_illuminance: f32,
+    pub light_color: Rgb,
+    pub light_illuminance: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -22,10 +20,8 @@ pub struct DayNightSample {
     pub phase: DayNightPhase,
     pub next_phase: DayNightPhase,
     pub transition: f32,
-    pub ambient_color: Rgb,
-    pub ambient_brightness: f32,
-    pub sun_color: Rgb,
-    pub sun_illuminance: f32,
+    pub light_color: Rgb,
+    pub light_illuminance: f32,
 }
 
 #[derive(Clone, Deserialize)]
@@ -55,16 +51,10 @@ impl DayNightCycleDefinition {
             phase,
             next_phase,
             transition,
-            ambient_color: current.ambient_color.lerp(next.ambient_color, transition),
-            ambient_brightness: lerp_scalar(
-                current.ambient_brightness,
-                next.ambient_brightness,
-                transition,
-            ),
-            sun_color: current.sun_color.lerp(next.sun_color, transition),
-            sun_illuminance: lerp_scalar(
-                current.sun_illuminance,
-                next.sun_illuminance,
+            light_color: current.light_color.lerp(next.light_color, transition),
+            light_illuminance: lerp_scalar(
+                current.light_illuminance,
+                next.light_illuminance,
                 transition,
             ),
         }

@@ -18,10 +18,8 @@ use crate::{
 pub struct EnvironmentVisualState {
     pub sky_color: Color,
     pub fog_color: Color,
-    pub ambient_color: Color,
-    pub ambient_brightness: f32,
-    pub sun_color: Color,
-    pub sun_illuminance: f32,
+    pub light_color: Color,
+    pub light_illuminance: f32,
 }
 
 impl Default for EnvironmentVisualState {
@@ -29,10 +27,8 @@ impl Default for EnvironmentVisualState {
         Self {
             sky_color: Color::srgb(0.38, 0.68, 1.0),
             fog_color: Color::srgb(0.52, 0.72, 0.90),
-            ambient_color: Color::WHITE,
-            ambient_brightness: 90.0,
-            sun_color: Color::WHITE,
-            sun_illuminance: 80_000.0,
+            light_color: Color::WHITE,
+            light_illuminance: 40_000.0,
         }
     }
 }
@@ -99,8 +95,6 @@ fn update_environment_visuals(
     visuals.fog_color = primary_fog
         .lerp(secondary_fog, current_biome.secondary_weight)
         .to_color();
-    visuals.ambient_color = sample.ambient_color.to_color();
-    visuals.ambient_brightness = sample.ambient_brightness;
-    visuals.sun_color = sample.sun_color.to_color();
-    visuals.sun_illuminance = sample.sun_illuminance;
+    visuals.light_color = sample.light_color.to_color();
+    visuals.light_illuminance = sample.light_illuminance;
 }
