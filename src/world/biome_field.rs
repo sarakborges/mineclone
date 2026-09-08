@@ -84,27 +84,28 @@ impl BiomeField {
                 let cell = center + IVec2::new(x, z);
                 let site = site_position(cell, self.site_spacing);
                 let distance = warped.distance(site);
-                let biome_index = biome_index(cell, self.biome_ids.len());
+                let candidate_index = biome_index(cell, self.biome_ids.len());
 
                 if distance < nearest_distance {
                     nearest_distance = distance;
-                    primary_index = biome_index;
+                    primary_index = candidate_index;
                 }
 
-                sites.push((biome_index, distance));
+                sites.push((candidate_index, distance));
             }
         }
 
         let mut weights = vec![0.0_f32; self.biome_ids.len()];
 
-        for (biome_index, distance) in sites {
+        for (candidate_index, distance) in sites {
             let distance_gap = (distance - nearest_distance).max(0.0);
             let border_progress =
                 1.0 - (distance_gap / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
             let smooth_progress =
                 border_progress * border_progress * (3.0 - 2.0 * border_progress);
+            let previous_weight = weights[candidate_index];
 
-            weights[biome_index] = weights[biome_index].max(smooth_progress);
+            weights[candidate_index] = previous_weight.max(smooth_progress);
         }
 
         let total_weight: f32 = weights.iter().sum();
