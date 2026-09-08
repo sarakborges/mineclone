@@ -12,6 +12,8 @@ use crate::{
     world::{
         biome::CurrentBiome,
         dimension::CurrentDimension,
+        InMemoryWorldSave,
+        WorldLoadMode,
         WorldSeed,
     },
 };
@@ -110,6 +112,7 @@ fn setup_starting_screen(mut commands: Commands, asset_server: Res<AssetServer>)
 fn handle_menu_buttons(
     mut commands: Commands,
     interactions: Query<(&Interaction, &StartingScreenAction), Changed<Interaction>>,
+    save: Res<InMemoryWorldSave>,
     mut transition: ResMut<ScreenTransition>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
@@ -123,9 +126,21 @@ fn handle_menu_buttons(
                 commands.insert_resource(CurrentDimension::default());
                 commands.insert_resource(CurrentBiome::default());
                 commands.insert_resource(WorldSeed::fresh());
+                commands.insert_resource(WorldLoadMode::New);
                 transition.request(ScreenTransitionTarget::game(GameState::Loading));
             }
-            StartingScreenAction::LoadWorlds => {}
+            StartingScreenAction::LoadWorlds => {
+                let (Some(seed), Some(dimension_id)) = (save.seed(), save.dimension_id()) else {
+                    continue;
+                };
+
+                commands.insert_resource(WorldSeed(seed.0));
+                commands.insert_resource(CurrentDimension {
+                    id: dimension_id.to_owned(),
+                });
+                commands.insert_resource(WorldLoadMode::Load);
+                transition.request(ScreenTransitionTarget::game(GameState::Loading));
+            }
             StartingScreenAction::Settings => {
                 transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
             }
