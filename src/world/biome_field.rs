@@ -8,6 +8,7 @@ use crate::content::{
 
 const BORDER_TRANSITION_WIDTH: f32 = 32.0;
 const BORDER_WARP_AMPLITUDE: f32 = 24.0;
+const SITE_JITTER_FRACTION: f32 = 0.32;
 const SITE_SEARCH_RADIUS: i32 = 2;
 
 #[derive(Resource)]
@@ -170,7 +171,17 @@ fn warp_position(position: Vec2) -> Vec2 {
 }
 
 fn site_position(cell: IVec2, spacing: Vec2) -> Vec2 {
-    Vec2::new(cell.x as f32 * spacing.x, cell.y as f32 * spacing.y)
+    let base = Vec2::new(cell.x as f32 * spacing.x, cell.y as f32 * spacing.y);
+
+    if cell == IVec2::ZERO {
+        return base;
+    }
+
+    let hash = cell_hash(cell);
+    let jitter_x = hash_component(hash) * spacing.x * SITE_JITTER_FRACTION;
+    let jitter_z = hash_component(hash.rotate_left(29)) * spacing.y * SITE_JITTER_FRACTION;
+
+    base + Vec2::new(jitter_x, jitter_z)
 }
 
 fn biome_index(cell: IVec2, biome_count: usize) -> usize {
@@ -178,11 +189,19 @@ fn biome_index(cell: IVec2, biome_count: usize) -> usize {
         return 0;
     }
 
+    cell_hash(cell) as usize % biome_count
+}
+
+fn cell_hash(cell: IVec2) -> u64 {
     let mut hash = (cell.x as i64 as u64).wrapping_mul(0x9E37_79B1_85EB_CA87);
     hash ^= (cell.y as i64 as u64).wrapping_mul(0xC2B2_AE3D_27D4_EB4F);
     hash ^= hash >> 33;
     hash = hash.wrapping_mul(0xFF51_AFD7_ED55_8CCD);
     hash ^= hash >> 33;
+    hash
+}
 
-    hash as usize % biome_count
+fn hash_component(hash: u64) -> f32 {
+    let normalized = (hash & 0xFFFF) as f32 / u16::MAX as f32;
+    normalized * 2.0 - 1.0
 }
