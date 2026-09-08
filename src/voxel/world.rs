@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
@@ -10,11 +10,18 @@ use super::{
 #[derive(Resource, Default)]
 pub struct VoxelWorld {
     chunks: HashMap<IVec3, VoxelChunk>,
+    generated_chunks: HashSet<IVec3>,
 }
 
 impl VoxelWorld {
     pub fn insert_chunk(&mut self, coord: IVec3, chunk: VoxelChunk) {
         assert!(coord.y >= 0, "chunk Y cannot be negative: {}", coord.y);
+        assert!(
+            !self.generated_chunks.contains(&coord),
+            "worldgen cannot overwrite an already generated chunk: {coord:?}"
+        );
+
+        self.generated_chunks.insert(coord);
         self.chunks.insert(coord, chunk);
     }
 
@@ -24,6 +31,10 @@ impl VoxelWorld {
         }
 
         self.chunks.get(&coord)
+    }
+
+    pub fn has_generated_chunk(&self, coord: IVec3) -> bool {
+        coord.y >= 0 && self.generated_chunks.contains(&coord)
     }
 
     pub fn cell_at(&self, world_position: IVec3) -> Option<VoxelCell> {
