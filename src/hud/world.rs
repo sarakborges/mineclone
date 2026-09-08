@@ -47,7 +47,7 @@ fn spawn_world_hud(mut commands: Commands) {
             },
             BackgroundColor(Color::srgba(0.02, 0.025, 0.04, 0.82)),
             children![(
-                Text::new("- - -\n00:00\nX 0 | Z 0 | Y 0"),
+                Text::new("- - -\nDay 1 - 00:00\nX 0 | Z 0 | Y 0"),
                 TextFont {
                     font_size: FontSize::Px(18.0),
                     ..default()
@@ -85,9 +85,10 @@ fn update_world_hud(
         .unwrap_or((0, 0));
 
     world_text.0 = format!(
-        "{} - {}\n{:02}:{:02}\nX {} | Z {} | Y {}",
+        "{} - {}\nDay {} - {:02}:{:02}\nX {} | Z {} | Y {}",
         dimension_name,
         biome_name,
+        clock.day,
         hour,
         minute,
         block_position.x,
