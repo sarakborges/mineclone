@@ -31,7 +31,7 @@ impl Default for EnvironmentVisualState {
             sky_color: Color::srgb(0.38, 0.68, 1.0),
             fog_color: Color::srgb(0.52, 0.72, 0.90),
             ambient_color: Color::WHITE,
-            ambient_brightness: 400.0,
+            ambient_brightness: 90.0,
             sun_color: Color::WHITE,
             sun_illuminance: 80_000.0,
             sun_rotation: Quat::IDENTITY,
@@ -68,20 +68,15 @@ fn update_environment_visuals(
     let Some(cycle) = cycles.get(&dimension.day_night_cycle) else {
         return;
     };
-    let Some(sample) = cycle.sample(clock.normalized_time) else {
-        return;
-    };
 
-    visuals.sky_color = biome
-        .visuals
-        .sky_color
-        .multiply(sample.sky_tint)
-        .to_color();
-    visuals.fog_color = biome
-        .visuals
-        .fog_color
-        .multiply(sample.fog_tint)
-        .to_color();
+    let sample = cycle.sample(clock.normalized_time);
+    let sky_start = *biome.visuals.sky_color.get(sample.phase);
+    let sky_end = *biome.visuals.sky_color.get(sample.next_phase);
+    let fog_start = *biome.visuals.fog_color.get(sample.phase);
+    let fog_end = *biome.visuals.fog_color.get(sample.next_phase);
+
+    visuals.sky_color = sky_start.lerp(sky_end, sample.transition).to_color();
+    visuals.fog_color = fog_start.lerp(fog_end, sample.transition).to_color();
     visuals.ambient_color = sample.ambient_color.to_color();
     visuals.ambient_brightness = sample.ambient_brightness;
     visuals.sun_color = sample.sun_color.to_color();
