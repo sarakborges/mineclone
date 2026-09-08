@@ -27,14 +27,26 @@ impl RenderDistanceSettings {
     }
 }
 
-pub fn chunk_coords_in_radius(center: IVec2, radius: i32) -> Vec<IVec2> {
-    let mut coords = Vec::new();
-    let radius_squared = radius * radius;
+pub fn chunk_coords_in_cylinder(
+    center: IVec3,
+    horizontal_radius: i32,
+    min_chunk_y: i32,
+    max_chunk_y: i32,
+) -> Vec<IVec3> {
+    assert!(
+        min_chunk_y <= max_chunk_y,
+        "minimum chunk Y must be less than or equal to maximum chunk Y"
+    );
 
-    for z in -radius..=radius {
-        for x in -radius..=radius {
-            if x * x + z * z <= radius_squared {
-                coords.push(center + IVec2::new(x, z));
+    let mut coords = Vec::new();
+    let radius_squared = horizontal_radius * horizontal_radius;
+
+    for y in (min_chunk_y..=max_chunk_y).rev() {
+        for z in -horizontal_radius..=horizontal_radius {
+            for x in -horizontal_radius..=horizontal_radius {
+                if x * x + z * z <= radius_squared {
+                    coords.push(IVec3::new(center.x + x, y, center.z + z));
+                }
             }
         }
     }
