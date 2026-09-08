@@ -83,6 +83,10 @@ pub fn setup_world(
     mut loading_state: ResMut<WorldLoadingState>,
     mut transition: ResMut<ScreenTransition>,
 ) {
+    if transition.is_active() {
+        return;
+    }
+
     if !loading_state.screen_rendered {
         loading_state.screen_rendered = true;
         return;
@@ -102,7 +106,7 @@ pub fn setup_world(
 
     let chunk = world
         .chunk(coord)
-        .unwrap_or_else(|| panic!("generated chunk should exist at {coord}"));
+        .unwrap_or_else(|| panic!("generated chunk should exist at {coord:?}"));
     let mesh = meshes.add(build_chunk_mesh(&world, coord, chunk, |voxel| {
         let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
         let grass = biome_field.grass_color(position, &biomes);
