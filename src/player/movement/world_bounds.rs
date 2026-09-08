@@ -5,7 +5,7 @@ use crate::player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT};
 use super::gravity::GravityState;
 
 pub(super) fn enforce_world_floor(
-    mut player: Single<(&mut Transform, &mut GravityState), With<GameplayCamera>>,
+    player: Single<(&mut Transform, &mut GravityState), With<GameplayCamera>>,
 ) {
     let (mut transform, mut gravity) = player.into_inner();
 
