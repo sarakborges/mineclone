@@ -22,6 +22,8 @@ use screens::{
     starting_screen::StartingScreenPlugin,
 };
 use targeting::block::BlockTargetingPlugin;
+#[cfg(target_os = "windows")]
+use winit::platform::windows::WindowExtWindows;
 use winit::window::Icon;
 use world::WorldPlugin;
 
@@ -77,6 +79,10 @@ fn set_window_icon(mut icon_set: Local<bool>) {
 
         for window in windows.windows.values() {
             window.set_window_icon(Some(icon.clone()));
+
+            #[cfg(target_os = "windows")]
+            window.set_taskbar_icon(Some(icon.clone()));
+
             applied = true;
         }
     });
