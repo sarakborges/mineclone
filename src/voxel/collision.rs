@@ -6,6 +6,8 @@ const COLLISION_EPSILON: f32 = 0.0001;
 
 pub fn collides_aabb(chunk: &VoxelChunk, min: Vec3, max: Vec3) -> bool {
     let chunk_size = CHUNK_SIZE as f32;
+    let min = min + Vec3::splat(COLLISION_EPSILON);
+    let max = max - Vec3::splat(COLLISION_EPSILON);
 
     if max.x <= 0.0
         || max.y <= 0.0
@@ -20,15 +22,9 @@ pub fn collides_aabb(chunk: &VoxelChunk, min: Vec3, max: Vec3) -> bool {
     let min_x = min.x.floor().max(0.0) as i32;
     let min_y = min.y.floor().max(0.0) as i32;
     let min_z = min.z.floor().max(0.0) as i32;
-    let max_x = (max.x - COLLISION_EPSILON)
-        .floor()
-        .min((CHUNK_SIZE - 1) as f32) as i32;
-    let max_y = (max.y - COLLISION_EPSILON)
-        .floor()
-        .min((CHUNK_SIZE - 1) as f32) as i32;
-    let max_z = (max.z - COLLISION_EPSILON)
-        .floor()
-        .min((CHUNK_SIZE - 1) as f32) as i32;
+    let max_x = max.x.floor().min((CHUNK_SIZE - 1) as f32) as i32;
+    let max_y = max.y.floor().min((CHUNK_SIZE - 1) as f32) as i32;
+    let max_z = max.z.floor().min((CHUNK_SIZE - 1) as f32) as i32;
 
     for y in min_y..=max_y {
         for z in min_z..=max_z {
