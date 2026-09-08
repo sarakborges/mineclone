@@ -15,16 +15,21 @@ use super::render_distance::chunk_coords_in_radius;
 const GRASS_BLOCK_ID: &str = "mineclone:grass";
 
 pub fn build_test_world(center: IVec2, radius: i32, blocks: &BlockRegistry) -> VoxelWorld {
-    let grass = blocks
-        .get(GRASS_BLOCK_ID)
-        .unwrap_or_else(|| panic!("missing block definition: {GRASS_BLOCK_ID}"));
     let mut world = VoxelWorld::default();
 
     for coord in chunk_coords_in_radius(center, radius) {
-        world.insert_chunk(coord, varied_terrain_chunk(coord, grass.rotate_texture));
+        world.insert_chunk(coord, build_test_chunk(coord, blocks));
     }
 
     world
+}
+
+pub fn build_test_chunk(coord: IVec2, blocks: &BlockRegistry) -> VoxelChunk {
+    let grass = blocks
+        .get(GRASS_BLOCK_ID)
+        .unwrap_or_else(|| panic!("missing block definition: {GRASS_BLOCK_ID}"));
+
+    varied_terrain_chunk(coord, grass.rotate_texture)
 }
 
 fn varied_terrain_chunk(coord: IVec2, rotate_texture: bool) -> VoxelChunk {
