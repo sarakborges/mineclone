@@ -12,7 +12,7 @@ use crate::app::game_state::GameState;
 use biome::{track_current_biome, CurrentBiome};
 use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
-use setup::setup_world;
+use setup::{begin_world_loading, setup_world};
 
 pub struct WorldPlugin;
 
@@ -21,7 +21,11 @@ impl Plugin for WorldPlugin {
         app.init_resource::<CurrentDimension>()
             .init_resource::<CurrentBiome>()
             .add_plugins(DayNightPlugin)
-            .add_systems(OnEnter(GameState::Gameplay), setup_world)
+            .add_systems(OnEnter(GameState::Loading), begin_world_loading)
+            .add_systems(
+                Update,
+                setup_world.run_if(in_state(GameState::Loading)),
+            )
             .add_systems(
                 Update,
                 track_current_biome.run_if(in_state(GameState::Gameplay)),
