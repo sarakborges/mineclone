@@ -26,7 +26,7 @@
     },
     "clouds": {
       "density": 0.50,
-      "color": { "r": 0.72, "g": 1.0, "b": 0.96 }
+      "color": { "r": 1.0, "g": 0.72, "b": 0.18 }
     },
     "terrain_roughness": 0.90,
     "terrain_metallic": 0.0
