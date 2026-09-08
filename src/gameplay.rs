@@ -4,7 +4,7 @@ use bevy::{
     window::{CursorGrabMode, CursorOptions},
 };
 
-use crate::game_state::GameState;
+use crate::{game_state::GameState, voxel_chunk::VoxelChunk};
 
 const MOUSE_SENSITIVITY: f32 = 0.003;
 const MAX_PITCH: f32 = 1.54;
@@ -12,9 +12,6 @@ const WALK_SPEED: f32 = 5.0;
 const GRAVITY: f32 = -18.0;
 const JUMP_SPEED: f32 = 7.0;
 const PLAYER_EYE_HEIGHT: f32 = 1.7;
-const GROUND_SIZE: f32 = 40.0;
-const GROUND_HALF_EXTENT: f32 = GROUND_SIZE / 2.0;
-const GROUND_SURFACE_Y: f32 = 0.0;
 
 pub struct GameplayPlugin;
 
@@ -52,7 +49,7 @@ fn setup_gameplay(
 
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(0.0, PLAYER_EYE_HEIGHT, 6.0),
+        Transform::from_xyz(8.0, PLAYER_EYE_HEIGHT + 1.0, 8.0),
         GameplayCamera {
             yaw: 0.0,
             pitch: 0.0,
@@ -64,17 +61,13 @@ fn setup_gameplay(
         DespawnOnExit(GameState::Gameplay),
     ));
 
-    commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(GROUND_SIZE, 1.0, GROUND_SIZE))),
-        MeshMaterial3d(materials.add(Color::srgb(0.18, 0.22, 0.18))),
-        Transform::from_xyz(0.0, -0.5, 0.0),
-        DespawnOnExit(GameState::Gameplay),
-    ));
+    let chunk = VoxelChunk::flat_test();
+    let chunk_mesh = meshes.add(chunk.build_mesh());
 
     commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(2.0, 2.0, 2.0))),
-        MeshMaterial3d(materials.add(Color::srgb(0.35, 0.55, 0.9))),
-        Transform::from_xyz(0.0, 1.0, 0.0),
+        Mesh3d(chunk_mesh),
+        MeshMaterial3d(materials.add(Color::srgb(0.22, 0.42, 0.2))),
+        chunk,
         DespawnOnExit(GameState::Gameplay),
     ));
 
@@ -84,7 +77,7 @@ fn setup_gameplay(
             shadow_maps_enabled: true,
             ..default()
         },
-        Transform::from_xyz(4.0, 8.0, 4.0),
+        Transform::from_xyz(8.0, 10.0, 8.0),
         DespawnOnExit(GameState::Gameplay),
     ));
 }
@@ -129,6 +122,7 @@ fn look_with_mouse(
 fn move_player(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
+    chunk: Single<&VoxelChunk>,
     mut player: Single<(&mut Transform, &GameplayCamera, &mut PlayerMovement)>,
 ) {
     let mut movement = Vec3::ZERO;
@@ -154,11 +148,15 @@ fn move_player(
         player.0.translation += movement.normalize() * WALK_SPEED * time.delta_secs();
     }
 
-    let over_ground = player.0.translation.x.abs() <= GROUND_HALF_EXTENT
-        && player.0.translation.z.abs() <= GROUND_HALF_EXTENT;
+    if player.2.grounded {
+        let foot_y = player.0.translation.y - PLAYER_EYE_HEIGHT;
+        let still_supported = chunk
+            .top_surface_at(player.0.translation.x, player.0.translation.z)
+            .is_some_and(|surface_y| (foot_y - surface_y).abs() < 0.01);
 
-    if !over_ground {
-        player.2.grounded = false;
+        if !still_supported {
+            player.2.grounded = false;
+        }
     }
 
     if keys.just_pressed(KeyCode::Space) && player.2.grounded {
@@ -166,14 +164,20 @@ fn move_player(
         player.2.grounded = false;
     }
 
+    let previous_foot_y = player.0.translation.y - PLAYER_EYE_HEIGHT;
+
     player.2.vertical_velocity += GRAVITY * time.delta_secs();
     player.0.translation.y += player.2.vertical_velocity * time.delta_secs();
 
-    let standing_height = GROUND_SURFACE_Y + PLAYER_EYE_HEIGHT;
+    let current_foot_y = player.0.translation.y - PLAYER_EYE_HEIGHT;
 
-    if over_ground && player.0.translation.y <= standing_height && player.2.vertical_velocity <= 0.0 {
-        player.0.translation.y = standing_height;
-        player.2.vertical_velocity = 0.0;
-        player.2.grounded = true;
+    if player.2.vertical_velocity <= 0.0 {
+        if let Some(surface_y) = chunk.top_surface_at(player.0.translation.x, player.0.translation.z) {
+            if previous_foot_y >= surface_y && current_foot_y <= surface_y {
+                player.0.translation.y = surface_y + PLAYER_EYE_HEIGHT;
+                player.2.vertical_velocity = 0.0;
+                player.2.grounded = true;
+            }
+        }
     }
 }
