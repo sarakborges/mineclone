@@ -69,7 +69,7 @@ fn spawn_world_hud(mut commands: Commands) {
                 BiomeHudText,
             ));
             root.spawn((
-                typography::hud("X: 0 | Y: 0 | Z: 0"),
+                typography::hud("X: 0 | Z: 0 | Y: 0"),
                 TextLayout::justify(Justify::Center),
                 shadow,
                 CoordinatesHudText,
@@ -111,7 +111,7 @@ fn update_coordinates_hud(
     let block_position = position.floor().as_ivec3();
 
     coordinates_text.0 = format!(
-        "X: {} | Y: {} | Z: {}",
-        block_position.x, block_position.y, block_position.z
+        "X: {} | Z: {} | Y: {}",
+        block_position.x, block_position.z, block_position.y
     );
 }
