@@ -1,7 +1,7 @@
 (
     id: "mineclone:overworld/sky",
     sun: (
-        texture: "textures/celestial/overworld/sun.png",
+        texture: None,
         size: 28.0,
         orbit_radius: 180.0,
         rise_phase: Dawn,
@@ -12,7 +12,7 @@
         tint: (r: 1.0, g: 0.96, b: 0.72),
     ),
     moon: (
-        texture: "textures/celestial/overworld/moon.png",
+        texture: None,
         size: 22.0,
         orbit_radius: 180.0,
         rise_phase: Dusk,
