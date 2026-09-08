@@ -5,7 +5,6 @@ use std::{
 
 const DATA_DIRECTORY: &str = "data";
 const ASSETS_DIRECTORY: &str = "assets";
-const DEVELOPMENT_DATA_DIRECTORY: &str = "assets/data";
 
 pub fn prepare_runtime_directory() {
     let Ok(executable) = env::current_exe() else {
@@ -26,9 +25,7 @@ pub fn prepare_runtime_directory() {
 }
 
 pub fn data_root() -> PathBuf {
-    if Path::new(DATA_DIRECTORY).is_dir() {
-        PathBuf::from(DATA_DIRECTORY)
-    } else {
-        PathBuf::from(DEVELOPMENT_DATA_DIRECTORY)
-    }
+    let path = Path::new(DATA_DIRECTORY);
+    assert!(path.is_dir(), "data directory not found at {}", path.display());
+    path.to_path_buf()
 }
