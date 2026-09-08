@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use bevy::prelude::*;
+use bevy::{light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
@@ -211,6 +211,7 @@ pub fn spawn_chunk_mesh(
                 Mesh3d(mesh_handle.clone()),
                 MeshMaterial3d(fluid_materials.get(fluid_mesh.fluid_id).clone()),
                 transform,
+                NotShadowCaster,
                 DespawnOnExit(GameState::Gameplay),
             ))
             .id();
