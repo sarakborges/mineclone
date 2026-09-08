@@ -1,10 +1,6 @@
 use bevy::prelude::*;
 
-use super::{
-    crosshair::CrosshairPlugin,
-    highlight::TargetHighlightPlugin,
-    hud::TargetHudPlugin,
-};
+use super::highlight::TargetHighlightPlugin;
 use crate::{
     app::game_state::GameState,
     voxel::{
@@ -20,7 +16,7 @@ pub struct BlockTargetingPlugin;
 impl Plugin for BlockTargetingPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<TargetedBlock>()
-            .add_plugins((CrosshairPlugin, TargetHighlightPlugin, TargetHudPlugin))
+            .add_plugins(TargetHighlightPlugin)
             .add_systems(
                 Update,
                 update_targeted_block.run_if(in_state(GameState::Gameplay)),
