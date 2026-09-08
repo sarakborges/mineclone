@@ -7,7 +7,7 @@ pub mod dimension;
 pub(crate) mod render_distance;
 mod setup;
 mod streaming;
-mod test_world;
+pub(crate) mod terrain;
 
 use bevy::prelude::*;
 
