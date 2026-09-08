@@ -7,7 +7,7 @@ use bevy::{
 
 use crate::{
     app::settings_state::SettingsState,
-    ui::{button::menu_button, theme, typography},
+    ui::{button::menu_button, surface, theme, typography},
     voxel::chunk::CHUNK_SIZE,
     world::render_distance::{
         RenderDistanceSettings, MAX_RENDER_DISTANCE_CHUNKS, MIN_RENDER_DISTANCE_CHUNKS,
@@ -144,27 +144,7 @@ fn spawn_settings_menu(
                 ));
             }
 
-            root.spawn((
-                Node {
-                    width: px(560),
-                    padding: UiRect::all(px(34)),
-                    flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::Center,
-                    row_gap: px(20),
-                    border_radius: BorderRadius::all(px(10)),
-                    ..default()
-                },
-                BackgroundColor(theme::FROSTED_SURFACE),
-                theme::frosted_surface_gradient(),
-                BoxShadow(vec![ShadowStyle {
-                    color: Color::srgba(0.0, 0.0, 0.0, 0.42),
-                    x_offset: px(0),
-                    y_offset: px(12),
-                    spread_radius: px(0),
-                    blur_radius: px(30),
-                }]),
-            ))
-            .with_children(|panel| {
+            root.spawn(surface::modal_panel()).with_children(|panel| {
                 panel.spawn((
                     typography::title("SETTINGS"),
                     Node {
