@@ -3,6 +3,9 @@
   "name": "The Overworld",
   "biomes": [
     "mineclone:overworld/plains",
+    "mineclone:overworld/wasteland",
+    "mineclone:overworld/wicked_realm",
+    "mineclone:overworld/enchanted_realm",
     "mineclone:overworld/ocean"
   ],
   "day_night_cycle": "mineclone:overworld/day_night_cycle",
