@@ -61,7 +61,12 @@ fn build_settings_menu_from_capture(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     render_distance: Res<RenderDistanceSettings>,
+    settings_state: Res<State<SettingsState>>,
 ) {
+    if *settings_state.get() != SettingsState::Open {
+        return;
+    }
+
     let backdrop = capture
         .image
         .clone()
