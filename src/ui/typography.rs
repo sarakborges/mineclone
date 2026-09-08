@@ -32,15 +32,6 @@ pub fn heading(label: impl Into<String>) -> impl Bundle {
     )
 }
 
-pub fn label(label: impl Into<String>) -> impl Bundle {
-    (
-        Text::new(label),
-        ui_font(22.0, FontWeight::MEDIUM),
-        LetterSpacing::Px(0.55),
-        TextColor(theme::TEXT_PRIMARY),
-    )
-}
-
 pub fn muted(label: impl Into<String>) -> impl Bundle {
     (
         Text::new(label),
