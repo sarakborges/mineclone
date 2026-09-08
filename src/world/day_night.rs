@@ -7,9 +7,19 @@ use crate::{
 
 use super::dimension::CurrentDimension;
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct DayNightClock {
+    pub day: u64,
     pub normalized_time: f32,
+}
+
+impl Default for DayNightClock {
+    fn default() -> Self {
+        Self {
+            day: 1,
+            normalized_time: 0.0,
+        }
+    }
 }
 
 pub struct DayNightPlugin;
@@ -38,6 +48,7 @@ fn initialize_clock(
         .get(&dimension.day_night_cycle)
         .unwrap_or_else(|| panic!("missing day-night cycle: {}", dimension.day_night_cycle));
 
+    clock.day = 1;
     clock.normalized_time = cycle.initial_time.rem_euclid(1.0);
 }
 
@@ -59,6 +70,10 @@ fn advance_clock(
         return;
     }
 
-    clock.normalized_time =
-        (clock.normalized_time + time.delta_secs() / cycle.day_duration_seconds).rem_euclid(1.0);
+    let elapsed_days = time.delta_secs() / cycle.day_duration_seconds;
+    let advanced_time = clock.normalized_time + elapsed_days;
+    let completed_days = advanced_time.floor().max(0.0) as u64;
+
+    clock.day += completed_days;
+    clock.normalized_time = advanced_time.rem_euclid(1.0);
 }
