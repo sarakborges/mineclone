@@ -4,6 +4,7 @@
     initial_time: 0.0,
     world_time_start_hour: 6.0,
     sun_angle_offset_degrees: -90.0,
+    sequence: [Dawn, Day, Dusk, Night],
     phases: (
         dawn: (
             duration_seconds: 300.0,
