@@ -54,13 +54,17 @@ pub struct ScreenTransition {
 
 impl ScreenTransition {
     pub fn request(&mut self, target: ScreenTransitionTarget) {
-        if self.phase != ScreenTransitionPhase::Idle {
+        if self.is_active() {
             return;
         }
 
         self.target = Some(target);
         self.progress = 0.0;
         self.phase = ScreenTransitionPhase::FadingOut;
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.phase != ScreenTransitionPhase::Idle
     }
 }
 
