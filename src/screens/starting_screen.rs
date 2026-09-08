@@ -2,7 +2,12 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, settings_state::SettingsState},
-    ui::{button::menu_button, theme, typography},
+    ui::{
+        button::menu_button,
+        theme,
+        transition::{ScreenTransition, ScreenTransitionTarget},
+        typography,
+    },
 };
 
 const STAR_FIELD: &[(f32, f32, f32, f32, f32, f32, f32, f32, f32)] = &[
@@ -195,8 +200,7 @@ fn animate_starfield(
 
 fn handle_menu_buttons(
     interactions: Query<(&Interaction, &StartingScreenAction), Changed<Interaction>>,
-    mut next_game_state: ResMut<NextState<GameState>>,
-    mut next_settings_state: ResMut<NextState<SettingsState>>,
+    mut transition: ResMut<ScreenTransition>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
     for (interaction, action) in &interactions {
@@ -205,10 +209,12 @@ fn handle_menu_buttons(
         }
 
         match action {
-            StartingScreenAction::NewWorld => next_game_state.set(GameState::Loading),
+            StartingScreenAction::NewWorld => {
+                transition.request(ScreenTransitionTarget::game(GameState::Loading));
+            }
             StartingScreenAction::LoadWorlds => {}
             StartingScreenAction::Settings => {
-                next_settings_state.set(SettingsState::Open);
+                transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
             }
             StartingScreenAction::ExitGame => {
                 app_exit.write(AppExit::Success);
