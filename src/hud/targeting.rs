@@ -63,7 +63,7 @@ fn update_target_hud(
         .map_or(hit.block_id, |block| block.name.as_str());
 
     target_text.0 = format!(
-        "Block: {block_name}\nPosition: X: {} | Y: {} | Z: {}",
-        hit.voxel.x, hit.voxel.y, hit.voxel.z
+        "Block: {block_name}\nX: {} | Z: {} | Y: {}",
+        hit.voxel.x, hit.voxel.z, hit.voxel.y
     );
 }
