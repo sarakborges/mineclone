@@ -7,6 +7,8 @@ use crate::{
     app::settings_state::SettingsState,
     ui::{
         button::menu_button,
+        cosmic_background::{self, STAR_FIELD},
+        surface,
         theme,
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
@@ -17,8 +19,9 @@ use crate::{
     },
 };
 
-const CONTENT_WIDTH: f32 = 640.0;
-const SLIDER_WIDTH: f32 = 470.0;
+const CONTENT_WIDTH: f32 = 760.0;
+const HEADER_HEIGHT: f32 = 116.0;
+const FOOTER_HEIGHT: f32 = 104.0;
 const SLIDER_THUMB_SIZE: f32 = 16.0;
 
 pub struct SettingsScreenPlugin;
@@ -63,8 +66,6 @@ fn spawn_settings_screen(mut commands: Commands, render_distance: Res<RenderDist
                 bottom: px(0),
                 width: percent(100),
                 height: percent(100),
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
                 ..default()
             },
             BackgroundColor(theme::SCREEN_BACKGROUND),
@@ -72,36 +73,74 @@ fn spawn_settings_screen(mut commands: Commands, render_distance: Res<RenderDist
             GlobalZIndex(500),
         ))
         .with_children(|root| {
+            for &(left, top, size, phase, speed, red, green, blue, base_alpha) in STAR_FIELD {
+                root.spawn(cosmic_background::star(
+                    left, top, size, phase, speed, red, green, blue, base_alpha,
+                ));
+            }
+
             root.spawn(Node {
-                width: px(CONTENT_WIDTH),
-                flex_direction: FlexDirection::Column,
+                position_type: PositionType::Absolute,
+                top: px(0),
+                left: px(0),
+                right: px(0),
+                height: px(HEADER_HEIGHT),
                 align_items: AlignItems::Center,
-                row_gap: px(22),
+                justify_content: JustifyContent::Center,
                 ..default()
             })
-            .with_children(|content| {
-                content.spawn((
-                    typography::title("SETTINGS"),
-                    Node {
-                        margin: UiRect::bottom(px(22)),
-                        ..default()
-                    },
-                ));
+            .with_children(|header| {
+                header.spawn(typography::title("SETTINGS"));
+            });
 
-                content.spawn(typography::label("Render Distance"));
-                content.spawn((
-                    typography::muted(render_distance_label(render_distance.chunks())),
-                    RenderDistanceValueText,
-                ));
-                content.spawn(render_distance_slider(render_distance.chunks()));
-                content.spawn((
-                    typography::caption("Applied while the world is running."),
-                    Node {
-                        margin: UiRect::bottom(px(18)),
-                        ..default()
-                    },
-                ));
-                content.spawn(menu_button("Back", SettingsBackButton));
+            root.spawn(Node {
+                position_type: PositionType::Absolute,
+                top: px(HEADER_HEIGHT),
+                bottom: px(FOOTER_HEIGHT),
+                left: px(0),
+                right: px(0),
+                padding: UiRect::axes(px(32), px(24)),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                ..default()
+            })
+            .with_children(|body| {
+                body.spawn(Node {
+                    width: px(CONTENT_WIDTH),
+                    max_width: percent(100),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(24),
+                    ..default()
+                })
+                .with_children(|sections| {
+                    sections
+                        .spawn(surface::settings_section())
+                        .with_children(|section| {
+                            section.spawn(typography::heading("Render Distance"));
+                            section.spawn((
+                                typography::muted(render_distance_label(render_distance.chunks())),
+                                RenderDistanceValueText,
+                            ));
+                            section.spawn(render_distance_slider(render_distance.chunks()));
+                            section.spawn(typography::caption(
+                                "Controls how far terrain is generated and rendered around the player.",
+                            ));
+                        });
+                });
+            });
+
+            root.spawn(Node {
+                position_type: PositionType::Absolute,
+                left: px(0),
+                right: px(0),
+                bottom: px(0),
+                height: px(FOOTER_HEIGHT),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            })
+            .with_children(|footer| {
+                footer.spawn(menu_button("Back", SettingsBackButton));
             });
         });
 }
@@ -121,7 +160,7 @@ fn render_distance_slider(chunks: i32) -> impl Bundle {
             MAX_RENDER_DISTANCE_CHUNKS as f32,
         ),
         Node {
-            width: px(SLIDER_WIDTH),
+            width: percent(100),
             height: px(32),
             position_type: PositionType::Relative,
             ..default()
