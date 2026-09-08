@@ -37,7 +37,7 @@ pub fn setup_world(
     let (roughness, metallic) = average_terrain_material(dimension, &biomes);
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
-        base_color_texture: Some(asset_server.load(grass.texture.clone())),
+        base_color_texture: Some(asset_server.load(&grass.texture)),
         perceptual_roughness: roughness,
         metallic,
         ..default()
