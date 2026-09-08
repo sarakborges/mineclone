@@ -23,24 +23,29 @@ fn spawn_world_hud(mut commands: Commands) {
         Node {
             position_type: PositionType::Absolute,
             top: px(16),
-            left: percent(50),
-            padding: UiRect::all(px(12)),
-            border_radius: BorderRadius::all(px(6)),
+            left: px(0),
+            width: percent(100),
+            justify_content: JustifyContent::Center,
             ..default()
         },
-        Transform::from_translation(Vec3::new(-0.5, 0.0, 0.0)),
-        BackgroundColor(Color::srgba(0.02, 0.025, 0.04, 0.82)),
         Pickable::IGNORE,
         DespawnOnExit(GameState::Gameplay),
         children![(
-            Text::new("- - -\nX 0 | Z 0 | Y 0"),
-            TextFont {
-                font_size: FontSize::Px(18.0),
+            Node {
+                padding: UiRect::all(px(12)),
+                border_radius: BorderRadius::all(px(6)),
                 ..default()
             },
-            TextColor(Color::WHITE),
-            TextLayout::new_with_justify(Justify::Center),
-            WorldHudText,
+            BackgroundColor(Color::srgba(0.02, 0.025, 0.04, 0.82)),
+            children![(
+                Text::new("- - -\nX 0 | Z 0 | Y 0"),
+                TextFont {
+                    font_size: FontSize::Px(18.0),
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+                WorldHudText,
+            )],
         )],
     ));
 }
