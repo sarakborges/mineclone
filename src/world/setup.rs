@@ -21,7 +21,7 @@ pub fn setup_world(
     let chunk_size = CHUNK_SIZE as f32;
 
     for (coord, chunk) in world.chunks() {
-        let mesh = meshes.add(build_chunk_mesh(chunk));
+        let mesh = meshes.add(build_chunk_mesh(&world, *coord, chunk));
 
         commands.spawn((
             Mesh3d(mesh),
