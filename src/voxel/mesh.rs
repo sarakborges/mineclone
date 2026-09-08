@@ -23,7 +23,7 @@ const FACE_UVS: [[f32; 2]; 4] = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]
 
 pub fn build_chunk_mesh<F>(
     world: &VoxelWorld,
-    chunk_coord: IVec2,
+    chunk_coord: IVec3,
     chunk: &VoxelChunk,
     tint_at: F,
 ) -> Mesh
@@ -36,7 +36,7 @@ where
     let mut colors = Vec::<[f32; 4]>::new();
     let mut indices = Vec::<u32>::new();
     let chunk_size = CHUNK_SIZE as i32;
-    let chunk_origin = IVec3::new(chunk_coord.x * chunk_size, 0, chunk_coord.y * chunk_size);
+    let chunk_origin = chunk_coord * chunk_size;
 
     for y in 0..CHUNK_SIZE {
         for z in 0..CHUNK_SIZE {
