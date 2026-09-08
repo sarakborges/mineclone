@@ -1,6 +1,7 @@
 pub mod biome;
 pub mod biome_field;
 mod chunk_rendering;
+mod chunk_unloading;
 pub mod day_night;
 pub mod dimension;
 pub(crate) mod render_distance;
@@ -12,6 +13,7 @@ use bevy::prelude::*;
 
 use crate::app::game_state::GameState;
 use biome::{track_current_biome, CurrentBiome};
+use chunk_unloading::unload_chunk_meshes;
 use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
 use render_distance::RenderDistanceSettings;
@@ -30,13 +32,12 @@ impl Plugin for WorldPlugin {
             .add_plugins(DayNightPlugin)
             .add_systems(OnEnter(GameState::Loading), begin_world_loading)
             .add_systems(OnEnter(GameState::Gameplay), reset_chunk_streaming)
+            .add_systems(Update, setup_world.run_if(in_state(GameState::Loading)))
             .add_systems(
                 Update,
-                setup_world.run_if(in_state(GameState::Loading)),
-            )
-            .add_systems(
-                Update,
-                (stream_chunks, track_current_biome).run_if(in_state(GameState::Gameplay)),
+                (unload_chunk_meshes, stream_chunks, track_current_biome)
+                    .chain()
+                    .run_if(in_state(GameState::Gameplay)),
             );
     }
 }
