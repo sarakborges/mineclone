@@ -1,3 +1,4 @@
+mod asset_upload;
 mod celestial;
 mod celestial_path;
 mod environment;
@@ -5,6 +6,7 @@ mod fog;
 mod lighting;
 mod sky;
 
+use asset_upload::AssetUploadPlugin;
 use bevy::prelude::*;
 use celestial::CelestialPlugin;
 use environment::EnvironmentPlugin;
@@ -17,6 +19,7 @@ pub struct RenderingPlugin;
 impl Plugin for RenderingPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
+            AssetUploadPlugin,
             EnvironmentPlugin,
             LightingPlugin,
             FogPlugin,
