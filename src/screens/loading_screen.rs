@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     app::game_state::GameState,
     ui::{theme, typography},
-    world::setup::WorldLoadingState,
+    world::WorldLoadingState,
 };
 
 pub struct LoadingScreenPlugin;
