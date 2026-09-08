@@ -34,7 +34,6 @@ pub struct DayNightCycleDefinition {
     pub day_duration_seconds: f32,
     pub initial_time: f32,
     pub world_time_start_hour: f32,
-    pub sun_angle_offset_degrees: f32,
     pub sequence: [DayNightPhase; 4],
     pub phases: DayNightPhases<DayNightLightingPhase>,
 }
