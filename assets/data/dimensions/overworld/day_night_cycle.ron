@@ -1,32 +1,33 @@
 (
     id: "mineclone:overworld/day_night_cycle",
-    duration_seconds: 120.0,
+    day_duration_seconds: 1200.0,
     initial_time: 0.32,
+    world_time_start_hour: 6.0,
     sun_angle_offset_degrees: -90.0,
     phases: (
         dawn: (
-            start_time: 0.00,
+            duration_seconds: 300.0,
             ambient_color: (r: 0.78, g: 0.52, b: 0.46),
             ambient_brightness: 45.0,
             sun_color: (r: 1.00, g: 0.58, b: 0.32),
             sun_illuminance: 28000.0,
         ),
         day: (
-            start_time: 0.15,
+            duration_seconds: 300.0,
             ambient_color: (r: 0.94, g: 0.97, b: 1.00),
             ambient_brightness: 90.0,
             sun_color: (r: 1.00, g: 0.98, b: 0.90),
             sun_illuminance: 105000.0,
         ),
         dusk: (
-            start_time: 0.65,
+            duration_seconds: 300.0,
             ambient_color: (r: 0.72, g: 0.46, b: 0.44),
             ambient_brightness: 42.0,
             sun_color: (r: 1.00, g: 0.48, b: 0.25),
             sun_illuminance: 22000.0,
         ),
         night: (
-            start_time: 0.80,
+            duration_seconds: 300.0,
             ambient_color: (r: 0.18, g: 0.22, b: 0.40),
             ambient_brightness: 18.0,
             sun_color: (r: 0.35, g: 0.40, b: 0.65),
