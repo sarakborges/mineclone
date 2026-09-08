@@ -63,6 +63,7 @@ impl FluidMaterials {
                     alpha_mode: AlphaMode::Blend,
                     double_sided: true,
                     cull_mode: None,
+                    unlit: true,
                     ..default()
                 });
 
