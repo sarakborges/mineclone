@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
+    content::{biome::BiomeRegistry, dimension::DimensionRegistry},
     player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
     world::{biome::CurrentBiome, dimension::CurrentDimension},
 };
@@ -54,15 +55,25 @@ fn update_world_hud(
     player: Single<&Transform, With<GameplayCamera>>,
     dimension: Res<CurrentDimension>,
     biome: Res<CurrentBiome>,
+    dimensions: Res<DimensionRegistry>,
+    biomes: Res<BiomeRegistry>,
     mut world_text: Single<&mut Text, With<WorldHudText>>,
 ) {
     let position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let block_position = position.floor().as_ivec3();
+    let dimension_name = dimensions
+        .get(&dimension.id)
+        .map(|definition| definition.name.as_str())
+        .unwrap_or(dimension.id.as_str());
+    let biome_name = biomes
+        .get(&biome.id)
+        .map(|definition| definition.name.as_str())
+        .unwrap_or(biome.id.as_str());
 
     world_text.0 = format!(
         "{} - {}\nX {} | Z {} | Y {}",
-        dimension.name,
-        biome.name,
+        dimension_name,
+        biome_name,
         block_position.x,
         block_position.z,
         block_position.y,
