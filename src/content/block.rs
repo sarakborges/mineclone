@@ -49,7 +49,7 @@ impl BlockRegistry {
     }
 }
 
-fn intern_block_id(id: &str) -> &'static str {
+pub(crate) fn intern_block_id(id: &str) -> &'static str {
     let interner = BLOCK_ID_INTERNER.get_or_init(|| Mutex::new(HashMap::new()));
     let mut ids = interner
         .lock()
