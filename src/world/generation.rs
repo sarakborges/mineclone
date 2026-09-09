@@ -273,6 +273,7 @@ fn rasterize_material_pass(
                     &column.surface,
                     volume.as_ref(),
                     &region.geology,
+                    &region.hydrology,
                     biomes,
                     fallback,
                 );
