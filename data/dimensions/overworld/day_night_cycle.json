@@ -6,16 +6,20 @@
   "sequence": ["Dawn", "Day", "Dusk", "Night"],
   "phases": {
     "dawn": {
-      "duration_seconds": 300.0
+      "duration_seconds": 300.0,
+      "sky_light_factor": 0.35
     },
     "day": {
-      "duration_seconds": 300.0
+      "duration_seconds": 300.0,
+      "sky_light_factor": 1.0
     },
     "dusk": {
-      "duration_seconds": 300.0
+      "duration_seconds": 300.0,
+      "sky_light_factor": 0.35
     },
     "night": {
-      "duration_seconds": 300.0
+      "duration_seconds": 300.0,
+      "sky_light_factor": 0.06
     }
   }
 }

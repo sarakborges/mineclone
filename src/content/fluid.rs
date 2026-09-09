@@ -16,6 +16,8 @@ pub struct FluidDefinition {
     pub roughness: f32,
     #[serde(default)]
     pub metallic: f32,
+    #[serde(default)]
+    pub light_dampening: u8,
 }
 
 #[derive(Resource, Default)]
@@ -39,6 +41,11 @@ impl FluidRegistry {
         assert!(
             (0.0..=1.0).contains(&definition.metallic),
             "fluid {} metallic must be between 0 and 1",
+            definition.id
+        );
+        assert!(
+            definition.light_dampening <= 15,
+            "fluid {} light dampening must be between 0 and 15",
             definition.id
         );
 

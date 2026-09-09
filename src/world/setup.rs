@@ -11,14 +11,18 @@ use crate::{
     },
     rendering::terrain_material::{TerrainMaterial, TerrainMaterialExtension},
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
-    voxel::{coordinates::split_dimension_position, world::VoxelWorld},
+    voxel::{
+        coordinates::split_dimension_position,
+        lighting::initialize_chunk_lighting,
+        world::VoxelWorld,
+    },
 };
 
 use super::{
     biome_field::BiomeField,
     chunk_rendering::{
-        refresh_adjacent_chunk_meshes, spawn_chunk_mesh, ChunkRenderPool, FluidMaterials,
-        TerrainMaterials,
+        refresh_adjacent_chunk_meshes, refresh_chunk_mesh, spawn_chunk_mesh, ChunkRenderPool,
+        FluidMaterials, TerrainMaterials,
     },
     dimension::CurrentDimension,
     render_distance::chunk_coords_in_cylinder,
@@ -54,7 +58,6 @@ pub fn begin_world_loading(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut terrain_material_assets: ResMut<Assets<TerrainMaterial>>,
-    mut standard_materials: ResMut<Assets<StandardMaterial>>,
     current_dimension: Res<CurrentDimension>,
     seed: Res<WorldSeed>,
     load_mode: Res<WorldLoadMode>,
@@ -97,6 +100,7 @@ pub fn begin_world_loading(
                 base_color_texture: Some(asset_server.load(texture.to_owned())),
                 perceptual_roughness: roughness,
                 metallic,
+                unlit: true,
                 ..default()
             },
             extension: TerrainMaterialExtension::default(),
@@ -111,7 +115,7 @@ pub fn begin_world_loading(
         back: create_material(&grass.textures.back),
     };
     drop(create_material);
-    let fluid_materials = FluidMaterials::from_registry(fluids_ref, &mut standard_materials);
+    let fluid_materials = FluidMaterials::from_registry(fluids_ref, &mut terrain_material_assets);
     let (min_chunk_y, max_chunk_y) = chunk_y_bounds(dimension, biomes_ref);
     let initial_center = if *load_mode == WorldLoadMode::Load {
         save.player_position()
@@ -212,6 +216,7 @@ pub fn setup_world(
             world.insert_chunk(coord, chunk);
         }
 
+        let lighting_changes = initialize_chunk_lighting(&mut world, coord, &blocks, &fluids);
         let chunk = world
             .chunk(coord)
             .unwrap_or_else(|| panic!("generated chunk should exist at {coord:?}"));
@@ -238,6 +243,24 @@ pub fn setup_world(
             &terrain_materials,
             &fluid_materials,
         );
+
+        for changed_coord in lighting_changes {
+            if changed_coord == coord {
+                continue;
+            }
+
+            refresh_chunk_mesh(
+                &mut commands,
+                &mut meshes,
+                &mut render_pool,
+                &world,
+                changed_coord,
+                &biomes,
+                &biome_field,
+                &terrain_materials,
+                &fluid_materials,
+            );
+        }
 
         loading_state.generated += 1;
     }

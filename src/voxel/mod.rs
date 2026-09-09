@@ -5,6 +5,8 @@ pub mod collision;
 pub mod coordinates;
 pub mod fluid;
 pub mod fluid_mesh;
+pub(crate) mod light;
+pub(crate) mod lighting;
 pub mod mesh;
 pub mod raycast;
 pub mod texture_rotation;

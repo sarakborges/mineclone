@@ -1,4 +1,5 @@
 mod face;
+pub(crate) mod lighting;
 
 use bevy::{
     asset::RenderAssetUsages,
@@ -7,6 +8,7 @@ use bevy::{
     render::render_resource::PrimitiveTopology,
 };
 use face::push_face;
+use lighting::{face_lighting, FaceLighting};
 
 use super::{
     chunk::{CHUNK_SIZE, VoxelChunk},
@@ -36,6 +38,7 @@ struct MeshBuffers {
     positions: Vec<[f32; 3]>,
     normals: Vec<[f32; 3]>,
     uvs: Vec<[f32; 2]>,
+    light_uvs: Vec<[f32; 2]>,
     colors: Vec<[f32; 4]>,
     indices: Vec<u32>,
 }
@@ -47,17 +50,21 @@ impl MeshBuffers {
         normal: [f32; 3],
         texture_rotation: TextureRotation,
         tint: [f32; 3],
+        lighting: FaceLighting,
     ) {
         push_face(
             &mut self.positions,
             &mut self.normals,
             &mut self.uvs,
+            &mut self.light_uvs,
             &mut self.colors,
             &mut self.indices,
             vertices,
             normal,
             texture_rotation,
             tint,
+            lighting.channels,
+            lighting.ambient_occlusion,
         );
     }
 
@@ -74,6 +81,7 @@ impl MeshBuffers {
             .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
             .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
             .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
+            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
             .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors)
             .with_inserted_indices(Indices::U32(self.indices)),
         )
@@ -127,6 +135,7 @@ where
                         [1.0, 0.0, 0.0],
                         TextureRotation::default(),
                         grass_tint,
+                        face_lighting(world, world_voxel, BlockFace::Right),
                     );
                 }
 
@@ -141,6 +150,7 @@ where
                         [-1.0, 0.0, 0.0],
                         TextureRotation::default(),
                         grass_tint,
+                        face_lighting(world, world_voxel, BlockFace::Left),
                     );
                 }
 
@@ -155,6 +165,7 @@ where
                         [0.0, 1.0, 0.0],
                         cell.texture_rotation,
                         grass_tint,
+                        face_lighting(world, world_voxel, BlockFace::Top),
                     );
                 }
 
@@ -169,6 +180,7 @@ where
                         [0.0, -1.0, 0.0],
                         cell.texture_rotation,
                         grass_tint,
+                        face_lighting(world, world_voxel, BlockFace::Bottom),
                     );
                 }
 
@@ -183,6 +195,7 @@ where
                         [0.0, 0.0, 1.0],
                         TextureRotation::default(),
                         grass_tint,
+                        face_lighting(world, world_voxel, BlockFace::Front),
                     );
                 }
 
@@ -197,6 +210,7 @@ where
                         [0.0, 0.0, -1.0],
                         TextureRotation::default(),
                         grass_tint,
+                        face_lighting(world, world_voxel, BlockFace::Back),
                     );
                 }
             }

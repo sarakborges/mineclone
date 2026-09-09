@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use super::{cell::VoxelCell, fluid::FluidCell};
+use super::{cell::VoxelCell, fluid::FluidCell, light::VoxelLight};
 
 pub const CHUNK_SIZE: usize = 16;
 const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
@@ -10,6 +10,7 @@ pub(crate) const CHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_SIZE;
 pub struct VoxelChunk {
     blocks: [Option<VoxelCell>; CHUNK_VOLUME],
     fluids: [Option<FluidCell>; CHUNK_VOLUME],
+    light: [VoxelLight; CHUNK_VOLUME],
 }
 
 impl VoxelChunk {
@@ -17,6 +18,7 @@ impl VoxelChunk {
         Self {
             blocks: [None; CHUNK_VOLUME],
             fluids: [None; CHUNK_VOLUME],
+            light: [VoxelLight::DARK; CHUNK_VOLUME],
         }
     }
 
@@ -40,12 +42,35 @@ impl VoxelChunk {
         self.fluids[index(x as usize, y as usize, z as usize)]
     }
 
+    pub(crate) fn light_at(&self, x: i32, y: i32, z: i32) -> VoxelLight {
+        if !in_bounds(x, y, z) {
+            return VoxelLight::DARK;
+        }
+
+        self.light[index(x as usize, y as usize, z as usize)]
+    }
+
     pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: Option<VoxelCell>) {
         self.blocks[index(x, y, z)] = block;
     }
 
     pub(crate) fn set_fluid(&mut self, x: usize, y: usize, z: usize, fluid: Option<FluidCell>) {
         self.fluids[index(x, y, z)] = fluid;
+    }
+
+    pub(crate) fn set_light(&mut self, x: usize, y: usize, z: usize, light: VoxelLight) -> bool {
+        let index = index(x, y, z);
+
+        if self.light[index] == light {
+            return false;
+        }
+
+        self.light[index] = light;
+        true
+    }
+
+    pub(crate) fn clear_light(&mut self) {
+        self.light.fill(VoxelLight::DARK);
     }
 }
 

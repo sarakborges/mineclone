@@ -2,19 +2,25 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
-    content::{biome::BiomeRegistry, block::BlockRegistry},
+    content::{
+        biome::BiomeRegistry,
+        block::BlockRegistry,
+        fluid::FluidRegistry,
+    },
     player::{
         camera::GameplayCamera,
         hotbar::PlayerHotbar,
         viewmodel::ViewModelAnimation,
     },
-    voxel::{cell::VoxelCell, texture_rotation::TextureRotation, world::VoxelWorld},
+    voxel::{
+        cell::VoxelCell,
+        lighting::relight_after_voxel_edit,
+        texture_rotation::TextureRotation,
+        world::VoxelWorld,
+    },
     world::{
         biome_field::BiomeField,
-        chunk_rendering::{
-            refresh_adjacent_chunk_meshes, refresh_chunk_mesh, ChunkRenderPool, FluidMaterials,
-            TerrainMaterials,
-        },
+        chunk_rendering::{refresh_chunk_mesh, ChunkRenderPool, FluidMaterials, TerrainMaterials},
     },
 };
 
@@ -22,6 +28,15 @@ use super::{
     block::{BlockTargetingSet, TargetedBlock},
     placement::placement_voxel,
 };
+
+const CHUNK_NEIGHBORS: [IVec3; 6] = [
+    IVec3::X,
+    IVec3::NEG_X,
+    IVec3::Y,
+    IVec3::NEG_Y,
+    IVec3::Z,
+    IVec3::NEG_Z,
+];
 
 pub struct BlockInteractionPlugin;
 
@@ -42,6 +57,7 @@ fn edit_targeted_block(
     buttons: Res<ButtonInput<MouseButton>>,
     mut meshes: ResMut<Assets<Mesh>>,
     blocks: Res<BlockRegistry>,
+    fluids: Res<FluidRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
     terrain_materials: Res<TerrainMaterials>,
@@ -64,8 +80,8 @@ fn edit_targeted_block(
         return;
     };
 
-    let (edited_chunk, placed) = if break_pressed {
-        (world.set_block_at(hit.voxel, None), false)
+    let (edited_chunk, edited_voxel, placed) = if break_pressed {
+        (world.set_block_at(hit.voxel, None), hit.voxel, false)
     } else {
         let Some(block_id) = hotbar.item_at(hotbar.selected_slot()) else {
             return;
@@ -82,6 +98,7 @@ fn edit_targeted_block(
                 voxel,
                 Some(VoxelCell::new(block_id, TextureRotation::default())),
             ),
+            voxel,
             true,
         )
     };
@@ -89,6 +106,13 @@ fn edit_targeted_block(
     let Some(coord) = edited_chunk else {
         return;
     };
+
+    let mut chunks_to_remesh =
+        relight_after_voxel_edit(&mut world, edited_voxel, &blocks, &fluids);
+    chunks_to_remesh.insert(coord);
+    for offset in CHUNK_NEIGHBORS {
+        chunks_to_remesh.insert(coord + offset);
+    }
 
     if placed {
         viewmodel_animation.play_place();
@@ -98,26 +122,17 @@ fn edit_targeted_block(
 
     targeted.0 = None;
 
-    refresh_chunk_mesh(
-        &mut commands,
-        &mut meshes,
-        &mut render_pool,
-        &world,
-        coord,
-        &biomes,
-        &biome_field,
-        &terrain_materials,
-        &fluid_materials,
-    );
-    refresh_adjacent_chunk_meshes(
-        &mut commands,
-        &mut meshes,
-        &mut render_pool,
-        &world,
-        coord,
-        &biomes,
-        &biome_field,
-        &terrain_materials,
-        &fluid_materials,
-    );
+    for chunk_coord in chunks_to_remesh {
+        refresh_chunk_mesh(
+            &mut commands,
+            &mut meshes,
+            &mut render_pool,
+            &world,
+            chunk_coord,
+            &biomes,
+            &biome_field,
+            &terrain_materials,
+            &fluid_materials,
+        );
+    }
 }

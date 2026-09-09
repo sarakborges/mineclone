@@ -8,6 +8,7 @@ use super::day_night_phase::{DayNightPhase, DayNightPhases};
 #[derive(Clone, Copy, Deserialize)]
 pub struct DayNightPhaseTiming {
     pub duration_seconds: f32,
+    pub sky_light_factor: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -15,6 +16,7 @@ pub struct DayNightSample {
     pub phase: DayNightPhase,
     pub next_phase: DayNightPhase,
     pub transition: f32,
+    pub sky_light_factor: f32,
 }
 
 #[derive(Clone, Deserialize)]
@@ -33,6 +35,7 @@ impl DayNightCycleDefinition {
         let (phase, phase_elapsed_seconds) = self.phase_at_elapsed(elapsed_seconds);
         let next_phase = self.next_phase(phase);
         let current = self.phases.get(phase);
+        let next = self.phases.get(next_phase);
         let transition = if current.duration_seconds <= f32::EPSILON {
             0.0
         } else {
@@ -43,6 +46,11 @@ impl DayNightCycleDefinition {
             phase,
             next_phase,
             transition,
+            sky_light_factor: lerp_scalar(
+                current.sky_light_factor,
+                next.sky_light_factor,
+                transition,
+            ),
         }
     }
 
@@ -147,6 +155,19 @@ impl DayNightCycleRegistry {
             definition.day_duration_seconds
         );
 
+        for phase in [
+            definition.phases.dawn,
+            definition.phases.day,
+            definition.phases.dusk,
+            definition.phases.night,
+        ] {
+            assert!(
+                (0.0..=1.0).contains(&phase.sky_light_factor),
+                "day-night cycle {} sky light factors must be between 0 and 1",
+                definition.id
+            );
+        }
+
         let unique_phases = definition.sequence.iter().copied().collect::<HashSet<_>>();
         assert!(
             unique_phases.len() == 4,
@@ -160,4 +181,8 @@ impl DayNightCycleRegistry {
     pub fn get(&self, id: &str) -> Option<&DayNightCycleDefinition> {
         self.definitions.get(id)
     }
+}
+
+fn lerp_scalar(start: f32, end: f32, t: f32) -> f32 {
+    start + (end - start) * t
 }

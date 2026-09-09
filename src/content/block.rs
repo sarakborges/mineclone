@@ -19,6 +19,8 @@ pub struct BlockDefinition {
     pub name: String,
     pub textures: BlockTextures,
     pub rotate_texture: bool,
+    #[serde(default)]
+    pub light_emission: u8,
 }
 
 #[derive(Resource, Default)]
@@ -28,6 +30,12 @@ pub struct BlockRegistry {
 
 impl BlockRegistry {
     pub fn insert(&mut self, definition: BlockDefinition) {
+        assert!(
+            definition.light_emission <= 15,
+            "block {} light emission must be between 0 and 15",
+            definition.id
+        );
+
         self.definitions.insert(definition.id.clone(), definition);
     }
 

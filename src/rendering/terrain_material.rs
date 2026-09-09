@@ -10,8 +10,19 @@ const TERRAIN_SHADER_PATH: &str = "shaders/terrain_material.wgsl";
 
 pub(crate) type TerrainMaterial = ExtendedMaterial<StandardMaterial, TerrainMaterialExtension>;
 
-#[derive(Asset, AsBindGroup, TypePath, Debug, Clone, Default)]
-pub(crate) struct TerrainMaterialExtension {}
+#[derive(Asset, AsBindGroup, TypePath, Debug, Clone)]
+pub(crate) struct TerrainMaterialExtension {
+    #[uniform(100)]
+    pub sky_light_factor: f32,
+}
+
+impl Default for TerrainMaterialExtension {
+    fn default() -> Self {
+        Self {
+            sky_light_factor: 1.0,
+        }
+    }
+}
 
 impl MaterialExtension for TerrainMaterialExtension {
     fn fragment_shader() -> ShaderRef {
