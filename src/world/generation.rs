@@ -89,7 +89,12 @@ pub(crate) fn generate_chunk(
             },
         )
     });
-    let anchored_caves = anchored_cave_region(region.as_ref(), biome_field, biomes);
+    let anchored_caves = anchored_cave_region(
+        region.as_ref(),
+        biome_field,
+        biomes,
+        feature_fields,
+    );
     let columns = sample_generation_columns(
         chunk_origin,
         fluids,
@@ -140,6 +145,7 @@ fn anchored_cave_region(
     region: &GenerationRegion,
     biome_field: &BiomeField,
     biomes: &BiomeRegistry,
+    feature_fields: &WorldFeatureFields,
 ) -> Option<CaveConnectivityRegion> {
     let (minimum, maximum) = generation_region_world_bounds(region.coord);
     let anchors = biome_field
@@ -154,7 +160,11 @@ fn anchored_cave_region(
         .map(|anchor| anchor.position)
         .collect::<Vec<_>>();
 
-    (!anchors.is_empty()).then(|| region.cave_connectivity.with_anchors(&anchors))
+    (!anchors.is_empty()).then(|| {
+        feature_fields
+            .cave_connectivity()
+            .region_with_anchors(&region.cave_connectivity, &anchors)
+    })
 }
 
 fn sample_generation_columns<'a>(
