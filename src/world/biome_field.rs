@@ -30,6 +30,7 @@ struct BiomeFieldEntry {
     size: BiomeSize,
     climate: BiomeClimate,
     vertical_range: Option<BiomeVerticalRange>,
+    priority: i32,
 }
 
 #[derive(Resource)]
@@ -66,6 +67,13 @@ pub struct ResolvedBiomeFieldSample<'a> {
     pub volume: Option<VolumeBiomeFieldSample<'a>>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct VolumeBiomeAnchor<'a> {
+    pub id: &'a str,
+    pub position: Vec3,
+    pub radii: Vec3,
+}
+
 impl BiomeField {
     pub fn from_dimension(
         dimension: &DimensionDefinition,
@@ -92,6 +100,7 @@ impl BiomeField {
                 size: biome.size,
                 climate: biome.climate,
                 vertical_range: biome.vertical_range,
+                priority: biome.priority,
             };
 
             match biome.kind {
@@ -238,9 +247,6 @@ impl BiomeField {
         );
         let climate = self.climate.sample(Vec2::new(position.x, position.z));
         let mut weights = vec![0.0_f32; self.volume_biomes.len()];
-        let mut primary_index = None;
-        let mut primary_strength = 0.0_f32;
-        let mut overlay_strength = 0.0_f32;
 
         for y in -VOLUME_SITE_SEARCH_RADIUS..=VOLUME_SITE_SEARCH_RADIUS {
             for z in -VOLUME_SITE_SEARCH_RADIUS..=VOLUME_SITE_SEARCH_RADIUS {
@@ -266,28 +272,40 @@ impl BiomeField {
                         normalized_ellipsoid_distance(warped - site, radii);
                     let strength = volume_site_strength(normalized_distance);
 
-                    if strength <= 0.0 {
-                        continue;
-                    }
-
-                    weights[candidate_index] = weights[candidate_index].max(strength);
-                    overlay_strength = overlay_strength.max(strength);
-
-                    if strength > primary_strength {
-                        primary_strength = strength;
-                        primary_index = Some(candidate_index);
+                    if strength > 0.0 {
+                        weights[candidate_index] = weights[candidate_index].max(strength);
                     }
                 }
             }
         }
 
-        let primary_index = primary_index?;
+        let winning_priority = weights
+            .iter()
+            .enumerate()
+            .filter_map(|(index, weight)| {
+                (*weight > 0.0).then_some(self.volume_biomes[index].priority)
+            })
+            .max()?;
+
+        for (index, weight) in weights.iter_mut().enumerate() {
+            if self.volume_biomes[index].priority < winning_priority {
+                *weight = 0.0;
+            }
+        }
+
+        let overlay_strength = weights.iter().copied().fold(0.0_f32, f32::max);
         let total_weight: f32 = weights.iter().sum();
 
         if total_weight <= f32::EPSILON {
             return None;
         }
 
+        let primary_index = weights
+            .iter()
+            .enumerate()
+            .filter(|(_, weight)| **weight > 0.0)
+            .max_by(|(_, left), (_, right)| left.total_cmp(right))
+            .map(|(index, _)| index)?;
         let influences = weights
             .into_iter()
             .enumerate()
@@ -306,6 +324,67 @@ impl BiomeField {
         })
     }
 
+    pub(crate) fn volume_anchors_in_bounds(
+        &self,
+        minimum: Vec3,
+        maximum: Vec3,
+    ) -> Vec<VolumeBiomeAnchor<'_>> {
+        let Some(spacing) = self.volume_site_spacing else {
+            return Vec::new();
+        };
+
+        let minimum_cell = IVec3::new(
+            (minimum.x / spacing.x).floor() as i32 - 1,
+            ((minimum.y / spacing.y).floor() as i32 - 1).max(0),
+            (minimum.z / spacing.z).floor() as i32 - 1,
+        );
+        let maximum_cell = IVec3::new(
+            (maximum.x / spacing.x).ceil() as i32 + 1,
+            ((maximum.y / spacing.y).ceil() as i32 + 1).max(0),
+            (maximum.z / spacing.z).ceil() as i32 + 1,
+        );
+        let mut anchors = Vec::new();
+
+        for y in minimum_cell.y..=maximum_cell.y {
+            for z in minimum_cell.z..=maximum_cell.z {
+                for x in minimum_cell.x..=maximum_cell.x {
+                    let cell = IVec3::new(x, y, z);
+                    let site = volume_site_position(cell, spacing, self.seed);
+                    let hash = volume_cell_hash(cell, self.seed);
+                    let climate = self.climate.sample(Vec2::new(site.x, site.z));
+                    let Some(index) = select_volume_biome_index(
+                        site.y,
+                        climate,
+                        hash,
+                        &self.volume_biomes,
+                    ) else {
+                        continue;
+                    };
+                    let radii = volume_site_radii(&self.volume_biomes[index], hash);
+                    let expanded = radii * (1.0 + VOLUME_BORDER_MARGIN);
+                    let site_minimum = site - expanded;
+                    let site_maximum = site + expanded;
+                    let intersects = site_maximum.x >= minimum.x
+                        && site_minimum.x <= maximum.x
+                        && site_maximum.y >= minimum.y
+                        && site_minimum.y <= maximum.y
+                        && site_maximum.z >= minimum.z
+                        && site_minimum.z <= maximum.z;
+
+                    if intersects {
+                        anchors.push(VolumeBiomeAnchor {
+                            id: self.volume_biomes[index].id.as_str(),
+                            position: site,
+                            radii,
+                        });
+                    }
+                }
+            }
+        }
+
+        anchors
+    }
+
     pub fn sample_resolved(&self, position: Vec3) -> ResolvedBiomeFieldSample<'_> {
         let surface = self.sample_surface(Vec2::new(position.x, position.z));
         let volume = self.sample_volume(position);
@@ -317,30 +396,20 @@ impl BiomeField {
                 surface.influences.len() + volume_sample.influences.len(),
             );
 
-            influences.extend(
-                surface
-                    .influences
-                    .iter()
-                    .filter_map(|influence| {
-                        let weight = influence.weight * surface_strength;
-                        (weight > 0.0).then_some(BiomeInfluence {
-                            id: influence.id,
-                            weight,
-                        })
-                    }),
-            );
-            influences.extend(
-                volume_sample
-                    .influences
-                    .iter()
-                    .filter_map(|influence| {
-                        let weight = influence.weight * volume_strength;
-                        (weight > 0.0).then_some(BiomeInfluence {
-                            id: influence.id,
-                            weight,
-                        })
-                    }),
-            );
+            influences.extend(surface.influences.iter().filter_map(|influence| {
+                let weight = influence.weight * surface_strength;
+                (weight > 0.0).then_some(BiomeInfluence {
+                    id: influence.id,
+                    weight,
+                })
+            }));
+            influences.extend(volume_sample.influences.iter().filter_map(|influence| {
+                let weight = influence.weight * volume_strength;
+                (weight > 0.0).then_some(BiomeInfluence {
+                    id: influence.id,
+                    weight,
+                })
+            }));
 
             let primary_id = if volume_strength >= 0.5 {
                 volume_sample.primary_id
@@ -425,13 +494,8 @@ fn select_surface_biome_index(
 
     let climate = climate_field.sample(site);
     let hash = cell_hash(cell, seed);
-    select_weighted_biome_index(
-        biomes,
-        climate,
-        hash,
-        |_| true,
-    )
-    .unwrap_or_else(|| biome_index(cell, biomes.len(), seed))
+    select_weighted_biome_index(biomes, climate, hash, |_| true)
+        .unwrap_or_else(|| biome_index(cell, biomes.len(), seed))
 }
 
 fn select_volume_biome_index(
@@ -440,12 +504,9 @@ fn select_volume_biome_index(
     hash: u64,
     biomes: &[BiomeFieldEntry],
 ) -> Option<usize> {
-    select_weighted_biome_index(
-        biomes,
-        climate,
-        hash,
-        |biome| vertical_range_contains(biome.vertical_range, world_y),
-    )
+    select_weighted_biome_index(biomes, climate, hash, |biome| {
+        vertical_range_contains(biome.vertical_range, world_y)
+    })
 }
 
 fn select_weighted_biome_index(
@@ -720,5 +781,48 @@ mod tests {
             }),
             -1.0,
         ));
+    }
+
+    #[test]
+    fn higher_priority_volume_weights_suppress_lower_priority_weights() {
+        let biomes = [
+            BiomeFieldEntry {
+                id: "low".into(),
+                size: BiomeSize {
+                    x: crate::content::biome::BiomeSizeAxis { min: 1.0, max: 1.0 },
+                    y: Some(crate::content::biome::BiomeSizeAxis { min: 1.0, max: 1.0 }),
+                    z: crate::content::biome::BiomeSizeAxis { min: 1.0, max: 1.0 },
+                },
+                climate: BiomeClimate::default(),
+                vertical_range: None,
+                priority: 0,
+            },
+            BiomeFieldEntry {
+                id: "high".into(),
+                size: BiomeSize {
+                    x: crate::content::biome::BiomeSizeAxis { min: 1.0, max: 1.0 },
+                    y: Some(crate::content::biome::BiomeSizeAxis { min: 1.0, max: 1.0 }),
+                    z: crate::content::biome::BiomeSizeAxis { min: 1.0, max: 1.0 },
+                },
+                climate: BiomeClimate::default(),
+                vertical_range: None,
+                priority: 5,
+            },
+        ];
+        let mut weights = [0.9_f32, 0.4_f32];
+        let winning_priority = weights
+            .iter()
+            .enumerate()
+            .filter_map(|(index, weight)| (*weight > 0.0).then_some(biomes[index].priority))
+            .max()
+            .unwrap();
+
+        for (index, weight) in weights.iter_mut().enumerate() {
+            if biomes[index].priority < winning_priority {
+                *weight = 0.0;
+            }
+        }
+
+        assert_eq!(weights, [0.0, 0.4]);
     }
 }
