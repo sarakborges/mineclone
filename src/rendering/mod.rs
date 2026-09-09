@@ -2,6 +2,7 @@ mod asset_upload;
 pub(crate) mod block_model;
 mod celestial;
 mod celestial_path;
+mod directional_shadows;
 mod environment;
 mod fog;
 mod lighting;
@@ -12,6 +13,7 @@ pub(crate) mod terrain_material;
 use asset_upload::AssetUploadPlugin;
 use bevy::prelude::*;
 use celestial::CelestialPlugin;
+use directional_shadows::DirectionalShadowsPlugin;
 use environment::EnvironmentPlugin;
 use fog::FogPlugin;
 use lighting::LightingPlugin;
@@ -28,6 +30,7 @@ impl Plugin for RenderingPlugin {
                 AssetUploadPlugin,
                 EnvironmentPlugin,
                 LightingPlugin,
+                DirectionalShadowsPlugin,
                 FogPlugin,
                 SkyPlugin,
                 SkyLayersPlugin,
