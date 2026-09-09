@@ -51,6 +51,7 @@ fn directional_sun_visibility(in: VertexOutput) -> f32 {
             in.world_position,
             surface_normal,
             view_z,
+            in.position.xy,
         );
         let incidence = max(
             dot(surface_normal, normalize((*light).direction_to_light)),
