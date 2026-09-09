@@ -9,6 +9,7 @@ use serde::Deserialize;
 static BLOCK_ID_INTERNER: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
 
 #[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BlockTextures {
     pub top: String,
     pub bottom: String,
@@ -19,6 +20,7 @@ pub struct BlockTextures {
 }
 
 #[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BlockDefinition {
     pub id: String,
     pub name: String,
