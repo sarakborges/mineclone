@@ -3,11 +3,16 @@ use crate::content::{
     block::intern_block_id,
 };
 
-use super::biome_field::{BiomeFieldSample, VolumeBiomeFieldSample};
+use super::{
+    biome_field::{BiomeFieldSample, VolumeBiomeFieldSample},
+    geology::GeologyRegion,
+};
 
 pub(crate) fn solid_block_id(
+    position: bevy::prelude::Vec3,
     surface: &BiomeFieldSample<'_>,
     volume: Option<&VolumeBiomeFieldSample<'_>>,
+    geology: &GeologyRegion,
     biomes: &BiomeRegistry,
     fallback: &'static str,
 ) -> &'static str {
@@ -21,6 +26,10 @@ pub(crate) fn solid_block_id(
         ) {
             return intern_block_id(block_id);
         }
+    }
+
+    if let Some(block_id) = geology.solid_block_at(position) {
+        return intern_block_id(block_id);
     }
 
     strongest_material(
