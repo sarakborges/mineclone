@@ -122,6 +122,7 @@ impl BiomeField {
                         volume_minimum_radius.z.max(biome.size.z.min);
                     volume_biomes.push(entry);
                 }
+                BiomeKind::Hydrology => continue,
             }
         }
 
