@@ -13,7 +13,7 @@ mod voxel;
 mod world;
 
 use app::{
-    crash_log::{install_crash_logger, write_caught_panic},
+    crash_log::{install_crash_logger, mark_clean_shutdown, write_caught_panic},
     game_state::GameState,
     pause_state::PauseState,
     runtime_paths::prepare_runtime_directory,
@@ -37,11 +37,12 @@ use world::WorldPlugin;
 fn main() {
     install_crash_logger();
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(run_game));
-
-    if let Err(payload) = result {
-        write_caught_panic(payload.as_ref());
-        std::panic::resume_unwind(payload);
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(run_game)) {
+        Ok(()) => mark_clean_shutdown(),
+        Err(payload) => {
+            write_caught_panic(payload.as_ref());
+            std::panic::resume_unwind(payload);
+        }
     }
 }
 
