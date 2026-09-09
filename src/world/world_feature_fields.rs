@@ -9,7 +9,7 @@ use super::{
     cave_connectivity::CaveConnectivityField,
     generation_region::GenerationRegion,
     geology::GeologyField,
-    hydrology::HydrologyField,
+    hydrology::{HydrologyField, HydrologyRegion},
 };
 
 #[derive(Resource)]
@@ -43,6 +43,16 @@ impl WorldFeatureFields {
     }
 
     pub fn region(&self, coord: IVec3) -> Arc<GenerationRegion> {
+        self.region_with_hydrology(coord, |field| {
+            field.region(IVec2::new(coord.x, coord.z))
+        })
+    }
+
+    pub fn region_with_hydrology(
+        &self,
+        coord: IVec3,
+        hydrology_factory: impl FnOnce(&HydrologyField) -> HydrologyRegion,
+    ) -> Arc<GenerationRegion> {
         if let Some(region) = self
             .region_cache
             .read()
@@ -55,7 +65,7 @@ impl WorldFeatureFields {
 
         let region = Arc::new(GenerationRegion {
             coord,
-            hydrology: self.hydrology.region(IVec2::new(coord.x, coord.z)),
+            hydrology: hydrology_factory(&self.hydrology),
             cave_connectivity: self.cave_connectivity.region(coord),
             geology: self.geology.region(coord),
         });
