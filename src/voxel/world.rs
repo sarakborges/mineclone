@@ -99,6 +99,36 @@ impl VoxelWorld {
         self.chunks.contains_key(&chunk_coord)
     }
 
+    pub(crate) fn highest_loaded_chunk_y(&self) -> i32 {
+        self.chunks.keys().map(|coord| coord.y).max().unwrap_or(0)
+    }
+
+    pub(crate) fn highest_solid_y_in_column(
+        &self,
+        world_x: i32,
+        world_z: i32,
+        max_chunk_y: i32,
+    ) -> Option<i32> {
+        let chunk_size = CHUNK_SIZE as i32;
+        let chunk_x = world_x.div_euclid(chunk_size);
+        let chunk_z = world_z.div_euclid(chunk_size);
+        let local_x = world_x.rem_euclid(chunk_size);
+        let local_z = world_z.rem_euclid(chunk_size);
+
+        for chunk_y in (0..=max_chunk_y).rev() {
+            let Some(chunk) = self.chunks.get(&IVec3::new(chunk_x, chunk_y, chunk_z)) else {
+                continue;
+            };
+            let Some(local_y) = chunk.highest_solid_y(local_x, local_z) else {
+                continue;
+            };
+
+            return Some(chunk_y * chunk_size + local_y);
+        }
+
+        None
+    }
+
     pub fn set_block_at(
         &mut self,
         world_position: IVec3,
