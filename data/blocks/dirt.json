@@ -1,0 +1,13 @@
+{
+  "id": "mineclone:dirt",
+  "name": "Dirt",
+  "textures": {
+    "top": "textures/blocks/grass/bottom.png",
+    "bottom": "textures/blocks/grass/bottom.png",
+    "left": "textures/blocks/grass/bottom.png",
+    "right": "textures/blocks/grass/bottom.png",
+    "front": "textures/blocks/grass/bottom.png",
+    "back": "textures/blocks/grass/bottom.png"
+  },
+  "rotateTexture": true
+}
