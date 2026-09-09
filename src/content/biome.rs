@@ -96,8 +96,6 @@ pub struct BiomeDefinition {
     pub density_modifier: Option<BiomeDensityModifier>,
     #[serde(default)]
     pub solid_block: Option<String>,
-    #[serde(default)]
-    pub surface_fluid: Option<String>,
     pub visuals: BiomeVisuals,
 }
 
