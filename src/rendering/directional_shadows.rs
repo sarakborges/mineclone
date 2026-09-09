@@ -34,7 +34,7 @@ impl Plugin for DirectionalShadowsPlugin {
         })
         .add_systems(OnEnter(GameState::Gameplay), spawn_sun_shadow_light)
         .add_systems(
-            PostUpdate,
+            Update,
             update_sun_shadow_light.run_if(in_state(GameState::Gameplay)),
         );
     }
