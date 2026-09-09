@@ -19,7 +19,7 @@ const SHADOW_CASCADE_OVERLAP: f32 = 0.20;
 const SHADOW_DEPTH_BIAS: f32 = 0.02;
 const SHADOW_NORMAL_BIAS: f32 = 0.0;
 const MIN_AMBIENT_BRIGHTNESS: f32 = 30.0;
-const MAX_AMBIENT_BRIGHTNESS: f32 = 100.0;
+const MAX_AMBIENT_BRIGHTNESS: f32 = 220.0;
 const DAYLIGHT_REFERENCE_ILLUMINANCE: f32 = 40_000.0;
 
 pub struct LightingPlugin;
@@ -77,10 +77,11 @@ fn update_sky_light(
 ) {
     let daylight =
         (visuals.light_illuminance / DAYLIGHT_REFERENCE_ILLUMINANCE).clamp(0.0, 1.0);
+    let ambient_daylight = daylight.sqrt();
 
     ambient_light.color = visuals.light_color;
-    ambient_light.brightness =
-        MIN_AMBIENT_BRIGHTNESS + (MAX_AMBIENT_BRIGHTNESS - MIN_AMBIENT_BRIGHTNESS) * daylight;
+    ambient_light.brightness = MIN_AMBIENT_BRIGHTNESS
+        + (MAX_AMBIENT_BRIGHTNESS - MIN_AMBIENT_BRIGHTNESS) * ambient_daylight;
     sky_light.color = visuals.light_color;
     sky_light.illuminance = visuals.light_illuminance;
 }
