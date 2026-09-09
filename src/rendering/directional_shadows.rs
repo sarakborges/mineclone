@@ -22,7 +22,7 @@ use super::celestial_path::celestial_direction;
 
 const SHADOW_MAP_SIZE: usize = 2048;
 const FIRST_CASCADE_FAR_BOUND: f32 = CHUNK_SIZE as f32;
-const MAXIMUM_SHADOW_DISTANCE: f32 = (MAX_RENDER_DISTANCE_CHUNKS * CHUNK_SIZE as i32) as f32;
+const MAXIMUM_SHADOW_DISTANCE: f32 = ((MAX_RENDER_DISTANCE_CHUNKS + 1) * CHUNK_SIZE as i32) as f32;
 const BASE_SUN_ILLUMINANCE: f32 = 10_000.0;
 
 pub struct DirectionalShadowsPlugin;
@@ -129,6 +129,6 @@ mod tests {
         let rotation = shadow_light_rotation(sun_direction);
         let light_forward = rotation * Vec3::NEG_Z;
 
-        assert!(light_forward.abs_diff_eq(-sun_direction, 0.0001));
+        assert!((light_forward + sun_direction).length() <= 0.0001);
     }
 }
