@@ -24,7 +24,7 @@ use super::{
     terrain::{build_chunk, chunk_y_bounds},
 };
 
-const CHUNKS_PER_FRAME: usize = 4;
+const CHUNKS_PER_FRAME: usize = 2;
 
 #[derive(Resource, Default)]
 pub struct ChunkStreamingState {

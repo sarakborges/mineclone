@@ -7,6 +7,7 @@ use super::{
     chunk::{VoxelChunk, CHUNK_SIZE},
     chunk_archive::ArchivedChunk,
     fluid::FluidCell,
+    skylight::relight_chunk_and_neighbors,
 };
 
 #[derive(Resource, Default)]
@@ -26,6 +27,7 @@ impl VoxelWorld {
 
         self.generated_chunks.insert(coord);
         self.chunks.insert(coord, chunk);
+        relight_chunk_and_neighbors(self, coord);
     }
 
     pub fn chunk(&self, coord: IVec3) -> Option<&VoxelChunk> {
@@ -34,6 +36,14 @@ impl VoxelWorld {
         }
 
         self.chunks.get(&coord)
+    }
+
+    pub(crate) fn chunk_mut(&mut self, coord: IVec3) -> Option<&mut VoxelChunk> {
+        if coord.y < 0 {
+            return None;
+        }
+
+        self.chunks.get_mut(&coord)
     }
 
     pub fn archive_chunk(&mut self, coord: IVec3) {
@@ -55,6 +65,7 @@ impl VoxelWorld {
         };
 
         self.chunks.insert(coord, archived.restore());
+        relight_chunk_and_neighbors(self, coord);
         true
     }
 
@@ -88,6 +99,19 @@ impl VoxelWorld {
             local_position.y,
             local_position.z,
         )
+    }
+
+    pub(crate) fn skylight_at(&self, world_position: IVec3) -> u8 {
+        if world_position.y < 0 {
+            return 0;
+        }
+
+        let (chunk_coord, local_position) = split_world_position(world_position);
+        let Some(chunk) = self.chunks.get(&chunk_coord) else {
+            return 0;
+        };
+
+        chunk.skylight_at(local_position.x, local_position.y, local_position.z)
     }
 
     pub fn is_loaded_at(&self, world_position: IVec3) -> bool {
@@ -139,17 +163,21 @@ impl VoxelWorld {
         }
 
         let (chunk_coord, local_position) = split_world_position(world_position);
-        let chunk = self.chunks.get_mut(&chunk_coord)?;
-        let x = local_position.x as usize;
-        let y = local_position.y as usize;
-        let z = local_position.z as usize;
 
-        chunk.set_block(x, y, z, block);
+        {
+            let chunk = self.chunks.get_mut(&chunk_coord)?;
+            let x = local_position.x as usize;
+            let y = local_position.y as usize;
+            let z = local_position.z as usize;
 
-        if block.is_some() {
-            chunk.set_fluid(x, y, z, None);
+            chunk.set_block(x, y, z, block);
+
+            if block.is_some() {
+                chunk.set_fluid(x, y, z, None);
+            }
         }
 
+        relight_chunk_and_neighbors(self, chunk_coord);
         Some(chunk_coord)
     }
 

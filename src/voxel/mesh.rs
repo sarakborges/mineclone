@@ -1,7 +1,5 @@
 mod face;
 
-use std::collections::HashMap;
-
 use bevy::{
     asset::RenderAssetUsages,
     mesh::Indices,
@@ -17,17 +15,16 @@ use super::{
 };
 
 const TOP_SHADE: f32 = 1.0;
-const BOTTOM_SHADE: f32 = 0.78;
-const EAST_SHADE: f32 = 0.94;
+const BOTTOM_SHADE: f32 = 0.82;
+const EAST_SHADE: f32 = 0.92;
 const WEST_SHADE: f32 = 0.88;
-const SOUTH_SHADE: f32 = 0.92;
-const NORTH_SHADE: f32 = 0.86;
-const SIDE_NORMAL_HORIZONTAL: f32 = 0.8;
-const SIDE_NORMAL_UP: f32 = 0.6;
-const SKY_LIGHT_SEARCH_RADIUS: i32 = 4;
-const SKY_LIGHT_LATERAL_ATTENUATION: f32 = 0.18;
-const ENCLOSED_SKY_LIGHT: f32 = 0.08;
-const SKY_LIGHT_DIRECTIONS: [IVec3; 4] = [IVec3::X, IVec3::NEG_X, IVec3::Z, IVec3::NEG_Z];
+const SOUTH_SHADE: f32 = 0.94;
+const NORTH_SHADE: f32 = 0.90;
+
+const LIGHT_BRIGHTNESS: [f32; 16] = [
+    0.035, 0.044, 0.055, 0.069, 0.086, 0.107, 0.134, 0.168, 0.210, 0.262, 0.328,
+    0.410, 0.512, 0.640, 0.800, 1.000,
+];
 
 #[derive(Clone, Copy)]
 pub enum BlockFace {
@@ -112,9 +109,6 @@ where
     let mut bottom = MeshBuffers::default();
     let mut front = MeshBuffers::default();
     let mut back = MeshBuffers::default();
-    let mut sky_heights = HashMap::new();
-    let mut skylight_cache = HashMap::new();
-    let max_loaded_chunk_y = world.highest_loaded_chunk_y();
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_origin = chunk_coord * chunk_size;
 
@@ -138,34 +132,22 @@ where
                 if !world.is_solid(world_voxel + IVec3::X) {
                     right.push(
                         [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]],
-                        [SIDE_NORMAL_HORIZONTAL, SIDE_NORMAL_UP, 0.0],
+                        [1.0, 0.0, 0.0],
                         TextureRotation::default(),
                         grass_tint,
                         EAST_SHADE,
-                        skylight_at(
-                            world,
-                            &mut sky_heights,
-                            &mut skylight_cache,
-                            max_loaded_chunk_y,
-                            world_voxel + IVec3::X,
-                        ),
+                        skylight_brightness(world, world_voxel + IVec3::X),
                     );
                 }
 
                 if !world.is_solid(world_voxel - IVec3::X) {
                     left.push(
                         [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]],
-                        [-SIDE_NORMAL_HORIZONTAL, SIDE_NORMAL_UP, 0.0],
+                        [-1.0, 0.0, 0.0],
                         TextureRotation::default(),
                         grass_tint,
                         WEST_SHADE,
-                        skylight_at(
-                            world,
-                            &mut sky_heights,
-                            &mut skylight_cache,
-                            max_loaded_chunk_y,
-                            world_voxel - IVec3::X,
-                        ),
+                        skylight_brightness(world, world_voxel - IVec3::X),
                     );
                 }
 
@@ -176,13 +158,7 @@ where
                         cell.texture_rotation,
                         grass_tint,
                         TOP_SHADE,
-                        skylight_at(
-                            world,
-                            &mut sky_heights,
-                            &mut skylight_cache,
-                            max_loaded_chunk_y,
-                            world_voxel + IVec3::Y,
-                        ),
+                        skylight_brightness(world, world_voxel + IVec3::Y),
                     );
                 }
 
@@ -193,47 +169,29 @@ where
                         cell.texture_rotation,
                         grass_tint,
                         BOTTOM_SHADE,
-                        skylight_at(
-                            world,
-                            &mut sky_heights,
-                            &mut skylight_cache,
-                            max_loaded_chunk_y,
-                            world_voxel - IVec3::Y,
-                        ),
+                        skylight_brightness(world, world_voxel - IVec3::Y),
                     );
                 }
 
                 if !world.is_solid(world_voxel + IVec3::Z) {
                     front.push(
                         [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]],
-                        [0.0, SIDE_NORMAL_UP, SIDE_NORMAL_HORIZONTAL],
+                        [0.0, 0.0, 1.0],
                         TextureRotation::default(),
                         grass_tint,
                         SOUTH_SHADE,
-                        skylight_at(
-                            world,
-                            &mut sky_heights,
-                            &mut skylight_cache,
-                            max_loaded_chunk_y,
-                            world_voxel + IVec3::Z,
-                        ),
+                        skylight_brightness(world, world_voxel + IVec3::Z),
                     );
                 }
 
                 if !world.is_solid(world_voxel - IVec3::Z) {
                     back.push(
                         [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]],
-                        [0.0, SIDE_NORMAL_UP, -SIDE_NORMAL_HORIZONTAL],
+                        [0.0, 0.0, -1.0],
                         TextureRotation::default(),
                         grass_tint,
                         NORTH_SHADE,
-                        skylight_at(
-                            world,
-                            &mut sky_heights,
-                            &mut skylight_cache,
-                            max_loaded_chunk_y,
-                            world_voxel - IVec3::Z,
-                        ),
+                        skylight_brightness(world, world_voxel - IVec3::Z),
                     );
                 }
             }
@@ -257,57 +215,6 @@ where
     .collect()
 }
 
-fn skylight_at(
-    world: &VoxelWorld,
-    sky_heights: &mut HashMap<IVec2, i32>,
-    skylight_cache: &mut HashMap<IVec3, f32>,
-    max_loaded_chunk_y: i32,
-    air_cell: IVec3,
-) -> f32 {
-    if let Some(&cached) = skylight_cache.get(&air_cell) {
-        return cached;
-    }
-
-    let light = if open_to_sky(world, sky_heights, max_loaded_chunk_y, air_cell) {
-        1.0
-    } else {
-        let mut propagated = ENCLOSED_SKY_LIGHT;
-
-        'directions: for direction in SKY_LIGHT_DIRECTIONS {
-            for distance in 1..=SKY_LIGHT_SEARCH_RADIUS {
-                let sample = air_cell + direction * distance;
-
-                if !world.is_loaded_at(sample) || world.is_solid(sample) {
-                    continue 'directions;
-                }
-
-                if open_to_sky(world, sky_heights, max_loaded_chunk_y, sample) {
-                    propagated = (1.0 - distance as f32 * SKY_LIGHT_LATERAL_ATTENUATION)
-                        .max(ENCLOSED_SKY_LIGHT);
-                    break 'directions;
-                }
-            }
-        }
-
-        propagated
-    };
-
-    skylight_cache.insert(air_cell, light);
-    light
-}
-
-fn open_to_sky(
-    world: &VoxelWorld,
-    sky_heights: &mut HashMap<IVec2, i32>,
-    max_loaded_chunk_y: i32,
-    air_cell: IVec3,
-) -> bool {
-    let column = IVec2::new(air_cell.x, air_cell.z);
-    let highest_solid = *sky_heights.entry(column).or_insert_with(|| {
-        world
-            .highest_solid_y_in_column(column.x, column.y, max_loaded_chunk_y)
-            .unwrap_or(-1)
-    });
-
-    air_cell.y > highest_solid
+fn skylight_brightness(world: &VoxelWorld, air_cell: IVec3) -> f32 {
+    LIGHT_BRIGHTNESS[world.skylight_at(air_cell).min(15) as usize]
 }

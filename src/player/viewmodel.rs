@@ -11,8 +11,8 @@ use crate::{
 
 use super::{camera::GameplayCamera, hotbar::PlayerHotbar};
 
-const ARM_SIZE: Vec3 = Vec3::new(0.20, 0.70, 0.20);
-const HELD_BLOCK_SCALE: f32 = 0.23;
+const ARM_SIZE: Vec3 = Vec3::new(0.22, 0.82, 0.22);
+const HELD_BLOCK_SCALE: f32 = 0.18;
 const BREAK_ANIMATION_DURATION: f32 = 0.22;
 const PLACE_ANIMATION_DURATION: f32 = 0.16;
 
@@ -93,11 +93,12 @@ fn spawn_viewmodel(
                     Visibility::Visible,
                 ))
                 .with_children(|viewmodel| {
+                    // The root sits just off the lower-right edge. The arm extends upward
+                    // from it, so its top acts as the hand instead of floating independently.
                     viewmodel.spawn((
                         Mesh3d(arm_mesh.clone()),
                         MeshMaterial3d(arm_material.clone()),
-                        Transform::from_translation(Vec3::new(0.10, -0.15, 0.05))
-                            .with_rotation(Quat::from_rotation_z(-0.22)),
+                        Transform::from_translation(Vec3::new(0.0, ARM_SIZE.y * 0.5, 0.0)),
                         NotShadowCaster,
                     ));
 
@@ -106,8 +107,8 @@ fn spawn_viewmodel(
                             HeldBlockRoot {
                                 block_id: selected_block_id,
                             },
-                            Transform::from_translation(Vec3::new(-0.08, 0.14, -0.14))
-                                .with_rotation(Quat::from_euler(EulerRot::XYZ, 0.16, -0.52, 0.04))
+                            Transform::from_translation(Vec3::new(-0.03, ARM_SIZE.y - 0.04, -0.06))
+                                .with_rotation(Quat::from_euler(EulerRot::XYZ, 0.18, -0.62, -0.10))
                                 .with_scale(Vec3::splat(HELD_BLOCK_SCALE)),
                             if selected_block_id.is_some() {
                                 Visibility::Visible
@@ -244,6 +245,6 @@ fn animate_viewmodel(
 }
 
 fn base_viewmodel_transform() -> Transform {
-    Transform::from_translation(Vec3::new(0.52, -0.40, -0.80))
-        .with_rotation(Quat::from_euler(EulerRot::XYZ, -0.18, -0.18, 0.10))
+    Transform::from_translation(Vec3::new(0.62, -0.72, -0.92))
+        .with_rotation(Quat::from_euler(EulerRot::XYZ, -0.10, -0.08, 0.20))
 }
