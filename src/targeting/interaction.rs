@@ -68,11 +68,6 @@ fn edit_targeted_block(
         return;
     }
 
-    let selected_block = hotbar.item_at(hotbar.selected_slot());
-    if place_pressed && selected_block.is_none() {
-        return;
-    }
-
     let Some(hit) = targeted.0 else {
         return;
     };
@@ -80,15 +75,15 @@ fn edit_targeted_block(
     let (edited_chunk, edited_voxel, placed) = if break_pressed {
         (world.set_block_at(hit.voxel, None), hit.voxel, false)
     } else {
-        let Some(block_id) = selected_block else {
+        let Some(block_id) = hotbar.item_at(hotbar.selected_slot()) else {
             return;
         };
         let Some(voxel) = placement_voxel(hit, &world, player.translation) else {
             return;
         };
-        blocks
-            .get(block_id)
-            .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
+        if blocks.get(block_id).is_none() {
+            return;
+        }
 
         (
             world.set_block_at(
