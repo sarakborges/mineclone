@@ -49,6 +49,10 @@ impl BlockRegistry {
     pub fn static_id(&self, id: &str) -> Option<&'static str> {
         self.static_ids.get(id).copied()
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &BlockDefinition> {
+        self.definitions.values()
+    }
 }
 
 pub(crate) fn intern_block_id(id: &str) -> &'static str {
