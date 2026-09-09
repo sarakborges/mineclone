@@ -147,9 +147,11 @@ fn anchored_cave_region(
     biomes: &BiomeRegistry,
     feature_fields: &WorldFeatureFields,
 ) -> Option<CaveConnectivityRegion> {
+    let cave_field = feature_fields.cave_connectivity();
     let (minimum, maximum) = generation_region_world_bounds(region.coord);
+    let margin = Vec3::splat(cave_field.anchor_search_margin());
     let anchors = biome_field
-        .volume_anchors_in_bounds(minimum, maximum)
+        .volume_anchors_in_bounds(minimum - margin, maximum + margin)
         .into_iter()
         .filter(|anchor| {
             let biome = biomes
@@ -160,11 +162,7 @@ fn anchored_cave_region(
         .map(|anchor| anchor.position)
         .collect::<Vec<_>>();
 
-    (!anchors.is_empty()).then(|| {
-        feature_fields
-            .cave_connectivity()
-            .region_with_anchors(&region.cave_connectivity, &anchors)
-    })
+    (anchors.len() >= 2).then(|| cave_field.region_from_anchors(region.coord, &anchors))
 }
 
 fn sample_generation_columns<'a>(
