@@ -58,4 +58,22 @@ mod tests {
         assert_eq!(hydrology.lake_chance_multiplier, 1.0);
         assert_eq!(hydrology.river_width_multiplier, 1.0);
     }
+
+    #[test]
+    fn hydrology_uses_readable_camel_case_json_fields() {
+        let hydrology: BiomeHydrology = serde_json::from_str(
+            r#"{
+                "canGenerateLake": false,
+                "canGenerateRiver": true,
+                "lakeChanceMultiplier": 0.25,
+                "riverWidthMultiplier": 1.5
+            }"#,
+        )
+        .unwrap();
+
+        assert!(!hydrology.can_generate_lake);
+        assert!(hydrology.can_generate_river);
+        assert_eq!(hydrology.lake_chance_multiplier, 0.25);
+        assert_eq!(hydrology.river_width_multiplier, 1.5);
+    }
 }
