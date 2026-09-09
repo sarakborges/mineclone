@@ -113,6 +113,7 @@ where
     let mut front = MeshBuffers::default();
     let mut back = MeshBuffers::default();
     let mut sky_heights = HashMap::new();
+    let mut skylight_cache = HashMap::new();
     let max_loaded_chunk_y = world.highest_loaded_chunk_y();
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_origin = chunk_coord * chunk_size;
@@ -144,6 +145,7 @@ where
                         skylight_at(
                             world,
                             &mut sky_heights,
+                            &mut skylight_cache,
                             max_loaded_chunk_y,
                             world_voxel + IVec3::X,
                         ),
@@ -160,6 +162,7 @@ where
                         skylight_at(
                             world,
                             &mut sky_heights,
+                            &mut skylight_cache,
                             max_loaded_chunk_y,
                             world_voxel - IVec3::X,
                         ),
@@ -176,6 +179,7 @@ where
                         skylight_at(
                             world,
                             &mut sky_heights,
+                            &mut skylight_cache,
                             max_loaded_chunk_y,
                             world_voxel + IVec3::Y,
                         ),
@@ -192,6 +196,7 @@ where
                         skylight_at(
                             world,
                             &mut sky_heights,
+                            &mut skylight_cache,
                             max_loaded_chunk_y,
                             world_voxel - IVec3::Y,
                         ),
@@ -208,6 +213,7 @@ where
                         skylight_at(
                             world,
                             &mut sky_heights,
+                            &mut skylight_cache,
                             max_loaded_chunk_y,
                             world_voxel + IVec3::Z,
                         ),
@@ -224,6 +230,7 @@ where
                         skylight_at(
                             world,
                             &mut sky_heights,
+                            &mut skylight_cache,
                             max_loaded_chunk_y,
                             world_voxel - IVec3::Z,
                         ),
@@ -253,29 +260,40 @@ where
 fn skylight_at(
     world: &VoxelWorld,
     sky_heights: &mut HashMap<IVec2, i32>,
+    skylight_cache: &mut HashMap<IVec3, f32>,
     max_loaded_chunk_y: i32,
     air_cell: IVec3,
 ) -> f32 {
-    if open_to_sky(world, sky_heights, max_loaded_chunk_y, air_cell) {
-        return 1.0;
+    if let Some(&cached) = skylight_cache.get(&air_cell) {
+        return cached;
     }
 
-    for distance in 1..=SKY_LIGHT_SEARCH_RADIUS {
-        for direction in SKY_LIGHT_DIRECTIONS {
-            let sample = air_cell + direction * distance;
+    let light = if open_to_sky(world, sky_heights, max_loaded_chunk_y, air_cell) {
+        1.0
+    } else {
+        let mut propagated = ENCLOSED_SKY_LIGHT;
 
-            if !world.is_loaded_at(sample) || world.is_solid(sample) {
-                continue;
-            }
+        'directions: for direction in SKY_LIGHT_DIRECTIONS {
+            for distance in 1..=SKY_LIGHT_SEARCH_RADIUS {
+                let sample = air_cell + direction * distance;
 
-            if open_to_sky(world, sky_heights, max_loaded_chunk_y, sample) {
-                return (1.0 - distance as f32 * SKY_LIGHT_LATERAL_ATTENUATION)
-                    .max(ENCLOSED_SKY_LIGHT);
+                if !world.is_loaded_at(sample) || world.is_solid(sample) {
+                    continue 'directions;
+                }
+
+                if open_to_sky(world, sky_heights, max_loaded_chunk_y, sample) {
+                    propagated = (1.0 - distance as f32 * SKY_LIGHT_LATERAL_ATTENUATION)
+                        .max(ENCLOSED_SKY_LIGHT);
+                    break 'directions;
+                }
             }
         }
-    }
 
-    ENCLOSED_SKY_LIGHT
+        propagated
+    };
+
+    skylight_cache.insert(air_cell, light);
+    light
 }
 
 fn open_to_sky(
