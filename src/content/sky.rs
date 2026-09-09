@@ -6,6 +6,7 @@ use serde::Deserialize;
 use super::{color::Rgb, day_night_phase::DayNightPhase};
 
 #[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CelestialBodyDefinition {
     pub texture: Option<String>,
     pub size: f32,
@@ -19,6 +20,7 @@ pub struct CelestialBodyDefinition {
 }
 
 #[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SkyDefinition {
     pub id: String,
     pub sun: CelestialBodyDefinition,
