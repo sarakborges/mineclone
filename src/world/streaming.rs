@@ -20,16 +20,17 @@ use super::{
         TerrainMaterials,
     },
     dimension::CurrentDimension,
-    render_distance::{chunk_coords_in_cylinder, RenderDistanceSettings},
-    terrain::{build_chunk, chunk_y_bounds},
+    generation::generate_chunk,
+    render_distance::{chunk_coords_in_volume, RenderDistanceSettings},
 };
 
 const CHUNKS_PER_FRAME: usize = 2;
 
 #[derive(Resource, Default)]
 pub struct ChunkStreamingState {
-    center: Option<IVec2>,
-    render_distance: i32,
+    center: Option<IVec3>,
+    horizontal_render_distance: i32,
+    vertical_render_distance: i32,
     pending: VecDeque<IVec3>,
 }
 
@@ -59,18 +60,20 @@ pub fn stream_chunks(
         .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = split_dimension_position(feet_position).chunk;
-    let center = IVec2::new(player_chunk.x, player_chunk.z);
-    let radius = render_distance.chunks();
-    let (min_chunk_y, max_chunk_y) = chunk_y_bounds(dimension, &biomes);
+    let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
+    let horizontal_radius = render_distance.chunks();
+    let vertical_radius = render_distance.vertical_chunks();
 
-    if streaming.center != Some(center) || streaming.render_distance != radius {
+    if streaming.center != Some(center)
+        || streaming.horizontal_render_distance != horizontal_radius
+        || streaming.vertical_render_distance != vertical_radius
+    {
         rebuild_queue(
             &mut streaming,
             &render_pool,
             center,
-            radius,
-            min_chunk_y,
-            max_chunk_y,
+            horizontal_radius,
+            vertical_radius,
         );
     }
 
@@ -89,7 +92,7 @@ pub fn stream_chunks(
                 "generated chunk must be resident or archived: {coord:?}"
             );
         } else {
-            let chunk = build_chunk(
+            let chunk = generate_chunk(
                 coord,
                 &blocks,
                 &fluids,
@@ -132,21 +135,15 @@ pub fn stream_chunks(
 fn rebuild_queue(
     streaming: &mut ChunkStreamingState,
     render_pool: &ChunkRenderPool,
-    center: IVec2,
-    radius: i32,
-    min_chunk_y: i32,
-    max_chunk_y: i32,
+    center: IVec3,
+    horizontal_radius: i32,
+    vertical_radius: i32,
 ) {
-    let center_3d = IVec3::new(center.x, min_chunk_y, center.y);
-    let coords = chunk_coords_in_cylinder(
-        center_3d,
-        radius,
-        min_chunk_y,
-        max_chunk_y,
-    );
+    let coords = chunk_coords_in_volume(center, horizontal_radius, vertical_radius);
 
     streaming.center = Some(center);
-    streaming.render_distance = radius;
+    streaming.horizontal_render_distance = horizontal_radius;
+    streaming.vertical_render_distance = vertical_radius;
     streaming.pending = coords
         .into_iter()
         .filter(|coord| !render_pool.contains(*coord))

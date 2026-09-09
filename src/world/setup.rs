@@ -11,7 +11,11 @@ use crate::{
     },
     rendering::terrain_material::{TerrainMaterial, TerrainMaterialExtension},
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
-    voxel::{coordinates::split_dimension_position, world::VoxelWorld},
+    voxel::{
+        chunk::CHUNK_SIZE,
+        coordinates::split_dimension_position,
+        world::VoxelWorld,
+    },
 };
 
 use super::{
@@ -21,8 +25,9 @@ use super::{
         TerrainMaterials,
     },
     dimension::CurrentDimension,
-    render_distance::chunk_coords_in_cylinder,
-    terrain::{build_chunk, chunk_y_bounds},
+    generation::generate_chunk,
+    render_distance::chunk_coords_in_volume,
+    terrain::surface_height,
     InMemoryWorldSave,
     WorldLoadMode,
     WorldSeed,
@@ -30,6 +35,7 @@ use super::{
 
 const GRASS_BLOCK_ID: &str = "mineclone:grass";
 const INITIAL_HORIZONTAL_RADIUS_CHUNKS: i32 = 5;
+const INITIAL_VERTICAL_RADIUS_CHUNKS: i32 = 4;
 const INITIAL_CHUNKS_PER_FRAME: usize = 4;
 
 #[derive(Resource)]
@@ -112,22 +118,21 @@ pub fn begin_world_loading(
     };
     drop(create_material);
     let fluid_materials = FluidMaterials::from_registry(fluids_ref, &mut standard_materials);
-    let (min_chunk_y, max_chunk_y) = chunk_y_bounds(dimension, biomes_ref);
     let initial_center = if *load_mode == WorldLoadMode::Load {
         save.player_position()
             .map(|position| {
                 let chunk = split_dimension_position(position).chunk;
-                IVec2::new(chunk.x, chunk.z)
+                IVec3::new(chunk.x, chunk.y.max(0), chunk.z)
             })
-            .unwrap_or(IVec2::ZERO)
+            .unwrap_or(IVec3::ZERO)
     } else {
-        IVec2::ZERO
+        let surface_y = surface_height(IVec2::ZERO, dimension, biomes_ref, &biome_field);
+        IVec3::new(0, surface_y.div_euclid(CHUNK_SIZE as i32), 0)
     };
-    let coords = chunk_coords_in_cylinder(
-        IVec3::new(initial_center.x, min_chunk_y, initial_center.y),
+    let coords = chunk_coords_in_volume(
+        initial_center,
         INITIAL_HORIZONTAL_RADIUS_CHUNKS,
-        min_chunk_y,
-        max_chunk_y,
+        INITIAL_VERTICAL_RADIUS_CHUNKS,
     );
 
     match *load_mode {
@@ -201,7 +206,7 @@ pub fn setup_world(
                 "generated chunk must be resident or archived: {coord:?}"
             );
         } else {
-            let chunk = build_chunk(
+            let chunk = generate_chunk(
                 coord,
                 &blocks,
                 &fluids,

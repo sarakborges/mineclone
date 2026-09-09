@@ -20,14 +20,19 @@ pub fn unload_chunk_meshes(
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = split_dimension_position(feet_position).chunk;
-    let radius = render_distance.chunks();
-    let radius_squared = radius * radius;
+    let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
+    let horizontal_radius = render_distance.chunks();
+    let vertical_radius = render_distance.vertical_chunks();
+    let horizontal_radius_squared = horizontal_radius * horizontal_radius;
     let to_unload = render_pool
         .active_coords()
         .filter(|coord| {
-            let dx = coord.x - player_chunk.x;
-            let dz = coord.z - player_chunk.z;
-            dx * dx + dz * dz > radius_squared
+            let delta = *coord - center;
+            let outside_horizontal =
+                delta.x * delta.x + delta.z * delta.z > horizontal_radius_squared;
+            let outside_vertical = delta.y.abs() > vertical_radius;
+
+            outside_horizontal || outside_vertical
         })
         .collect::<Vec<_>>();
 
