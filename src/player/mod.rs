@@ -68,6 +68,7 @@ fn spawn_player(
 
     commands.spawn((
         Camera3d::default(),
+        Msaa::Off,
         Transform::from_translation(translation),
         GameplayCamera::default(),
         WalkingState::default(),
