@@ -5,6 +5,7 @@ use serde::Deserialize;
 
 use super::{
     biome_density::BiomeDensityModifier,
+    biome_hydrology::BiomeHydrology,
     biome_sky_layer::BiomeSkyLayerVisuals,
     biome_terrain::BiomeTerrain,
     color::Rgb,
@@ -20,12 +21,14 @@ pub enum BiomeKind {
 }
 
 #[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BiomeSizeAxis {
     pub min: f32,
     pub max: f32,
 }
 
 #[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BiomeSize {
     pub x: BiomeSizeAxis,
     pub z: BiomeSizeAxis,
@@ -34,12 +37,14 @@ pub struct BiomeSize {
 }
 
 #[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BiomeClimateRange {
     pub min: f32,
     pub max: f32,
 }
 
 #[derive(Clone, Copy, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BiomeClimate {
     #[serde(default)]
     pub temperature: Option<BiomeClimateRange>,
@@ -52,18 +57,21 @@ pub struct BiomeClimate {
 }
 
 #[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BiomeVerticalRange {
     pub min: f32,
     pub max: f32,
 }
 
 #[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BiomeUnderwaterTint {
     pub color: Rgb,
     pub opacity: f32,
 }
 
 #[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BiomeVisuals {
     pub sky_color: DayNightPhases<Rgb>,
     pub fog_color: DayNightPhases<Rgb>,
@@ -78,6 +86,7 @@ pub struct BiomeVisuals {
 }
 
 #[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BiomeDefinition {
     pub id: String,
     pub name: String,
@@ -96,6 +105,8 @@ pub struct BiomeDefinition {
     pub density_modifier: Option<BiomeDensityModifier>,
     #[serde(default)]
     pub solid_block: Option<String>,
+    #[serde(default)]
+    pub hydrology: BiomeHydrology,
     pub visuals: BiomeVisuals,
 }
 
@@ -122,7 +133,7 @@ impl BiomeRegistry {
                 );
                 assert!(
                     definition.density_modifier.is_none(),
-                    "surface biome {} cannot define a volume density modifier",
+                    "surface biome {} cannot define a volume densityModifier",
                     definition.id
                 );
                 assert_eq!(
@@ -143,17 +154,18 @@ impl BiomeRegistry {
         if let Some(range) = definition.vertical_range {
             assert!(
                 range.min >= 0.0,
-                "biome {} vertical_range.min cannot be negative",
+                "biome {} verticalRange.min cannot be negative",
                 definition.id
             );
             assert!(
                 range.max >= range.min,
-                "biome {} vertical_range.max must be greater than or equal to min",
+                "biome {} verticalRange.max must be greater than or equal to min",
                 definition.id
             );
         }
 
         validate_climate(&definition.id, definition.climate);
+        definition.hydrology.validate(&definition.id);
 
         assert!(
             (0.0..=1.0).contains(&definition.visuals.stars.density),
@@ -167,7 +179,7 @@ impl BiomeRegistry {
         );
         assert!(
             (0.0..=1.0).contains(&definition.visuals.underwater_tint.opacity),
-            "biome {} underwater tint opacity must be between 0 and 1",
+            "biome {} underwaterTint opacity must be between 0 and 1",
             definition.id
         );
 
