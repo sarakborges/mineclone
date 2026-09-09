@@ -100,7 +100,7 @@ fn compare_position(left: &Vec3, right: &Vec3) -> std::cmp::Ordering {
 }
 
 fn anchor_pair_hash(left: Vec3, right: Vec3, seed: u64) -> u64 {
-    let (first, second) = if compare_position(&left, &right).is_le() {
+    let (first, second) = if compare_position(&left, &right) != std::cmp::Ordering::Greater {
         (left, right)
     } else {
         (right, left)
@@ -198,5 +198,22 @@ mod tests {
             anchor_pair_hash(left, right, seed),
             anchor_pair_hash(right, left, seed),
         );
+    }
+
+    #[test]
+    fn connector_geometry_does_not_depend_on_requesting_region() {
+        let field = CaveConnectivityField::new(42);
+        let anchors = [
+            Vec3::new(100.0, 40.0, 20.0),
+            Vec3::new(180.0, 40.0, 20.0),
+        ];
+        let left = field.region_from_anchors(IVec3::ZERO, &anchors);
+        let right = field.region_from_anchors(IVec3::X, &anchors);
+        let sample_position = Vec3::new(128.0, 40.0, 20.0);
+        let left_sample = left.connector_graph.sample(sample_position).unwrap();
+        let right_sample = right.connector_graph.sample(sample_position).unwrap();
+
+        assert_eq!(left_sample.radius, right_sample.radius);
+        assert_eq!(left_sample.strength, right_sample.strength);
     }
 }
