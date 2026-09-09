@@ -8,27 +8,33 @@
   },
   "terrain": {
     "type": "rolling",
-    "base_height": 4.0,
+    "baseHeight": 4.0,
     "amplitude": 3.0,
     "scale": 0.012,
-    "detail_amplitude": 1.0,
-    "detail_scale": 0.045
+    "detailAmplitude": 1.0,
+    "detailScale": 0.045
+  },
+  "hydrology": {
+    "canGenerateLake": true,
+    "canGenerateRiver": true,
+    "lakeChanceMultiplier": 1.0,
+    "riverWidthMultiplier": 1.0
   },
   "visuals": {
-    "sky_color": {
+    "skyColor": {
       "dawn": { "r": 0.50, "g": 0.69, "b": 0.94 },
       "day": { "r": 0.22, "g": 0.60, "b": 1.00 },
       "dusk": { "r": 0.62, "g": 0.50, "b": 0.72 },
       "night": { "r": 0.025, "g": 0.045, "b": 0.12 }
     },
-    "fog_color": {
+    "fogColor": {
       "dawn": { "r": 0.62, "g": 0.76, "b": 0.90 },
       "day": { "r": 0.65, "g": 0.83, "b": 0.98 },
       "dusk": { "r": 0.66, "g": 0.58, "b": 0.68 },
       "night": { "r": 0.04, "g": 0.06, "b": 0.11 }
     },
-    "grass_color": { "r": 0.24, "g": 0.70, "b": 0.16 },
-    "underwater_tint": {
+    "grassColor": { "r": 0.24, "g": 0.70, "b": 0.16 },
+    "underwaterTint": {
       "color": { "r": 0.12, "g": 0.44, "b": 0.72 },
       "opacity": 0.20
     },
@@ -40,7 +46,7 @@
       "density": 0.45,
       "color": { "r": 0.92, "g": 0.94, "b": 0.98 }
     },
-    "terrain_roughness": 0.98,
-    "terrain_metallic": 0.0
+    "terrainRoughness": 0.98,
+    "terrainMetallic": 0.0
   }
 }
