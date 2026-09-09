@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use super::block::TargetedBlock;
+use super::block::{BlockTargetingSet, TargetedBlock};
 use crate::app::game_state::GameState;
 
 const HIGHLIGHT_SCALE: f32 = 1.01;
@@ -12,7 +12,9 @@ impl Plugin for TargetHighlightPlugin {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_highlight)
             .add_systems(
                 Update,
-                update_highlight.run_if(in_state(GameState::Gameplay)),
+                update_highlight
+                    .in_set(BlockTargetingSet::Visuals)
+                    .run_if(in_state(GameState::Gameplay)),
             );
     }
 }
