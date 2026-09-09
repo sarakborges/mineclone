@@ -462,12 +462,15 @@ mod tests {
         let blocks = test_blocks();
         let fluids = test_fluids();
         let water_id = fluids.id_of(WATER_ID).expect("test water should exist");
-        let mut world = two_chunk_world(IVec3::ZERO, IVec3::X);
         let source = IVec3::new(CHUNK_SIZE as i32 - 1, 8, 8);
         let water = source + IVec3::X;
         let after_water = water + IVec3::X;
+        let mut neighbor_chunk = VoxelChunk::empty();
+        neighbor_chunk.set_fluid(0, 8, 8, Some(FluidCell::source(water_id)));
 
-        world.set_fluid_at(water, Some(FluidCell::source(water_id)));
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
+        world.insert_chunk(IVec3::X, neighbor_chunk);
         world.set_block_at(
             source,
             Some(VoxelCell::new(LAMP_BLOCK_ID, TextureRotation::default())),
