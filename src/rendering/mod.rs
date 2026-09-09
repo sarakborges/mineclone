@@ -4,7 +4,6 @@ mod celestial;
 mod celestial_path;
 mod environment;
 mod fog;
-mod lighting;
 mod sky;
 mod sky_layers;
 pub(crate) mod terrain_material;
@@ -14,7 +13,6 @@ use bevy::prelude::*;
 use celestial::CelestialPlugin;
 use environment::EnvironmentPlugin;
 use fog::FogPlugin;
-use lighting::LightingPlugin;
 use sky::SkyPlugin;
 use sky_layers::SkyLayersPlugin;
 use terrain_material::TerrainMaterial;
@@ -27,7 +25,6 @@ impl Plugin for RenderingPlugin {
             .add_plugins((
                 AssetUploadPlugin,
                 EnvironmentPlugin,
-                LightingPlugin,
                 FogPlugin,
                 SkyPlugin,
                 SkyLayersPlugin,

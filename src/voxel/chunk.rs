@@ -10,7 +10,6 @@ pub(crate) const CHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_SIZE;
 pub struct VoxelChunk {
     blocks: [Option<VoxelCell>; CHUNK_VOLUME],
     fluids: [Option<FluidCell>; CHUNK_VOLUME],
-    skylight: [u8; CHUNK_VOLUME],
 }
 
 impl VoxelChunk {
@@ -18,7 +17,6 @@ impl VoxelChunk {
         Self {
             blocks: [None; CHUNK_VOLUME],
             fluids: [None; CHUNK_VOLUME],
-            skylight: [0; CHUNK_VOLUME],
         }
     }
 
@@ -40,44 +38,6 @@ impl VoxelChunk {
         }
 
         self.fluids[index(x as usize, y as usize, z as usize)]
-    }
-
-    pub(crate) fn skylight_at(&self, x: i32, y: i32, z: i32) -> u8 {
-        if !in_bounds(x, y, z) {
-            return 0;
-        }
-
-        self.skylight[index(x as usize, y as usize, z as usize)]
-    }
-
-    pub(crate) fn skylight_data(&self) -> [u8; CHUNK_VOLUME] {
-        self.skylight
-    }
-
-    pub(crate) fn highest_solid_y(&self, x: i32, z: i32) -> Option<i32> {
-        if x < 0 || z < 0 || x >= CHUNK_SIZE as i32 || z >= CHUNK_SIZE as i32 {
-            return None;
-        }
-
-        (0..CHUNK_SIZE as i32)
-            .rev()
-            .find(|&y| self.cell_at(x, y, z).is_some())
-    }
-
-    pub(crate) fn replace_skylight(&mut self, skylight: [u8; CHUNK_VOLUME]) {
-        self.skylight = skylight;
-    }
-
-    pub(crate) fn set_skylight(&mut self, x: usize, y: usize, z: usize, level: u8) -> bool {
-        let index = index(x, y, z);
-        let level = level.min(15);
-
-        if self.skylight[index] == level {
-            return false;
-        }
-
-        self.skylight[index] = level;
-        true
     }
 
     pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: Option<VoxelCell>) {

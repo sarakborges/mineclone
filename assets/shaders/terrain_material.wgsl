@@ -29,7 +29,6 @@ fn fragment(
         in.uv,
     );
     let tint = clamp(in.color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
-    let local_light = clamp(in.color.a, 0.0, 1.0);
     let maximum_channel = max(texel.r, max(texel.g, texel.b));
     let minimum_channel = min(texel.r, min(texel.g, texel.b));
     let chroma = maximum_channel - minimum_channel;
@@ -54,7 +53,7 @@ fn fragment(
     }
 
     pbr_input.material.base_color = vec4<f32>(
-        base_rgb * local_light * pbr_bindings::material.base_color.rgb,
+        base_rgb * pbr_bindings::material.base_color.rgb,
         texel.a * pbr_bindings::material.base_color.a,
     );
     pbr_input.material.base_color = alpha_discard(

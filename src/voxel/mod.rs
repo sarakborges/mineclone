@@ -7,6 +7,5 @@ pub mod fluid;
 pub mod fluid_mesh;
 pub mod mesh;
 pub mod raycast;
-pub(crate) mod skylight;
 pub mod texture_rotation;
 pub mod world;

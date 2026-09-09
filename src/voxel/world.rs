@@ -4,13 +4,9 @@ use bevy::prelude::*;
 
 use super::{
     cell::VoxelCell,
-    chunk::{VoxelChunk, CHUNK_SIZE},
+    chunk::{CHUNK_SIZE, VoxelChunk},
     chunk_archive::ArchivedChunk,
     fluid::FluidCell,
-    skylight::{
-        initialize_chunk_skylight,
-        relight_around_voxel as relight_skylight_around_voxel,
-    },
 };
 
 #[derive(Resource, Default)]
@@ -30,7 +26,6 @@ impl VoxelWorld {
 
         self.generated_chunks.insert(coord);
         self.chunks.insert(coord, chunk);
-        initialize_chunk_skylight(self, coord);
     }
 
     pub fn chunk(&self, coord: IVec3) -> Option<&VoxelChunk> {
@@ -39,14 +34,6 @@ impl VoxelWorld {
         }
 
         self.chunks.get(&coord)
-    }
-
-    pub(crate) fn chunk_mut(&mut self, coord: IVec3) -> Option<&mut VoxelChunk> {
-        if coord.y < 0 {
-            return None;
-        }
-
-        self.chunks.get_mut(&coord)
     }
 
     pub fn archive_chunk(&mut self, coord: IVec3) {
@@ -103,37 +90,6 @@ impl VoxelWorld {
         )
     }
 
-    pub(crate) fn skylight_at(&self, world_position: IVec3) -> u8 {
-        if world_position.y < 0 {
-            return 0;
-        }
-
-        let (chunk_coord, local_position) = split_world_position(world_position);
-        let Some(chunk) = self.chunks.get(&chunk_coord) else {
-            return 0;
-        };
-
-        chunk.skylight_at(local_position.x, local_position.y, local_position.z)
-    }
-
-    pub(crate) fn set_skylight_at(&mut self, world_position: IVec3, level: u8) -> bool {
-        if world_position.y < 0 {
-            return false;
-        }
-
-        let (chunk_coord, local_position) = split_world_position(world_position);
-        let Some(chunk) = self.chunks.get_mut(&chunk_coord) else {
-            return false;
-        };
-
-        chunk.set_skylight(
-            local_position.x as usize,
-            local_position.y as usize,
-            local_position.z as usize,
-            level,
-        )
-    }
-
     pub fn is_loaded_at(&self, world_position: IVec3) -> bool {
         if world_position.y < 0 {
             return false;
@@ -141,36 +97,6 @@ impl VoxelWorld {
 
         let (chunk_coord, _) = split_world_position(world_position);
         self.chunks.contains_key(&chunk_coord)
-    }
-
-    pub(crate) fn highest_loaded_chunk_y(&self) -> i32 {
-        self.chunks.keys().map(|coord| coord.y).max().unwrap_or(0)
-    }
-
-    pub(crate) fn highest_solid_y_in_column(
-        &self,
-        world_x: i32,
-        world_z: i32,
-        max_chunk_y: i32,
-    ) -> Option<i32> {
-        let chunk_size = CHUNK_SIZE as i32;
-        let chunk_x = world_x.div_euclid(chunk_size);
-        let chunk_z = world_z.div_euclid(chunk_size);
-        let local_x = world_x.rem_euclid(chunk_size);
-        let local_z = world_z.rem_euclid(chunk_size);
-
-        for chunk_y in (0..=max_chunk_y).rev() {
-            let Some(chunk) = self.chunks.get(&IVec3::new(chunk_x, chunk_y, chunk_z)) else {
-                continue;
-            };
-            let Some(local_y) = chunk.highest_solid_y(local_x, local_z) else {
-                continue;
-            };
-
-            return Some(chunk_y * chunk_size + local_y);
-        }
-
-        None
     }
 
     pub fn set_block_at(
@@ -198,10 +124,6 @@ impl VoxelWorld {
         }
 
         Some(chunk_coord)
-    }
-
-    pub(crate) fn relight_around_voxel(&mut self, world_position: IVec3) -> HashSet<IVec3> {
-        relight_skylight_around_voxel(self, world_position)
     }
 
     pub fn is_solid(&self, world_position: IVec3) -> bool {

@@ -3,16 +3,11 @@ use std::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::{
-    color::Rgb,
-    day_night_phase::{DayNightPhase, DayNightPhases},
-};
+use super::day_night_phase::{DayNightPhase, DayNightPhases};
 
 #[derive(Clone, Copy, Deserialize)]
-pub struct DayNightLightingPhase {
+pub struct DayNightPhaseTiming {
     pub duration_seconds: f32,
-    pub light_color: Rgb,
-    pub light_illuminance: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -20,8 +15,6 @@ pub struct DayNightSample {
     pub phase: DayNightPhase,
     pub next_phase: DayNightPhase,
     pub transition: f32,
-    pub light_color: Rgb,
-    pub light_illuminance: f32,
 }
 
 #[derive(Clone, Deserialize)]
@@ -31,7 +24,7 @@ pub struct DayNightCycleDefinition {
     pub initial_time: f32,
     pub world_time_start_hour: f32,
     pub sequence: [DayNightPhase; 4],
-    pub phases: DayNightPhases<DayNightLightingPhase>,
+    pub phases: DayNightPhases<DayNightPhaseTiming>,
 }
 
 impl DayNightCycleDefinition {
@@ -40,7 +33,6 @@ impl DayNightCycleDefinition {
         let (phase, phase_elapsed_seconds) = self.phase_at_elapsed(elapsed_seconds);
         let next_phase = self.next_phase(phase);
         let current = self.phases.get(phase);
-        let next = self.phases.get(next_phase);
         let transition = if current.duration_seconds <= f32::EPSILON {
             0.0
         } else {
@@ -51,12 +43,6 @@ impl DayNightCycleDefinition {
             phase,
             next_phase,
             transition,
-            light_color: current.light_color.lerp(next.light_color, transition),
-            light_illuminance: lerp_scalar(
-                current.light_illuminance,
-                next.light_illuminance,
-                transition,
-            ),
         }
     }
 
@@ -174,8 +160,4 @@ impl DayNightCycleRegistry {
     pub fn get(&self, id: &str) -> Option<&DayNightCycleDefinition> {
         self.definitions.get(id)
     }
-}
-
-fn lerp_scalar(start: f32, end: f32, t: f32) -> f32 {
-    start + (end - start) * t
 }

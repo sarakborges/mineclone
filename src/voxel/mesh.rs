@@ -14,13 +14,7 @@ use super::{
     world::VoxelWorld,
 };
 
-const FACE_SHADE: f32 = 1.0;
 const FACE_OVERDRAW: f32 = 0.002;
-
-const LIGHT_BRIGHTNESS: [f32; 16] = [
-    0.08, 0.10, 0.13, 0.16, 0.20, 0.24, 0.29, 0.34,
-    0.39, 0.44, 0.49, 0.53, 0.57, 0.61, 0.66, 1.00,
-];
 
 #[derive(Clone, Copy)]
 pub enum BlockFace {
@@ -53,7 +47,6 @@ impl MeshBuffers {
         normal: [f32; 3],
         texture_rotation: TextureRotation,
         tint: [f32; 3],
-        skylight: f32,
     ) {
         push_face(
             &mut self.positions,
@@ -65,8 +58,6 @@ impl MeshBuffers {
             normal,
             texture_rotation,
             tint,
-            FACE_SHADE,
-            skylight,
         );
     }
 
@@ -136,7 +127,6 @@ where
                         [1.0, 0.0, 0.0],
                         TextureRotation::default(),
                         grass_tint,
-                        skylight_brightness(world, world_voxel + IVec3::X),
                     );
                 }
 
@@ -151,7 +141,6 @@ where
                         [-1.0, 0.0, 0.0],
                         TextureRotation::default(),
                         grass_tint,
-                        skylight_brightness(world, world_voxel - IVec3::X),
                     );
                 }
 
@@ -166,7 +155,6 @@ where
                         [0.0, 1.0, 0.0],
                         cell.texture_rotation,
                         grass_tint,
-                        skylight_brightness(world, world_voxel + IVec3::Y),
                     );
                 }
 
@@ -181,7 +169,6 @@ where
                         [0.0, -1.0, 0.0],
                         cell.texture_rotation,
                         grass_tint,
-                        skylight_brightness(world, world_voxel - IVec3::Y),
                     );
                 }
 
@@ -196,7 +183,6 @@ where
                         [0.0, 0.0, 1.0],
                         TextureRotation::default(),
                         grass_tint,
-                        skylight_brightness(world, world_voxel + IVec3::Z),
                     );
                 }
 
@@ -211,7 +197,6 @@ where
                         [0.0, 0.0, -1.0],
                         TextureRotation::default(),
                         grass_tint,
-                        skylight_brightness(world, world_voxel - IVec3::Z),
                     );
                 }
             }
@@ -233,16 +218,4 @@ where
             .map(|mesh| ChunkFaceMesh { face, mesh })
     })
     .collect()
-}
-
-fn skylight_brightness(world: &VoxelWorld, air_cell: IVec3) -> f32 {
-    if air_cell.y < 0 {
-        return LIGHT_BRIGHTNESS[0];
-    }
-
-    if !world.is_loaded_at(air_cell) {
-        return LIGHT_BRIGHTNESS[15];
-    }
-
-    LIGHT_BRIGHTNESS[world.skylight_at(air_cell).min(15) as usize]
 }

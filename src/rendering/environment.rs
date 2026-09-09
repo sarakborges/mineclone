@@ -19,8 +19,6 @@ use crate::{
 pub struct EnvironmentVisualState {
     pub sky_color: Color,
     pub fog_color: Color,
-    pub light_color: Color,
-    pub light_illuminance: f32,
 }
 
 impl Default for EnvironmentVisualState {
@@ -28,8 +26,6 @@ impl Default for EnvironmentVisualState {
         Self {
             sky_color: Color::srgb(0.38, 0.68, 1.0),
             fog_color: Color::srgb(0.52, 0.72, 0.90),
-            light_color: Color::WHITE,
-            light_illuminance: 40_000.0,
         }
     }
 }
@@ -98,6 +94,4 @@ fn update_environment_visuals(
 
     visuals.sky_color = sky.to_color();
     visuals.fog_color = fog.to_color();
-    visuals.light_color = sample.light_color.to_color();
-    visuals.light_illuminance = sample.light_illuminance;
 }
