@@ -12,7 +12,11 @@
 #else
 #import bevy_pbr::{
     forward_io::{VertexOutput, FragmentOutput},
+    mesh_view_bindings as view_bindings,
+    mesh_view_types,
     pbr_functions::main_pass_post_lighting_processing,
+    shadows,
+    view_transformations,
 }
 #endif
 
@@ -25,6 +29,41 @@ var<uniform> terrain_material_extension: TerrainMaterialExtension;
 
 const AMBIENT_FLOOR: f32 = 0.055;
 const LIGHT_GAMMA: f32 = 1.35;
+const SUN_AMBIENT_SHARE: f32 = 0.62;
+
+#ifndef PREPASS_PIPELINE
+fn directional_sun_visibility(in: VertexOutput) -> f32 {
+    let view_z = view_transformations::position_world_to_view(in.world_position.xyz).z;
+    let surface_normal = normalize(in.world_normal);
+    let directional_light_count = view_bindings::lights.n_directional_lights;
+
+    for (var light_id: u32 = 0u; light_id < directional_light_count; light_id = light_id + 1u) {
+        let light = &view_bindings::lights.directional_lights[light_id];
+        let casts_shadows = ((*light).flags
+            & mesh_view_types::DIRECTIONAL_LIGHT_FLAGS_SHADOWS_ENABLED_BIT) != 0u;
+
+        if !casts_shadows {
+            continue;
+        }
+
+        let shadow = shadows::fetch_directional_shadow(
+            light_id,
+            in.world_position,
+            surface_normal,
+            view_z,
+            in.position.xy,
+        );
+        let incidence = max(
+            dot(surface_normal, normalize((*light).direction_to_light)),
+            0.0,
+        );
+
+        return mix(SUN_AMBIENT_SHARE, 1.0, shadow * incidence);
+    }
+
+    return 1.0;
+}
+#endif
 
 @fragment
 fn fragment(
@@ -44,7 +83,15 @@ fn fragment(
     let block_level = clamp(in.uv_b.y, 0.0, 1.0);
     let sky_light = pow(sky_level, LIGHT_GAMMA) * terrain_material_extension.sky_light_factor;
     let block_light = pow(block_level, LIGHT_GAMMA);
-    let propagated_light = max(sky_light, block_light);
+
+#ifdef PREPASS_PIPELINE
+    let sun_visibility = 1.0;
+#else
+    let sun_visibility = directional_sun_visibility(in);
+#endif
+
+    let shadowed_sky_light = sky_light * sun_visibility;
+    let propagated_light = max(shadowed_sky_light, block_light);
     let local_light = mix(AMBIENT_FLOOR, 1.0, propagated_light) * ambient_occlusion;
     let maximum_channel = max(texel.r, max(texel.g, texel.b));
     let minimum_channel = min(texel.r, min(texel.g, texel.b));
