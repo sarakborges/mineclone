@@ -96,6 +96,7 @@ pub(crate) fn generate_chunk(
         blocks,
         biomes,
         biome_field,
+        region.as_ref(),
     );
     rasterize_fluid_pass(
         &mut chunk,
@@ -219,6 +220,7 @@ fn rasterize_material_pass(
     blocks: &BlockRegistry,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
+    region: &GenerationRegion,
 ) {
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
@@ -237,8 +239,10 @@ fn rasterize_material_pass(
                 let sample_position = world_position.as_vec3() + Vec3::splat(0.5);
                 let volume = biome_field.sample_volume(sample_position);
                 let block_id = solid_block_id(
+                    sample_position,
                     &column.surface,
                     volume.as_ref(),
+                    &region.geology,
                     biomes,
                     GRASS_BLOCK_ID,
                 );
