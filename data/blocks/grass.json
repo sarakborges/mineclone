@@ -9,5 +9,7 @@
     "front": "textures/blocks/grass/front.png",
     "back": "textures/blocks/grass/back.png"
   },
-  "rotate_texture": true
+  "rotate_texture": true,
+  "light_dampening": 15,
+  "casts_shadow": true
 }

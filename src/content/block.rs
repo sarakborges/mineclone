@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use serde::Deserialize;
 
+const MAX_LIGHT_DAMPENING: u8 = 15;
+
 #[derive(Clone, Deserialize)]
 pub struct BlockTextures {
     pub top: String,
@@ -21,6 +23,10 @@ pub struct BlockDefinition {
     pub rotate_texture: bool,
     #[serde(default)]
     pub light_emission: u8,
+    #[serde(default = "default_light_dampening")]
+    pub light_dampening: u8,
+    #[serde(default = "default_casts_shadow")]
+    pub casts_shadow: bool,
 }
 
 #[derive(Resource, Default)]
@@ -35,6 +41,11 @@ impl BlockRegistry {
             "block {} light emission must be between 0 and 15",
             definition.id
         );
+        assert!(
+            definition.light_dampening <= MAX_LIGHT_DAMPENING,
+            "block {} light dampening must be between 0 and 15",
+            definition.id
+        );
 
         self.definitions.insert(definition.id.clone(), definition);
     }
@@ -42,4 +53,12 @@ impl BlockRegistry {
     pub fn get(&self, id: &str) -> Option<&BlockDefinition> {
         self.definitions.get(id)
     }
+}
+
+fn default_light_dampening() -> u8 {
+    MAX_LIGHT_DAMPENING
+}
+
+fn default_casts_shadow() -> bool {
+    true
 }

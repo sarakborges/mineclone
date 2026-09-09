@@ -6,6 +6,7 @@ use crate::{
     app::game_state::GameState,
     content::{
         biome::BiomeRegistry,
+        block::BlockRegistry,
         fluid::{FluidId, FluidRegistry},
     },
     rendering::terrain_material::{TerrainMaterial, TerrainMaterialExtension},
@@ -148,6 +149,7 @@ pub fn spawn_chunk_mesh(
     world: &VoxelWorld,
     coord: IVec3,
     chunk: &VoxelChunk,
+    blocks: &BlockRegistry,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     terrain_materials: &TerrainMaterials,
@@ -162,7 +164,7 @@ pub fn spawn_chunk_mesh(
         return;
     }
 
-    let face_meshes = build_chunk_mesh(world, coord, chunk, |voxel| {
+    let face_meshes = build_chunk_mesh(world, coord, chunk, blocks, |voxel| {
         let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
         let grass = biome_field.grass_color(position, biomes);
         [grass.r, grass.g, grass.b]
@@ -174,17 +176,21 @@ pub fn spawn_chunk_mesh(
     let mut mesh_handles = Vec::new();
 
     for face_mesh in face_meshes {
+        let material = terrain_materials.for_face(face_mesh.face).clone();
+        let casts_shadow = face_mesh.casts_shadow;
         let mesh_handle = meshes.add(face_mesh.mesh);
-        let entity = commands
-            .spawn((
-                Mesh3d(mesh_handle.clone()),
-                MeshMaterial3d(terrain_materials.for_face(face_mesh.face).clone()),
-                transform,
-                DespawnOnExit(GameState::Gameplay),
-            ))
-            .id();
+        let mut entity_commands = commands.spawn((
+            Mesh3d(mesh_handle.clone()),
+            MeshMaterial3d(material),
+            transform,
+            DespawnOnExit(GameState::Gameplay),
+        ));
 
-        entities.push(entity);
+        if !casts_shadow {
+            entity_commands.insert(NotShadowCaster);
+        }
+
+        entities.push(entity_commands.id());
         mesh_handles.push(mesh_handle);
     }
 
@@ -213,6 +219,7 @@ pub fn refresh_adjacent_chunk_meshes(
     render_pool: &mut ChunkRenderPool,
     world: &VoxelWorld,
     coord: IVec3,
+    blocks: &BlockRegistry,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     terrain_materials: &TerrainMaterials,
@@ -231,6 +238,7 @@ pub fn refresh_adjacent_chunk_meshes(
             render_pool,
             world,
             neighbor,
+            blocks,
             biomes,
             biome_field,
             terrain_materials,
@@ -245,6 +253,7 @@ pub fn refresh_chunk_mesh(
     render_pool: &mut ChunkRenderPool,
     world: &VoxelWorld,
     coord: IVec3,
+    blocks: &BlockRegistry,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     terrain_materials: &TerrainMaterials,
@@ -275,6 +284,7 @@ pub fn refresh_chunk_mesh(
         world,
         coord,
         chunk,
+        blocks,
         biomes,
         biome_field,
         terrain_materials,
