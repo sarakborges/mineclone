@@ -24,8 +24,9 @@ use super::{
     generation_region::{
         generation_region_coord, generation_region_world_bounds, GenerationRegion,
     },
+    hydrology::HydrologySurfaceSample,
     material_field::solid_block_id,
-    terrain::{chunk_y_bounds, surface_height, surface_height_from_sample, terrain_density},
+    terrain::{chunk_y_bounds, surface_height_from_sample, terrain_density},
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -76,15 +77,25 @@ pub(crate) fn generate_chunk(
                     position.x.floor() as i32,
                     position.y.floor() as i32,
                 );
-                let elevation = surface_height(
+                let surface = biome_field
+                    .sample_surface(surface_position.as_vec2() + Vec2::splat(0.5));
+                let elevation = surface_height_from_sample(
                     surface_position,
                     dimension,
                     biomes,
-                    biome_field,
+                    biome_field.seed(),
+                    &surface,
                 ) as f32;
                 let continentalness = biome_field.climate_at(position).continentalness;
+                let surface_biome = biomes
+                    .get(surface.primary_id)
+                    .unwrap_or_else(|| panic!("missing biome definition: {}", surface.primary_id));
 
-                (elevation, continentalness)
+                HydrologySurfaceSample {
+                    elevation,
+                    continentalness,
+                    biome_hydrology: surface_biome.hydrology,
+                }
             },
         )
     });
