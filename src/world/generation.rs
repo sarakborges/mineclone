@@ -251,6 +251,10 @@ fn rasterize_material_pass(
     biome_field: &BiomeField,
     region: &GenerationRegion,
 ) {
+    let fallback = blocks
+        .static_id(GRASS_BLOCK_ID)
+        .unwrap_or_else(|| panic!("missing interned block definition: {GRASS_BLOCK_ID}"));
+
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
             let column = &columns[column_index(local_x, local_z)];
@@ -273,7 +277,7 @@ fn rasterize_material_pass(
                     volume.as_ref(),
                     &region.geology,
                     biomes,
-                    GRASS_BLOCK_ID,
+                    fallback,
                 );
                 let block = blocks
                     .get(block_id)
