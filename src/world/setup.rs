@@ -92,6 +92,11 @@ pub fn begin_world_loading(
     let dimension = dimensions_ref
         .get(&current_dimension.id)
         .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
+
+    dimension
+        .hydrology
+        .validate_references(&dimension.id, biomes_ref, blocks_ref, fluids_ref);
+
     let grass = blocks_ref
         .get(GRASS_BLOCK_ID)
         .unwrap_or_else(|| panic!("missing block definition: {GRASS_BLOCK_ID}"));
@@ -151,7 +156,11 @@ pub fn begin_world_loading(
     }
 
     commands.insert_resource(biome_field);
-    commands.insert_resource(WorldFeatureFields::new(seed.0, dimension.sea_level));
+    commands.insert_resource(WorldFeatureFields::new(
+        seed.0,
+        dimension.sea_level,
+        dimension.hydrology.clone(),
+    ));
     commands.insert_resource(terrain_materials);
     commands.insert_resource(fluid_materials);
     commands.insert_resource(WorldLoadingState {
