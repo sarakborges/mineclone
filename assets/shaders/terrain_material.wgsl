@@ -34,13 +34,25 @@ fn fragment(
     let minimum_channel = min(texel.r, min(texel.g, texel.b));
     let chroma = maximum_channel - minimum_channel;
 
-    var selective_tint = vec3<f32>(1.0);
+    var base_rgb = texel.rgb;
     if chroma <= 0.02 {
-        selective_tint = tint;
+        // Grayscale pixels carry the authored brightness of the grass texture.
+        // Use biome color only for hue/chroma, preserving that luminance instead of
+        // multiplying the texture by a dark RGB tint.
+        let tint_luma = max(
+            dot(tint, vec3<f32>(0.2126, 0.7152, 0.0722)),
+            0.001,
+        );
+        let luminance_preserving_tint = tint / tint_luma;
+        base_rgb = clamp(
+            vec3<f32>(texel.r) * luminance_preserving_tint,
+            vec3<f32>(0.0),
+            vec3<f32>(1.0),
+        );
     }
 
     pbr_input.material.base_color = vec4<f32>(
-        texel.rgb * selective_tint * local_light * pbr_bindings::material.base_color.rgb,
+        base_rgb * local_light * pbr_bindings::material.base_color.rgb,
         texel.a * pbr_bindings::material.base_color.a,
     );
     pbr_input.material.base_color = alpha_discard(
@@ -52,8 +64,6 @@ fn fragment(
     return deferred_output(in, pbr_input);
 #else
     var out: FragmentOutput;
-    // Terrain lighting is voxel/lightmap-driven. Do not apply Bevy's directional PBR
-    // lighting again, or side faces become artificially dark depending on sun direction.
     out.color = pbr_input.material.base_color;
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
     return out;
