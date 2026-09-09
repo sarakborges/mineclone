@@ -2,17 +2,20 @@ use crate::content::biome::BiomeRegistry;
 
 use super::biome_field::{BiomeFieldSample, VolumeBiomeFieldSample};
 
-pub(crate) fn solid_block_id<'a>(
+pub(crate) fn solid_block_id<'registry>(
     surface: &BiomeFieldSample<'_>,
     volume: Option<&VolumeBiomeFieldSample<'_>>,
-    biomes: &'a BiomeRegistry,
-    fallback: &'a str,
-) -> &'a str {
+    biomes: &'registry BiomeRegistry,
+    fallback: &'registry str,
+) -> &'registry str {
     if let Some(volume) = volume {
-        if let Some(block_id) = strongest_material(volume.influences.iter().map(|influence| {
-            (influence.id, influence.weight)
-        }), biomes)
-        {
+        if let Some(block_id) = strongest_material(
+            volume
+                .influences
+                .iter()
+                .map(|influence| (influence.id, influence.weight)),
+            biomes,
+        ) {
             return block_id;
         }
     }
@@ -27,10 +30,10 @@ pub(crate) fn solid_block_id<'a>(
     .unwrap_or(fallback)
 }
 
-fn strongest_material<'a>(
-    influences: impl Iterator<Item = (&'a str, f32)>,
-    biomes: &'a BiomeRegistry,
-) -> Option<&'a str> {
+fn strongest_material<'registry, 'id>(
+    influences: impl Iterator<Item = (&'id str, f32)>,
+    biomes: &'registry BiomeRegistry,
+) -> Option<&'registry str> {
     influences
         .filter_map(|(biome_id, weight)| {
             let biome = biomes
