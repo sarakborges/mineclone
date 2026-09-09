@@ -136,8 +136,6 @@ impl HydrologyField {
         coord: IVec2,
         mut sample: impl FnMut(Vec2) -> (f32, f32),
     ) -> HydrologyRegion {
-        let origin = coord.as_vec2() * HYDROLOGY_REGION_SIZE;
-        let step = HYDROLOGY_REGION_SIZE / (MACRO_SAMPLE_GRID - 1) as f32;
         let mut minimum_elevation = f32::MAX;
         let mut maximum_elevation = f32::MIN;
         let mut elevation_sum = 0.0;
@@ -146,7 +144,7 @@ impl HydrologyField {
 
         for z in 0..MACRO_SAMPLE_GRID {
             for x in 0..MACRO_SAMPLE_GRID {
-                let position = origin + Vec2::new(x as f32 * step, z as f32 * step);
+                let position = macro_sample_position(coord, x, z);
                 let (elevation, continentalness) = sample(position);
 
                 minimum_elevation = minimum_elevation.min(elevation);
@@ -170,6 +168,13 @@ impl HydrologyField {
             water_bodies: Vec::new(),
         }
     }
+}
+
+fn macro_sample_position(coord: IVec2, x: usize, z: usize) -> Vec2 {
+    let origin = coord.as_vec2() * HYDROLOGY_REGION_SIZE;
+    let step = HYDROLOGY_REGION_SIZE / (MACRO_SAMPLE_GRID - 1) as f32;
+
+    origin + Vec2::new(x as f32 * step, z as f32 * step)
 }
 
 #[cfg(test)]
@@ -202,5 +207,13 @@ mod tests {
         assert_eq!(first.terrain.maximum_elevation, second.terrain.maximum_elevation);
         assert_eq!(first.terrain.mean_elevation, second.terrain.mean_elevation);
         assert_eq!(first.terrain.mean_continentalness, 0.5);
+    }
+
+    #[test]
+    fn adjacent_regions_sample_the_same_shared_boundary() {
+        let left_boundary = macro_sample_position(IVec2::ZERO, MACRO_SAMPLE_GRID - 1, 2);
+        let right_boundary = macro_sample_position(IVec2::X, 0, 2);
+
+        assert_eq!(left_boundary, right_boundary);
     }
 }
