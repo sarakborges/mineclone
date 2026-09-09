@@ -1,6 +1,7 @@
 pub mod camera;
 pub mod hotbar;
 pub mod movement;
+pub mod viewmodel;
 
 use bevy::prelude::*;
 
