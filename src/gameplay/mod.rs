@@ -6,6 +6,7 @@ use crate::player::{
     camera::PlayerCameraPlugin,
     hotbar::PlayerHotbarPlugin,
     movement::PlayerMovementPlugin,
+    viewmodel::PlayerViewModelPlugin,
     PlayerPlugin,
 };
 use pause::PausePlugin;
@@ -18,6 +19,7 @@ impl Plugin for GameplayPlugin {
             PausePlugin,
             PlayerPlugin,
             PlayerHotbarPlugin,
+            PlayerViewModelPlugin,
             PlayerCameraPlugin,
             PlayerMovementPlugin,
         ));
