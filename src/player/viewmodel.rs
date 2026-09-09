@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use bevy::{light::NotShadowCaster, prelude::*};
 
 use crate::{
@@ -11,6 +13,8 @@ use super::{camera::GameplayCamera, hotbar::PlayerHotbar};
 
 const ARM_SIZE: Vec3 = Vec3::new(0.18, 0.64, 0.18);
 const HELD_BLOCK_SCALE: f32 = 0.30;
+const BREAK_ANIMATION_DURATION: f32 = 0.22;
+const PLACE_ANIMATION_DURATION: f32 = 0.16;
 
 #[derive(Component)]
 struct PlayerViewModel;
@@ -25,13 +29,37 @@ struct HeldBlockFace {
     face: BlockFace,
 }
 
+#[derive(Clone, Copy)]
+enum ViewModelAction {
+    Break,
+    Place,
+}
+
+#[derive(Resource, Default)]
+pub(crate) struct ViewModelAnimation {
+    action: Option<ViewModelAction>,
+    elapsed: f32,
+}
+
+impl ViewModelAnimation {
+    pub(crate) fn play_break(&mut self) {
+        self.action = Some(ViewModelAction::Break);
+        self.elapsed = 0.0;
+    }
+
+    pub(crate) fn play_place(&mut self) {
+        self.action = Some(ViewModelAction::Place);
+        self.elapsed = 0.0;
+    }
+}
+
 pub struct PlayerViewModelPlugin;
 
 impl Plugin for PlayerViewModelPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        app.init_resource::<ViewModelAnimation>().add_systems(
             Update,
-            (spawn_viewmodel, sync_held_block)
+            (spawn_viewmodel, sync_held_block, animate_viewmodel)
                 .chain()
                 .run_if(in_state(GameState::Gameplay)),
         );
@@ -61,8 +89,7 @@ fn spawn_viewmodel(
             camera
                 .spawn((
                     PlayerViewModel,
-                    Transform::from_translation(Vec3::new(0.53, -0.46, -0.86))
-                        .with_rotation(Quat::from_euler(EulerRot::XYZ, -0.18, -0.18, 0.10)),
+                    base_viewmodel_transform(),
                     Visibility::Visible,
                 ))
                 .with_children(|viewmodel| {
@@ -160,4 +187,63 @@ fn sync_held_block(
             );
         }
     }
+}
+
+fn animate_viewmodel(
+    time: Res<Time>,
+    mut animation: ResMut<ViewModelAnimation>,
+    mut viewmodels: Query<&mut Transform, With<PlayerViewModel>>,
+) {
+    let Some(action) = animation.action else {
+        return;
+    };
+
+    animation.elapsed += time.delta_secs();
+    let duration = match action {
+        ViewModelAction::Break => BREAK_ANIMATION_DURATION,
+        ViewModelAction::Place => PLACE_ANIMATION_DURATION,
+    };
+    let progress = (animation.elapsed / duration).clamp(0.0, 1.0);
+    let wave = (progress * PI).sin();
+
+    for mut transform in &mut viewmodels {
+        let mut animated = base_viewmodel_transform();
+
+        match action {
+            ViewModelAction::Break => {
+                animated.translation += Vec3::new(-0.08, -0.13, -0.08) * wave;
+                animated.rotation *= Quat::from_euler(
+                    EulerRot::XYZ,
+                    -0.68 * wave,
+                    0.12 * wave,
+                    -0.34 * wave,
+                );
+            }
+            ViewModelAction::Place => {
+                animated.translation += Vec3::new(-0.04, 0.02, -0.18) * wave;
+                animated.rotation *= Quat::from_euler(
+                    EulerRot::XYZ,
+                    -0.18 * wave,
+                    0.05 * wave,
+                    -0.08 * wave,
+                );
+            }
+        }
+
+        *transform = animated;
+    }
+
+    if progress >= 1.0 {
+        animation.action = None;
+        animation.elapsed = 0.0;
+
+        for mut transform in &mut viewmodels {
+            *transform = base_viewmodel_transform();
+        }
+    }
+}
+
+fn base_viewmodel_transform() -> Transform {
+    Transform::from_translation(Vec3::new(0.53, -0.46, -0.86))
+        .with_rotation(Quat::from_euler(EulerRot::XYZ, -0.18, -0.18, 0.10))
 }
