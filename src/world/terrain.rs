@@ -122,14 +122,6 @@ fn biome_surface_height(
             let ridge = (1.0 - noise.abs()).clamp(0.0, 1.0).powf(sharpness);
             sea_level + base_height + ridge * amplitude
         }
-        BiomeTerrain::Ocean {
-            floor_depth,
-            amplitude,
-            scale,
-        } => {
-            let floor = fractal_noise(position * scale, seed);
-            sea_level - floor_depth + floor * amplitude
-        }
     }
 }
 
