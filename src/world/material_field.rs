@@ -1,6 +1,6 @@
 use crate::content::{
     biome::BiomeRegistry,
-    block::BlockRegistry,
+    block::intern_block_id,
 };
 
 use super::{
@@ -14,7 +14,6 @@ pub(crate) fn solid_block_id(
     volume: Option<&VolumeBiomeFieldSample<'_>>,
     geology: &GeologyRegion,
     biomes: &BiomeRegistry,
-    blocks: &BlockRegistry,
     fallback: &'static str,
 ) -> &'static str {
     if let Some(volume) = volume {
@@ -25,31 +24,23 @@ pub(crate) fn solid_block_id(
                 .map(|influence| (influence.id, influence.weight)),
             biomes,
         ) {
-            return blocks
-                .static_id(block_id)
-                .unwrap_or_else(|| panic!("biome references missing solid block: {block_id}"));
+            return intern_block_id(block_id);
         }
     }
 
     if let Some(block_id) = geology.solid_block_at(position) {
-        return blocks
-            .static_id(block_id)
-            .unwrap_or_else(|| panic!("geology references missing solid block: {block_id}"));
+        return intern_block_id(block_id);
     }
 
-    if let Some(block_id) = strongest_material(
+    strongest_material(
         surface
             .influences
             .iter()
             .map(|influence| (influence.id, influence.weight)),
         biomes,
-    ) {
-        return blocks
-            .static_id(block_id)
-            .unwrap_or_else(|| panic!("biome references missing solid block: {block_id}"));
-    }
-
-    fallback
+    )
+    .map(intern_block_id)
+    .unwrap_or(fallback)
 }
 
 fn strongest_material<'registry, 'id>(
