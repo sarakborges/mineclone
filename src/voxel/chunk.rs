@@ -20,10 +20,6 @@ impl VoxelChunk {
         }
     }
 
-    pub fn is_empty() -> bool {
-        false
-    }
-
     pub fn is_empty(&self) -> bool {
         self.blocks.iter().all(Option::is_none) && self.fluids.iter().all(Option::is_none)
     }
