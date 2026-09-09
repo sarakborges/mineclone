@@ -798,7 +798,7 @@ mod tests {
     }
 
     #[test]
-    fn higher_priority_volume_weights_suppress_lower_priority_weights() {
+    fn higher_priority_volume_wins_before_random_tiebreak() {
         let biomes = [
             BiomeFieldEntry {
                 id: "low".into(),
