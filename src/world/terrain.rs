@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::content::{
-    biome::BiomeRegistry,
+    biome::{BiomeKind, BiomeRegistry},
     biome_terrain::BiomeTerrain,
     dimension::DimensionDefinition,
 };
@@ -17,7 +17,7 @@ pub fn surface_height(
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
 ) -> i32 {
-    let sample = biome_field.sample(position.as_vec2() + Vec2::splat(0.5));
+    let sample = biome_field.sample_surface(position.as_vec2() + Vec2::splat(0.5));
 
     surface_height_from_sample(position, dimension, biomes, biome_field.seed(), &sample)
 }
@@ -35,12 +35,15 @@ pub(crate) fn surface_height_from_sample(
         let biome = biomes
             .get(influence.id)
             .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
+        let terrain = biome.terrain.as_ref().unwrap_or_else(|| {
+            panic!("surface biome {} must define terrain", biome.id)
+        });
         height += biome_surface_height(
             position.as_vec2(),
             dimension.sea_level,
             world_seed,
             biome.id.as_str(),
-            &biome.terrain,
+            terrain,
         ) * influence.weight;
     }
 
@@ -58,18 +61,31 @@ pub(crate) fn chunk_y_bounds(
     let maximum_offset = dimension
         .biomes
         .iter()
-        .map(|biome_id| {
-            biomes
+        .filter_map(|biome_id| {
+            let biome = biomes
                 .get(biome_id)
-                .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"))
-                .terrain
-                .maximum_height_offset()
+                .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
+
+            if biome.kind != BiomeKind::Surface {
+                return None;
+            }
+
+            Some(
+                biome
+                    .terrain
+                    .as_ref()
+                    .unwrap_or_else(|| {
+                        panic!("surface biome {} must define terrain", biome.id)
+                    })
+                    .maximum_height_offset(),
+            )
         })
         .fold(0.0_f32, f32::max)
         .max(0.0);
     let maximum_surface = dimension.sea_level as f32 + maximum_offset;
     let maximum_block_y = maximum_surface.ceil().max(1.0) as i32 - 1;
-    let maximum_chunk_y = maximum_block_y.div_euclid(crate::voxel::chunk::CHUNK_SIZE as i32);
+    let maximum_chunk_y =
+        maximum_block_y.div_euclid(crate::voxel::chunk::CHUNK_SIZE as i32);
 
     (TERRAIN_MIN_CHUNK_Y, maximum_chunk_y)
 }
@@ -124,7 +140,8 @@ fn fractal_noise(position: Vec2, seed: u64) -> f32 {
     let mut frequency = 1.0;
 
     for octave in 0..NOISE_OCTAVES {
-        let octave_seed = seed.wrapping_add((octave as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15));
+        let octave_seed =
+            seed.wrapping_add((octave as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15));
         value += value_noise(position * frequency, octave_seed) * amplitude;
         normalization += amplitude;
         amplitude *= 0.5;

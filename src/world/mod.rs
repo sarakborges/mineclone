@@ -5,6 +5,7 @@ mod chunk_unloading;
 pub mod day_night;
 pub mod dimension;
 mod generation;
+mod macro_climate;
 pub(crate) mod render_distance;
 mod save;
 mod seed;

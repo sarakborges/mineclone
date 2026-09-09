@@ -67,7 +67,7 @@ fn update_underwater_tint(
         return;
     }
 
-    let biome_tint = biome_field.underwater_tint(Vec2::new(eye.x, eye.z), &biomes);
+    let biome_tint = biome_field.underwater_tint(eye, &biomes);
 
     tint.0.0 = Color::srgba(
         biome_tint.color.r,

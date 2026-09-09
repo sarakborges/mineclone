@@ -79,7 +79,8 @@ fn sample_generation_columns(
             let world_x = chunk_origin.x + local_x as i32;
             let world_z = chunk_origin.z + local_z as i32;
             let position = IVec2::new(world_x, world_z);
-            let sample = biome_field.sample(position.as_vec2() + Vec2::splat(0.5));
+            let sample =
+                biome_field.sample_surface(position.as_vec2() + Vec2::splat(0.5));
 
             columns.push(GenerationColumnSample {
                 surface_height: surface_height_from_sample(

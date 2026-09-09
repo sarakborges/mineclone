@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     app::game_state::GameState,
     content::{
-        biome::BiomeRegistry,
+        biome::{BiomeKind, BiomeRegistry},
         block::BlockRegistry,
         dimension::{DimensionDefinition, DimensionRegistry},
         fluid::FluidRegistry,
@@ -267,10 +267,21 @@ fn average_terrain_material(
         let biome = biomes
             .get(biome_id)
             .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
+
+        if biome.kind != BiomeKind::Surface {
+            continue;
+        }
+
         roughness += biome.visuals.terrain_roughness;
         metallic += biome.visuals.terrain_metallic;
         count += 1.0;
     }
+
+    assert!(
+        count > 0.0,
+        "dimension {} must define at least one surface biome",
+        dimension.id
+    );
 
     (roughness / count, metallic / count)
 }
