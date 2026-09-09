@@ -14,16 +14,11 @@ use super::{
     world::VoxelWorld,
 };
 
-const TOP_SHADE: f32 = 1.0;
-const BOTTOM_SHADE: f32 = 0.82;
-const EAST_SHADE: f32 = 0.92;
-const WEST_SHADE: f32 = 0.88;
-const SOUTH_SHADE: f32 = 0.94;
-const NORTH_SHADE: f32 = 0.90;
+const FACE_SHADE: f32 = 1.0;
 
 const LIGHT_BRIGHTNESS: [f32; 16] = [
-    0.045, 0.060, 0.080, 0.105, 0.135, 0.175, 0.225, 0.285,
-    0.355, 0.435, 0.525, 0.625, 0.735, 0.835, 0.955, 1.000,
+    0.10, 0.13, 0.17, 0.21, 0.26, 0.32, 0.39, 0.47,
+    0.55, 0.63, 0.70, 0.76, 0.81, 0.85, 0.89, 1.00,
 ];
 
 #[derive(Clone, Copy)]
@@ -57,7 +52,6 @@ impl MeshBuffers {
         normal: [f32; 3],
         texture_rotation: TextureRotation,
         tint: [f32; 3],
-        shade: f32,
         skylight: f32,
     ) {
         push_face(
@@ -70,7 +64,7 @@ impl MeshBuffers {
             normal,
             texture_rotation,
             tint,
-            shade,
+            FACE_SHADE,
             skylight,
         );
     }
@@ -135,7 +129,6 @@ where
                         [1.0, 0.0, 0.0],
                         TextureRotation::default(),
                         grass_tint,
-                        EAST_SHADE,
                         skylight_brightness(world, world_voxel + IVec3::X),
                     );
                 }
@@ -146,7 +139,6 @@ where
                         [-1.0, 0.0, 0.0],
                         TextureRotation::default(),
                         grass_tint,
-                        WEST_SHADE,
                         skylight_brightness(world, world_voxel - IVec3::X),
                     );
                 }
@@ -157,7 +149,6 @@ where
                         [0.0, 1.0, 0.0],
                         cell.texture_rotation,
                         grass_tint,
-                        TOP_SHADE,
                         skylight_brightness(world, world_voxel + IVec3::Y),
                     );
                 }
@@ -168,7 +159,6 @@ where
                         [0.0, -1.0, 0.0],
                         cell.texture_rotation,
                         grass_tint,
-                        BOTTOM_SHADE,
                         skylight_brightness(world, world_voxel - IVec3::Y),
                     );
                 }
@@ -179,7 +169,6 @@ where
                         [0.0, 0.0, 1.0],
                         TextureRotation::default(),
                         grass_tint,
-                        SOUTH_SHADE,
                         skylight_brightness(world, world_voxel + IVec3::Z),
                     );
                 }
@@ -190,7 +179,6 @@ where
                         [0.0, 0.0, -1.0],
                         TextureRotation::default(),
                         grass_tint,
-                        NORTH_SHADE,
                         skylight_brightness(world, world_voxel - IVec3::Z),
                     );
                 }
