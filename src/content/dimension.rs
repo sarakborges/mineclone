@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use serde::Deserialize;
 
+use super::dimension_hydrology::DimensionHydrology;
+
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DimensionDefinition {
@@ -12,6 +14,8 @@ pub struct DimensionDefinition {
     pub day_night_cycle: String,
     pub sky: String,
     pub sea_level: i32,
+    #[serde(default)]
+    pub hydrology: DimensionHydrology,
 }
 
 #[derive(Resource, Default)]
