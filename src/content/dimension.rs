@@ -4,6 +4,7 @@ use bevy::prelude::*;
 use serde::Deserialize;
 
 #[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DimensionDefinition {
     pub id: String,
     pub name: String,
