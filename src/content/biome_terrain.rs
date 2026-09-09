@@ -16,11 +16,6 @@ pub enum BiomeTerrain {
         scale: f32,
         sharpness: f32,
     },
-    Ocean {
-        floor_depth: f32,
-        amplitude: f32,
-        scale: f32,
-    },
 }
 
 impl BiomeTerrain {
@@ -37,11 +32,6 @@ impl BiomeTerrain {
                 amplitude,
                 ..
             } => base_height + amplitude.abs(),
-            Self::Ocean {
-                floor_depth,
-                amplitude,
-                ..
-            } => -floor_depth + amplitude.abs(),
         }
     }
 
@@ -80,21 +70,6 @@ impl BiomeTerrain {
                     sharpness > 0.0,
                     "biome {biome_id} mountains sharpness must be positive"
                 );
-            }
-            Self::Ocean {
-                floor_depth,
-                amplitude,
-                scale,
-            } => {
-                assert!(
-                    floor_depth >= 0.0,
-                    "biome {biome_id} ocean floor_depth cannot be negative"
-                );
-                assert!(
-                    amplitude >= 0.0,
-                    "biome {biome_id} ocean amplitude cannot be negative"
-                );
-                assert!(scale > 0.0, "biome {biome_id} ocean scale must be positive");
             }
         }
     }
