@@ -1,12 +1,14 @@
 use bevy::prelude::*;
 
-use crate::content::biome_hydrology::BiomeHydrology;
+use crate::content::{
+    biome_hydrology::BiomeHydrology,
+    dimension_hydrology::DimensionHydrology,
+};
 
 use super::feature_graph::FeatureGraph;
 
 const HYDROLOGY_REGION_SIZE: f32 = 128.0;
 const MACRO_SAMPLE_GRID: usize = 5;
-const DEFAULT_WATER_FLUID: &str = "mineclone:water";
 
 const OCEAN_CONTINENTALNESS_THRESHOLD: f32 = 0.34;
 const OCEAN_TRANSITION_WIDTH: f32 = 0.12;
@@ -25,6 +27,9 @@ const LAKE_MAXIMUM_RADIUS: f32 = 34.0;
 const LAKE_CARVE_DEPTH: f32 = 6.0;
 const LAKE_MINIMUM_RELIEF: f32 = 1.0;
 const LAKE_CHANCE: f32 = 0.45;
+
+const SHORE_STRENGTH: f32 = 0.25;
+const BED_MATERIAL_DEPTH: f32 = 1.5;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WaterBodyKind {
@@ -69,6 +74,15 @@ pub struct HydrologySurfaceSample {
     pub biome_hydrology: BiomeHydrology,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct HydrologyBiomeOverlay<'a> {
+    pub surface_weight: f32,
+    pub coast_biome: Option<&'a str>,
+    pub coast_weight: f32,
+    pub ocean_biome: Option<&'a str>,
+    pub ocean_weight: f32,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HydrologyTerrainSummary {
     pub minimum_elevation: f32,
@@ -99,11 +113,12 @@ pub struct HydrologyRegion {
     pub river_carve_depth: f32,
     pub water_bodies: Vec<WaterBody>,
     sea_level: f32,
+    settings: DimensionHydrology,
     macro_samples: Vec<HydrologyMacroSample>,
 }
 
 impl HydrologyRegion {
-    fn empty(coord: IVec2, sea_level: f32) -> Self {
+    fn empty(coord: IVec2, sea_level: f32, settings: DimensionHydrology) -> Self {
         Self {
             coord,
             terrain: HydrologyTerrainSummary::default(),
@@ -111,6 +126,7 @@ impl HydrologyRegion {
             river_carve_depth: RIVER_CARVE_DEPTH,
             water_bodies: Vec::new(),
             sea_level,
+            settings,
             macro_samples: Vec::new(),
         }
     }
@@ -170,7 +186,7 @@ impl HydrologyRegion {
         if let Some(river) = self.river_graph.sample_horizontal(position) {
             if river.strength > 0.0 {
                 let candidate = HydrologyWaterSample {
-                    fluid_id: DEFAULT_WATER_FLUID,
+                    fluid_id: self.settings.water_fluid.as_str(),
                     water_level: river.height,
                 };
 
@@ -185,7 +201,7 @@ impl HydrologyRegion {
 
         if self.ocean_strength_at(position) > 0.0 {
             let candidate = HydrologyWaterSample {
-                fluid_id: DEFAULT_WATER_FLUID,
+                fluid_id: self.settings.water_fluid.as_str(),
                 water_level: self.sea_level,
             };
 
@@ -200,14 +216,96 @@ impl HydrologyRegion {
         selected
     }
 
-    pub fn ocean_strength_at(&self, position: Vec2) -> f32 {
-        let Some(sample) = self.macro_sample_at(position) else {
-            return 0.0;
-        };
-        let raw = (OCEAN_CONTINENTALNESS_THRESHOLD - sample.continentalness)
-            / OCEAN_TRANSITION_WIDTH;
+    pub fn solid_block_at(&self, position: Vec3) -> Option<&str> {
+        let horizontal = Vec2::new(position.x, position.z);
 
-        smoothstep(raw.clamp(0.0, 1.0))
+        if let Some((body, strength)) = self
+            .water_bodies
+            .iter()
+            .filter_map(|body| {
+                let strength = body.horizontal_strength(horizontal);
+                (strength > 0.0).then_some((body, strength))
+            })
+            .max_by(|(_, left), (_, right)| left.total_cmp(right))
+        {
+            let bottom = body.water_level - body.carve_depth * strength;
+
+            if position.y >= bottom - BED_MATERIAL_DEPTH
+                && position.y <= bottom + BED_MATERIAL_DEPTH
+            {
+                return self.material_for_water_body(body.kind, strength);
+            }
+        }
+
+        if let Some(river) = self.river_graph.sample_horizontal(horizontal) {
+            let profile = smoothstep(river.strength);
+            let bed = river.height - self.river_carve_depth * profile;
+
+            if position.y >= bed - BED_MATERIAL_DEPTH
+                && position.y <= bed + BED_MATERIAL_DEPTH
+            {
+                if river.strength <= SHORE_STRENGTH {
+                    return self
+                        .settings
+                        .shore_block
+                        .as_deref()
+                        .or(self.settings.river_bed_block.as_deref());
+                }
+
+                return self
+                    .settings
+                    .river_bed_block
+                    .as_deref()
+                    .or(self.settings.shore_block.as_deref());
+            }
+        }
+
+        let strength = self.ocean_strength_at(horizontal);
+
+        if strength > 0.0 {
+            let sample = self.macro_sample_at(horizontal)?;
+            let target_floor =
+                self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength;
+            let floor = lerp(sample.elevation, target_floor, strength);
+
+            if position.y >= floor - BED_MATERIAL_DEPTH
+                && position.y <= floor + BED_MATERIAL_DEPTH
+            {
+                if strength <= SHORE_STRENGTH {
+                    return self
+                        .settings
+                        .shore_block
+                        .as_deref()
+                        .or(self.settings.ocean_bed_block.as_deref());
+                }
+
+                return self
+                    .settings
+                    .ocean_bed_block
+                    .as_deref()
+                    .or(self.settings.shore_block.as_deref());
+            }
+        }
+
+        None
+    }
+
+    pub fn ocean_strength_at(&self, position: Vec2) -> f32 {
+        self.macro_sample_at(position)
+            .map_or(0.0, |sample| ocean_strength(sample.continentalness))
+    }
+
+    fn material_for_water_body(&self, kind: WaterBodyKind, strength: f32) -> Option<&str> {
+        let bed = match kind {
+            WaterBodyKind::Lake => self.settings.lake_bed_block.as_deref(),
+            WaterBodyKind::Ocean => self.settings.ocean_bed_block.as_deref(),
+        };
+
+        if strength <= SHORE_STRENGTH {
+            self.settings.shore_block.as_deref().or(bed)
+        } else {
+            bed.or(self.settings.shore_block.as_deref())
+        }
     }
 
     fn ocean_density_delta(&self, position: Vec2) -> f32 {
@@ -256,15 +354,20 @@ impl HydrologyRegion {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct HydrologyField {
     seed: u64,
     sea_level: i32,
+    settings: DimensionHydrology,
 }
 
 impl HydrologyField {
-    pub fn new(seed: u64, sea_level: i32) -> Self {
-        Self { seed, sea_level }
+    pub fn new(seed: u64, sea_level: i32, settings: DimensionHydrology) -> Self {
+        Self {
+            seed,
+            sea_level,
+            settings,
+        }
     }
 
     pub fn seed(&self) -> u64 {
@@ -275,8 +378,55 @@ impl HydrologyField {
         self.sea_level
     }
 
+    pub fn biome_overlay(&self, continentalness: f32) -> HydrologyBiomeOverlay<'_> {
+        let strength = ocean_strength(continentalness);
+        let mut surface_weight = (1.0 - strength * 2.0).clamp(0.0, 1.0);
+        let mut coast_weight = (1.0 - (strength * 2.0 - 1.0).abs()).clamp(0.0, 1.0);
+        let mut ocean_weight = (strength * 2.0 - 1.0).clamp(0.0, 1.0);
+        let coast_biome = self.settings.coast_biome.as_deref();
+        let ocean_biome = self.settings.ocean_biome.as_deref();
+
+        if coast_biome.is_none() {
+            if strength < 0.5 {
+                surface_weight += coast_weight;
+            } else {
+                ocean_weight += coast_weight;
+            }
+            coast_weight = 0.0;
+        }
+
+        if ocean_biome.is_none() {
+            if coast_biome.is_some() {
+                coast_weight += ocean_weight;
+            } else {
+                surface_weight += ocean_weight;
+            }
+            ocean_weight = 0.0;
+        }
+
+        let total = surface_weight + coast_weight + ocean_weight;
+
+        if total > f32::EPSILON {
+            surface_weight /= total;
+            coast_weight /= total;
+            ocean_weight /= total;
+        }
+
+        HydrologyBiomeOverlay {
+            surface_weight,
+            coast_biome,
+            coast_weight,
+            ocean_biome,
+            ocean_weight,
+        }
+    }
+
     pub fn region(&self, coord: IVec2) -> HydrologyRegion {
-        HydrologyRegion::empty(coord, self.sea_level as f32)
+        HydrologyRegion::empty(
+            coord,
+            self.sea_level as f32,
+            self.settings.clone(),
+        )
     }
 
     pub fn region_from_macro_terrain(
@@ -354,6 +504,7 @@ impl HydrologyField {
                     &neighbors,
                     self.seed,
                     self.sea_level as f32,
+                    &self.settings.water_fluid,
                 ) {
                     if water_body_intersects_region(coord, &lake) {
                         water_bodies.push(lake);
@@ -374,6 +525,7 @@ impl HydrologyField {
             river_carve_depth: RIVER_CARVE_DEPTH,
             water_bodies,
             sea_level: self.sea_level as f32,
+            settings: self.settings.clone(),
             macro_samples,
         }
     }
@@ -430,6 +582,7 @@ fn lake_for_local_basin(
     neighbors: &[DrainageNode],
     seed: u64,
     sea_level: f32,
+    water_fluid: &str,
 ) -> Option<WaterBody> {
     if !source.biome_hydrology.can_generate_lake
         || source.elevation <= sea_level + 1.0
@@ -474,8 +627,13 @@ fn lake_for_local_basin(
         radius: Vec2::new(radius_x, radius_z),
         water_level,
         carve_depth: LAKE_CARVE_DEPTH,
-        fluid_id: DEFAULT_WATER_FLUID.into(),
+        fluid_id: water_fluid.to_owned(),
     })
+}
+
+fn ocean_strength(continentalness: f32) -> f32 {
+    let raw = (OCEAN_CONTINENTALNESS_THRESHOLD - continentalness) / OCEAN_TRANSITION_WIDTH;
+    smoothstep(raw.clamp(0.0, 1.0))
 }
 
 fn drainage_position(cell: IVec2, seed: u64) -> Vec2 {
@@ -570,6 +728,18 @@ fn lerp(from: f32, to: f32, amount: f32) -> f32 {
 mod tests {
     use super::*;
 
+    fn settings() -> DimensionHydrology {
+        DimensionHydrology {
+            ocean_biome: Some("mineclone:test/ocean".into()),
+            coast_biome: Some("mineclone:test/coast".into()),
+            ..default()
+        }
+    }
+
+    fn field() -> HydrologyField {
+        HydrologyField::new(42, 64, settings())
+    }
+
     fn surface(elevation: f32, continentalness: f32) -> HydrologySurfaceSample {
         HydrologySurfaceSample {
             elevation,
@@ -586,7 +756,7 @@ mod tests {
             radius: Vec2::splat(10.0),
             water_level: 64.0,
             carve_depth: 8.0,
-            fluid_id: DEFAULT_WATER_FLUID.into(),
+            fluid_id: settings().water_fluid,
         };
 
         assert_eq!(body.horizontal_strength(Vec2::ZERO), 1.0);
@@ -595,7 +765,7 @@ mod tests {
 
     #[test]
     fn macro_terrain_summary_is_deterministic() {
-        let field = HydrologyField::new(42, 64);
+        let field = field();
         let sample = |position: Vec2| surface(position.x + position.y, 0.5);
         let first = field.region_from_macro_terrain(IVec2::ZERO, sample);
         let second = field.region_from_macro_terrain(IVec2::ZERO, sample);
@@ -610,14 +780,27 @@ mod tests {
 
     #[test]
     fn low_continentalness_produces_ocean_water_and_carving() {
-        let field = HydrologyField::new(42, 64);
+        let field = field();
         let region = field.region_from_macro_terrain(IVec2::ZERO, |_| surface(70.0, 0.1));
         let center = Vec2::splat(HYDROLOGY_REGION_SIZE * 0.5);
 
         let water = region.water_at(center).unwrap();
-        assert_eq!(water.fluid_id, DEFAULT_WATER_FLUID);
+        assert_eq!(water.fluid_id, field.settings.water_fluid);
         assert_eq!(water.water_level, 64.0);
         assert!(region.density_delta(Vec3::new(center.x, 60.0, center.y)) < 0.0);
+    }
+
+    #[test]
+    fn hydrology_biome_overlay_transitions_surface_to_coast_to_ocean() {
+        let field = field();
+        let land = field.biome_overlay(0.5);
+        let coast = field.biome_overlay(0.28);
+        let ocean = field.biome_overlay(0.1);
+
+        assert_eq!(land.surface_weight, 1.0);
+        assert!(coast.coast_weight > coast.surface_weight);
+        assert!(coast.coast_weight > coast.ocean_weight);
+        assert_eq!(ocean.ocean_weight, 1.0);
     }
 
     #[test]
@@ -639,7 +822,17 @@ mod tests {
             biome_hydrology: BiomeHydrology::default(),
         }];
 
-        assert!(lake_for_local_basin(IVec2::ZERO, source, &neighbors, 42, 64.0).is_none());
+        assert!(
+            lake_for_local_basin(
+                IVec2::ZERO,
+                source,
+                &neighbors,
+                42,
+                64.0,
+                "mineclone:water",
+            )
+            .is_none()
+        );
     }
 
     #[test]
