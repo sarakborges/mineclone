@@ -6,7 +6,7 @@ use crate::{
         biome_density::BiomeDensityModifier,
         block::BlockRegistry,
         dimension::DimensionDefinition,
-        fluid::{FluidId, FluidRegistry},
+        fluid::FluidRegistry,
     },
     voxel::{
         cell::VoxelCell,
@@ -34,7 +34,6 @@ const VOXELS_PER_CHUNK: usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 struct GenerationColumnSample<'a> {
     surface_height: i32,
-    surface_fluid: Option<FluidId>,
     surface: BiomeFieldSample<'a>,
 }
 
@@ -95,13 +94,7 @@ pub(crate) fn generate_chunk(
         biomes,
         feature_fields,
     );
-    let columns = sample_generation_columns(
-        chunk_origin,
-        fluids,
-        dimension,
-        biomes,
-        biome_field,
-    );
+    let columns = sample_generation_columns(chunk_origin, dimension, biomes, biome_field);
     let density = sample_density_field(
         chunk_origin,
         &columns,
@@ -125,9 +118,7 @@ pub(crate) fn generate_chunk(
     rasterize_fluid_pass(
         &mut chunk,
         chunk_origin,
-        &columns,
         &density,
-        dimension.sea_level,
         fluids,
         region.as_ref(),
     );
@@ -167,7 +158,6 @@ fn anchored_cave_region(
 
 fn sample_generation_columns<'a>(
     chunk_origin: IVec3,
-    fluids: &FluidRegistry,
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     biome_field: &'a BiomeField,
@@ -187,11 +177,9 @@ fn sample_generation_columns<'a>(
                 biome_field.seed(),
                 &surface,
             );
-            let surface_fluid = surface_fluid_from_sample(&surface, biomes, fluids);
 
             columns.push(GenerationColumnSample {
                 surface_height,
-                surface_fluid,
                 surface,
             });
         }
@@ -296,19 +284,21 @@ fn rasterize_material_pass(
 fn rasterize_fluid_pass(
     chunk: &mut VoxelChunk,
     chunk_origin: IVec3,
-    columns: &[GenerationColumnSample<'_>],
     density: &[f32],
-    sea_level: i32,
     fluids: &FluidRegistry,
     region: &GenerationRegion,
 ) {
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
-            let column = &columns[column_index(local_x, local_z)];
             let world_x = chunk_origin.x + local_x as i32;
             let world_z = chunk_origin.z + local_z as i32;
             let horizontal = Vec2::new(world_x as f32 + 0.5, world_z as f32 + 0.5);
-            let hydrology = region.hydrology.water_at(horizontal);
+            let Some(water) = region.hydrology.water_at(horizontal) else {
+                continue;
+            };
+            let fluid_id = fluids.id_of(water.fluid_id).unwrap_or_else(|| {
+                panic!("hydrology references missing fluid: {}", water.fluid_id)
+            });
 
             for local_y in 0..CHUNK_SIZE {
                 if density[voxel_index(local_x, local_y, local_z)] > 0.0 {
@@ -316,24 +306,10 @@ fn rasterize_fluid_pass(
                 }
 
                 let world_y = chunk_origin.y + local_y as i32;
-                let fluid_id = if let Some(water) = hydrology {
-                    if world_y as f32 >= water.water_level {
-                        continue;
-                    }
 
-                    Some(fluids.id_of(water.fluid_id).unwrap_or_else(|| {
-                        panic!("hydrology references missing fluid: {}", water.fluid_id)
-                    }))
-                } else {
-                    if world_y >= sea_level {
-                        continue;
-                    }
-
-                    column.surface_fluid
-                };
-                let Some(fluid_id) = fluid_id else {
+                if world_y as f32 >= water.water_level {
                     continue;
-                };
+                }
 
                 chunk.set_fluid(
                     local_x,
@@ -354,32 +330,6 @@ fn rasterize_feature_pass(
 ) {
     // Feature placement intentionally runs after geometry and fluids. Concrete
     // trees, crystals, roots, structures, and similar content are authored later.
-}
-
-fn surface_fluid_from_sample(
-    sample: &BiomeFieldSample<'_>,
-    biomes: &BiomeRegistry,
-    fluids: &FluidRegistry,
-) -> Option<FluidId> {
-    sample
-        .influences
-        .iter()
-        .filter_map(|influence| {
-            let biome = biomes
-                .get(influence.id)
-                .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
-            let fluid_id = biome.surface_fluid.as_deref()?;
-            let fluid = fluids.id_of(fluid_id).unwrap_or_else(|| {
-                panic!(
-                    "biome {} references missing surface fluid: {fluid_id}",
-                    biome.id
-                )
-            });
-
-            Some((fluid, influence.weight))
-        })
-        .max_by(|(_, left_weight), (_, right_weight)| left_weight.total_cmp(right_weight))
-        .map(|(fluid_id, _)| fluid_id)
 }
 
 fn column_index(x: usize, z: usize) -> usize {
