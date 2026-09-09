@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::app::{game_state::GameState, pause_state::PauseState};
-use cursor::{capture_cursor, handle_cursor_grab, release_cursor};
+use cursor::{capture_cursor, handle_cursor_grab, handle_window_focus, release_cursor};
 use look::{drain_or_apply_mouse_look, MouseLookInputState};
 
 mod cursor;
@@ -21,6 +21,10 @@ impl Plugin for PlayerCameraPlugin {
             .add_systems(
                 OnEnter(PauseState::Running),
                 capture_cursor.run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                Update,
+                handle_window_focus.run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
                 Update,
