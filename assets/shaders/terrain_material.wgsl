@@ -36,12 +36,7 @@ fn fragment(
 
     var selective_tint = vec3<f32>(1.0);
     if chroma <= 0.02 {
-        // Biome grass colors define hue, not an extra brightness multiplier.
-        // Normalize the tint so grayscale texels keep their authored luminance.
-        let tint_peak = max(tint.r, max(tint.g, tint.b));
-        if tint_peak > 0.001 {
-            selective_tint = clamp(tint / tint_peak, vec3<f32>(0.0), vec3<f32>(1.0));
-        }
+        selective_tint = tint;
     }
 
     pbr_input.material.base_color = vec4<f32>(
@@ -57,6 +52,8 @@ fn fragment(
     return deferred_output(in, pbr_input);
 #else
     var out: FragmentOutput;
+    // Terrain lighting is voxel/lightmap-driven. Do not apply Bevy's directional PBR
+    // lighting again, or side faces become artificially dark depending on sun direction.
     out.color = pbr_input.material.base_color;
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
     return out;

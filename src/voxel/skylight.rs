@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use bevy::prelude::*;
 
@@ -8,6 +8,7 @@ use super::{
 };
 
 pub(crate) const MAX_SKYLIGHT: u8 = 15;
+pub(crate) const LIGHT_UPDATE_RADIUS: i32 = 15;
 
 const NEIGHBORS: [IVec3; 6] = [
     IVec3::X,
@@ -18,28 +19,7 @@ const NEIGHBORS: [IVec3; 6] = [
     IVec3::NEG_Z,
 ];
 
-pub(crate) fn relight_chunk_and_neighbors(world: &mut VoxelWorld, center: IVec3) {
-    let coords = [
-        center,
-        center + IVec3::X,
-        center + IVec3::NEG_X,
-        center + IVec3::Y,
-        center + IVec3::NEG_Y,
-        center + IVec3::Z,
-        center + IVec3::NEG_Z,
-    ];
-
-    for coord in coords {
-        relight_chunk(world, coord);
-    }
-
-    // Re-evaluate the edited/new chunk after its neighbors have consumed its boundary light.
-    // With a maximum light range of 15 and 16-block chunks, light never needs to cross
-    // more than one chunk boundary horizontally.
-    relight_chunk(world, center);
-}
-
-fn relight_chunk(world: &mut VoxelWorld, coord: IVec3) {
+pub(crate) fn initialize_chunk_skylight(world: &mut VoxelWorld, coord: IVec3) {
     if coord.y < 0 || world.chunk(coord).is_none() {
         return;
     }
@@ -49,6 +29,109 @@ fn relight_chunk(world: &mut VoxelWorld, coord: IVec3) {
     if let Some(chunk) = world.chunk_mut(coord) {
         chunk.replace_skylight(skylight);
     }
+}
+
+pub(crate) fn relight_around_voxel(
+    world: &mut VoxelWorld,
+    center: IVec3,
+) -> HashSet<IVec3> {
+    let mut positions = Vec::new();
+
+    for dy in -LIGHT_UPDATE_RADIUS..=LIGHT_UPDATE_RADIUS {
+        for dz in -LIGHT_UPDATE_RADIUS..=LIGHT_UPDATE_RADIUS {
+            for dx in -LIGHT_UPDATE_RADIUS..=LIGHT_UPDATE_RADIUS {
+                if dx.abs() + dy.abs() + dz.abs() > LIGHT_UPDATE_RADIUS {
+                    continue;
+                }
+
+                let position = center + IVec3::new(dx, dy, dz);
+                if position.y < 0 || !world.is_loaded_at(position) {
+                    continue;
+                }
+
+                positions.push(position);
+            }
+        }
+    }
+
+    let old_levels = positions
+        .iter()
+        .copied()
+        .map(|position| (position, world.skylight_at(position)))
+        .collect::<Vec<_>>();
+    let region = positions.iter().copied().collect::<HashSet<_>>();
+
+    for position in &positions {
+        world.set_skylight_at(*position, 0);
+    }
+
+    let max_loaded_chunk_y = world.highest_loaded_chunk_y();
+    let mut highest_solid_by_column = HashMap::<IVec2, i32>::new();
+    let mut queue = VecDeque::new();
+
+    for position in positions.iter().copied() {
+        if world.is_solid(position) {
+            continue;
+        }
+
+        let column = IVec2::new(position.x, position.z);
+        let highest_solid = *highest_solid_by_column.entry(column).or_insert_with(|| {
+            world
+                .highest_solid_y_in_column(position.x, position.z, max_loaded_chunk_y)
+                .unwrap_or(-1)
+        });
+        let mut level = if position.y > highest_solid {
+            MAX_SKYLIGHT
+        } else {
+            0
+        };
+
+        for direction in NEIGHBORS {
+            let neighbor = position + direction;
+            if region.contains(&neighbor) {
+                continue;
+            }
+
+            level = level.max(world.skylight_at(neighbor).saturating_sub(1));
+        }
+
+        if level > 0 {
+            world.set_skylight_at(position, level);
+            queue.push_back(position);
+        }
+    }
+
+    while let Some(position) = queue.pop_front() {
+        let level = world.skylight_at(position);
+        if level <= 1 {
+            continue;
+        }
+
+        let propagated = level - 1;
+
+        for direction in NEIGHBORS {
+            let next = position + direction;
+            if !region.contains(&next) || world.is_solid(next) {
+                continue;
+            }
+            if propagated <= world.skylight_at(next) {
+                continue;
+            }
+
+            world.set_skylight_at(next, propagated);
+            queue.push_back(next);
+        }
+    }
+
+    let mut changed_chunks = HashSet::new();
+
+    for (position, old_level) in old_levels {
+        if world.skylight_at(position) != old_level {
+            changed_chunks.insert(chunk_coord(position));
+        }
+    }
+
+    changed_chunks
 }
 
 fn calculate_chunk_skylight(world: &VoxelWorld, coord: IVec3) -> [u8; CHUNK_VOLUME] {
@@ -61,7 +144,6 @@ fn calculate_chunk_skylight(world: &VoxelWorld, coord: IVec3) -> [u8; CHUNK_VOLU
     let mut skylight = [0_u8; CHUNK_VOLUME];
     let mut queue = VecDeque::new();
 
-    // Minecraft-style direct sky: unobstructed vertical columns stay at level 15.
     for z in 0..CHUNK_SIZE {
         for x in 0..CHUNK_SIZE {
             let world_x = origin.x + x as i32;
@@ -86,8 +168,6 @@ fn calculate_chunk_skylight(world: &VoxelWorld, coord: IVec3) -> [u8; CHUNK_VOLU
         }
     }
 
-    // Neighbor chunks seed this chunk through its six boundaries. Horizontal/upward
-    // propagation loses one level, just like Minecraft skylight below level 15.
     for z in 0..CHUNK_SIZE {
         for y in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
@@ -168,4 +248,13 @@ fn local_index(local: IVec3) -> usize {
     local.x as usize
         + local.z as usize * CHUNK_SIZE
         + local.y as usize * CHUNK_SIZE * CHUNK_SIZE
+}
+
+fn chunk_coord(world_position: IVec3) -> IVec3 {
+    let size = CHUNK_SIZE as i32;
+    IVec3::new(
+        world_position.x.div_euclid(size),
+        world_position.y.div_euclid(size),
+        world_position.z.div_euclid(size),
+    )
 }

@@ -2,13 +2,12 @@ use crate::content::fluid::FluidId;
 
 use super::{
     cell::VoxelCell,
-    chunk::{VoxelChunk, CHUNK_SIZE},
+    chunk::{VoxelChunk, CHUNK_SIZE, CHUNK_VOLUME},
     fluid::FluidCell,
     texture_rotation::TextureRotation,
 };
 
 const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
-const CHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_SIZE;
 const OCCUPANCY_WORDS: usize = CHUNK_VOLUME.div_ceil(u64::BITS as usize);
 
 #[derive(Clone, Copy)]
@@ -29,6 +28,7 @@ pub struct ArchivedChunk {
     cells: Vec<ArchivedCell>,
     fluid_occupancy: [u64; OCCUPANCY_WORDS],
     fluid_cells: Vec<ArchivedFluidCell>,
+    skylight: [u8; CHUNK_VOLUME],
 }
 
 impl ArchivedChunk {
@@ -85,6 +85,7 @@ impl ArchivedChunk {
             cells,
             fluid_occupancy,
             fluid_cells,
+            skylight: chunk.skylight_data(),
         }
     }
 
@@ -138,6 +139,7 @@ impl ArchivedChunk {
             );
         }
 
+        chunk.replace_skylight(self.skylight);
         chunk
     }
 }

@@ -12,8 +12,7 @@ use crate::{
     world::{
         biome_field::BiomeField,
         chunk_rendering::{
-            refresh_adjacent_chunk_meshes, spawn_chunk_mesh, ChunkRenderPool, FluidMaterials,
-            TerrainMaterials,
+            refresh_chunk_mesh, ChunkRenderPool, FluidMaterials, TerrainMaterials,
         },
     },
 };
@@ -22,6 +21,15 @@ use super::{
     block::{BlockTargetingSet, TargetedBlock},
     placement::placement_voxel,
 };
+
+const CHUNK_NEIGHBORS: [IVec3; 6] = [
+    IVec3::X,
+    IVec3::NEG_X,
+    IVec3::Y,
+    IVec3::NEG_Y,
+    IVec3::Z,
+    IVec3::NEG_Z,
+];
 
 pub struct BlockInteractionPlugin;
 
@@ -57,8 +65,8 @@ fn edit_targeted_block(
         return;
     };
 
-    let (edited_chunk, placed) = if buttons.just_pressed(MouseButton::Left) {
-        (world.set_block_at(hit.voxel, None), false)
+    let (edited_chunk, edited_voxel, placed) = if buttons.just_pressed(MouseButton::Left) {
+        (world.set_block_at(hit.voxel, None), hit.voxel, false)
     } else if buttons.just_pressed(MouseButton::Right) {
         let Some(block_id) = hotbar.item_at(hotbar.selected_slot()) else {
             return;
@@ -75,6 +83,7 @@ fn edit_targeted_block(
                 voxel,
                 Some(VoxelCell::new(block_id, TextureRotation::default())),
             ),
+            voxel,
             true,
         )
     } else {
@@ -85,6 +94,12 @@ fn edit_targeted_block(
         return;
     };
 
+    let mut chunks_to_remesh = world.relight_around_voxel(edited_voxel);
+    chunks_to_remesh.insert(coord);
+    for offset in CHUNK_NEIGHBORS {
+        chunks_to_remesh.insert(coord + offset);
+    }
+
     if placed {
         viewmodel_animation.play_place();
     } else {
@@ -92,67 +107,18 @@ fn edit_targeted_block(
     }
 
     targeted.0 = None;
-    remesh_edited_chunk(
-        &mut commands,
-        &mut meshes,
-        &mut render_pool,
-        &world,
-        coord,
-        &biomes,
-        &biome_field,
-        &terrain_materials,
-        &fluid_materials,
-    );
-}
 
-#[allow(clippy::too_many_arguments)]
-fn remesh_edited_chunk(
-    commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    render_pool: &mut ChunkRenderPool,
-    world: &VoxelWorld,
-    coord: IVec3,
-    biomes: &BiomeRegistry,
-    biome_field: &BiomeField,
-    terrain_materials: &TerrainMaterials,
-    fluid_materials: &FluidMaterials,
-) {
-    if render_pool.contains(coord) {
-        if let Some((entities, mesh_handles)) = render_pool.take(coord) {
-            for entity in entities {
-                commands.entity(entity).despawn();
-            }
-
-            for handle in mesh_handles {
-                let _ = meshes.remove(&handle);
-            }
-        }
-
-        if let Some(chunk) = world.chunk(coord) {
-            spawn_chunk_mesh(
-                commands,
-                meshes,
-                render_pool,
-                world,
-                coord,
-                chunk,
-                biomes,
-                biome_field,
-                terrain_materials,
-                fluid_materials,
-            );
-        }
+    for chunk_coord in chunks_to_remesh {
+        refresh_chunk_mesh(
+            &mut commands,
+            &mut meshes,
+            &mut render_pool,
+            &world,
+            chunk_coord,
+            &biomes,
+            &biome_field,
+            &terrain_materials,
+            &fluid_materials,
+        );
     }
-
-    refresh_adjacent_chunk_meshes(
-        commands,
-        meshes,
-        render_pool,
-        world,
-        coord,
-        biomes,
-        biome_field,
-        terrain_materials,
-        fluid_materials,
-    );
 }

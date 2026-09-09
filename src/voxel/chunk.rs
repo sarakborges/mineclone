@@ -50,6 +50,10 @@ impl VoxelChunk {
         self.skylight[index(x as usize, y as usize, z as usize)]
     }
 
+    pub(crate) fn skylight_data(&self) -> [u8; CHUNK_VOLUME] {
+        self.skylight
+    }
+
     pub(crate) fn highest_solid_y(&self, x: i32, z: i32) -> Option<i32> {
         if x < 0 || z < 0 || x >= CHUNK_SIZE as i32 || z >= CHUNK_SIZE as i32 {
             return None;
@@ -62,6 +66,18 @@ impl VoxelChunk {
 
     pub(crate) fn replace_skylight(&mut self, skylight: [u8; CHUNK_VOLUME]) {
         self.skylight = skylight;
+    }
+
+    pub(crate) fn set_skylight(&mut self, x: usize, y: usize, z: usize, level: u8) -> bool {
+        let index = index(x, y, z);
+        let level = level.min(15);
+
+        if self.skylight[index] == level {
+            return false;
+        }
+
+        self.skylight[index] = level;
+        true
     }
 
     pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: Option<VoxelCell>) {

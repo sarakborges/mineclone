@@ -7,7 +7,10 @@ use super::{
     chunk::{VoxelChunk, CHUNK_SIZE},
     chunk_archive::ArchivedChunk,
     fluid::FluidCell,
-    skylight::relight_chunk_and_neighbors,
+    skylight::{
+        initialize_chunk_skylight,
+        relight_around_voxel as relight_skylight_around_voxel,
+    },
 };
 
 #[derive(Resource, Default)]
@@ -27,7 +30,7 @@ impl VoxelWorld {
 
         self.generated_chunks.insert(coord);
         self.chunks.insert(coord, chunk);
-        relight_chunk_and_neighbors(self, coord);
+        initialize_chunk_skylight(self, coord);
     }
 
     pub fn chunk(&self, coord: IVec3) -> Option<&VoxelChunk> {
@@ -65,7 +68,6 @@ impl VoxelWorld {
         };
 
         self.chunks.insert(coord, archived.restore());
-        relight_chunk_and_neighbors(self, coord);
         true
     }
 
@@ -112,6 +114,24 @@ impl VoxelWorld {
         };
 
         chunk.skylight_at(local_position.x, local_position.y, local_position.z)
+    }
+
+    pub(crate) fn set_skylight_at(&mut self, world_position: IVec3, level: u8) -> bool {
+        if world_position.y < 0 {
+            return false;
+        }
+
+        let (chunk_coord, local_position) = split_world_position(world_position);
+        let Some(chunk) = self.chunks.get_mut(&chunk_coord) else {
+            return false;
+        };
+
+        chunk.set_skylight(
+            local_position.x as usize,
+            local_position.y as usize,
+            local_position.z as usize,
+            level,
+        )
     }
 
     pub fn is_loaded_at(&self, world_position: IVec3) -> bool {
@@ -177,8 +197,11 @@ impl VoxelWorld {
             }
         }
 
-        relight_chunk_and_neighbors(self, chunk_coord);
         Some(chunk_coord)
+    }
+
+    pub(crate) fn relight_around_voxel(&mut self, world_position: IVec3) -> HashSet<IVec3> {
+        relight_skylight_around_voxel(self, world_position)
     }
 
     pub fn is_solid(&self, world_position: IVec3) -> bool {

@@ -236,7 +236,7 @@ pub fn refresh_adjacent_chunk_meshes(
     }
 }
 
-fn refresh_chunk_mesh(
+pub fn refresh_chunk_mesh(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     render_pool: &mut ChunkRenderPool,
@@ -247,6 +247,10 @@ fn refresh_chunk_mesh(
     terrain_materials: &TerrainMaterials,
     fluid_materials: &FluidMaterials,
 ) {
+    if !render_pool.contains(coord) {
+        return;
+    }
+
     let Some(chunk) = world.chunk(coord) else {
         return;
     };

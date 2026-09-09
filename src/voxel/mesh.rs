@@ -58,7 +58,7 @@ impl MeshBuffers {
         texture_rotation: TextureRotation,
         tint: [f32; 3],
         shade: f32,
-        skylight: [f32; 4],
+        skylight: f32,
     ) {
         push_face(
             &mut self.positions,
@@ -136,7 +136,7 @@ where
                         TextureRotation::default(),
                         grass_tint,
                         EAST_SHADE,
-                        face_skylight(world, world_voxel, BlockFace::Right),
+                        skylight_brightness(world, world_voxel + IVec3::X),
                     );
                 }
 
@@ -147,7 +147,7 @@ where
                         TextureRotation::default(),
                         grass_tint,
                         WEST_SHADE,
-                        face_skylight(world, world_voxel, BlockFace::Left),
+                        skylight_brightness(world, world_voxel - IVec3::X),
                     );
                 }
 
@@ -158,7 +158,7 @@ where
                         cell.texture_rotation,
                         grass_tint,
                         TOP_SHADE,
-                        face_skylight(world, world_voxel, BlockFace::Top),
+                        skylight_brightness(world, world_voxel + IVec3::Y),
                     );
                 }
 
@@ -169,7 +169,7 @@ where
                         cell.texture_rotation,
                         grass_tint,
                         BOTTOM_SHADE,
-                        face_skylight(world, world_voxel, BlockFace::Bottom),
+                        skylight_brightness(world, world_voxel - IVec3::Y),
                     );
                 }
 
@@ -180,7 +180,7 @@ where
                         TextureRotation::default(),
                         grass_tint,
                         SOUTH_SHADE,
-                        face_skylight(world, world_voxel, BlockFace::Front),
+                        skylight_brightness(world, world_voxel + IVec3::Z),
                     );
                 }
 
@@ -191,7 +191,7 @@ where
                         TextureRotation::default(),
                         grass_tint,
                         NORTH_SHADE,
-                        face_skylight(world, world_voxel, BlockFace::Back),
+                        skylight_brightness(world, world_voxel - IVec3::Z),
                     );
                 }
             }
@@ -215,87 +215,6 @@ where
     .collect()
 }
 
-fn face_skylight(world: &VoxelWorld, voxel: IVec3, face: BlockFace) -> [f32; 4] {
-    let (normal, tangent_a, tangent_b, signs) = match face {
-        BlockFace::Right => (
-            IVec3::X,
-            IVec3::Y,
-            IVec3::Z,
-            [(-1, 1), (-1, -1), (1, -1), (1, 1)],
-        ),
-        BlockFace::Left => (
-            IVec3::NEG_X,
-            IVec3::Y,
-            IVec3::Z,
-            [(-1, -1), (-1, 1), (1, 1), (1, -1)],
-        ),
-        BlockFace::Top => (
-            IVec3::Y,
-            IVec3::X,
-            IVec3::Z,
-            [(-1, 1), (1, 1), (1, -1), (-1, -1)],
-        ),
-        BlockFace::Bottom => (
-            IVec3::NEG_Y,
-            IVec3::X,
-            IVec3::Z,
-            [(-1, -1), (1, -1), (1, 1), (-1, 1)],
-        ),
-        BlockFace::Front => (
-            IVec3::Z,
-            IVec3::X,
-            IVec3::Y,
-            [(-1, -1), (1, -1), (1, 1), (-1, 1)],
-        ),
-        BlockFace::Back => (
-            IVec3::NEG_Z,
-            IVec3::X,
-            IVec3::Y,
-            [(1, -1), (-1, -1), (-1, 1), (1, 1)],
-        ),
-    };
-    let base = voxel + normal;
-
-    signs.map(|(sign_a, sign_b)| {
-        vertex_skylight(
-            world,
-            base,
-            tangent_a * sign_a,
-            tangent_b * sign_b,
-        )
-    })
-}
-
-fn vertex_skylight(
-    world: &VoxelWorld,
-    base: IVec3,
-    offset_a: IVec3,
-    offset_b: IVec3,
-) -> f32 {
-    let samples = [
-        base,
-        base + offset_a,
-        base + offset_b,
-        base + offset_a + offset_b,
-    ];
-
-    samples
-        .into_iter()
-        .map(|position| skylight_brightness(world, position))
-        .sum::<f32>()
-        / samples.len() as f32
-}
-
 fn skylight_brightness(world: &VoxelWorld, air_cell: IVec3) -> f32 {
-    if air_cell.y < 0 {
-        return LIGHT_BRIGHTNESS[0];
-    }
-
-    // Missing neighbor chunks are temporary while streaming. Treat their edge light as
-    // open sky so chunk borders do not flash black before the neighbor is generated.
-    if !world.is_loaded_at(air_cell) {
-        return LIGHT_BRIGHTNESS[15];
-    }
-
     LIGHT_BRIGHTNESS[world.skylight_at(air_cell).min(15) as usize]
 }
