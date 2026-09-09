@@ -6,11 +6,40 @@ const CONNECTOR_REGION_SIZE: f32 = 128.0;
 const NODE_JITTER: f32 = 28.0;
 const MIN_TUNNEL_RADIUS: f32 = 3.0;
 const MAX_TUNNEL_RADIUS: f32 = 8.0;
+const ANCHOR_TUNNEL_RADIUS: f32 = 6.0;
 
 #[derive(Clone, Debug)]
 pub struct CaveConnectivityRegion {
     pub coord: IVec3,
     pub connector_graph: FeatureGraph,
+}
+
+impl CaveConnectivityRegion {
+    pub fn with_anchors(&self, anchors: &[Vec3]) -> Self {
+        if anchors.is_empty() {
+            return self.clone();
+        }
+
+        let mut connector_graph = self.connector_graph.clone();
+
+        for &anchor in anchors {
+            let Some(nearest) = connector_graph.nearest_node(anchor) else {
+                continue;
+            };
+            let anchor_node = connector_graph.add_node(anchor);
+            connector_graph.add_edge(
+                anchor_node,
+                nearest,
+                ANCHOR_TUNNEL_RADIUS,
+                ANCHOR_TUNNEL_RADIUS,
+            );
+        }
+
+        Self {
+            coord: self.coord,
+            connector_graph,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -48,6 +77,11 @@ impl CaveConnectivityField {
 
         for direction in [IVec3::X, IVec3::Z, IVec3::Y] {
             let neighbor_coord = coord + direction;
+
+            if neighbor_coord.y < 0 {
+                continue;
+            }
+
             let neighbor = graph.add_node(node_position(neighbor_coord, self.seed));
             let edge_hash = region_hash(coord, self.seed ^ direction_hash(direction));
             let start_radius = tunnel_radius(edge_hash);
@@ -131,5 +165,15 @@ mod tests {
             assert_eq!(left.position, right.position);
             assert!(left.position.y >= 0.0);
         }
+    }
+
+    #[test]
+    fn anchors_add_connections_to_the_region_graph() {
+        let field = CaveConnectivityField::new(42);
+        let base = field.region(IVec3::ZERO);
+        let anchored = base.with_anchors(&[Vec3::new(10.0, 20.0, 10.0)]);
+
+        assert_eq!(anchored.connector_graph.nodes().len(), base.connector_graph.nodes().len() + 1);
+        assert_eq!(anchored.connector_graph.edges().len(), base.connector_graph.edges().len() + 1);
     }
 }
