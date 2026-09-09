@@ -26,7 +26,7 @@ jobs:
           sudo apt-get install --yes libasound2-dev libudev-dev
 
       - name: Check
-        run: cargo check --locked
+        run: cargo check
 
       - name: Test
-        run: cargo test --locked
+        run: cargo test
