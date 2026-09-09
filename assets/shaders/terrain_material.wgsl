@@ -36,18 +36,15 @@ fn fragment(
 
     var base_rgb = texel.rgb;
     if chroma <= 0.02 {
-        // Grayscale pixels carry the authored brightness of the grass texture.
-        // Use biome color only for hue/chroma, preserving that luminance instead of
-        // multiplying the texture by a dark RGB tint.
         let tint_luma = max(
             dot(tint, vec3<f32>(0.2126, 0.7152, 0.0722)),
-            0.001,
+            0.001
         );
         let luminance_preserving_tint = tint / tint_luma;
         base_rgb = clamp(
             vec3<f32>(texel.r) * luminance_preserving_tint,
             vec3<f32>(0.0),
-            vec3<f32>(1.0),
+            vec3<f32>(1.0)
         );
     }
 
