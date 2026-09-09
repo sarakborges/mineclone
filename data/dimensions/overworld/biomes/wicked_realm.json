@@ -2,8 +2,8 @@
   "id": "mineclone:overworld/wicked_realm",
   "name": "Wicked Realm",
   "size": {
-    "x": { "min": 100.0, "max": 500.0 },
-    "z": { "min": 100.0, "max": 500.0 },
+    "x": { "min": 50.0, "max": 250.0 },
+    "z": { "min": 50.0, "max": 250.0 },
     "y": null
   },
   "terrain": {
