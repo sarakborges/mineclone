@@ -28,6 +28,7 @@ use super::{
     generation::generate_chunk,
     render_distance::chunk_coords_in_volume,
     terrain::surface_height,
+    world_feature_fields::WorldFeatureFields,
     InMemoryWorldSave,
     WorldLoadMode,
     WorldSeed,
@@ -150,6 +151,7 @@ pub fn begin_world_loading(
     }
 
     commands.insert_resource(biome_field);
+    commands.insert_resource(WorldFeatureFields::new(seed.0, dimension.sea_level));
     commands.insert_resource(terrain_materials);
     commands.insert_resource(fluid_materials);
     commands.insert_resource(WorldLoadingState {
