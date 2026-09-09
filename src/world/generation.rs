@@ -25,7 +25,7 @@ use super::{
         generation_region_coord, generation_region_world_bounds, GenerationRegion,
     },
     material_field::solid_block_id,
-    terrain::{chunk_y_bounds, surface_height_from_sample, terrain_density},
+    terrain::{chunk_y_bounds, surface_height, surface_height_from_sample, terrain_density},
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -69,7 +69,26 @@ pub(crate) fn generate_chunk(
 
     let chunk_origin = coord * CHUNK_SIZE as i32;
     let region_coord = generation_region_coord(coord);
-    let region = feature_fields.region(region_coord);
+    let region = feature_fields.region_with_hydrology(region_coord, |hydrology| {
+        hydrology.region_from_macro_terrain(
+            IVec2::new(region_coord.x, region_coord.z),
+            |position| {
+                let surface_position = IVec2::new(
+                    position.x.floor() as i32,
+                    position.y.floor() as i32,
+                );
+                let elevation = surface_height(
+                    surface_position,
+                    dimension,
+                    biomes,
+                    biome_field,
+                ) as f32;
+                let continentalness = biome_field.climate_at(position).continentalness;
+
+                (elevation, continentalness)
+            },
+        )
+    });
     let anchored_caves = anchored_cave_region(region.as_ref(), biome_field, biomes);
     let columns = sample_generation_columns(
         chunk_origin,
