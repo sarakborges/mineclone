@@ -125,7 +125,6 @@ fn remesh_edited_chunk(
 
             for handle in mesh_handles {
                 let _ = meshes.remove(&handle);
-                render_pool.recycle_mesh_handle(handle);
             }
         }
 
