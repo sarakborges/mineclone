@@ -39,8 +39,15 @@ fn fragment(
         let tint_peak = max(max(tint.r, tint.g), max(tint.b, 0.001));
         let hue = tint / tint_peak;
         let softened_hue = mix(vec3<f32>(1.0), hue, 0.72);
+        let luminance_weights = vec3<f32>(0.2126, 0.7152, 0.0722);
+        let softened_luma = max(dot(softened_hue, luminance_weights), 0.001);
+        let luminance_compensation = min(1.35, 1.0 / softened_luma);
+
         base_rgb = clamp(
-            vec3<f32>(texel.r) * softened_hue,
+            vec3<f32>(texel.r)
+                * softened_hue
+                * luminance_compensation
+                * 1.08,
             vec3<f32>(0.0),
             vec3<f32>(1.0)
         );
