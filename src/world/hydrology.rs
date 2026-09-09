@@ -8,13 +8,14 @@ pub enum WaterBodyKind {
     Ocean,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct WaterBody {
     pub kind: WaterBodyKind,
     pub center: Vec2,
     pub radius: Vec2,
     pub water_level: f32,
     pub carve_depth: f32,
+    pub fluid_id: String,
 }
 
 impl WaterBody {
@@ -29,6 +30,12 @@ impl WaterBody {
     pub fn contains_horizontal(&self, position: Vec2) -> bool {
         self.horizontal_strength(position) > 0.0
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct HydrologyWaterSample<'a> {
+    pub fluid_id: &'a str,
+    pub water_level: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -76,12 +83,15 @@ impl HydrologyRegion {
         river_delta + water_body_delta
     }
 
-    pub fn water_level_at(&self, position: Vec2) -> Option<f32> {
+    pub fn water_at(&self, position: Vec2) -> Option<HydrologyWaterSample<'_>> {
         self.water_bodies
             .iter()
             .filter(|body| body.contains_horizontal(position))
-            .map(|body| body.water_level)
-            .max_by(f32::total_cmp)
+            .max_by(|left, right| left.water_level.total_cmp(&right.water_level))
+            .map(|body| HydrologyWaterSample {
+                fluid_id: body.fluid_id.as_str(),
+                water_level: body.water_level,
+            })
     }
 }
 
@@ -121,6 +131,7 @@ mod tests {
             radius: Vec2::splat(10.0),
             water_level: 64.0,
             carve_depth: 8.0,
+            fluid_id: "mineclone:water".into(),
         };
 
         assert_eq!(body.horizontal_strength(Vec2::ZERO), 1.0);
