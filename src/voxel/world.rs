@@ -90,6 +90,39 @@ impl VoxelWorld {
         )
     }
 
+    pub fn is_loaded_at(&self, world_position: IVec3) -> bool {
+        if world_position.y < 0 {
+            return false;
+        }
+
+        let (chunk_coord, _) = split_world_position(world_position);
+        self.chunks.contains_key(&chunk_coord)
+    }
+
+    pub fn set_block_at(
+        &mut self,
+        world_position: IVec3,
+        block: Option<VoxelCell>,
+    ) -> Option<IVec3> {
+        if world_position.y < 0 {
+            return None;
+        }
+
+        let (chunk_coord, local_position) = split_world_position(world_position);
+        let chunk = self.chunks.get_mut(&chunk_coord)?;
+        let x = local_position.x as usize;
+        let y = local_position.y as usize;
+        let z = local_position.z as usize;
+
+        chunk.set_block(x, y, z, block);
+
+        if block.is_some() {
+            chunk.set_fluid(x, y, z, None);
+        }
+
+        Some(chunk_coord)
+    }
+
     pub fn is_solid(&self, world_position: IVec3) -> bool {
         self.cell_at(world_position).is_some()
     }
