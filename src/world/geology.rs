@@ -14,6 +14,7 @@ pub struct GeologicalFeature {
     pub kind: GeologicalFeatureKind,
     pub path: FeatureGraph,
     pub strength: f32,
+    pub solid_block: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -33,6 +34,18 @@ impl GeologyRegion {
                     .map(|sample| -feature.strength * sample.strength)
             })
             .sum()
+    }
+
+    pub fn solid_block_at(&self, position: Vec3) -> Option<&str> {
+        self.features
+            .iter()
+            .filter_map(|feature| {
+                let block_id = feature.solid_block.as_deref()?;
+                let sample = feature.path.sample(position)?;
+                Some((block_id, sample.strength))
+            })
+            .max_by(|(_, left), (_, right)| left.total_cmp(right))
+            .map(|(block_id, _)| block_id)
     }
 }
 
