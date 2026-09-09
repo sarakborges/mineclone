@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-pub const DEFAULT_DIMENSION_ID: &str = "mineclone:overworld";
+pub const DEFAULT_DIMENSION_ID: &str = "asteria:overworld";
 
 #[derive(Resource)]
 pub struct CurrentDimension {

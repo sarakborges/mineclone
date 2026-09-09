@@ -6,10 +6,13 @@ use crate::{
     app::game_state::GameState,
     content::{
         biome::BiomeRegistry,
-        block::BlockRegistry,
+        block::{BlockDefinition, BlockRegistry},
         fluid::{FluidId, FluidRegistry},
     },
-    rendering::terrain_material::{TerrainMaterial, TerrainMaterialExtension},
+    rendering::{
+        block_model::block_face_texture,
+        terrain_material::{TerrainMaterial, TerrainMaterialExtension},
+    },
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         fluid_mesh::build_fluid_meshes,
@@ -29,17 +32,17 @@ const CHUNK_NEIGHBORS: [IVec3; 6] = [
     IVec3::NEG_Z,
 ];
 
-#[derive(Resource, Clone)]
-pub struct TerrainMaterials {
-    pub top: Handle<TerrainMaterial>,
-    pub bottom: Handle<TerrainMaterial>,
-    pub left: Handle<TerrainMaterial>,
-    pub right: Handle<TerrainMaterial>,
-    pub front: Handle<TerrainMaterial>,
-    pub back: Handle<TerrainMaterial>,
+#[derive(Clone)]
+struct BlockFaceMaterials {
+    top: Handle<TerrainMaterial>,
+    bottom: Handle<TerrainMaterial>,
+    left: Handle<TerrainMaterial>,
+    right: Handle<TerrainMaterial>,
+    front: Handle<TerrainMaterial>,
+    back: Handle<TerrainMaterial>,
 }
 
-impl TerrainMaterials {
+impl BlockFaceMaterials {
     fn for_face(&self, face: BlockFace) -> &Handle<TerrainMaterial> {
         match face {
             BlockFace::Right => &self.right,
@@ -50,6 +53,110 @@ impl TerrainMaterials {
             BlockFace::Back => &self.back,
         }
     }
+}
+
+#[derive(Resource, Clone)]
+pub struct TerrainMaterials {
+    materials: HashMap<String, BlockFaceMaterials>,
+}
+
+impl TerrainMaterials {
+    pub fn from_registry(
+        blocks: &BlockRegistry,
+        asset_server: &AssetServer,
+        materials: &mut Assets<TerrainMaterial>,
+        roughness: f32,
+        metallic: f32,
+    ) -> Self {
+        let materials = blocks
+            .iter()
+            .map(|block| {
+                let face_materials = BlockFaceMaterials {
+                    top: create_block_face_material(
+                        block,
+                        BlockFace::Top,
+                        asset_server,
+                        materials,
+                        roughness,
+                        metallic,
+                    ),
+                    bottom: create_block_face_material(
+                        block,
+                        BlockFace::Bottom,
+                        asset_server,
+                        materials,
+                        roughness,
+                        metallic,
+                    ),
+                    left: create_block_face_material(
+                        block,
+                        BlockFace::Left,
+                        asset_server,
+                        materials,
+                        roughness,
+                        metallic,
+                    ),
+                    right: create_block_face_material(
+                        block,
+                        BlockFace::Right,
+                        asset_server,
+                        materials,
+                        roughness,
+                        metallic,
+                    ),
+                    front: create_block_face_material(
+                        block,
+                        BlockFace::Front,
+                        asset_server,
+                        materials,
+                        roughness,
+                        metallic,
+                    ),
+                    back: create_block_face_material(
+                        block,
+                        BlockFace::Back,
+                        asset_server,
+                        materials,
+                        roughness,
+                        metallic,
+                    ),
+                };
+
+                (block.id.clone(), face_materials)
+            })
+            .collect();
+
+        Self { materials }
+    }
+
+    fn for_block_face(&self, block_id: &str, face: BlockFace) -> &Handle<TerrainMaterial> {
+        self.materials
+            .get(block_id)
+            .unwrap_or_else(|| panic!("missing terrain materials for block: {block_id}"))
+            .for_face(face)
+    }
+}
+
+fn create_block_face_material(
+    block: &BlockDefinition,
+    face: BlockFace,
+    asset_server: &AssetServer,
+    materials: &mut Assets<TerrainMaterial>,
+    roughness: f32,
+    metallic: f32,
+) -> Handle<TerrainMaterial> {
+    materials.add(TerrainMaterial {
+        base: StandardMaterial {
+            base_color: Color::WHITE,
+            base_color_texture: block_face_texture(face, block)
+                .map(|texture| asset_server.load(texture.to_owned())),
+            perceptual_roughness: roughness,
+            metallic,
+            unlit: true,
+            ..default()
+        },
+        extension: TerrainMaterialExtension::default(),
+    })
 }
 
 #[derive(Resource, Clone)]
@@ -176,7 +283,9 @@ pub fn spawn_chunk_mesh(
     let mut mesh_handles = Vec::new();
 
     for face_mesh in face_meshes {
-        let material = terrain_materials.for_face(face_mesh.face).clone();
+        let material = terrain_materials
+            .for_block_face(face_mesh.block_id, face_mesh.face)
+            .clone();
         let casts_shadow = face_mesh.casts_shadow;
         let mesh_handle = meshes.add(face_mesh.mesh);
         let mut entity_commands = commands.spawn((

@@ -1,6 +1,8 @@
 mod face;
 pub(crate) mod lighting;
 
+use std::collections::HashMap;
+
 use bevy::{
     asset::RenderAssetUsages,
     mesh::Indices,
@@ -32,6 +34,7 @@ pub enum BlockFace {
 
 pub struct ChunkFaceMesh {
     pub face: BlockFace,
+    pub block_id: &'static str,
     pub mesh: Mesh,
     pub casts_shadow: bool,
 }
@@ -92,26 +95,22 @@ impl MeshBuffers {
 }
 
 #[derive(Default)]
-struct ShadowMeshBuffers {
-    casting: MeshBuffers,
-    non_casting: MeshBuffers,
+struct BlockMeshBuffers {
+    buffers: HashMap<(&'static str, bool), MeshBuffers>,
 }
 
-impl ShadowMeshBuffers {
-    fn get_mut(&mut self, casts_shadow: bool) -> &mut MeshBuffers {
-        if casts_shadow {
-            &mut self.casting
-        } else {
-            &mut self.non_casting
-        }
+impl BlockMeshBuffers {
+    fn get_mut(&mut self, block_id: &'static str, casts_shadow: bool) -> &mut MeshBuffers {
+        self.buffers.entry((block_id, casts_shadow)).or_default()
     }
 
     fn into_meshes(self, face: BlockFace) -> impl Iterator<Item = ChunkFaceMesh> {
-        [(true, self.casting), (false, self.non_casting)]
+        self.buffers
             .into_iter()
-            .filter_map(move |(casts_shadow, buffers)| {
+            .filter_map(move |((block_id, casts_shadow), buffers)| {
                 buffers.into_mesh().map(|mesh| ChunkFaceMesh {
                     face,
+                    block_id,
                     mesh,
                     casts_shadow,
                 })
@@ -129,12 +128,12 @@ pub fn build_chunk_mesh<F>(
 where
     F: Fn(IVec3) -> [f32; 3],
 {
-    let mut right = ShadowMeshBuffers::default();
-    let mut left = ShadowMeshBuffers::default();
-    let mut top = ShadowMeshBuffers::default();
-    let mut bottom = ShadowMeshBuffers::default();
-    let mut front = ShadowMeshBuffers::default();
-    let mut back = ShadowMeshBuffers::default();
+    let mut right = BlockMeshBuffers::default();
+    let mut left = BlockMeshBuffers::default();
+    let mut top = BlockMeshBuffers::default();
+    let mut bottom = BlockMeshBuffers::default();
+    let mut front = BlockMeshBuffers::default();
+    let mut back = BlockMeshBuffers::default();
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_origin = chunk_coord * chunk_size;
 
@@ -150,7 +149,11 @@ where
                 let casts_shadow = block.casts_shadow;
                 let local = IVec3::new(x as i32, y as i32, z as i32);
                 let world_voxel = chunk_origin + local;
-                let grass_tint = tint_at(world_voxel);
+                let tint = if block.textures.is_empty() {
+                    [1.0, 1.0, 1.0]
+                } else {
+                    tint_at(world_voxel)
+                };
                 let x0 = x as f32;
                 let y0 = y as f32;
                 let z0 = z as f32;
@@ -160,7 +163,7 @@ where
                 let e = FACE_OVERDRAW;
 
                 if !world.is_solid(world_voxel + IVec3::X) {
-                    right.get_mut(casts_shadow).push(
+                    right.get_mut(cell.block_id, casts_shadow).push(
                         [
                             [x1, y0 - e, z1 + e],
                             [x1, y0 - e, z0 - e],
@@ -169,13 +172,13 @@ where
                         ],
                         [1.0, 0.0, 0.0],
                         TextureRotation::default(),
-                        grass_tint,
+                        tint,
                         face_lighting(world, world_voxel, BlockFace::Right),
                     );
                 }
 
                 if !world.is_solid(world_voxel - IVec3::X) {
-                    left.get_mut(casts_shadow).push(
+                    left.get_mut(cell.block_id, casts_shadow).push(
                         [
                             [x0, y0 - e, z0 - e],
                             [x0, y0 - e, z1 + e],
@@ -184,13 +187,13 @@ where
                         ],
                         [-1.0, 0.0, 0.0],
                         TextureRotation::default(),
-                        grass_tint,
+                        tint,
                         face_lighting(world, world_voxel, BlockFace::Left),
                     );
                 }
 
                 if !world.is_solid(world_voxel + IVec3::Y) {
-                    top.get_mut(casts_shadow).push(
+                    top.get_mut(cell.block_id, casts_shadow).push(
                         [
                             [x0 - e, y1, z1 + e],
                             [x1 + e, y1, z1 + e],
@@ -199,13 +202,13 @@ where
                         ],
                         [0.0, 1.0, 0.0],
                         cell.texture_rotation,
-                        grass_tint,
+                        tint,
                         face_lighting(world, world_voxel, BlockFace::Top),
                     );
                 }
 
                 if world_voxel.y > 0 && !world.is_solid(world_voxel - IVec3::Y) {
-                    bottom.get_mut(casts_shadow).push(
+                    bottom.get_mut(cell.block_id, casts_shadow).push(
                         [
                             [x0 - e, y0, z0 - e],
                             [x1 + e, y0, z0 - e],
@@ -214,13 +217,13 @@ where
                         ],
                         [0.0, -1.0, 0.0],
                         cell.texture_rotation,
-                        grass_tint,
+                        tint,
                         face_lighting(world, world_voxel, BlockFace::Bottom),
                     );
                 }
 
                 if !world.is_solid(world_voxel + IVec3::Z) {
-                    front.get_mut(casts_shadow).push(
+                    front.get_mut(cell.block_id, casts_shadow).push(
                         [
                             [x0 - e, y0 - e, z1],
                             [x1 + e, y0 - e, z1],
@@ -229,13 +232,13 @@ where
                         ],
                         [0.0, 0.0, 1.0],
                         TextureRotation::default(),
-                        grass_tint,
+                        tint,
                         face_lighting(world, world_voxel, BlockFace::Front),
                     );
                 }
 
                 if !world.is_solid(world_voxel - IVec3::Z) {
-                    back.get_mut(casts_shadow).push(
+                    back.get_mut(cell.block_id, casts_shadow).push(
                         [
                             [x1 + e, y0 - e, z0],
                             [x0 - e, y0 - e, z0],
@@ -244,7 +247,7 @@ where
                         ],
                         [0.0, 0.0, -1.0],
                         TextureRotation::default(),
-                        grass_tint,
+                        tint,
                         face_lighting(world, world_voxel, BlockFace::Back),
                     );
                 }

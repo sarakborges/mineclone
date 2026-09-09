@@ -1,5 +1,5 @@
 {
-  "id": "mineclone:overworld/enchanted_realm",
+  "id": "asteria:overworld/enchanted_realm",
   "name": "Enchanted Realm",
   "size": {
     "x": { "min": 50.0, "max": 250.0 },

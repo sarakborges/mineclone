@@ -108,15 +108,27 @@ fn spawn_hotbar(
                             .get(block_id)
                             .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
 
-                        slot.spawn((
-                            ImageNode::new(asset_server.load(block.textures.top.clone())),
-                            Node {
-                                width: px(ITEM_ICON_SIZE),
-                                height: px(ITEM_ICON_SIZE),
-                                ..default()
-                            },
-                            Pickable::IGNORE,
-                        ));
+                        if block.textures.top.is_empty() {
+                            slot.spawn((
+                                Node {
+                                    width: px(ITEM_ICON_SIZE),
+                                    height: px(ITEM_ICON_SIZE),
+                                    ..default()
+                                },
+                                BackgroundColor(Color::WHITE),
+                                Pickable::IGNORE,
+                            ));
+                        } else {
+                            slot.spawn((
+                                ImageNode::new(asset_server.load(block.textures.top.clone())),
+                                Node {
+                                    width: px(ITEM_ICON_SIZE),
+                                    height: px(ITEM_ICON_SIZE),
+                                    ..default()
+                                },
+                                Pickable::IGNORE,
+                            ));
+                        }
                     });
                 }
             });

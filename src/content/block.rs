@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 const MAX_LIGHT_DAMPENING: u8 = 15;
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Default, Deserialize)]
 pub struct BlockTextures {
     pub top: String,
     pub bottom: String,
@@ -15,10 +15,22 @@ pub struct BlockTextures {
     pub back: String,
 }
 
+impl BlockTextures {
+    pub fn is_empty(&self) -> bool {
+        self.top.is_empty()
+            && self.bottom.is_empty()
+            && self.left.is_empty()
+            && self.right.is_empty()
+            && self.front.is_empty()
+            && self.back.is_empty()
+    }
+}
+
 #[derive(Clone, Deserialize)]
 pub struct BlockDefinition {
     pub id: String,
     pub name: String,
+    #[serde(default)]
     pub textures: BlockTextures,
     pub rotate_texture: bool,
     #[serde(default)]
@@ -52,6 +64,10 @@ impl BlockRegistry {
 
     pub fn get(&self, id: &str) -> Option<&BlockDefinition> {
         self.definitions.get(id)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &BlockDefinition> {
+        self.definitions.values()
     }
 }
 

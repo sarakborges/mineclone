@@ -18,7 +18,7 @@ use crate::{
 
 use super::biome_field::{BiomeField, BiomeFieldSample};
 
-const GRASS_BLOCK_ID: &str = "mineclone:grass";
+const GRASS_BLOCK_ID: &str = "asteria:grass";
 const TERRAIN_MIN_CHUNK_Y: i32 = 0;
 const NOISE_OCTAVES: usize = 4;
 

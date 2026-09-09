@@ -1,0 +1,8 @@
+{
+  "id": "asteria:lamp",
+  "name": "Lamp Block",
+  "rotate_texture": false,
+  "light_emission": 15,
+  "light_dampening": 15,
+  "casts_shadow": true
+}

@@ -18,6 +18,22 @@ pub(crate) fn block_faces() -> [BlockFace; 6] {
     ]
 }
 
+pub(crate) fn block_face_texture<'a>(
+    face: BlockFace,
+    block: &'a BlockDefinition,
+) -> Option<&'a str> {
+    let texture = match face {
+        BlockFace::Right => block.textures.right.as_str(),
+        BlockFace::Left => block.textures.left.as_str(),
+        BlockFace::Top => block.textures.top.as_str(),
+        BlockFace::Bottom => block.textures.bottom.as_str(),
+        BlockFace::Front => block.textures.front.as_str(),
+        BlockFace::Back => block.textures.back.as_str(),
+    };
+
+    (!texture.is_empty()).then_some(texture)
+}
+
 pub(crate) fn block_face_material(
     face: BlockFace,
     block: &BlockDefinition,
@@ -25,19 +41,12 @@ pub(crate) fn block_face_material(
     materials: &mut Assets<StandardMaterial>,
     opacity: f32,
 ) -> Handle<StandardMaterial> {
-    let texture = match face {
-        BlockFace::Right => &block.textures.right,
-        BlockFace::Left => &block.textures.left,
-        BlockFace::Top => &block.textures.top,
-        BlockFace::Bottom => &block.textures.bottom,
-        BlockFace::Front => &block.textures.front,
-        BlockFace::Back => &block.textures.back,
-    };
     let opacity = opacity.clamp(0.0, 1.0);
 
     materials.add(StandardMaterial {
         base_color: Color::srgba(1.0, 1.0, 1.0, opacity),
-        base_color_texture: Some(asset_server.load(texture.clone())),
+        base_color_texture: block_face_texture(face, block)
+            .map(|texture| asset_server.load(texture.to_owned())),
         perceptual_roughness: 1.0,
         alpha_mode: if opacity < 1.0 {
             AlphaMode::Blend

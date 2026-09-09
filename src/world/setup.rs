@@ -9,7 +9,7 @@ use crate::{
         fluid::FluidRegistry,
         read_content,
     },
-    rendering::terrain_material::{TerrainMaterial, TerrainMaterialExtension},
+    rendering::terrain_material::TerrainMaterial,
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
     voxel::{
         coordinates::split_dimension_position,
@@ -32,7 +32,6 @@ use super::{
     WorldSeed,
 };
 
-const GRASS_BLOCK_ID: &str = "mineclone:grass";
 const INITIAL_HORIZONTAL_RADIUS_CHUNKS: i32 = 5;
 const INITIAL_CHUNKS_PER_FRAME: usize = 4;
 
@@ -88,33 +87,15 @@ pub fn begin_world_loading(
     let dimension = dimensions_ref
         .get(&current_dimension.id)
         .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
-    let grass = blocks_ref
-        .get(GRASS_BLOCK_ID)
-        .unwrap_or_else(|| panic!("missing block definition: {GRASS_BLOCK_ID}"));
     let biome_field = BiomeField::from_dimension(dimension, biomes_ref, seed.0);
     let (roughness, metallic) = average_terrain_material(dimension, biomes_ref);
-    let mut create_material = |texture: &str| {
-        terrain_material_assets.add(TerrainMaterial {
-            base: StandardMaterial {
-                base_color: Color::WHITE,
-                base_color_texture: Some(asset_server.load(texture.to_owned())),
-                perceptual_roughness: roughness,
-                metallic,
-                unlit: true,
-                ..default()
-            },
-            extension: TerrainMaterialExtension::default(),
-        })
-    };
-    let terrain_materials = TerrainMaterials {
-        top: create_material(&grass.textures.top),
-        bottom: create_material(&grass.textures.bottom),
-        left: create_material(&grass.textures.left),
-        right: create_material(&grass.textures.right),
-        front: create_material(&grass.textures.front),
-        back: create_material(&grass.textures.back),
-    };
-    drop(create_material);
+    let terrain_materials = TerrainMaterials::from_registry(
+        blocks_ref,
+        &asset_server,
+        &mut terrain_material_assets,
+        roughness,
+        metallic,
+    );
     let fluid_materials = FluidMaterials::from_registry(fluids_ref, &mut terrain_material_assets);
     let (min_chunk_y, max_chunk_y) = chunk_y_bounds(dimension, biomes_ref);
     let initial_center = if *load_mode == WorldLoadMode::Load {

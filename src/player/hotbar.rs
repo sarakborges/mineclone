@@ -3,7 +3,8 @@ use bevy::prelude::*;
 use crate::app::{game_state::GameState, pause_state::PauseState};
 
 pub const HOTBAR_SLOT_COUNT: usize = 9;
-pub const GRASS_BLOCK_ID: &str = "mineclone:grass";
+pub const GRASS_BLOCK_ID: &str = "asteria:grass";
+pub const LAMP_BLOCK_ID: &str = "asteria:lamp";
 
 #[derive(Resource)]
 pub struct PlayerHotbar {
@@ -15,6 +16,7 @@ impl Default for PlayerHotbar {
     fn default() -> Self {
         let mut slots = [None; HOTBAR_SLOT_COUNT];
         slots[0] = Some(GRASS_BLOCK_ID);
+        slots[1] = Some(LAMP_BLOCK_ID);
 
         Self {
             selected_slot: 0,

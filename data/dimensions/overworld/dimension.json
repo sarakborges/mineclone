@@ -1,14 +1,14 @@
 {
-  "id": "mineclone:overworld",
+  "id": "asteria:overworld",
   "name": "The Overworld",
   "biomes": [
-    "mineclone:overworld/plains",
-    "mineclone:overworld/wasteland",
-    "mineclone:overworld/wicked_realm",
-    "mineclone:overworld/enchanted_realm",
-    "mineclone:overworld/ocean"
+    "asteria:overworld/plains",
+    "asteria:overworld/wasteland",
+    "asteria:overworld/wicked_realm",
+    "asteria:overworld/enchanted_realm",
+    "asteria:overworld/ocean"
   ],
-  "day_night_cycle": "mineclone:overworld/day_night_cycle",
-  "sky": "mineclone:overworld/sky",
+  "day_night_cycle": "asteria:overworld/day_night_cycle",
+  "sky": "asteria:overworld/sky",
   "sea_level": 90
 }
