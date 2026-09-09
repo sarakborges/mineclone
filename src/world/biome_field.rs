@@ -295,7 +295,6 @@ impl BiomeField {
                     .then_some(index)
             })
             .collect::<Vec<_>>();
-
         let primary_index = select_tied_volume_index(&tied_indices, &source_hashes, self.seed)?;
         let overlay_strength = weights[primary_index];
 
