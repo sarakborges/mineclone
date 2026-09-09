@@ -8,6 +8,7 @@ use super::color::Rgb;
 pub type FluidId = u16;
 
 #[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FluidDefinition {
     pub id: String,
     pub name: String,
