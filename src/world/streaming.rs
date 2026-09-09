@@ -22,6 +22,7 @@ use super::{
     dimension::CurrentDimension,
     generation::generate_chunk,
     render_distance::{chunk_coords_in_volume, RenderDistanceSettings},
+    world_feature_fields::WorldFeatureFields,
 };
 
 const CHUNKS_PER_FRAME: usize = 2;
@@ -48,6 +49,7 @@ pub fn stream_chunks(
     fluids: Res<FluidRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
+    feature_fields: Res<WorldFeatureFields>,
     terrain_materials: Res<TerrainMaterials>,
     fluid_materials: Res<FluidMaterials>,
     render_distance: Res<RenderDistanceSettings>,
@@ -99,6 +101,7 @@ pub fn stream_chunks(
                 dimension,
                 &biomes,
                 &biome_field,
+                &feature_fields,
             );
             world.insert_chunk(coord, chunk);
         }
