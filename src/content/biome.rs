@@ -4,6 +4,7 @@ use bevy::prelude::*;
 use serde::Deserialize;
 
 use super::{
+    biome_density::BiomeDensityModifier,
     biome_sky_layer::BiomeSkyLayerVisuals,
     biome_terrain::BiomeTerrain,
     color::Rgb,
@@ -90,6 +91,8 @@ pub struct BiomeDefinition {
     #[serde(default)]
     pub terrain: Option<BiomeTerrain>,
     #[serde(default)]
+    pub density_modifier: Option<BiomeDensityModifier>,
+    #[serde(default)]
     pub surface_fluid: Option<String>,
     pub visuals: BiomeVisuals,
 }
@@ -113,6 +116,11 @@ impl BiomeRegistry {
                 assert!(
                     definition.terrain.is_some(),
                     "surface biome {} must define terrain",
+                    definition.id
+                );
+                assert!(
+                    definition.density_modifier.is_none(),
+                    "surface biome {} cannot define a volume density modifier",
                     definition.id
                 );
             }
@@ -160,11 +168,21 @@ impl BiomeRegistry {
             terrain.validate(&definition.id);
         }
 
+        if let Some(modifier) = &definition.density_modifier {
+            modifier.validate(&definition.id);
+        }
+
         self.definitions.insert(definition.id.clone(), definition);
     }
 
     pub fn get(&self, id: &str) -> Option<&BiomeDefinition> {
         self.definitions.get(id)
+    }
+
+    pub fn has_volume_density_modifiers(&self) -> bool {
+        self.definitions.values().any(|definition| {
+            definition.kind == BiomeKind::Volume && definition.density_modifier.is_some()
+        })
     }
 }
 
