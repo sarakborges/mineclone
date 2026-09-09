@@ -204,5 +204,13 @@ where
 }
 
 fn skylight_brightness(world: &VoxelWorld, air_cell: IVec3) -> f32 {
+    if air_cell.y < 0 {
+        return LIGHT_BRIGHTNESS[0];
+    }
+
+    if !world.is_loaded_at(air_cell) {
+        return LIGHT_BRIGHTNESS[15];
+    }
+
     LIGHT_BRIGHTNESS[world.skylight_at(air_cell).min(15) as usize]
 }
