@@ -12,7 +12,7 @@
 #else
 #import bevy_pbr::{
     forward_io::{VertexOutput, FragmentOutput},
-    pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
+    pbr_functions::main_pass_post_lighting_processing,
 }
 #endif
 
@@ -52,7 +52,9 @@ fn fragment(
     return deferred_output(in, pbr_input);
 #else
     var out: FragmentOutput;
-    out.color = apply_pbr_lighting(pbr_input);
+    // Terrain lighting is voxel/lightmap-driven. Do not apply Bevy's directional PBR
+    // lighting again, or side faces become artificially dark depending on sun direction.
+    out.color = pbr_input.material.base_color;
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
     return out;
 #endif
