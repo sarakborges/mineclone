@@ -10,14 +10,19 @@ use crate::{
         dimension::DimensionRegistry,
         sky::SkyRegistry,
     },
-    world::{day_night::DayNightClock, dimension::CurrentDimension},
+    voxel::chunk::CHUNK_SIZE,
+    world::{
+        day_night::DayNightClock,
+        dimension::CurrentDimension,
+        render_distance::MAX_RENDER_DISTANCE_CHUNKS,
+    },
 };
 
 use super::celestial_path::celestial_direction;
 
 const SHADOW_MAP_SIZE: usize = 2048;
-const FIRST_CASCADE_FAR_BOUND: f32 = 16.0;
-const MAXIMUM_SHADOW_DISTANCE: f32 = 128.0;
+const FIRST_CASCADE_FAR_BOUND: f32 = CHUNK_SIZE as f32;
+const MAXIMUM_SHADOW_DISTANCE: f32 = (MAX_RENDER_DISTANCE_CHUNKS * CHUNK_SIZE as i32) as f32;
 const BASE_SUN_ILLUMINANCE: f32 = 10_000.0;
 
 pub struct DirectionalShadowsPlugin;
