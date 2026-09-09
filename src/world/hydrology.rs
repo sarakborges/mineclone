@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::content::biome_hydrology::BiomeHydrology;
+
 use super::feature_graph::FeatureGraph;
 
 const HYDROLOGY_REGION_SIZE: f32 = 128.0;
@@ -60,6 +62,13 @@ pub struct HydrologyWaterSample<'a> {
     pub water_level: f32,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct HydrologySurfaceSample {
+    pub elevation: f32,
+    pub continentalness: f32,
+    pub biome_hydrology: BiomeHydrology,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HydrologyTerrainSummary {
     pub minimum_elevation: f32,
@@ -79,6 +88,7 @@ struct DrainageNode {
     position: Vec2,
     elevation: f32,
     continentalness: f32,
+    biome_hydrology: BiomeHydrology,
 }
 
 #[derive(Clone, Debug)]
@@ -132,7 +142,10 @@ impl HydrologyRegion {
                 let strength = body.horizontal_strength(horizontal);
                 let bottom = body.water_level - body.carve_depth * strength;
 
-                if strength <= 0.0 || position.y < bottom - 0.5 || position.y > body.water_level + 0.5 {
+                if strength <= 0.0
+                    || position.y < bottom - 0.5
+                    || position.y > body.water_level + 0.5
+                {
                     return 0.0;
                 }
 
@@ -207,9 +220,8 @@ impl HydrologyRegion {
             return 0.0;
         }
 
-        let target_floor = self.sea_level
-            - OCEAN_MINIMUM_DEPTH
-            - OCEAN_EXTRA_DEPTH * strength;
+        let target_floor =
+            self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength;
         (target_floor - sample.elevation).min(0.0) * strength
     }
 
@@ -270,7 +282,7 @@ impl HydrologyField {
     pub fn region_from_macro_terrain(
         &self,
         coord: IVec2,
-        mut sample: impl FnMut(Vec2) -> (f32, f32),
+        mut sample: impl FnMut(Vec2) -> HydrologySurfaceSample,
     ) -> HydrologyRegion {
         let mut minimum_elevation = f32::MAX;
         let mut maximum_elevation = f32::MIN;
@@ -282,16 +294,16 @@ impl HydrologyField {
         for z in 0..MACRO_SAMPLE_GRID {
             for x in 0..MACRO_SAMPLE_GRID {
                 let position = macro_sample_position(coord, x, z);
-                let (elevation, continentalness) = sample(position);
+                let surface = sample(position);
 
-                minimum_elevation = minimum_elevation.min(elevation);
-                maximum_elevation = maximum_elevation.max(elevation);
-                elevation_sum += elevation;
-                continentalness_sum += continentalness;
+                minimum_elevation = minimum_elevation.min(surface.elevation);
+                maximum_elevation = maximum_elevation.max(surface.elevation);
+                elevation_sum += surface.elevation;
+                continentalness_sum += surface.continentalness;
                 count += 1.0;
                 macro_samples.push(HydrologyMacroSample {
-                    elevation,
-                    continentalness,
+                    elevation: surface.elevation,
+                    continentalness: surface.continentalness,
                 });
             }
         }
@@ -307,25 +319,34 @@ impl HydrologyField {
 
                 if let Some(downstream) = select_downstream(source, &neighbors) {
                     if source.continentalness > OCEAN_CONTINENTALNESS_THRESHOLD
+                        && source.biome_hydrology.can_generate_river
+                        && downstream.biome_hydrology.can_generate_river
                         && edge_intersects_region(coord, source.position, downstream.position)
                     {
                         let hash = cell_hash(source_cell, self.seed ^ 0x6a09_e667_f3bc_c909);
-                        let radius = lerp(
+                        let base_radius = lerp(
                             RIVER_MINIMUM_RADIUS,
                             RIVER_MAXIMUM_RADIUS,
                             hash_unit(hash),
                         );
-                        let from = river_graph.add_node(Vec3::new(
-                            source.position.x,
-                            (source.elevation - 0.75).max(1.0),
-                            source.position.y,
-                        ));
-                        let to = river_graph.add_node(Vec3::new(
-                            downstream.position.x,
-                            (downstream.elevation - 0.75).max(1.0),
-                            downstream.position.y,
-                        ));
-                        river_graph.add_edge(from, to, radius, radius * 1.15);
+                        let width_multiplier = (source.biome_hydrology.river_width_multiplier
+                            + downstream.biome_hydrology.river_width_multiplier)
+                            * 0.5;
+                        let radius = base_radius * width_multiplier;
+
+                        if radius > f32::EPSILON {
+                            let from = river_graph.add_node(Vec3::new(
+                                source.position.x,
+                                (source.elevation - 0.75).max(1.0),
+                                source.position.y,
+                            ));
+                            let to = river_graph.add_node(Vec3::new(
+                                downstream.position.x,
+                                (downstream.elevation - 0.75).max(1.0),
+                                downstream.position.y,
+                            ));
+                            river_graph.add_edge(from, to, radius, radius * 1.15);
+                        }
                     }
                 } else if let Some(lake) = lake_for_local_basin(
                     source_cell,
@@ -361,22 +382,23 @@ impl HydrologyField {
 fn drainage_node(
     cell: IVec2,
     seed: u64,
-    sample: &mut impl FnMut(Vec2) -> (f32, f32),
+    sample: &mut impl FnMut(Vec2) -> HydrologySurfaceSample,
 ) -> DrainageNode {
     let position = drainage_position(cell, seed);
-    let (elevation, continentalness) = sample(position);
+    let surface = sample(position);
 
     DrainageNode {
         position,
-        elevation,
-        continentalness,
+        elevation: surface.elevation,
+        continentalness: surface.continentalness,
+        biome_hydrology: surface.biome_hydrology,
     }
 }
 
 fn drainage_neighbors(
     cell: IVec2,
     seed: u64,
-    sample: &mut impl FnMut(Vec2) -> (f32, f32),
+    sample: &mut impl FnMut(Vec2) -> HydrologySurfaceSample,
 ) -> Vec<DrainageNode> {
     let mut neighbors = Vec::with_capacity(8);
 
@@ -409,7 +431,8 @@ fn lake_for_local_basin(
     seed: u64,
     sea_level: f32,
 ) -> Option<WaterBody> {
-    if source.elevation <= sea_level + 1.0
+    if !source.biome_hydrology.can_generate_lake
+        || source.elevation <= sea_level + 1.0
         || source.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD
     {
         return None;
@@ -426,8 +449,10 @@ fn lake_for_local_basin(
     }
 
     let hash = cell_hash(cell, seed ^ 0xbb67_ae85_84ca_a73b);
+    let lake_chance =
+        (LAKE_CHANCE * source.biome_hydrology.lake_chance_multiplier).clamp(0.0, 1.0);
 
-    if hash_unit(hash.rotate_left(17)) > LAKE_CHANCE {
+    if hash_unit(hash.rotate_left(17)) > lake_chance {
         return None;
     }
 
@@ -545,6 +570,14 @@ fn lerp(from: f32, to: f32, amount: f32) -> f32 {
 mod tests {
     use super::*;
 
+    fn surface(elevation: f32, continentalness: f32) -> HydrologySurfaceSample {
+        HydrologySurfaceSample {
+            elevation,
+            continentalness,
+            biome_hydrology: BiomeHydrology::default(),
+        }
+    }
+
     #[test]
     fn water_body_strength_fades_to_zero_at_shoreline() {
         let body = WaterBody {
@@ -563,7 +596,7 @@ mod tests {
     #[test]
     fn macro_terrain_summary_is_deterministic() {
         let field = HydrologyField::new(42, 64);
-        let sample = |position: Vec2| (position.x + position.y, 0.5);
+        let sample = |position: Vec2| surface(position.x + position.y, 0.5);
         let first = field.region_from_macro_terrain(IVec2::ZERO, sample);
         let second = field.region_from_macro_terrain(IVec2::ZERO, sample);
 
@@ -578,13 +611,35 @@ mod tests {
     #[test]
     fn low_continentalness_produces_ocean_water_and_carving() {
         let field = HydrologyField::new(42, 64);
-        let region = field.region_from_macro_terrain(IVec2::ZERO, |_| (70.0, 0.1));
+        let region = field.region_from_macro_terrain(IVec2::ZERO, |_| surface(70.0, 0.1));
         let center = Vec2::splat(HYDROLOGY_REGION_SIZE * 0.5);
 
         let water = region.water_at(center).unwrap();
         assert_eq!(water.fluid_id, DEFAULT_WATER_FLUID);
         assert_eq!(water.water_level, 64.0);
         assert!(region.density_delta(Vec3::new(center.x, 60.0, center.y)) < 0.0);
+    }
+
+    #[test]
+    fn biome_can_disable_lake_generation() {
+        let source = DrainageNode {
+            position: Vec2::ZERO,
+            elevation: 80.0,
+            continentalness: 0.8,
+            biome_hydrology: BiomeHydrology {
+                can_generate_lake: false,
+                lake_chance_multiplier: 10.0,
+                ..default()
+            },
+        };
+        let neighbors = vec![DrainageNode {
+            position: Vec2::X,
+            elevation: 84.0,
+            continentalness: 0.8,
+            biome_hydrology: BiomeHydrology::default(),
+        }];
+
+        assert!(lake_for_local_basin(IVec2::ZERO, source, &neighbors, 42, 64.0).is_none());
     }
 
     #[test]
