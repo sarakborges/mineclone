@@ -1,10 +1,12 @@
 use std::{
+    any::Any,
     backtrace::Backtrace,
     env,
     fs::{create_dir_all, OpenOptions},
     io::Write,
     panic::{self, PanicHookInfo},
     path::PathBuf,
+    sync::atomic::{AtomicBool, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -12,36 +14,32 @@ const LOG_DIRECTORY: &str = "logs";
 const DATA_DIRECTORY: &str = "data";
 const ASSETS_DIRECTORY: &str = "assets";
 
+static PANIC_LOG_WRITTEN: AtomicBool = AtomicBool::new(false);
+
 pub fn install_crash_logger() {
-    let default_hook = panic::take_hook();
+    PANIC_LOG_WRITTEN.store(false, Ordering::Release);
+    let previous_hook = panic::take_hook();
 
     panic::set_hook(Box::new(move |info| {
-        write_panic_log(info);
-        default_hook(info);
+        if write_panic_log(info) {
+            PANIC_LOG_WRITTEN.store(true, Ordering::Release);
+        }
+        previous_hook(info);
     }));
 }
 
-fn write_panic_log(info: &PanicHookInfo<'_>) {
-    let now = SystemTime::now();
-    let timestamp = format_timestamp(now);
-    let log_directory = runtime_root().join(LOG_DIRECTORY);
-
-    if create_dir_all(&log_directory).is_err() {
+pub fn write_caught_panic(payload: &(dyn Any + Send)) {
+    if PANIC_LOG_WRITTEN.load(Ordering::Acquire) {
         return;
     }
 
-    let path = log_directory.join(format!("{}.txt", timestamp.file_name));
-    let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .open(path)
-    else {
-        return;
-    };
+    let message = panic_payload_message(payload);
+    if write_report(&message, "<unavailable; panic caught after unwind>") {
+        PANIC_LOG_WRITTEN.store(true, Ordering::Release);
+    }
+}
 
-    let thread = std::thread::current();
-    let thread_name = thread.name().unwrap_or("<unnamed>");
+fn write_panic_log(info: &PanicHookInfo<'_>) -> bool {
     let message = panic_message(info);
     let location = info
         .location()
@@ -54,6 +52,31 @@ fn write_panic_log(info: &PanicHookInfo<'_>) {
             )
         })
         .unwrap_or_else(|| "<unknown>".to_owned());
+
+    write_report(&message, &location)
+}
+
+fn write_report(message: &str, location: &str) -> bool {
+    let now = SystemTime::now();
+    let timestamp = format_timestamp(now);
+    let log_directory = runtime_root().join(LOG_DIRECTORY);
+
+    if create_dir_all(&log_directory).is_err() {
+        return false;
+    }
+
+    let path = log_directory.join(format!("{}.txt", timestamp.file_name));
+    let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(path)
+    else {
+        return false;
+    };
+
+    let thread = std::thread::current();
+    let thread_name = thread.name().unwrap_or("<unnamed>");
     let current_directory = env::current_dir()
         .map(|path| path.display().to_string())
         .unwrap_or_else(|_| "<unavailable>".to_owned());
@@ -76,15 +99,20 @@ fn write_panic_log(info: &PanicHookInfo<'_>) {
     let _ = writeln!(file);
     let _ = writeln!(file, "Backtrace:");
     let _ = writeln!(file, "{backtrace}");
-    let _ = file.flush();
+
+    file.flush().is_ok()
 }
 
 fn panic_message(info: &PanicHookInfo<'_>) -> String {
-    if let Some(message) = info.payload().downcast_ref::<&str>() {
+    panic_payload_message(info.payload())
+}
+
+fn panic_payload_message(payload: &(dyn Any + Send)) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
         return (*message).to_owned();
     }
 
-    if let Some(message) = info.payload().downcast_ref::<String>() {
+    if let Some(message) = payload.downcast_ref::<String>() {
         return message.clone();
     }
 
