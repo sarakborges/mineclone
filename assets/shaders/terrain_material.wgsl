@@ -36,13 +36,11 @@ fn fragment(
 
     var base_rgb = texel.rgb;
     if chroma <= 0.02 {
-        let tint_luma = max(
-            dot(tint, vec3<f32>(0.2126, 0.7152, 0.0722)),
-            0.001
-        );
-        let luminance_preserving_tint = tint / tint_luma;
+        let tint_peak = max(max(tint.r, tint.g), max(tint.b, 0.001));
+        let hue = tint / tint_peak;
+        let softened_hue = mix(vec3<f32>(1.0), hue, 0.72);
         base_rgb = clamp(
-            vec3<f32>(texel.r) * luminance_preserving_tint,
+            vec3<f32>(texel.r) * softened_hue,
             vec3<f32>(0.0),
             vec3<f32>(1.0)
         );
