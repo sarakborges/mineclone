@@ -89,7 +89,7 @@ fn update_placement_preview(
     player: Single<&Transform, With<GameplayCamera>>,
     mut root: Single<
         (&mut PlacementPreviewRoot, &mut Transform, &mut Visibility),
-        Without<PlacementPreviewFace>,
+        (Without<PlacementPreviewFace>, Without<GameplayCamera>),
     >,
     mut faces: Query<(&PlacementPreviewFace, &mut MeshMaterial3d<StandardMaterial>)>,
 ) {
