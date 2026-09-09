@@ -3,15 +3,19 @@ use bevy::prelude::*;
 use crate::{
     app::game_state::GameState,
     content::{
-        biome::BiomeRegistry,
+        biome::{BiomeKind, BiomeRegistry},
         block::BlockRegistry,
         dimension::{DimensionDefinition, DimensionRegistry},
         fluid::FluidRegistry,
         read_content,
     },
-    rendering::terrain_material::{TerrainMaterial, TerrainMaterialExtension},
+    rendering::terrain_material::TerrainMaterial,
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
-    voxel::{coordinates::split_dimension_position, world::VoxelWorld},
+    voxel::{
+        chunk::CHUNK_SIZE,
+        coordinates::split_dimension_position,
+        world::VoxelWorld,
+    },
 };
 
 use super::{
@@ -21,15 +25,17 @@ use super::{
         TerrainMaterials,
     },
     dimension::CurrentDimension,
-    render_distance::chunk_coords_in_cylinder,
-    terrain::{build_chunk, chunk_y_bounds},
+    generation::generate_chunk,
+    render_distance::chunk_coords_in_volume,
+    terrain::surface_height,
+    world_feature_fields::WorldFeatureFields,
     InMemoryWorldSave,
     WorldLoadMode,
     WorldSeed,
 };
 
-const GRASS_BLOCK_ID: &str = "mineclone:grass";
 const INITIAL_HORIZONTAL_RADIUS_CHUNKS: i32 = 5;
+const INITIAL_VERTICAL_RADIUS_CHUNKS: i32 = 4;
 const INITIAL_CHUNKS_PER_FRAME: usize = 4;
 
 #[derive(Resource)]
@@ -85,49 +91,36 @@ pub fn begin_world_loading(
     let dimension = dimensions_ref
         .get(&current_dimension.id)
         .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
-    let grass = blocks_ref
-        .get(GRASS_BLOCK_ID)
-        .unwrap_or_else(|| panic!("missing block definition: {GRASS_BLOCK_ID}"));
+
+    dimension
+        .hydrology
+        .validate_references(&dimension.id, biomes_ref, blocks_ref, fluids_ref);
+
     let biome_field = BiomeField::from_dimension(dimension, biomes_ref, seed.0);
     let (roughness, metallic) = average_terrain_material(dimension, biomes_ref);
-    let mut create_material = |texture: &str| {
-        terrain_material_assets.add(TerrainMaterial {
-            base: StandardMaterial {
-                base_color: Color::WHITE,
-                base_color_texture: Some(asset_server.load(texture.to_owned())),
-                perceptual_roughness: roughness,
-                metallic,
-                ..default()
-            },
-            extension: TerrainMaterialExtension::default(),
-        })
-    };
-    let terrain_materials = TerrainMaterials {
-        top: create_material(&grass.textures.top),
-        bottom: create_material(&grass.textures.bottom),
-        left: create_material(&grass.textures.left),
-        right: create_material(&grass.textures.right),
-        front: create_material(&grass.textures.front),
-        back: create_material(&grass.textures.back),
-    };
-    drop(create_material);
+    let terrain_materials = TerrainMaterials::from_registry(
+        blocks_ref,
+        &asset_server,
+        &mut terrain_material_assets,
+        roughness,
+        metallic,
+    );
     let fluid_materials = FluidMaterials::from_registry(fluids_ref, &mut standard_materials);
-    let (min_chunk_y, max_chunk_y) = chunk_y_bounds(dimension, biomes_ref);
     let initial_center = if *load_mode == WorldLoadMode::Load {
         save.player_position()
             .map(|position| {
                 let chunk = split_dimension_position(position).chunk;
-                IVec2::new(chunk.x, chunk.z)
+                IVec3::new(chunk.x, chunk.y.max(0), chunk.z)
             })
-            .unwrap_or(IVec2::ZERO)
+            .unwrap_or(IVec3::ZERO)
     } else {
-        IVec2::ZERO
+        let surface_y = surface_height(IVec2::ZERO, dimension, biomes_ref, &biome_field);
+        IVec3::new(0, surface_y.div_euclid(CHUNK_SIZE as i32), 0)
     };
-    let coords = chunk_coords_in_cylinder(
-        IVec3::new(initial_center.x, min_chunk_y, initial_center.y),
+    let coords = chunk_coords_in_volume(
+        initial_center,
         INITIAL_HORIZONTAL_RADIUS_CHUNKS,
-        min_chunk_y,
-        max_chunk_y,
+        INITIAL_VERTICAL_RADIUS_CHUNKS,
     );
 
     match *load_mode {
@@ -145,6 +138,11 @@ pub fn begin_world_loading(
     }
 
     commands.insert_resource(biome_field);
+    commands.insert_resource(WorldFeatureFields::new(
+        seed.0,
+        dimension.sea_level,
+        dimension.hydrology.clone(),
+    ));
     commands.insert_resource(terrain_materials);
     commands.insert_resource(fluid_materials);
     commands.insert_resource(WorldLoadingState {
@@ -168,6 +166,7 @@ pub fn setup_world(
     fluids: Res<FluidRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
+    feature_fields: Res<WorldFeatureFields>,
     terrain_materials: Res<TerrainMaterials>,
     fluid_materials: Res<FluidMaterials>,
     mut world: ResMut<VoxelWorld>,
@@ -201,13 +200,14 @@ pub fn setup_world(
                 "generated chunk must be resident or archived: {coord:?}"
             );
         } else {
-            let chunk = build_chunk(
+            let chunk = generate_chunk(
                 coord,
                 &blocks,
                 &fluids,
                 dimension,
                 &biomes,
                 &biome_field,
+                &feature_fields,
             );
             world.insert_chunk(coord, chunk);
         }
@@ -262,10 +262,21 @@ fn average_terrain_material(
         let biome = biomes
             .get(biome_id)
             .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
+
+        if biome.kind != BiomeKind::Surface {
+            continue;
+        }
+
         roughness += biome.visuals.terrain_roughness;
         metallic += biome.visuals.terrain_metallic;
         count += 1.0;
     }
+
+    assert!(
+        count > 0.0,
+        "dimension {} must define at least one surface biome",
+        dimension.id
+    );
 
     (roughness / count, metallic / count)
 }

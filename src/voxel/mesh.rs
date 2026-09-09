@@ -1,5 +1,7 @@
 mod face;
 
+use std::collections::HashMap;
+
 use bevy::{
     asset::RenderAssetUsages,
     mesh::Indices,
@@ -16,7 +18,7 @@ use super::{
 
 const FACE_OVERDRAW: f32 = 0.002;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum BlockFace {
     Right,
     Left,
@@ -27,6 +29,7 @@ pub enum BlockFace {
 }
 
 pub struct ChunkFaceMesh {
+    pub block_id: &'static str,
     pub face: BlockFace,
     pub mesh: Mesh,
 }
@@ -87,14 +90,9 @@ pub fn build_chunk_mesh<F>(
     tint_at: F,
 ) -> Vec<ChunkFaceMesh>
 where
-    F: Fn(IVec3) -> [f32; 3],
+    F: Fn(IVec3, &'static str) -> [f32; 3],
 {
-    let mut right = MeshBuffers::default();
-    let mut left = MeshBuffers::default();
-    let mut top = MeshBuffers::default();
-    let mut bottom = MeshBuffers::default();
-    let mut front = MeshBuffers::default();
-    let mut back = MeshBuffers::default();
+    let mut buffers = HashMap::<(&'static str, BlockFace), MeshBuffers>::new();
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_origin = chunk_coord * chunk_size;
 
@@ -107,7 +105,7 @@ where
 
                 let local = IVec3::new(x as i32, y as i32, z as i32);
                 let world_voxel = chunk_origin + local;
-                let grass_tint = tint_at(world_voxel);
+                let tint = tint_at(world_voxel, cell.block_id);
                 let x0 = x as f32;
                 let y0 = y as f32;
                 let z0 = z as f32;
@@ -117,105 +115,118 @@ where
                 let e = FACE_OVERDRAW;
 
                 if !world.is_solid(world_voxel + IVec3::X) {
-                    right.push(
-                        [
-                            [x1, y0 - e, z1 + e],
-                            [x1, y0 - e, z0 - e],
-                            [x1, y1 + e, z0 - e],
-                            [x1, y1 + e, z1 + e],
-                        ],
-                        [1.0, 0.0, 0.0],
-                        TextureRotation::default(),
-                        grass_tint,
-                    );
+                    buffers
+                        .entry((cell.block_id, BlockFace::Right))
+                        .or_default()
+                        .push(
+                            [
+                                [x1, y0 - e, z1 + e],
+                                [x1, y0 - e, z0 - e],
+                                [x1, y1 + e, z0 - e],
+                                [x1, y1 + e, z1 + e],
+                            ],
+                            [1.0, 0.0, 0.0],
+                            TextureRotation::default(),
+                            tint,
+                        );
                 }
 
                 if !world.is_solid(world_voxel - IVec3::X) {
-                    left.push(
-                        [
-                            [x0, y0 - e, z0 - e],
-                            [x0, y0 - e, z1 + e],
-                            [x0, y1 + e, z1 + e],
-                            [x0, y1 + e, z0 - e],
-                        ],
-                        [-1.0, 0.0, 0.0],
-                        TextureRotation::default(),
-                        grass_tint,
-                    );
+                    buffers
+                        .entry((cell.block_id, BlockFace::Left))
+                        .or_default()
+                        .push(
+                            [
+                                [x0, y0 - e, z0 - e],
+                                [x0, y0 - e, z1 + e],
+                                [x0, y1 + e, z1 + e],
+                                [x0, y1 + e, z0 - e],
+                            ],
+                            [-1.0, 0.0, 0.0],
+                            TextureRotation::default(),
+                            tint,
+                        );
                 }
 
                 if !world.is_solid(world_voxel + IVec3::Y) {
-                    top.push(
-                        [
-                            [x0 - e, y1, z1 + e],
-                            [x1 + e, y1, z1 + e],
-                            [x1 + e, y1, z0 - e],
-                            [x0 - e, y1, z0 - e],
-                        ],
-                        [0.0, 1.0, 0.0],
-                        cell.texture_rotation,
-                        grass_tint,
-                    );
+                    buffers
+                        .entry((cell.block_id, BlockFace::Top))
+                        .or_default()
+                        .push(
+                            [
+                                [x0 - e, y1, z1 + e],
+                                [x1 + e, y1, z1 + e],
+                                [x1 + e, y1, z0 - e],
+                                [x0 - e, y1, z0 - e],
+                            ],
+                            [0.0, 1.0, 0.0],
+                            cell.texture_rotation,
+                            tint,
+                        );
                 }
 
                 if world_voxel.y > 0 && !world.is_solid(world_voxel - IVec3::Y) {
-                    bottom.push(
-                        [
-                            [x0 - e, y0, z0 - e],
-                            [x1 + e, y0, z0 - e],
-                            [x1 + e, y0, z1 + e],
-                            [x0 - e, y0, z1 + e],
-                        ],
-                        [0.0, -1.0, 0.0],
-                        cell.texture_rotation,
-                        grass_tint,
-                    );
+                    buffers
+                        .entry((cell.block_id, BlockFace::Bottom))
+                        .or_default()
+                        .push(
+                            [
+                                [x0 - e, y0, z0 - e],
+                                [x1 + e, y0, z0 - e],
+                                [x1 + e, y0, z1 + e],
+                                [x0 - e, y0, z1 + e],
+                            ],
+                            [0.0, -1.0, 0.0],
+                            cell.texture_rotation,
+                            tint,
+                        );
                 }
 
                 if !world.is_solid(world_voxel + IVec3::Z) {
-                    front.push(
-                        [
-                            [x0 - e, y0 - e, z1],
-                            [x1 + e, y0 - e, z1],
-                            [x1 + e, y1 + e, z1],
-                            [x0 - e, y1 + e, z1],
-                        ],
-                        [0.0, 0.0, 1.0],
-                        TextureRotation::default(),
-                        grass_tint,
-                    );
+                    buffers
+                        .entry((cell.block_id, BlockFace::Front))
+                        .or_default()
+                        .push(
+                            [
+                                [x0 - e, y0 - e, z1],
+                                [x1 + e, y0 - e, z1],
+                                [x1 + e, y1 + e, z1],
+                                [x0 - e, y1 + e, z1],
+                            ],
+                            [0.0, 0.0, 1.0],
+                            TextureRotation::default(),
+                            tint,
+                        );
                 }
 
                 if !world.is_solid(world_voxel - IVec3::Z) {
-                    back.push(
-                        [
-                            [x1 + e, y0 - e, z0],
-                            [x0 - e, y0 - e, z0],
-                            [x0 - e, y1 + e, z0],
-                            [x1 + e, y1 + e, z0],
-                        ],
-                        [0.0, 0.0, -1.0],
-                        TextureRotation::default(),
-                        grass_tint,
-                    );
+                    buffers
+                        .entry((cell.block_id, BlockFace::Back))
+                        .or_default()
+                        .push(
+                            [
+                                [x1 + e, y0 - e, z0],
+                                [x0 - e, y0 - e, z0],
+                                [x0 - e, y1 + e, z0],
+                                [x1 + e, y1 + e, z0],
+                            ],
+                            [0.0, 0.0, -1.0],
+                            TextureRotation::default(),
+                            tint,
+                        );
                 }
             }
         }
     }
 
-    [
-        (BlockFace::Right, right),
-        (BlockFace::Left, left),
-        (BlockFace::Top, top),
-        (BlockFace::Bottom, bottom),
-        (BlockFace::Front, front),
-        (BlockFace::Back, back),
-    ]
-    .into_iter()
-    .filter_map(|(face, buffers)| {
-        buffers
-            .into_mesh()
-            .map(|mesh| ChunkFaceMesh { face, mesh })
-    })
-    .collect()
+    buffers
+        .into_iter()
+        .filter_map(|((block_id, face), buffers)| {
+            buffers.into_mesh().map(|mesh| ChunkFaceMesh {
+                block_id,
+                face,
+                mesh,
+            })
+        })
+        .collect()
 }

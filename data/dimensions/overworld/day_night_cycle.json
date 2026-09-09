@@ -1,21 +1,21 @@
 {
   "id": "mineclone:overworld/day_night_cycle",
-  "day_duration_seconds": 1200.0,
-  "initial_time": 0.0,
-  "world_time_start_hour": 6.0,
+  "dayDurationSeconds": 1200.0,
+  "initialTime": 0.0,
+  "worldTimeStartHour": 6.0,
   "sequence": ["Dawn", "Day", "Dusk", "Night"],
   "phases": {
     "dawn": {
-      "duration_seconds": 300.0
+      "durationSeconds": 300.0
     },
     "day": {
-      "duration_seconds": 300.0
+      "durationSeconds": 300.0
     },
     "dusk": {
-      "duration_seconds": 300.0
+      "durationSeconds": 300.0
     },
     "night": {
-      "duration_seconds": 300.0
+      "durationSeconds": 300.0
     }
   }
 }

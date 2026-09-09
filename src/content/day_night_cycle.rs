@@ -6,6 +6,7 @@ use serde::Deserialize;
 use super::day_night_phase::{DayNightPhase, DayNightPhases};
 
 #[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DayNightPhaseTiming {
     pub duration_seconds: f32,
 }
@@ -18,6 +19,7 @@ pub struct DayNightSample {
 }
 
 #[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DayNightCycleDefinition {
     pub id: String,
     pub day_duration_seconds: f32,

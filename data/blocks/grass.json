@@ -9,5 +9,5 @@
     "front": "textures/blocks/grass/front.png",
     "back": "textures/blocks/grass/back.png"
   },
-  "rotate_texture": true
+  "rotateTexture": true
 }

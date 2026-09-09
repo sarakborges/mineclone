@@ -5,7 +5,7 @@ use crate::{
     content::biome::BiomeRegistry,
     player::camera::GameplayCamera,
     voxel::world::VoxelWorld,
-    world::biome_field::BiomeField,
+    world::biome::CurrentBiome,
 };
 
 #[derive(Component)]
@@ -46,7 +46,7 @@ fn update_underwater_tint(
     camera: Single<&Transform, With<GameplayCamera>>,
     world: Res<VoxelWorld>,
     biomes: Res<BiomeRegistry>,
-    biome_field: Res<BiomeField>,
+    current_biome: Res<CurrentBiome>,
     mut tint: Single<(&mut BackgroundColor, &mut Visibility), With<UnderwaterTint>>,
 ) {
     let eye = camera.translation;
@@ -67,13 +67,23 @@ fn update_underwater_tint(
         return;
     }
 
-    let biome_tint = biome_field.underwater_tint(Vec2::new(eye.x, eye.z), &biomes);
+    let mut red = 0.0;
+    let mut green = 0.0;
+    let mut blue = 0.0;
+    let mut opacity = 0.0;
 
-    tint.0.0 = Color::srgba(
-        biome_tint.color.r,
-        biome_tint.color.g,
-        biome_tint.color.b,
-        biome_tint.opacity,
-    );
+    for influence in &current_biome.influences {
+        let Some(biome) = biomes.get(&influence.id) else {
+            continue;
+        };
+        let biome_tint = biome.visuals.underwater_tint;
+
+        red += biome_tint.color.r * influence.weight;
+        green += biome_tint.color.g * influence.weight;
+        blue += biome_tint.color.b * influence.weight;
+        opacity += biome_tint.opacity * influence.weight;
+    }
+
+    tint.0.0 = Color::srgba(red, green, blue, opacity);
     *tint.1 = Visibility::Visible;
 }

@@ -6,9 +6,10 @@ use crate::{
     app::game_state::GameState,
     content::{
         biome::BiomeRegistry,
+        block::{BlockDefinition, BlockRegistry},
         fluid::{FluidId, FluidRegistry},
     },
-    rendering::terrain_material::TerrainMaterial,
+    rendering::terrain_material::{TerrainMaterial, TerrainMaterialExtension},
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         fluid_mesh::build_fluid_meshes,
@@ -19,6 +20,7 @@ use crate::{
 
 use super::biome_field::BiomeField;
 
+const GRASS_BLOCK_ID: &str = "mineclone:grass";
 const CHUNK_NEIGHBORS: [IVec3; 6] = [
     IVec3::X,
     IVec3::NEG_X,
@@ -28,27 +30,125 @@ const CHUNK_NEIGHBORS: [IVec3; 6] = [
     IVec3::NEG_Z,
 ];
 
+#[derive(Clone)]
+struct BlockTerrainMaterials {
+    top: Handle<TerrainMaterial>,
+    bottom: Handle<TerrainMaterial>,
+    left: Handle<TerrainMaterial>,
+    right: Handle<TerrainMaterial>,
+    front: Handle<TerrainMaterial>,
+    back: Handle<TerrainMaterial>,
+}
+
 #[derive(Resource, Clone)]
 pub struct TerrainMaterials {
-    pub top: Handle<TerrainMaterial>,
-    pub bottom: Handle<TerrainMaterial>,
-    pub left: Handle<TerrainMaterial>,
-    pub right: Handle<TerrainMaterial>,
-    pub front: Handle<TerrainMaterial>,
-    pub back: Handle<TerrainMaterial>,
+    blocks: HashMap<String, BlockTerrainMaterials>,
 }
 
 impl TerrainMaterials {
-    fn for_face(&self, face: BlockFace) -> &Handle<TerrainMaterial> {
+    pub fn from_registry(
+        blocks: &BlockRegistry,
+        asset_server: &AssetServer,
+        materials: &mut Assets<TerrainMaterial>,
+        roughness: f32,
+        metallic: f32,
+    ) -> Self {
+        let blocks = blocks
+            .iter()
+            .map(|definition| {
+                let block_materials = BlockTerrainMaterials {
+                    top: create_material(
+                        definition,
+                        &definition.textures.top,
+                        asset_server,
+                        materials,
+                        roughness,
+                        metallic,
+                    ),
+                    bottom: create_material(
+                        definition,
+                        &definition.textures.bottom,
+                        asset_server,
+                        materials,
+                        roughness,
+                        metallic,
+                    ),
+                    left: create_material(
+                        definition,
+                        &definition.textures.left,
+                        asset_server,
+                        materials,
+                        roughness,
+                        metallic,
+                    ),
+                    right: create_material(
+                        definition,
+                        &definition.textures.right,
+                        asset_server,
+                        materials,
+                        roughness,
+                        metallic,
+                    ),
+                    front: create_material(
+                        definition,
+                        &definition.textures.front,
+                        asset_server,
+                        materials,
+                        roughness,
+                        metallic,
+                    ),
+                    back: create_material(
+                        definition,
+                        &definition.textures.back,
+                        asset_server,
+                        materials,
+                        roughness,
+                        metallic,
+                    ),
+                };
+
+                (definition.id.clone(), block_materials)
+            })
+            .collect();
+
+        Self { blocks }
+    }
+
+    fn for_face(&self, block_id: &str, face: BlockFace) -> &Handle<TerrainMaterial> {
+        let block = self
+            .blocks
+            .get(block_id)
+            .unwrap_or_else(|| panic!("missing terrain materials for block: {block_id}"));
+
         match face {
-            BlockFace::Right => &self.right,
-            BlockFace::Left => &self.left,
-            BlockFace::Top => &self.top,
-            BlockFace::Bottom => &self.bottom,
-            BlockFace::Front => &self.front,
-            BlockFace::Back => &self.back,
+            BlockFace::Right => &block.right,
+            BlockFace::Left => &block.left,
+            BlockFace::Top => &block.top,
+            BlockFace::Bottom => &block.bottom,
+            BlockFace::Front => &block.front,
+            BlockFace::Back => &block.back,
         }
     }
+}
+
+fn create_material(
+    _definition: &BlockDefinition,
+    texture: &str,
+    asset_server: &AssetServer,
+    materials: &mut Assets<TerrainMaterial>,
+    roughness: f32,
+    metallic: f32,
+) -> Handle<TerrainMaterial> {
+    materials.add(TerrainMaterial {
+        base: StandardMaterial {
+            base_color: Color::WHITE,
+            base_color_texture: Some(asset_server.load(texture.to_owned())),
+            perceptual_roughness: roughness,
+            metallic,
+            ..default()
+        },
+        extension: TerrainMaterialExtension::default(),
+    })
 }
 
 #[derive(Resource, Clone)]
@@ -159,7 +259,11 @@ pub fn spawn_chunk_mesh(
         return;
     }
 
-    let face_meshes = build_chunk_mesh(world, coord, chunk, |voxel| {
+    let face_meshes = build_chunk_mesh(world, coord, chunk, |voxel, block_id| {
+        if block_id != GRASS_BLOCK_ID {
+            return [1.0, 1.0, 1.0];
+        }
+
         let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
         let grass = biome_field.grass_color(position, biomes);
         [grass.r, grass.g, grass.b]
@@ -175,7 +279,11 @@ pub fn spawn_chunk_mesh(
         let entity = commands
             .spawn((
                 Mesh3d(mesh_handle.clone()),
-                MeshMaterial3d(terrain_materials.for_face(face_mesh.face).clone()),
+                MeshMaterial3d(
+                    terrain_materials
+                        .for_face(face_mesh.block_id, face_mesh.face)
+                        .clone(),
+                ),
                 transform,
                 DespawnOnExit(GameState::Gameplay),
             ))
