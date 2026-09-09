@@ -153,7 +153,7 @@ impl BiomeField {
         self.seed
     }
 
-    pub fn climate_at(&self, position: Vec2) -> MacroClimateSample {
+    pub(crate) fn climate_at(&self, position: Vec2) -> MacroClimateSample {
         self.climate.sample(position)
     }
 
