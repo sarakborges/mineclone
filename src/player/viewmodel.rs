@@ -11,8 +11,8 @@ use crate::{
 
 use super::{camera::GameplayCamera, hotbar::PlayerHotbar};
 
-const ARM_SIZE: Vec3 = Vec3::new(0.18, 0.64, 0.18);
-const HELD_BLOCK_SCALE: f32 = 0.30;
+const ARM_SIZE: Vec3 = Vec3::new(0.20, 0.70, 0.20);
+const HELD_BLOCK_SCALE: f32 = 0.23;
 const BREAK_ANIMATION_DURATION: f32 = 0.22;
 const PLACE_ANIMATION_DURATION: f32 = 0.16;
 
@@ -96,7 +96,7 @@ fn spawn_viewmodel(
                     viewmodel.spawn((
                         Mesh3d(arm_mesh.clone()),
                         MeshMaterial3d(arm_material.clone()),
-                        Transform::from_translation(Vec3::new(0.10, -0.19, 0.05))
+                        Transform::from_translation(Vec3::new(0.10, -0.15, 0.05))
                             .with_rotation(Quat::from_rotation_z(-0.22)),
                         NotShadowCaster,
                     ));
@@ -106,7 +106,7 @@ fn spawn_viewmodel(
                             HeldBlockRoot {
                                 block_id: selected_block_id,
                             },
-                            Transform::from_translation(Vec3::new(-0.08, 0.15, -0.15))
+                            Transform::from_translation(Vec3::new(-0.08, 0.14, -0.14))
                                 .with_rotation(Quat::from_euler(EulerRot::XYZ, 0.16, -0.52, 0.04))
                                 .with_scale(Vec3::splat(HELD_BLOCK_SCALE)),
                             if selected_block_id.is_some() {
@@ -244,6 +244,6 @@ fn animate_viewmodel(
 }
 
 fn base_viewmodel_transform() -> Transform {
-    Transform::from_translation(Vec3::new(0.53, -0.46, -0.86))
+    Transform::from_translation(Vec3::new(0.52, -0.40, -0.80))
         .with_rotation(Quat::from_euler(EulerRot::XYZ, -0.18, -0.18, 0.10))
 }
