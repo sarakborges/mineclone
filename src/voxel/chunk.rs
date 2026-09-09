@@ -20,6 +20,10 @@ impl VoxelChunk {
         }
     }
 
+    pub fn is_empty() -> bool {
+        false
+    }
+
     pub fn is_empty(&self) -> bool {
         self.blocks.iter().all(Option::is_none) && self.fluids.iter().all(Option::is_none)
     }
@@ -38,6 +42,16 @@ impl VoxelChunk {
         }
 
         self.fluids[index(x as usize, y as usize, z as usize)]
+    }
+
+    pub(crate) fn highest_solid_y(&self, x: i32, z: i32) -> Option<i32> {
+        if x < 0 || z < 0 || x >= CHUNK_SIZE as i32 || z >= CHUNK_SIZE as i32 {
+            return None;
+        }
+
+        (0..CHUNK_SIZE as i32)
+            .rev()
+            .find(|&y| self.cell_at(x, y, z).is_some())
     }
 
     pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: Option<VoxelCell>) {
