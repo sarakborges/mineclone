@@ -246,6 +246,7 @@ impl BiomeField {
         );
         let climate = self.climate.sample(Vec2::new(position.x, position.z));
         let mut weights = vec![0.0_f32; self.volume_biomes.len()];
+        let mut source_hashes = vec![None; self.volume_biomes.len()];
 
         for y in -VOLUME_SITE_SEARCH_RADIUS..=VOLUME_SITE_SEARCH_RADIUS {
             for z in -VOLUME_SITE_SEARCH_RADIUS..=VOLUME_SITE_SEARCH_RADIUS {
@@ -271,8 +272,9 @@ impl BiomeField {
                         normalized_ellipsoid_distance(warped - site, radii);
                     let strength = volume_site_strength(normalized_distance);
 
-                    if strength > 0.0 {
-                        weights[candidate_index] = weights[candidate_index].max(strength);
+                    if strength > weights[candidate_index] {
+                        weights[candidate_index] = strength;
+                        source_hashes[candidate_index] = Some(hash);
                     }
                 }
             }
@@ -285,40 +287,23 @@ impl BiomeField {
                 (*weight > 0.0).then_some(self.volume_biomes[index].priority)
             })
             .max()?;
-
-        for (index, weight) in weights.iter_mut().enumerate() {
-            if self.volume_biomes[index].priority < winning_priority {
-                *weight = 0.0;
-            }
-        }
-
-        let overlay_strength = weights.iter().copied().fold(0.0_f32, f32::max);
-        let total_weight: f32 = weights.iter().sum();
-
-        if total_weight <= f32::EPSILON {
-            return None;
-        }
-
-        let primary_index = weights
+        let tied_indices = weights
             .iter()
             .enumerate()
-            .filter(|(_, weight)| **weight > 0.0)
-            .max_by(|(_, left), (_, right)| left.total_cmp(right))
-            .map(|(index, _)| index)?;
-        let influences = weights
-            .into_iter()
-            .enumerate()
             .filter_map(|(index, weight)| {
-                (weight > 0.0).then_some(BiomeInfluence {
-                    id: self.volume_biomes[index].id.as_str(),
-                    weight: weight / total_weight,
-                })
+                (*weight > 0.0 && self.volume_biomes[index].priority == winning_priority)
+                    .then_some(index)
             })
-            .collect();
+            .collect::<Vec<_>>();
+        let primary_index = select_tied_volume_index(&tied_indices, &source_hashes, self.seed)?;
+        let overlay_strength = weights[primary_index];
 
         Some(VolumeBiomeFieldSample {
             primary_id: self.volume_biomes[primary_index].id.as_str(),
-            influences,
+            influences: vec![BiomeInfluence {
+                id: self.volume_biomes[primary_index].id.as_str(),
+                weight: 1.0,
+            }],
             strength: overlay_strength,
         })
     }
@@ -505,6 +490,37 @@ fn select_volume_biome_index(
     select_weighted_biome_index(biomes, climate, hash, |biome| {
         vertical_range_contains(biome.vertical_range, world_y)
     })
+}
+
+fn select_tied_volume_index(
+    indices: &[usize],
+    source_hashes: &[Option<u64>],
+    seed: u64,
+) -> Option<usize> {
+    if indices.is_empty() {
+        return None;
+    }
+
+    if indices.len() == 1 {
+        return Some(indices[0]);
+    }
+
+    let mut candidates = indices
+        .iter()
+        .map(|index| (*index, source_hashes[*index].unwrap_or_default()))
+        .collect::<Vec<_>>();
+    candidates.sort_by_key(|(_, source_hash)| *source_hash);
+
+    let mut hash = seed ^ 0x6a09_e667_f3bc_c909;
+
+    for (_, source_hash) in &candidates {
+        hash ^= source_hash.wrapping_mul(0x9e37_79b1_85eb_ca87);
+        hash ^= hash >> 33;
+        hash = hash.wrapping_mul(0xff51_afd7_ed55_8ccd);
+        hash ^= hash >> 33;
+    }
+
+    Some(candidates[hash as usize % candidates.len()].0)
 }
 
 fn select_weighted_biome_index(
@@ -807,20 +823,32 @@ mod tests {
                 priority: 5,
             },
         ];
-        let mut weights = [0.9_f32, 0.4_f32];
+        let weights = [0.9_f32, 0.4_f32];
         let winning_priority = weights
             .iter()
             .enumerate()
             .filter_map(|(index, weight)| (*weight > 0.0).then_some(biomes[index].priority))
             .max()
             .unwrap();
+        let tied = weights
+            .iter()
+            .enumerate()
+            .filter_map(|(index, weight)| {
+                (*weight > 0.0 && biomes[index].priority == winning_priority).then_some(index)
+            })
+            .collect::<Vec<_>>();
 
-        for (index, weight) in weights.iter_mut().enumerate() {
-            if biomes[index].priority < winning_priority {
-                *weight = 0.0;
-            }
-        }
+        assert_eq!(tied, vec![1]);
+    }
 
-        assert_eq!(weights, [0.0, 0.4]);
+    #[test]
+    fn equal_priority_volume_tiebreak_is_seeded_and_deterministic() {
+        let tied = [0_usize, 1, 2];
+        let source_hashes = [Some(11_u64), Some(29_u64), Some(47_u64)];
+        let first = select_tied_volume_index(&tied, &source_hashes, 12345).unwrap();
+        let second = select_tied_volume_index(&tied, &source_hashes, 12345).unwrap();
+
+        assert_eq!(first, second);
+        assert!(tied.contains(&first));
     }
 }
