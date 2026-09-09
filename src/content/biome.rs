@@ -89,9 +89,13 @@ pub struct BiomeDefinition {
     #[serde(default)]
     pub vertical_range: Option<BiomeVerticalRange>,
     #[serde(default)]
+    pub priority: i32,
+    #[serde(default)]
     pub terrain: Option<BiomeTerrain>,
     #[serde(default)]
     pub density_modifier: Option<BiomeDensityModifier>,
+    #[serde(default)]
+    pub solid_block: Option<String>,
     #[serde(default)]
     pub surface_fluid: Option<String>,
     pub visuals: BiomeVisuals,
@@ -121,6 +125,11 @@ impl BiomeRegistry {
                 assert!(
                     definition.density_modifier.is_none(),
                     "surface biome {} cannot define a volume density modifier",
+                    definition.id
+                );
+                assert_eq!(
+                    definition.priority, 0,
+                    "surface biome {} cannot define volume overlap priority",
                     definition.id
                 );
             }
