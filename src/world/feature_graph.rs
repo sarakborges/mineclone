@@ -22,6 +22,16 @@ pub struct FeatureGraphSample {
     pub strength: f32,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct FeatureGraphHorizontalSample {
+    pub edge_index: usize,
+    pub progress: f32,
+    pub distance: f32,
+    pub radius: f32,
+    pub height: f32,
+    pub strength: f32,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct FeatureGraph {
     nodes: Vec<FeatureNode>,
@@ -118,6 +128,53 @@ impl FeatureGraph {
 
         strongest
     }
+
+    pub fn sample_horizontal(&self, position: Vec2) -> Option<FeatureGraphHorizontalSample> {
+        let mut strongest: Option<FeatureGraphHorizontalSample> = None;
+
+        for (edge_index, edge) in self.edges.iter().enumerate() {
+            let from = self.nodes[edge.from].position;
+            let to = self.nodes[edge.to].position;
+            let from_horizontal = Vec2::new(from.x, from.z);
+            let to_horizontal = Vec2::new(to.x, to.z);
+            let segment = to_horizontal - from_horizontal;
+            let length_squared = segment.length_squared();
+
+            if length_squared <= f32::EPSILON {
+                continue;
+            }
+
+            let relative = position - from_horizontal;
+            let progress = (relative.dot(segment) / length_squared).clamp(0.0, 1.0);
+            let closest = from_horizontal + segment * progress;
+            let distance = position.distance(closest);
+            let radius = edge.start_radius + (edge.end_radius - edge.start_radius) * progress;
+            let strength = 1.0 - (distance / radius).clamp(0.0, 1.0);
+
+            if strength <= 0.0 {
+                continue;
+            }
+
+            let candidate = FeatureGraphHorizontalSample {
+                edge_index,
+                progress,
+                distance,
+                radius,
+                height: from.y + (to.y - from.y) * progress,
+                strength,
+            };
+            let should_replace = match strongest.as_ref() {
+                Some(current) => candidate.strength > current.strength,
+                None => true,
+            };
+
+            if should_replace {
+                strongest = Some(candidate);
+            }
+        }
+
+        strongest
+    }
 }
 
 #[cfg(test)]
@@ -137,6 +194,19 @@ mod tests {
         assert_eq!(center.strength, 1.0);
         assert!(edge.strength > 0.0 && edge.strength < 1.0);
         assert!(graph.sample(Vec3::new(5.0, 3.0, 0.0)).is_none());
+    }
+
+    #[test]
+    fn horizontal_sampling_interpolates_feature_height() {
+        let mut graph = FeatureGraph::default();
+        let from = graph.add_node(Vec3::new(0.0, 10.0, 0.0));
+        let to = graph.add_node(Vec3::new(10.0, 20.0, 0.0));
+        graph.add_edge(from, to, 2.0, 2.0);
+
+        let sample = graph.sample_horizontal(Vec2::new(5.0, 0.0)).unwrap();
+
+        assert_eq!(sample.height, 15.0);
+        assert_eq!(sample.strength, 1.0);
     }
 
     #[test]
