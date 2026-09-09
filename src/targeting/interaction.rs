@@ -80,7 +80,9 @@ fn edit_targeted_block(
     let (edited_chunk, edited_voxel, placed) = if break_pressed {
         (world.set_block_at(hit.voxel, None), hit.voxel, false)
     } else {
-        let block_id = selected_block.expect("empty hotbar placement is guarded above");
+        let Some(block_id) = selected_block else {
+            return;
+        };
         let Some(voxel) = placement_voxel(hit, &world, player.translation) else {
             return;
         };
