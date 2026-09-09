@@ -16,6 +16,16 @@
 }
 #endif
 
+struct TerrainMaterialExtension {
+    sky_light_factor: f32,
+}
+
+@group(#{MATERIAL_BIND_GROUP}) @binding(100)
+var<uniform> terrain_material_extension: TerrainMaterialExtension;
+
+const AMBIENT_FLOOR: f32 = 0.055;
+const LIGHT_GAMMA: f32 = 1.35;
+
 @fragment
 fn fragment(
     in: VertexOutput,
@@ -29,6 +39,13 @@ fn fragment(
         in.uv,
     );
     let tint = clamp(in.color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+    let ambient_occlusion = clamp(in.color.a, 0.0, 1.0);
+    let sky_level = clamp(in.uv_b.x, 0.0, 1.0);
+    let block_level = clamp(in.uv_b.y, 0.0, 1.0);
+    let sky_light = pow(sky_level, LIGHT_GAMMA) * terrain_material_extension.sky_light_factor;
+    let block_light = pow(block_level, LIGHT_GAMMA);
+    let propagated_light = max(sky_light, block_light);
+    let local_light = mix(AMBIENT_FLOOR, 1.0, propagated_light) * ambient_occlusion;
     let maximum_channel = max(texel.r, max(texel.g, texel.b));
     let minimum_channel = min(texel.r, min(texel.g, texel.b));
     let chroma = maximum_channel - minimum_channel;
@@ -53,7 +70,7 @@ fn fragment(
     }
 
     pbr_input.material.base_color = vec4<f32>(
-        base_rgb * pbr_bindings::material.base_color.rgb,
+        base_rgb * local_light * pbr_bindings::material.base_color.rgb,
         texel.a * pbr_bindings::material.base_color.a,
     );
     pbr_input.material.base_color = alpha_discard(

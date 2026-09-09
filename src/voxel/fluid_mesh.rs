@@ -10,9 +10,15 @@ use bevy::{
 use crate::content::fluid::FluidId;
 
 use super::{
-    chunk::{VoxelChunk, CHUNK_SIZE},
+    chunk::{CHUNK_SIZE, VoxelChunk},
+    mesh::{
+        lighting::{face_lighting, should_flip_diagonal, FaceLighting},
+        BlockFace,
+    },
     world::VoxelWorld,
 };
+
+const FACE_UVS: [[f32; 2]; 4] = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
 
 pub struct ChunkFluidMesh {
     pub fluid_id: FluidId,
@@ -23,17 +29,43 @@ pub struct ChunkFluidMesh {
 struct MeshBuffers {
     positions: Vec<[f32; 3]>,
     normals: Vec<[f32; 3]>,
+    uvs: Vec<[f32; 2]>,
+    light_uvs: Vec<[f32; 2]>,
+    colors: Vec<[f32; 4]>,
     indices: Vec<u32>,
 }
 
 impl MeshBuffers {
-    fn push(&mut self, vertices: [[f32; 3]; 4], normal: [f32; 3]) {
+    fn push(
+        &mut self,
+        vertices: [[f32; 3]; 4],
+        normal: [f32; 3],
+        lighting: FaceLighting,
+    ) {
         let base = self.positions.len() as u32;
+        let vertex_colors = lighting
+            .ambient_occlusion
+            .map(|ao| [1.0, 1.0, 1.0, ao]);
 
         self.positions.extend(vertices);
         self.normals.extend([normal; 4]);
-        self.indices
-            .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+        self.uvs.extend(FACE_UVS);
+        self.light_uvs.extend(lighting.channels);
+        self.colors.extend(vertex_colors);
+
+        if should_flip_diagonal(lighting.ambient_occlusion) {
+            self.indices.extend([
+                base,
+                base + 1,
+                base + 3,
+                base + 1,
+                base + 2,
+                base + 3,
+            ]);
+        } else {
+            self.indices
+                .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+        }
     }
 
     fn into_mesh(self) -> Option<Mesh> {
@@ -48,6 +80,9 @@ impl MeshBuffers {
             )
             .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
             .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
+            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
+            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
+            .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors)
             .with_inserted_indices(Indices::U32(self.indices)),
         )
     }
@@ -83,6 +118,7 @@ pub fn build_fluid_meshes(
                     fluid.push(
                         [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]],
                         [1.0, 0.0, 0.0],
+                        face_lighting(world, world_voxel, BlockFace::Right),
                     );
                 }
 
@@ -90,6 +126,7 @@ pub fn build_fluid_meshes(
                     fluid.push(
                         [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]],
                         [-1.0, 0.0, 0.0],
+                        face_lighting(world, world_voxel, BlockFace::Left),
                     );
                 }
 
@@ -97,6 +134,7 @@ pub fn build_fluid_meshes(
                     fluid.push(
                         [[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]],
                         [0.0, 1.0, 0.0],
+                        face_lighting(world, world_voxel, BlockFace::Top),
                     );
                 }
 
@@ -106,6 +144,7 @@ pub fn build_fluid_meshes(
                     fluid.push(
                         [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]],
                         [0.0, -1.0, 0.0],
+                        face_lighting(world, world_voxel, BlockFace::Bottom),
                     );
                 }
 
@@ -113,6 +152,7 @@ pub fn build_fluid_meshes(
                     fluid.push(
                         [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]],
                         [0.0, 0.0, 1.0],
+                        face_lighting(world, world_voxel, BlockFace::Front),
                     );
                 }
 
@@ -120,6 +160,7 @@ pub fn build_fluid_meshes(
                     fluid.push(
                         [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]],
                         [0.0, 0.0, -1.0],
+                        face_lighting(world, world_voxel, BlockFace::Back),
                     );
                 }
             }

@@ -10,14 +10,18 @@ use crate::{
         fluid::FluidRegistry,
     },
     player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
-    voxel::{coordinates::split_dimension_position, world::VoxelWorld},
+    voxel::{
+        coordinates::split_dimension_position,
+        lighting::initialize_chunk_lighting,
+        world::VoxelWorld,
+    },
 };
 
 use super::{
     biome_field::BiomeField,
     chunk_rendering::{
-        refresh_adjacent_chunk_meshes, spawn_chunk_mesh, ChunkRenderPool, FluidMaterials,
-        TerrainMaterials,
+        refresh_adjacent_chunk_meshes, refresh_chunk_mesh, spawn_chunk_mesh, ChunkRenderPool,
+        FluidMaterials, TerrainMaterials,
     },
     dimension::CurrentDimension,
     generation::generate_chunk,
@@ -106,6 +110,7 @@ pub fn stream_chunks(
             world.insert_chunk(coord, chunk);
         }
 
+        let lighting_changes = initialize_chunk_lighting(&mut world, coord, &blocks, &fluids);
         let chunk = world
             .chunk(coord)
             .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
@@ -132,6 +137,24 @@ pub fn stream_chunks(
             &terrain_materials,
             &fluid_materials,
         );
+
+        for changed_coord in lighting_changes {
+            if changed_coord == coord {
+                continue;
+            }
+
+            refresh_chunk_mesh(
+                &mut commands,
+                &mut meshes,
+                &mut render_pool,
+                &world,
+                changed_coord,
+                &biomes,
+                &biome_field,
+                &terrain_materials,
+                &fluid_materials,
+            );
+        }
     }
 }
 

@@ -7,6 +7,7 @@ use super::{
     chunk::{CHUNK_SIZE, VoxelChunk},
     chunk_archive::ArchivedChunk,
     fluid::FluidCell,
+    light::VoxelLight,
 };
 
 #[derive(Resource, Default)]
@@ -90,6 +91,46 @@ impl VoxelWorld {
         )
     }
 
+    pub(crate) fn light_at(&self, world_position: IVec3) -> VoxelLight {
+        if world_position.y < 0 {
+            return VoxelLight::DARK;
+        }
+
+        let (chunk_coord, local_position) = split_world_position(world_position);
+        let Some(chunk) = self.chunks.get(&chunk_coord) else {
+            return VoxelLight::DARK;
+        };
+
+        chunk.light_at(local_position.x, local_position.y, local_position.z)
+    }
+
+    pub(crate) fn set_light_at(&mut self, world_position: IVec3, light: VoxelLight) -> bool {
+        if world_position.y < 0 {
+            return false;
+        }
+
+        let (chunk_coord, local_position) = split_world_position(world_position);
+        let Some(chunk) = self.chunks.get_mut(&chunk_coord) else {
+            return false;
+        };
+
+        chunk.set_light(
+            local_position.x as usize,
+            local_position.y as usize,
+            local_position.z as usize,
+            light,
+        )
+    }
+
+    pub(crate) fn clear_chunk_light(&mut self, coord: IVec3) -> bool {
+        let Some(chunk) = self.chunks.get_mut(&coord) else {
+            return false;
+        };
+
+        chunk.clear_light();
+        true
+    }
+
     pub fn is_loaded_at(&self, world_position: IVec3) -> bool {
         if world_position.y < 0 {
             return false;
@@ -97,6 +138,22 @@ impl VoxelWorld {
 
         let (chunk_coord, _) = split_world_position(world_position);
         self.chunks.contains_key(&chunk_coord)
+    }
+
+    pub(crate) fn highest_loaded_world_y_in_column(
+        &self,
+        world_x: i32,
+        world_z: i32,
+    ) -> Option<i32> {
+        let chunk_size = CHUNK_SIZE as i32;
+        let chunk_x = world_x.div_euclid(chunk_size);
+        let chunk_z = world_z.div_euclid(chunk_size);
+
+        self.chunks
+            .keys()
+            .filter(|coord| coord.x == chunk_x && coord.z == chunk_z)
+            .map(|coord| (coord.y + 1) * chunk_size - 1)
+            .max()
     }
 
     pub fn set_block_at(

@@ -145,6 +145,7 @@ fn create_material(
             base_color_texture: Some(asset_server.load(texture.to_owned())),
             perceptual_roughness: roughness,
             metallic,
+            unlit: true,
             ..default()
         },
         extension: TerrainMaterialExtension::default(),
@@ -153,31 +154,34 @@ fn create_material(
 
 #[derive(Resource, Clone)]
 pub struct FluidMaterials {
-    materials: HashMap<FluidId, Handle<StandardMaterial>>,
+    materials: HashMap<FluidId, Handle<TerrainMaterial>>,
 }
 
 impl FluidMaterials {
     pub fn from_registry(
         fluids: &FluidRegistry,
-        materials: &mut Assets<StandardMaterial>,
+        materials: &mut Assets<TerrainMaterial>,
     ) -> Self {
         let materials = fluids
             .iter()
             .map(|(fluid_id, definition)| {
-                let material = materials.add(StandardMaterial {
-                    base_color: Color::srgba(
-                        definition.color.r,
-                        definition.color.g,
-                        definition.color.b,
-                        definition.opacity,
-                    ),
-                    perceptual_roughness: definition.roughness,
-                    metallic: definition.metallic,
-                    alpha_mode: AlphaMode::Blend,
-                    double_sided: true,
-                    cull_mode: None,
-                    unlit: true,
-                    ..default()
+                let material = materials.add(TerrainMaterial {
+                    base: StandardMaterial {
+                        base_color: Color::srgba(
+                            definition.color.r,
+                            definition.color.g,
+                            definition.color.b,
+                            definition.opacity,
+                        ),
+                        perceptual_roughness: definition.roughness,
+                        metallic: definition.metallic,
+                        alpha_mode: AlphaMode::Blend,
+                        double_sided: true,
+                        cull_mode: None,
+                        unlit: true,
+                        ..default()
+                    },
+                    extension: TerrainMaterialExtension::default(),
                 });
 
                 (fluid_id, material)
@@ -187,7 +191,7 @@ impl FluidMaterials {
         Self { materials }
     }
 
-    fn get(&self, fluid_id: FluidId) -> &Handle<StandardMaterial> {
+    fn get(&self, fluid_id: FluidId) -> &Handle<TerrainMaterial> {
         self.materials
             .get(&fluid_id)
             .unwrap_or_else(|| panic!("missing material for fluid id {fluid_id}"))
