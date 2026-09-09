@@ -61,16 +61,14 @@ fn edit_targeted_block(
         let Some(voxel) = placement_voxel(hit, &world, player.translation) else {
             return;
         };
-        let block = blocks
+        blocks
             .get(block_id)
             .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
-        let rotation = if block.rotate_texture {
-            TextureRotation::default()
-        } else {
-            TextureRotation::default()
-        };
 
-        world.set_block_at(voxel, Some(VoxelCell::new(block_id, rotation)))
+        world.set_block_at(
+            voxel,
+            Some(VoxelCell::new(block_id, TextureRotation::default())),
+        )
     } else {
         return;
     };
