@@ -1,6 +1,6 @@
 pub mod biome;
 pub mod biome_field;
-mod chunk_rendering;
+pub(crate) mod chunk_rendering;
 mod chunk_unloading;
 pub mod day_night;
 pub mod dimension;
