@@ -1,6 +1,10 @@
 use bevy::prelude::*;
 
-use super::highlight::TargetHighlightPlugin;
+use super::{
+    highlight::TargetHighlightPlugin,
+    interaction::BlockInteractionPlugin,
+    placement_preview::PlacementPreviewPlugin,
+};
 use crate::{
     app::game_state::GameState,
     voxel::{
@@ -11,15 +15,33 @@ use crate::{
 
 const TARGET_RANGE: f32 = 8.0;
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) enum BlockTargetingSet {
+    Raycast,
+    Interaction,
+    Visuals,
+}
+
 pub struct BlockTargetingPlugin;
 
 impl Plugin for BlockTargetingPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<TargetedBlock>()
-            .add_plugins(TargetHighlightPlugin)
+            .configure_sets(
+                Update,
+                (
+                    BlockTargetingSet::Raycast,
+                    BlockTargetingSet::Interaction,
+                    BlockTargetingSet::Visuals,
+                )
+                    .chain(),
+            )
+            .add_plugins((TargetHighlightPlugin, BlockInteractionPlugin, PlacementPreviewPlugin))
             .add_systems(
                 Update,
-                update_targeted_block.run_if(in_state(GameState::Gameplay)),
+                update_targeted_block
+                    .in_set(BlockTargetingSet::Raycast)
+                    .run_if(in_state(GameState::Gameplay)),
             );
     }
 }
