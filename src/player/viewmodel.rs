@@ -105,16 +105,19 @@ fn spawn_viewmodel(
                                 HeldBlockRoot {
                                     block_id: selected_block_id,
                                 },
+                                // The block sits just beyond the end of the arm instead of
+                                // intersecting it. Its bottom face starts above the hand and
+                                // the negative Z offset pushes it toward the camera view.
                                 Transform::from_translation(Vec3::new(
-                                    -0.025,
-                                    ARM_SIZE.y * 0.5 - 0.025,
-                                    -0.035,
+                                    -0.045,
+                                    ARM_SIZE.y * 0.5 + 0.10,
+                                    -0.12,
                                 ))
                                 .with_rotation(Quat::from_euler(
                                     EulerRot::XYZ,
-                                    0.18,
+                                    0.14,
                                     -0.62,
-                                    -0.10,
+                                    -0.08,
                                 ))
                                 .with_scale(Vec3::splat(HELD_BLOCK_SCALE)),
                                 if selected_block_id.is_some() {
