@@ -5,6 +5,8 @@ use std::{
 
 use bevy::prelude::*;
 
+use crate::content::dimension_hydrology::DimensionHydrology;
+
 use super::{
     cave_connectivity::CaveConnectivityField,
     generation_region::GenerationRegion,
@@ -21,9 +23,9 @@ pub struct WorldFeatureFields {
 }
 
 impl WorldFeatureFields {
-    pub fn new(seed: u64, sea_level: i32) -> Self {
+    pub fn new(seed: u64, sea_level: i32, hydrology: DimensionHydrology) -> Self {
         Self {
-            hydrology: HydrologyField::new(seed.rotate_left(7), sea_level),
+            hydrology: HydrologyField::new(seed.rotate_left(7), sea_level, hydrology),
             cave_connectivity: CaveConnectivityField::new(seed.rotate_left(23)),
             geology: GeologyField::new(seed.rotate_left(41)),
             region_cache: RwLock::new(HashMap::new()),
@@ -91,7 +93,7 @@ mod tests {
 
     #[test]
     fn region_cache_reuses_the_same_region() {
-        let fields = WorldFeatureFields::new(42, 64);
+        let fields = WorldFeatureFields::new(42, 64, DimensionHydrology::default());
         let first = fields.region(IVec3::new(2, 0, -1));
         let second = fields.region(IVec3::new(2, 0, -1));
 
