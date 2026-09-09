@@ -9,5 +9,14 @@
   ],
   "dayNightCycle": "mineclone:overworld/day_night_cycle",
   "sky": "mineclone:overworld/sky",
-  "seaLevel": 90
+  "seaLevel": 90,
+  "hydrology": {
+    "waterFluid": "mineclone:water",
+    "oceanBiome": "mineclone:overworld/ocean",
+    "coastBiome": "mineclone:overworld/coast",
+    "oceanBedBlock": "mineclone:dirt",
+    "riverBedBlock": "mineclone:dirt",
+    "lakeBedBlock": "mineclone:dirt",
+    "shoreBlock": "mineclone:dirt"
+  }
 }
