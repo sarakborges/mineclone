@@ -71,7 +71,6 @@ pub struct ResolvedBiomeFieldSample<'a> {
 pub(crate) struct VolumeBiomeAnchor<'a> {
     pub id: &'a str,
     pub position: Vec3,
-    pub radii: Vec3,
 }
 
 impl BiomeField {
@@ -375,7 +374,6 @@ impl BiomeField {
                         anchors.push(VolumeBiomeAnchor {
                             id: self.volume_biomes[index].id.as_str(),
                             position: site,
-                            radii,
                         });
                     }
                 }
