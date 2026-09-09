@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 #[derive(Clone, Copy, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case", rename_all_fields = "camelCase")]
 pub enum BiomeDensityModifier {
     Cavern {
         carve_strength: f32,
@@ -25,11 +25,11 @@ impl BiomeDensityModifier {
             } => {
                 assert!(
                     carve_strength >= 0.0,
-                    "biome {biome_id} cavern carve_strength cannot be negative"
+                    "biome {biome_id} cavern carveStrength cannot be negative"
                 );
                 assert!(
                     noise_scale > 0.0,
-                    "biome {biome_id} cavern noise_scale must be positive"
+                    "biome {biome_id} cavern noiseScale must be positive"
                 );
                 assert!(
                     (0.0..=1.0).contains(&openness),
@@ -43,11 +43,11 @@ impl BiomeDensityModifier {
             } => {
                 assert!(
                     fill_strength >= 0.0,
-                    "biome {biome_id} solid fill_strength cannot be negative"
+                    "biome {biome_id} solid fillStrength cannot be negative"
                 );
                 assert!(
                     noise_scale > 0.0,
-                    "biome {biome_id} solid noise_scale must be positive"
+                    "biome {biome_id} solid noiseScale must be positive"
                 );
                 assert!(
                     (0.0..=1.0).contains(&coverage),
