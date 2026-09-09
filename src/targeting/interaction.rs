@@ -3,7 +3,11 @@ use bevy::prelude::*;
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
     content::{biome::BiomeRegistry, block::BlockRegistry},
-    player::{camera::GameplayCamera, hotbar::PlayerHotbar},
+    player::{
+        camera::GameplayCamera,
+        hotbar::PlayerHotbar,
+        viewmodel::ViewModelAnimation,
+    },
     voxel::{cell::VoxelCell, texture_rotation::TextureRotation, world::VoxelWorld},
     world::{
         biome_field::BiomeField,
@@ -44,6 +48,7 @@ fn edit_targeted_block(
     fluid_materials: Res<FluidMaterials>,
     hotbar: Res<PlayerHotbar>,
     player: Single<&Transform, With<GameplayCamera>>,
+    mut viewmodel_animation: ResMut<ViewModelAnimation>,
     mut world: ResMut<VoxelWorld>,
     mut render_pool: ResMut<ChunkRenderPool>,
     mut targeted: ResMut<TargetedBlock>,
@@ -52,8 +57,8 @@ fn edit_targeted_block(
         return;
     };
 
-    let edited_chunk = if buttons.just_pressed(MouseButton::Left) {
-        world.set_block_at(hit.voxel, None)
+    let (edited_chunk, placed) = if buttons.just_pressed(MouseButton::Left) {
+        (world.set_block_at(hit.voxel, None), false)
     } else if buttons.just_pressed(MouseButton::Right) {
         let Some(block_id) = hotbar.item_at(hotbar.selected_slot()) else {
             return;
@@ -65,9 +70,12 @@ fn edit_targeted_block(
             .get(block_id)
             .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
 
-        world.set_block_at(
-            voxel,
-            Some(VoxelCell::new(block_id, TextureRotation::default())),
+        (
+            world.set_block_at(
+                voxel,
+                Some(VoxelCell::new(block_id, TextureRotation::default())),
+            ),
+            true,
         )
     } else {
         return;
@@ -76,6 +84,12 @@ fn edit_targeted_block(
     let Some(coord) = edited_chunk else {
         return;
     };
+
+    if placed {
+        viewmodel_animation.play_place();
+    } else {
+        viewmodel_animation.play_break();
+    }
 
     targeted.0 = None;
     remesh_edited_chunk(
