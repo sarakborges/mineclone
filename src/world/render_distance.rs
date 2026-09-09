@@ -81,7 +81,7 @@ pub fn chunk_coords_in_volume(
 
     coords.sort_by_key(|coord| {
         let delta = *coord - center;
-        delta.length_squared()
+        delta.x * delta.x + delta.y * delta.y + delta.z * delta.z
     });
 
     coords
