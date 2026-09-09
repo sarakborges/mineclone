@@ -15,10 +15,11 @@ use super::{
 };
 
 const FACE_SHADE: f32 = 1.0;
+const FACE_OVERDRAW: f32 = 0.002;
 
 const LIGHT_BRIGHTNESS: [f32; 16] = [
     0.10, 0.13, 0.17, 0.21, 0.26, 0.32, 0.39, 0.47,
-    0.55, 0.63, 0.70, 0.76, 0.81, 0.85, 0.89, 1.00,
+    0.55, 0.62, 0.68, 0.72, 0.75, 0.77, 0.80, 1.00,
 ];
 
 #[derive(Clone, Copy)]
@@ -122,10 +123,16 @@ where
                 let x1 = x0 + 1.0;
                 let y1 = y0 + 1.0;
                 let z1 = z0 + 1.0;
+                let e = FACE_OVERDRAW;
 
                 if !world.is_solid(world_voxel + IVec3::X) {
                     right.push(
-                        [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]],
+                        [
+                            [x1, y0 - e, z1 + e],
+                            [x1, y0 - e, z0 - e],
+                            [x1, y1 + e, z0 - e],
+                            [x1, y1 + e, z1 + e],
+                        ],
                         [1.0, 0.0, 0.0],
                         TextureRotation::default(),
                         grass_tint,
@@ -135,7 +142,12 @@ where
 
                 if !world.is_solid(world_voxel - IVec3::X) {
                     left.push(
-                        [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]],
+                        [
+                            [x0, y0 - e, z0 - e],
+                            [x0, y0 - e, z1 + e],
+                            [x0, y1 + e, z1 + e],
+                            [x0, y1 + e, z0 - e],
+                        ],
                         [-1.0, 0.0, 0.0],
                         TextureRotation::default(),
                         grass_tint,
@@ -145,7 +157,12 @@ where
 
                 if !world.is_solid(world_voxel + IVec3::Y) {
                     top.push(
-                        [[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]],
+                        [
+                            [x0 - e, y1, z1 + e],
+                            [x1 + e, y1, z1 + e],
+                            [x1 + e, y1, z0 - e],
+                            [x0 - e, y1, z0 - e],
+                        ],
                         [0.0, 1.0, 0.0],
                         cell.texture_rotation,
                         grass_tint,
@@ -155,7 +172,12 @@ where
 
                 if world_voxel.y > 0 && !world.is_solid(world_voxel - IVec3::Y) {
                     bottom.push(
-                        [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]],
+                        [
+                            [x0 - e, y0, z0 - e],
+                            [x1 + e, y0, z0 - e],
+                            [x1 + e, y0, z1 + e],
+                            [x0 - e, y0, z1 + e],
+                        ],
                         [0.0, -1.0, 0.0],
                         cell.texture_rotation,
                         grass_tint,
@@ -165,7 +187,12 @@ where
 
                 if !world.is_solid(world_voxel + IVec3::Z) {
                     front.push(
-                        [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]],
+                        [
+                            [x0 - e, y0 - e, z1],
+                            [x1 + e, y0 - e, z1],
+                            [x1 + e, y1 + e, z1],
+                            [x0 - e, y1 + e, z1],
+                        ],
                         [0.0, 0.0, 1.0],
                         TextureRotation::default(),
                         grass_tint,
@@ -175,7 +202,12 @@ where
 
                 if !world.is_solid(world_voxel - IVec3::Z) {
                     back.push(
-                        [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]],
+                        [
+                            [x1 + e, y0 - e, z0],
+                            [x0 - e, y0 - e, z0],
+                            [x0 - e, y1 + e, z0],
+                            [x1 + e, y1 + e, z0],
+                        ],
                         [0.0, 0.0, -1.0],
                         TextureRotation::default(),
                         grass_tint,
