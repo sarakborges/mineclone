@@ -1,0 +1,34 @@
+{
+  "id": "mineclone:overworld/coast",
+  "name": "Coast",
+  "kind": "hydrology",
+  "visuals": {
+    "skyColor": {
+      "dawn": { "r": 0.50, "g": 0.70, "b": 0.92 },
+      "day": { "r": 0.30, "g": 0.66, "b": 0.98 },
+      "dusk": { "r": 0.60, "g": 0.52, "b": 0.72 },
+      "night": { "r": 0.025, "g": 0.05, "b": 0.115 }
+    },
+    "fogColor": {
+      "dawn": { "r": 0.56, "g": 0.74, "b": 0.88 },
+      "day": { "r": 0.56, "g": 0.77, "b": 0.94 },
+      "dusk": { "r": 0.60, "g": 0.55, "b": 0.69 },
+      "night": { "r": 0.035, "g": 0.06, "b": 0.115 }
+    },
+    "grassColor": { "r": 0.21, "g": 0.58, "b": 0.25 },
+    "underwaterTint": {
+      "color": { "r": 0.08, "g": 0.38, "b": 0.70 },
+      "opacity": 0.20
+    },
+    "stars": {
+      "density": 0.62,
+      "color": { "r": 0.88, "g": 0.93, "b": 1.0 }
+    },
+    "clouds": {
+      "density": 0.48,
+      "color": { "r": 0.90, "g": 0.93, "b": 0.98 }
+    },
+    "terrainRoughness": 0.97,
+    "terrainMetallic": 0.0
+  }
+}
