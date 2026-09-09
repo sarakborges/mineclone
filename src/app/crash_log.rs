@@ -6,7 +6,10 @@ use std::{
     io::Write,
     panic::{self, PanicHookInfo},
     path::PathBuf,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        OnceLock,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -15,11 +18,14 @@ const DATA_DIRECTORY: &str = "data";
 const ASSETS_DIRECTORY: &str = "assets";
 
 static PANIC_LOG_WRITTEN: AtomicBool = AtomicBool::new(false);
+static SESSION_LOG_PATH: OnceLock<PathBuf> = OnceLock::new();
 
 pub fn install_crash_logger() {
     PANIC_LOG_WRITTEN.store(false, Ordering::Release);
-    let previous_hook = panic::take_hook();
+    let path = initialize_session_log();
+    let _ = SESSION_LOG_PATH.set(path);
 
+    let previous_hook = panic::take_hook();
     panic::set_hook(Box::new(move |info| {
         if write_panic_log(info) {
             PANIC_LOG_WRITTEN.store(true, Ordering::Release);
@@ -37,6 +43,36 @@ pub fn write_caught_panic(payload: &(dyn Any + Send)) {
     if write_report(&message, "<unavailable; panic caught after unwind>") {
         PANIC_LOG_WRITTEN.store(true, Ordering::Release);
     }
+}
+
+fn initialize_session_log() -> PathBuf {
+    let timestamp = format_timestamp(SystemTime::now());
+    let root = runtime_root();
+    let log_directory = root.join(LOG_DIRECTORY);
+    let preferred_path = log_directory.join(format!("{}.txt", timestamp.file_name));
+
+    let path = if create_dir_all(&log_directory).is_ok() {
+        preferred_path
+    } else {
+        root.join(format!("asteria-crash-{}.txt", timestamp.file_name))
+    };
+
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(&path)
+    {
+        let _ = writeln!(file, "Asteria session log");
+        let _ = writeln!(file, "===================");
+        let _ = writeln!(file, "Started (UTC): {}", timestamp.display);
+        let _ = writeln!(file, "Process ID: {}", std::process::id());
+        let _ = writeln!(file, "Platform: {} / {}", env::consts::OS, env::consts::ARCH);
+        let _ = writeln!(file);
+        let _ = file.flush();
+    }
+
+    path
 }
 
 fn write_panic_log(info: &PanicHookInfo<'_>) -> bool {
@@ -57,24 +93,14 @@ fn write_panic_log(info: &PanicHookInfo<'_>) -> bool {
 }
 
 fn write_report(message: &str, location: &str) -> bool {
-    let now = SystemTime::now();
-    let timestamp = format_timestamp(now);
-    let log_directory = runtime_root().join(LOG_DIRECTORY);
-
-    if create_dir_all(&log_directory).is_err() {
+    let Some(path) = SESSION_LOG_PATH.get() else {
         return false;
-    }
-
-    let path = log_directory.join(format!("{}.txt", timestamp.file_name));
-    let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .open(path)
-    else {
+    };
+    let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) else {
         return false;
     };
 
+    let timestamp = format_timestamp(SystemTime::now());
     let thread = std::thread::current();
     let thread_name = thread.name().unwrap_or("<unnamed>");
     let current_directory = env::current_dir()
@@ -85,20 +111,18 @@ fn write_report(message: &str, location: &str) -> bool {
         .unwrap_or_else(|_| "<unavailable>".to_owned());
     let backtrace = Backtrace::force_capture();
 
-    let _ = writeln!(file, "Asteria crash report");
-    let _ = writeln!(file, "====================");
+    let _ = writeln!(file, "CRASH");
+    let _ = writeln!(file, "=====");
     let _ = writeln!(file, "Timestamp (UTC): {}", timestamp.display);
-    let _ = writeln!(file, "Process ID: {}", std::process::id());
     let _ = writeln!(file, "Thread: {thread_name}");
-    let _ = writeln!(file, "Platform: {} / {}", env::consts::OS, env::consts::ARCH);
     let _ = writeln!(file, "Executable: {executable}");
     let _ = writeln!(file, "Working directory: {current_directory}");
-    let _ = writeln!(file);
     let _ = writeln!(file, "Panic: {message}");
     let _ = writeln!(file, "Location: {location}");
     let _ = writeln!(file);
     let _ = writeln!(file, "Backtrace:");
     let _ = writeln!(file, "{backtrace}");
+    let _ = writeln!(file);
 
     file.flush().is_ok()
 }
