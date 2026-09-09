@@ -29,7 +29,7 @@ use super::{
 };
 
 const GRASS_BLOCK_ID: &str = "mineclone:grass";
-const INITIAL_HORIZONTAL_RADIUS_CHUNKS: i32 = 4;
+const INITIAL_HORIZONTAL_RADIUS_CHUNKS: i32 = 5;
 const INITIAL_CHUNKS_PER_FRAME: usize = 4;
 
 #[derive(Resource)]
