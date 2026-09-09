@@ -61,16 +61,26 @@ fn edit_targeted_block(
     mut render_pool: ResMut<ChunkRenderPool>,
     mut targeted: ResMut<TargetedBlock>,
 ) {
+    let break_pressed = buttons.just_pressed(MouseButton::Left);
+    let place_pressed = buttons.just_pressed(MouseButton::Right);
+
+    if !break_pressed && !place_pressed {
+        return;
+    }
+
+    let selected_block = hotbar.item_at(hotbar.selected_slot());
+    if place_pressed && selected_block.is_none() {
+        return;
+    }
+
     let Some(hit) = targeted.0 else {
         return;
     };
 
-    let (edited_chunk, edited_voxel, placed) = if buttons.just_pressed(MouseButton::Left) {
+    let (edited_chunk, edited_voxel, placed) = if break_pressed {
         (world.set_block_at(hit.voxel, None), hit.voxel, false)
-    } else if buttons.just_pressed(MouseButton::Right) {
-        let Some(block_id) = hotbar.item_at(hotbar.selected_slot()) else {
-            return;
-        };
+    } else {
+        let block_id = selected_block.expect("empty hotbar placement is guarded above");
         let Some(voxel) = placement_voxel(hit, &world, player.translation) else {
             return;
         };
@@ -86,8 +96,6 @@ fn edit_targeted_block(
             voxel,
             true,
         )
-    } else {
-        return;
     };
 
     let Some(coord) = edited_chunk else {
