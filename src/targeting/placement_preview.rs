@@ -3,7 +3,10 @@ use bevy::{light::NotShadowCaster, prelude::*};
 use crate::{
     app::game_state::GameState,
     content::block::BlockRegistry,
-    player::{camera::GameplayCamera, hotbar::{PlayerHotbar, GRASS_BLOCK_ID}},
+    player::{
+        camera::GameplayCamera,
+        hotbar::{GRASS_BLOCK_ID, PlayerHotbar},
+    },
     rendering::block_model::{block_face_material, block_face_mesh, block_faces},
     voxel::mesh::BlockFace,
 };
@@ -13,7 +16,7 @@ use super::{
     placement::placement_voxel,
 };
 
-const PREVIEW_OPACITY: f32 = 0.42;
+const PREVIEW_OPACITY: f32 = 0.68;
 
 #[derive(Component)]
 struct PlacementPreviewRoot {
