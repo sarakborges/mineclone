@@ -37,13 +37,17 @@ fn main() {
     prepare_runtime_directory();
 
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Asteria".into(),
-                ..default()
-            }),
-            ..default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(ImagePlugin::default_nearest())
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "Asteria".into(),
+                        ..default()
+                    }),
+                    ..default()
+                }),
+        )
         .init_state::<GameState>()
         .init_state::<PauseState>()
         .insert_resource(ClearColor(Color::srgb(0.02, 0.025, 0.04)))
