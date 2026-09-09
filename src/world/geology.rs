@@ -22,6 +22,20 @@ pub struct GeologyRegion {
     pub features: Vec<GeologicalFeature>,
 }
 
+impl GeologyRegion {
+    pub fn density_delta(&self, position: Vec3) -> f32 {
+        self.features
+            .iter()
+            .filter_map(|feature| {
+                feature
+                    .path
+                    .sample(position)
+                    .map(|sample| -feature.strength * sample.strength)
+            })
+            .sum()
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct GeologyField {
     seed: u64,
