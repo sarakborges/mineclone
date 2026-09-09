@@ -175,6 +175,7 @@ pub fn setup_world(
     fluids: Res<FluidRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
+    feature_fields: Res<WorldFeatureFields>,
     terrain_materials: Res<TerrainMaterials>,
     fluid_materials: Res<FluidMaterials>,
     mut world: ResMut<VoxelWorld>,
@@ -215,6 +216,7 @@ pub fn setup_world(
                 dimension,
                 &biomes,
                 &biome_field,
+                &feature_fields,
             );
             world.insert_chunk(coord, chunk);
         }
