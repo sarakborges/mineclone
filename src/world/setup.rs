@@ -9,6 +9,7 @@ use crate::{
         fluid::FluidRegistry,
         read_content,
     },
+    rendering::terrain_material::{TerrainMaterial, TerrainMaterialExtension},
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
     voxel::{coordinates::split_dimension_position, world::VoxelWorld},
 };
@@ -52,7 +53,8 @@ impl WorldLoadingState {
 pub fn begin_world_loading(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut terrain_material_assets: ResMut<Assets<TerrainMaterial>>,
+    mut standard_materials: ResMut<Assets<StandardMaterial>>,
     current_dimension: Res<CurrentDimension>,
     seed: Res<WorldSeed>,
     load_mode: Res<WorldLoadMode>,
@@ -89,12 +91,15 @@ pub fn begin_world_loading(
     let biome_field = BiomeField::from_dimension(dimension, biomes_ref, seed.0);
     let (roughness, metallic) = average_terrain_material(dimension, biomes_ref);
     let mut create_material = |texture: &str| {
-        materials.add(StandardMaterial {
-            base_color: Color::WHITE,
-            base_color_texture: Some(asset_server.load(texture.to_owned())),
-            perceptual_roughness: roughness,
-            metallic,
-            ..default()
+        terrain_material_assets.add(TerrainMaterial {
+            base: StandardMaterial {
+                base_color: Color::WHITE,
+                base_color_texture: Some(asset_server.load(texture.to_owned())),
+                perceptual_roughness: roughness,
+                metallic,
+                ..default()
+            },
+            extension: TerrainMaterialExtension::default(),
         })
     };
     let terrain_materials = TerrainMaterials {
@@ -106,7 +111,7 @@ pub fn begin_world_loading(
         back: create_material(&grass.textures.back),
     };
     drop(create_material);
-    let fluid_materials = FluidMaterials::from_registry(fluids_ref, &mut materials);
+    let fluid_materials = FluidMaterials::from_registry(fluids_ref, &mut standard_materials);
     let (min_chunk_y, max_chunk_y) = chunk_y_bounds(dimension, biomes_ref);
     let initial_center = if *load_mode == WorldLoadMode::Load {
         save.player_position()

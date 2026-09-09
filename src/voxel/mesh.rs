@@ -9,7 +9,7 @@ use bevy::{
 use face::push_face;
 
 use super::{
-    chunk::{VoxelChunk, CHUNK_SIZE},
+    chunk::{CHUNK_SIZE, VoxelChunk},
     texture_rotation::TextureRotation,
     world::VoxelWorld,
 };
@@ -22,6 +22,20 @@ const SOUTH_SHADE: f32 = 0.92;
 const NORTH_SHADE: f32 = 0.86;
 const SIDE_NORMAL_HORIZONTAL: f32 = 0.8;
 const SIDE_NORMAL_UP: f32 = 0.6;
+const SKY_LIGHT_SEARCH_RADIUS: i32 = 6;
+const SKY_LIGHT_LATERAL_ATTENUATION: f32 = 0.12;
+const ENCLOSED_SKY_LIGHT: f32 = 0.06;
+const SKY_SCAN_LIMIT: usize = 192;
+const SKY_LIGHT_DIRECTIONS: [IVec3; 8] = [
+    IVec3::X,
+    IVec3::NEG_X,
+    IVec3::Z,
+    IVec3::NEG_Z,
+    IVec3::new(1, 0, 1),
+    IVec3::new(1, 0, -1),
+    IVec3::new(-1, 0, 1),
+    IVec3::new(-1, 0, -1),
+];
 
 #[derive(Clone, Copy)]
 pub enum BlockFace {
@@ -55,6 +69,7 @@ impl MeshBuffers {
         texture_rotation: TextureRotation,
         tint: [f32; 3],
         shade: f32,
+        skylight: f32,
     ) {
         push_face(
             &mut self.positions,
@@ -67,6 +82,7 @@ impl MeshBuffers {
             texture_rotation,
             tint,
             shade,
+            skylight,
         );
     }
 
@@ -131,6 +147,7 @@ where
                         TextureRotation::default(),
                         grass_tint,
                         EAST_SHADE,
+                        skylight_at(world, world_voxel + IVec3::X),
                     );
                 }
 
@@ -141,6 +158,7 @@ where
                         TextureRotation::default(),
                         grass_tint,
                         WEST_SHADE,
+                        skylight_at(world, world_voxel - IVec3::X),
                     );
                 }
 
@@ -151,6 +169,7 @@ where
                         cell.texture_rotation,
                         grass_tint,
                         TOP_SHADE,
+                        skylight_at(world, world_voxel + IVec3::Y),
                     );
                 }
 
@@ -161,6 +180,7 @@ where
                         cell.texture_rotation,
                         grass_tint,
                         BOTTOM_SHADE,
+                        skylight_at(world, world_voxel - IVec3::Y),
                     );
                 }
 
@@ -171,6 +191,7 @@ where
                         TextureRotation::default(),
                         grass_tint,
                         SOUTH_SHADE,
+                        skylight_at(world, world_voxel + IVec3::Z),
                     );
                 }
 
@@ -181,6 +202,7 @@ where
                         TextureRotation::default(),
                         grass_tint,
                         NORTH_SHADE,
+                        skylight_at(world, world_voxel - IVec3::Z),
                     );
                 }
             }
@@ -202,4 +224,49 @@ where
             .map(|mesh| ChunkFaceMesh { face, mesh })
     })
     .collect()
+}
+
+fn skylight_at(world: &VoxelWorld, air_cell: IVec3) -> f32 {
+    if open_to_sky(world, air_cell) {
+        return 1.0;
+    }
+
+    let mut best = ENCLOSED_SKY_LIGHT;
+
+    for direction in SKY_LIGHT_DIRECTIONS {
+        for distance in 1..=SKY_LIGHT_SEARCH_RADIUS {
+            let sample = air_cell + direction * distance;
+
+            if !world.is_loaded_at(sample) || world.is_solid(sample) {
+                break;
+            }
+
+            if open_to_sky(world, sample) {
+                let light = (1.0 - distance as f32 * SKY_LIGHT_LATERAL_ATTENUATION)
+                    .max(ENCLOSED_SKY_LIGHT);
+                best = best.max(light);
+                break;
+            }
+        }
+    }
+
+    best
+}
+
+fn open_to_sky(world: &VoxelWorld, start: IVec3) -> bool {
+    let mut sample = start;
+
+    for _ in 0..SKY_SCAN_LIMIT {
+        if !world.is_loaded_at(sample) {
+            return true;
+        }
+
+        if world.is_solid(sample) {
+            return false;
+        }
+
+        sample.y += 1;
+    }
+
+    true
 }

@@ -8,6 +8,7 @@ use crate::{
         biome::BiomeRegistry,
         fluid::{FluidId, FluidRegistry},
     },
+    rendering::terrain_material::TerrainMaterial,
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         fluid_mesh::build_fluid_meshes,
@@ -29,16 +30,16 @@ const CHUNK_NEIGHBORS: [IVec3; 6] = [
 
 #[derive(Resource, Clone)]
 pub struct TerrainMaterials {
-    pub top: Handle<StandardMaterial>,
-    pub bottom: Handle<StandardMaterial>,
-    pub left: Handle<StandardMaterial>,
-    pub right: Handle<StandardMaterial>,
-    pub front: Handle<StandardMaterial>,
-    pub back: Handle<StandardMaterial>,
+    pub top: Handle<TerrainMaterial>,
+    pub bottom: Handle<TerrainMaterial>,
+    pub left: Handle<TerrainMaterial>,
+    pub right: Handle<TerrainMaterial>,
+    pub front: Handle<TerrainMaterial>,
+    pub back: Handle<TerrainMaterial>,
 }
 
 impl TerrainMaterials {
-    fn for_face(&self, face: BlockFace) -> &Handle<StandardMaterial> {
+    fn for_face(&self, face: BlockFace) -> &Handle<TerrainMaterial> {
         match face {
             BlockFace::Right => &self.right,
             BlockFace::Left => &self.left,
