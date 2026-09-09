@@ -75,7 +75,14 @@ impl CaveConnectivityField {
         let mut graph = FeatureGraph::default();
         let center = graph.add_node(node_position(coord, self.seed));
 
-        for direction in [IVec3::X, IVec3::Z, IVec3::Y] {
+        for direction in [
+            IVec3::X,
+            IVec3::NEG_X,
+            IVec3::Z,
+            IVec3::NEG_Z,
+            IVec3::Y,
+            IVec3::NEG_Y,
+        ] {
             let neighbor_coord = coord + direction;
 
             if neighbor_coord.y < 0 {
@@ -83,11 +90,10 @@ impl CaveConnectivityField {
             }
 
             let neighbor = graph.add_node(node_position(neighbor_coord, self.seed));
-            let edge_hash = region_hash(coord, self.seed ^ direction_hash(direction));
-            let start_radius = tunnel_radius(edge_hash);
-            let end_radius = tunnel_radius(edge_hash.rotate_left(29));
+            let (center_radius, neighbor_radius) =
+                canonical_edge_radii(coord, neighbor_coord, self.seed);
 
-            graph.add_edge(center, neighbor, start_radius, end_radius);
+            graph.add_edge(center, neighbor, center_radius, neighbor_radius);
         }
 
         CaveConnectivityRegion {
@@ -95,6 +101,31 @@ impl CaveConnectivityField {
             connector_graph: graph,
         }
     }
+}
+
+fn canonical_edge_radii(from: IVec3, to: IVec3, seed: u64) -> (f32, f32) {
+    let edge_hash = canonical_edge_hash(from, to, seed);
+    let from_radius = tunnel_radius(edge_hash ^ region_hash(from, seed.rotate_left(11)));
+    let to_radius = tunnel_radius(edge_hash ^ region_hash(to, seed.rotate_left(11)));
+
+    (from_radius, to_radius)
+}
+
+fn canonical_edge_hash(left: IVec3, right: IVec3, seed: u64) -> u64 {
+    let (first, second) = if coord_key(left) <= coord_key(right) {
+        (left, right)
+    } else {
+        (right, left)
+    };
+    let mut hash = region_hash(first, seed ^ 0x6a09_e667_f3bc_c909);
+    hash ^= region_hash(second, seed.rotate_left(31));
+    hash ^= hash >> 29;
+    hash = hash.wrapping_mul(0x9e37_79b1_85eb_ca87);
+    hash ^ (hash >> 32)
+}
+
+fn coord_key(coord: IVec3) -> (i32, i32, i32) {
+    (coord.x, coord.y, coord.z)
 }
 
 fn node_position(coord: IVec3, seed: u64) -> Vec3 {
@@ -127,12 +158,6 @@ fn region_hash(coord: IVec3, seed: u64) -> u64 {
     hash = hash.wrapping_mul(0xbf58_476d_1ce4_e5b9);
     hash ^= hash >> 27;
     hash
-}
-
-fn direction_hash(direction: IVec3) -> u64 {
-    ((direction.x as i64 as u64).wrapping_mul(0x9e37_79b9))
-        ^ ((direction.y as i64 as u64).wrapping_mul(0x85eb_ca6b))
-        ^ ((direction.z as i64 as u64).wrapping_mul(0xc2b2_ae35))
 }
 
 fn hash_unit(hash: u64) -> f32 {
@@ -175,5 +200,17 @@ mod tests {
 
         assert_eq!(anchored.connector_graph.nodes().len(), base.connector_graph.nodes().len() + 1);
         assert_eq!(anchored.connector_graph.edges().len(), base.connector_graph.edges().len() + 1);
+    }
+
+    #[test]
+    fn shared_region_edges_have_matching_endpoint_radii() {
+        let seed = 42;
+        let left = IVec3::ZERO;
+        let right = IVec3::X;
+        let (left_radius, right_radius) = canonical_edge_radii(left, right, seed);
+        let (right_reverse, left_reverse) = canonical_edge_radii(right, left, seed);
+
+        assert_eq!(left_radius, left_reverse);
+        assert_eq!(right_radius, right_reverse);
     }
 }
