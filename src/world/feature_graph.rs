@@ -63,6 +63,18 @@ impl FeatureGraph {
         });
     }
 
+    pub fn nearest_node(&self, position: Vec3) -> Option<usize> {
+        self.nodes
+            .iter()
+            .enumerate()
+            .min_by(|(_, left), (_, right)| {
+                left.position
+                    .distance_squared(position)
+                    .total_cmp(&right.position.distance_squared(position))
+            })
+            .map(|(index, _)| index)
+    }
+
     pub fn sample(&self, position: Vec3) -> Option<FeatureGraphSample> {
         let mut strongest: Option<FeatureGraphSample> = None;
 
@@ -70,22 +82,16 @@ impl FeatureGraph {
             let from = self.nodes[edge.from].position;
             let to = self.nodes[edge.to].position;
             let segment = to - from;
-            let length_squared = segment.x * segment.x
-                + segment.y * segment.y
-                + segment.z * segment.z;
+            let length_squared = segment.length_squared();
 
             if length_squared <= f32::EPSILON {
                 continue;
             }
 
             let relative = position - from;
-            let dot = relative.x * segment.x
-                + relative.y * segment.y
-                + relative.z * segment.z;
-            let progress = (dot / length_squared).clamp(0.0, 1.0);
+            let progress = (relative.dot(segment) / length_squared).clamp(0.0, 1.0);
             let closest = from + segment * progress;
-            let delta = position - closest;
-            let distance = (delta.x * delta.x + delta.y * delta.y + delta.z * delta.z).sqrt();
+            let distance = position.distance(closest);
             let radius = edge.start_radius + (edge.end_radius - edge.start_radius) * progress;
             let strength = 1.0 - (distance / radius).clamp(0.0, 1.0);
 
@@ -131,5 +137,15 @@ mod tests {
         assert_eq!(center.strength, 1.0);
         assert!(edge.strength > 0.0 && edge.strength < 1.0);
         assert!(graph.sample(Vec3::new(5.0, 3.0, 0.0)).is_none());
+    }
+
+    #[test]
+    fn nearest_node_is_stable_at_feature_boundaries() {
+        let mut graph = FeatureGraph::default();
+        graph.add_node(Vec3::new(-10.0, 0.0, 0.0));
+        graph.add_node(Vec3::new(10.0, 0.0, 0.0));
+
+        assert_eq!(graph.nearest_node(Vec3::new(-9.0, 0.0, 0.0)), Some(0));
+        assert_eq!(graph.nearest_node(Vec3::new(9.0, 0.0, 0.0)), Some(1));
     }
 }
