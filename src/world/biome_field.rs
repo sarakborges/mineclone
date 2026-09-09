@@ -296,9 +296,6 @@ impl BiomeField {
             })
             .collect::<Vec<_>>();
 
-        // Equal-priority overlaps pick one deterministic pseudo-random winner for the
-        // overlapping source volumes. This avoids blending biome identities while keeping
-        // the result stable across chunk generation order and repeated sampling.
         let primary_index = select_tied_volume_index(&tied_indices, &source_hashes, self.seed)?;
         let overlay_strength = weights[primary_index];
 
