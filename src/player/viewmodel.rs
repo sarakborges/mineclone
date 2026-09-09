@@ -106,9 +106,9 @@ fn spawn_viewmodel(
                                     block_id: selected_block_id,
                                 },
                                 Transform::from_translation(Vec3::new(
-                                    -0.02,
-                                    ARM_SIZE.y * 0.5 + 0.16,
-                                    -0.18,
+                                    -0.015,
+                                    ARM_SIZE.y * 0.5 + 0.06,
+                                    -0.11,
                                 ))
                                 .with_rotation(Quat::from_euler(
                                     EulerRot::XYZ,
