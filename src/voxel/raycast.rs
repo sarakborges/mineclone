@@ -6,6 +6,7 @@ use super::world::VoxelWorld;
 pub struct VoxelHit {
     pub voxel: IVec3,
     pub block_id: &'static str,
+    pub normal: IVec3,
 }
 
 pub fn raycast_voxels(
@@ -25,6 +26,7 @@ pub fn raycast_voxels(
         direction.y.signum() as i32,
         direction.z.signum() as i32,
     );
+    let mut entry_normal = IVec3::ZERO;
 
     let t_delta = Vec3::new(
         reciprocal_abs(direction.x),
@@ -39,22 +41,29 @@ pub fn raycast_voxels(
 
     loop {
         if let Some(block_id) = world.block_id_at(voxel) {
-            return Some(VoxelHit { voxel, block_id });
+            return Some(VoxelHit {
+                voxel,
+                block_id,
+                normal: entry_normal,
+            });
         }
 
         let distance = if t_max.x <= t_max.y && t_max.x <= t_max.z {
             let distance = t_max.x;
             voxel.x += step.x;
+            entry_normal = IVec3::new(-step.x, 0, 0);
             t_max.x += t_delta.x;
             distance
         } else if t_max.y <= t_max.z {
             let distance = t_max.y;
             voxel.y += step.y;
+            entry_normal = IVec3::new(0, -step.y, 0);
             t_max.y += t_delta.y;
             distance
         } else {
             let distance = t_max.z;
             voxel.z += step.z;
+            entry_normal = IVec3::new(0, 0, -step.z);
             t_max.z += t_delta.z;
             distance
         };
