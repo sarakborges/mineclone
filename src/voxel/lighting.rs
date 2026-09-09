@@ -379,27 +379,29 @@ mod tests {
         initialize_chunk_lighting(&mut world, IVec3::ZERO, &blocks, &fluids);
         assert_eq!(world.light_at(below).sky(), VoxelLight::MAX_LEVEL);
 
-        let mut upper = VoxelChunk::empty();
-        for y in 0..CHUNK_SIZE {
-            for z in 0..CHUNK_SIZE {
-                for x in 0..CHUNK_SIZE {
-                    upper.set_block(
-                        x,
-                        y,
-                        z,
-                        Some(VoxelCell::new(
-                            OPAQUE_BLOCK_ID,
-                            TextureRotation::default(),
-                        )),
-                    );
-                }
-            }
-        }
-
-        world.insert_chunk(IVec3::Y, upper);
+        world.insert_chunk(IVec3::Y, opaque_chunk());
         initialize_chunk_lighting(&mut world, IVec3::Y, &blocks, &fluids);
 
         assert_eq!(world.light_at(below).sky(), 0);
+    }
+
+    #[test]
+    fn unloading_opaque_chunk_above_restores_existing_skylight_below() {
+        let blocks = test_blocks();
+        let fluids = test_fluids();
+        let mut world = empty_world();
+        let upper_chunk = IVec3::Y;
+        let below = IVec3::new(8, CHUNK_SIZE as i32 - 1, 8);
+
+        world.insert_chunk(upper_chunk, opaque_chunk());
+        initialize_chunk_lighting(&mut world, IVec3::ZERO, &blocks, &fluids);
+        initialize_chunk_lighting(&mut world, upper_chunk, &blocks, &fluids);
+        assert_eq!(world.light_at(below).sky(), 0);
+
+        world.archive_chunk(upper_chunk);
+        relight_after_chunk_unloads(&mut world, &[upper_chunk], &blocks, &fluids);
+
+        assert_eq!(world.light_at(below).sky(), VoxelLight::MAX_LEVEL);
     }
 
     #[test]
@@ -456,6 +458,28 @@ mod tests {
     }
 
     #[test]
+    fn fluid_dampening_applies_across_chunk_boundary() {
+        let blocks = test_blocks();
+        let fluids = test_fluids();
+        let water_id = fluids.id_of(WATER_ID).expect("test water should exist");
+        let mut world = two_chunk_world(IVec3::ZERO, IVec3::X);
+        let source = IVec3::new(CHUNK_SIZE as i32 - 1, 8, 8);
+        let water = source + IVec3::X;
+        let after_water = water + IVec3::X;
+
+        world.set_fluid_at(water, Some(FluidCell::source(water_id)));
+        world.set_block_at(
+            source,
+            Some(VoxelCell::new(LAMP_BLOCK_ID, TextureRotation::default())),
+        );
+        initialize_chunk_lighting(&mut world, IVec3::ZERO, &blocks, &fluids);
+        initialize_chunk_lighting(&mut world, IVec3::X, &blocks, &fluids);
+
+        assert_eq!(world.light_at(water).block(), 13);
+        assert_eq!(world.light_at(after_water).block(), 12);
+    }
+
+    #[test]
     fn blocklight_propagates_and_converges_after_source_removal() {
         let blocks = test_blocks();
         let fluids = test_fluids();
@@ -480,17 +504,60 @@ mod tests {
     }
 
     #[test]
+    fn blocklight_addition_crosses_chunk_boundary_after_voxel_edit() {
+        let blocks = test_blocks();
+        let fluids = test_fluids();
+        let mut world = two_chunk_world(IVec3::ZERO, IVec3::X);
+        let source = IVec3::new(CHUNK_SIZE as i32 - 1, 8, 8);
+        let neighbor = source + IVec3::X;
+
+        initialize_chunk_lighting(&mut world, IVec3::ZERO, &blocks, &fluids);
+        initialize_chunk_lighting(&mut world, IVec3::X, &blocks, &fluids);
+        assert_eq!(world.light_at(neighbor).block(), 0);
+
+        world.set_block_at(
+            source,
+            Some(VoxelCell::new(LAMP_BLOCK_ID, TextureRotation::default())),
+        );
+        relight_after_voxel_edit(&mut world, source, &blocks, &fluids);
+
+        assert_eq!(world.light_at(source).block(), VoxelLight::MAX_LEVEL);
+        assert_eq!(world.light_at(neighbor).block(), VoxelLight::MAX_LEVEL - 1);
+    }
+
+    #[test]
+    fn blocklight_addition_crosses_negative_chunk_boundary() {
+        let blocks = test_blocks();
+        let fluids = test_fluids();
+        let negative_chunk = IVec3::NEG_X;
+        let mut world = two_chunk_world(negative_chunk, IVec3::ZERO);
+        let source = IVec3::new(-1, 8, 8);
+        let neighbor = IVec3::new(0, 8, 8);
+
+        initialize_chunk_lighting(&mut world, negative_chunk, &blocks, &fluids);
+        initialize_chunk_lighting(&mut world, IVec3::ZERO, &blocks, &fluids);
+        assert_eq!(world.light_at(neighbor).block(), 0);
+
+        world.set_block_at(
+            source,
+            Some(VoxelCell::new(LAMP_BLOCK_ID, TextureRotation::default())),
+        );
+        relight_after_voxel_edit(&mut world, source, &blocks, &fluids);
+
+        assert_eq!(world.light_at(source).block(), VoxelLight::MAX_LEVEL);
+        assert_eq!(world.light_at(neighbor).block(), VoxelLight::MAX_LEVEL - 1);
+    }
+
+    #[test]
     fn blocklight_is_removed_across_chunk_boundary_after_source_chunk_unloads() {
         let blocks = test_blocks();
         let fluids = test_fluids();
-        let mut world = VoxelWorld::default();
+        let mut world = two_chunk_world(IVec3::ZERO, IVec3::X);
         let source_chunk = IVec3::ZERO;
         let neighbor_chunk = IVec3::X;
         let source = IVec3::new(CHUNK_SIZE as i32 - 1, 8, 8);
         let neighbor = source + IVec3::X;
 
-        world.insert_chunk(source_chunk, VoxelChunk::empty());
-        world.insert_chunk(neighbor_chunk, VoxelChunk::empty());
         world.set_block_at(
             source,
             Some(VoxelCell::new(LAMP_BLOCK_ID, TextureRotation::default())),
@@ -510,6 +577,35 @@ mod tests {
         let mut world = VoxelWorld::default();
         world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
         world
+    }
+
+    fn two_chunk_world(first: IVec3, second: IVec3) -> VoxelWorld {
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(first, VoxelChunk::empty());
+        world.insert_chunk(second, VoxelChunk::empty());
+        world
+    }
+
+    fn opaque_chunk() -> VoxelChunk {
+        let mut chunk = VoxelChunk::empty();
+
+        for y in 0..CHUNK_SIZE {
+            for z in 0..CHUNK_SIZE {
+                for x in 0..CHUNK_SIZE {
+                    chunk.set_block(
+                        x,
+                        y,
+                        z,
+                        Some(VoxelCell::new(
+                            OPAQUE_BLOCK_ID,
+                            TextureRotation::default(),
+                        )),
+                    );
+                }
+            }
+        }
+
+        chunk
     }
 
     fn test_blocks() -> BlockRegistry {
