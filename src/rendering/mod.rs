@@ -1,4 +1,5 @@
 mod asset_upload;
+pub(crate) mod block_model;
 mod celestial;
 mod celestial_path;
 mod environment;
