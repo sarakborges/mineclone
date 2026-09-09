@@ -1,7 +1,14 @@
 use bevy::prelude::*;
 
-use super::block::{BlockTargetingSet, TargetedBlock};
-use crate::app::game_state::GameState;
+use super::{
+    block::{BlockTargetingSet, TargetedBlock},
+    placement::placement_voxel,
+};
+use crate::{
+    app::game_state::GameState,
+    player::{camera::GameplayCamera, hotbar::PlayerHotbar},
+    voxel::world::VoxelWorld,
+};
 
 const HIGHLIGHT_SCALE: f32 = 1.01;
 
@@ -44,12 +51,27 @@ fn spawn_highlight(
 
 fn update_highlight(
     targeted: Res<TargetedBlock>,
-    mut highlight: Single<(&mut Transform, &mut Visibility), With<TargetHighlight>>,
+    hotbar: Res<PlayerHotbar>,
+    world: Res<VoxelWorld>,
+    player: Single<&Transform, With<GameplayCamera>>,
+    mut highlight: Single<
+        (&mut Transform, &mut Visibility),
+        (With<TargetHighlight>, Without<GameplayCamera>),
+    >,
 ) {
-    if let Some(hit) = targeted.0 {
-        highlight.0.translation = hit.voxel.as_vec3() + Vec3::splat(0.5);
-        *highlight.1 = Visibility::Visible;
-    } else {
+    let Some(hit) = targeted.0 else {
         *highlight.1 = Visibility::Hidden;
+        return;
+    };
+
+    let placement_preview_visible = hotbar.item_at(hotbar.selected_slot()).is_some()
+        && placement_voxel(hit, &world, player.translation).is_some();
+
+    if placement_preview_visible {
+        *highlight.1 = Visibility::Hidden;
+        return;
     }
+
+    highlight.0.translation = hit.voxel.as_vec3() + Vec3::splat(0.5);
+    *highlight.1 = Visibility::Visible;
 }
