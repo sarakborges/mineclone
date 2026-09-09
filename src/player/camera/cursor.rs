@@ -3,8 +3,6 @@ use bevy::{
     window::{CursorGrabMode, CursorOptions, WindowFocused},
 };
 
-use crate::app::pause_state::PauseState;
-
 use super::look::MouseLookInputState;
 
 pub(super) fn capture_cursor(
@@ -12,11 +10,7 @@ pub(super) fn capture_cursor(
     mut cursor_options: Single<&mut CursorOptions>,
     mut mouse_input: ResMut<MouseLookInputState>,
 ) {
-    set_cursor_capture(
-        window.focused,
-        &mut cursor_options,
-        &mut mouse_input,
-    );
+    set_cursor_capture(window.focused, &mut cursor_options, &mut mouse_input);
 }
 
 pub(super) fn release_cursor(
@@ -28,13 +22,15 @@ pub(super) fn release_cursor(
 
 pub(super) fn handle_window_focus(
     mut focused_events: MessageReader<WindowFocused>,
-    pause_state: Res<State<PauseState>>,
     mut cursor_options: Single<&mut CursorOptions>,
     mut mouse_input: ResMut<MouseLookInputState>,
 ) {
-    for event in focused_events.read() {
-        let should_capture = event.focused && *pause_state.get() == PauseState::Running;
-        set_cursor_capture(should_capture, &mut cursor_options, &mut mouse_input);
+    for _event in focused_events.read() {
+        // Never request a Locked grab from inside the OS focus transition itself.
+        // Alt+Tab can briefly leave the native window in a state where relocking is
+        // unsafe. Returning to the game leaves the cursor released until the player
+        // clicks the window again.
+        set_cursor_capture(false, &mut cursor_options, &mut mouse_input);
     }
 }
 
