@@ -19,13 +19,15 @@ pub(super) struct MouseLookInputState {
 pub(super) fn drain_or_apply_mouse_look(
     mut mouse_motion: MessageReader<MouseMotion>,
     pause_state: Res<State<PauseState>>,
+    window: Single<&Window>,
     cursor_options: Single<&CursorOptions>,
     mut input_state: ResMut<MouseLookInputState>,
     mut camera: Single<(&mut Transform, &mut GameplayCamera)>,
 ) {
     let delta = mouse_motion.read().map(|motion| motion.delta).sum::<Vec2>();
 
-    if *pause_state.get() == PauseState::Paused
+    if !window.focused
+        || *pause_state.get() == PauseState::Paused
         || cursor_options.grab_mode == CursorGrabMode::None
         || delta == Vec2::ZERO
     {
