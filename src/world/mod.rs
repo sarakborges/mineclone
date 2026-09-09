@@ -1,10 +1,15 @@
 pub mod biome;
 pub mod biome_field;
+pub(crate) mod cave_connectivity;
 pub(crate) mod chunk_rendering;
 mod chunk_unloading;
 pub mod day_night;
 pub mod dimension;
+pub(crate) mod feature_graph;
 mod generation;
+pub(crate) mod generation_region;
+pub(crate) mod geology;
+pub(crate) mod hydrology;
 mod macro_climate;
 pub(crate) mod render_distance;
 mod save;
@@ -12,6 +17,7 @@ mod seed;
 mod setup;
 mod streaming;
 pub(crate) mod terrain;
+pub(crate) mod world_feature_fields;
 
 use bevy::prelude::*;
 
