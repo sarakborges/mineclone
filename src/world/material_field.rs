@@ -6,6 +6,7 @@ use crate::content::{
 use super::{
     biome_field::{BiomeFieldSample, VolumeBiomeFieldSample},
     geology::GeologyRegion,
+    hydrology::HydrologyRegion,
 };
 
 pub(crate) fn solid_block_id(
@@ -13,6 +14,7 @@ pub(crate) fn solid_block_id(
     surface: &BiomeFieldSample<'_>,
     volume: Option<&VolumeBiomeFieldSample<'_>>,
     geology: &GeologyRegion,
+    hydrology: &HydrologyRegion,
     biomes: &BiomeRegistry,
     fallback: &'static str,
 ) -> &'static str {
@@ -29,6 +31,10 @@ pub(crate) fn solid_block_id(
     }
 
     if let Some(block_id) = geology.solid_block_at(position) {
+        return intern_block_id(block_id);
+    }
+
+    if let Some(block_id) = hydrology.solid_block_at(position) {
         return intern_block_id(block_id);
     }
 
