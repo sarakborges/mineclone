@@ -13,6 +13,7 @@ mod voxel;
 mod world;
 
 use app::{
+    crash_log::install_crash_logger,
     game_state::GameState,
     pause_state::PauseState,
     runtime_paths::prepare_runtime_directory,
@@ -34,6 +35,7 @@ use ui::UiDesignSystemPlugin;
 use world::WorldPlugin;
 
 fn main() {
+    install_crash_logger();
     prepare_runtime_directory();
 
     App::new()

@@ -102,7 +102,6 @@ struct ChunkRenderSlot {
 #[derive(Resource, Default)]
 pub struct ChunkRenderPool {
     active: HashMap<IVec3, ChunkRenderSlot>,
-    free_mesh_handles: Vec<Handle<Mesh>>,
 }
 
 impl ChunkRenderPool {
@@ -120,23 +119,12 @@ impl ChunkRenderPool {
             .map(|slot| (slot.entities, slot.meshes))
     }
 
-    pub fn recycle_mesh_handle(&mut self, handle: Handle<Mesh>) {
-        self.free_mesh_handles.push(handle);
-    }
-
     pub fn clear(&mut self, meshes: &mut Assets<Mesh>) {
         for (_, slot) in self.active.drain() {
             for handle in slot.meshes {
                 let _ = meshes.remove(&handle);
-                self.free_mesh_handles.push(handle);
             }
         }
-    }
-
-    fn acquire_mesh_handle(&mut self, meshes: &Assets<Mesh>) -> Handle<Mesh> {
-        self.free_mesh_handles
-            .pop()
-            .unwrap_or_else(|| meshes.reserve_handle())
     }
 
     fn insert(
@@ -183,11 +171,7 @@ pub fn spawn_chunk_mesh(
     let mut mesh_handles = Vec::new();
 
     for face_mesh in face_meshes {
-        let mesh_handle = render_pool.acquire_mesh_handle(meshes);
-        meshes
-            .insert(&mesh_handle, face_mesh.mesh)
-            .expect("reserved chunk mesh handle should remain valid");
-
+        let mesh_handle = meshes.add(face_mesh.mesh);
         let entity = commands
             .spawn((
                 Mesh3d(mesh_handle.clone()),
@@ -202,11 +186,7 @@ pub fn spawn_chunk_mesh(
     }
 
     for fluid_mesh in fluid_meshes {
-        let mesh_handle = render_pool.acquire_mesh_handle(meshes);
-        meshes
-            .insert(&mesh_handle, fluid_mesh.mesh)
-            .expect("reserved fluid mesh handle should remain valid");
-
+        let mesh_handle = meshes.add(fluid_mesh.mesh);
         let entity = commands
             .spawn((
                 Mesh3d(mesh_handle.clone()),
@@ -278,7 +258,6 @@ fn refresh_chunk_mesh(
 
         for handle in mesh_handles {
             let _ = meshes.remove(&handle);
-            render_pool.recycle_mesh_handle(handle);
         }
     }
 

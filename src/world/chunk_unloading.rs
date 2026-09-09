@@ -38,7 +38,6 @@ pub fn unload_chunk_meshes(
 
         for mesh_handle in mesh_handles {
             let _ = meshes.remove(&mesh_handle);
-            render_pool.recycle_mesh_handle(mesh_handle);
         }
 
         for entity in entities {

@@ -13,14 +13,19 @@ pub(super) fn push_face(
     texture_rotation: TextureRotation,
     tint: [f32; 3],
     shade: f32,
-    skylight: f32,
+    skylight: [f32; 4],
 ) {
     let start = positions.len() as u32;
-    let light = (shade * skylight).clamp(0.0, 1.0);
+    let vertex_colors = skylight.map(|light| [
+        tint[0],
+        tint[1],
+        tint[2],
+        (shade * light).clamp(0.0, 1.0),
+    ]);
 
     positions.extend(vertices);
     normals.extend([normal; 4]);
     uvs.extend(texture_rotation.rotate_uvs(FACE_UVS));
-    colors.extend([[tint[0], tint[1], tint[2], light]; 4]);
+    colors.extend(vertex_colors);
     indices.extend([start, start + 1, start + 2, start, start + 2, start + 3]);
 }
