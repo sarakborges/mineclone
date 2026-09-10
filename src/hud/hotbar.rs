@@ -216,7 +216,7 @@ fn update_hotbar_item_tints(
 
     for (icon, material_handle) in &icons {
         let tint = block_tint_at(icon.block_id, position, &biome_field, &biomes);
-        let Some(material) = materials.get_mut(&material_handle.0) else {
+        let Some(mut material) = materials.get_mut(&material_handle.0) else {
             continue;
         };
 
