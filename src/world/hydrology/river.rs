@@ -6,9 +6,10 @@ use crate::world::feature_graph::FeatureGraph;
 
 use super::{
     constants::{
-        OCEAN_CONTINENTALNESS_THRESHOLD, RIVER_EDGE_MARGIN_CELLS, RIVER_FLOW_FOR_MAX_WIDTH,
-        RIVER_FLOW_SEARCH_RADIUS, RIVER_FLOW_TRACE_STEPS, RIVER_MAXIMUM_RADIUS, RIVER_MINIMUM_FLOW,
-        RIVER_MINIMUM_RADIUS,
+        OCEAN_CONTINENTALNESS_THRESHOLD, RIVER_BASIN_ESCAPE_RADIUS_CELLS,
+        RIVER_EDGE_MARGIN_CELLS, RIVER_FLOW_FOR_MAX_WIDTH, RIVER_FLOW_SEARCH_RADIUS,
+        RIVER_FLOW_TRACE_STEPS, RIVER_MAXIMUM_RADIUS, RIVER_MINIMUM_FLOW,
+        RIVER_MINIMUM_RADIUS, RIVER_MINIMUM_WATER_DROP,
     },
     drainage::{DrainageNetwork, DrainageNode},
     lake::{lake_for_local_basin, terminal_lake_for_local_basin},
@@ -57,11 +58,11 @@ where
                 continue;
             }
 
-            let flow = flow_cache.get(&cell).copied().unwrap_or(0);
+            let flow = flow_cache.get(&cell).copied().unwrap_or(1);
             let downstream_cell = network.downstream_cell(cell);
 
             if let Some(downstream_cell) = downstream_cell {
-                if flow < RIVER_MINIMUM_FLOW || !source.biome_hydrology.can_generate_river {
+                if !source.biome_hydrology.can_generate_river {
                     continue;
                 }
 
@@ -70,7 +71,17 @@ where
                     continue;
                 }
 
-                let downstream_flow = flow_cache.get(&downstream_cell).copied().unwrap_or(flow);
+                let downstream_flow = flow_cache
+                    .get(&downstream_cell)
+                    .copied()
+                    .unwrap_or(flow);
+                let is_main_channel = flow >= RIVER_MINIMUM_FLOW;
+                let feeds_main_channel = downstream_flow >= RIVER_MINIMUM_FLOW;
+
+                if !is_main_channel && !feeds_main_channel {
+                    continue;
+                }
+
                 add_curved_river_edge(
                     &mut graph,
                     RiverEdgeSpec {
@@ -117,7 +128,7 @@ fn build_flow_cache<F>(coord: IVec2, network: &mut DrainageNetwork<'_, F>) -> Ha
 where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
-    let target_radius = RIVER_EDGE_MARGIN_CELLS + 1;
+    let target_radius = RIVER_EDGE_MARGIN_CELLS + RIVER_BASIN_ESCAPE_RADIUS_CELLS;
     let source_radius = target_radius + RIVER_FLOW_SEARCH_RADIUS;
     let mut flow = HashMap::<IVec2, u32>::new();
 
@@ -217,23 +228,25 @@ fn river_path_points(
 ) -> Vec<Vec3> {
     let delta = downstream.position - source.position;
     let distance = delta.length();
-    let segment_count = ((distance / 16.0).ceil() as usize).clamp(5, 12);
+    let segment_count = ((distance / 16.0).ceil() as usize).clamp(5, 18);
     let direction = delta.normalize_or_zero();
     let perpendicular = Vec2::new(-direction.y, direction.x);
     let hash = cell_hash(source_cell, seed ^ 0x6a09_e667_f3bc_c909);
-    let amplitude = (distance * lerp(0.10, 0.24, hash_unit(hash))).clamp(6.0, 30.0);
+    let amplitude = (distance * lerp(0.12, 0.28, hash_unit(hash))).clamp(7.0, 34.0);
     let phase = hash_unit(hash.rotate_left(23)) * std::f32::consts::TAU;
     let secondary = hash_signed(hash.rotate_left(41));
     let start_height = river_height(source, sea_level);
     let raw_end_height = river_height(downstream, sea_level);
-    let end_height = raw_end_height.min(start_height - 0.03).max(1.0);
+    let end_height = raw_end_height
+        .min(start_height - RIVER_MINIMUM_WATER_DROP)
+        .max(1.0);
 
     (0..=segment_count)
         .map(|index| {
             let t = index as f32 / segment_count as f32;
             let envelope = (std::f32::consts::PI * t).sin();
-            let broad = (phase + t * std::f32::consts::TAU * 0.85).sin();
-            let detail = (phase * 0.5 + t * std::f32::consts::TAU * 1.9).sin();
+            let broad = (phase + t * std::f32::consts::TAU * 0.72).sin();
+            let detail = (phase * 0.5 + t * std::f32::consts::TAU * 1.65).sin();
             let lateral = (broad * 0.72 + detail * 0.28 * secondary) * amplitude * envelope;
             let horizontal = source.position.lerp(downstream.position, t) + perpendicular * lateral;
             let height = lerp(start_height, end_height, smoothstep(t));
@@ -283,5 +296,16 @@ mod tests {
                 .iter()
                 .any(|point| point.z != 0.0)
         );
+    }
+
+    #[test]
+    fn river_surface_drops_downstream() {
+        let source = node(Vec2::ZERO, 80.0);
+        let downstream = node(Vec2::new(128.0, 0.0), 79.9);
+        let points = river_path_points(IVec2::ZERO, source, downstream, 42, 64.0);
+        let start = points.first().unwrap().y;
+        let end = points.last().unwrap().y;
+
+        assert!(start - end >= RIVER_MINIMUM_WATER_DROP);
     }
 }
