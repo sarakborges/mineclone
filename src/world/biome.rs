@@ -3,8 +3,7 @@ mod identity;
 use bevy::prelude::*;
 
 use crate::{
-    content::builtin_ids::PLAINS_BIOME_ID,
-    player::camera::GameplayCamera,
+    content::builtin_ids::PLAINS_BIOME_ID, player::camera::GameplayCamera,
     voxel::coordinates::split_dimension_position,
 };
 

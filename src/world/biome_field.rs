@@ -13,8 +13,8 @@ use crate::content::{
     dimension::DimensionDefinition,
 };
 
-use self::{constants::VOLUME_SITE_GAP, spatial::surface_minimum_spacing};
 pub(crate) use self::volume::{VolumeBiomeRegion, VolumeBiomeSelection};
+use self::{constants::VOLUME_SITE_GAP, spatial::surface_minimum_spacing};
 use super::macro_climate::{MacroClimateField, MacroClimateSample};
 
 #[derive(Clone)]

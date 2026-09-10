@@ -73,11 +73,7 @@ pub(super) fn resolve_final_identity(
     }
 
     if let Some(volume) = volume {
-        push_influence(
-            &mut influences,
-            volume.primary_id,
-            volume_strength,
-        );
+        push_influence(&mut influences, volume.primary_id, volume_strength);
     }
 
     normalize_influences(&mut influences);

@@ -4,9 +4,7 @@ use crate::content::biome_density::BiomeDensityModifier;
 
 use super::{
     BiomeField, BiomeFieldEntry, VolumeBiomeAnchor, VolumeBiomeFieldSample,
-    constants::{
-        VOLUME_BORDER_MARGIN, VOLUME_SITE_JITTER_FRACTION, VOLUME_WARP_AMPLITUDE,
-    },
+    constants::{VOLUME_BORDER_MARGIN, VOLUME_SITE_JITTER_FRACTION, VOLUME_WARP_AMPLITUDE},
     selection::select_volume_biome_index,
     spatial::{
         hash_unit, lerp, smoothstep, volume_cell_hash, volume_site_position, warp_volume_position,
@@ -70,7 +68,8 @@ impl BiomeField {
         let mut selected: Option<(ResolvedVolumeBiomeSite, f32)> = None;
 
         for site in &region.sites {
-            let normalized_distance = normalized_ellipsoid_distance(warped - site.position, site.radii);
+            let normalized_distance =
+                normalized_ellipsoid_distance(warped - site.position, site.radii);
             let strength = volume_site_strength(normalized_distance);
             if strength <= 0.0 {
                 continue;
@@ -100,10 +99,7 @@ impl BiomeField {
             .map(|modifier| (modifier, biome.density_seed))
     }
 
-    pub(crate) fn volume_solid_block(
-        &self,
-        selection: VolumeBiomeSelection,
-    ) -> Option<&str> {
+    pub(crate) fn volume_solid_block(&self, selection: VolumeBiomeSelection) -> Option<&str> {
         self.volume_biomes[selection.biome_index]
             .solid_block
             .as_deref()
@@ -167,12 +163,8 @@ impl BiomeField {
                     let site_minimum = site - expanded;
                     let site_maximum = site + expanded;
 
-                    if !bounds_intersect(
-                        site_minimum,
-                        site_maximum,
-                        sample_minimum,
-                        sample_maximum,
-                    ) {
+                    if !bounds_intersect(site_minimum, site_maximum, sample_minimum, sample_maximum)
+                    {
                         continue;
                     }
 
@@ -211,11 +203,7 @@ fn maximum_volume_radii(biomes: &[BiomeFieldEntry]) -> Vec3 {
             .y
             .expect("volume biome field entry must define size.y");
 
-        maximum.max(Vec3::new(
-            biome.size.x.max,
-            vertical.max,
-            biome.size.z.max,
-        ))
+        maximum.max(Vec3::new(biome.size.x.max, vertical.max, biome.size.z.max))
     })
 }
 
@@ -273,8 +261,7 @@ fn volume_site_strength(normalized_distance: f32) -> f32 {
         return 0.0;
     }
 
-    let progress =
-        1.0 - ((normalized_distance - 1.0) / VOLUME_BORDER_MARGIN).clamp(0.0, 1.0);
+    let progress = 1.0 - ((normalized_distance - 1.0) / VOLUME_BORDER_MARGIN).clamp(0.0, 1.0);
     smoothstep(progress)
 }
 

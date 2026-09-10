@@ -92,10 +92,14 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
                 },
             )
         });
-    let volume_region = context.feature_fields.volume_biome_region(region_coord, || {
-        let (minimum, maximum) = generation_region_world_bounds(region_coord);
-        context.biome_field.volume_region_in_bounds(minimum, maximum)
-    });
+    let volume_region = context
+        .feature_fields
+        .volume_biome_region(region_coord, || {
+            let (minimum, maximum) = generation_region_world_bounds(region_coord);
+            context
+                .biome_field
+                .volume_region_in_bounds(minimum, maximum)
+        });
     let anchored_caves = anchored_cave_region(
         region.as_ref(),
         context.biome_field,
