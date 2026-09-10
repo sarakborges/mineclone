@@ -1,10 +1,14 @@
 pub(super) const HYDROLOGY_REGION_SIZE: f32 = 128.0;
 pub(super) const MACRO_SAMPLE_GRID: usize = 5;
 
-pub(super) const OCEAN_CONTINENTALNESS_THRESHOLD: f32 = 0.47;
-pub(super) const OCEAN_TRANSITION_WIDTH: f32 = 0.14;
+pub(super) const OCEAN_CONTINENTALNESS_THRESHOLD: f32 = 0.43;
+pub(super) const OCEAN_TRANSITION_WIDTH: f32 = 0.11;
 pub(super) const OCEAN_MINIMUM_DEPTH: f32 = 8.0;
 pub(super) const OCEAN_EXTRA_DEPTH: f32 = 18.0;
+pub(super) const COAST_SURFACE_BLEND_END_STRENGTH: f32 = 0.25;
+pub(super) const COAST_OCEAN_BLEND_START_STRENGTH: f32 = 0.55;
+pub(super) const COAST_OCEAN_BLEND_END_STRENGTH: f32 = 0.80;
+pub(super) const COAST_MAXIMUM_SURFACE_HEIGHT: f32 = 3.0;
 
 pub(super) const RIVER_EDGE_MARGIN_CELLS: i32 = 2;
 pub(super) const RIVER_MINIMUM_DROP: f32 = 0.01;
