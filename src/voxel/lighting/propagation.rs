@@ -19,10 +19,24 @@ pub(super) fn relax(
     fluids: &FluidRegistry,
     queue: &mut LightingQueue,
 ) -> HashSet<IVec3> {
+    relax_budgeted(world, blocks, fluids, queue, usize::MAX)
+}
+
+pub(super) fn relax_budgeted(
+    world: &mut VoxelWorld,
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+    queue: &mut LightingQueue,
+    max_voxels: usize,
+) -> HashSet<IVec3> {
     let mut changed_chunks = HashSet::new();
     let mut context = LightingContext::default();
 
-    while let Some(position) = queue.pop() {
+    for _ in 0..max_voxels {
+        let Some(position) = queue.pop() else {
+            break;
+        };
+
         if !world.is_loaded_at(position) {
             continue;
         }
