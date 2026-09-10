@@ -59,8 +59,7 @@ fn lake_for_basin(
     }
 
     let hash = cell_hash(cell, seed ^ 0xbb67_ae85_84ca_a73b);
-    let lake_chance =
-        (LAKE_CHANCE * source.biome_hydrology.lake_chance_multiplier).clamp(0.0, 1.0);
+    let lake_chance = (LAKE_CHANCE * source.biome_hydrology.lake_chance_multiplier).clamp(0.0, 1.0);
 
     if !terminal && hash_unit(hash.rotate_left(17)) > lake_chance {
         return None;
