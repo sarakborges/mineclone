@@ -1,3 +1,4 @@
+mod block_icon;
 mod crosshair;
 mod hotbar;
 mod targeting;
@@ -6,6 +7,7 @@ mod underwater;
 mod world;
 
 use bevy::prelude::*;
+use block_icon::BlockIconMaterial;
 use crosshair::CrosshairPlugin;
 use hotbar::HotbarHudPlugin;
 use targeting::TargetHudPlugin;
@@ -17,13 +19,14 @@ pub struct HudPlugin;
 
 impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((
-            UnderwaterTintPlugin,
-            CrosshairPlugin,
-            HotbarHudPlugin,
-            TimeHudPlugin,
-            WorldHudPlugin,
-            TargetHudPlugin,
-        ));
+        app.add_plugins(UiMaterialPlugin::<BlockIconMaterial>::default())
+            .add_plugins((
+                UnderwaterTintPlugin,
+                CrosshairPlugin,
+                HotbarHudPlugin,
+                TimeHudPlugin,
+                WorldHudPlugin,
+                TargetHudPlugin,
+            ));
     }
 }
