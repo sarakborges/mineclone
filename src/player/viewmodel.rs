@@ -7,9 +7,8 @@ use crate::{
     content::{biome::BiomeRegistry, block::BlockRegistry},
     rendering::{
         block_model::{
-            BlockModelInstance, BlockModelMaterials, BlockModelMeshes,
-            apply_block_display_shading, block_display_faces, block_display_isometric_rotation,
-            block_face_material_data, set_block_model_tint,
+            BlockModel, BlockModelMaterials, BlockModelMeshes, apply_block_display_shading,
+            block_display_isometric_rotation, block_face_material_data, set_block_model_tint,
         },
         block_model_material::BlockModelMaterial,
         block_tint::block_tint_at,
@@ -54,7 +53,7 @@ type ArmVisibilityQuery<'w, 's> = Query<
 type HeldBlockRootQuery<'w, 's> = Query<
     'w,
     's,
-    (&'static mut BlockModelInstance, &'static mut Visibility),
+    (&'static mut BlockModel, &'static mut Visibility),
     (
         With<HeldBlockRoot>,
         Without<ViewModelArm>,
@@ -171,8 +170,8 @@ fn spawn_viewmodel(
             camera_transform.translation.z,
         );
         let block_model = selected_block_id
-            .map(BlockModelInstance::new)
-            .unwrap_or_else(BlockModelInstance::empty);
+            .map(BlockModel::display)
+            .unwrap_or_else(BlockModel::empty_display);
 
         commands.entity(camera).with_children(|camera| {
             camera
@@ -207,7 +206,7 @@ fn spawn_viewmodel(
                                 &content.biomes,
                             );
 
-                            for face in block_display_faces() {
+                            for &face in block_model.faces() {
                                 let material = block_materials.held_for_face(face);
                                 let Some(mut face_material) = materials.get_mut(&material) else {
                                     continue;
@@ -216,9 +215,13 @@ fn spawn_viewmodel(
                                     face,
                                     block,
                                     &content.asset_server,
-                                    1.0,
+                                    block_model.opacity(),
                                 );
-                                apply_block_display_shading(&mut face_material, face, 1.0);
+                                apply_block_display_shading(
+                                    &mut face_material,
+                                    face,
+                                    block_model.opacity(),
+                                );
                                 set_block_model_tint(&mut face_material, tint);
 
                                 held.spawn((
@@ -320,8 +323,13 @@ fn sync_held_block(
             };
 
             if block_changed {
-                *material = block_face_material_data(face.face, block, &content.asset_server, 1.0);
-                apply_block_display_shading(&mut material, face.face, 1.0);
+                *material = block_face_material_data(
+                    face.face,
+                    block,
+                    &content.asset_server,
+                    held.opacity(),
+                );
+                apply_block_display_shading(&mut material, face.face, held.opacity());
             }
 
             set_block_model_tint(&mut material, tint);
@@ -410,7 +418,8 @@ fn base_viewmodel_transform() -> Transform {
 }
 
 fn held_block_transform() -> Transform {
+    let viewmodel_rotation = base_viewmodel_transform().rotation;
     Transform::from_translation(Vec3::new(-0.02, ARM_SIZE.y + 0.04, 0.20))
-        .with_rotation(block_display_isometric_rotation())
+        .with_rotation(viewmodel_rotation.inverse() * block_display_isometric_rotation())
         .with_scale(Vec3::splat(HELD_BLOCK_SCALE))
 }
