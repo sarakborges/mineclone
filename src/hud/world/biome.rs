@@ -15,5 +15,7 @@ pub(super) fn update_biome_hud(
         .map(|definition| definition.name.as_str())
         .unwrap_or(biome.id.as_str());
 
-    biome_text.0 = biome_name.to_string();
+    if biome_text.0 != biome_name {
+        biome_text.0 = biome_name.to_string();
+    }
 }
