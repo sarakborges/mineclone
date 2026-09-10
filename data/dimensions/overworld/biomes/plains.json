@@ -25,6 +25,28 @@
     "lakeChanceMultiplier": 1.0,
     "riverWidthMultiplier": 1.0
   },
+  "structures": [
+    {
+      "id": "asteria:oak_tree",
+      "placement": { "spacing": 80, "chance": 0.45, "jitter": 24 }
+    },
+    {
+      "id": "asteria:small_boulder",
+      "placement": { "spacing": 12, "chance": 0.45, "jitter": 4 }
+    },
+    {
+      "id": "asteria:medium_boulder",
+      "placement": { "spacing": 22, "chance": 0.28, "jitter": 7 }
+    },
+    {
+      "id": "asteria:big_boulder",
+      "placement": { "spacing": 36, "chance": 0.16, "jitter": 11 }
+    },
+    {
+      "id": "asteria:huge_boulder",
+      "placement": { "spacing": 64, "chance": 0.08, "jitter": 20 }
+    }
+  ],
   "visuals": {
     "skyColor": {
       "dawn": { "r": 0.50, "g": 0.69, "b": 0.94 },
