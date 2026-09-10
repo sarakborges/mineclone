@@ -1,4 +1,6 @@
-use crate::content::fluid::FluidId;
+use crate::{
+    content::{block_orientation::BlockOrientation, fluid::FluidId},
+};
 
 use super::{
     cell::VoxelCell,
@@ -14,6 +16,7 @@ const OCCUPANCY_WORDS: usize = CHUNK_VOLUME.div_ceil(u64::BITS as usize);
 struct ArchivedCell {
     palette_index: u16,
     rotation: u8,
+    orientation: u8,
 }
 
 #[derive(Clone, Copy)]
@@ -63,6 +66,7 @@ impl ArchivedChunk {
             cells.push(ArchivedCell {
                 palette_index: palette_index as u16,
                 rotation: rotation_index(cell.texture_rotation),
+                orientation: cell.orientation.index(),
             });
         }
 
@@ -111,9 +115,10 @@ impl ArchivedChunk {
                 x,
                 y,
                 z,
-                Some(VoxelCell::new(
+                Some(VoxelCell::oriented(
                     block_id,
                     TextureRotation::from_quarter_turn(archived.rotation),
+                    BlockOrientation::from_index(archived.orientation),
                 )),
             );
         }

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::block_id::intern_block_id;
+use super::{block_id::intern_block_id, block_orientation::BlockOrientation};
 
 const MAX_LIGHT_DAMPENING: u8 = 15;
 
@@ -62,6 +62,8 @@ pub struct BlockDefinition {
     #[serde(default)]
     pub rotate_texture: BlockTextureRotations,
     #[serde(default)]
+    pub orientations: Vec<BlockOrientation>,
+    #[serde(default)]
     pub alpha_cutoff: Option<f32>,
     #[serde(default)]
     pub light_emission: u8,
@@ -80,6 +82,26 @@ impl BlockDefinition {
         } else {
             AlphaMode::Opaque
         }
+    }
+
+    pub fn default_orientation(&self) -> BlockOrientation {
+        self.orientations.first().copied().unwrap_or_default()
+    }
+
+    pub fn next_orientation(&self, current: BlockOrientation) -> BlockOrientation {
+        let Some(&first) = self.orientations.first() else {
+            return BlockOrientation::default();
+        };
+
+        let Some(index) = self
+            .orientations
+            .iter()
+            .position(|orientation| *orientation == current)
+        else {
+            return first;
+        };
+
+        self.orientations[(index + 1) % self.orientations.len()]
     }
 }
 
@@ -104,6 +126,13 @@ impl BlockRegistry {
             assert!(
                 (0.0..=1.0).contains(&alpha_cutoff),
                 "block {} alphaCutoff must be between 0 and 1",
+                definition.id
+            );
+        }
+        for (index, orientation) in definition.orientations.iter().enumerate() {
+            assert!(
+                !definition.orientations[..index].contains(orientation),
+                "block {} orientations cannot contain duplicates",
                 definition.id
             );
         }

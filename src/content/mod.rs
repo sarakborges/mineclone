@@ -7,6 +7,7 @@ pub mod biome_structure;
 pub mod biome_terrain;
 pub mod block;
 pub(crate) mod block_id;
+pub mod block_orientation;
 pub(crate) mod builtin_ids;
 pub mod color;
 pub mod day_night_cycle;

@@ -16,6 +16,7 @@ use crate::{
 use super::{
     block::{BlockTargetingSet, TargetedBlock},
     placement::placement_voxel,
+    placement_orientation::PlacementOrientation,
 };
 
 pub struct BlockInteractionPlugin;
@@ -36,6 +37,7 @@ impl Plugin for BlockInteractionPlugin {
 struct BlockEditInput<'w, 's> {
     buttons: Res<'w, ButtonInput<MouseButton>>,
     hotbar: Res<'w, PlayerHotbar>,
+    placement_orientation: Res<'w, PlacementOrientation>,
     player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
     targeted: ResMut<'w, TargetedBlock>,
 }
@@ -63,7 +65,8 @@ fn edit_targeted_block(
     let (edited_chunk, edited_voxel, placed) = if break_pressed {
         (world.set_block_at(hit.voxel, None), hit.voxel, false)
     } else {
-        let Some(block_id) = input.hotbar.item_at(input.hotbar.selected_slot()) else {
+        let selected_slot = input.hotbar.selected_slot();
+        let Some(block_id) = input.hotbar.item_at(selected_slot) else {
             return;
         };
         let Some(voxel) = placement_voxel(hit, &world, input.player.translation) else {
@@ -72,10 +75,20 @@ fn edit_targeted_block(
         let Some(block) = content.blocks.get(block_id) else {
             return;
         };
-        let rotation = TextureRotation::for_position(voxel, block.rotate_texture.any());
+        let texture_rotation = TextureRotation::for_position(voxel, block.rotate_texture.any());
+        let orientation = input
+            .placement_orientation
+            .for_block(selected_slot, block);
 
         (
-            world.set_block_at(voxel, Some(VoxelCell::new(block_id, rotation))),
+            world.set_block_at(
+                voxel,
+                Some(VoxelCell::oriented(
+                    block_id,
+                    texture_rotation,
+                    orientation,
+                )),
+            ),
             voxel,
             true,
         )

@@ -10,6 +10,11 @@ use crate::{
 
 pub const HOTBAR_SLOT_COUNT: usize = 9;
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) enum PlayerHotbarSet {
+    Selection,
+}
+
 #[derive(Resource)]
 pub struct PlayerHotbar {
     selected_slot: usize,
@@ -61,6 +66,7 @@ impl Plugin for PlayerHotbarPlugin {
             .add_systems(
                 Update,
                 select_hotbar_slot
+                    .in_set(PlayerHotbarSet::Selection)
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(PauseState::Running)),
             );

@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 
 use super::BlockFace;
-use crate::voxel::{texture_rotation::TextureRotation, world::VoxelWorld};
+use crate::{
+    content::block_orientation::BlockOrientation,
+    voxel::{texture_rotation::TextureRotation, world::VoxelWorld},
+};
 
 const FACE_OVERDRAW: f32 = 0.002;
 
@@ -95,6 +98,34 @@ pub(super) fn face_geometry(
             normal: [0.0, 0.0, -1.0],
             texture_rotation,
         },
+    }
+}
+
+pub(super) fn orient_face_geometry(
+    mut geometry: FaceGeometry,
+    orientation: BlockOrientation,
+    x: usize,
+    y: usize,
+    z: usize,
+) -> FaceGeometry {
+    if orientation == BlockOrientation::Y {
+        return geometry;
+    }
+
+    let center = Vec3::new(x as f32 + 0.5, y as f32 + 0.5, z as f32 + 0.5);
+    geometry.vertices = geometry.vertices.map(|vertex| {
+        let vertex = Vec3::from_array(vertex);
+        (center + orient_vector(vertex - center, orientation)).to_array()
+    });
+    geometry.normal = orient_vector(Vec3::from_array(geometry.normal), orientation).to_array();
+    geometry
+}
+
+fn orient_vector(vector: Vec3, orientation: BlockOrientation) -> Vec3 {
+    match orientation {
+        BlockOrientation::Y => vector,
+        BlockOrientation::Z => Vec3::new(vector.x, -vector.z, vector.y),
+        BlockOrientation::X => Vec3::new(vector.y, -vector.x, vector.z),
     }
 }
 

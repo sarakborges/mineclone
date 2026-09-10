@@ -17,6 +17,7 @@
     "front": false,
     "back": false
   },
+  "orientations": ["y", "z", "x"],
   "lightDampening": 15,
   "castsShadow": true
 }

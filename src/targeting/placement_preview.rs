@@ -1,8 +1,13 @@
+use std::f32::consts::FRAC_PI_2;
+
 use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::{biome::BiomeRegistry, block::BlockRegistry, builtin_ids::GRASS_BLOCK_ID},
+    content::{
+        biome::BiomeRegistry, block::BlockRegistry, block_orientation::BlockOrientation,
+        builtin_ids::GRASS_BLOCK_ID,
+    },
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::{
         block_model::{
@@ -19,6 +24,7 @@ use crate::{
 use super::{
     block::{BlockTargetingSet, TargetedBlock},
     placement::placement_voxel,
+    placement_orientation::PlacementOrientation,
 };
 
 const PREVIEW_OPACITY: f32 = 0.82;
@@ -81,7 +87,7 @@ fn spawn_placement_preview(
         .spawn((
             PlacementPreviewRoot,
             block_model,
-            Transform::default(),
+            Transform::from_rotation(orientation_rotation(block.default_orientation())),
             Visibility::Hidden,
             DespawnOnExit(GameState::Gameplay),
         ))
@@ -112,6 +118,7 @@ fn spawn_placement_preview(
 struct PlacementPreviewInput<'w, 's> {
     targeted: Res<'w, TargetedBlock>,
     hotbar: Res<'w, PlayerHotbar>,
+    placement_orientation: Res<'w, PlacementOrientation>,
     blocks: Res<'w, BlockRegistry>,
     biomes: Res<'w, BiomeRegistry>,
     biome_field: Res<'w, BiomeField>,
@@ -126,17 +133,17 @@ fn update_placement_preview(
     mut root: PreviewRoot,
     faces: Query<(&PlacementPreviewFace, &MeshMaterial3d<BlockModelMaterial>)>,
 ) {
-    let Some(block_id) = input.hotbar.item_at(input.hotbar.selected_slot()) else {
+    let selected_slot = input.hotbar.selected_slot();
+    let Some(block_id) = input.hotbar.item_at(selected_slot) else {
         *root.2 = Visibility::Hidden;
         return;
     };
+    let block = input
+        .blocks
+        .get(block_id)
+        .unwrap_or_else(|| panic!("placement preview references missing block: {block_id}"));
 
     if root.0.set_block_id(Some(block_id)) {
-        let block = input
-            .blocks
-            .get(block_id)
-            .unwrap_or_else(|| panic!("placement preview references missing block: {block_id}"));
-
         for (face, material_handle) in &faces {
             let Some(mut material) = materials.get_mut(&material_handle.0) else {
                 continue;
@@ -150,6 +157,11 @@ fn update_placement_preview(
             );
         }
     }
+
+    let orientation = input
+        .placement_orientation
+        .for_block(selected_slot, block);
+    root.1.rotation = orientation_rotation(orientation);
 
     let Some(hit) = input.targeted.0 else {
         *root.2 = Visibility::Hidden;
@@ -173,4 +185,12 @@ fn update_placement_preview(
 
     root.1.translation = voxel.as_vec3() + Vec3::splat(0.5);
     *root.2 = Visibility::Visible;
+}
+
+fn orientation_rotation(orientation: BlockOrientation) -> Quat {
+    match orientation {
+        BlockOrientation::Y => Quat::IDENTITY,
+        BlockOrientation::Z => Quat::from_rotation_x(FRAC_PI_2),
+        BlockOrientation::X => Quat::from_rotation_z(-FRAC_PI_2),
+    }
 }

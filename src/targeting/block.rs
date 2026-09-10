@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use super::{
     highlight::TargetHighlightPlugin, interaction::BlockInteractionPlugin,
-    placement_preview::PlacementPreviewPlugin,
+    placement_orientation::PlacementOrientationPlugin, placement_preview::PlacementPreviewPlugin,
 };
 use crate::{
     app::game_state::GameState,
@@ -18,6 +18,7 @@ const TARGET_RANGE: f32 = 8.0;
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum BlockTargetingSet {
     Raycast,
+    PlacementState,
     Interaction,
     Visuals,
 }
@@ -31,6 +32,7 @@ impl Plugin for BlockTargetingPlugin {
                 Update,
                 (
                     BlockTargetingSet::Raycast,
+                    BlockTargetingSet::PlacementState,
                     BlockTargetingSet::Interaction,
                     BlockTargetingSet::Visuals,
                 )
@@ -38,6 +40,7 @@ impl Plugin for BlockTargetingPlugin {
             )
             .add_plugins((
                 TargetHighlightPlugin,
+                PlacementOrientationPlugin,
                 BlockInteractionPlugin,
                 PlacementPreviewPlugin,
             ))

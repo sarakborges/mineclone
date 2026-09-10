@@ -7,11 +7,14 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use crate::content::block::{BlockRegistry, BlockTextureRotations};
+use crate::content::{
+    block::{BlockRegistry, BlockTextureRotations},
+    block_orientation::BlockOrientation,
+};
 
 use self::{
     buffer::MeshBuffers,
-    geometry::{face_geometry, is_face_exposed},
+    geometry::{face_geometry, is_face_exposed, orient_face_geometry},
     lighting::face_lighting,
 };
 use super::{
@@ -39,6 +42,28 @@ impl BlockFace {
         Self::Front,
         Self::Back,
     ];
+
+    fn oriented(self, orientation: BlockOrientation) -> Self {
+        match orientation {
+            BlockOrientation::Y => self,
+            BlockOrientation::Z => match self {
+                Self::Right => Self::Right,
+                Self::Left => Self::Left,
+                Self::Top => Self::Front,
+                Self::Bottom => Self::Back,
+                Self::Front => Self::Bottom,
+                Self::Back => Self::Top,
+            },
+            BlockOrientation::X => match self {
+                Self::Right => Self::Bottom,
+                Self::Left => Self::Top,
+                Self::Top => Self::Right,
+                Self::Bottom => Self::Left,
+                Self::Front => Self::Front,
+                Self::Back => Self::Back,
+            },
+        }
+    }
 }
 
 pub struct ChunkFaceMesh {
@@ -77,20 +102,27 @@ where
                     tint_at(world_voxel, cell.block_id)
                 };
 
-                for face in BlockFace::ALL {
+                for block_face in BlockFace::ALL {
+                    let face = block_face.oriented(cell.orientation);
                     if !is_face_exposed(world, world_voxel, face) {
                         continue;
                     }
 
-                    let texture_rotation = if face_uses_texture_rotation(block.rotate_texture, face)
-                    {
-                        cell.texture_rotation
-                    } else {
-                        TextureRotation::default()
-                    };
-                    let geometry = face_geometry(face, x, y, z, texture_rotation);
+                    let texture_rotation =
+                        if face_uses_texture_rotation(block.rotate_texture, block_face) {
+                            cell.texture_rotation
+                        } else {
+                            TextureRotation::default()
+                        };
+                    let geometry = orient_face_geometry(
+                        face_geometry(block_face, x, y, z, texture_rotation),
+                        cell.orientation,
+                        x,
+                        y,
+                        z,
+                    );
                     buffers
-                        .entry((cell.block_id, face, block.casts_shadow))
+                        .entry((cell.block_id, block_face, block.casts_shadow))
                         .or_default()
                         .push(
                             geometry.vertices,
@@ -125,5 +157,26 @@ fn face_uses_texture_rotation(rotations: BlockTextureRotations, face: BlockFace)
         BlockFace::Bottom => rotations.bottom,
         BlockFace::Front => rotations.front,
         BlockFace::Back => rotations.back,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn axial_orientation_moves_top_face_to_selected_axis() {
+        assert_eq!(
+            BlockFace::Top.oriented(BlockOrientation::Y),
+            BlockFace::Top
+        );
+        assert_eq!(
+            BlockFace::Top.oriented(BlockOrientation::Z),
+            BlockFace::Front
+        );
+        assert_eq!(
+            BlockFace::Top.oriented(BlockOrientation::X),
+            BlockFace::Right
+        );
     }
 }
