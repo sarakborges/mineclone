@@ -21,6 +21,14 @@ impl ChunkRenderPool {
         self.active.keys().copied()
     }
 
+    pub(crate) fn active_count(&self) -> usize {
+        self.active.len()
+    }
+
+    pub(crate) fn mesh_count(&self) -> usize {
+        self.active.values().map(|slot| slot.meshes.len()).sum()
+    }
+
     pub fn take(&mut self, coord: IVec3) -> Option<(Vec<Entity>, Vec<Handle<Mesh>>)> {
         self.active
             .remove(&coord)
