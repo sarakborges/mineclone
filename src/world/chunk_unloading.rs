@@ -3,14 +3,14 @@ use bevy::prelude::*;
 use crate::{
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
-        coordinates::split_dimension_position, lighting::relight_after_chunk_unloads,
+        coordinates::split_dimension_position, lighting::PendingLightingUpdates,
         neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
     },
 };
 
 use super::{
     chunk_remesh::ChunkRemeshQueue,
-    chunk_system_params::{ChunkContent, ChunkRenderer},
+    chunk_system_params::ChunkRenderer,
     render_distance::{RenderDistanceSettings, chunk_is_in_volume},
 };
 
@@ -19,9 +19,9 @@ const MAX_CHUNK_UNLOADS_PER_FRAME: usize = 2;
 pub fn unload_chunk_meshes(
     player: Single<&Transform, With<GameplayCamera>>,
     render_distance: Res<RenderDistanceSettings>,
-    content: ChunkContent,
     mut renderer: ChunkRenderer,
     mut world: ResMut<VoxelWorld>,
+    mut lighting: ResMut<PendingLightingUpdates>,
     mut remesh_queue: ResMut<ChunkRemeshQueue>,
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
@@ -58,9 +58,7 @@ pub fn unload_chunk_meshes(
         return;
     }
 
-    let lighting_changes =
-        relight_after_chunk_unloads(&mut world, &to_unload, &content.blocks, &content.fluids);
-    remesh_queue.extend(lighting_changes);
+    lighting.enqueue_chunk_unloads(&to_unload);
 
     for coord in &to_unload {
         for offset in CARDINAL_NEIGHBORS {
