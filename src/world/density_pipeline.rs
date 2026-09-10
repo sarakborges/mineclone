@@ -47,7 +47,13 @@ pub fn sample_density(
     );
 
     density
-        + volume_biome_density_delta(density, position, volume, biome_field, cavern_depth_strength)
+        + volume_biome_density_delta(
+            density,
+            position,
+            volume,
+            biome_field,
+            cavern_depth_strength,
+        )
 }
 
 fn depth_strength(base_density: f32, minimum_depth: f32, full_strength_depth: f32) -> f32 {
@@ -59,8 +65,7 @@ fn depth_strength(base_density: f32, minimum_depth: f32, full_strength_depth: f3
         return 1.0;
     }
 
-    let progress =
-        (base_density - minimum_depth) / (full_strength_depth - minimum_depth);
+    let progress = (base_density - minimum_depth) / (full_strength_depth - minimum_depth);
     smoothstep(progress.clamp(0.0, 1.0))
 }
 
