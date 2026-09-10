@@ -3,9 +3,6 @@ use bevy::prelude::*;
 pub const MIN_RENDER_DISTANCE_CHUNKS: i32 = 4;
 pub const MAX_RENDER_DISTANCE_CHUNKS: i32 = 8;
 pub const DEFAULT_RENDER_DISTANCE_CHUNKS: i32 = 6;
-
-pub const MIN_VERTICAL_RENDER_DISTANCE_CHUNKS: i32 = 2;
-pub const MAX_VERTICAL_RENDER_DISTANCE_CHUNKS: i32 = 8;
 pub const DEFAULT_VERTICAL_RENDER_DISTANCE_CHUNKS: i32 = 4;
 
 #[derive(Resource)]
@@ -35,13 +32,6 @@ impl RenderDistanceSettings {
     pub fn set_chunks(&mut self, chunks: i32) {
         self.horizontal_chunks =
             chunks.clamp(MIN_RENDER_DISTANCE_CHUNKS, MAX_RENDER_DISTANCE_CHUNKS);
-    }
-
-    pub fn set_vertical_chunks(&mut self, chunks: i32) {
-        self.vertical_chunks = chunks.clamp(
-            MIN_VERTICAL_RENDER_DISTANCE_CHUNKS,
-            MAX_VERTICAL_RENDER_DISTANCE_CHUNKS,
-        );
     }
 }
 

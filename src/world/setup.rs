@@ -18,17 +18,17 @@ use crate::{
 };
 
 use super::{
-    InMemoryWorldSave, WorldLoadMode, WorldSeed,
     biome_field::BiomeField,
     chunk_rendering::{
-        ChunkRenderPool, FluidMaterials, TerrainMaterials, refresh_adjacent_chunk_meshes,
-        refresh_chunk_mesh, spawn_chunk_mesh,
+        ChunkRenderContext, ChunkRenderPool, FluidMaterials, TerrainMaterials,
+        refresh_adjacent_chunk_meshes, refresh_chunk_mesh, spawn_chunk_mesh,
     },
     dimension::CurrentDimension,
     generation::generate_chunk,
     render_distance::chunk_coords_in_volume,
     terrain::surface_height,
     world_feature_fields::WorldFeatureFields,
+    InMemoryWorldSave, WorldLoadMode, WorldSeed,
 };
 
 const INITIAL_HORIZONTAL_RADIUS_CHUNKS: i32 = 5;
@@ -53,6 +53,10 @@ impl WorldLoadingState {
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy ECS system parameters declare independent world-loading resources"
+)]
 pub fn begin_world_loading(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -156,6 +160,10 @@ pub fn begin_world_loading(
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy ECS system parameters declare independent loading and rendering resources"
+)]
 pub fn setup_world(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -215,30 +223,29 @@ pub fn setup_world(
         let chunk = world
             .chunk(coord)
             .unwrap_or_else(|| panic!("generated chunk should exist at {coord:?}"));
+        let render_context = ChunkRenderContext {
+            world: &world,
+            blocks: &blocks,
+            biomes: &biomes,
+            biome_field: &biome_field,
+            terrain_materials: &terrain_materials,
+            fluid_materials: &fluid_materials,
+        };
+
         spawn_chunk_mesh(
             &mut commands,
             &mut meshes,
             &mut render_pool,
-            &world,
             coord,
             chunk,
-            &blocks,
-            &biomes,
-            &biome_field,
-            &terrain_materials,
-            &fluid_materials,
+            &render_context,
         );
         refresh_adjacent_chunk_meshes(
             &mut commands,
             &mut meshes,
             &mut render_pool,
-            &world,
             coord,
-            &blocks,
-            &biomes,
-            &biome_field,
-            &terrain_materials,
-            &fluid_materials,
+            &render_context,
         );
 
         for changed_coord in lighting_changes {
@@ -250,13 +257,8 @@ pub fn setup_world(
                 &mut commands,
                 &mut meshes,
                 &mut render_pool,
-                &world,
                 changed_coord,
-                &blocks,
-                &biomes,
-                &biome_field,
-                &terrain_materials,
-                &fluid_materials,
+                &render_context,
             );
         }
 

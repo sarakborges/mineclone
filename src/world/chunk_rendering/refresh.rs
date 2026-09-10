@@ -1,16 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{
-    content::{biome::BiomeRegistry, block::BlockRegistry},
-    voxel::world::VoxelWorld,
-    world::biome_field::BiomeField,
-};
-
-use super::{
-    materials::{FluidMaterials, TerrainMaterials},
-    pool::ChunkRenderPool,
-    spawn::spawn_chunk_mesh,
-};
+use super::{ChunkRenderContext, pool::ChunkRenderPool, spawn::spawn_chunk_mesh};
 
 const CHUNK_NEIGHBORS: [IVec3; 6] = [
     IVec3::X,
@@ -25,30 +15,14 @@ pub fn refresh_adjacent_chunk_meshes(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     render_pool: &mut ChunkRenderPool,
-    world: &VoxelWorld,
     coord: IVec3,
-    blocks: &BlockRegistry,
-    biomes: &BiomeRegistry,
-    biome_field: &BiomeField,
-    terrain_materials: &TerrainMaterials,
-    fluid_materials: &FluidMaterials,
+    context: &ChunkRenderContext<'_>,
 ) {
     for offset in CHUNK_NEIGHBORS {
         let neighbor = coord + offset;
 
         if render_pool.contains(neighbor) {
-            refresh_chunk_mesh(
-                commands,
-                meshes,
-                render_pool,
-                world,
-                neighbor,
-                blocks,
-                biomes,
-                biome_field,
-                terrain_materials,
-                fluid_materials,
-            );
+            refresh_chunk_mesh(commands, meshes, render_pool, neighbor, context);
         }
     }
 }
@@ -57,19 +31,14 @@ pub fn refresh_chunk_mesh(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     render_pool: &mut ChunkRenderPool,
-    world: &VoxelWorld,
     coord: IVec3,
-    blocks: &BlockRegistry,
-    biomes: &BiomeRegistry,
-    biome_field: &BiomeField,
-    terrain_materials: &TerrainMaterials,
-    fluid_materials: &FluidMaterials,
+    context: &ChunkRenderContext<'_>,
 ) {
     if !render_pool.contains(coord) {
         return;
     }
 
-    let Some(chunk) = world.chunk(coord) else {
+    let Some(chunk) = context.world.chunk(coord) else {
         return;
     };
 
@@ -82,17 +51,5 @@ pub fn refresh_chunk_mesh(
         }
     }
 
-    spawn_chunk_mesh(
-        commands,
-        meshes,
-        render_pool,
-        world,
-        coord,
-        chunk,
-        blocks,
-        biomes,
-        biome_field,
-        terrain_materials,
-        fluid_materials,
-    );
+    spawn_chunk_mesh(commands, meshes, render_pool, coord, chunk, context);
 }

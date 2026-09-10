@@ -2,9 +2,7 @@ use bevy::prelude::*;
 
 use crate::voxel::chunk::CHUNK_SIZE;
 
-use super::{
-    cave_connectivity::CaveConnectivityRegion, geology::GeologyRegion, hydrology::HydrologyRegion,
-};
+use super::{geology::GeologyRegion, hydrology::HydrologyRegion};
 
 pub const GENERATION_REGION_SIZE_CHUNKS: i32 = 8;
 
@@ -12,7 +10,6 @@ pub const GENERATION_REGION_SIZE_CHUNKS: i32 = 8;
 pub struct GenerationRegion {
     pub coord: IVec3,
     pub hydrology: HydrologyRegion,
-    pub cave_connectivity: CaveConnectivityRegion,
     pub geology: GeologyRegion,
 }
 

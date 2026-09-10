@@ -7,7 +7,7 @@ use crate::{
         biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionRegistry,
         fluid::FluidRegistry,
     },
-    player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
+    player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
     voxel::{
         coordinates::split_dimension_position, lighting::initialize_chunk_lighting,
         world::VoxelWorld,
@@ -17,12 +17,12 @@ use crate::{
 use super::{
     biome_field::BiomeField,
     chunk_rendering::{
-        ChunkRenderPool, FluidMaterials, TerrainMaterials, refresh_adjacent_chunk_meshes,
-        refresh_chunk_mesh, spawn_chunk_mesh,
+        ChunkRenderContext, ChunkRenderPool, FluidMaterials, TerrainMaterials,
+        refresh_adjacent_chunk_meshes, refresh_chunk_mesh, spawn_chunk_mesh,
     },
     dimension::CurrentDimension,
     generation::generate_chunk,
-    render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
+    render_distance::{chunk_coords_in_volume, RenderDistanceSettings},
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -40,6 +40,10 @@ pub fn reset_chunk_streaming(mut state: ResMut<ChunkStreamingState>) {
     *state = ChunkStreamingState::default();
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy ECS system parameters declare independent streaming and rendering resources"
+)]
 pub fn stream_chunks(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -111,30 +115,29 @@ pub fn stream_chunks(
         let chunk = world
             .chunk(coord)
             .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
+        let render_context = ChunkRenderContext {
+            world: &world,
+            blocks: &blocks,
+            biomes: &biomes,
+            biome_field: &biome_field,
+            terrain_materials: &terrain_materials,
+            fluid_materials: &fluid_materials,
+        };
+
         spawn_chunk_mesh(
             &mut commands,
             &mut meshes,
             &mut render_pool,
-            &world,
             coord,
             chunk,
-            &blocks,
-            &biomes,
-            &biome_field,
-            &terrain_materials,
-            &fluid_materials,
+            &render_context,
         );
         refresh_adjacent_chunk_meshes(
             &mut commands,
             &mut meshes,
             &mut render_pool,
-            &world,
             coord,
-            &blocks,
-            &biomes,
-            &biome_field,
-            &terrain_materials,
-            &fluid_materials,
+            &render_context,
         );
 
         for changed_coord in lighting_changes {
@@ -146,13 +149,8 @@ pub fn stream_chunks(
                 &mut commands,
                 &mut meshes,
                 &mut render_pool,
-                &world,
                 changed_coord,
-                &blocks,
-                &biomes,
-                &biome_field,
-                &terrain_materials,
-                &fluid_materials,
+                &render_context,
             );
         }
     }

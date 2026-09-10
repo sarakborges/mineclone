@@ -10,8 +10,8 @@ use crate::{
         typography,
     },
     world::{
-        InMemoryWorldSave, WorldLoadMode, WorldSeed, biome::CurrentBiome,
-        dimension::CurrentDimension,
+        biome::CurrentBiome, dimension::CurrentDimension, InMemoryWorldSave, WorldLoadMode,
+        WorldSeed,
     },
 };
 
@@ -58,10 +58,8 @@ fn setup_starting_screen(mut commands: Commands, asset_server: Res<AssetServer>)
             theme::cosmic_background_gradient(),
         ))
         .with_children(|parent| {
-            for &(left, top, size, phase, speed, red, green, blue, base_alpha) in STAR_FIELD {
-                parent.spawn(cosmic_background::star(
-                    left, top, size, phase, speed, red, green, blue, base_alpha,
-                ));
+            for &spec in STAR_FIELD {
+                parent.spawn(cosmic_background::star(spec));
             }
 
             parent

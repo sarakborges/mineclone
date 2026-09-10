@@ -2,7 +2,10 @@ use bevy::{
     asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology,
 };
 
-use super::{face::push_face, lighting::FaceLighting};
+use super::{
+    face::{FaceData, push_face},
+    lighting::FaceLighting,
+};
 use crate::voxel::texture_rotation::TextureRotation;
 
 #[derive(Default)]
@@ -31,12 +34,14 @@ impl MeshBuffers {
             &mut self.light_uvs,
             &mut self.colors,
             &mut self.indices,
-            vertices,
-            normal,
-            texture_rotation,
-            tint,
-            lighting.channels,
-            lighting.ambient_occlusion,
+            FaceData {
+                vertices,
+                normal,
+                texture_rotation,
+                tint,
+                light: lighting.channels,
+                ambient_occlusion: lighting.ambient_occlusion,
+            },
         );
     }
 

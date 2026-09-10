@@ -1,9 +1,9 @@
 use super::{
-    HydrologyField, HydrologySurfaceSample, WaterBody, WaterBodyKind,
     constants::{HYDROLOGY_REGION_SIZE, MACRO_SAMPLE_GRID},
-    drainage::{DrainageNode, drainage_position},
+    drainage::{drainage_position, DrainageNode},
     lake::lake_for_local_basin,
     spatial::macro_sample_position,
+    HydrologyField, HydrologySurfaceSample, WaterBody,
 };
 use crate::content::{
     biome_hydrology::BiomeHydrology, builtin_ids::WATER_FLUID_ID,
@@ -34,7 +34,6 @@ fn surface(elevation: f32, continentalness: f32) -> HydrologySurfaceSample {
 #[test]
 fn water_body_strength_fades_to_zero_at_shoreline() {
     let body = WaterBody {
-        kind: WaterBodyKind::Lake,
         center: Vec2::ZERO,
         radius: Vec2::splat(10.0),
         water_level: 64.0,
@@ -47,26 +46,13 @@ fn water_body_strength_fades_to_zero_at_shoreline() {
 }
 
 #[test]
-fn macro_terrain_summary_is_deterministic() {
+fn macro_terrain_generation_is_deterministic() {
     let field = field();
     let sample = |position: Vec2| surface(position.x + position.y, 0.5);
     let first = field.region_from_macro_terrain(IVec2::ZERO, sample);
     let second = field.region_from_macro_terrain(IVec2::ZERO, sample);
 
-    assert_eq!(
-        first.terrain.minimum_elevation,
-        second.terrain.minimum_elevation
-    );
-    assert_eq!(
-        first.terrain.maximum_elevation,
-        second.terrain.maximum_elevation
-    );
-    assert_eq!(first.terrain.mean_elevation, second.terrain.mean_elevation);
-    assert_eq!(first.terrain.mean_continentalness, 0.5);
-    assert_eq!(
-        first.river_graph.edges().len(),
-        second.river_graph.edges().len()
-    );
+    assert_eq!(first.river_graph.edges().len(), second.river_graph.edges().len());
     assert_eq!(first.water_bodies.len(), second.water_bodies.len());
 }
 
@@ -115,7 +101,15 @@ fn biome_can_disable_lake_generation() {
     }];
 
     assert!(
-        lake_for_local_basin(IVec2::ZERO, source, &neighbors, 42, 64.0, WATER_FLUID_ID,).is_none()
+        lake_for_local_basin(
+            IVec2::ZERO,
+            source,
+            &neighbors,
+            42,
+            64.0,
+            WATER_FLUID_ID,
+        )
+        .is_none()
     );
 }
 

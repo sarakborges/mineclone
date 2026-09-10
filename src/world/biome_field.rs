@@ -1,5 +1,4 @@
 mod constants;
-mod resolved;
 mod selection;
 mod spatial;
 mod surface;
@@ -50,13 +49,6 @@ pub struct VolumeBiomeFieldSample<'a> {
     pub primary_id: &'a str,
     pub influences: Vec<BiomeInfluence<'a>>,
     pub strength: f32,
-}
-
-pub struct ResolvedBiomeFieldSample<'a> {
-    pub primary_id: &'a str,
-    pub influences: Vec<BiomeInfluence<'a>>,
-    pub surface: BiomeFieldSample<'a>,
-    pub volume: Option<VolumeBiomeFieldSample<'a>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -140,9 +132,5 @@ impl BiomeField {
 
     pub(crate) fn climate_at(&self, position: Vec2) -> MacroClimateSample {
         self.climate.sample(position)
-    }
-
-    pub fn sample(&self, position: Vec2) -> BiomeFieldSample<'_> {
-        self.sample_surface(position)
     }
 }

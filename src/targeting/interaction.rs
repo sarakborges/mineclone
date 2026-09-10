@@ -10,7 +10,10 @@ use crate::{
     },
     world::{
         biome_field::BiomeField,
-        chunk_rendering::{ChunkRenderPool, FluidMaterials, TerrainMaterials, refresh_chunk_mesh},
+        chunk_rendering::{
+            ChunkRenderContext, ChunkRenderPool, FluidMaterials, TerrainMaterials,
+            refresh_chunk_mesh,
+        },
     },
 };
 
@@ -42,6 +45,10 @@ impl Plugin for BlockInteractionPlugin {
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy ECS system parameters declare independent interaction and rendering resources"
+)]
 fn edit_targeted_block(
     mut commands: Commands,
     buttons: Res<ButtonInput<MouseButton>>,
@@ -111,18 +118,22 @@ fn edit_targeted_block(
 
     targeted.0 = None;
 
+    let render_context = ChunkRenderContext {
+        world: &world,
+        blocks: &blocks,
+        biomes: &biomes,
+        biome_field: &biome_field,
+        terrain_materials: &terrain_materials,
+        fluid_materials: &fluid_materials,
+    };
+
     for chunk_coord in chunks_to_remesh {
         refresh_chunk_mesh(
             &mut commands,
             &mut meshes,
             &mut render_pool,
-            &world,
             chunk_coord,
-            &blocks,
-            &biomes,
-            &biome_field,
-            &terrain_materials,
-            &fluid_materials,
+            &render_context,
         );
     }
 }

@@ -12,6 +12,13 @@ use crate::{
 
 const HIGHLIGHT_SCALE: f32 = 1.01;
 
+type HighlightTarget<'w, 's> = Single<
+    'w,
+    's,
+    (&'static mut Transform, &'static mut Visibility),
+    (With<TargetHighlight>, Without<GameplayCamera>),
+>;
+
 pub struct TargetHighlightPlugin;
 
 impl Plugin for TargetHighlightPlugin {
@@ -54,10 +61,7 @@ fn update_highlight(
     hotbar: Res<PlayerHotbar>,
     world: Res<VoxelWorld>,
     player: Single<&Transform, With<GameplayCamera>>,
-    mut highlight: Single<
-        (&mut Transform, &mut Visibility),
-        (With<TargetHighlight>, Without<GameplayCamera>),
-    >,
+    mut highlight: HighlightTarget,
 ) {
     let Some(hit) = targeted.0 else {
         *highlight.1 = Visibility::Hidden;

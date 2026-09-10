@@ -5,19 +5,15 @@ use crate::{content::dimension_hydrology::DimensionHydrology, world::feature_gra
 use super::{
     constants::{
         BED_MATERIAL_DEPTH, HYDROLOGY_REGION_SIZE, MACRO_SAMPLE_GRID, OCEAN_EXTRA_DEPTH,
-        OCEAN_MINIMUM_DEPTH, RIVER_CARVE_DEPTH, RIVER_CARVE_STRENGTH, SHORE_STRENGTH,
+        OCEAN_MINIMUM_DEPTH, RIVER_CARVE_STRENGTH, SHORE_STRENGTH,
     },
     math::{lerp, ocean_strength, smoothstep},
-    types::{
-        HydrologyMacroSample, HydrologyTerrainSummary, HydrologyWaterSample, WaterBody,
-        WaterBodyKind,
-    },
+    types::{HydrologyMacroSample, HydrologyWaterSample, WaterBody},
 };
 
 #[derive(Clone, Debug)]
 pub struct HydrologyRegion {
     pub coord: IVec2,
-    pub terrain: HydrologyTerrainSummary,
     pub river_graph: FeatureGraph,
     pub river_carve_depth: f32,
     pub water_bodies: Vec<WaterBody>,
@@ -27,19 +23,6 @@ pub struct HydrologyRegion {
 }
 
 impl HydrologyRegion {
-    pub(super) fn empty(coord: IVec2, sea_level: f32, settings: DimensionHydrology) -> Self {
-        Self {
-            coord,
-            terrain: HydrologyTerrainSummary::default(),
-            river_graph: FeatureGraph::default(),
-            river_carve_depth: RIVER_CARVE_DEPTH,
-            water_bodies: Vec::new(),
-            sea_level,
-            settings,
-            macro_samples: Vec::new(),
-        }
-    }
-
     pub fn density_delta(&self, position: Vec3) -> f32 {
         let horizontal = Vec2::new(position.x, position.z);
         let ocean_delta = self.ocean_density_delta(horizontal);
@@ -92,19 +75,21 @@ impl HydrologyRegion {
                 water_level: body.water_level,
             });
 
-        if let Some(river) = self.river_graph.sample_horizontal(position) {
-            if river.strength > 0.0 {
-                let candidate = HydrologyWaterSample {
-                    fluid_id: self.settings.water_fluid.as_str(),
-                    water_level: river.height,
-                };
+        if let Some(river) = self
+            .river_graph
+            .sample_horizontal(position)
+            .filter(|river| river.strength > 0.0)
+        {
+            let candidate = HydrologyWaterSample {
+                fluid_id: self.settings.water_fluid.as_str(),
+                water_level: river.height,
+            };
 
-                if selected
-                    .as_ref()
-                    .is_none_or(|current| candidate.water_level > current.water_level)
-                {
-                    selected = Some(candidate);
-                }
+            if selected
+                .as_ref()
+                .is_none_or(|current| candidate.water_level > current.water_level)
+            {
+                selected = Some(candidate);
             }
         }
 
@@ -142,7 +127,7 @@ impl HydrologyRegion {
             if position.y >= bottom - BED_MATERIAL_DEPTH
                 && position.y <= bottom + BED_MATERIAL_DEPTH
             {
-                return self.material_for_water_body(body.kind, strength);
+                return self.lake_bed_material(strength);
             }
         }
 
@@ -150,7 +135,9 @@ impl HydrologyRegion {
             let profile = smoothstep(river.strength);
             let bed = river.height - self.river_carve_depth * profile;
 
-            if position.y >= bed - BED_MATERIAL_DEPTH && position.y <= bed + BED_MATERIAL_DEPTH {
+            if position.y >= bed - BED_MATERIAL_DEPTH
+                && position.y <= bed + BED_MATERIAL_DEPTH
+            {
                 if river.strength <= SHORE_STRENGTH {
                     return self
                         .settings
@@ -170,10 +157,12 @@ impl HydrologyRegion {
         let strength = self.ocean_strength_at(horizontal);
         if strength > 0.0 {
             let sample = self.macro_sample_at(horizontal)?;
-            let target_floor = self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength;
+            let target_floor =
+                self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength;
             let floor = lerp(sample.elevation, target_floor, strength);
 
-            if position.y >= floor - BED_MATERIAL_DEPTH && position.y <= floor + BED_MATERIAL_DEPTH
+            if position.y >= floor - BED_MATERIAL_DEPTH
+                && position.y <= floor + BED_MATERIAL_DEPTH
             {
                 if strength <= SHORE_STRENGTH {
                     return self
@@ -199,11 +188,8 @@ impl HydrologyRegion {
             .map_or(0.0, |sample| ocean_strength(sample.continentalness))
     }
 
-    fn material_for_water_body(&self, kind: WaterBodyKind, strength: f32) -> Option<&str> {
-        let bed = match kind {
-            WaterBodyKind::Lake => self.settings.lake_bed_block.as_deref(),
-            WaterBodyKind::Ocean => self.settings.ocean_bed_block.as_deref(),
-        };
+    fn lake_bed_material(&self, strength: f32) -> Option<&str> {
+        let bed = self.settings.lake_bed_block.as_deref();
 
         if strength <= SHORE_STRENGTH {
             self.settings.shore_block.as_deref().or(bed)

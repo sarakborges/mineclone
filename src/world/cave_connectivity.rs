@@ -2,14 +2,12 @@ use bevy::prelude::*;
 
 use super::feature_graph::FeatureGraph;
 
-const CONNECTOR_REGION_SIZE: f32 = 128.0;
 const MAX_CONNECTOR_LENGTH: f32 = 256.0;
 const MIN_TUNNEL_RADIUS: f32 = 3.0;
 const MAX_TUNNEL_RADIUS: f32 = 8.0;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct CaveConnectivityRegion {
-    pub coord: IVec3,
     pub connector_graph: FeatureGraph,
 }
 
@@ -23,32 +21,13 @@ impl CaveConnectivityField {
         Self { seed }
     }
 
-    pub fn seed(&self) -> u64 {
-        self.seed
-    }
-
-    pub fn region_coord(position: Vec3) -> IVec3 {
-        IVec3::new(
-            (position.x / CONNECTOR_REGION_SIZE).floor() as i32,
-            ((position.y / CONNECTOR_REGION_SIZE).floor() as i32).max(0),
-            (position.z / CONNECTOR_REGION_SIZE).floor() as i32,
-        )
-    }
-
     pub fn anchor_search_margin(&self) -> f32 {
         MAX_CONNECTOR_LENGTH
     }
 
-    pub fn region(&self, coord: IVec3) -> CaveConnectivityRegion {
-        CaveConnectivityRegion {
-            coord,
-            connector_graph: FeatureGraph::default(),
-        }
-    }
-
     pub fn region_from_anchors(&self, coord: IVec3, anchors: &[Vec3]) -> CaveConnectivityRegion {
         if coord.y < 0 || anchors.len() < 2 {
-            return self.region(coord);
+            return CaveConnectivityRegion::default();
         }
 
         let mut anchors = anchors
@@ -82,7 +61,6 @@ impl CaveConnectivityField {
         }
 
         CaveConnectivityRegion {
-            coord,
             connector_graph: graph,
         }
     }
@@ -194,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn connector_geometry_does_not_depend_on_requesting_region() {
+    fn connector_strength_does_not_depend_on_requesting_region() {
         let field = CaveConnectivityField::new(42);
         let anchors = [Vec3::new(100.0, 40.0, 20.0), Vec3::new(180.0, 40.0, 20.0)];
         let left = field.region_from_anchors(IVec3::ZERO, &anchors);
@@ -203,7 +181,6 @@ mod tests {
         let left_sample = left.connector_graph.sample(sample_position).unwrap();
         let right_sample = right.connector_graph.sample(sample_position).unwrap();
 
-        assert_eq!(left_sample.radius, right_sample.radius);
         assert_eq!(left_sample.strength, right_sample.strength);
     }
 }

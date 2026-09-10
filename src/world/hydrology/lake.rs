@@ -2,12 +2,12 @@ use bevy::prelude::*;
 
 use super::{
     constants::{
-        LAKE_CARVE_DEPTH, LAKE_CHANCE, LAKE_MAXIMUM_RADIUS, LAKE_MINIMUM_RADIUS,
+        LAKE_CHANCE, LAKE_CARVE_DEPTH, LAKE_MAXIMUM_RADIUS, LAKE_MINIMUM_RADIUS,
         LAKE_MINIMUM_RELIEF, OCEAN_CONTINENTALNESS_THRESHOLD,
     },
     drainage::DrainageNode,
     math::{cell_hash, hash_unit, lerp},
-    types::{WaterBody, WaterBodyKind},
+    types::WaterBody,
 };
 
 pub(super) fn lake_for_local_basin(
@@ -36,7 +36,8 @@ pub(super) fn lake_for_local_basin(
     }
 
     let hash = cell_hash(cell, seed ^ 0xbb67_ae85_84ca_a73b);
-    let lake_chance = (LAKE_CHANCE * source.biome_hydrology.lake_chance_multiplier).clamp(0.0, 1.0);
+    let lake_chance =
+        (LAKE_CHANCE * source.biome_hydrology.lake_chance_multiplier).clamp(0.0, 1.0);
 
     if hash_unit(hash.rotate_left(17)) > lake_chance {
         return None;
@@ -55,7 +56,6 @@ pub(super) fn lake_for_local_basin(
     let water_level = source.elevation + relief.min(5.0) * 0.7;
 
     Some(WaterBody {
-        kind: WaterBodyKind::Lake,
         center: source.position,
         radius: Vec2::new(radius_x, radius_z),
         water_level,

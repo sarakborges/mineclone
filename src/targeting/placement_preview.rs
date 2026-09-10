@@ -5,7 +5,7 @@ use crate::{
     content::{block::BlockRegistry, builtin_ids::GRASS_BLOCK_ID},
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::block_model::{block_face_material, block_face_mesh, block_faces},
-    voxel::mesh::BlockFace,
+    voxel::{mesh::BlockFace, world::VoxelWorld},
 };
 
 use super::{
@@ -14,6 +14,17 @@ use super::{
 };
 
 const PREVIEW_OPACITY: f32 = 0.68;
+
+type PreviewRoot<'w, 's> = Single<
+    'w,
+    's,
+    (
+        &'static mut PlacementPreviewRoot,
+        &'static mut Transform,
+        &'static mut Visibility,
+    ),
+    (Without<PlacementPreviewFace>, Without<GameplayCamera>),
+>;
 
 #[derive(Component)]
 struct PlacementPreviewRoot {
@@ -79,18 +90,19 @@ fn spawn_placement_preview(
         });
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy ECS system parameters declare independent preview state and rendering resources"
+)]
 fn update_placement_preview(
     targeted: Res<TargetedBlock>,
     hotbar: Res<PlayerHotbar>,
     blocks: Res<BlockRegistry>,
     asset_server: Res<AssetServer>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    world: Res<crate::voxel::world::VoxelWorld>,
+    world: Res<VoxelWorld>,
     player: Single<&Transform, With<GameplayCamera>>,
-    mut root: Single<
-        (&mut PlacementPreviewRoot, &mut Transform, &mut Visibility),
-        (Without<PlacementPreviewFace>, Without<GameplayCamera>),
-    >,
+    mut root: PreviewRoot,
     mut faces: Query<(&PlacementPreviewFace, &mut MeshMaterial3d<StandardMaterial>)>,
 ) {
     let Some(block_id) = hotbar.item_at(hotbar.selected_slot()) else {

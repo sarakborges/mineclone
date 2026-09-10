@@ -4,15 +4,8 @@ use crate::content::biome_hydrology::BiomeHydrology;
 
 use super::math::smoothstep;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum WaterBodyKind {
-    Lake,
-    Ocean,
-}
-
 #[derive(Clone, Debug)]
 pub struct WaterBody {
-    pub kind: WaterBodyKind,
     pub center: Vec2,
     pub radius: Vec2,
     pub water_level: f32,
@@ -54,14 +47,6 @@ pub struct HydrologyBiomeOverlay<'a> {
     pub coast_weight: f32,
     pub ocean_biome: Option<&'a str>,
     pub ocean_weight: f32,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct HydrologyTerrainSummary {
-    pub minimum_elevation: f32,
-    pub maximum_elevation: f32,
-    pub mean_elevation: f32,
-    pub mean_continentalness: f32,
 }
 
 #[derive(Clone, Copy, Debug)]

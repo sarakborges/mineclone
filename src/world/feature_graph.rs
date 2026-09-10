@@ -15,19 +15,11 @@ pub struct FeatureEdge {
 
 #[derive(Clone, Copy, Debug)]
 pub struct FeatureGraphSample {
-    pub edge_index: usize,
-    pub progress: f32,
-    pub distance: f32,
-    pub radius: f32,
     pub strength: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct FeatureGraphHorizontalSample {
-    pub edge_index: usize,
-    pub progress: f32,
-    pub distance: f32,
-    pub radius: f32,
     pub height: f32,
     pub strength: f32,
 }
@@ -39,10 +31,12 @@ pub struct FeatureGraph {
 }
 
 impl FeatureGraph {
+    #[cfg(test)]
     pub fn nodes(&self) -> &[FeatureNode] {
         &self.nodes
     }
 
+    #[cfg(test)]
     pub fn edges(&self) -> &[FeatureEdge] {
         &self.edges
     }
@@ -73,6 +67,7 @@ impl FeatureGraph {
         });
     }
 
+    #[cfg(test)]
     pub fn nearest_node(&self, position: Vec3) -> Option<usize> {
         self.nodes
             .iter()
@@ -88,7 +83,7 @@ impl FeatureGraph {
     pub fn sample(&self, position: Vec3) -> Option<FeatureGraphSample> {
         let mut strongest: Option<FeatureGraphSample> = None;
 
-        for (edge_index, edge) in self.edges.iter().enumerate() {
+        for edge in &self.edges {
             let from = self.nodes[edge.from].position;
             let to = self.nodes[edge.to].position;
             let segment = to - from;
@@ -109,19 +104,11 @@ impl FeatureGraph {
                 continue;
             }
 
-            let candidate = FeatureGraphSample {
-                edge_index,
-                progress,
-                distance,
-                radius,
-                strength,
-            };
-            let should_replace = match strongest.as_ref() {
-                Some(current) => candidate.strength > current.strength,
-                None => true,
-            };
-
-            if should_replace {
+            let candidate = FeatureGraphSample { strength };
+            if strongest
+                .as_ref()
+                .is_none_or(|current| candidate.strength > current.strength)
+            {
                 strongest = Some(candidate);
             }
         }
@@ -132,7 +119,7 @@ impl FeatureGraph {
     pub fn sample_horizontal(&self, position: Vec2) -> Option<FeatureGraphHorizontalSample> {
         let mut strongest: Option<FeatureGraphHorizontalSample> = None;
 
-        for (edge_index, edge) in self.edges.iter().enumerate() {
+        for edge in &self.edges {
             let from = self.nodes[edge.from].position;
             let to = self.nodes[edge.to].position;
             let from_horizontal = Vec2::new(from.x, from.z);
@@ -156,19 +143,13 @@ impl FeatureGraph {
             }
 
             let candidate = FeatureGraphHorizontalSample {
-                edge_index,
-                progress,
-                distance,
-                radius,
                 height: from.y + (to.y - from.y) * progress,
                 strength,
             };
-            let should_replace = match strongest.as_ref() {
-                Some(current) => candidate.strength > current.strength,
-                None => true,
-            };
-
-            if should_replace {
+            if strongest
+                .as_ref()
+                .is_none_or(|current| candidate.strength > current.strength)
+            {
                 strongest = Some(candidate);
             }
         }

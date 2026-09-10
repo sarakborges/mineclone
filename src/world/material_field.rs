@@ -15,16 +15,16 @@ pub(crate) fn solid_block_id(
     biomes: &BiomeRegistry,
     fallback: &'static str,
 ) -> &'static str {
-    if let Some(volume) = volume {
-        if let Some(block_id) = strongest_material(
+    if let Some(block_id) = volume.and_then(|volume| {
+        strongest_material(
             volume
                 .influences
                 .iter()
                 .map(|influence| (influence.id, influence.weight)),
             biomes,
-        ) {
-            return intern_block_id(block_id);
-        }
+        )
+    }) {
+        return intern_block_id(block_id);
     }
 
     if let Some(block_id) = geology.solid_block_at(position) {

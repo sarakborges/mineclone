@@ -68,6 +68,10 @@ pub(super) fn spawn_stars(mut commands: Commands, assets: Res<StarAssets>) {
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy ECS system parameters declare independent sky state, assets, camera, and star query"
+)]
 pub(super) fn update_stars(
     visuals: Res<SkyLayerVisualState>,
     clock: Res<DayNightClock>,

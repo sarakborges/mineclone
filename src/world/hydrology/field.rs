@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::{content::dimension_hydrology::DimensionHydrology, world::feature_graph::FeatureGraph};
+use crate::{
+    content::dimension_hydrology::DimensionHydrology,
+    world::feature_graph::FeatureGraph,
+};
 
 use super::{
     constants::{
@@ -12,10 +15,7 @@ use super::{
     math::{cell_hash, hash_unit, lerp, ocean_strength},
     region::HydrologyRegion,
     spatial::{edge_intersects_region, macro_sample_position, water_body_intersects_region},
-    types::{
-        HydrologyBiomeOverlay, HydrologyMacroSample, HydrologySurfaceSample,
-        HydrologyTerrainSummary,
-    },
+    types::{HydrologyBiomeOverlay, HydrologyMacroSample, HydrologySurfaceSample},
 };
 
 #[derive(Clone, Debug)]
@@ -32,14 +32,6 @@ impl HydrologyField {
             sea_level,
             settings,
         }
-    }
-
-    pub fn seed(&self) -> u64 {
-        self.seed
-    }
-
-    pub fn sea_level(&self) -> i32 {
-        self.sea_level
     }
 
     pub fn biome_overlay(&self, continentalness: f32) -> HydrologyBiomeOverlay<'_> {
@@ -84,32 +76,17 @@ impl HydrologyField {
         }
     }
 
-    pub fn region(&self, coord: IVec2) -> HydrologyRegion {
-        HydrologyRegion::empty(coord, self.sea_level as f32, self.settings.clone())
-    }
-
     pub fn region_from_macro_terrain(
         &self,
         coord: IVec2,
         mut sample: impl FnMut(Vec2) -> HydrologySurfaceSample,
     ) -> HydrologyRegion {
-        let mut minimum_elevation = f32::MAX;
-        let mut maximum_elevation = f32::MIN;
-        let mut elevation_sum = 0.0;
-        let mut continentalness_sum = 0.0;
-        let mut count = 0.0;
         let mut macro_samples = Vec::with_capacity(MACRO_SAMPLE_GRID * MACRO_SAMPLE_GRID);
 
         for z in 0..MACRO_SAMPLE_GRID {
             for x in 0..MACRO_SAMPLE_GRID {
                 let position = macro_sample_position(coord, x, z);
                 let surface = sample(position);
-
-                minimum_elevation = minimum_elevation.min(surface.elevation);
-                maximum_elevation = maximum_elevation.max(surface.elevation);
-                elevation_sum += surface.elevation;
-                continentalness_sum += surface.continentalness;
-                count += 1.0;
                 macro_samples.push(HydrologyMacroSample {
                     elevation: surface.elevation,
                     continentalness: surface.continentalness,
@@ -133,8 +110,11 @@ impl HydrologyField {
                         && edge_intersects_region(coord, source.position, downstream.position)
                     {
                         let hash = cell_hash(source_cell, self.seed ^ 0x6a09_e667_f3bc_c909);
-                        let base_radius =
-                            lerp(RIVER_MINIMUM_RADIUS, RIVER_MAXIMUM_RADIUS, hash_unit(hash));
+                        let base_radius = lerp(
+                            RIVER_MINIMUM_RADIUS,
+                            RIVER_MAXIMUM_RADIUS,
+                            hash_unit(hash),
+                        );
                         let width_multiplier = (source.biome_hydrology.river_width_multiplier
                             + downstream.biome_hydrology.river_width_multiplier)
                             * 0.5;
@@ -161,22 +141,16 @@ impl HydrologyField {
                     self.seed,
                     self.sea_level as f32,
                     &self.settings.water_fluid,
-                ) {
-                    if water_body_intersects_region(coord, &lake) {
-                        water_bodies.push(lake);
-                    }
+                )
+                .filter(|lake| water_body_intersects_region(coord, lake))
+                {
+                    water_bodies.push(lake);
                 }
             }
         }
 
         HydrologyRegion {
             coord,
-            terrain: HydrologyTerrainSummary {
-                minimum_elevation,
-                maximum_elevation,
-                mean_elevation: elevation_sum / count,
-                mean_continentalness: continentalness_sum / count,
-            },
             river_graph,
             river_carve_depth: RIVER_CARVE_DEPTH,
             water_bodies,

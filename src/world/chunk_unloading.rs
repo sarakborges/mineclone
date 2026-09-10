@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     content::{biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry},
-    player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
+    player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
     voxel::{
         coordinates::split_dimension_position, lighting::relight_after_chunk_unloads,
         world::VoxelWorld,
@@ -11,7 +11,9 @@ use crate::{
 
 use super::{
     biome_field::BiomeField,
-    chunk_rendering::{ChunkRenderPool, FluidMaterials, TerrainMaterials, refresh_chunk_mesh},
+    chunk_rendering::{
+        ChunkRenderContext, ChunkRenderPool, FluidMaterials, TerrainMaterials, refresh_chunk_mesh,
+    },
     render_distance::RenderDistanceSettings,
 };
 
@@ -24,6 +26,10 @@ const CHUNK_NEIGHBORS: [IVec3; 6] = [
     IVec3::NEG_Z,
 ];
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy ECS system parameters declare independent unloading and rendering resources"
+)]
 pub fn unload_chunk_meshes(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -84,18 +90,22 @@ pub fn unload_chunk_meshes(
         }
     }
 
+    let render_context = ChunkRenderContext {
+        world: &world,
+        blocks: &blocks,
+        biomes: &biomes,
+        biome_field: &biome_field,
+        terrain_materials: &terrain_materials,
+        fluid_materials: &fluid_materials,
+    };
+
     for coord in chunks_to_remesh {
         refresh_chunk_mesh(
             &mut commands,
             &mut meshes,
             &mut render_pool,
-            &world,
             coord,
-            &blocks,
-            &biomes,
-            &biome_field,
-            &terrain_materials,
-            &fluid_materials,
+            &render_context,
         );
     }
 }

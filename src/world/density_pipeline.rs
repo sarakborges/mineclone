@@ -10,16 +10,6 @@ use super::{
 const DENSITY_NOISE_EDGE: f32 = 0.15;
 const CAVE_CONNECTOR_CARVE_STRENGTH: f32 = 12.0;
 
-#[derive(Clone, Copy, Debug)]
-pub struct DensityPipelineSample {
-    pub base_density: f32,
-    pub hydrology_delta: f32,
-    pub geology_delta: f32,
-    pub cave_connectivity_delta: f32,
-    pub volume_biome_delta: f32,
-    pub final_density: f32,
-}
-
 pub fn sample_density(
     base_density: f32,
     position: Vec3,
@@ -27,7 +17,7 @@ pub fn sample_density(
     anchored_caves: Option<&CaveConnectivityRegion>,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
-) -> DensityPipelineSample {
+) -> f32 {
     let hydrology_delta = region.hydrology.density_delta(position);
     let geology_delta = region.geology.density_delta(position);
     let cave_connectivity_delta = anchored_caves
@@ -36,20 +26,12 @@ pub fn sample_density(
             -CAVE_CONNECTOR_CARVE_STRENGTH * smoothstep(sample.strength)
         });
     let volume_biome_delta = volume_biome_density_delta(position, biomes, biome_field);
-    let final_density = base_density
+
+    base_density
         + hydrology_delta
         + geology_delta
         + cave_connectivity_delta
-        + volume_biome_delta;
-
-    DensityPipelineSample {
-        base_density,
-        hydrology_delta,
-        geology_delta,
-        cave_connectivity_delta,
-        volume_biome_delta,
-        final_density,
-    }
+        + volume_biome_delta
 }
 
 fn volume_biome_density_delta(

@@ -15,10 +15,7 @@ pub(crate) fn block_faces() -> [BlockFace; 6] {
     ]
 }
 
-pub(crate) fn block_face_texture<'a>(
-    face: BlockFace,
-    block: &'a BlockDefinition,
-) -> Option<&'a str> {
+pub(crate) fn block_face_texture(face: BlockFace, block: &BlockDefinition) -> Option<&str> {
     let texture = match face {
         BlockFace::Right => block.textures.right.as_str(),
         BlockFace::Left => block.textures.left.as_str(),

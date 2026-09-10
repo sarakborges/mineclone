@@ -18,17 +18,22 @@ use super::{
     index::{column_index, voxel_index},
 };
 
+pub(super) struct MaterialPassContext<'a> {
+    pub blocks: &'a BlockRegistry,
+    pub biomes: &'a BiomeRegistry,
+    pub biome_field: &'a BiomeField,
+    pub region: &'a GenerationRegion,
+}
+
 pub(super) fn rasterize_material_pass(
     chunk: &mut VoxelChunk,
     chunk_origin: IVec3,
     columns: &[GenerationColumnSample<'_>],
     density: &[f32],
-    blocks: &BlockRegistry,
-    biomes: &BiomeRegistry,
-    biome_field: &BiomeField,
-    region: &GenerationRegion,
+    context: &MaterialPassContext<'_>,
 ) {
-    let fallback = blocks
+    let fallback = context
+        .blocks
         .static_id(GRASS_BLOCK_ID)
         .unwrap_or_else(|| panic!("missing interned block definition: {GRASS_BLOCK_ID}"));
 
@@ -47,17 +52,18 @@ pub(super) fn rasterize_material_pass(
                     chunk_origin.z + local_z as i32,
                 );
                 let sample_position = world_position.as_vec3() + Vec3::splat(0.5);
-                let volume = biome_field.sample_volume(sample_position);
+                let volume = context.biome_field.sample_volume(sample_position);
                 let block_id = solid_block_id(
                     sample_position,
                     &column.surface,
                     volume.as_ref(),
-                    &region.geology,
-                    &region.hydrology,
-                    biomes,
+                    &context.region.geology,
+                    &context.region.hydrology,
+                    context.biomes,
                     fallback,
                 );
-                let block = blocks
+                let block = context
+                    .blocks
                     .get(block_id)
                     .unwrap_or_else(|| panic!("missing block definition: {block_id}"));
                 let rotation = texture_rotation_for(world_position, block.rotate_texture);
