@@ -8,8 +8,9 @@ use crate::{
         texture_rotation::TextureRotation,
     },
     world::{
-        biome_field::BiomeField, generation_region::GenerationRegion,
-        material_field::solid_block_id,
+        biome_field::BiomeField,
+        generation_region::GenerationRegion,
+        material_field::{MaterialFieldContext, solid_block_id},
     },
 };
 
@@ -37,6 +38,13 @@ pub(super) fn rasterize_material_pass(
         .blocks
         .static_id(GRASS_BLOCK_ID)
         .unwrap_or_else(|| panic!("missing interned block definition: {GRASS_BLOCK_ID}"));
+    let material_field = MaterialFieldContext {
+        biome_field: context.biome_field,
+        geology: &context.region.geology,
+        hydrology: &context.region.hydrology,
+        biomes: context.biomes,
+        fallback,
+    };
 
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
@@ -58,11 +66,7 @@ pub(super) fn rasterize_material_pass(
                     sample_position,
                     &column.surface,
                     density.volume[index],
-                    context.biome_field,
-                    &context.region.geology,
-                    &context.region.hydrology,
-                    context.biomes,
-                    fallback,
+                    &material_field,
                 );
                 let block = context
                     .blocks

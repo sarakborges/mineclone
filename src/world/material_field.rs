@@ -6,25 +6,29 @@ use super::{
     hydrology::HydrologyRegion,
 };
 
+pub(crate) struct MaterialFieldContext<'a> {
+    pub biome_field: &'a BiomeField,
+    pub geology: &'a GeologyRegion,
+    pub hydrology: &'a HydrologyRegion,
+    pub biomes: &'a BiomeRegistry,
+    pub fallback: &'static str,
+}
+
 pub(crate) fn solid_block_id(
     position: bevy::prelude::Vec3,
     surface: &BiomeFieldSample<'_>,
     volume: Option<VolumeBiomeSelection>,
-    biome_field: &BiomeField,
-    geology: &GeologyRegion,
-    hydrology: &HydrologyRegion,
-    biomes: &BiomeRegistry,
-    fallback: &'static str,
+    context: &MaterialFieldContext<'_>,
 ) -> &'static str {
-    if let Some(block_id) = volume.and_then(|selection| biome_field.volume_solid_block(selection)) {
+    if let Some(block_id) = volume.and_then(|selection| context.biome_field.volume_solid_block(selection)) {
         return intern_block_id(block_id);
     }
 
-    if let Some(block_id) = geology.solid_block_at(position) {
+    if let Some(block_id) = context.geology.solid_block_at(position) {
         return intern_block_id(block_id);
     }
 
-    if let Some(block_id) = hydrology.solid_block_at(position) {
+    if let Some(block_id) = context.hydrology.solid_block_at(position) {
         return intern_block_id(block_id);
     }
 
@@ -33,10 +37,10 @@ pub(crate) fn solid_block_id(
             .influences
             .iter()
             .map(|influence| (influence.id, influence.weight)),
-        biomes,
+        context.biomes,
     )
     .map(intern_block_id)
-    .unwrap_or(fallback)
+    .unwrap_or(context.fallback)
 }
 
 fn strongest_material<'registry, 'id>(
