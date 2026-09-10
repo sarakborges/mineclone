@@ -7,6 +7,7 @@
 @group(1) @binding(4) var right_texture: texture_2d<f32>;
 @group(1) @binding(5) var right_sampler: sampler;
 @group(1) @binding(6) var<uniform> tint: vec4<f32>;
+@group(1) @binding(7) var<uniform> face_shades: vec4<f32>;
 
 fn parallelogram_uv(
     point: vec2<f32>,
@@ -69,7 +70,8 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
             vec2<f32>(top_uv.x, top_uv.y),
             0.0,
         );
-        return apply_biome_tint(sampled);
+        let colored = apply_biome_tint(sampled);
+        return vec4<f32>(colored.rgb * face_shades.x, colored.a);
     }
 
     let front_uv = parallelogram_uv(
@@ -86,7 +88,7 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
             0.0,
         );
         let colored = apply_biome_tint(sampled);
-        return vec4<f32>(colored.rgb * 0.86, colored.a);
+        return vec4<f32>(colored.rgb * face_shades.y, colored.a);
     }
 
     let right_uv = parallelogram_uv(
@@ -103,7 +105,7 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
             0.0,
         );
         let colored = apply_biome_tint(sampled);
-        return vec4<f32>(colored.rgb * 0.74, colored.a);
+        return vec4<f32>(colored.rgb * face_shades.z, colored.a);
     }
 
     return vec4<f32>(0.0);
