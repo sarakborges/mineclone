@@ -5,7 +5,7 @@ use crate::{
     content::{day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry},
 };
 
-use super::{dimension::CurrentDimension, WorldLoadMode};
+use super::{WorldLoadMode, dimension::CurrentDimension};
 
 #[derive(Resource)]
 pub struct DayNightClock {

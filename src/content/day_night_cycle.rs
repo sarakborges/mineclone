@@ -72,8 +72,8 @@ impl DayNightCycleDefinition {
         end_phase: DayNightPhase,
     ) -> Option<f32> {
         let start_seconds = self.phase_start_seconds(start_phase)?;
-        let mut end_seconds = self.phase_start_seconds(end_phase)?
-            + self.phases.get(end_phase).duration_seconds;
+        let mut end_seconds =
+            self.phase_start_seconds(end_phase)? + self.phases.get(end_phase).duration_seconds;
         let mut current_seconds = normalized_time.rem_euclid(1.0) * self.day_duration_seconds;
 
         if end_seconds <= start_seconds {

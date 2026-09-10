@@ -1,16 +1,12 @@
 use std::fs;
 
-use bevy::{
-    ecs::system::NonSendMarker,
-    prelude::*,
-    winit::WINIT_WINDOWS,
-};
+use bevy::{ecs::system::NonSendMarker, prelude::*, winit::WINIT_WINDOWS};
+use winit::window::Icon;
 #[cfg(target_os = "windows")]
 use winit::{
     dpi::PhysicalSize,
     platform::windows::{IconExtWindows, WindowExtWindows},
 };
-use winit::window::Icon;
 
 const ICON_PATH: &str = "assets/branding/asteria_icon.png";
 
@@ -61,8 +57,9 @@ fn set_window_icon(mut icon_set: Local<bool>, _main_thread: NonSendMarker) {
 }
 
 fn load_png_icon() -> Icon {
-    let icon_bytes = fs::read(ICON_PATH)
-        .unwrap_or_else(|error| panic!("failed to read Asteria window icon at {ICON_PATH}: {error}"));
+    let icon_bytes = fs::read(ICON_PATH).unwrap_or_else(|error| {
+        panic!("failed to read Asteria window icon at {ICON_PATH}: {error}")
+    });
     let icon_rgba = image::load_from_memory(&icon_bytes)
         .expect("Asteria window icon should be a valid PNG")
         .into_rgba8();

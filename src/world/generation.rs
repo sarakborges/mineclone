@@ -10,26 +10,20 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        biome::BiomeRegistry,
-        block::BlockRegistry,
-        builtin_ids::GRASS_BLOCK_ID,
-        dimension::DimensionDefinition,
-        fluid::FluidRegistry,
+        biome::BiomeRegistry, block::BlockRegistry, builtin_ids::GRASS_BLOCK_ID,
+        dimension::DimensionDefinition, fluid::FluidRegistry,
     },
-    voxel::{chunk::VoxelChunk, chunk::CHUNK_SIZE},
+    voxel::{chunk::CHUNK_SIZE, chunk::VoxelChunk},
 };
 
 use self::{
-    caves::anchored_cave_region,
-    columns::sample_generation_columns,
-    density::sample_density_field,
-    features::rasterize_feature_pass,
-    fluids::rasterize_fluid_pass,
+    caves::anchored_cave_region, columns::sample_generation_columns, density::sample_density_field,
+    features::rasterize_feature_pass, fluids::rasterize_fluid_pass,
     materials::rasterize_material_pass,
 };
 use super::{
     biome_field::BiomeField,
-    generation_pipeline::{GenerationStage, GENERATION_STAGE_ORDER},
+    generation_pipeline::{GENERATION_STAGE_ORDER, GenerationStage},
     generation_region::generation_region_coord,
     hydrology::HydrologySurfaceSample,
     terrain::{chunk_y_bounds, surface_height_from_sample},
@@ -66,12 +60,10 @@ pub(crate) fn generate_chunk(
         hydrology.region_from_macro_terrain(
             IVec2::new(region_coord.x, region_coord.z),
             |position| {
-                let surface_position = IVec2::new(
-                    position.x.floor() as i32,
-                    position.y.floor() as i32,
-                );
-                let surface = biome_field
-                    .sample_surface(surface_position.as_vec2() + Vec2::splat(0.5));
+                let surface_position =
+                    IVec2::new(position.x.floor() as i32, position.y.floor() as i32);
+                let surface =
+                    biome_field.sample_surface(surface_position.as_vec2() + Vec2::splat(0.5));
                 let elevation = surface_height_from_sample(
                     surface_position,
                     dimension,
@@ -92,12 +84,7 @@ pub(crate) fn generate_chunk(
             },
         )
     });
-    let anchored_caves = anchored_cave_region(
-        region.as_ref(),
-        biome_field,
-        biomes,
-        feature_fields,
-    );
+    let anchored_caves = anchored_cave_region(region.as_ref(), biome_field, biomes, feature_fields);
     let columns = sample_generation_columns(chunk_origin, dimension, biomes, biome_field);
     let density = sample_density_field(
         chunk_origin,
@@ -119,19 +106,8 @@ pub(crate) fn generate_chunk(
         biome_field,
         region.as_ref(),
     );
-    rasterize_fluid_pass(
-        &mut chunk,
-        chunk_origin,
-        &density,
-        fluids,
-        region.as_ref(),
-    );
-    rasterize_feature_pass(
-        &mut chunk,
-        chunk_origin,
-        region.as_ref(),
-        biome_field,
-    );
+    rasterize_fluid_pass(&mut chunk, chunk_origin, &density, fluids, region.as_ref());
+    rasterize_feature_pass(&mut chunk, chunk_origin, region.as_ref(), biome_field);
 
     chunk
 }

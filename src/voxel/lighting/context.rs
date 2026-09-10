@@ -28,13 +28,7 @@ impl LightingContext {
         let column = IVec2::new(position.x, position.z);
         if !self.direct_sky_levels_by_column.contains_key(&column) {
             let highest_loaded_y = self.highest_loaded_y(world, position);
-            let levels = build_direct_sky_column(
-                world,
-                blocks,
-                fluids,
-                column,
-                highest_loaded_y,
-            );
+            let levels = build_direct_sky_column(world, blocks, fluids, column, highest_loaded_y);
             self.direct_sky_levels_by_column.insert(column, levels);
         }
 
@@ -47,10 +41,7 @@ impl LightingContext {
 
     fn highest_loaded_y(&mut self, world: &VoxelWorld, position: IVec3) -> Option<i32> {
         let size = CHUNK_SIZE as i32;
-        let chunk_column = IVec2::new(
-            position.x.div_euclid(size),
-            position.z.div_euclid(size),
-        );
+        let chunk_column = IVec2::new(position.x.div_euclid(size), position.z.div_euclid(size));
 
         if let Some(cached) = self.highest_loaded_y_by_chunk_column.get(&chunk_column) {
             return *cached;

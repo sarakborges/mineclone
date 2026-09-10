@@ -5,15 +5,12 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use serde::Deserialize;
 
+use self::validation::validate_biome_definition;
 use super::{
-    biome_density::BiomeDensityModifier,
-    biome_hydrology::BiomeHydrology,
-    biome_sky_layer::BiomeSkyLayerVisuals,
-    biome_terrain::BiomeTerrain,
-    color::Rgb,
+    biome_density::BiomeDensityModifier, biome_hydrology::BiomeHydrology,
+    biome_sky_layer::BiomeSkyLayerVisuals, biome_terrain::BiomeTerrain, color::Rgb,
     day_night_phase::DayNightPhases,
 };
-use self::validation::validate_biome_definition;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

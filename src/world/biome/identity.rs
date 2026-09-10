@@ -35,20 +35,12 @@ pub(super) fn resolve_surface_identity(
 
     if let Some(coast_id) = hydrology.coast_biome {
         push_influence(&mut influences, coast_id, hydrology.coast_weight);
-        push_influence(
-            &mut hydrology_influences,
-            coast_id,
-            hydrology.coast_weight,
-        );
+        push_influence(&mut hydrology_influences, coast_id, hydrology.coast_weight);
     }
 
     if let Some(ocean_id) = hydrology.ocean_biome {
         push_influence(&mut influences, ocean_id, hydrology.ocean_weight);
-        push_influence(
-            &mut hydrology_influences,
-            ocean_id,
-            hydrology.ocean_weight,
-        );
+        push_influence(&mut hydrology_influences, ocean_id, hydrology.ocean_weight);
     }
 
     normalize_influences(&mut influences);

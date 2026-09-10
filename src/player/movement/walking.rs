@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{player::camera::GameplayCamera, voxel::world::VoxelWorld};
 
 use super::{
-    collision::{move_axis, Axis},
+    collision::{Axis, move_axis},
     config::{WALK_ACCELERATION, WALK_DECELERATION, WALK_SPEED},
     flight::FlightState,
     smoothing::approach_velocity,
@@ -18,7 +18,12 @@ pub(super) fn walk(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
     world: Res<VoxelWorld>,
-    player: Single<(&mut Transform, &GameplayCamera, &FlightState, &mut WalkingState)>,
+    player: Single<(
+        &mut Transform,
+        &GameplayCamera,
+        &FlightState,
+        &mut WalkingState,
+    )>,
 ) {
     let (mut transform, camera, flight, mut walking) = player.into_inner();
 
@@ -63,10 +68,20 @@ pub(super) fn walk(
     );
 
     let velocity = walking.velocity;
-    if move_axis(&mut transform, &world, velocity.x * time.delta_secs(), Axis::X) {
+    if move_axis(
+        &mut transform,
+        &world,
+        velocity.x * time.delta_secs(),
+        Axis::X,
+    ) {
         walking.velocity.x = 0.0;
     }
-    if move_axis(&mut transform, &world, velocity.z * time.delta_secs(), Axis::Z) {
+    if move_axis(
+        &mut transform,
+        &world,
+        velocity.z * time.delta_secs(),
+        Axis::Z,
+    ) {
         walking.velocity.z = 0.0;
     }
 }

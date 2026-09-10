@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 
 use super::{
+    BiomeField, BiomeFieldSample, BiomeInfluence,
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS},
     selection::select_surface_biome_index,
     spatial::{smoothstep, surface_site_position, warp_surface_position},
-    BiomeField, BiomeFieldSample, BiomeInfluence,
 };
 
 impl BiomeField {
@@ -51,8 +51,7 @@ impl BiomeField {
         let mut weights = vec![0.0_f32; self.surface_biomes.len()];
         for (candidate_index, distance) in sites {
             let distance_gap = (distance - nearest_distance).max(0.0);
-            let border_progress =
-                1.0 - (distance_gap / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
+            let border_progress = 1.0 - (distance_gap / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
             let smooth_progress = smoothstep(border_progress);
             weights[candidate_index] = weights[candidate_index].max(smooth_progress);
         }

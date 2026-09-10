@@ -33,10 +33,8 @@ impl RenderDistanceSettings {
     }
 
     pub fn set_chunks(&mut self, chunks: i32) {
-        self.horizontal_chunks = chunks.clamp(
-            MIN_RENDER_DISTANCE_CHUNKS,
-            MAX_RENDER_DISTANCE_CHUNKS,
-        );
+        self.horizontal_chunks =
+            chunks.clamp(MIN_RENDER_DISTANCE_CHUNKS, MAX_RENDER_DISTANCE_CHUNKS);
     }
 
     pub fn set_vertical_chunks(&mut self, chunks: i32) {
@@ -103,10 +101,6 @@ mod tests {
         let center = IVec3::new(3, 10, -2);
         let coords = chunk_coords_in_volume(center, 2, 3);
 
-        assert!(
-            coords
-                .iter()
-                .all(|coord| (coord.y - center.y).abs() <= 3)
-        );
+        assert!(coords.iter().all(|coord| (coord.y - center.y).abs() <= 3));
     }
 }

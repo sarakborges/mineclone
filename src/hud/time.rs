@@ -12,7 +12,10 @@ pub struct TimeHudPlugin;
 impl Plugin for TimeHudPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_time_hud)
-            .add_systems(Update, update_time_hud.run_if(in_state(GameState::Gameplay)));
+            .add_systems(
+                Update,
+                update_time_hud.run_if(in_state(GameState::Gameplay)),
+            );
     }
 }
 

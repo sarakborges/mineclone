@@ -12,9 +12,9 @@ pub mod day_night_phase;
 pub mod dimension;
 pub mod dimension_hydrology;
 pub mod fluid;
-pub mod sky;
 mod json_file;
 mod loader;
+pub mod sky;
 
 use bevy::prelude::*;
 use loader::load_content;

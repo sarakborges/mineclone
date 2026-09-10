@@ -1,10 +1,12 @@
 use bevy::prelude::*;
 
 use super::{
+    BiomeField, BiomeFieldEntry, BiomeInfluence, VolumeBiomeAnchor, VolumeBiomeFieldSample,
     constants::{VOLUME_BORDER_MARGIN, VOLUME_SITE_SEARCH_RADIUS},
     selection::{select_tied_volume_index, select_volume_biome_index},
-    spatial::{hash_unit, lerp, smoothstep, volume_cell_hash, volume_site_position, warp_volume_position},
-    BiomeField, BiomeFieldEntry, BiomeInfluence, VolumeBiomeAnchor, VolumeBiomeFieldSample,
+    spatial::{
+        hash_unit, lerp, smoothstep, volume_cell_hash, volume_site_position, warp_volume_position,
+    },
 };
 
 impl BiomeField {
@@ -36,12 +38,9 @@ impl BiomeField {
 
                     let site = volume_site_position(cell, spacing, self.seed);
                     let hash = volume_cell_hash(cell, self.seed);
-                    let Some(candidate_index) = select_volume_biome_index(
-                        position.y,
-                        climate,
-                        hash,
-                        &self.volume_biomes,
-                    ) else {
+                    let Some(candidate_index) =
+                        select_volume_biome_index(position.y, climate, hash, &self.volume_biomes)
+                    else {
                         continue;
                     };
                     let radii = volume_site_radii(&self.volume_biomes[candidate_index], hash);
@@ -111,12 +110,9 @@ impl BiomeField {
                     let site = volume_site_position(cell, spacing, self.seed);
                     let hash = volume_cell_hash(cell, self.seed);
                     let climate = self.climate.sample(Vec2::new(site.x, site.z));
-                    let Some(index) = select_volume_biome_index(
-                        site.y,
-                        climate,
-                        hash,
-                        &self.volume_biomes,
-                    ) else {
+                    let Some(index) =
+                        select_volume_biome_index(site.y, climate, hash, &self.volume_biomes)
+                    else {
                         continue;
                     };
                     let radii = volume_site_radii(&self.volume_biomes[index], hash);
@@ -170,16 +166,9 @@ fn volume_site_radii(biome: &BiomeFieldEntry, hash: u64) -> Vec3 {
 }
 
 fn normalized_ellipsoid_distance(delta: Vec3, radii: Vec3) -> f32 {
-    let normalized = Vec3::new(
-        delta.x / radii.x,
-        delta.y / radii.y,
-        delta.z / radii.z,
-    );
+    let normalized = Vec3::new(delta.x / radii.x, delta.y / radii.y, delta.z / radii.z);
 
-    (normalized.x * normalized.x
-        + normalized.y * normalized.y
-        + normalized.z * normalized.z)
-        .sqrt()
+    (normalized.x * normalized.x + normalized.y * normalized.y + normalized.z * normalized.z).sqrt()
 }
 
 fn volume_site_strength(normalized_distance: f32) -> f32 {
@@ -191,8 +180,7 @@ fn volume_site_strength(normalized_distance: f32) -> f32 {
         return 0.0;
     }
 
-    let progress =
-        1.0 - ((normalized_distance - 1.0) / VOLUME_BORDER_MARGIN).clamp(0.0, 1.0);
+    let progress = 1.0 - ((normalized_distance - 1.0) / VOLUME_BORDER_MARGIN).clamp(0.0, 1.0);
     smoothstep(progress)
 }
 

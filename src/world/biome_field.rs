@@ -9,16 +9,11 @@ mod volume;
 use bevy::prelude::*;
 
 use crate::content::{
-    biome::{
-        BiomeClimate, BiomeKind, BiomeRegistry, BiomeSize, BiomeVerticalRange,
-    },
+    biome::{BiomeClimate, BiomeKind, BiomeRegistry, BiomeSize, BiomeVerticalRange},
     dimension::DimensionDefinition,
 };
 
-use self::{
-    constants::VOLUME_SITE_GAP,
-    spatial::surface_minimum_spacing,
-};
+use self::{constants::VOLUME_SITE_GAP, spatial::surface_minimum_spacing};
 use super::macro_climate::{MacroClimateField, MacroClimateSample};
 
 #[derive(Clone)]

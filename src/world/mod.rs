@@ -25,17 +25,17 @@ pub(crate) mod world_feature_fields;
 use bevy::prelude::*;
 
 use crate::app::game_state::GameState;
-use biome::{track_current_biome, CurrentBiome};
-use chunk_rendering::{clear_chunk_render_pool, ChunkRenderPool};
+use biome::{CurrentBiome, track_current_biome};
+use chunk_rendering::{ChunkRenderPool, clear_chunk_render_pool};
 use chunk_unloading::unload_chunk_meshes;
 use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
 use render_distance::RenderDistanceSettings;
 pub(crate) use save::{InMemoryWorldSave, WorldLoadMode};
 pub(crate) use seed::WorldSeed;
-use setup::{begin_world_loading, setup_world};
 pub(crate) use setup::WorldLoadingState;
-use streaming::{reset_chunk_streaming, stream_chunks, ChunkStreamingState};
+use setup::{begin_world_loading, setup_world};
+use streaming::{ChunkStreamingState, reset_chunk_streaming, stream_chunks};
 
 pub struct WorldPlugin;
 

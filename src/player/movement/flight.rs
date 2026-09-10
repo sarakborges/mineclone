@@ -3,10 +3,10 @@ use bevy::prelude::*;
 use crate::{player::camera::GameplayCamera, voxel::world::VoxelWorld};
 
 use super::{
-    collision::{move_axis, Axis},
+    collision::{Axis, move_axis},
     config::{
-        FLIGHT_TOGGLE_WINDOW_SECONDS, FLY_ACCELERATION, FLY_DECELERATION,
-        FLY_SPEED_MULTIPLIER, WALK_SPEED,
+        FLIGHT_TOGGLE_WINDOW_SECONDS, FLY_ACCELERATION, FLY_DECELERATION, FLY_SPEED_MULTIPLIER,
+        WALK_SPEED,
     },
     gravity::GravityState,
     smoothing::approach_velocity,
@@ -118,13 +118,28 @@ pub(super) fn move_flying(
 
     let velocity = flight.velocity;
 
-    if move_axis(&mut transform, &world, velocity.x * time.delta_secs(), Axis::X) {
+    if move_axis(
+        &mut transform,
+        &world,
+        velocity.x * time.delta_secs(),
+        Axis::X,
+    ) {
         flight.velocity.x = 0.0;
     }
-    if move_axis(&mut transform, &world, velocity.z * time.delta_secs(), Axis::Z) {
+    if move_axis(
+        &mut transform,
+        &world,
+        velocity.z * time.delta_secs(),
+        Axis::Z,
+    ) {
         flight.velocity.z = 0.0;
     }
-    if move_axis(&mut transform, &world, velocity.y * time.delta_secs(), Axis::Y) {
+    if move_axis(
+        &mut transform,
+        &world,
+        velocity.y * time.delta_secs(),
+        Axis::Y,
+    ) {
         flight.velocity.y = 0.0;
     }
 }

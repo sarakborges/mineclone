@@ -271,10 +271,7 @@ fn opaque_chunk() -> VoxelChunk {
                     x,
                     y,
                     z,
-                    Some(VoxelCell::new(
-                        OPAQUE_BLOCK_ID,
-                        TextureRotation::default(),
-                    )),
+                    Some(VoxelCell::new(OPAQUE_BLOCK_ID, TextureRotation::default())),
                 );
             }
         }

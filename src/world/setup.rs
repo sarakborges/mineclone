@@ -12,27 +12,23 @@ use crate::{
     rendering::terrain_material::TerrainMaterial,
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
     voxel::{
-        chunk::CHUNK_SIZE,
-        coordinates::split_dimension_position,
-        lighting::initialize_chunk_lighting,
-        world::VoxelWorld,
+        chunk::CHUNK_SIZE, coordinates::split_dimension_position,
+        lighting::initialize_chunk_lighting, world::VoxelWorld,
     },
 };
 
 use super::{
+    InMemoryWorldSave, WorldLoadMode, WorldSeed,
     biome_field::BiomeField,
     chunk_rendering::{
-        refresh_adjacent_chunk_meshes, refresh_chunk_mesh, spawn_chunk_mesh, ChunkRenderPool,
-        FluidMaterials, TerrainMaterials,
+        ChunkRenderPool, FluidMaterials, TerrainMaterials, refresh_adjacent_chunk_meshes,
+        refresh_chunk_mesh, spawn_chunk_mesh,
     },
     dimension::CurrentDimension,
     generation::generate_chunk,
     render_distance::chunk_coords_in_volume,
     terrain::surface_height,
     world_feature_fields::WorldFeatureFields,
-    InMemoryWorldSave,
-    WorldLoadMode,
-    WorldSeed,
 };
 
 const INITIAL_HORIZONTAL_RADIUS_CHUNKS: i32 = 5;
@@ -129,7 +125,10 @@ pub fn begin_world_loading(
             save.begin_new_world(*seed, &current_dimension.id);
         }
         WorldLoadMode::Load => {
-            assert!(save.has_world(), "cannot load a world that is not saved in memory");
+            assert!(
+                save.has_world(),
+                "cannot load a world that is not saved in memory"
+            );
             assert!(
                 existing_world.is_some(),
                 "saved world voxel state is missing from memory"
@@ -264,18 +263,14 @@ pub fn setup_world(
         loading_state.generated += 1;
     }
 
-    if loading_state.generated >= loading_state.coords.len()
-        && !loading_state.transition_requested
+    if loading_state.generated >= loading_state.coords.len() && !loading_state.transition_requested
     {
         loading_state.transition_requested = true;
         transition.request(ScreenTransitionTarget::game(GameState::Gameplay));
     }
 }
 
-fn average_terrain_material(
-    dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
-) -> (f32, f32) {
+fn average_terrain_material(dimension: &DimensionDefinition, biomes: &BiomeRegistry) -> (f32, f32) {
     let mut roughness = 0.0;
     let mut metallic = 0.0;
     let mut count = 0.0;

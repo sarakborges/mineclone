@@ -70,11 +70,9 @@ impl VoxelWorld {
 
         let (chunk_coord, local_position) = split_world_position(world_position);
 
-        self.chunks.get(&chunk_coord)?.cell_at(
-            local_position.x,
-            local_position.y,
-            local_position.z,
-        )
+        self.chunks
+            .get(&chunk_coord)?
+            .cell_at(local_position.x, local_position.y, local_position.z)
     }
 
     pub fn fluid_at(&self, world_position: IVec3) -> Option<FluidCell> {

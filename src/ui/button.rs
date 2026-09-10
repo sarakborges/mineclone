@@ -97,10 +97,7 @@ fn button_gradient(level: f32) -> BackgroundGradient {
             ),
             76.0,
         ),
-        ColorStop::percent(
-            Color::srgba(0.14, 0.35, 0.62, 0.06 + 0.04 * lift),
-            90.0,
-        ),
+        ColorStop::percent(Color::srgba(0.14, 0.35, 0.62, 0.06 + 0.04 * lift), 90.0),
         ColorStop::percent(Color::srgba(0.14, 0.35, 0.62, 0.0), 100.0),
     ]))
 }

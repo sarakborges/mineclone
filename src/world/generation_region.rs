@@ -3,9 +3,7 @@ use bevy::prelude::*;
 use crate::voxel::chunk::CHUNK_SIZE;
 
 use super::{
-    cave_connectivity::CaveConnectivityRegion,
-    geology::GeologyRegion,
-    hydrology::HydrologyRegion,
+    cave_connectivity::CaveConnectivityRegion, geology::GeologyRegion, hydrology::HydrologyRegion,
 };
 
 pub const GENERATION_REGION_SIZE_CHUNKS: i32 = 8;
@@ -21,7 +19,10 @@ pub struct GenerationRegion {
 pub fn generation_region_coord(chunk_coord: IVec3) -> IVec3 {
     IVec3::new(
         chunk_coord.x.div_euclid(GENERATION_REGION_SIZE_CHUNKS),
-        chunk_coord.y.div_euclid(GENERATION_REGION_SIZE_CHUNKS).max(0),
+        chunk_coord
+            .y
+            .div_euclid(GENERATION_REGION_SIZE_CHUNKS)
+            .max(0),
         chunk_coord.z.div_euclid(GENERATION_REGION_SIZE_CHUNKS),
     )
 }

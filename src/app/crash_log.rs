@@ -2,13 +2,13 @@ use std::{
     any::Any,
     backtrace::Backtrace,
     env,
-    fs::{create_dir_all, OpenOptions},
+    fs::{OpenOptions, create_dir_all},
     io::Write,
     panic::{self, PanicHookInfo},
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, Ordering},
         OnceLock,
+        atomic::{AtomicBool, Ordering},
     },
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -75,7 +75,12 @@ fn initialize_session_log() -> PathBuf {
         let _ = writeln!(file, "START");
         let _ = writeln!(file, "Started (UTC): {}", timestamp.display);
         let _ = writeln!(file, "Process ID: {}", std::process::id());
-        let _ = writeln!(file, "Platform: {} / {}", env::consts::OS, env::consts::ARCH);
+        let _ = writeln!(
+            file,
+            "Platform: {} / {}",
+            env::consts::OS,
+            env::consts::ARCH
+        );
         let _ = writeln!(file);
         let _ = file.flush();
     }
@@ -163,7 +168,11 @@ fn write_native_exception(code: u32, address: usize) -> bool {
     let _ = writeln!(file, "WINDOWS NATIVE EXCEPTION");
     let _ = writeln!(file, "========================");
     let _ = writeln!(file, "Timestamp (UTC): {}", timestamp.display);
-    let _ = writeln!(file, "Exception code: 0x{code:08X} ({})", windows_exception_name(code));
+    let _ = writeln!(
+        file,
+        "Exception code: 0x{code:08X} ({})",
+        windows_exception_name(code)
+    );
     let _ = writeln!(file, "Exception address: 0x{address:016X}");
     let _ = writeln!(file);
 
@@ -211,8 +220,7 @@ fn panic_payload_message(payload: &(dyn Any + Send)) -> String {
 fn runtime_root() -> PathBuf {
     if let Ok(executable) = env::current_exe() {
         if let Some(directory) = executable.parent() {
-            if directory.join(DATA_DIRECTORY).is_dir()
-                && directory.join(ASSETS_DIRECTORY).is_dir()
+            if directory.join(DATA_DIRECTORY).is_dir() && directory.join(ASSETS_DIRECTORY).is_dir()
             {
                 return directory.to_path_buf();
             }
@@ -238,9 +246,8 @@ fn format_timestamp(time: SystemTime) -> Timestamp {
     let minute = seconds_of_day % 3_600 / 60;
     let second = seconds_of_day % 60;
 
-    let file_name = format!(
-        "{year:04}-{month:02}-{day:02}_{hour:02}-{minute:02}-{second:02}-{nanoseconds:09}"
-    );
+    let file_name =
+        format!("{year:04}-{month:02}-{day:02}_{hour:02}-{minute:02}-{second:02}-{nanoseconds:09}");
     let display = format!(
         "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{nanoseconds:09}Z"
     );
@@ -253,8 +260,7 @@ fn civil_date_from_days(days_since_epoch: i64) -> (i64, i64, i64) {
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
     let day_of_era = z - era * 146_097;
     let year_of_era =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096)
-            / 365;
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
     let mut year = year_of_era + era * 400;
     let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
     let month_prime = (5 * day_of_year + 2) / 153;

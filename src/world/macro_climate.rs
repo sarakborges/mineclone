@@ -33,10 +33,7 @@ impl MacroClimateField {
                 position * 0.0008,
                 self.seed ^ 0xa409_3822_299f_31d0,
             ),
-            erosion: normalized_fractal_noise(
-                position * 0.0040,
-                self.seed ^ 0x082e_fa98_ec4e_6c89,
-            ),
+            erosion: normalized_fractal_noise(position * 0.0040, self.seed ^ 0x082e_fa98_ec4e_6c89),
         }
     }
 }
@@ -52,8 +49,7 @@ fn fractal_noise(position: Vec2, seed: u64) -> f32 {
     let mut frequency = 1.0;
 
     for octave in 0..CLIMATE_OCTAVES {
-        let octave_seed =
-            seed.wrapping_add((octave as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15));
+        let octave_seed = seed.wrapping_add((octave as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15));
         value += value_noise(position * frequency, octave_seed) * amplitude;
         normalization += amplitude;
         amplitude *= 0.5;

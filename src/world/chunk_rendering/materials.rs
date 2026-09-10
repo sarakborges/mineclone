@@ -111,11 +111,7 @@ impl TerrainMaterials {
         Self { blocks }
     }
 
-    pub(super) fn for_face(
-        &self,
-        block_id: &str,
-        face: BlockFace,
-    ) -> &Handle<TerrainMaterial> {
+    pub(super) fn for_face(&self, block_id: &str, face: BlockFace) -> &Handle<TerrainMaterial> {
         self.blocks
             .get(block_id)
             .unwrap_or_else(|| panic!("missing terrain materials for block: {block_id}"))
@@ -151,10 +147,7 @@ pub struct FluidMaterials {
 }
 
 impl FluidMaterials {
-    pub fn from_registry(
-        fluids: &FluidRegistry,
-        materials: &mut Assets<TerrainMaterial>,
-    ) -> Self {
+    pub fn from_registry(fluids: &FluidRegistry, materials: &mut Assets<TerrainMaterial>) -> Self {
         let materials = fluids
             .iter()
             .map(|(fluid_id, definition)| {

@@ -2,7 +2,10 @@ use bevy::prelude::*;
 
 use crate::{
     content::fluid::FluidRegistry,
-    voxel::{chunk::{CHUNK_SIZE, VoxelChunk}, fluid::FluidCell},
+    voxel::{
+        chunk::{CHUNK_SIZE, VoxelChunk},
+        fluid::FluidCell,
+    },
     world::generation_region::GenerationRegion,
 };
 
@@ -37,12 +40,7 @@ pub(super) fn rasterize_fluid_pass(
                     continue;
                 }
 
-                chunk.set_fluid(
-                    local_x,
-                    local_y,
-                    local_z,
-                    Some(FluidCell::source(fluid_id)),
-                );
+                chunk.set_fluid(local_x, local_y, local_z, Some(FluidCell::source(fluid_id)));
             }
         }
     }

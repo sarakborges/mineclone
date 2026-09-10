@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use crate::app::game_state::GameState;
 use clouds::{setup_cloud_assets, spawn_clouds, update_clouds};
 use stars::{setup_star_assets, spawn_stars, update_stars};
-use state::{update_sky_layer_visuals, SkyLayerVisualState};
+use state::{SkyLayerVisualState, update_sky_layer_visuals};
 
 pub struct SkyLayersPlugin;
 

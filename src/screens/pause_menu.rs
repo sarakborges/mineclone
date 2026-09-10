@@ -1,16 +1,11 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{
-        game_state::GameState,
-        pause_state::PauseState,
-        settings_state::SettingsState,
-    },
+    app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     player::camera::GameplayCamera,
     ui::{
         button::menu_button,
-        surface,
-        theme,
+        surface, theme,
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
     },

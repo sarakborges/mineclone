@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{
-    content::biome::BiomeRegistry,
-    world::biome::CurrentBiome,
-};
+use crate::{content::biome::BiomeRegistry, world::biome::CurrentBiome};
 
 #[derive(Component)]
 pub(super) struct BiomeHudText;

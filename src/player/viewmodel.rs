@@ -110,12 +110,7 @@ fn spawn_viewmodel(
                                     ARM_SIZE.y * 0.5 + 0.06,
                                     -0.11,
                                 ))
-                                .with_rotation(Quat::from_euler(
-                                    EulerRot::XYZ,
-                                    0.12,
-                                    -0.62,
-                                    -0.06,
-                                ))
+                                .with_rotation(Quat::from_euler(EulerRot::XYZ, 0.12, -0.62, -0.06))
                                 .with_scale(Vec3::splat(HELD_BLOCK_SCALE)),
                                 if selected_block_id.is_some() {
                                     Visibility::Visible
@@ -187,13 +182,7 @@ fn sync_held_block(
         *visibility = Visibility::Visible;
 
         for (face, mut material) in &mut faces {
-            material.0 = block_face_material(
-                face.face,
-                block,
-                &asset_server,
-                &mut materials,
-                1.0,
-            );
+            material.0 = block_face_material(face.face, block, &asset_server, &mut materials, 1.0);
         }
     }
 }
@@ -221,21 +210,13 @@ fn animate_viewmodel(
         match action {
             ViewModelAction::Break => {
                 animated.translation += Vec3::new(-0.06, -0.10, -0.06) * wave;
-                animated.rotation *= Quat::from_euler(
-                    EulerRot::XYZ,
-                    -0.68 * wave,
-                    0.12 * wave,
-                    -0.34 * wave,
-                );
+                animated.rotation *=
+                    Quat::from_euler(EulerRot::XYZ, -0.68 * wave, 0.12 * wave, -0.34 * wave);
             }
             ViewModelAction::Place => {
                 animated.translation += Vec3::new(-0.03, 0.01, -0.14) * wave;
-                animated.rotation *= Quat::from_euler(
-                    EulerRot::XYZ,
-                    -0.18 * wave,
-                    0.05 * wave,
-                    -0.08 * wave,
-                );
+                animated.rotation *=
+                    Quat::from_euler(EulerRot::XYZ, -0.18 * wave, 0.05 * wave, -0.08 * wave);
             }
         }
 
@@ -253,6 +234,10 @@ fn animate_viewmodel(
 }
 
 fn base_viewmodel_transform() -> Transform {
-    Transform::from_translation(Vec3::new(0.64, -0.78, -1.12))
-        .with_rotation(Quat::from_euler(EulerRot::XYZ, -0.22, -0.10, 0.28))
+    Transform::from_translation(Vec3::new(0.64, -0.78, -1.12)).with_rotation(Quat::from_euler(
+        EulerRot::XYZ,
+        -0.22,
+        -0.10,
+        0.28,
+    ))
 }

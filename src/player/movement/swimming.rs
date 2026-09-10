@@ -1,15 +1,14 @@
 use bevy::prelude::*;
 
 use crate::{
-    player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT, PLAYER_HEIGHT},
+    player::{PLAYER_EYE_HEIGHT, PLAYER_HEIGHT, camera::GameplayCamera},
     voxel::world::VoxelWorld,
 };
 
 use super::{
-    collision::{move_axis, Axis},
+    collision::{Axis, move_axis},
     config::{
-        SWIM_ASCEND_SPEED, SWIM_BUOYANCY_SPEED, SWIM_DESCEND_SPEED,
-        SWIM_VERTICAL_ACCELERATION,
+        SWIM_ASCEND_SPEED, SWIM_BUOYANCY_SPEED, SWIM_DESCEND_SPEED, SWIM_VERTICAL_ACCELERATION,
     },
     flight::FlightState,
     gravity::GravityState,
@@ -65,11 +64,7 @@ pub(super) fn swim_vertical(
 
 pub(super) fn player_in_fluid(eye_position: Vec3, world: &VoxelWorld) -> bool {
     let feet_y = eye_position.y - PLAYER_EYE_HEIGHT;
-    let sample = Vec3::new(
-        eye_position.x,
-        feet_y + PLAYER_HEIGHT * 0.5,
-        eye_position.z,
-    );
+    let sample = Vec3::new(eye_position.x, feet_y + PLAYER_HEIGHT * 0.5, eye_position.z);
     let voxel = sample.floor().as_ivec3();
     let Some(fluid) = world.fluid_at(voxel) else {
         return false;

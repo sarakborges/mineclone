@@ -6,9 +6,9 @@ use crate::{
 };
 
 use super::{
+    BiomeFieldEntry,
     constants::CLIMATE_BLEND_MARGIN,
     spatial::{biome_index, cell_hash, hash_unit},
-    BiomeFieldEntry,
 };
 
 pub(super) fn select_surface_biome_index(

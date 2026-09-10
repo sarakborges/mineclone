@@ -36,7 +36,10 @@ impl PlayerHotbar {
     }
 
     fn select(&mut self, slot: usize) {
-        assert!(slot < HOTBAR_SLOT_COUNT, "hotbar slot must be between 0 and 8");
+        assert!(
+            slot < HOTBAR_SLOT_COUNT,
+            "hotbar slot must be between 0 and 8"
+        );
         self.selected_slot = slot;
     }
 }

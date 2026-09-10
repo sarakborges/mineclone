@@ -45,9 +45,7 @@ impl WorldFeatureFields {
     }
 
     pub fn region(&self, coord: IVec3) -> Arc<GenerationRegion> {
-        self.region_with_hydrology(coord, |field| {
-            field.region(IVec2::new(coord.x, coord.z))
-        })
+        self.region_with_hydrology(coord, |field| field.region(IVec2::new(coord.x, coord.z)))
     }
 
     pub fn region_with_hydrology(

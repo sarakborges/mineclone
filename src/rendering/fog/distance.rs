@@ -1,8 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    player::camera::GameplayCamera,
-    voxel::chunk::CHUNK_SIZE,
+    player::camera::GameplayCamera, voxel::chunk::CHUNK_SIZE,
     world::render_distance::RenderDistanceSettings,
 };
 

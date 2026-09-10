@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{
-    content::dimension::DimensionRegistry,
-    world::dimension::CurrentDimension,
-};
+use crate::{content::dimension::DimensionRegistry, world::dimension::CurrentDimension};
 
 #[derive(Component)]
 pub(super) struct DimensionHudText;

@@ -2,11 +2,7 @@ use bevy::{light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::{
-        biome::BiomeRegistry,
-        block::BlockRegistry,
-        builtin_ids::GRASS_BLOCK_ID,
-    },
+    content::{biome::BiomeRegistry, block::BlockRegistry, builtin_ids::GRASS_BLOCK_ID},
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         fluid_mesh::build_fluid_meshes,
@@ -16,7 +12,10 @@ use crate::{
     world::biome_field::BiomeField,
 };
 
-use super::{materials::{FluidMaterials, TerrainMaterials}, pool::ChunkRenderPool};
+use super::{
+    materials::{FluidMaterials, TerrainMaterials},
+    pool::ChunkRenderPool,
+};
 
 pub fn spawn_chunk_mesh(
     commands: &mut Commands,

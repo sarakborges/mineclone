@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT};
+use crate::player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera};
 
 use super::gravity::GravityState;
 

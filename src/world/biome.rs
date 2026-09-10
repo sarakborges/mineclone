@@ -2,10 +2,7 @@ mod identity;
 
 use bevy::prelude::*;
 
-use crate::{
-    content::builtin_ids::PLAINS_BIOME_ID,
-    player::camera::GameplayCamera,
-};
+use crate::{content::builtin_ids::PLAINS_BIOME_ID, player::camera::GameplayCamera};
 
 use self::identity::{replace_influences, resolve_final_identity, resolve_surface_identity};
 use super::{biome_field::BiomeField, world_feature_fields::WorldFeatureFields};
@@ -80,10 +77,7 @@ pub fn track_current_biome(
     if let Some(volume) = volume {
         current_biome.volume_id = Some(volume.primary_id.to_owned());
         current_biome.volume_strength = volume.strength;
-        replace_influences(
-            &mut current_biome.volume_influences,
-            &volume.influences,
-        );
+        replace_influences(&mut current_biome.volume_influences, &volume.influences);
         resolve_final_identity(
             &mut current_biome,
             resolved_surface.influences,

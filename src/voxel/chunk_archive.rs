@@ -70,8 +70,7 @@ impl ArchivedChunk {
                 continue;
             };
 
-            fluid_occupancy[index / u64::BITS as usize] |=
-                1_u64 << (index % u64::BITS as usize);
+            fluid_occupancy[index / u64::BITS as usize] |= 1_u64 << (index % u64::BITS as usize);
             fluid_cells.push(ArchivedFluidCell {
                 fluid_id: fluid.fluid_id,
                 level: fluid.level,

@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::app::{game_state::GameState, pause_state::PauseState};
 use cursor::{capture_cursor, handle_cursor_grab, handle_window_focus, release_cursor};
-use look::{drain_or_apply_mouse_look, MouseLookInputState};
+use look::{MouseLookInputState, drain_or_apply_mouse_look};
 
 mod cursor;
 mod look;

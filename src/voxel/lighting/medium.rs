@@ -13,11 +13,7 @@ pub(super) fn medium_dampening(
     block_dampening(world, blocks, position).max(fluid_dampening(world, fluids, position))
 }
 
-pub(super) fn block_emission(
-    world: &VoxelWorld,
-    blocks: &BlockRegistry,
-    position: IVec3,
-) -> u8 {
+pub(super) fn block_emission(world: &VoxelWorld, blocks: &BlockRegistry, position: IVec3) -> u8 {
     let Some(block_id) = world.block_id_at(position) else {
         return 0;
     };

@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{
-    player::camera::GameplayCamera,
-    world::render_distance::RenderDistanceSettings,
-};
+use crate::{player::camera::GameplayCamera, world::render_distance::RenderDistanceSettings};
 
 use super::distance::fog_falloff;
 use crate::rendering::environment::EnvironmentVisualState;

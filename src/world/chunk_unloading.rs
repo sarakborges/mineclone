@@ -1,22 +1,17 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::{
-        biome::BiomeRegistry,
-        block::BlockRegistry,
-        fluid::FluidRegistry,
-    },
-    player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
+    content::{biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry},
+    player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
-        coordinates::split_dimension_position,
-        lighting::relight_after_chunk_unloads,
+        coordinates::split_dimension_position, lighting::relight_after_chunk_unloads,
         world::VoxelWorld,
     },
 };
 
 use super::{
     biome_field::BiomeField,
-    chunk_rendering::{refresh_chunk_mesh, ChunkRenderPool, FluidMaterials, TerrainMaterials},
+    chunk_rendering::{ChunkRenderPool, FluidMaterials, TerrainMaterials, refresh_chunk_mesh},
     render_distance::RenderDistanceSettings,
 };
 

@@ -46,11 +46,7 @@ impl CaveConnectivityField {
         }
     }
 
-    pub fn region_from_anchors(
-        &self,
-        coord: IVec3,
-        anchors: &[Vec3],
-    ) -> CaveConnectivityRegion {
+    pub fn region_from_anchors(&self, coord: IVec3, anchors: &[Vec3]) -> CaveConnectivityRegion {
         if coord.y < 0 || anchors.len() < 2 {
             return self.region(coord);
         }
@@ -138,15 +134,18 @@ mod tests {
     #[test]
     fn connector_regions_are_deterministic_and_never_negative_y() {
         let field = CaveConnectivityField::new(42);
-        let anchors = [
-            Vec3::new(10.0, 20.0, 10.0),
-            Vec3::new(80.0, 30.0, 20.0),
-        ];
+        let anchors = [Vec3::new(10.0, 20.0, 10.0), Vec3::new(80.0, 30.0, 20.0)];
         let first = field.region_from_anchors(IVec3::ZERO, &anchors);
         let second = field.region_from_anchors(IVec3::ZERO, &anchors);
 
-        assert_eq!(first.connector_graph.nodes().len(), second.connector_graph.nodes().len());
-        assert_eq!(first.connector_graph.edges().len(), second.connector_graph.edges().len());
+        assert_eq!(
+            first.connector_graph.nodes().len(),
+            second.connector_graph.nodes().len()
+        );
+        assert_eq!(
+            first.connector_graph.edges().len(),
+            second.connector_graph.edges().len()
+        );
 
         for (left, right) in first
             .connector_graph
@@ -164,10 +163,7 @@ mod tests {
         let field = CaveConnectivityField::new(42);
         let region = field.region_from_anchors(
             IVec3::ZERO,
-            &[
-                Vec3::new(10.0, 20.0, 10.0),
-                Vec3::new(80.0, 30.0, 20.0),
-            ],
+            &[Vec3::new(10.0, 20.0, 10.0), Vec3::new(80.0, 30.0, 20.0)],
         );
 
         assert_eq!(region.connector_graph.nodes().len(), 2);
@@ -179,10 +175,7 @@ mod tests {
         let field = CaveConnectivityField::new(42);
         let region = field.region_from_anchors(
             IVec3::ZERO,
-            &[
-                Vec3::ZERO,
-                Vec3::new(MAX_CONNECTOR_LENGTH + 1.0, 0.0, 0.0),
-            ],
+            &[Vec3::ZERO, Vec3::new(MAX_CONNECTOR_LENGTH + 1.0, 0.0, 0.0)],
         );
 
         assert!(region.connector_graph.edges().is_empty());
@@ -203,10 +196,7 @@ mod tests {
     #[test]
     fn connector_geometry_does_not_depend_on_requesting_region() {
         let field = CaveConnectivityField::new(42);
-        let anchors = [
-            Vec3::new(100.0, 40.0, 20.0),
-            Vec3::new(180.0, 40.0, 20.0),
-        ];
+        let anchors = [Vec3::new(100.0, 40.0, 20.0), Vec3::new(180.0, 40.0, 20.0)];
         let left = field.region_from_anchors(IVec3::ZERO, &anchors);
         let right = field.region_from_anchors(IVec3::X, &anchors);
         let sample_position = Vec3::new(128.0, 40.0, 20.0);

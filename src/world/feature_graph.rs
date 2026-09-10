@@ -53,16 +53,16 @@ impl FeatureGraph {
         index
     }
 
-    pub fn add_edge(
-        &mut self,
-        from: usize,
-        to: usize,
-        start_radius: f32,
-        end_radius: f32,
-    ) {
-        assert!(from < self.nodes.len(), "feature edge source node is missing");
+    pub fn add_edge(&mut self, from: usize, to: usize, start_radius: f32, end_radius: f32) {
+        assert!(
+            from < self.nodes.len(),
+            "feature edge source node is missing"
+        );
         assert!(to < self.nodes.len(), "feature edge target node is missing");
-        assert!(start_radius > 0.0, "feature edge start radius must be positive");
+        assert!(
+            start_radius > 0.0,
+            "feature edge start radius must be positive"
+        );
         assert!(end_radius > 0.0, "feature edge end radius must be positive");
 
         self.edges.push(FeatureEdge {

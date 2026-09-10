@@ -10,11 +10,8 @@ use crate::{
         typography,
     },
     world::{
-        biome::CurrentBiome,
+        InMemoryWorldSave, WorldLoadMode, WorldSeed, biome::CurrentBiome,
         dimension::CurrentDimension,
-        InMemoryWorldSave,
-        WorldLoadMode,
-        WorldSeed,
     },
 };
 
@@ -89,10 +86,7 @@ fn setup_starting_screen(mut commands: Commands, asset_server: Res<AssetServer>)
                     ));
 
                     content.spawn(menu_button("New World", StartingScreenAction::NewWorld));
-                    content.spawn(menu_button(
-                        "Load Worlds",
-                        StartingScreenAction::LoadWorlds,
-                    ));
+                    content.spawn(menu_button("Load Worlds", StartingScreenAction::LoadWorlds));
                     content.spawn(menu_button("Settings", StartingScreenAction::Settings));
                     content.spawn(menu_button("Exit Game", StartingScreenAction::ExitGame));
                 });

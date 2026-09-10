@@ -5,7 +5,7 @@ use crate::{
     world::{
         biome_field::BiomeField,
         cave_connectivity::CaveConnectivityRegion,
-        generation_region::{generation_region_world_bounds, GenerationRegion},
+        generation_region::{GenerationRegion, generation_region_world_bounds},
         world_feature_fields::WorldFeatureFields,
     },
 };

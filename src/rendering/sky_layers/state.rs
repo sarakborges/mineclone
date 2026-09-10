@@ -39,8 +39,16 @@ pub(super) fn update_sky_layer_visuals(
 ) {
     let mut star_density = 0.0;
     let mut cloud_density = 0.0;
-    let mut star_color = Rgb { r: 0.0, g: 0.0, b: 0.0 };
-    let mut cloud_color = Rgb { r: 0.0, g: 0.0, b: 0.0 };
+    let mut star_color = Rgb {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+    };
+    let mut cloud_color = Rgb {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+    };
 
     for influence in &current_biome.influences {
         let Some(biome) = biomes.get(&influence.id) else {

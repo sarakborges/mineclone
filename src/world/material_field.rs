@@ -1,7 +1,4 @@
-use crate::content::{
-    biome::BiomeRegistry,
-    block_id::intern_block_id,
-};
+use crate::content::{biome::BiomeRegistry, block_id::intern_block_id};
 
 use super::{
     biome_field::{BiomeFieldSample, VolumeBiomeFieldSample},
@@ -58,7 +55,10 @@ fn strongest_material<'registry, 'id>(
             let biome = biomes
                 .get(biome_id)
                 .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
-            biome.solid_block.as_deref().map(|block_id| (block_id, weight))
+            biome
+                .solid_block
+                .as_deref()
+                .map(|block_id| (block_id, weight))
         })
         .max_by(|(_, left), (_, right)| left.total_cmp(right))
         .map(|(block_id, _)| block_id)

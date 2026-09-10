@@ -12,7 +12,10 @@ pub struct TargetHudPlugin;
 impl Plugin for TargetHudPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_target_hud)
-            .add_systems(Update, update_target_hud.run_if(in_state(GameState::Gameplay)));
+            .add_systems(
+                Update,
+                update_target_hud.run_if(in_state(GameState::Gameplay)),
+            );
     }
 }
 

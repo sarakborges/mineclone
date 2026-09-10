@@ -3,11 +3,8 @@ mod pause;
 use bevy::prelude::*;
 
 use crate::player::{
-    camera::PlayerCameraPlugin,
-    hotbar::PlayerHotbarPlugin,
-    movement::PlayerMovementPlugin,
-    viewmodel::PlayerViewModelPlugin,
-    PlayerPlugin,
+    PlayerPlugin, camera::PlayerCameraPlugin, hotbar::PlayerHotbarPlugin,
+    movement::PlayerMovementPlugin, viewmodel::PlayerViewModelPlugin,
 };
 use pause::PausePlugin;
 

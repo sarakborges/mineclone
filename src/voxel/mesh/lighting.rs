@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-use crate::voxel::{
-    light::VoxelLight,
-    world::VoxelWorld,
-};
+use crate::voxel::{light::VoxelLight, world::VoxelWorld};
 
 use super::BlockFace;
 
@@ -14,11 +11,7 @@ pub(crate) struct FaceLighting {
     pub(crate) ambient_occlusion: [f32; 4],
 }
 
-pub(crate) fn face_lighting(
-    world: &VoxelWorld,
-    voxel: IVec3,
-    face: BlockFace,
-) -> FaceLighting {
+pub(crate) fn face_lighting(world: &VoxelWorld, voxel: IVec3, face: BlockFace) -> FaceLighting {
     let (normal, tangent_a, tangent_b, signs) = face_basis(face);
     let base = voxel + normal;
     let emitted_block_level = world.light_at(voxel).block() as f32;
@@ -39,8 +32,7 @@ pub(crate) fn face_lighting(
         } else {
             side_a_solid as usize + side_b_solid as usize + corner_solid as usize
         };
-        let (sky_level, block_level) =
-            average_light_levels(world, [base, side_a, side_b, corner]);
+        let (sky_level, block_level) = average_light_levels(world, [base, side_a, side_b, corner]);
 
         channels[index] = [
             normalize_level(sky_level),
@@ -56,8 +48,7 @@ pub(crate) fn face_lighting(
 }
 
 pub(crate) fn should_flip_diagonal(ambient_occlusion: [f32; 4]) -> bool {
-    ambient_occlusion[0] + ambient_occlusion[2]
-        > ambient_occlusion[1] + ambient_occlusion[3]
+    ambient_occlusion[0] + ambient_occlusion[2] > ambient_occlusion[1] + ambient_occlusion[3]
 }
 
 fn average_light_levels(world: &VoxelWorld, samples: [IVec3; 4]) -> (f32, f32) {

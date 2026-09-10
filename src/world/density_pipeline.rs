@@ -1,13 +1,9 @@
 use bevy::prelude::*;
 
-use crate::content::{
-    biome::BiomeRegistry,
-    biome_density::BiomeDensityModifier,
-};
+use crate::content::{biome::BiomeRegistry, biome_density::BiomeDensityModifier};
 
 use super::{
-    biome_field::BiomeField,
-    cave_connectivity::CaveConnectivityRegion,
+    biome_field::BiomeField, cave_connectivity::CaveConnectivityRegion,
     generation_region::GenerationRegion,
 };
 
@@ -84,11 +80,7 @@ fn volume_biome_density_delta(
         .sum()
 }
 
-fn density_modifier_delta(
-    modifier: BiomeDensityModifier,
-    position: Vec3,
-    seed: u64,
-) -> f32 {
+fn density_modifier_delta(modifier: BiomeDensityModifier, position: Vec3, seed: u64) -> f32 {
     match modifier {
         BiomeDensityModifier::Cavern {
             carve_strength,

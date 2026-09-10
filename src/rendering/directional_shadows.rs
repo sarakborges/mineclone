@@ -6,14 +6,11 @@ use bevy::{
 use crate::{
     app::game_state::GameState,
     content::{
-        day_night_cycle::DayNightCycleRegistry,
-        dimension::DimensionRegistry,
-        sky::SkyRegistry,
+        day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry, sky::SkyRegistry,
     },
     voxel::chunk::CHUNK_SIZE,
     world::{
-        day_night::DayNightClock,
-        dimension::CurrentDimension,
+        day_night::DayNightClock, dimension::CurrentDimension,
         render_distance::MAX_RENDER_DISTANCE_CHUNKS,
     },
 };

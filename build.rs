@@ -1,15 +1,6 @@
-use std::{
-    env,
-    fs::File,
-    io::Write,
-    path::PathBuf,
-};
+use std::{env, fs::File, io::Write, path::PathBuf};
 
-use image::{
-    codecs::png::PngEncoder,
-    imageops::FilterType,
-    ImageEncoder,
-};
+use image::{ImageEncoder, codecs::png::PngEncoder, imageops::FilterType};
 
 const ICON_SOURCE: &str = "assets/branding/asteria_icon.png";
 const ICON_SIZES: [u32; 7] = [16, 24, 32, 48, 64, 128, 256];

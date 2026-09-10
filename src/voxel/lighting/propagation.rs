@@ -56,7 +56,12 @@ fn desired_light(
     } else {
         context
             .direct_sky_level(world, blocks, fluids, position)
-            .max(propagated_neighbor_level(world, position, attenuation, VoxelLight::sky))
+            .max(propagated_neighbor_level(
+                world,
+                position,
+                attenuation,
+                VoxelLight::sky,
+            ))
     };
 
     let emitted = block_emission(world, blocks, position);
@@ -82,9 +87,7 @@ fn propagated_neighbor_level(
 ) -> u8 {
     NEIGHBORS
         .into_iter()
-        .map(|direction| {
-            channel(world.light_at(position + direction)).saturating_sub(attenuation)
-        })
+        .map(|direction| channel(world.light_at(position + direction)).saturating_sub(attenuation))
         .max()
         .unwrap_or(0)
 }

@@ -1,6 +1,4 @@
-use super::{
-    BiomeClimate, BiomeClimateRange, BiomeDefinition, BiomeKind, BiomeSizeAxis,
-};
+use super::{BiomeClimate, BiomeClimateRange, BiomeDefinition, BiomeKind, BiomeSizeAxis};
 
 pub(super) fn validate_biome_definition(definition: &BiomeDefinition) {
     match definition.kind {
@@ -132,11 +130,7 @@ fn validate_climate(biome_id: &str, climate: BiomeClimate) {
     validate_climate_range(biome_id, "erosion", climate.erosion);
 }
 
-fn validate_climate_range(
-    biome_id: &str,
-    field: &str,
-    range: Option<BiomeClimateRange>,
-) {
+fn validate_climate_range(biome_id: &str, field: &str, range: Option<BiomeClimateRange>) {
     let Some(range) = range else {
         return;
     };

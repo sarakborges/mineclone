@@ -14,7 +14,10 @@ use self::{
     geometry::{face_geometry, is_face_exposed},
     lighting::face_lighting,
 };
-use super::{chunk::{CHUNK_SIZE, VoxelChunk}, world::VoxelWorld};
+use super::{
+    chunk::{CHUNK_SIZE, VoxelChunk},
+    world::VoxelWorld,
+};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum BlockFace {

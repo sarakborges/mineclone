@@ -3,9 +3,7 @@ use bevy::prelude::*;
 use crate::{app::game_state::GameState, ui::typography};
 
 use super::{
-    banner::world_banner,
-    biome::BiomeHudText,
-    coordinates::CoordinatesHudText,
+    banner::world_banner, biome::BiomeHudText, coordinates::CoordinatesHudText,
     dimension::DimensionHudText,
 };
 

@@ -9,19 +9,13 @@ use crate::{
     app::game_state::GameState,
     content::{biome::BiomeRegistry, dimension::DimensionRegistry},
     world::{
-        biome_field::BiomeField,
-        dimension::CurrentDimension,
+        InMemoryWorldSave, WorldLoadMode, biome_field::BiomeField, dimension::CurrentDimension,
         terrain::surface_height,
-        InMemoryWorldSave,
-        WorldLoadMode,
     },
 };
 use camera::GameplayCamera;
 use movement::{
-    flight::FlightState,
-    gravity::GravityState,
-    swimming::SwimmingState,
-    walking::WalkingState,
+    flight::FlightState, gravity::GravityState, swimming::SwimmingState, walking::WalkingState,
 };
 
 pub const PLAYER_HEIGHT: f32 = 1.8;
@@ -50,20 +44,10 @@ fn spawn_player(
 ) {
     let translation = if *load_mode == WorldLoadMode::Load {
         save.player_position().unwrap_or_else(|| {
-            default_spawn_position(
-                &current_dimension,
-                &dimensions,
-                &biomes,
-                &biome_field,
-            )
+            default_spawn_position(&current_dimension, &dimensions, &biomes, &biome_field)
         })
     } else {
-        default_spawn_position(
-            &current_dimension,
-            &dimensions,
-            &biomes,
-            &biome_field,
-        )
+        default_spawn_position(&current_dimension, &dimensions, &biomes, &biome_field)
     };
 
     commands.spawn((
@@ -88,16 +72,8 @@ fn default_spawn_position(
     let dimension = dimensions
         .get(&current_dimension.id)
         .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
-    let feet_y = surface_height(
-        IVec2::new(SPAWN_X, SPAWN_Z),
-        dimension,
-        biomes,
-        biome_field,
-    ) as f32;
+    let feet_y =
+        surface_height(IVec2::new(SPAWN_X, SPAWN_Z), dimension, biomes, biome_field) as f32;
 
-    Vec3::new(
-        SPAWN_X as f32,
-        feet_y + PLAYER_EYE_HEIGHT,
-        SPAWN_Z as f32,
-    )
+    Vec3::new(SPAWN_X as f32, feet_y + PLAYER_EYE_HEIGHT, SPAWN_Z as f32)
 }

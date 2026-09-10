@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{player::camera::GameplayCamera, voxel::world::VoxelWorld};
 
 use super::{
-    collision::{move_axis, player_collides, Axis},
+    collision::{Axis, move_axis, player_collides},
     config::{GRAVITY, GROUND_PROBE, JUMP_SPEED},
     flight::FlightState,
     swimming::SwimmingState,

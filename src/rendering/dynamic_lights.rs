@@ -27,10 +27,7 @@ impl Plugin for DynamicLightsPlugin {
     }
 }
 
-fn spawn_held_dynamic_light(
-    mut commands: Commands,
-    cameras: Query<Entity, Added<GameplayCamera>>,
-) {
+fn spawn_held_dynamic_light(mut commands: Commands, cameras: Query<Entity, Added<GameplayCamera>>) {
     for camera in &cameras {
         commands.entity(camera).with_children(|camera| {
             camera.spawn((

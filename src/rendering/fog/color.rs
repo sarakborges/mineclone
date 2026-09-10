@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{
-    player::camera::GameplayCamera,
-    rendering::environment::EnvironmentVisualState,
-};
+use crate::{player::camera::GameplayCamera, rendering::environment::EnvironmentVisualState};
 
 pub(super) fn update_fog_color(
     visuals: Res<EnvironmentVisualState>,

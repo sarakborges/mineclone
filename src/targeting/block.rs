@@ -1,14 +1,13 @@
 use bevy::prelude::*;
 
 use super::{
-    highlight::TargetHighlightPlugin,
-    interaction::BlockInteractionPlugin,
+    highlight::TargetHighlightPlugin, interaction::BlockInteractionPlugin,
     placement_preview::PlacementPreviewPlugin,
 };
 use crate::{
     app::game_state::GameState,
     voxel::{
-        raycast::{raycast_voxels, VoxelHit},
+        raycast::{VoxelHit, raycast_voxels},
         world::VoxelWorld,
     },
 };
@@ -36,7 +35,11 @@ impl Plugin for BlockTargetingPlugin {
                 )
                     .chain(),
             )
-            .add_plugins((TargetHighlightPlugin, BlockInteractionPlugin, PlacementPreviewPlugin))
+            .add_plugins((
+                TargetHighlightPlugin,
+                BlockInteractionPlugin,
+                PlacementPreviewPlugin,
+            ))
             .add_systems(
                 Update,
                 update_targeted_block

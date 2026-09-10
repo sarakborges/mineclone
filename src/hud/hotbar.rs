@@ -104,9 +104,9 @@ fn spawn_hotbar(
                         let Some(block_id) = hotbar.item_at(index) else {
                             return;
                         };
-                        let block = blocks
-                            .get(block_id)
-                            .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
+                        let block = blocks.get(block_id).unwrap_or_else(|| {
+                            panic!("hotbar references missing block: {block_id}")
+                        });
 
                         if block.textures.top.is_empty() {
                             slot.spawn((

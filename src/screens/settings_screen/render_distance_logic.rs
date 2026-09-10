@@ -6,7 +6,7 @@ use bevy::{
 use crate::{
     voxel::chunk::CHUNK_SIZE,
     world::render_distance::{
-        RenderDistanceSettings, MAX_RENDER_DISTANCE_CHUNKS, MIN_RENDER_DISTANCE_CHUNKS,
+        MAX_RENDER_DISTANCE_CHUNKS, MIN_RENDER_DISTANCE_CHUNKS, RenderDistanceSettings,
     },
 };
 

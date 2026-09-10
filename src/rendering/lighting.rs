@@ -2,10 +2,7 @@ use bevy::prelude::*;
 
 use crate::app::game_state::GameState;
 
-use super::{
-    environment::EnvironmentVisualState,
-    terrain_material::TerrainMaterial,
-};
+use super::{environment::EnvironmentVisualState, terrain_material::TerrainMaterial};
 
 pub struct LightingPlugin;
 

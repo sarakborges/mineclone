@@ -10,10 +10,7 @@ use crate::{
     world::render_distance::RenderDistanceSettings,
 };
 
-use super::{
-    navigation::SettingsBackButton,
-    render_distance_section::render_distance_section,
-};
+use super::{navigation::SettingsBackButton, render_distance_section::render_distance_section};
 
 const CONTENT_WIDTH: f32 = 760.0;
 const HEADER_HEIGHT: f32 = 116.0;

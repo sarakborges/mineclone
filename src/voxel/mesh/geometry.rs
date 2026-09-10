@@ -11,11 +11,7 @@ pub(super) struct FaceGeometry {
     pub texture_rotation: TextureRotation,
 }
 
-pub(super) fn is_face_exposed(
-    world: &VoxelWorld,
-    world_voxel: IVec3,
-    face: BlockFace,
-) -> bool {
+pub(super) fn is_face_exposed(world: &VoxelWorld, world_voxel: IVec3, face: BlockFace) -> bool {
     if face == BlockFace::Bottom && world_voxel.y <= 0 {
         return false;
     }

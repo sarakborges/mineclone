@@ -1,24 +1,22 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::{
-        biome::BiomeRegistry,
-        block::BlockRegistry,
-        builtin_ids::GRASS_BLOCK_ID,
-    },
+    content::{biome::BiomeRegistry, block::BlockRegistry, builtin_ids::GRASS_BLOCK_ID},
     voxel::{
         cell::VoxelCell,
         chunk::{CHUNK_SIZE, VoxelChunk},
         texture_rotation::TextureRotation,
     },
     world::{
-        biome_field::BiomeField,
-        generation_region::GenerationRegion,
+        biome_field::BiomeField, generation_region::GenerationRegion,
         material_field::solid_block_id,
     },
 };
 
-use super::{columns::GenerationColumnSample, index::{column_index, voxel_index}};
+use super::{
+    columns::GenerationColumnSample,
+    index::{column_index, voxel_index},
+};
 
 pub(super) fn rasterize_material_pass(
     chunk: &mut VoxelChunk,

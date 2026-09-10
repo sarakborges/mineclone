@@ -1,6 +1,6 @@
 use bevy::{
     prelude::*,
-    ui_widgets::{observe, Slider, SliderRange, SliderThumb, SliderValue, TrackClick},
+    ui_widgets::{Slider, SliderRange, SliderThumb, SliderValue, TrackClick, observe},
 };
 
 use crate::{
@@ -8,9 +8,7 @@ use crate::{
     world::render_distance::{MAX_RENDER_DISTANCE_CHUNKS, MIN_RENDER_DISTANCE_CHUNKS},
 };
 
-use super::render_distance_logic::{
-    apply_render_distance, render_distance_label, slider_position,
-};
+use super::render_distance_logic::{apply_render_distance, render_distance_label, slider_position};
 
 const SLIDER_THUMB_SIZE: f32 = 16.0;
 

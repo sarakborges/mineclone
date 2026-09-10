@@ -15,9 +15,6 @@ impl Plugin for SkyPlugin {
     }
 }
 
-fn update_sky_color(
-    visuals: Res<EnvironmentVisualState>,
-    mut clear_color: ResMut<ClearColor>,
-) {
+fn update_sky_color(visuals: Res<EnvironmentVisualState>, mut clear_color: ResMut<ClearColor>) {
     clear_color.0 = visuals.sky_color;
 }

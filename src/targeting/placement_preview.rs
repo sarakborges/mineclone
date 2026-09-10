@@ -2,14 +2,8 @@ use bevy::{light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::{
-        block::BlockRegistry,
-        builtin_ids::GRASS_BLOCK_ID,
-    },
-    player::{
-        camera::GameplayCamera,
-        hotbar::PlayerHotbar,
-    },
+    content::{block::BlockRegistry, builtin_ids::GRASS_BLOCK_ID},
+    player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::block_model::{block_face_material, block_face_mesh, block_faces},
     voxel::mesh::BlockFace,
 };

@@ -6,8 +6,7 @@ use bevy::{
 use crate::{
     app::game_state::GameState,
     content::{
-        day_night_cycle::DayNightCycleRegistry,
-        day_night_phase::DayNightPhase,
+        day_night_cycle::DayNightCycleRegistry, day_night_phase::DayNightPhase,
         dimension::DimensionRegistry,
     },
     player::camera::GameplayCamera,
@@ -88,8 +87,7 @@ pub(super) fn update_stars(
     };
     let sample = cycle.sample(clock.normalized_time);
     let time_factor = star_time_factor(sample.phase, sample.next_phase, sample.transition);
-    let visible_count =
-        (visuals.star_density * time_factor * MAX_STARS as f32).round() as usize;
+    let visible_count = (visuals.star_density * time_factor * MAX_STARS as f32).round() as usize;
     let camera_position = camera.translation();
 
     if let Some(mut material) = materials.get_mut(&assets.material) {

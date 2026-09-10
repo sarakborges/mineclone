@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use super::{
     constants::{
-        LAKE_CHANCE, LAKE_CARVE_DEPTH, LAKE_MAXIMUM_RADIUS, LAKE_MINIMUM_RADIUS,
+        LAKE_CARVE_DEPTH, LAKE_CHANCE, LAKE_MAXIMUM_RADIUS, LAKE_MINIMUM_RADIUS,
         LAKE_MINIMUM_RELIEF, OCEAN_CONTINENTALNESS_THRESHOLD,
     },
     drainage::DrainageNode,
@@ -36,8 +36,7 @@ pub(super) fn lake_for_local_basin(
     }
 
     let hash = cell_hash(cell, seed ^ 0xbb67_ae85_84ca_a73b);
-    let lake_chance =
-        (LAKE_CHANCE * source.biome_hydrology.lake_chance_multiplier).clamp(0.0, 1.0);
+    let lake_chance = (LAKE_CHANCE * source.biome_hydrology.lake_chance_multiplier).clamp(0.0, 1.0);
 
     if hash_unit(hash.rotate_left(17)) > lake_chance {
         return None;

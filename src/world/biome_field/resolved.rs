@@ -10,9 +10,8 @@ impl BiomeField {
         let (primary_id, influences) = if let Some(volume_sample) = &volume {
             let volume_strength = volume_sample.strength.clamp(0.0, 1.0);
             let surface_strength = 1.0 - volume_strength;
-            let mut influences = Vec::with_capacity(
-                surface.influences.len() + volume_sample.influences.len(),
-            );
+            let mut influences =
+                Vec::with_capacity(surface.influences.len() + volume_sample.influences.len());
 
             influences.extend(surface.influences.iter().filter_map(|influence| {
                 let weight = influence.weight * surface_strength;

@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{
-    content::dimension_hydrology::DimensionHydrology,
-    world::feature_graph::FeatureGraph,
-};
+use crate::{content::dimension_hydrology::DimensionHydrology, world::feature_graph::FeatureGraph};
 
 use super::{
     constants::{
@@ -136,11 +133,8 @@ impl HydrologyField {
                         && edge_intersects_region(coord, source.position, downstream.position)
                     {
                         let hash = cell_hash(source_cell, self.seed ^ 0x6a09_e667_f3bc_c909);
-                        let base_radius = lerp(
-                            RIVER_MINIMUM_RADIUS,
-                            RIVER_MAXIMUM_RADIUS,
-                            hash_unit(hash),
-                        );
+                        let base_radius =
+                            lerp(RIVER_MINIMUM_RADIUS, RIVER_MAXIMUM_RADIUS, hash_unit(hash));
                         let width_multiplier = (source.biome_hydrology.river_width_multiplier
                             + downstream.biome_hydrology.river_width_multiplier)
                             * 0.5;

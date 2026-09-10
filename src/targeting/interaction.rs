@@ -2,25 +2,15 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
-    content::{
-        biome::BiomeRegistry,
-        block::BlockRegistry,
-        fluid::FluidRegistry,
-    },
-    player::{
-        camera::GameplayCamera,
-        hotbar::PlayerHotbar,
-        viewmodel::ViewModelAnimation,
-    },
+    content::{biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry},
+    player::{camera::GameplayCamera, hotbar::PlayerHotbar, viewmodel::ViewModelAnimation},
     voxel::{
-        cell::VoxelCell,
-        lighting::relight_after_voxel_edit,
-        texture_rotation::TextureRotation,
+        cell::VoxelCell, lighting::relight_after_voxel_edit, texture_rotation::TextureRotation,
         world::VoxelWorld,
     },
     world::{
         biome_field::BiomeField,
-        chunk_rendering::{refresh_chunk_mesh, ChunkRenderPool, FluidMaterials, TerrainMaterials},
+        chunk_rendering::{ChunkRenderPool, FluidMaterials, TerrainMaterials, refresh_chunk_mesh},
     },
 };
 
@@ -107,8 +97,7 @@ fn edit_targeted_block(
         return;
     };
 
-    let mut chunks_to_remesh =
-        relight_after_voxel_edit(&mut world, edited_voxel, &blocks, &fluids);
+    let mut chunks_to_remesh = relight_after_voxel_edit(&mut world, edited_voxel, &blocks, &fluids);
     chunks_to_remesh.insert(coord);
     for offset in CHUNK_NEIGHBORS {
         chunks_to_remesh.insert(coord + offset);

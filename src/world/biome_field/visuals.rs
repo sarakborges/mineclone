@@ -30,11 +30,7 @@ impl BiomeField {
         color
     }
 
-    pub fn underwater_tint(
-        &self,
-        position: Vec3,
-        biomes: &BiomeRegistry,
-    ) -> BiomeUnderwaterTint {
+    pub fn underwater_tint(&self, position: Vec3, biomes: &BiomeRegistry) -> BiomeUnderwaterTint {
         let sample = self.sample_resolved(position);
         let mut color = Rgb {
             r: 0.0,

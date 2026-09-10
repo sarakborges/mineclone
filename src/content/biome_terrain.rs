@@ -1,7 +1,11 @@
 use serde::Deserialize;
 
 #[derive(Clone, Copy, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum BiomeTerrain {
     Rolling {
         base_height: f32,
@@ -44,8 +48,14 @@ impl BiomeTerrain {
                 detail_scale,
                 ..
             } => {
-                assert!(amplitude >= 0.0, "biome {biome_id} rolling amplitude cannot be negative");
-                assert!(scale > 0.0, "biome {biome_id} rolling scale must be positive");
+                assert!(
+                    amplitude >= 0.0,
+                    "biome {biome_id} rolling amplitude cannot be negative"
+                );
+                assert!(
+                    scale > 0.0,
+                    "biome {biome_id} rolling scale must be positive"
+                );
                 assert!(
                     detail_amplitude >= 0.0,
                     "biome {biome_id} rolling detailAmplitude cannot be negative"
@@ -65,7 +75,10 @@ impl BiomeTerrain {
                     amplitude >= 0.0,
                     "biome {biome_id} mountains amplitude cannot be negative"
                 );
-                assert!(scale > 0.0, "biome {biome_id} mountains scale must be positive");
+                assert!(
+                    scale > 0.0,
+                    "biome {biome_id} mountains scale must be positive"
+                );
                 assert!(
                     sharpness > 0.0,
                     "biome {biome_id} mountains sharpness must be positive"

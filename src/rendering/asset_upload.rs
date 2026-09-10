@@ -6,8 +6,6 @@ pub struct AssetUploadPlugin;
 
 impl Plugin for AssetUploadPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(RenderAssetBytesPerFrame::new(
-            RENDER_UPLOAD_BYTES_PER_FRAME,
-        ));
+        app.insert_resource(RenderAssetBytesPerFrame::new(RENDER_UPLOAD_BYTES_PER_FRAME));
     }
 }

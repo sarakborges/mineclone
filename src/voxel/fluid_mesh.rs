@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 
 use bevy::{
-    asset::RenderAssetUsages,
-    mesh::Indices,
-    prelude::*,
-    render::render_resource::PrimitiveTopology,
+    asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology,
 };
 
 use crate::content::fluid::FluidId;
@@ -12,8 +9,8 @@ use crate::content::fluid::FluidId;
 use super::{
     chunk::{CHUNK_SIZE, VoxelChunk},
     mesh::{
-        lighting::{face_lighting, should_flip_diagonal, FaceLighting},
         BlockFace,
+        lighting::{FaceLighting, face_lighting, should_flip_diagonal},
     },
     world::VoxelWorld,
 };
@@ -36,16 +33,9 @@ struct MeshBuffers {
 }
 
 impl MeshBuffers {
-    fn push(
-        &mut self,
-        vertices: [[f32; 3]; 4],
-        normal: [f32; 3],
-        lighting: FaceLighting,
-    ) {
+    fn push(&mut self, vertices: [[f32; 3]; 4], normal: [f32; 3], lighting: FaceLighting) {
         let base = self.positions.len() as u32;
-        let vertex_colors = lighting
-            .ambient_occlusion
-            .map(|ao| [1.0, 1.0, 1.0, ao]);
+        let vertex_colors = lighting.ambient_occlusion.map(|ao| [1.0, 1.0, 1.0, ao]);
 
         self.positions.extend(vertices);
         self.normals.extend([normal; 4]);
@@ -54,14 +44,8 @@ impl MeshBuffers {
         self.colors.extend(vertex_colors);
 
         if should_flip_diagonal(lighting.ambient_occlusion) {
-            self.indices.extend([
-                base,
-                base + 1,
-                base + 3,
-                base + 1,
-                base + 2,
-                base + 3,
-            ]);
+            self.indices
+                .extend([base, base + 1, base + 3, base + 1, base + 2, base + 3]);
         } else {
             self.indices
                 .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
