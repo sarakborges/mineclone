@@ -40,6 +40,28 @@ struct HeldBlockFace {
     face: BlockFace,
 }
 
+type ArmVisibilityQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Visibility,
+    (
+        With<ViewModelArm>,
+        Without<HeldBlockRoot>,
+        Without<PlayerViewModel>,
+    ),
+>;
+
+type HeldBlockRootQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut HeldBlockRoot, &'static mut Visibility),
+    (
+        With<HeldBlockRoot>,
+        Without<ViewModelArm>,
+        Without<PlayerViewModel>,
+    ),
+>;
+
 #[derive(Resource)]
 struct ViewModelArmAssets {
     mesh: Handle<Mesh>,
@@ -200,22 +222,8 @@ fn sync_held_block(
     content: ViewModelContent,
     player: Single<&Transform, With<GameplayCamera>>,
     mut materials: ResMut<Assets<BlockModelMaterial>>,
-    mut arms: Query<
-        &mut Visibility,
-        (
-            With<ViewModelArm>,
-            Without<HeldBlockRoot>,
-            Without<PlayerViewModel>,
-        ),
-    >,
-    mut roots: Query<
-        (&mut HeldBlockRoot, &mut Visibility),
-        (
-            With<HeldBlockRoot>,
-            Without<ViewModelArm>,
-            Without<PlayerViewModel>,
-        ),
-    >,
+    mut arms: ArmVisibilityQuery,
+    mut roots: HeldBlockRootQuery,
     faces: Query<(&HeldBlockFace, &MeshMaterial3d<BlockModelMaterial>)>,
 ) {
     let selected_block_id = content.hotbar.item_at(content.hotbar.selected_slot());
