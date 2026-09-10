@@ -11,7 +11,8 @@ use bevy::prelude::*;
 use crate::{
     content::{
         biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionDefinition,
-        fluid::FluidRegistry,
+        fluid::FluidRegistry, structure::StructureRegistry,
+        structure_set::StructureSetRegistry,
     },
     voxel::chunk::{CHUNK_SIZE, VoxelChunk},
 };
@@ -38,6 +39,8 @@ pub(crate) struct ChunkGenerationContext<'a> {
     pub fluids: &'a FluidRegistry,
     pub dimension: &'a DimensionDefinition,
     pub biomes: &'a BiomeRegistry,
+    pub structures: &'a StructureRegistry,
+    pub structure_sets: &'a StructureSetRegistry,
     pub biome_field: &'a BiomeField,
     pub feature_fields: &'a WorldFeatureFields,
 }
@@ -144,6 +147,8 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         chunk_origin,
         region.as_ref(),
         context.biome_field,
+        context.structures,
+        context.structure_sets,
     );
 
     chunk

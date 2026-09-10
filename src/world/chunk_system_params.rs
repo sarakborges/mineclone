@@ -5,6 +5,8 @@ use crate::content::{
     block::BlockRegistry,
     dimension::{DimensionDefinition, DimensionRegistry},
     fluid::FluidRegistry,
+    structure::StructureRegistry,
+    structure_set::StructureSetRegistry,
 };
 
 use super::{
@@ -20,6 +22,8 @@ pub(crate) struct ChunkContent<'w> {
     pub blocks: Res<'w, BlockRegistry>,
     pub fluids: Res<'w, FluidRegistry>,
     pub biomes: Res<'w, BiomeRegistry>,
+    pub structures: Res<'w, StructureRegistry>,
+    pub structure_sets: Res<'w, StructureSetRegistry>,
     pub biome_field: Res<'w, BiomeField>,
 }
 
@@ -66,6 +70,8 @@ impl<'w> ChunkGeneration<'w> {
             fluids: &content.fluids,
             dimension: self.dimension(),
             biomes: &content.biomes,
+            structures: &content.structures,
+            structure_sets: &content.structure_sets,
             biome_field: &content.biome_field,
             feature_fields: &self.feature_fields,
         }

@@ -25,6 +25,7 @@ mod save;
 mod seed;
 mod setup;
 mod streaming;
+pub(crate) mod structure_placement;
 pub(crate) mod terrain;
 pub(crate) mod world_feature_fields;
 
