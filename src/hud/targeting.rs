@@ -3,6 +3,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     app::game_state::GameState,
     content::{biome::BiomeRegistry, block::BlockRegistry},
+    hud::block_icon::BlockIconMaterial,
     rendering::block_tint::block_tint_at,
     targeting::block::TargetedBlock,
     ui::{surface, typography},
@@ -10,7 +11,7 @@ use crate::{
     world::biome_field::BiomeField,
 };
 
-const TARGET_THUMBNAIL_SIZE: f32 = 42.0;
+const TARGET_ICON_SIZE: f32 = 46.0;
 
 pub struct TargetHudPlugin;
 
@@ -31,7 +32,7 @@ struct TargetHudRoot;
 struct TargetBlockText;
 
 #[derive(Component, Default)]
-struct TargetBlockThumbnail {
+struct TargetBlockIcon {
     block_id: Option<&'static str>,
 }
 
@@ -44,7 +45,12 @@ struct TargetHudContent<'w> {
     world: Res<'w, VoxelWorld>,
 }
 
-fn spawn_target_hud(mut commands: Commands) {
+fn spawn_target_hud(
+    mut commands: Commands,
+    mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
+) {
+    let icon_material = icon_materials.add(BlockIconMaterial::empty());
+
     commands
         .spawn((
             TargetHudRoot,
@@ -68,11 +74,11 @@ fn spawn_target_hud(mut commands: Commands) {
                     })
                     .with_children(|row| {
                         row.spawn((
-                            TargetBlockThumbnail::default(),
-                            ImageNode::default(),
+                            TargetBlockIcon::default(),
+                            MaterialNode(icon_material),
                             Node {
-                                width: px(TARGET_THUMBNAIL_SIZE),
-                                height: px(TARGET_THUMBNAIL_SIZE),
+                                width: px(TARGET_ICON_SIZE),
+                                height: px(TARGET_ICON_SIZE),
                                 ..default()
                             },
                             Pickable::IGNORE,
@@ -88,7 +94,11 @@ fn update_target_hud(
     content: TargetHudContent,
     root_visibility: Single<&mut Visibility, With<TargetHudRoot>>,
     mut target_text: Single<&mut Text, With<TargetBlockText>>,
-    mut thumbnail: Single<(&mut TargetBlockThumbnail, &mut ImageNode)>,
+    mut icon: Single<(
+        &mut TargetBlockIcon,
+        &MaterialNode<BlockIconMaterial>,
+    )>,
+    mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
     let mut root_visibility = root_visibility.into_inner();
 
@@ -121,23 +131,23 @@ fn update_target_hud(
         target_text.0 = next_text;
     }
 
-    let (thumbnail_state, image) = &mut *thumbnail;
-    if thumbnail_state.block_id != Some(hit.block_id) {
-        thumbnail_state.block_id = Some(hit.block_id);
-        image.image = block
-            .filter(|block| !block.textures.top.is_empty())
-            .map(|block| content.asset_server.load(block.textures.top.clone()))
-            .unwrap_or_default();
+    let (icon_state, material_handle) = &mut *icon;
+    let Some(material) = icon_materials.get_mut(&material_handle.0) else {
+        return;
+    };
+
+    if icon_state.block_id != Some(hit.block_id) {
+        icon_state.block_id = Some(hit.block_id);
+        if let Some(block) = block {
+            material.set_block(block, &content.asset_server);
+        }
     }
 
     let tint_position = Vec2::new(hit.voxel.x as f32 + 0.5, hit.voxel.z as f32 + 0.5);
-    let tint = block_tint_at(
+    material.set_tint(block_tint_at(
         hit.block_id,
         tint_position,
         &content.biome_field,
         &content.biomes,
-    );
-    if image.color != tint {
-        image.color = tint;
-    }
+    ));
 }
