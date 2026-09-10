@@ -6,6 +6,7 @@ use super::{
 };
 use crate::{
     app::game_state::GameState,
+    player::camera::GameplayCamera,
     voxel::{
         raycast::{VoxelHit, raycast_voxels},
         world::VoxelWorld,
@@ -53,7 +54,7 @@ impl Plugin for BlockTargetingPlugin {
 pub struct TargetedBlock(pub Option<VoxelHit>);
 
 fn update_targeted_block(
-    camera: Single<&GlobalTransform, With<Camera3d>>,
+    camera: Single<&GlobalTransform, With<GameplayCamera>>,
     world: Res<VoxelWorld>,
     mut targeted: ResMut<TargetedBlock>,
 ) {
