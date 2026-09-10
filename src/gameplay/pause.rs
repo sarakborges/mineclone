@@ -45,14 +45,14 @@ fn pause_on_focus_lost(
     mut next_pause_state: ResMut<NextState<PauseState>>,
     mut time: ResMut<Time<Virtual>>,
 ) {
-    if *pause_state.get() == PauseState::Paused {
+    let lost_focus = focused_events.read().any(|event| !event.focused);
+
+    if *pause_state.get() == PauseState::Paused || !lost_focus {
         return;
     }
 
-    if focused_events.read().any(|event| !event.focused) {
-        time.pause();
-        next_pause_state.set(PauseState::Paused);
-    }
+    time.pause();
+    next_pause_state.set(PauseState::Paused);
 }
 
 fn pause_time(mut time: ResMut<Time<Virtual>>) {
