@@ -12,7 +12,4 @@ mod tests;
 
 pub use field::HydrologyField;
 pub use region::HydrologyRegion;
-pub use types::{
-    HydrologyBiomeOverlay, HydrologySurfaceSample, HydrologyTerrainSummary,
-    HydrologyWaterSample, WaterBody, WaterBodyKind,
-};
+pub use types::{HydrologyBiomeOverlay, HydrologySurfaceSample};
