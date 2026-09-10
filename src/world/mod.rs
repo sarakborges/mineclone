@@ -18,6 +18,7 @@ pub(crate) mod hydrology;
 mod macro_climate;
 mod material_field;
 pub(crate) mod render_distance;
+mod render_diagnostics;
 mod save;
 mod seed;
 mod setup;
@@ -34,6 +35,7 @@ use chunk_rendering::{ChunkRenderPool, clear_chunk_render_pool};
 use chunk_unloading::unload_chunk_meshes;
 use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
+use render_diagnostics::log_render_asset_pressure;
 use render_distance::RenderDistanceSettings;
 pub(crate) use save::{InMemoryWorldSave, WorldLoadMode};
 pub(crate) use seed::WorldSeed;
@@ -71,6 +73,10 @@ impl Plugin for WorldPlugin {
             .add_systems(
                 PostUpdate,
                 process_chunk_remesh_queue.run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                Last,
+                log_render_asset_pressure.run_if(in_state(GameState::Gameplay)),
             );
     }
 }
