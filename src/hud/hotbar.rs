@@ -30,6 +30,9 @@ struct HotbarSlot {
 #[derive(Component)]
 struct HotbarItemName;
 
+#[derive(Component)]
+struct HotbarBlockModel;
+
 #[derive(SystemParam)]
 struct HotbarHudContent<'w> {
     asset_server: Res<'w, AssetServer>,
@@ -142,6 +145,7 @@ fn spawn_hotbar(
                         ));
 
                         slot.spawn((
+                            HotbarBlockModel,
                             BlockModelInstance::new(block_id),
                             MaterialNode(material),
                             Node {
@@ -197,7 +201,10 @@ fn update_hotbar_item_tints(
     player: Single<&Transform, With<GameplayCamera>>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
-    icons: Query<(&BlockModelInstance, &MaterialNode<BlockIconMaterial>)>,
+    icons: Query<
+        (&BlockModelInstance, &MaterialNode<BlockIconMaterial>),
+        With<HotbarBlockModel>,
+    >,
     mut materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
     let position = Vec2::new(player.translation.x, player.translation.z);
