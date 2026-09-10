@@ -187,6 +187,33 @@ impl VoxelWorld {
         Some(chunk_coord)
     }
 
+    pub(crate) fn set_fluid_at(
+        &mut self,
+        world_position: IVec3,
+        fluid: Option<FluidCell>,
+    ) -> Option<IVec3> {
+        if world_position.y < 0 {
+            return None;
+        }
+
+        let (chunk_coord, local_position) = split_world_position(world_position);
+        let chunk = self.chunks.get_mut(&chunk_coord)?;
+        let x = local_position.x as usize;
+        let y = local_position.y as usize;
+        let z = local_position.z as usize;
+
+        if fluid.is_some() && chunk.cell_at(local_position.x, local_position.y, local_position.z).is_some() {
+            return None;
+        }
+        if chunk.fluid_at(local_position.x, local_position.y, local_position.z) == fluid {
+            return None;
+        }
+
+        chunk.set_fluid(x, y, z, fluid);
+        self.dirty_chunks.insert(chunk_coord);
+        Some(chunk_coord)
+    }
+
     pub fn is_solid(&self, world_position: IVec3) -> bool {
         self.cell_at(world_position).is_some()
     }

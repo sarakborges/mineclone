@@ -7,7 +7,10 @@ use crate::{
         cell::VoxelCell, lighting::PendingLightingUpdates, neighbors::CARDINAL_NEIGHBORS,
         texture_rotation::TextureRotation, world::VoxelWorld,
     },
-    world::{chunk_remesh::ChunkRemeshQueue, chunk_system_params::ChunkContent},
+    world::{
+        chunk_remesh::ChunkRemeshQueue, chunk_system_params::ChunkContent,
+        fluid_updates::PendingFluidUpdates,
+    },
 };
 
 use super::{
@@ -43,6 +46,7 @@ fn edit_targeted_block(
     mut viewmodel_animation: ResMut<ViewModelAnimation>,
     mut world: ResMut<VoxelWorld>,
     mut lighting: ResMut<PendingLightingUpdates>,
+    mut fluid_updates: ResMut<PendingFluidUpdates>,
     mut remesh_queue: ResMut<ChunkRemeshQueue>,
 ) {
     let break_pressed = input.buttons.just_pressed(MouseButton::Left);
@@ -82,6 +86,7 @@ fn edit_targeted_block(
     };
 
     lighting.enqueue_voxel_edit(edited_voxel);
+    fluid_updates.enqueue_voxel_edit(edited_voxel);
 
     remesh_queue.enqueue_priority(coord);
     for offset in CARDINAL_NEIGHBORS {

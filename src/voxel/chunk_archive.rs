@@ -20,6 +20,7 @@ struct ArchivedCell {
 struct ArchivedFluidCell {
     fluid_id: FluidId,
     level: u8,
+    source: bool,
 }
 
 pub struct ArchivedChunk {
@@ -74,6 +75,7 @@ impl ArchivedChunk {
             fluid_cells.push(ArchivedFluidCell {
                 fluid_id: fluid.fluid_id,
                 level: fluid.level,
+                source: fluid.is_source(),
             });
         }
 
@@ -132,7 +134,11 @@ impl ArchivedChunk {
                 x,
                 y,
                 z,
-                Some(FluidCell::new(archived.fluid_id, archived.level)),
+                Some(FluidCell::with_source(
+                    archived.fluid_id,
+                    archived.level,
+                    archived.source,
+                )),
             );
         }
 

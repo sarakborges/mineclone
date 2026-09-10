@@ -10,6 +10,7 @@ pub mod day_night;
 mod density_pipeline;
 pub mod dimension;
 pub(crate) mod feature_graph;
+pub(crate) mod fluid_updates;
 mod generation;
 mod generation_pipeline;
 pub(crate) mod generation_region;
@@ -36,6 +37,7 @@ use chunk_rendering::{ChunkRenderPool, clear_chunk_render_pool};
 use chunk_unloading::unload_chunk_meshes;
 use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
+use fluid_updates::{PendingFluidUpdates, clear_fluid_updates, process_fluid_updates};
 use lighting_updates::{clear_dynamic_lighting, process_dynamic_lighting};
 use render_diagnostics::log_render_asset_pressure;
 use render_distance::RenderDistanceSettings;
@@ -59,6 +61,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<ChunkRenderPool>()
             .init_resource::<ChunkRemeshQueue>()
             .init_resource::<PendingLightingUpdates>()
+            .init_resource::<PendingFluidUpdates>()
             .add_plugins(DayNightPlugin)
             .add_systems(OnEnter(GameState::Loading), begin_world_loading)
             .add_systems(OnEnter(GameState::Gameplay), reset_chunk_streaming)
@@ -68,6 +71,7 @@ impl Plugin for WorldPlugin {
                     clear_chunk_render_pool,
                     clear_chunk_remesh_queue,
                     clear_dynamic_lighting,
+                    clear_fluid_updates,
                 ),
             )
             .add_systems(Update, setup_world.run_if(in_state(GameState::Loading)))
@@ -79,7 +83,11 @@ impl Plugin for WorldPlugin {
             )
             .add_systems(
                 PostUpdate,
-                (process_dynamic_lighting, process_chunk_remesh_queue)
+                (
+                    process_fluid_updates,
+                    process_dynamic_lighting,
+                    process_chunk_remesh_queue,
+                )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
             )

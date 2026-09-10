@@ -48,7 +48,7 @@ pub(super) fn rasterize_fluid_pass(
                     local_x,
                     local_y,
                     local_z,
-                    Some(FluidCell::new(fluid_id, level)),
+                    Some(FluidCell::source(fluid_id, level)),
                 );
             }
         }
