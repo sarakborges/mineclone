@@ -63,7 +63,12 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
         vec2<f32>(0.40, -0.20),
     );
     if inside_face(top_uv) {
-        let sampled = textureSample(top_texture, top_sampler, vec2<f32>(top_uv.x, top_uv.y));
+        let sampled = textureSampleLevel(
+            top_texture,
+            top_sampler,
+            vec2<f32>(top_uv.x, top_uv.y),
+            0.0,
+        );
         return apply_biome_tint(sampled);
     }
 
@@ -74,10 +79,11 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
         vec2<f32>(0.00, 0.42),
     );
     if inside_face(front_uv) {
-        let sampled = textureSample(
+        let sampled = textureSampleLevel(
             front_texture,
             front_sampler,
             vec2<f32>(front_uv.x, front_uv.y),
+            0.0,
         );
         let colored = apply_biome_tint(sampled);
         return vec4<f32>(colored.rgb * 0.86, colored.a);
@@ -90,10 +96,11 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
         vec2<f32>(0.00, 0.42),
     );
     if inside_face(right_uv) {
-        let sampled = textureSample(
+        let sampled = textureSampleLevel(
             right_texture,
             right_sampler,
             vec2<f32>(1.0 - right_uv.x, right_uv.y),
+            0.0,
         );
         let colored = apply_biome_tint(sampled);
         return vec4<f32>(colored.rgb * 0.74, colored.a);
