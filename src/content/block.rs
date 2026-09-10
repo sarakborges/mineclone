@@ -72,7 +72,6 @@ pub struct BlockDefinition {
 #[derive(Resource, Default)]
 pub struct BlockRegistry {
     definitions: HashMap<String, BlockDefinition>,
-    static_ids: HashMap<String, &'static str>,
 }
 
 impl BlockRegistry {
@@ -88,17 +87,12 @@ impl BlockRegistry {
             definition.id
         );
 
-        let static_id = intern_block_id(&definition.id);
-        self.static_ids.insert(definition.id.clone(), static_id);
+        intern_block_id(&definition.id);
         self.definitions.insert(definition.id.clone(), definition);
     }
 
     pub fn get(&self, id: &str) -> Option<&BlockDefinition> {
         self.definitions.get(id)
-    }
-
-    pub fn static_id(&self, id: &str) -> Option<&'static str> {
-        self.static_ids.get(id).copied()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &BlockDefinition> {
