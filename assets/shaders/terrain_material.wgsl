@@ -11,7 +11,9 @@
 }
 #else
 #import bevy_pbr::{
+    clustered_forward as clustering,
     forward_io::{VertexOutput, FragmentOutput},
+    lighting,
     mesh_view_bindings as view_bindings,
     mesh_view_types,
     pbr_functions::main_pass_post_lighting_processing,
@@ -30,6 +32,7 @@ var<uniform> terrain_material_extension: TerrainMaterialExtension;
 const AMBIENT_FLOOR: f32 = 0.055;
 const LIGHT_GAMMA: f32 = 1.35;
 const SUN_AMBIENT_SHARE: f32 = 0.62;
+const DYNAMIC_LIGHT_SCALE: f32 = 0.08;
 
 #ifndef PREPASS_PIPELINE
 fn directional_sun_visibility(in: VertexOutput) -> f32 {
@@ -63,6 +66,71 @@ fn directional_sun_visibility(in: VertexOutput) -> f32 {
 
     return 1.0;
 }
+
+fn dynamic_point_lighting(
+    in: VertexOutput,
+    surface_normal: vec3<f32>,
+    is_orthographic: bool,
+) -> vec3<f32> {
+    let view_z = dot(
+        vec4<f32>(
+            view_bindings::view.view_from_world[0].z,
+            view_bindings::view.view_from_world[1].z,
+            view_bindings::view.view_from_world[2].z,
+            view_bindings::view.view_from_world[3].z,
+        ),
+        in.world_position,
+    );
+    let cluster_index = clustering::view_fragment_cluster_index(
+        in.position.xy,
+        view_z,
+        is_orthographic,
+    );
+    let ranges = clustering::unpack_clusterable_object_index_ranges(cluster_index);
+    var result = vec3<f32>(0.0);
+
+    for (
+        var index = ranges.first_point_light_index_offset;
+        index < ranges.first_spot_light_index_offset;
+        index = index + 1u
+    ) {
+        let light_id = clustering::get_clusterable_object_id(index);
+        let light = &view_bindings::clustered_lights.data[light_id];
+        let to_light = (*light).position_radius.xyz - in.world_position.xyz;
+        let distance_squared = max(dot(to_light, to_light), 0.0001);
+        let light_direction = to_light * inverseSqrt(distance_squared);
+        let incidence = max(dot(surface_normal, light_direction), 0.0);
+
+        if incidence <= 0.0 {
+            continue;
+        }
+
+        let attenuation = lighting::getDistanceAttenuation(
+            distance_squared,
+            (*light).color_inverse_square_range.w,
+        );
+        var visibility = 1.0;
+        let casts_shadows = ((*light).flags
+            & mesh_view_types::POINT_LIGHT_FLAGS_SHADOWS_ENABLED_BIT) != 0u;
+
+        if casts_shadows {
+            visibility = shadows::fetch_point_shadow(
+                light_id,
+                in.world_position,
+                surface_normal,
+                in.position.xy,
+            );
+        }
+
+        result += (*light).color_inverse_square_range.rgb
+            * attenuation
+            * incidence
+            * visibility
+            * DYNAMIC_LIGHT_SCALE;
+    }
+
+    return result;
+}
 #endif
 
 @fragment
@@ -86,8 +154,15 @@ fn fragment(
 
 #ifdef PREPASS_PIPELINE
     let sun_visibility = 1.0;
+    let dynamic_light = vec3<f32>(0.0);
 #else
+    let surface_normal = normalize(pbr_input.world_normal);
     let sun_visibility = directional_sun_visibility(in);
+    let dynamic_light = dynamic_point_lighting(
+        in,
+        surface_normal,
+        pbr_input.is_orthographic,
+    );
 #endif
 
     let shadowed_sky_light = sky_light * sun_visibility;
@@ -116,8 +191,9 @@ fn fragment(
         );
     }
 
+    let lighting_multiplier = vec3<f32>(local_light) + dynamic_light;
     pbr_input.material.base_color = vec4<f32>(
-        base_rgb * local_light * pbr_bindings::material.base_color.rgb,
+        base_rgb * lighting_multiplier * pbr_bindings::material.base_color.rgb,
         texel.a * pbr_bindings::material.base_color.a,
     );
     pbr_input.material.base_color = alpha_discard(
