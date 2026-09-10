@@ -9,7 +9,8 @@ use self::validation::validate_biome_definition;
 use super::{
     biome_density::BiomeDensityModifier, biome_hydrology::BiomeHydrology,
     biome_material::BiomeMaterialLayer, biome_sky_layer::BiomeSkyLayerVisuals,
-    biome_terrain::BiomeTerrain, color::Rgb, day_night_phase::DayNightPhases,
+    biome_structure::BiomeStructure, biome_terrain::BiomeTerrain, color::Rgb,
+    day_night_phase::DayNightPhases,
 };
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
@@ -112,7 +113,7 @@ pub struct BiomeDefinition {
     #[serde(default)]
     pub hydrology: BiomeHydrology,
     #[serde(default)]
-    pub structures: Vec<String>,
+    pub structures: Vec<BiomeStructure>,
     #[serde(default)]
     pub structure_sets: Vec<String>,
     pub visuals: BiomeVisuals,
