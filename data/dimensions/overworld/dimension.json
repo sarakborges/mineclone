@@ -4,8 +4,8 @@
   "biomes": [
     "asteria:overworld/plains",
     "asteria:overworld/wasteland",
-    "asteria:overworld/wicked_realm",
-    "asteria:overworld/enchanted_realm"
+    "asteria:overworld/witchwood",
+    "asteria:overworld/enchanted_forest"
   ],
   "dayNightCycle": "asteria:overworld/day_night_cycle",
   "sky": "asteria:overworld/sky",

@@ -1,6 +1,6 @@
 {
-  "id": "asteria:overworld/wicked_realm",
-  "name": "Wicked Realm",
+  "id": "asteria:overworld/witchwood",
+  "name": "Witchwood",
   "size": {
     "x": { "min": 50.0, "max": 250.0 },
     "z": { "min": 50.0, "max": 250.0 },

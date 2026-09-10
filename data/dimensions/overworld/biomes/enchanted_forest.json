@@ -1,6 +1,6 @@
 {
-  "id": "asteria:overworld/enchanted_realm",
-  "name": "Enchanted Realm",
+  "id": "asteria:overworld/enchanted_forest",
+  "name": "Enchanted Forest",
   "size": {
     "x": { "min": 50.0, "max": 250.0 },
     "z": { "min": 50.0, "max": 250.0 },
