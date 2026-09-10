@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
@@ -16,6 +16,8 @@ use super::{
     spatial::{edge_intersects_region, water_body_intersects_region},
     types::{HydrologySurfaceSample, WaterBody},
 };
+
+const MAX_INCOMING_CHANNELS_PER_CONFLUENCE: usize = 2;
 
 pub(super) struct RiverSystem {
     pub graph: FeatureGraph,
@@ -47,6 +49,7 @@ where
     let mut graph = FeatureGraph::default();
     let mut water_bodies = Vec::new();
     let flow_cache = build_flow_cache(coord, network);
+    let selected_sources = selected_river_sources(&flow_cache, network);
 
     for dz in -RIVER_EDGE_MARGIN_CELLS..=RIVER_EDGE_MARGIN_CELLS {
         for dx in -RIVER_EDGE_MARGIN_CELLS..=RIVER_EDGE_MARGIN_CELLS {
@@ -77,7 +80,10 @@ where
             }
 
             if let Some(downstream_cell) = downstream_cell {
-                if !source.biome_hydrology.can_generate_river || flow < RIVER_MINIMUM_FLOW {
+                if !source.biome_hydrology.can_generate_river
+                    || flow < RIVER_MINIMUM_FLOW
+                    || !selected_sources.contains(&cell)
+                {
                     continue;
                 }
 
@@ -171,6 +177,62 @@ where
     }
 
     flow
+}
+
+fn selected_river_sources<F>(
+    flow_cache: &HashMap<IVec2, u32>,
+    network: &mut DrainageNetwork<'_, F>,
+) -> HashSet<IVec2>
+where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    let mut incoming = HashMap::<IVec2, Vec<(IVec2, u32)>>::new();
+
+    for (&cell, &flow) in flow_cache {
+        if flow < RIVER_MINIMUM_FLOW {
+            continue;
+        }
+
+        let source = network.node(cell);
+        if source.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD
+            || !source.biome_hydrology.can_generate_river
+        {
+            continue;
+        }
+
+        let Some(downstream_cell) = network.downstream_cell(cell) else {
+            continue;
+        };
+        let downstream = network.node(downstream_cell);
+        if !downstream.biome_hydrology.can_generate_river {
+            continue;
+        }
+
+        incoming
+            .entry(downstream_cell)
+            .or_default()
+            .push((cell, flow));
+    }
+
+    let mut selected = HashSet::new();
+
+    for channels in incoming.values_mut() {
+        channels.sort_by(|(left_cell, left_flow), (right_cell, right_flow)| {
+            right_flow
+                .cmp(left_flow)
+                .then_with(|| left_cell.x.cmp(&right_cell.x))
+                .then_with(|| left_cell.y.cmp(&right_cell.y))
+        });
+
+        selected.extend(
+            channels
+                .iter()
+                .take(MAX_INCOMING_CHANNELS_PER_CONFLUENCE)
+                .map(|(cell, _)| *cell),
+        );
+    }
+
+    selected
 }
 
 fn add_curved_river_edge(graph: &mut FeatureGraph, spec: RiverEdgeSpec) {
