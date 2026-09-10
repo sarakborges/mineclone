@@ -91,8 +91,7 @@ pub(crate) fn chunk_is_in_volume(
             let horizontal_radius_squared = horizontal_radius * horizontal_radius;
             let vertical_offset = delta.y.abs();
 
-            horizontal_squared * vertical_radius
-                + vertical_offset * horizontal_radius_squared
+            horizontal_squared * vertical_radius + vertical_offset * horizontal_radius_squared
                 <= horizontal_radius_squared * vertical_radius
         }
     }
