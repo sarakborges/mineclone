@@ -5,7 +5,9 @@ use crate::{
     content::{biome::BiomeRegistry, block::BlockRegistry, builtin_ids::GRASS_BLOCK_ID},
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::{
-        block_model::{BlockModelMeshes, block_face_material, block_face_material_data, block_faces},
+        block_model::{
+            BlockModelMeshes, block_face_material, block_face_material_data, block_faces,
+        },
         block_tint::block_tint_with_opacity,
     },
     voxel::{mesh::BlockFace, world::VoxelWorld},
