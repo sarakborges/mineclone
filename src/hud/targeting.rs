@@ -1,11 +1,16 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::block::BlockRegistry,
+    content::{biome::BiomeRegistry, block::BlockRegistry},
+    rendering::block_tint::block_tint_at,
     targeting::block::TargetedBlock,
     ui::{surface, typography},
+    voxel::world::VoxelWorld,
+    world::biome_field::BiomeField,
 };
+
+const TARGET_THUMBNAIL_SIZE: f32 = 42.0;
 
 pub struct TargetHudPlugin;
 
@@ -25,6 +30,20 @@ struct TargetHudRoot;
 #[derive(Component)]
 struct TargetBlockText;
 
+#[derive(Component, Default)]
+struct TargetBlockThumbnail {
+    block_id: Option<&'static str>,
+}
+
+#[derive(SystemParam)]
+struct TargetHudContent<'w> {
+    asset_server: Res<'w, AssetServer>,
+    blocks: Res<'w, BlockRegistry>,
+    biomes: Res<'w, BiomeRegistry>,
+    biome_field: Res<'w, BiomeField>,
+    world: Res<'w, VoxelWorld>,
+}
+
 fn spawn_target_hud(mut commands: Commands) {
     commands
         .spawn((
@@ -41,16 +60,35 @@ fn spawn_target_hud(mut commands: Commands) {
         ))
         .with_children(|root| {
             root.spawn(surface::hud_panel()).with_children(|panel| {
-                panel.spawn((typography::hud(""), TargetBlockText));
+                panel
+                    .spawn(Node {
+                        align_items: AlignItems::Center,
+                        column_gap: px(10),
+                        ..default()
+                    })
+                    .with_children(|row| {
+                        row.spawn((
+                            TargetBlockThumbnail::default(),
+                            ImageNode::default(),
+                            Node {
+                                width: px(TARGET_THUMBNAIL_SIZE),
+                                height: px(TARGET_THUMBNAIL_SIZE),
+                                ..default()
+                            },
+                            Pickable::IGNORE,
+                        ));
+                        row.spawn((typography::hud(""), TargetBlockText));
+                    });
             });
         });
 }
 
 fn update_target_hud(
     targeted: Res<TargetedBlock>,
-    blocks: Res<BlockRegistry>,
+    content: TargetHudContent,
     root_visibility: Single<&mut Visibility, With<TargetHudRoot>>,
     mut target_text: Single<&mut Text, With<TargetBlockText>>,
+    mut thumbnail: Single<(&mut TargetBlockThumbnail, &mut ImageNode)>,
 ) {
     let mut root_visibility = root_visibility.into_inner();
 
@@ -65,15 +103,41 @@ fn update_target_hud(
         *root_visibility = Visibility::Visible;
     }
 
-    let block_name = blocks
-        .get(hit.block_id)
-        .map_or(hit.block_id, |block| block.name.as_str());
+    let block = content.blocks.get(hit.block_id);
+    let block_name = block.map_or(hit.block_id, |block| block.name.as_str());
+    let light_position = if hit.normal == IVec3::ZERO {
+        hit.voxel + IVec3::Y
+    } else {
+        hit.voxel + hit.normal
+    };
+    let light = content.world.light_at(light_position);
+    let light_level = light.sky().max(light.block());
     let next_text = format!(
-        "Block: {block_name}\nX: {} | Z: {} | Y: {}",
+        "{block_name}\nLight: {light_level}\nX: {} | Z: {} | Y: {}",
         hit.voxel.x, hit.voxel.z, hit.voxel.y
     );
 
     if target_text.0 != next_text {
         target_text.0 = next_text;
+    }
+
+    let (thumbnail_state, image) = &mut *thumbnail;
+    if thumbnail_state.block_id != Some(hit.block_id) {
+        thumbnail_state.block_id = Some(hit.block_id);
+        image.image = block
+            .filter(|block| !block.textures.top.is_empty())
+            .map(|block| content.asset_server.load(block.textures.top.clone()))
+            .unwrap_or_default();
+    }
+
+    let tint_position = Vec2::new(hit.voxel.x as f32 + 0.5, hit.voxel.z as f32 + 0.5);
+    let tint = block_tint_at(
+        hit.block_id,
+        tint_position,
+        &content.biome_field,
+        &content.biomes,
+    );
+    if image.color != tint {
+        image.color = tint;
     }
 }
