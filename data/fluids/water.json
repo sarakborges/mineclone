@@ -5,5 +5,7 @@
   "opacity": 0.32,
   "roughness": 0.18,
   "metallic": 0.0,
-  "lightDampening": 2
+  "lightDampening": 2,
+  "spreadSpeed": 4.0,
+  "maxSpread": 7
 }
