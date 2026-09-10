@@ -49,6 +49,7 @@
       "night": { "r": 0.25, "g": 0.67, "b": 0.66 }
     },
     "grassColor": { "r": 0.03, "g": 0.88, "b": 0.78 },
+    "foliageColor": { "r": 0.03, "g": 0.88, "b": 0.78 },
     "underwaterTint": {
       "color": { "r": 0.05, "g": 0.62, "b": 0.68 },
       "opacity": 0.20
