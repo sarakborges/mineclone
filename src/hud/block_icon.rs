@@ -2,7 +2,11 @@ use bevy::{
     prelude::*, reflect::TypePath, render::render_resource::AsBindGroup, shader::ShaderRef,
 };
 
-use crate::content::block::BlockDefinition;
+use crate::{
+    content::block::BlockDefinition,
+    rendering::block_model::block_display_face_shade,
+    voxel::mesh::BlockFace,
+};
 
 const BLOCK_ICON_SHADER_PATH: &str = "shaders/block_icon_material.wgsl";
 
@@ -19,6 +23,8 @@ pub(crate) struct BlockIconMaterial {
     right_texture: Handle<Image>,
     #[uniform(6)]
     tint: Vec4,
+    #[uniform(7)]
+    face_shades: Vec4,
 }
 
 impl UiMaterial for BlockIconMaterial {
@@ -34,6 +40,7 @@ impl BlockIconMaterial {
             front_texture: Handle::default(),
             right_texture: Handle::default(),
             tint: Vec4::ONE,
+            face_shades: block_face_shades(),
         }
     }
 
@@ -49,6 +56,7 @@ impl BlockIconMaterial {
             front_texture: load_texture(asset_server, &block.textures.front, fallback),
             right_texture: load_texture(asset_server, &block.textures.right, fallback),
             tint: tint_vec4(tint),
+            face_shades: block_face_shades(),
         }
     }
 
@@ -62,6 +70,15 @@ impl BlockIconMaterial {
     pub(crate) fn set_tint(&mut self, tint: Color) {
         self.tint = tint_vec4(tint);
     }
+}
+
+fn block_face_shades() -> Vec4 {
+    Vec4::new(
+        block_display_face_shade(BlockFace::Top),
+        block_display_face_shade(BlockFace::Front),
+        block_display_face_shade(BlockFace::Right),
+        1.0,
+    )
 }
 
 fn first_texture(block: &BlockDefinition) -> &str {
