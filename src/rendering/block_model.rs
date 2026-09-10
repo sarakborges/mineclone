@@ -35,9 +35,18 @@ pub(crate) fn block_face_material(
     materials: &mut Assets<StandardMaterial>,
     opacity: f32,
 ) -> Handle<StandardMaterial> {
+    materials.add(block_face_material_data(face, block, asset_server, opacity))
+}
+
+pub(crate) fn block_face_material_data(
+    face: BlockFace,
+    block: &BlockDefinition,
+    asset_server: &AssetServer,
+    opacity: f32,
+) -> StandardMaterial {
     let opacity = opacity.clamp(0.0, 1.0);
 
-    materials.add(StandardMaterial {
+    StandardMaterial {
         base_color: Color::srgba(1.0, 1.0, 1.0, opacity),
         base_color_texture: block_face_texture(face, block)
             .map(|texture| asset_server.load(texture.to_owned())),
@@ -49,7 +58,7 @@ pub(crate) fn block_face_material(
         },
         unlit: true,
         ..default()
-    })
+    }
 }
 
 pub(crate) fn block_face_mesh(face: BlockFace) -> Mesh {
