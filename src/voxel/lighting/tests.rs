@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     content::{
-        block::{BlockDefinition, BlockRegistry, BlockTextures},
+        block::{BlockDefinition, BlockRegistry, BlockTextureRotations, BlockTextures},
         color::Rgb,
         fluid::{FluidDefinition, FluidRegistry},
     },
@@ -310,7 +310,7 @@ fn test_block(id: &str, light_emission: u8) -> BlockDefinition {
         id: id.to_owned(),
         name: id.to_owned(),
         textures: BlockTextures::default(),
-        rotate_texture: false,
+        rotate_texture: BlockTextureRotations::default(),
         light_emission,
         light_dampening: VoxelLight::MAX_LEVEL,
         casts_shadow: true,
