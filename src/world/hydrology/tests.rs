@@ -81,12 +81,15 @@ fn low_continentalness_produces_ocean_water_and_carving() {
 fn hydrology_biome_overlay_transitions_surface_to_coast_to_ocean() {
     let field = field();
     let land = field.biome_overlay(0.5);
-    let coast = field.biome_overlay(0.34);
+    let coast_fringe = field.biome_overlay(0.415);
+    let coast = field.biome_overlay(0.375);
     let ocean = field.biome_overlay(0.1);
 
     assert_eq!(land.surface_weight, 1.0);
-    assert!(coast.coast_weight > coast.surface_weight);
-    assert!(coast.coast_weight > coast.ocean_weight);
+    assert!(coast_fringe.surface_weight > coast_fringe.coast_weight);
+    assert_eq!(coast.surface_weight, 0.0);
+    assert_eq!(coast.coast_weight, 1.0);
+    assert_eq!(coast.ocean_weight, 0.0);
     assert_eq!(ocean.ocean_weight, 1.0);
 }
 
