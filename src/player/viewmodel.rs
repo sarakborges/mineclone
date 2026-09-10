@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use bevy::{light::NotShadowCaster, prelude::*};
+use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
@@ -59,6 +59,15 @@ impl ViewModelAnimation {
     }
 }
 
+#[derive(SystemParam)]
+struct ViewModelContent<'w> {
+    asset_server: Res<'w, AssetServer>,
+    blocks: Res<'w, BlockRegistry>,
+    biomes: Res<'w, BiomeRegistry>,
+    biome_field: Res<'w, BiomeField>,
+    hotbar: Res<'w, PlayerHotbar>,
+}
+
 pub struct PlayerViewModelPlugin;
 
 impl Plugin for PlayerViewModelPlugin {
@@ -75,13 +84,9 @@ impl Plugin for PlayerViewModelPlugin {
 fn spawn_viewmodel(
     mut commands: Commands,
     cameras: Query<(Entity, &Transform), Added<GameplayCamera>>,
-    asset_server: Res<AssetServer>,
+    content: ViewModelContent,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    blocks: Res<BlockRegistry>,
-    biomes: Res<BiomeRegistry>,
-    biome_field: Res<BiomeField>,
-    hotbar: Res<PlayerHotbar>,
 ) {
     for (camera, camera_transform) in &cameras {
         let arm_mesh = meshes.add(Cuboid::new(ARM_SIZE.x, ARM_SIZE.y, ARM_SIZE.z));
@@ -91,7 +96,7 @@ fn spawn_viewmodel(
             unlit: true,
             ..default()
         });
-        let selected_block_id = hotbar.item_at(hotbar.selected_slot());
+        let selected_block_id = content.hotbar.item_at(content.hotbar.selected_slot());
         let tint_position = Vec2::new(
             camera_transform.translation.x,
             camera_transform.translation.z,
@@ -134,18 +139,22 @@ fn spawn_viewmodel(
                                 let Some(block_id) = selected_block_id else {
                                     return;
                                 };
-                                let block = blocks.get(block_id).unwrap_or_else(|| {
+                                let block = content.blocks.get(block_id).unwrap_or_else(|| {
                                     panic!("hotbar references missing block: {block_id}")
                                 });
-                                let tint =
-                                    block_tint_at(block_id, tint_position, &biome_field, &biomes);
+                                let tint = block_tint_at(
+                                    block_id,
+                                    tint_position,
+                                    &content.biome_field,
+                                    &content.biomes,
+                                );
 
                                 for face in block_faces() {
                                     let mesh = meshes.add(block_face_mesh(face));
                                     let material = block_face_material(
                                         face,
                                         block,
-                                        &asset_server,
+                                        &content.asset_server,
                                         &mut materials,
                                         1.0,
                                     );
@@ -168,17 +177,13 @@ fn spawn_viewmodel(
 }
 
 fn sync_held_block(
-    hotbar: Res<PlayerHotbar>,
-    blocks: Res<BlockRegistry>,
-    biomes: Res<BiomeRegistry>,
-    biome_field: Res<BiomeField>,
-    asset_server: Res<AssetServer>,
+    content: ViewModelContent,
     player: Single<&Transform, With<GameplayCamera>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut roots: Query<(&mut HeldBlockRoot, &mut Visibility)>,
     faces: Query<(&HeldBlockFace, &MeshMaterial3d<StandardMaterial>)>,
 ) {
-    let selected_block_id = hotbar.item_at(hotbar.selected_slot());
+    let selected_block_id = content.hotbar.item_at(content.hotbar.selected_slot());
     let tint_position = Vec2::new(player.translation.x, player.translation.z);
 
     for (mut held, mut visibility) in &mut roots {
@@ -192,10 +197,16 @@ fn sync_held_block(
             *visibility = Visibility::Hidden;
             continue;
         };
-        let block = blocks
+        let block = content
+            .blocks
             .get(block_id)
             .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
-        let tint = block_tint_at(block_id, tint_position, &biome_field, &biomes);
+        let tint = block_tint_at(
+            block_id,
+            tint_position,
+            &content.biome_field,
+            &content.biomes,
+        );
 
         *visibility = Visibility::Visible;
 
@@ -205,7 +216,8 @@ fn sync_held_block(
             };
 
             if block_changed {
-                *material = block_face_material_data(face.face, block, &asset_server, 1.0);
+                *material =
+                    block_face_material_data(face.face, block, &content.asset_server, 1.0);
             }
 
             if material.base_color != tint {
