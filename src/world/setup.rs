@@ -13,7 +13,7 @@ use crate::{
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
     voxel::{
         chunk::CHUNK_SIZE, coordinates::split_dimension_position,
-        lighting::initialize_chunk_lighting, world::VoxelWorld,
+        lighting::initialize_chunks_lighting, world::VoxelWorld,
     },
 };
 
@@ -21,10 +21,7 @@ use super::{
     InMemoryWorldSave, WorldLoadMode, WorldSeed,
     biome_field::BiomeField,
     chunk_loading::ensure_chunk_loaded,
-    chunk_rendering::{
-        FluidMaterials, TerrainMaterials, refresh_adjacent_chunk_meshes,
-        refresh_changed_chunk_meshes, spawn_chunk_mesh,
-    },
+    chunk_rendering::{FluidMaterials, TerrainMaterials, spawn_chunk_mesh},
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
     dimension::CurrentDimension,
     render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
@@ -36,10 +33,19 @@ const BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS: i32 = 2;
 const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 1;
 const INITIAL_CHUNKS_PER_FRAME: usize = 2;
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum WorldLoadingPhase {
+    Generating,
+    Lighting,
+    Meshing,
+}
+
 #[derive(Resource)]
 pub struct WorldLoadingState {
     coords: Vec<IVec3>,
     generated: usize,
+    meshed: usize,
+    phase: WorldLoadingPhase,
     screen_rendered: bool,
     transition_requested: bool,
 }
@@ -155,6 +161,8 @@ pub fn begin_world_loading(
     commands.insert_resource(WorldLoadingState {
         coords,
         generated: 0,
+        meshed: 0,
+        phase: WorldLoadingPhase::Generating,
         screen_rendered: false,
         transition_requested: false,
     });
@@ -183,56 +191,62 @@ pub fn setup_world(
 
     let generation_context = generation.context(&content);
 
-    for _ in 0..INITIAL_CHUNKS_PER_FRAME {
-        if loading_state.generated >= loading_state.coords.len() {
-            break;
+    match loading_state.phase {
+        WorldLoadingPhase::Generating => {
+            for _ in 0..INITIAL_CHUNKS_PER_FRAME {
+                let Some(coord) = loading_state.coords.get(loading_state.generated).copied() else {
+                    break;
+                };
+
+                ensure_chunk_loaded(&mut world, coord, &generation_context);
+                loading_state.generated += 1;
+            }
+
+            if loading_state.generated >= loading_state.coords.len() {
+                loading_state.phase = WorldLoadingPhase::Lighting;
+            }
         }
+        WorldLoadingPhase::Lighting => {
+            initialize_chunks_lighting(
+                &mut world,
+                &loading_state.coords,
+                &content.blocks,
+                &content.fluids,
+            );
+            loading_state.phase = WorldLoadingPhase::Meshing;
+        }
+        WorldLoadingPhase::Meshing => {
+            for _ in 0..INITIAL_CHUNKS_PER_FRAME {
+                let Some(coord) = loading_state.coords.get(loading_state.meshed).copied() else {
+                    break;
+                };
+                let chunk = world
+                    .chunk(coord)
+                    .unwrap_or_else(|| panic!("generated chunk should exist at {coord:?}"));
+                let render_context = content.render_context(
+                    &world,
+                    &renderer.terrain_materials,
+                    &renderer.fluid_materials,
+                );
 
-        let coord = loading_state.coords[loading_state.generated];
-        ensure_chunk_loaded(&mut world, coord, &generation_context);
+                spawn_chunk_mesh(
+                    &mut renderer.commands,
+                    &mut renderer.meshes,
+                    &mut renderer.pool,
+                    coord,
+                    chunk,
+                    &render_context,
+                );
+                loading_state.meshed += 1;
+            }
 
-        let lighting_changes =
-            initialize_chunk_lighting(&mut world, coord, &content.blocks, &content.fluids);
-        let chunk = world
-            .chunk(coord)
-            .unwrap_or_else(|| panic!("generated chunk should exist at {coord:?}"));
-        let render_context = content.render_context(
-            &world,
-            &renderer.terrain_materials,
-            &renderer.fluid_materials,
-        );
-
-        spawn_chunk_mesh(
-            &mut renderer.commands,
-            &mut renderer.meshes,
-            &mut renderer.pool,
-            coord,
-            chunk,
-            &render_context,
-        );
-        refresh_adjacent_chunk_meshes(
-            &mut renderer.commands,
-            &mut renderer.meshes,
-            &mut renderer.pool,
-            coord,
-            &render_context,
-        );
-        refresh_changed_chunk_meshes(
-            &mut renderer.commands,
-            &mut renderer.meshes,
-            &mut renderer.pool,
-            coord,
-            lighting_changes,
-            &render_context,
-        );
-
-        loading_state.generated += 1;
-    }
-
-    if loading_state.generated >= loading_state.coords.len() && !loading_state.transition_requested
-    {
-        loading_state.transition_requested = true;
-        transition.request(ScreenTransitionTarget::game(GameState::Gameplay));
+            if loading_state.meshed >= loading_state.coords.len()
+                && !loading_state.transition_requested
+            {
+                loading_state.transition_requested = true;
+                transition.request(ScreenTransitionTarget::game(GameState::Gameplay));
+            }
+        }
     }
 }
 

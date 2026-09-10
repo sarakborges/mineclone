@@ -33,6 +33,28 @@ pub(crate) fn initialize_chunk_lighting(
     relax(world, blocks, fluids, &mut queue)
 }
 
+pub(crate) fn initialize_chunks_lighting(
+    world: &mut VoxelWorld,
+    coords: &[IVec3],
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+) {
+    let mut queue = LightingQueue::default();
+    let chunk_size = CHUNK_SIZE as i32;
+
+    for &coord in coords {
+        if !world.clear_chunk_light(coord) {
+            continue;
+        }
+
+        let origin = coord * chunk_size;
+        queue.enqueue_chunk_voxels(origin);
+        queue.enqueue_chunk_boundary_neighbors(origin);
+    }
+
+    drop(relax(world, blocks, fluids, &mut queue));
+}
+
 pub(crate) fn relight_after_voxel_edit(
     world: &mut VoxelWorld,
     position: IVec3,

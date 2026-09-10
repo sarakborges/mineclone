@@ -22,6 +22,18 @@ pub(super) struct RiverSystem {
     pub water_bodies: Vec<WaterBody>,
 }
 
+#[derive(Clone, Copy)]
+struct RiverEdgeSpec {
+    region_coord: IVec2,
+    source_cell: IVec2,
+    source: DrainageNode,
+    downstream: DrainageNode,
+    flow: u32,
+    downstream_flow: u32,
+    seed: u64,
+    sea_level: f32,
+}
+
 pub(super) fn build_river_system<F>(
     coord: IVec2,
     seed: u64,
@@ -61,14 +73,16 @@ where
                 let downstream_flow = flow_cache.get(&downstream_cell).copied().unwrap_or(flow);
                 add_curved_river_edge(
                     &mut graph,
-                    coord,
-                    cell,
-                    source,
-                    downstream,
-                    flow,
-                    downstream_flow,
-                    seed,
-                    sea_level,
+                    RiverEdgeSpec {
+                        region_coord: coord,
+                        source_cell: cell,
+                        source,
+                        downstream,
+                        flow,
+                        downstream_flow,
+                        seed,
+                        sea_level,
+                    },
                 );
                 continue;
             }
@@ -142,35 +156,31 @@ where
     flow
 }
 
-fn add_curved_river_edge(
-    graph: &mut FeatureGraph,
-    region_coord: IVec2,
-    source_cell: IVec2,
-    source: DrainageNode,
-    downstream: DrainageNode,
-    flow: u32,
-    downstream_flow: u32,
-    seed: u64,
-    sea_level: f32,
-) {
-    let width_multiplier = (source.biome_hydrology.river_width_multiplier
-        + downstream.biome_hydrology.river_width_multiplier)
+fn add_curved_river_edge(graph: &mut FeatureGraph, spec: RiverEdgeSpec) {
+    let width_multiplier = (spec.source.biome_hydrology.river_width_multiplier
+        + spec.downstream.biome_hydrology.river_width_multiplier)
         * 0.5;
-    let start_radius = river_radius(flow) * width_multiplier;
-    let end_radius = river_radius(downstream_flow.max(flow)) * width_multiplier;
+    let start_radius = river_radius(spec.flow) * width_multiplier;
+    let end_radius = river_radius(spec.downstream_flow.max(spec.flow)) * width_multiplier;
 
     if start_radius <= f32::EPSILON || end_radius <= f32::EPSILON {
         return;
     }
 
-    let points = river_path_points(source_cell, source, downstream, seed, sea_level);
+    let points = river_path_points(
+        spec.source_cell,
+        spec.source,
+        spec.downstream,
+        spec.seed,
+        spec.sea_level,
+    );
     let last = points.len().saturating_sub(1);
 
     for index in 0..last {
         let from = points[index];
         let to = points[index + 1];
         if !edge_intersects_region(
-            region_coord,
+            spec.region_coord,
             Vec2::new(from.x, from.z),
             Vec2::new(to.x, to.z),
         ) {

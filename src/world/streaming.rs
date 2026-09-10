@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
@@ -28,32 +28,37 @@ pub struct ChunkStreamingState {
     pending: VecDeque<IVec3>,
 }
 
+#[derive(SystemParam)]
+struct ChunkStreamingInputs<'w, 's> {
+    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
+    render_distance: Res<'w, RenderDistanceSettings>,
+    world: ResMut<'w, VoxelWorld>,
+    streaming: ResMut<'w, ChunkStreamingState>,
+    remesh_queue: ResMut<'w, ChunkRemeshQueue>,
+}
+
 pub fn reset_chunk_streaming(mut state: ResMut<ChunkStreamingState>) {
     *state = ChunkStreamingState::default();
 }
 
 pub fn stream_chunks(
-    player: Single<&Transform, With<GameplayCamera>>,
     generation: ChunkGeneration,
     content: ChunkContent,
     mut renderer: ChunkRenderer,
-    render_distance: Res<RenderDistanceSettings>,
-    mut world: ResMut<VoxelWorld>,
-    mut streaming: ResMut<ChunkStreamingState>,
-    mut remesh_queue: ResMut<ChunkRemeshQueue>,
+    mut inputs: ChunkStreamingInputs,
 ) {
-    let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
+    let feet_position = inputs.player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = split_dimension_position(feet_position).chunk;
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
-    let horizontal_radius = render_distance.chunks();
-    let vertical_radius = render_distance.vertical_chunks();
+    let horizontal_radius = inputs.render_distance.chunks();
+    let vertical_radius = inputs.render_distance.vertical_chunks();
 
-    if streaming.center != Some(center)
-        || streaming.horizontal_render_distance != horizontal_radius
-        || streaming.vertical_render_distance != vertical_radius
+    if inputs.streaming.center != Some(center)
+        || inputs.streaming.horizontal_render_distance != horizontal_radius
+        || inputs.streaming.vertical_render_distance != vertical_radius
     {
         rebuild_queue(
-            &mut streaming,
+            &mut inputs.streaming,
             &renderer.pool,
             center,
             horizontal_radius,
@@ -64,7 +69,7 @@ pub fn stream_chunks(
     let generation_context = generation.context(&content);
 
     for _ in 0..CHUNKS_PER_FRAME {
-        let Some(coord) = streaming.pending.pop_front() else {
+        let Some(coord) = inputs.streaming.pending.pop_front() else {
             break;
         };
 
@@ -72,14 +77,19 @@ pub fn stream_chunks(
             continue;
         }
 
-        ensure_chunk_loaded(&mut world, coord, &generation_context);
-        let lighting_changes =
-            initialize_chunk_lighting(&mut world, coord, &content.blocks, &content.fluids);
-        let chunk = world
+        ensure_chunk_loaded(&mut inputs.world, coord, &generation_context);
+        let lighting_changes = initialize_chunk_lighting(
+            &mut inputs.world,
+            coord,
+            &content.blocks,
+            &content.fluids,
+        );
+        let chunk = inputs
+            .world
             .chunk(coord)
             .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
         let render_context = content.render_context(
-            &world,
+            &inputs.world,
             &renderer.terrain_materials,
             &renderer.fluid_materials,
         );
@@ -93,9 +103,9 @@ pub fn stream_chunks(
             &render_context,
         );
 
-        remesh_queue.extend(lighting_changes);
+        inputs.remesh_queue.extend(lighting_changes);
         for offset in CARDINAL_NEIGHBORS {
-            remesh_queue.enqueue(coord + offset);
+            inputs.remesh_queue.enqueue(coord + offset);
         }
     }
 }

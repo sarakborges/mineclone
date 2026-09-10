@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use crate::content::dimension_hydrology::DimensionHydrology;
 
 use super::{
-    cave_connectivity::CaveConnectivityField,
+    cave_connectivity::{CaveConnectivityField, CaveConnectivityRegion},
     generation_region::GenerationRegion,
     geology::GeologyField,
     hydrology::{HydrologyField, HydrologyRegion},
@@ -20,6 +20,7 @@ pub struct WorldFeatureFields {
     cave_connectivity: CaveConnectivityField,
     geology: GeologyField,
     hydrology_cache: RwLock<HashMap<IVec2, Arc<HydrologyRegion>>>,
+    cave_cache: RwLock<HashMap<IVec3, Option<Arc<CaveConnectivityRegion>>>>,
     region_cache: RwLock<HashMap<IVec3, Arc<GenerationRegion>>>,
 }
 
@@ -30,6 +31,7 @@ impl WorldFeatureFields {
             cave_connectivity: CaveConnectivityField::new(seed.rotate_left(23)),
             geology: GeologyField::new(seed.rotate_left(41)),
             hydrology_cache: RwLock::new(HashMap::new()),
+            cave_cache: RwLock::new(HashMap::new()),
             region_cache: RwLock::new(HashMap::new()),
         }
     }
@@ -38,8 +40,31 @@ impl WorldFeatureFields {
         &self.hydrology
     }
 
-    pub fn cave_connectivity(&self) -> &CaveConnectivityField {
-        &self.cave_connectivity
+    pub fn cave_region(
+        &self,
+        coord: IVec3,
+        factory: impl FnOnce(&CaveConnectivityField) -> Option<CaveConnectivityRegion>,
+    ) -> Option<Arc<CaveConnectivityRegion>> {
+        if let Some(cached) = self
+            .cave_cache
+            .read()
+            .expect("cave region cache read lock was poisoned")
+            .get(&coord)
+            .cloned()
+        {
+            return cached;
+        }
+
+        let region = factory(&self.cave_connectivity).map(Arc::new);
+        let mut cache = self
+            .cave_cache
+            .write()
+            .expect("cave region cache write lock was poisoned");
+
+        cache
+            .entry(coord)
+            .or_insert_with(|| region.clone())
+            .clone()
     }
 
     pub fn region_with_hydrology(
@@ -106,6 +131,14 @@ impl WorldFeatureFields {
             .expect("hydrology region cache read lock was poisoned")
             .len()
     }
+
+    #[cfg(test)]
+    fn cached_cave_region_count(&self) -> usize {
+        self.cave_cache
+            .read()
+            .expect("cave region cache read lock was poisoned")
+            .len()
+    }
 }
 
 #[cfg(test)]
@@ -137,5 +170,20 @@ mod tests {
         assert!(Arc::ptr_eq(&first.hydrology, &vertical.hydrology));
         assert_eq!(fields.cached_region_count(), 2);
         assert_eq!(fields.cached_hydrology_region_count(), 1);
+    }
+
+    #[test]
+    fn cave_cache_reuses_the_same_generation_region_result() {
+        let fields = WorldFeatureFields::new(42, 64, DimensionHydrology::default());
+        let coord = IVec3::new(1, 2, 3);
+        let first = fields
+            .cave_region(coord, |_| Some(CaveConnectivityRegion::default()))
+            .expect("test cave region should exist");
+        let second = fields
+            .cave_region(coord, |_| panic!("cached cave region should not rebuild"))
+            .expect("cached cave region should exist");
+
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(fields.cached_cave_region_count(), 1);
     }
 }

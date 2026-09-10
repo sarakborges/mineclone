@@ -18,10 +18,6 @@ impl FluidCell {
         Self { fluid_id, level }
     }
 
-    pub fn source(fluid_id: FluidId) -> Self {
-        Self::new(fluid_id, MAX_FLUID_LEVEL)
-    }
-
     pub fn height(self) -> f32 {
         self.level as f32 / MAX_FLUID_LEVEL as f32
     }
