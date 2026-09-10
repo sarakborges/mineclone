@@ -4,11 +4,15 @@ use bevy::{light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::block::BlockRegistry,
-    rendering::block_model::{
-        block_face_material, block_face_material_data, block_face_mesh, block_faces,
+    content::{biome::BiomeRegistry, block::BlockRegistry},
+    rendering::{
+        block_model::{
+            block_face_material, block_face_material_data, block_face_mesh, block_faces,
+        },
+        block_tint::block_tint_at,
     },
     voxel::mesh::BlockFace,
+    world::biome_field::BiomeField,
 };
 
 use super::{camera::GameplayCamera, hotbar::PlayerHotbar};
@@ -70,14 +74,16 @@ impl Plugin for PlayerViewModelPlugin {
 
 fn spawn_viewmodel(
     mut commands: Commands,
-    cameras: Query<Entity, Added<GameplayCamera>>,
+    cameras: Query<(Entity, &Transform), Added<GameplayCamera>>,
     asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     blocks: Res<BlockRegistry>,
+    biomes: Res<BiomeRegistry>,
+    biome_field: Res<BiomeField>,
     hotbar: Res<PlayerHotbar>,
 ) {
-    for camera in &cameras {
+    for (camera, camera_transform) in &cameras {
         let arm_mesh = meshes.add(Cuboid::new(ARM_SIZE.x, ARM_SIZE.y, ARM_SIZE.z));
         let arm_material = materials.add(StandardMaterial {
             base_color: Color::srgb(0.72, 0.52, 0.40),
@@ -86,6 +92,10 @@ fn spawn_viewmodel(
             ..default()
         });
         let selected_block_id = hotbar.item_at(hotbar.selected_slot());
+        let tint_position = Vec2::new(
+            camera_transform.translation.x,
+            camera_transform.translation.z,
+        );
 
         commands.entity(camera).with_children(|camera| {
             camera
@@ -127,6 +137,8 @@ fn spawn_viewmodel(
                                 let block = blocks.get(block_id).unwrap_or_else(|| {
                                     panic!("hotbar references missing block: {block_id}")
                                 });
+                                let tint =
+                                    block_tint_at(block_id, tint_position, &biome_field, &biomes);
 
                                 for face in block_faces() {
                                     let mesh = meshes.add(block_face_mesh(face));
@@ -137,6 +149,9 @@ fn spawn_viewmodel(
                                         &mut materials,
                                         1.0,
                                     );
+                                    if let Some(mut face_material) = materials.get_mut(&material) {
+                                        face_material.base_color = tint;
+                                    }
 
                                     held.spawn((
                                         HeldBlockFace { face },
@@ -155,23 +170,23 @@ fn spawn_viewmodel(
 fn sync_held_block(
     hotbar: Res<PlayerHotbar>,
     blocks: Res<BlockRegistry>,
+    biomes: Res<BiomeRegistry>,
+    biome_field: Res<BiomeField>,
     asset_server: Res<AssetServer>,
+    player: Single<&Transform, With<GameplayCamera>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut roots: Query<(&mut HeldBlockRoot, &mut Visibility)>,
     faces: Query<(&HeldBlockFace, &MeshMaterial3d<StandardMaterial>)>,
 ) {
-    if !hotbar.is_changed() {
-        return;
-    }
-
     let selected_block_id = hotbar.item_at(hotbar.selected_slot());
+    let tint_position = Vec2::new(player.translation.x, player.translation.z);
 
     for (mut held, mut visibility) in &mut roots {
-        if held.block_id == selected_block_id {
-            continue;
-        }
+        let block_changed = held.block_id != selected_block_id;
 
-        held.block_id = selected_block_id;
+        if block_changed {
+            held.block_id = selected_block_id;
+        }
 
         let Some(block_id) = selected_block_id else {
             *visibility = Visibility::Hidden;
@@ -180,6 +195,7 @@ fn sync_held_block(
         let block = blocks
             .get(block_id)
             .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
+        let tint = block_tint_at(block_id, tint_position, &biome_field, &biomes);
 
         *visibility = Visibility::Visible;
 
@@ -188,7 +204,13 @@ fn sync_held_block(
                 continue;
             };
 
-            *material = block_face_material_data(face.face, block, &asset_server, 1.0);
+            if block_changed {
+                *material = block_face_material_data(face.face, block, &asset_server, 1.0);
+            }
+
+            if material.base_color != tint {
+                material.base_color = tint;
+            }
         }
     }
 }
