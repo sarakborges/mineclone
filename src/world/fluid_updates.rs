@@ -174,7 +174,7 @@ fn desired_fluid(
         return None;
     }
 
-    let mut strongest: Option<(u8, FluidId)> = None;
+    let mut strongest: Option<(u8, u16, FluidId)> = None;
 
     for offset in HORIZONTAL_NEIGHBORS {
         let Some(neighbor) = world.fluid_at(position + offset) else {
@@ -183,31 +183,37 @@ fn desired_fluid(
         let definition = fluids
             .get(neighbor.fluid_id)
             .unwrap_or_else(|| panic!("missing fluid definition for id {}", neighbor.fluid_id));
-        let Some(level) = horizontal_spread_level(neighbor.level, definition.max_spread) else {
+        let Some((level, spread_distance)) =
+            horizontal_spread_state(neighbor, definition.max_spread)
+        else {
             continue;
         };
 
-        let candidate = (level, neighbor.fluid_id);
+        let candidate = (level, spread_distance, neighbor.fluid_id);
         if strongest.is_none_or(|current| {
-            candidate.0 > current.0 || (candidate.0 == current.0 && candidate.1 < current.1)
+            candidate.0 > current.0
+                || (candidate.0 == current.0 && candidate.1 < current.1)
+                || (candidate.0 == current.0
+                    && candidate.1 == current.1
+                    && candidate.2 < current.2)
         }) {
             strongest = Some(candidate);
         }
     }
 
-    strongest.map(|(level, fluid_id)| FluidCell::flowing(fluid_id, level))
+    strongest.map(|(level, spread_distance, fluid_id)| {
+        FluidCell::spreading(fluid_id, level, spread_distance)
+    })
 }
 
-fn horizontal_spread_level(neighbor_level: u8, max_spread: u8) -> Option<u8> {
-    let distance = MAX_FLUID_LEVEL
-        .saturating_sub(neighbor_level)
-        .saturating_add(1);
-    if distance > max_spread {
+fn horizontal_spread_state(neighbor: FluidCell, max_spread: u16) -> Option<(u8, u16)> {
+    let spread_distance = neighbor.spread_distance().saturating_add(1);
+    if spread_distance > max_spread {
         return None;
     }
 
-    let level = neighbor_level.saturating_sub(1);
-    (level > 0).then_some(level)
+    let level = neighbor.level.saturating_sub(1).max(1);
+    Some((level, spread_distance))
 }
 
 fn enqueue_remesh(position: IVec3, remesh_queue: &mut ChunkRemeshQueue) {
@@ -236,12 +242,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn horizontal_spread_respects_data_driven_range() {
-        assert_eq!(horizontal_spread_level(MAX_FLUID_LEVEL, 0), None);
-        assert_eq!(horizontal_spread_level(MAX_FLUID_LEVEL, 1), Some(7));
-        assert_eq!(horizontal_spread_level(7, 1), None);
-        assert_eq!(horizontal_spread_level(7, 2), Some(6));
-        assert_eq!(horizontal_spread_level(2, 7), Some(1));
-        assert_eq!(horizontal_spread_level(1, 7), None);
+    fn horizontal_spread_respects_data_driven_range_independently_from_level() {
+        let source = FluidCell::source(0, 2);
+        assert_eq!(horizontal_spread_state(source, 0), None);
+        assert_eq!(horizontal_spread_state(source, 1), Some((1, 1)));
+
+        let first = FluidCell::spreading(0, 1, 1);
+        assert_eq!(horizontal_spread_state(first, 1), None);
+        assert_eq!(horizontal_spread_state(first, 2), Some((1, 2)));
+
+        let far = FluidCell::spreading(0, 1, 20);
+        assert_eq!(horizontal_spread_state(far, 20), None);
+        assert_eq!(horizontal_spread_state(far, 21), Some((1, 21)));
     }
 }
