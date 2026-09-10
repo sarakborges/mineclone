@@ -1,0 +1,45 @@
+{
+  "id": "asteria:medium_boulder",
+  "name": "Medium Boulder",
+  "anchor": { "x": 2, "y": 0, "z": 2 },
+  "placement": {
+    "spacing": 16,
+    "chance": 0.32,
+    "jitter": 5
+  },
+  "palette": {
+    "S": { "block": "asteria:stone" }
+  },
+  "layers": [
+    {
+      "y": 0,
+      "rows": [
+        ".SS..",
+        "SSSS.",
+        "SSSSS",
+        ".SSSS",
+        "..SS."
+      ]
+    },
+    {
+      "y": 1,
+      "rows": [
+        "..SS.",
+        ".SSSS",
+        ".SSS.",
+        "..SS.",
+        "....."
+      ]
+    },
+    {
+      "y": 2,
+      "rows": [
+        ".....",
+        "..SS.",
+        "..S..",
+        ".....",
+        "....."
+      ]
+    }
+  ]
+}
