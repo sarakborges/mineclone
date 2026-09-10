@@ -1,40 +1,58 @@
 use bevy::prelude::*;
 
 use super::HydrologyRegion;
-use crate::world::hydrology::types::HydrologyWaterSample;
+use crate::world::hydrology::{
+    constants::{OCEAN_EXTRA_DEPTH, OCEAN_MINIMUM_DEPTH},
+    math::smoothstep,
+    types::HydrologyWaterSample,
+};
 
 impl HydrologyRegion {
     pub fn water_at(&self, position: Vec2) -> Option<HydrologyWaterSample<'_>> {
-        let mut selected = self
-            .water_bodies
-            .iter()
-            .filter(|body| body.contains_horizontal(position))
-            .max_by(|left, right| left.water_level.total_cmp(&right.water_level))
-            .map(|body| HydrologyWaterSample {
-                fluid_id: body.fluid_id.as_str(),
-                water_level: body.water_level,
-            });
+        let mut selected = None;
+
+        for body in &self.water_bodies {
+            let strength = body.horizontal_strength(position);
+            if strength <= 0.0 {
+                continue;
+            }
+
+            choose_water(
+                &mut selected,
+                HydrologyWaterSample {
+                    fluid_id: body.fluid_id.as_str(),
+                    water_level: body.water_level,
+                    bed_level: body.water_level - body.carve_depth * strength,
+                },
+            );
+        }
 
         if let Some(river) = self
             .river_graph
             .sample_horizontal(position)
             .filter(|river| river.strength > 0.0)
         {
-            choose_higher_water(
+            let profile = smoothstep(river.strength);
+            choose_water(
                 &mut selected,
                 HydrologyWaterSample {
                     fluid_id: self.settings.water_fluid.as_str(),
                     water_level: river.height,
+                    bed_level: river.height - self.river_carve_depth * profile,
                 },
             );
         }
 
-        if self.ocean_strength_at(position) > 0.0 {
-            choose_higher_water(
+        let ocean_strength = self.ocean_strength_at(position);
+        if ocean_strength > 0.0 {
+            choose_water(
                 &mut selected,
                 HydrologyWaterSample {
                     fluid_id: self.settings.water_fluid.as_str(),
                     water_level: self.sea_level,
+                    bed_level: self.sea_level
+                        - OCEAN_MINIMUM_DEPTH
+                        - OCEAN_EXTRA_DEPTH * ocean_strength,
                 },
             );
         }
@@ -43,14 +61,17 @@ impl HydrologyRegion {
     }
 }
 
-fn choose_higher_water<'a>(
+fn choose_water<'a>(
     selected: &mut Option<HydrologyWaterSample<'a>>,
     candidate: HydrologyWaterSample<'a>,
 ) {
-    if selected
-        .as_ref()
-        .is_none_or(|current| candidate.water_level > current.water_level)
-    {
+    let should_replace = selected.as_ref().is_none_or(|current| {
+        candidate.water_level > current.water_level
+            || ((candidate.water_level - current.water_level).abs() <= f32::EPSILON
+                && candidate.bed_level < current.bed_level)
+    });
+
+    if should_replace {
         *selected = Some(candidate);
     }
 }

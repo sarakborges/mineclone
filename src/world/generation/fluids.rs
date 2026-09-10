@@ -36,6 +36,10 @@ pub(super) fn rasterize_fluid_pass(
                 }
 
                 let world_y = chunk_origin.y + local_y as i32;
+                if world_y as f32 + 1.0 <= water.bed_level {
+                    continue;
+                }
+
                 let Some(level) = fluid_level_for_surface(water.water_level, world_y) else {
                     continue;
                 };

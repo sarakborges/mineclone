@@ -60,6 +60,7 @@ fn irregular_boundary_scale(normalized: Vec2, seed: u64) -> f32 {
 pub struct HydrologyWaterSample<'a> {
     pub fluid_id: &'a str,
     pub water_level: f32,
+    pub bed_level: f32,
 }
 
 #[derive(Clone, Copy, Debug)]

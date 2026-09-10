@@ -72,13 +72,21 @@ impl HydrologyRegion {
             return 0.0;
         }
 
+        let river_opening = self
+            .river_graph
+            .sample_horizontal(horizontal)
+            .map_or(0.0, |river| smoothstep((river.strength * 2.0).clamp(0.0, 1.0)));
+        if river_opening >= 1.0 {
+            return 0.0;
+        }
+
         let Some(surface) = self.macro_sample_at(horizontal) else {
             return 0.0;
         };
         let target_surface = body.water_level + LAKE_SHORE_SURFACE_OFFSET;
         let missing_height = (target_surface - surface.elevation).max(0.0);
 
-        missing_height * shore_strength
+        missing_height * shore_strength * (1.0 - river_opening)
     }
 
     fn ocean_density_delta(&self, position: Vec2) -> f32 {
