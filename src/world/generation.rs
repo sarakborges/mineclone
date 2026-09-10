@@ -100,6 +100,7 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         region.as_ref(),
         context.biome_field,
         context.biomes,
+        context.dimension,
         context.feature_fields,
     );
     let columns = sample_generation_columns(
