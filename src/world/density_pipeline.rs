@@ -10,8 +10,10 @@ use super::{
 
 const DENSITY_NOISE_EDGE: f32 = 0.15;
 const CAVE_CONNECTOR_AIR_MARGIN: f32 = 4.0;
-const CAVE_MINIMUM_SURFACE_DEPTH: f32 = 12.0;
-const CAVE_FULL_STRENGTH_SURFACE_DEPTH: f32 = 20.0;
+const CAVE_CONNECTOR_MINIMUM_SURFACE_DEPTH: f32 = -2.0;
+const CAVE_CONNECTOR_FULL_STRENGTH_SURFACE_DEPTH: f32 = 3.0;
+const CAVERN_MINIMUM_SURFACE_DEPTH: f32 = 12.0;
+const CAVERN_FULL_STRENGTH_SURFACE_DEPTH: f32 = 20.0;
 
 pub fn sample_density(
     base_density: f32,
@@ -24,31 +26,41 @@ pub fn sample_density(
     let hydrology_delta = region.hydrology.density_delta(position);
     let geology_delta = region.geology.density_delta(position);
     let mut density = base_density + hydrology_delta + geology_delta;
-    let cave_depth_strength = cave_depth_strength(base_density);
+    let connector_depth_strength = depth_strength(
+        base_density,
+        CAVE_CONNECTOR_MINIMUM_SURFACE_DEPTH,
+        CAVE_CONNECTOR_FULL_STRENGTH_SURFACE_DEPTH,
+    );
 
-    if cave_depth_strength > 0.0
+    if connector_depth_strength > 0.0
         && let Some(connector) = anchored_caves
             .and_then(|caves| caves.connector_graph.sample(position))
-            .map(|sample| smoothstep(sample.strength) * cave_depth_strength)
+            .map(|sample| smoothstep(sample.strength) * connector_depth_strength)
     {
         density += carve_density_delta(density, connector, CAVE_CONNECTOR_AIR_MARGIN);
     }
 
+    let cavern_depth_strength = depth_strength(
+        base_density,
+        CAVERN_MINIMUM_SURFACE_DEPTH,
+        CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
+    );
+
     density
-        + volume_biome_density_delta(density, position, volume, biome_field, cave_depth_strength)
+        + volume_biome_density_delta(density, position, volume, biome_field, cavern_depth_strength)
 }
 
-fn cave_depth_strength(base_density: f32) -> f32 {
-    if base_density <= CAVE_MINIMUM_SURFACE_DEPTH {
+fn depth_strength(base_density: f32, minimum_depth: f32, full_strength_depth: f32) -> f32 {
+    if base_density <= minimum_depth {
         return 0.0;
     }
 
-    if base_density >= CAVE_FULL_STRENGTH_SURFACE_DEPTH {
+    if base_density >= full_strength_depth {
         return 1.0;
     }
 
-    let progress = (base_density - CAVE_MINIMUM_SURFACE_DEPTH)
-        / (CAVE_FULL_STRENGTH_SURFACE_DEPTH - CAVE_MINIMUM_SURFACE_DEPTH);
+    let progress =
+        (base_density - minimum_depth) / (full_strength_depth - minimum_depth);
     smoothstep(progress.clamp(0.0, 1.0))
 }
 
@@ -193,11 +205,52 @@ mod tests {
     }
 
     #[test]
-    fn cave_carving_is_suppressed_close_to_the_surface() {
-        assert_eq!(cave_depth_strength(0.0), 0.0);
-        assert_eq!(cave_depth_strength(CAVE_MINIMUM_SURFACE_DEPTH), 0.0);
-        assert!(cave_depth_strength(16.0) > 0.0);
-        assert_eq!(cave_depth_strength(CAVE_FULL_STRENGTH_SURFACE_DEPTH), 1.0);
+    fn cavern_carving_stays_suppressed_close_to_the_surface() {
+        assert_eq!(
+            depth_strength(
+                0.0,
+                CAVERN_MINIMUM_SURFACE_DEPTH,
+                CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
+            ),
+            0.0
+        );
+        assert_eq!(
+            depth_strength(
+                CAVERN_MINIMUM_SURFACE_DEPTH,
+                CAVERN_MINIMUM_SURFACE_DEPTH,
+                CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
+            ),
+            0.0
+        );
+        assert!(
+            depth_strength(
+                16.0,
+                CAVERN_MINIMUM_SURFACE_DEPTH,
+                CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
+            ) > 0.0
+        );
+        assert_eq!(
+            depth_strength(
+                CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
+                CAVERN_MINIMUM_SURFACE_DEPTH,
+                CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
+            ),
+            1.0
+        );
+    }
+
+    #[test]
+    fn cave_connectors_can_open_a_surface_mouth() {
+        let strength = depth_strength(
+            0.5,
+            CAVE_CONNECTOR_MINIMUM_SURFACE_DEPTH,
+            CAVE_CONNECTOR_FULL_STRENGTH_SURFACE_DEPTH,
+        );
+        let density = 0.5;
+        let carved = density + carve_density_delta(density, strength, CAVE_CONNECTOR_AIR_MARGIN);
+
+        assert!(strength > 0.0);
+        assert!(carved < 0.0);
     }
 
     #[test]
@@ -232,7 +285,7 @@ mod tests {
     }
 
     #[test]
-    fn cavern_modifier_cannot_open_shallow_terrain() {
+    fn cavern_modifier_cannot_open_shallow_terrain_without_an_entrance_connector() {
         let position = Vec3::new(12.5, 70.5, -8.5);
         let current_density = 8.0;
         let cavern = density_modifier_delta(
@@ -244,7 +297,11 @@ mod tests {
             current_density,
             position,
             7,
-            cave_depth_strength(current_density),
+            depth_strength(
+                current_density,
+                CAVERN_MINIMUM_SURFACE_DEPTH,
+                CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
+            ),
         );
 
         assert_eq!(cavern, 0.0);
