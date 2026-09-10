@@ -5,6 +5,7 @@ mod features;
 mod fluids;
 mod index;
 mod materials;
+mod structures;
 
 use bevy::prelude::*;
 
@@ -51,7 +52,15 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
     }
 
     let (_, maximum_surface_chunk_y) = chunk_y_bounds(context.dimension, context.biomes);
-    if coord.y > maximum_surface_chunk_y && !context.biomes.has_volume_density_modifiers() {
+    let structure_height = context.structures.max_height_above_anchor();
+    let structure_chunk_allowance = if structure_height == 0 {
+        0
+    } else {
+        (structure_height + CHUNK_SIZE as i32 - 1) / CHUNK_SIZE as i32
+    };
+    if coord.y > maximum_surface_chunk_y + structure_chunk_allowance
+        && !context.biomes.has_volume_density_modifiers()
+    {
         return VoxelChunk::empty();
     }
 
@@ -147,6 +156,9 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         chunk_origin,
         region.as_ref(),
         context.biome_field,
+        context.blocks,
+        context.dimension,
+        context.biomes,
         context.structures,
         context.structure_sets,
     );
