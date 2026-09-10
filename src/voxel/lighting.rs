@@ -12,7 +12,10 @@ use bevy::prelude::*;
 
 use crate::content::{block::BlockRegistry, fluid::FluidRegistry};
 
-use self::{propagation::{relax, relax_budgeted}, queue::LightingQueue};
+use self::{
+    propagation::{relax, relax_budgeted},
+    queue::LightingQueue,
+};
 use super::{chunk::CHUNK_SIZE, world::VoxelWorld};
 
 #[derive(Resource, Default)]
