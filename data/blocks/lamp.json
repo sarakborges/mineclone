@@ -1,6 +1,14 @@
 {
   "id": "asteria:lamp",
   "name": "Lamp Block",
+  "textures": {
+    "top": "textures/blocks/lamp.png",
+    "bottom": "textures/blocks/lamp.png",
+    "left": "textures/blocks/lamp.png",
+    "right": "textures/blocks/lamp.png",
+    "front": "textures/blocks/lamp.png",
+    "back": "textures/blocks/lamp.png"
+  },
   "rotateTexture": {
     "top": false,
     "bottom": false,
