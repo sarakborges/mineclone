@@ -68,9 +68,8 @@ pub(super) fn swim_vertical(
 }
 
 pub(super) fn player_in_fluid(eye_position: Vec3, world: &VoxelWorld) -> bool {
-    player_fluid_surface(eye_position, world).is_some_and(|surface_y| {
-        player_fluid_sample_y(eye_position) < surface_y
-    })
+    player_fluid_surface(eye_position, world)
+        .is_some_and(|surface_y| player_fluid_sample_y(eye_position) < surface_y)
 }
 
 fn player_near_fluid_surface(eye_position: Vec3, world: &VoxelWorld) -> bool {
