@@ -35,7 +35,8 @@ pub fn sample_density(
         }
     }
 
-    density + volume_biome_density_delta(density, position, volume, biome_field, cave_depth_strength)
+    density
+        + volume_biome_density_delta(density, position, volume, biome_field, cave_depth_strength)
 }
 
 fn cave_depth_strength(base_density: f32) -> f32 {
