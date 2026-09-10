@@ -72,7 +72,8 @@ pub(super) fn rasterize_material_pass(
                     .blocks
                     .get(block_id)
                     .unwrap_or_else(|| panic!("missing block definition: {block_id}"));
-                let rotation = TextureRotation::for_position(world_position, block.rotate_texture);
+                let rotation =
+                    TextureRotation::for_position(world_position, block.rotate_texture.any());
 
                 chunk.set_block(
                     local_x,
