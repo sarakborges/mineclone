@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, text::FontAtlasSet};
 
 use crate::{app::game_state::GameState, rendering::terrain_material::TerrainMaterial};
 
@@ -16,6 +16,7 @@ pub(super) fn log_render_asset_pressure(
     pool: Res<ChunkRenderPool>,
     meshes: Res<Assets<Mesh>>,
     images: Res<Assets<Image>>,
+    font_atlases: Res<FontAtlasSet>,
     standard_materials: Res<Assets<StandardMaterial>>,
     terrain_materials: Res<Assets<TerrainMaterial>>,
     mut timer: Local<Option<Timer>>,
@@ -56,9 +57,12 @@ pub(super) fn log_render_asset_pressure(
     let runtime_top_shape = runtime_image_shapes
         .into_iter()
         .max_by_key(|(_, count)| *count);
+    let font_atlas_keys = font_atlases.len();
+    let font_atlas_count = font_atlases.values().map(Vec::len).sum::<usize>();
+    let font_atlas_bytes = font_atlases.total_bytes(&images);
 
     info!(
-        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} runtime_top_shape={runtime_top_shape:?} standard_materials={} terrain_materials={}",
+        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} runtime_top_shape={runtime_top_shape:?} font_atlas_keys={font_atlas_keys} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} standard_materials={} terrain_materials={}",
         state.get(),
         standard_materials.len(),
         terrain_materials.len(),
