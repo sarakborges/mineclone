@@ -9,11 +9,13 @@ use super::{
 };
 
 const DENSITY_NOISE_EDGE: f32 = 0.15;
-const CAVE_CONNECTOR_AIR_MARGIN: f32 = 4.0;
+const CAVE_CONNECTOR_AIR_MARGIN: f32 = 5.5;
 const CAVE_CONNECTOR_MINIMUM_SURFACE_DEPTH: f32 = -2.0;
-const CAVE_CONNECTOR_FULL_STRENGTH_SURFACE_DEPTH: f32 = 3.0;
+const CAVE_CONNECTOR_FULL_STRENGTH_SURFACE_DEPTH: f32 = 1.5;
 const CAVERN_MINIMUM_SURFACE_DEPTH: f32 = 12.0;
 const CAVERN_FULL_STRENGTH_SURFACE_DEPTH: f32 = 20.0;
+const CAVE_WATER_PROTECTION_DEPTH: f32 = 14.0;
+const CAVE_WATER_PROTECTION_FADE_DEPTH: f32 = 20.0;
 
 pub fn sample_density(
     base_density: f32,
@@ -26,11 +28,12 @@ pub fn sample_density(
     let hydrology_delta = region.hydrology.density_delta(position);
     let geology_delta = region.geology.density_delta(position);
     let mut density = base_density + hydrology_delta + geology_delta;
+    let water_clearance = cave_water_clearance(position, region);
     let connector_depth_strength = depth_strength(
         base_density,
         CAVE_CONNECTOR_MINIMUM_SURFACE_DEPTH,
         CAVE_CONNECTOR_FULL_STRENGTH_SURFACE_DEPTH,
-    );
+    ) * water_clearance;
 
     if connector_depth_strength > 0.0
         && let Some(connector) = anchored_caves
@@ -44,7 +47,7 @@ pub fn sample_density(
         base_density,
         CAVERN_MINIMUM_SURFACE_DEPTH,
         CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
-    );
+    ) * water_clearance;
 
     density
         + volume_biome_density_delta(
@@ -54,6 +57,29 @@ pub fn sample_density(
             biome_field,
             cavern_depth_strength,
         )
+}
+
+fn cave_water_clearance(position: Vec3, region: &GenerationRegion) -> f32 {
+    let horizontal = Vec2::new(position.x, position.z);
+    let Some(water) = region.hydrology.water_at(horizontal) else {
+        return 1.0;
+    };
+    let depth_below_water = water.water_level - position.y;
+
+    if depth_below_water < 0.0 {
+        return 1.0;
+    }
+    if depth_below_water <= CAVE_WATER_PROTECTION_DEPTH {
+        return 0.0;
+    }
+    if depth_below_water >= CAVE_WATER_PROTECTION_FADE_DEPTH {
+        return 1.0;
+    }
+
+    smoothstep(
+        (depth_below_water - CAVE_WATER_PROTECTION_DEPTH)
+            / (CAVE_WATER_PROTECTION_FADE_DEPTH - CAVE_WATER_PROTECTION_DEPTH),
+    )
 }
 
 fn depth_strength(base_density: f32, minimum_depth: f32, full_strength_depth: f32) -> f32 {
