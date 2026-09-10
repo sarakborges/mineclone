@@ -55,18 +55,25 @@ fn update_target_hud(
     let mut root_visibility = root_visibility.into_inner();
 
     let Some(hit) = targeted.0 else {
-        *root_visibility = Visibility::Hidden;
+        if *root_visibility != Visibility::Hidden {
+            *root_visibility = Visibility::Hidden;
+        }
         return;
     };
 
-    *root_visibility = Visibility::Visible;
+    if *root_visibility != Visibility::Visible {
+        *root_visibility = Visibility::Visible;
+    }
 
     let block_name = blocks
         .get(hit.block_id)
         .map_or(hit.block_id, |block| block.name.as_str());
-
-    target_text.0 = format!(
+    let next_text = format!(
         "Block: {block_name}\nX: {} | Z: {} | Y: {}",
         hit.voxel.x, hit.voxel.z, hit.voxel.y
     );
+
+    if target_text.0 != next_text {
+        target_text.0 = next_text;
+    }
 }
