@@ -3,7 +3,7 @@ use bevy::prelude::*;
 pub const MIN_RENDER_DISTANCE_CHUNKS: i32 = 4;
 pub const MAX_RENDER_DISTANCE_CHUNKS: i32 = 8;
 pub const DEFAULT_RENDER_DISTANCE_CHUNKS: i32 = 6;
-pub const DEFAULT_VERTICAL_RENDER_DISTANCE_CHUNKS: i32 = 4;
+pub const DEFAULT_VERTICAL_RENDER_DISTANCE_CHUNKS: i32 = 3;
 
 #[derive(Resource)]
 pub struct RenderDistanceSettings {
@@ -51,14 +51,21 @@ pub fn chunk_coords_in_volume(
     );
 
     let mut coords = Vec::new();
-    let horizontal_radius_squared = horizontal_radius * horizontal_radius;
     let min_chunk_y = (center.y - vertical_radius).max(0);
     let max_chunk_y = center.y + vertical_radius;
 
     for y in min_chunk_y..=max_chunk_y {
+        let vertical_delta = y - center.y;
+
         for z in -horizontal_radius..=horizontal_radius {
             for x in -horizontal_radius..=horizontal_radius {
-                if x * x + z * z > horizontal_radius_squared {
+                if !inside_streaming_ellipsoid(
+                    x,
+                    vertical_delta,
+                    z,
+                    horizontal_radius,
+                    vertical_radius,
+                ) {
                     continue;
                 }
 
@@ -73,6 +80,30 @@ pub fn chunk_coords_in_volume(
     });
 
     coords
+}
+
+fn inside_streaming_ellipsoid(
+    x: i32,
+    y: i32,
+    z: i32,
+    horizontal_radius: i32,
+    vertical_radius: i32,
+) -> bool {
+    let horizontal_squared = x * x + z * z;
+
+    match (horizontal_radius, vertical_radius) {
+        (0, 0) => horizontal_squared == 0 && y == 0,
+        (0, _) => horizontal_squared == 0 && y.abs() <= vertical_radius,
+        (_, 0) => y == 0 && horizontal_squared <= horizontal_radius * horizontal_radius,
+        _ => {
+            let horizontal_radius_squared = horizontal_radius * horizontal_radius;
+            let vertical_radius_squared = vertical_radius * vertical_radius;
+
+            horizontal_squared * vertical_radius_squared
+                + y * y * horizontal_radius_squared
+                <= horizontal_radius_squared * vertical_radius_squared
+        }
+    }
 }
 
 #[cfg(test)]
@@ -92,5 +123,18 @@ mod tests {
         let coords = chunk_coords_in_volume(center, 2, 3);
 
         assert!(coords.iter().all(|coord| (coord.y - center.y).abs() <= 3));
+    }
+
+    #[test]
+    fn vertical_extremes_have_smaller_horizontal_footprint() {
+        let center = IVec3::new(0, 8, 0);
+        let coords = chunk_coords_in_volume(center, 4, 2);
+        let center_layer = coords.iter().filter(|coord| coord.y == center.y).count();
+        let top_layer = coords
+            .iter()
+            .filter(|coord| coord.y == center.y + 2)
+            .count();
+
+        assert!(top_layer < center_layer);
     }
 }

@@ -27,14 +27,14 @@ use super::{
     },
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
     dimension::CurrentDimension,
-    render_distance::chunk_coords_in_volume,
+    render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
     terrain::surface_height,
     world_feature_fields::WorldFeatureFields,
 };
 
-const INITIAL_HORIZONTAL_RADIUS_CHUNKS: i32 = 5;
-const INITIAL_VERTICAL_RADIUS_CHUNKS: i32 = 4;
-const INITIAL_CHUNKS_PER_FRAME: usize = 4;
+const BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS: i32 = 2;
+const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 1;
+const INITIAL_CHUNKS_PER_FRAME: usize = 2;
 
 #[derive(Resource)]
 pub struct WorldLoadingState {
@@ -60,6 +60,7 @@ pub(super) struct WorldLoadingInputs<'w> {
     current_dimension: Res<'w, CurrentDimension>,
     seed: Res<'w, WorldSeed>,
     load_mode: Res<'w, WorldLoadMode>,
+    render_distance: Res<'w, RenderDistanceSettings>,
     dimensions: Res<'w, DimensionRegistry>,
     biomes: Res<'w, BiomeRegistry>,
     blocks: Res<'w, BlockRegistry>,
@@ -124,11 +125,7 @@ pub fn begin_world_loading(
         let surface_y = surface_height(IVec2::ZERO, dimension, biomes, &biome_field);
         IVec3::new(0, surface_y.div_euclid(CHUNK_SIZE as i32), 0)
     };
-    let coords = chunk_coords_in_volume(
-        initial_center,
-        INITIAL_HORIZONTAL_RADIUS_CHUNKS,
-        INITIAL_VERTICAL_RADIUS_CHUNKS,
-    );
+    let coords = bootstrap_chunk_coords(initial_center, &inputs.render_distance);
 
     match *inputs.load_mode {
         WorldLoadMode::New => {
@@ -237,6 +234,14 @@ pub fn setup_world(
         loading_state.transition_requested = true;
         transition.request(ScreenTransitionTarget::game(GameState::Gameplay));
     }
+}
+
+fn bootstrap_chunk_coords(center: IVec3, render_distance: &RenderDistanceSettings) -> Vec<IVec3> {
+    chunk_coords_in_volume(
+        center,
+        BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS.min(render_distance.chunks()),
+        BOOTSTRAP_VERTICAL_RADIUS_CHUNKS.min(render_distance.vertical_chunks()),
+    )
 }
 
 fn average_terrain_material(dimension: &DimensionDefinition, biomes: &BiomeRegistry) -> (f32, f32) {
