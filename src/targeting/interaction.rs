@@ -85,12 +85,8 @@ fn edit_targeted_block(
         return;
     };
 
-    let mut chunks_to_remesh = relight_after_voxel_edit(
-        &mut world,
-        edited_voxel,
-        &content.blocks,
-        &content.fluids,
-    );
+    let mut chunks_to_remesh =
+        relight_after_voxel_edit(&mut world, edited_voxel, &content.blocks, &content.fluids);
     chunks_to_remesh.insert(coord);
     for offset in CARDINAL_NEIGHBORS {
         chunks_to_remesh.insert(coord + offset);

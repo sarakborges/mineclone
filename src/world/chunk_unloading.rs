@@ -56,12 +56,8 @@ pub fn unload_chunk_meshes(
         world.archive_chunk(*coord);
     }
 
-    let mut chunks_to_remesh = relight_after_chunk_unloads(
-        &mut world,
-        &to_unload,
-        &content.blocks,
-        &content.fluids,
-    );
+    let mut chunks_to_remesh =
+        relight_after_chunk_unloads(&mut world, &to_unload, &content.blocks, &content.fluids);
 
     for coord in &to_unload {
         for offset in CARDINAL_NEIGHBORS {

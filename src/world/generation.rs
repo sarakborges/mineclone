@@ -79,9 +79,10 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
                         &surface,
                     ) as f32;
                     let continentalness = context.biome_field.climate_at(position).continentalness;
-                    let surface_biome = context.biomes.get(surface.primary_id).unwrap_or_else(|| {
-                        panic!("missing biome definition: {}", surface.primary_id)
-                    });
+                    let surface_biome =
+                        context.biomes.get(surface.primary_id).unwrap_or_else(|| {
+                            panic!("missing biome definition: {}", surface.primary_id)
+                        });
 
                     HydrologySurfaceSample {
                         elevation,

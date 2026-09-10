@@ -74,12 +74,8 @@ pub fn stream_chunks(
         }
 
         ensure_chunk_loaded(&mut world, coord, &generation_context);
-        let lighting_changes = initialize_chunk_lighting(
-            &mut world,
-            coord,
-            &content.blocks,
-            &content.fluids,
-        );
+        let lighting_changes =
+            initialize_chunk_lighting(&mut world, coord, &content.blocks, &content.fluids);
         let chunk = world
             .chunk(coord)
             .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));

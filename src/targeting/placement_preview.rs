@@ -112,9 +112,10 @@ fn update_placement_preview(
     };
 
     if root.0.block_id != block_id {
-        let block = input.blocks.get(block_id).unwrap_or_else(|| {
-            panic!("placement preview references missing block: {block_id}")
-        });
+        let block = input
+            .blocks
+            .get(block_id)
+            .unwrap_or_else(|| panic!("placement preview references missing block: {block_id}"));
 
         root.0.block_id = block_id;
 

@@ -194,12 +194,8 @@ pub fn setup_world(
         let coord = loading_state.coords[loading_state.generated];
         ensure_chunk_loaded(&mut world, coord, &generation_context);
 
-        let lighting_changes = initialize_chunk_lighting(
-            &mut world,
-            coord,
-            &content.blocks,
-            &content.fluids,
-        );
+        let lighting_changes =
+            initialize_chunk_lighting(&mut world, coord, &content.blocks, &content.fluids);
         let chunk = world
             .chunk(coord)
             .unwrap_or_else(|| panic!("generated chunk should exist at {coord:?}"));

@@ -93,7 +93,8 @@ pub(super) fn update_stars(
     };
     let sample = cycle.sample(input.clock.normalized_time);
     let time_factor = star_time_factor(sample.phase, sample.next_phase, sample.transition);
-    let visible_count = (input.visuals.star_density * time_factor * MAX_STARS as f32).round() as usize;
+    let visible_count =
+        (input.visuals.star_density * time_factor * MAX_STARS as f32).round() as usize;
     let camera_position = input.camera.translation();
 
     if let Some(mut material) = materials.get_mut(&input.assets.material) {
