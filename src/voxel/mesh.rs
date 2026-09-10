@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use crate::content::block::BlockRegistry;
+use crate::content::{block::{BlockRegistry, BlockTextureRotations}};
 
 use self::{
     buffer::MeshBuffers,
@@ -16,6 +16,7 @@ use self::{
 };
 use super::{
     chunk::{CHUNK_SIZE, VoxelChunk},
+    texture_rotation::TextureRotation,
     world::VoxelWorld,
 };
 
@@ -81,7 +82,12 @@ where
                         continue;
                     }
 
-                    let geometry = face_geometry(face, x, y, z, cell.texture_rotation);
+                    let texture_rotation = if face_uses_texture_rotation(block.rotate_texture, face) {
+                        cell.texture_rotation
+                    } else {
+                        TextureRotation::default()
+                    };
+                    let geometry = face_geometry(face, x, y, z, texture_rotation);
                     buffers
                         .entry((cell.block_id, face, block.casts_shadow))
                         .or_default()
@@ -108,4 +114,15 @@ where
             })
         })
         .collect()
+}
+
+fn face_uses_texture_rotation(rotations: BlockTextureRotations, face: BlockFace) -> bool {
+    match face {
+        BlockFace::Right => rotations.right,
+        BlockFace::Left => rotations.left,
+        BlockFace::Top => rotations.top,
+        BlockFace::Bottom => rotations.bottom,
+        BlockFace::Front => rotations.front,
+        BlockFace::Back => rotations.back,
+    }
 }
