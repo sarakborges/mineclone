@@ -13,3 +13,6 @@ mod tests;
 pub use field::HydrologyField;
 pub use region::HydrologyRegion;
 pub use types::{HydrologyBiomeOverlay, HydrologySurfaceSample};
+
+#[cfg(test)]
+use types::{WaterBody, WaterBodyKind};
