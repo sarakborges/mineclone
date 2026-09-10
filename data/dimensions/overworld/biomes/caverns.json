@@ -13,7 +13,7 @@
     "type": "cavern",
     "carveStrength": 4.0,
     "noiseScale": 0.045,
-    "openness": 0.62
+    "openness": 0.34
   },
   "hydrology": {
     "canGenerateLake": false,
