@@ -14,12 +14,15 @@ pub(crate) type TerrainMaterial = ExtendedMaterial<StandardMaterial, TerrainMate
 pub(crate) struct TerrainMaterialExtension {
     #[uniform(100)]
     pub sky_light_factor: f32,
+    #[uniform(100)]
+    pub fluid_animation_factor: f32,
 }
 
 impl Default for TerrainMaterialExtension {
     fn default() -> Self {
         Self {
             sky_light_factor: 1.0,
+            fluid_animation_factor: 0.0,
         }
     }
 }
