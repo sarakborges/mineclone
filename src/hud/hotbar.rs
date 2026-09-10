@@ -8,7 +8,10 @@ use crate::{
         camera::GameplayCamera,
         hotbar::{HOTBAR_SLOT_COUNT, PlayerHotbar},
     },
-    rendering::block_tint::block_tint_at,
+    rendering::{
+        block_model::BlockModelInstance,
+        block_tint::block_tint_at,
+    },
     ui::{theme, typography},
     world::biome_field::BiomeField,
 };
@@ -26,11 +29,6 @@ struct HotbarSlot {
 
 #[derive(Component)]
 struct HotbarItemName;
-
-#[derive(Component)]
-struct HotbarItemIcon {
-    block_id: &'static str,
-}
 
 #[derive(SystemParam)]
 struct HotbarHudContent<'w> {
@@ -144,7 +142,7 @@ fn spawn_hotbar(
                         ));
 
                         slot.spawn((
-                            HotbarItemIcon { block_id },
+                            BlockModelInstance::new(block_id),
                             MaterialNode(material),
                             Node {
                                 width: px(ITEM_ICON_SIZE),
@@ -199,13 +197,16 @@ fn update_hotbar_item_tints(
     player: Single<&Transform, With<GameplayCamera>>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
-    icons: Query<(&HotbarItemIcon, &MaterialNode<BlockIconMaterial>)>,
+    icons: Query<(&BlockModelInstance, &MaterialNode<BlockIconMaterial>)>,
     mut materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
     let position = Vec2::new(player.translation.x, player.translation.z);
 
-    for (icon, material_handle) in &icons {
-        let tint = block_tint_at(icon.block_id, position, &biome_field, &biomes);
+    for (model, material_handle) in &icons {
+        let Some(block_id) = model.block_id() else {
+            continue;
+        };
+        let tint = block_tint_at(block_id, position, &biome_field, &biomes);
         let Some(mut material) = materials.get_mut(&material_handle.0) else {
             continue;
         };
