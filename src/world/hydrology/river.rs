@@ -99,10 +99,7 @@ where
     }
 }
 
-fn build_flow_cache<F>(
-    coord: IVec2,
-    network: &mut DrainageNetwork<'_, F>,
-) -> HashMap<IVec2, u32>
+fn build_flow_cache<F>(coord: IVec2, network: &mut DrainageNetwork<'_, F>) -> HashMap<IVec2, u32>
 where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
@@ -118,8 +115,8 @@ where
             for _ in 0..RIVER_FLOW_TRACE_STEPS {
                 let relative = current - coord;
                 let source_delta = source - current;
-                let inside_target = relative.x.abs() <= target_radius
-                    && relative.y.abs() <= target_radius;
+                let inside_target =
+                    relative.x.abs() <= target_radius && relative.y.abs() <= target_radius;
                 let inside_source_radius = source_delta.x.abs() <= RIVER_FLOW_SEARCH_RADIUS
                     && source_delta.y.abs() <= RIVER_FLOW_SEARCH_RADIUS;
 
