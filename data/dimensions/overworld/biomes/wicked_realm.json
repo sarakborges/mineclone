@@ -1,5 +1,5 @@
 {
-  "id": "mineclone:overworld/wicked_realm",
+  "id": "asteria:overworld/wicked_realm",
   "name": "Wicked Realm",
   "size": {
     "x": { "min": 50.0, "max": 250.0 },

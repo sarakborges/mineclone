@@ -96,6 +96,7 @@ pub fn unload_chunk_meshes(
             &mut render_pool,
             &world,
             coord,
+            &blocks,
             &biomes,
             &biome_field,
             &terrain_materials,

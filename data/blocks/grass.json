@@ -1,5 +1,5 @@
 {
-  "id": "mineclone:grass",
+  "id": "asteria:grass",
   "name": "Grass Block",
   "textures": {
     "top": "textures/blocks/grass/top.png",
@@ -9,5 +9,7 @@
     "front": "textures/blocks/grass/front.png",
     "back": "textures/blocks/grass/back.png"
   },
-  "rotateTexture": true
+  "rotateTexture": true,
+  "lightDampening": 15,
+  "castsShadow": true
 }

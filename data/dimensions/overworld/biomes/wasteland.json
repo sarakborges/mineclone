@@ -1,5 +1,5 @@
 {
-  "id": "mineclone:overworld/wasteland",
+  "id": "asteria:overworld/wasteland",
   "name": "Wasteland",
   "size": {
     "x": { "min": 50.0, "max": 250.0 },

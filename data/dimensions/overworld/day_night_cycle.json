@@ -1,5 +1,5 @@
 {
-  "id": "mineclone:overworld/day_night_cycle",
+  "id": "asteria:overworld/day_night_cycle",
   "dayDurationSeconds": 1200.0,
   "initialTime": 0.0,
   "worldTimeStartHour": 6.0,

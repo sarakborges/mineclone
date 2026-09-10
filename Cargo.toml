@@ -1,9 +1,9 @@
 [package]
-name = "mineclone"
+name = "asteria"
 version = "0.1.1"
 edition = "2024"
 build = "build.rs"
-default-run = "mineclone"
+default-run = "asteria"
 
 [dependencies]
 bevy = { version = "0.19.1", features = ["system_font_discovery"] }

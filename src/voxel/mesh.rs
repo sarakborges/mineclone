@@ -12,6 +12,8 @@ use bevy::{
 use face::push_face;
 use lighting::{face_lighting, FaceLighting};
 
+use crate::content::block::BlockRegistry;
+
 use super::{
     chunk::{CHUNK_SIZE, VoxelChunk},
     texture_rotation::TextureRotation,
@@ -34,6 +36,7 @@ pub struct ChunkFaceMesh {
     pub block_id: &'static str,
     pub face: BlockFace,
     pub mesh: Mesh,
+    pub casts_shadow: bool,
 }
 
 #[derive(Default)]
@@ -95,12 +98,13 @@ pub fn build_chunk_mesh<F>(
     world: &VoxelWorld,
     chunk_coord: IVec3,
     chunk: &VoxelChunk,
+    blocks: &BlockRegistry,
     tint_at: F,
 ) -> Vec<ChunkFaceMesh>
 where
     F: Fn(IVec3, &'static str) -> [f32; 3],
 {
-    let mut buffers = HashMap::<(&'static str, BlockFace), MeshBuffers>::new();
+    let mut buffers = HashMap::<(&'static str, BlockFace, bool), MeshBuffers>::new();
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_origin = chunk_coord * chunk_size;
 
@@ -110,10 +114,17 @@ where
                 let Some(cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
                     continue;
                 };
-
+                let block = blocks
+                    .get(cell.block_id)
+                    .unwrap_or_else(|| panic!("missing block definition: {}", cell.block_id));
+                let casts_shadow = block.casts_shadow;
                 let local = IVec3::new(x as i32, y as i32, z as i32);
                 let world_voxel = chunk_origin + local;
-                let tint = tint_at(world_voxel, cell.block_id);
+                let tint = if block.textures.is_empty() {
+                    [1.0, 1.0, 1.0]
+                } else {
+                    tint_at(world_voxel, cell.block_id)
+                };
                 let x0 = x as f32;
                 let y0 = y as f32;
                 let z0 = z as f32;
@@ -124,7 +135,7 @@ where
 
                 if !world.is_solid(world_voxel + IVec3::X) {
                     buffers
-                        .entry((cell.block_id, BlockFace::Right))
+                        .entry((cell.block_id, BlockFace::Right, casts_shadow))
                         .or_default()
                         .push(
                             [
@@ -142,7 +153,7 @@ where
 
                 if !world.is_solid(world_voxel - IVec3::X) {
                     buffers
-                        .entry((cell.block_id, BlockFace::Left))
+                        .entry((cell.block_id, BlockFace::Left, casts_shadow))
                         .or_default()
                         .push(
                             [
@@ -160,7 +171,7 @@ where
 
                 if !world.is_solid(world_voxel + IVec3::Y) {
                     buffers
-                        .entry((cell.block_id, BlockFace::Top))
+                        .entry((cell.block_id, BlockFace::Top, casts_shadow))
                         .or_default()
                         .push(
                             [
@@ -178,7 +189,7 @@ where
 
                 if world_voxel.y > 0 && !world.is_solid(world_voxel - IVec3::Y) {
                     buffers
-                        .entry((cell.block_id, BlockFace::Bottom))
+                        .entry((cell.block_id, BlockFace::Bottom, casts_shadow))
                         .or_default()
                         .push(
                             [
@@ -196,7 +207,7 @@ where
 
                 if !world.is_solid(world_voxel + IVec3::Z) {
                     buffers
-                        .entry((cell.block_id, BlockFace::Front))
+                        .entry((cell.block_id, BlockFace::Front, casts_shadow))
                         .or_default()
                         .push(
                             [
@@ -214,7 +225,7 @@ where
 
                 if !world.is_solid(world_voxel - IVec3::Z) {
                     buffers
-                        .entry((cell.block_id, BlockFace::Back))
+                        .entry((cell.block_id, BlockFace::Back, casts_shadow))
                         .or_default()
                         .push(
                             [
@@ -235,11 +246,12 @@ where
 
     buffers
         .into_iter()
-        .filter_map(|((block_id, face), buffers)| {
+        .filter_map(|((block_id, face, casts_shadow), buffers)| {
             buffers.into_mesh().map(|mesh| ChunkFaceMesh {
                 block_id,
                 face,
                 mesh,
+                casts_shadow,
             })
         })
         .collect()

@@ -7,8 +7,9 @@ use bevy::prelude::*;
 use serde::Deserialize;
 
 static BLOCK_ID_INTERNER: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
+const MAX_LIGHT_DAMPENING: u8 = 15;
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockTextures {
     pub top: String,
@@ -19,15 +20,31 @@ pub struct BlockTextures {
     pub back: String,
 }
 
+impl BlockTextures {
+    pub fn is_empty(&self) -> bool {
+        self.top.is_empty()
+            && self.bottom.is_empty()
+            && self.left.is_empty()
+            && self.right.is_empty()
+            && self.front.is_empty()
+            && self.back.is_empty()
+    }
+}
+
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockDefinition {
     pub id: String,
     pub name: String,
+    #[serde(default)]
     pub textures: BlockTextures,
     pub rotate_texture: bool,
     #[serde(default)]
     pub light_emission: u8,
+    #[serde(default = "default_light_dampening")]
+    pub light_dampening: u8,
+    #[serde(default = "default_casts_shadow")]
+    pub casts_shadow: bool,
 }
 
 #[derive(Resource, Default)]
@@ -41,6 +58,11 @@ impl BlockRegistry {
         assert!(
             definition.light_emission <= 15,
             "block {} light emission must be between 0 and 15",
+            definition.id
+        );
+        assert!(
+            definition.light_dampening <= MAX_LIGHT_DAMPENING,
+            "block {} light dampening must be between 0 and 15",
             definition.id
         );
 
@@ -61,6 +83,14 @@ impl BlockRegistry {
     pub fn iter(&self) -> impl Iterator<Item = &BlockDefinition> {
         self.definitions.values()
     }
+}
+
+fn default_light_dampening() -> u8 {
+    MAX_LIGHT_DAMPENING
+}
+
+fn default_casts_shadow() -> bool {
+    true
 }
 
 pub(crate) fn intern_block_id(id: &str) -> &'static str {
@@ -84,8 +114,8 @@ mod tests {
 
     #[test]
     fn block_ids_are_interned_once_per_process() {
-        let first = intern_block_id("mineclone:test");
-        let second = intern_block_id("mineclone:test");
+        let first = intern_block_id("asteria:test");
+        let second = intern_block_id("asteria:test");
 
         assert!(std::ptr::eq(first.as_ptr(), second.as_ptr()));
     }

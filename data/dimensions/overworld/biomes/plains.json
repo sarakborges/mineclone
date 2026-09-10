@@ -1,5 +1,5 @@
 {
-  "id": "mineclone:overworld/plains",
+  "id": "asteria:overworld/plains",
   "name": "Plains",
   "size": {
     "x": { "min": 50.0, "max": 250.0 },

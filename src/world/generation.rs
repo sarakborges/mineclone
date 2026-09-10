@@ -30,7 +30,7 @@ use super::{
     world_feature_fields::WorldFeatureFields,
 };
 
-const GRASS_BLOCK_ID: &str = "mineclone:grass";
+const GRASS_BLOCK_ID: &str = "asteria:grass";
 const VOXELS_PER_CHUNK: usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 struct GenerationColumnSample<'a> {
@@ -273,6 +273,7 @@ fn rasterize_material_pass(
                     &column.surface,
                     volume.as_ref(),
                     &region.geology,
+                    &region.hydrology,
                     biomes,
                     fallback,
                 );

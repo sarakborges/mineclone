@@ -6,7 +6,7 @@ use super::{
     fluid::FluidRegistry,
 };
 
-const DEFAULT_WATER_FLUID: &str = "mineclone:water";
+const DEFAULT_WATER_FLUID: &str = "asteria:water";
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

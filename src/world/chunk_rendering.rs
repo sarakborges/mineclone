@@ -9,7 +9,10 @@ use crate::{
         block::{BlockDefinition, BlockRegistry},
         fluid::{FluidId, FluidRegistry},
     },
-    rendering::terrain_material::{TerrainMaterial, TerrainMaterialExtension},
+    rendering::{
+        block_model::block_face_texture,
+        terrain_material::{TerrainMaterial, TerrainMaterialExtension},
+    },
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         fluid_mesh::build_fluid_meshes,
@@ -20,7 +23,7 @@ use crate::{
 
 use super::biome_field::BiomeField;
 
-const GRASS_BLOCK_ID: &str = "mineclone:grass";
+const GRASS_BLOCK_ID: &str = "asteria:grass";
 const CHUNK_NEIGHBORS: [IVec3; 6] = [
     IVec3::X,
     IVec3::NEG_X,
@@ -38,6 +41,19 @@ struct BlockTerrainMaterials {
     right: Handle<TerrainMaterial>,
     front: Handle<TerrainMaterial>,
     back: Handle<TerrainMaterial>,
+}
+
+impl BlockTerrainMaterials {
+    fn for_face(&self, face: BlockFace) -> &Handle<TerrainMaterial> {
+        match face {
+            BlockFace::Right => &self.right,
+            BlockFace::Left => &self.left,
+            BlockFace::Top => &self.top,
+            BlockFace::Bottom => &self.bottom,
+            BlockFace::Front => &self.front,
+            BlockFace::Back => &self.back,
+        }
+    }
 }
 
 #[derive(Resource, Clone)]
@@ -59,7 +75,7 @@ impl TerrainMaterials {
                 let block_materials = BlockTerrainMaterials {
                     top: create_material(
                         definition,
-                        &definition.textures.top,
+                        BlockFace::Top,
                         asset_server,
                         materials,
                         roughness,
@@ -67,7 +83,7 @@ impl TerrainMaterials {
                     ),
                     bottom: create_material(
                         definition,
-                        &definition.textures.bottom,
+                        BlockFace::Bottom,
                         asset_server,
                         materials,
                         roughness,
@@ -75,7 +91,7 @@ impl TerrainMaterials {
                     ),
                     left: create_material(
                         definition,
-                        &definition.textures.left,
+                        BlockFace::Left,
                         asset_server,
                         materials,
                         roughness,
@@ -83,7 +99,7 @@ impl TerrainMaterials {
                     ),
                     right: create_material(
                         definition,
-                        &definition.textures.right,
+                        BlockFace::Right,
                         asset_server,
                         materials,
                         roughness,
@@ -91,7 +107,7 @@ impl TerrainMaterials {
                     ),
                     front: create_material(
                         definition,
-                        &definition.textures.front,
+                        BlockFace::Front,
                         asset_server,
                         materials,
                         roughness,
@@ -99,7 +115,7 @@ impl TerrainMaterials {
                     ),
                     back: create_material(
                         definition,
-                        &definition.textures.back,
+                        BlockFace::Back,
                         asset_server,
                         materials,
                         roughness,
@@ -115,25 +131,16 @@ impl TerrainMaterials {
     }
 
     fn for_face(&self, block_id: &str, face: BlockFace) -> &Handle<TerrainMaterial> {
-        let block = self
-            .blocks
+        self.blocks
             .get(block_id)
-            .unwrap_or_else(|| panic!("missing terrain materials for block: {block_id}"));
-
-        match face {
-            BlockFace::Right => &block.right,
-            BlockFace::Left => &block.left,
-            BlockFace::Top => &block.top,
-            BlockFace::Bottom => &block.bottom,
-            BlockFace::Front => &block.front,
-            BlockFace::Back => &block.back,
-        }
+            .unwrap_or_else(|| panic!("missing terrain materials for block: {block_id}"))
+            .for_face(face)
     }
 }
 
 fn create_material(
-    _definition: &BlockDefinition,
-    texture: &str,
+    definition: &BlockDefinition,
+    face: BlockFace,
     asset_server: &AssetServer,
     materials: &mut Assets<TerrainMaterial>,
     roughness: f32,
@@ -142,7 +149,8 @@ fn create_material(
     materials.add(TerrainMaterial {
         base: StandardMaterial {
             base_color: Color::WHITE,
-            base_color_texture: Some(asset_server.load(texture.to_owned())),
+            base_color_texture: block_face_texture(face, definition)
+                .map(|texture| asset_server.load(texture.to_owned())),
             perceptual_roughness: roughness,
             metallic,
             unlit: true,
@@ -249,6 +257,7 @@ pub fn spawn_chunk_mesh(
     world: &VoxelWorld,
     coord: IVec3,
     chunk: &VoxelChunk,
+    blocks: &BlockRegistry,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     terrain_materials: &TerrainMaterials,
@@ -263,7 +272,7 @@ pub fn spawn_chunk_mesh(
         return;
     }
 
-    let face_meshes = build_chunk_mesh(world, coord, chunk, |voxel, block_id| {
+    let face_meshes = build_chunk_mesh(world, coord, chunk, blocks, |voxel, block_id| {
         if block_id != GRASS_BLOCK_ID {
             return [1.0, 1.0, 1.0];
         }
@@ -279,21 +288,23 @@ pub fn spawn_chunk_mesh(
     let mut mesh_handles = Vec::new();
 
     for face_mesh in face_meshes {
+        let material = terrain_materials
+            .for_face(face_mesh.block_id, face_mesh.face)
+            .clone();
+        let casts_shadow = face_mesh.casts_shadow;
         let mesh_handle = meshes.add(face_mesh.mesh);
-        let entity = commands
-            .spawn((
-                Mesh3d(mesh_handle.clone()),
-                MeshMaterial3d(
-                    terrain_materials
-                        .for_face(face_mesh.block_id, face_mesh.face)
-                        .clone(),
-                ),
-                transform,
-                DespawnOnExit(GameState::Gameplay),
-            ))
-            .id();
+        let mut entity_commands = commands.spawn((
+            Mesh3d(mesh_handle.clone()),
+            MeshMaterial3d(material),
+            transform,
+            DespawnOnExit(GameState::Gameplay),
+        ));
 
-        entities.push(entity);
+        if !casts_shadow {
+            entity_commands.insert(NotShadowCaster);
+        }
+
+        entities.push(entity_commands.id());
         mesh_handles.push(mesh_handle);
     }
 
@@ -322,6 +333,7 @@ pub fn refresh_adjacent_chunk_meshes(
     render_pool: &mut ChunkRenderPool,
     world: &VoxelWorld,
     coord: IVec3,
+    blocks: &BlockRegistry,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     terrain_materials: &TerrainMaterials,
@@ -340,6 +352,7 @@ pub fn refresh_adjacent_chunk_meshes(
             render_pool,
             world,
             neighbor,
+            blocks,
             biomes,
             biome_field,
             terrain_materials,
@@ -354,6 +367,7 @@ pub fn refresh_chunk_mesh(
     render_pool: &mut ChunkRenderPool,
     world: &VoxelWorld,
     coord: IVec3,
+    blocks: &BlockRegistry,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     terrain_materials: &TerrainMaterials,
@@ -384,6 +398,7 @@ pub fn refresh_chunk_mesh(
         world,
         coord,
         chunk,
+        blocks,
         biomes,
         biome_field,
         terrain_materials,

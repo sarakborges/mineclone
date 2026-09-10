@@ -129,6 +129,7 @@ fn edit_targeted_block(
             &mut render_pool,
             &world,
             chunk_coord,
+            &blocks,
             &biomes,
             &biome_field,
             &terrain_materials,

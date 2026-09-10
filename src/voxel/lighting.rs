@@ -32,10 +32,11 @@ impl LightingContext {
     fn direct_sky_level(
         &mut self,
         world: &VoxelWorld,
+        blocks: &BlockRegistry,
         fluids: &FluidRegistry,
         position: IVec3,
     ) -> u8 {
-        if position.y < 0 || world.is_solid(position) {
+        if position.y < 0 {
             return 0;
         }
 
@@ -58,7 +59,13 @@ impl LightingContext {
                     .insert(chunk_column, highest);
                 highest
             };
-            let levels = build_direct_sky_column(world, fluids, column, highest_loaded_y);
+            let levels = build_direct_sky_column(
+                world,
+                blocks,
+                fluids,
+                column,
+                highest_loaded_y,
+            );
             self.direct_sky_levels_by_column.insert(column, levels);
         }
 
@@ -167,19 +174,20 @@ fn desired_light(
     position: IVec3,
     context: &mut LightingContext,
 ) -> VoxelLight {
-    let solid = world.is_solid(position);
-    let attenuation = propagation_cost(world, fluids, position);
-    let sky = if solid {
+    let dampening = medium_dampening(world, blocks, fluids, position);
+    let blocks_light = dampening >= VoxelLight::MAX_LEVEL;
+    let attenuation = dampening.max(1);
+    let sky = if blocks_light {
         0
     } else {
         context
-            .direct_sky_level(world, fluids, position)
+            .direct_sky_level(world, blocks, fluids, position)
             .max(propagated_neighbor_level(world, position, attenuation, |light| {
                 light.sky()
             }))
     };
     let emitted = block_emission(world, blocks, position);
-    let block = if solid {
+    let block = if blocks_light {
         emitted
     } else {
         emitted.max(propagated_neighbor_level(
@@ -195,6 +203,7 @@ fn desired_light(
 
 fn build_direct_sky_column(
     world: &VoxelWorld,
+    blocks: &BlockRegistry,
     fluids: &FluidRegistry,
     column: IVec2,
     highest_y: Option<i32>,
@@ -207,13 +216,7 @@ fn build_direct_sky_column(
 
     for y in (0..=highest_y).rev() {
         let position = IVec3::new(column.x, y, column.y);
-
-        if world.is_solid(position) {
-            level = 0;
-        } else {
-            level = level.saturating_sub(fluid_dampening(world, fluids, position));
-        }
-
+        level = level.saturating_sub(medium_dampening(world, blocks, fluids, position));
         levels[y as usize] = level;
     }
 
@@ -238,8 +241,24 @@ where
         .unwrap_or(0)
 }
 
-fn propagation_cost(world: &VoxelWorld, fluids: &FluidRegistry, position: IVec3) -> u8 {
-    fluid_dampening(world, fluids, position).max(1)
+fn medium_dampening(
+    world: &VoxelWorld,
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+    position: IVec3,
+) -> u8 {
+    block_dampening(world, blocks, position).max(fluid_dampening(world, fluids, position))
+}
+
+fn block_dampening(world: &VoxelWorld, blocks: &BlockRegistry, position: IVec3) -> u8 {
+    let Some(block_id) = world.block_id_at(position) else {
+        return 0;
+    };
+
+    blocks
+        .get(block_id)
+        .map(|block| block.light_dampening.min(VoxelLight::MAX_LEVEL))
+        .unwrap_or(VoxelLight::MAX_LEVEL)
 }
 
 fn fluid_dampening(world: &VoxelWorld, fluids: &FluidRegistry, position: IVec3) -> u8 {
@@ -650,6 +669,8 @@ mod tests {
             },
             rotate_texture: false,
             light_emission,
+            light_dampening: VoxelLight::MAX_LEVEL,
+            casts_shadow: true,
         }
     }
 }
