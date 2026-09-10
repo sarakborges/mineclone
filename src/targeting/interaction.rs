@@ -1,19 +1,15 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
-    content::{biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry},
     player::{camera::GameplayCamera, hotbar::PlayerHotbar, viewmodel::ViewModelAnimation},
     voxel::{
-        cell::VoxelCell, lighting::relight_after_voxel_edit, texture_rotation::TextureRotation,
-        world::VoxelWorld,
+        cell::VoxelCell, lighting::relight_after_voxel_edit, neighbors::CARDINAL_NEIGHBORS,
+        texture_rotation::TextureRotation, world::VoxelWorld,
     },
     world::{
-        biome_field::BiomeField,
-        chunk_rendering::{
-            ChunkRenderContext, ChunkRenderPool, FluidMaterials, TerrainMaterials,
-            refresh_chunk_mesh,
-        },
+        chunk_rendering::refresh_chunk_mesh,
+        chunk_system_params::{ChunkContent, ChunkRenderer},
     },
 };
 
@@ -21,15 +17,6 @@ use super::{
     block::{BlockTargetingSet, TargetedBlock},
     placement::placement_voxel,
 };
-
-const CHUNK_NEIGHBORS: [IVec3; 6] = [
-    IVec3::X,
-    IVec3::NEG_X,
-    IVec3::Y,
-    IVec3::NEG_Y,
-    IVec3::Z,
-    IVec3::NEG_Z,
-];
 
 pub struct BlockInteractionPlugin;
 
@@ -45,48 +32,42 @@ impl Plugin for BlockInteractionPlugin {
     }
 }
 
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Bevy ECS system parameters declare independent interaction and rendering resources"
-)]
+#[derive(SystemParam)]
+struct BlockEditInput<'w, 's> {
+    buttons: Res<'w, ButtonInput<MouseButton>>,
+    hotbar: Res<'w, PlayerHotbar>,
+    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
+    targeted: ResMut<'w, TargetedBlock>,
+}
+
 fn edit_targeted_block(
-    mut commands: Commands,
-    buttons: Res<ButtonInput<MouseButton>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    blocks: Res<BlockRegistry>,
-    fluids: Res<FluidRegistry>,
-    biomes: Res<BiomeRegistry>,
-    biome_field: Res<BiomeField>,
-    terrain_materials: Res<TerrainMaterials>,
-    fluid_materials: Res<FluidMaterials>,
-    hotbar: Res<PlayerHotbar>,
-    player: Single<&Transform, With<GameplayCamera>>,
+    mut input: BlockEditInput,
+    content: ChunkContent,
+    mut renderer: ChunkRenderer,
     mut viewmodel_animation: ResMut<ViewModelAnimation>,
     mut world: ResMut<VoxelWorld>,
-    mut render_pool: ResMut<ChunkRenderPool>,
-    mut targeted: ResMut<TargetedBlock>,
 ) {
-    let break_pressed = buttons.just_pressed(MouseButton::Left);
-    let place_pressed = buttons.just_pressed(MouseButton::Right);
+    let break_pressed = input.buttons.just_pressed(MouseButton::Left);
+    let place_pressed = input.buttons.just_pressed(MouseButton::Right);
 
     if !break_pressed && !place_pressed {
         return;
     }
 
-    let Some(hit) = targeted.0 else {
+    let Some(hit) = input.targeted.0 else {
         return;
     };
 
     let (edited_chunk, edited_voxel, placed) = if break_pressed {
         (world.set_block_at(hit.voxel, None), hit.voxel, false)
     } else {
-        let Some(block_id) = hotbar.item_at(hotbar.selected_slot()) else {
+        let Some(block_id) = input.hotbar.item_at(input.hotbar.selected_slot()) else {
             return;
         };
-        let Some(voxel) = placement_voxel(hit, &world, player.translation) else {
+        let Some(voxel) = placement_voxel(hit, &world, input.player.translation) else {
             return;
         };
-        if blocks.get(block_id).is_none() {
+        if content.blocks.get(block_id).is_none() {
             return;
         }
 
@@ -104,9 +85,14 @@ fn edit_targeted_block(
         return;
     };
 
-    let mut chunks_to_remesh = relight_after_voxel_edit(&mut world, edited_voxel, &blocks, &fluids);
+    let mut chunks_to_remesh = relight_after_voxel_edit(
+        &mut world,
+        edited_voxel,
+        &content.blocks,
+        &content.fluids,
+    );
     chunks_to_remesh.insert(coord);
-    for offset in CHUNK_NEIGHBORS {
+    for offset in CARDINAL_NEIGHBORS {
         chunks_to_remesh.insert(coord + offset);
     }
 
@@ -116,22 +102,19 @@ fn edit_targeted_block(
         viewmodel_animation.play_break();
     }
 
-    targeted.0 = None;
+    input.targeted.0 = None;
 
-    let render_context = ChunkRenderContext {
-        world: &world,
-        blocks: &blocks,
-        biomes: &biomes,
-        biome_field: &biome_field,
-        terrain_materials: &terrain_materials,
-        fluid_materials: &fluid_materials,
-    };
+    let render_context = content.render_context(
+        &world,
+        &renderer.terrain_materials,
+        &renderer.fluid_materials,
+    );
 
     for chunk_coord in chunks_to_remesh {
         refresh_chunk_mesh(
-            &mut commands,
-            &mut meshes,
-            &mut render_pool,
+            &mut renderer.commands,
+            &mut renderer.meshes,
+            &mut renderer.pool,
             chunk_coord,
             &render_context,
         );

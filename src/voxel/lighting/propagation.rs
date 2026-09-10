@@ -3,12 +3,14 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::content::{block::BlockRegistry, fluid::FluidRegistry};
-use crate::voxel::{chunk::CHUNK_SIZE, light::VoxelLight, world::VoxelWorld};
+use crate::voxel::{
+    chunk::CHUNK_SIZE, light::VoxelLight, neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
+};
 
 use super::{
     context::LightingContext,
     medium::{block_emission, medium_dampening},
-    queue::{LightingQueue, NEIGHBORS},
+    queue::LightingQueue,
 };
 
 pub(super) fn relax(
@@ -85,7 +87,7 @@ fn propagated_neighbor_level(
     attenuation: u8,
     channel: fn(VoxelLight) -> u8,
 ) -> u8 {
-    NEIGHBORS
+    CARDINAL_NEIGHBORS
         .into_iter()
         .map(|direction| channel(world.light_at(position + direction)).saturating_sub(attenuation))
         .max()

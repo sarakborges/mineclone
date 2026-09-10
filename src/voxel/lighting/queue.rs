@@ -2,16 +2,7 @@ use std::collections::{HashSet, VecDeque};
 
 use bevy::prelude::*;
 
-use crate::voxel::chunk::CHUNK_SIZE;
-
-pub(super) const NEIGHBORS: [IVec3; 6] = [
-    IVec3::X,
-    IVec3::NEG_X,
-    IVec3::Y,
-    IVec3::NEG_Y,
-    IVec3::Z,
-    IVec3::NEG_Z,
-];
+use crate::voxel::{chunk::CHUNK_SIZE, neighbors::CARDINAL_NEIGHBORS};
 
 #[derive(Default)]
 pub(super) struct LightingQueue {
@@ -27,7 +18,7 @@ impl LightingQueue {
     }
 
     pub fn enqueue_neighbors(&mut self, position: IVec3) {
-        for direction in NEIGHBORS {
+        for direction in CARDINAL_NEIGHBORS {
             self.enqueue(position + direction);
         }
     }

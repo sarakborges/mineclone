@@ -8,6 +8,7 @@ pub mod fluid_mesh;
 pub(crate) mod light;
 pub(crate) mod lighting;
 pub mod mesh;
+pub(crate) mod neighbors;
 pub mod raycast;
 pub mod texture_rotation;
 pub mod world;

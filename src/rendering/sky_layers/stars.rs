@@ -1,4 +1,5 @@
 use bevy::{
+    ecs::system::SystemParam,
     light::{NotShadowCaster, NotShadowReceiver},
     prelude::*,
 };
@@ -68,39 +69,40 @@ pub(super) fn spawn_stars(mut commands: Commands, assets: Res<StarAssets>) {
     }
 }
 
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Bevy ECS system parameters declare independent sky state, assets, camera, and star query"
-)]
+#[derive(SystemParam)]
+pub(super) struct StarUpdateInput<'w, 's> {
+    visuals: Res<'w, SkyLayerVisualState>,
+    clock: Res<'w, DayNightClock>,
+    current_dimension: Res<'w, CurrentDimension>,
+    dimensions: Res<'w, DimensionRegistry>,
+    cycles: Res<'w, DayNightCycleRegistry>,
+    camera: Single<'w, 's, &'static GlobalTransform, With<GameplayCamera>>,
+    assets: Res<'w, StarAssets>,
+}
+
 pub(super) fn update_stars(
-    visuals: Res<SkyLayerVisualState>,
-    clock: Res<DayNightClock>,
-    current_dimension: Res<CurrentDimension>,
-    dimensions: Res<DimensionRegistry>,
-    cycles: Res<DayNightCycleRegistry>,
-    camera: Single<&GlobalTransform, With<GameplayCamera>>,
-    assets: Res<StarAssets>,
+    input: StarUpdateInput,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut stars: Query<(&Star, &mut Transform, &mut Visibility)>,
 ) {
-    let Some(dimension) = dimensions.get(&current_dimension.id) else {
+    let Some(dimension) = input.dimensions.get(&input.current_dimension.id) else {
         return;
     };
-    let Some(cycle) = cycles.get(&dimension.day_night_cycle) else {
+    let Some(cycle) = input.cycles.get(&dimension.day_night_cycle) else {
         return;
     };
-    let sample = cycle.sample(clock.normalized_time);
+    let sample = cycle.sample(input.clock.normalized_time);
     let time_factor = star_time_factor(sample.phase, sample.next_phase, sample.transition);
-    let visible_count = (visuals.star_density * time_factor * MAX_STARS as f32).round() as usize;
-    let camera_position = camera.translation();
+    let visible_count = (input.visuals.star_density * time_factor * MAX_STARS as f32).round() as usize;
+    let camera_position = input.camera.translation();
 
-    if let Some(mut material) = materials.get_mut(&assets.material) {
-        let color = visuals.star_color;
+    if let Some(mut material) = materials.get_mut(&input.assets.material) {
+        let color = input.visuals.star_color;
         material.base_color = Color::srgba(color.r, color.g, color.b, time_factor);
     }
 
     for (star, mut transform, mut visibility) in &mut stars {
-        if star.index >= visible_count || visuals.star_density <= 0.0 || time_factor <= 0.0 {
+        if star.index >= visible_count || input.visuals.star_density <= 0.0 || time_factor <= 0.0 {
             *visibility = Visibility::Hidden;
             continue;
         }

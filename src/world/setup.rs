@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
@@ -20,12 +20,13 @@ use crate::{
 use super::{
     InMemoryWorldSave, WorldLoadMode, WorldSeed,
     biome_field::BiomeField,
+    chunk_loading::ensure_chunk_loaded,
     chunk_rendering::{
-        ChunkRenderContext, ChunkRenderPool, FluidMaterials, TerrainMaterials,
-        refresh_adjacent_chunk_meshes, refresh_chunk_mesh, spawn_chunk_mesh,
+        FluidMaterials, TerrainMaterials, refresh_adjacent_chunk_meshes,
+        refresh_changed_chunk_meshes, spawn_chunk_mesh,
     },
+    chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
     dimension::CurrentDimension,
-    generation::generate_chunk,
     render_distance::chunk_coords_in_volume,
     terrain::surface_height,
     world_feature_fields::WorldFeatureFields,
@@ -53,60 +54,66 @@ impl WorldLoadingState {
     }
 }
 
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Bevy ECS system parameters declare independent world-loading resources"
-)]
+#[derive(SystemParam)]
+pub(super) struct WorldLoadingInputs<'w> {
+    asset_server: Res<'w, AssetServer>,
+    current_dimension: Res<'w, CurrentDimension>,
+    seed: Res<'w, WorldSeed>,
+    load_mode: Res<'w, WorldLoadMode>,
+    dimensions: Res<'w, DimensionRegistry>,
+    biomes: Res<'w, BiomeRegistry>,
+    blocks: Res<'w, BlockRegistry>,
+    fluids: Res<'w, FluidRegistry>,
+    existing_world: Option<Res<'w, VoxelWorld>>,
+}
+
 pub fn begin_world_loading(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
     mut terrain_material_assets: ResMut<Assets<TerrainMaterial>>,
-    current_dimension: Res<CurrentDimension>,
-    seed: Res<WorldSeed>,
-    load_mode: Res<WorldLoadMode>,
     mut save: ResMut<InMemoryWorldSave>,
-    dimensions: Res<DimensionRegistry>,
-    biomes: Res<BiomeRegistry>,
-    blocks: Res<BlockRegistry>,
-    fluids: Res<FluidRegistry>,
-    existing_world: Option<Res<VoxelWorld>>,
+    inputs: WorldLoadingInputs,
 ) {
-    let fresh_content = if *load_mode == WorldLoadMode::New {
+    let fresh_content = if *inputs.load_mode == WorldLoadMode::New {
         Some(read_content())
     } else {
         None
     };
-    let dimensions_ref = fresh_content
+    let dimensions = fresh_content
         .as_ref()
-        .map_or(&*dimensions, |content| &content.dimensions);
-    let biomes_ref = fresh_content
+        .map_or(&*inputs.dimensions, |content| &content.dimensions);
+    let biomes = fresh_content
         .as_ref()
-        .map_or(&*biomes, |content| &content.biomes);
-    let blocks_ref = fresh_content
+        .map_or(&*inputs.biomes, |content| &content.biomes);
+    let blocks = fresh_content
         .as_ref()
-        .map_or(&*blocks, |content| &content.blocks);
-    let fluids_ref = fresh_content
+        .map_or(&*inputs.blocks, |content| &content.blocks);
+    let fluids = fresh_content
         .as_ref()
-        .map_or(&*fluids, |content| &content.fluids);
-    let dimension = dimensions_ref
-        .get(&current_dimension.id)
-        .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
+        .map_or(&*inputs.fluids, |content| &content.fluids);
+    let dimension = dimensions
+        .get(&inputs.current_dimension.id)
+        .unwrap_or_else(|| {
+            panic!(
+                "missing dimension definition: {}",
+                inputs.current_dimension.id
+            )
+        });
 
     dimension
         .hydrology
-        .validate_references(&dimension.id, biomes_ref, blocks_ref, fluids_ref);
+        .validate_references(&dimension.id, biomes, blocks, fluids);
 
-    let biome_field = BiomeField::from_dimension(dimension, biomes_ref, seed.0);
-    let (roughness, metallic) = average_terrain_material(dimension, biomes_ref);
+    let biome_field = BiomeField::from_dimension(dimension, biomes, inputs.seed.0);
+    let (roughness, metallic) = average_terrain_material(dimension, biomes);
     let terrain_materials = TerrainMaterials::from_registry(
-        blocks_ref,
-        &asset_server,
+        blocks,
+        &inputs.asset_server,
         &mut terrain_material_assets,
         roughness,
         metallic,
     );
-    let fluid_materials = FluidMaterials::from_registry(fluids_ref, &mut terrain_material_assets);
-    let initial_center = if *load_mode == WorldLoadMode::Load {
+    let fluid_materials = FluidMaterials::from_registry(fluids, &mut terrain_material_assets);
+    let initial_center = if *inputs.load_mode == WorldLoadMode::Load {
         save.player_position()
             .map(|position| {
                 let chunk = split_dimension_position(position).chunk;
@@ -114,7 +121,7 @@ pub fn begin_world_loading(
             })
             .unwrap_or(IVec3::ZERO)
     } else {
-        let surface_y = surface_height(IVec2::ZERO, dimension, biomes_ref, &biome_field);
+        let surface_y = surface_height(IVec2::ZERO, dimension, biomes, &biome_field);
         IVec3::new(0, surface_y.div_euclid(CHUNK_SIZE as i32), 0)
     };
     let coords = chunk_coords_in_volume(
@@ -123,10 +130,10 @@ pub fn begin_world_loading(
         INITIAL_VERTICAL_RADIUS_CHUNKS,
     );
 
-    match *load_mode {
+    match *inputs.load_mode {
         WorldLoadMode::New => {
             commands.insert_resource(VoxelWorld::default());
-            save.begin_new_world(*seed, &current_dimension.id);
+            save.begin_new_world(*inputs.seed, &inputs.current_dimension.id);
         }
         WorldLoadMode::Load => {
             assert!(
@@ -134,7 +141,7 @@ pub fn begin_world_loading(
                 "cannot load a world that is not saved in memory"
             );
             assert!(
-                existing_world.is_some(),
+                inputs.existing_world.is_some(),
                 "saved world voxel state is missing from memory"
             );
         }
@@ -142,7 +149,7 @@ pub fn begin_world_loading(
 
     commands.insert_resource(biome_field);
     commands.insert_resource(WorldFeatureFields::new(
-        seed.0,
+        inputs.seed.0,
         dimension.sea_level,
         dimension.hydrology.clone(),
     ));
@@ -160,24 +167,11 @@ pub fn begin_world_loading(
     }
 }
 
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Bevy ECS system parameters declare independent loading and rendering resources"
-)]
 pub fn setup_world(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    current_dimension: Res<CurrentDimension>,
-    dimensions: Res<DimensionRegistry>,
-    blocks: Res<BlockRegistry>,
-    fluids: Res<FluidRegistry>,
-    biomes: Res<BiomeRegistry>,
-    biome_field: Res<BiomeField>,
-    feature_fields: Res<WorldFeatureFields>,
-    terrain_materials: Res<TerrainMaterials>,
-    fluid_materials: Res<FluidMaterials>,
+    generation: ChunkGeneration,
+    content: ChunkContent,
+    mut renderer: ChunkRenderer,
     mut world: ResMut<VoxelWorld>,
-    mut render_pool: ResMut<ChunkRenderPool>,
     mut loading_state: ResMut<WorldLoadingState>,
     mut transition: ResMut<ScreenTransition>,
 ) {
@@ -190,9 +184,7 @@ pub fn setup_world(
         return;
     }
 
-    let dimension = dimensions
-        .get(&current_dimension.id)
-        .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
+    let generation_context = generation.context(&content);
 
     for _ in 0..INITIAL_CHUNKS_PER_FRAME {
         if loading_state.generated >= loading_state.coords.len() {
@@ -200,67 +192,46 @@ pub fn setup_world(
         }
 
         let coord = loading_state.coords[loading_state.generated];
+        ensure_chunk_loaded(&mut world, coord, &generation_context);
 
-        if world.has_generated_chunk(coord) {
-            assert!(
-                world.restore_chunk(coord),
-                "generated chunk must be resident or archived: {coord:?}"
-            );
-        } else {
-            let chunk = generate_chunk(
-                coord,
-                &blocks,
-                &fluids,
-                dimension,
-                &biomes,
-                &biome_field,
-                &feature_fields,
-            );
-            world.insert_chunk(coord, chunk);
-        }
-
-        let lighting_changes = initialize_chunk_lighting(&mut world, coord, &blocks, &fluids);
+        let lighting_changes = initialize_chunk_lighting(
+            &mut world,
+            coord,
+            &content.blocks,
+            &content.fluids,
+        );
         let chunk = world
             .chunk(coord)
             .unwrap_or_else(|| panic!("generated chunk should exist at {coord:?}"));
-        let render_context = ChunkRenderContext {
-            world: &world,
-            blocks: &blocks,
-            biomes: &biomes,
-            biome_field: &biome_field,
-            terrain_materials: &terrain_materials,
-            fluid_materials: &fluid_materials,
-        };
+        let render_context = content.render_context(
+            &world,
+            &renderer.terrain_materials,
+            &renderer.fluid_materials,
+        );
 
         spawn_chunk_mesh(
-            &mut commands,
-            &mut meshes,
-            &mut render_pool,
+            &mut renderer.commands,
+            &mut renderer.meshes,
+            &mut renderer.pool,
             coord,
             chunk,
             &render_context,
         );
         refresh_adjacent_chunk_meshes(
-            &mut commands,
-            &mut meshes,
-            &mut render_pool,
+            &mut renderer.commands,
+            &mut renderer.meshes,
+            &mut renderer.pool,
             coord,
             &render_context,
         );
-
-        for changed_coord in lighting_changes {
-            if changed_coord == coord {
-                continue;
-            }
-
-            refresh_chunk_mesh(
-                &mut commands,
-                &mut meshes,
-                &mut render_pool,
-                changed_coord,
-                &render_context,
-            );
-        }
+        refresh_changed_chunk_meshes(
+            &mut renderer.commands,
+            &mut renderer.meshes,
+            &mut renderer.pool,
+            coord,
+            lighting_changes,
+            &render_context,
+        );
 
         loading_state.generated += 1;
     }

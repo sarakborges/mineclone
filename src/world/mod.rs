@@ -1,7 +1,9 @@
 pub mod biome;
 pub mod biome_field;
 pub(crate) mod cave_connectivity;
+mod chunk_loading;
 pub(crate) mod chunk_rendering;
+pub(crate) mod chunk_system_params;
 mod chunk_unloading;
 pub mod day_night;
 mod density_pipeline;

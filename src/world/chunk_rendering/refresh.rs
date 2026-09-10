@@ -1,15 +1,8 @@
 use bevy::prelude::*;
 
-use super::{ChunkRenderContext, pool::ChunkRenderPool, spawn::spawn_chunk_mesh};
+use crate::voxel::neighbors::CARDINAL_NEIGHBORS;
 
-const CHUNK_NEIGHBORS: [IVec3; 6] = [
-    IVec3::X,
-    IVec3::NEG_X,
-    IVec3::Y,
-    IVec3::NEG_Y,
-    IVec3::Z,
-    IVec3::NEG_Z,
-];
+use super::{ChunkRenderContext, pool::ChunkRenderPool, spawn::spawn_chunk_mesh};
 
 pub fn refresh_adjacent_chunk_meshes(
     commands: &mut Commands,
@@ -18,11 +11,26 @@ pub fn refresh_adjacent_chunk_meshes(
     coord: IVec3,
     context: &ChunkRenderContext<'_>,
 ) {
-    for offset in CHUNK_NEIGHBORS {
+    for offset in CARDINAL_NEIGHBORS {
         let neighbor = coord + offset;
 
         if render_pool.contains(neighbor) {
             refresh_chunk_mesh(commands, meshes, render_pool, neighbor, context);
+        }
+    }
+}
+
+pub fn refresh_changed_chunk_meshes(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    render_pool: &mut ChunkRenderPool,
+    source_coord: IVec3,
+    changed_coords: impl IntoIterator<Item = IVec3>,
+    context: &ChunkRenderContext<'_>,
+) {
+    for coord in changed_coords {
+        if coord != source_coord {
+            refresh_chunk_mesh(commands, meshes, render_pool, coord, context);
         }
     }
 }

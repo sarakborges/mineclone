@@ -1,4 +1,4 @@
-use bevy::{light::NotShadowCaster, prelude::*};
+use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
@@ -90,30 +90,31 @@ fn spawn_placement_preview(
         });
 }
 
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Bevy ECS system parameters declare independent preview state and rendering resources"
-)]
+#[derive(SystemParam)]
+struct PlacementPreviewInput<'w, 's> {
+    targeted: Res<'w, TargetedBlock>,
+    hotbar: Res<'w, PlayerHotbar>,
+    blocks: Res<'w, BlockRegistry>,
+    asset_server: Res<'w, AssetServer>,
+    world: Res<'w, VoxelWorld>,
+    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
+}
+
 fn update_placement_preview(
-    targeted: Res<TargetedBlock>,
-    hotbar: Res<PlayerHotbar>,
-    blocks: Res<BlockRegistry>,
-    asset_server: Res<AssetServer>,
+    input: PlacementPreviewInput,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    world: Res<VoxelWorld>,
-    player: Single<&Transform, With<GameplayCamera>>,
     mut root: PreviewRoot,
     mut faces: Query<(&PlacementPreviewFace, &mut MeshMaterial3d<StandardMaterial>)>,
 ) {
-    let Some(block_id) = hotbar.item_at(hotbar.selected_slot()) else {
+    let Some(block_id) = input.hotbar.item_at(input.hotbar.selected_slot()) else {
         *root.2 = Visibility::Hidden;
         return;
     };
 
     if root.0.block_id != block_id {
-        let block = blocks
-            .get(block_id)
-            .unwrap_or_else(|| panic!("placement preview references missing block: {block_id}"));
+        let block = input.blocks.get(block_id).unwrap_or_else(|| {
+            panic!("placement preview references missing block: {block_id}")
+        });
 
         root.0.block_id = block_id;
 
@@ -121,18 +122,18 @@ fn update_placement_preview(
             material.0 = block_face_material(
                 face.face,
                 block,
-                &asset_server,
+                &input.asset_server,
                 &mut materials,
                 PREVIEW_OPACITY,
             );
         }
     }
 
-    let Some(hit) = targeted.0 else {
+    let Some(hit) = input.targeted.0 else {
         *root.2 = Visibility::Hidden;
         return;
     };
-    let Some(voxel) = placement_voxel(hit, &world, player.translation) else {
+    let Some(voxel) = placement_voxel(hit, &input.world, input.player.translation) else {
         *root.2 = Visibility::Hidden;
         return;
     };

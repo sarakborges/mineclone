@@ -1,48 +1,25 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::{biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry},
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
         coordinates::split_dimension_position, lighting::relight_after_chunk_unloads,
-        world::VoxelWorld,
+        neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
     },
 };
 
 use super::{
-    biome_field::BiomeField,
-    chunk_rendering::{
-        ChunkRenderContext, ChunkRenderPool, FluidMaterials, TerrainMaterials, refresh_chunk_mesh,
-    },
+    chunk_rendering::refresh_chunk_mesh,
+    chunk_system_params::{ChunkContent, ChunkRenderer},
     render_distance::RenderDistanceSettings,
 };
 
-const CHUNK_NEIGHBORS: [IVec3; 6] = [
-    IVec3::X,
-    IVec3::NEG_X,
-    IVec3::Y,
-    IVec3::NEG_Y,
-    IVec3::Z,
-    IVec3::NEG_Z,
-];
-
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Bevy ECS system parameters declare independent unloading and rendering resources"
-)]
 pub fn unload_chunk_meshes(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
     player: Single<&Transform, With<GameplayCamera>>,
     render_distance: Res<RenderDistanceSettings>,
-    blocks: Res<BlockRegistry>,
-    fluids: Res<FluidRegistry>,
-    biomes: Res<BiomeRegistry>,
-    biome_field: Res<BiomeField>,
-    terrain_materials: Res<TerrainMaterials>,
-    fluid_materials: Res<FluidMaterials>,
+    content: ChunkContent,
+    mut renderer: ChunkRenderer,
     mut world: ResMut<VoxelWorld>,
-    mut render_pool: ResMut<ChunkRenderPool>,
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = split_dimension_position(feet_position).chunk;
@@ -50,7 +27,8 @@ pub fn unload_chunk_meshes(
     let horizontal_radius = render_distance.chunks();
     let vertical_radius = render_distance.vertical_chunks();
     let horizontal_radius_squared = horizontal_radius * horizontal_radius;
-    let to_unload = render_pool
+    let to_unload = renderer
+        .pool
         .active_coords()
         .filter(|coord| {
             let delta = *coord - center;
@@ -63,47 +41,48 @@ pub fn unload_chunk_meshes(
         .collect::<Vec<_>>();
 
     for coord in &to_unload {
-        let Some((entities, mesh_handles)) = render_pool.take(*coord) else {
+        let Some((entities, mesh_handles)) = renderer.pool.take(*coord) else {
             continue;
         };
 
         for mesh_handle in mesh_handles {
-            let _ = meshes.remove(&mesh_handle);
+            let _ = renderer.meshes.remove(&mesh_handle);
         }
 
         for entity in entities {
-            commands.entity(entity).despawn();
+            renderer.commands.entity(entity).despawn();
         }
 
         world.archive_chunk(*coord);
     }
 
-    let mut chunks_to_remesh =
-        relight_after_chunk_unloads(&mut world, &to_unload, &blocks, &fluids);
+    let mut chunks_to_remesh = relight_after_chunk_unloads(
+        &mut world,
+        &to_unload,
+        &content.blocks,
+        &content.fluids,
+    );
 
     for coord in &to_unload {
-        for offset in CHUNK_NEIGHBORS {
+        for offset in CARDINAL_NEIGHBORS {
             let neighbor = *coord + offset;
-            if render_pool.contains(neighbor) {
+            if renderer.pool.contains(neighbor) {
                 chunks_to_remesh.insert(neighbor);
             }
         }
     }
 
-    let render_context = ChunkRenderContext {
-        world: &world,
-        blocks: &blocks,
-        biomes: &biomes,
-        biome_field: &biome_field,
-        terrain_materials: &terrain_materials,
-        fluid_materials: &fluid_materials,
-    };
+    let render_context = content.render_context(
+        &world,
+        &renderer.terrain_materials,
+        &renderer.fluid_materials,
+    );
 
     for coord in chunks_to_remesh {
         refresh_chunk_mesh(
-            &mut commands,
-            &mut meshes,
-            &mut render_pool,
+            &mut renderer.commands,
+            &mut renderer.meshes,
+            &mut renderer.pool,
             coord,
             &render_context,
         );
