@@ -111,6 +111,10 @@ pub struct BiomeDefinition {
     pub solid_block: Option<String>,
     #[serde(default)]
     pub hydrology: BiomeHydrology,
+    #[serde(default)]
+    pub structures: Vec<String>,
+    #[serde(default)]
+    pub structure_sets: Vec<String>,
     pub visuals: BiomeVisuals,
 }
 

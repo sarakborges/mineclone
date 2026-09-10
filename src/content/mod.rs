@@ -3,6 +3,7 @@ pub mod biome_density;
 pub mod biome_hydrology;
 pub mod biome_material;
 pub mod biome_sky_layer;
+pub mod biome_structure;
 pub mod biome_terrain;
 pub mod block;
 pub(crate) mod block_id;
@@ -16,6 +17,8 @@ pub mod fluid;
 mod json_file;
 mod loader;
 pub mod sky;
+pub mod structure;
+pub mod structure_set;
 
 use bevy::prelude::*;
 use loader::load_content;

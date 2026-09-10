@@ -12,6 +12,8 @@ use super::{
     fluid::{FluidDefinition, FluidRegistry},
     json_file::{collect_json_files, read_json_definition},
     sky::{SkyDefinition, SkyRegistry},
+    structure::{StructureDefinition, StructureRegistry},
+    structure_set::{StructureSetDefinition, StructureSetRegistry},
 };
 
 pub(crate) struct LoadedContent {
@@ -21,6 +23,8 @@ pub(crate) struct LoadedContent {
     pub day_night_cycles: DayNightCycleRegistry,
     pub fluids: FluidRegistry,
     pub skies: SkyRegistry,
+    pub structures: StructureRegistry,
+    pub structure_sets: StructureSetRegistry,
 }
 
 impl LoadedContent {
@@ -31,6 +35,8 @@ impl LoadedContent {
         commands.insert_resource(self.day_night_cycles);
         commands.insert_resource(self.fluids);
         commands.insert_resource(self.skies);
+        commands.insert_resource(self.structures);
+        commands.insert_resource(self.structure_sets);
     }
 }
 
@@ -45,6 +51,8 @@ pub(crate) fn read_content() -> LoadedContent {
     let mut day_night_cycle_registry = DayNightCycleRegistry::default();
     let mut fluid_registry = FluidRegistry::default();
     let mut sky_registry = SkyRegistry::default();
+    let mut structure_registry = StructureRegistry::default();
+    let mut structure_set_registry = StructureSetRegistry::default();
     let mut files = Vec::new();
 
     collect_json_files(&data_root(), &mut files);
@@ -58,11 +66,18 @@ pub(crate) fn read_content() -> LoadedContent {
             &mut day_night_cycle_registry,
             &mut fluid_registry,
             &mut sky_registry,
+            &mut structure_registry,
+            &mut structure_set_registry,
         );
+    }
+
+    for structure_set in structure_set_registry.iter() {
+        structure_set.validate_references(&structure_registry);
     }
 
     for biome in biome_registry.iter() {
         biome.validate_material_references(&block_registry);
+        biome.validate_structure_references(&structure_registry, &structure_set_registry);
     }
 
     LoadedContent {
@@ -72,9 +87,12 @@ pub(crate) fn read_content() -> LoadedContent {
         day_night_cycles: day_night_cycle_registry,
         fluids: fluid_registry,
         skies: sky_registry,
+        structures: structure_registry,
+        structure_sets: structure_set_registry,
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn load_definition(
     path: &Path,
     biome_registry: &mut BiomeRegistry,
@@ -83,6 +101,8 @@ fn load_definition(
     day_night_cycle_registry: &mut DayNightCycleRegistry,
     fluid_registry: &mut FluidRegistry,
     sky_registry: &mut SkyRegistry,
+    structure_registry: &mut StructureRegistry,
+    structure_set_registry: &mut StructureSetRegistry,
 ) {
     let file_name = path
         .file_name()
@@ -101,6 +121,10 @@ fn load_definition(
         block_registry.insert(read_json_definition::<BlockDefinition>(path));
     } else if path_has_component(path, "fluids") {
         fluid_registry.insert(read_json_definition::<FluidDefinition>(path));
+    } else if path_has_component(path, "structure_sets") {
+        structure_set_registry.insert(read_json_definition::<StructureSetDefinition>(path));
+    } else if path_has_component(path, "structures") {
+        structure_registry.insert(read_json_definition::<StructureDefinition>(path));
     }
 }
 
