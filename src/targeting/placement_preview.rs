@@ -6,8 +6,8 @@ use crate::{
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::{
         block_model::{
-            BlockModelMaterials, BlockModelMeshes, block_face_material_data, block_faces,
-            set_block_model_tint,
+            BlockModelInstance, BlockModelMaterials, BlockModelMeshes, block_face_material_data,
+            block_faces, set_block_model_tint,
         },
         block_model_material::BlockModelMaterial,
         block_tint::block_tint_at,
@@ -27,17 +27,15 @@ type PreviewRoot<'w, 's> = Single<
     'w,
     's,
     (
-        &'static mut PlacementPreviewRoot,
+        &'static mut BlockModelInstance,
         &'static mut Transform,
         &'static mut Visibility,
     ),
-    (Without<PlacementPreviewFace>, Without<GameplayCamera>),
+    (With<PlacementPreviewRoot>, Without<PlacementPreviewFace>, Without<GameplayCamera>),
 >;
 
 #[derive(Component)]
-struct PlacementPreviewRoot {
-    block_id: &'static str,
-}
+struct PlacementPreviewRoot;
 
 #[derive(Component)]
 struct PlacementPreviewFace {
@@ -76,7 +74,8 @@ fn spawn_placement_preview(
 
     commands
         .spawn((
-            PlacementPreviewRoot { block_id },
+            PlacementPreviewRoot,
+            BlockModelInstance::new(block_id),
             Transform::default(),
             Visibility::Hidden,
             DespawnOnExit(GameState::Gameplay),
@@ -123,13 +122,11 @@ fn update_placement_preview(
         return;
     };
 
-    if root.0.block_id != block_id {
+    if root.0.set_block_id(Some(block_id)) {
         let block = input
             .blocks
             .get(block_id)
             .unwrap_or_else(|| panic!("placement preview references missing block: {block_id}"));
-
-        root.0.block_id = block_id;
 
         for (face, material_handle) in &faces {
             let Some(mut material) = materials.get_mut(&material_handle.0) else {
