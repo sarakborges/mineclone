@@ -35,6 +35,12 @@ struct HeldBlockFace {
     face: BlockFace,
 }
 
+#[derive(Resource)]
+struct ViewModelArmAssets {
+    mesh: Handle<Mesh>,
+    material: Handle<StandardMaterial>,
+}
+
 #[derive(Clone, Copy)]
 enum ViewModelAction {
     Break,
@@ -72,13 +78,31 @@ pub struct PlayerViewModelPlugin;
 
 impl Plugin for PlayerViewModelPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<ViewModelAnimation>().add_systems(
-            Update,
-            (spawn_viewmodel, sync_held_block, animate_viewmodel)
-                .chain()
-                .run_if(in_state(GameState::Gameplay)),
-        );
+        app.init_resource::<ViewModelAnimation>()
+            .add_systems(Startup, setup_viewmodel_arm_assets)
+            .add_systems(
+                Update,
+                (spawn_viewmodel, sync_held_block, animate_viewmodel)
+                    .chain()
+                    .run_if(in_state(GameState::Gameplay)),
+            );
     }
+}
+
+fn setup_viewmodel_arm_assets(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    commands.insert_resource(ViewModelArmAssets {
+        mesh: meshes.add(Cuboid::new(ARM_SIZE.x, ARM_SIZE.y, ARM_SIZE.z)),
+        material: materials.add(StandardMaterial {
+            base_color: Color::srgb(0.72, 0.52, 0.40),
+            perceptual_roughness: 1.0,
+            unlit: true,
+            ..default()
+        }),
+    });
 }
 
 fn spawn_viewmodel(
@@ -87,17 +111,10 @@ fn spawn_viewmodel(
     content: ViewModelContent,
     block_meshes: Res<BlockModelMeshes>,
     block_materials: Res<BlockModelMaterials>,
-    mut meshes: ResMut<Assets<Mesh>>,
+    arm_assets: Res<ViewModelArmAssets>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     for (camera, camera_transform) in &cameras {
-        let arm_mesh = meshes.add(Cuboid::new(ARM_SIZE.x, ARM_SIZE.y, ARM_SIZE.z));
-        let arm_material = materials.add(StandardMaterial {
-            base_color: Color::srgb(0.72, 0.52, 0.40),
-            perceptual_roughness: 1.0,
-            unlit: true,
-            ..default()
-        });
         let selected_block_id = content.hotbar.item_at(content.hotbar.selected_slot());
         let tint_position = Vec2::new(
             camera_transform.translation.x,
@@ -114,8 +131,8 @@ fn spawn_viewmodel(
                 .with_children(|viewmodel| {
                     viewmodel
                         .spawn((
-                            Mesh3d(arm_mesh.clone()),
-                            MeshMaterial3d(arm_material.clone()),
+                            Mesh3d(arm_assets.mesh.clone()),
+                            MeshMaterial3d(arm_assets.material.clone()),
                             Transform::from_translation(Vec3::new(0.0, ARM_SIZE.y * 0.5, 0.0)),
                             NotShadowCaster,
                         ))
