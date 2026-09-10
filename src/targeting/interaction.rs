@@ -4,7 +4,7 @@ use crate::{
     app::{game_state::GameState, pause_state::PauseState},
     player::{camera::GameplayCamera, hotbar::PlayerHotbar, viewmodel::ViewModelAnimation},
     voxel::{
-        cell::VoxelCell, lighting::relight_after_voxel_edit, neighbors::CARDINAL_NEIGHBORS,
+        cell::VoxelCell, lighting::PendingLightingUpdates, neighbors::CARDINAL_NEIGHBORS,
         texture_rotation::TextureRotation, world::VoxelWorld,
     },
     world::{chunk_remesh::ChunkRemeshQueue, chunk_system_params::ChunkContent},
@@ -42,6 +42,7 @@ fn edit_targeted_block(
     content: ChunkContent,
     mut viewmodel_animation: ResMut<ViewModelAnimation>,
     mut world: ResMut<VoxelWorld>,
+    mut lighting: ResMut<PendingLightingUpdates>,
     mut remesh_queue: ResMut<ChunkRemeshQueue>,
 ) {
     let break_pressed = input.buttons.just_pressed(MouseButton::Left);
@@ -80,11 +81,9 @@ fn edit_targeted_block(
         return;
     };
 
-    let lighting_changes =
-        relight_after_voxel_edit(&mut world, edited_voxel, &content.blocks, &content.fluids);
+    lighting.enqueue_voxel_edit(edited_voxel);
 
     remesh_queue.enqueue_priority(coord);
-    remesh_queue.extend(lighting_changes);
     for offset in CARDINAL_NEIGHBORS {
         remesh_queue.enqueue(coord + offset);
     }
