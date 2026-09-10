@@ -2,11 +2,6 @@
   "id": "asteria:big_boulder",
   "name": "Big Boulder",
   "anchor": { "x": 3, "y": 0, "z": 3 },
-  "placement": {
-    "spacing": 26,
-    "chance": 0.20,
-    "jitter": 8
-  },
   "palette": {
     "S": { "block": "asteria:stone" }
   },
