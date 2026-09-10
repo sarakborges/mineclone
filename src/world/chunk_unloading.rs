@@ -9,10 +9,12 @@ use crate::{
 };
 
 use super::{
-    chunk_rendering::refresh_chunk_mesh,
+    chunk_remesh::ChunkRemeshQueue,
     chunk_system_params::{ChunkContent, ChunkRenderer},
-    render_distance::RenderDistanceSettings,
+    render_distance::{RenderDistanceSettings, chunk_is_in_volume},
 };
+
+const MAX_CHUNK_UNLOADS_PER_FRAME: usize = 2;
 
 pub fn unload_chunk_meshes(
     player: Single<&Transform, With<GameplayCamera>>,
@@ -20,25 +22,23 @@ pub fn unload_chunk_meshes(
     content: ChunkContent,
     mut renderer: ChunkRenderer,
     mut world: ResMut<VoxelWorld>,
+    mut remesh_queue: ResMut<ChunkRemeshQueue>,
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = split_dimension_position(feet_position).chunk;
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
     let horizontal_radius = render_distance.chunks();
     let vertical_radius = render_distance.vertical_chunks();
-    let horizontal_radius_squared = horizontal_radius * horizontal_radius;
-    let to_unload = renderer
+    let mut to_unload = renderer
         .pool
         .active_coords()
         .filter(|coord| {
-            let delta = *coord - center;
-            let outside_horizontal =
-                delta.x * delta.x + delta.z * delta.z > horizontal_radius_squared;
-            let outside_vertical = delta.y.abs() > vertical_radius;
-
-            outside_horizontal || outside_vertical
+            !chunk_is_in_volume(center, *coord, horizontal_radius, vertical_radius)
         })
         .collect::<Vec<_>>();
+
+    to_unload.sort_by_key(|coord| -(*coord - center).length_squared());
+    to_unload.truncate(MAX_CHUNK_UNLOADS_PER_FRAME);
 
     for coord in &to_unload {
         let Some((entities, mesh_handles)) = renderer.pool.take(*coord) else {
@@ -56,31 +56,17 @@ pub fn unload_chunk_meshes(
         world.archive_chunk(*coord);
     }
 
-    let mut chunks_to_remesh =
+    if to_unload.is_empty() {
+        return;
+    }
+
+    let lighting_changes =
         relight_after_chunk_unloads(&mut world, &to_unload, &content.blocks, &content.fluids);
+    remesh_queue.extend(lighting_changes);
 
     for coord in &to_unload {
         for offset in CARDINAL_NEIGHBORS {
-            let neighbor = *coord + offset;
-            if renderer.pool.contains(neighbor) {
-                chunks_to_remesh.insert(neighbor);
-            }
+            remesh_queue.enqueue(*coord + offset);
         }
-    }
-
-    let render_context = content.render_context(
-        &world,
-        &renderer.terrain_materials,
-        &renderer.fluid_materials,
-    );
-
-    for coord in chunks_to_remesh {
-        refresh_chunk_mesh(
-            &mut renderer.commands,
-            &mut renderer.meshes,
-            &mut renderer.pool,
-            coord,
-            &render_context,
-        );
     }
 }

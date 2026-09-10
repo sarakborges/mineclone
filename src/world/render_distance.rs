@@ -55,52 +55,44 @@ pub fn chunk_coords_in_volume(
     let max_chunk_y = center.y + vertical_radius;
 
     for y in min_chunk_y..=max_chunk_y {
-        let vertical_delta = y - center.y;
-
         for z in -horizontal_radius..=horizontal_radius {
             for x in -horizontal_radius..=horizontal_radius {
-                if !inside_streaming_ellipsoid(
-                    x,
-                    vertical_delta,
-                    z,
-                    horizontal_radius,
-                    vertical_radius,
-                ) {
-                    continue;
-                }
+                let coord = IVec3::new(center.x + x, y, center.z + z);
 
-                coords.push(IVec3::new(center.x + x, y, center.z + z));
+                if chunk_is_in_volume(center, coord, horizontal_radius, vertical_radius) {
+                    coords.push(coord);
+                }
             }
         }
     }
 
-    coords.sort_by_key(|coord| {
-        let delta = *coord - center;
-        delta.x * delta.x + delta.y * delta.y + delta.z * delta.z
-    });
-
+    coords.sort_by_key(|coord| (*coord - center).length_squared());
     coords
 }
 
-fn inside_streaming_ellipsoid(
-    x: i32,
-    y: i32,
-    z: i32,
+pub(crate) fn chunk_is_in_volume(
+    center: IVec3,
+    coord: IVec3,
     horizontal_radius: i32,
     vertical_radius: i32,
 ) -> bool {
-    let horizontal_squared = x * x + z * z;
+    if coord.y < 0 || horizontal_radius < 0 || vertical_radius < 0 {
+        return false;
+    }
+
+    let delta = coord - center;
+    let horizontal_squared = delta.x * delta.x + delta.z * delta.z;
 
     match (horizontal_radius, vertical_radius) {
-        (0, 0) => horizontal_squared == 0 && y == 0,
-        (0, _) => horizontal_squared == 0 && y.abs() <= vertical_radius,
-        (_, 0) => y == 0 && horizontal_squared <= horizontal_radius * horizontal_radius,
+        (0, 0) => horizontal_squared == 0 && delta.y == 0,
+        (0, _) => horizontal_squared == 0 && delta.y.abs() <= vertical_radius,
+        (_, 0) => delta.y == 0 && horizontal_squared <= horizontal_radius * horizontal_radius,
         _ => {
             let horizontal_radius_squared = horizontal_radius * horizontal_radius;
             let vertical_radius_squared = vertical_radius * vertical_radius;
 
             horizontal_squared * vertical_radius_squared
-                + y * y * horizontal_radius_squared
+                + delta.y * delta.y * horizontal_radius_squared
                 <= horizontal_radius_squared * vertical_radius_squared
         }
     }
@@ -136,5 +128,18 @@ mod tests {
             .count();
 
         assert!(top_layer < center_layer);
+    }
+
+    #[test]
+    fn membership_matches_generated_volume() {
+        let center = IVec3::new(2, 5, -3);
+        let coords = chunk_coords_in_volume(center, 4, 2);
+
+        assert!(
+            coords
+                .iter()
+                .all(|coord| chunk_is_in_volume(center, *coord, 4, 2))
+        );
+        assert!(!chunk_is_in_volume(center, center + IVec3::new(4, 2, 0), 4, 2));
     }
 }

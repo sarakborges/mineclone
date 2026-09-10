@@ -15,6 +15,7 @@ pub struct VoxelWorld {
     chunks: HashMap<IVec3, VoxelChunk>,
     archived_chunks: HashMap<IVec3, ArchivedChunk>,
     generated_chunks: HashSet<IVec3>,
+    dirty_chunks: HashSet<IVec3>,
 }
 
 impl VoxelWorld {
@@ -42,8 +43,12 @@ impl VoxelWorld {
             return;
         };
 
-        self.archived_chunks
-            .insert(coord, ArchivedChunk::from_chunk(&chunk));
+        if self.dirty_chunks.contains(&coord) {
+            self.archived_chunks
+                .insert(coord, ArchivedChunk::from_chunk(&chunk));
+        } else {
+            self.generated_chunks.remove(&coord);
+        }
     }
 
     pub fn restore_chunk(&mut self, coord: IVec3) -> bool {
@@ -178,6 +183,7 @@ impl VoxelWorld {
             }
         }
 
+        self.dirty_chunks.insert(chunk_coord);
         Some(chunk_coord)
     }
 

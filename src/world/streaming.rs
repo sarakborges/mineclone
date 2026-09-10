@@ -6,16 +6,14 @@ use crate::{
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
         coordinates::split_dimension_position, lighting::initialize_chunk_lighting,
-        world::VoxelWorld,
+        neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
     },
 };
 
 use super::{
     chunk_loading::ensure_chunk_loaded,
-    chunk_rendering::{
-        ChunkRenderPool, refresh_adjacent_chunk_meshes, refresh_changed_chunk_meshes,
-        spawn_chunk_mesh,
-    },
+    chunk_remesh::ChunkRemeshQueue,
+    chunk_rendering::{ChunkRenderPool, spawn_chunk_mesh},
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
     render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
 };
@@ -42,6 +40,7 @@ pub fn stream_chunks(
     render_distance: Res<RenderDistanceSettings>,
     mut world: ResMut<VoxelWorld>,
     mut streaming: ResMut<ChunkStreamingState>,
+    mut remesh_queue: ResMut<ChunkRemeshQueue>,
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = split_dimension_position(feet_position).chunk;
@@ -93,21 +92,11 @@ pub fn stream_chunks(
             chunk,
             &render_context,
         );
-        refresh_adjacent_chunk_meshes(
-            &mut renderer.commands,
-            &mut renderer.meshes,
-            &mut renderer.pool,
-            coord,
-            &render_context,
-        );
-        refresh_changed_chunk_meshes(
-            &mut renderer.commands,
-            &mut renderer.meshes,
-            &mut renderer.pool,
-            coord,
-            lighting_changes,
-            &render_context,
-        );
+
+        remesh_queue.extend(lighting_changes);
+        for offset in CARDINAL_NEIGHBORS {
+            remesh_queue.enqueue(coord + offset);
+        }
     }
 }
 

@@ -7,10 +7,7 @@ use crate::{
         cell::VoxelCell, lighting::relight_after_voxel_edit, neighbors::CARDINAL_NEIGHBORS,
         texture_rotation::TextureRotation, world::VoxelWorld,
     },
-    world::{
-        chunk_rendering::refresh_chunk_mesh,
-        chunk_system_params::{ChunkContent, ChunkRenderer},
-    },
+    world::{chunk_remesh::ChunkRemeshQueue, chunk_system_params::ChunkContent},
 };
 
 use super::{
@@ -43,9 +40,9 @@ struct BlockEditInput<'w, 's> {
 fn edit_targeted_block(
     mut input: BlockEditInput,
     content: ChunkContent,
-    mut renderer: ChunkRenderer,
     mut viewmodel_animation: ResMut<ViewModelAnimation>,
     mut world: ResMut<VoxelWorld>,
+    mut remesh_queue: ResMut<ChunkRemeshQueue>,
 ) {
     let break_pressed = input.buttons.just_pressed(MouseButton::Left);
     let place_pressed = input.buttons.just_pressed(MouseButton::Right);
@@ -85,11 +82,13 @@ fn edit_targeted_block(
         return;
     };
 
-    let mut chunks_to_remesh =
+    let lighting_changes =
         relight_after_voxel_edit(&mut world, edited_voxel, &content.blocks, &content.fluids);
-    chunks_to_remesh.insert(coord);
+
+    remesh_queue.enqueue_priority(coord);
+    remesh_queue.extend(lighting_changes);
     for offset in CARDINAL_NEIGHBORS {
-        chunks_to_remesh.insert(coord + offset);
+        remesh_queue.enqueue(coord + offset);
     }
 
     if placed {
@@ -99,20 +98,4 @@ fn edit_targeted_block(
     }
 
     input.targeted.0 = None;
-
-    let render_context = content.render_context(
-        &world,
-        &renderer.terrain_materials,
-        &renderer.fluid_materials,
-    );
-
-    for chunk_coord in chunks_to_remesh {
-        refresh_chunk_mesh(
-            &mut renderer.commands,
-            &mut renderer.meshes,
-            &mut renderer.pool,
-            chunk_coord,
-            &render_context,
-        );
-    }
 }
