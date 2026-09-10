@@ -4,7 +4,10 @@ use crate::{
     app::game_state::GameState,
     content::{biome::BiomeRegistry, block::BlockRegistry},
     hud::block_icon::BlockIconMaterial,
-    rendering::block_tint::block_tint_at,
+    rendering::{
+        block_model::BlockModelInstance,
+        block_tint::block_tint_at,
+    },
     targeting::block::TargetedBlock,
     ui::{surface, typography},
     voxel::world::VoxelWorld,
@@ -30,11 +33,6 @@ struct TargetHudRoot;
 
 #[derive(Component)]
 struct TargetBlockText;
-
-#[derive(Component, Default)]
-struct TargetBlockIcon {
-    block_id: Option<&'static str>,
-}
 
 #[derive(SystemParam)]
 struct TargetHudContent<'w> {
@@ -71,7 +69,7 @@ fn spawn_target_hud(mut commands: Commands, mut icon_materials: ResMut<Assets<Bl
                     })
                     .with_children(|row| {
                         row.spawn((
-                            TargetBlockIcon::default(),
+                            BlockModelInstance::empty(),
                             MaterialNode(icon_material),
                             Node {
                                 width: px(TARGET_ICON_SIZE),
@@ -91,7 +89,7 @@ fn update_target_hud(
     content: TargetHudContent,
     root_visibility: Single<&mut Visibility, With<TargetHudRoot>>,
     mut target_text: Single<&mut Text, With<TargetBlockText>>,
-    mut icon: Single<(&mut TargetBlockIcon, &MaterialNode<BlockIconMaterial>)>,
+    mut icon: Single<(&mut BlockModelInstance, &MaterialNode<BlockIconMaterial>)>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
     let mut root_visibility = root_visibility.into_inner();
@@ -125,16 +123,15 @@ fn update_target_hud(
         target_text.0 = next_text;
     }
 
-    let (icon_state, material_handle) = &mut *icon;
+    let (model, material_handle) = &mut *icon;
     let Some(mut material) = icon_materials.get_mut(&material_handle.0) else {
         return;
     };
 
-    if icon_state.block_id != Some(hit.block_id) {
-        icon_state.block_id = Some(hit.block_id);
-        if let Some(block) = block {
-            material.set_block(block, &content.asset_server);
-        }
+    if model.set_block_id(Some(hit.block_id))
+        && let Some(block) = block
+    {
+        material.set_block(block, &content.asset_server);
     }
 
     let tint_position = Vec2::new(hit.voxel.x as f32 + 0.5, hit.voxel.z as f32 + 0.5);
