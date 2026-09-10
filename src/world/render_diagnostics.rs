@@ -10,7 +10,7 @@ const RENDER_DIAGNOSTIC_INTERVAL_SECONDS: f32 = 2.0;
 const MESH_ASSET_OVERHEAD_WARNING: usize = 128;
 
 #[derive(SystemParam)]
-struct RenderDiagnosticAssets<'w> {
+pub(super) struct RenderDiagnosticAssets<'w> {
     state: Res<'w, State<GameState>>,
     time: Res<'w, Time<Real>>,
     asset_server: Res<'w, AssetServer>,
