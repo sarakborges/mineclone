@@ -34,6 +34,9 @@ struct TargetHudRoot;
 #[derive(Component)]
 struct TargetBlockText;
 
+#[derive(Component)]
+struct TargetBlockModel;
+
 #[derive(SystemParam)]
 struct TargetHudContent<'w> {
     asset_server: Res<'w, AssetServer>,
@@ -69,6 +72,7 @@ fn spawn_target_hud(mut commands: Commands, mut icon_materials: ResMut<Assets<Bl
                     })
                     .with_children(|row| {
                         row.spawn((
+                            TargetBlockModel,
                             BlockModelInstance::empty(),
                             MaterialNode(icon_material),
                             Node {
@@ -89,7 +93,10 @@ fn update_target_hud(
     content: TargetHudContent,
     root_visibility: Single<&mut Visibility, With<TargetHudRoot>>,
     mut target_text: Single<&mut Text, With<TargetBlockText>>,
-    mut icon: Single<(&mut BlockModelInstance, &MaterialNode<BlockIconMaterial>)>,
+    mut icon: Single<
+        (&mut BlockModelInstance, &MaterialNode<BlockIconMaterial>),
+        With<TargetBlockModel>,
+    >,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
     let mut root_visibility = root_visibility.into_inner();
