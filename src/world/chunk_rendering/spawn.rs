@@ -2,7 +2,7 @@ use bevy::{light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::builtin_ids::GRASS_BLOCK_ID,
+    rendering::block_tint::block_tint_at,
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         fluid_mesh::build_fluid_meshes,
@@ -35,13 +35,9 @@ pub fn spawn_chunk_mesh(
         chunk,
         context.blocks,
         |voxel, block_id| {
-            if block_id != GRASS_BLOCK_ID {
-                return [1.0, 1.0, 1.0];
-            }
-
             let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-            let grass = context.biome_field.grass_color(position, context.biomes);
-            [grass.r, grass.g, grass.b]
+            let tint = block_tint_at(block_id, position, context.biome_field, context.biomes).to_srgba();
+            [tint.red, tint.green, tint.blue]
         },
     );
     let fluid_meshes = build_fluid_meshes(context.world, coord, chunk);
@@ -81,7 +77,6 @@ pub fn spawn_chunk_mesh(
                 DespawnOnExit(GameState::Gameplay),
             ))
             .id();
-
         entities.push(entity);
         mesh_handles.push(mesh_handle);
     }
