@@ -1,8 +1,4 @@
-use crate::content::{
-    biome::BiomeRegistry,
-    block_id::intern_block_id,
-    builtin_ids::{DIRT_BLOCK_ID, STONE_BLOCK_ID},
-};
+use crate::content::{biome::BiomeRegistry, block_id::intern_block_id};
 
 use super::{
     biome_field::{BiomeField, BiomeFieldSample, VolumeBiomeSelection},
@@ -46,17 +42,13 @@ pub(crate) fn solid_block_id(
         surface_depth,
         context.biomes,
     );
-    let should_irregularize = matches!(
-        base_material,
-        Some(block_id) if block_id == DIRT_BLOCK_ID || block_id == STONE_BLOCK_ID
-    ) && surface_depth > 0;
-    let resolved_material = if should_irregularize {
+    let resolved_material = if surface_depth > 0 {
         strongest_surface_material(
             surface
                 .influences
                 .iter()
                 .map(|influence| (influence.id, influence.weight)),
-            irregular_subsurface_depth(position, surface_depth, context.biome_field.seed()),
+            irregular_layer_depth(position, surface_depth, context.biome_field.seed()),
             context.biomes,
         )
         .or(base_material)
@@ -87,7 +79,7 @@ fn strongest_surface_material<'registry, 'id>(
         .map(|(block_id, _)| block_id)
 }
 
-fn irregular_subsurface_depth(
+fn irregular_layer_depth(
     position: bevy::prelude::Vec3,
     surface_depth: u32,
     seed: u64,
@@ -102,7 +94,7 @@ fn irregular_subsurface_depth(
         * 0.38;
     let offset = broad + detail;
 
-    (surface_depth as f32 + offset).round().max(1.0) as u32
+    (surface_depth as f32 + offset).round().max(0.0) as u32
 }
 
 #[cfg(test)]
@@ -110,36 +102,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn irregular_subsurface_depth_never_reaches_surface_layer() {
-        for x in -16..=16 {
-            for z in -16..=16 {
-                assert!(
-                    irregular_subsurface_depth(
-                        bevy::prelude::Vec3::new(x as f32, 60.0, z as f32),
-                        1,
-                        42,
-                    ) >= 1
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn irregular_subsurface_depth_varies_across_space() {
+    fn irregular_layer_depth_can_vary_across_any_boundary() {
         let depths = (0..32)
             .map(|index| {
-                irregular_subsurface_depth(
+                irregular_layer_depth(
                     bevy::prelude::Vec3::new(
                         index as f32 * 2.0,
                         58.0,
                         index as f32 * 0.75,
                     ),
-                    5,
+                    3,
                     42,
                 )
             })
             .collect::<std::collections::HashSet<_>>();
 
         assert!(depths.len() > 1);
+    }
+
+    #[test]
+    fn irregular_layer_depth_can_reach_the_surface_layer_below_depth_zero() {
+        let reaches_surface = (-64..=64).any(|index| {
+            irregular_layer_depth(
+                bevy::prelude::Vec3::new(index as f32, 60.0, index as f32 * 0.37),
+                1,
+                42,
+            ) == 0
+        });
+
+        assert!(reaches_surface);
     }
 }
