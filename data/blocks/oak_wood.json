@@ -1,0 +1,22 @@
+{
+  "id": "asteria:oak_wood",
+  "name": "Oak Wood",
+  "textures": {
+    "top": "textures/blocks/trees/oak/top.png",
+    "bottom": "textures/blocks/trees/oak/top.png",
+    "left": "textures/blocks/trees/oak/side.png",
+    "right": "textures/blocks/trees/oak/side.png",
+    "front": "textures/blocks/trees/oak/side.png",
+    "back": "textures/blocks/trees/oak/side.png"
+  },
+  "rotateTexture": {
+    "top": false,
+    "bottom": false,
+    "left": false,
+    "right": false,
+    "front": false,
+    "back": false
+  },
+  "lightDampening": 15,
+  "castsShadow": true
+}
