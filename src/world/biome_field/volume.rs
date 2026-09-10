@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::content::biome_density::BiomeDensityModifier;
+use crate::content::{
+    biome::BiomeVerticalRange,
+    biome_density::BiomeDensityModifier,
+};
 
 use super::{
     BiomeField, BiomeFieldEntry, VolumeBiomeAnchor, VolumeBiomeFieldSample,
@@ -68,6 +71,11 @@ impl BiomeField {
         let mut selected: Option<(ResolvedVolumeBiomeSite, f32)> = None;
 
         for site in &region.sites {
+            let biome = &self.volume_biomes[site.biome_index];
+            if !vertical_range_contains(biome.vertical_range, position.y) {
+                continue;
+            }
+
             let normalized_distance =
                 normalized_ellipsoid_distance(warped - site.position, site.radii);
             let strength = volume_site_strength(normalized_distance);
@@ -183,6 +191,14 @@ impl BiomeField {
     }
 }
 
+fn vertical_range_contains(range: Option<BiomeVerticalRange>, y: f32) -> bool {
+    let Some(range) = range else {
+        return y >= 0.0;
+    };
+
+    y >= range.min && y <= range.max
+}
+
 fn site_is_better(
     candidate: ResolvedVolumeBiomeSite,
     candidate_strength: f32,
@@ -275,6 +291,19 @@ mod tests {
         assert_eq!(volume_site_strength(1.0), 1.0);
         assert!(volume_site_strength(1.1) > 0.0);
         assert_eq!(volume_site_strength(1.25), 0.0);
+    }
+
+    #[test]
+    fn volume_samples_stay_inside_their_vertical_range() {
+        let range = Some(BiomeVerticalRange {
+            min: 8.0,
+            max: 64.0,
+        });
+
+        assert!(vertical_range_contains(range, 8.0));
+        assert!(vertical_range_contains(range, 64.0));
+        assert!(!vertical_range_contains(range, 7.99));
+        assert!(!vertical_range_contains(range, 64.01));
     }
 
     #[test]
