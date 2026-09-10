@@ -19,7 +19,7 @@ use crate::{
 
 use super::{camera::GameplayCamera, hotbar::PlayerHotbar};
 
-const ARM_SIZE: Vec3 = Vec3::new(0.28, 0.60, 0.26);
+const ARM_SIZE: Vec3 = Vec3::new(0.27, 0.60, 0.25);
 const HELD_BLOCK_SCALE: f32 = 0.18;
 const BREAK_ANIMATION_DURATION: f32 = 0.16;
 const PLACE_ANIMATION_DURATION: f32 = 0.22;
