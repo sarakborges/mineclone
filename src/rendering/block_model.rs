@@ -2,7 +2,11 @@ use bevy::{
     asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology,
 };
 
-use crate::{content::block::BlockDefinition, voxel::mesh::BlockFace};
+use crate::{
+    content::block::BlockDefinition,
+    rendering::block_model_material::{BlockModelMaterial, BlockModelMaterialExtension},
+    voxel::mesh::BlockFace,
+};
 
 #[derive(Resource)]
 pub(crate) struct BlockModelMeshes {
@@ -28,16 +32,16 @@ impl BlockModelMeshes {
 }
 
 struct BlockFaceMaterialHandles {
-    right: Handle<StandardMaterial>,
-    left: Handle<StandardMaterial>,
-    top: Handle<StandardMaterial>,
-    bottom: Handle<StandardMaterial>,
-    front: Handle<StandardMaterial>,
-    back: Handle<StandardMaterial>,
+    right: Handle<BlockModelMaterial>,
+    left: Handle<BlockModelMaterial>,
+    top: Handle<BlockModelMaterial>,
+    bottom: Handle<BlockModelMaterial>,
+    front: Handle<BlockModelMaterial>,
+    back: Handle<BlockModelMaterial>,
 }
 
 impl BlockFaceMaterialHandles {
-    fn new(materials: &mut Assets<StandardMaterial>, opacity: f32) -> Self {
+    fn new(materials: &mut Assets<BlockModelMaterial>, opacity: f32) -> Self {
         Self {
             right: materials.add(block_model_placeholder_material(opacity)),
             left: materials.add(block_model_placeholder_material(opacity)),
@@ -48,7 +52,7 @@ impl BlockFaceMaterialHandles {
         }
     }
 
-    fn for_face(&self, face: BlockFace) -> Handle<StandardMaterial> {
+    fn for_face(&self, face: BlockFace) -> Handle<BlockModelMaterial> {
         match face {
             BlockFace::Right => self.right.clone(),
             BlockFace::Left => self.left.clone(),
@@ -67,11 +71,11 @@ pub(crate) struct BlockModelMaterials {
 }
 
 impl BlockModelMaterials {
-    pub(crate) fn held_for_face(&self, face: BlockFace) -> Handle<StandardMaterial> {
+    pub(crate) fn held_for_face(&self, face: BlockFace) -> Handle<BlockModelMaterial> {
         self.held.for_face(face)
     }
 
-    pub(crate) fn preview_for_face(&self, face: BlockFace) -> Handle<StandardMaterial> {
+    pub(crate) fn preview_for_face(&self, face: BlockFace) -> Handle<BlockModelMaterial> {
         self.preview.for_face(face)
     }
 }
@@ -79,7 +83,7 @@ impl BlockModelMaterials {
 pub(crate) fn setup_block_model_assets(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<BlockModelMaterial>>,
 ) {
     commands.insert_resource(BlockModelMeshes {
         right: meshes.add(block_face_mesh(BlockFace::Right)),
@@ -124,37 +128,47 @@ pub(crate) fn block_face_material_data(
     block: &BlockDefinition,
     asset_server: &AssetServer,
     opacity: f32,
-) -> StandardMaterial {
+) -> BlockModelMaterial {
     let opacity = opacity.clamp(0.0, 1.0);
 
-    StandardMaterial {
-        base_color: Color::srgba(1.0, 1.0, 1.0, opacity),
-        base_color_texture: block_face_texture(face, block)
-            .map(|texture| asset_server.load(texture.to_owned())),
-        perceptual_roughness: 1.0,
-        alpha_mode: if opacity < 1.0 {
-            AlphaMode::Blend
-        } else {
-            AlphaMode::Opaque
+    BlockModelMaterial {
+        base: StandardMaterial {
+            base_color: Color::srgba(1.0, 1.0, 1.0, opacity),
+            base_color_texture: block_face_texture(face, block)
+                .map(|texture| asset_server.load(texture.to_owned())),
+            perceptual_roughness: 1.0,
+            alpha_mode: if opacity < 1.0 {
+                AlphaMode::Blend
+            } else {
+                AlphaMode::Opaque
+            },
+            unlit: true,
+            ..default()
         },
-        unlit: true,
-        ..default()
+        extension: BlockModelMaterialExtension::default(),
     }
 }
 
-fn block_model_placeholder_material(opacity: f32) -> StandardMaterial {
+pub(crate) fn set_block_model_tint(material: &mut BlockModelMaterial, tint: Color) {
+    material.extension.set_tint(tint);
+}
+
+fn block_model_placeholder_material(opacity: f32) -> BlockModelMaterial {
     let opacity = opacity.clamp(0.0, 1.0);
 
-    StandardMaterial {
-        base_color: Color::srgba(1.0, 1.0, 1.0, opacity),
-        perceptual_roughness: 1.0,
-        alpha_mode: if opacity < 1.0 {
-            AlphaMode::Blend
-        } else {
-            AlphaMode::Opaque
+    BlockModelMaterial {
+        base: StandardMaterial {
+            base_color: Color::srgba(1.0, 1.0, 1.0, opacity),
+            perceptual_roughness: 1.0,
+            alpha_mode: if opacity < 1.0 {
+                AlphaMode::Blend
+            } else {
+                AlphaMode::Opaque
+            },
+            unlit: true,
+            ..default()
         },
-        unlit: true,
-        ..default()
+        extension: BlockModelMaterialExtension::default(),
     }
 }
 
