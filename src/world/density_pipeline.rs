@@ -26,13 +26,12 @@ pub fn sample_density(
     let mut density = base_density + hydrology_delta + geology_delta;
     let cave_depth_strength = cave_depth_strength(base_density);
 
-    if cave_depth_strength > 0.0 {
-        if let Some(connector) = anchored_caves
+    if cave_depth_strength > 0.0
+        && let Some(connector) = anchored_caves
             .and_then(|caves| caves.connector_graph.sample(position))
             .map(|sample| smoothstep(sample.strength) * cave_depth_strength)
-        {
-            density += carve_density_delta(density, connector, CAVE_CONNECTOR_AIR_MARGIN);
-        }
+    {
+        density += carve_density_delta(density, connector, CAVE_CONNECTOR_AIR_MARGIN);
     }
 
     density
