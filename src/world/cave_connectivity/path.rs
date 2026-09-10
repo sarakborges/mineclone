@@ -78,10 +78,11 @@ pub(super) fn connector_radius_progress(start: f32, end: f32, t: f32, hash: u64)
     let base = start + (end - start) * t;
     let phase = hash_unit(hash.rotate_left(13)) * std::f32::consts::TAU;
     let swell = 1.0
-        + (phase + t * std::f32::consts::TAU * 2.3).sin() * 0.18
-        + (phase * 0.5 + t * std::f32::consts::TAU * 5.1).sin() * 0.08;
+        + (phase + t * std::f32::consts::TAU * 2.3).sin() * 0.12
+        + (phase * 0.5 + t * std::f32::consts::TAU * 5.1).sin() * 0.05;
+    let width_floor = start.max(end) * 0.90;
 
-    (base * swell).max(1.5)
+    (base * swell).max(width_floor).max(2.5)
 }
 
 fn hash_unit(hash: u64) -> f32 {
@@ -128,5 +129,17 @@ mod tests {
                 .iter()
                 .any(|point| point.y != 30.0 || point.z != 0.0)
         );
+    }
+
+    #[test]
+    fn connector_width_does_not_collapse_between_anchors() {
+        let start = 7.0;
+        let end = 4.0;
+        let minimum = start.max(end) * 0.90;
+
+        for step in 0..=20 {
+            let t = step as f32 / 20.0;
+            assert!(connector_radius_progress(start, end, t, 42) >= minimum);
+        }
     }
 }
