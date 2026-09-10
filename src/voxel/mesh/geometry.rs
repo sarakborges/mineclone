@@ -24,7 +24,7 @@ pub(super) fn face_geometry(
     x: usize,
     y: usize,
     z: usize,
-    block_rotation: TextureRotation,
+    texture_rotation: TextureRotation,
 ) -> FaceGeometry {
     let x0 = x as f32;
     let y0 = y as f32;
@@ -33,7 +33,6 @@ pub(super) fn face_geometry(
     let y1 = y0 + 1.0;
     let z1 = z0 + 1.0;
     let e = FACE_OVERDRAW;
-    let default_rotation = TextureRotation::default();
 
     match face {
         BlockFace::Right => FaceGeometry {
@@ -44,7 +43,7 @@ pub(super) fn face_geometry(
                 [x1, y1 + e, z1 + e],
             ],
             normal: [1.0, 0.0, 0.0],
-            texture_rotation: default_rotation,
+            texture_rotation,
         },
         BlockFace::Left => FaceGeometry {
             vertices: [
@@ -54,7 +53,7 @@ pub(super) fn face_geometry(
                 [x0, y1 + e, z0 - e],
             ],
             normal: [-1.0, 0.0, 0.0],
-            texture_rotation: default_rotation,
+            texture_rotation,
         },
         BlockFace::Top => FaceGeometry {
             vertices: [
@@ -64,7 +63,7 @@ pub(super) fn face_geometry(
                 [x0 - e, y1, z0 - e],
             ],
             normal: [0.0, 1.0, 0.0],
-            texture_rotation: block_rotation,
+            texture_rotation,
         },
         BlockFace::Bottom => FaceGeometry {
             vertices: [
@@ -74,7 +73,7 @@ pub(super) fn face_geometry(
                 [x0 - e, y0, z1 + e],
             ],
             normal: [0.0, -1.0, 0.0],
-            texture_rotation: block_rotation,
+            texture_rotation,
         },
         BlockFace::Front => FaceGeometry {
             vertices: [
@@ -84,7 +83,7 @@ pub(super) fn face_geometry(
                 [x0 - e, y1 + e, z1],
             ],
             normal: [0.0, 0.0, 1.0],
-            texture_rotation: default_rotation,
+            texture_rotation,
         },
         BlockFace::Back => FaceGeometry {
             vertices: [
@@ -94,7 +93,7 @@ pub(super) fn face_geometry(
                 [x1 + e, y1 + e, z0],
             ],
             normal: [0.0, 0.0, -1.0],
-            texture_rotation: default_rotation,
+            texture_rotation,
         },
     }
 }
