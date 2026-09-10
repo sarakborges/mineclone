@@ -79,7 +79,11 @@ fn first_texture(block: &BlockDefinition) -> &str {
 }
 
 fn load_texture(asset_server: &AssetServer, texture: &str, fallback: &str) -> Handle<Image> {
-    let path = if texture.is_empty() { fallback } else { texture };
+    let path = if texture.is_empty() {
+        fallback
+    } else {
+        texture
+    };
 
     if path.is_empty() {
         Handle::default()
