@@ -2,12 +2,16 @@ use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::{block::BlockRegistry, builtin_ids::GRASS_BLOCK_ID},
+    content::{biome::BiomeRegistry, block::BlockRegistry, builtin_ids::GRASS_BLOCK_ID},
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
-    rendering::block_model::{
-        block_face_material, block_face_material_data, block_face_mesh, block_faces,
+    rendering::{
+        block_model::{
+            block_face_material, block_face_material_data, block_face_mesh, block_faces,
+        },
+        block_tint::block_tint_with_opacity,
     },
     voxel::{mesh::BlockFace, world::VoxelWorld},
+    world::biome_field::BiomeField,
 };
 
 use super::{
@@ -97,6 +101,8 @@ struct PlacementPreviewInput<'w, 's> {
     targeted: Res<'w, TargetedBlock>,
     hotbar: Res<'w, PlayerHotbar>,
     blocks: Res<'w, BlockRegistry>,
+    biomes: Res<'w, BiomeRegistry>,
+    biome_field: Res<'w, BiomeField>,
     asset_server: Res<'w, AssetServer>,
     world: Res<'w, VoxelWorld>,
     player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
@@ -139,6 +145,25 @@ fn update_placement_preview(
         *root.2 = Visibility::Hidden;
         return;
     };
+
+    let tint_position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
+    let tint = block_tint_with_opacity(
+        block_id,
+        tint_position,
+        &input.biome_field,
+        &input.biomes,
+        PREVIEW_OPACITY,
+    );
+
+    for (_, material_handle) in &faces {
+        let Some(mut material) = materials.get_mut(&material_handle.0) else {
+            continue;
+        };
+
+        if material.base_color != tint {
+            material.base_color = tint;
+        }
+    }
 
     root.1.translation = voxel.as_vec3() + Vec3::splat(0.5);
     *root.2 = Visibility::Visible;
