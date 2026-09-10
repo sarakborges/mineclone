@@ -2,10 +2,7 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use crate::{
-    app::game_state::GameState,
-    rendering::terrain_material::TerrainMaterial,
-};
+use crate::{app::game_state::GameState, rendering::terrain_material::TerrainMaterial};
 
 use super::chunk_rendering::ChunkRenderPool;
 
@@ -49,7 +46,9 @@ pub(super) fn log_render_asset_pressure(
         }
 
         let size = image.texture_descriptor.size;
-        *runtime_image_shapes.entry((size.width, size.height)).or_default() += 1;
+        *runtime_image_shapes
+            .entry((size.width, size.height))
+            .or_default() += 1;
     }
 
     let image_assets = images.len();
