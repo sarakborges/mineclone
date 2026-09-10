@@ -200,7 +200,7 @@ fn spawn_viewmodel(
                                 panic!("hotbar references missing block: {block_id}")
                             });
                             let tint = block_tint_at(
-                                block_id,
+                                block.tint,
                                 tint_position,
                                 &content.biome_field,
                                 &content.biomes,
@@ -311,7 +311,7 @@ fn sync_held_block(
             .get(block_id)
             .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
         let tint = block_tint_at(
-            block_id,
+            block.tint,
             tint_position,
             &content.biome_field,
             &content.biomes,

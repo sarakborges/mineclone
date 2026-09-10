@@ -196,6 +196,7 @@ fn update_hotbar(
 
 fn update_hotbar_item_tints(
     player: Single<&Transform, With<GameplayCamera>>,
+    blocks: Res<BlockRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
     icons: Query<(&BlockModel, &MaterialNode<BlockIconMaterial>), With<HotbarBlockModel>>,
@@ -207,7 +208,10 @@ fn update_hotbar_item_tints(
         let Some(block_id) = model.block_id() else {
             continue;
         };
-        let tint = block_tint_at(block_id, position, &biome_field, &biomes);
+        let block = blocks
+            .get(block_id)
+            .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
+        let tint = block_tint_at(block.tint, position, &biome_field, &biomes);
         let Some(mut material) = materials.get_mut(&material_handle.0) else {
             continue;
         };

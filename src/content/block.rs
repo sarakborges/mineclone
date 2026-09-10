@@ -52,11 +52,22 @@ impl BlockTextureRotations {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockTint {
+    #[default]
+    None,
+    Grass,
+    Foliage,
+}
+
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockDefinition {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub tint: BlockTint,
     #[serde(default)]
     pub textures: BlockTextures,
     #[serde(default)]

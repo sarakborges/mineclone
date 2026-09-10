@@ -78,6 +78,7 @@ pub struct BiomeVisuals {
     pub sky_color: DayNightPhases<Rgb>,
     pub fog_color: DayNightPhases<Rgb>,
     pub grass_color: Rgb,
+    pub foliage_color: Rgb,
     pub underwater_tint: BiomeUnderwaterTint,
     #[serde(default)]
     pub stars: BiomeSkyLayerVisuals,

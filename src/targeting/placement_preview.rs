@@ -173,7 +173,7 @@ fn update_placement_preview(
     };
 
     let tint_position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-    let tint = block_tint_at(block_id, tint_position, &input.biome_field, &input.biomes);
+    let tint = block_tint_at(block.tint, tint_position, &input.biome_field, &input.biomes);
 
     for (_, material_handle) in &faces {
         let Some(mut material) = materials.get_mut(&material_handle.0) else {

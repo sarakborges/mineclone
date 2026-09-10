@@ -1,20 +1,21 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::{biome::BiomeRegistry, builtin_ids::GRASS_BLOCK_ID},
+    content::{biome::BiomeRegistry, block::BlockTint},
     world::biome_field::BiomeField,
 };
 
 pub(crate) fn block_tint_at(
-    block_id: &str,
+    tint: BlockTint,
     position: Vec2,
     biome_field: &BiomeField,
     biomes: &BiomeRegistry,
 ) -> Color {
-    if block_id != GRASS_BLOCK_ID {
-        return Color::WHITE;
-    }
+    let color = match tint {
+        BlockTint::None => return Color::WHITE,
+        BlockTint::Grass => biome_field.grass_color(position, biomes),
+        BlockTint::Foliage => biome_field.foliage_color(position, biomes),
+    };
 
-    let grass = biome_field.grass_color(position, biomes);
-    Color::srgb(grass.r, grass.g, grass.b)
+    Color::srgb(color.r, color.g, color.b)
 }
