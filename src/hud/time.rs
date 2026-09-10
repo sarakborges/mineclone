@@ -57,6 +57,9 @@ fn update_time_hud(
         .and_then(|definition| cycles.get(&definition.day_night_cycle))
         .map(|cycle| cycle.world_time(clock.normalized_time))
         .unwrap_or((0, 0));
+    let next_text = format!("Day {}\n{:02}:{:02}", clock.day, hour, minute);
 
-    time_text.0 = format!("Day {}\n{:02}:{:02}", clock.day, hour, minute);
+    if time_text.0 != next_text {
+        time_text.0 = next_text;
+    }
 }
