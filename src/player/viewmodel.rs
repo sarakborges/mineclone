@@ -5,7 +5,9 @@ use bevy::{light::NotShadowCaster, prelude::*};
 use crate::{
     app::game_state::GameState,
     content::block::BlockRegistry,
-    rendering::block_model::{block_face_material, block_face_mesh, block_faces},
+    rendering::block_model::{
+        block_face_material, block_face_material_data, block_face_mesh, block_faces,
+    },
     voxel::mesh::BlockFace,
 };
 
@@ -156,7 +158,7 @@ fn sync_held_block(
     asset_server: Res<AssetServer>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut roots: Query<(&mut HeldBlockRoot, &mut Visibility)>,
-    mut faces: Query<(&HeldBlockFace, &mut MeshMaterial3d<StandardMaterial>)>,
+    faces: Query<(&HeldBlockFace, &MeshMaterial3d<StandardMaterial>)>,
 ) {
     if !hotbar.is_changed() {
         return;
@@ -181,8 +183,12 @@ fn sync_held_block(
 
         *visibility = Visibility::Visible;
 
-        for (face, mut material) in &mut faces {
-            material.0 = block_face_material(face.face, block, &asset_server, &mut materials, 1.0);
+        for (face, material_handle) in &faces {
+            let Some(material) = materials.get_mut(&material_handle.0) else {
+                continue;
+            };
+
+            *material = block_face_material_data(face.face, block, &asset_server, 1.0);
         }
     }
 }
