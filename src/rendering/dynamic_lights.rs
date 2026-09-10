@@ -12,7 +12,9 @@ const HELD_LIGHT_RADIUS: f32 = 0.12;
 const HELD_LIGHT_OFFSET: Vec3 = Vec3::new(0.32, -0.24, -0.52);
 
 #[derive(Component)]
-struct HeldDynamicLight;
+struct HeldDynamicLight {
+    block_id: Option<&'static str>,
+}
 
 pub struct DynamicLightsPlugin;
 
@@ -33,12 +35,13 @@ fn spawn_held_dynamic_light(
     hotbar: Res<PlayerHotbar>,
     blocks: Res<BlockRegistry>,
 ) {
-    let (intensity, visibility) = held_light_state(&hotbar, &blocks);
+    let block_id = hotbar.item_at(hotbar.selected_slot());
+    let (intensity, visibility) = held_light_state(block_id, &blocks);
 
     for camera in &cameras {
         commands.entity(camera).with_children(|camera| {
             camera.spawn((
-                HeldDynamicLight,
+                HeldDynamicLight { block_id },
                 PointLight {
                     color: Color::WHITE,
                     intensity,
@@ -57,27 +60,27 @@ fn spawn_held_dynamic_light(
 fn sync_held_dynamic_light(
     hotbar: Res<PlayerHotbar>,
     blocks: Res<BlockRegistry>,
-    mut lights: Query<(&mut PointLight, &mut Visibility), With<HeldDynamicLight>>,
+    mut lights: Query<(&mut HeldDynamicLight, &mut PointLight, &mut Visibility)>,
 ) {
-    if !hotbar.is_changed() {
-        return;
-    }
+    let block_id = hotbar.item_at(hotbar.selected_slot());
 
-    let (intensity, visibility) = held_light_state(&hotbar, &blocks);
+    for (mut held, mut light, mut visibility) in &mut lights {
+        if held.block_id == block_id {
+            continue;
+        }
 
-    for (mut light, mut current_visibility) in &mut lights {
-        if light.intensity != intensity {
-            light.intensity = intensity;
-        }
-        if *current_visibility != visibility {
-            *current_visibility = visibility;
-        }
+        held.block_id = block_id;
+        let (intensity, next_visibility) = held_light_state(block_id, &blocks);
+        light.intensity = intensity;
+        *visibility = next_visibility;
     }
 }
 
-fn held_light_state(hotbar: &PlayerHotbar, blocks: &BlockRegistry) -> (f32, Visibility) {
-    let emission = hotbar
-        .item_at(hotbar.selected_slot())
+fn held_light_state(
+    block_id: Option<&'static str>,
+    blocks: &BlockRegistry,
+) -> (f32, Visibility) {
+    let emission = block_id
         .and_then(|block_id| blocks.get(block_id))
         .map_or(0, |block| block.light_emission)
         .min(15);
