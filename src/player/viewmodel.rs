@@ -7,7 +7,9 @@ use crate::{
     content::{biome::BiomeRegistry, block::BlockRegistry},
     rendering::{
         block_model::{
-            BlockModelMaterials, BlockModelMeshes, block_face_material_data, set_block_model_tint,
+            BlockModelInstance, BlockModelMaterials, BlockModelMeshes,
+            apply_block_display_shading, block_display_faces, block_display_isometric_rotation,
+            block_face_material_data, set_block_model_tint,
         },
         block_model_material::BlockModelMaterial,
         block_tint::block_tint_at,
@@ -31,9 +33,7 @@ struct PlayerViewModel;
 struct ViewModelArm;
 
 #[derive(Component)]
-struct HeldBlockRoot {
-    block_id: Option<&'static str>,
-}
+struct HeldBlockRoot;
 
 #[derive(Component)]
 struct HeldBlockFace {
@@ -54,7 +54,7 @@ type ArmVisibilityQuery<'w, 's> = Query<
 type HeldBlockRootQuery<'w, 's> = Query<
     'w,
     's,
-    (&'static mut HeldBlockRoot, &'static mut Visibility),
+    (&'static mut BlockModelInstance, &'static mut Visibility),
     (
         With<HeldBlockRoot>,
         Without<ViewModelArm>,
@@ -170,6 +170,9 @@ fn spawn_viewmodel(
             camera_transform.translation.x,
             camera_transform.translation.z,
         );
+        let block_model = selected_block_id
+            .map(BlockModelInstance::new)
+            .unwrap_or_else(BlockModelInstance::empty);
 
         commands.entity(camera).with_children(|camera| {
             camera
@@ -189,13 +192,7 @@ fn spawn_viewmodel(
                     ));
 
                     viewmodel
-                        .spawn((
-                            HeldBlockRoot {
-                                block_id: selected_block_id,
-                            },
-                            held_block_transform(),
-                            item_visibility,
-                        ))
+                        .spawn((HeldBlockRoot, block_model, held_block_transform(), item_visibility))
                         .with_children(|held| {
                             let Some(block_id) = selected_block_id else {
                                 return;
@@ -210,7 +207,7 @@ fn spawn_viewmodel(
                                 &content.biomes,
                             );
 
-                            for face in held_block_faces() {
+                            for face in block_display_faces() {
                                 let material = block_materials.held_for_face(face);
                                 let Some(mut face_material) = materials.get_mut(&material) else {
                                     continue;
@@ -221,7 +218,7 @@ fn spawn_viewmodel(
                                     &content.asset_server,
                                     1.0,
                                 );
-                                apply_held_face_shading(&mut face_material, face);
+                                apply_block_display_shading(&mut face_material, face, 1.0);
                                 set_block_model_tint(&mut face_material, tint);
 
                                 held.spawn((
@@ -297,16 +294,13 @@ fn sync_held_block(
     }
 
     for (mut held, mut held_visibility) in &mut roots {
-        let block_changed = held.block_id != selected_block_id;
+        let block_changed = held.set_block_id(selected_block_id);
 
-        if block_changed {
-            held.block_id = selected_block_id;
-        }
         if *held_visibility != visibility {
             *held_visibility = visibility;
         }
 
-        let Some(block_id) = selected_block_id else {
+        let Some(block_id) = held.block_id() else {
             continue;
         };
         let block = content
@@ -327,7 +321,7 @@ fn sync_held_block(
 
             if block_changed {
                 *material = block_face_material_data(face.face, block, &content.asset_server, 1.0);
-                apply_held_face_shading(&mut material, face.face);
+                apply_block_display_shading(&mut material, face.face, 1.0);
             }
 
             set_block_model_tint(&mut material, tint);
@@ -406,20 +400,6 @@ fn item_visibility(block_id: Option<&'static str>) -> Visibility {
     }
 }
 
-fn held_block_faces() -> [BlockFace; 3] {
-    [BlockFace::Top, BlockFace::Front, BlockFace::Right]
-}
-
-fn apply_held_face_shading(material: &mut BlockModelMaterial, face: BlockFace) {
-    let shade = match face {
-        BlockFace::Top => 1.0,
-        BlockFace::Front => 0.86,
-        BlockFace::Right => 0.74,
-        _ => 1.0,
-    };
-    material.base.base_color = Color::srgba(shade, shade, shade, 1.0);
-}
-
 fn base_viewmodel_transform() -> Transform {
     Transform::from_translation(Vec3::new(0.62, -0.80, -1.05)).with_rotation(Quat::from_euler(
         EulerRot::XYZ,
@@ -431,6 +411,6 @@ fn base_viewmodel_transform() -> Transform {
 
 fn held_block_transform() -> Transform {
     Transform::from_translation(Vec3::new(-0.02, ARM_SIZE.y + 0.04, 0.20))
-        .with_rotation(Quat::from_euler(EulerRot::XYZ, 0.34, -0.64, 0.0))
+        .with_rotation(block_display_isometric_rotation())
         .with_scale(Vec3::splat(HELD_BLOCK_SCALE))
 }
