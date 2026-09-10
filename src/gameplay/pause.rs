@@ -1,4 +1,4 @@
-use bevy::{prelude::*, time::Virtual};
+use bevy::{prelude::*, time::Virtual, window::WindowFocused};
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
@@ -11,9 +11,11 @@ impl Plugin for PausePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            toggle_pause
-                .run_if(in_state(GameState::Gameplay))
-                .run_if(in_state(SettingsState::Closed)),
+            (
+                toggle_pause.run_if(in_state(SettingsState::Closed)),
+                pause_on_focus_lost,
+            )
+                .run_if(in_state(GameState::Gameplay)),
         )
         .add_systems(OnEnter(PauseState::Paused), pause_time)
         .add_systems(OnEnter(PauseState::Running), resume_time);
@@ -35,6 +37,22 @@ fn toggle_pause(
     };
 
     transition.request(ScreenTransitionTarget::pause(next));
+}
+
+fn pause_on_focus_lost(
+    mut focused_events: MessageReader<WindowFocused>,
+    pause_state: Res<State<PauseState>>,
+    mut next_pause_state: ResMut<NextState<PauseState>>,
+    mut time: ResMut<Time<Virtual>>,
+) {
+    if *pause_state.get() == PauseState::Paused {
+        return;
+    }
+
+    if focused_events.read().any(|event| !event.focused) {
+        time.pause();
+        next_pause_state.set(PauseState::Paused);
+    }
 }
 
 fn pause_time(mut time: ResMut<Time<Virtual>>) {
