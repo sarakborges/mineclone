@@ -8,6 +8,7 @@ mod dynamic_lights;
 mod environment;
 mod fog;
 mod lighting;
+mod mesh_allocator_diagnostics;
 mod sky;
 mod sky_layers;
 pub(crate) mod terrain_material;
@@ -21,6 +22,7 @@ use dynamic_lights::DynamicLightsPlugin;
 use environment::EnvironmentPlugin;
 use fog::FogPlugin;
 use lighting::LightingPlugin;
+use mesh_allocator_diagnostics::MeshAllocatorDiagnosticsPlugin;
 use sky::SkyPlugin;
 use sky_layers::SkyLayersPlugin;
 use terrain_material::TerrainMaterial;
@@ -33,6 +35,7 @@ impl Plugin for RenderingPlugin {
             .add_systems(Startup, setup_block_model_assets)
             .add_plugins((
                 AssetUploadPlugin,
+                MeshAllocatorDiagnosticsPlugin,
                 EnvironmentPlugin,
                 LightingPlugin,
                 DirectionalShadowsPlugin,
