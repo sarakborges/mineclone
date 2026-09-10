@@ -15,6 +15,7 @@ mod generation_pipeline;
 pub(crate) mod generation_region;
 pub(crate) mod geology;
 pub(crate) mod hydrology;
+mod lighting_updates;
 mod macro_climate;
 mod material_field;
 mod render_diagnostics;
@@ -28,13 +29,14 @@ pub(crate) mod world_feature_fields;
 
 use bevy::prelude::*;
 
-use crate::app::game_state::GameState;
+use crate::{app::game_state::GameState, voxel::lighting::PendingLightingUpdates};
 use biome::{CurrentBiome, track_current_biome};
 use chunk_remesh::{ChunkRemeshQueue, clear_chunk_remesh_queue, process_chunk_remesh_queue};
 use chunk_rendering::{ChunkRenderPool, clear_chunk_render_pool};
 use chunk_unloading::unload_chunk_meshes;
 use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
+use lighting_updates::{clear_dynamic_lighting, process_dynamic_lighting};
 use render_diagnostics::log_render_asset_pressure;
 use render_distance::RenderDistanceSettings;
 pub(crate) use save::{InMemoryWorldSave, WorldLoadMode};
@@ -56,12 +58,17 @@ impl Plugin for WorldPlugin {
             .init_resource::<ChunkStreamingState>()
             .init_resource::<ChunkRenderPool>()
             .init_resource::<ChunkRemeshQueue>()
+            .init_resource::<PendingLightingUpdates>()
             .add_plugins(DayNightPlugin)
             .add_systems(OnEnter(GameState::Loading), begin_world_loading)
             .add_systems(OnEnter(GameState::Gameplay), reset_chunk_streaming)
             .add_systems(
                 OnExit(GameState::Gameplay),
-                (clear_chunk_render_pool, clear_chunk_remesh_queue),
+                (
+                    clear_chunk_render_pool,
+                    clear_chunk_remesh_queue,
+                    clear_dynamic_lighting,
+                ),
             )
             .add_systems(Update, setup_world.run_if(in_state(GameState::Loading)))
             .add_systems(
@@ -72,7 +79,9 @@ impl Plugin for WorldPlugin {
             )
             .add_systems(
                 PostUpdate,
-                process_chunk_remesh_queue.run_if(in_state(GameState::Gameplay)),
+                (process_dynamic_lighting, process_chunk_remesh_queue)
+                    .chain()
+                    .run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(Last, log_render_asset_pressure);
     }
