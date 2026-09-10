@@ -3,7 +3,7 @@ use bevy::prelude::*;
 pub const MIN_RENDER_DISTANCE_CHUNKS: i32 = 4;
 pub const MAX_RENDER_DISTANCE_CHUNKS: i32 = 8;
 pub const DEFAULT_RENDER_DISTANCE_CHUNKS: i32 = 6;
-pub const DEFAULT_VERTICAL_RENDER_DISTANCE_CHUNKS: i32 = 3;
+pub const DEFAULT_VERTICAL_RENDER_DISTANCE_CHUNKS: i32 = 2;
 
 #[derive(Resource)]
 pub struct RenderDistanceSettings {
