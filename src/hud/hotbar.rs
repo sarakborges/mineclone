@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
@@ -32,6 +32,16 @@ struct HotbarItemIcon {
     block_id: &'static str,
 }
 
+#[derive(SystemParam)]
+struct HotbarHudContent<'w, 's> {
+    asset_server: Res<'w, AssetServer>,
+    blocks: Res<'w, BlockRegistry>,
+    hotbar: Res<'w, PlayerHotbar>,
+    biomes: Res<'w, BiomeRegistry>,
+    biome_field: Res<'w, BiomeField>,
+    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
+}
+
 pub struct HotbarHudPlugin;
 
 impl Plugin for HotbarHudPlugin {
@@ -46,12 +56,7 @@ impl Plugin for HotbarHudPlugin {
 
 fn spawn_hotbar(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    blocks: Res<BlockRegistry>,
-    hotbar: Res<PlayerHotbar>,
-    biomes: Res<BiomeRegistry>,
-    biome_field: Res<BiomeField>,
-    player: Single<&Transform, With<GameplayCamera>>,
+    content: HotbarHudContent,
     existing: Query<(), With<HotbarHudRoot>>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
@@ -59,11 +64,12 @@ fn spawn_hotbar(
         return;
     }
 
-    let selected_name = hotbar
-        .item_at(hotbar.selected_slot())
-        .and_then(|block_id| blocks.get(block_id))
+    let selected_name = content
+        .hotbar
+        .item_at(content.hotbar.selected_slot())
+        .and_then(|block_id| content.blocks.get(block_id))
         .map_or("", |block| block.name.as_str());
-    let tint_position = Vec2::new(player.translation.x, player.translation.z);
+    let tint_position = Vec2::new(content.player.translation.x, content.player.translation.z);
 
     commands
         .spawn((
@@ -102,7 +108,7 @@ fn spawn_hotbar(
             })
             .with_children(|row| {
                 for index in 0..HOTBAR_SLOT_COUNT {
-                    let selected = index == hotbar.selected_slot();
+                    let selected = index == content.hotbar.selected_slot();
                     let border_color = if selected {
                         theme::TEXT_PRIMARY
                     } else {
@@ -129,17 +135,21 @@ fn spawn_hotbar(
                         Pickable::IGNORE,
                     ))
                     .with_children(|slot| {
-                        let Some(block_id) = hotbar.item_at(index) else {
+                        let Some(block_id) = content.hotbar.item_at(index) else {
                             return;
                         };
-                        let block = blocks.get(block_id).unwrap_or_else(|| {
+                        let block = content.blocks.get(block_id).unwrap_or_else(|| {
                             panic!("hotbar references missing block: {block_id}")
                         });
-                        let tint =
-                            block_tint_at(block_id, tint_position, &biome_field, &biomes);
+                        let tint = block_tint_at(
+                            block_id,
+                            tint_position,
+                            &content.biome_field,
+                            &content.biomes,
+                        );
                         let material = icon_materials.add(BlockIconMaterial::from_block(
                             block,
-                            &asset_server,
+                            &content.asset_server,
                             tint,
                         ));
 
