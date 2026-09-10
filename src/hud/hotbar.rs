@@ -2,9 +2,14 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    content::block::BlockRegistry,
-    player::hotbar::{HOTBAR_SLOT_COUNT, PlayerHotbar},
+    content::{biome::BiomeRegistry, block::BlockRegistry},
+    player::{
+        camera::GameplayCamera,
+        hotbar::{HOTBAR_SLOT_COUNT, PlayerHotbar},
+    },
+    rendering::block_tint::block_tint_at,
     ui::{theme, typography},
+    world::biome_field::BiomeField,
 };
 
 const SLOT_SIZE: f32 = 44.0;
@@ -18,12 +23,21 @@ struct HotbarSlot {
 #[derive(Component)]
 struct HotbarItemName;
 
+#[derive(Component)]
+struct HotbarItemIcon {
+    block_id: &'static str,
+}
+
 pub struct HotbarHudPlugin;
 
 impl Plugin for HotbarHudPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_hotbar)
-            .add_systems(Update, update_hotbar.run_if(in_state(GameState::Gameplay)));
+            .add_systems(
+                Update,
+                (update_hotbar, update_hotbar_item_tints)
+                    .run_if(in_state(GameState::Gameplay)),
+            );
     }
 }
 
@@ -120,6 +134,7 @@ fn spawn_hotbar(
                             ));
                         } else {
                             slot.spawn((
+                                HotbarItemIcon { block_id },
                                 ImageNode::new(asset_server.load(block.textures.top.clone())),
                                 Node {
                                     width: px(ITEM_ICON_SIZE),
@@ -167,5 +182,22 @@ fn update_hotbar(
 
     if item_name.0 != selected_name {
         item_name.0 = selected_name.to_owned();
+    }
+}
+
+fn update_hotbar_item_tints(
+    player: Single<&Transform, With<GameplayCamera>>,
+    biomes: Res<BiomeRegistry>,
+    biome_field: Res<BiomeField>,
+    mut icons: Query<(&HotbarItemIcon, &mut ImageNode)>,
+) {
+    let position = Vec2::new(player.translation.x, player.translation.z);
+
+    for (icon, mut image) in &mut icons {
+        let tint = block_tint_at(icon.block_id, position, &biome_field, &biomes);
+
+        if image.color != tint {
+            image.color = tint;
+        }
     }
 }
