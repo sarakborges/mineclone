@@ -25,7 +25,7 @@ pub fn spawn_chunk_mesh(
     }
 
     if chunk.is_empty() {
-        render_pool.insert(coord, Vec::new(), Vec::new());
+        render_pool.insert(coord, Vec::new(), Vec::new(), 0);
         return;
     }
 
@@ -45,12 +45,14 @@ pub fn spawn_chunk_mesh(
     let transform = Transform::from_translation(coord.as_vec3() * CHUNK_SIZE as f32);
     let mut entities = Vec::new();
     let mut mesh_handles = Vec::new();
+    let mut pooled_mesh_bytes = 0;
 
     for face_mesh in face_meshes {
         let material = context
             .terrain_materials
             .for_face(face_mesh.block_id, face_mesh.face)
             .clone();
+        pooled_mesh_bytes += mesh_asset_bytes(&face_mesh.mesh);
         let mesh_handle = meshes.add(face_mesh.mesh);
         let mut entity_commands = commands.spawn((
             Mesh3d(mesh_handle.clone()),
@@ -68,6 +70,7 @@ pub fn spawn_chunk_mesh(
     }
 
     for fluid_mesh in fluid_meshes {
+        pooled_mesh_bytes += mesh_asset_bytes(&fluid_mesh.mesh);
         let mesh_handle = meshes.add(fluid_mesh.mesh);
         let entity = commands
             .spawn((
@@ -82,5 +85,12 @@ pub fn spawn_chunk_mesh(
         mesh_handles.push(mesh_handle);
     }
 
-    render_pool.insert(coord, entities, mesh_handles);
+    render_pool.insert(coord, entities, mesh_handles, pooled_mesh_bytes);
+}
+
+fn mesh_asset_bytes(mesh: &Mesh) -> usize {
+    mesh.get_vertex_buffer_size()
+        + mesh
+            .get_index_buffer_bytes()
+            .map_or(0, |indices| indices.len())
 }
