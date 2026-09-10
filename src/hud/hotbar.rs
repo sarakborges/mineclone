@@ -141,6 +141,10 @@ fn update_hotbar(
     mut slots: Query<(&HotbarSlot, &mut BackgroundColor, &mut BorderColor)>,
     mut item_name: Single<&mut Text, With<HotbarItemName>>,
 ) {
+    if !hotbar.is_changed() {
+        return;
+    }
+
     for (slot, mut background, mut border) in &mut slots {
         let selected = slot.index == hotbar.selected_slot();
 
@@ -156,8 +160,12 @@ fn update_hotbar(
         });
     }
 
-    item_name.0 = hotbar
+    let selected_name = hotbar
         .item_at(hotbar.selected_slot())
         .and_then(|block_id| blocks.get(block_id))
-        .map_or_else(String::new, |block| block.name.clone());
+        .map_or("", |block| block.name.as_str());
+
+    if item_name.0 != selected_name {
+        item_name.0 = selected_name.to_owned();
+    }
 }
