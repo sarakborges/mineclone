@@ -19,10 +19,7 @@ impl Plugin for MeshAllocatorDiagnosticsPlugin {
     }
 }
 
-fn log_mesh_allocator_pressure(
-    allocator: Res<MeshAllocator>,
-    mut frames: Local<u32>,
-) {
+fn log_mesh_allocator_pressure(allocator: Res<MeshAllocator>, mut frames: Local<u32>) {
     *frames = frames.wrapping_add(1);
 
     if !(*frames).is_multiple_of(LOG_INTERVAL_FRAMES) {
