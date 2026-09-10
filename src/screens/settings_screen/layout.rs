@@ -35,10 +35,8 @@ pub fn spawn_settings_screen(mut commands: Commands, render_distance: Res<Render
             GlobalZIndex(500),
         ))
         .with_children(|root| {
-            for &(left, top, size, phase, speed, red, green, blue, base_alpha) in STAR_FIELD {
-                root.spawn(cosmic_background::star(
-                    left, top, size, phase, speed, red, green, blue, base_alpha,
-                ));
+            for &spec in STAR_FIELD {
+                root.spawn(cosmic_background::star(spec));
             }
 
             root.spawn(Node {
