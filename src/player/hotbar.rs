@@ -1,10 +1,11 @@
 use bevy::prelude::*;
 
-use crate::app::{game_state::GameState, pause_state::PauseState};
+use crate::{
+    app::{game_state::GameState, pause_state::PauseState},
+    content::builtin_ids::{GRASS_BLOCK_ID, LAMP_BLOCK_ID},
+};
 
 pub const HOTBAR_SLOT_COUNT: usize = 9;
-pub const GRASS_BLOCK_ID: &str = "asteria:grass";
-pub const LAMP_BLOCK_ID: &str = "asteria:lamp";
 
 #[derive(Resource)]
 pub struct PlayerHotbar {

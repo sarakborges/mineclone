@@ -4,6 +4,8 @@ pub mod biome_hydrology;
 pub mod biome_sky_layer;
 pub mod biome_terrain;
 pub mod block;
+pub(crate) mod block_id;
+pub(crate) mod builtin_ids;
 pub mod color;
 pub mod day_night_cycle;
 pub mod day_night_phase;

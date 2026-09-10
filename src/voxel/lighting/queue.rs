@@ -1,0 +1,77 @@
+use std::collections::{HashSet, VecDeque};
+
+use bevy::prelude::*;
+
+use crate::voxel::chunk::CHUNK_SIZE;
+
+pub(super) const NEIGHBORS: [IVec3; 6] = [
+    IVec3::X,
+    IVec3::NEG_X,
+    IVec3::Y,
+    IVec3::NEG_Y,
+    IVec3::Z,
+    IVec3::NEG_Z,
+];
+
+#[derive(Default)]
+pub(super) struct LightingQueue {
+    pending: VecDeque<IVec3>,
+    queued: HashSet<IVec3>,
+}
+
+impl LightingQueue {
+    pub fn enqueue(&mut self, position: IVec3) {
+        if position.y >= 0 && self.queued.insert(position) {
+            self.pending.push_back(position);
+        }
+    }
+
+    pub fn enqueue_neighbors(&mut self, position: IVec3) {
+        for direction in NEIGHBORS {
+            self.enqueue(position + direction);
+        }
+    }
+
+    pub fn enqueue_chunk_voxels(&mut self, origin: IVec3) {
+        let size = CHUNK_SIZE as i32;
+
+        for y in 0..size {
+            for z in 0..size {
+                for x in 0..size {
+                    self.enqueue(origin + IVec3::new(x, y, z));
+                }
+            }
+        }
+    }
+
+    pub fn enqueue_chunk_boundary_neighbors(&mut self, origin: IVec3) {
+        let size = CHUNK_SIZE as i32;
+
+        for y in 0..size {
+            for z in 0..size {
+                self.enqueue(origin + IVec3::new(-1, y, z));
+                self.enqueue(origin + IVec3::new(size, y, z));
+            }
+        }
+
+        for y in 0..size {
+            for x in 0..size {
+                self.enqueue(origin + IVec3::new(x, y, -1));
+                self.enqueue(origin + IVec3::new(x, y, size));
+            }
+        }
+
+        for z in 0..size {
+            for x in 0..size {
+                self.enqueue(origin + IVec3::new(x, -1, z));
+                self.enqueue(origin + IVec3::new(x, size, z));
+            }
+        }
+    }
+
+    pub fn pop(&mut self) -> Option<IVec3> {
+        let position = self.pending.pop_front()?;
+        self.queued.remove(&position);
+        Some(position)
+    }
+}

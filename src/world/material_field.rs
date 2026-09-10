@@ -1,6 +1,6 @@
 use crate::content::{
     biome::BiomeRegistry,
-    block::intern_block_id,
+    block_id::intern_block_id,
 };
 
 use super::{

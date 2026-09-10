@@ -1,12 +1,10 @@
-use std::{
-    collections::HashMap,
-    sync::{Mutex, OnceLock},
-};
+use std::collections::HashMap;
 
 use bevy::prelude::*;
 use serde::Deserialize;
 
-static BLOCK_ID_INTERNER: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
+use super::block_id::intern_block_id;
+
 const MAX_LIGHT_DAMPENING: u8 = 15;
 
 #[derive(Clone, Default, Deserialize)]
@@ -56,7 +54,7 @@ pub struct BlockRegistry {
 impl BlockRegistry {
     pub fn insert(&mut self, definition: BlockDefinition) {
         assert!(
-            definition.light_emission <= 15,
+            definition.light_emission <= MAX_LIGHT_DAMPENING,
             "block {} light emission must be between 0 and 15",
             definition.id
         );
@@ -67,7 +65,6 @@ impl BlockRegistry {
         );
 
         let static_id = intern_block_id(&definition.id);
-
         self.static_ids.insert(definition.id.clone(), static_id);
         self.definitions.insert(definition.id.clone(), definition);
     }
@@ -91,32 +88,4 @@ fn default_light_dampening() -> u8 {
 
 fn default_casts_shadow() -> bool {
     true
-}
-
-pub(crate) fn intern_block_id(id: &str) -> &'static str {
-    let interner = BLOCK_ID_INTERNER.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut ids = interner
-        .lock()
-        .expect("block ID interner lock was poisoned");
-
-    if let Some(&interned) = ids.get(id) {
-        return interned;
-    }
-
-    let interned = Box::leak(id.to_owned().into_boxed_str());
-    ids.insert(id.to_owned(), interned);
-    interned
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn block_ids_are_interned_once_per_process() {
-        let first = intern_block_id("asteria:test");
-        let second = intern_block_id("asteria:test");
-
-        assert!(std::ptr::eq(first.as_ptr(), second.as_ptr()));
-    }
 }

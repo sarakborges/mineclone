@@ -3,10 +3,9 @@ use serde::Deserialize;
 use super::{
     biome::{BiomeKind, BiomeRegistry},
     block::BlockRegistry,
+    builtin_ids::WATER_FLUID_ID,
     fluid::FluidRegistry,
 };
-
-const DEFAULT_WATER_FLUID: &str = "asteria:water";
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -30,7 +29,7 @@ pub struct DimensionHydrology {
 impl Default for DimensionHydrology {
     fn default() -> Self {
         Self {
-            water_fluid: DEFAULT_WATER_FLUID.to_owned(),
+            water_fluid: WATER_FLUID_ID.to_owned(),
             ocean_biome: None,
             coast_biome: None,
             ocean_bed_block: None,
@@ -92,5 +91,5 @@ impl DimensionHydrology {
 }
 
 fn default_water_fluid() -> String {
-    DEFAULT_WATER_FLUID.to_owned()
+    WATER_FLUID_ID.to_owned()
 }
