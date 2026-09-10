@@ -4,6 +4,40 @@ use bevy::{
 
 use crate::{content::block::BlockDefinition, voxel::mesh::BlockFace};
 
+#[derive(Resource)]
+pub(crate) struct BlockModelMeshes {
+    right: Handle<Mesh>,
+    left: Handle<Mesh>,
+    top: Handle<Mesh>,
+    bottom: Handle<Mesh>,
+    front: Handle<Mesh>,
+    back: Handle<Mesh>,
+}
+
+impl BlockModelMeshes {
+    pub(crate) fn for_face(&self, face: BlockFace) -> Handle<Mesh> {
+        match face {
+            BlockFace::Right => self.right.clone(),
+            BlockFace::Left => self.left.clone(),
+            BlockFace::Top => self.top.clone(),
+            BlockFace::Bottom => self.bottom.clone(),
+            BlockFace::Front => self.front.clone(),
+            BlockFace::Back => self.back.clone(),
+        }
+    }
+}
+
+pub(crate) fn setup_block_model_meshes(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
+    commands.insert_resource(BlockModelMeshes {
+        right: meshes.add(block_face_mesh(BlockFace::Right)),
+        left: meshes.add(block_face_mesh(BlockFace::Left)),
+        top: meshes.add(block_face_mesh(BlockFace::Top)),
+        bottom: meshes.add(block_face_mesh(BlockFace::Bottom)),
+        front: meshes.add(block_face_mesh(BlockFace::Front)),
+        back: meshes.add(block_face_mesh(BlockFace::Back)),
+    });
+}
+
 pub(crate) fn block_faces() -> [BlockFace; 6] {
     [
         BlockFace::Right,
