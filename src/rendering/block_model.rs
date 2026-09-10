@@ -8,6 +8,36 @@ use crate::{
     voxel::mesh::BlockFace,
 };
 
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub(crate) struct BlockModelInstance {
+    block_id: Option<&'static str>,
+}
+
+impl BlockModelInstance {
+    pub(crate) fn new(block_id: &'static str) -> Self {
+        Self {
+            block_id: Some(block_id),
+        }
+    }
+
+    pub(crate) fn empty() -> Self {
+        Self { block_id: None }
+    }
+
+    pub(crate) fn block_id(&self) -> Option<&'static str> {
+        self.block_id
+    }
+
+    pub(crate) fn set_block_id(&mut self, block_id: Option<&'static str>) -> bool {
+        if self.block_id == block_id {
+            return false;
+        }
+
+        self.block_id = block_id;
+        true
+    }
+}
+
 #[derive(Resource)]
 pub(crate) struct BlockModelMeshes {
     right: Handle<Mesh>,
@@ -110,6 +140,28 @@ pub(crate) fn block_faces() -> [BlockFace; 6] {
     ]
 }
 
+pub(crate) fn block_display_faces() -> [BlockFace; 3] {
+    [BlockFace::Top, BlockFace::Front, BlockFace::Right]
+}
+
+pub(crate) fn block_display_face_shade(face: BlockFace) -> f32 {
+    match face {
+        BlockFace::Top => 1.0,
+        BlockFace::Front => 0.86,
+        BlockFace::Right => 0.74,
+        _ => 1.0,
+    }
+}
+
+pub(crate) fn block_display_isometric_rotation() -> Quat {
+    Quat::from_euler(
+        EulerRot::XYZ,
+        35.264_39_f32.to_radians(),
+        -45.0_f32.to_radians(),
+        0.0,
+    )
+}
+
 pub(crate) fn block_face_texture(face: BlockFace, block: &BlockDefinition) -> Option<&str> {
     let texture = match face {
         BlockFace::Right => block.textures.right.as_str(),
@@ -151,6 +203,15 @@ pub(crate) fn block_face_material_data(
 
 pub(crate) fn set_block_model_tint(material: &mut BlockModelMaterial, tint: Color) {
     material.extension.set_tint(tint);
+}
+
+pub(crate) fn apply_block_display_shading(
+    material: &mut BlockModelMaterial,
+    face: BlockFace,
+    opacity: f32,
+) {
+    let shade = block_display_face_shade(face);
+    material.base.base_color = Color::srgba(shade, shade, shade, opacity.clamp(0.0, 1.0));
 }
 
 fn block_model_placeholder_material(opacity: f32) -> BlockModelMaterial {
