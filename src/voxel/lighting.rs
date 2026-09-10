@@ -92,3 +92,27 @@ pub(crate) fn initialize_chunks_lighting(
 
     drop(relax(world, blocks, fluids, &mut queue));
 }
+
+#[cfg(test)]
+fn relight_after_voxel_edit(
+    world: &mut VoxelWorld,
+    position: IVec3,
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+) {
+    let mut pending = PendingLightingUpdates::default();
+    pending.enqueue_voxel_edit(position);
+    drop(relax(world, blocks, fluids, &mut pending.queue));
+}
+
+#[cfg(test)]
+fn relight_after_chunk_unloads(
+    world: &mut VoxelWorld,
+    unloaded: &[IVec3],
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+) {
+    let mut pending = PendingLightingUpdates::default();
+    pending.enqueue_chunk_unloads(unloaded);
+    drop(relax(world, blocks, fluids, &mut pending.queue));
+}
