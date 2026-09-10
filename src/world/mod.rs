@@ -74,9 +74,6 @@ impl Plugin for WorldPlugin {
                 PostUpdate,
                 process_chunk_remesh_queue.run_if(in_state(GameState::Gameplay)),
             )
-            .add_systems(
-                Last,
-                log_render_asset_pressure.run_if(in_state(GameState::Gameplay)),
-            );
+            .add_systems(Last, log_render_asset_pressure);
     }
 }
