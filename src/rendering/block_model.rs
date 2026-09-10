@@ -8,20 +8,42 @@ use crate::{
     voxel::mesh::BlockFace,
 };
 
-#[derive(Component, Clone, Copy, Debug, Default)]
-pub(crate) struct BlockModelInstance {
-    block_id: Option<&'static str>,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BlockModelMode {
+    Display,
+    World,
 }
 
-impl BlockModelInstance {
-    pub(crate) fn new(block_id: &'static str) -> Self {
+#[derive(Component, Clone, Copy, Debug)]
+pub(crate) struct BlockModel {
+    block_id: Option<&'static str>,
+    mode: BlockModelMode,
+    opacity: f32,
+}
+
+impl BlockModel {
+    pub(crate) fn display(block_id: &'static str) -> Self {
         Self {
             block_id: Some(block_id),
+            mode: BlockModelMode::Display,
+            opacity: 1.0,
         }
     }
 
-    pub(crate) fn empty() -> Self {
-        Self { block_id: None }
+    pub(crate) fn empty_display() -> Self {
+        Self {
+            block_id: None,
+            mode: BlockModelMode::Display,
+            opacity: 1.0,
+        }
+    }
+
+    pub(crate) fn world(block_id: &'static str, opacity: f32) -> Self {
+        Self {
+            block_id: Some(block_id),
+            mode: BlockModelMode::World,
+            opacity: opacity.clamp(0.0, 1.0),
+        }
     }
 
     pub(crate) fn block_id(&self) -> Option<&'static str> {
@@ -36,7 +58,28 @@ impl BlockModelInstance {
         self.block_id = block_id;
         true
     }
+
+    pub(crate) fn opacity(&self) -> f32 {
+        self.opacity
+    }
+
+    pub(crate) fn faces(&self) -> &'static [BlockFace] {
+        match self.mode {
+            BlockModelMode::Display => &DISPLAY_FACES,
+            BlockModelMode::World => &WORLD_FACES,
+        }
+    }
 }
+
+const DISPLAY_FACES: [BlockFace; 3] = [BlockFace::Top, BlockFace::Front, BlockFace::Right];
+const WORLD_FACES: [BlockFace; 6] = [
+    BlockFace::Right,
+    BlockFace::Left,
+    BlockFace::Top,
+    BlockFace::Bottom,
+    BlockFace::Front,
+    BlockFace::Back,
+];
 
 #[derive(Resource)]
 pub(crate) struct BlockModelMeshes {
@@ -127,21 +170,6 @@ pub(crate) fn setup_block_model_assets(
         held: BlockFaceMaterialHandles::new(&mut materials, 1.0),
         preview: BlockFaceMaterialHandles::new(&mut materials, 0.68),
     });
-}
-
-pub(crate) fn block_faces() -> [BlockFace; 6] {
-    [
-        BlockFace::Right,
-        BlockFace::Left,
-        BlockFace::Top,
-        BlockFace::Bottom,
-        BlockFace::Front,
-        BlockFace::Back,
-    ]
-}
-
-pub(crate) fn block_display_faces() -> [BlockFace; 3] {
-    [BlockFace::Top, BlockFace::Front, BlockFace::Right]
 }
 
 pub(crate) fn block_display_face_shade(face: BlockFace) -> f32 {
