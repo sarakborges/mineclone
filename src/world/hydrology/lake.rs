@@ -18,15 +18,7 @@ pub(super) fn lake_for_local_basin(
     sea_level: f32,
     water_fluid: &str,
 ) -> Option<WaterBody> {
-    lake_for_basin(
-        cell,
-        source,
-        neighbors,
-        seed,
-        sea_level,
-        water_fluid,
-        false,
-    )
+    lake_for_basin(cell, source, neighbors, seed, sea_level, water_fluid, false)
 }
 
 pub(super) fn terminal_lake_for_local_basin(
@@ -37,15 +29,7 @@ pub(super) fn terminal_lake_for_local_basin(
     sea_level: f32,
     water_fluid: &str,
 ) -> Option<WaterBody> {
-    lake_for_basin(
-        cell,
-        source,
-        neighbors,
-        seed,
-        sea_level,
-        water_fluid,
-        true,
-    )
+    lake_for_basin(cell, source, neighbors, seed, sea_level, water_fluid, true)
 }
 
 fn lake_for_basin(

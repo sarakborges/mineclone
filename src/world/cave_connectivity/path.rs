@@ -23,8 +23,8 @@ pub(super) fn chaotic_connector_points(from: Vec3, to: Vec3, hash: u64) -> Vec<V
     };
     let side = direction.cross(reference).normalize_or_zero();
     let up = side.cross(direction).normalize_or_zero();
-    let segment_count = ((distance / TARGET_SEGMENT_LENGTH).ceil() as usize)
-        .clamp(MIN_SEGMENTS, MAX_SEGMENTS);
+    let segment_count =
+        ((distance / TARGET_SEGMENT_LENGTH).ceil() as usize).clamp(MIN_SEGMENTS, MAX_SEGMENTS);
 
     let phase = hash_unit(hash.rotate_left(7)) * std::f32::consts::TAU;
     let secondary_phase = hash_unit(hash.rotate_left(19)) * std::f32::consts::TAU;
@@ -61,13 +61,12 @@ pub(super) fn chaotic_connector_points(from: Vec3, to: Vec3, hash: u64) -> Vec<V
             let fine_side = (phase * 1.9 + t * std::f32::consts::TAU * fine_frequency).sin()
                 * side_amplitude
                 * 0.18;
-            let fine_up = (secondary_phase * 1.3
-                + t * std::f32::consts::TAU * (fine_frequency * 1.17))
-                .sin()
-                * vertical_amplitude
-                * 0.16;
-            let offset = side * (helix_side + broad_side + fine_side)
-                + up * (helix_up + broad_up + fine_up);
+            let fine_up =
+                (secondary_phase * 1.3 + t * std::f32::consts::TAU * (fine_frequency * 1.17)).sin()
+                    * vertical_amplitude
+                    * 0.16;
+            let offset =
+                side * (helix_side + broad_side + fine_side) + up * (helix_up + broad_up + fine_up);
             let mut point = center + offset * envelope;
             point.y = point.y.max(MIN_WORLD_Y);
             point

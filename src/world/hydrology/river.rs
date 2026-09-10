@@ -6,9 +6,9 @@ use crate::world::feature_graph::FeatureGraph;
 
 use super::{
     constants::{
-        OCEAN_CONTINENTALNESS_THRESHOLD, RIVER_EDGE_MARGIN_CELLS,
-        RIVER_FLOW_FOR_MAX_WIDTH, RIVER_FLOW_SEARCH_RADIUS, RIVER_FLOW_TRACE_STEPS,
-        RIVER_MAXIMUM_RADIUS, RIVER_MINIMUM_FLOW, RIVER_MINIMUM_RADIUS,
+        OCEAN_CONTINENTALNESS_THRESHOLD, RIVER_EDGE_MARGIN_CELLS, RIVER_FLOW_FOR_MAX_WIDTH,
+        RIVER_FLOW_SEARCH_RADIUS, RIVER_FLOW_TRACE_STEPS, RIVER_MAXIMUM_RADIUS, RIVER_MINIMUM_FLOW,
+        RIVER_MINIMUM_RADIUS,
     },
     drainage::{DrainageNetwork, DrainageNode},
     lake::{lake_for_local_basin, terminal_lake_for_local_basin},
@@ -84,14 +84,7 @@ where
                     water_fluid,
                 )
             } else {
-                lake_for_local_basin(
-                    cell,
-                    source,
-                    &neighbors,
-                    seed,
-                    sea_level,
-                    water_fluid,
-                )
+                lake_for_local_basin(cell, source, &neighbors, seed, sea_level, water_fluid)
             };
 
             if let Some(lake) = lake.filter(|lake| water_body_intersects_region(coord, lake)) {
@@ -207,9 +200,7 @@ fn river_radius(flow: u32) -> f32 {
     let normalized = if flow as f32 <= minimum {
         0.0
     } else {
-        ((flow as f32 / minimum).ln()
-            / (RIVER_FLOW_FOR_MAX_WIDTH / minimum).ln())
-            .clamp(0.0, 1.0)
+        ((flow as f32 / minimum).ln() / (RIVER_FLOW_FOR_MAX_WIDTH / minimum).ln()).clamp(0.0, 1.0)
     };
 
     lerp(RIVER_MINIMUM_RADIUS, RIVER_MAXIMUM_RADIUS, normalized)
@@ -228,8 +219,7 @@ fn river_path_points(
     let direction = delta.normalize_or_zero();
     let perpendicular = Vec2::new(-direction.y, direction.x);
     let hash = cell_hash(source_cell, seed ^ 0x6a09_e667_f3bc_c909);
-    let amplitude = (distance * lerp(0.10, 0.24, hash_unit(hash)))
-        .clamp(6.0, 30.0);
+    let amplitude = (distance * lerp(0.10, 0.24, hash_unit(hash))).clamp(6.0, 30.0);
     let phase = hash_unit(hash.rotate_left(23)) * std::f32::consts::TAU;
     let secondary = hash_signed(hash.rotate_left(41));
     let start_height = river_height(source, sea_level);
@@ -286,6 +276,10 @@ mod tests {
 
         assert_eq!(points.first().unwrap().x, source.position.x);
         assert_eq!(points.last().unwrap().x, downstream.position.x);
-        assert!(points[1..points.len() - 1].iter().any(|point| point.z != 0.0));
+        assert!(
+            points[1..points.len() - 1]
+                .iter()
+                .any(|point| point.z != 0.0)
+        );
     }
 }

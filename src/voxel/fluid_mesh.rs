@@ -223,11 +223,7 @@ fn fluid_corner_height(
         }
     }
 
-    if count > 0.0 {
-        total / count
-    } else {
-        0.0
-    }
+    if count > 0.0 { total / count } else { 0.0 }
 }
 
 fn face_is_exposed(world: &VoxelWorld, position: IVec3, fluid_id: FluidId) -> bool {
