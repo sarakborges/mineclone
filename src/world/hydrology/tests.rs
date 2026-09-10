@@ -1,13 +1,16 @@
 use super::{
     HydrologyField, HydrologySurfaceSample, WaterBody,
-    constants::{HYDROLOGY_REGION_SIZE, MACRO_SAMPLE_GRID},
+    constants::{HYDROLOGY_REGION_SIZE, MACRO_SAMPLE_GRID, OCEAN_CONTINENTALNESS_THRESHOLD},
     drainage::{DrainageNode, drainage_position},
     lake::lake_for_local_basin,
     spatial::macro_sample_position,
 };
-use crate::content::{
-    biome_hydrology::BiomeHydrology, builtin_ids::WATER_FLUID_ID,
-    dimension_hydrology::DimensionHydrology,
+use crate::{
+    content::{
+        biome_hydrology::BiomeHydrology, builtin_ids::WATER_FLUID_ID,
+        dimension_hydrology::DimensionHydrology,
+    },
+    world::macro_climate::MacroClimateField,
 };
 use bevy::prelude::*;
 
@@ -36,13 +39,16 @@ fn water_body_strength_fades_to_zero_at_shoreline() {
     let body = WaterBody {
         center: Vec2::ZERO,
         radius: Vec2::splat(10.0),
+        rotation: 0.0,
+        shape_seed: 42,
         water_level: 64.0,
         carve_depth: 8.0,
         fluid_id: WATER_FLUID_ID.to_owned(),
     };
 
     assert_eq!(body.horizontal_strength(Vec2::ZERO), 1.0);
-    assert_eq!(body.horizontal_strength(Vec2::new(10.0, 0.0)), 0.0);
+    assert!(body.horizontal_strength(Vec2::new(10.0, 0.0)) < 0.5);
+    assert_eq!(body.horizontal_strength(Vec2::new(15.0, 0.0)), 0.0);
 }
 
 #[test]
@@ -75,13 +81,33 @@ fn low_continentalness_produces_ocean_water_and_carving() {
 fn hydrology_biome_overlay_transitions_surface_to_coast_to_ocean() {
     let field = field();
     let land = field.biome_overlay(0.5);
-    let coast = field.biome_overlay(0.28);
+    let coast = field.biome_overlay(0.34);
     let ocean = field.biome_overlay(0.1);
 
     assert_eq!(land.surface_weight, 1.0);
     assert!(coast.coast_weight > coast.surface_weight);
     assert!(coast.coast_weight > coast.ocean_weight);
     assert_eq!(ocean.ocean_weight, 1.0);
+}
+
+#[test]
+fn continentalness_reaches_ocean_range_within_exploration_scale() {
+    for seed in 0..64 {
+        let climate = MacroClimateField::new(seed);
+        let found = (0..=2048).step_by(32).any(|distance| {
+            let distance = distance as f32;
+            [
+                Vec2::new(distance, 0.0),
+                Vec2::new(-distance, 0.0),
+                Vec2::new(0.0, distance),
+                Vec2::new(0.0, -distance),
+            ]
+            .into_iter()
+            .any(|position| climate.sample(position).continentalness < OCEAN_CONTINENTALNESS_THRESHOLD)
+        });
+
+        assert!(found, "seed {seed} has no ocean-range continentalness within 2048 blocks");
+    }
 }
 
 #[test]

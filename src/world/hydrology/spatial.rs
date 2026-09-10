@@ -19,8 +19,9 @@ pub(super) fn edge_intersects_region(coord: IVec2, from: Vec2, to: Vec2) -> bool
 
 pub(super) fn water_body_intersects_region(coord: IVec2, body: &WaterBody) -> bool {
     let (minimum, maximum) = region_bounds(coord);
-    let body_minimum = body.center - body.radius;
-    let body_maximum = body.center + body.radius;
+    let extent = Vec2::splat(body.maximum_horizontal_extent());
+    let body_minimum = body.center - extent;
+    let body_maximum = body.center + extent;
 
     body_maximum.x >= minimum.x
         && body_minimum.x <= maximum.x

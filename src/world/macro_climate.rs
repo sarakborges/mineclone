@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 const CLIMATE_OCTAVES: usize = 4;
+const CONTINENTALNESS_SCALE: f32 = 0.0012;
 
 #[derive(Clone, Copy, Debug)]
 pub struct MacroClimateSample {
@@ -30,7 +31,7 @@ impl MacroClimateField {
                 self.seed ^ 0x1319_8a2e_0370_7344,
             ),
             continentalness: normalized_fractal_noise(
-                position * 0.0008,
+                position * CONTINENTALNESS_SCALE,
                 self.seed ^ 0xa409_3822_299f_31d0,
             ),
             erosion: normalized_fractal_noise(position * 0.0040, self.seed ^ 0x082e_fa98_ec4e_6c89),

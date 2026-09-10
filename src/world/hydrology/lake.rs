@@ -59,27 +59,28 @@ fn lake_for_basin(
     }
 
     let hash = cell_hash(cell, seed ^ 0xbb67_ae85_84ca_a73b);
-    let lake_chance = (LAKE_CHANCE * source.biome_hydrology.lake_chance_multiplier).clamp(0.0, 1.0);
+    let lake_chance =
+        (LAKE_CHANCE * source.biome_hydrology.lake_chance_multiplier).clamp(0.0, 1.0);
 
     if !terminal && hash_unit(hash.rotate_left(17)) > lake_chance {
         return None;
     }
 
-    let radius_x = lerp(
+    let base_radius = lerp(
         LAKE_MINIMUM_RADIUS,
         LAKE_MAXIMUM_RADIUS,
         hash_unit(hash.rotate_left(29)),
     );
-    let radius_z = lerp(
-        LAKE_MINIMUM_RADIUS,
-        LAKE_MAXIMUM_RADIUS,
-        hash_unit(hash.rotate_left(43)),
-    );
+    let aspect = lerp(0.86, 1.14, hash_unit(hash.rotate_left(43)));
+    let radius = Vec2::new(base_radius * aspect, base_radius * (2.0 - aspect));
+    let rotation = hash_unit(hash.rotate_left(11)) * std::f32::consts::TAU;
     let water_level = source.elevation + relief.min(5.0) * 0.7;
 
     Some(WaterBody {
         center: source.position,
-        radius: Vec2::new(radius_x, radius_z),
+        radius,
+        rotation,
+        shape_seed: hash.rotate_left(7),
         water_level,
         carve_depth: LAKE_CARVE_DEPTH,
         fluid_id: water_fluid.to_owned(),
