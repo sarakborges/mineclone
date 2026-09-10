@@ -31,15 +31,6 @@ pub struct StructureLayer {
     pub rows: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StructurePlacementRules {
-    pub spacing: i32,
-    pub chance: f32,
-    #[serde(default)]
-    pub jitter: i32,
-}
-
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StructureDefinition {
@@ -47,7 +38,6 @@ pub struct StructureDefinition {
     pub name: String,
     #[serde(default)]
     pub anchor: StructureAnchor,
-    pub placement: StructurePlacementRules,
     pub palette: HashMap<String, StructurePaletteEntry>,
     pub layers: Vec<StructureLayer>,
 }
@@ -133,21 +123,6 @@ impl StructureDefinition {
         assert!(
             !self.name.trim().is_empty(),
             "structure {} name cannot be empty",
-            self.id
-        );
-        assert!(
-            self.placement.spacing > 0,
-            "structure {} placement spacing must be positive",
-            self.id
-        );
-        assert!(
-            (0.0..=1.0).contains(&self.placement.chance),
-            "structure {} placement chance must be between 0 and 1",
-            self.id
-        );
-        assert!(
-            self.placement.jitter >= 0 && self.placement.jitter * 2 < self.placement.spacing,
-            "structure {} placement jitter must be non-negative and smaller than half its spacing",
             self.id
         );
         assert!(
