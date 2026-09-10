@@ -8,6 +8,7 @@ pub(super) const OCEAN_EXTRA_DEPTH: f32 = 18.0;
 
 pub(super) const RIVER_EDGE_MARGIN_CELLS: i32 = 2;
 pub(super) const RIVER_MINIMUM_DROP: f32 = 0.01;
+pub(super) const RIVER_MINIMUM_WATER_DROP: f32 = 0.5;
 pub(super) const RIVER_BASIN_ESCAPE_RADIUS_CELLS: i32 = 3;
 pub(super) const RIVER_ROUTE_VARIATION: f32 = 1.75;
 pub(super) const RIVER_FLOW_SEARCH_RADIUS: i32 = 6;
