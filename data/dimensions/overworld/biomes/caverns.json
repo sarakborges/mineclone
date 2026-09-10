@@ -1,0 +1,53 @@
+{
+  "id": "asteria:overworld/caverns",
+  "name": "Caverns",
+  "kind": "volume",
+  "size": {
+    "x": { "min": 48.0, "max": 96.0 },
+    "z": { "min": 48.0, "max": 96.0 },
+    "y": { "min": 18.0, "max": 34.0 }
+  },
+  "verticalRange": { "min": 8.0, "max": 82.0 },
+  "priority": 0,
+  "densityModifier": {
+    "type": "cavern",
+    "carveStrength": 4.0,
+    "noiseScale": 0.045,
+    "openness": 0.62
+  },
+  "hydrology": {
+    "canGenerateLake": false,
+    "canGenerateRiver": false,
+    "lakeChanceMultiplier": 1.0,
+    "riverWidthMultiplier": 1.0
+  },
+  "visuals": {
+    "skyColor": {
+      "dawn": { "r": 0.50, "g": 0.69, "b": 0.94 },
+      "day": { "r": 0.22, "g": 0.60, "b": 1.00 },
+      "dusk": { "r": 0.62, "g": 0.50, "b": 0.72 },
+      "night": { "r": 0.025, "g": 0.045, "b": 0.12 }
+    },
+    "fogColor": {
+      "dawn": { "r": 0.62, "g": 0.76, "b": 0.90 },
+      "day": { "r": 0.65, "g": 0.83, "b": 0.98 },
+      "dusk": { "r": 0.66, "g": 0.58, "b": 0.68 },
+      "night": { "r": 0.04, "g": 0.06, "b": 0.11 }
+    },
+    "grassColor": { "r": 0.24, "g": 0.70, "b": 0.16 },
+    "underwaterTint": {
+      "color": { "r": 0.12, "g": 0.44, "b": 0.72 },
+      "opacity": 0.20
+    },
+    "stars": {
+      "density": 0.0,
+      "color": { "r": 0.88, "g": 0.93, "b": 1.0 }
+    },
+    "clouds": {
+      "density": 0.0,
+      "color": { "r": 0.92, "g": 0.94, "b": 0.98 }
+    },
+    "terrainRoughness": 0.98,
+    "terrainMetallic": 0.0
+  }
+}

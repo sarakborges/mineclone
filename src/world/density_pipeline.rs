@@ -9,15 +9,6 @@ use super::{
 
 const DENSITY_NOISE_EDGE: f32 = 0.15;
 const CAVE_CONNECTOR_AIR_MARGIN: f32 = 4.0;
-const BASE_CAVE_AIR_MARGIN: f32 = 3.0;
-const CAVE_SURFACE_CLEARANCE: f32 = 5.0;
-const CAVE_SURFACE_FADE: f32 = 10.0;
-const CAVE_FLOOR_CLEARANCE: f32 = 3.0;
-const CAVE_FLOOR_FADE: f32 = 6.0;
-const CAVE_TUNNEL_THRESHOLD: f32 = 0.22;
-const CAVE_TUNNEL_EDGE: f32 = 0.10;
-const CAVE_CHAMBER_THRESHOLD: f32 = 0.58;
-const CAVE_CHAMBER_EDGE: f32 = 0.14;
 
 pub fn sample_density(
     base_density: f32,
@@ -31,9 +22,6 @@ pub fn sample_density(
     let geology_delta = region.geology.density_delta(position);
     let mut density = base_density + hydrology_delta + geology_delta;
 
-    let cave_strength = base_cave_strength(base_density, position, biome_field.seed());
-    density += carve_density_delta(density, cave_strength, BASE_CAVE_AIR_MARGIN);
-
     if let Some(connector) = anchored_caves
         .and_then(|caves| caves.connector_graph.sample(position))
         .map(|sample| smoothstep(sample.strength))
@@ -42,38 +30,6 @@ pub fn sample_density(
     }
 
     density + volume_biome_density_delta(density, position, biomes, biome_field)
-}
-
-fn base_cave_strength(base_density: f32, position: Vec3, seed: u64) -> f32 {
-    if base_density <= CAVE_SURFACE_CLEARANCE || position.y <= CAVE_FLOOR_CLEARANCE {
-        return 0.0;
-    }
-
-    let depth_mask =
-        smoothstep(((base_density - CAVE_SURFACE_CLEARANCE) / CAVE_SURFACE_FADE).clamp(0.0, 1.0));
-    let floor_mask =
-        smoothstep(((position.y - CAVE_FLOOR_CLEARANCE) / CAVE_FLOOR_FADE).clamp(0.0, 1.0));
-    let tunnel_a = value_noise_3d(
-        position * Vec3::new(0.028, 0.036, 0.028),
-        mix_seed(seed ^ 0x243f_6a88_85a3_08d3),
-    )
-    .abs();
-    let tunnel_b = value_noise_3d(
-        (position + Vec3::new(73.0, -29.0, 41.0)) * Vec3::new(0.031, 0.024, 0.031),
-        mix_seed(seed ^ 0x1319_8a2e_0370_7344),
-    )
-    .abs();
-    let tunnel_distance = tunnel_a.max(tunnel_b);
-    let tunnel =
-        smoothstep(((CAVE_TUNNEL_THRESHOLD - tunnel_distance) / CAVE_TUNNEL_EDGE).clamp(0.0, 1.0));
-    let chamber_noise = value_noise_3d(
-        position * Vec3::splat(0.017),
-        mix_seed(seed ^ 0xa409_3822_299f_31d0),
-    );
-    let chamber =
-        smoothstep(((chamber_noise - CAVE_CHAMBER_THRESHOLD) / CAVE_CHAMBER_EDGE).clamp(0.0, 1.0));
-
-    tunnel.max(chamber) * depth_mask * floor_mask
 }
 
 fn carve_density_delta(density: f32, strength: f32, air_margin: f32) -> f32 {
@@ -230,19 +186,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn full_cave_strength_opens_deep_solid_density() {
+    fn full_explicit_cave_strength_opens_deep_solid_density() {
         let density = 80.0;
-        let carved = density + carve_density_delta(density, 1.0, BASE_CAVE_AIR_MARGIN);
+        let carved = density + carve_density_delta(density, 1.0, 4.0);
 
         assert!(carved < 0.0);
-    }
-
-    #[test]
-    fn base_caves_preserve_a_surface_cap() {
-        assert_eq!(
-            base_cave_strength(2.0, Vec3::new(10.0, 80.0, 10.0), 42),
-            0.0
-        );
     }
 
     #[test]
@@ -251,7 +199,7 @@ mod tests {
         let current_density = 20.0;
         let cavern = density_modifier_delta(
             BiomeDensityModifier::Cavern {
-                carve_strength: 20.0,
+                carve_strength: 4.0,
                 noise_scale: 0.01,
                 openness: 1.0,
             },

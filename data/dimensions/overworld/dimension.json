@@ -5,7 +5,8 @@
     "asteria:overworld/plains",
     "asteria:overworld/wasteland",
     "asteria:overworld/witchwood",
-    "asteria:overworld/enchanted_forest"
+    "asteria:overworld/enchanted_forest",
+    "asteria:overworld/caverns"
   ],
   "dayNightCycle": "asteria:overworld/day_night_cycle",
   "sky": "asteria:overworld/sky",
