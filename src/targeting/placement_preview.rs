@@ -21,7 +21,7 @@ use super::{
     placement::placement_voxel,
 };
 
-const PREVIEW_OPACITY: f32 = 0.68;
+const PREVIEW_OPACITY: f32 = 0.82;
 
 type PreviewRoot<'w, 's> = Single<
     'w,
