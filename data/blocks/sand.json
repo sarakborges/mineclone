@@ -1,0 +1,22 @@
+{
+  "id": "asteria:sand",
+  "name": "Sand",
+  "textures": {
+    "top": "textures/blocks/sand.png",
+    "bottom": "textures/blocks/sand.png",
+    "left": "textures/blocks/sand.png",
+    "right": "textures/blocks/sand.png",
+    "front": "textures/blocks/sand.png",
+    "back": "textures/blocks/sand.png"
+  },
+  "rotateTexture": {
+    "top": true,
+    "bottom": true,
+    "left": true,
+    "right": true,
+    "front": true,
+    "back": true
+  },
+  "lightDampening": 15,
+  "castsShadow": true
+}
