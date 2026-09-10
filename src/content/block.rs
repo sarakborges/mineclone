@@ -29,6 +29,29 @@ impl BlockTextures {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockTextureRotations {
+    #[serde(default)]
+    pub top: bool,
+    #[serde(default)]
+    pub bottom: bool,
+    #[serde(default)]
+    pub left: bool,
+    #[serde(default)]
+    pub right: bool,
+    #[serde(default)]
+    pub front: bool,
+    #[serde(default)]
+    pub back: bool,
+}
+
+impl BlockTextureRotations {
+    pub fn any(self) -> bool {
+        self.top || self.bottom || self.left || self.right || self.front || self.back
+    }
+}
+
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockDefinition {
@@ -36,7 +59,8 @@ pub struct BlockDefinition {
     pub name: String,
     #[serde(default)]
     pub textures: BlockTextures,
-    pub rotate_texture: bool,
+    #[serde(default)]
+    pub rotate_texture: BlockTextureRotations,
     #[serde(default)]
     pub light_emission: u8,
     #[serde(default = "default_light_dampening")]
