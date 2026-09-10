@@ -19,6 +19,8 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - name: Install Linux dependencies
         run: |
@@ -33,6 +35,12 @@ jobs:
             libxcursor-dev \
             libxi-dev \
             libxrandr-dev
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Check
         run: cargo check
