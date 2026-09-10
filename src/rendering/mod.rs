@@ -14,6 +14,7 @@ pub(crate) mod terrain_material;
 
 use asset_upload::AssetUploadPlugin;
 use bevy::prelude::*;
+use block_model::setup_block_model_meshes;
 use celestial::CelestialPlugin;
 use directional_shadows::DirectionalShadowsPlugin;
 use dynamic_lights::DynamicLightsPlugin;
@@ -29,6 +30,7 @@ pub struct RenderingPlugin;
 impl Plugin for RenderingPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MaterialPlugin::<TerrainMaterial>::default())
+            .add_systems(Startup, setup_block_model_meshes)
             .add_plugins((
                 AssetUploadPlugin,
                 EnvironmentPlugin,
