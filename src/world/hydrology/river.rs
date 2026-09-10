@@ -6,10 +6,9 @@ use crate::world::feature_graph::FeatureGraph;
 
 use super::{
     constants::{
-        OCEAN_CONTINENTALNESS_THRESHOLD, RIVER_BASIN_ESCAPE_RADIUS_CELLS,
-        RIVER_EDGE_MARGIN_CELLS, RIVER_FLOW_FOR_MAX_WIDTH, RIVER_FLOW_SEARCH_RADIUS,
-        RIVER_FLOW_TRACE_STEPS, RIVER_MAXIMUM_RADIUS, RIVER_MINIMUM_FLOW,
-        RIVER_MINIMUM_RADIUS, RIVER_MINIMUM_WATER_DROP,
+        OCEAN_CONTINENTALNESS_THRESHOLD, RIVER_BASIN_ESCAPE_RADIUS_CELLS, RIVER_EDGE_MARGIN_CELLS,
+        RIVER_FLOW_FOR_MAX_WIDTH, RIVER_FLOW_SEARCH_RADIUS, RIVER_FLOW_TRACE_STEPS,
+        RIVER_MAXIMUM_RADIUS, RIVER_MINIMUM_FLOW, RIVER_MINIMUM_RADIUS, RIVER_MINIMUM_WATER_DROP,
     },
     drainage::{DrainageNetwork, DrainageNode},
     lake::{lake_for_local_basin, terminal_lake_for_local_basin},
@@ -71,10 +70,7 @@ where
                     continue;
                 }
 
-                let downstream_flow = flow_cache
-                    .get(&downstream_cell)
-                    .copied()
-                    .unwrap_or(flow);
+                let downstream_flow = flow_cache.get(&downstream_cell).copied().unwrap_or(flow);
                 let is_main_channel = flow >= RIVER_MINIMUM_FLOW;
                 let feeds_main_channel = downstream_flow >= RIVER_MINIMUM_FLOW;
 
