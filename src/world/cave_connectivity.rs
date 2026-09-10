@@ -5,10 +5,7 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 
 use self::path::{chaotic_connector_points, connector_radius_progress};
-use super::{
-    feature_graph::FeatureGraph,
-    generation_region::generation_region_world_bounds,
-};
+use super::{feature_graph::FeatureGraph, generation_region::generation_region_world_bounds};
 
 const MAX_CONNECTOR_LENGTH: f32 = 256.0;
 const MAX_CONNECTIONS_PER_ANCHOR: usize = 3;
@@ -64,11 +61,13 @@ impl CaveConnectivityField {
                         .then_some((right, distance))
                 })
                 .collect::<Vec<_>>();
-            neighbors.sort_by(|(left_index, left_distance), (right_index, right_distance)| {
-                left_distance
-                    .total_cmp(right_distance)
-                    .then_with(|| compare_position(&anchors[*left_index], &anchors[*right_index]))
-            });
+            neighbors.sort_by(
+                |(left_index, left_distance), (right_index, right_distance)| {
+                    left_distance.total_cmp(right_distance).then_with(|| {
+                        compare_position(&anchors[*left_index], &anchors[*right_index])
+                    })
+                },
+            );
 
             for (right, _) in neighbors.into_iter().take(MAX_CONNECTIONS_PER_ANCHOR) {
                 let pair = ordered_pair(left, right);
@@ -76,7 +75,13 @@ impl CaveConnectivityField {
                     continue;
                 }
 
-                add_connector(&mut graph, coord, anchors[pair.0], anchors[pair.1], self.seed);
+                add_connector(
+                    &mut graph,
+                    coord,
+                    anchors[pair.0],
+                    anchors[pair.1],
+                    self.seed,
+                );
             }
         }
 
