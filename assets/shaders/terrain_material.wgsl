@@ -24,6 +24,7 @@
 
 struct TerrainMaterialExtension {
     sky_light_factor: f32,
+    fluid_animation_factor: f32,
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(100)
@@ -190,6 +191,30 @@ fn fragment(
             vec3<f32>(1.0)
         );
     }
+
+#ifndef PREPASS_PIPELINE
+    let fluid_animation = clamp(
+        terrain_material_extension.fluid_animation_factor,
+        0.0,
+        1.0,
+    );
+    let wave_a = sin(
+        in.world_position.x * 0.34
+            + in.world_position.z * 0.22
+            + view_bindings::globals.time * 1.35
+    );
+    let wave_b = cos(
+        in.world_position.z * 0.41
+            - in.world_position.x * 0.17
+            + view_bindings::globals.time * 0.92
+    );
+    let moving_wave = (wave_a * 0.65 + wave_b * 0.35) * fluid_animation;
+    base_rgb = clamp(
+        base_rgb * (1.0 + moving_wave * 0.055),
+        vec3<f32>(0.0),
+        vec3<f32>(1.0),
+    );
+#endif
 
     let lighting_multiplier = vec3<f32>(local_light) + dynamic_light;
     pbr_input.material.base_color = vec4<f32>(
