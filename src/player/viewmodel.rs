@@ -216,8 +216,14 @@ fn sync_held_block(
     content: ViewModelContent,
     player: Single<&Transform, With<GameplayCamera>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut viewmodel_visibility: Single<&mut Visibility, With<PlayerViewModel>>,
-    mut roots: Query<(&mut HeldBlockRoot, &mut Visibility)>,
+    mut viewmodel_visibility: Single<
+        &mut Visibility,
+        (With<PlayerViewModel>, Without<HeldBlockRoot>),
+    >,
+    mut roots: Query<
+        (&mut HeldBlockRoot, &mut Visibility),
+        (With<HeldBlockRoot>, Without<PlayerViewModel>),
+    >,
     faces: Query<(&HeldBlockFace, &MeshMaterial3d<StandardMaterial>)>,
 ) {
     let selected_block_id = content.hotbar.item_at(content.hotbar.selected_slot());
