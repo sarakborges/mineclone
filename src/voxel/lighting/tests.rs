@@ -8,7 +8,7 @@ use crate::{
     voxel::{
         cell::VoxelCell,
         chunk::{CHUNK_SIZE, VoxelChunk},
-        fluid::FluidCell,
+        fluid::{FluidCell, MAX_FLUID_LEVEL},
         light::VoxelLight,
         texture_rotation::TextureRotation,
         world::VoxelWorld,
@@ -86,7 +86,12 @@ fn skylight_dampens_with_fluid_depth() {
     for y in 10..=12 {
         for z in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
-                chunk.set_fluid(x, y, z, Some(FluidCell::source(water_id)));
+                chunk.set_fluid(
+                    x,
+                    y,
+                    z,
+                    Some(FluidCell::new(water_id, MAX_FLUID_LEVEL)),
+                );
             }
         }
     }
@@ -114,7 +119,7 @@ fn blocklight_uses_fluid_dampening_as_propagation_cost() {
         water.x as usize,
         water.y as usize,
         water.z as usize,
-        Some(FluidCell::source(water_id)),
+        Some(FluidCell::new(water_id, MAX_FLUID_LEVEL)),
     );
 
     let mut world = VoxelWorld::default();
@@ -138,7 +143,12 @@ fn fluid_dampening_applies_across_chunk_boundary() {
     let water = source + IVec3::X;
     let after_water = water + IVec3::X;
     let mut neighbor_chunk = VoxelChunk::empty();
-    neighbor_chunk.set_fluid(0, 8, 8, Some(FluidCell::source(water_id)));
+    neighbor_chunk.set_fluid(
+        0,
+        8,
+        8,
+        Some(FluidCell::new(water_id, MAX_FLUID_LEVEL)),
+    );
 
     let mut world = VoxelWorld::default();
     world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());

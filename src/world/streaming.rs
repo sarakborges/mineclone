@@ -29,7 +29,7 @@ pub struct ChunkStreamingState {
 }
 
 #[derive(SystemParam)]
-struct ChunkStreamingInputs<'w, 's> {
+pub(super) struct ChunkStreamingInputs<'w, 's> {
     player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
     render_distance: Res<'w, RenderDistanceSettings>,
     world: ResMut<'w, VoxelWorld>,
