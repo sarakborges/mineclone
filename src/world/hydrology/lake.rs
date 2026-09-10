@@ -73,7 +73,7 @@ fn lake_for_basin(
     let aspect = lerp(0.86, 1.14, hash_unit(hash.rotate_left(43)));
     let radius = Vec2::new(base_radius * aspect, base_radius * (2.0 - aspect));
     let rotation = hash_unit(hash.rotate_left(11)) * std::f32::consts::TAU;
-    let water_level = source.elevation + relief.min(5.0) * 0.7;
+    let water_level = (source.elevation - 0.65).max(sea_level);
 
     Some(WaterBody {
         center: source.position,
