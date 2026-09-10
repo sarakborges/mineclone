@@ -60,8 +60,24 @@ where
             let flow = flow_cache.get(&cell).copied().unwrap_or(1);
             let downstream_cell = network.downstream_cell(cell);
 
+            if downstream_cell.is_some() {
+                let neighbors = network.neighbor_nodes(cell);
+                if let Some(lake) = lake_for_local_basin(
+                    cell,
+                    source,
+                    &neighbors,
+                    seed,
+                    sea_level,
+                    water_fluid,
+                )
+                .filter(|lake| water_body_intersects_region(coord, lake))
+                {
+                    water_bodies.push(lake);
+                }
+            }
+
             if let Some(downstream_cell) = downstream_cell {
-                if !source.biome_hydrology.can_generate_river {
+                if !source.biome_hydrology.can_generate_river || flow < RIVER_MINIMUM_FLOW {
                     continue;
                 }
 
@@ -71,12 +87,6 @@ where
                 }
 
                 let downstream_flow = flow_cache.get(&downstream_cell).copied().unwrap_or(flow);
-                let is_main_channel = flow >= RIVER_MINIMUM_FLOW;
-                let feeds_main_channel = downstream_flow >= RIVER_MINIMUM_FLOW;
-
-                if !is_main_channel && !feeds_main_channel {
-                    continue;
-                }
 
                 add_curved_river_edge(
                     &mut graph,
@@ -228,7 +238,7 @@ fn river_path_points(
     let direction = delta.normalize_or_zero();
     let perpendicular = Vec2::new(-direction.y, direction.x);
     let hash = cell_hash(source_cell, seed ^ 0x6a09_e667_f3bc_c909);
-    let amplitude = (distance * lerp(0.12, 0.28, hash_unit(hash))).clamp(7.0, 34.0);
+    let amplitude = (distance * lerp(0.08, 0.20, hash_unit(hash))).clamp(6.0, 26.0);
     let phase = hash_unit(hash.rotate_left(23)) * std::f32::consts::TAU;
     let secondary = hash_signed(hash.rotate_left(41));
     let start_height = river_height(source, sea_level);
