@@ -1,6 +1,8 @@
 use std::f32::consts::PI;
 
-use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
+use bevy::{
+    camera::visibility::RenderLayers, ecs::system::SystemParam, light::NotShadowCaster, prelude::*,
+};
 
 use crate::{
     app::game_state::GameState,
@@ -19,6 +21,8 @@ use super::{camera::GameplayCamera, hotbar::PlayerHotbar};
 
 const ARM_SIZE: Vec3 = Vec3::new(0.16, 0.56, 0.16);
 const HELD_BLOCK_SCALE: f32 = 0.16;
+const VIEW_MODEL_RENDER_LAYER: usize = 1;
+const VIEW_MODEL_FOV_DEGREES: f32 = 70.0;
 const BREAK_ANIMATION_DURATION: f32 = 0.22;
 const PLACE_ANIMATION_DURATION: f32 = 0.16;
 
@@ -116,24 +120,39 @@ fn spawn_viewmodel(
 ) {
     for (camera, camera_transform) in &cameras {
         let selected_block_id = content.hotbar.item_at(content.hotbar.selected_slot());
+        let visibility = if selected_block_id.is_some() {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
         let tint_position = Vec2::new(
             camera_transform.translation.x,
             camera_transform.translation.z,
         );
 
         commands.entity(camera).with_children(|camera| {
+            camera.spawn((
+                Camera3d::default(),
+                Camera {
+                    order: 1,
+                    ..default()
+                },
+                Projection::from(PerspectiveProjection {
+                    fov: VIEW_MODEL_FOV_DEGREES.to_radians(),
+                    ..default()
+                }),
+                RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
+            ));
+
             camera
-                .spawn((
-                    PlayerViewModel,
-                    base_viewmodel_transform(),
-                    Visibility::Visible,
-                ))
+                .spawn((PlayerViewModel, base_viewmodel_transform(), visibility))
                 .with_children(|viewmodel| {
                     viewmodel
                         .spawn((
                             Mesh3d(arm_assets.mesh.clone()),
                             MeshMaterial3d(arm_assets.material.clone()),
                             Transform::from_translation(Vec3::new(0.0, ARM_SIZE.y * 0.5, 0.0)),
+                            RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
                             NotShadowCaster,
                         ))
                         .with_children(|arm| {
@@ -148,11 +167,7 @@ fn spawn_viewmodel(
                                 ))
                                 .with_rotation(Quat::from_euler(EulerRot::XYZ, 0.12, -0.62, -0.06))
                                 .with_scale(Vec3::splat(HELD_BLOCK_SCALE)),
-                                if selected_block_id.is_some() {
-                                    Visibility::Visible
-                                } else {
-                                    Visibility::Hidden
-                                },
+                                visibility,
                             ))
                             .with_children(|held| {
                                 let Some(block_id) = selected_block_id else {
@@ -186,6 +201,7 @@ fn spawn_viewmodel(
                                         HeldBlockFace { face },
                                         Mesh3d(block_meshes.for_face(face)),
                                         MeshMaterial3d(material),
+                                        RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
                                         NotShadowCaster,
                                     ));
                                 }
@@ -200,13 +216,23 @@ fn sync_held_block(
     content: ViewModelContent,
     player: Single<&Transform, With<GameplayCamera>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut viewmodel_visibility: Single<&mut Visibility, With<PlayerViewModel>>,
     mut roots: Query<(&mut HeldBlockRoot, &mut Visibility)>,
     faces: Query<(&HeldBlockFace, &MeshMaterial3d<StandardMaterial>)>,
 ) {
     let selected_block_id = content.hotbar.item_at(content.hotbar.selected_slot());
+    let visibility = if selected_block_id.is_some() {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
     let tint_position = Vec2::new(player.translation.x, player.translation.z);
 
-    for (mut held, mut visibility) in &mut roots {
+    if *viewmodel_visibility != visibility {
+        *viewmodel_visibility = visibility;
+    }
+
+    for (mut held, mut held_visibility) in &mut roots {
         let block_changed = held.block_id != selected_block_id;
 
         if block_changed {
@@ -214,7 +240,7 @@ fn sync_held_block(
         }
 
         let Some(block_id) = selected_block_id else {
-            *visibility = Visibility::Hidden;
+            *held_visibility = Visibility::Hidden;
             continue;
         };
         let block = content
@@ -228,7 +254,9 @@ fn sync_held_block(
             &content.biomes,
         );
 
-        *visibility = Visibility::Visible;
+        if *held_visibility != Visibility::Visible {
+            *held_visibility = Visibility::Visible;
+        }
 
         for (face, material_handle) in &faces {
             let Some(mut material) = materials.get_mut(&material_handle.0) else {
