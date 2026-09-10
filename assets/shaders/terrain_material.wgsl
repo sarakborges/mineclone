@@ -198,19 +198,40 @@ fn fragment(
         0.0,
         1.0,
     );
+    let time = view_bindings::globals.time;
     let wave_a = sin(
         in.world_position.x * 0.34
             + in.world_position.z * 0.22
-            + view_bindings::globals.time * 1.35
+            + time * 1.35
     );
     let wave_b = cos(
         in.world_position.z * 0.41
             - in.world_position.x * 0.17
-            + view_bindings::globals.time * 0.92
+            + time * 0.92
     );
     let moving_wave = (wave_a * 0.65 + wave_b * 0.35) * fluid_animation;
+    let ripple_a = sin(
+        (in.world_position.x + in.world_position.z) * 0.86
+            + time * 1.72
+    );
+    let ripple_b = cos(
+        (in.world_position.x - in.world_position.z) * 1.18
+            - time * 1.06
+    );
+    let fine_wave = sin(
+        in.world_position.x * 2.08
+            + in.world_position.z * 1.71
+            + time * 0.58
+    );
+    let interference = abs(ripple_a * 0.58 + ripple_b * 0.42);
+    let ripple_ridge = smoothstep(0.48, 0.92, interference) * fluid_animation;
+    let fluid_variation =
+        moving_wave * 0.050
+        + (ripple_a * 0.018 + ripple_b * 0.014 + fine_wave * 0.010) * fluid_animation;
+
     base_rgb = clamp(
-        base_rgb * (1.0 + moving_wave * 0.055),
+        base_rgb * (1.0 + fluid_variation)
+            + vec3<f32>(0.018, 0.028, 0.042) * ripple_ridge,
         vec3<f32>(0.0),
         vec3<f32>(1.0),
     );
