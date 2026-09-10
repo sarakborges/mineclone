@@ -6,7 +6,7 @@ use crate::{
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::{
         block_model::{
-            BlockModelMeshes, block_face_material, block_face_material_data, block_faces,
+            BlockModelMaterials, BlockModelMeshes, block_face_material_data, block_faces,
         },
         block_tint::block_tint_with_opacity,
     },
@@ -60,6 +60,7 @@ fn spawn_placement_preview(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     block_meshes: Res<BlockModelMeshes>,
+    block_materials: Res<BlockModelMaterials>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     blocks: Res<BlockRegistry>,
     hotbar: Res<PlayerHotbar>,
@@ -80,16 +81,17 @@ fn spawn_placement_preview(
         ))
         .with_children(|preview| {
             for face in block_faces() {
+                let material = block_materials.preview_for_face(face);
+                let Some(mut face_material) = materials.get_mut(&material) else {
+                    continue;
+                };
+                *face_material =
+                    block_face_material_data(face, block, &asset_server, PREVIEW_OPACITY);
+
                 preview.spawn((
                     PlacementPreviewFace { face },
                     Mesh3d(block_meshes.for_face(face)),
-                    MeshMaterial3d(block_face_material(
-                        face,
-                        block,
-                        &asset_server,
-                        &mut materials,
-                        PREVIEW_OPACITY,
-                    )),
+                    MeshMaterial3d(material),
                     NotShadowCaster,
                 ));
             }
