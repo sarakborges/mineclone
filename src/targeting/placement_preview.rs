@@ -6,8 +6,8 @@ use crate::{
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::{
         block_model::{
-            BlockModelInstance, BlockModelMaterials, BlockModelMeshes, block_face_material_data,
-            block_faces, set_block_model_tint,
+            BlockModel, BlockModelMaterials, BlockModelMeshes, block_face_material_data,
+            set_block_model_tint,
         },
         block_model_material::BlockModelMaterial,
         block_tint::block_tint_at,
@@ -27,11 +27,15 @@ type PreviewRoot<'w, 's> = Single<
     'w,
     's,
     (
-        &'static mut BlockModelInstance,
+        &'static mut BlockModel,
         &'static mut Transform,
         &'static mut Visibility,
     ),
-    (With<PlacementPreviewRoot>, Without<PlacementPreviewFace>, Without<GameplayCamera>),
+    (
+        With<PlacementPreviewRoot>,
+        Without<PlacementPreviewFace>,
+        Without<GameplayCamera>,
+    ),
 >;
 
 #[derive(Component)]
@@ -71,23 +75,28 @@ fn spawn_placement_preview(
     let block = blocks
         .get(block_id)
         .unwrap_or_else(|| panic!("placement preview references missing block: {block_id}"));
+    let block_model = BlockModel::world(block_id, PREVIEW_OPACITY);
 
     commands
         .spawn((
             PlacementPreviewRoot,
-            BlockModelInstance::new(block_id),
+            block_model,
             Transform::default(),
             Visibility::Hidden,
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|preview| {
-            for face in block_faces() {
+            for &face in block_model.faces() {
                 let material = block_materials.preview_for_face(face);
                 let Some(mut face_material) = materials.get_mut(&material) else {
                     continue;
                 };
-                *face_material =
-                    block_face_material_data(face, block, &asset_server, PREVIEW_OPACITY);
+                *face_material = block_face_material_data(
+                    face,
+                    block,
+                    &asset_server,
+                    block_model.opacity(),
+                );
 
                 preview.spawn((
                     PlacementPreviewFace { face },
@@ -133,8 +142,12 @@ fn update_placement_preview(
                 continue;
             };
 
-            *material =
-                block_face_material_data(face.face, block, &input.asset_server, PREVIEW_OPACITY);
+            *material = block_face_material_data(
+                face.face,
+                block,
+                &input.asset_server,
+                root.0.opacity(),
+            );
         }
     }
 
