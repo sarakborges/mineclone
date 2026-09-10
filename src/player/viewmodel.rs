@@ -10,7 +10,9 @@ use crate::{
     rendering::{
         block_model::{
             BlockModelMaterials, BlockModelMeshes, block_face_material_data, block_faces,
+            set_block_model_tint,
         },
+        block_model_material::BlockModelMaterial,
         block_tint::block_tint_at,
     },
     voxel::mesh::BlockFace,
@@ -119,7 +121,7 @@ fn spawn_viewmodel(
     block_meshes: Res<BlockModelMeshes>,
     block_materials: Res<BlockModelMaterials>,
     arm_assets: Res<ViewModelArmAssets>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<BlockModelMaterial>>,
 ) {
     for (camera, camera_transform) in &cameras {
         let selected_block_id = content.hotbar.item_at(content.hotbar.selected_slot());
@@ -198,7 +200,7 @@ fn spawn_viewmodel(
                                     &content.asset_server,
                                     1.0,
                                 );
-                                face_material.base_color = tint;
+                                set_block_model_tint(&mut face_material, tint);
 
                                 held.spawn((
                                     HeldBlockFace { face },
@@ -217,7 +219,7 @@ fn spawn_viewmodel(
 fn sync_held_block(
     content: ViewModelContent,
     player: Single<&Transform, With<GameplayCamera>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<BlockModelMaterial>>,
     mut arms: Query<
         &mut Visibility,
         (With<ViewModelArm>, Without<HeldBlockRoot>, Without<PlayerViewModel>),
@@ -226,7 +228,7 @@ fn sync_held_block(
         (&mut HeldBlockRoot, &mut Visibility),
         (With<HeldBlockRoot>, Without<ViewModelArm>, Without<PlayerViewModel>),
     >,
-    faces: Query<(&HeldBlockFace, &MeshMaterial3d<StandardMaterial>)>,
+    faces: Query<(&HeldBlockFace, &MeshMaterial3d<BlockModelMaterial>)>,
 ) {
     let selected_block_id = content.hotbar.item_at(content.hotbar.selected_slot());
     let item_visibility = if selected_block_id.is_some() {
@@ -275,9 +277,7 @@ fn sync_held_block(
                 *material = block_face_material_data(face.face, block, &content.asset_server, 1.0);
             }
 
-            if material.base_color != tint {
-                material.base_color = tint;
-            }
+            set_block_model_tint(&mut material, tint);
         }
     }
 }
