@@ -1,5 +1,8 @@
+mod path;
+
 use bevy::prelude::*;
 
+use self::path::{chaotic_connector_points, connector_radius_progress};
 use super::feature_graph::FeatureGraph;
 
 const MAX_CONNECTOR_LENGTH: f32 = 256.0;
@@ -39,10 +42,6 @@ impl CaveConnectivityField {
         anchors.dedup_by(|left, right| *left == *right);
 
         let mut graph = FeatureGraph::default();
-        let nodes = anchors
-            .iter()
-            .map(|position| graph.add_node(*position))
-            .collect::<Vec<_>>();
 
         for left in 0..anchors.len() {
             for right in (left + 1)..anchors.len() {
@@ -55,8 +54,20 @@ impl CaveConnectivityField {
                 let hash = anchor_pair_hash(anchors[left], anchors[right], self.seed);
                 let start_radius = tunnel_radius(hash);
                 let end_radius = tunnel_radius(hash.rotate_left(29));
+                let points = chaotic_connector_points(anchors[left], anchors[right], hash);
 
-                graph.add_edge(nodes[left], nodes[right], start_radius, end_radius);
+                for segment in 0..points.len().saturating_sub(1) {
+                    let from_progress = segment as f32 / (points.len() - 1) as f32;
+                    let to_progress = (segment + 1) as f32 / (points.len() - 1) as f32;
+                    let from_radius =
+                        connector_radius_progress(start_radius, end_radius, from_progress, hash);
+                    let to_radius =
+                        connector_radius_progress(start_radius, end_radius, to_progress, hash);
+                    let from = graph.add_node(points[segment]);
+                    let to = graph.add_node(points[segment + 1]);
+
+                    graph.add_edge(from, to, from_radius, to_radius);
+                }
             }
         }
 
@@ -137,15 +148,15 @@ mod tests {
     }
 
     #[test]
-    fn nearby_cavern_anchors_are_connected() {
+    fn nearby_cavern_anchors_are_connected_by_a_path() {
         let field = CaveConnectivityField::new(42);
         let region = field.region_from_anchors(
             IVec3::ZERO,
             &[Vec3::new(10.0, 20.0, 10.0), Vec3::new(80.0, 30.0, 20.0)],
         );
 
-        assert_eq!(region.connector_graph.nodes().len(), 2);
-        assert_eq!(region.connector_graph.edges().len(), 1);
+        assert!(region.connector_graph.nodes().len() > 2);
+        assert!(region.connector_graph.edges().len() > 1);
     }
 
     #[test]
@@ -178,9 +189,12 @@ mod tests {
         let left = field.region_from_anchors(IVec3::ZERO, &anchors);
         let right = field.region_from_anchors(IVec3::X, &anchors);
         let sample_position = Vec3::new(128.0, 40.0, 20.0);
-        let left_sample = left.connector_graph.sample(sample_position).unwrap();
-        let right_sample = right.connector_graph.sample(sample_position).unwrap();
+        let left_sample = left.connector_graph.sample(sample_position);
+        let right_sample = right.connector_graph.sample(sample_position);
 
-        assert_eq!(left_sample.strength, right_sample.strength);
+        assert_eq!(left_sample.is_some(), right_sample.is_some());
+        if let (Some(left_sample), Some(right_sample)) = (left_sample, right_sample) {
+            assert_eq!(left_sample.strength, right_sample.strength);
+        }
     }
 }
