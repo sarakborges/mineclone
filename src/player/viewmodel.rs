@@ -8,7 +8,7 @@ use crate::{
     rendering::{
         block_model::{
             BlockModel, BlockModelMaterials, BlockModelMeshes, apply_block_display_shading,
-            block_display_isometric_rotation, block_face_material_data, set_block_model_tint,
+            block_face_material_data, set_block_model_tint,
         },
         block_model_material::BlockModelMaterial,
         block_tint::block_tint_at,
@@ -226,7 +226,7 @@ fn spawn_viewmodel(
 
                                 held.spawn((
                                     HeldBlockFace { face },
-                                    Mesh3d(block_meshes.for_face(face)),
+                                    Mesh3d(block_meshes.display_face(face)),
                                     MeshMaterial3d(material),
                                     NotShadowCaster,
                                 ));
@@ -420,6 +420,6 @@ fn base_viewmodel_transform() -> Transform {
 fn held_block_transform() -> Transform {
     let viewmodel_rotation = base_viewmodel_transform().rotation;
     Transform::from_translation(Vec3::new(-0.02, ARM_SIZE.y + 0.04, 0.20))
-        .with_rotation(viewmodel_rotation.inverse() * block_display_isometric_rotation())
+        .with_rotation(viewmodel_rotation.inverse())
         .with_scale(Vec3::splat(HELD_BLOCK_SCALE))
 }
