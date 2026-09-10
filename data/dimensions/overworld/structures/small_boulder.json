@@ -2,11 +2,6 @@
   "id": "asteria:small_boulder",
   "name": "Small Boulder",
   "anchor": { "x": 1, "y": 0, "z": 1 },
-  "placement": {
-    "spacing": 9,
-    "chance": 0.55,
-    "jitter": 3
-  },
   "palette": {
     "S": { "block": "asteria:stone" }
   },
