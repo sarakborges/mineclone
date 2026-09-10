@@ -135,9 +135,7 @@ impl HydrologyRegion {
             let profile = smoothstep(river.strength);
             let bed = river.height - self.river_carve_depth * profile;
 
-            if position.y >= bed - BED_MATERIAL_DEPTH
-                && position.y <= bed + BED_MATERIAL_DEPTH
-            {
+            if position.y >= bed - BED_MATERIAL_DEPTH && position.y <= bed + BED_MATERIAL_DEPTH {
                 if river.strength <= SHORE_STRENGTH {
                     return self
                         .settings
@@ -157,12 +155,10 @@ impl HydrologyRegion {
         let strength = self.ocean_strength_at(horizontal);
         if strength > 0.0 {
             let sample = self.macro_sample_at(horizontal)?;
-            let target_floor =
-                self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength;
+            let target_floor = self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength;
             let floor = lerp(sample.elevation, target_floor, strength);
 
-            if position.y >= floor - BED_MATERIAL_DEPTH
-                && position.y <= floor + BED_MATERIAL_DEPTH
+            if position.y >= floor - BED_MATERIAL_DEPTH && position.y <= floor + BED_MATERIAL_DEPTH
             {
                 if strength <= SHORE_STRENGTH {
                     return self

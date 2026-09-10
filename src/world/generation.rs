@@ -65,8 +65,8 @@ pub(crate) fn generate_chunk(
             |position| {
                 let surface_position =
                     IVec2::new(position.x.floor() as i32, position.y.floor() as i32);
-                let surface = biome_field
-                    .sample_surface(surface_position.as_vec2() + Vec2::splat(0.5));
+                let surface =
+                    biome_field.sample_surface(surface_position.as_vec2() + Vec2::splat(0.5));
                 let elevation = surface_height_from_sample(
                     surface_position,
                     dimension,
@@ -87,8 +87,7 @@ pub(crate) fn generate_chunk(
             },
         )
     });
-    let anchored_caves =
-        anchored_cave_region(region.as_ref(), biome_field, biomes, feature_fields);
+    let anchored_caves = anchored_cave_region(region.as_ref(), biome_field, biomes, feature_fields);
     let columns = sample_generation_columns(chunk_origin, dimension, biomes, biome_field);
     let density = sample_density_field(
         chunk_origin,
@@ -113,13 +112,7 @@ pub(crate) fn generate_chunk(
         &density,
         &material_context,
     );
-    rasterize_fluid_pass(
-        &mut chunk,
-        chunk_origin,
-        &density,
-        fluids,
-        region.as_ref(),
-    );
+    rasterize_fluid_pass(&mut chunk, chunk_origin, &density, fluids, region.as_ref());
     rasterize_feature_pass(&mut chunk, chunk_origin, region.as_ref(), biome_field);
 
     chunk

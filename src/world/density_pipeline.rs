@@ -27,11 +27,7 @@ pub fn sample_density(
         });
     let volume_biome_delta = volume_biome_density_delta(position, biomes, biome_field);
 
-    base_density
-        + hydrology_delta
-        + geology_delta
-        + cave_connectivity_delta
-        + volume_biome_delta
+    base_density + hydrology_delta + geology_delta + cave_connectivity_delta + volume_biome_delta
 }
 
 fn volume_biome_density_delta(

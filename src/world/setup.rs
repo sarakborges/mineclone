@@ -18,6 +18,7 @@ use crate::{
 };
 
 use super::{
+    InMemoryWorldSave, WorldLoadMode, WorldSeed,
     biome_field::BiomeField,
     chunk_rendering::{
         ChunkRenderContext, ChunkRenderPool, FluidMaterials, TerrainMaterials,
@@ -28,7 +29,6 @@ use super::{
     render_distance::chunk_coords_in_volume,
     terrain::surface_height,
     world_feature_fields::WorldFeatureFields,
-    InMemoryWorldSave, WorldLoadMode, WorldSeed,
 };
 
 const INITIAL_HORIZONTAL_RADIUS_CHUNKS: i32 = 5;

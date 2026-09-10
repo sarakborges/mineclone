@@ -7,7 +7,7 @@ use crate::{
         biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionRegistry,
         fluid::FluidRegistry,
     },
-    player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
+    player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
         coordinates::split_dimension_position, lighting::initialize_chunk_lighting,
         world::VoxelWorld,
@@ -22,7 +22,7 @@ use super::{
     },
     dimension::CurrentDimension,
     generation::generate_chunk,
-    render_distance::{chunk_coords_in_volume, RenderDistanceSettings},
+    render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
     world_feature_fields::WorldFeatureFields,
 };
 

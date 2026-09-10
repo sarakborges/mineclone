@@ -10,8 +10,8 @@ use crate::{
         typography,
     },
     world::{
-        biome::CurrentBiome, dimension::CurrentDimension, InMemoryWorldSave, WorldLoadMode,
-        WorldSeed,
+        InMemoryWorldSave, WorldLoadMode, WorldSeed, biome::CurrentBiome,
+        dimension::CurrentDimension,
     },
 };
 

@@ -4,17 +4,15 @@ use crate::{
     content::biome::BiomeRegistry,
     voxel::chunk::CHUNK_SIZE,
     world::{
-        biome_field::BiomeField,
-        cave_connectivity::CaveConnectivityRegion,
-        density_pipeline::sample_density,
-        generation_region::GenerationRegion,
+        biome_field::BiomeField, cave_connectivity::CaveConnectivityRegion,
+        density_pipeline::sample_density, generation_region::GenerationRegion,
         terrain::terrain_density,
     },
 };
 
 use super::{
     columns::GenerationColumnSample,
-    index::{column_index, voxel_index, VOXELS_PER_CHUNK},
+    index::{VOXELS_PER_CHUNK, column_index, voxel_index},
 };
 
 pub(super) fn sample_density_field(

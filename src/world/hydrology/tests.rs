@@ -1,9 +1,9 @@
 use super::{
+    HydrologyField, HydrologySurfaceSample, WaterBody,
     constants::{HYDROLOGY_REGION_SIZE, MACRO_SAMPLE_GRID},
-    drainage::{drainage_position, DrainageNode},
+    drainage::{DrainageNode, drainage_position},
     lake::lake_for_local_basin,
     spatial::macro_sample_position,
-    HydrologyField, HydrologySurfaceSample, WaterBody,
 };
 use crate::content::{
     biome_hydrology::BiomeHydrology, builtin_ids::WATER_FLUID_ID,
@@ -52,7 +52,10 @@ fn macro_terrain_generation_is_deterministic() {
     let first = field.region_from_macro_terrain(IVec2::ZERO, sample);
     let second = field.region_from_macro_terrain(IVec2::ZERO, sample);
 
-    assert_eq!(first.river_graph.edges().len(), second.river_graph.edges().len());
+    assert_eq!(
+        first.river_graph.edges().len(),
+        second.river_graph.edges().len()
+    );
     assert_eq!(first.water_bodies.len(), second.water_bodies.len());
 }
 
@@ -101,15 +104,7 @@ fn biome_can_disable_lake_generation() {
     }];
 
     assert!(
-        lake_for_local_basin(
-            IVec2::ZERO,
-            source,
-            &neighbors,
-            42,
-            64.0,
-            WATER_FLUID_ID,
-        )
-        .is_none()
+        lake_for_local_basin(IVec2::ZERO, source, &neighbors, 42, 64.0, WATER_FLUID_ID,).is_none()
     );
 }
 

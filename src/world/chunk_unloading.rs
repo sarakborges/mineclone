@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     content::{biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry},
-    player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
+    player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
         coordinates::split_dimension_position, lighting::relight_after_chunk_unloads,
         world::VoxelWorld,

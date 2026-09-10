@@ -29,7 +29,11 @@ pub struct FluidRegistry {
 
 impl FluidRegistry {
     pub fn insert(&mut self, definition: FluidDefinition) {
-        assert!(!definition.name.trim().is_empty(), "fluid {} name cannot be empty", definition.id);
+        assert!(
+            !definition.name.trim().is_empty(),
+            "fluid {} name cannot be empty",
+            definition.id
+        );
         assert!(
             (0.0..=1.0).contains(&definition.opacity),
             "fluid {} opacity must be between 0 and 1",
