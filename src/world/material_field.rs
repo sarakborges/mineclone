@@ -43,7 +43,9 @@ pub(crate) fn solid_block_id(
         context.biomes,
     )
     .map(intern_block_id)
-    .unwrap_or_else(|| panic!("surface biome sample did not resolve a material at depth {surface_depth}"))
+    .unwrap_or_else(|| {
+        panic!("surface biome sample did not resolve a material at depth {surface_depth}")
+    })
 }
 
 fn strongest_surface_material<'registry, 'id>(
