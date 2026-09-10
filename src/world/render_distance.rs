@@ -89,11 +89,11 @@ pub(crate) fn chunk_is_in_volume(
         (_, 0) => delta.y == 0 && horizontal_squared <= horizontal_radius * horizontal_radius,
         _ => {
             let horizontal_radius_squared = horizontal_radius * horizontal_radius;
-            let vertical_radius_squared = vertical_radius * vertical_radius;
+            let vertical_offset = delta.y.abs();
 
-            horizontal_squared * vertical_radius_squared
-                + delta.y * delta.y * horizontal_radius_squared
-                <= horizontal_radius_squared * vertical_radius_squared
+            horizontal_squared * vertical_radius
+                + vertical_offset * horizontal_radius_squared
+                <= horizontal_radius_squared * vertical_radius
         }
     }
 }
@@ -118,16 +118,21 @@ mod tests {
     }
 
     #[test]
-    fn vertical_extremes_have_smaller_horizontal_footprint() {
+    fn vertical_layers_taper_toward_the_extremes() {
         let center = IVec3::new(0, 8, 0);
-        let coords = chunk_coords_in_volume(center, 4, 2);
+        let coords = chunk_coords_in_volume(center, 6, 2);
         let center_layer = coords.iter().filter(|coord| coord.y == center.y).count();
+        let adjacent_layer = coords
+            .iter()
+            .filter(|coord| coord.y == center.y + 1)
+            .count();
         let top_layer = coords
             .iter()
             .filter(|coord| coord.y == center.y + 2)
             .count();
 
-        assert!(top_layer < center_layer);
+        assert!(adjacent_layer < center_layer);
+        assert!(top_layer < adjacent_layer);
     }
 
     #[test]
