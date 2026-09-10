@@ -1,10 +1,45 @@
 use bevy::prelude::*;
 
-use super::constants::{OCEAN_CONTINENTALNESS_THRESHOLD, OCEAN_TRANSITION_WIDTH};
+use super::constants::{
+    COAST_OCEAN_BLEND_END_STRENGTH, COAST_OCEAN_BLEND_START_STRENGTH,
+    COAST_SURFACE_BLEND_END_STRENGTH, OCEAN_CONTINENTALNESS_THRESHOLD, OCEAN_TRANSITION_WIDTH,
+};
 
 pub(super) fn ocean_strength(continentalness: f32) -> f32 {
     let raw = (OCEAN_CONTINENTALNESS_THRESHOLD - continentalness) / OCEAN_TRANSITION_WIDTH;
     smoothstep(raw.clamp(0.0, 1.0))
+}
+
+pub(super) fn hydrology_biome_weights(strength: f32) -> (f32, f32, f32) {
+    let strength = strength.clamp(0.0, 1.0);
+
+    if strength <= 0.0 {
+        return (1.0, 0.0, 0.0);
+    }
+
+    if strength < COAST_SURFACE_BLEND_END_STRENGTH {
+        let coast = smoothstep(strength / COAST_SURFACE_BLEND_END_STRENGTH);
+        return (1.0 - coast, coast, 0.0);
+    }
+
+    if strength <= COAST_OCEAN_BLEND_START_STRENGTH {
+        return (0.0, 1.0, 0.0);
+    }
+
+    if strength < COAST_OCEAN_BLEND_END_STRENGTH {
+        let ocean = smoothstep(
+            (strength - COAST_OCEAN_BLEND_START_STRENGTH)
+                / (COAST_OCEAN_BLEND_END_STRENGTH - COAST_OCEAN_BLEND_START_STRENGTH),
+        );
+        return (0.0, 1.0 - ocean, ocean);
+    }
+
+    (0.0, 0.0, 1.0)
+}
+
+pub(super) fn hydrology_dominates_surface(strength: f32) -> bool {
+    let (surface, coast, ocean) = hydrology_biome_weights(strength);
+    coast.max(ocean) >= surface
 }
 
 pub(super) fn cell_hash(cell: IVec2, seed: u64) -> u64 {
