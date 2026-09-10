@@ -45,10 +45,7 @@ struct TargetHudContent<'w> {
     world: Res<'w, VoxelWorld>,
 }
 
-fn spawn_target_hud(
-    mut commands: Commands,
-    mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
-) {
+fn spawn_target_hud(mut commands: Commands, mut icon_materials: ResMut<Assets<BlockIconMaterial>>) {
     let icon_material = icon_materials.add(BlockIconMaterial::empty());
 
     commands
@@ -94,10 +91,7 @@ fn update_target_hud(
     content: TargetHudContent,
     root_visibility: Single<&mut Visibility, With<TargetHudRoot>>,
     mut target_text: Single<&mut Text, With<TargetBlockText>>,
-    mut icon: Single<(
-        &mut TargetBlockIcon,
-        &MaterialNode<BlockIconMaterial>,
-    )>,
+    mut icon: Single<(&mut TargetBlockIcon, &MaterialNode<BlockIconMaterial>)>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
     let mut root_visibility = root_visibility.into_inner();
