@@ -234,8 +234,8 @@ fn sync_held_block(
     };
     let tint_position = Vec2::new(player.translation.x, player.translation.z);
 
-    if *viewmodel_visibility != visibility {
-        *viewmodel_visibility = visibility;
+    if **viewmodel_visibility != visibility {
+        **viewmodel_visibility = visibility;
     }
 
     for (mut held, mut held_visibility) in &mut roots {
