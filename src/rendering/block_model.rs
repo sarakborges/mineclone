@@ -27,7 +27,60 @@ impl BlockModelMeshes {
     }
 }
 
-pub(crate) fn setup_block_model_meshes(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
+struct BlockFaceMaterialHandles {
+    right: Handle<StandardMaterial>,
+    left: Handle<StandardMaterial>,
+    top: Handle<StandardMaterial>,
+    bottom: Handle<StandardMaterial>,
+    front: Handle<StandardMaterial>,
+    back: Handle<StandardMaterial>,
+}
+
+impl BlockFaceMaterialHandles {
+    fn new(materials: &mut Assets<StandardMaterial>, opacity: f32) -> Self {
+        Self {
+            right: materials.add(block_model_placeholder_material(opacity)),
+            left: materials.add(block_model_placeholder_material(opacity)),
+            top: materials.add(block_model_placeholder_material(opacity)),
+            bottom: materials.add(block_model_placeholder_material(opacity)),
+            front: materials.add(block_model_placeholder_material(opacity)),
+            back: materials.add(block_model_placeholder_material(opacity)),
+        }
+    }
+
+    fn for_face(&self, face: BlockFace) -> Handle<StandardMaterial> {
+        match face {
+            BlockFace::Right => self.right.clone(),
+            BlockFace::Left => self.left.clone(),
+            BlockFace::Top => self.top.clone(),
+            BlockFace::Bottom => self.bottom.clone(),
+            BlockFace::Front => self.front.clone(),
+            BlockFace::Back => self.back.clone(),
+        }
+    }
+}
+
+#[derive(Resource)]
+pub(crate) struct BlockModelMaterials {
+    held: BlockFaceMaterialHandles,
+    preview: BlockFaceMaterialHandles,
+}
+
+impl BlockModelMaterials {
+    pub(crate) fn held_for_face(&self, face: BlockFace) -> Handle<StandardMaterial> {
+        self.held.for_face(face)
+    }
+
+    pub(crate) fn preview_for_face(&self, face: BlockFace) -> Handle<StandardMaterial> {
+        self.preview.for_face(face)
+    }
+}
+
+pub(crate) fn setup_block_model_assets(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
     commands.insert_resource(BlockModelMeshes {
         right: meshes.add(block_face_mesh(BlockFace::Right)),
         left: meshes.add(block_face_mesh(BlockFace::Left)),
@@ -35,6 +88,10 @@ pub(crate) fn setup_block_model_meshes(mut commands: Commands, mut meshes: ResMu
         bottom: meshes.add(block_face_mesh(BlockFace::Bottom)),
         front: meshes.add(block_face_mesh(BlockFace::Front)),
         back: meshes.add(block_face_mesh(BlockFace::Back)),
+    });
+    commands.insert_resource(BlockModelMaterials {
+        held: BlockFaceMaterialHandles::new(&mut materials, 1.0),
+        preview: BlockFaceMaterialHandles::new(&mut materials, 0.68),
     });
 }
 
@@ -62,16 +119,6 @@ pub(crate) fn block_face_texture(face: BlockFace, block: &BlockDefinition) -> Op
     (!texture.is_empty()).then_some(texture)
 }
 
-pub(crate) fn block_face_material(
-    face: BlockFace,
-    block: &BlockDefinition,
-    asset_server: &AssetServer,
-    materials: &mut Assets<StandardMaterial>,
-    opacity: f32,
-) -> Handle<StandardMaterial> {
-    materials.add(block_face_material_data(face, block, asset_server, opacity))
-}
-
 pub(crate) fn block_face_material_data(
     face: BlockFace,
     block: &BlockDefinition,
@@ -84,6 +131,22 @@ pub(crate) fn block_face_material_data(
         base_color: Color::srgba(1.0, 1.0, 1.0, opacity),
         base_color_texture: block_face_texture(face, block)
             .map(|texture| asset_server.load(texture.to_owned())),
+        perceptual_roughness: 1.0,
+        alpha_mode: if opacity < 1.0 {
+            AlphaMode::Blend
+        } else {
+            AlphaMode::Opaque
+        },
+        unlit: true,
+        ..default()
+    }
+}
+
+fn block_model_placeholder_material(opacity: f32) -> StandardMaterial {
+    let opacity = opacity.clamp(0.0, 1.0);
+
+    StandardMaterial {
+        base_color: Color::srgba(1.0, 1.0, 1.0, opacity),
         perceptual_roughness: 1.0,
         alpha_mode: if opacity < 1.0 {
             AlphaMode::Blend
