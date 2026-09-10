@@ -4,7 +4,9 @@ use crate::{
     app::game_state::GameState,
     content::{block::BlockRegistry, builtin_ids::GRASS_BLOCK_ID},
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
-    rendering::block_model::{block_face_material, block_face_mesh, block_faces},
+    rendering::block_model::{
+        block_face_material, block_face_material_data, block_face_mesh, block_faces,
+    },
     voxel::{mesh::BlockFace, world::VoxelWorld},
 };
 
@@ -104,7 +106,7 @@ fn update_placement_preview(
     input: PlacementPreviewInput,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut root: PreviewRoot,
-    mut faces: Query<(&PlacementPreviewFace, &mut MeshMaterial3d<StandardMaterial>)>,
+    faces: Query<(&PlacementPreviewFace, &MeshMaterial3d<StandardMaterial>)>,
 ) {
     let Some(block_id) = input.hotbar.item_at(input.hotbar.selected_slot()) else {
         *root.2 = Visibility::Hidden;
@@ -119,14 +121,13 @@ fn update_placement_preview(
 
         root.0.block_id = block_id;
 
-        for (face, mut material) in &mut faces {
-            material.0 = block_face_material(
-                face.face,
-                block,
-                &input.asset_server,
-                &mut materials,
-                PREVIEW_OPACITY,
-            );
+        for (face, material_handle) in &faces {
+            let Some(material) = materials.get_mut(&material_handle.0) else {
+                continue;
+            };
+
+            *material =
+                block_face_material_data(face.face, block, &input.asset_server, PREVIEW_OPACITY);
         }
     }
 
