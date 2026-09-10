@@ -18,6 +18,6 @@
     "back": false
   },
   "alphaCutoff": 0.5,
-  "lightDampening": 15,
+  "lightDampening": 1,
   "castsShadow": true
 }
