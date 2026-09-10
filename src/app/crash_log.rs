@@ -218,13 +218,12 @@ fn panic_payload_message(payload: &(dyn Any + Send)) -> String {
 }
 
 fn runtime_root() -> PathBuf {
-    if let Ok(executable) = env::current_exe() {
-        if let Some(directory) = executable.parent() {
-            if directory.join(DATA_DIRECTORY).is_dir() && directory.join(ASSETS_DIRECTORY).is_dir()
-            {
-                return directory.to_path_buf();
-            }
-        }
+    if let Ok(executable) = env::current_exe()
+        && let Some(directory) = executable.parent()
+        && directory.join(DATA_DIRECTORY).is_dir()
+        && directory.join(ASSETS_DIRECTORY).is_dir()
+    {
+        return directory.to_path_buf();
     }
 
     env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
