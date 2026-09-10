@@ -15,5 +15,7 @@ pub(super) fn update_dimension_hud(
         .map(|definition| definition.name.as_str())
         .unwrap_or(dimension.id.as_str());
 
-    dimension_text.0 = dimension_name.to_string();
+    if dimension_text.0 != dimension_name {
+        dimension_text.0 = dimension_name.to_string();
+    }
 }
