@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::{biome::BiomeRegistry, block::BlockRegistry, builtin_ids::GRASS_BLOCK_ID},
+    content::{biome::BiomeRegistry, block::BlockRegistry},
     voxel::{
         cell::VoxelCell,
         chunk::{CHUNK_SIZE, VoxelChunk},
@@ -34,16 +34,11 @@ pub(super) fn rasterize_material_pass(
     density: &DensityField,
     context: &MaterialPassContext<'_>,
 ) {
-    let fallback = context
-        .blocks
-        .static_id(GRASS_BLOCK_ID)
-        .unwrap_or_else(|| panic!("missing interned block definition: {GRASS_BLOCK_ID}"));
     let material_field = MaterialFieldContext {
         biome_field: context.biome_field,
         geology: &context.region.geology,
         hydrology: &context.region.hydrology,
         biomes: context.biomes,
-        fallback,
     };
 
     for local_z in 0..CHUNK_SIZE {
@@ -62,9 +57,11 @@ pub(super) fn rasterize_material_pass(
                     chunk_origin.z + local_z as i32,
                 );
                 let sample_position = world_position.as_vec3() + Vec3::splat(0.5);
+                let surface_depth = (column.surface_height - world_position.y - 1).max(0) as u32;
                 let block_id = solid_block_id(
                     sample_position,
                     &column.surface,
+                    surface_depth,
                     density.volume[index],
                     &material_field,
                 );

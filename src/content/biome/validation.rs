@@ -49,11 +49,18 @@ fn validate_surface_biome(definition: &BiomeDefinition) {
         "surface biome {} cannot define a volume densityModifier",
         definition.id
     );
+    assert!(
+        definition.solid_block.is_none(),
+        "surface biome {} must use surfaceLayers instead of solidBlock",
+        definition.id
+    );
     assert_eq!(
         definition.priority, 0,
         "surface biome {} cannot define volume overlap priority",
         definition.id
     );
+
+    definition.validate_surface_materials();
 }
 
 fn validate_volume_biome(definition: &BiomeDefinition) {
@@ -64,12 +71,23 @@ fn validate_volume_biome(definition: &BiomeDefinition) {
         .y
         .unwrap_or_else(|| panic!("volume biome {} must define size.y", definition.id));
     validate_size_axis(&definition.id, "y", vertical_size);
+
+    assert!(
+        definition.surface_layers.is_empty(),
+        "volume biome {} cannot define surfaceLayers",
+        definition.id
+    );
 }
 
 fn validate_hydrology_biome(definition: &BiomeDefinition) {
     assert!(
         definition.terrain.is_none(),
         "hydrology biome {} cannot define terrain",
+        definition.id
+    );
+    assert!(
+        definition.surface_layers.is_empty(),
+        "hydrology biome {} cannot define surfaceLayers",
         definition.id
     );
     assert!(

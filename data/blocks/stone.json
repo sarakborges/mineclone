@@ -1,0 +1,22 @@
+{
+  "id": "asteria:stone",
+  "name": "Stone",
+  "textures": {
+    "top": "textures/blocks/stone.png",
+    "bottom": "textures/blocks/stone.png",
+    "left": "textures/blocks/stone.png",
+    "right": "textures/blocks/stone.png",
+    "front": "textures/blocks/stone.png",
+    "back": "textures/blocks/stone.png"
+  },
+  "rotateTexture": {
+    "top": true,
+    "bottom": true,
+    "left": true,
+    "right": true,
+    "front": true,
+    "back": true
+  },
+  "lightDampening": 15,
+  "castsShadow": true
+}

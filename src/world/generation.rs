@@ -10,8 +10,8 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        biome::BiomeRegistry, block::BlockRegistry, builtin_ids::GRASS_BLOCK_ID,
-        dimension::DimensionDefinition, fluid::FluidRegistry,
+        biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionDefinition,
+        fluid::FluidRegistry,
     },
     voxel::chunk::{CHUNK_SIZE, VoxelChunk},
 };
@@ -52,10 +52,6 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         return VoxelChunk::empty();
     }
 
-    assert!(
-        context.blocks.get(GRASS_BLOCK_ID).is_some(),
-        "missing block definition: {GRASS_BLOCK_ID}"
-    );
     debug_assert_generation_order();
 
     let chunk_origin = coord * CHUNK_SIZE as i32;

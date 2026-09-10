@@ -14,6 +14,11 @@
     "detailAmplitude": 1.0,
     "detailScale": 0.045
   },
+  "surfaceLayers": [
+    { "block": "asteria:grass", "depth": 1 },
+    { "block": "asteria:dirt", "depth": 4 },
+    { "block": "asteria:stone" }
+  ],
   "hydrology": {
     "canGenerateLake": true,
     "canGenerateRiver": true,

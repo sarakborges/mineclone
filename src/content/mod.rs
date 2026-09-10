@@ -1,6 +1,7 @@
 pub mod biome;
 pub mod biome_density;
 pub mod biome_hydrology;
+pub mod biome_material;
 pub mod biome_sky_layer;
 pub mod biome_terrain;
 pub mod block;

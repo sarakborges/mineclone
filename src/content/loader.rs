@@ -61,6 +61,10 @@ pub(crate) fn read_content() -> LoadedContent {
         );
     }
 
+    for biome in biome_registry.iter() {
+        biome.validate_material_references(&block_registry);
+    }
+
     LoadedContent {
         biomes: biome_registry,
         blocks: block_registry,

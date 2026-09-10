@@ -11,12 +11,12 @@ pub(crate) struct MaterialFieldContext<'a> {
     pub geology: &'a GeologyRegion,
     pub hydrology: &'a HydrologyRegion,
     pub biomes: &'a BiomeRegistry,
-    pub fallback: &'static str,
 }
 
 pub(crate) fn solid_block_id(
     position: bevy::prelude::Vec3,
     surface: &BiomeFieldSample<'_>,
+    surface_depth: u32,
     volume: Option<VolumeBiomeSelection>,
     context: &MaterialFieldContext<'_>,
 ) -> &'static str {
@@ -34,19 +34,21 @@ pub(crate) fn solid_block_id(
         return intern_block_id(block_id);
     }
 
-    strongest_material(
+    strongest_surface_material(
         surface
             .influences
             .iter()
             .map(|influence| (influence.id, influence.weight)),
+        surface_depth,
         context.biomes,
     )
     .map(intern_block_id)
-    .unwrap_or(context.fallback)
+    .unwrap_or_else(|| panic!("surface biome sample did not resolve a material at depth {surface_depth}"))
 }
 
-fn strongest_material<'registry, 'id>(
+fn strongest_surface_material<'registry, 'id>(
     influences: impl Iterator<Item = (&'id str, f32)>,
+    depth: u32,
     biomes: &'registry BiomeRegistry,
 ) -> Option<&'registry str> {
     influences
@@ -55,8 +57,7 @@ fn strongest_material<'registry, 'id>(
                 .get(biome_id)
                 .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
             biome
-                .solid_block
-                .as_deref()
+                .surface_block_at_depth(depth)
                 .map(|block_id| (block_id, weight))
         })
         .max_by(|(_, left), (_, right)| left.total_cmp(right))

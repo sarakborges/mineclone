@@ -8,8 +8,8 @@ use serde::Deserialize;
 use self::validation::validate_biome_definition;
 use super::{
     biome_density::BiomeDensityModifier, biome_hydrology::BiomeHydrology,
-    biome_sky_layer::BiomeSkyLayerVisuals, biome_terrain::BiomeTerrain, color::Rgb,
-    day_night_phase::DayNightPhases,
+    biome_material::BiomeMaterialLayer, biome_sky_layer::BiomeSkyLayerVisuals,
+    biome_terrain::BiomeTerrain, color::Rgb, day_night_phase::DayNightPhases,
 };
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
@@ -104,6 +104,8 @@ pub struct BiomeDefinition {
     #[serde(default)]
     pub terrain: Option<BiomeTerrain>,
     #[serde(default)]
+    pub surface_layers: Vec<BiomeMaterialLayer>,
+    #[serde(default)]
     pub density_modifier: Option<BiomeDensityModifier>,
     #[serde(default)]
     pub solid_block: Option<String>,
@@ -125,6 +127,10 @@ impl BiomeRegistry {
 
     pub fn get(&self, id: &str) -> Option<&BiomeDefinition> {
         self.definitions.get(id)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &BiomeDefinition> {
+        self.definitions.values()
     }
 
     pub fn has_volume_density_modifiers(&self) -> bool {
