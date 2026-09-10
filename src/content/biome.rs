@@ -1,93 +1,108 @@
-use bevy::prelude::*;
-use serde::Deserialize;
+mod validation;
+
 use std::collections::HashMap;
 
-use super::biome_density::BiomeDensityModifier;
-use crate::rendering::sky_layers::SkyLayerDefinition;
+use bevy::prelude::*;
+use serde::Deserialize;
 
-mod validation;
-use validation::validate_biome_definition;
+use self::validation::validate_biome_definition;
+use super::{
+    biome_density::BiomeDensityModifier, biome_hydrology::BiomeHydrology,
+    biome_sky_layer::BiomeSkyLayerVisuals, biome_terrain::BiomeTerrain, color::Rgb,
+    day_night_phase::DayNightPhases,
+};
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct BiomeClimate {
-    pub temperature: f32,
-    pub humidity: f32,
-    pub continentalness: f32,
-    pub erosion: f32,
-    pub weirdness: f32,
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BiomeKind {
+    #[default]
+    Surface,
+    Volume,
+    Hydrology,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BiomeRange {
+pub struct BiomeSizeAxis {
     pub min: f32,
     pub max: f32,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BiomeSize {
-    pub x: BiomeRange,
-    pub y: Option<BiomeRange>,
-    pub z: BiomeRange,
+    pub x: BiomeSizeAxis,
+    pub z: BiomeSizeAxis,
+    #[serde(default)]
+    pub y: Option<BiomeSizeAxis>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BiomeClimateRange {
+    pub min: f32,
+    pub max: f32,
+}
+
+#[derive(Clone, Copy, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BiomeClimate {
+    #[serde(default)]
+    pub temperature: Option<BiomeClimateRange>,
+    #[serde(default)]
+    pub humidity: Option<BiomeClimateRange>,
+    #[serde(default)]
+    pub continentalness: Option<BiomeClimateRange>,
+    #[serde(default)]
+    pub erosion: Option<BiomeClimateRange>,
+}
+
+#[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BiomeVerticalRange {
     pub min: f32,
     pub max: f32,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum BiomeKind {
-    Surface,
-    Volume,
-    Hydrology,
+pub struct BiomeUnderwaterTint {
+    pub color: Rgb,
+    pub opacity: f32,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct BiomeHydrology {
-    #[serde(default = "default_hydrology_multiplier")]
-    pub river_width_multiplier: f32,
-    #[serde(default = "default_hydrology_multiplier")]
-    pub river_depth_multiplier: f32,
-    #[serde(default = "default_hydrology_multiplier")]
-    pub lake_size_multiplier: f32,
-}
-
-const fn default_hydrology_multiplier() -> f32 {
-    1.0
-}
-
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BiomeVisuals {
-    pub sky_color: Srgba,
-    pub fog_color: Srgba,
-    pub fog_density: f32,
-    pub grass_color: Srgba,
-    pub water_color: Srgba,
-    pub ambient_light: f32,
+    pub sky_color: DayNightPhases<Rgb>,
+    pub fog_color: DayNightPhases<Rgb>,
+    pub grass_color: Rgb,
+    pub underwater_tint: BiomeUnderwaterTint,
     #[serde(default)]
-    pub sky_layers: Vec<SkyLayerDefinition>,
+    pub stars: BiomeSkyLayerVisuals,
+    #[serde(default)]
+    pub clouds: BiomeSkyLayerVisuals,
+    pub terrain_roughness: f32,
+    pub terrain_metallic: f32,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BiomeDefinition {
     pub id: String,
     pub name: String,
+    #[serde(default)]
     pub kind: BiomeKind,
+    #[serde(default)]
     pub size: BiomeSize,
+    #[serde(default)]
     pub climate: BiomeClimate,
     #[serde(default)]
     pub vertical_range: Option<BiomeVerticalRange>,
     #[serde(default)]
     pub priority: i32,
+    #[serde(default)]
+    pub terrain: Option<BiomeTerrain>,
     #[serde(default)]
     pub density_modifier: Option<BiomeDensityModifier>,
     #[serde(default)]
