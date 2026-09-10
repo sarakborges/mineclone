@@ -20,8 +20,8 @@ use super::{camera::GameplayCamera, hotbar::PlayerHotbar};
 
 const ARM_SIZE: Vec3 = Vec3::new(0.28, 0.60, 0.26);
 const HELD_BLOCK_SCALE: f32 = 0.18;
-const BREAK_ANIMATION_DURATION: f32 = 0.22;
-const PLACE_ANIMATION_DURATION: f32 = 0.16;
+const BREAK_ANIMATION_DURATION: f32 = 0.16;
+const PLACE_ANIMATION_DURATION: f32 = 0.22;
 const ITEM_SWITCH_ANIMATION_DURATION: f32 = 0.30;
 
 #[derive(Component)]
@@ -372,14 +372,14 @@ fn animate_viewmodel(
         if let Some((action, wave)) = interaction {
             match action {
                 ViewModelAction::Break => {
-                    animated.translation += Vec3::new(-0.06, -0.10, -0.06) * wave;
-                    animated.rotation *=
-                        Quat::from_euler(EulerRot::XYZ, -0.68 * wave, 0.12 * wave, -0.34 * wave);
-                }
-                ViewModelAction::Place => {
                     animated.translation += Vec3::new(-0.03, 0.01, -0.14) * wave;
                     animated.rotation *=
                         Quat::from_euler(EulerRot::XYZ, -0.18 * wave, 0.05 * wave, -0.08 * wave);
+                }
+                ViewModelAction::Place => {
+                    animated.translation += Vec3::new(-0.06, -0.10, -0.06) * wave;
+                    animated.rotation *=
+                        Quat::from_euler(EulerRot::XYZ, -0.68 * wave, 0.12 * wave, -0.34 * wave);
                 }
             }
         }
