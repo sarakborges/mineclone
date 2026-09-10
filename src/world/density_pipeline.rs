@@ -10,6 +10,8 @@ use super::{
 
 const DENSITY_NOISE_EDGE: f32 = 0.15;
 const CAVE_CONNECTOR_AIR_MARGIN: f32 = 4.0;
+const CAVE_MINIMUM_SURFACE_DEPTH: f32 = 12.0;
+const CAVE_FULL_STRENGTH_SURFACE_DEPTH: f32 = 20.0;
 
 pub fn sample_density(
     base_density: f32,
@@ -22,15 +24,39 @@ pub fn sample_density(
     let hydrology_delta = region.hydrology.density_delta(position);
     let geology_delta = region.geology.density_delta(position);
     let mut density = base_density + hydrology_delta + geology_delta;
+    let cave_depth_strength = cave_depth_strength(base_density);
 
-    if let Some(connector) = anchored_caves
-        .and_then(|caves| caves.connector_graph.sample(position))
-        .map(|sample| smoothstep(sample.strength))
-    {
-        density += carve_density_delta(density, connector, CAVE_CONNECTOR_AIR_MARGIN);
+    if cave_depth_strength > 0.0 {
+        if let Some(connector) = anchored_caves
+            .and_then(|caves| caves.connector_graph.sample(position))
+            .map(|sample| smoothstep(sample.strength) * cave_depth_strength)
+        {
+            density += carve_density_delta(density, connector, CAVE_CONNECTOR_AIR_MARGIN);
+        }
     }
 
-    density + volume_biome_density_delta(density, position, volume, biome_field)
+    density
+        + volume_biome_density_delta(
+            density,
+            position,
+            volume,
+            biome_field,
+            cave_depth_strength,
+        )
+}
+
+fn cave_depth_strength(base_density: f32) -> f32 {
+    if base_density <= CAVE_MINIMUM_SURFACE_DEPTH {
+        return 0.0;
+    }
+
+    if base_density >= CAVE_FULL_STRENGTH_SURFACE_DEPTH {
+        return 1.0;
+    }
+
+    let progress = (base_density - CAVE_MINIMUM_SURFACE_DEPTH)
+        / (CAVE_FULL_STRENGTH_SURFACE_DEPTH - CAVE_MINIMUM_SURFACE_DEPTH);
+    smoothstep(progress.clamp(0.0, 1.0))
 }
 
 fn carve_density_delta(density: f32, strength: f32, air_margin: f32) -> f32 {
@@ -46,6 +72,7 @@ fn volume_biome_density_delta(
     position: Vec3,
     volume: Option<VolumeBiomeSelection>,
     biome_field: &BiomeField,
+    cave_depth_strength: f32,
 ) -> f32 {
     let Some(selection) = volume else {
         return 0.0;
@@ -54,7 +81,13 @@ fn volume_biome_density_delta(
         return 0.0;
     };
 
-    density_modifier_delta(modifier, current_density, position, seed) * selection.strength
+    density_modifier_delta(
+        modifier,
+        current_density,
+        position,
+        seed,
+        cave_depth_strength,
+    ) * selection.strength
 }
 
 fn density_modifier_delta(
@@ -62,6 +95,7 @@ fn density_modifier_delta(
     current_density: f32,
     position: Vec3,
     seed: u64,
+    cave_depth_strength: f32,
 ) -> f32 {
     match modifier {
         BiomeDensityModifier::Cavern {
@@ -69,8 +103,12 @@ fn density_modifier_delta(
             noise_scale,
             openness,
         } => {
+            if cave_depth_strength <= 0.0 {
+                return 0.0;
+            }
+
             let noise = value_noise_3d(position * noise_scale, seed) * 0.5 + 0.5;
-            let mask = coverage_mask(noise, openness);
+            let mask = coverage_mask(noise, openness) * cave_depth_strength;
             carve_density_delta(current_density, mask, carve_strength)
         }
         BiomeDensityModifier::Solid {
@@ -162,6 +200,17 @@ mod tests {
     }
 
     #[test]
+    fn cave_carving_is_suppressed_close_to_the_surface() {
+        assert_eq!(cave_depth_strength(0.0), 0.0);
+        assert_eq!(cave_depth_strength(CAVE_MINIMUM_SURFACE_DEPTH), 0.0);
+        assert!(cave_depth_strength(16.0) > 0.0);
+        assert_eq!(
+            cave_depth_strength(CAVE_FULL_STRENGTH_SURFACE_DEPTH),
+            1.0
+        );
+    }
+
+    #[test]
     fn cavern_and_solid_modifiers_move_density_in_opposite_directions() {
         let position = Vec3::new(12.5, 30.5, -8.5);
         let current_density = 20.0;
@@ -174,6 +223,7 @@ mod tests {
             current_density,
             position,
             7,
+            1.0,
         );
         let solid = density_modifier_delta(
             BiomeDensityModifier::Solid {
@@ -184,9 +234,29 @@ mod tests {
             current_density,
             position,
             7,
+            1.0,
         );
 
         assert!(current_density + cavern < 0.0);
         assert_eq!(solid, 20.0);
+    }
+
+    #[test]
+    fn cavern_modifier_cannot_open_shallow_terrain() {
+        let position = Vec3::new(12.5, 70.5, -8.5);
+        let current_density = 8.0;
+        let cavern = density_modifier_delta(
+            BiomeDensityModifier::Cavern {
+                carve_strength: 4.0,
+                noise_scale: 0.01,
+                openness: 1.0,
+            },
+            current_density,
+            position,
+            7,
+            cave_depth_strength(current_density),
+        );
+
+        assert_eq!(cavern, 0.0);
     }
 }
