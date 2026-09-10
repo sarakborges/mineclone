@@ -11,9 +11,12 @@ pub(super) fn update_coordinates_hud(
 ) {
     let position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let block_position = position.floor().as_ivec3();
-
-    coordinates_text.0 = format!(
+    let next_text = format!(
         "X: {} | Z: {} | Y: {}",
         block_position.x, block_position.z, block_position.y
     );
+
+    if coordinates_text.0 != next_text {
+        coordinates_text.0 = next_text;
+    }
 }
