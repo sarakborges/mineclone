@@ -4,7 +4,7 @@ use crate::voxel::{light::VoxelLight, world::VoxelWorld};
 
 use super::BlockFace;
 
-const AO_BRIGHTNESS: [f32; 4] = [1.0, 0.86, 0.72, 0.58];
+const AO_BRIGHTNESS: [f32; 4] = [1.0, 0.92, 0.84, 0.76];
 
 pub(crate) struct FaceLighting {
     pub(crate) channels: [[f32; 2]; 4],
