@@ -66,6 +66,8 @@ pub struct BlockDefinition {
     #[serde(default)]
     pub alpha_cutoff: Option<f32>,
     #[serde(default)]
+    pub alpha_blend: bool,
+    #[serde(default)]
     pub light_emission: u8,
     #[serde(default = "default_light_dampening")]
     pub light_dampening: u8,
@@ -75,7 +77,7 @@ pub struct BlockDefinition {
 
 impl BlockDefinition {
     pub fn alpha_mode(&self, opacity: f32) -> AlphaMode {
-        if opacity < 1.0 {
+        if opacity < 1.0 || self.alpha_blend {
             AlphaMode::Blend
         } else if let Some(cutoff) = self.alpha_cutoff {
             AlphaMode::Mask(cutoff)
@@ -129,6 +131,11 @@ impl BlockRegistry {
                 definition.id
             );
         }
+        assert!(
+            !definition.alpha_blend || definition.alpha_cutoff.is_none(),
+            "block {} cannot use alphaBlend and alphaCutoff together",
+            definition.id
+        );
         for (index, orientation) in definition.orientations.iter().enumerate() {
             assert!(
                 !definition.orientations[..index].contains(orientation),
