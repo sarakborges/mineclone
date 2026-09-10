@@ -5,7 +5,7 @@ use crate::content::dimension_hydrology::DimensionHydrology;
 use super::{
     constants::{MACRO_SAMPLE_GRID, RIVER_CARVE_DEPTH},
     drainage::DrainageNetwork,
-    math::ocean_strength,
+    math::{hydrology_biome_weights, ocean_strength},
     region::HydrologyRegion,
     river::build_river_system,
     spatial::macro_sample_position,
@@ -30,9 +30,8 @@ impl HydrologyField {
 
     pub fn biome_overlay(&self, continentalness: f32) -> HydrologyBiomeOverlay<'_> {
         let strength = ocean_strength(continentalness);
-        let mut surface_weight = (1.0 - strength * 2.0).clamp(0.0, 1.0);
-        let mut coast_weight = (1.0 - (strength * 2.0 - 1.0).abs()).clamp(0.0, 1.0);
-        let mut ocean_weight = (strength * 2.0 - 1.0).clamp(0.0, 1.0);
+        let (mut surface_weight, mut coast_weight, mut ocean_weight) =
+            hydrology_biome_weights(strength);
         let coast_biome = self.settings.coast_biome.as_deref();
         let ocean_biome = self.settings.ocean_biome.as_deref();
 
