@@ -8,10 +8,7 @@ use crate::{
         camera::GameplayCamera,
         hotbar::{HOTBAR_SLOT_COUNT, PlayerHotbar},
     },
-    rendering::{
-        block_model::BlockModelInstance,
-        block_tint::block_tint_at,
-    },
+    rendering::{block_model::BlockModel, block_tint::block_tint_at},
     ui::{theme, typography},
     world::biome_field::BiomeField,
 };
@@ -146,7 +143,7 @@ fn spawn_hotbar(
 
                         slot.spawn((
                             HotbarBlockModel,
-                            BlockModelInstance::new(block_id),
+                            BlockModel::display(block_id),
                             MaterialNode(material),
                             Node {
                                 width: px(ITEM_ICON_SIZE),
@@ -201,10 +198,7 @@ fn update_hotbar_item_tints(
     player: Single<&Transform, With<GameplayCamera>>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
-    icons: Query<
-        (&BlockModelInstance, &MaterialNode<BlockIconMaterial>),
-        With<HotbarBlockModel>,
-    >,
+    icons: Query<(&BlockModel, &MaterialNode<BlockIconMaterial>), With<HotbarBlockModel>>,
     mut materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
     let position = Vec2::new(player.translation.x, player.translation.z);
