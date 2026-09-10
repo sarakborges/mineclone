@@ -33,13 +33,10 @@ struct HotbarItemIcon {
 }
 
 #[derive(SystemParam)]
-struct HotbarHudContent<'w, 's> {
+struct HotbarHudContent<'w> {
     asset_server: Res<'w, AssetServer>,
     blocks: Res<'w, BlockRegistry>,
     hotbar: Res<'w, PlayerHotbar>,
-    biomes: Res<'w, BiomeRegistry>,
-    biome_field: Res<'w, BiomeField>,
-    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
 }
 
 pub struct HotbarHudPlugin;
@@ -69,7 +66,6 @@ fn spawn_hotbar(
         .item_at(content.hotbar.selected_slot())
         .and_then(|block_id| content.blocks.get(block_id))
         .map_or("", |block| block.name.as_str());
-    let tint_position = Vec2::new(content.player.translation.x, content.player.translation.z);
 
     commands
         .spawn((
@@ -141,16 +137,10 @@ fn spawn_hotbar(
                         let block = content.blocks.get(block_id).unwrap_or_else(|| {
                             panic!("hotbar references missing block: {block_id}")
                         });
-                        let tint = block_tint_at(
-                            block_id,
-                            tint_position,
-                            &content.biome_field,
-                            &content.biomes,
-                        );
                         let material = icon_materials.add(BlockIconMaterial::from_block(
                             block,
                             &content.asset_server,
-                            tint,
+                            Color::WHITE,
                         ));
 
                         slot.spawn((
