@@ -11,8 +11,6 @@ pub(super) fn update_fog_color(
     }
 
     for mut fog in &mut fogs {
-        // The far end of the fog must visually merge with the horizon; otherwise
-        // fully fogged terrain remains visible as a flat silhouette against the sky.
-        fog.color = visuals.sky_color;
+        fog.color = visuals.fog_color;
     }
 }
