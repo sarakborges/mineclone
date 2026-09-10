@@ -25,6 +25,7 @@
     "lakeChanceMultiplier": 1.0,
     "riverWidthMultiplier": 1.0
   },
+  "structures": ["asteria:oak_tree"],
   "visuals": {
     "skyColor": {
       "dawn": { "r": 0.35, "g": 0.92, "b": 0.94 },

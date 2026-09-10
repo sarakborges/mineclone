@@ -71,6 +71,10 @@ pub(crate) fn read_content() -> LoadedContent {
         );
     }
 
+    for structure in structure_registry.iter() {
+        structure.validate_references(&block_registry);
+    }
+
     for structure_set in structure_set_registry.iter() {
         structure_set.validate_references(&structure_registry);
     }
