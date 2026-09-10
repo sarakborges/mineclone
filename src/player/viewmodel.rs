@@ -19,7 +19,7 @@ use crate::{
 
 use super::{camera::GameplayCamera, hotbar::PlayerHotbar};
 
-const ARM_SIZE: Vec3 = Vec3::new(0.16, 0.56, 0.16);
+const ARM_SIZE: Vec3 = Vec3::new(0.24, 0.58, 0.22);
 const HELD_BLOCK_SCALE: f32 = 0.16;
 const VIEW_MODEL_RENDER_LAYER: usize = 1;
 const VIEW_MODEL_FOV_DEGREES: f32 = 70.0;
@@ -28,6 +28,9 @@ const PLACE_ANIMATION_DURATION: f32 = 0.16;
 
 #[derive(Component)]
 struct PlayerViewModel;
+
+#[derive(Component)]
+struct ViewModelArm;
 
 #[derive(Component)]
 struct HeldBlockRoot {
@@ -120,7 +123,7 @@ fn spawn_viewmodel(
 ) {
     for (camera, camera_transform) in &cameras {
         let selected_block_id = content.hotbar.item_at(content.hotbar.selected_slot());
-        let visibility = if selected_block_id.is_some() {
+        let item_visibility = if selected_block_id.is_some() {
             Visibility::Visible
         } else {
             Visibility::Hidden
@@ -135,6 +138,7 @@ fn spawn_viewmodel(
                 Camera3d::default(),
                 Camera {
                     order: 1,
+                    clear_color: ClearColorConfig::None,
                     ..default()
                 },
                 Projection::from(PerspectiveProjection {
@@ -145,67 +149,65 @@ fn spawn_viewmodel(
             ));
 
             camera
-                .spawn((PlayerViewModel, base_viewmodel_transform(), visibility))
+                .spawn((
+                    PlayerViewModel,
+                    base_viewmodel_transform(),
+                    Visibility::Visible,
+                ))
                 .with_children(|viewmodel| {
+                    viewmodel.spawn((
+                        ViewModelArm,
+                        Mesh3d(arm_assets.mesh.clone()),
+                        MeshMaterial3d(arm_assets.material.clone()),
+                        Transform::from_translation(Vec3::new(0.0, ARM_SIZE.y * 0.5, 0.0)),
+                        item_visibility,
+                        RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
+                        NotShadowCaster,
+                    ));
+
                     viewmodel
                         .spawn((
-                            Mesh3d(arm_assets.mesh.clone()),
-                            MeshMaterial3d(arm_assets.material.clone()),
-                            Transform::from_translation(Vec3::new(0.0, ARM_SIZE.y * 0.5, 0.0)),
-                            RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
-                            NotShadowCaster,
+                            HeldBlockRoot {
+                                block_id: selected_block_id,
+                            },
+                            held_block_transform(),
+                            item_visibility,
                         ))
-                        .with_children(|arm| {
-                            arm.spawn((
-                                HeldBlockRoot {
-                                    block_id: selected_block_id,
-                                },
-                                Transform::from_translation(Vec3::new(
-                                    -0.015,
-                                    ARM_SIZE.y * 0.5 + 0.06,
-                                    -0.11,
-                                ))
-                                .with_rotation(Quat::from_euler(EulerRot::XYZ, 0.12, -0.62, -0.06))
-                                .with_scale(Vec3::splat(HELD_BLOCK_SCALE)),
-                                visibility,
-                            ))
-                            .with_children(|held| {
-                                let Some(block_id) = selected_block_id else {
-                                    return;
-                                };
-                                let block = content.blocks.get(block_id).unwrap_or_else(|| {
-                                    panic!("hotbar references missing block: {block_id}")
-                                });
-                                let tint = block_tint_at(
-                                    block_id,
-                                    tint_position,
-                                    &content.biome_field,
-                                    &content.biomes,
-                                );
-
-                                for face in block_faces() {
-                                    let material = block_materials.held_for_face(face);
-                                    let Some(mut face_material) = materials.get_mut(&material)
-                                    else {
-                                        continue;
-                                    };
-                                    *face_material = block_face_material_data(
-                                        face,
-                                        block,
-                                        &content.asset_server,
-                                        1.0,
-                                    );
-                                    face_material.base_color = tint;
-
-                                    held.spawn((
-                                        HeldBlockFace { face },
-                                        Mesh3d(block_meshes.for_face(face)),
-                                        MeshMaterial3d(material),
-                                        RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
-                                        NotShadowCaster,
-                                    ));
-                                }
+                        .with_children(|held| {
+                            let Some(block_id) = selected_block_id else {
+                                return;
+                            };
+                            let block = content.blocks.get(block_id).unwrap_or_else(|| {
+                                panic!("hotbar references missing block: {block_id}")
                             });
+                            let tint = block_tint_at(
+                                block_id,
+                                tint_position,
+                                &content.biome_field,
+                                &content.biomes,
+                            );
+
+                            for face in block_faces() {
+                                let material = block_materials.held_for_face(face);
+                                let Some(mut face_material) = materials.get_mut(&material) else {
+                                    continue;
+                                };
+                                *face_material = block_face_material_data(
+                                    face,
+                                    block,
+                                    &content.asset_server,
+                                    1.0,
+                                );
+                                face_material.base_color = tint;
+
+                                held.spawn((
+                                    HeldBlockFace { face },
+                                    Mesh3d(block_meshes.for_face(face)),
+                                    MeshMaterial3d(material),
+                                    RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
+                                    NotShadowCaster,
+                                ));
+                            }
                         });
                 });
         });
@@ -216,26 +218,28 @@ fn sync_held_block(
     content: ViewModelContent,
     player: Single<&Transform, With<GameplayCamera>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut viewmodel_visibility: Single<
+    mut arms: Query<
         &mut Visibility,
-        (With<PlayerViewModel>, Without<HeldBlockRoot>),
+        (With<ViewModelArm>, Without<HeldBlockRoot>, Without<PlayerViewModel>),
     >,
     mut roots: Query<
         (&mut HeldBlockRoot, &mut Visibility),
-        (With<HeldBlockRoot>, Without<PlayerViewModel>),
+        (With<HeldBlockRoot>, Without<ViewModelArm>, Without<PlayerViewModel>),
     >,
     faces: Query<(&HeldBlockFace, &MeshMaterial3d<StandardMaterial>)>,
 ) {
     let selected_block_id = content.hotbar.item_at(content.hotbar.selected_slot());
-    let visibility = if selected_block_id.is_some() {
+    let item_visibility = if selected_block_id.is_some() {
         Visibility::Visible
     } else {
         Visibility::Hidden
     };
     let tint_position = Vec2::new(player.translation.x, player.translation.z);
 
-    if **viewmodel_visibility != visibility {
-        **viewmodel_visibility = visibility;
+    for mut visibility in &mut arms {
+        if *visibility != item_visibility {
+            *visibility = item_visibility;
+        }
     }
 
     for (mut held, mut held_visibility) in &mut roots {
@@ -244,9 +248,11 @@ fn sync_held_block(
         if block_changed {
             held.block_id = selected_block_id;
         }
+        if *held_visibility != item_visibility {
+            *held_visibility = item_visibility;
+        }
 
         let Some(block_id) = selected_block_id else {
-            *held_visibility = Visibility::Hidden;
             continue;
         };
         let block = content
@@ -259,10 +265,6 @@ fn sync_held_block(
             &content.biome_field,
             &content.biomes,
         );
-
-        if *held_visibility != Visibility::Visible {
-            *held_visibility = Visibility::Visible;
-        }
 
         for (face, material_handle) in &faces {
             let Some(mut material) = materials.get_mut(&material_handle.0) else {
@@ -333,4 +335,10 @@ fn base_viewmodel_transform() -> Transform {
         -0.10,
         0.28,
     ))
+}
+
+fn held_block_transform() -> Transform {
+    Transform::from_translation(Vec3::new(-0.015, ARM_SIZE.y + 0.06, 0.20))
+        .with_rotation(Quat::from_euler(EulerRot::XYZ, 0.12, -0.62, -0.06))
+        .with_scale(Vec3::splat(HELD_BLOCK_SCALE))
 }
