@@ -40,6 +40,7 @@ pub(super) fn log_render_asset_pressure(
 
     let active_chunks = assets.pool.active_count();
     let pooled_meshes = assets.pool.mesh_count();
+    let pooled_mesh_bytes = assets.pool.mesh_bytes();
     let mesh_assets = assets.meshes.len();
     let mesh_overhead = mesh_assets.saturating_sub(pooled_meshes);
     let mut file_images = 0;
@@ -67,7 +68,7 @@ pub(super) fn log_render_asset_pressure(
     let font_atlas_bytes = assets.font_atlases.total_bytes(&assets.images);
 
     info!(
-        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} runtime_top_shape={runtime_top_shape:?} font_atlas_keys={font_atlas_keys} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} standard_materials={} terrain_materials={}",
+        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} pooled_mesh_bytes={pooled_mesh_bytes} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} runtime_top_shape={runtime_top_shape:?} font_atlas_keys={font_atlas_keys} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} standard_materials={} terrain_materials={}",
         assets.state.get(),
         assets.standard_materials.len(),
         assets.terrain_materials.len(),
