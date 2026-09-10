@@ -67,7 +67,7 @@ fn edit_targeted_block(
         let Some(block) = content.blocks.get(block_id) else {
             return;
         };
-        let rotation = TextureRotation::for_position(voxel, block.rotate_texture);
+        let rotation = TextureRotation::for_position(voxel, block.rotate_texture.any());
 
         (
             world.set_block_at(voxel, Some(VoxelCell::new(block_id, rotation))),
