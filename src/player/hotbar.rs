@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
-    content::builtin_ids::{GRASS_BLOCK_ID, LAMP_BLOCK_ID},
+    content::builtin_ids::{DIRT_BLOCK_ID, GRASS_BLOCK_ID, LAMP_BLOCK_ID, STONE_BLOCK_ID},
 };
 
 pub const HOTBAR_SLOT_COUNT: usize = 9;
@@ -17,7 +17,9 @@ impl Default for PlayerHotbar {
     fn default() -> Self {
         let mut slots = [None; HOTBAR_SLOT_COUNT];
         slots[0] = Some(GRASS_BLOCK_ID);
-        slots[1] = Some(LAMP_BLOCK_ID);
+        slots[1] = Some(DIRT_BLOCK_ID);
+        slots[2] = Some(STONE_BLOCK_ID);
+        slots[3] = Some(LAMP_BLOCK_ID);
 
         Self {
             selected_slot: 0,
