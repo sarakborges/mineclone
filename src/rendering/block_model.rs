@@ -292,11 +292,7 @@ pub(crate) fn block_face_material_data(
             base_color_texture: block_face_texture(face, block)
                 .map(|texture| asset_server.load(texture.to_owned())),
             perceptual_roughness: 1.0,
-            alpha_mode: if opacity < 1.0 {
-                AlphaMode::Blend
-            } else {
-                AlphaMode::Opaque
-            },
+            alpha_mode: block.alpha_mode(opacity),
             unlit: true,
             double_sided: true,
             cull_mode: None,

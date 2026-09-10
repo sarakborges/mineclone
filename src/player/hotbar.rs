@@ -3,8 +3,8 @@ use bevy::prelude::*;
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
     content::builtin_ids::{
-        DIRT_BLOCK_ID, GRASS_BLOCK_ID, LAMP_BLOCK_ID, OAK_WOOD_BLOCK_ID, SAND_BLOCK_ID,
-        STONE_BLOCK_ID,
+        DIRT_BLOCK_ID, GRASS_BLOCK_ID, LAMP_BLOCK_ID, OAK_LEAF_BLOCK_ID, OAK_WOOD_BLOCK_ID,
+        SAND_BLOCK_ID, STONE_BLOCK_ID,
     },
 };
 
@@ -25,6 +25,7 @@ impl Default for PlayerHotbar {
         slots[3] = Some(LAMP_BLOCK_ID);
         slots[4] = Some(SAND_BLOCK_ID);
         slots[5] = Some(OAK_WOOD_BLOCK_ID);
+        slots[6] = Some(OAK_LEAF_BLOCK_ID);
 
         Self {
             selected_slot: 0,

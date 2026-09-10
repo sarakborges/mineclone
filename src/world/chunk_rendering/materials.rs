@@ -134,6 +134,7 @@ fn create_material(
                 .map(|texture| asset_server.load(texture.to_owned())),
             perceptual_roughness: roughness,
             metallic,
+            alpha_mode: definition.alpha_mode(1.0),
             unlit: true,
             ..default()
         },

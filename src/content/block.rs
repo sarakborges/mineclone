@@ -62,11 +62,25 @@ pub struct BlockDefinition {
     #[serde(default)]
     pub rotate_texture: BlockTextureRotations,
     #[serde(default)]
+    pub alpha_cutoff: Option<f32>,
+    #[serde(default)]
     pub light_emission: u8,
     #[serde(default = "default_light_dampening")]
     pub light_dampening: u8,
     #[serde(default = "default_casts_shadow")]
     pub casts_shadow: bool,
+}
+
+impl BlockDefinition {
+    pub fn alpha_mode(&self, opacity: f32) -> AlphaMode {
+        if opacity < 1.0 {
+            AlphaMode::Blend
+        } else if let Some(cutoff) = self.alpha_cutoff {
+            AlphaMode::Mask(cutoff)
+        } else {
+            AlphaMode::Opaque
+        }
+    }
 }
 
 #[derive(Resource, Default)]
@@ -86,6 +100,13 @@ impl BlockRegistry {
             "block {} light dampening must be between 0 and 15",
             definition.id
         );
+        if let Some(alpha_cutoff) = definition.alpha_cutoff {
+            assert!(
+                (0.0..=1.0).contains(&alpha_cutoff),
+                "block {} alphaCutoff must be between 0 and 1",
+                definition.id
+            );
+        }
 
         intern_block_id(&definition.id);
         self.definitions.insert(definition.id.clone(), definition);

@@ -1,0 +1,23 @@
+{
+  "id": "asteria:oak_leaf",
+  "name": "Oak Leaf",
+  "textures": {
+    "top": "textures/blocks/trees/oak/leaf.png",
+    "bottom": "textures/blocks/trees/oak/leaf.png",
+    "left": "textures/blocks/trees/oak/leaf.png",
+    "right": "textures/blocks/trees/oak/leaf.png",
+    "front": "textures/blocks/trees/oak/leaf.png",
+    "back": "textures/blocks/trees/oak/leaf.png"
+  },
+  "rotateTexture": {
+    "top": false,
+    "bottom": false,
+    "left": false,
+    "right": false,
+    "front": false,
+    "back": false
+  },
+  "alphaCutoff": 0.5,
+  "lightDampening": 15,
+  "castsShadow": true
+}
