@@ -6,6 +6,8 @@ const MAX_SEGMENTS: usize = 28;
 const MAX_SIDE_AMPLITUDE: f32 = 22.0;
 const MAX_VERTICAL_AMPLITUDE: f32 = 14.0;
 const MIN_WORLD_Y: f32 = 2.5;
+const ENDPOINT_CHAMBER_FRACTION: f32 = 0.16;
+const ENDPOINT_CHAMBER_SCALE: f32 = 1.65;
 
 pub(super) fn chaotic_connector_points(from: Vec3, to: Vec3, hash: u64) -> Vec<Vec3> {
     let delta = to - from;
@@ -81,8 +83,23 @@ pub(super) fn connector_radius_progress(start: f32, end: f32, t: f32, hash: u64)
         + (phase + t * std::f32::consts::TAU * 2.3).sin() * 0.12
         + (phase * 0.5 + t * std::f32::consts::TAU * 5.1).sin() * 0.05;
     let width_floor = start.max(end) * 0.90;
+    let chamber = endpoint_chamber_scale(t);
 
-    (base * swell).max(width_floor).max(2.5)
+    (base * swell * chamber).max(width_floor).max(2.5)
+}
+
+fn endpoint_chamber_scale(t: f32) -> f32 {
+    let edge_distance = t.clamp(0.0, 1.0).min(1.0 - t.clamp(0.0, 1.0));
+    if edge_distance >= ENDPOINT_CHAMBER_FRACTION {
+        return 1.0;
+    }
+
+    let influence = 1.0 - edge_distance / ENDPOINT_CHAMBER_FRACTION;
+    lerp(1.0, ENDPOINT_CHAMBER_SCALE, smoothstep(influence))
+}
+
+fn smoothstep(value: f32) -> f32 {
+    value * value * (3.0 - 2.0 * value)
 }
 
 fn hash_unit(hash: u64) -> f32 {
@@ -141,5 +158,15 @@ mod tests {
             let t = step as f32 / 20.0;
             assert!(connector_radius_progress(start, end, t, 42) >= minimum);
         }
+    }
+
+    #[test]
+    fn connector_endpoints_open_into_wider_chambers() {
+        let start = connector_radius_progress(5.0, 5.0, 0.0, 42);
+        let middle = connector_radius_progress(5.0, 5.0, 0.5, 42);
+        let end = connector_radius_progress(5.0, 5.0, 1.0, 42);
+
+        assert!(start > middle);
+        assert!(end > middle);
     }
 }
