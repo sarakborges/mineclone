@@ -122,7 +122,7 @@ fn update_placement_preview(
         root.0.block_id = block_id;
 
         for (face, material_handle) in &faces {
-            let Some(material) = materials.get_mut(&material_handle.0) else {
+            let Some(mut material) = materials.get_mut(&material_handle.0) else {
                 continue;
             };
 
