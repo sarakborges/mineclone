@@ -118,6 +118,7 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         biomes: context.biomes,
         biome_field: context.biome_field,
         region: region.as_ref(),
+        has_volume_solid_blocks: context.biomes.has_volume_solid_blocks(),
     };
 
     rasterize_material_pass(

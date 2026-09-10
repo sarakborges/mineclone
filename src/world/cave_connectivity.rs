@@ -1,11 +1,17 @@
 mod path;
 
+use std::collections::HashSet;
+
 use bevy::prelude::*;
 
 use self::path::{chaotic_connector_points, connector_radius_progress};
-use super::feature_graph::FeatureGraph;
+use super::{
+    feature_graph::FeatureGraph,
+    generation_region::generation_region_world_bounds,
+};
 
 const MAX_CONNECTOR_LENGTH: f32 = 256.0;
+const MAX_CONNECTIONS_PER_ANCHOR: usize = 3;
 const MIN_TUNNEL_RADIUS: f32 = 3.0;
 const MAX_TUNNEL_RADIUS: f32 = 8.0;
 
@@ -42,32 +48,35 @@ impl CaveConnectivityField {
         anchors.dedup_by(|left, right| *left == *right);
 
         let mut graph = FeatureGraph::default();
+        let mut connected_pairs = HashSet::new();
 
         for left in 0..anchors.len() {
-            for right in (left + 1)..anchors.len() {
-                let distance = anchors[left].distance(anchors[right]);
+            let mut neighbors = anchors
+                .iter()
+                .enumerate()
+                .filter_map(|(right, position)| {
+                    if left == right {
+                        return None;
+                    }
 
-                if distance <= f32::EPSILON || distance > MAX_CONNECTOR_LENGTH {
+                    let distance = anchors[left].distance(*position);
+                    (distance > f32::EPSILON && distance <= MAX_CONNECTOR_LENGTH)
+                        .then_some((right, distance))
+                })
+                .collect::<Vec<_>>();
+            neighbors.sort_by(|(left_index, left_distance), (right_index, right_distance)| {
+                left_distance
+                    .total_cmp(right_distance)
+                    .then_with(|| compare_position(&anchors[*left_index], &anchors[*right_index]))
+            });
+
+            for (right, _) in neighbors.into_iter().take(MAX_CONNECTIONS_PER_ANCHOR) {
+                let pair = ordered_pair(left, right);
+                if !connected_pairs.insert(pair) {
                     continue;
                 }
 
-                let hash = anchor_pair_hash(anchors[left], anchors[right], self.seed);
-                let start_radius = tunnel_radius(hash);
-                let end_radius = tunnel_radius(hash.rotate_left(29));
-                let points = chaotic_connector_points(anchors[left], anchors[right], hash);
-
-                for segment in 0..points.len().saturating_sub(1) {
-                    let from_progress = segment as f32 / (points.len() - 1) as f32;
-                    let to_progress = (segment + 1) as f32 / (points.len() - 1) as f32;
-                    let from_radius =
-                        connector_radius_progress(start_radius, end_radius, from_progress, hash);
-                    let to_radius =
-                        connector_radius_progress(start_radius, end_radius, to_progress, hash);
-                    let from = graph.add_node(points[segment]);
-                    let to = graph.add_node(points[segment + 1]);
-
-                    graph.add_edge(from, to, from_radius, to_radius);
-                }
+                add_connector(&mut graph, coord, anchors[pair.0], anchors[pair.1], self.seed);
             }
         }
 
@@ -75,6 +84,64 @@ impl CaveConnectivityField {
             connector_graph: graph,
         }
     }
+}
+
+fn add_connector(graph: &mut FeatureGraph, coord: IVec3, from: Vec3, to: Vec3, seed: u64) {
+    let hash = anchor_pair_hash(from, to, seed);
+    let start_radius = tunnel_radius(hash);
+    let end_radius = tunnel_radius(hash.rotate_left(29));
+    let points = chaotic_connector_points(from, to, hash);
+    let (region_minimum, region_maximum) = generation_region_world_bounds(coord);
+
+    for segment in 0..points.len().saturating_sub(1) {
+        let from_progress = segment as f32 / (points.len() - 1) as f32;
+        let to_progress = (segment + 1) as f32 / (points.len() - 1) as f32;
+        let from_radius = connector_radius_progress(start_radius, end_radius, from_progress, hash);
+        let to_radius = connector_radius_progress(start_radius, end_radius, to_progress, hash);
+        let from = points[segment];
+        let to = points[segment + 1];
+
+        if !segment_intersects_region(
+            from,
+            to,
+            from_radius.max(to_radius),
+            region_minimum,
+            region_maximum,
+        ) {
+            continue;
+        }
+
+        let from_node = graph.add_node(from);
+        let to_node = graph.add_node(to);
+        graph.add_edge(from_node, to_node, from_radius, to_radius);
+    }
+}
+
+fn ordered_pair(left: usize, right: usize) -> (usize, usize) {
+    if left < right {
+        (left, right)
+    } else {
+        (right, left)
+    }
+}
+
+fn segment_intersects_region(
+    from: Vec3,
+    to: Vec3,
+    radius: f32,
+    region_minimum: Vec3,
+    region_maximum: Vec3,
+) -> bool {
+    let margin = Vec3::splat(radius);
+    let segment_minimum = from.min(to) - margin;
+    let segment_maximum = from.max(to) + margin;
+
+    segment_maximum.x >= region_minimum.x
+        && segment_minimum.x <= region_maximum.x
+        && segment_maximum.y >= region_minimum.y
+        && segment_minimum.y <= region_maximum.y
+        && segment_maximum.z >= region_minimum.z
+        && segment_minimum.z <= region_maximum.z
 }
 
 fn compare_position(left: &Vec3, right: &Vec3) -> std::cmp::Ordering {
@@ -157,6 +224,17 @@ mod tests {
 
         assert!(region.connector_graph.nodes().len() > 2);
         assert!(region.connector_graph.edges().len() > 1);
+    }
+
+    #[test]
+    fn dense_anchor_sets_create_sparse_connector_graphs() {
+        let field = CaveConnectivityField::new(42);
+        let anchors = (0..12)
+            .map(|index| Vec3::new(index as f32 * 18.0, 40.0, 32.0))
+            .collect::<Vec<_>>();
+        let region = field.region_from_anchors(IVec3::ZERO, &anchors);
+
+        assert!(region.connector_graph.edges().len() < 12 * 11 / 2 * 5);
     }
 
     #[test]

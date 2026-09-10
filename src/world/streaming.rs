@@ -78,12 +78,8 @@ pub fn stream_chunks(
         }
 
         ensure_chunk_loaded(&mut inputs.world, coord, &generation_context);
-        let lighting_changes = initialize_chunk_lighting(
-            &mut inputs.world,
-            coord,
-            &content.blocks,
-            &content.fluids,
-        );
+        let lighting_changes =
+            initialize_chunk_lighting(&mut inputs.world, coord, &content.blocks, &content.fluids);
         let chunk = inputs
             .world
             .chunk(coord)

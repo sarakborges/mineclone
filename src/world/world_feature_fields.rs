@@ -61,10 +61,7 @@ impl WorldFeatureFields {
             .write()
             .expect("cave region cache write lock was poisoned");
 
-        cache
-            .entry(coord)
-            .or_insert_with(|| region.clone())
-            .clone()
+        cache.entry(coord).or_insert_with(|| region.clone()).clone()
     }
 
     pub fn region_with_hydrology(

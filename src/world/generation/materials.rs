@@ -23,6 +23,7 @@ pub(super) struct MaterialPassContext<'a> {
     pub biomes: &'a BiomeRegistry,
     pub biome_field: &'a BiomeField,
     pub region: &'a GenerationRegion,
+    pub has_volume_solid_blocks: bool,
 }
 
 pub(super) fn rasterize_material_pass(
@@ -52,7 +53,11 @@ pub(super) fn rasterize_material_pass(
                     chunk_origin.z + local_z as i32,
                 );
                 let sample_position = world_position.as_vec3() + Vec3::splat(0.5);
-                let volume = context.biome_field.sample_volume(sample_position);
+                let volume = if context.has_volume_solid_blocks {
+                    context.biome_field.sample_volume(sample_position)
+                } else {
+                    None
+                };
                 let block_id = solid_block_id(
                     sample_position,
                     &column.surface,

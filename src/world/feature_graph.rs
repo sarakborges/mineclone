@@ -11,6 +11,8 @@ pub struct FeatureEdge {
     pub to: usize,
     pub start_radius: f32,
     pub end_radius: f32,
+    minimum: Vec3,
+    maximum: Vec3,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -59,11 +61,17 @@ impl FeatureGraph {
         );
         assert!(end_radius > 0.0, "feature edge end radius must be positive");
 
+        let from_position = self.nodes[from].position;
+        let to_position = self.nodes[to].position;
+        let margin = Vec3::splat(start_radius.max(end_radius));
+
         self.edges.push(FeatureEdge {
             from,
             to,
             start_radius,
             end_radius,
+            minimum: from_position.min(to_position) - margin,
+            maximum: from_position.max(to_position) + margin,
         });
     }
 
@@ -84,6 +92,10 @@ impl FeatureGraph {
         let mut strongest: Option<FeatureGraphSample> = None;
 
         for edge in &self.edges {
+            if !edge_contains_position(edge, position) {
+                continue;
+            }
+
             let from = self.nodes[edge.from].position;
             let to = self.nodes[edge.to].position;
             let segment = to - from;
@@ -120,6 +132,14 @@ impl FeatureGraph {
         let mut strongest: Option<FeatureGraphHorizontalSample> = None;
 
         for edge in &self.edges {
+            if position.x < edge.minimum.x
+                || position.x > edge.maximum.x
+                || position.y < edge.minimum.z
+                || position.y > edge.maximum.z
+            {
+                continue;
+            }
+
             let from = self.nodes[edge.from].position;
             let to = self.nodes[edge.to].position;
             let from_horizontal = Vec2::new(from.x, from.z);
@@ -156,6 +176,15 @@ impl FeatureGraph {
 
         strongest
     }
+}
+
+fn edge_contains_position(edge: &FeatureEdge, position: Vec3) -> bool {
+    position.x >= edge.minimum.x
+        && position.x <= edge.maximum.x
+        && position.y >= edge.minimum.y
+        && position.y <= edge.maximum.y
+        && position.z >= edge.minimum.z
+        && position.z <= edge.maximum.z
 }
 
 #[cfg(test)]

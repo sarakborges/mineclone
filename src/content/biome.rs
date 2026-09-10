@@ -132,4 +132,10 @@ impl BiomeRegistry {
             definition.kind == BiomeKind::Volume && definition.density_modifier.is_some()
         })
     }
+
+    pub fn has_volume_solid_blocks(&self) -> bool {
+        self.definitions.values().any(|definition| {
+            definition.kind == BiomeKind::Volume && definition.solid_block.is_some()
+        })
+    }
 }
