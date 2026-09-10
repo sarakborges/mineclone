@@ -104,14 +104,11 @@ where
                     self.seed,
                 );
 
-                if best
-                    .as_ref()
-                    .is_none_or(|(best_cell, best_score)| {
-                        score.total_cmp(best_score).is_lt()
-                            || (score.total_cmp(best_score).is_eq()
-                                && compare_cell(candidate_cell, *best_cell).is_lt())
-                    })
-                {
+                if best.as_ref().is_none_or(|(best_cell, best_score)| {
+                    score.total_cmp(best_score).is_lt()
+                        || (score.total_cmp(best_score).is_eq()
+                            && compare_cell(candidate_cell, *best_cell).is_lt())
+                }) {
                     best = Some((candidate_cell, score));
                 }
             }
