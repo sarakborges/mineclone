@@ -4,10 +4,7 @@ use crate::{
     app::game_state::GameState,
     content::{biome::BiomeRegistry, block::BlockRegistry},
     hud::block_icon::BlockIconMaterial,
-    rendering::{
-        block_model::BlockModelInstance,
-        block_tint::block_tint_at,
-    },
+    rendering::{block_model::BlockModel, block_tint::block_tint_at},
     targeting::block::TargetedBlock,
     ui::{surface, typography},
     voxel::world::VoxelWorld,
@@ -73,7 +70,7 @@ fn spawn_target_hud(mut commands: Commands, mut icon_materials: ResMut<Assets<Bl
                     .with_children(|row| {
                         row.spawn((
                             TargetBlockModel,
-                            BlockModelInstance::empty(),
+                            BlockModel::empty_display(),
                             MaterialNode(icon_material),
                             Node {
                                 width: px(TARGET_ICON_SIZE),
@@ -94,7 +91,7 @@ fn update_target_hud(
     root_visibility: Single<&mut Visibility, With<TargetHudRoot>>,
     mut target_text: Single<&mut Text, With<TargetBlockText>>,
     mut icon: Single<
-        (&mut BlockModelInstance, &MaterialNode<BlockIconMaterial>),
+        (&mut BlockModel, &MaterialNode<BlockIconMaterial>),
         With<TargetBlockModel>,
     >,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
