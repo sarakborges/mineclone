@@ -222,11 +222,19 @@ fn sync_held_block(
     mut materials: ResMut<Assets<BlockModelMaterial>>,
     mut arms: Query<
         &mut Visibility,
-        (With<ViewModelArm>, Without<HeldBlockRoot>, Without<PlayerViewModel>),
+        (
+            With<ViewModelArm>,
+            Without<HeldBlockRoot>,
+            Without<PlayerViewModel>,
+        ),
     >,
     mut roots: Query<
         (&mut HeldBlockRoot, &mut Visibility),
-        (With<HeldBlockRoot>, Without<ViewModelArm>, Without<PlayerViewModel>),
+        (
+            With<HeldBlockRoot>,
+            Without<ViewModelArm>,
+            Without<PlayerViewModel>,
+        ),
     >,
     faces: Query<(&HeldBlockFace, &MeshMaterial3d<BlockModelMaterial>)>,
 ) {
