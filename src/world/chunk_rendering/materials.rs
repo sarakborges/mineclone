@@ -167,7 +167,10 @@ impl FluidMaterials {
                         unlit: true,
                         ..default()
                     },
-                    extension: TerrainMaterialExtension::default(),
+                    extension: TerrainMaterialExtension {
+                        fluid_animation_factor: 1.0,
+                        ..default()
+                    },
                 });
 
                 (fluid_id, material)
