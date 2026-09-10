@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bevy::prelude::*;
 
 use crate::{
@@ -13,6 +15,7 @@ const MESH_ASSET_OVERHEAD_WARNING: usize = 128;
 pub(super) fn log_render_asset_pressure(
     state: Res<State<GameState>>,
     time: Res<Time<Real>>,
+    asset_server: Res<AssetServer>,
     pool: Res<ChunkRenderPool>,
     meshes: Res<Assets<Mesh>>,
     images: Res<Assets<Image>>,
@@ -36,11 +39,28 @@ pub(super) fn log_render_asset_pressure(
     let pooled_meshes = pool.mesh_count();
     let mesh_assets = meshes.len();
     let mesh_overhead = mesh_assets.saturating_sub(pooled_meshes);
+    let mut file_images = 0;
+    let mut runtime_image_shapes = HashMap::<(u32, u32), usize>::new();
+
+    for (id, image) in images.iter() {
+        if asset_server.get_path(id).is_some() {
+            file_images += 1;
+            continue;
+        }
+
+        let size = image.texture_descriptor.size;
+        *runtime_image_shapes.entry((size.width, size.height)).or_default() += 1;
+    }
+
+    let image_assets = images.len();
+    let runtime_images = image_assets.saturating_sub(file_images);
+    let runtime_top_shape = runtime_image_shapes
+        .into_iter()
+        .max_by_key(|(_, count)| *count);
 
     info!(
-        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} mesh_assets={mesh_assets} images={} standard_materials={} terrain_materials={}",
+        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} runtime_top_shape={runtime_top_shape:?} standard_materials={} terrain_materials={}",
         state.get(),
-        images.len(),
         standard_materials.len(),
         terrain_materials.len(),
     );
