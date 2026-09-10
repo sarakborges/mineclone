@@ -83,7 +83,8 @@ fn surface_cave_entrance(
         })
         .filter_map(|anchor| {
             let horizontal = cave_entrance_horizontal(anchor, minimum, maximum, biome_field.seed());
-            let block_position = IVec2::new(horizontal.x.floor() as i32, horizontal.y.floor() as i32);
+            let block_position =
+                IVec2::new(horizontal.x.floor() as i32, horizontal.y.floor() as i32);
             let surface_y = surface_height(block_position, dimension, biomes, biome_field) as f32;
             let depth = surface_y - anchor.y;
 
@@ -93,7 +94,10 @@ fn surface_cave_entrance(
                 return None;
             }
 
-            Some((depth, Vec3::new(horizontal.x, surface_y + 0.5, horizontal.y)))
+            Some((
+                depth,
+                Vec3::new(horizontal.x, surface_y + 0.5, horizontal.y),
+            ))
         })
         .collect::<Vec<_>>();
 
