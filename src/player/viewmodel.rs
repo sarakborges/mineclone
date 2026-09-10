@@ -7,7 +7,7 @@ use crate::{
     content::{biome::BiomeRegistry, block::BlockRegistry},
     rendering::{
         block_model::{
-            block_face_material, block_face_material_data, block_face_mesh, block_faces,
+            BlockModelMeshes, block_face_material, block_face_material_data, block_faces,
         },
         block_tint::block_tint_at,
     },
@@ -85,6 +85,7 @@ fn spawn_viewmodel(
     mut commands: Commands,
     cameras: Query<(Entity, &Transform), Added<GameplayCamera>>,
     content: ViewModelContent,
+    block_meshes: Res<BlockModelMeshes>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
@@ -150,7 +151,6 @@ fn spawn_viewmodel(
                                 );
 
                                 for face in block_faces() {
-                                    let mesh = meshes.add(block_face_mesh(face));
                                     let material = block_face_material(
                                         face,
                                         block,
@@ -164,7 +164,7 @@ fn spawn_viewmodel(
 
                                     held.spawn((
                                         HeldBlockFace { face },
-                                        Mesh3d(mesh),
+                                        Mesh3d(block_meshes.for_face(face)),
                                         MeshMaterial3d(material),
                                         NotShadowCaster,
                                     ));
