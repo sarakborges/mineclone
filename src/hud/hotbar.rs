@@ -35,8 +35,7 @@ impl Plugin for HotbarHudPlugin {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_hotbar)
             .add_systems(
                 Update,
-                (update_hotbar, update_hotbar_item_tints)
-                    .run_if(in_state(GameState::Gameplay)),
+                (update_hotbar, update_hotbar_item_tints).run_if(in_state(GameState::Gameplay)),
             );
     }
 }
