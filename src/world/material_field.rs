@@ -20,7 +20,9 @@ pub(crate) fn solid_block_id(
     volume: Option<VolumeBiomeSelection>,
     context: &MaterialFieldContext<'_>,
 ) -> &'static str {
-    if let Some(block_id) = volume.and_then(|selection| context.biome_field.volume_solid_block(selection)) {
+    if let Some(block_id) =
+        volume.and_then(|selection| context.biome_field.volume_solid_block(selection))
+    {
         return intern_block_id(block_id);
     }
 
