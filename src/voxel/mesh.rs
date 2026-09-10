@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use crate::content::{block::{BlockRegistry, BlockTextureRotations}};
+use crate::content::block::{BlockRegistry, BlockTextureRotations};
 
 use self::{
     buffer::MeshBuffers,
@@ -82,7 +82,8 @@ where
                         continue;
                     }
 
-                    let texture_rotation = if face_uses_texture_rotation(block.rotate_texture, face) {
+                    let texture_rotation = if face_uses_texture_rotation(block.rotate_texture, face)
+                    {
                         cell.texture_rotation
                     } else {
                         TextureRotation::default()
