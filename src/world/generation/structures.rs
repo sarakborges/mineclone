@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::{
     content::{
         biome::BiomeRegistry,
+        biome_structure::StructurePlacementRules,
         block::BlockRegistry,
         block_id::intern_block_id,
         dimension::DimensionDefinition,
@@ -25,16 +26,27 @@ pub(super) fn rasterize_structures(
     biome_field: &BiomeField,
     structures: &StructureRegistry,
 ) {
-    for structure in structures.iter() {
-        rasterize_structure_candidates(
-            chunk,
-            chunk_origin,
-            dimension,
-            biomes,
-            blocks,
-            biome_field,
-            structure,
-        );
+    for biome in biomes.iter() {
+        for biome_structure in &biome.structures {
+            let structure = structures.get(&biome_structure.id).unwrap_or_else(|| {
+                panic!(
+                    "biome {} references missing structure: {}",
+                    biome.id, biome_structure.id
+                )
+            });
+
+            rasterize_structure_candidates(
+                chunk,
+                chunk_origin,
+                dimension,
+                biomes,
+                blocks,
+                biome_field,
+                &biome.id,
+                structure,
+                biome_structure.placement,
+            );
+        }
     }
 }
 
@@ -46,13 +58,15 @@ fn rasterize_structure_candidates(
     biomes: &BiomeRegistry,
     blocks: &BlockRegistry,
     biome_field: &BiomeField,
+    biome_id: &str,
     structure: &StructureDefinition,
+    placement: StructurePlacementRules,
 ) {
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_min = IVec2::new(chunk_origin.x, chunk_origin.z);
     let chunk_max = chunk_min + IVec2::splat(chunk_size - 1);
     let (minimum_offset, maximum_offset) = structure.horizontal_bounds();
-    let spacing = structure.placement.spacing;
+    let spacing = placement.spacing;
 
     let minimum_candidate = chunk_min - maximum_offset;
     let maximum_candidate = chunk_max - minimum_offset;
@@ -68,19 +82,14 @@ fn rasterize_structure_candidates(
     for cell_z in minimum_cell.y..=maximum_cell.y {
         for cell_x in minimum_cell.x..=maximum_cell.x {
             let cell = IVec2::new(cell_x, cell_z);
-            let Some(anchor) = candidate_anchor(biome_field.seed(), structure, cell) else {
+            let Some(anchor) =
+                candidate_anchor(biome_field.seed(), biome_id, structure, placement, cell)
+            else {
                 continue;
             };
             let surface_sample = biome_field.sample_surface(anchor.as_vec2() + Vec2::splat(0.5));
-            let biome = biomes.get(surface_sample.primary_id).unwrap_or_else(|| {
-                panic!("missing biome definition: {}", surface_sample.primary_id)
-            });
 
-            if !biome
-                .structures
-                .iter()
-                .any(|structure_id| structure_id == &structure.id)
-            {
+            if surface_sample.primary_id != biome_id {
                 continue;
             }
 
@@ -93,18 +102,20 @@ fn rasterize_structure_candidates(
 
 fn candidate_anchor(
     world_seed: u64,
+    biome_id: &str,
     structure: &StructureDefinition,
+    placement: StructurePlacementRules,
     cell: IVec2,
 ) -> Option<IVec2> {
-    let hash = placement_hash(world_seed, &structure.id, cell);
+    let hash = placement_hash(world_seed, biome_id, &structure.id, cell);
     let chance = unit_interval(hash);
-    if chance >= structure.placement.chance {
+    if chance >= placement.chance {
         return None;
     }
 
-    let spacing = structure.placement.spacing;
+    let spacing = placement.spacing;
     let center = cell * spacing + IVec2::splat(spacing / 2);
-    let jitter = structure.placement.jitter;
+    let jitter = placement.jitter;
     let jitter_x = signed_jitter(hash ^ 0x517c_c1b7_2722_0a95, jitter);
     let jitter_z = signed_jitter(hash ^ 0x6eed_0e9d_a4d9_4a4f, jitter);
 
@@ -160,8 +171,9 @@ fn rasterize_structure(
     }
 }
 
-fn placement_hash(world_seed: u64, structure_id: &str, cell: IVec2) -> u64 {
+fn placement_hash(world_seed: u64, biome_id: &str, structure_id: &str, cell: IVec2) -> u64 {
     let mut hash = world_seed ^ string_hash(structure_id);
+    hash ^= string_hash(biome_id).rotate_left(29);
     hash ^= (cell.x as i64 as u64).wrapping_mul(0x9e37_79b1_85eb_ca87);
     hash ^= (cell.y as i64 as u64).wrapping_mul(0xc2b2_ae3d_27d4_eb4f);
     avalanche(hash)
