@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::{
     app::game_state::GameState,
     content::{biome::BiomeRegistry, block::BlockRegistry},
+    hud::block_icon::BlockIconMaterial,
     player::{
         camera::GameplayCamera,
         hotbar::{HOTBAR_SLOT_COUNT, PlayerHotbar},
@@ -13,7 +14,10 @@ use crate::{
 };
 
 const SLOT_SIZE: f32 = 44.0;
-const ITEM_ICON_SIZE: f32 = 32.0;
+const ITEM_ICON_SIZE: f32 = 34.0;
+
+#[derive(Component)]
+struct HotbarHudRoot;
 
 #[derive(Component)]
 struct HotbarSlot {
@@ -45,14 +49,25 @@ fn spawn_hotbar(
     asset_server: Res<AssetServer>,
     blocks: Res<BlockRegistry>,
     hotbar: Res<PlayerHotbar>,
+    biomes: Res<BiomeRegistry>,
+    biome_field: Res<BiomeField>,
+    player: Single<&Transform, With<GameplayCamera>>,
+    existing: Query<(), With<HotbarHudRoot>>,
+    mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
+    if !existing.is_empty() {
+        return;
+    }
+
     let selected_name = hotbar
         .item_at(hotbar.selected_slot())
         .and_then(|block_id| blocks.get(block_id))
         .map_or("", |block| block.name.as_str());
+    let tint_position = Vec2::new(player.translation.x, player.translation.z);
 
     commands
         .spawn((
+            HotbarHudRoot,
             Node {
                 position_type: PositionType::Absolute,
                 left: px(0),
@@ -71,9 +86,9 @@ fn spawn_hotbar(
             root.spawn((
                 typography::hud(selected_name),
                 TextLayout::justify(Justify::Center),
-                TextShadow {
-                    offset: Vec2::new(2.0, 2.0),
-                    color: Color::srgba(0.0, 0.0, 0.0, 0.95),
+                Node {
+                    min_height: px(18),
+                    ..default()
                 },
                 HotbarItemName,
             ));
@@ -120,29 +135,24 @@ fn spawn_hotbar(
                         let block = blocks.get(block_id).unwrap_or_else(|| {
                             panic!("hotbar references missing block: {block_id}")
                         });
+                        let tint =
+                            block_tint_at(block_id, tint_position, &biome_field, &biomes);
+                        let material = icon_materials.add(BlockIconMaterial::from_block(
+                            block,
+                            &asset_server,
+                            tint,
+                        ));
 
-                        if block.textures.top.is_empty() {
-                            slot.spawn((
-                                Node {
-                                    width: px(ITEM_ICON_SIZE),
-                                    height: px(ITEM_ICON_SIZE),
-                                    ..default()
-                                },
-                                BackgroundColor(Color::WHITE),
-                                Pickable::IGNORE,
-                            ));
-                        } else {
-                            slot.spawn((
-                                HotbarItemIcon { block_id },
-                                ImageNode::new(asset_server.load(block.textures.top.clone())),
-                                Node {
-                                    width: px(ITEM_ICON_SIZE),
-                                    height: px(ITEM_ICON_SIZE),
-                                    ..default()
-                                },
-                                Pickable::IGNORE,
-                            ));
-                        }
+                        slot.spawn((
+                            HotbarItemIcon { block_id },
+                            MaterialNode(material),
+                            Node {
+                                width: px(ITEM_ICON_SIZE),
+                                height: px(ITEM_ICON_SIZE),
+                                ..default()
+                            },
+                            Pickable::IGNORE,
+                        ));
                     });
                 }
             });
@@ -180,7 +190,8 @@ fn update_hotbar(
         .map_or("", |block| block.name.as_str());
 
     if item_name.0 != selected_name {
-        item_name.0 = selected_name.to_owned();
+        item_name.0.clear();
+        item_name.0.push_str(selected_name);
     }
 }
 
@@ -188,15 +199,17 @@ fn update_hotbar_item_tints(
     player: Single<&Transform, With<GameplayCamera>>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
-    mut icons: Query<(&HotbarItemIcon, &mut ImageNode)>,
+    icons: Query<(&HotbarItemIcon, &MaterialNode<BlockIconMaterial>)>,
+    mut materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
     let position = Vec2::new(player.translation.x, player.translation.z);
 
-    for (icon, mut image) in &mut icons {
+    for (icon, material_handle) in &icons {
         let tint = block_tint_at(icon.block_id, position, &biome_field, &biomes);
+        let Some(material) = materials.get_mut(&material_handle.0) else {
+            continue;
+        };
 
-        if image.color != tint {
-            image.color = tint;
-        }
+        material.set_tint(tint);
     }
 }
