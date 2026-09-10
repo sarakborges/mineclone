@@ -28,6 +28,15 @@ impl UiMaterial for BlockIconMaterial {
 }
 
 impl BlockIconMaterial {
+    pub(crate) fn empty() -> Self {
+        Self {
+            top_texture: Handle::default(),
+            front_texture: Handle::default(),
+            right_texture: Handle::default(),
+            tint: Vec4::ONE,
+        }
+    }
+
     pub(crate) fn from_block(
         block: &BlockDefinition,
         asset_server: &AssetServer,
