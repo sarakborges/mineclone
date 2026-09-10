@@ -25,7 +25,16 @@
     "lakeChanceMultiplier": 1.0,
     "riverWidthMultiplier": 1.0
   },
-  "structures": ["asteria:oak_tree"],
+  "structures": [
+    {
+      "id": "asteria:oak_tree",
+      "placement": { "spacing": 7, "chance": 0.8, "jitter": 1 }
+    },
+    {
+      "id": "asteria:small_boulder",
+      "placement": { "spacing": 48, "chance": 0.20, "jitter": 14 }
+    }
+  ],
   "visuals": {
     "skyColor": {
       "dawn": { "r": 0.35, "g": 0.92, "b": 0.94 },
