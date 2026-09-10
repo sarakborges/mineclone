@@ -1,7 +1,7 @@
 pub(super) const HYDROLOGY_REGION_SIZE: f32 = 128.0;
 pub(super) const MACRO_SAMPLE_GRID: usize = 5;
 
-pub(super) const OCEAN_CONTINENTALNESS_THRESHOLD: f32 = 0.43;
+pub(super) const OCEAN_CONTINENTALNESS_THRESHOLD: f32 = 0.45;
 pub(super) const OCEAN_TRANSITION_WIDTH: f32 = 0.11;
 pub(super) const OCEAN_MINIMUM_DEPTH: f32 = 8.0;
 pub(super) const OCEAN_EXTRA_DEPTH: f32 = 18.0;
@@ -17,7 +17,7 @@ pub(super) const RIVER_BASIN_ESCAPE_RADIUS_CELLS: i32 = 3;
 pub(super) const RIVER_ROUTE_VARIATION: f32 = 1.15;
 pub(super) const RIVER_FLOW_SEARCH_RADIUS: i32 = 6;
 pub(super) const RIVER_FLOW_TRACE_STEPS: usize = 64;
-pub(super) const RIVER_MINIMUM_FLOW: u32 = 4;
+pub(super) const RIVER_MINIMUM_FLOW: u32 = 3;
 pub(super) const RIVER_FLOW_FOR_MAX_WIDTH: f32 = 20.0;
 pub(super) const RIVER_MINIMUM_RADIUS: f32 = 5.5;
 pub(super) const RIVER_MAXIMUM_RADIUS: f32 = 11.0;
