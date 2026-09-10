@@ -103,10 +103,15 @@ fn continentalness_reaches_ocean_range_within_exploration_scale() {
                 Vec2::new(0.0, -distance),
             ]
             .into_iter()
-            .any(|position| climate.sample(position).continentalness < OCEAN_CONTINENTALNESS_THRESHOLD)
+            .any(|position| {
+                climate.sample(position).continentalness < OCEAN_CONTINENTALNESS_THRESHOLD
+            })
         });
 
-        assert!(found, "seed {seed} has no ocean-range continentalness within 2048 blocks");
+        assert!(
+            found,
+            "seed {seed} has no ocean-range continentalness within 2048 blocks"
+        );
     }
 }
 
