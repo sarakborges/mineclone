@@ -7,8 +7,10 @@ use crate::{
     rendering::{
         block_model::{
             BlockModelMaterials, BlockModelMeshes, block_face_material_data, block_faces,
+            set_block_model_tint,
         },
-        block_tint::block_tint_with_opacity,
+        block_model_material::BlockModelMaterial,
+        block_tint::block_tint_at,
     },
     voxel::{mesh::BlockFace, world::VoxelWorld},
     world::biome_field::BiomeField,
@@ -61,7 +63,7 @@ fn spawn_placement_preview(
     asset_server: Res<AssetServer>,
     block_meshes: Res<BlockModelMeshes>,
     block_materials: Res<BlockModelMaterials>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<BlockModelMaterial>>,
     blocks: Res<BlockRegistry>,
     hotbar: Res<PlayerHotbar>,
 ) {
@@ -112,9 +114,9 @@ struct PlacementPreviewInput<'w, 's> {
 
 fn update_placement_preview(
     input: PlacementPreviewInput,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<BlockModelMaterial>>,
     mut root: PreviewRoot,
-    faces: Query<(&PlacementPreviewFace, &MeshMaterial3d<StandardMaterial>)>,
+    faces: Query<(&PlacementPreviewFace, &MeshMaterial3d<BlockModelMaterial>)>,
 ) {
     let Some(block_id) = input.hotbar.item_at(input.hotbar.selected_slot()) else {
         *root.2 = Visibility::Hidden;
@@ -149,12 +151,11 @@ fn update_placement_preview(
     };
 
     let tint_position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-    let tint = block_tint_with_opacity(
+    let tint = block_tint_at(
         block_id,
         tint_position,
         &input.biome_field,
         &input.biomes,
-        PREVIEW_OPACITY,
     );
 
     for (_, material_handle) in &faces {
@@ -162,9 +163,7 @@ fn update_placement_preview(
             continue;
         };
 
-        if material.base_color != tint {
-            material.base_color = tint;
-        }
+        set_block_model_tint(&mut material, tint);
     }
 
     root.1.translation = voxel.as_vec3() + Vec3::splat(0.5);
