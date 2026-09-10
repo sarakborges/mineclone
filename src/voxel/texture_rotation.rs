@@ -24,11 +24,15 @@ impl TextureRotation {
             return Self::default();
         }
 
-        let mut hash = position.x as u32;
-        hash ^= (position.y as u32).wrapping_mul(0x9e37_79b9);
-        hash = hash.rotate_left(13);
-        hash ^= (position.z as u32).wrapping_mul(0x85eb_ca6b);
-        hash ^= hash >> 16;
+        let mut hash = (position.x as i64 as u64).wrapping_mul(0x9e37_79b1_85eb_ca87);
+        hash ^= (position.y as i64 as u64).wrapping_mul(0xc2b2_ae3d_27d4_eb4f);
+        hash ^= (position.z as i64 as u64).wrapping_mul(0x1656_67b1_9e37_79f9);
+
+        hash ^= hash >> 30;
+        hash = hash.wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        hash ^= hash >> 27;
+        hash = hash.wrapping_mul(0x94d0_49bb_1331_11eb);
+        hash ^= hash >> 31;
 
         Self::from_quarter_turn((hash & 3) as u8)
     }
@@ -62,5 +66,39 @@ mod tests {
         let second = TextureRotation::for_position(position, true) as u8;
 
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn neighboring_surface_voxels_do_not_form_large_rotation_bands() {
+        const SIZE: i32 = 32;
+        let mut matching_neighbors = 0;
+        let mut neighbor_pairs = 0;
+        let mut counts = [0_usize; 4];
+
+        for z in 0..SIZE {
+            for x in 0..SIZE {
+                let position = IVec3::new(x, 64, z);
+                let rotation = TextureRotation::for_position(position, true) as usize;
+                counts[rotation] += 1;
+
+                if x + 1 < SIZE {
+                    neighbor_pairs += 1;
+                    matching_neighbors += usize::from(
+                        TextureRotation::for_position(IVec3::new(x + 1, 64, z), true) as usize
+                            == rotation,
+                    );
+                }
+                if z + 1 < SIZE {
+                    neighbor_pairs += 1;
+                    matching_neighbors += usize::from(
+                        TextureRotation::for_position(IVec3::new(x, 64, z + 1), true) as usize
+                            == rotation,
+                    );
+                }
+            }
+        }
+
+        assert!(counts.into_iter().all(|count| count > 150));
+        assert!(matching_neighbors * 100 < neighbor_pairs * 40);
     }
 }
