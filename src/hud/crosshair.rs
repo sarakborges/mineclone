@@ -68,13 +68,6 @@ fn spawn_crosshair(mut commands: Commands) {
                         ..default()
                     },
                     BackgroundColor(theme::TEXT_PRIMARY.with_alpha(0.92)),
-                    BoxShadow(vec![ShadowStyle {
-                        color: theme::CYAN_GLOW,
-                        x_offset: px(0),
-                        y_offset: px(0),
-                        spread_radius: px(0),
-                        blur_radius: px(8),
-                    }]),
                 ));
                 crosshair.spawn((
                     Node {
@@ -87,13 +80,6 @@ fn spawn_crosshair(mut commands: Commands) {
                         ..default()
                     },
                     BackgroundColor(theme::TEXT_PRIMARY.with_alpha(0.92)),
-                    BoxShadow(vec![ShadowStyle {
-                        color: theme::CYAN_GLOW,
-                        x_offset: px(0),
-                        y_offset: px(0),
-                        spread_radius: px(0),
-                        blur_radius: px(8),
-                    }]),
                 ));
             });
         });
