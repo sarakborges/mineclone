@@ -12,8 +12,43 @@ use bevy::prelude::*;
 
 use crate::content::{block::BlockRegistry, fluid::FluidRegistry};
 
-use self::{propagation::relax, queue::LightingQueue};
+use self::{propagation::{relax, relax_budgeted}, queue::LightingQueue};
 use super::{chunk::CHUNK_SIZE, world::VoxelWorld};
+
+#[derive(Resource, Default)]
+pub(crate) struct PendingLightingUpdates {
+    queue: LightingQueue,
+}
+
+impl PendingLightingUpdates {
+    pub fn enqueue_voxel_edit(&mut self, position: IVec3) {
+        self.queue.enqueue(position);
+        self.queue.enqueue_neighbors(position);
+    }
+
+    pub fn enqueue_chunk_unloads(&mut self, unloaded: &[IVec3]) {
+        let chunk_size = CHUNK_SIZE as i32;
+
+        for coord in unloaded {
+            self.queue
+                .enqueue_chunk_boundary_neighbors(*coord * chunk_size);
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.queue = LightingQueue::default();
+    }
+}
+
+pub(crate) fn process_pending_lighting(
+    world: &mut VoxelWorld,
+    pending: &mut PendingLightingUpdates,
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+    max_voxels: usize,
+) -> HashSet<IVec3> {
+    relax_budgeted(world, blocks, fluids, &mut pending.queue, max_voxels)
+}
 
 pub(crate) fn initialize_chunk_lighting(
     world: &mut VoxelWorld,
@@ -53,33 +88,4 @@ pub(crate) fn initialize_chunks_lighting(
     }
 
     drop(relax(world, blocks, fluids, &mut queue));
-}
-
-pub(crate) fn relight_after_voxel_edit(
-    world: &mut VoxelWorld,
-    position: IVec3,
-    blocks: &BlockRegistry,
-    fluids: &FluidRegistry,
-) -> HashSet<IVec3> {
-    let mut queue = LightingQueue::default();
-    queue.enqueue(position);
-    queue.enqueue_neighbors(position);
-
-    relax(world, blocks, fluids, &mut queue)
-}
-
-pub(crate) fn relight_after_chunk_unloads(
-    world: &mut VoxelWorld,
-    unloaded: &[IVec3],
-    blocks: &BlockRegistry,
-    fluids: &FluidRegistry,
-) -> HashSet<IVec3> {
-    let mut queue = LightingQueue::default();
-    let chunk_size = CHUNK_SIZE as i32;
-
-    for coord in unloaded {
-        queue.enqueue_chunk_boundary_neighbors(*coord * chunk_size);
-    }
-
-    relax(world, blocks, fluids, &mut queue)
 }
