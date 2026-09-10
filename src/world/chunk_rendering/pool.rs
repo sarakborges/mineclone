@@ -5,6 +5,7 @@ use bevy::prelude::*;
 struct ChunkRenderSlot {
     entities: Vec<Entity>,
     meshes: Vec<Handle<Mesh>>,
+    mesh_bytes: usize,
 }
 
 #[derive(Resource, Default)]
@@ -29,6 +30,10 @@ impl ChunkRenderPool {
         self.active.values().map(|slot| slot.meshes.len()).sum()
     }
 
+    pub(crate) fn mesh_bytes(&self) -> usize {
+        self.active.values().map(|slot| slot.mesh_bytes).sum()
+    }
+
     pub fn take(&mut self, coord: IVec3) -> Option<(Vec<Entity>, Vec<Handle<Mesh>>)> {
         self.active
             .remove(&coord)
@@ -40,9 +45,16 @@ impl ChunkRenderPool {
         coord: IVec3,
         entities: Vec<Entity>,
         meshes: Vec<Handle<Mesh>>,
+        mesh_bytes: usize,
     ) {
-        self.active
-            .insert(coord, ChunkRenderSlot { entities, meshes });
+        self.active.insert(
+            coord,
+            ChunkRenderSlot {
+                entities,
+                meshes,
+                mesh_bytes,
+            },
+        );
     }
 
     fn clear(&mut self, meshes: &mut Assets<Mesh>) {
