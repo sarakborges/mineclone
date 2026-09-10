@@ -32,9 +32,7 @@ pub fn unload_chunk_meshes(
     let mut to_unload = renderer
         .pool
         .active_coords()
-        .filter(|coord| {
-            !chunk_is_in_volume(center, *coord, horizontal_radius, vertical_radius)
-        })
+        .filter(|coord| !chunk_is_in_volume(center, *coord, horizontal_radius, vertical_radius))
         .collect::<Vec<_>>();
 
     to_unload.sort_by_key(|coord| -(*coord - center).length_squared());

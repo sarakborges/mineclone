@@ -49,12 +49,10 @@ fn base_cave_strength(base_density: f32, position: Vec3, seed: u64) -> f32 {
         return 0.0;
     }
 
-    let depth_mask = smoothstep(
-        ((base_density - CAVE_SURFACE_CLEARANCE) / CAVE_SURFACE_FADE).clamp(0.0, 1.0),
-    );
-    let floor_mask = smoothstep(
-        ((position.y - CAVE_FLOOR_CLEARANCE) / CAVE_FLOOR_FADE).clamp(0.0, 1.0),
-    );
+    let depth_mask =
+        smoothstep(((base_density - CAVE_SURFACE_CLEARANCE) / CAVE_SURFACE_FADE).clamp(0.0, 1.0));
+    let floor_mask =
+        smoothstep(((position.y - CAVE_FLOOR_CLEARANCE) / CAVE_FLOOR_FADE).clamp(0.0, 1.0));
     let tunnel_a = value_noise_3d(
         position * Vec3::new(0.028, 0.036, 0.028),
         mix_seed(seed ^ 0x243f_6a88_85a3_08d3),
@@ -66,16 +64,14 @@ fn base_cave_strength(base_density: f32, position: Vec3, seed: u64) -> f32 {
     )
     .abs();
     let tunnel_distance = tunnel_a.max(tunnel_b);
-    let tunnel = smoothstep(
-        ((CAVE_TUNNEL_THRESHOLD - tunnel_distance) / CAVE_TUNNEL_EDGE).clamp(0.0, 1.0),
-    );
+    let tunnel =
+        smoothstep(((CAVE_TUNNEL_THRESHOLD - tunnel_distance) / CAVE_TUNNEL_EDGE).clamp(0.0, 1.0));
     let chamber_noise = value_noise_3d(
         position * Vec3::splat(0.017),
         mix_seed(seed ^ 0xa409_3822_299f_31d0),
     );
-    let chamber = smoothstep(
-        ((chamber_noise - CAVE_CHAMBER_THRESHOLD) / CAVE_CHAMBER_EDGE).clamp(0.0, 1.0),
-    );
+    let chamber =
+        smoothstep(((chamber_noise - CAVE_CHAMBER_THRESHOLD) / CAVE_CHAMBER_EDGE).clamp(0.0, 1.0));
 
     tunnel.max(chamber) * depth_mask * floor_mask
 }
@@ -243,7 +239,10 @@ mod tests {
 
     #[test]
     fn base_caves_preserve_a_surface_cap() {
-        assert_eq!(base_cave_strength(2.0, Vec3::new(10.0, 80.0, 10.0), 42), 0.0);
+        assert_eq!(
+            base_cave_strength(2.0, Vec3::new(10.0, 80.0, 10.0), 42),
+            0.0
+        );
     }
 
     #[test]

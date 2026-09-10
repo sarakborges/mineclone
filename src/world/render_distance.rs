@@ -140,6 +140,11 @@ mod tests {
                 .iter()
                 .all(|coord| chunk_is_in_volume(center, *coord, 4, 2))
         );
-        assert!(!chunk_is_in_volume(center, center + IVec3::new(4, 2, 0), 4, 2));
+        assert!(!chunk_is_in_volume(
+            center,
+            center + IVec3::new(4, 2, 0),
+            4,
+            2
+        ));
     }
 }
