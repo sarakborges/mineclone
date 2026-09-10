@@ -1,8 +1,6 @@
 use std::f32::consts::PI;
 
-use bevy::{
-    camera::visibility::RenderLayers, ecs::system::SystemParam, light::NotShadowCaster, prelude::*,
-};
+use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
@@ -21,10 +19,8 @@ use crate::{
 
 use super::{camera::GameplayCamera, hotbar::PlayerHotbar};
 
-const ARM_SIZE: Vec3 = Vec3::new(0.24, 0.58, 0.22);
+const ARM_SIZE: Vec3 = Vec3::new(0.36, 0.60, 0.34);
 const HELD_BLOCK_SCALE: f32 = 0.16;
-const VIEW_MODEL_RENDER_LAYER: usize = 1;
-const VIEW_MODEL_FOV_DEGREES: f32 = 70.0;
 const BREAK_ANIMATION_DURATION: f32 = 0.22;
 const PLACE_ANIMATION_DURATION: f32 = 0.16;
 
@@ -136,20 +132,6 @@ fn spawn_viewmodel(
         );
 
         commands.entity(camera).with_children(|camera| {
-            camera.spawn((
-                Camera3d::default(),
-                Camera {
-                    order: 1,
-                    clear_color: ClearColorConfig::None,
-                    ..default()
-                },
-                Projection::from(PerspectiveProjection {
-                    fov: VIEW_MODEL_FOV_DEGREES.to_radians(),
-                    ..default()
-                }),
-                RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
-            ));
-
             camera
                 .spawn((
                     PlayerViewModel,
@@ -163,7 +145,6 @@ fn spawn_viewmodel(
                         MeshMaterial3d(arm_assets.material.clone()),
                         Transform::from_translation(Vec3::new(0.0, ARM_SIZE.y * 0.5, 0.0)),
                         item_visibility,
-                        RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
                         NotShadowCaster,
                     ));
 
@@ -206,7 +187,6 @@ fn spawn_viewmodel(
                                     HeldBlockFace { face },
                                     Mesh3d(block_meshes.for_face(face)),
                                     MeshMaterial3d(material),
-                                    RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
                                     NotShadowCaster,
                                 ));
                             }
@@ -337,7 +317,7 @@ fn animate_viewmodel(
 }
 
 fn base_viewmodel_transform() -> Transform {
-    Transform::from_translation(Vec3::new(0.64, -0.78, -1.12)).with_rotation(Quat::from_euler(
+    Transform::from_translation(Vec3::new(0.62, -0.80, -1.05)).with_rotation(Quat::from_euler(
         EulerRot::XYZ,
         -0.22,
         -0.10,
@@ -346,7 +326,7 @@ fn base_viewmodel_transform() -> Transform {
 }
 
 fn held_block_transform() -> Transform {
-    Transform::from_translation(Vec3::new(-0.015, ARM_SIZE.y + 0.06, 0.20))
+    Transform::from_translation(Vec3::new(-0.02, ARM_SIZE.y + 0.05, 0.24))
         .with_rotation(Quat::from_euler(EulerRot::XYZ, 0.12, -0.62, -0.06))
         .with_scale(Vec3::splat(HELD_BLOCK_SCALE))
 }
