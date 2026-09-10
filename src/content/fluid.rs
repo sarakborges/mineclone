@@ -6,6 +6,7 @@ use serde::Deserialize;
 use super::color::Rgb;
 
 pub type FluidId = u16;
+pub const MAX_FLUID_SPREAD: u8 = 7;
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -19,6 +20,8 @@ pub struct FluidDefinition {
     pub metallic: f32,
     #[serde(default)]
     pub light_dampening: u8,
+    pub spread_speed: f32,
+    pub max_spread: u8,
 }
 
 #[derive(Resource, Default)]
@@ -52,6 +55,16 @@ impl FluidRegistry {
         assert!(
             definition.light_dampening <= 15,
             "fluid {} light dampening must be between 0 and 15",
+            definition.id
+        );
+        assert!(
+            definition.spread_speed.is_finite() && definition.spread_speed >= 0.0,
+            "fluid {} spread speed must be finite and non-negative",
+            definition.id
+        );
+        assert!(
+            definition.max_spread <= MAX_FLUID_SPREAD,
+            "fluid {} max spread must be between 0 and {MAX_FLUID_SPREAD}",
             definition.id
         );
 
