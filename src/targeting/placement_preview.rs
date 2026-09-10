@@ -100,7 +100,7 @@ fn spawn_placement_preview(
 
                 preview.spawn((
                     PlacementPreviewFace { face },
-                    Mesh3d(block_meshes.for_face(face)),
+                    Mesh3d(block_meshes.world_face(face)),
                     MeshMaterial3d(material),
                     NotShadowCaster,
                 ));
