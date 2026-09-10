@@ -35,14 +35,7 @@ pub fn sample_density(
         }
     }
 
-    density
-        + volume_biome_density_delta(
-            density,
-            position,
-            volume,
-            biome_field,
-            cave_depth_strength,
-        )
+    density + volume_biome_density_delta(density, position, volume, biome_field, cave_depth_strength)
 }
 
 fn cave_depth_strength(base_density: f32) -> f32 {
@@ -204,10 +197,7 @@ mod tests {
         assert_eq!(cave_depth_strength(0.0), 0.0);
         assert_eq!(cave_depth_strength(CAVE_MINIMUM_SURFACE_DEPTH), 0.0);
         assert!(cave_depth_strength(16.0) > 0.0);
-        assert_eq!(
-            cave_depth_strength(CAVE_FULL_STRENGTH_SURFACE_DEPTH),
-            1.0
-        );
+        assert_eq!(cave_depth_strength(CAVE_FULL_STRENGTH_SURFACE_DEPTH), 1.0);
     }
 
     #[test]
