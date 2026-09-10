@@ -14,10 +14,15 @@ pub struct WaterBody {
 }
 
 impl WaterBody {
-    pub fn horizontal_strength(&self, position: Vec2) -> f32 {
+    pub fn normalized_horizontal_distance(&self, position: Vec2) -> f32 {
         let delta = position - self.center;
         let normalized = Vec2::new(delta.x / self.radius.x, delta.y / self.radius.y);
-        let distance = normalized.length();
+
+        normalized.length()
+    }
+
+    pub fn horizontal_strength(&self, position: Vec2) -> f32 {
+        let distance = self.normalized_horizontal_distance(position);
 
         smoothstep(1.0 - distance.clamp(0.0, 1.0))
     }
