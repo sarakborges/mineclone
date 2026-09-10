@@ -8,7 +8,8 @@ use crate::{
 use super::{
     collision::{Axis, move_axis},
     config::{
-        SWIM_ASCEND_SPEED, SWIM_BUOYANCY_SPEED, SWIM_DESCEND_SPEED, SWIM_VERTICAL_ACCELERATION,
+        JUMP_SPEED, SWIM_ASCEND_SPEED, SWIM_BUOYANCY_SPEED, SWIM_DESCEND_SPEED,
+        SWIM_EXIT_SURFACE_MARGIN, SWIM_VERTICAL_ACCELERATION,
     },
     flight::FlightState,
     gravity::GravityState,
@@ -43,7 +44,11 @@ pub(super) fn swim_vertical(
     gravity.grounded = false;
 
     let target_velocity = if keys.pressed(KeyCode::Space) {
-        SWIM_ASCEND_SPEED
+        if player_near_fluid_surface(transform.translation, &world) {
+            JUMP_SPEED
+        } else {
+            SWIM_ASCEND_SPEED
+        }
     } else if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
         -SWIM_DESCEND_SPEED
     } else {
@@ -63,15 +68,33 @@ pub(super) fn swim_vertical(
 }
 
 pub(super) fn player_in_fluid(eye_position: Vec3, world: &VoxelWorld) -> bool {
-    let feet_y = eye_position.y - PLAYER_EYE_HEIGHT;
-    let sample = Vec3::new(eye_position.x, feet_y + PLAYER_HEIGHT * 0.5, eye_position.z);
-    let voxel = sample.floor().as_ivec3();
-    let Some(fluid) = world.fluid_at(voxel) else {
-        return false;
-    };
-    let surface_y = voxel.y as f32 + fluid.height();
+    player_fluid_surface(eye_position, world).is_some_and(|surface_y| {
+        player_fluid_sample_y(eye_position) < surface_y
+    })
+}
 
-    sample.y < surface_y
+fn player_near_fluid_surface(eye_position: Vec3, world: &VoxelWorld) -> bool {
+    let sample_y = player_fluid_sample_y(eye_position);
+
+    player_fluid_surface(eye_position, world).is_some_and(|surface_y| {
+        let depth = surface_y - sample_y;
+        depth > 0.0 && depth <= SWIM_EXIT_SURFACE_MARGIN
+    })
+}
+
+fn player_fluid_surface(eye_position: Vec3, world: &VoxelWorld) -> Option<f32> {
+    let sample_y = player_fluid_sample_y(eye_position);
+    let voxel = Vec3::new(eye_position.x, sample_y, eye_position.z)
+        .floor()
+        .as_ivec3();
+    let fluid = world.fluid_at(voxel)?;
+
+    Some(voxel.y as f32 + fluid.height())
+}
+
+fn player_fluid_sample_y(eye_position: Vec3) -> f32 {
+    let feet_y = eye_position.y - PLAYER_EYE_HEIGHT;
+    feet_y + PLAYER_HEIGHT * 0.5
 }
 
 fn approach(current: f32, target: f32, max_delta: f32) -> f32 {
