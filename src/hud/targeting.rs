@@ -126,7 +126,7 @@ fn update_target_hud(
     }
 
     let (icon_state, material_handle) = &mut *icon;
-    let Some(material) = icon_materials.get_mut(&material_handle.0) else {
+    let Some(mut material) = icon_materials.get_mut(&material_handle.0) else {
         return;
     };
 
