@@ -192,6 +192,8 @@ fn fragment(
         );
     }
 
+    var material_rgb = base_rgb * pbr_bindings::material.base_color.rgb;
+
 #ifndef PREPASS_PIPELINE
     let fluid_animation = clamp(
         terrain_material_extension.fluid_animation_factor,
@@ -229,8 +231,8 @@ fn fragment(
         moving_wave * 0.050
         + (ripple_a * 0.018 + ripple_b * 0.014 + fine_wave * 0.010) * fluid_animation;
 
-    base_rgb = clamp(
-        base_rgb * (1.0 + fluid_variation)
+    material_rgb = clamp(
+        material_rgb * (1.0 + fluid_variation)
             + vec3<f32>(0.018, 0.028, 0.042) * ripple_ridge,
         vec3<f32>(0.0),
         vec3<f32>(1.0),
@@ -239,7 +241,7 @@ fn fragment(
 
     let lighting_multiplier = vec3<f32>(local_light) + dynamic_light;
     pbr_input.material.base_color = vec4<f32>(
-        base_rgb * lighting_multiplier * pbr_bindings::material.base_color.rgb,
+        material_rgb * lighting_multiplier,
         texel.a * pbr_bindings::material.base_color.a,
     );
     pbr_input.material.base_color = alpha_discard(
