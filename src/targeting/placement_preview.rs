@@ -5,9 +5,7 @@ use crate::{
     content::{biome::BiomeRegistry, block::BlockRegistry, builtin_ids::GRASS_BLOCK_ID},
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::{
-        block_model::{
-            block_face_material, block_face_material_data, block_face_mesh, block_faces,
-        },
+        block_model::{BlockModelMeshes, block_face_material, block_face_material_data, block_faces},
         block_tint::block_tint_with_opacity,
     },
     voxel::{mesh::BlockFace, world::VoxelWorld},
@@ -59,7 +57,7 @@ impl Plugin for PlacementPreviewPlugin {
 fn spawn_placement_preview(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    mut meshes: ResMut<Assets<Mesh>>,
+    block_meshes: Res<BlockModelMeshes>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     blocks: Res<BlockRegistry>,
     hotbar: Res<PlayerHotbar>,
@@ -82,7 +80,7 @@ fn spawn_placement_preview(
             for face in block_faces() {
                 preview.spawn((
                     PlacementPreviewFace { face },
-                    Mesh3d(meshes.add(block_face_mesh(face))),
+                    Mesh3d(block_meshes.for_face(face)),
                     MeshMaterial3d(block_face_material(
                         face,
                         block,
