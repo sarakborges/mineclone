@@ -216,8 +216,7 @@ fn sync_held_block(
             };
 
             if block_changed {
-                *material =
-                    block_face_material_data(face.face, block, &content.asset_server, 1.0);
+                *material = block_face_material_data(face.face, block, &content.asset_server, 1.0);
             }
 
             if material.base_color != tint {
