@@ -8,6 +8,7 @@ use bevy::prelude::*;
 use crate::content::dimension_hydrology::DimensionHydrology;
 
 use super::{
+    biome_field::VolumeBiomeRegion,
     cave_connectivity::{CaveConnectivityField, CaveConnectivityRegion},
     generation_region::GenerationRegion,
     geology::GeologyField,
@@ -20,6 +21,7 @@ pub struct WorldFeatureFields {
     cave_connectivity: CaveConnectivityField,
     geology: GeologyField,
     hydrology_cache: RwLock<HashMap<IVec2, Arc<HydrologyRegion>>>,
+    volume_biome_cache: RwLock<HashMap<IVec3, Arc<VolumeBiomeRegion>>>,
     cave_cache: RwLock<HashMap<IVec3, Option<Arc<CaveConnectivityRegion>>>>,
     region_cache: RwLock<HashMap<IVec3, Arc<GenerationRegion>>>,
 }
@@ -31,6 +33,7 @@ impl WorldFeatureFields {
             cave_connectivity: CaveConnectivityField::new(seed.rotate_left(23)),
             geology: GeologyField::new(seed.rotate_left(41)),
             hydrology_cache: RwLock::new(HashMap::new()),
+            volume_biome_cache: RwLock::new(HashMap::new()),
             cave_cache: RwLock::new(HashMap::new()),
             region_cache: RwLock::new(HashMap::new()),
         }
@@ -38,6 +41,30 @@ impl WorldFeatureFields {
 
     pub fn hydrology(&self) -> &HydrologyField {
         &self.hydrology
+    }
+
+    pub(crate) fn volume_biome_region(
+        &self,
+        coord: IVec3,
+        factory: impl FnOnce() -> VolumeBiomeRegion,
+    ) -> Arc<VolumeBiomeRegion> {
+        if let Some(cached) = self
+            .volume_biome_cache
+            .read()
+            .expect("volume biome cache read lock was poisoned")
+            .get(&coord)
+            .cloned()
+        {
+            return cached;
+        }
+
+        let region = Arc::new(factory());
+        let mut cache = self
+            .volume_biome_cache
+            .write()
+            .expect("volume biome cache write lock was poisoned");
+
+        cache.entry(coord).or_insert_with(|| region.clone()).clone()
     }
 
     pub fn cave_region(
@@ -130,6 +157,14 @@ impl WorldFeatureFields {
     }
 
     #[cfg(test)]
+    fn cached_volume_biome_region_count(&self) -> usize {
+        self.volume_biome_cache
+            .read()
+            .expect("volume biome cache read lock was poisoned")
+            .len()
+    }
+
+    #[cfg(test)]
     fn cached_cave_region_count(&self) -> usize {
         self.cave_cache
             .read()
@@ -167,6 +202,19 @@ mod tests {
         assert!(Arc::ptr_eq(&first.hydrology, &vertical.hydrology));
         assert_eq!(fields.cached_region_count(), 2);
         assert_eq!(fields.cached_hydrology_region_count(), 1);
+    }
+
+    #[test]
+    fn volume_biome_cache_reuses_the_same_generation_region_result() {
+        let fields = WorldFeatureFields::new(42, 64, DimensionHydrology::default());
+        let coord = IVec3::new(1, 2, 3);
+        let first = fields.volume_biome_region(coord, VolumeBiomeRegion::default);
+        let second = fields.volume_biome_region(coord, || {
+            panic!("cached volume biome region should not rebuild")
+        });
+
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(fields.cached_volume_biome_region_count(), 1);
     }
 
     #[test]

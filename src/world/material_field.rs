@@ -1,7 +1,7 @@
 use crate::content::{biome::BiomeRegistry, block_id::intern_block_id};
 
 use super::{
-    biome_field::{BiomeFieldSample, VolumeBiomeFieldSample},
+    biome_field::{BiomeField, BiomeFieldSample, VolumeBiomeSelection},
     geology::GeologyRegion,
     hydrology::HydrologyRegion,
 };
@@ -9,21 +9,14 @@ use super::{
 pub(crate) fn solid_block_id(
     position: bevy::prelude::Vec3,
     surface: &BiomeFieldSample<'_>,
-    volume: Option<&VolumeBiomeFieldSample<'_>>,
+    volume: Option<VolumeBiomeSelection>,
+    biome_field: &BiomeField,
     geology: &GeologyRegion,
     hydrology: &HydrologyRegion,
     biomes: &BiomeRegistry,
     fallback: &'static str,
 ) -> &'static str {
-    if let Some(block_id) = volume.and_then(|volume| {
-        strongest_material(
-            volume
-                .influences
-                .iter()
-                .map(|influence| (influence.id, influence.weight)),
-            biomes,
-        )
-    }) {
+    if let Some(block_id) = volume.and_then(|selection| biome_field.volume_solid_block(selection)) {
         return intern_block_id(block_id);
     }
 

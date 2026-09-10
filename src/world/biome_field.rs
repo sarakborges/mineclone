@@ -9,10 +9,12 @@ use bevy::prelude::*;
 
 use crate::content::{
     biome::{BiomeClimate, BiomeKind, BiomeRegistry, BiomeSize, BiomeVerticalRange},
+    biome_density::BiomeDensityModifier,
     dimension::DimensionDefinition,
 };
 
 use self::{constants::VOLUME_SITE_GAP, spatial::surface_minimum_spacing};
+pub(crate) use self::volume::{VolumeBiomeRegion, VolumeBiomeSelection};
 use super::macro_climate::{MacroClimateField, MacroClimateSample};
 
 #[derive(Clone)]
@@ -22,6 +24,9 @@ pub(super) struct BiomeFieldEntry {
     pub climate: BiomeClimate,
     pub vertical_range: Option<BiomeVerticalRange>,
     pub priority: i32,
+    pub density_modifier: Option<BiomeDensityModifier>,
+    pub solid_block: Option<String>,
+    pub density_seed: u64,
 }
 
 #[derive(Resource)]
@@ -47,7 +52,6 @@ pub struct BiomeFieldSample<'a> {
 
 pub struct VolumeBiomeFieldSample<'a> {
     pub primary_id: &'a str,
-    pub influences: Vec<BiomeInfluence<'a>>,
     pub strength: f32,
 }
 
@@ -84,6 +88,9 @@ impl BiomeField {
                 climate: biome.climate,
                 vertical_range: biome.vertical_range,
                 priority: biome.priority,
+                density_modifier: biome.density_modifier,
+                solid_block: biome.solid_block.clone(),
+                density_seed: biome_density_seed(seed, &biome.id),
             };
 
             match biome.kind {
@@ -133,4 +140,21 @@ impl BiomeField {
     pub(crate) fn climate_at(&self, position: Vec2) -> MacroClimateSample {
         self.climate.sample(position)
     }
+}
+
+fn biome_density_seed(seed: u64, biome_id: &str) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+
+    for byte in biome_id.bytes() {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+
+    let mut mixed = seed ^ hash;
+    mixed ^= mixed >> 33;
+    mixed = mixed.wrapping_mul(0xff51_afd7_ed55_8ccd);
+    mixed ^= mixed >> 33;
+    mixed = mixed.wrapping_mul(0xc4ce_b9fe_1a85_ec53);
+    mixed ^= mixed >> 33;
+    mixed
 }

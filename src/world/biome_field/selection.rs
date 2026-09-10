@@ -42,36 +42,6 @@ pub(super) fn select_volume_biome_index(
     })
 }
 
-pub(super) fn select_tied_volume_index(
-    indices: &[usize],
-    source_hashes: &[Option<u64>],
-    seed: u64,
-) -> Option<usize> {
-    if indices.is_empty() {
-        return None;
-    }
-
-    if indices.len() == 1 {
-        return Some(indices[0]);
-    }
-
-    let mut candidates = indices
-        .iter()
-        .map(|index| (*index, source_hashes[*index].unwrap_or_default()))
-        .collect::<Vec<_>>();
-    candidates.sort_by_key(|(_, source_hash)| *source_hash);
-
-    let mut hash = seed ^ 0x6a09_e667_f3bc_c909;
-    for (_, source_hash) in &candidates {
-        hash ^= source_hash.wrapping_mul(0x9e37_79b1_85eb_ca87);
-        hash ^= hash >> 33;
-        hash = hash.wrapping_mul(0xff51_afd7_ed55_8ccd);
-        hash ^= hash >> 33;
-    }
-
-    Some(candidates[hash as usize % candidates.len()].0)
-}
-
 fn select_weighted_biome_index(
     biomes: &[BiomeFieldEntry],
     climate: MacroClimateSample,
@@ -159,7 +129,6 @@ fn vertical_range_contains(range: Option<BiomeVerticalRange>, y: f32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::content::biome::{BiomeSize, BiomeSizeAxis};
 
     #[test]
     fn vertical_ranges_never_include_negative_world_y() {
@@ -171,57 +140,5 @@ mod tests {
             }),
             -1.0,
         ));
-    }
-
-    #[test]
-    fn higher_priority_volume_wins_before_random_tiebreak() {
-        let size = BiomeSize {
-            x: BiomeSizeAxis { min: 1.0, max: 1.0 },
-            y: Some(BiomeSizeAxis { min: 1.0, max: 1.0 }),
-            z: BiomeSizeAxis { min: 1.0, max: 1.0 },
-        };
-        let biomes = [
-            BiomeFieldEntry {
-                id: "low".into(),
-                size,
-                climate: BiomeClimate::default(),
-                vertical_range: None,
-                priority: 0,
-            },
-            BiomeFieldEntry {
-                id: "high".into(),
-                size,
-                climate: BiomeClimate::default(),
-                vertical_range: None,
-                priority: 5,
-            },
-        ];
-        let weights = [0.9_f32, 0.4_f32];
-        let winning_priority = weights
-            .iter()
-            .enumerate()
-            .filter_map(|(index, weight)| (*weight > 0.0).then_some(biomes[index].priority))
-            .max()
-            .unwrap();
-        let tied = weights
-            .iter()
-            .enumerate()
-            .filter_map(|(index, weight)| {
-                (*weight > 0.0 && biomes[index].priority == winning_priority).then_some(index)
-            })
-            .collect::<Vec<_>>();
-
-        assert_eq!(tied, vec![1]);
-    }
-
-    #[test]
-    fn equal_priority_volume_tiebreak_is_seeded_and_deterministic() {
-        let tied = [0_usize, 1, 2];
-        let source_hashes = [Some(11_u64), Some(29_u64), Some(47_u64)];
-        let first = select_tied_volume_index(&tied, &source_hashes, 12345).unwrap();
-        let second = select_tied_volume_index(&tied, &source_hashes, 12345).unwrap();
-
-        assert_eq!(first, second);
-        assert!(tied.contains(&first));
     }
 }

@@ -1,9 +1,10 @@
 use bevy::prelude::*;
 
-use crate::content::{biome::BiomeRegistry, biome_density::BiomeDensityModifier};
+use crate::content::biome_density::BiomeDensityModifier;
 
 use super::{
-    biome_field::BiomeField, cave_connectivity::CaveConnectivityRegion,
+    biome_field::{BiomeField, VolumeBiomeSelection},
+    cave_connectivity::CaveConnectivityRegion,
     generation_region::GenerationRegion,
 };
 
@@ -15,7 +16,7 @@ pub fn sample_density(
     position: Vec3,
     region: &GenerationRegion,
     anchored_caves: Option<&CaveConnectivityRegion>,
-    biomes: &BiomeRegistry,
+    volume: Option<VolumeBiomeSelection>,
     biome_field: &BiomeField,
 ) -> f32 {
     let hydrology_delta = region.hydrology.density_delta(position);
@@ -29,7 +30,7 @@ pub fn sample_density(
         density += carve_density_delta(density, connector, CAVE_CONNECTOR_AIR_MARGIN);
     }
 
-    density + volume_biome_density_delta(density, position, biomes, biome_field)
+    density + volume_biome_density_delta(density, position, volume, biome_field)
 }
 
 fn carve_density_delta(density: f32, strength: f32, air_margin: f32) -> f32 {
@@ -43,30 +44,17 @@ fn carve_density_delta(density: f32, strength: f32, air_margin: f32) -> f32 {
 fn volume_biome_density_delta(
     current_density: f32,
     position: Vec3,
-    biomes: &BiomeRegistry,
+    volume: Option<VolumeBiomeSelection>,
     biome_field: &BiomeField,
 ) -> f32 {
-    let Some(volume) = biome_field.sample_volume(position) else {
+    let Some(selection) = volume else {
+        return 0.0;
+    };
+    let Some((modifier, seed)) = biome_field.volume_density_modifier(selection) else {
         return 0.0;
     };
 
-    volume
-        .influences
-        .iter()
-        .filter_map(|influence| {
-            let biome = biomes
-                .get(influence.id)
-                .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
-            let modifier = biome.density_modifier?;
-            let seed = mix_seed(biome_field.seed() ^ string_hash(&biome.id));
-
-            Some(
-                density_modifier_delta(modifier, current_density, position, seed)
-                    * influence.weight
-                    * volume.strength,
-            )
-        })
-        .sum()
+    density_modifier_delta(modifier, current_density, position, seed) * selection.strength
 }
 
 fn density_modifier_delta(
@@ -151,26 +139,6 @@ fn lattice_noise_3d(x: i32, y: i32, z: i32, seed: u64) -> f32 {
     let normalized = (hash & 0xffff) as f32 / u16::MAX as f32;
 
     normalized * 2.0 - 1.0
-}
-
-fn string_hash(value: &str) -> u64 {
-    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-
-    for byte in value.bytes() {
-        hash ^= byte as u64;
-        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-
-    hash
-}
-
-fn mix_seed(mut seed: u64) -> u64 {
-    seed ^= seed >> 33;
-    seed = seed.wrapping_mul(0xff51_afd7_ed55_8ccd);
-    seed ^= seed >> 33;
-    seed = seed.wrapping_mul(0xc4ce_b9fe_1a85_ec53);
-    seed ^= seed >> 33;
-    seed
 }
 
 fn smoothstep(value: f32) -> f32 {

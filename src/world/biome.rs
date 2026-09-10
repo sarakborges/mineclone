@@ -2,10 +2,18 @@ mod identity;
 
 use bevy::prelude::*;
 
-use crate::{content::builtin_ids::PLAINS_BIOME_ID, player::camera::GameplayCamera};
+use crate::{
+    content::builtin_ids::PLAINS_BIOME_ID,
+    player::camera::GameplayCamera,
+    voxel::coordinates::split_dimension_position,
+};
 
 use self::identity::{replace_influences, resolve_final_identity, resolve_surface_identity};
-use super::{biome_field::BiomeField, world_feature_fields::WorldFeatureFields};
+use super::{
+    biome_field::BiomeField,
+    generation_region::{generation_region_coord, generation_region_world_bounds},
+    world_feature_fields::WorldFeatureFields,
+};
 
 pub const DEFAULT_BIOME_ID: &str = PLAINS_BIOME_ID;
 
@@ -62,7 +70,16 @@ pub fn track_current_biome(
     let position = player.translation;
     let horizontal = Vec2::new(position.x, position.z);
     let surface = biome_field.sample_surface(horizontal);
-    let volume = biome_field.sample_volume(position);
+    let volume = feature_fields.as_ref().and_then(|fields| {
+        let chunk_coord = split_dimension_position(position).chunk;
+        let region_coord = generation_region_coord(chunk_coord);
+        let volume_region = fields.volume_biome_region(region_coord, || {
+            let (minimum, maximum) = generation_region_world_bounds(region_coord);
+            biome_field.volume_region_in_bounds(minimum, maximum)
+        });
+
+        biome_field.sample_volume_in_region(position, volume_region.as_ref())
+    });
     let hydrology = feature_fields.as_ref().map(|fields| {
         let continentalness = biome_field.climate_at(horizontal).continentalness;
         fields.hydrology().biome_overlay(continentalness)
@@ -77,7 +94,11 @@ pub fn track_current_biome(
     if let Some(volume) = volume {
         current_biome.volume_id = Some(volume.primary_id.to_owned());
         current_biome.volume_strength = volume.strength;
-        replace_influences(&mut current_biome.volume_influences, &volume.influences);
+        current_biome.volume_influences.clear();
+        current_biome.volume_influences.push(CurrentBiomeInfluence {
+            id: volume.primary_id.to_owned(),
+            weight: 1.0,
+        });
         resolve_final_identity(
             &mut current_biome,
             resolved_surface.influences,

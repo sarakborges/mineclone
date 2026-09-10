@@ -27,7 +27,7 @@ use self::{
 use super::{
     biome_field::BiomeField,
     generation_pipeline::{GENERATION_STAGE_ORDER, GenerationStage},
-    generation_region::generation_region_coord,
+    generation_region::{generation_region_coord, generation_region_world_bounds},
     hydrology::HydrologySurfaceSample,
     terrain::{chunk_y_bounds, surface_height_from_sample},
     world_feature_fields::WorldFeatureFields,
@@ -92,6 +92,10 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
                 },
             )
         });
+    let volume_region = context.feature_fields.volume_biome_region(region_coord, || {
+        let (minimum, maximum) = generation_region_world_bounds(region_coord);
+        context.biome_field.volume_region_in_bounds(minimum, maximum)
+    });
     let anchored_caves = anchored_cave_region(
         region.as_ref(),
         context.biome_field,
@@ -108,8 +112,8 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         chunk_origin,
         &columns,
         region.as_ref(),
+        volume_region.as_ref(),
         anchored_caves.as_deref(),
-        context.biomes,
         context.biome_field,
     );
     let mut chunk = VoxelChunk::empty();
@@ -118,7 +122,6 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         biomes: context.biomes,
         biome_field: context.biome_field,
         region: region.as_ref(),
-        has_volume_solid_blocks: context.biomes.has_volume_solid_blocks(),
     };
 
     rasterize_material_pass(
@@ -131,7 +134,7 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
     rasterize_fluid_pass(
         &mut chunk,
         chunk_origin,
-        &density,
+        &density.values,
         context.fluids,
         region.as_ref(),
     );
