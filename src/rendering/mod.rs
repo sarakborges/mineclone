@@ -1,5 +1,6 @@
 mod asset_upload;
 pub(crate) mod block_model;
+pub(crate) mod block_model_material;
 pub(crate) mod block_tint;
 mod celestial;
 mod celestial_path;
@@ -16,6 +17,7 @@ pub(crate) mod terrain_material;
 use asset_upload::AssetUploadPlugin;
 use bevy::prelude::*;
 use block_model::setup_block_model_assets;
+use block_model_material::BlockModelMaterial;
 use celestial::CelestialPlugin;
 use directional_shadows::DirectionalShadowsPlugin;
 use dynamic_lights::DynamicLightsPlugin;
@@ -31,19 +33,22 @@ pub struct RenderingPlugin;
 
 impl Plugin for RenderingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(MaterialPlugin::<TerrainMaterial>::default())
-            .add_systems(Startup, setup_block_model_assets)
-            .add_plugins((
-                AssetUploadPlugin,
-                MeshAllocatorDiagnosticsPlugin,
-                EnvironmentPlugin,
-                LightingPlugin,
-                DirectionalShadowsPlugin,
-                DynamicLightsPlugin,
-                FogPlugin,
-                SkyPlugin,
-                SkyLayersPlugin,
-                CelestialPlugin,
-            ));
+        app.add_plugins((
+            MaterialPlugin::<TerrainMaterial>::default(),
+            MaterialPlugin::<BlockModelMaterial>::default(),
+        ))
+        .add_systems(Startup, setup_block_model_assets)
+        .add_plugins((
+            AssetUploadPlugin,
+            MeshAllocatorDiagnosticsPlugin,
+            EnvironmentPlugin,
+            LightingPlugin,
+            DirectionalShadowsPlugin,
+            DynamicLightsPlugin,
+            FogPlugin,
+            SkyPlugin,
+            SkyLayersPlugin,
+            CelestialPlugin,
+        ));
     }
 }
