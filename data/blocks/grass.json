@@ -9,7 +9,14 @@
     "front": "textures/blocks/grass/front.png",
     "back": "textures/blocks/grass/back.png"
   },
-  "rotateTexture": true,
+  "rotateTexture": {
+    "top": true,
+    "bottom": true,
+    "left": false,
+    "right": false,
+    "front": false,
+    "back": false
+  },
   "lightDampening": 15,
   "castsShadow": true
 }
