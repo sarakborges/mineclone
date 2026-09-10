@@ -83,23 +83,35 @@ const WORLD_FACES: [BlockFace; 6] = [
 
 #[derive(Resource)]
 pub(crate) struct BlockModelMeshes {
-    right: Handle<Mesh>,
-    left: Handle<Mesh>,
-    top: Handle<Mesh>,
-    bottom: Handle<Mesh>,
-    front: Handle<Mesh>,
-    back: Handle<Mesh>,
+    world_right: Handle<Mesh>,
+    world_left: Handle<Mesh>,
+    world_top: Handle<Mesh>,
+    world_bottom: Handle<Mesh>,
+    world_front: Handle<Mesh>,
+    world_back: Handle<Mesh>,
+    display_top: Handle<Mesh>,
+    display_front: Handle<Mesh>,
+    display_right: Handle<Mesh>,
 }
 
 impl BlockModelMeshes {
-    pub(crate) fn for_face(&self, face: BlockFace) -> Handle<Mesh> {
+    pub(crate) fn world_face(&self, face: BlockFace) -> Handle<Mesh> {
         match face {
-            BlockFace::Right => self.right.clone(),
-            BlockFace::Left => self.left.clone(),
-            BlockFace::Top => self.top.clone(),
-            BlockFace::Bottom => self.bottom.clone(),
-            BlockFace::Front => self.front.clone(),
-            BlockFace::Back => self.back.clone(),
+            BlockFace::Right => self.world_right.clone(),
+            BlockFace::Left => self.world_left.clone(),
+            BlockFace::Top => self.world_top.clone(),
+            BlockFace::Bottom => self.world_bottom.clone(),
+            BlockFace::Front => self.world_front.clone(),
+            BlockFace::Back => self.world_back.clone(),
+        }
+    }
+
+    pub(crate) fn display_face(&self, face: BlockFace) -> Handle<Mesh> {
+        match face {
+            BlockFace::Top => self.display_top.clone(),
+            BlockFace::Front => self.display_front.clone(),
+            BlockFace::Right => self.display_right.clone(),
+            _ => panic!("{face:?} is not part of the display block model"),
         }
     }
 }
@@ -159,12 +171,15 @@ pub(crate) fn setup_block_model_assets(
     mut materials: ResMut<Assets<BlockModelMaterial>>,
 ) {
     commands.insert_resource(BlockModelMeshes {
-        right: meshes.add(block_face_mesh(BlockFace::Right)),
-        left: meshes.add(block_face_mesh(BlockFace::Left)),
-        top: meshes.add(block_face_mesh(BlockFace::Top)),
-        bottom: meshes.add(block_face_mesh(BlockFace::Bottom)),
-        front: meshes.add(block_face_mesh(BlockFace::Front)),
-        back: meshes.add(block_face_mesh(BlockFace::Back)),
+        world_right: meshes.add(block_face_mesh(BlockFace::Right)),
+        world_left: meshes.add(block_face_mesh(BlockFace::Left)),
+        world_top: meshes.add(block_face_mesh(BlockFace::Top)),
+        world_bottom: meshes.add(block_face_mesh(BlockFace::Bottom)),
+        world_front: meshes.add(block_face_mesh(BlockFace::Front)),
+        world_back: meshes.add(block_face_mesh(BlockFace::Back)),
+        display_top: meshes.add(block_display_face_mesh(BlockFace::Top)),
+        display_front: meshes.add(block_display_face_mesh(BlockFace::Front)),
+        display_right: meshes.add(block_display_face_mesh(BlockFace::Right)),
     });
     commands.insert_resource(BlockModelMaterials {
         held: BlockFaceMaterialHandles::new(&mut materials, 1.0),
@@ -179,15 +194,6 @@ pub(crate) fn block_display_face_shade(face: BlockFace) -> f32 {
         BlockFace::Right => 0.74,
         _ => 1.0,
     }
-}
-
-pub(crate) fn block_display_isometric_rotation() -> Quat {
-    Quat::from_euler(
-        EulerRot::XYZ,
-        35.264_39_f32.to_radians(),
-        -45.0_f32.to_radians(),
-        0.0,
-    )
 }
 
 pub(crate) fn block_face_texture(face: BlockFace, block: &BlockDefinition) -> Option<&str> {
@@ -223,6 +229,8 @@ pub(crate) fn block_face_material_data(
                 AlphaMode::Opaque
             },
             unlit: true,
+            double_sided: true,
+            cull_mode: None,
             ..default()
         },
         extension: BlockModelMaterialExtension::default(),
@@ -255,10 +263,61 @@ fn block_model_placeholder_material(opacity: f32) -> BlockModelMaterial {
                 AlphaMode::Opaque
             },
             unlit: true,
+            double_sided: true,
+            cull_mode: None,
             ..default()
         },
         extension: BlockModelMaterialExtension::default(),
     }
+}
+
+fn display_position(point: Vec2) -> [f32; 3] {
+    [(point.x - 0.5) * 2.0, (0.5 - point.y) * 2.0, 0.0]
+}
+
+fn block_display_face_mesh(face: BlockFace) -> Mesh {
+    let (points, uvs) = match face {
+        BlockFace::Top => (
+            [
+                Vec2::new(0.10, 0.28),
+                Vec2::new(0.50, 0.48),
+                Vec2::new(0.90, 0.28),
+                Vec2::new(0.50, 0.08),
+            ],
+            [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
+        ),
+        BlockFace::Front => (
+            [
+                Vec2::new(0.10, 0.28),
+                Vec2::new(0.10, 0.70),
+                Vec2::new(0.50, 0.90),
+                Vec2::new(0.50, 0.48),
+            ],
+            [[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0]],
+        ),
+        BlockFace::Right => (
+            [
+                Vec2::new(0.90, 0.28),
+                Vec2::new(0.50, 0.48),
+                Vec2::new(0.50, 0.90),
+                Vec2::new(0.90, 0.70),
+            ],
+            [[1.0, 0.0], [0.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+        ),
+        _ => panic!("{face:?} is not part of the display block model"),
+    };
+
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    )
+    .with_inserted_attribute(
+        Mesh::ATTRIBUTE_POSITION,
+        points.into_iter().map(display_position).collect::<Vec<_>>(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0, 0.0, 1.0]; 4])
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs.to_vec())
+    .with_inserted_indices(Indices::U32(vec![0, 1, 2, 0, 2, 3]))
 }
 
 pub(crate) fn block_face_mesh(face: BlockFace) -> Mesh {
