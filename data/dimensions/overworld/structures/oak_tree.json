@@ -2,11 +2,6 @@
   "id": "asteria:oak_tree",
   "name": "Oak Tree",
   "anchor": { "x": 2, "y": 0, "z": 2 },
-  "placement": {
-    "spacing": 7,
-    "chance": 0.8,
-    "jitter": 1
-  },
   "palette": {
     "G": { "block": "asteria:grass" },
     "W": { "block": "asteria:oak_wood", "orientation": "y" },
