@@ -1,17 +1,14 @@
 use bevy::prelude::*;
 
-use crate::{content::dimension_hydrology::DimensionHydrology, world::feature_graph::FeatureGraph};
+use crate::content::dimension_hydrology::DimensionHydrology;
 
 use super::{
-    constants::{
-        MACRO_SAMPLE_GRID, OCEAN_CONTINENTALNESS_THRESHOLD, RIVER_CARVE_DEPTH,
-        RIVER_MAXIMUM_RADIUS, RIVER_MINIMUM_RADIUS, RIVER_SOURCE_MARGIN_CELLS,
-    },
-    drainage::{drainage_neighbors, drainage_node, select_downstream},
-    lake::lake_for_local_basin,
-    math::{cell_hash, hash_unit, lerp, ocean_strength},
+    constants::{MACRO_SAMPLE_GRID, RIVER_CARVE_DEPTH},
+    drainage::DrainageNetwork,
+    math::ocean_strength,
     region::HydrologyRegion,
-    spatial::{edge_intersects_region, macro_sample_position, water_body_intersects_region},
+    river::build_river_system,
+    spatial::macro_sample_position,
     types::{HydrologyBiomeOverlay, HydrologyMacroSample, HydrologySurfaceSample},
 };
 
@@ -91,63 +88,20 @@ impl HydrologyField {
             }
         }
 
-        let mut river_graph = FeatureGraph::default();
-        let mut water_bodies = Vec::new();
-
-        for dz in -RIVER_SOURCE_MARGIN_CELLS..=RIVER_SOURCE_MARGIN_CELLS {
-            for dx in -RIVER_SOURCE_MARGIN_CELLS..=RIVER_SOURCE_MARGIN_CELLS {
-                let source_cell = coord + IVec2::new(dx, dz);
-                let source = drainage_node(source_cell, self.seed, &mut sample);
-                let neighbors = drainage_neighbors(source_cell, self.seed, &mut sample);
-
-                if let Some(downstream) = select_downstream(source, &neighbors) {
-                    if source.continentalness > OCEAN_CONTINENTALNESS_THRESHOLD
-                        && source.biome_hydrology.can_generate_river
-                        && downstream.biome_hydrology.can_generate_river
-                        && edge_intersects_region(coord, source.position, downstream.position)
-                    {
-                        let hash = cell_hash(source_cell, self.seed ^ 0x6a09_e667_f3bc_c909);
-                        let base_radius =
-                            lerp(RIVER_MINIMUM_RADIUS, RIVER_MAXIMUM_RADIUS, hash_unit(hash));
-                        let width_multiplier = (source.biome_hydrology.river_width_multiplier
-                            + downstream.biome_hydrology.river_width_multiplier)
-                            * 0.5;
-                        let radius = base_radius * width_multiplier;
-
-                        if radius > f32::EPSILON {
-                            let from = river_graph.add_node(Vec3::new(
-                                source.position.x,
-                                (source.elevation - 0.75).max(1.0),
-                                source.position.y,
-                            ));
-                            let to = river_graph.add_node(Vec3::new(
-                                downstream.position.x,
-                                (downstream.elevation - 0.75).max(1.0),
-                                downstream.position.y,
-                            ));
-                            river_graph.add_edge(from, to, radius, radius * 1.15);
-                        }
-                    }
-                } else if let Some(lake) = lake_for_local_basin(
-                    source_cell,
-                    source,
-                    &neighbors,
-                    self.seed,
-                    self.sea_level as f32,
-                    &self.settings.water_fluid,
-                )
-                .filter(|lake| water_body_intersects_region(coord, lake))
-                {
-                    water_bodies.push(lake);
-                }
-            }
-        }
+        let mut drainage = DrainageNetwork::new(self.seed, &mut sample);
+        let rivers = build_river_system(
+            coord,
+            self.seed,
+            self.sea_level as f32,
+            &self.settings.water_fluid,
+            &mut drainage,
+        );
 
         HydrologyRegion {
             coord,
-            river_graph,
+            river_graph: rivers.graph,
             river_carve_depth: RIVER_CARVE_DEPTH,
-            water_bodies,
+            water_bodies: rivers.water_bodies,
             sea_level: self.sea_level as f32,
             settings: self.settings.clone(),
             macro_samples,

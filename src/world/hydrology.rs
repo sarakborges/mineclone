@@ -4,6 +4,7 @@ mod field;
 mod lake;
 mod math;
 mod region;
+mod river;
 mod spatial;
 mod types;
 

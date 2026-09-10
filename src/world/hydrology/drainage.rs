@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bevy::prelude::*;
 
 use crate::content::biome_hydrology::BiomeHydrology;
@@ -16,7 +18,87 @@ pub(super) struct DrainageNode {
     pub biome_hydrology: BiomeHydrology,
 }
 
-pub(super) fn drainage_node(
+pub(super) struct DrainageNetwork<'a, F>
+where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    seed: u64,
+    sample: &'a mut F,
+    nodes: HashMap<IVec2, DrainageNode>,
+    downstream: HashMap<IVec2, Option<IVec2>>,
+}
+
+impl<'a, F> DrainageNetwork<'a, F>
+where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    pub fn new(seed: u64, sample: &'a mut F) -> Self {
+        Self {
+            seed,
+            sample,
+            nodes: HashMap::new(),
+            downstream: HashMap::new(),
+        }
+    }
+
+    pub fn node(&mut self, cell: IVec2) -> DrainageNode {
+        if let Some(node) = self.nodes.get(&cell).copied() {
+            return node;
+        }
+
+        let node = drainage_node(cell, self.seed, self.sample);
+        self.nodes.insert(cell, node);
+        node
+    }
+
+    pub fn neighbor_nodes(&mut self, cell: IVec2) -> Vec<DrainageNode> {
+        self.neighbors(cell)
+            .into_iter()
+            .map(|(_, node)| node)
+            .collect()
+    }
+
+    pub fn downstream_cell(&mut self, cell: IVec2) -> Option<IVec2> {
+        if let Some(cached) = self.downstream.get(&cell).copied() {
+            return cached;
+        }
+
+        let source = self.node(cell);
+        let downstream = self
+            .neighbors(cell)
+            .into_iter()
+            .filter(|(_, node)| node.elevation + RIVER_MINIMUM_DROP < source.elevation)
+            .min_by(|(left_cell, left), (right_cell, right)| {
+                left.elevation
+                    .total_cmp(&right.elevation)
+                    .then_with(|| left_cell.x.cmp(&right_cell.x))
+                    .then_with(|| left_cell.y.cmp(&right_cell.y))
+            })
+            .map(|(cell, _)| cell);
+
+        self.downstream.insert(cell, downstream);
+        downstream
+    }
+
+    fn neighbors(&mut self, cell: IVec2) -> Vec<(IVec2, DrainageNode)> {
+        let mut neighbors = Vec::with_capacity(8);
+
+        for dz in -1..=1 {
+            for dx in -1..=1 {
+                if dx == 0 && dz == 0 {
+                    continue;
+                }
+
+                let neighbor_cell = cell + IVec2::new(dx, dz);
+                neighbors.push((neighbor_cell, self.node(neighbor_cell)));
+            }
+        }
+
+        neighbors
+    }
+}
+
+fn drainage_node(
     cell: IVec2,
     seed: u64,
     sample: &mut impl FnMut(Vec2) -> HydrologySurfaceSample,
@@ -30,38 +112,6 @@ pub(super) fn drainage_node(
         continentalness: surface.continentalness,
         biome_hydrology: surface.biome_hydrology,
     }
-}
-
-pub(super) fn drainage_neighbors(
-    cell: IVec2,
-    seed: u64,
-    sample: &mut impl FnMut(Vec2) -> HydrologySurfaceSample,
-) -> Vec<DrainageNode> {
-    let mut neighbors = Vec::with_capacity(8);
-
-    for dz in -1..=1 {
-        for dx in -1..=1 {
-            if dx == 0 && dz == 0 {
-                continue;
-            }
-
-            neighbors.push(drainage_node(cell + IVec2::new(dx, dz), seed, sample));
-        }
-    }
-
-    neighbors
-}
-
-pub(super) fn select_downstream(
-    source: DrainageNode,
-    neighbors: &[DrainageNode],
-) -> Option<DrainageNode> {
-    let downstream = neighbors
-        .iter()
-        .copied()
-        .min_by(|left, right| left.elevation.total_cmp(&right.elevation))?;
-
-    (downstream.elevation + RIVER_MINIMUM_DROP < source.elevation).then_some(downstream)
 }
 
 pub(super) fn drainage_position(cell: IVec2, seed: u64) -> Vec2 {

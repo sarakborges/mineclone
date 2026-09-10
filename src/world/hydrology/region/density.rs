@@ -48,7 +48,7 @@ impl HydrologyRegion {
                     return 0.0;
                 }
 
-                -(body.carve_depth + 2.0) * strength
+                -(body.carve_depth * 1.8 + 2.0) * strength
             })
             .sum()
     }

@@ -4,7 +4,7 @@ use crate::{
     content::fluid::FluidRegistry,
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
-        fluid::FluidCell,
+        fluid::{FluidCell, MAX_FLUID_LEVEL},
     },
     world::generation_region::GenerationRegion,
 };
@@ -36,12 +36,40 @@ pub(super) fn rasterize_fluid_pass(
                 }
 
                 let world_y = chunk_origin.y + local_y as i32;
-                if world_y as f32 >= water.water_level {
+                let Some(level) = fluid_level_for_surface(water.water_level, world_y) else {
                     continue;
-                }
+                };
 
-                chunk.set_fluid(local_x, local_y, local_z, Some(FluidCell::source(fluid_id)));
+                chunk.set_fluid(
+                    local_x,
+                    local_y,
+                    local_z,
+                    Some(FluidCell::new(fluid_id, level)),
+                );
             }
         }
+    }
+}
+
+fn fluid_level_for_surface(water_level: f32, world_y: i32) -> Option<u8> {
+    let coverage = water_level - world_y as f32;
+    if coverage <= 0.0 {
+        return None;
+    }
+
+    let level = (coverage.clamp(0.0, 1.0) * MAX_FLUID_LEVEL as f32).ceil() as u8;
+    Some(level.clamp(1, MAX_FLUID_LEVEL))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fractional_water_surface_produces_partial_fluid_level() {
+        assert_eq!(fluid_level_for_surface(10.25, 10), Some(2));
+        assert_eq!(fluid_level_for_surface(10.75, 10), Some(6));
+        assert_eq!(fluid_level_for_surface(10.0, 9), Some(MAX_FLUID_LEVEL));
+        assert_eq!(fluid_level_for_surface(10.0, 10), None);
     }
 }
