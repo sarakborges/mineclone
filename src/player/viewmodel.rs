@@ -184,7 +184,7 @@ fn sync_held_block(
         *visibility = Visibility::Visible;
 
         for (face, material_handle) in &faces {
-            let Some(material) = materials.get_mut(&material_handle.0) else {
+            let Some(mut material) = materials.get_mut(&material_handle.0) else {
                 continue;
             };
 
