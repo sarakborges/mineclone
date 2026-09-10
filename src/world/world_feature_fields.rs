@@ -19,6 +19,7 @@ pub struct WorldFeatureFields {
     hydrology: HydrologyField,
     cave_connectivity: CaveConnectivityField,
     geology: GeologyField,
+    hydrology_cache: RwLock<HashMap<IVec2, Arc<HydrologyRegion>>>,
     region_cache: RwLock<HashMap<IVec3, Arc<GenerationRegion>>>,
 }
 
@@ -28,6 +29,7 @@ impl WorldFeatureFields {
             hydrology: HydrologyField::new(seed.rotate_left(7), sea_level, hydrology),
             cave_connectivity: CaveConnectivityField::new(seed.rotate_left(23)),
             geology: GeologyField::new(seed.rotate_left(41)),
+            hydrology_cache: RwLock::new(HashMap::new()),
             region_cache: RwLock::new(HashMap::new()),
         }
     }
@@ -55,9 +57,30 @@ impl WorldFeatureFields {
             return region;
         }
 
+        let hydrology_coord = IVec2::new(coord.x, coord.z);
+        let hydrology = if let Some(region) = self
+            .hydrology_cache
+            .read()
+            .expect("hydrology region cache read lock was poisoned")
+            .get(&hydrology_coord)
+            .cloned()
+        {
+            region
+        } else {
+            let region = Arc::new(hydrology_factory(&self.hydrology));
+            let mut cache = self
+                .hydrology_cache
+                .write()
+                .expect("hydrology region cache write lock was poisoned");
+
+            cache
+                .entry(hydrology_coord)
+                .or_insert_with(|| region.clone())
+                .clone()
+        };
         let region = Arc::new(GenerationRegion {
             coord,
-            hydrology: hydrology_factory(&self.hydrology),
+            hydrology,
             geology: self.geology.region(coord),
         });
         let mut cache = self
@@ -75,6 +98,14 @@ impl WorldFeatureFields {
             .expect("generation region cache read lock was poisoned")
             .len()
     }
+
+    #[cfg(test)]
+    fn cached_hydrology_region_count(&self) -> usize {
+        self.hydrology_cache
+            .read()
+            .expect("hydrology region cache read lock was poisoned")
+            .len()
+    }
 }
 
 #[cfg(test)]
@@ -82,7 +113,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn region_cache_reuses_the_same_region() {
+    fn region_cache_reuses_hydrology_across_vertical_regions() {
         let fields = WorldFeatureFields::new(42, 64, DimensionHydrology::default());
         let coord = IVec3::new(2, 0, -1);
         let first = fields.region_with_hydrology(coord, |hydrology| {
@@ -97,8 +128,14 @@ mod tests {
         let second = fields.region_with_hydrology(coord, |_| {
             panic!("cached generation region should not rebuild hydrology")
         });
+        let vertical_coord = coord + IVec3::Y;
+        let vertical = fields.region_with_hydrology(vertical_coord, |_| {
+            panic!("vertical generation region should reuse cached 2D hydrology")
+        });
 
         assert!(Arc::ptr_eq(&first, &second));
-        assert_eq!(fields.cached_region_count(), 1);
+        assert!(Arc::ptr_eq(&first.hydrology, &vertical.hydrology));
+        assert_eq!(fields.cached_region_count(), 2);
+        assert_eq!(fields.cached_hydrology_region_count(), 1);
     }
 }

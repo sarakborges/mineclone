@@ -64,15 +64,13 @@ fn edit_targeted_block(
         let Some(voxel) = placement_voxel(hit, &world, input.player.translation) else {
             return;
         };
-        if content.blocks.get(block_id).is_none() {
+        let Some(block) = content.blocks.get(block_id) else {
             return;
-        }
+        };
+        let rotation = TextureRotation::for_position(voxel, block.rotate_texture);
 
         (
-            world.set_block_at(
-                voxel,
-                Some(VoxelCell::new(block_id, TextureRotation::default())),
-            ),
+            world.set_block_at(voxel, Some(VoxelCell::new(block_id, rotation))),
             voxel,
             true,
         )

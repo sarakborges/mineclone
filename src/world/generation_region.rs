@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bevy::prelude::*;
 
 use crate::voxel::chunk::CHUNK_SIZE;
@@ -9,7 +11,7 @@ pub const GENERATION_REGION_SIZE_CHUNKS: i32 = 8;
 #[derive(Clone, Debug)]
 pub struct GenerationRegion {
     pub coord: IVec3,
-    pub hydrology: HydrologyRegion,
+    pub hydrology: Arc<HydrologyRegion>,
     pub geology: GeologyRegion,
 }
 

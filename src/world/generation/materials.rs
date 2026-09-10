@@ -66,7 +66,7 @@ pub(super) fn rasterize_material_pass(
                     .blocks
                     .get(block_id)
                     .unwrap_or_else(|| panic!("missing block definition: {block_id}"));
-                let rotation = texture_rotation_for(world_position, block.rotate_texture);
+                let rotation = TextureRotation::for_position(world_position, block.rotate_texture);
 
                 chunk.set_block(
                     local_x,
@@ -77,18 +77,4 @@ pub(super) fn rasterize_material_pass(
             }
         }
     }
-}
-
-fn texture_rotation_for(position: IVec3, enabled: bool) -> TextureRotation {
-    if !enabled {
-        return TextureRotation::default();
-    }
-
-    let mut hash = position.x as u32;
-    hash ^= (position.y as u32).wrapping_mul(0x9e37_79b9);
-    hash = hash.rotate_left(13);
-    hash ^= (position.z as u32).wrapping_mul(0x85eb_ca6b);
-    hash ^= hash >> 16;
-
-    TextureRotation::from_quarter_turn((hash & 3) as u8)
 }

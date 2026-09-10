@@ -34,7 +34,7 @@ where
 {
     let mut graph = FeatureGraph::default();
     let mut water_bodies = Vec::new();
-    let mut flow_cache = HashMap::<IVec2, u32>::new();
+    let flow_cache = build_flow_cache(coord, network);
 
     for dz in -RIVER_EDGE_MARGIN_CELLS..=RIVER_EDGE_MARGIN_CELLS {
         for dx in -RIVER_EDGE_MARGIN_CELLS..=RIVER_EDGE_MARGIN_CELLS {
@@ -45,7 +45,7 @@ where
                 continue;
             }
 
-            let flow = cached_flow_at(cell, network, &mut flow_cache);
+            let flow = flow_cache.get(&cell).copied().unwrap_or(0);
             let downstream_cell = network.downstream_cell(cell);
 
             if let Some(downstream_cell) = downstream_cell {
@@ -58,7 +58,7 @@ where
                     continue;
                 }
 
-                let downstream_flow = cached_flow_at(downstream_cell, network, &mut flow_cache);
+                let downstream_flow = flow_cache.get(&downstream_cell).copied().unwrap_or(flow);
                 add_curved_river_edge(
                     &mut graph,
                     coord,
@@ -99,37 +99,32 @@ where
     }
 }
 
-fn cached_flow_at<F>(
-    target: IVec2,
+fn build_flow_cache<F>(
+    coord: IVec2,
     network: &mut DrainageNetwork<'_, F>,
-    cache: &mut HashMap<IVec2, u32>,
-) -> u32
+) -> HashMap<IVec2, u32>
 where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
-    if let Some(flow) = cache.get(&target).copied() {
-        return flow;
-    }
+    let target_radius = RIVER_EDGE_MARGIN_CELLS + 1;
+    let source_radius = target_radius + RIVER_FLOW_SEARCH_RADIUS;
+    let mut flow = HashMap::<IVec2, u32>::new();
 
-    let flow = drainage_flow_at(target, network);
-    cache.insert(target, flow);
-    flow
-}
-
-fn drainage_flow_at<F>(target: IVec2, network: &mut DrainageNetwork<'_, F>) -> u32
-where
-    F: FnMut(Vec2) -> HydrologySurfaceSample,
-{
-    let mut flow = 0;
-
-    for dz in -RIVER_FLOW_SEARCH_RADIUS..=RIVER_FLOW_SEARCH_RADIUS {
-        for dx in -RIVER_FLOW_SEARCH_RADIUS..=RIVER_FLOW_SEARCH_RADIUS {
-            let mut current = target + IVec2::new(dx, dz);
+    for dz in -source_radius..=source_radius {
+        for dx in -source_radius..=source_radius {
+            let source = coord + IVec2::new(dx, dz);
+            let mut current = source;
 
             for _ in 0..RIVER_FLOW_TRACE_STEPS {
-                if current == target {
-                    flow += 1;
-                    break;
+                let relative = current - coord;
+                let source_delta = source - current;
+                let inside_target = relative.x.abs() <= target_radius
+                    && relative.y.abs() <= target_radius;
+                let inside_source_radius = source_delta.x.abs() <= RIVER_FLOW_SEARCH_RADIUS
+                    && source_delta.y.abs() <= RIVER_FLOW_SEARCH_RADIUS;
+
+                if inside_target && inside_source_radius {
+                    *flow.entry(current).or_default() += 1;
                 }
 
                 let node = network.node(current);
