@@ -63,8 +63,28 @@ where
             let flow = flow_cache.get(&cell).copied().unwrap_or(1);
             let downstream_cell = network.downstream_cell(cell);
 
-            if downstream_cell.is_some() {
+            if let Some(downstream_cell) = downstream_cell {
+                let downstream = network.node(downstream_cell);
+                let channel_selected = source.biome_hydrology.can_generate_river
+                    && selected_sources.contains(&cell);
                 let neighbors = network.neighbor_nodes(cell);
+
+                if channel_selected && !downstream.biome_hydrology.can_generate_river {
+                    if let Some(lake) = terminal_lake_for_local_basin(
+                        cell,
+                        source,
+                        &neighbors,
+                        seed,
+                        sea_level,
+                        water_fluid,
+                    )
+                    .filter(|lake| water_body_intersects_region(coord, lake))
+                    {
+                        water_bodies.push(lake);
+                    }
+                    continue;
+                }
+
                 if let Some(lake) = lake_for_local_basin(
                     cell,
                     source,
@@ -77,18 +97,8 @@ where
                 {
                     water_bodies.push(lake);
                 }
-            }
 
-            if let Some(downstream_cell) = downstream_cell {
-                if !source.biome_hydrology.can_generate_river
-                    || flow < RIVER_MINIMUM_FLOW
-                    || !selected_sources.contains(&cell)
-                {
-                    continue;
-                }
-
-                let downstream = network.node(downstream_cell);
-                if !downstream.biome_hydrology.can_generate_river {
+                if !channel_selected {
                     continue;
                 }
 
@@ -111,7 +121,7 @@ where
             }
 
             let neighbors = network.neighbor_nodes(cell);
-            let lake = if flow >= RIVER_MINIMUM_FLOW {
+            let lake = if selected_sources.contains(&cell) || flow >= RIVER_MINIMUM_FLOW {
                 terminal_lake_for_local_basin(
                     cell,
                     source,
@@ -232,7 +242,38 @@ where
         );
     }
 
+    extend_selected_downstream(&mut selected, network);
     selected
+}
+
+fn extend_selected_downstream<F>(
+    selected: &mut HashSet<IVec2>,
+    network: &mut DrainageNetwork<'_, F>,
+) where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    let starts = selected.iter().copied().collect::<Vec<_>>();
+
+    for start in starts {
+        let mut current = start;
+
+        for _ in 0..RIVER_FLOW_TRACE_STEPS {
+            selected.insert(current);
+
+            let Some(next) = network.downstream_cell(current) else {
+                break;
+            };
+            let downstream = network.node(next);
+
+            if downstream.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD
+                || !downstream.biome_hydrology.can_generate_river
+            {
+                break;
+            }
+
+            current = next;
+        }
+    }
 }
 
 fn add_curved_river_edge(graph: &mut FeatureGraph, spec: RiverEdgeSpec) {
