@@ -21,6 +21,7 @@ struct ArchivedFluidCell {
     fluid_id: FluidId,
     level: u8,
     source: bool,
+    spread_distance: u16,
 }
 
 pub struct ArchivedChunk {
@@ -76,6 +77,7 @@ impl ArchivedChunk {
                 fluid_id: fluid.fluid_id,
                 level: fluid.level,
                 source: fluid.is_source(),
+                spread_distance: fluid.spread_distance(),
             });
         }
 
@@ -134,10 +136,11 @@ impl ArchivedChunk {
                 x,
                 y,
                 z,
-                Some(FluidCell::with_source(
+                Some(FluidCell::with_state(
                     archived.fluid_id,
                     archived.level,
                     archived.source,
+                    archived.spread_distance,
                 )),
             );
         }
