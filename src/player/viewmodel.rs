@@ -170,7 +170,8 @@ fn spawn_viewmodel(
 
                                 for face in block_faces() {
                                     let material = block_materials.held_for_face(face);
-                                    let Some(mut face_material) = materials.get_mut(&material) else {
+                                    let Some(mut face_material) = materials.get_mut(&material)
+                                    else {
                                         continue;
                                     };
                                     *face_material = block_face_material_data(
