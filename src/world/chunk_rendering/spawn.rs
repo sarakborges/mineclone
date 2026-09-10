@@ -36,7 +36,8 @@ pub fn spawn_chunk_mesh(
         context.blocks,
         |voxel, block_id| {
             let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-            let tint = block_tint_at(block_id, position, context.biome_field, context.biomes).to_srgba();
+            let tint =
+                block_tint_at(block_id, position, context.biome_field, context.biomes).to_srgba();
             [tint.red, tint.green, tint.blue]
         },
     );
