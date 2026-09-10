@@ -81,6 +81,58 @@ const WORLD_FACES: [BlockFace; 6] = [
     BlockFace::Back,
 ];
 
+#[derive(Clone, Copy)]
+struct BlockDisplayFaceGeometry {
+    origin: Vec2,
+    axis_u: Vec2,
+    axis_v: Vec2,
+}
+
+impl BlockDisplayFaceGeometry {
+    fn points(self) -> [Vec2; 4] {
+        [
+            self.origin,
+            self.origin + self.axis_u,
+            self.origin + self.axis_u + self.axis_v,
+            self.origin + self.axis_v,
+        ]
+    }
+}
+
+fn block_display_face_geometry(face: BlockFace) -> BlockDisplayFaceGeometry {
+    match face {
+        BlockFace::Top => BlockDisplayFaceGeometry {
+            origin: Vec2::new(0.10, 0.28),
+            axis_u: Vec2::new(0.40, 0.20),
+            axis_v: Vec2::new(0.40, -0.20),
+        },
+        BlockFace::Front => BlockDisplayFaceGeometry {
+            origin: Vec2::new(0.10, 0.28),
+            axis_u: Vec2::new(0.40, 0.20),
+            axis_v: Vec2::new(0.00, 0.42),
+        },
+        BlockFace::Right => BlockDisplayFaceGeometry {
+            origin: Vec2::new(0.50, 0.48),
+            axis_u: Vec2::new(0.40, -0.20),
+            axis_v: Vec2::new(0.00, 0.42),
+        },
+        _ => panic!("{face:?} is not part of the display block model"),
+    }
+}
+
+pub(crate) fn block_display_face_basis(face: BlockFace) -> (Vec4, Vec4) {
+    let geometry = block_display_face_geometry(face);
+    (
+        Vec4::new(
+            geometry.origin.x,
+            geometry.origin.y,
+            geometry.axis_u.x,
+            geometry.axis_u.y,
+        ),
+        Vec4::new(geometry.axis_v.x, geometry.axis_v.y, 0.0, 0.0),
+    )
+}
+
 #[derive(Resource)]
 pub(crate) struct BlockModelMeshes {
     world_right: Handle<Mesh>,
@@ -206,7 +258,24 @@ pub(crate) fn block_face_texture(face: BlockFace, block: &BlockDefinition) -> Op
         BlockFace::Back => block.textures.back.as_str(),
     };
 
-    (!texture.is_empty()).then_some(texture)
+    if !texture.is_empty() {
+        Some(texture)
+    } else {
+        first_block_texture(block)
+    }
+}
+
+fn first_block_texture(block: &BlockDefinition) -> Option<&str> {
+    [
+        block.textures.top.as_str(),
+        block.textures.front.as_str(),
+        block.textures.right.as_str(),
+        block.textures.left.as_str(),
+        block.textures.back.as_str(),
+        block.textures.bottom.as_str(),
+    ]
+    .into_iter()
+    .find(|texture| !texture.is_empty())
 }
 
 pub(crate) fn block_face_material_data(
@@ -276,36 +345,9 @@ fn display_position(point: Vec2) -> [f32; 3] {
 }
 
 fn block_display_face_mesh(face: BlockFace) -> Mesh {
-    let (points, uvs) = match face {
-        BlockFace::Top => (
-            [
-                Vec2::new(0.10, 0.28),
-                Vec2::new(0.50, 0.48),
-                Vec2::new(0.90, 0.28),
-                Vec2::new(0.50, 0.08),
-            ],
-            [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
-        ),
-        BlockFace::Front => (
-            [
-                Vec2::new(0.10, 0.28),
-                Vec2::new(0.10, 0.70),
-                Vec2::new(0.50, 0.90),
-                Vec2::new(0.50, 0.48),
-            ],
-            [[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0]],
-        ),
-        BlockFace::Right => (
-            [
-                Vec2::new(0.90, 0.28),
-                Vec2::new(0.50, 0.48),
-                Vec2::new(0.50, 0.90),
-                Vec2::new(0.90, 0.70),
-            ],
-            [[1.0, 0.0], [0.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
-        ),
-        _ => panic!("{face:?} is not part of the display block model"),
-    };
+    let geometry = block_display_face_geometry(face);
+    let points = geometry.points();
+    let uvs = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
 
     Mesh::new(
         PrimitiveTopology::TriangleList,

@@ -8,18 +8,26 @@
 @group(1) @binding(5) var right_sampler: sampler;
 @group(1) @binding(6) var<uniform> tint: vec4<f32>;
 @group(1) @binding(7) var<uniform> face_shades: vec4<f32>;
+@group(1) @binding(8) var<uniform> top_origin_axis_u: vec4<f32>;
+@group(1) @binding(9) var<uniform> top_axis_v: vec4<f32>;
+@group(1) @binding(10) var<uniform> front_origin_axis_u: vec4<f32>;
+@group(1) @binding(11) var<uniform> front_axis_v: vec4<f32>;
+@group(1) @binding(12) var<uniform> right_origin_axis_u: vec4<f32>;
+@group(1) @binding(13) var<uniform> right_axis_v: vec4<f32>;
 
 fn parallelogram_uv(
     point: vec2<f32>,
-    origin: vec2<f32>,
-    axis_u: vec2<f32>,
-    axis_v: vec2<f32>,
+    origin_axis_u: vec4<f32>,
+    axis_v: vec4<f32>,
 ) -> vec2<f32> {
+    let origin = origin_axis_u.xy;
+    let axis_u = origin_axis_u.zw;
+    let face_axis_v = axis_v.xy;
     let delta = point - origin;
-    let determinant = axis_u.x * axis_v.y - axis_u.y * axis_v.x;
+    let determinant = axis_u.x * face_axis_v.y - axis_u.y * face_axis_v.x;
 
     return vec2<f32>(
-        (delta.x * axis_v.y - delta.y * axis_v.x) / determinant,
+        (delta.x * face_axis_v.y - delta.y * face_axis_v.x) / determinant,
         (axis_u.x * delta.y - axis_u.y * delta.x) / determinant,
     );
 }
@@ -57,53 +65,23 @@ fn apply_biome_tint(texel: vec4<f32>) -> vec4<f32> {
 fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
     let point = in.uv;
 
-    let top_uv = parallelogram_uv(
-        point,
-        vec2<f32>(0.10, 0.28),
-        vec2<f32>(0.40, 0.20),
-        vec2<f32>(0.40, -0.20),
-    );
+    let top_uv = parallelogram_uv(point, top_origin_axis_u, top_axis_v);
     if inside_face(top_uv) {
-        let sampled = textureSampleLevel(
-            top_texture,
-            top_sampler,
-            vec2<f32>(top_uv.x, top_uv.y),
-            0.0,
-        );
+        let sampled = textureSampleLevel(top_texture, top_sampler, top_uv, 0.0);
         let colored = apply_biome_tint(sampled);
         return vec4<f32>(colored.rgb * face_shades.x, colored.a);
     }
 
-    let front_uv = parallelogram_uv(
-        point,
-        vec2<f32>(0.10, 0.28),
-        vec2<f32>(0.40, 0.20),
-        vec2<f32>(0.00, 0.42),
-    );
+    let front_uv = parallelogram_uv(point, front_origin_axis_u, front_axis_v);
     if inside_face(front_uv) {
-        let sampled = textureSampleLevel(
-            front_texture,
-            front_sampler,
-            vec2<f32>(front_uv.x, front_uv.y),
-            0.0,
-        );
+        let sampled = textureSampleLevel(front_texture, front_sampler, front_uv, 0.0);
         let colored = apply_biome_tint(sampled);
         return vec4<f32>(colored.rgb * face_shades.y, colored.a);
     }
 
-    let right_uv = parallelogram_uv(
-        point,
-        vec2<f32>(0.90, 0.28),
-        vec2<f32>(-0.40, 0.20),
-        vec2<f32>(0.00, 0.42),
-    );
+    let right_uv = parallelogram_uv(point, right_origin_axis_u, right_axis_v);
     if inside_face(right_uv) {
-        let sampled = textureSampleLevel(
-            right_texture,
-            right_sampler,
-            vec2<f32>(1.0 - right_uv.x, right_uv.y),
-            0.0,
-        );
+        let sampled = textureSampleLevel(right_texture, right_sampler, right_uv, 0.0);
         let colored = apply_biome_tint(sampled);
         return vec4<f32>(colored.rgb * face_shades.z, colored.a);
     }

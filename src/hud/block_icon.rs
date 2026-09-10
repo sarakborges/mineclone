@@ -4,7 +4,9 @@ use bevy::{
 
 use crate::{
     content::block::BlockDefinition,
-    rendering::block_model::block_display_face_shade,
+    rendering::block_model::{
+        block_display_face_basis, block_display_face_shade, block_face_texture,
+    },
     voxel::mesh::BlockFace,
 };
 
@@ -25,6 +27,18 @@ pub(crate) struct BlockIconMaterial {
     tint: Vec4,
     #[uniform(7)]
     face_shades: Vec4,
+    #[uniform(8)]
+    top_origin_axis_u: Vec4,
+    #[uniform(9)]
+    top_axis_v: Vec4,
+    #[uniform(10)]
+    front_origin_axis_u: Vec4,
+    #[uniform(11)]
+    front_axis_v: Vec4,
+    #[uniform(12)]
+    right_origin_axis_u: Vec4,
+    #[uniform(13)]
+    right_axis_v: Vec4,
 }
 
 impl UiMaterial for BlockIconMaterial {
@@ -35,12 +49,22 @@ impl UiMaterial for BlockIconMaterial {
 
 impl BlockIconMaterial {
     pub(crate) fn empty() -> Self {
+        let (top_origin_axis_u, top_axis_v) = block_display_face_basis(BlockFace::Top);
+        let (front_origin_axis_u, front_axis_v) = block_display_face_basis(BlockFace::Front);
+        let (right_origin_axis_u, right_axis_v) = block_display_face_basis(BlockFace::Right);
+
         Self {
             top_texture: Handle::default(),
             front_texture: Handle::default(),
             right_texture: Handle::default(),
             tint: Vec4::ONE,
             face_shades: block_face_shades(),
+            top_origin_axis_u,
+            top_axis_v,
+            front_origin_axis_u,
+            front_axis_v,
+            right_origin_axis_u,
+            right_axis_v,
         }
     }
 
@@ -49,22 +73,16 @@ impl BlockIconMaterial {
         asset_server: &AssetServer,
         tint: Color,
     ) -> Self {
-        let fallback = first_texture(block);
-
-        Self {
-            top_texture: load_texture(asset_server, &block.textures.top, fallback),
-            front_texture: load_texture(asset_server, &block.textures.front, fallback),
-            right_texture: load_texture(asset_server, &block.textures.right, fallback),
-            tint: tint_vec4(tint),
-            face_shades: block_face_shades(),
-        }
+        let mut material = Self::empty();
+        material.set_block(block, asset_server);
+        material.set_tint(tint);
+        material
     }
 
     pub(crate) fn set_block(&mut self, block: &BlockDefinition, asset_server: &AssetServer) {
-        let fallback = first_texture(block);
-        self.top_texture = load_texture(asset_server, &block.textures.top, fallback);
-        self.front_texture = load_texture(asset_server, &block.textures.front, fallback);
-        self.right_texture = load_texture(asset_server, &block.textures.right, fallback);
+        self.top_texture = load_face_texture(asset_server, block, BlockFace::Top);
+        self.front_texture = load_face_texture(asset_server, block, BlockFace::Front);
+        self.right_texture = load_face_texture(asset_server, block, BlockFace::Right);
     }
 
     pub(crate) fn set_tint(&mut self, tint: Color) {
@@ -81,32 +99,14 @@ fn block_face_shades() -> Vec4 {
     )
 }
 
-fn first_texture(block: &BlockDefinition) -> &str {
-    [
-        block.textures.top.as_str(),
-        block.textures.front.as_str(),
-        block.textures.right.as_str(),
-        block.textures.left.as_str(),
-        block.textures.back.as_str(),
-        block.textures.bottom.as_str(),
-    ]
-    .into_iter()
-    .find(|texture| !texture.is_empty())
-    .unwrap_or("")
-}
-
-fn load_texture(asset_server: &AssetServer, texture: &str, fallback: &str) -> Handle<Image> {
-    let path = if texture.is_empty() {
-        fallback
-    } else {
-        texture
-    };
-
-    if path.is_empty() {
-        Handle::default()
-    } else {
-        asset_server.load(path.to_owned())
-    }
+fn load_face_texture(
+    asset_server: &AssetServer,
+    block: &BlockDefinition,
+    face: BlockFace,
+) -> Handle<Image> {
+    block_face_texture(face, block)
+        .map(|texture| asset_server.load(texture.to_owned()))
+        .unwrap_or_default()
 }
 
 fn tint_vec4(tint: Color) -> Vec4 {

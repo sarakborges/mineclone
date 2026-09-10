@@ -9,10 +9,7 @@
     pbr_deferred_functions::deferred_output,
 }
 #else
-#import bevy_pbr::{
-    forward_io::{VertexOutput, FragmentOutput},
-    pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
-}
+#import bevy_pbr::forward_io::{VertexOutput, FragmentOutput}
 #endif
 
 struct BlockModelMaterialExtension {
@@ -64,8 +61,7 @@ fn fragment(
     return deferred_output(in, pbr_input);
 #else
     var out: FragmentOutput;
-    out.color = apply_pbr_lighting(pbr_input);
-    out.color = main_pass_post_lighting_processing(pbr_input, out.color);
+    out.color = pbr_input.material.base_color;
     return out;
 #endif
 }
