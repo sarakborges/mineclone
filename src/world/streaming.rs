@@ -197,13 +197,45 @@ fn rebuild_queue(
         .filter(|coord| !render_pool.contains(*coord))
         .collect::<Vec<_>>();
 
-    pending.sort_by_key(|coord| (*coord - center).length_squared());
+    pending.sort_by_key(|coord| pending_priority(*coord, center, &streaming.surface_ranges));
 
     streaming.center = Some(center);
     streaming.horizontal_render_distance = horizontal_radius;
     streaming.vertical_render_distance = vertical_radius;
     streaming.desired = desired;
     streaming.pending = pending.into();
+}
+
+fn pending_priority(
+    coord: IVec3,
+    center: IVec3,
+    surface_ranges: &HashMap<IVec2, (i32, i32)>,
+) -> (i32, i32, i32, i32) {
+    let chunk_size = CHUNK_SIZE as i32;
+    let horizontal = coord.xz();
+    let (minimum_surface, maximum_surface) = surface_ranges
+        .get(&horizontal)
+        .copied()
+        .unwrap_or((coord.y * chunk_size, coord.y * chunk_size));
+    let minimum_surface_chunk = minimum_surface.div_euclid(chunk_size);
+    let maximum_surface_chunk = maximum_surface.div_euclid(chunk_size);
+    let surface_distance = if coord.y < minimum_surface_chunk {
+        minimum_surface_chunk - coord.y
+    } else if coord.y > maximum_surface_chunk {
+        coord.y - maximum_surface_chunk
+    } else {
+        0
+    };
+    let horizontal_distance = (horizontal - center.xz()).length_squared();
+    let vertical_distance = (coord.y - center.y).abs();
+    let total_distance = (coord - center).length_squared();
+
+    (
+        surface_distance,
+        horizontal_distance,
+        vertical_distance,
+        total_distance,
+    )
 }
 
 fn desired_chunk_coords(
