@@ -11,7 +11,7 @@ const MESH_ASSET_OVERHEAD_WARNING: usize = 128;
 const RUNTIME_IMAGE_SHAPE_LIMIT: usize = 4;
 
 #[derive(Clone, Copy, Debug)]
-struct RenderDiagnosticSnapshot {
+pub(super) struct RenderDiagnosticSnapshot {
     runtime_images: usize,
     font_atlases: usize,
     font_atlas_bytes: u64,
