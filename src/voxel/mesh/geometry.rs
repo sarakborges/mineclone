@@ -6,8 +6,6 @@ use crate::{
     voxel::{texture_rotation::TextureRotation, world::VoxelWorld},
 };
 
-const FACE_OVERDRAW: f32 = 0.002;
-
 pub(super) struct FaceGeometry {
     pub vertices: [[f32; 3]; 4],
     pub normal: [f32; 3],
@@ -58,66 +56,35 @@ pub(super) fn face_geometry(
     let x1 = x0 + 1.0;
     let y1 = y0 + 1.0;
     let z1 = z0 + 1.0;
-    let e = FACE_OVERDRAW;
 
     match face {
         BlockFace::Right => FaceGeometry {
-            vertices: [
-                [x1, y0 - e, z1 + e],
-                [x1, y0 - e, z0 - e],
-                [x1, y1 + e, z0 - e],
-                [x1, y1 + e, z1 + e],
-            ],
+            vertices: [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]],
             normal: [1.0, 0.0, 0.0],
             texture_rotation,
         },
         BlockFace::Left => FaceGeometry {
-            vertices: [
-                [x0, y0 - e, z0 - e],
-                [x0, y0 - e, z1 + e],
-                [x0, y1 + e, z1 + e],
-                [x0, y1 + e, z0 - e],
-            ],
+            vertices: [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]],
             normal: [-1.0, 0.0, 0.0],
             texture_rotation,
         },
         BlockFace::Top => FaceGeometry {
-            vertices: [
-                [x0 - e, y1, z1 + e],
-                [x1 + e, y1, z1 + e],
-                [x1 + e, y1, z0 - e],
-                [x0 - e, y1, z0 - e],
-            ],
+            vertices: [[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]],
             normal: [0.0, 1.0, 0.0],
             texture_rotation,
         },
         BlockFace::Bottom => FaceGeometry {
-            vertices: [
-                [x0 - e, y0, z0 - e],
-                [x1 + e, y0, z0 - e],
-                [x1 + e, y0, z1 + e],
-                [x0 - e, y0, z1 + e],
-            ],
+            vertices: [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]],
             normal: [0.0, -1.0, 0.0],
             texture_rotation,
         },
         BlockFace::Front => FaceGeometry {
-            vertices: [
-                [x0 - e, y0 - e, z1],
-                [x1 + e, y0 - e, z1],
-                [x1 + e, y1 + e, z1],
-                [x0 - e, y1 + e, z1],
-            ],
+            vertices: [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]],
             normal: [0.0, 0.0, 1.0],
             texture_rotation,
         },
         BlockFace::Back => FaceGeometry {
-            vertices: [
-                [x1 + e, y0 - e, z0],
-                [x0 - e, y0 - e, z0],
-                [x0 - e, y1 + e, z0],
-                [x1 + e, y1 + e, z0],
-            ],
+            vertices: [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]],
             normal: [0.0, 0.0, -1.0],
             texture_rotation,
         },
