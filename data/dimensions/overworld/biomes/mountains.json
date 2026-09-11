@@ -54,19 +54,19 @@
   "structures": [
     {
       "id": "asteria:small_boulder",
-      "placement": { "spacing": 16, "chance": 0.42, "jitter": 5 }
+      "placement": { "spacing": 28, "chance": 0.34, "jitter": 8 }
     },
     {
       "id": "asteria:medium_boulder",
-      "placement": { "spacing": 24, "chance": 0.32, "jitter": 7 }
+      "placement": { "spacing": 44, "chance": 0.27, "jitter": 13 }
     },
     {
       "id": "asteria:big_boulder",
-      "placement": { "spacing": 34, "chance": 0.24, "jitter": 10 }
+      "placement": { "spacing": 68, "chance": 0.18, "jitter": 21 }
     },
     {
       "id": "asteria:huge_boulder",
-      "placement": { "spacing": 52, "chance": 0.14, "jitter": 16 }
+      "placement": { "spacing": 108, "chance": 0.10, "jitter": 33 }
     }
   ],
   "visuals": {
