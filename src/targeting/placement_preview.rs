@@ -1,13 +1,8 @@
-use std::f32::consts::FRAC_PI_2;
-
 use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::{
-        biome::BiomeRegistry, block::BlockRegistry, block_orientation::BlockOrientation,
-        builtin_ids::GRASS_BLOCK_ID,
-    },
+    content::{biome::BiomeRegistry, block::BlockRegistry, builtin_ids::GRASS_BLOCK_ID},
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::{
         block_model::{
@@ -17,7 +12,9 @@ use crate::{
         block_model_material::BlockModelMaterial,
         block_tint::block_tint_at,
     },
-    voxel::{block_face::BlockFace, world::VoxelWorld},
+    voxel::{
+        block_face::BlockFace, orientation::orientation_rotation, world::VoxelWorld,
+    },
     world::biome_field::BiomeField,
 };
 
@@ -185,12 +182,4 @@ fn update_placement_preview(
 
     root.1.translation = voxel.as_vec3() + Vec3::splat(0.5);
     *root.2 = Visibility::Visible;
-}
-
-fn orientation_rotation(orientation: BlockOrientation) -> Quat {
-    match orientation {
-        BlockOrientation::Y => Quat::IDENTITY,
-        BlockOrientation::Z => Quat::from_rotation_x(FRAC_PI_2),
-        BlockOrientation::X => Quat::from_rotation_z(-FRAC_PI_2),
-    }
 }

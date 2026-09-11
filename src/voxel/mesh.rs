@@ -7,10 +7,7 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use crate::content::{
-    block::{BlockRegistry, BlockTextureRotations},
-    block_orientation::BlockOrientation,
-};
+use crate::content::block::{BlockRegistry, BlockTextureRotations};
 
 use self::{
     buffer::MeshBuffers,
@@ -20,6 +17,7 @@ use self::{
 pub(crate) use super::block_face::BlockFace;
 use super::{
     chunk::{CHUNK_SIZE, VoxelChunk},
+    orientation::orient_face,
     texture_rotation::TextureRotation,
     world::VoxelWorld,
 };
@@ -61,7 +59,7 @@ where
                 };
 
                 for block_face in BlockFace::ALL {
-                    let face = oriented_face(block_face, cell.orientation);
+                    let face = orient_face(block_face, cell.orientation);
                     if !is_face_exposed(world, blocks, cell.block_id, world_voxel, face) {
                         continue;
                     }
@@ -107,28 +105,6 @@ where
         .collect()
 }
 
-fn oriented_face(face: BlockFace, orientation: BlockOrientation) -> BlockFace {
-    match orientation {
-        BlockOrientation::Y => face,
-        BlockOrientation::Z => match face {
-            BlockFace::Right => BlockFace::Right,
-            BlockFace::Left => BlockFace::Left,
-            BlockFace::Top => BlockFace::Front,
-            BlockFace::Bottom => BlockFace::Back,
-            BlockFace::Front => BlockFace::Bottom,
-            BlockFace::Back => BlockFace::Top,
-        },
-        BlockOrientation::X => match face {
-            BlockFace::Right => BlockFace::Bottom,
-            BlockFace::Left => BlockFace::Top,
-            BlockFace::Top => BlockFace::Right,
-            BlockFace::Bottom => BlockFace::Left,
-            BlockFace::Front => BlockFace::Front,
-            BlockFace::Back => BlockFace::Back,
-        },
-    }
-}
-
 fn face_uses_texture_rotation(rotations: BlockTextureRotations, face: BlockFace) -> bool {
     match face {
         BlockFace::Right => rotations.right,
@@ -137,26 +113,5 @@ fn face_uses_texture_rotation(rotations: BlockTextureRotations, face: BlockFace)
         BlockFace::Bottom => rotations.bottom,
         BlockFace::Front => rotations.front,
         BlockFace::Back => rotations.back,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn axial_orientation_moves_top_face_to_selected_axis() {
-        assert_eq!(
-            oriented_face(BlockFace::Top, BlockOrientation::Y),
-            BlockFace::Top
-        );
-        assert_eq!(
-            oriented_face(BlockFace::Top, BlockOrientation::Z),
-            BlockFace::Front
-        );
-        assert_eq!(
-            oriented_face(BlockFace::Top, BlockOrientation::X),
-            BlockFace::Right
-        );
     }
 }

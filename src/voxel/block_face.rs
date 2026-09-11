@@ -20,6 +20,18 @@ impl BlockFace {
         Self::Back,
     ];
 
+    pub(crate) fn from_offset(offset: IVec3) -> Option<Self> {
+        match offset {
+            IVec3::X => Some(Self::Right),
+            IVec3::NEG_X => Some(Self::Left),
+            IVec3::Y => Some(Self::Top),
+            IVec3::NEG_Y => Some(Self::Bottom),
+            IVec3::Z => Some(Self::Front),
+            IVec3::NEG_Z => Some(Self::Back),
+            _ => None,
+        }
+    }
+
     pub(crate) fn unit_vertices(self) -> [[f32; 3]; 4] {
         match self {
             Self::Right => [

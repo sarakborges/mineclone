@@ -3,7 +3,9 @@ use bevy::prelude::*;
 use super::BlockFace;
 use crate::{
     content::{block::BlockRegistry, block_orientation::BlockOrientation},
-    voxel::{texture_rotation::TextureRotation, world::VoxelWorld},
+    voxel::{
+        orientation::orient_vector, texture_rotation::TextureRotation, world::VoxelWorld,
+    },
 };
 
 pub(super) struct FaceGeometry {
@@ -79,12 +81,4 @@ pub(super) fn orient_face_geometry(
     });
     geometry.normal = orient_vector(Vec3::from_array(geometry.normal), orientation).to_array();
     geometry
-}
-
-fn orient_vector(vector: Vec3, orientation: BlockOrientation) -> Vec3 {
-    match orientation {
-        BlockOrientation::Y => vector,
-        BlockOrientation::Z => Vec3::new(vector.x, -vector.z, vector.y),
-        BlockOrientation::X => Vec3::new(vector.y, -vector.x, vector.z),
-    }
 }
