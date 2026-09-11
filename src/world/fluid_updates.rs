@@ -50,18 +50,28 @@ impl PendingFluidUpdates {
     }
 
     fn enqueue_chunk_spread_targets(&mut self, world: &VoxelWorld, coord: IVec3) {
-        if coord.y < 0 || world.chunk(coord).is_none() {
+        if coord.y < 0 {
             return;
         }
+        let Some(chunk) = world.chunk(coord) else {
+            return;
+        };
 
         let origin = coord * CHUNK_SIZE as i32;
 
         for local_y in 0..CHUNK_SIZE {
             for local_z in 0..CHUNK_SIZE {
                 for local_x in 0..CHUNK_SIZE {
+                    if chunk
+                        .fluid_at(local_x as i32, local_y as i32, local_z as i32)
+                        .is_none()
+                    {
+                        continue;
+                    }
+
                     let position = origin
                         + IVec3::new(local_x as i32, local_y as i32, local_z as i32);
-                    self.enqueue_fluid_spread_targets_at(world, position);
+                    self.enqueue_spread_targets_from_fluid(world, position);
                 }
             }
         }
@@ -122,6 +132,10 @@ impl PendingFluidUpdates {
             return;
         }
 
+        self.enqueue_spread_targets_from_fluid(world, position);
+    }
+
+    fn enqueue_spread_targets_from_fluid(&mut self, world: &VoxelWorld, position: IVec3) {
         for offset in FLUID_SPREAD_TARGETS {
             let target = position + offset;
             if !world.is_loaded_at(target)
