@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
+    content::biome::BiomeRegistry,
     voxel::chunk::CHUNK_SIZE,
     world::{
         biome_field::{BiomeField, VolumeBiomeRegion, VolumeBiomeSelection},
@@ -14,6 +15,7 @@ use crate::{
 use super::{
     columns::GenerationColumnSample,
     index::{VOXELS_PER_CHUNK, column_index, voxel_index},
+    surface_carvers::surface_carver_density_delta,
 };
 
 pub(super) struct DensityField {
@@ -28,6 +30,7 @@ pub(super) fn sample_density_field(
     volume_region: &VolumeBiomeRegion,
     anchored_caves: Option<&CaveConnectivityRegion>,
     biome_field: &BiomeField,
+    biomes: &BiomeRegistry,
 ) -> DensityField {
     let mut field = DensityField {
         values: vec![0.0; VOXELS_PER_CHUNK],
@@ -46,11 +49,24 @@ pub(super) fn sample_density_field(
                 );
                 let sample_position = world_position.as_vec3() + Vec3::splat(0.5);
                 let base_density = terrain_density(column.surface_height, world_position.y);
+                let horizontal = Vec2::new(sample_position.x, sample_position.z);
+                let carver_delta = if region.hydrology.water_at(horizontal).is_none() {
+                    surface_carver_density_delta(
+                        base_density,
+                        sample_position,
+                        column.surface_height,
+                        &column.surface,
+                        biomes,
+                        biome_field.seed(),
+                    )
+                } else {
+                    0.0
+                };
                 let volume = biome_field.volume_selection_in_region(sample_position, volume_region);
                 let index = voxel_index(local_x, local_y, local_z);
 
                 field.values[index] = sample_density(
-                    base_density,
+                    base_density + carver_delta,
                     sample_position,
                     region,
                     anchored_caves,
