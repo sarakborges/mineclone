@@ -2,7 +2,7 @@ use bevy::{
     asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology,
 };
 
-use crate::voxel::mesh::BlockFace;
+use crate::voxel::mesh::{BlockFace, QUAD_TRIANGLE_INDICES, WORLD_FACE_UVS};
 
 #[derive(Clone, Copy)]
 struct BlockDisplayFaceGeometry {
@@ -133,76 +133,21 @@ fn block_display_face_mesh(face: BlockFace) -> Mesh {
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0, 0.0, 1.0]; 4])
     .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs.to_vec())
-    .with_inserted_indices(Indices::U32(vec![0, 1, 2, 0, 2, 3]))
+    .with_inserted_indices(Indices::U32(QUAD_TRIANGLE_INDICES.to_vec()))
 }
 
 pub(crate) fn block_face_mesh(face: BlockFace) -> Mesh {
-    let (vertices, normal) = match face {
-        BlockFace::Right => (
-            [
-                [0.5, -0.5, 0.5],
-                [0.5, -0.5, -0.5],
-                [0.5, 0.5, -0.5],
-                [0.5, 0.5, 0.5],
-            ],
-            [1.0, 0.0, 0.0],
-        ),
-        BlockFace::Left => (
-            [
-                [-0.5, -0.5, -0.5],
-                [-0.5, -0.5, 0.5],
-                [-0.5, 0.5, 0.5],
-                [-0.5, 0.5, -0.5],
-            ],
-            [-1.0, 0.0, 0.0],
-        ),
-        BlockFace::Top => (
-            [
-                [-0.5, 0.5, 0.5],
-                [0.5, 0.5, 0.5],
-                [0.5, 0.5, -0.5],
-                [-0.5, 0.5, -0.5],
-            ],
-            [0.0, 1.0, 0.0],
-        ),
-        BlockFace::Bottom => (
-            [
-                [-0.5, -0.5, -0.5],
-                [0.5, -0.5, -0.5],
-                [0.5, -0.5, 0.5],
-                [-0.5, -0.5, 0.5],
-            ],
-            [0.0, -1.0, 0.0],
-        ),
-        BlockFace::Front => (
-            [
-                [-0.5, -0.5, 0.5],
-                [0.5, -0.5, 0.5],
-                [0.5, 0.5, 0.5],
-                [-0.5, 0.5, 0.5],
-            ],
-            [0.0, 0.0, 1.0],
-        ),
-        BlockFace::Back => (
-            [
-                [0.5, -0.5, -0.5],
-                [-0.5, -0.5, -0.5],
-                [-0.5, 0.5, -0.5],
-                [0.5, 0.5, -0.5],
-            ],
-            [0.0, 0.0, -1.0],
-        ),
-    };
+    let center = Vec3::splat(0.5);
+    let vertices = face
+        .unit_vertices()
+        .map(|vertex| (Vec3::from_array(vertex) - center).to_array());
 
     Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::RENDER_WORLD,
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, vertices.to_vec())
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![normal; 4])
-    .with_inserted_attribute(
-        Mesh::ATTRIBUTE_UV_0,
-        vec![[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]],
-    )
-    .with_inserted_indices(Indices::U32(vec![0, 1, 2, 0, 2, 3]))
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![face.normal(); 4])
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, WORLD_FACE_UVS.to_vec())
+    .with_inserted_indices(Indices::U32(QUAD_TRIANGLE_INDICES.to_vec()))
 }

@@ -23,7 +23,7 @@ pub(super) fn is_face_exposed(
         return false;
     }
 
-    let neighbor_position = world_voxel + face_offset(face);
+    let neighbor_position = world_voxel + face.offset();
     let Some(neighbor_id) = world.block_id_at(neighbor_position) else {
         return true;
     };
@@ -50,44 +50,14 @@ pub(super) fn face_geometry(
     z: usize,
     texture_rotation: TextureRotation,
 ) -> FaceGeometry {
-    let x0 = x as f32;
-    let y0 = y as f32;
-    let z0 = z as f32;
-    let x1 = x0 + 1.0;
-    let y1 = y0 + 1.0;
-    let z1 = z0 + 1.0;
+    let origin = Vec3::new(x as f32, y as f32, z as f32);
 
-    match face {
-        BlockFace::Right => FaceGeometry {
-            vertices: [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]],
-            normal: [1.0, 0.0, 0.0],
-            texture_rotation,
-        },
-        BlockFace::Left => FaceGeometry {
-            vertices: [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]],
-            normal: [-1.0, 0.0, 0.0],
-            texture_rotation,
-        },
-        BlockFace::Top => FaceGeometry {
-            vertices: [[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]],
-            normal: [0.0, 1.0, 0.0],
-            texture_rotation,
-        },
-        BlockFace::Bottom => FaceGeometry {
-            vertices: [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]],
-            normal: [0.0, -1.0, 0.0],
-            texture_rotation,
-        },
-        BlockFace::Front => FaceGeometry {
-            vertices: [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]],
-            normal: [0.0, 0.0, 1.0],
-            texture_rotation,
-        },
-        BlockFace::Back => FaceGeometry {
-            vertices: [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]],
-            normal: [0.0, 0.0, -1.0],
-            texture_rotation,
-        },
+    FaceGeometry {
+        vertices: face
+            .unit_vertices()
+            .map(|vertex| (Vec3::from_array(vertex) + origin).to_array()),
+        normal: face.normal(),
+        texture_rotation,
     }
 }
 
@@ -116,16 +86,5 @@ fn orient_vector(vector: Vec3, orientation: BlockOrientation) -> Vec3 {
         BlockOrientation::Y => vector,
         BlockOrientation::Z => Vec3::new(vector.x, -vector.z, vector.y),
         BlockOrientation::X => Vec3::new(vector.y, -vector.x, vector.z),
-    }
-}
-
-fn face_offset(face: BlockFace) -> IVec3 {
-    match face {
-        BlockFace::Right => IVec3::X,
-        BlockFace::Left => IVec3::NEG_X,
-        BlockFace::Top => IVec3::Y,
-        BlockFace::Bottom => IVec3::NEG_Y,
-        BlockFace::Front => IVec3::Z,
-        BlockFace::Back => IVec3::NEG_Z,
     }
 }

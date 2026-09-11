@@ -23,6 +23,10 @@ use super::{
     world::VoxelWorld,
 };
 
+pub(crate) const WORLD_FACE_UVS: [[f32; 2]; 4] =
+    [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
+pub(crate) const QUAD_TRIANGLE_INDICES: [u32; 6] = [0, 1, 2, 0, 2, 3];
+
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum BlockFace {
     Right,
@@ -42,6 +46,39 @@ impl BlockFace {
         Self::Front,
         Self::Back,
     ];
+
+    pub(crate) fn unit_vertices(self) -> [[f32; 3]; 4] {
+        match self {
+            Self::Right => [[1.0, 0.0, 1.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [1.0, 1.0, 1.0]],
+            Self::Left => [[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 1.0], [0.0, 1.0, 0.0]],
+            Self::Top => [[0.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]],
+            Self::Bottom => [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 1.0], [0.0, 0.0, 1.0]],
+            Self::Front => [[0.0, 0.0, 1.0], [1.0, 0.0, 1.0], [1.0, 1.0, 1.0], [0.0, 1.0, 1.0]],
+            Self::Back => [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0]],
+        }
+    }
+
+    pub(crate) fn normal(self) -> [f32; 3] {
+        match self {
+            Self::Right => [1.0, 0.0, 0.0],
+            Self::Left => [-1.0, 0.0, 0.0],
+            Self::Top => [0.0, 1.0, 0.0],
+            Self::Bottom => [0.0, -1.0, 0.0],
+            Self::Front => [0.0, 0.0, 1.0],
+            Self::Back => [0.0, 0.0, -1.0],
+        }
+    }
+
+    pub(crate) fn offset(self) -> IVec3 {
+        match self {
+            Self::Right => IVec3::X,
+            Self::Left => IVec3::NEG_X,
+            Self::Top => IVec3::Y,
+            Self::Bottom => IVec3::NEG_Y,
+            Self::Front => IVec3::Z,
+            Self::Back => IVec3::NEG_Z,
+        }
+    }
 
     fn oriented(self, orientation: BlockOrientation) -> Self {
         match orientation {
