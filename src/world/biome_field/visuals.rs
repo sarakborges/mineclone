@@ -27,6 +27,31 @@ impl BiomeField {
         color
     }
 
+    pub fn leaf_color(&self, position: Vec2, biomes: &BiomeRegistry) -> Rgb {
+        let sample = self.sample_surface(position);
+        let mut color = Rgb {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+        };
+
+        for influence in sample.influences {
+            let biome = biomes
+                .get(influence.id)
+                .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
+            let leaf = biome
+                .visuals
+                .leaf_color
+                .unwrap_or(biome.visuals.foliage_color);
+
+            color.r += leaf.r * influence.weight;
+            color.g += leaf.g * influence.weight;
+            color.b += leaf.b * influence.weight;
+        }
+
+        color
+    }
+
     pub fn foliage_color(&self, position: Vec2, biomes: &BiomeRegistry) -> Rgb {
         let sample = self.sample_surface(position);
         let mut color = Rgb {
