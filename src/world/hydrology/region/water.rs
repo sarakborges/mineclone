@@ -16,6 +16,28 @@ impl HydrologyRegion {
         self.water_with_margin(position, radius.max(0.0))
     }
 
+    pub fn river_water_at(&self, position: Vec2) -> Option<HydrologyWaterSample<'_>> {
+        self.river_water_with_margin(position, 0.0)
+    }
+
+    fn river_water_with_margin(
+        &self,
+        position: Vec2,
+        margin: f32,
+    ) -> Option<HydrologyWaterSample<'_>> {
+        let river = self
+            .river_graph
+            .sample_horizontal_with_margin(position, margin)
+            .filter(|river| river.strength > SHORE_STRENGTH)?;
+        let profile = smoothstep(river.strength);
+
+        Some(HydrologyWaterSample {
+            fluid_id: self.settings.water_fluid.as_str(),
+            water_level: river.height,
+            bed_level: river.height - self.river_carve_depth * profile,
+        })
+    }
+
     fn water_with_margin(
         &self,
         position: Vec2,
@@ -39,20 +61,8 @@ impl HydrologyRegion {
             );
         }
 
-        if let Some(river) = self
-            .river_graph
-            .sample_horizontal_with_margin(position, margin)
-            .filter(|river| river.strength > SHORE_STRENGTH)
-        {
-            let profile = smoothstep(river.strength);
-            choose_water(
-                &mut selected,
-                HydrologyWaterSample {
-                    fluid_id: self.settings.water_fluid.as_str(),
-                    water_level: river.height,
-                    bed_level: river.height - self.river_carve_depth * profile,
-                },
-            );
+        if let Some(river) = self.river_water_with_margin(position, margin) {
+            choose_water(&mut selected, river);
         }
 
         let ocean_strength = self.ocean_strength_at(position);
