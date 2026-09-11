@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use super::HydrologyRegion;
 use crate::world::hydrology::{
-    constants::{OCEAN_EXTRA_DEPTH, OCEAN_MINIMUM_DEPTH},
+    constants::{OCEAN_EXTRA_DEPTH, OCEAN_MINIMUM_DEPTH, SHORE_STRENGTH},
     math::{lerp, smoothstep},
     types::HydrologyWaterSample,
 };
@@ -42,7 +42,7 @@ impl HydrologyRegion {
         if let Some(river) = self
             .river_graph
             .sample_horizontal_with_margin(position, margin)
-            .filter(|river| river.strength > 0.0)
+            .filter(|river| river.strength > SHORE_STRENGTH)
         {
             let profile = smoothstep(river.strength);
             choose_water(
