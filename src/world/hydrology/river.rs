@@ -17,6 +17,8 @@ use super::{
     types::{HydrologySurfaceSample, WaterBody},
 };
 
+const RIVER_WATER_SURFACE_OFFSET: f32 = 2.0;
+
 pub(super) struct RiverSystem {
     pub graph: FeatureGraph,
     pub water_bodies: Vec<WaterBody>,
@@ -344,7 +346,7 @@ fn river_height(node: DrainageNode, sea_level: f32) -> f32 {
     if node.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD {
         sea_level
     } else {
-        (node.elevation - 0.65).max(1.0)
+        (node.elevation - RIVER_WATER_SURFACE_OFFSET).max(1.0)
     }
 }
 
@@ -391,5 +393,12 @@ mod tests {
         let end = points.last().unwrap().y;
 
         assert!(start - end >= RIVER_MINIMUM_WATER_DROP);
+    }
+
+    #[test]
+    fn river_surface_stays_two_blocks_below_land_sample() {
+        let source = node(Vec2::ZERO, 80.0);
+
+        assert_eq!(river_height(source, 64.0), 78.0);
     }
 }
