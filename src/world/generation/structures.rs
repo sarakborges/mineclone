@@ -14,12 +14,19 @@ use crate::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         texture_rotation::TextureRotation,
     },
-    world::{biome_field::BiomeField, terrain::surface_height},
+    world::{
+        biome_field::BiomeField,
+        generation_region::GenerationRegion,
+        terrain::surface_height,
+    },
 };
+
+const MAX_STRUCTURE_GROUND_VARIATION: i32 = 1;
 
 pub(super) fn rasterize_structures(
     chunk: &mut VoxelChunk,
     chunk_origin: IVec3,
+    region: &GenerationRegion,
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     blocks: &BlockRegistry,
@@ -54,6 +61,7 @@ pub(super) fn rasterize_structures(
         rasterize_structure_candidates(
             chunk,
             chunk_origin,
+            region,
             dimension,
             biomes,
             blocks,
@@ -69,6 +77,7 @@ pub(super) fn rasterize_structures(
 fn rasterize_structure_candidates(
     chunk: &mut VoxelChunk,
     chunk_origin: IVec3,
+    region: &GenerationRegion,
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     blocks: &BlockRegistry,
@@ -108,11 +117,59 @@ fn rasterize_structure_candidates(
                 continue;
             }
 
-            let ground_y = surface_height(anchor, dimension, biomes, biome_field) - 1;
-            let origin = IVec3::new(anchor.x, ground_y, anchor.y);
+            let Some(origin_y) = structure_origin_y(
+                anchor,
+                structure,
+                region,
+                dimension,
+                biomes,
+                biome_field,
+            ) else {
+                continue;
+            };
+            let origin = IVec3::new(anchor.x, origin_y, anchor.y);
             rasterize_structure(chunk, chunk_origin, blocks, structure, origin);
         }
     }
+}
+
+fn structure_origin_y(
+    anchor: IVec2,
+    structure: &StructureDefinition,
+    region: &GenerationRegion,
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+) -> Option<i32> {
+    let voxels = structure.voxels();
+    let minimum_offset_y = voxels.iter().map(|voxel| voxel.offset.y).min()?;
+    let mut minimum_ground_y = i32::MAX;
+    let mut maximum_ground_y = i32::MIN;
+
+    for voxel in voxels
+        .iter()
+        .filter(|voxel| voxel.offset.y == minimum_offset_y)
+    {
+        let horizontal_offset = IVec2::new(voxel.offset.x, voxel.offset.z);
+        let position = anchor + horizontal_offset;
+        let sample_position = position.as_vec2() + Vec2::splat(0.5);
+
+        if region.hydrology.water_at(sample_position).is_some() {
+            return None;
+        }
+
+        let ground_y = surface_height(position, dimension, biomes, biome_field) - 1;
+        minimum_ground_y = minimum_ground_y.min(ground_y);
+        maximum_ground_y = maximum_ground_y.max(ground_y);
+    }
+
+    if minimum_ground_y == i32::MAX
+        || maximum_ground_y - minimum_ground_y > MAX_STRUCTURE_GROUND_VARIATION
+    {
+        return None;
+    }
+
+    Some(minimum_ground_y - minimum_offset_y)
 }
 
 fn candidate_anchor(
