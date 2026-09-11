@@ -28,8 +28,8 @@ use super::{
 };
 
 const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 1;
-const STREAMING_LIGHT_BATCH_CHUNKS: usize = 2;
-const STREAMING_BUDGET_MS: u128 = 6;
+const STREAMING_LIGHT_BATCH_CHUNKS: usize = 1;
+const STREAMING_BUDGET_MICROS: u128 = 6_000;
 const HORIZONTAL_PRELOAD_CHUNKS: i32 = 1;
 const SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const SURFACE_PADDING_ABOVE_CHUNKS: i32 = 1;
@@ -111,7 +111,7 @@ pub(super) fn stream_chunks(
 
     loop {
         if processed >= MIN_CHUNKS_BEFORE_BUDGET_CHECK
-            && frame_started.elapsed().as_millis() >= STREAMING_BUDGET_MS
+            && frame_started.elapsed().as_micros() >= STREAMING_BUDGET_MICROS
         {
             break;
         }
@@ -120,7 +120,7 @@ pub(super) fn stream_chunks(
 
         while batch.len() < STREAMING_LIGHT_BATCH_CHUNKS {
             if processed + batch.len() >= MIN_CHUNKS_BEFORE_BUDGET_CHECK
-                && frame_started.elapsed().as_millis() >= STREAMING_BUDGET_MS
+                && frame_started.elapsed().as_micros() >= STREAMING_BUDGET_MICROS
             {
                 break;
             }
