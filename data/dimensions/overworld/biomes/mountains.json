@@ -42,6 +42,17 @@
       "warpStrength": 14.0
     }
   ],
+  "surfaceCarvers": [
+    {
+      "type": "tunnel",
+      "spacing": 180.0,
+      "chance": 0.35,
+      "length": { "min": 70.0, "max": 130.0 },
+      "radius": { "min": 3.0, "max": 5.2 },
+      "depth": { "min": 2.5, "max": 5.5 },
+      "jitter": 50.0
+    }
+  ],
   "surfaceLayers": [
     { "block": "asteria:stone" }
   ],
