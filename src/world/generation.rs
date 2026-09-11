@@ -8,6 +8,8 @@ mod materials;
 mod structures;
 mod surface_carvers;
 
+use std::sync::Arc;
+
 use bevy::prelude::*;
 
 use crate::{
@@ -29,8 +31,9 @@ use self::{
 };
 use super::{
     biome_field::BiomeField,
+    cave_connectivity::CaveConnectivityRegion,
     generation_pipeline::{GENERATION_STAGE_ORDER, GenerationStage},
-    generation_region::{generation_region_coord, generation_region_world_bounds},
+    generation_region::{GenerationRegion, generation_region_coord, generation_region_world_bounds},
     hydrology::HydrologySurfaceSample,
     terrain::{chunk_y_bounds, surface_height_from_sample},
     world_feature_fields::WorldFeatureFields,
@@ -45,6 +48,56 @@ pub(crate) struct ChunkGenerationContext<'a> {
     pub structure_sets: &'a StructureSetRegistry,
     pub biome_field: &'a BiomeField,
     pub feature_fields: &'a WorldFeatureFields,
+}
+
+impl ChunkGenerationContext<'_> {
+    fn region(&self, region_coord: IVec3) -> Arc<GenerationRegion> {
+        self.feature_fields
+            .region_with_hydrology(region_coord, |hydrology| {
+                hydrology.region_from_macro_terrain(
+                    IVec2::new(region_coord.x, region_coord.z),
+                    |position| {
+                        let surface_position =
+                            IVec2::new(position.x.floor() as i32, position.y.floor() as i32);
+                        let surface = self
+                            .biome_field
+                            .sample_surface(surface_position.as_vec2() + Vec2::splat(0.5));
+                        let elevation = surface_height_from_sample(
+                            surface_position,
+                            self.dimension,
+                            self.biomes,
+                            self.biome_field.seed(),
+                            &surface,
+                        ) as f32;
+                        let continentalness =
+                            self.biome_field.climate_at(position).continentalness;
+                        let surface_biome =
+                            self.biomes.get(surface.primary_id).unwrap_or_else(|| {
+                                panic!("missing biome definition: {}", surface.primary_id)
+                            });
+
+                        HydrologySurfaceSample {
+                            elevation,
+                            continentalness,
+                            biome_hydrology: surface_biome.hydrology,
+                        }
+                    },
+                )
+            })
+    }
+
+    fn anchored_caves(
+        &self,
+        region: &GenerationRegion,
+    ) -> Option<Arc<CaveConnectivityRegion>> {
+        anchored_cave_region(
+            region,
+            self.biome_field,
+            self.biomes,
+            self.dimension,
+            self.feature_fields,
+        )
+    }
 }
 
 pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>) -> VoxelChunk {
@@ -70,38 +123,7 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
     let chunk_origin = coord * CHUNK_SIZE as i32;
     let horizontal_chunk = IVec2::new(coord.x, coord.z);
     let region_coord = generation_region_coord(coord);
-    let region = context
-        .feature_fields
-        .region_with_hydrology(region_coord, |hydrology| {
-            hydrology.region_from_macro_terrain(
-                IVec2::new(region_coord.x, region_coord.z),
-                |position| {
-                    let surface_position =
-                        IVec2::new(position.x.floor() as i32, position.y.floor() as i32);
-                    let surface = context
-                        .biome_field
-                        .sample_surface(surface_position.as_vec2() + Vec2::splat(0.5));
-                    let elevation = surface_height_from_sample(
-                        surface_position,
-                        context.dimension,
-                        context.biomes,
-                        context.biome_field.seed(),
-                        &surface,
-                    ) as f32;
-                    let continentalness = context.biome_field.climate_at(position).continentalness;
-                    let surface_biome =
-                        context.biomes.get(surface.primary_id).unwrap_or_else(|| {
-                            panic!("missing biome definition: {}", surface.primary_id)
-                        });
-
-                    HydrologySurfaceSample {
-                        elevation,
-                        continentalness,
-                        biome_hydrology: surface_biome.hydrology,
-                    }
-                },
-            )
-        });
+    let region = context.region(region_coord);
     let volume_region = context
         .feature_fields
         .volume_biome_region(region_coord, || {
@@ -113,13 +135,7 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
     let chunk_minimum = chunk_origin.as_vec3();
     let chunk_maximum = chunk_minimum + Vec3::splat(CHUNK_SIZE as f32);
     let chunk_volume_region = volume_region.restricted_to_bounds(chunk_minimum, chunk_maximum);
-    let anchored_caves = anchored_cave_region(
-        region.as_ref(),
-        context.biome_field,
-        context.biomes,
-        context.dimension,
-        context.feature_fields,
-    );
+    let anchored_caves = context.anchored_caves(region.as_ref());
     let columns = context.feature_fields.generation_columns(horizontal_chunk, || {
         sample_generation_columns(
             horizontal_chunk,
@@ -160,18 +176,7 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         context.fluids,
         region.as_ref(),
     );
-    rasterize_feature_pass(
-        &mut chunk,
-        chunk_origin,
-        region.as_ref(),
-        anchored_caves.as_deref(),
-        context.biome_field,
-        context.blocks,
-        context.dimension,
-        context.biomes,
-        context.structures,
-        context.structure_sets,
-    );
+    rasterize_feature_pass(&mut chunk, chunk_origin, context);
 
     chunk
 }

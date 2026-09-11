@@ -1,13 +1,13 @@
+use std::sync::Arc;
+
 use bevy::prelude::*;
 
 use crate::{
     content::{
-        biome::BiomeRegistry,
         biome_structure::StructurePlacementRules,
         block::BlockRegistry,
         block_id::intern_block_id,
-        dimension::DimensionDefinition,
-        structure::{StructureDefinition, StructureRegistry},
+        structure::StructureDefinition,
     },
     voxel::{
         cell::VoxelCell,
@@ -15,15 +15,17 @@ use crate::{
         texture_rotation::TextureRotation,
     },
     world::{
-        biome_field::BiomeField,
         cave_connectivity::CaveConnectivityRegion,
         density_pipeline::{DensitySampleContext, sample_density},
-        generation_region::GenerationRegion,
+        generation_region::{GenerationRegion, generation_region_coord},
         terrain::{surface_height, terrain_density},
     },
 };
 
-use super::surface_carvers::{resolve_surface_carver_column, surface_carver_density_delta};
+use super::{
+    ChunkGenerationContext,
+    surface_carvers::{resolve_surface_carver_column, surface_carver_density_delta},
+};
 
 const MAX_STRUCTURE_GROUND_VARIATION: i32 = 1;
 const MAX_STRUCTURE_GROUND_RISE: i32 = 3;
@@ -32,15 +34,10 @@ const SURFACE_CARVER_WATER_CLEARANCE: f32 = 12.0;
 pub(super) fn rasterize_structures(
     chunk: &mut VoxelChunk,
     chunk_origin: IVec3,
-    region: &GenerationRegion,
-    anchored_caves: Option<&CaveConnectivityRegion>,
-    dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
-    blocks: &BlockRegistry,
-    biome_field: &BiomeField,
-    structures: &StructureRegistry,
+    context: &ChunkGenerationContext<'_>,
 ) {
-    let mut placements = biomes
+    let mut placements = context
+        .biomes
         .iter()
         .flat_map(|biome| {
             biome
@@ -58,22 +55,20 @@ pub(super) fn rasterize_structures(
     });
 
     for (biome, biome_structure) in placements {
-        let structure = structures.get(&biome_structure.id).unwrap_or_else(|| {
-            panic!(
-                "biome {} references missing structure: {}",
-                biome.id, biome_structure.id
-            )
-        });
+        let structure = context
+            .structures
+            .get(&biome_structure.id)
+            .unwrap_or_else(|| {
+                panic!(
+                    "biome {} references missing structure: {}",
+                    biome.id, biome_structure.id
+                )
+            });
 
         rasterize_structure_candidates(
             chunk,
             chunk_origin,
-            region,
-            anchored_caves,
-            dimension,
-            biomes,
-            blocks,
-            biome_field,
+            context,
             &biome.id,
             structure,
             biome_structure.placement,
@@ -81,16 +76,10 @@ pub(super) fn rasterize_structures(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn rasterize_structure_candidates(
     chunk: &mut VoxelChunk,
     chunk_origin: IVec3,
-    region: &GenerationRegion,
-    anchored_caves: Option<&CaveConnectivityRegion>,
-    dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
-    blocks: &BlockRegistry,
-    biome_field: &BiomeField,
+    context: &ChunkGenerationContext<'_>,
     biome_id: &str,
     structure: &StructureDefinition,
     placement: StructurePlacementRules,
@@ -115,30 +104,28 @@ fn rasterize_structure_candidates(
     for cell_z in minimum_cell.y..=maximum_cell.y {
         for cell_x in minimum_cell.x..=maximum_cell.x {
             let cell = IVec2::new(cell_x, cell_z);
-            let Some(anchor) =
-                candidate_anchor(biome_field.seed(), biome_id, structure, placement, cell)
-            else {
+            let Some(anchor) = candidate_anchor(
+                context.biome_field.seed(),
+                biome_id,
+                structure,
+                placement,
+                cell,
+            ) else {
                 continue;
             };
-            let surface_sample = biome_field.sample_surface(anchor.as_vec2() + Vec2::splat(0.5));
+            let surface_sample = context
+                .biome_field
+                .sample_surface(anchor.as_vec2() + Vec2::splat(0.5));
 
             if surface_sample.primary_id != biome_id {
                 continue;
             }
 
-            let Some(origin_y) = structure_origin_y(
-                anchor,
-                structure,
-                region,
-                anchored_caves,
-                dimension,
-                biomes,
-                biome_field,
-            ) else {
+            let Some(origin_y) = structure_origin_y(anchor, structure, context) else {
                 continue;
             };
             let origin = IVec3::new(anchor.x, origin_y, anchor.y);
-            rasterize_structure(chunk, chunk_origin, blocks, structure, origin);
+            rasterize_structure(chunk, chunk_origin, context.blocks, structure, origin);
         }
     }
 }
@@ -146,12 +133,9 @@ fn rasterize_structure_candidates(
 fn structure_origin_y(
     anchor: IVec2,
     structure: &StructureDefinition,
-    region: &GenerationRegion,
-    anchored_caves: Option<&CaveConnectivityRegion>,
-    dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
-    biome_field: &BiomeField,
+    context: &ChunkGenerationContext<'_>,
 ) -> Option<i32> {
+    let (region, anchored_caves) = structure_support_context(anchor, context);
     let voxels = structure.voxels();
     let minimum_offset_y = voxels.iter().map(|voxel| voxel.offset.y).min()?;
     let mut minimum_ground_y = i32::MAX;
@@ -171,11 +155,9 @@ fn structure_origin_y(
 
         let ground_y = supported_surface_ground_y(
             position,
-            region,
-            anchored_caves,
-            dimension,
-            biomes,
-            biome_field,
+            region.as_ref(),
+            anchored_caves.as_deref(),
+            context,
         )?;
         minimum_ground_y = minimum_ground_y.min(ground_y);
         maximum_ground_y = maximum_ground_y.max(ground_y);
@@ -190,24 +172,49 @@ fn structure_origin_y(
     Some(minimum_ground_y - minimum_offset_y)
 }
 
+fn structure_support_context(
+    anchor: IVec2,
+    context: &ChunkGenerationContext<'_>,
+) -> (Arc<GenerationRegion>, Option<Arc<CaveConnectivityRegion>>) {
+    let surface_y = surface_height(
+        anchor,
+        context.dimension,
+        context.biomes,
+        context.biome_field,
+    );
+    let chunk_size = CHUNK_SIZE as i32;
+    let anchor_chunk = IVec3::new(
+        anchor.x.div_euclid(chunk_size),
+        (surface_y - 1).div_euclid(chunk_size).max(0),
+        anchor.y.div_euclid(chunk_size),
+    );
+    let region = context.region(generation_region_coord(anchor_chunk));
+    let anchored_caves = context.anchored_caves(region.as_ref());
+
+    (region, anchored_caves)
+}
+
 fn supported_surface_ground_y(
     position: IVec2,
     region: &GenerationRegion,
     anchored_caves: Option<&CaveConnectivityRegion>,
-    dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
-    biome_field: &BiomeField,
+    context: &ChunkGenerationContext<'_>,
 ) -> Option<i32> {
     let horizontal = position.as_vec2() + Vec2::splat(0.5);
-    let surface = biome_field.sample_surface(horizontal);
-    let raw_surface_height = surface_height(position, dimension, biomes, biome_field);
+    let surface = context.biome_field.sample_surface(horizontal);
+    let raw_surface_height = surface_height(
+        position,
+        context.dimension,
+        context.biomes,
+        context.biome_field,
+    );
     let raw_ground_y = raw_surface_height - 1;
     let influences = surface
         .influences
         .iter()
         .map(|influence| {
             (
-                biome_field.surface_biome_index(influence.id),
+                context.biome_field.surface_biome_index(influence.id),
                 influence.weight,
             )
         })
@@ -220,13 +227,13 @@ fn supported_surface_ground_y(
             resolve_surface_carver_column(
                 horizontal,
                 &influences,
-                biomes,
-                biome_field,
-                biome_field.seed(),
-                dimension.sea_level as f32,
+                context.biomes,
+                context.biome_field,
+                context.biome_field.seed(),
+                context.dimension.sea_level as f32,
             )
         });
-    let density_context = DensitySampleContext::new(region, anchored_caves, biome_field);
+    let density_context = DensitySampleContext::new(region, anchored_caves, context.biome_field);
 
     let density_at = |world_y: i32| {
         let sample_position = Vec3::new(horizontal.x, world_y as f32 + 0.5, horizontal.y);
