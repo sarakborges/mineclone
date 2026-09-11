@@ -34,6 +34,7 @@ use super::{
 
 const BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS: i32 = 2;
 const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 1;
+const BOOTSTRAP_LIGHT_BATCH_CHUNKS: usize = 2;
 const INITIAL_LOADING_BUDGET_MS: u128 = 12;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -47,6 +48,7 @@ enum WorldLoadingPhase {
 pub(crate) struct WorldLoadingState {
     coords: Vec<IVec3>,
     generated: usize,
+    lit: usize,
     meshed: usize,
     phase: WorldLoadingPhase,
     screen_rendered: bool,
@@ -164,6 +166,7 @@ pub(super) fn begin_world_loading(
     commands.insert_resource(WorldLoadingState {
         coords,
         generated: 0,
+        lit: 0,
         meshed: 0,
         phase: WorldLoadingPhase::Generating,
         screen_rendered: false,
@@ -220,13 +223,33 @@ pub(super) fn setup_world(
             }
         }
         WorldLoadingPhase::Lighting => {
-            drop(initialize_chunks_lighting(
-                &mut world,
-                &loading_state.coords,
-                &content.blocks,
-                &content.fluids,
-            ));
-            loading_state.phase = WorldLoadingPhase::Meshing;
+            let frame_started = Instant::now();
+            let mut processed = 0;
+
+            loop {
+                if processed > 0 && frame_started.elapsed().as_millis() >= INITIAL_LOADING_BUDGET_MS {
+                    break;
+                }
+
+                let start = loading_state.lit;
+                if start >= loading_state.coords.len() {
+                    break;
+                }
+                let end = (start + BOOTSTRAP_LIGHT_BATCH_CHUNKS).min(loading_state.coords.len());
+
+                drop(initialize_chunks_lighting(
+                    &mut world,
+                    &loading_state.coords[start..end],
+                    &content.blocks,
+                    &content.fluids,
+                ));
+                loading_state.lit = end;
+                processed += end - start;
+            }
+
+            if loading_state.lit >= loading_state.coords.len() {
+                loading_state.phase = WorldLoadingPhase::Meshing;
+            }
         }
         WorldLoadingPhase::Meshing => {
             let frame_started = Instant::now();
