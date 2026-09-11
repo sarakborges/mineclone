@@ -6,7 +6,10 @@ use crate::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         fluid::{FluidCell, MAX_FLUID_LEVEL},
     },
-    world::generation_region::GenerationRegion,
+    world::{
+        cave_connectivity::CaveConnectivityRegion,
+        generation_region::GenerationRegion,
+    },
 };
 
 use super::index::voxel_index;
@@ -17,17 +20,27 @@ pub(super) fn rasterize_fluid_pass(
     density: &[f32],
     fluids: &FluidRegistry,
     region: &GenerationRegion,
+    anchored_caves: Option<&CaveConnectivityRegion>,
+    underground_water_fluid: &str,
 ) {
+    let underground_fluid_id = anchored_caves.map(|_| {
+        fluids.id_of(underground_water_fluid).unwrap_or_else(|| {
+            panic!(
+                "underground hydrology references missing fluid: {underground_water_fluid}"
+            )
+        })
+    });
+
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
             let world_x = chunk_origin.x + local_x as i32;
             let world_z = chunk_origin.z + local_z as i32;
             let horizontal = Vec2::new(world_x as f32 + 0.5, world_z as f32 + 0.5);
-            let Some(water) = region.hydrology.water_at(horizontal) else {
-                continue;
-            };
-            let fluid_id = fluids.id_of(water.fluid_id).unwrap_or_else(|| {
-                panic!("hydrology references missing fluid: {}", water.fluid_id)
+            let surface_water = region.hydrology.water_at(horizontal);
+            let surface_fluid_id = surface_water.as_ref().map(|water| {
+                fluids.id_of(water.fluid_id).unwrap_or_else(|| {
+                    panic!("hydrology references missing fluid: {}", water.fluid_id)
+                })
             });
 
             for local_y in 0..CHUNK_SIZE {
@@ -36,10 +49,34 @@ pub(super) fn rasterize_fluid_pass(
                 }
 
                 let world_y = chunk_origin.y + local_y as i32;
-                if world_y as f32 + 1.0 <= water.bed_level {
+                if let (Some(water), Some(fluid_id)) = (surface_water.as_ref(), surface_fluid_id)
+                    && world_y as f32 + 1.0 > water.bed_level
+                    && let Some(level) = fluid_level_for_surface(water.water_level, world_y)
+                {
+                    chunk.set_fluid(
+                        local_x,
+                        local_y,
+                        local_z,
+                        Some(FluidCell::source(fluid_id, level)),
+                    );
                     continue;
                 }
 
+                let (Some(caves), Some(fluid_id)) = (anchored_caves, underground_fluid_id)
+                else {
+                    continue;
+                };
+                let position = Vec3::new(
+                    world_x as f32 + 0.5,
+                    world_y as f32 + 0.5,
+                    world_z as f32 + 0.5,
+                );
+                let Some(water) = caves.underground_water_at(position) else {
+                    continue;
+                };
+                if world_y as f32 + 1.0 <= water.bed_level {
+                    continue;
+                }
                 let Some(level) = fluid_level_for_surface(water.water_level, world_y) else {
                     continue;
                 };

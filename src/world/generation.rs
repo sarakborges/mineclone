@@ -175,6 +175,8 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         &density.values,
         context.fluids,
         region.as_ref(),
+        anchored_caves.as_deref(),
+        &context.dimension.hydrology.water_fluid,
     );
     rasterize_feature_pass(&mut chunk, chunk_origin, context);
 
