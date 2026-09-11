@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::content::{
-    biome::{BiomeFieldSample, BiomeRegistry},
+    biome::BiomeRegistry,
     biome_surface_carver::{BiomeSurfaceCarver, SurfaceCarverRange},
 };
 
