@@ -8,7 +8,7 @@ use crate::{
     },
     world::{
         biome_field::{BiomeField, VolumeBiomeRegion},
-        density_pipeline::{DensitySampleContext, sample_density},
+        density_sampling::{DensitySampleContext, sample_density},
         generation_region::GenerationRegion,
         terrain::{surface_height, terrain_density},
     },

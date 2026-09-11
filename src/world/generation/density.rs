@@ -6,7 +6,7 @@ use crate::{
     world::{
         biome_field::{BiomeField, VolumeBiomeRegion, VolumeBiomeSelection},
         cave_connectivity::CaveConnectivityRegion,
-        density_pipeline::{
+        density_sampling::{
             DensitySampleContext, sample_density_column_hydrology, sample_density_with_hydrology,
         },
         generation_region::GenerationRegion,

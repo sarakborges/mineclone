@@ -7,7 +7,7 @@ use crate::{
     voxel::coordinates::chunk_coord_from_world,
     world::{
         cave_connectivity::CaveConnectivityRegion,
-        density_pipeline::{DensitySampleContext, sample_density},
+        density_sampling::{DensitySampleContext, sample_density},
         generation_region::{GenerationRegion, generation_region_coord},
         terrain::{surface_height, terrain_density},
     },

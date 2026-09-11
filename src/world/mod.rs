@@ -7,7 +7,7 @@ pub(crate) mod chunk_rendering;
 pub(crate) mod chunk_system_params;
 mod chunk_unloading;
 pub(crate) mod day_night;
-mod density_pipeline;
+mod density_sampling;
 mod deterministic;
 pub(crate) mod dimension;
 pub(crate) mod feature_graph;

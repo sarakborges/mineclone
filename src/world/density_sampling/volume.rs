@@ -85,7 +85,7 @@ fn coverage_mask(noise: f32, coverage: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::density_pipeline::{
+    use crate::world::density_sampling::{
         CAVERN_FULL_STRENGTH_SURFACE_DEPTH, CAVERN_MINIMUM_SURFACE_DEPTH, depth_strength,
     };
 
