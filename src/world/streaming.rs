@@ -116,9 +116,16 @@ pub fn stream_chunks(
             &render_context,
         );
 
-        inputs.remesh_queue.extend(lighting_changes);
+        for changed in lighting_changes {
+            if changed != coord && renderer.pool.contains(changed) {
+                inputs.remesh_queue.enqueue_priority(changed);
+            }
+        }
         for offset in CARDINAL_NEIGHBORS {
-            inputs.remesh_queue.enqueue(coord + offset);
+            let neighbor = coord + offset;
+            if renderer.pool.contains(neighbor) {
+                inputs.remesh_queue.enqueue_priority(neighbor);
+            }
         }
     }
 }
