@@ -1,21 +1,14 @@
-use bevy::{
-    asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology,
+use crate::voxel::{
+    mesh_buffer::VoxelMeshBuffer,
+    quad::VOXEL_FACE_UVS,
+    texture_rotation::TextureRotation,
 };
 
-use super::{
-    face::{FaceData, push_face},
-    lighting::FaceLighting,
-};
-use crate::voxel::texture_rotation::TextureRotation;
+use super::lighting::{FaceLighting, should_flip_diagonal};
 
 #[derive(Default)]
 pub(super) struct MeshBuffers {
-    positions: Vec<[f32; 3]>,
-    normals: Vec<[f32; 3]>,
-    uvs: Vec<[f32; 2]>,
-    light_uvs: Vec<[f32; 2]>,
-    colors: Vec<[f32; 4]>,
-    indices: Vec<u32>,
+    inner: VoxelMeshBuffer,
 }
 
 impl MeshBuffers {
@@ -27,40 +20,21 @@ impl MeshBuffers {
         tint: [f32; 3],
         lighting: FaceLighting,
     ) {
-        push_face(
-            &mut self.positions,
-            &mut self.normals,
-            &mut self.uvs,
-            &mut self.light_uvs,
-            &mut self.colors,
-            &mut self.indices,
-            FaceData {
-                vertices,
-                normal,
-                texture_rotation,
-                tint,
-                light: lighting.channels,
-                ambient_occlusion: lighting.ambient_occlusion,
-            },
+        let colors = lighting
+            .ambient_occlusion
+            .map(|ao| [tint[0], tint[1], tint[2], ao]);
+
+        self.inner.push_quad(
+            vertices,
+            normal,
+            texture_rotation.rotate_uvs(VOXEL_FACE_UVS),
+            lighting.channels,
+            colors,
+            should_flip_diagonal(lighting.ambient_occlusion),
         );
     }
 
-    pub fn into_mesh(self) -> Option<Mesh> {
-        if self.positions.is_empty() {
-            return None;
-        }
-
-        Some(
-            Mesh::new(
-                PrimitiveTopology::TriangleList,
-                RenderAssetUsages::RENDER_WORLD,
-            )
-            .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors)
-            .with_inserted_indices(Indices::U32(self.indices)),
-        )
+    pub fn into_mesh(self) -> Option<bevy::prelude::Mesh> {
+        self.inner.into_mesh()
     }
 }

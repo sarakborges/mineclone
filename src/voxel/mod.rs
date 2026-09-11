@@ -10,6 +10,7 @@ pub(crate) mod fluid_mesh;
 pub(crate) mod light;
 pub(crate) mod lighting;
 pub(crate) mod mesh;
+pub(crate) mod mesh_buffer;
 pub(crate) mod neighbors;
 pub(crate) mod quad;
 pub(crate) mod raycast;

@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use bevy::{
-    asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology,
-};
+use bevy::prelude::*;
 
 use crate::content::fluid::FluidId;
 
@@ -10,67 +8,14 @@ use super::{
     block_face::BlockFace,
     chunk::{CHUNK_SIZE, VoxelChunk},
     mesh::lighting::{FaceLighting, face_lighting, should_flip_diagonal},
-    quad::{VOXEL_FACE_UVS, quad_triangle_indices},
+    mesh_buffer::VoxelMeshBuffer,
+    quad::VOXEL_FACE_UVS,
     world::VoxelWorld,
 };
 
 pub struct ChunkFluidMesh {
     pub fluid_id: FluidId,
     pub mesh: Mesh,
-}
-
-#[derive(Default)]
-struct MeshBuffers {
-    positions: Vec<[f32; 3]>,
-    normals: Vec<[f32; 3]>,
-    uvs: Vec<[f32; 2]>,
-    light_uvs: Vec<[f32; 2]>,
-    colors: Vec<[f32; 4]>,
-    indices: Vec<u32>,
-}
-
-impl MeshBuffers {
-    fn push(
-        &mut self,
-        vertices: [[f32; 3]; 4],
-        normal: [f32; 3],
-        lighting: FaceLighting,
-        tint: [f32; 3],
-    ) {
-        let base = self.positions.len() as u32;
-        let vertex_colors = lighting
-            .ambient_occlusion
-            .map(|ao| [tint[0], tint[1], tint[2], ao]);
-
-        self.positions.extend(vertices);
-        self.normals.extend([normal; 4]);
-        self.uvs.extend(VOXEL_FACE_UVS);
-        self.light_uvs.extend(lighting.channels);
-        self.colors.extend(vertex_colors);
-        self.indices.extend(quad_triangle_indices(
-            base,
-            should_flip_diagonal(lighting.ambient_occlusion),
-        ));
-    }
-
-    fn into_mesh(self) -> Option<Mesh> {
-        if self.positions.is_empty() {
-            return None;
-        }
-
-        Some(
-            Mesh::new(
-                PrimitiveTopology::TriangleList,
-                RenderAssetUsages::RENDER_WORLD,
-            )
-            .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors)
-            .with_inserted_indices(Indices::U32(self.indices)),
-        )
-    }
 }
 
 pub fn build_fluid_meshes<F>(
@@ -82,7 +27,7 @@ pub fn build_fluid_meshes<F>(
 where
     F: Fn(IVec3, FluidId) -> [f32; 3],
 {
-    let mut buffers = HashMap::<FluidId, MeshBuffers>::new();
+    let mut buffers = HashMap::<FluidId, VoxelMeshBuffer>::new();
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_origin = chunk_coord * chunk_size;
 
@@ -108,7 +53,8 @@ where
                 let h01 = fluid_corner_height(world, world_voxel, cell.fluid_id, -1, 1);
 
                 if face_is_exposed(world, world_voxel + IVec3::X, cell.fluid_id) {
-                    fluid.push(
+                    push_fluid_face(
+                        fluid,
                         [
                             [x1, y0, z1],
                             [x1, y0, z0],
@@ -122,7 +68,8 @@ where
                 }
 
                 if face_is_exposed(world, world_voxel - IVec3::X, cell.fluid_id) {
-                    fluid.push(
+                    push_fluid_face(
+                        fluid,
                         [
                             [x0, y0, z0],
                             [x0, y0, z1],
@@ -136,7 +83,8 @@ where
                 }
 
                 if face_is_exposed(world, world_voxel + IVec3::Y, cell.fluid_id) {
-                    fluid.push(
+                    push_fluid_face(
+                        fluid,
                         [
                             [x0, y0 + h01, z1],
                             [x1, y0 + h11, z1],
@@ -152,7 +100,8 @@ where
                 if world_voxel.y > 0
                     && face_is_exposed(world, world_voxel - IVec3::Y, cell.fluid_id)
                 {
-                    fluid.push(
+                    push_fluid_face(
+                        fluid,
                         [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]],
                         [0.0, -1.0, 0.0],
                         face_lighting(world, world_voxel, BlockFace::Bottom),
@@ -161,7 +110,8 @@ where
                 }
 
                 if face_is_exposed(world, world_voxel + IVec3::Z, cell.fluid_id) {
-                    fluid.push(
+                    push_fluid_face(
+                        fluid,
                         [
                             [x0, y0, z1],
                             [x1, y0, z1],
@@ -175,7 +125,8 @@ where
                 }
 
                 if face_is_exposed(world, world_voxel - IVec3::Z, cell.fluid_id) {
-                    fluid.push(
+                    push_fluid_face(
+                        fluid,
                         [
                             [x1, y0, z0],
                             [x0, y0, z0],
@@ -193,12 +144,33 @@ where
 
     buffers
         .into_iter()
-        .filter_map(|(fluid_id, buffers)| {
-            buffers
+        .filter_map(|(fluid_id, buffer)| {
+            buffer
                 .into_mesh()
                 .map(|mesh| ChunkFluidMesh { fluid_id, mesh })
         })
         .collect()
+}
+
+fn push_fluid_face(
+    buffer: &mut VoxelMeshBuffer,
+    vertices: [[f32; 3]; 4],
+    normal: [f32; 3],
+    lighting: FaceLighting,
+    tint: [f32; 3],
+) {
+    let colors = lighting
+        .ambient_occlusion
+        .map(|ao| [tint[0], tint[1], tint[2], ao]);
+
+    buffer.push_quad(
+        vertices,
+        normal,
+        VOXEL_FACE_UVS,
+        lighting.channels,
+        colors,
+        should_flip_diagonal(lighting.ambient_occlusion),
+    );
 }
 
 fn fluid_corner_height(
