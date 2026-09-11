@@ -16,6 +16,7 @@ const CAVERN_MINIMUM_SURFACE_DEPTH: f32 = 12.0;
 const CAVERN_FULL_STRENGTH_SURFACE_DEPTH: f32 = 20.0;
 const CAVE_WATER_PROTECTION_DEPTH: f32 = 14.0;
 const CAVE_WATER_PROTECTION_FADE_DEPTH: f32 = 20.0;
+const CAVE_WATER_HORIZONTAL_CLEARANCE: f32 = 8.0;
 
 pub fn sample_density(
     base_density: f32,
@@ -61,7 +62,10 @@ pub fn sample_density(
 
 fn cave_water_clearance(position: Vec3, region: &GenerationRegion) -> f32 {
     let horizontal = Vec2::new(position.x, position.z);
-    let Some(water) = region.hydrology.water_at(horizontal) else {
+    let Some(water) = region
+        .hydrology
+        .water_near(horizontal, CAVE_WATER_HORIZONTAL_CLEARANCE)
+    else {
         return 1.0;
     };
     let depth_below_water = water.water_level - position.y;
