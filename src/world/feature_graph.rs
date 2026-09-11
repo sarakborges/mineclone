@@ -1,29 +1,29 @@
 use bevy::prelude::*;
 
 #[derive(Clone, Copy, Debug)]
-pub struct FeatureNode {
-    pub position: Vec3,
+struct FeatureNode {
+    position: Vec3,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct FeatureEdge {
-    pub from: usize,
-    pub to: usize,
-    pub start_radius: f32,
-    pub end_radius: f32,
+struct FeatureEdge {
+    from: usize,
+    to: usize,
+    start_radius: f32,
+    end_radius: f32,
     minimum: Vec3,
     maximum: Vec3,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct FeatureGraphSample {
-    pub strength: f32,
+pub(crate) struct FeatureGraphSample {
+    pub(crate) strength: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct FeatureGraphHorizontalSample {
-    pub height: f32,
-    pub strength: f32,
+pub(crate) struct FeatureGraphHorizontalSample {
+    pub(crate) height: f32,
+    pub(crate) strength: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -33,29 +33,35 @@ pub(crate) struct FeatureGraphHorizontalIntersection {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct FeatureGraph {
+pub(crate) struct FeatureGraph {
     nodes: Vec<FeatureNode>,
     edges: Vec<FeatureEdge>,
 }
 
 impl FeatureGraph {
     #[cfg(test)]
-    pub fn nodes(&self) -> &[FeatureNode] {
+    fn nodes(&self) -> &[FeatureNode] {
         &self.nodes
     }
 
     #[cfg(test)]
-    pub fn edges(&self) -> &[FeatureEdge] {
+    fn edges(&self) -> &[FeatureEdge] {
         &self.edges
     }
 
-    pub fn add_node(&mut self, position: Vec3) -> usize {
+    pub(crate) fn add_node(&mut self, position: Vec3) -> usize {
         let index = self.nodes.len();
         self.nodes.push(FeatureNode { position });
         index
     }
 
-    pub fn add_edge(&mut self, from: usize, to: usize, start_radius: f32, end_radius: f32) {
+    pub(crate) fn add_edge(
+        &mut self,
+        from: usize,
+        to: usize,
+        start_radius: f32,
+        end_radius: f32,
+    ) {
         assert!(
             from < self.nodes.len(),
             "feature edge source node is missing"
@@ -126,7 +132,7 @@ impl FeatureGraph {
     }
 
     #[cfg(test)]
-    pub fn nearest_node(&self, position: Vec3) -> Option<usize> {
+    fn nearest_node(&self, position: Vec3) -> Option<usize> {
         self.nodes
             .iter()
             .enumerate()
@@ -138,7 +144,7 @@ impl FeatureGraph {
             .map(|(index, _)| index)
     }
 
-    pub fn sample(&self, position: Vec3) -> Option<FeatureGraphSample> {
+    pub(crate) fn sample(&self, position: Vec3) -> Option<FeatureGraphSample> {
         let mut strongest: Option<FeatureGraphSample> = None;
 
         for edge in &self.edges {
@@ -178,11 +184,14 @@ impl FeatureGraph {
         strongest
     }
 
-    pub fn sample_horizontal(&self, position: Vec2) -> Option<FeatureGraphHorizontalSample> {
+    pub(crate) fn sample_horizontal(
+        &self,
+        position: Vec2,
+    ) -> Option<FeatureGraphHorizontalSample> {
         self.sample_horizontal_with_margin(position, 0.0)
     }
 
-    pub fn sample_horizontal_with_margin(
+    pub(crate) fn sample_horizontal_with_margin(
         &self,
         position: Vec2,
         margin: f32,
