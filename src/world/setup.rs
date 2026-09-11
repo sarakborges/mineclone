@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
@@ -32,7 +34,7 @@ use super::{
 
 const BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS: i32 = 2;
 const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 1;
-const INITIAL_CHUNKS_PER_FRAME: usize = 2;
+const INITIAL_LOADING_BUDGET_MS: u128 = 12;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum WorldLoadingPhase {
@@ -195,7 +197,14 @@ pub fn setup_world(
 
     match loading_state.phase {
         WorldLoadingPhase::Generating => {
-            for _ in 0..INITIAL_CHUNKS_PER_FRAME {
+            let frame_started = Instant::now();
+            let mut processed = 0;
+
+            loop {
+                if processed > 0 && frame_started.elapsed().as_millis() >= INITIAL_LOADING_BUDGET_MS {
+                    break;
+                }
+
                 let Some(coord) = loading_state.coords.get(loading_state.generated).copied() else {
                     break;
                 };
@@ -203,6 +212,7 @@ pub fn setup_world(
                 ensure_chunk_loaded(&mut world, coord, &generation_context);
                 fluid_updates.enqueue_loaded_fluid_frontier(&world, coord);
                 loading_state.generated += 1;
+                processed += 1;
             }
 
             if loading_state.generated >= loading_state.coords.len() {
@@ -210,16 +220,23 @@ pub fn setup_world(
             }
         }
         WorldLoadingPhase::Lighting => {
-            initialize_chunks_lighting(
+            drop(initialize_chunks_lighting(
                 &mut world,
                 &loading_state.coords,
                 &content.blocks,
                 &content.fluids,
-            );
+            ));
             loading_state.phase = WorldLoadingPhase::Meshing;
         }
         WorldLoadingPhase::Meshing => {
-            for _ in 0..INITIAL_CHUNKS_PER_FRAME {
+            let frame_started = Instant::now();
+            let mut processed = 0;
+
+            loop {
+                if processed > 0 && frame_started.elapsed().as_millis() >= INITIAL_LOADING_BUDGET_MS {
+                    break;
+                }
+
                 let Some(coord) = loading_state.coords.get(loading_state.meshed).copied() else {
                     break;
                 };
@@ -241,6 +258,7 @@ pub fn setup_world(
                     &render_context,
                 );
                 loading_state.meshed += 1;
+                processed += 1;
             }
 
             if loading_state.meshed >= loading_state.coords.len()
