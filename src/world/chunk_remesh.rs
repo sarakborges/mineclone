@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use bevy::prelude::*;
 
@@ -9,7 +9,7 @@ use super::{
     chunk_system_params::{ChunkContent, ChunkRenderer},
 };
 
-const REMESH_BUDGET_MICROS: u128 = 4_000;
+const REMESH_BUDGET: Duration = Duration::from_millis(4);
 
 #[derive(Resource, Default)]
 pub(crate) struct ChunkRemeshQueue {
@@ -63,7 +63,7 @@ pub(super) fn process_chunk_remesh_queue(
     let mut processed = 0;
 
     loop {
-        if processed > 0 && frame_started.elapsed().as_micros() >= REMESH_BUDGET_MICROS {
+        if processed > 0 && frame_started.elapsed() >= REMESH_BUDGET {
             break;
         }
 
