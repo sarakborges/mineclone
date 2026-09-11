@@ -17,6 +17,7 @@ const CAVERN_FULL_STRENGTH_SURFACE_DEPTH: f32 = 20.0;
 const CAVE_WATER_PROTECTION_DEPTH: f32 = 14.0;
 const CAVE_WATER_PROTECTION_FADE_DEPTH: f32 = 20.0;
 const CAVE_WATER_HORIZONTAL_CLEARANCE: f32 = 8.0;
+const WATER_VOLUME_AIR_DENSITY: f32 = -0.001;
 
 pub fn sample_density(
     base_density: f32,
@@ -50,14 +51,34 @@ pub fn sample_density(
         CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
     ) * water_clearance;
 
-    density
-        + volume_biome_density_delta(
-            density,
-            position,
-            volume,
-            biome_field,
-            cavern_depth_strength,
-        )
+    density += volume_biome_density_delta(
+        density,
+        position,
+        volume,
+        biome_field,
+        cavern_depth_strength,
+    );
+
+    enforce_hydrology_water_volume(density, position, region)
+}
+
+fn enforce_hydrology_water_volume(
+    density: f32,
+    position: Vec3,
+    region: &GenerationRegion,
+) -> f32 {
+    let horizontal = Vec2::new(position.x, position.z);
+    let Some(water) = region.hydrology.water_at(horizontal) else {
+        return density;
+    };
+    let cell_bottom = position.y - 0.5;
+    let cell_top = position.y + 0.5;
+
+    if cell_top <= water.bed_level || cell_bottom >= water.water_level {
+        return density;
+    }
+
+    density.min(WATER_VOLUME_AIR_DENSITY)
 }
 
 fn cave_water_clearance(position: Vec3, region: &GenerationRegion) -> f32 {
