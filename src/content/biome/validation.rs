@@ -31,6 +31,9 @@ pub(super) fn validate_biome_definition(definition: &BiomeDefinition) {
     for modifier in &definition.terrain_modifiers {
         modifier.validate(&definition.id);
     }
+    for carver in &definition.surface_carvers {
+        carver.validate(&definition.id);
+    }
     if let Some(modifier) = &definition.density_modifier {
         modifier.validate(&definition.id);
     }
@@ -87,6 +90,11 @@ fn validate_volume_biome(definition: &BiomeDefinition) {
         definition.id
     );
     assert!(
+        definition.surface_carvers.is_empty(),
+        "volume biome {} cannot define surfaceCarvers",
+        definition.id
+    );
+    assert!(
         definition.surface_layers.is_empty(),
         "volume biome {} cannot define surfaceLayers",
         definition.id
@@ -107,6 +115,11 @@ fn validate_hydrology_biome(definition: &BiomeDefinition) {
     assert!(
         definition.terrain_modifiers.is_empty(),
         "hydrology biome {} cannot define terrainModifiers",
+        definition.id
+    );
+    assert!(
+        definition.surface_carvers.is_empty(),
+        "hydrology biome {} cannot define surfaceCarvers",
         definition.id
     );
     assert!(
