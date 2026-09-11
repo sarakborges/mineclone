@@ -51,8 +51,9 @@
     "grassColor": { "r": 0.32, "g": 0.05, "b": 0.72 },
     "leafColor": { "r": 0.58, "g": 0.12, "b": 0.88 },
     "foliageColor": { "r": 0.72, "g": 0.20, "b": 0.95 },
+    "waterColor": { "r": 0.28, "g": 0.90, "b": 0.38 },
     "underwaterTint": {
-      "color": { "r": 0.18, "g": 0.02, "b": 0.20 },
+      "color": { "r": 0.08, "g": 0.38, "b": 0.13 },
       "opacity": 0.20
     },
     "stars": {
