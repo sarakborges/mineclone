@@ -6,7 +6,8 @@ use crate::content::biome_hydrology::BiomeHydrology;
 
 use super::{
     constants::{
-        HYDROLOGY_REGION_SIZE, RIVER_BASIN_ESCAPE_RADIUS_CELLS, RIVER_MINIMUM_DROP,
+        HYDROLOGY_REGION_SIZE, OCEAN_CONTINENTALNESS_THRESHOLD,
+        RIVER_BASIN_ESCAPE_RADIUS_CELLS, RIVER_MINIMUM_DROP, RIVER_OCEAN_OUTLET_RADIUS_CELLS,
         RIVER_ROUTE_VARIATION,
     },
     math::{cell_hash, hash_signed, hash_unit},
@@ -68,11 +69,48 @@ where
 
         let source = self.node(cell);
         let downstream = self
-            .best_lower_cell(cell, source, 1)
+            .ocean_outlet_cell(cell, 1)
+            .or_else(|| self.best_lower_cell(cell, source, 1))
+            .or_else(|| self.ocean_outlet_cell(cell, RIVER_OCEAN_OUTLET_RADIUS_CELLS))
             .or_else(|| self.best_lower_cell(cell, source, RIVER_BASIN_ESCAPE_RADIUS_CELLS));
 
         self.downstream.insert(cell, downstream);
         downstream
+    }
+
+    fn ocean_outlet_cell(&mut self, source_cell: IVec2, radius: i32) -> Option<IVec2> {
+        let mut best: Option<(IVec2, f32)> = None;
+
+        for dz in -radius..=radius {
+            for dx in -radius..=radius {
+                if dx == 0 && dz == 0 {
+                    continue;
+                }
+
+                let candidate_cell = source_cell + IVec2::new(dx, dz);
+                let candidate = self.node(candidate_cell);
+                if candidate.continentalness > OCEAN_CONTINENTALNESS_THRESHOLD {
+                    continue;
+                }
+
+                let distance = Vec2::new(dx as f32, dz as f32).length();
+                let hash = cell_hash(
+                    candidate_cell,
+                    cell_hash(source_cell, self.seed ^ 0x243f_6a88_85a3_08d3),
+                );
+                let score = distance + candidate.continentalness * 0.35 + hash_unit(hash) * 0.12;
+
+                if best.as_ref().is_none_or(|(best_cell, best_score)| {
+                    score.total_cmp(best_score).is_lt()
+                        || (score.total_cmp(best_score).is_eq()
+                            && compare_cell(candidate_cell, *best_cell).is_lt())
+                }) {
+                    best = Some((candidate_cell, score));
+                }
+            }
+        }
+
+        best.map(|(cell, _)| cell)
     }
 
     fn best_lower_cell(
@@ -174,8 +212,8 @@ pub(super) fn drainage_position(cell: IVec2, seed: u64) -> Vec2 {
     let base = (cell.as_vec2() + Vec2::splat(0.5)) * HYDROLOGY_REGION_SIZE;
     let hash = cell_hash(cell, seed);
     let jitter = Vec2::new(
-        hash_signed(hash) * HYDROLOGY_REGION_SIZE * 0.22,
-        hash_signed(hash.rotate_left(31)) * HYDROLOGY_REGION_SIZE * 0.22,
+        hash_signed(hash) * HYDROLOGY_REGION_SIZE * 0.36,
+        hash_signed(hash.rotate_left(31)) * HYDROLOGY_REGION_SIZE * 0.36,
     );
 
     base + jitter
@@ -197,7 +235,7 @@ mod tests {
     }
 
     #[test]
-    fn lower_elevation_still_dominates_small_route_variation() {
+    fn lower_elevation_still_dominates_route_variation() {
         let source = IVec2::ZERO;
         let high = downstream_score(source, IVec2::X, 70.0, 1.0, 42);
         let low = downstream_score(source, IVec2::Y, 65.0, 1.0, 42);
