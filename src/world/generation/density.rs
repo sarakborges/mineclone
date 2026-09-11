@@ -6,7 +6,9 @@ use crate::{
     world::{
         biome_field::{BiomeField, VolumeBiomeRegion, VolumeBiomeSelection},
         cave_connectivity::CaveConnectivityRegion,
-        density_pipeline::sample_density,
+        density_pipeline::{
+            sample_density_column_hydrology, sample_density_with_column_hydrology,
+        },
         generation_region::GenerationRegion,
         terrain::terrain_density,
     },
@@ -47,6 +49,7 @@ pub(super) fn sample_density_field(
                 chunk_origin.x as f32 + local_x as f32 + 0.5,
                 chunk_origin.z as f32 + local_z as f32 + 0.5,
             );
+            let column_hydrology = sample_density_column_hydrology(horizontal, region);
             let surface_carver_allowed = region
                 .hydrology
                 .water_near(horizontal, SURFACE_CARVER_WATER_CLEARANCE)
@@ -62,13 +65,14 @@ pub(super) fn sample_density_field(
                 let base_density = terrain_density(column.surface_height, world_position.y);
                 let volume = biome_field.volume_selection_in_region(sample_position, volume_region);
                 let index = voxel_index(local_x, local_y, local_z);
-                let sampled_density = sample_density(
+                let sampled_density = sample_density_with_column_hydrology(
                     base_density,
                     sample_position,
                     region,
                     anchored_caves,
                     volume,
                     biome_field,
+                    column_hydrology,
                 );
                 let carver_delta = if surface_carver_allowed {
                     surface_carver_density_delta(
