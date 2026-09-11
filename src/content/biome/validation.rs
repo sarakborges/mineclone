@@ -21,7 +21,7 @@ pub(super) fn validate_biome_definition(definition: &BiomeDefinition) {
     }
 
     validate_climate(&definition.id, definition.climate);
-    definition.distribution.validate(&definition.id);
+    validate_distributions(definition);
     definition.hydrology.validate(&definition.id);
     validate_visuals(definition);
 
@@ -77,7 +77,7 @@ fn validate_volume_biome(definition: &BiomeDefinition) {
     validate_size_axis(&definition.id, "y", vertical_size);
 
     assert!(
-        definition.distribution.is_regional(),
+        distributions_are_regional(definition),
         "volume biome {} cannot define a surface distribution",
         definition.id
     );
@@ -95,7 +95,7 @@ fn validate_volume_biome(definition: &BiomeDefinition) {
 
 fn validate_hydrology_biome(definition: &BiomeDefinition) {
     assert!(
-        definition.distribution.is_regional(),
+        distributions_are_regional(definition),
         "hydrology biome {} cannot define a surface distribution",
         definition.id
     );
@@ -134,6 +134,39 @@ fn validate_hydrology_biome(definition: &BiomeDefinition) {
         "hydrology biome {} cannot define volume overlap priority",
         definition.id
     );
+}
+
+fn validate_distributions(definition: &BiomeDefinition) {
+    assert!(
+        !definition.distributions.is_empty(),
+        "biome {} must define at least one distribution",
+        definition.id
+    );
+
+    for distribution in &definition.distributions {
+        distribution.validate(&definition.id);
+    }
+
+    let regional_count = definition
+        .distributions
+        .iter()
+        .filter(|distribution| distribution.is_regional())
+        .count();
+
+    assert!(
+        regional_count <= 1,
+        "biome {} cannot define regional distribution more than once",
+        definition.id
+    );
+    assert!(
+        regional_count == 0 || definition.distributions.len() == 1,
+        "biome {} cannot combine regional distribution with macro distributions",
+        definition.id
+    );
+}
+
+fn distributions_are_regional(definition: &BiomeDefinition) -> bool {
+    definition.distributions.len() == 1 && definition.distributions[0].is_regional()
 }
 
 fn validate_visuals(definition: &BiomeDefinition) {
