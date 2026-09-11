@@ -33,6 +33,7 @@ use super::{
 const BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS: i32 = 2;
 const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 1;
 const INITIAL_CHUNKS_PER_FRAME: usize = 2;
+const TEXTURE_READY_FRAMES_BEFORE_MESHING: u8 = 2;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum WorldLoadingPhase {
@@ -49,6 +50,7 @@ pub struct WorldLoadingState {
     meshed: usize,
     phase: WorldLoadingPhase,
     screen_rendered: bool,
+    texture_ready_frames: u8,
     transition_requested: bool,
 }
 
@@ -166,6 +168,7 @@ pub fn begin_world_loading(
         meshed: 0,
         phase: WorldLoadingPhase::Generating,
         screen_rendered: false,
+        texture_ready_frames: 0,
         transition_requested: false,
     });
 
@@ -222,7 +225,13 @@ pub fn setup_world(
         }
         WorldLoadingPhase::WaitingForTextures => {
             if renderer.terrain_materials.textures_loaded(&asset_server) {
-                loading_state.phase = WorldLoadingPhase::Meshing;
+                loading_state.texture_ready_frames =
+                    loading_state.texture_ready_frames.saturating_add(1);
+                if loading_state.texture_ready_frames >= TEXTURE_READY_FRAMES_BEFORE_MESHING {
+                    loading_state.phase = WorldLoadingPhase::Meshing;
+                }
+            } else {
+                loading_state.texture_ready_frames = 0;
             }
         }
         WorldLoadingPhase::Meshing => {
