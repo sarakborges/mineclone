@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-use crate::world::{
-    math::{lerp, smoothstep},
-    noise::value_noise_2d,
-};
+use crate::world::noise::fractal_noise_2d;
 
 const CLIMATE_OCTAVES: usize = 4;
 const CONTINENTALNESS_SCALE: f32 = 0.0012;
@@ -45,24 +42,7 @@ impl MacroClimateField {
 }
 
 fn normalized_fractal_noise(position: Vec2, seed: u64) -> f32 {
-    ((fractal_noise(position, seed) + 1.0) * 0.5).clamp(0.0, 1.0)
-}
-
-fn fractal_noise(position: Vec2, seed: u64) -> f32 {
-    let mut value = 0.0;
-    let mut normalization = 0.0;
-    let mut amplitude = 1.0;
-    let mut frequency = 1.0;
-
-    for octave in 0..CLIMATE_OCTAVES {
-        let octave_seed = seed.wrapping_add((octave as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15));
-        value += value_noise_2d(position * frequency, octave_seed) * amplitude;
-        normalization += amplitude;
-        amplitude *= 0.5;
-        frequency *= 2.0;
-    }
-
-    value / normalization
+    ((fractal_noise_2d(position, seed, CLIMATE_OCTAVES) + 1.0) * 0.5).clamp(0.0, 1.0)
 }
 
 #[cfg(test)]

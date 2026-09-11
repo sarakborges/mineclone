@@ -1,9 +1,32 @@
 use bevy::prelude::*;
 
 use crate::world::{
-    deterministic::hash_unit,
+    deterministic::{hash_unit, mix_hash_u64},
     math::{lerp, smoothstep},
 };
+
+const OCTAVE_SEED_STEP: u64 = 0x9e37_79b9_7f4a_7c15;
+
+pub(crate) fn fractal_noise_2d(position: Vec2, seed: u64, octaves: usize) -> f32 {
+    if octaves == 0 {
+        return 0.0;
+    }
+
+    let mut value = 0.0;
+    let mut normalization = 0.0;
+    let mut amplitude = 1.0;
+    let mut frequency = 1.0;
+
+    for octave in 0..octaves {
+        let octave_seed = seed.wrapping_add((octave as u64).wrapping_mul(OCTAVE_SEED_STEP));
+        value += value_noise_2d(position * frequency, octave_seed) * amplitude;
+        normalization += amplitude;
+        amplitude *= 0.5;
+        frequency *= 2.0;
+    }
+
+    value / normalization
+}
 
 pub(crate) fn value_noise_2d(position: Vec2, seed: u64) -> f32 {
     let x0 = position.x.floor() as i32;
@@ -61,9 +84,6 @@ fn lattice_noise_3d(x: i32, y: i32, z: i32, seed: u64) -> f32 {
     hash ^= (x as i64 as u64).wrapping_mul(0x9e37_79b1_85eb_ca87);
     hash ^= (y as i64 as u64).wrapping_mul(0xd6e8_feb8_6659_fd93);
     hash ^= (z as i64 as u64).wrapping_mul(0xc2b2_ae3d_27d4_eb4f);
-    hash ^= hash >> 33;
-    hash = hash.wrapping_mul(0xff51_afd7_ed55_8ccd);
-    hash ^= hash >> 33;
 
-    hash_unit(hash) * 2.0 - 1.0
+    hash_unit(mix_hash_u64(hash)) * 2.0 - 1.0
 }
