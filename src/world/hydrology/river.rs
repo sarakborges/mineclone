@@ -47,6 +47,8 @@ struct RiverEdgeSpec {
     source_cell: IVec2,
     source: DrainageNode,
     downstream: DrainageNode,
+    source_water_level: Option<f32>,
+    downstream_water_level: Option<f32>,
     flow: u32,
     downstream_flow: u32,
     seed: u64,
@@ -127,6 +129,11 @@ where
                     source_cell: cell,
                     source,
                     downstream,
+                    source_water_level: selection.lakes.get(&cell).map(|lake| lake.water_level),
+                    downstream_water_level: selection
+                        .lakes
+                        .get(&downstream_cell)
+                        .map(|lake| lake.water_level),
                     flow,
                     downstream_flow,
                     seed,
@@ -390,6 +397,8 @@ fn add_curved_river_edge(graph: &mut FeatureGraph, spec: RiverEdgeSpec) -> Optio
         spec.downstream,
         spec.seed,
         spec.sea_level,
+        spec.source_water_level,
+        spec.downstream_water_level,
     );
     let last = path.points.len().saturating_sub(1);
 
@@ -433,6 +442,8 @@ fn river_path(
     downstream: DrainageNode,
     seed: u64,
     sea_level: f32,
+    source_water_level: Option<f32>,
+    downstream_water_level: Option<f32>,
 ) -> RiverPath {
     let delta = downstream.position - source.position;
     let distance = delta.length();
@@ -440,11 +451,16 @@ fn river_path(
     let direction = delta.normalize_or_zero();
     let perpendicular = Vec2::new(-direction.y, direction.x);
     let lateral_controls = river_lateral_controls(source_cell, seed, distance);
-    let start_height = river_height(source, sea_level);
-    let raw_end_height = river_height(downstream, sea_level);
-    let end_height = raw_end_height
-        .min(start_height - RIVER_MINIMUM_WATER_DROP)
-        .max(1.0);
+    let start_height = source_water_level.unwrap_or_else(|| river_height(source, sea_level));
+    let raw_end_height =
+        downstream_water_level.unwrap_or_else(|| river_height(downstream, sea_level));
+    let end_height = if downstream_water_level.is_some() {
+        raw_end_height.min(start_height).max(1.0)
+    } else {
+        raw_end_height
+            .min(start_height - RIVER_MINIMUM_WATER_DROP)
+            .max(1.0)
+    };
     let waterfall_profile = waterfall_profile(
         source_cell,
         seed,
@@ -481,7 +497,16 @@ fn river_path_points(
     seed: u64,
     sea_level: f32,
 ) -> Vec<Vec3> {
-    river_path(source_cell, source, downstream, seed, sea_level).points
+    river_path(
+        source_cell,
+        source,
+        downstream,
+        seed,
+        sea_level,
+        None,
+        None,
+    )
+    .points
 }
 
 fn waterfall_profile(
@@ -694,6 +719,26 @@ mod tests {
         let end = points.last().unwrap().y;
 
         assert!(start - end >= RIVER_MINIMUM_WATER_DROP);
+    }
+
+    #[test]
+    fn lake_endpoints_preserve_their_water_surface() {
+        let source = node(Vec2::ZERO, 96.0);
+        let downstream = node(Vec2::new(128.0, 0.0), 82.0);
+        let source_lake_level = 95.35;
+        let downstream_lake_level = 81.35;
+        let path = river_path(
+            IVec2::ZERO,
+            source,
+            downstream,
+            42,
+            64.0,
+            Some(source_lake_level),
+            Some(downstream_lake_level),
+        );
+
+        assert_eq!(path.points.first().unwrap().y, source_lake_level);
+        assert_eq!(path.points.last().unwrap().y, downstream_lake_level);
     }
 
     #[test]
