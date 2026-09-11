@@ -110,6 +110,9 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
                 .biome_field
                 .volume_region_in_bounds(minimum, maximum)
         });
+    let chunk_minimum = chunk_origin.as_vec3();
+    let chunk_maximum = chunk_minimum + Vec3::splat(CHUNK_SIZE as f32);
+    let chunk_volume_region = volume_region.restricted_to_bounds(chunk_minimum, chunk_maximum);
     let anchored_caves = anchored_cave_region(
         region.as_ref(),
         context.biome_field,
@@ -129,7 +132,7 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         chunk_origin,
         columns.as_slice(),
         region.as_ref(),
-        volume_region.as_ref(),
+        &chunk_volume_region,
         anchored_caves.as_deref(),
         context.biome_field,
         context.biomes,
