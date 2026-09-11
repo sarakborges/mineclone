@@ -4,8 +4,8 @@
   "distribution": {
     "type": "mountain_belt",
     "scale": 0.0015,
-    "threshold": 0.72,
-    "width": 0.18,
+    "threshold": 0.97,
+    "width": 0.03,
     "warpScale": 0.0025,
     "warpStrength": 85.0
   },
