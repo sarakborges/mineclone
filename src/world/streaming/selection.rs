@@ -16,6 +16,7 @@ use super::{
 const HORIZONTAL_PRELOAD_CHUNKS: i32 = 1;
 const SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const SURFACE_PADDING_ABOVE_CHUNKS: i32 = 1;
+const FULL_DEPTH_VISIBILITY_RADIUS_CHUNKS: i32 = 4;
 
 pub(super) fn rebuild_queue(
     streaming: &mut ChunkStreamingState,
@@ -87,8 +88,8 @@ fn pending_priority(
     let total_distance = (coord - center).length_squared();
 
     (
-        surface_distance,
         horizontal_distance,
+        surface_distance,
         vertical_distance,
         total_distance,
     )
@@ -108,7 +109,8 @@ fn desired_chunk_coords(
 
     for z in -horizontal_radius..=horizontal_radius {
         for x in -horizontal_radius..=horizontal_radius {
-            if x * x + z * z > horizontal_radius * horizontal_radius {
+            let horizontal_distance_squared = x * x + z * z;
+            if horizontal_distance_squared > horizontal_radius * horizontal_radius {
                 continue;
             }
 
@@ -141,9 +143,13 @@ fn desired_chunk_coords(
             }
 
             let chunk_size = CHUNK_SIZE as i32;
-            let minimum_y = (surrounding_minimum.div_euclid(chunk_size)
-                - SURFACE_PADDING_BELOW_CHUNKS)
-                .max(0);
+            let minimum_y = if horizontal_distance_squared
+                <= FULL_DEPTH_VISIBILITY_RADIUS_CHUNKS * FULL_DEPTH_VISIBILITY_RADIUS_CHUNKS
+            {
+                0
+            } else {
+                (surrounding_minimum.div_euclid(chunk_size) - SURFACE_PADDING_BELOW_CHUNKS).max(0)
+            };
             let maximum_y = (own_maximum.div_euclid(chunk_size)
                 + SURFACE_PADDING_ABOVE_CHUNKS.max(structure_chunk_allowance))
                 .max(minimum_y);
