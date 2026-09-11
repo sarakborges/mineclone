@@ -13,8 +13,8 @@ use self::{
     geometry::{face_geometry, is_face_exposed, orient_face_geometry},
     lighting::face_lighting,
 };
-pub(crate) use super::block_face::BlockFace;
 use super::{
+    block_face::BlockFace,
     chunk::{CHUNK_SIZE, VoxelChunk},
     orientation::orient_face,
     texture_rotation::TextureRotation,
