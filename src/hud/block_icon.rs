@@ -4,8 +4,9 @@ use bevy::{
 
 use crate::{
     content::block::BlockDefinition,
-    rendering::block_model::{
-        block_display_face_basis, block_display_face_shade, block_face_texture,
+    rendering::{
+        block_model::{block_display_face_basis, block_display_face_shade, block_face_texture},
+        color::color_to_linear_vec4,
     },
     voxel::mesh::BlockFace,
 };
@@ -86,7 +87,7 @@ impl BlockIconMaterial {
     }
 
     pub(crate) fn set_tint(&mut self, tint: Color) {
-        self.tint = tint_vec4(tint);
+        self.tint = color_to_linear_vec4(tint);
     }
 }
 
@@ -107,9 +108,4 @@ fn load_face_texture(
     block_face_texture(face, block)
         .map(|texture| asset_server.load(texture.to_owned()))
         .unwrap_or_default()
-}
-
-fn tint_vec4(tint: Color) -> Vec4 {
-    let tint = tint.to_linear();
-    Vec4::new(tint.red, tint.green, tint.blue, tint.alpha)
 }

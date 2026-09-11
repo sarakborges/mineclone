@@ -4,6 +4,7 @@ pub(crate) mod block_model_material;
 pub(crate) mod block_tint;
 mod celestial;
 mod celestial_path;
+pub(crate) mod color;
 mod directional_shadows;
 mod dynamic_lights;
 mod environment;

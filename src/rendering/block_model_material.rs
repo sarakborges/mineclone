@@ -6,6 +6,8 @@ use bevy::{
     shader::ShaderRef,
 };
 
+use crate::rendering::color::color_to_linear_vec4;
+
 const BLOCK_MODEL_SHADER_PATH: &str = "shaders/block_model_material.wgsl";
 
 pub(crate) type BlockModelMaterial =
@@ -25,8 +27,7 @@ impl Default for BlockModelMaterialExtension {
 
 impl BlockModelMaterialExtension {
     pub(crate) fn set_tint(&mut self, color: Color) {
-        let color = color.to_linear();
-        self.tint = Vec4::new(color.red, color.green, color.blue, color.alpha);
+        self.tint = color_to_linear_vec4(color);
     }
 }
 
