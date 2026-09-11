@@ -23,7 +23,8 @@ use super::{
 };
 
 const CHUNKS_PER_FRAME: usize = 2;
-const SURFACE_VERTICAL_PADDING_CHUNKS: i32 = 1;
+const SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
+const SURFACE_PADDING_ABOVE_CHUNKS: i32 = 1;
 
 #[derive(Resource, Default)]
 pub struct ChunkStreamingState {
@@ -205,10 +206,10 @@ fn desired_chunk_coords(
 
             let chunk_size = CHUNK_SIZE as i32;
             let minimum_y = (surrounding_minimum.div_euclid(chunk_size)
-                - SURFACE_VERTICAL_PADDING_CHUNKS)
+                - SURFACE_PADDING_BELOW_CHUNKS)
                 .max(0);
             let maximum_y = (own_maximum.div_euclid(chunk_size)
-                + SURFACE_VERTICAL_PADDING_CHUNKS)
+                + SURFACE_PADDING_ABOVE_CHUNKS)
                 .max(minimum_y);
 
             for y in minimum_y..=maximum_y {
