@@ -1,37 +1,27 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::{Arc, RwLock},
-};
+mod cache;
+
+use std::{collections::HashSet, sync::Arc};
 
 use bevy::prelude::*;
 
-use crate::{
-    content::dimension_hydrology::DimensionHydrology,
-    voxel::chunk::CHUNK_SIZE,
-};
+use crate::content::dimension_hydrology::DimensionHydrology;
 
+use self::cache::FeatureCaches;
 use super::{
     biome_field::VolumeBiomeRegion,
     cave_connectivity::{CaveConnectivityField, CaveConnectivityRegion},
     generation::columns::GenerationColumnSample,
-    generation_region::{GenerationRegion, generation_region_coord},
+    generation_region::GenerationRegion,
     geology::GeologyField,
     hydrology::{HydrologyBiomeOverlay, HydrologyField, HydrologyRegion},
 };
-
-const CACHE_REGION_MARGIN: i32 = 1;
 
 #[derive(Resource)]
 pub(crate) struct WorldFeatureFields {
     hydrology: HydrologyField,
     cave_connectivity: CaveConnectivityField,
     geology: GeologyField,
-    hydrology_cache: RwLock<HashMap<IVec2, Arc<HydrologyRegion>>>,
-    generation_column_cache: RwLock<HashMap<IVec2, Arc<Vec<GenerationColumnSample>>>>,
-    volume_biome_cache: RwLock<HashMap<IVec3, Arc<VolumeBiomeRegion>>>,
-    cave_cache: RwLock<HashMap<IVec3, Option<Arc<CaveConnectivityRegion>>>>,
-    region_cache: RwLock<HashMap<IVec3, Arc<GenerationRegion>>>,
-    structure_origin_cache: RwLock<HashMap<(String, IVec2), Option<i32>>>,
+    caches: FeatureCaches,
 }
 
 impl WorldFeatureFields {
@@ -40,12 +30,7 @@ impl WorldFeatureFields {
             hydrology: HydrologyField::new(seed.rotate_left(7), sea_level, hydrology),
             cave_connectivity: CaveConnectivityField::new(seed.rotate_left(23)),
             geology: GeologyField::new(seed.rotate_left(41)),
-            hydrology_cache: RwLock::new(HashMap::new()),
-            generation_column_cache: RwLock::new(HashMap::new()),
-            volume_biome_cache: RwLock::new(HashMap::new()),
-            cave_cache: RwLock::new(HashMap::new()),
-            region_cache: RwLock::new(HashMap::new()),
-            structure_origin_cache: RwLock::new(HashMap::new()),
+            caches: FeatureCaches::new(),
         }
     }
 
@@ -61,23 +46,7 @@ impl WorldFeatureFields {
         coord: IVec2,
         factory: impl FnOnce() -> Vec<GenerationColumnSample>,
     ) -> Arc<Vec<GenerationColumnSample>> {
-        if let Some(cached) = self
-            .generation_column_cache
-            .read()
-            .expect("generation column cache read lock was poisoned")
-            .get(&coord)
-            .cloned()
-        {
-            return cached;
-        }
-
-        let columns = Arc::new(factory());
-        let mut cache = self
-            .generation_column_cache
-            .write()
-            .expect("generation column cache write lock was poisoned");
-
-        cache.entry(coord).or_insert_with(|| columns.clone()).clone()
+        self.caches.generation_columns(coord, factory)
     }
 
     pub(crate) fn volume_biome_region(
@@ -85,23 +54,7 @@ impl WorldFeatureFields {
         coord: IVec3,
         factory: impl FnOnce() -> VolumeBiomeRegion,
     ) -> Arc<VolumeBiomeRegion> {
-        if let Some(cached) = self
-            .volume_biome_cache
-            .read()
-            .expect("volume biome cache read lock was poisoned")
-            .get(&coord)
-            .cloned()
-        {
-            return cached;
-        }
-
-        let region = Arc::new(factory());
-        let mut cache = self
-            .volume_biome_cache
-            .write()
-            .expect("volume biome cache write lock was poisoned");
-
-        cache.entry(coord).or_insert_with(|| region.clone()).clone()
+        self.caches.volume_biome_region(coord, factory)
     }
 
     pub(crate) fn cave_region(
@@ -109,23 +62,8 @@ impl WorldFeatureFields {
         coord: IVec3,
         factory: impl FnOnce(&CaveConnectivityField) -> Option<CaveConnectivityRegion>,
     ) -> Option<Arc<CaveConnectivityRegion>> {
-        if let Some(cached) = self
-            .cave_cache
-            .read()
-            .expect("cave region cache read lock was poisoned")
-            .get(&coord)
-            .cloned()
-        {
-            return cached;
-        }
-
-        let region = factory(&self.cave_connectivity).map(Arc::new);
-        let mut cache = self
-            .cave_cache
-            .write()
-            .expect("cave region cache write lock was poisoned");
-
-        cache.entry(coord).or_insert_with(|| region.clone()).clone()
+        self.caches
+            .cave_region(coord, || factory(&self.cave_connectivity))
     }
 
     pub(crate) fn structure_origin_y(
@@ -134,24 +72,8 @@ impl WorldFeatureFields {
         anchor: IVec2,
         factory: impl FnOnce() -> Option<i32>,
     ) -> Option<i32> {
-        let key = (structure_id.to_owned(), anchor);
-        if let Some(cached) = self
-            .structure_origin_cache
-            .read()
-            .expect("structure origin cache read lock was poisoned")
-            .get(&key)
-            .copied()
-        {
-            return cached;
-        }
-
-        let origin = factory();
-        let mut cache = self
-            .structure_origin_cache
-            .write()
-            .expect("structure origin cache write lock was poisoned");
-
-        *cache.entry(key).or_insert(origin)
+        self.caches
+            .structure_origin_y(structure_id, anchor, factory)
     }
 
     pub(crate) fn region_with_hydrology(
@@ -159,155 +81,62 @@ impl WorldFeatureFields {
         coord: IVec3,
         hydrology_factory: impl FnOnce(&HydrologyField) -> HydrologyRegion,
     ) -> Arc<GenerationRegion> {
-        if let Some(region) = self
-            .region_cache
-            .read()
-            .expect("generation region cache read lock was poisoned")
-            .get(&coord)
-            .cloned()
-        {
-            return region;
-        }
+        self.caches.generation_region(coord, || {
+            let hydrology_coord = coord.xz();
+            let hydrology = self.caches.hydrology_region(hydrology_coord, || {
+                hydrology_factory(&self.hydrology)
+            });
 
-        let hydrology_coord = IVec2::new(coord.x, coord.z);
-        let hydrology = if let Some(region) = self
-            .hydrology_cache
-            .read()
-            .expect("hydrology region cache read lock was poisoned")
-            .get(&hydrology_coord)
-            .cloned()
-        {
-            region
-        } else {
-            let region = Arc::new(hydrology_factory(&self.hydrology));
-            let mut cache = self
-                .hydrology_cache
-                .write()
-                .expect("hydrology region cache write lock was poisoned");
-
-            cache
-                .entry(hydrology_coord)
-                .or_insert_with(|| region.clone())
-                .clone()
-        };
-        let region = Arc::new(GenerationRegion {
-            coord,
-            hydrology,
-            geology: self.geology.region(coord),
-        });
-        let mut cache = self
-            .region_cache
-            .write()
-            .expect("generation region cache write lock was poisoned");
-
-        cache.entry(coord).or_insert_with(|| region.clone()).clone()
+            GenerationRegion {
+                coord,
+                hydrology,
+                geology: self.geology.region(coord),
+            }
+        })
     }
 
     pub(crate) fn retain_for_chunks(&self, desired: &HashSet<IVec3>) {
-        let horizontal_chunks = desired.iter().map(|coord| coord.xz()).collect::<HashSet<_>>();
-        let mut retained_regions = HashSet::new();
-
-        for &chunk in desired {
-            let region = generation_region_coord(chunk);
-            for y in (region.y - CACHE_REGION_MARGIN).max(0)..=(region.y + CACHE_REGION_MARGIN) {
-                for z in (region.z - CACHE_REGION_MARGIN)..=(region.z + CACHE_REGION_MARGIN) {
-                    for x in (region.x - CACHE_REGION_MARGIN)..=(region.x + CACHE_REGION_MARGIN) {
-                        retained_regions.insert(IVec3::new(x, y, z));
-                    }
-                }
-            }
-        }
-
-        let retained_hydrology = retained_regions
-            .iter()
-            .map(|coord| coord.xz())
-            .collect::<HashSet<_>>();
-
-        self.generation_column_cache
-            .write()
-            .expect("generation column cache write lock was poisoned")
-            .retain(|coord, _| horizontal_chunks.contains(coord));
-        self.volume_biome_cache
-            .write()
-            .expect("volume biome cache write lock was poisoned")
-            .retain(|coord, _| retained_regions.contains(coord));
-        self.cave_cache
-            .write()
-            .expect("cave region cache write lock was poisoned")
-            .retain(|coord, _| retained_regions.contains(coord));
-        self.region_cache
-            .write()
-            .expect("generation region cache write lock was poisoned")
-            .retain(|coord, _| retained_regions.contains(coord));
-        self.hydrology_cache
-            .write()
-            .expect("hydrology region cache write lock was poisoned")
-            .retain(|coord, _| retained_hydrology.contains(coord));
-        self.structure_origin_cache
-            .write()
-            .expect("structure origin cache write lock was poisoned")
-            .retain(|(_, anchor), _| {
-                let chunk_size = CHUNK_SIZE as i32;
-                let chunk = IVec2::new(
-                    anchor.x.div_euclid(chunk_size),
-                    anchor.y.div_euclid(chunk_size),
-                );
-                horizontal_chunks.contains(&chunk)
-            });
+        self.caches.retain_for_chunks(desired);
     }
 
     #[cfg(test)]
     fn cached_region_count(&self) -> usize {
-        self.region_cache
-            .read()
-            .expect("generation region cache read lock was poisoned")
-            .len()
+        self.caches.region_count()
     }
 
     #[cfg(test)]
     fn cached_hydrology_region_count(&self) -> usize {
-        self.hydrology_cache
-            .read()
-            .expect("hydrology region cache read lock was poisoned")
-            .len()
+        self.caches.hydrology_region_count()
     }
 
     #[cfg(test)]
     fn cached_generation_column_count(&self) -> usize {
-        self.generation_column_cache
-            .read()
-            .expect("generation column cache read lock was poisoned")
-            .len()
+        self.caches.generation_column_count()
     }
 
     #[cfg(test)]
     fn cached_volume_biome_region_count(&self) -> usize {
-        self.volume_biome_cache
-            .read()
-            .expect("volume biome cache read lock was poisoned")
-            .len()
+        self.caches.volume_biome_region_count()
     }
 
     #[cfg(test)]
     fn cached_cave_region_count(&self) -> usize {
-        self.cave_cache
-            .read()
-            .expect("cave region cache read lock was poisoned")
-            .len()
+        self.caches.cave_region_count()
     }
 
     #[cfg(test)]
     fn cached_structure_origin_count(&self) -> usize {
-        self.structure_origin_cache
-            .read()
-            .expect("structure origin cache read lock was poisoned")
-            .len()
+        self.caches.structure_origin_count()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        voxel::chunk::CHUNK_SIZE,
+        world::generation_region::generation_region_coord,
+    };
 
     #[test]
     fn region_cache_reuses_hydrology_across_vertical_regions() {
