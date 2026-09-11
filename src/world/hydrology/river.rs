@@ -38,6 +38,7 @@ pub(super) struct RiverSystem {
 struct RiverSelection {
     channels: HashSet<IVec2>,
     springs: HashSet<IVec2>,
+    lakes: HashMap<IVec2, WaterBody>,
 }
 
 #[derive(Clone, Copy)]
@@ -83,7 +84,7 @@ where
     let mut graph = FeatureGraph::default();
     let mut water_bodies = Vec::new();
     let flow_cache = build_flow_cache(coord, network);
-    let selection = selected_river_sources(&flow_cache, seed, sea_level, network);
+    let selection = selected_river_sources(&flow_cache, seed, sea_level, water_fluid, network);
     let mut outlet_cache = HashMap::new();
 
     for dz in -RIVER_EDGE_MARGIN_CELLS..=RIVER_EDGE_MARGIN_CELLS {
@@ -102,17 +103,10 @@ where
             };
             let downstream = network.node(downstream_cell);
             let flow = flow_cache.get(&cell).copied().unwrap_or(1);
-            let neighbors = network.neighbor_nodes(cell);
             let spring = selection.springs.contains(&cell).then(|| {
                 mountain_spring_body(cell, source, seed, sea_level, water_fluid)
             });
-            let lake = if spring.is_none() {
-                lake_for_local_basin(cell, source, &neighbors, seed, sea_level, water_fluid)
-            } else {
-                None
-            };
-            let channel_selected =
-                selection.channels.contains(&cell) || spring.is_some() || lake.is_some();
+            let lake = selection.lakes.get(&cell).cloned();
 
             if let Some(body) = spring
                 .or(lake)
@@ -121,7 +115,7 @@ where
                 water_bodies.push(body);
             }
 
-            if !channel_selected {
+            if !selection.channels.contains(&cell) {
                 continue;
             }
 
@@ -140,10 +134,11 @@ where
                 },
             );
 
-            if let Some(pool) = waterfall.and_then(|waterfall| {
-                plunge_pool_for_waterfall(cell, waterfall, seed, water_fluid)
-            })
-            .filter(|body| water_body_intersects_region(coord, body))
+            if let Some(pool) = waterfall
+                .and_then(|waterfall| {
+                    plunge_pool_for_waterfall(cell, waterfall, seed, water_fluid)
+                })
+                .filter(|body| water_body_intersects_region(coord, body))
             {
                 water_bodies.push(pool);
             }
@@ -243,6 +238,7 @@ fn selected_river_sources<F>(
     flow_cache: &HashMap<IVec2, u32>,
     seed: u64,
     sea_level: f32,
+    water_fluid: &str,
     network: &mut DrainageNetwork<'_, F>,
 ) -> RiverSelection
 where
@@ -250,12 +246,30 @@ where
 {
     let mut channels = HashSet::new();
     let mut springs = HashSet::new();
+    let mut lakes = HashMap::new();
 
     for (&cell, &flow) in flow_cache {
         let source = network.node(cell);
-        if source.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD
-            || !source.biome_hydrology.can_generate_river
-        {
+        if source.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD {
+            continue;
+        }
+
+        if source.biome_hydrology.can_generate_lake && source.elevation > sea_level + 1.0 {
+            let neighbors = network.neighbor_nodes(cell);
+            if let Some(lake) = lake_for_local_basin(
+                cell,
+                source,
+                &neighbors,
+                seed,
+                sea_level,
+                water_fluid,
+            ) {
+                channels.insert(cell);
+                lakes.insert(cell, lake);
+            }
+        }
+
+        if !source.biome_hydrology.can_generate_river {
             continue;
         }
 
@@ -271,7 +285,11 @@ where
     }
 
     extend_selected_downstream(&mut channels, network);
-    RiverSelection { channels, springs }
+    RiverSelection {
+        channels,
+        springs,
+        lakes,
+    }
 }
 
 fn is_mountain_spring<F>(
@@ -445,8 +463,8 @@ fn river_path(
         })
         .collect::<Vec<_>>();
     let waterfall = waterfall_profile.map(|profile| {
-        let landing_index = ((profile.end_t * segment_count as f32).round() as usize)
-            .min(segment_count);
+        let landing_index =
+            ((profile.end_t * segment_count as f32).round() as usize).min(segment_count);
         WaterfallLanding {
             position: points[landing_index],
             drop: profile.drop,
@@ -535,7 +553,8 @@ fn plunge_pool_for_waterfall(
         return None;
     }
 
-    let drop_strength = ((waterfall.drop - WATERFALL_MINIMUM_DROP) / 24.0).clamp(0.0, 1.0);
+    let drop_strength =
+        ((waterfall.drop - WATERFALL_MINIMUM_DROP) / 24.0).clamp(0.0, 1.0);
     let base_radius = lerp(
         6.0,
         13.0,
