@@ -7,9 +7,10 @@ use serde::Deserialize;
 
 use self::validation::validate_biome_definition;
 use super::{
-    biome_density::BiomeDensityModifier, biome_hydrology::BiomeHydrology,
-    biome_material::BiomeMaterialLayer, biome_sky_layer::BiomeSkyLayerVisuals,
-    biome_structure::BiomeStructure, biome_terrain::BiomeTerrain, color::Rgb,
+    biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
+    biome_hydrology::BiomeHydrology, biome_material::BiomeMaterialLayer,
+    biome_sky_layer::BiomeSkyLayerVisuals, biome_structure::BiomeStructure,
+    biome_terrain::BiomeTerrain, biome_terrain_modifier::BiomeTerrainModifier, color::Rgb,
     day_night_phase::DayNightPhases,
 };
 
@@ -100,6 +101,8 @@ pub struct BiomeDefinition {
     #[serde(default)]
     pub kind: BiomeKind,
     #[serde(default)]
+    pub distribution: BiomeDistribution,
+    #[serde(default)]
     pub size: BiomeSize,
     #[serde(default)]
     pub climate: BiomeClimate,
@@ -109,6 +112,8 @@ pub struct BiomeDefinition {
     pub priority: i32,
     #[serde(default)]
     pub terrain: Option<BiomeTerrain>,
+    #[serde(default)]
+    pub terrain_modifiers: Vec<BiomeTerrainModifier>,
     #[serde(default)]
     pub surface_layers: Vec<BiomeMaterialLayer>,
     #[serde(default)]

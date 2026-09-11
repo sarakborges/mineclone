@@ -3,20 +3,13 @@ use bevy::prelude::*;
 use super::{
     BiomeField, BiomeFieldSample, BiomeInfluence,
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS},
+    mountain_belt::mountain_belt_strength,
     selection::select_surface_biome_index,
     spatial::{smoothstep, surface_site_position, warp_surface_position},
 };
 
 impl BiomeField {
     pub fn sample_surface(&self, position: Vec2) -> BiomeFieldSample<'_> {
-        if self.surface_biomes.len() == 1 {
-            let id = self.surface_biomes[0].id.as_str();
-            return BiomeFieldSample {
-                primary_id: id,
-                influences: vec![BiomeInfluence { id, weight: 1.0 }],
-            };
-        }
-
         let warped = warp_surface_position(position, self.seed);
         let center = IVec2::new(
             (warped.x / self.surface_site_spacing.x).round() as i32,
@@ -54,6 +47,44 @@ impl BiomeField {
             let border_progress = 1.0 - (distance_gap / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
             let smooth_progress = smoothstep(border_progress);
             weights[candidate_index] = weights[candidate_index].max(smooth_progress);
+        }
+
+        let regional_total: f32 = weights.iter().sum();
+        if regional_total > f32::EPSILON {
+            for weight in &mut weights {
+                *weight /= regional_total;
+            }
+        }
+
+        let strongest_belt = self
+            .surface_biomes
+            .iter()
+            .enumerate()
+            .filter_map(|(index, biome)| {
+                let strength = mountain_belt_strength(
+                    biome.distribution,
+                    position,
+                    self.seed,
+                    biome.id.as_str(),
+                );
+                (strength > 0.0).then_some((index, strength))
+            })
+            .max_by(|left, right| left.1.total_cmp(&right.1));
+
+        if let Some((belt_index, belt_strength)) = strongest_belt {
+            let retained_regional_weight = 1.0 - belt_strength;
+            for weight in &mut weights {
+                *weight *= retained_regional_weight;
+            }
+            weights[belt_index] += belt_strength;
+        }
+
+        if let Some((index, _)) = weights
+            .iter()
+            .enumerate()
+            .max_by(|left, right| left.1.total_cmp(right.1))
+        {
+            primary_index = index;
         }
 
         let total_weight: f32 = weights.iter().sum();

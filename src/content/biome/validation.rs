@@ -21,11 +21,15 @@ pub(super) fn validate_biome_definition(definition: &BiomeDefinition) {
     }
 
     validate_climate(&definition.id, definition.climate);
+    definition.distribution.validate(&definition.id);
     definition.hydrology.validate(&definition.id);
     validate_visuals(definition);
 
     if let Some(terrain) = &definition.terrain {
         terrain.validate(&definition.id);
+    }
+    for modifier in &definition.terrain_modifiers {
+        modifier.validate(&definition.id);
     }
     if let Some(modifier) = &definition.density_modifier {
         modifier.validate(&definition.id);
@@ -73,6 +77,16 @@ fn validate_volume_biome(definition: &BiomeDefinition) {
     validate_size_axis(&definition.id, "y", vertical_size);
 
     assert!(
+        definition.distribution.is_regional(),
+        "volume biome {} cannot define a surface distribution",
+        definition.id
+    );
+    assert!(
+        definition.terrain_modifiers.is_empty(),
+        "volume biome {} cannot define terrainModifiers",
+        definition.id
+    );
+    assert!(
         definition.surface_layers.is_empty(),
         "volume biome {} cannot define surfaceLayers",
         definition.id
@@ -81,8 +95,18 @@ fn validate_volume_biome(definition: &BiomeDefinition) {
 
 fn validate_hydrology_biome(definition: &BiomeDefinition) {
     assert!(
+        definition.distribution.is_regional(),
+        "hydrology biome {} cannot define a surface distribution",
+        definition.id
+    );
+    assert!(
         definition.terrain.is_none(),
         "hydrology biome {} cannot define terrain",
+        definition.id
+    );
+    assert!(
+        definition.terrain_modifiers.is_empty(),
+        "hydrology biome {} cannot define terrainModifiers",
         definition.id
     );
     assert!(

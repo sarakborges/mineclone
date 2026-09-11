@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::content::{
     biome::{BiomeKind, BiomeRegistry},
     biome_terrain::BiomeTerrain,
+    biome_terrain_modifier::BiomeTerrainModifier,
     dimension::DimensionDefinition,
 };
 
@@ -45,6 +46,7 @@ pub(crate) fn surface_height_from_sample(
             world_seed,
             biome.id.as_str(),
             terrain,
+            &biome.terrain_modifiers,
         ) * influence.weight;
     }
 
@@ -71,13 +73,19 @@ pub(crate) fn chunk_y_bounds(
                 return None;
             }
 
-            Some(
-                biome
-                    .terrain
-                    .as_ref()
-                    .unwrap_or_else(|| panic!("surface biome {} must define terrain", biome.id))
-                    .maximum_height_offset(),
-            )
+            let terrain_offset = biome
+                .terrain
+                .as_ref()
+                .unwrap_or_else(|| panic!("surface biome {} must define terrain", biome.id))
+                .maximum_height_offset();
+            let modifier_offset: f32 = biome
+                .terrain_modifiers
+                .iter()
+                .copied()
+                .map(BiomeTerrainModifier::maximum_height_offset)
+                .sum();
+
+            Some(terrain_offset + modifier_offset)
         })
         .fold(0.0_f32, f32::max)
         .max(0.0);
@@ -94,11 +102,12 @@ fn biome_surface_height(
     world_seed: u64,
     biome_id: &str,
     terrain: &BiomeTerrain,
+    modifiers: &[BiomeTerrainModifier],
 ) -> f32 {
     let seed = mix_seed(world_seed ^ string_hash(biome_id));
     let sea_level = sea_level as f32;
 
-    match *terrain {
+    let base_height = match *terrain {
         BiomeTerrain::Rolling {
             base_height,
             amplitude,
@@ -119,6 +128,55 @@ fn biome_surface_height(
             let noise = fractal_noise(position * scale, seed);
             let ridge = (1.0 - noise.abs()).clamp(0.0, 1.0).powf(sharpness);
             sea_level + base_height + ridge * amplitude
+        }
+    };
+
+    base_height
+        + modifiers
+            .iter()
+            .enumerate()
+            .map(|(index, modifier)| {
+                terrain_modifier_height(
+                    position,
+                    seed.wrapping_add((index as u64 + 1).wrapping_mul(0x517c_c1b7_2722_0a95)),
+                    *modifier,
+                )
+            })
+            .sum::<f32>()
+}
+
+fn terrain_modifier_height(position: Vec2, seed: u64, modifier: BiomeTerrainModifier) -> f32 {
+    match modifier {
+        BiomeTerrainModifier::Cliffs {
+            scale,
+            threshold,
+            height,
+            edge_width,
+            warp_scale,
+            warp_strength,
+        } => {
+            let warp_position = position * warp_scale;
+            let warp = Vec2::new(
+                fractal_noise(warp_position, seed ^ 0x9e37_79b9_7f4a_7c15),
+                fractal_noise(
+                    warp_position + Vec2::new(-23.1, 41.9),
+                    seed ^ 0xc2b2_ae3d_27d4_eb4f,
+                ),
+            ) * warp_strength;
+            let value = ((fractal_noise((position + warp) * scale, seed) + 1.0) * 0.5)
+                .clamp(0.0, 1.0);
+            let half_edge = edge_width * 0.5;
+            let lower = (threshold - half_edge).clamp(0.0, 1.0);
+            let upper = (threshold + half_edge).clamp(0.0, 1.0);
+            let progress = if upper > lower {
+                ((value - lower) / (upper - lower)).clamp(0.0, 1.0)
+            } else if value >= threshold {
+                1.0
+            } else {
+                0.0
+            };
+
+            smoothstep(progress) * height
         }
     }
 }

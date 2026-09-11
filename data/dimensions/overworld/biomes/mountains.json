@@ -1,6 +1,14 @@
 {
   "id": "asteria:overworld/mountains",
   "name": "Mountains",
+  "distribution": {
+    "type": "mountain_belt",
+    "scale": 0.0015,
+    "threshold": 0.72,
+    "width": 0.18,
+    "warpScale": 0.0025,
+    "warpStrength": 85.0
+  },
   "size": {
     "x": { "min": 90.0, "max": 260.0 },
     "z": { "min": 90.0, "max": 260.0 },
@@ -13,6 +21,17 @@
     "scale": 0.010,
     "sharpness": 1.65
   },
+  "terrainModifiers": [
+    {
+      "type": "cliffs",
+      "scale": 0.018,
+      "threshold": 0.62,
+      "height": 18.0,
+      "edgeWidth": 0.035,
+      "warpScale": 0.006,
+      "warpStrength": 14.0
+    }
+  ],
   "surfaceLayers": [
     { "block": "asteria:stone" }
   ],

@@ -18,17 +18,24 @@ pub(super) fn select_surface_biome_index(
     climate_field: &MacroClimateField,
     seed: u64,
 ) -> usize {
-    if biomes
+    let regional = biomes
         .iter()
-        .all(|biome| climate_is_unrestricted(biome.climate))
+        .enumerate()
+        .filter_map(|(index, biome)| biome.distribution.is_regional().then_some(index))
+        .collect::<Vec<_>>();
+    assert!(!regional.is_empty(), "surface biome field has no regional biomes");
+
+    if regional
+        .iter()
+        .all(|index| climate_is_unrestricted(biomes[*index].climate))
     {
-        return biome_index(cell, biomes.len(), seed);
+        return regional[biome_index(cell, regional.len(), seed)];
     }
 
     let climate = climate_field.sample(site);
     let hash = cell_hash(cell, seed);
-    select_weighted_biome_index(biomes, climate, hash, |_| true)
-        .unwrap_or_else(|| biome_index(cell, biomes.len(), seed))
+    select_weighted_biome_index(biomes, climate, hash, |biome| biome.distribution.is_regional())
+        .unwrap_or_else(|| regional[hash as usize % regional.len()])
 }
 
 pub(super) fn select_volume_biome_index(

@@ -1,4 +1,5 @@
 mod constants;
+mod mountain_belt;
 mod selection;
 mod spatial;
 mod surface;
@@ -9,7 +10,7 @@ use bevy::prelude::*;
 
 use crate::content::{
     biome::{BiomeClimate, BiomeKind, BiomeRegistry, BiomeSize, BiomeVerticalRange},
-    biome_density::BiomeDensityModifier,
+    biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
     dimension::DimensionDefinition,
 };
 
@@ -20,6 +21,7 @@ use super::macro_climate::{MacroClimateField, MacroClimateSample};
 #[derive(Clone)]
 pub(super) struct BiomeFieldEntry {
     pub id: String,
+    pub distribution: BiomeDistribution,
     pub size: BiomeSize,
     pub climate: BiomeClimate,
     pub vertical_range: Option<BiomeVerticalRange>,
@@ -84,6 +86,7 @@ impl BiomeField {
                 .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
             let entry = BiomeFieldEntry {
                 id: biome.id.clone(),
+                distribution: biome.distribution,
                 size: biome.size,
                 climate: biome.climate,
                 vertical_range: biome.vertical_range,
@@ -95,8 +98,10 @@ impl BiomeField {
 
             match biome.kind {
                 BiomeKind::Surface => {
-                    surface_minimum_radius.x = surface_minimum_radius.x.max(biome.size.x.min);
-                    surface_minimum_radius.y = surface_minimum_radius.y.max(biome.size.z.min);
+                    if biome.distribution.is_regional() {
+                        surface_minimum_radius.x = surface_minimum_radius.x.max(biome.size.x.min);
+                        surface_minimum_radius.y = surface_minimum_radius.y.max(biome.size.z.min);
+                    }
                     surface_biomes.push(entry);
                 }
                 BiomeKind::Volume => {
@@ -114,8 +119,8 @@ impl BiomeField {
         }
 
         assert!(
-            !surface_biomes.is_empty(),
-            "dimension {} must define at least one surface biome",
+            surface_biomes.iter().any(|biome| biome.distribution.is_regional()),
+            "dimension {} must define at least one regional surface biome",
             dimension.id
         );
 
