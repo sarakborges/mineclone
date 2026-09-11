@@ -17,9 +17,7 @@ use crate::{
 use super::{
     columns::GenerationColumnSample,
     index::{VOXELS_PER_CHUNK, column_index, voxel_index},
-    surface_carvers::{
-        resolve_surface_carver_column, surface_carver_density_delta_from_column,
-    },
+    surface_carvers::{resolve_surface_carver_column, surface_carver_density_delta},
 };
 
 const SURFACE_CARVER_WATER_CLEARANCE: f32 = 12.0;
@@ -92,11 +90,7 @@ pub(super) fn sample_density_field(
                     hydrology_deltas[local_y],
                 );
                 let carver_delta = surface_carvers.as_ref().map_or(0.0, |carvers| {
-                    surface_carver_density_delta_from_column(
-                        sampled_density,
-                        sample_position,
-                        carvers,
-                    )
+                    surface_carver_density_delta(sampled_density, sample_position, carvers)
                 });
 
                 field.values[index] = sampled_density + carver_delta;
