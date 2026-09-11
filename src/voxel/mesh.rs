@@ -104,7 +104,7 @@ where
 
                 for block_face in BlockFace::ALL {
                     let face = block_face.oriented(cell.orientation);
-                    if !is_face_exposed(world, world_voxel, face) {
+                    if !is_face_exposed(world, blocks, cell.block_id, world_voxel, face) {
                         continue;
                     }
 
