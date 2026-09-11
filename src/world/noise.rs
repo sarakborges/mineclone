@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::world::{
-    deterministic::{hash_unit, mix_hash_u64},
+    deterministic::{hash_signed, mix_hash_u64},
     math::{lerp, smoothstep},
 };
 
@@ -85,5 +85,5 @@ fn lattice_noise_3d(x: i32, y: i32, z: i32, seed: u64) -> f32 {
     hash ^= (y as i64 as u64).wrapping_mul(0xd6e8_feb8_6659_fd93);
     hash ^= (z as i64 as u64).wrapping_mul(0xc2b2_ae3d_27d4_eb4f);
 
-    hash_unit(mix_hash_u64(hash)) * 2.0 - 1.0
+    hash_signed(mix_hash_u64(hash))
 }
