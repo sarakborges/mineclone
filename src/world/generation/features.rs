@@ -14,7 +14,7 @@ use super::structures::rasterize_structures;
 pub(super) fn rasterize_feature_pass(
     chunk: &mut VoxelChunk,
     chunk_origin: IVec3,
-    _region: &GenerationRegion,
+    region: &GenerationRegion,
     biome_field: &BiomeField,
     blocks: &BlockRegistry,
     dimension: &DimensionDefinition,
@@ -25,6 +25,7 @@ pub(super) fn rasterize_feature_pass(
     rasterize_structures(
         chunk,
         chunk_origin,
+        region,
         dimension,
         biomes,
         blocks,
