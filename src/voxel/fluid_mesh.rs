@@ -18,6 +18,14 @@ pub struct ChunkFluidMesh {
     pub mesh: Mesh,
 }
 
+#[derive(Clone, Copy)]
+struct FluidFaceHeights {
+    h00: f32,
+    h10: f32,
+    h11: f32,
+    h01: f32,
+}
+
 pub fn build_fluid_meshes<F>(
     world: &VoxelWorld,
     chunk_coord: IVec3,
@@ -39,102 +47,28 @@ where
                 };
 
                 let fluid = buffers.entry(cell.fluid_id).or_default();
-                let local = IVec3::new(x as i32, y as i32, z as i32);
-                let world_voxel = chunk_origin + local;
+                let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
                 let tint = tint_at(world_voxel, cell.fluid_id);
-                let x0 = x as f32;
-                let y0 = y as f32;
-                let z0 = z as f32;
-                let x1 = x0 + 1.0;
-                let z1 = z0 + 1.0;
-                let h00 = fluid_corner_height(world, world_voxel, cell.fluid_id, -1, -1);
-                let h10 = fluid_corner_height(world, world_voxel, cell.fluid_id, 1, -1);
-                let h11 = fluid_corner_height(world, world_voxel, cell.fluid_id, 1, 1);
-                let h01 = fluid_corner_height(world, world_voxel, cell.fluid_id, -1, 1);
+                let heights = FluidFaceHeights {
+                    h00: fluid_corner_height(world, world_voxel, cell.fluid_id, -1, -1),
+                    h10: fluid_corner_height(world, world_voxel, cell.fluid_id, 1, -1),
+                    h11: fluid_corner_height(world, world_voxel, cell.fluid_id, 1, 1),
+                    h01: fluid_corner_height(world, world_voxel, cell.fluid_id, -1, 1),
+                };
 
-                if face_is_exposed(world, world_voxel + IVec3::X, cell.fluid_id) {
+                for face in BlockFace::ALL {
+                    if face == BlockFace::Bottom && world_voxel.y <= 0 {
+                        continue;
+                    }
+                    if !face_is_exposed(world, world_voxel + face.offset(), cell.fluid_id) {
+                        continue;
+                    }
+
                     push_fluid_face(
                         fluid,
-                        [
-                            [x1, y0, z1],
-                            [x1, y0, z0],
-                            [x1, y0 + h10, z0],
-                            [x1, y0 + h11, z1],
-                        ],
-                        [1.0, 0.0, 0.0],
-                        face_lighting(world, world_voxel, BlockFace::Right),
-                        tint,
-                    );
-                }
-
-                if face_is_exposed(world, world_voxel - IVec3::X, cell.fluid_id) {
-                    push_fluid_face(
-                        fluid,
-                        [
-                            [x0, y0, z0],
-                            [x0, y0, z1],
-                            [x0, y0 + h01, z1],
-                            [x0, y0 + h00, z0],
-                        ],
-                        [-1.0, 0.0, 0.0],
-                        face_lighting(world, world_voxel, BlockFace::Left),
-                        tint,
-                    );
-                }
-
-                if face_is_exposed(world, world_voxel + IVec3::Y, cell.fluid_id) {
-                    push_fluid_face(
-                        fluid,
-                        [
-                            [x0, y0 + h01, z1],
-                            [x1, y0 + h11, z1],
-                            [x1, y0 + h10, z0],
-                            [x0, y0 + h00, z0],
-                        ],
-                        [0.0, 1.0, 0.0],
-                        face_lighting(world, world_voxel, BlockFace::Top),
-                        tint,
-                    );
-                }
-
-                if world_voxel.y > 0
-                    && face_is_exposed(world, world_voxel - IVec3::Y, cell.fluid_id)
-                {
-                    push_fluid_face(
-                        fluid,
-                        [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]],
-                        [0.0, -1.0, 0.0],
-                        face_lighting(world, world_voxel, BlockFace::Bottom),
-                        tint,
-                    );
-                }
-
-                if face_is_exposed(world, world_voxel + IVec3::Z, cell.fluid_id) {
-                    push_fluid_face(
-                        fluid,
-                        [
-                            [x0, y0, z1],
-                            [x1, y0, z1],
-                            [x1, y0 + h11, z1],
-                            [x0, y0 + h01, z1],
-                        ],
-                        [0.0, 0.0, 1.0],
-                        face_lighting(world, world_voxel, BlockFace::Front),
-                        tint,
-                    );
-                }
-
-                if face_is_exposed(world, world_voxel - IVec3::Z, cell.fluid_id) {
-                    push_fluid_face(
-                        fluid,
-                        [
-                            [x1, y0, z0],
-                            [x0, y0, z0],
-                            [x0, y0 + h00, z0],
-                            [x1, y0 + h10, z0],
-                        ],
-                        [0.0, 0.0, -1.0],
-                        face_lighting(world, world_voxel, BlockFace::Back),
+                        fluid_face_vertices(face, x as f32, y as f32, z as f32, heights),
+                        face.normal(),
+                        face_lighting(world, world_voxel, face),
                         tint,
                     );
                 }
@@ -150,6 +84,51 @@ where
                 .map(|mesh| ChunkFluidMesh { fluid_id, mesh })
         })
         .collect()
+}
+
+fn fluid_face_vertices(
+    face: BlockFace,
+    x0: f32,
+    y0: f32,
+    z0: f32,
+    heights: FluidFaceHeights,
+) -> [[f32; 3]; 4] {
+    let x1 = x0 + 1.0;
+    let z1 = z0 + 1.0;
+
+    match face {
+        BlockFace::Right => [
+            [x1, y0, z1],
+            [x1, y0, z0],
+            [x1, y0 + heights.h10, z0],
+            [x1, y0 + heights.h11, z1],
+        ],
+        BlockFace::Left => [
+            [x0, y0, z0],
+            [x0, y0, z1],
+            [x0, y0 + heights.h01, z1],
+            [x0, y0 + heights.h00, z0],
+        ],
+        BlockFace::Top => [
+            [x0, y0 + heights.h01, z1],
+            [x1, y0 + heights.h11, z1],
+            [x1, y0 + heights.h10, z0],
+            [x0, y0 + heights.h00, z0],
+        ],
+        BlockFace::Bottom => [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]],
+        BlockFace::Front => [
+            [x0, y0, z1],
+            [x1, y0, z1],
+            [x1, y0 + heights.h11, z1],
+            [x0, y0 + heights.h01, z1],
+        ],
+        BlockFace::Back => [
+            [x1, y0, z0],
+            [x0, y0, z0],
+            [x0, y0 + heights.h00, z0],
+            [x1, y0 + heights.h10, z0],
+        ],
+    }
 }
 
 fn push_fluid_face(
