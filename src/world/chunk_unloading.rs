@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use bevy::prelude::*;
 
@@ -16,7 +16,7 @@ use super::{
     streaming::ChunkStreamingState,
 };
 
-const CHUNK_UNLOAD_BUDGET_MS: u128 = 2;
+const CHUNK_UNLOAD_BUDGET: Duration = Duration::from_millis(2);
 
 pub(super) fn unload_chunk_meshes(
     player: Single<&Transform, With<GameplayCamera>>,
@@ -41,7 +41,7 @@ pub(super) fn unload_chunk_meshes(
     let mut unloaded = Vec::new();
 
     for coord in pending_unloads {
-        if !unloaded.is_empty() && frame_started.elapsed().as_millis() >= CHUNK_UNLOAD_BUDGET_MS {
+        if !unloaded.is_empty() && frame_started.elapsed() >= CHUNK_UNLOAD_BUDGET {
             break;
         }
 
