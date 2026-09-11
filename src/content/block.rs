@@ -58,6 +58,7 @@ pub enum BlockTint {
     #[default]
     None,
     Grass,
+    Leaf,
     Foliage,
 }
 
