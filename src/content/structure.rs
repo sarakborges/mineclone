@@ -244,4 +244,20 @@ impl StructureRegistry {
             .unwrap_or(0)
             .max(0)
     }
+
+    pub(crate) fn max_horizontal_extent_from_anchor(&self) -> i32 {
+        self.definitions
+            .values()
+            .map(|definition| {
+                let (minimum, maximum) = definition.horizontal_bounds();
+                minimum
+                    .x
+                    .abs()
+                    .max(minimum.y.abs())
+                    .max(maximum.x.abs())
+                    .max(maximum.y.abs())
+            })
+            .max()
+            .unwrap_or(0)
+    }
 }

@@ -195,14 +195,16 @@ fn rebuild_queue(
     vertical_radius: i32,
     context: &QueueRebuildContext<'_>,
 ) {
-    let preload_radius = horizontal_radius + HORIZONTAL_PRELOAD_CHUNKS;
-    let structure_chunk_allowance = structure_chunk_allowance(context.structures);
+    let horizontal_structure_allowance = structure_horizontal_chunk_allowance(context.structures);
+    let preload_radius =
+        horizontal_radius + HORIZONTAL_PRELOAD_CHUNKS.max(horizontal_structure_allowance);
+    let vertical_structure_allowance = structure_vertical_chunk_allowance(context.structures);
     prune_surface_cache(&mut streaming.surface_ranges, center.xz(), preload_radius);
     let desired = desired_chunk_coords(
         center,
         preload_radius,
         vertical_radius,
-        structure_chunk_allowance,
+        vertical_structure_allowance,
         context.dimension,
         context.biomes,
         context.biome_field,
@@ -218,7 +220,7 @@ fn rebuild_queue(
         pending_priority(
             *coord,
             center,
-            structure_chunk_allowance,
+            vertical_structure_allowance,
             &streaming.surface_ranges,
         )
     });
@@ -329,12 +331,21 @@ fn desired_chunk_coords(
     desired
 }
 
-fn structure_chunk_allowance(structures: &StructureRegistry) -> i32 {
+fn structure_vertical_chunk_allowance(structures: &StructureRegistry) -> i32 {
     let structure_height = structures.max_height_above_anchor();
     if structure_height == 0 {
         0
     } else {
         (structure_height + CHUNK_SIZE as i32 - 1) / CHUNK_SIZE as i32
+    }
+}
+
+fn structure_horizontal_chunk_allowance(structures: &StructureRegistry) -> i32 {
+    let structure_extent = structures.max_horizontal_extent_from_anchor();
+    if structure_extent == 0 {
+        0
+    } else {
+        (structure_extent + CHUNK_SIZE as i32 - 1) / CHUNK_SIZE as i32
     }
 }
 
