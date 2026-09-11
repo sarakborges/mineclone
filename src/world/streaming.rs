@@ -25,9 +25,9 @@ use super::{
     terrain::surface_height,
 };
 
-const MIN_CHUNKS_PER_FRAME: usize = 2;
+const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 2;
 const STREAMING_LIGHT_BATCH_CHUNKS: usize = 2;
-const EXTRA_STREAMING_BUDGET_MS: u128 = 6;
+const STREAMING_BUDGET_MS: u128 = 6;
 const HORIZONTAL_PRELOAD_CHUNKS: i32 = 1;
 const SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const SURFACE_PADDING_ABOVE_CHUNKS: i32 = 1;
@@ -36,8 +36,8 @@ const SURFACE_CACHE_MARGIN_CHUNKS: i32 = 2;
 #[derive(Resource, Default)]
 pub struct ChunkStreamingState {
     center: Option<IVec3>,
-    horizontal_render_distance: i32,
-    vertical_render_distance: i32,
+    horizontal_radius: i32,
+    vertical_radius: i32,
     desired: HashSet<IVec3>,
     pending: VecDeque<IVec3>,
     surface_ranges: HashMap<IVec2, (i32, i32)>,
@@ -47,6 +47,13 @@ impl ChunkStreamingState {
     pub(crate) fn wants(&self, coord: IVec3) -> bool {
         self.desired.contains(&coord)
     }
+}
+
+struct QueueRebuildContext<'a> {
+    render_pool: &'a ChunkRenderPool,
+    dimension: &'a DimensionDefinition,
+    biomes: &'a BiomeRegistry,
+    biome_field: &'a BiomeField,
 }
 
 #[derive(SystemParam)]
@@ -76,18 +83,21 @@ pub fn stream_chunks(
     let vertical_radius = inputs.render_distance.vertical_chunks();
 
     if inputs.streaming.center != Some(center)
-        || inputs.streaming.horizontal_render_distance != horizontal_radius
-        || inputs.streaming.vertical_render_distance != vertical_radius
+        || inputs.streaming.horizontal_radius != horizontal_radius
+        || inputs.streaming.vertical_radius != vertical_radius
     {
+        let rebuild_context = QueueRebuildContext {
+            render_pool: &renderer.pool,
+            dimension: generation.dimension(),
+            biomes: &content.biomes,
+            biome_field: &content.biome_field,
+        };
         rebuild_queue(
             &mut inputs.streaming,
-            &renderer.pool,
             center,
             horizontal_radius,
             vertical_radius,
-            generation.dimension(),
-            &content.biomes,
-            &content.biome_field,
+            &rebuild_context,
         );
     }
 
@@ -96,8 +106,8 @@ pub fn stream_chunks(
     let mut processed = 0;
 
     loop {
-        if processed >= MIN_CHUNKS_PER_FRAME
-            && frame_started.elapsed().as_millis() >= EXTRA_STREAMING_BUDGET_MS
+        if processed >= MIN_CHUNKS_BEFORE_BUDGET_CHECK
+            && frame_started.elapsed().as_millis() >= STREAMING_BUDGET_MS
         {
             break;
         }
@@ -128,7 +138,6 @@ pub fn stream_chunks(
             &content.blocks,
             &content.fluids,
         );
-        let batch_coords = batch.iter().copied().collect::<HashSet<_>>();
 
         for &coord in &batch {
             let chunk = inputs
@@ -154,14 +163,14 @@ pub fn stream_chunks(
         processed += batch.len();
 
         for changed in lighting_changes {
-            if !batch_coords.contains(&changed) && renderer.pool.contains(changed) {
+            if !batch.contains(&changed) && renderer.pool.contains(changed) {
                 inputs.remesh_queue.enqueue_priority(changed);
             }
         }
-        for coord in batch {
+        for &coord in &batch {
             for offset in CARDINAL_NEIGHBORS {
                 let neighbor = coord + offset;
-                if !batch_coords.contains(&neighbor) && renderer.pool.contains(neighbor) {
+                if !batch.contains(&neighbor) && renderer.pool.contains(neighbor) {
                     inputs.remesh_queue.enqueue_priority(neighbor);
                 }
             }
@@ -169,16 +178,12 @@ pub fn stream_chunks(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn rebuild_queue(
     streaming: &mut ChunkStreamingState,
-    render_pool: &ChunkRenderPool,
     center: IVec3,
     horizontal_radius: i32,
     vertical_radius: i32,
-    dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
-    biome_field: &BiomeField,
+    context: &QueueRebuildContext<'_>,
 ) {
     let preload_radius = horizontal_radius + HORIZONTAL_PRELOAD_CHUNKS;
     prune_surface_cache(&mut streaming.surface_ranges, center.xz(), preload_radius);
@@ -186,22 +191,22 @@ fn rebuild_queue(
         center,
         preload_radius,
         vertical_radius,
-        dimension,
-        biomes,
-        biome_field,
+        context.dimension,
+        context.biomes,
+        context.biome_field,
         &mut streaming.surface_ranges,
     );
     let mut pending = desired
         .iter()
         .copied()
-        .filter(|coord| !render_pool.contains(*coord))
+        .filter(|coord| !context.render_pool.contains(*coord))
         .collect::<Vec<_>>();
 
     pending.sort_by_key(|coord| pending_priority(*coord, center, &streaming.surface_ranges));
 
     streaming.center = Some(center);
-    streaming.horizontal_render_distance = horizontal_radius;
-    streaming.vertical_render_distance = vertical_radius;
+    streaming.horizontal_radius = horizontal_radius;
+    streaming.vertical_radius = vertical_radius;
     streaming.desired = desired;
     streaming.pending = pending.into();
 }
