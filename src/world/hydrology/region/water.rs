@@ -4,7 +4,7 @@ use super::HydrologyRegion;
 use crate::world::hydrology::{
     constants::{OCEAN_EXTRA_DEPTH, OCEAN_MINIMUM_DEPTH, SHORE_STRENGTH},
     math::{lerp, smoothstep},
-    types::HydrologyWaterSample,
+    types::{HydrologyRiverSurfaceSample, HydrologyWaterSample},
 };
 
 impl HydrologyRegion {
@@ -22,6 +22,18 @@ impl HydrologyRegion {
 
     pub(crate) fn river_water_at(&self, position: Vec2) -> Option<HydrologyWaterSample<'_>> {
         self.river_water_with_margin(position, 0.0)
+    }
+
+    pub(crate) fn river_surface_at(
+        &self,
+        position: Vec2,
+    ) -> Option<HydrologyRiverSurfaceSample> {
+        let river = self.river_graph.sample_horizontal(position)?;
+
+        Some(HydrologyRiverSurfaceSample {
+            water_level: river.height,
+            strength: river.strength,
+        })
     }
 
     fn river_water_with_margin(

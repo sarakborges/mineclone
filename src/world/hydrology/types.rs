@@ -80,6 +80,12 @@ pub struct HydrologyWaterSample<'a> {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub(crate) struct HydrologyRiverSurfaceSample {
+    pub water_level: f32,
+    pub strength: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct HydrologySurfaceSample {
     pub elevation: f32,
     pub continentalness: f32,

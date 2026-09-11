@@ -6,7 +6,7 @@ use super::{
     biome_field::{BiomeField, VolumeBiomeSelection},
     cave_connectivity::CaveConnectivityRegion,
     generation_region::GenerationRegion,
-    hydrology::HydrologyWaterSample,
+    hydrology::{HydrologyRiverSurfaceSample, HydrologyWaterSample},
 };
 
 const DENSITY_NOISE_EDGE: f32 = 0.15;
@@ -36,10 +36,25 @@ impl From<HydrologyWaterSample<'_>> for WaterLevels {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+struct RiverSurface {
+    water_level: f32,
+    strength: f32,
+}
+
+impl From<HydrologyRiverSurfaceSample> for RiverSurface {
+    fn from(sample: HydrologyRiverSurfaceSample) -> Self {
+        Self {
+            water_level: sample.water_level,
+            strength: sample.strength,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct DensityColumnHydrology {
     cave_water: Option<WaterLevels>,
-    river_water: Option<WaterLevels>,
+    river_surface: Option<RiverSurface>,
     water: Option<WaterLevels>,
 }
 
@@ -72,7 +87,7 @@ pub(crate) fn sample_density_column_hydrology(
             .hydrology
             .water_near(horizontal, CAVE_WATER_HORIZONTAL_CLEARANCE)
             .map(Into::into),
-        river_water: region.hydrology.river_water_at(horizontal).map(Into::into),
+        river_surface: region.hydrology.river_surface_at(horizontal).map(Into::into),
         water: region.hydrology.water_at(horizontal).map(Into::into),
     }
 }
@@ -151,12 +166,15 @@ fn enforce_hydrology_water_volume(
     let cell_bottom = y - 0.5;
     let cell_top = y + 0.5;
 
-    if let Some(river) = column_hydrology.river_water
-        && cell_top > river.bed_level
-        && cell_bottom < river.water_level + RIVER_CHANNEL_HEADROOM
-        && base_density > 0.0
-    {
-        return density.min(WATER_VOLUME_AIR_DENSITY);
+    if let Some(river) = column_hydrology.river_surface {
+        let headroom = river_headroom(river.strength);
+        if headroom > 0.0
+            && cell_top > river.water_level
+            && cell_bottom < river.water_level + headroom
+            && base_density > 0.0
+        {
+            return density.min(WATER_VOLUME_AIR_DENSITY);
+        }
     }
 
     let Some(water) = column_hydrology.water else {
@@ -168,6 +186,10 @@ fn enforce_hydrology_water_volume(
     }
 
     density.min(WATER_VOLUME_AIR_DENSITY)
+}
+
+fn river_headroom(strength: f32) -> f32 {
+    RIVER_CHANNEL_HEADROOM * smoothstep(strength.clamp(0.0, 1.0))
 }
 
 fn cave_water_clearance(y: f32, water: Option<WaterLevels>) -> f32 {
@@ -336,6 +358,14 @@ fn lerp(from: f32, to: f32, amount: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn river_headroom_tapers_toward_the_bank() {
+        assert_eq!(river_headroom(0.0), 0.0);
+        assert!(river_headroom(0.25) < river_headroom(0.5));
+        assert!(river_headroom(0.5) < river_headroom(1.0));
+        assert_eq!(river_headroom(1.0), RIVER_CHANNEL_HEADROOM);
+    }
 
     #[test]
     fn full_explicit_cave_strength_opens_deep_solid_density() {
