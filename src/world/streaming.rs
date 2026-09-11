@@ -34,7 +34,7 @@ const SURFACE_PADDING_ABOVE_CHUNKS: i32 = 1;
 const SURFACE_CACHE_MARGIN_CHUNKS: i32 = 2;
 
 #[derive(Resource, Default)]
-pub struct ChunkStreamingState {
+pub(super) struct ChunkStreamingState {
     center: Option<IVec3>,
     horizontal_radius: i32,
     vertical_radius: i32,
@@ -44,7 +44,7 @@ pub struct ChunkStreamingState {
 }
 
 impl ChunkStreamingState {
-    pub(crate) fn wants(&self, coord: IVec3) -> bool {
+    pub(super) fn wants(&self, coord: IVec3) -> bool {
         self.desired.contains(&coord)
     }
 }
@@ -65,11 +65,11 @@ pub(super) struct ChunkStreamingInputs<'w, 's> {
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
 }
 
-pub fn reset_chunk_streaming(mut state: ResMut<ChunkStreamingState>) {
+pub(super) fn reset_chunk_streaming(mut state: ResMut<ChunkStreamingState>) {
     *state = ChunkStreamingState::default();
 }
 
-pub fn stream_chunks(
+pub(super) fn stream_chunks(
     generation: ChunkGeneration,
     content: ChunkContent,
     mut renderer: ChunkRenderer,
