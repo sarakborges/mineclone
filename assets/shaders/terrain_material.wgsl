@@ -25,6 +25,8 @@
 struct TerrainMaterialExtension {
     sky_light_factor: f32,
     fluid_animation_factor: f32,
+    fog_color: vec4<f32>,
+    fog_distances: vec4<f32>,
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(100)
@@ -131,6 +133,22 @@ fn dynamic_point_lighting(
     }
 
     return result;
+}
+
+fn apply_asteria_distance_fog(
+    color: vec4<f32>,
+    world_position: vec3<f32>,
+) -> vec4<f32> {
+    let start = terrain_material_extension.fog_distances.x;
+    let end = max(terrain_material_extension.fog_distances.y, start + 0.001);
+    let view_distance = distance(world_position, view_bindings::view.world_position.xyz);
+    let fog_amount = smoothstep(start, end, view_distance)
+        * clamp(terrain_material_extension.fog_color.a, 0.0, 1.0);
+
+    return vec4<f32>(
+        mix(color.rgb, terrain_material_extension.fog_color.rgb, fog_amount),
+        color.a,
+    );
 }
 #endif
 
@@ -253,7 +271,10 @@ fn fragment(
     return deferred_output(in, pbr_input);
 #else
     var out: FragmentOutput;
-    out.color = pbr_input.material.base_color;
+    out.color = apply_asteria_distance_fog(
+        pbr_input.material.base_color,
+        in.world_position.xyz,
+    );
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
     return out;
 #endif
