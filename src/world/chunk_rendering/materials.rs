@@ -111,12 +111,7 @@ impl FluidMaterials {
             .map(|(fluid_id, definition)| {
                 let material = materials.add(TerrainMaterial {
                     base: StandardMaterial {
-                        base_color: Color::srgba(
-                            definition.color.r,
-                            definition.color.g,
-                            definition.color.b,
-                            definition.opacity,
-                        ),
+                        base_color: Color::srgba(1.0, 1.0, 1.0, definition.opacity),
                         perceptual_roughness: definition.roughness,
                         metallic: definition.metallic,
                         alpha_mode: AlphaMode::Blend,
