@@ -45,7 +45,7 @@ impl PendingFluidUpdates {
         self.enqueue_chunk_spread_targets(world, coord);
 
         for offset in CARDINAL_NEIGHBORS {
-            self.enqueue_chunk_spread_targets(world, coord + offset);
+            self.enqueue_neighbor_boundary_spread_targets(world, coord + offset, -offset);
         }
     }
 
@@ -61,23 +61,77 @@ impl PendingFluidUpdates {
                 for local_x in 0..CHUNK_SIZE {
                     let position = origin
                         + IVec3::new(local_x as i32, local_y as i32, local_z as i32);
-                    if world.fluid_at(position).is_none() {
-                        continue;
-                    }
-
-                    for offset in FLUID_SPREAD_TARGETS {
-                        let target = position + offset;
-                        if !world.is_loaded_at(target)
-                            || world.is_solid(target)
-                            || world.fluid_at(target).is_some()
-                        {
-                            continue;
-                        }
-
-                        self.enqueue(target);
-                    }
+                    self.enqueue_fluid_spread_targets_at(world, position);
                 }
             }
+        }
+    }
+
+    fn enqueue_neighbor_boundary_spread_targets(
+        &mut self,
+        world: &VoxelWorld,
+        coord: IVec3,
+        direction: IVec3,
+    ) {
+        if coord.y < 0 || world.chunk(coord).is_none() {
+            return;
+        }
+
+        let size = CHUNK_SIZE as i32;
+        let origin = coord * size;
+
+        if direction.x != 0 {
+            let local_x = if direction.x < 0 { 0 } else { size - 1 };
+            for local_y in 0..size {
+                for local_z in 0..size {
+                    self.enqueue_fluid_spread_targets_at(
+                        world,
+                        origin + IVec3::new(local_x, local_y, local_z),
+                    );
+                }
+            }
+            return;
+        }
+
+        if direction.y != 0 {
+            let local_y = if direction.y < 0 { 0 } else { size - 1 };
+            for local_z in 0..size {
+                for local_x in 0..size {
+                    self.enqueue_fluid_spread_targets_at(
+                        world,
+                        origin + IVec3::new(local_x, local_y, local_z),
+                    );
+                }
+            }
+            return;
+        }
+
+        let local_z = if direction.z < 0 { 0 } else { size - 1 };
+        for local_y in 0..size {
+            for local_x in 0..size {
+                self.enqueue_fluid_spread_targets_at(
+                    world,
+                    origin + IVec3::new(local_x, local_y, local_z),
+                );
+            }
+        }
+    }
+
+    fn enqueue_fluid_spread_targets_at(&mut self, world: &VoxelWorld, position: IVec3) {
+        if world.fluid_at(position).is_none() {
+            return;
+        }
+
+        for offset in FLUID_SPREAD_TARGETS {
+            let target = position + offset;
+            if !world.is_loaded_at(target)
+                || world.is_solid(target)
+                || world.fluid_at(target).is_some()
+            {
+                continue;
+            }
+
+            self.enqueue(target);
         }
     }
 
