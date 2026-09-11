@@ -4,7 +4,7 @@ mod refresh;
 mod spawn;
 
 use crate::{
-    content::{biome::BiomeRegistry, block::BlockRegistry},
+    content::{biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry},
     voxel::world::VoxelWorld,
 };
 
@@ -18,6 +18,7 @@ pub use spawn::spawn_chunk_mesh;
 pub(crate) struct ChunkRenderContext<'a> {
     pub world: &'a VoxelWorld,
     pub blocks: &'a BlockRegistry,
+    pub fluids: &'a FluidRegistry,
     pub biomes: &'a BiomeRegistry,
     pub biome_field: &'a BiomeField,
     pub terrain_materials: &'a TerrainMaterials,
