@@ -21,13 +21,13 @@ pub(crate) struct ChunkRemeshQueue {
 }
 
 impl ChunkRemeshQueue {
-    pub fn enqueue(&mut self, coord: IVec3) {
+    pub(crate) fn enqueue(&mut self, coord: IVec3) {
         if coord.y >= 0 && self.queued.insert(coord) {
             self.pending.push_back(coord);
         }
     }
 
-    pub fn enqueue_priority(&mut self, coord: IVec3) {
+    pub(crate) fn enqueue_priority(&mut self, coord: IVec3) {
         if coord.y < 0 {
             return;
         }
@@ -39,7 +39,7 @@ impl ChunkRemeshQueue {
         self.pending.push_front(coord);
     }
 
-    pub fn extend(&mut self, coords: impl IntoIterator<Item = IVec3>) {
+    pub(crate) fn extend(&mut self, coords: impl IntoIterator<Item = IVec3>) {
         for coord in coords {
             self.enqueue(coord);
         }
