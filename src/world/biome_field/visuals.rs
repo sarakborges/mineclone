@@ -39,10 +39,7 @@ impl BiomeField {
             let biome = biomes
                 .get(influence.id)
                 .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
-            let leaf = biome
-                .visuals
-                .leaf_color
-                .unwrap_or(biome.visuals.foliage_color);
+            let leaf = biome.visuals.leaf_color;
 
             color.r += leaf.r * influence.weight;
             color.g += leaf.g * influence.weight;
