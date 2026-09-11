@@ -1,7 +1,7 @@
-pub mod camera;
-pub mod hotbar;
-pub mod movement;
-pub mod viewmodel;
+pub(crate) mod camera;
+pub(crate) mod hotbar;
+pub(crate) mod movement;
+pub(crate) mod viewmodel;
 
 use bevy::prelude::*;
 
@@ -18,14 +18,14 @@ use movement::{
     flight::FlightState, gravity::GravityState, swimming::SwimmingState, walking::WalkingState,
 };
 
-pub const PLAYER_HEIGHT: f32 = 1.8;
-pub const PLAYER_EYE_HEIGHT: f32 = 1.62;
-pub const PLAYER_HALF_WIDTH: f32 = 0.3;
+pub(crate) const PLAYER_HEIGHT: f32 = 1.8;
+pub(crate) const PLAYER_EYE_HEIGHT: f32 = 1.62;
+pub(crate) const PLAYER_HALF_WIDTH: f32 = 0.3;
 
 const SPAWN_X: i32 = 8;
 const SPAWN_Z: i32 = 8;
 
-pub struct PlayerPlugin;
+pub(crate) struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {

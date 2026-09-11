@@ -29,7 +29,7 @@ use sky::SkyPlugin;
 use sky_layers::SkyLayersPlugin;
 use terrain_material::TerrainMaterial;
 
-pub struct RenderingPlugin;
+pub(crate) struct RenderingPlugin;
 
 impl Plugin for RenderingPlugin {
     fn build(&self, app: &mut App) {

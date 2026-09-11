@@ -1,4 +1,4 @@
-pub mod block;
+pub(crate) mod block;
 mod highlight;
 mod interaction;
 mod placement;

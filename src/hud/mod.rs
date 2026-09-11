@@ -15,7 +15,7 @@ use time::TimeHudPlugin;
 use underwater::UnderwaterTintPlugin;
 use world::WorldHudPlugin;
 
-pub struct HudPlugin;
+pub(crate) struct HudPlugin;
 
 impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {

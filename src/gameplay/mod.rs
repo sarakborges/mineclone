@@ -8,7 +8,7 @@ use crate::player::{
 };
 use pause::PausePlugin;
 
-pub struct GameplayPlugin;
+pub(crate) struct GameplayPlugin;
 
 impl Plugin for GameplayPlugin {
     fn build(&self, app: &mut App) {

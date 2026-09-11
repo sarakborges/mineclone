@@ -1,14 +1,14 @@
-pub mod biome;
-pub mod biome_field;
+pub(crate) mod biome;
+pub(crate) mod biome_field;
 pub(crate) mod cave_connectivity;
 mod chunk_loading;
 pub(crate) mod chunk_remesh;
 pub(crate) mod chunk_rendering;
 pub(crate) mod chunk_system_params;
 mod chunk_unloading;
-pub mod day_night;
+pub(crate) mod day_night;
 mod density_pipeline;
-pub mod dimension;
+pub(crate) mod dimension;
 pub(crate) mod feature_graph;
 pub(crate) mod fluid_updates;
 mod generation;
@@ -46,7 +46,7 @@ pub(crate) use setup::WorldLoadingState;
 use setup::{begin_world_loading, setup_world};
 use streaming::{ChunkStreamingState, reset_chunk_streaming, stream_chunks};
 
-pub struct WorldPlugin;
+pub(crate) struct WorldPlugin;
 
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {

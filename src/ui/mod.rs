@@ -1,13 +1,13 @@
-pub mod button;
-pub mod cosmic_background;
-pub mod surface;
-pub mod theme;
-pub mod transition;
-pub mod typography;
+pub(crate) mod button;
+pub(crate) mod cosmic_background;
+pub(crate) mod surface;
+pub(crate) mod theme;
+pub(crate) mod transition;
+pub(crate) mod typography;
 
 use bevy::prelude::*;
 
-pub struct UiDesignSystemPlugin;
+pub(crate) struct UiDesignSystemPlugin;
 
 impl Plugin for UiDesignSystemPlugin {
     fn build(&self, app: &mut App) {
