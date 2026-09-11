@@ -6,7 +6,7 @@ use crate::content::{
 };
 
 use super::{
-    BiomeField, BiomeFieldEntry, VolumeBiomeAnchor, VolumeBiomeFieldSample,
+    BiomeField, BiomeFieldEntry, VolumeBiomeAnchor,
     constants::{VOLUME_BORDER_MARGIN, VOLUME_SITE_JITTER_FRACTION, VOLUME_WARP_AMPLITUDE},
     selection::select_volume_biome_index,
     spatial::{
@@ -73,19 +73,6 @@ impl BiomeField {
         }
     }
 
-    pub(crate) fn sample_volume_in_region<'a>(
-        &'a self,
-        position: Vec3,
-        region: &VolumeBiomeRegion,
-    ) -> Option<VolumeBiomeFieldSample<'a>> {
-        let selection = self.volume_selection_in_region(position, region)?;
-
-        Some(VolumeBiomeFieldSample {
-            primary_id: self.volume_biomes[selection.biome_index].id.as_str(),
-            strength: selection.strength,
-        })
-    }
-
     pub(crate) fn volume_selection_in_region(
         &self,
         position: Vec3,
@@ -148,20 +135,6 @@ impl BiomeField {
         region
             .sites
             .iter()
-            .map(|site| VolumeBiomeAnchor {
-                id: self.volume_biomes[site.biome_index].id.as_str(),
-                position: site.position,
-            })
-            .collect()
-    }
-
-    pub(crate) fn volume_anchors_in_bounds(
-        &self,
-        minimum: Vec3,
-        maximum: Vec3,
-    ) -> Vec<VolumeBiomeAnchor<'_>> {
-        self.resolved_volume_sites_in_bounds(minimum, maximum)
-            .into_iter()
             .map(|site| VolumeBiomeAnchor {
                 id: self.volume_biomes[site.biome_index].id.as_str(),
                 position: site.position,
