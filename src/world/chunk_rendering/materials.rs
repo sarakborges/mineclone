@@ -11,44 +11,12 @@ use crate::{
         block_model::block_face_texture,
         terrain_material::{TerrainMaterial, TerrainMaterialExtension},
     },
-    voxel::mesh::BlockFace,
+    voxel::mesh::{BlockFace, BlockFaces},
 };
-
-const BLOCK_FACES: [BlockFace; 6] = [
-    BlockFace::Top,
-    BlockFace::Bottom,
-    BlockFace::Left,
-    BlockFace::Right,
-    BlockFace::Front,
-    BlockFace::Back,
-];
-
-#[derive(Clone)]
-struct BlockTerrainMaterials {
-    top: Handle<TerrainMaterial>,
-    bottom: Handle<TerrainMaterial>,
-    left: Handle<TerrainMaterial>,
-    right: Handle<TerrainMaterial>,
-    front: Handle<TerrainMaterial>,
-    back: Handle<TerrainMaterial>,
-}
-
-impl BlockTerrainMaterials {
-    fn for_face(&self, face: BlockFace) -> &Handle<TerrainMaterial> {
-        match face {
-            BlockFace::Right => &self.right,
-            BlockFace::Left => &self.left,
-            BlockFace::Top => &self.top,
-            BlockFace::Bottom => &self.bottom,
-            BlockFace::Front => &self.front,
-            BlockFace::Back => &self.back,
-        }
-    }
-}
 
 #[derive(Resource, Clone)]
 pub struct TerrainMaterials {
-    blocks: HashMap<String, BlockTerrainMaterials>,
+    blocks: HashMap<String, BlockFaces<Handle<TerrainMaterial>>>,
     _texture_preloads: Vec<Handle<Image>>,
 }
 
@@ -64,7 +32,7 @@ impl TerrainMaterials {
         let texture_preloads = blocks
             .iter()
             .flat_map(|definition| {
-                BLOCK_FACES
+                BlockFace::ALL
                     .into_iter()
                     .filter_map(move |face| block_face_texture(face, definition))
             })
@@ -78,56 +46,16 @@ impl TerrainMaterials {
         let blocks = blocks
             .iter()
             .map(|definition| {
-                let block_materials = BlockTerrainMaterials {
-                    top: create_material(
+                let block_materials = BlockFaces::from_fn(|face| {
+                    create_material(
                         definition,
-                        BlockFace::Top,
+                        face,
                         asset_server,
                         materials,
                         roughness,
                         metallic,
-                    ),
-                    bottom: create_material(
-                        definition,
-                        BlockFace::Bottom,
-                        asset_server,
-                        materials,
-                        roughness,
-                        metallic,
-                    ),
-                    left: create_material(
-                        definition,
-                        BlockFace::Left,
-                        asset_server,
-                        materials,
-                        roughness,
-                        metallic,
-                    ),
-                    right: create_material(
-                        definition,
-                        BlockFace::Right,
-                        asset_server,
-                        materials,
-                        roughness,
-                        metallic,
-                    ),
-                    front: create_material(
-                        definition,
-                        BlockFace::Front,
-                        asset_server,
-                        materials,
-                        roughness,
-                        metallic,
-                    ),
-                    back: create_material(
-                        definition,
-                        BlockFace::Back,
-                        asset_server,
-                        materials,
-                        roughness,
-                        metallic,
-                    ),
-                };
+                    )
+                });
 
                 (definition.id.clone(), block_materials)
             })
@@ -143,7 +71,7 @@ impl TerrainMaterials {
         self.blocks
             .get(block_id)
             .unwrap_or_else(|| panic!("missing terrain materials for block: {block_id}"))
-            .for_face(face)
+            .get(face)
     }
 }
 

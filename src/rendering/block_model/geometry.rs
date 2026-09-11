@@ -2,7 +2,9 @@ use bevy::{
     asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology,
 };
 
-use crate::voxel::mesh::{BlockFace, QUAD_TRIANGLE_INDICES, WORLD_FACE_UVS};
+use crate::voxel::mesh::{
+    BlockFace, BlockFaces, QUAD_TRIANGLE_INDICES, WORLD_FACE_UVS,
+};
 
 #[derive(Clone, Copy)]
 struct BlockDisplayFaceGeometry {
@@ -67,12 +69,7 @@ pub(crate) fn block_display_face_shade(face: BlockFace) -> f32 {
 
 #[derive(Resource)]
 pub(crate) struct BlockModelMeshes {
-    world_right: Handle<Mesh>,
-    world_left: Handle<Mesh>,
-    world_top: Handle<Mesh>,
-    world_bottom: Handle<Mesh>,
-    world_front: Handle<Mesh>,
-    world_back: Handle<Mesh>,
+    world: BlockFaces<Handle<Mesh>>,
     display_top: Handle<Mesh>,
     display_front: Handle<Mesh>,
     display_right: Handle<Mesh>,
@@ -81,12 +78,7 @@ pub(crate) struct BlockModelMeshes {
 impl BlockModelMeshes {
     pub(super) fn new(meshes: &mut Assets<Mesh>) -> Self {
         Self {
-            world_right: meshes.add(block_face_mesh(BlockFace::Right)),
-            world_left: meshes.add(block_face_mesh(BlockFace::Left)),
-            world_top: meshes.add(block_face_mesh(BlockFace::Top)),
-            world_bottom: meshes.add(block_face_mesh(BlockFace::Bottom)),
-            world_front: meshes.add(block_face_mesh(BlockFace::Front)),
-            world_back: meshes.add(block_face_mesh(BlockFace::Back)),
+            world: BlockFaces::from_fn(|face| meshes.add(block_face_mesh(face))),
             display_top: meshes.add(block_display_face_mesh(BlockFace::Top)),
             display_front: meshes.add(block_display_face_mesh(BlockFace::Front)),
             display_right: meshes.add(block_display_face_mesh(BlockFace::Right)),
@@ -94,14 +86,7 @@ impl BlockModelMeshes {
     }
 
     pub(crate) fn world_face(&self, face: BlockFace) -> Handle<Mesh> {
-        match face {
-            BlockFace::Right => self.world_right.clone(),
-            BlockFace::Left => self.world_left.clone(),
-            BlockFace::Top => self.world_top.clone(),
-            BlockFace::Bottom => self.world_bottom.clone(),
-            BlockFace::Front => self.world_front.clone(),
-            BlockFace::Back => self.world_back.clone(),
-        }
+        self.world.get(face).clone()
     }
 
     pub(crate) fn display_face(&self, face: BlockFace) -> Handle<Mesh> {

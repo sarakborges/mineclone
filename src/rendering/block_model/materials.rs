@@ -3,64 +3,33 @@ use bevy::prelude::*;
 use crate::{
     content::block::BlockDefinition,
     rendering::block_model_material::{BlockModelMaterial, BlockModelMaterialExtension},
-    voxel::mesh::BlockFace,
+    voxel::mesh::{BlockFace, BlockFaces},
 };
 
 use super::geometry::block_display_face_shade;
 
-struct BlockFaceMaterialHandles {
-    right: Handle<BlockModelMaterial>,
-    left: Handle<BlockModelMaterial>,
-    top: Handle<BlockModelMaterial>,
-    bottom: Handle<BlockModelMaterial>,
-    front: Handle<BlockModelMaterial>,
-    back: Handle<BlockModelMaterial>,
-}
-
-impl BlockFaceMaterialHandles {
-    fn new(materials: &mut Assets<BlockModelMaterial>, opacity: f32) -> Self {
-        Self {
-            right: materials.add(block_model_placeholder_material(opacity)),
-            left: materials.add(block_model_placeholder_material(opacity)),
-            top: materials.add(block_model_placeholder_material(opacity)),
-            bottom: materials.add(block_model_placeholder_material(opacity)),
-            front: materials.add(block_model_placeholder_material(opacity)),
-            back: materials.add(block_model_placeholder_material(opacity)),
-        }
-    }
-
-    fn for_face(&self, face: BlockFace) -> Handle<BlockModelMaterial> {
-        match face {
-            BlockFace::Right => self.right.clone(),
-            BlockFace::Left => self.left.clone(),
-            BlockFace::Top => self.top.clone(),
-            BlockFace::Bottom => self.bottom.clone(),
-            BlockFace::Front => self.front.clone(),
-            BlockFace::Back => self.back.clone(),
-        }
-    }
-}
-
 #[derive(Resource)]
 pub(crate) struct BlockModelMaterials {
-    held: BlockFaceMaterialHandles,
-    preview: BlockFaceMaterialHandles,
+    held: BlockFaces<Handle<BlockModelMaterial>>,
+    preview: BlockFaces<Handle<BlockModelMaterial>>,
 }
 
 impl BlockModelMaterials {
     pub(super) fn new(materials: &mut Assets<BlockModelMaterial>) -> Self {
         Self {
-            held: BlockFaceMaterialHandles::new(materials, 1.0),
-            preview: BlockFaceMaterialHandles::new(materials, 0.68),
+            held: BlockFaces::from_fn(|_| materials.add(block_model_placeholder_material(1.0))),
+            preview: BlockFaces::from_fn(|_| {
+                materials.add(block_model_placeholder_material(0.68))
+            }),
         }
     }
 
     pub(crate) fn held_for_face(&self, face: BlockFace) -> Handle<BlockModelMaterial> {
-        self.held.for_face(face)
+        self.held.get(face).clone()
     }
 
     pub(crate) fn preview_for_face(&self, face: BlockFace) -> Handle<BlockModelMaterial> {
-        self.preview.for_face(face)
+        self.preview.get(face).clone()
     }
 }
 
