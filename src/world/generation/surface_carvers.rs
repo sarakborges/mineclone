@@ -60,7 +60,7 @@ pub(super) fn resolve_surface_carver_column(
     SurfaceCarverColumn { tunnels }
 }
 
-pub(super) fn surface_carver_density_delta_from_column(
+pub(super) fn surface_carver_density_delta(
     current_density: f32,
     position: Vec3,
     column: &SurfaceCarverColumn,
@@ -85,28 +85,6 @@ pub(super) fn surface_carver_density_delta_from_column(
     }
 
     -(current_density + 6.0) * strongest.clamp(0.0, 1.0)
-}
-
-pub(super) fn surface_carver_density_delta(
-    current_density: f32,
-    position: Vec3,
-    surface_influences: &[(usize, f32)],
-    biomes: &BiomeRegistry,
-    biome_field: &BiomeField,
-    world_seed: u64,
-    sea_level: f32,
-) -> f32 {
-    let horizontal = Vec2::new(position.x, position.z);
-    let column = resolve_surface_carver_column(
-        horizontal,
-        surface_influences,
-        biomes,
-        biome_field,
-        world_seed,
-        sea_level,
-    );
-
-    surface_carver_density_delta_from_column(current_density, position, &column)
 }
 
 #[allow(clippy::too_many_arguments)]
