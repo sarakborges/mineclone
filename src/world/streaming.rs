@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 
@@ -175,6 +175,7 @@ fn desired_chunk_coords(
     let mut desired = chunk_coords_in_volume(center, horizontal_radius, vertical_radius)
         .into_iter()
         .collect::<HashSet<_>>();
+    let mut surface_ranges = HashMap::<IVec2, (i32, i32)>::new();
 
     for z in -horizontal_radius..=horizontal_radius {
         for x in -horizontal_radius..=horizontal_radius {
@@ -183,8 +184,9 @@ fn desired_chunk_coords(
             }
 
             let horizontal = IVec2::new(center.x + x, center.z + z);
-            let (own_minimum, own_maximum) =
-                chunk_surface_range(horizontal, dimension, biomes, biome_field);
+            let (own_minimum, own_maximum) = *surface_ranges.entry(horizontal).or_insert_with(|| {
+                chunk_surface_range(horizontal, dimension, biomes, biome_field)
+            });
             let mut surrounding_minimum = own_minimum;
 
             for neighbor_z in -1..=1 {
@@ -194,8 +196,9 @@ fn desired_chunk_coords(
                     }
 
                     let neighbor = horizontal + IVec2::new(neighbor_x, neighbor_z);
-                    let (neighbor_minimum, _) =
-                        chunk_surface_range(neighbor, dimension, biomes, biome_field);
+                    let (neighbor_minimum, _) = *surface_ranges.entry(neighbor).or_insert_with(|| {
+                        chunk_surface_range(neighbor, dimension, biomes, biome_field)
+                    });
                     surrounding_minimum = surrounding_minimum.min(neighbor_minimum);
                 }
             }
