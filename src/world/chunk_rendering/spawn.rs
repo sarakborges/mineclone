@@ -45,7 +45,18 @@ pub fn spawn_chunk_mesh(
             [tint.red, tint.green, tint.blue]
         },
     );
-    let fluid_meshes = build_fluid_meshes(context.world, coord, chunk);
+    let fluid_meshes = build_fluid_meshes(context.world, coord, chunk, |voxel, fluid_id| {
+        let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
+        let fluid = context
+            .fluids
+            .get(fluid_id)
+            .unwrap_or_else(|| panic!("missing fluid definition for id {fluid_id}"));
+        let tint = context
+            .biome_field
+            .water_color(position, context.biomes, fluid.color);
+
+        [tint.r, tint.g, tint.b]
+    });
     let transform = Transform::from_translation(coord.as_vec3() * CHUNK_SIZE as f32);
     let mut entities = Vec::new();
     let mut mesh_handles = Vec::new();
