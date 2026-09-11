@@ -26,7 +26,6 @@ use super::{
 };
 
 const MIN_CHUNKS_PER_FRAME: usize = 2;
-const MAX_CHUNKS_PER_FRAME: usize = 8;
 const STREAMING_LIGHT_BATCH_CHUNKS: usize = 2;
 const EXTRA_STREAMING_BUDGET_MS: u128 = 6;
 const HORIZONTAL_PRELOAD_CHUNKS: i32 = 1;
@@ -96,17 +95,16 @@ pub fn stream_chunks(
     let frame_started = Instant::now();
     let mut processed = 0;
 
-    while processed < MAX_CHUNKS_PER_FRAME {
+    loop {
         if processed >= MIN_CHUNKS_PER_FRAME
             && frame_started.elapsed().as_millis() >= EXTRA_STREAMING_BUDGET_MS
         {
             break;
         }
 
-        let batch_target = STREAMING_LIGHT_BATCH_CHUNKS.min(MAX_CHUNKS_PER_FRAME - processed);
-        let mut batch = Vec::with_capacity(batch_target);
+        let mut batch = Vec::with_capacity(STREAMING_LIGHT_BATCH_CHUNKS);
 
-        while batch.len() < batch_target {
+        while batch.len() < STREAMING_LIGHT_BATCH_CHUNKS {
             let Some(coord) = inputs.streaming.pending.pop_front() else {
                 break;
             };
