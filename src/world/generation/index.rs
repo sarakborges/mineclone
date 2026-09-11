@@ -1,6 +1,4 @@
-use crate::voxel::chunk::CHUNK_SIZE;
-
-pub(super) const VOXELS_PER_CHUNK: usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
+use crate::voxel::chunk::{CHUNK_SIZE, CHUNK_VOLUME};
 
 pub(super) fn column_index(x: usize, z: usize) -> usize {
     x + z * CHUNK_SIZE
@@ -16,7 +14,7 @@ mod tests {
 
     #[test]
     fn voxel_index_covers_the_chunk_without_collisions() {
-        let mut seen = vec![false; VOXELS_PER_CHUNK];
+        let mut seen = vec![false; CHUNK_VOLUME];
 
         for z in 0..CHUNK_SIZE {
             for y in 0..CHUNK_SIZE {

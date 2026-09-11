@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     content::biome::BiomeRegistry,
-    voxel::chunk::CHUNK_SIZE,
+    voxel::chunk::{CHUNK_SIZE, CHUNK_VOLUME},
     world::{
         biome_field::{BiomeField, VolumeBiomeRegion, VolumeBiomeSelection},
         cave_connectivity::CaveConnectivityRegion,
@@ -16,7 +16,7 @@ use crate::{
 
 use super::{
     columns::GenerationColumnSample,
-    index::{VOXELS_PER_CHUNK, column_index, voxel_index},
+    index::{column_index, voxel_index},
     surface_carvers::{resolve_surface_carver_column, surface_carver_density_delta},
 };
 
@@ -39,8 +39,8 @@ pub(super) fn sample_density_field(
 ) -> DensityField {
     let context = DensitySampleContext::new(region, anchored_caves, biome_field);
     let mut field = DensityField {
-        values: vec![0.0; VOXELS_PER_CHUNK],
-        volume: vec![None; VOXELS_PER_CHUNK],
+        values: vec![0.0; CHUNK_VOLUME],
+        volume: vec![None; CHUNK_VOLUME],
     };
 
     for local_z in 0..CHUNK_SIZE {
