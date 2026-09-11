@@ -26,6 +26,12 @@ pub struct FeatureGraphHorizontalSample {
     pub strength: f32,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct FeatureGraphHorizontalIntersection {
+    pub(crate) position: Vec3,
+    pub(crate) progress: f32,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct FeatureGraph {
     nodes: Vec<FeatureNode>,
@@ -73,6 +79,50 @@ impl FeatureGraph {
             minimum: from_position.min(to_position) - margin,
             maximum: from_position.max(to_position) + margin,
         });
+    }
+
+    pub(crate) fn first_horizontal_intersection(
+        &self,
+        from: Vec2,
+        to: Vec2,
+    ) -> Option<FeatureGraphHorizontalIntersection> {
+        let direction = to - from;
+        if direction.length_squared() <= f32::EPSILON {
+            return None;
+        }
+
+        let mut first: Option<FeatureGraphHorizontalIntersection> = None;
+
+        for edge in &self.edges {
+            let edge_from = self.nodes[edge.from].position;
+            let edge_to = self.nodes[edge.to].position;
+            let edge_from_horizontal = Vec2::new(edge_from.x, edge_from.z);
+            let edge_to_horizontal = Vec2::new(edge_to.x, edge_to.z);
+            let Some((progress, edge_progress)) = horizontal_segment_intersection_parameters(
+                from,
+                to,
+                edge_from_horizontal,
+                edge_to_horizontal,
+            ) else {
+                continue;
+            };
+
+            let horizontal = from + direction * progress;
+            let height = edge_from.y + (edge_to.y - edge_from.y) * edge_progress;
+            let candidate = FeatureGraphHorizontalIntersection {
+                position: Vec3::new(horizontal.x, height, horizontal.y),
+                progress,
+            };
+
+            if first
+                .as_ref()
+                .is_none_or(|current| candidate.progress < current.progress)
+            {
+                first = Some(candidate);
+            }
+        }
+
+        first
     }
 
     #[cfg(test)]
@@ -189,6 +239,40 @@ impl FeatureGraph {
     }
 }
 
+fn horizontal_segment_intersection_parameters(
+    from: Vec2,
+    to: Vec2,
+    edge_from: Vec2,
+    edge_to: Vec2,
+) -> Option<(f32, f32)> {
+    const ENDPOINT_EPSILON: f32 = 0.001;
+
+    let direction = to - from;
+    let edge_direction = edge_to - edge_from;
+    let denominator = cross_2d(direction, edge_direction);
+    if denominator.abs() <= f32::EPSILON {
+        return None;
+    }
+
+    let delta = edge_from - from;
+    let progress = cross_2d(delta, edge_direction) / denominator;
+    let edge_progress = cross_2d(delta, direction) / denominator;
+
+    if progress <= ENDPOINT_EPSILON
+        || progress >= 1.0 - ENDPOINT_EPSILON
+        || edge_progress <= ENDPOINT_EPSILON
+        || edge_progress >= 1.0 - ENDPOINT_EPSILON
+    {
+        return None;
+    }
+
+    Some((progress, edge_progress))
+}
+
+fn cross_2d(left: Vec2, right: Vec2) -> f32 {
+    left.x * right.y - left.y * right.x
+}
+
 fn edge_contains_position(edge: &FeatureEdge, position: Vec3) -> bool {
     position.x >= edge.minimum.x
         && position.x <= edge.maximum.x
@@ -240,6 +324,35 @@ mod tests {
         let nearby = Vec2::new(5.0, 5.0);
         assert!(graph.sample_horizontal(nearby).is_none());
         assert!(graph.sample_horizontal_with_margin(nearby, 4.0).is_some());
+    }
+
+    #[test]
+    fn finds_proper_horizontal_segment_crossings() {
+        let mut graph = FeatureGraph::default();
+        let from = graph.add_node(Vec3::new(-5.0, 10.0, 0.0));
+        let to = graph.add_node(Vec3::new(5.0, 8.0, 0.0));
+        graph.add_edge(from, to, 2.0, 2.0);
+
+        let intersection = graph
+            .first_horizontal_intersection(Vec2::new(0.0, -5.0), Vec2::new(0.0, 5.0))
+            .unwrap();
+
+        assert!((intersection.progress - 0.5).abs() < 0.001);
+        assert!((intersection.position.y - 9.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn shared_segment_endpoints_are_not_crossings() {
+        let mut graph = FeatureGraph::default();
+        let from = graph.add_node(Vec3::ZERO);
+        let to = graph.add_node(Vec3::new(10.0, 0.0, 0.0));
+        graph.add_edge(from, to, 2.0, 2.0);
+
+        assert!(
+            graph
+                .first_horizontal_intersection(Vec2::new(10.0, 0.0), Vec2::new(20.0, 10.0))
+                .is_none()
+        );
     }
 
     #[test]
