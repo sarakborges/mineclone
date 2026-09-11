@@ -24,12 +24,12 @@ pub(crate) struct PendingLightingUpdates {
 }
 
 impl PendingLightingUpdates {
-    pub fn enqueue_voxel_edit(&mut self, position: IVec3) {
+    pub(crate) fn enqueue_voxel_edit(&mut self, position: IVec3) {
         self.queue.enqueue(position);
         self.queue.enqueue_neighbors(position);
     }
 
-    pub fn enqueue_chunk_unloads(&mut self, unloaded: &[IVec3]) {
+    pub(crate) fn enqueue_chunk_unloads(&mut self, unloaded: &[IVec3]) {
         let chunk_size = CHUNK_SIZE as i32;
 
         for coord in unloaded {
@@ -38,7 +38,7 @@ impl PendingLightingUpdates {
         }
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.queue = LightingQueue::default();
     }
 }
@@ -51,24 +51,6 @@ pub(crate) fn process_pending_lighting(
     max_voxels: usize,
 ) -> HashSet<IVec3> {
     relax_budgeted(world, blocks, fluids, &mut pending.queue, max_voxels)
-}
-
-pub(crate) fn initialize_chunk_lighting(
-    world: &mut VoxelWorld,
-    coord: IVec3,
-    blocks: &BlockRegistry,
-    fluids: &FluidRegistry,
-) -> HashSet<IVec3> {
-    if !world.clear_chunk_light(coord) {
-        return HashSet::new();
-    }
-
-    let mut queue = LightingQueue::default();
-    let origin = coord * CHUNK_SIZE as i32;
-    queue.enqueue_chunk_voxels(origin);
-    queue.enqueue_chunk_boundary_neighbors(origin);
-
-    relax(world, blocks, fluids, &mut queue)
 }
 
 pub(crate) fn initialize_chunks_lighting(
