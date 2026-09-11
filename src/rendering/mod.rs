@@ -1,6 +1,7 @@
 mod asset_upload;
 pub(crate) mod block_model;
 pub(crate) mod block_model_material;
+pub(crate) mod block_texture;
 pub(crate) mod block_tint;
 mod celestial;
 mod celestial_path;

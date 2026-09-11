@@ -8,7 +8,7 @@ use crate::{
         fluid::{FluidId, FluidRegistry},
     },
     rendering::{
-        block_model::block_face_texture,
+        block_texture::block_face_texture,
         terrain_material::{TerrainMaterial, TerrainMaterialExtension},
     },
     voxel::block_face::{BlockFace, BlockFaces},

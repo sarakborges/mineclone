@@ -10,7 +10,7 @@ pub(crate) use geometry::{
     BlockModelMeshes, block_display_face_basis, block_display_face_shade,
 };
 pub(crate) use materials::{
-    BlockModelMaterials, apply_block_display_shading, block_face_material_data, block_face_texture,
+    BlockModelMaterials, apply_block_display_shading, block_face_material_data,
     set_block_model_tint,
 };
 

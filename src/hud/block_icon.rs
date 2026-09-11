@@ -5,7 +5,8 @@ use bevy::{
 use crate::{
     content::block::BlockDefinition,
     rendering::{
-        block_model::{block_display_face_basis, block_display_face_shade, block_face_texture},
+        block_model::{block_display_face_basis, block_display_face_shade},
+        block_texture::block_face_texture,
         color::color_to_linear_vec4,
     },
     voxel::block_face::BlockFace,
