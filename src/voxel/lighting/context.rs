@@ -69,6 +69,11 @@ fn build_direct_sky_column(
 
     for y in (0..=highest_y).rev() {
         let position = IVec3::new(column.x, y, column.y);
+        if !world.is_loaded_at(position) {
+            level = 0;
+            continue;
+        }
+
         level = level.saturating_sub(medium_dampening(world, blocks, fluids, position));
         levels[y as usize] = level;
     }
