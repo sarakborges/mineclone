@@ -18,6 +18,8 @@ use super::{
     surface_carvers::surface_carver_density_delta,
 };
 
+const SURFACE_CARVER_WATER_CLEARANCE: f32 = 12.0;
+
 pub(super) struct DensityField {
     pub(super) values: Vec<f32>,
     pub(super) volume: Vec<Option<VolumeBiomeSelection>>,
@@ -60,7 +62,11 @@ pub(super) fn sample_density_field(
                     biome_field,
                 );
                 let horizontal = Vec2::new(sample_position.x, sample_position.z);
-                let carver_delta = if region.hydrology.water_at(horizontal).is_none() {
+                let carver_delta = if region
+                    .hydrology
+                    .water_near(horizontal, SURFACE_CARVER_WATER_CLEARANCE)
+                    .is_none()
+                {
                     surface_carver_density_delta(
                         sampled_density,
                         sample_position,
