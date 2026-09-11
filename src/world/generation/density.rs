@@ -33,6 +33,7 @@ pub(super) fn sample_density_field(
     anchored_caves: Option<&CaveConnectivityRegion>,
     biome_field: &BiomeField,
     biomes: &BiomeRegistry,
+    sea_level: f32,
 ) -> DensityField {
     let mut field = DensityField {
         values: vec![0.0; VOXELS_PER_CHUNK],
@@ -73,10 +74,10 @@ pub(super) fn sample_density_field(
                     surface_carver_density_delta(
                         sampled_density,
                         sample_position,
-                        column.surface_height,
                         &column.surface,
                         biomes,
                         biome_field.seed(),
+                        sea_level,
                     )
                 } else {
                     0.0
