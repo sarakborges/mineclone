@@ -15,6 +15,7 @@ use super::{
     structure::{StructureDefinition, StructureRegistry},
 };
 
+#[derive(Default)]
 pub(crate) struct LoadedContent {
     pub biomes: BiomeRegistry,
     pub blocks: BlockRegistry,
@@ -42,80 +43,59 @@ pub fn load_content(mut commands: Commands) {
 }
 
 pub(crate) fn read_content() -> LoadedContent {
-    let mut biome_registry = BiomeRegistry::default();
-    let mut block_registry = BlockRegistry::default();
-    let mut dimension_registry = DimensionRegistry::default();
-    let mut day_night_cycle_registry = DayNightCycleRegistry::default();
-    let mut fluid_registry = FluidRegistry::default();
-    let mut sky_registry = SkyRegistry::default();
-    let mut structure_registry = StructureRegistry::default();
+    let mut content = LoadedContent::default();
     let mut files = Vec::new();
 
     collect_json_files(&data_root(), &mut files);
 
     for path in files {
-        load_definition(
-            &path,
-            &mut biome_registry,
-            &mut block_registry,
-            &mut dimension_registry,
-            &mut day_night_cycle_registry,
-            &mut fluid_registry,
-            &mut sky_registry,
-            &mut structure_registry,
-        );
+        load_definition(&path, &mut content);
     }
 
-    for structure in structure_registry.iter() {
-        structure.validate_references(&block_registry);
+    for structure in content.structures.iter() {
+        structure.validate_references(&content.blocks);
     }
 
-    for biome in biome_registry.iter() {
-        biome.validate_material_references(&block_registry);
-        biome.validate_structure_references(&structure_registry);
+    for biome in content.biomes.iter() {
+        biome.validate_material_references(&content.blocks);
+        biome.validate_structure_references(&content.structures);
     }
 
-    LoadedContent {
-        biomes: biome_registry,
-        blocks: block_registry,
-        dimensions: dimension_registry,
-        day_night_cycles: day_night_cycle_registry,
-        fluids: fluid_registry,
-        skies: sky_registry,
-        structures: structure_registry,
-    }
+    content
 }
 
-#[allow(clippy::too_many_arguments)]
-fn load_definition(
-    path: &Path,
-    biome_registry: &mut BiomeRegistry,
-    block_registry: &mut BlockRegistry,
-    dimension_registry: &mut DimensionRegistry,
-    day_night_cycle_registry: &mut DayNightCycleRegistry,
-    fluid_registry: &mut FluidRegistry,
-    sky_registry: &mut SkyRegistry,
-    structure_registry: &mut StructureRegistry,
-) {
+fn load_definition(path: &Path, content: &mut LoadedContent) {
     let file_name = path
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or_default();
 
     if file_name == "dimension.json" {
-        dimension_registry.insert(read_json_definition::<DimensionDefinition>(path));
+        content
+            .dimensions
+            .insert(read_json_definition::<DimensionDefinition>(path));
     } else if file_name == "day_night_cycle.json" {
-        day_night_cycle_registry.insert(read_json_definition::<DayNightCycleDefinition>(path));
+        content
+            .day_night_cycles
+            .insert(read_json_definition::<DayNightCycleDefinition>(path));
     } else if file_name == "sky.json" {
-        sky_registry.insert(read_json_definition::<SkyDefinition>(path));
+        content.skies.insert(read_json_definition::<SkyDefinition>(path));
     } else if path_has_component(path, "biomes") {
-        biome_registry.insert(read_json_definition::<BiomeDefinition>(path));
+        content
+            .biomes
+            .insert(read_json_definition::<BiomeDefinition>(path));
     } else if path_has_component(path, "blocks") {
-        block_registry.insert(read_json_definition::<BlockDefinition>(path));
+        content
+            .blocks
+            .insert(read_json_definition::<BlockDefinition>(path));
     } else if path_has_component(path, "fluids") {
-        fluid_registry.insert(read_json_definition::<FluidDefinition>(path));
+        content
+            .fluids
+            .insert(read_json_definition::<FluidDefinition>(path));
     } else if path_has_component(path, "structures") {
-        structure_registry.insert(read_json_definition::<StructureDefinition>(path));
+        content
+            .structures
+            .insert(read_json_definition::<StructureDefinition>(path));
     }
 }
 
