@@ -1,8 +1,14 @@
 use super::{CurrentBiome, CurrentBiomeInfluence};
 use crate::world::{
-    biome_field::{BiomeFieldSample, BiomeInfluence, VolumeBiomeFieldSample},
+    biome_field::{BiomeFieldSample, BiomeInfluence},
     hydrology::HydrologyBiomeOverlay,
 };
+
+#[derive(Clone, Copy)]
+pub(super) struct VolumeBiomeIdentity<'a> {
+    pub id: &'a str,
+    pub strength: f32,
+}
 
 pub(super) struct ResolvedSurfaceIdentity {
     pub hydrology_id: Option<String>,
@@ -58,9 +64,9 @@ pub(super) fn resolve_surface_identity(
 pub(super) fn resolve_final_identity(
     current_biome: &mut CurrentBiome,
     surface: Vec<CurrentBiomeInfluence>,
-    volume: Option<&VolumeBiomeFieldSample<'_>>,
+    volume: Option<VolumeBiomeIdentity<'_>>,
 ) {
-    let volume_strength = volume.map_or(0.0, |sample| sample.strength.clamp(0.0, 1.0));
+    let volume_strength = volume.map_or(0.0, |identity| identity.strength.clamp(0.0, 1.0));
     let surface_strength = 1.0 - volume_strength;
     let mut influences = Vec::new();
 
@@ -73,7 +79,7 @@ pub(super) fn resolve_final_identity(
     }
 
     if let Some(volume) = volume {
-        push_influence(&mut influences, volume.primary_id, volume_strength);
+        push_influence(&mut influences, volume.id, volume_strength);
     }
 
     normalize_influences(&mut influences);
