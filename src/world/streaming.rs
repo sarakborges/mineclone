@@ -163,6 +163,7 @@ fn rebuild_queue(
     prune_surface_cache(&mut streaming.surface_ranges, center.xz(), preload_radius);
     let desired = desired_chunk_coords(
         center,
+        horizontal_radius,
         preload_radius,
         vertical_radius,
         dimension,
@@ -242,20 +243,21 @@ fn chunk_streaming_priority(
 
 fn desired_chunk_coords(
     center: IVec3,
-    horizontal_radius: i32,
+    visible_horizontal_radius: i32,
+    preload_horizontal_radius: i32,
     vertical_radius: i32,
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     surface_ranges: &mut HashMap<IVec2, (i32, i32)>,
 ) -> HashSet<IVec3> {
-    let mut desired = chunk_coords_in_volume(center, horizontal_radius, vertical_radius)
+    let mut desired = chunk_coords_in_volume(center, visible_horizontal_radius, vertical_radius)
         .into_iter()
         .collect::<HashSet<_>>();
 
-    for z in -horizontal_radius..=horizontal_radius {
-        for x in -horizontal_radius..=horizontal_radius {
-            if x * x + z * z > horizontal_radius * horizontal_radius {
+    for z in -preload_horizontal_radius..=preload_horizontal_radius {
+        for x in -preload_horizontal_radius..=preload_horizontal_radius {
+            if x * x + z * z > preload_horizontal_radius * preload_horizontal_radius {
                 continue;
             }
 
