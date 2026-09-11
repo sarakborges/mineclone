@@ -8,15 +8,19 @@ use crate::world::hydrology::{
 };
 
 impl HydrologyRegion {
-    pub fn water_at(&self, position: Vec2) -> Option<HydrologyWaterSample<'_>> {
+    pub(crate) fn water_at(&self, position: Vec2) -> Option<HydrologyWaterSample<'_>> {
         self.water_with_margin(position, 0.0)
     }
 
-    pub fn water_near(&self, position: Vec2, radius: f32) -> Option<HydrologyWaterSample<'_>> {
+    pub(crate) fn water_near(
+        &self,
+        position: Vec2,
+        radius: f32,
+    ) -> Option<HydrologyWaterSample<'_>> {
         self.water_with_margin(position, radius.max(0.0))
     }
 
-    pub fn river_water_at(&self, position: Vec2) -> Option<HydrologyWaterSample<'_>> {
+    pub(crate) fn river_water_at(&self, position: Vec2) -> Option<HydrologyWaterSample<'_>> {
         self.river_water_with_margin(position, 0.0)
     }
 
