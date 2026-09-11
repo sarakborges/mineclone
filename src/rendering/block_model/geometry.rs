@@ -4,7 +4,7 @@ use bevy::{
 
 use crate::voxel::{
     block_face::{BlockFace, BlockFaces},
-    mesh::{QUAD_TRIANGLE_INDICES, WORLD_FACE_UVS},
+    quad::{QUAD_TRIANGLE_INDICES, VOXEL_FACE_UVS},
 };
 
 #[derive(Clone, Copy)]
@@ -134,6 +134,6 @@ pub(crate) fn block_face_mesh(face: BlockFace) -> Mesh {
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, vertices.to_vec())
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![face.normal(); 4])
-    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, WORLD_FACE_UVS.to_vec())
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, VOXEL_FACE_UVS.to_vec())
     .with_inserted_indices(Indices::U32(QUAD_TRIANGLE_INDICES.to_vec()))
 }

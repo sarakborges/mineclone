@@ -1,6 +1,9 @@
-use crate::voxel::texture_rotation::TextureRotation;
+use crate::voxel::{
+    quad::{VOXEL_FACE_UVS, quad_triangle_indices},
+    texture_rotation::TextureRotation,
+};
 
-use super::{QUAD_TRIANGLE_INDICES, WORLD_FACE_UVS, lighting::should_flip_diagonal};
+use super::lighting::should_flip_diagonal;
 
 pub(super) struct FaceData {
     pub vertices: [[f32; 3]; 4],
@@ -27,13 +30,11 @@ pub(super) fn push_face(
 
     positions.extend(face.vertices);
     normals.extend([face.normal; 4]);
-    uvs.extend(face.texture_rotation.rotate_uvs(WORLD_FACE_UVS));
+    uvs.extend(face.texture_rotation.rotate_uvs(VOXEL_FACE_UVS));
     light_uvs.extend(face.light);
     colors.extend(vertex_colors);
-
-    if should_flip_diagonal(face.ambient_occlusion) {
-        indices.extend([start, start + 1, start + 3, start + 1, start + 2, start + 3]);
-    } else {
-        indices.extend(QUAD_TRIANGLE_INDICES.map(|index| start + index));
-    }
+    indices.extend(quad_triangle_indices(
+        start,
+        should_flip_diagonal(face.ambient_occlusion),
+    ));
 }

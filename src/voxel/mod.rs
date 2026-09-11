@@ -11,6 +11,7 @@ pub(crate) mod light;
 pub(crate) mod lighting;
 pub(crate) mod mesh;
 pub(crate) mod neighbors;
+pub(crate) mod quad;
 pub(crate) mod raycast;
 pub(crate) mod texture_rotation;
 pub(crate) mod update_queue;

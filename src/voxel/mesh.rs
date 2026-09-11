@@ -24,10 +24,6 @@ use super::{
     world::VoxelWorld,
 };
 
-pub(crate) const WORLD_FACE_UVS: [[f32; 2]; 4] =
-    [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
-pub(crate) const QUAD_TRIANGLE_INDICES: [u32; 6] = [0, 1, 2, 0, 2, 3];
-
 pub struct ChunkFaceMesh {
     pub block_id: &'static str,
     pub face: BlockFace,

@@ -7,15 +7,12 @@ use bevy::{
 use crate::content::fluid::FluidId;
 
 use super::{
+    block_face::BlockFace,
     chunk::{CHUNK_SIZE, VoxelChunk},
-    mesh::{
-        BlockFace,
-        lighting::{FaceLighting, face_lighting, should_flip_diagonal},
-    },
+    mesh::lighting::{FaceLighting, face_lighting, should_flip_diagonal},
+    quad::{VOXEL_FACE_UVS, quad_triangle_indices},
     world::VoxelWorld,
 };
-
-const FACE_UVS: [[f32; 2]; 4] = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
 
 pub struct ChunkFluidMesh {
     pub fluid_id: FluidId,
@@ -47,17 +44,13 @@ impl MeshBuffers {
 
         self.positions.extend(vertices);
         self.normals.extend([normal; 4]);
-        self.uvs.extend(FACE_UVS);
+        self.uvs.extend(VOXEL_FACE_UVS);
         self.light_uvs.extend(lighting.channels);
         self.colors.extend(vertex_colors);
-
-        if should_flip_diagonal(lighting.ambient_occlusion) {
-            self.indices
-                .extend([base, base + 1, base + 3, base + 1, base + 2, base + 3]);
-        } else {
-            self.indices
-                .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
-        }
+        self.indices.extend(quad_triangle_indices(
+            base,
+            should_flip_diagonal(lighting.ambient_occlusion),
+        ));
     }
 
     fn into_mesh(self) -> Option<Mesh> {
