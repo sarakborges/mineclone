@@ -5,14 +5,12 @@ use crate::{
     voxel::{
         coordinates::chunk_coord_from_world,
         fluid::{FluidCell, MAX_FLUID_LEVEL},
-        neighbors::CARDINAL_NEIGHBORS,
+        neighbors::{CARDINAL_NEIGHBORS, HORIZONTAL_NEIGHBORS},
         world::VoxelWorld,
     },
 };
 
 use crate::world::chunk_remesh::ChunkRemeshQueue;
-
-const HORIZONTAL_NEIGHBORS: [IVec3; 4] = [IVec3::X, IVec3::NEG_X, IVec3::Z, IVec3::NEG_Z];
 
 pub(super) fn desired_fluid(
     world: &VoxelWorld,

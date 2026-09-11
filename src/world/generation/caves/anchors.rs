@@ -6,6 +6,7 @@ use crate::{
     content::{
         biome::BiomeRegistry, biome_density::BiomeDensityModifier, dimension::DimensionDefinition,
     },
+    voxel::neighbors::CARDINAL_NEIGHBORS,
     world::{
         biome_field::{BiomeField, VolumeBiomeRegion},
         density_sampling::{DensitySampleContext, sample_density},
@@ -96,19 +97,11 @@ fn cavern_space_is_open(
         return false;
     }
 
-    let probes = [
-        Vec3::X,
-        Vec3::NEG_X,
-        Vec3::Y,
-        Vec3::NEG_Y,
-        Vec3::Z,
-        Vec3::NEG_Z,
-    ];
-    let open_neighbors = probes
+    let open_neighbors = CARDINAL_NEIGHBORS
         .into_iter()
         .filter(|direction| {
             cavern_density_is_open(
-                position + *direction * CAVERN_ANCHOR_NEIGHBOR_PROBE,
+                position + direction.as_vec3() * CAVERN_ANCHOR_NEIGHBOR_PROBE,
                 region,
                 volume_region,
                 dimension,
