@@ -38,6 +38,7 @@ const INITIAL_CHUNKS_PER_FRAME: usize = 2;
 enum WorldLoadingPhase {
     Generating,
     Lighting,
+    WaitingForTextures,
     Meshing,
 }
 
@@ -174,6 +175,7 @@ pub fn begin_world_loading(
 }
 
 pub fn setup_world(
+    asset_server: Res<AssetServer>,
     generation: ChunkGeneration,
     content: ChunkContent,
     mut renderer: ChunkRenderer,
@@ -216,7 +218,12 @@ pub fn setup_world(
                 &content.blocks,
                 &content.fluids,
             );
-            loading_state.phase = WorldLoadingPhase::Meshing;
+            loading_state.phase = WorldLoadingPhase::WaitingForTextures;
+        }
+        WorldLoadingPhase::WaitingForTextures => {
+            if renderer.terrain_materials.textures_loaded(&asset_server) {
+                loading_state.phase = WorldLoadingPhase::Meshing;
+            }
         }
         WorldLoadingPhase::Meshing => {
             for _ in 0..INITIAL_CHUNKS_PER_FRAME {
