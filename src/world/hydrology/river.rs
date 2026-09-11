@@ -11,7 +11,7 @@ use super::{
         RIVER_MAXIMUM_RADIUS, RIVER_MINIMUM_FLOW, RIVER_MINIMUM_RADIUS, RIVER_MINIMUM_WATER_DROP,
     },
     drainage::{DrainageNetwork, DrainageNode},
-    lake::{lake_for_local_basin, terminal_lake_for_local_basin},
+    lake::lake_for_local_basin,
     math::{cell_hash, hash_signed, hash_unit, lerp, smoothstep},
     spatial::{edge_intersects_region, water_body_intersects_region},
     types::{HydrologySurfaceSample, WaterBody},
@@ -54,93 +54,58 @@ where
     let mut water_bodies = Vec::new();
     let flow_cache = build_flow_cache(coord, network);
     let selected_sources = selected_river_sources(&flow_cache, network);
+    let mut outlet_cache = HashMap::new();
 
     for dz in -RIVER_EDGE_MARGIN_CELLS..=RIVER_EDGE_MARGIN_CELLS {
         for dx in -RIVER_EDGE_MARGIN_CELLS..=RIVER_EDGE_MARGIN_CELLS {
             let cell = coord + IVec2::new(dx, dz);
             let source = network.node(cell);
 
-            if source.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD {
+            if source.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD
+                || !drainage_reaches_ocean(cell, network, &mut outlet_cache)
+            {
                 continue;
             }
 
-            let flow = flow_cache.get(&cell).copied().unwrap_or(1);
-            let downstream_cell = network.downstream_cell(cell);
-
-            if let Some(downstream_cell) = downstream_cell {
-                let downstream = network.node(downstream_cell);
-                let channel_selected = source.biome_hydrology.can_generate_river
-                    && selected_sources.contains(&cell);
-                let neighbors = network.neighbor_nodes(cell);
-
-                if channel_selected && !downstream.biome_hydrology.can_generate_river {
-                    if let Some(lake) = terminal_lake_for_local_basin(
-                        cell,
-                        source,
-                        &neighbors,
-                        seed,
-                        sea_level,
-                        water_fluid,
-                    )
-                    .filter(|lake| water_body_intersects_region(coord, lake))
-                    {
-                        water_bodies.push(lake);
-                    }
-                    continue;
-                }
-
-                if let Some(lake) = lake_for_local_basin(
-                    cell,
-                    source,
-                    &neighbors,
-                    seed,
-                    sea_level,
-                    water_fluid,
-                )
-                .filter(|lake| water_body_intersects_region(coord, lake))
-                {
-                    water_bodies.push(lake);
-                }
-
-                if !channel_selected {
-                    continue;
-                }
-
-                let downstream_flow = flow_cache.get(&downstream_cell).copied().unwrap_or(flow);
-
-                add_curved_river_edge(
-                    &mut graph,
-                    RiverEdgeSpec {
-                        region_coord: coord,
-                        source_cell: cell,
-                        source,
-                        downstream,
-                        flow,
-                        downstream_flow,
-                        seed,
-                        sea_level,
-                    },
-                );
+            let Some(downstream_cell) = network.downstream_cell(cell) else {
                 continue;
-            }
-
-            let neighbors = network.neighbor_nodes(cell);
-            let lake = if selected_sources.contains(&cell) || flow >= RIVER_MINIMUM_FLOW {
-                terminal_lake_for_local_basin(
-                    cell,
-                    source,
-                    &neighbors,
-                    seed,
-                    sea_level,
-                    water_fluid,
-                )
-            } else {
-                lake_for_local_basin(cell, source, &neighbors, seed, sea_level, water_fluid)
             };
+            let downstream = network.node(downstream_cell);
+            let flow = flow_cache.get(&cell).copied().unwrap_or(1);
+            let neighbors = network.neighbor_nodes(cell);
+            let lake = lake_for_local_basin(
+                cell,
+                source,
+                &neighbors,
+                seed,
+                sea_level,
+                water_fluid,
+            );
+            let channel_selected = selected_sources.contains(&cell) || lake.is_some();
 
             if let Some(lake) = lake.filter(|lake| water_body_intersects_region(coord, lake)) {
                 water_bodies.push(lake);
             }
+
+            if !channel_selected {
+                continue;
+            }
+
+            let downstream_flow = flow_cache.get(&downstream_cell).copied().unwrap_or(flow);
+
+            add_curved_river_edge(
+                &mut graph,
+                RiverEdgeSpec {
+                    region_coord: coord,
+                    source_cell: cell,
+                    source,
+                    downstream,
+                    flow,
+                    downstream_flow,
+                    seed,
+                    sea_level,
+                },
+            );
         }
     }
 
@@ -148,6 +113,48 @@ where
         graph,
         water_bodies,
     }
+}
+
+fn drainage_reaches_ocean<F>(
+    start: IVec2,
+    network: &mut DrainageNetwork<'_, F>,
+    cache: &mut HashMap<IVec2, bool>,
+) -> bool
+where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    if let Some(&cached) = cache.get(&start) {
+        return cached;
+    }
+
+    let mut path = Vec::new();
+    let mut current = start;
+    let reaches_ocean = loop {
+        if let Some(&cached) = cache.get(&current) {
+            break cached;
+        }
+
+        let node = network.node(current);
+        path.push(current);
+
+        if node.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD {
+            break true;
+        }
+        if path.len() >= RIVER_FLOW_TRACE_STEPS {
+            break false;
+        }
+
+        let Some(next) = network.downstream_cell(current) else {
+            break false;
+        };
+        current = next;
+    };
+
+    for cell in path {
+        cache.insert(cell, reaches_ocean);
+    }
+
+    reaches_ocean
 }
 
 fn build_flow_cache<F>(coord: IVec2, network: &mut DrainageNetwork<'_, F>) -> HashMap<IVec2, u32>
@@ -176,9 +183,7 @@ where
                 }
 
                 let node = network.node(current);
-                if node.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD
-                    || !node.biome_hydrology.can_generate_river
-                {
+                if node.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD {
                     break;
                 }
 
@@ -240,9 +245,7 @@ fn extend_selected_downstream<F>(
             };
             let downstream = network.node(next);
 
-            if downstream.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD
-                || !downstream.biome_hydrology.can_generate_river
-            {
+            if downstream.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD {
                 break;
             }
 
