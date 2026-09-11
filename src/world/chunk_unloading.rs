@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use bevy::prelude::*;
 
 use crate::{
@@ -14,9 +16,9 @@ use super::{
     streaming::ChunkStreamingState,
 };
 
-const MAX_CHUNK_UNLOADS_PER_FRAME: usize = 2;
+const CHUNK_UNLOAD_BUDGET_MS: u128 = 2;
 
-pub fn unload_chunk_meshes(
+pub(super) fn unload_chunk_meshes(
     player: Single<&Transform, With<GameplayCamera>>,
     streaming: Res<ChunkStreamingState>,
     mut renderer: ChunkRenderer,
@@ -27,17 +29,23 @@ pub fn unload_chunk_meshes(
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = split_dimension_position(feet_position).chunk;
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
-    let mut to_unload = renderer
+    let mut pending_unloads = renderer
         .pool
         .active_coords()
         .filter(|coord| !streaming.wants(*coord))
         .collect::<Vec<_>>();
 
-    to_unload.sort_by_key(|coord| -(*coord - center).length_squared());
-    to_unload.truncate(MAX_CHUNK_UNLOADS_PER_FRAME);
+    pending_unloads.sort_by_key(|coord| -(*coord - center).length_squared());
 
-    for coord in &to_unload {
-        let Some((entities, mesh_handles)) = renderer.pool.take(*coord) else {
+    let frame_started = Instant::now();
+    let mut unloaded = Vec::new();
+
+    for coord in pending_unloads {
+        if !unloaded.is_empty() && frame_started.elapsed().as_millis() >= CHUNK_UNLOAD_BUDGET_MS {
+            break;
+        }
+
+        let Some((entities, mesh_handles)) = renderer.pool.take(coord) else {
             continue;
         };
 
@@ -49,18 +57,19 @@ pub fn unload_chunk_meshes(
             renderer.commands.entity(entity).despawn();
         }
 
-        world.archive_chunk(*coord);
+        world.archive_chunk(coord);
+        unloaded.push(coord);
     }
 
-    if to_unload.is_empty() {
+    if unloaded.is_empty() {
         return;
     }
 
-    lighting.enqueue_chunk_unloads(&to_unload);
+    lighting.enqueue_chunk_unloads(&unloaded);
 
-    for coord in &to_unload {
+    for coord in unloaded {
         for offset in CARDINAL_NEIGHBORS {
-            remesh_queue.enqueue(*coord + offset);
+            remesh_queue.enqueue(coord + offset);
         }
     }
 }
