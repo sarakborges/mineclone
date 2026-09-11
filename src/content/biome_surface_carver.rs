@@ -19,7 +19,7 @@ pub enum BiomeSurfaceCarver {
         chance: f32,
         length: SurfaceCarverRange,
         radius: SurfaceCarverRange,
-        depth: SurfaceCarverRange,
+        elevation: SurfaceCarverRange,
         jitter: f32,
     },
 }
@@ -32,7 +32,7 @@ impl BiomeSurfaceCarver {
                 chance,
                 length,
                 radius,
-                depth,
+                elevation,
                 jitter,
             } => {
                 assert!(spacing > 0.0, "biome {biome_id} tunnel spacing must be positive");
@@ -42,7 +42,7 @@ impl BiomeSurfaceCarver {
                 );
                 validate_range(biome_id, "tunnel length", length, false);
                 validate_range(biome_id, "tunnel radius", radius, false);
-                validate_range(biome_id, "tunnel depth", depth, true);
+                validate_range(biome_id, "tunnel elevation", elevation, true);
                 assert!(jitter >= 0.0, "biome {biome_id} tunnel jitter cannot be negative");
                 assert!(
                     jitter * 2.0 < spacing,
