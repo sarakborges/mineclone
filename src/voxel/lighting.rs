@@ -76,6 +76,16 @@ pub(crate) fn initialize_chunks_lighting(
 }
 
 #[cfg(test)]
+fn initialize_chunk_lighting(
+    world: &mut VoxelWorld,
+    coord: IVec3,
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+) -> HashSet<IVec3> {
+    initialize_chunks_lighting(world, std::slice::from_ref(&coord), blocks, fluids)
+}
+
+#[cfg(test)]
 fn relight_after_voxel_edit(
     world: &mut VoxelWorld,
     position: IVec3,
