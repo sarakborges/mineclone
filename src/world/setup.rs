@@ -44,7 +44,7 @@ enum WorldLoadingPhase {
 }
 
 #[derive(Resource)]
-pub struct WorldLoadingState {
+pub(crate) struct WorldLoadingState {
     coords: Vec<IVec3>,
     generated: usize,
     meshed: usize,
@@ -54,11 +54,11 @@ pub struct WorldLoadingState {
 }
 
 impl WorldLoadingState {
-    pub fn generated(&self) -> usize {
+    pub(crate) fn generated(&self) -> usize {
         self.generated
     }
 
-    pub fn total(&self) -> usize {
+    pub(crate) fn total(&self) -> usize {
         self.coords.len()
     }
 }
@@ -77,7 +77,7 @@ pub(super) struct WorldLoadingInputs<'w> {
     existing_world: Option<Res<'w, VoxelWorld>>,
 }
 
-pub fn begin_world_loading(
+pub(super) fn begin_world_loading(
     mut commands: Commands,
     mut terrain_material_assets: ResMut<Assets<TerrainMaterial>>,
     mut save: ResMut<InMemoryWorldSave>,
@@ -175,7 +175,7 @@ pub fn begin_world_loading(
     }
 }
 
-pub fn setup_world(
+pub(super) fn setup_world(
     generation: ChunkGeneration,
     content: ChunkContent,
     mut renderer: ChunkRenderer,
