@@ -6,7 +6,9 @@ use std::{
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    content::{biome::BiomeRegistry, dimension::DimensionDefinition},
+    content::{
+        biome::BiomeRegistry, dimension::DimensionDefinition, structure::StructureRegistry,
+    },
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
         chunk::CHUNK_SIZE, coordinates::split_dimension_position,
@@ -53,6 +55,7 @@ struct QueueRebuildContext<'a> {
     render_pool: &'a ChunkRenderPool,
     dimension: &'a DimensionDefinition,
     biomes: &'a BiomeRegistry,
+    structures: &'a StructureRegistry,
     biome_field: &'a BiomeField,
 }
 
@@ -90,6 +93,7 @@ pub(super) fn stream_chunks(
             render_pool: &renderer.pool,
             dimension: generation.dimension(),
             biomes: &content.biomes,
+            structures: &content.structures,
             biome_field: &content.biome_field,
         };
         rebuild_queue(
@@ -186,11 +190,13 @@ fn rebuild_queue(
     context: &QueueRebuildContext<'_>,
 ) {
     let preload_radius = horizontal_radius + HORIZONTAL_PRELOAD_CHUNKS;
+    let structure_chunk_allowance = structure_chunk_allowance(context.structures);
     prune_surface_cache(&mut streaming.surface_ranges, center.xz(), preload_radius);
     let desired = desired_chunk_coords(
         center,
         preload_radius,
         vertical_radius,
+        structure_chunk_allowance,
         context.dimension,
         context.biomes,
         context.biome_field,
@@ -202,7 +208,14 @@ fn rebuild_queue(
         .filter(|coord| !context.render_pool.contains(*coord))
         .collect::<Vec<_>>();
 
-    pending.sort_by_key(|coord| pending_priority(*coord, center, &streaming.surface_ranges));
+    pending.sort_by_key(|coord| {
+        pending_priority(
+            *coord,
+            center,
+            structure_chunk_allowance,
+            &streaming.surface_ranges,
+        )
+    });
 
     streaming.center = Some(center);
     streaming.horizontal_radius = horizontal_radius;
@@ -214,6 +227,7 @@ fn rebuild_queue(
 fn pending_priority(
     coord: IVec3,
     center: IVec3,
+    structure_chunk_allowance: i32,
     surface_ranges: &HashMap<IVec2, (i32, i32)>,
 ) -> (i32, i32, i32, i32) {
     let chunk_size = CHUNK_SIZE as i32;
@@ -223,11 +237,12 @@ fn pending_priority(
         .copied()
         .unwrap_or((coord.y * chunk_size, coord.y * chunk_size));
     let minimum_surface_chunk = minimum_surface.div_euclid(chunk_size);
-    let maximum_surface_chunk = maximum_surface.div_euclid(chunk_size);
+    let maximum_structure_chunk =
+        maximum_surface.div_euclid(chunk_size) + structure_chunk_allowance;
     let surface_distance = if coord.y < minimum_surface_chunk {
         minimum_surface_chunk - coord.y
-    } else if coord.y > maximum_surface_chunk {
-        coord.y - maximum_surface_chunk
+    } else if coord.y > maximum_structure_chunk {
+        coord.y - maximum_structure_chunk
     } else {
         0
     };
@@ -247,6 +262,7 @@ fn desired_chunk_coords(
     center: IVec3,
     horizontal_radius: i32,
     vertical_radius: i32,
+    structure_chunk_allowance: i32,
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
@@ -295,7 +311,7 @@ fn desired_chunk_coords(
                 - SURFACE_PADDING_BELOW_CHUNKS)
                 .max(0);
             let maximum_y = (own_maximum.div_euclid(chunk_size)
-                + SURFACE_PADDING_ABOVE_CHUNKS)
+                + SURFACE_PADDING_ABOVE_CHUNKS.max(structure_chunk_allowance))
                 .max(minimum_y);
 
             for y in minimum_y..=maximum_y {
@@ -305,6 +321,15 @@ fn desired_chunk_coords(
     }
 
     desired
+}
+
+fn structure_chunk_allowance(structures: &StructureRegistry) -> i32 {
+    let structure_height = structures.max_height_above_anchor();
+    if structure_height == 0 {
+        0
+    } else {
+        (structure_height + CHUNK_SIZE as i32 - 1) / CHUNK_SIZE as i32
+    }
 }
 
 fn cached_surface_range(
