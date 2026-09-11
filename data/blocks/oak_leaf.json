@@ -1,7 +1,7 @@
 {
   "id": "asteria:oak_leaf",
   "name": "Oak Leaf",
-  "tint": "foliage",
+  "tint": "leaf",
   "textures": {
     "top": "textures/blocks/trees/oak/leaf.png",
     "bottom": "textures/blocks/trees/oak/leaf.png",
