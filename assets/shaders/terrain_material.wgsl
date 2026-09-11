@@ -34,7 +34,7 @@ var<uniform> terrain_material_extension: TerrainMaterialExtension;
 
 const AMBIENT_FLOOR: f32 = 0.055;
 const LIGHT_GAMMA: f32 = 1.35;
-const SUN_AMBIENT_SHARE: f32 = 0.62;
+const SUN_AMBIENT_SHARE: f32 = 0.38;
 const DYNAMIC_LIGHT_SCALE: f32 = 0.08;
 
 #ifndef PREPASS_PIPELINE
