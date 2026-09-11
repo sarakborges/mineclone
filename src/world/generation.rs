@@ -130,6 +130,7 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         anchored_caves.as_deref(),
         context.biome_field,
         context.biomes,
+        context.dimension.sea_level as f32,
     );
     let mut chunk = VoxelChunk::empty();
     let material_context = MaterialPassContext {
