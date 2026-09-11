@@ -335,11 +335,11 @@ fn fluid_has_support(world: &VoxelWorld, position: IVec3) -> bool {
 }
 
 fn can_spill_over_edge(world: &VoxelWorld, position: IVec3, fluid: FluidCell) -> bool {
-    if fluid.is_source() || position.y == 0 {
+    if position.y == 0 || world.is_solid(position - IVec3::Y) {
         return true;
     }
 
-    world.is_solid(position - IVec3::Y)
+    fluid.is_source() && world.fluid_at(position + IVec3::Y).is_none()
 }
 
 fn horizontal_spread_state(neighbor: FluidCell, max_spread: u16) -> Option<(u8, u16)> {
@@ -376,6 +376,7 @@ fn chunk_coord(position: IVec3) -> IVec3 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::voxel::chunk::VoxelChunk;
 
     #[test]
     fn horizontal_spread_respects_data_driven_range_independently_from_level() {
@@ -393,19 +394,23 @@ mod tests {
     }
 
     #[test]
-    fn source_water_can_spill_over_an_edge_without_airborne_flow_fanning_out() {
-        let world = VoxelWorld::default();
+    fn source_water_spills_only_from_the_top_of_an_unsupported_column() {
         let position = IVec3::new(4, 10, 4);
+        let source = FluidCell::source(0, MAX_FLUID_LEVEL);
+        let mut exposed_world = VoxelWorld::default();
+        exposed_world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
 
-        assert!(can_spill_over_edge(
-            &world,
-            position,
-            FluidCell::source(0, MAX_FLUID_LEVEL),
-        ));
+        assert!(can_spill_over_edge(&exposed_world, position, source));
         assert!(!can_spill_over_edge(
-            &world,
+            &exposed_world,
             position,
             FluidCell::flowing(0, MAX_FLUID_LEVEL),
         ));
+
+        let mut covered_world = VoxelWorld::default();
+        covered_world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
+        covered_world.set_fluid_at(position + IVec3::Y, Some(source));
+
+        assert!(!can_spill_over_edge(&covered_world, position, source));
     }
 }
