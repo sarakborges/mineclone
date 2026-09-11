@@ -45,12 +45,12 @@ impl DensityColumnProfile {
             .map(|body| body.at(y))
             .sum::<f32>();
 
-        self.ocean_delta + river_delta + (carve_delta + self.shore_delta)
+        self.ocean_delta + river_delta + carve_delta + self.shore_delta
     }
 }
 
 impl HydrologyRegion {
-    pub fn density_delta(&self, position: Vec3) -> f32 {
+    pub(crate) fn density_delta(&self, position: Vec3) -> f32 {
         self.density_column_profile(Vec2::new(position.x, position.z))
             .delta_at(position.y)
     }
