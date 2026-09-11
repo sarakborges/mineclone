@@ -9,7 +9,7 @@ use crate::{
     world::{
         biome_field::{BiomeField, VolumeBiomeRegion},
         cave_connectivity::CaveConnectivityRegion,
-        density_pipeline::sample_density,
+        density_pipeline::{DensitySampleContext, sample_density},
         generation_region::{GenerationRegion, generation_region_world_bounds},
         terrain::{surface_height, terrain_density},
         world_feature_fields::WorldFeatureFields,
@@ -208,15 +208,9 @@ fn cavern_density_is_open(
     let surface_y = surface_height(horizontal, dimension, biomes, biome_field);
     let world_y = position.y.floor() as i32;
     let base_density = terrain_density(surface_y, world_y);
+    let context = DensitySampleContext::new(region, None, biome_field);
 
-    sample_density(
-        base_density,
-        position,
-        region,
-        None,
-        Some(volume),
-        biome_field,
-    ) < 0.0
+    sample_density(base_density, position, Some(volume), &context) < 0.0
 }
 
 fn snap_to_voxel_center(position: Vec3) -> Vec3 {
