@@ -164,7 +164,7 @@ fn create_material(
             metallic,
             alpha_mode: definition.alpha_mode(1.0),
             fog_enabled: false,
-            unlit: true,
+            unlit: false,
             ..default()
         },
         extension: TerrainMaterialExtension::default(),
