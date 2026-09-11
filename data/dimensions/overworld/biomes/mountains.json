@@ -5,8 +5,8 @@
     {
       "type": "mountain_belt",
       "scale": 0.0015,
-      "threshold": 0.97,
-      "width": 0.03,
+      "threshold": 0.93,
+      "width": 0.18,
       "warpScale": 0.0025,
       "warpStrength": 85.0
     },
@@ -34,10 +34,10 @@
   "terrainModifiers": [
     {
       "type": "cliffs",
-      "scale": 0.018,
-      "threshold": 0.62,
-      "height": 18.0,
-      "edgeWidth": 0.035,
+      "scale": 0.016,
+      "threshold": 0.66,
+      "height": 13.0,
+      "edgeWidth": 0.12,
       "warpScale": 0.006,
       "warpStrength": 14.0
     }
@@ -45,12 +45,12 @@
   "surfaceCarvers": [
     {
       "type": "tunnel",
-      "spacing": 180.0,
-      "chance": 0.35,
+      "spacing": 260.0,
+      "chance": 0.18,
       "length": { "min": 70.0, "max": 130.0 },
       "radius": { "min": 3.0, "max": 5.2 },
-      "depth": { "min": 2.5, "max": 5.5 },
-      "jitter": 50.0
+      "elevation": { "min": 12.0, "max": 42.0 },
+      "jitter": 70.0
     }
   ],
   "surfaceLayers": [
