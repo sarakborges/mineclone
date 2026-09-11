@@ -30,7 +30,7 @@ pub(super) struct MaterialPassContext<'a> {
 pub(super) fn rasterize_material_pass(
     chunk: &mut VoxelChunk,
     chunk_origin: IVec3,
-    columns: &[GenerationColumnSample<'_>],
+    columns: &[GenerationColumnSample],
     density: &DensityField,
     context: &MaterialPassContext<'_>,
 ) {
@@ -60,7 +60,7 @@ pub(super) fn rasterize_material_pass(
                 let surface_depth = (column.surface_height - world_position.y - 1).max(0) as u32;
                 let block_id = solid_block_id(
                     sample_position,
-                    &column.surface,
+                    &column.surface_influences,
                     surface_depth,
                     density.volume[index],
                     &material_field,

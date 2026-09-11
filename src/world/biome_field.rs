@@ -152,6 +152,21 @@ impl BiomeField {
     pub(crate) fn climate_at(&self, position: Vec2) -> MacroClimateSample {
         self.climate.sample(position)
     }
+
+    pub(crate) fn surface_biome_index(&self, biome_id: &str) -> usize {
+        self.surface_biomes
+            .iter()
+            .position(|biome| biome.id == biome_id)
+            .unwrap_or_else(|| panic!("missing surface biome in field: {biome_id}"))
+    }
+
+    pub(crate) fn surface_biome_id(&self, index: usize) -> &str {
+        self.surface_biomes
+            .get(index)
+            .unwrap_or_else(|| panic!("surface biome index out of bounds: {index}"))
+            .id
+            .as_str()
+    }
 }
 
 fn biome_density_seed(seed: u64, biome_id: &str) -> u64 {

@@ -1,8 +1,11 @@
 use bevy::prelude::*;
 
-use crate::content::{
-    biome::BiomeRegistry,
-    biome_surface_carver::{BiomeSurfaceCarver, SurfaceCarverRange},
+use crate::{
+    content::{
+        biome::BiomeRegistry,
+        biome_surface_carver::{BiomeSurfaceCarver, SurfaceCarverRange},
+    },
+    world::biome_field::BiomeField,
 };
 
 const MAXIMUM_TUNNEL_SLOPE: f32 = 0.06;
@@ -10,8 +13,9 @@ const MAXIMUM_TUNNEL_SLOPE: f32 = 0.06;
 pub(super) fn surface_carver_density_delta(
     current_density: f32,
     position: Vec3,
-    surface: &crate::world::biome_field::BiomeFieldSample<'_>,
+    surface_influences: &[(usize, f32)],
     biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
     world_seed: u64,
     sea_level: f32,
 ) -> f32 {
@@ -21,10 +25,11 @@ pub(super) fn surface_carver_density_delta(
 
     let mut strongest = 0.0_f32;
 
-    for influence in &surface.influences {
+    for &(biome_index, weight) in surface_influences {
+        let biome_id = biome_field.surface_biome_id(biome_index);
         let biome = biomes
-            .get(influence.id)
-            .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
+            .get(biome_id)
+            .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
 
         for (index, carver) in biome.surface_carvers.iter().copied().enumerate() {
             let strength = tunnel_strength(
@@ -34,7 +39,7 @@ pub(super) fn surface_carver_density_delta(
                 biome.id.as_str(),
                 index,
                 carver,
-            ) * influence.weight;
+            ) * weight;
             strongest = strongest.max(strength);
         }
     }

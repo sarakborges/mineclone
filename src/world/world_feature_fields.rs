@@ -10,6 +10,7 @@ use crate::content::dimension_hydrology::DimensionHydrology;
 use super::{
     biome_field::VolumeBiomeRegion,
     cave_connectivity::{CaveConnectivityField, CaveConnectivityRegion},
+    generation::columns::GenerationColumnSample,
     generation_region::GenerationRegion,
     geology::GeologyField,
     hydrology::{HydrologyField, HydrologyRegion},
@@ -21,6 +22,7 @@ pub struct WorldFeatureFields {
     cave_connectivity: CaveConnectivityField,
     geology: GeologyField,
     hydrology_cache: RwLock<HashMap<IVec2, Arc<HydrologyRegion>>>,
+    generation_column_cache: RwLock<HashMap<IVec2, Arc<Vec<GenerationColumnSample>>>>,
     volume_biome_cache: RwLock<HashMap<IVec3, Arc<VolumeBiomeRegion>>>,
     cave_cache: RwLock<HashMap<IVec3, Option<Arc<CaveConnectivityRegion>>>>,
     region_cache: RwLock<HashMap<IVec3, Arc<GenerationRegion>>>,
@@ -33,6 +35,7 @@ impl WorldFeatureFields {
             cave_connectivity: CaveConnectivityField::new(seed.rotate_left(23)),
             geology: GeologyField::new(seed.rotate_left(41)),
             hydrology_cache: RwLock::new(HashMap::new()),
+            generation_column_cache: RwLock::new(HashMap::new()),
             volume_biome_cache: RwLock::new(HashMap::new()),
             cave_cache: RwLock::new(HashMap::new()),
             region_cache: RwLock::new(HashMap::new()),
@@ -41,6 +44,30 @@ impl WorldFeatureFields {
 
     pub fn hydrology(&self) -> &HydrologyField {
         &self.hydrology
+    }
+
+    pub(crate) fn generation_columns(
+        &self,
+        coord: IVec2,
+        factory: impl FnOnce() -> Vec<GenerationColumnSample>,
+    ) -> Arc<Vec<GenerationColumnSample>> {
+        if let Some(cached) = self
+            .generation_column_cache
+            .read()
+            .expect("generation column cache read lock was poisoned")
+            .get(&coord)
+            .cloned()
+        {
+            return cached;
+        }
+
+        let columns = Arc::new(factory());
+        let mut cache = self
+            .generation_column_cache
+            .write()
+            .expect("generation column cache write lock was poisoned");
+
+        cache.entry(coord).or_insert_with(|| columns.clone()).clone()
     }
 
     pub(crate) fn volume_biome_region(
@@ -157,6 +184,14 @@ impl WorldFeatureFields {
     }
 
     #[cfg(test)]
+    fn cached_generation_column_count(&self) -> usize {
+        self.generation_column_cache
+            .read()
+            .expect("generation column cache read lock was poisoned")
+            .len()
+    }
+
+    #[cfg(test)]
     fn cached_volume_biome_region_count(&self) -> usize {
         self.volume_biome_cache
             .read()
@@ -202,6 +237,19 @@ mod tests {
         assert!(Arc::ptr_eq(&first.hydrology, &vertical.hydrology));
         assert_eq!(fields.cached_region_count(), 2);
         assert_eq!(fields.cached_hydrology_region_count(), 1);
+    }
+
+    #[test]
+    fn generation_column_cache_reuses_horizontal_chunk_samples() {
+        let fields = WorldFeatureFields::new(42, 64, DimensionHydrology::default());
+        let coord = IVec2::new(3, -2);
+        let first = fields.generation_columns(coord, Vec::new);
+        let second = fields.generation_columns(coord, || {
+            panic!("cached generation columns should not rebuild")
+        });
+
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(fields.cached_generation_column_count(), 1);
     }
 
     #[test]

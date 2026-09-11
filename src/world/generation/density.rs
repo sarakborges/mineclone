@@ -27,7 +27,7 @@ pub(super) struct DensityField {
 
 pub(super) fn sample_density_field(
     chunk_origin: IVec3,
-    columns: &[GenerationColumnSample<'_>],
+    columns: &[GenerationColumnSample],
     region: &GenerationRegion,
     volume_region: &VolumeBiomeRegion,
     anchored_caves: Option<&CaveConnectivityRegion>,
@@ -74,8 +74,9 @@ pub(super) fn sample_density_field(
                     surface_carver_density_delta(
                         sampled_density,
                         sample_position,
-                        &column.surface,
+                        &column.surface_influences,
                         biomes,
+                        biome_field,
                         biome_field.seed(),
                         sea_level,
                     )

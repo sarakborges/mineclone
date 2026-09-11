@@ -1,5 +1,5 @@
 mod caves;
-mod columns;
+pub(super) mod columns;
 mod density;
 mod features;
 mod fluids;
@@ -68,6 +68,7 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
     debug_assert_generation_order();
 
     let chunk_origin = coord * CHUNK_SIZE as i32;
+    let horizontal_chunk = IVec2::new(coord.x, coord.z);
     let region_coord = generation_region_coord(coord);
     let region = context
         .feature_fields
@@ -116,15 +117,17 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         context.dimension,
         context.feature_fields,
     );
-    let columns = sample_generation_columns(
-        chunk_origin,
-        context.dimension,
-        context.biomes,
-        context.biome_field,
-    );
+    let columns = context.feature_fields.generation_columns(horizontal_chunk, || {
+        sample_generation_columns(
+            horizontal_chunk,
+            context.dimension,
+            context.biomes,
+            context.biome_field,
+        )
+    });
     let density = sample_density_field(
         chunk_origin,
-        &columns,
+        columns.as_slice(),
         region.as_ref(),
         volume_region.as_ref(),
         anchored_caves.as_deref(),
@@ -143,7 +146,7 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
     rasterize_material_pass(
         &mut chunk,
         chunk_origin,
-        &columns,
+        columns.as_slice(),
         &density,
         &material_context,
     );

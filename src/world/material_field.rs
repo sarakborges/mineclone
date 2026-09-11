@@ -1,7 +1,7 @@
 use crate::content::{biome::BiomeRegistry, block_id::intern_block_id};
 
 use super::{
-    biome_field::{BiomeField, BiomeFieldSample, VolumeBiomeSelection},
+    biome_field::{BiomeField, VolumeBiomeSelection},
     geology::GeologyRegion,
     hydrology::HydrologyRegion,
 };
@@ -15,7 +15,7 @@ pub(crate) struct MaterialFieldContext<'a> {
 
 pub(crate) fn solid_block_id(
     position: bevy::prelude::Vec3,
-    surface: &BiomeFieldSample<'_>,
+    surface_influences: &[(usize, f32)],
     surface_depth: u32,
     volume: Option<VolumeBiomeSelection>,
     context: &MaterialFieldContext<'_>,
@@ -35,19 +35,23 @@ pub(crate) fn solid_block_id(
     }
 
     let base_material = strongest_surface_material(
-        surface
-            .influences
-            .iter()
-            .map(|influence| (influence.id, influence.weight)),
+        surface_influences.iter().map(|(biome_index, weight)| {
+            (
+                context.biome_field.surface_biome_id(*biome_index),
+                *weight,
+            )
+        }),
         surface_depth,
         context.biomes,
     );
     let resolved_material = if surface_depth > 0 {
         strongest_surface_material(
-            surface
-                .influences
-                .iter()
-                .map(|influence| (influence.id, influence.weight)),
+            surface_influences.iter().map(|(biome_index, weight)| {
+                (
+                    context.biome_field.surface_biome_id(*biome_index),
+                    *weight,
+                )
+            }),
             irregular_layer_depth(position, surface_depth, context.biome_field.seed()),
             context.biomes,
         )
