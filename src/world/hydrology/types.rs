@@ -17,20 +17,36 @@ pub struct WaterBody {
 
 impl WaterBody {
     pub fn normalized_horizontal_distance(&self, position: Vec2) -> f32 {
+        self.normalized_horizontal_distance_with_margin(position, 0.0)
+    }
+
+    pub fn normalized_horizontal_distance_with_margin(
+        &self,
+        position: Vec2,
+        margin: f32,
+    ) -> f32 {
         let delta = position - self.center;
         let (sin, cos) = self.rotation.sin_cos();
         let local = Vec2::new(
             delta.x * cos + delta.y * sin,
             -delta.x * sin + delta.y * cos,
         );
-        let normalized = Vec2::new(local.x / self.radius.x, local.y / self.radius.y);
+        let expanded_radius = self.radius + Vec2::splat(margin.max(0.0));
+        let normalized = Vec2::new(
+            local.x / expanded_radius.x,
+            local.y / expanded_radius.y,
+        );
         let boundary_scale = irregular_boundary_scale(normalized, self.shape_seed);
 
         normalized.length() / boundary_scale
     }
 
     pub fn horizontal_strength(&self, position: Vec2) -> f32 {
-        let distance = self.normalized_horizontal_distance(position);
+        self.horizontal_strength_with_margin(position, 0.0)
+    }
+
+    pub fn horizontal_strength_with_margin(&self, position: Vec2, margin: f32) -> f32 {
+        let distance = self.normalized_horizontal_distance_with_margin(position, margin);
 
         smoothstep(1.0 - distance.clamp(0.0, 1.0))
     }
@@ -105,5 +121,22 @@ mod tests {
         let diagonal_distance = body.normalized_horizontal_distance(diagonal);
 
         assert_ne!(x_distance, diagonal_distance);
+    }
+
+    #[test]
+    fn water_body_margin_detects_nearby_positions_without_expanding_base_shape() {
+        let body = WaterBody {
+            center: Vec2::ZERO,
+            radius: Vec2::splat(10.0),
+            rotation: 0.0,
+            shape_seed: 42,
+            water_level: 64.0,
+            carve_depth: 10.0,
+            fluid_id: "asteria:test/water".into(),
+        };
+        let nearby = Vec2::new(16.0, 0.0);
+
+        assert_eq!(body.horizontal_strength(nearby), 0.0);
+        assert!(body.horizontal_strength_with_margin(nearby, 8.0) > 0.0);
     }
 }
