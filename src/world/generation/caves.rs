@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use bevy::prelude::*;
 
@@ -88,34 +88,7 @@ fn resolve_open_cavern_anchor(
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
 ) -> Option<Vec3> {
-    let mut offsets = Vec::new();
-
-    for y in (-CAVERN_ANCHOR_SEARCH_RADIUS..=CAVERN_ANCHOR_SEARCH_RADIUS)
-        .step_by(CAVERN_ANCHOR_SEARCH_STEP as usize)
-    {
-        for z in (-CAVERN_ANCHOR_SEARCH_RADIUS..=CAVERN_ANCHOR_SEARCH_RADIUS)
-            .step_by(CAVERN_ANCHOR_SEARCH_STEP as usize)
-        {
-            for x in (-CAVERN_ANCHOR_SEARCH_RADIUS..=CAVERN_ANCHOR_SEARCH_RADIUS)
-                .step_by(CAVERN_ANCHOR_SEARCH_STEP as usize)
-            {
-                offsets.push(IVec3::new(x, y, z));
-            }
-        }
-    }
-
-    offsets.sort_by(|left, right| {
-        left.length_squared()
-            .cmp(&right.length_squared())
-            .then_with(|| left.y.abs().cmp(&right.y.abs()))
-            .then_with(|| left.x.abs().cmp(&right.x.abs()))
-            .then_with(|| left.z.abs().cmp(&right.z.abs()))
-            .then_with(|| left.x.cmp(&right.x))
-            .then_with(|| left.y.cmp(&right.y))
-            .then_with(|| left.z.cmp(&right.z))
-    });
-
-    offsets.into_iter().find_map(|offset| {
+    cavern_anchor_offsets().iter().copied().find_map(|offset| {
         let candidate = snap_to_voxel_center(anchor + offset.as_vec3());
         cavern_space_is_open(
             candidate,
@@ -127,6 +100,42 @@ fn resolve_open_cavern_anchor(
         )
         .then_some(candidate)
     })
+}
+
+fn cavern_anchor_offsets() -> &'static [IVec3] {
+    static OFFSETS: OnceLock<Vec<IVec3>> = OnceLock::new();
+
+    OFFSETS
+        .get_or_init(|| {
+            let mut offsets = Vec::new();
+
+            for y in (-CAVERN_ANCHOR_SEARCH_RADIUS..=CAVERN_ANCHOR_SEARCH_RADIUS)
+                .step_by(CAVERN_ANCHOR_SEARCH_STEP as usize)
+            {
+                for z in (-CAVERN_ANCHOR_SEARCH_RADIUS..=CAVERN_ANCHOR_SEARCH_RADIUS)
+                    .step_by(CAVERN_ANCHOR_SEARCH_STEP as usize)
+                {
+                    for x in (-CAVERN_ANCHOR_SEARCH_RADIUS..=CAVERN_ANCHOR_SEARCH_RADIUS)
+                        .step_by(CAVERN_ANCHOR_SEARCH_STEP as usize)
+                    {
+                        offsets.push(IVec3::new(x, y, z));
+                    }
+                }
+            }
+
+            offsets.sort_by(|left, right| {
+                left.length_squared()
+                    .cmp(&right.length_squared())
+                    .then_with(|| left.y.abs().cmp(&right.y.abs()))
+                    .then_with(|| left.x.abs().cmp(&right.x.abs()))
+                    .then_with(|| left.z.abs().cmp(&right.z.abs()))
+                    .then_with(|| left.x.cmp(&right.x))
+                    .then_with(|| left.y.cmp(&right.y))
+                    .then_with(|| left.z.cmp(&right.z))
+            });
+            offsets
+        })
+        .as_slice()
 }
 
 fn cavern_space_is_open(
