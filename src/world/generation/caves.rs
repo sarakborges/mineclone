@@ -11,6 +11,7 @@ use crate::{
         cave_connectivity::CaveConnectivityRegion,
         density_pipeline::{DensitySampleContext, sample_density},
         generation_region::{GenerationRegion, generation_region_world_bounds},
+        hydrology::HydrologyWaterKind,
         terrain::{surface_height, terrain_density},
         world_feature_fields::WorldFeatureFields,
     },
@@ -20,6 +21,9 @@ const CAVE_ENTRANCE_MINIMUM_DEPTH: f32 = 8.0;
 const CAVE_ENTRANCE_MINIMUM_OFFSET: f32 = 12.0;
 const CAVE_ENTRANCE_MAXIMUM_OFFSET: f32 = 26.0;
 const CAVE_ENTRANCE_REGION_MARGIN: f32 = 8.0;
+const OCEAN_CAVE_ENTRANCE_CHANCE: f32 = 0.34;
+const OCEAN_CAVE_MINIMUM_STRENGTH: f32 = 0.35;
+const OCEAN_CAVE_MINIMUM_DROP: f32 = 5.0;
 const CAVERN_ANCHOR_SEARCH_RADIUS: i32 = 16;
 const CAVERN_ANCHOR_SEARCH_STEP: i32 = 4;
 const CAVERN_ANCHOR_NEIGHBOR_PROBE: f32 = 2.0;
@@ -62,26 +66,39 @@ pub(super) fn anchored_cave_region(
             })
             .collect::<Vec<_>>();
         let underground_anchors = anchors.clone();
+        let mut water_source_anchors = Vec::new();
 
-        if region.coord.y == 0
-            && let Some(entrance) = surface_cave_entrance(
+        if region.coord.y == 0 {
+            if let Some(entrance) = surface_cave_entrance(
                 region,
-                &anchors,
+                &underground_anchors,
                 minimum,
                 maximum,
                 dimension,
                 biomes,
                 biome_field,
-            )
-        {
-            anchors.push(entrance);
+            ) {
+                anchors.push(entrance);
+            }
+
+            if let Some(ocean_opening) = ocean_cave_entrance(
+                region,
+                &underground_anchors,
+                minimum,
+                maximum,
+                biome_field,
+            ) {
+                anchors.push(ocean_opening);
+                water_source_anchors.push(ocean_opening);
+            }
         }
 
         (!anchors.is_empty()).then(|| {
-            cave_field.region_from_anchors_with_underground_water(
+            cave_field.region_from_anchors_with_water_sources(
                 region.coord,
                 &anchors,
                 &underground_anchors,
+                &water_source_anchors,
             )
         })
     })
@@ -274,6 +291,64 @@ fn surface_cave_entrance(
     });
 
     candidates.first().map(|(_, entrance)| *entrance)
+}
+
+fn ocean_cave_entrance(
+    region: &GenerationRegion,
+    anchors: &[Vec3],
+    minimum: Vec3,
+    maximum: Vec3,
+    biome_field: &BiomeField,
+) -> Option<Vec3> {
+    let seed = biome_field.seed() ^ 0x3c6e_f372_fe94_f82b;
+    let mut candidates = anchors
+        .iter()
+        .copied()
+        .filter(|anchor| {
+            anchor.x >= minimum.x
+                && anchor.x < maximum.x
+                && anchor.z >= minimum.z
+                && anchor.z < maximum.z
+        })
+        .filter_map(|anchor| {
+            let hash = cave_entrance_hash(anchor, seed);
+            if hash_unit(hash.rotate_left(11)) >= OCEAN_CAVE_ENTRANCE_CHANCE {
+                return None;
+            }
+
+            let horizontal = cave_entrance_horizontal(anchor, minimum, maximum, seed);
+            let water = region.hydrology.water_at(horizontal)?;
+            if water.kind != HydrologyWaterKind::Ocean
+                || water.strength < OCEAN_CAVE_MINIMUM_STRENGTH
+            {
+                return None;
+            }
+
+            let opening_y = (water.bed_level + 0.5).max(1.5);
+            let drop = opening_y - anchor.y;
+            if drop < OCEAN_CAVE_MINIMUM_DROP {
+                return None;
+            }
+
+            Some((
+                drop,
+                water.strength,
+                Vec3::new(horizontal.x, opening_y, horizontal.y),
+            ))
+        })
+        .collect::<Vec<_>>();
+
+    candidates.sort_by(
+        |(left_drop, left_strength, left), (right_drop, right_strength, right)| {
+            left_drop
+                .total_cmp(right_drop)
+                .then_with(|| right_strength.total_cmp(left_strength))
+                .then_with(|| left.x.total_cmp(&right.x))
+                .then_with(|| left.z.total_cmp(&right.z))
+        },
+    );
+
+    candidates.first().map(|(_, _, entrance)| *entrance)
 }
 
 fn cave_entrance_horizontal(anchor: Vec3, minimum: Vec3, maximum: Vec3, seed: u64) -> Vec2 {
