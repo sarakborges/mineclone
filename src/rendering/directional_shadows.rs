@@ -21,6 +21,8 @@ const SHADOW_MAP_SIZE: usize = 2048;
 const FIRST_CASCADE_FAR_BOUND: f32 = CHUNK_SIZE as f32;
 const MAXIMUM_SHADOW_DISTANCE: f32 = ((MAX_RENDER_DISTANCE_CHUNKS + 1) * CHUNK_SIZE as i32) as f32;
 const BASE_SUN_ILLUMINANCE: f32 = 10_000.0;
+const VOXEL_SHADOW_DEPTH_BIAS: f32 = 0.005;
+const VOXEL_SHADOW_NORMAL_BIAS: f32 = 0.5;
 
 pub struct DirectionalShadowsPlugin;
 
@@ -45,6 +47,9 @@ fn spawn_sun_shadow_light(mut commands: Commands) {
         DirectionalLight {
             illuminance: 0.0,
             shadow_maps_enabled: true,
+            contact_shadows_enabled: true,
+            shadow_depth_bias: VOXEL_SHADOW_DEPTH_BIAS,
+            shadow_normal_bias: VOXEL_SHADOW_NORMAL_BIAS,
             ..default()
         },
         CascadeShadowConfigBuilder {
