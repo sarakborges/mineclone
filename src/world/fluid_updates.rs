@@ -34,6 +34,40 @@ impl PendingFluidUpdates {
         }
     }
 
+    pub(crate) fn enqueue_loaded_fluid_frontier(&mut self, world: &VoxelWorld, coord: IVec3) {
+        let origin = coord * CHUNK_SIZE as i32;
+
+        for local_y in 0..CHUNK_SIZE {
+            for local_z in 0..CHUNK_SIZE {
+                for local_x in 0..CHUNK_SIZE {
+                    let position = origin
+                        + IVec3::new(local_x as i32, local_y as i32, local_z as i32);
+                    if world.fluid_at(position).is_none() {
+                        continue;
+                    }
+
+                    let has_empty_neighbor = CARDINAL_NEIGHBORS.into_iter().any(|offset| {
+                        let neighbor = position + offset;
+                        world.is_loaded_at(neighbor)
+                            && !world.is_solid(neighbor)
+                            && world.fluid_at(neighbor).is_none()
+                    });
+                    if !has_empty_neighbor {
+                        continue;
+                    }
+
+                    self.enqueue(position);
+                    for offset in CARDINAL_NEIGHBORS {
+                        let neighbor = position + offset;
+                        if world.is_loaded_at(neighbor) {
+                            self.enqueue(neighbor);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fn enqueue(&mut self, position: IVec3) {
         if position.y >= 0 && self.queued.insert(position) {
             self.pending.push_back(position);
