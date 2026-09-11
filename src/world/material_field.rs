@@ -1,3 +1,5 @@
+use bevy::prelude::Vec3;
+
 use crate::content::{
     biome::{BiomeDefinition, BiomeRegistry},
     block_id::intern_block_id,
@@ -6,7 +8,6 @@ use crate::content::{
 use super::{
     biome_field::{BiomeField, VolumeBiomeSelection},
     geology::GeologyRegion,
-    hydrology::HydrologyRegion,
 };
 
 #[derive(Clone, Copy)]
@@ -22,8 +23,6 @@ pub(crate) struct SurfaceMaterialColumn<'a> {
 pub(crate) struct MaterialFieldContext<'a> {
     pub biome_field: &'a BiomeField,
     pub geology: &'a GeologyRegion,
-    pub hydrology: &'a HydrologyRegion,
-    pub biomes: &'a BiomeRegistry,
 }
 
 pub(crate) fn resolve_surface_material_column<'a>(
@@ -50,50 +49,7 @@ pub(crate) fn resolve_surface_material_column<'a>(
 }
 
 pub(crate) fn solid_block_id(
-    position: bevy::prelude::Vec3,
-    surface_influences: &[(usize, f32)],
-    surface_depth: u32,
-    volume: Option<VolumeBiomeSelection>,
-    context: &MaterialFieldContext<'_>,
-) -> &'static str {
-    let hydrology_block = context.hydrology.solid_block_at(position);
-
-    solid_block_id_with_hydrology(
-        position,
-        surface_influences,
-        surface_depth,
-        volume,
-        hydrology_block,
-        context,
-    )
-}
-
-pub(crate) fn solid_block_id_with_hydrology(
-    position: bevy::prelude::Vec3,
-    surface_influences: &[(usize, f32)],
-    surface_depth: u32,
-    volume: Option<VolumeBiomeSelection>,
-    hydrology_block: Option<&str>,
-    context: &MaterialFieldContext<'_>,
-) -> &'static str {
-    let surface_materials = resolve_surface_material_column(
-        surface_influences,
-        context.biome_field,
-        context.biomes,
-    );
-
-    solid_block_id_with_resolved_surface(
-        position,
-        surface_depth,
-        volume,
-        hydrology_block,
-        &surface_materials,
-        context,
-    )
-}
-
-pub(crate) fn solid_block_id_with_resolved_surface(
-    position: bevy::prelude::Vec3,
+    position: Vec3,
     surface_depth: u32,
     volume: Option<VolumeBiomeSelection>,
     hydrology_block: Option<&str>,
@@ -114,9 +70,9 @@ pub(crate) fn solid_block_id_with_resolved_surface(
         return intern_block_id(block_id);
     }
 
-    let base_material = strongest_resolved_surface_material(surface_materials, surface_depth);
+    let base_material = strongest_surface_material(surface_materials, surface_depth);
     let resolved_material = if surface_depth > 0 {
-        strongest_resolved_surface_material(
+        strongest_surface_material(
             surface_materials,
             irregular_layer_depth(position, surface_depth, context.biome_field.seed()),
         )
@@ -130,7 +86,7 @@ pub(crate) fn solid_block_id_with_resolved_surface(
     })
 }
 
-fn strongest_resolved_surface_material<'a>(
+fn strongest_surface_material<'a>(
     surface_materials: &SurfaceMaterialColumn<'a>,
     depth: u32,
 ) -> Option<&'a str> {
@@ -147,11 +103,7 @@ fn strongest_resolved_surface_material<'a>(
         .map(|(block_id, _)| block_id)
 }
 
-fn irregular_layer_depth(
-    position: bevy::prelude::Vec3,
-    surface_depth: u32,
-    seed: u64,
-) -> u32 {
+fn irregular_layer_depth(position: Vec3, surface_depth: u32, seed: u64) -> u32 {
     let phase = (seed % 10_000) as f32 * 0.001;
     let broad = ((position.x * 0.055 + phase).sin()
         + (position.z * 0.071 - phase * 0.7).cos()
@@ -174,11 +126,7 @@ mod tests {
         let depths = (0..32)
             .map(|index| {
                 irregular_layer_depth(
-                    bevy::prelude::Vec3::new(
-                        index as f32 * 2.0,
-                        58.0,
-                        index as f32 * 0.75,
-                    ),
+                    Vec3::new(index as f32 * 2.0, 58.0, index as f32 * 0.75),
                     3,
                     42,
                 )
@@ -191,11 +139,7 @@ mod tests {
     #[test]
     fn irregular_layer_depth_can_reach_the_surface_layer_below_depth_zero() {
         let reaches_surface = (-64..=64).any(|index| {
-            irregular_layer_depth(
-                bevy::prelude::Vec3::new(index as f32, 60.0, index as f32 * 0.37),
-                1,
-                42,
-            ) == 0
+            irregular_layer_depth(Vec3::new(index as f32, 60.0, index as f32 * 0.37), 1, 42) == 0
         });
 
         assert!(reaches_surface);
