@@ -6,6 +6,7 @@ use super::{
     biome_field::{BiomeField, VolumeBiomeSelection},
     cave_connectivity::CaveConnectivityRegion,
     generation_region::GenerationRegion,
+    hydrology::HydrologyWaterSample,
 };
 
 const DENSITY_NOISE_EDGE: f32 = 0.15;
@@ -20,6 +21,42 @@ const CAVE_WATER_HORIZONTAL_CLEARANCE: f32 = 8.0;
 const RIVER_CHANNEL_HEADROOM: f32 = 5.0;
 const WATER_VOLUME_AIR_DENSITY: f32 = -0.001;
 
+#[derive(Clone, Copy, Debug)]
+struct WaterLevels {
+    water_level: f32,
+    bed_level: f32,
+}
+
+impl From<HydrologyWaterSample<'_>> for WaterLevels {
+    fn from(sample: HydrologyWaterSample<'_>) -> Self {
+        Self {
+            water_level: sample.water_level,
+            bed_level: sample.bed_level,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct DensityColumnHydrology {
+    cave_water: Option<WaterLevels>,
+    river_water: Option<WaterLevels>,
+    water: Option<WaterLevels>,
+}
+
+pub(crate) fn sample_density_column_hydrology(
+    horizontal: Vec2,
+    region: &GenerationRegion,
+) -> DensityColumnHydrology {
+    DensityColumnHydrology {
+        cave_water: region
+            .hydrology
+            .water_near(horizontal, CAVE_WATER_HORIZONTAL_CLEARANCE)
+            .map(Into::into),
+        river_water: region.hydrology.river_water_at(horizontal).map(Into::into),
+        water: region.hydrology.water_at(horizontal).map(Into::into),
+    }
+}
+
 pub fn sample_density(
     base_density: f32,
     position: Vec3,
@@ -28,10 +65,32 @@ pub fn sample_density(
     volume: Option<VolumeBiomeSelection>,
     biome_field: &BiomeField,
 ) -> f32 {
+    let hydrology = sample_density_column_hydrology(Vec2::new(position.x, position.z), region);
+
+    sample_density_with_column_hydrology(
+        base_density,
+        position,
+        region,
+        anchored_caves,
+        volume,
+        biome_field,
+        hydrology,
+    )
+}
+
+pub(crate) fn sample_density_with_column_hydrology(
+    base_density: f32,
+    position: Vec3,
+    region: &GenerationRegion,
+    anchored_caves: Option<&CaveConnectivityRegion>,
+    volume: Option<VolumeBiomeSelection>,
+    biome_field: &BiomeField,
+    column_hydrology: DensityColumnHydrology,
+) -> f32 {
     let hydrology_delta = region.hydrology.density_delta(position);
     let geology_delta = region.geology.density_delta(position);
     let mut density = base_density + hydrology_delta + geology_delta;
-    let water_clearance = cave_water_clearance(position, region);
+    let water_clearance = cave_water_clearance(position.y, column_hydrology.cave_water);
     let connector_depth_strength = depth_strength(
         base_density,
         CAVE_CONNECTOR_MINIMUM_SURFACE_DEPTH,
@@ -60,20 +119,19 @@ pub fn sample_density(
         cavern_depth_strength,
     );
 
-    enforce_hydrology_water_volume(density, base_density, position, region)
+    enforce_hydrology_water_volume(density, base_density, position.y, column_hydrology)
 }
 
 fn enforce_hydrology_water_volume(
     density: f32,
     base_density: f32,
-    position: Vec3,
-    region: &GenerationRegion,
+    y: f32,
+    column_hydrology: DensityColumnHydrology,
 ) -> f32 {
-    let horizontal = Vec2::new(position.x, position.z);
-    let cell_bottom = position.y - 0.5;
-    let cell_top = position.y + 0.5;
+    let cell_bottom = y - 0.5;
+    let cell_top = y + 0.5;
 
-    if let Some(river) = region.hydrology.river_water_at(horizontal)
+    if let Some(river) = column_hydrology.river_water
         && cell_top > river.bed_level
         && cell_bottom < river.water_level + RIVER_CHANNEL_HEADROOM
         && base_density > 0.0
@@ -81,7 +139,7 @@ fn enforce_hydrology_water_volume(
         return density.min(WATER_VOLUME_AIR_DENSITY);
     }
 
-    let Some(water) = region.hydrology.water_at(horizontal) else {
+    let Some(water) = column_hydrology.water else {
         return density;
     };
 
@@ -92,15 +150,11 @@ fn enforce_hydrology_water_volume(
     density.min(WATER_VOLUME_AIR_DENSITY)
 }
 
-fn cave_water_clearance(position: Vec3, region: &GenerationRegion) -> f32 {
-    let horizontal = Vec2::new(position.x, position.z);
-    let Some(water) = region
-        .hydrology
-        .water_near(horizontal, CAVE_WATER_HORIZONTAL_CLEARANCE)
-    else {
+fn cave_water_clearance(y: f32, water: Option<WaterLevels>) -> f32 {
+    let Some(water) = water else {
         return 1.0;
     };
-    let depth_below_water = water.water_level - position.y;
+    let depth_below_water = water.water_level - y;
 
     if depth_below_water < 0.0 {
         return 1.0;
