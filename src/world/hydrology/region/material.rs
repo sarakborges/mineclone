@@ -17,7 +17,11 @@ struct BedMaterial<'a> {
 
 impl<'a> BedMaterial<'a> {
     fn at(self, y: f32) -> Option<&'a str> {
-        is_near_bed(y, self.bed).then_some(self.material).flatten()
+        if is_near_bed(y, self.bed) {
+            self.material
+        } else {
+            None
+        }
     }
 }
 
@@ -38,11 +42,6 @@ impl<'a> MaterialColumnProfile<'a> {
 }
 
 impl HydrologyRegion {
-    pub fn solid_block_at(&self, position: Vec3) -> Option<&str> {
-        self.material_column_profile(Vec2::new(position.x, position.z))
-            .material_at(position.y)
-    }
-
     pub(crate) fn solid_blocks_for_column<const N: usize>(
         &self,
         horizontal: Vec2,
