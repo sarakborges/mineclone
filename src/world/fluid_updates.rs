@@ -18,6 +18,13 @@ use super::chunk_remesh::ChunkRemeshQueue;
 const MAX_FLUID_UPDATES_PER_FRAME: usize = 512;
 const MAX_FLUID_STEPS_PER_FRAME: usize = 4;
 const HORIZONTAL_NEIGHBORS: [IVec3; 4] = [IVec3::X, IVec3::NEG_X, IVec3::Z, IVec3::NEG_Z];
+const FLUID_SPREAD_TARGETS: [IVec3; 5] = [
+    IVec3::NEG_Y,
+    IVec3::X,
+    IVec3::NEG_X,
+    IVec3::Z,
+    IVec3::NEG_Z,
+];
 
 #[derive(Resource, Default)]
 pub(crate) struct PendingFluidUpdates {
@@ -35,6 +42,18 @@ impl PendingFluidUpdates {
     }
 
     pub(crate) fn enqueue_loaded_fluid_frontier(&mut self, world: &VoxelWorld, coord: IVec3) {
+        self.enqueue_chunk_spread_targets(world, coord);
+
+        for offset in CARDINAL_NEIGHBORS {
+            self.enqueue_chunk_spread_targets(world, coord + offset);
+        }
+    }
+
+    fn enqueue_chunk_spread_targets(&mut self, world: &VoxelWorld, coord: IVec3) {
+        if coord.y < 0 || world.chunk(coord).is_none() {
+            return;
+        }
+
         let origin = coord * CHUNK_SIZE as i32;
 
         for local_y in 0..CHUNK_SIZE {
@@ -46,22 +65,16 @@ impl PendingFluidUpdates {
                         continue;
                     }
 
-                    let has_empty_neighbor = CARDINAL_NEIGHBORS.into_iter().any(|offset| {
-                        let neighbor = position + offset;
-                        world.is_loaded_at(neighbor)
-                            && !world.is_solid(neighbor)
-                            && world.fluid_at(neighbor).is_none()
-                    });
-                    if !has_empty_neighbor {
-                        continue;
-                    }
-
-                    self.enqueue(position);
-                    for offset in CARDINAL_NEIGHBORS {
-                        let neighbor = position + offset;
-                        if world.is_loaded_at(neighbor) {
-                            self.enqueue(neighbor);
+                    for offset in FLUID_SPREAD_TARGETS {
+                        let target = position + offset;
+                        if !world.is_loaded_at(target)
+                            || world.is_solid(target)
+                            || world.fluid_at(target).is_some()
+                        {
+                            continue;
                         }
+
+                        self.enqueue(target);
                     }
                 }
             }
