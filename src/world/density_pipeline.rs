@@ -8,6 +8,7 @@ use super::{
     biome_field::{BiomeField, VolumeBiomeSelection},
     cave_connectivity::CaveConnectivityRegion,
     generation_region::GenerationRegion,
+    math::smoothstep,
 };
 use self::{
     hydrology::{cave_water_clearance, enforce_hydrology_water_volume},
@@ -132,10 +133,6 @@ fn carve_density_delta(density: f32, strength: f32, air_margin: f32) -> f32 {
     }
 
     -(density.max(0.0) + air_margin) * strength.clamp(0.0, 1.0)
-}
-
-fn smoothstep(value: f32) -> f32 {
-    value * value * (3.0 - 2.0 * value)
 }
 
 #[cfg(test)]

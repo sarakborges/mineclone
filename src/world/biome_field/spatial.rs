@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+pub(super) use crate::world::math::{lerp, smoothstep};
+
 use super::constants::{
     BORDER_TRANSITION_WIDTH, BORDER_WARP_AMPLITUDE, SITE_JITTER_FRACTION,
     VOLUME_SITE_JITTER_FRACTION, VOLUME_WARP_AMPLITUDE,
@@ -106,12 +108,4 @@ fn hash_component(hash: u64) -> f32 {
 
 pub(super) fn hash_unit(hash: u64) -> f32 {
     (hash & 0xffff) as f32 / u16::MAX as f32
-}
-
-pub(super) fn smoothstep(value: f32) -> f32 {
-    value * value * (3.0 - 2.0 * value)
-}
-
-pub(super) fn lerp(from: f32, to: f32, amount: f32) -> f32 {
-    from + (to - from) * amount
 }

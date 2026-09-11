@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+pub(super) use crate::world::math::{lerp, smoothstep};
+
 use super::constants::{
     COAST_OCEAN_BLEND_END_STRENGTH, COAST_OCEAN_BLEND_START_STRENGTH,
     COAST_SURFACE_BLEND_END_STRENGTH, OCEAN_CONTINENTALNESS_THRESHOLD, OCEAN_TRANSITION_WIDTH,
@@ -59,12 +61,4 @@ pub(super) fn hash_unit(hash: u64) -> f32 {
 
 pub(super) fn hash_signed(hash: u64) -> f32 {
     hash_unit(hash) * 2.0 - 1.0
-}
-
-pub(super) fn smoothstep(value: f32) -> f32 {
-    value * value * (3.0 - 2.0 * value)
-}
-
-pub(super) fn lerp(from: f32, to: f32, amount: f32) -> f32 {
-    from + (to - from) * amount
 }

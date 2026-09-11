@@ -2,7 +2,10 @@ use bevy::prelude::*;
 
 use crate::{
     content::biome_density::BiomeDensityModifier,
-    world::biome_field::{BiomeField, VolumeBiomeSelection},
+    world::{
+        biome_field::{BiomeField, VolumeBiomeSelection},
+        math::smoothstep,
+    },
 };
 
 use super::{carve_density_delta, noise::value_noise_3d};
@@ -76,10 +79,6 @@ fn coverage_mask(noise: f32, coverage: f32) -> f32 {
 
     let threshold = 1.0 - coverage;
     smoothstep(((noise - threshold) / DENSITY_NOISE_EDGE).clamp(0.0, 1.0))
-}
-
-fn smoothstep(value: f32) -> f32 {
-    value * value * (3.0 - 2.0 * value)
 }
 
 #[cfg(test)]

@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::world::{
     generation_region::GenerationRegion,
     hydrology::{HydrologyRiverSurfaceSample, HydrologyWaterKind, HydrologyWaterSample},
+    math::{lerp, smoothstep},
 };
 
 use super::noise::value_noise_2d;
@@ -161,14 +162,6 @@ fn river_headroom(strength: f32, horizontal: Vec2, seed: u64) -> f32 {
 
 fn lake_surface_headroom(strength: f32) -> f32 {
     LAKE_SURFACE_HEADROOM * smoothstep(strength.clamp(0.0, 1.0))
-}
-
-fn smoothstep(value: f32) -> f32 {
-    value * value * (3.0 - 2.0 * value)
-}
-
-fn lerp(from: f32, to: f32, amount: f32) -> f32 {
-    from + (to - from) * amount
 }
 
 #[cfg(test)]

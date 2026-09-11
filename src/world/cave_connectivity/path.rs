@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::world::math::{lerp, smoothstep};
+
 const TARGET_SEGMENT_LENGTH: f32 = 10.0;
 const MIN_SEGMENTS: usize = 5;
 const MAX_SEGMENTS: usize = 28;
@@ -98,16 +100,8 @@ fn endpoint_chamber_scale(t: f32) -> f32 {
     lerp(1.0, ENDPOINT_CHAMBER_SCALE, smoothstep(influence))
 }
 
-fn smoothstep(value: f32) -> f32 {
-    value * value * (3.0 - 2.0 * value)
-}
-
 fn hash_unit(hash: u64) -> f32 {
     (hash & 0xffff) as f32 / u16::MAX as f32
-}
-
-fn lerp(from: f32, to: f32, amount: f32) -> f32 {
-    from + (to - from) * amount
 }
 
 #[cfg(test)]

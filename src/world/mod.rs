@@ -17,6 +17,7 @@ pub(crate) mod geology;
 pub(crate) mod hydrology;
 mod lighting_updates;
 mod macro_climate;
+pub(crate) mod math;
 mod material_field;
 mod render_diagnostics;
 pub(crate) mod render_distance;
