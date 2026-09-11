@@ -83,18 +83,8 @@ pub(crate) fn chunk_is_in_volume(
     let delta = coord - center;
     let horizontal_squared = delta.x * delta.x + delta.z * delta.z;
 
-    match (horizontal_radius, vertical_radius) {
-        (0, 0) => horizontal_squared == 0 && delta.y == 0,
-        (0, _) => horizontal_squared == 0 && delta.y.abs() <= vertical_radius,
-        (_, 0) => delta.y == 0 && horizontal_squared <= horizontal_radius * horizontal_radius,
-        _ => {
-            let horizontal_radius_squared = horizontal_radius * horizontal_radius;
-            let vertical_offset = delta.y.abs();
-
-            horizontal_squared * vertical_radius + vertical_offset * horizontal_radius_squared
-                <= horizontal_radius_squared * vertical_radius
-        }
-    }
+    horizontal_squared <= horizontal_radius * horizontal_radius
+        && delta.y.abs() <= vertical_radius
 }
 
 #[cfg(test)]
@@ -117,7 +107,7 @@ mod tests {
     }
 
     #[test]
-    fn vertical_layers_taper_toward_the_extremes() {
+    fn every_loaded_vertical_layer_keeps_full_horizontal_radius() {
         let center = IVec3::new(0, 8, 0);
         let coords = chunk_coords_in_volume(center, 6, 2);
         let center_layer = coords.iter().filter(|coord| coord.y == center.y).count();
@@ -130,8 +120,8 @@ mod tests {
             .filter(|coord| coord.y == center.y + 2)
             .count();
 
-        assert!(adjacent_layer < center_layer);
-        assert!(top_layer < adjacent_layer);
+        assert_eq!(adjacent_layer, center_layer);
+        assert_eq!(top_layer, center_layer);
     }
 
     #[test]
@@ -144,9 +134,15 @@ mod tests {
                 .iter()
                 .all(|coord| chunk_is_in_volume(center, *coord, 4, 2))
         );
-        assert!(!chunk_is_in_volume(
+        assert!(chunk_is_in_volume(
             center,
             center + IVec3::new(4, 2, 0),
+            4,
+            2
+        ));
+        assert!(!chunk_is_in_volume(
+            center,
+            center + IVec3::new(5, 0, 0),
             4,
             2
         ));
