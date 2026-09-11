@@ -59,11 +59,6 @@ pub struct BiomeFieldSample<'a> {
     pub influences: Vec<BiomeInfluence<'a>>,
 }
 
-pub struct VolumeBiomeFieldSample<'a> {
-    pub primary_id: &'a str,
-    pub strength: f32,
-}
-
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct VolumeBiomeAnchor<'a> {
     pub id: &'a str,
