@@ -7,7 +7,7 @@ use crate::{
         biome_field::{BiomeField, VolumeBiomeRegion, VolumeBiomeSelection},
         cave_connectivity::CaveConnectivityRegion,
         density_pipeline::{
-            sample_density_column_hydrology, sample_density_with_column_hydrology,
+            sample_density_column_hydrology, sample_density_with_precomputed_hydrology,
         },
         generation_region::GenerationRegion,
         terrain::terrain_density,
@@ -52,6 +52,10 @@ pub(super) fn sample_density_field(
                 chunk_origin.z as f32 + local_z as f32 + 0.5,
             );
             let column_hydrology = sample_density_column_hydrology(horizontal, region);
+            let hydrology_deltas = region.hydrology.density_deltas_for_column::<CHUNK_SIZE>(
+                horizontal,
+                chunk_origin.y as f32 + 0.5,
+            );
             let surface_carver_allowed = region
                 .hydrology
                 .water_near(horizontal, SURFACE_CARVER_WATER_CLEARANCE)
@@ -77,7 +81,7 @@ pub(super) fn sample_density_field(
                 let base_density = terrain_density(column.surface_height, world_position.y);
                 let volume = biome_field.volume_selection_in_region(sample_position, volume_region);
                 let index = voxel_index(local_x, local_y, local_z);
-                let sampled_density = sample_density_with_column_hydrology(
+                let sampled_density = sample_density_with_precomputed_hydrology(
                     base_density,
                     sample_position,
                     region,
@@ -85,6 +89,7 @@ pub(super) fn sample_density_field(
                     volume,
                     biome_field,
                     column_hydrology,
+                    hydrology_deltas[local_y],
                 );
                 let carver_delta = surface_carvers.as_ref().map_or(0.0, |carvers| {
                     surface_carver_density_delta_from_column(
