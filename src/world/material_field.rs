@@ -1,4 +1,7 @@
-use crate::content::{biome::BiomeRegistry, block_id::intern_block_id};
+use crate::content::{
+    biome::{BiomeDefinition, BiomeRegistry},
+    block_id::intern_block_id,
+};
 
 use super::{
     biome_field::{BiomeField, VolumeBiomeSelection},
@@ -6,11 +9,44 @@ use super::{
     hydrology::HydrologyRegion,
 };
 
+#[derive(Clone, Copy)]
+struct ResolvedSurfaceInfluence<'a> {
+    biome: &'a BiomeDefinition,
+    weight: f32,
+}
+
+pub(crate) struct SurfaceMaterialColumn<'a> {
+    influences: Vec<ResolvedSurfaceInfluence<'a>>,
+}
+
 pub(crate) struct MaterialFieldContext<'a> {
     pub biome_field: &'a BiomeField,
     pub geology: &'a GeologyRegion,
     pub hydrology: &'a HydrologyRegion,
     pub biomes: &'a BiomeRegistry,
+}
+
+pub(crate) fn resolve_surface_material_column<'a>(
+    surface_influences: &[(usize, f32)],
+    biome_field: &BiomeField,
+    biomes: &'a BiomeRegistry,
+) -> SurfaceMaterialColumn<'a> {
+    let influences = surface_influences
+        .iter()
+        .map(|(biome_index, weight)| {
+            let biome_id = biome_field.surface_biome_id(*biome_index);
+            let biome = biomes
+                .get(biome_id)
+                .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
+
+            ResolvedSurfaceInfluence {
+                biome,
+                weight: *weight,
+            }
+        })
+        .collect();
+
+    SurfaceMaterialColumn { influences }
 }
 
 pub(crate) fn solid_block_id(
@@ -40,6 +76,30 @@ pub(crate) fn solid_block_id_with_hydrology(
     hydrology_block: Option<&str>,
     context: &MaterialFieldContext<'_>,
 ) -> &'static str {
+    let surface_materials = resolve_surface_material_column(
+        surface_influences,
+        context.biome_field,
+        context.biomes,
+    );
+
+    solid_block_id_with_resolved_surface(
+        position,
+        surface_depth,
+        volume,
+        hydrology_block,
+        &surface_materials,
+        context,
+    )
+}
+
+pub(crate) fn solid_block_id_with_resolved_surface(
+    position: bevy::prelude::Vec3,
+    surface_depth: u32,
+    volume: Option<VolumeBiomeSelection>,
+    hydrology_block: Option<&str>,
+    surface_materials: &SurfaceMaterialColumn<'_>,
+    context: &MaterialFieldContext<'_>,
+) -> &'static str {
     if let Some(block_id) =
         volume.and_then(|selection| context.biome_field.volume_solid_block(selection))
     {
@@ -54,26 +114,11 @@ pub(crate) fn solid_block_id_with_hydrology(
         return intern_block_id(block_id);
     }
 
-    let base_material = strongest_surface_material(
-        surface_influences.iter().map(|(biome_index, weight)| {
-            (
-                context.biome_field.surface_biome_id(*biome_index),
-                *weight,
-            )
-        }),
-        surface_depth,
-        context.biomes,
-    );
+    let base_material = strongest_resolved_surface_material(surface_materials, surface_depth);
     let resolved_material = if surface_depth > 0 {
-        strongest_surface_material(
-            surface_influences.iter().map(|(biome_index, weight)| {
-                (
-                    context.biome_field.surface_biome_id(*biome_index),
-                    *weight,
-                )
-            }),
+        strongest_resolved_surface_material(
+            surface_materials,
             irregular_layer_depth(position, surface_depth, context.biome_field.seed()),
-            context.biomes,
         )
         .or(base_material)
     } else {
@@ -85,19 +130,18 @@ pub(crate) fn solid_block_id_with_hydrology(
     })
 }
 
-fn strongest_surface_material<'registry, 'id>(
-    influences: impl Iterator<Item = (&'id str, f32)>,
+fn strongest_resolved_surface_material<'a>(
+    surface_materials: &SurfaceMaterialColumn<'a>,
     depth: u32,
-    biomes: &'registry BiomeRegistry,
-) -> Option<&'registry str> {
-    influences
-        .filter_map(|(biome_id, weight)| {
-            let biome = biomes
-                .get(biome_id)
-                .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
-            biome
+) -> Option<&'a str> {
+    surface_materials
+        .influences
+        .iter()
+        .filter_map(|influence| {
+            influence
+                .biome
                 .surface_block_at_depth(depth)
-                .map(|block_id| (block_id, weight))
+                .map(|block_id| (block_id, influence.weight))
         })
         .max_by(|(_, left), (_, right)| left.total_cmp(right))
         .map(|(block_id, _)| block_id)
