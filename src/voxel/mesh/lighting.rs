@@ -32,7 +32,8 @@ pub(crate) fn face_lighting(world: &VoxelWorld, voxel: IVec3, face: BlockFace) -
         } else {
             side_a_solid as usize + side_b_solid as usize + corner_solid as usize
         };
-        let (sky_level, block_level) = average_light_levels(world, [base, side_a, side_b, corner]);
+        let (sky_level, block_level) =
+            average_light_levels(world, base, [base, side_a, side_b, corner]);
 
         channels[index] = [
             normalize_level(sky_level),
@@ -51,7 +52,11 @@ pub(crate) fn should_flip_diagonal(ambient_occlusion: [f32; 4]) -> bool {
     ambient_occlusion[0] + ambient_occlusion[2] > ambient_occlusion[1] + ambient_occlusion[3]
 }
 
-fn average_light_levels(world: &VoxelWorld, samples: [IVec3; 4]) -> (f32, f32) {
+fn average_light_levels(
+    world: &VoxelWorld,
+    fallback: IVec3,
+    samples: [IVec3; 4],
+) -> (f32, f32) {
     let mut sky_total = 0.0;
     let mut block_total = 0.0;
     let mut count = 0_u32;
@@ -68,7 +73,12 @@ fn average_light_levels(world: &VoxelWorld, samples: [IVec3; 4]) -> (f32, f32) {
     }
 
     if count == 0 {
-        (VoxelLight::MAX_LEVEL as f32, 0.0)
+        if !world.is_loaded_at(fallback) {
+            return (0.0, 0.0);
+        }
+
+        let light = world.light_at(fallback);
+        (light.sky() as f32, light.block() as f32)
     } else {
         (sky_total / count as f32, block_total / count as f32)
     }
@@ -121,11 +131,22 @@ fn face_basis(face: BlockFace) -> (IVec3, IVec3, IVec3, [(i32, i32); 4]) {
 
 #[cfg(test)]
 mod tests {
-    use super::should_flip_diagonal;
+    use super::{average_light_levels, should_flip_diagonal};
+    use crate::voxel::world::VoxelWorld;
+    use bevy::prelude::*;
 
     #[test]
     fn chooses_the_lower_error_ao_diagonal() {
         assert!(should_flip_diagonal([1.0, 0.6, 1.0, 0.6]));
         assert!(!should_flip_diagonal([0.6, 1.0, 0.6, 1.0]));
+    }
+
+    #[test]
+    fn unloaded_face_samples_do_not_fall_back_to_full_skylight() {
+        let world = VoxelWorld::default();
+        let base = IVec3::new(16, 8, 8);
+        let samples = [base, base + IVec3::Y, base + IVec3::Z, base + IVec3::Y + IVec3::Z];
+
+        assert_eq!(average_light_levels(&world, base, samples), (0.0, 0.0));
     }
 }
