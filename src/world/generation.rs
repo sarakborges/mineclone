@@ -6,6 +6,7 @@ mod fluids;
 mod index;
 mod materials;
 mod structures;
+mod surface_carvers;
 
 use bevy::prelude::*;
 
@@ -128,6 +129,7 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         volume_region.as_ref(),
         anchored_caves.as_deref(),
         context.biome_field,
+        context.biomes,
     );
     let mut chunk = VoxelChunk::empty();
     let material_context = MaterialPassContext {
