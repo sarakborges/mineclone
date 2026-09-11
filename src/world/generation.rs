@@ -164,6 +164,7 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         &mut chunk,
         chunk_origin,
         region.as_ref(),
+        anchored_caves.as_deref(),
         context.biome_field,
         context.blocks,
         context.dimension,
