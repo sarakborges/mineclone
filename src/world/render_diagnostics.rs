@@ -14,7 +14,7 @@ const RUNTIME_IMAGE_SHAPE_LIMIT: usize = 4;
 struct RenderDiagnosticSnapshot {
     runtime_images: usize,
     font_atlases: usize,
-    font_atlas_bytes: usize,
+    font_atlas_bytes: u64,
     non_font_runtime_images: usize,
 }
 
@@ -93,7 +93,7 @@ pub(super) fn log_render_asset_pressure(
         (
             signed_delta(snapshot.runtime_images, previous.runtime_images),
             signed_delta(snapshot.font_atlases, previous.font_atlases),
-            signed_delta(snapshot.font_atlas_bytes, previous.font_atlas_bytes),
+            signed_delta_u64(snapshot.font_atlas_bytes, previous.font_atlas_bytes),
             signed_delta(
                 snapshot.non_font_runtime_images,
                 previous.non_font_runtime_images,
@@ -122,5 +122,13 @@ fn signed_delta(current: usize, previous: usize) -> i64 {
         current.saturating_sub(previous).min(i64::MAX as usize) as i64
     } else {
         -(previous.saturating_sub(current).min(i64::MAX as usize) as i64)
+    }
+}
+
+fn signed_delta_u64(current: u64, previous: u64) -> i64 {
+    if current >= previous {
+        current.saturating_sub(previous).min(i64::MAX as u64) as i64
+    } else {
+        -(previous.saturating_sub(current).min(i64::MAX as u64) as i64)
     }
 }
