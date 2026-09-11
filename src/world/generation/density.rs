@@ -17,7 +17,9 @@ use crate::{
 use super::{
     columns::GenerationColumnSample,
     index::{VOXELS_PER_CHUNK, column_index, voxel_index},
-    surface_carvers::surface_carver_density_delta,
+    surface_carvers::{
+        resolve_surface_carver_column, surface_carver_density_delta_from_column,
+    },
 };
 
 const SURFACE_CARVER_WATER_CLEARANCE: f32 = 12.0;
@@ -54,6 +56,16 @@ pub(super) fn sample_density_field(
                 .hydrology
                 .water_near(horizontal, SURFACE_CARVER_WATER_CLEARANCE)
                 .is_none();
+            let surface_carvers = surface_carver_allowed.then(|| {
+                resolve_surface_carver_column(
+                    horizontal,
+                    &column.surface_influences,
+                    biomes,
+                    biome_field,
+                    biome_field.seed(),
+                    sea_level,
+                )
+            });
 
             for local_y in 0..CHUNK_SIZE {
                 let world_position = IVec3::new(
@@ -74,19 +86,13 @@ pub(super) fn sample_density_field(
                     biome_field,
                     column_hydrology,
                 );
-                let carver_delta = if surface_carver_allowed {
-                    surface_carver_density_delta(
+                let carver_delta = surface_carvers.as_ref().map_or(0.0, |carvers| {
+                    surface_carver_density_delta_from_column(
                         sampled_density,
                         sample_position,
-                        &column.surface_influences,
-                        biomes,
-                        biome_field,
-                        biome_field.seed(),
-                        sea_level,
+                        carvers,
                     )
-                } else {
-                    0.0
-                };
+                });
 
                 field.values[index] = sampled_density + carver_delta;
                 field.volume[index] = volume;
