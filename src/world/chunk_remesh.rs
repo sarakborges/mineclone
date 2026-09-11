@@ -9,7 +9,7 @@ use super::{
     chunk_system_params::{ChunkContent, ChunkRenderer},
 };
 
-const MAX_REMESHES_PER_FRAME: usize = 2;
+const MAX_REMESHES_PER_FRAME: usize = 16;
 
 #[derive(Resource, Default)]
 pub(crate) struct ChunkRemeshQueue {
