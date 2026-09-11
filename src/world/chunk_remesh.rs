@@ -1,11 +1,8 @@
-use std::{
-    collections::{HashSet, VecDeque},
-    time::Instant,
-};
+use std::time::Instant;
 
 use bevy::prelude::*;
 
-use crate::voxel::world::VoxelWorld;
+use crate::voxel::{deduplicated_queue::DeduplicatedQueue, world::VoxelWorld};
 
 use super::{
     chunk_rendering::refresh_chunk_mesh,
@@ -16,27 +13,20 @@ const REMESH_BUDGET_MICROS: u128 = 4_000;
 
 #[derive(Resource, Default)]
 pub(crate) struct ChunkRemeshQueue {
-    pending: VecDeque<IVec3>,
-    queued: HashSet<IVec3>,
+    queue: DeduplicatedQueue<IVec3>,
 }
 
 impl ChunkRemeshQueue {
     pub(crate) fn enqueue(&mut self, coord: IVec3) {
-        if coord.y >= 0 && self.queued.insert(coord) {
-            self.pending.push_back(coord);
+        if coord.y >= 0 {
+            self.queue.enqueue(coord);
         }
     }
 
     pub(crate) fn enqueue_priority(&mut self, coord: IVec3) {
-        if coord.y < 0 {
-            return;
+        if coord.y >= 0 {
+            self.queue.enqueue_front(coord);
         }
-
-        if !self.queued.insert(coord) {
-            self.pending.retain(|pending| *pending != coord);
-        }
-
-        self.pending.push_front(coord);
     }
 
     pub(crate) fn extend(&mut self, coords: impl IntoIterator<Item = IVec3>) {
@@ -46,14 +36,11 @@ impl ChunkRemeshQueue {
     }
 
     fn pop(&mut self) -> Option<IVec3> {
-        let coord = self.pending.pop_front()?;
-        self.queued.remove(&coord);
-        Some(coord)
+        self.queue.pop()
     }
 
     fn clear(&mut self) {
-        self.pending.clear();
-        self.queued.clear();
+        self.queue.clear();
     }
 }
 

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::HashMap;
 
 use bevy::prelude::*;
 
@@ -6,6 +6,7 @@ use crate::{
     content::fluid::{FluidId, FluidRegistry},
     voxel::{
         chunk::CHUNK_SIZE,
+        deduplicated_queue::DeduplicatedQueue,
         fluid::{FluidCell, MAX_FLUID_LEVEL},
         lighting::PendingLightingUpdates,
         neighbors::CARDINAL_NEIGHBORS,
@@ -28,8 +29,7 @@ const FLUID_SPREAD_TARGETS: [IVec3; 5] = [
 
 #[derive(Resource, Default)]
 pub(crate) struct PendingFluidUpdates {
-    pending: VecDeque<IVec3>,
-    queued: HashSet<IVec3>,
+    queue: DeduplicatedQueue<IVec3>,
     accumulated_seconds: HashMap<FluidId, f32>,
 }
 
@@ -154,15 +154,13 @@ impl PendingFluidUpdates {
     }
 
     fn enqueue(&mut self, position: IVec3) {
-        if position.y >= 0 && self.queued.insert(position) {
-            self.pending.push_back(position);
+        if position.y >= 0 {
+            self.queue.enqueue(position);
         }
     }
 
     fn pop(&mut self) -> Option<IVec3> {
-        let position = self.pending.pop_front()?;
-        self.queued.remove(&position);
-        Some(position)
+        self.queue.pop()
     }
 
     fn ready_steps(&mut self, delta_seconds: f32, fluids: &FluidRegistry) -> HashMap<FluidId, usize> {
@@ -192,8 +190,7 @@ impl PendingFluidUpdates {
     }
 
     fn clear(&mut self) {
-        self.pending.clear();
-        self.queued.clear();
+        self.queue.clear();
         self.accumulated_seconds.clear();
     }
 }
@@ -223,7 +220,7 @@ pub(super) fn process_fluid_updates(
             break;
         }
 
-        let batch_len = pending.pending.len().min(remaining_budget);
+        let batch_len = pending.queue.len().min(remaining_budget);
         for _ in 0..batch_len {
             remaining_budget -= 1;
 

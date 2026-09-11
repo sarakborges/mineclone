@@ -1,19 +1,18 @@
-use std::collections::{HashSet, VecDeque};
-
 use bevy::prelude::*;
 
-use crate::voxel::{chunk::CHUNK_SIZE, neighbors::CARDINAL_NEIGHBORS};
+use crate::voxel::{
+    chunk::CHUNK_SIZE, deduplicated_queue::DeduplicatedQueue, neighbors::CARDINAL_NEIGHBORS,
+};
 
 #[derive(Default)]
 pub(super) struct LightingQueue {
-    pending: VecDeque<IVec3>,
-    queued: HashSet<IVec3>,
+    queue: DeduplicatedQueue<IVec3>,
 }
 
 impl LightingQueue {
     pub fn enqueue(&mut self, position: IVec3) {
-        if position.y >= 0 && self.queued.insert(position) {
-            self.pending.push_back(position);
+        if position.y >= 0 {
+            self.queue.enqueue(position);
         }
     }
 
@@ -61,8 +60,6 @@ impl LightingQueue {
     }
 
     pub fn pop(&mut self) -> Option<IVec3> {
-        let position = self.pending.pop_front()?;
-        self.queued.remove(&position);
-        Some(position)
+        self.queue.pop()
     }
 }

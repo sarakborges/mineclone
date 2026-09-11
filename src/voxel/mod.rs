@@ -3,6 +3,7 @@ pub mod chunk;
 pub(crate) mod chunk_archive;
 pub mod collision;
 pub mod coordinates;
+pub(crate) mod deduplicated_queue;
 pub mod fluid;
 pub mod fluid_mesh;
 pub(crate) mod light;
