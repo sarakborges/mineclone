@@ -25,6 +25,7 @@ use super::{
     fluid_updates::PendingFluidUpdates,
     render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
     terrain::surface_height,
+    world_feature_fields::WorldFeatureFields,
 };
 
 const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 1;
@@ -57,6 +58,7 @@ struct QueueRebuildContext<'a> {
     biomes: &'a BiomeRegistry,
     structures: &'a StructureRegistry,
     biome_field: &'a BiomeField,
+    feature_fields: &'a WorldFeatureFields,
 }
 
 #[derive(SystemParam)]
@@ -95,6 +97,7 @@ pub(super) fn stream_chunks(
             biomes: &content.biomes,
             structures: &content.structures,
             biome_field: &content.biome_field,
+            feature_fields: &generation.feature_fields,
         };
         rebuild_queue(
             &mut inputs.streaming,
@@ -210,6 +213,7 @@ fn rebuild_queue(
         context.biome_field,
         &mut streaming.surface_ranges,
     );
+    context.feature_fields.retain_for_chunks(&desired);
     let mut pending = desired
         .iter()
         .copied()
