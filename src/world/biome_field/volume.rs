@@ -141,6 +141,20 @@ impl BiomeField {
             .as_deref()
     }
 
+    pub(crate) fn volume_anchors_in_region<'a>(
+        &'a self,
+        region: &VolumeBiomeRegion,
+    ) -> Vec<VolumeBiomeAnchor<'a>> {
+        region
+            .sites
+            .iter()
+            .map(|site| VolumeBiomeAnchor {
+                id: self.volume_biomes[site.biome_index].id.as_str(),
+                position: site.position,
+            })
+            .collect()
+    }
+
     pub(crate) fn volume_anchors_in_bounds(
         &self,
         minimum: Vec3,
