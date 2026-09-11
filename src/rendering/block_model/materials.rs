@@ -3,13 +3,12 @@ use bevy::prelude::*;
 use crate::{
     content::block::BlockDefinition,
     rendering::{
+        block_display::block_display_face_shade,
         block_model_material::{BlockModelMaterial, BlockModelMaterialExtension},
         block_texture::block_face_texture,
     },
     voxel::block_face::{BlockFace, BlockFaces},
 };
-
-use super::geometry::block_display_face_shade;
 
 #[derive(Resource)]
 pub(crate) struct BlockModelMaterials {

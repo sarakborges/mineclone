@@ -3,12 +3,13 @@ mod materials;
 
 use bevy::prelude::*;
 
-use super::block_model_material::BlockModelMaterial;
+use super::{
+    block_display::BLOCK_DISPLAY_FACES,
+    block_model_material::BlockModelMaterial,
+};
 use crate::voxel::block_face::BlockFace;
 
-pub(crate) use geometry::{
-    BlockModelMeshes, block_display_face_basis, block_display_face_shade,
-};
+pub(crate) use geometry::BlockModelMeshes;
 pub(crate) use materials::{
     BlockModelMaterials, apply_block_display_shading, block_face_material_data,
     set_block_model_tint,
@@ -71,13 +72,12 @@ impl BlockModel {
 
     pub(crate) fn faces(&self) -> &'static [BlockFace] {
         match self.mode {
-            BlockModelMode::Display => &DISPLAY_FACES,
+            BlockModelMode::Display => &BLOCK_DISPLAY_FACES,
             BlockModelMode::World => &WORLD_FACES,
         }
     }
 }
 
-const DISPLAY_FACES: [BlockFace; 3] = [BlockFace::Top, BlockFace::Front, BlockFace::Right];
 const WORLD_FACES: [BlockFace; 6] = BlockFace::ALL;
 
 pub(crate) fn setup_block_model_assets(

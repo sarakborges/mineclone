@@ -1,4 +1,5 @@
 mod asset_upload;
+pub(crate) mod block_display;
 pub(crate) mod block_model;
 pub(crate) mod block_model_material;
 pub(crate) mod block_texture;
