@@ -49,7 +49,7 @@ impl BlockTerrainMaterials {
 #[derive(Resource, Clone)]
 pub struct TerrainMaterials {
     blocks: HashMap<String, BlockTerrainMaterials>,
-    texture_handles: Vec<Handle<Image>>,
+    _texture_preloads: Vec<Handle<Image>>,
 }
 
 impl TerrainMaterials {
@@ -61,7 +61,7 @@ impl TerrainMaterials {
         metallic: f32,
     ) -> Self {
         let mut seen_textures = HashSet::<String>::new();
-        let texture_handles = blocks
+        let texture_preloads = blocks
             .iter()
             .flat_map(|definition| {
                 BLOCK_FACES
@@ -135,14 +135,8 @@ impl TerrainMaterials {
 
         Self {
             blocks,
-            texture_handles,
+            _texture_preloads: texture_preloads,
         }
-    }
-
-    pub fn textures_loaded(&self, asset_server: &AssetServer) -> bool {
-        self.texture_handles
-            .iter()
-            .all(|handle| asset_server.is_loaded_with_dependencies(handle.id()))
     }
 
     pub(super) fn for_face(&self, block_id: &str, face: BlockFace) -> &Handle<TerrainMaterial> {
