@@ -3,8 +3,10 @@ use std::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 
 use crate::{
-    content::structure::StructureRegistry,
-    voxel::chunk::CHUNK_SIZE,
+    voxel::{
+        chunk::CHUNK_SIZE,
+        coordinates::chunks_for_block_extent,
+    },
     world::render_distance::chunk_coords_in_volume,
 };
 
@@ -25,10 +27,13 @@ pub(super) fn rebuild_queue(
     vertical_radius: i32,
     context: &QueueRebuildContext<'_>,
 ) {
-    let horizontal_structure_allowance = structure_horizontal_chunk_allowance(context.structures);
+    let horizontal_structure_allowance = chunks_for_block_extent(
+        context.structures.max_horizontal_extent_from_anchor(),
+    );
     let preload_radius =
         horizontal_radius + HORIZONTAL_PRELOAD_CHUNKS.max(horizontal_structure_allowance);
-    let vertical_structure_allowance = structure_vertical_chunk_allowance(context.structures);
+    let vertical_structure_allowance =
+        chunks_for_block_extent(context.structures.max_height_above_anchor());
     prune_surface_cache(&mut streaming.surface_ranges, center.xz(), preload_radius);
     let desired = desired_chunk_coords(
         center,
@@ -161,22 +166,4 @@ fn desired_chunk_coords(
     }
 
     desired
-}
-
-fn structure_vertical_chunk_allowance(structures: &StructureRegistry) -> i32 {
-    let structure_height = structures.max_height_above_anchor();
-    if structure_height == 0 {
-        0
-    } else {
-        (structure_height + CHUNK_SIZE as i32 - 1) / CHUNK_SIZE as i32
-    }
-}
-
-fn structure_horizontal_chunk_allowance(structures: &StructureRegistry) -> i32 {
-    let structure_extent = structures.max_horizontal_extent_from_anchor();
-    if structure_extent == 0 {
-        0
-    } else {
-        (structure_extent + CHUNK_SIZE as i32 - 1) / CHUNK_SIZE as i32
-    }
 }
