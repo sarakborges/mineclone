@@ -76,7 +76,7 @@ pub(crate) fn initialize_chunks_lighting(
     coords: &[IVec3],
     blocks: &BlockRegistry,
     fluids: &FluidRegistry,
-) {
+) -> HashSet<IVec3> {
     let mut queue = LightingQueue::default();
     let chunk_size = CHUNK_SIZE as i32;
 
@@ -90,7 +90,7 @@ pub(crate) fn initialize_chunks_lighting(
         queue.enqueue_chunk_boundary_neighbors(origin);
     }
 
-    drop(relax(world, blocks, fluids, &mut queue));
+    relax(world, blocks, fluids, &mut queue)
 }
 
 #[cfg(test)]
