@@ -10,36 +10,72 @@ use crate::{
 
 const MAXIMUM_TUNNEL_SLOPE: f32 = 0.06;
 
-pub(super) fn surface_carver_density_delta(
-    current_density: f32,
-    position: Vec3,
+#[derive(Clone, Copy, Debug)]
+struct ResolvedSurfaceTunnel {
+    start: Vec3,
+    end: Vec3,
+    radius: f32,
+    weight: f32,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct SurfaceCarverColumn {
+    tunnels: Vec<ResolvedSurfaceTunnel>,
+}
+
+pub(super) fn resolve_surface_carver_column(
+    horizontal: Vec2,
     surface_influences: &[(usize, f32)],
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     world_seed: u64,
     sea_level: f32,
-) -> f32 {
-    if current_density <= 0.0 {
-        return 0.0;
-    }
-
-    let mut strongest = 0.0_f32;
+) -> SurfaceCarverColumn {
+    let mut tunnels = Vec::new();
 
     for &(biome_index, weight) in surface_influences {
+        if weight <= 0.0 {
+            continue;
+        }
+
         let biome_id = biome_field.surface_biome_id(biome_index);
         let biome = biomes
             .get(biome_id)
             .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
 
         for (index, carver) in biome.surface_carvers.iter().copied().enumerate() {
-            let strength = tunnel_strength(
-                position,
+            resolve_tunnel_candidates(
+                &mut tunnels,
+                horizontal,
                 world_seed,
                 sea_level,
                 biome.id.as_str(),
                 index,
                 carver,
-            ) * weight;
+                weight,
+            );
+        }
+    }
+
+    SurfaceCarverColumn { tunnels }
+}
+
+pub(super) fn surface_carver_density_delta_from_column(
+    current_density: f32,
+    position: Vec3,
+    column: &SurfaceCarverColumn,
+) -> f32 {
+    if current_density <= 0.0 || column.tunnels.is_empty() {
+        return 0.0;
+    }
+
+    let mut strongest = 0.0_f32;
+
+    for tunnel in &column.tunnels {
+        let distance = distance_to_segment(position, tunnel.start, tunnel.end);
+
+        if distance < tunnel.radius {
+            let strength = smoothstep(1.0 - distance / tunnel.radius) * tunnel.weight;
             strongest = strongest.max(strength);
         }
     }
@@ -51,14 +87,39 @@ pub(super) fn surface_carver_density_delta(
     -(current_density + 6.0) * strongest.clamp(0.0, 1.0)
 }
 
-fn tunnel_strength(
+pub(super) fn surface_carver_density_delta(
+    current_density: f32,
     position: Vec3,
+    surface_influences: &[(usize, f32)],
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+    world_seed: u64,
+    sea_level: f32,
+) -> f32 {
+    let horizontal = Vec2::new(position.x, position.z);
+    let column = resolve_surface_carver_column(
+        horizontal,
+        surface_influences,
+        biomes,
+        biome_field,
+        world_seed,
+        sea_level,
+    );
+
+    surface_carver_density_delta_from_column(current_density, position, &column)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_tunnel_candidates(
+    tunnels: &mut Vec<ResolvedSurfaceTunnel>,
+    horizontal: Vec2,
     world_seed: u64,
     sea_level: f32,
     biome_id: &str,
     carver_index: usize,
     carver: BiomeSurfaceCarver,
-) -> f32 {
+    weight: f32,
+) {
     let BiomeSurfaceCarver::Tunnel {
         spacing,
         chance,
@@ -67,7 +128,6 @@ fn tunnel_strength(
         elevation,
         jitter,
     } = carver;
-    let horizontal = Vec2::new(position.x, position.z);
     let center = IVec2::new(
         (horizontal.x / spacing).floor() as i32,
         (horizontal.y / spacing).floor() as i32,
@@ -79,7 +139,6 @@ fn tunnel_strength(
             ^ string_hash(biome_id)
             ^ (carver_index as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15),
     );
-    let mut strongest = 0.0_f32;
 
     for z in -search_radius..=search_radius {
         for x in -search_radius..=search_radius {
@@ -104,25 +163,23 @@ fn tunnel_strength(
                 signed_unit(hash.rotate_left(59)) * half_length * MAXIMUM_TUNNEL_SLOPE;
             let start_horizontal = anchor - direction * half_length;
             let end_horizontal = anchor + direction * half_length;
-            let start = Vec3::new(
-                start_horizontal.x,
-                center_y - vertical_half_span,
-                start_horizontal.y,
-            );
-            let end = Vec3::new(
-                end_horizontal.x,
-                center_y + vertical_half_span,
-                end_horizontal.y,
-            );
-            let distance = distance_to_segment(position, start, end);
 
-            if distance < tunnel_radius {
-                strongest = strongest.max(smoothstep(1.0 - distance / tunnel_radius));
-            }
+            tunnels.push(ResolvedSurfaceTunnel {
+                start: Vec3::new(
+                    start_horizontal.x,
+                    center_y - vertical_half_span,
+                    start_horizontal.y,
+                ),
+                end: Vec3::new(
+                    end_horizontal.x,
+                    center_y + vertical_half_span,
+                    end_horizontal.y,
+                ),
+                radius: tunnel_radius,
+                weight,
+            });
         }
     }
-
-    strongest
 }
 
 fn distance_to_segment(point: Vec3, start: Vec3, end: Vec3) -> f32 {
