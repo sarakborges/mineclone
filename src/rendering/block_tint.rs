@@ -14,6 +14,7 @@ pub(crate) fn block_tint_at(
     let color = match tint {
         BlockTint::None => return Color::WHITE,
         BlockTint::Grass => biome_field.grass_color(position, biomes),
+        BlockTint::Leaf => biome_field.leaf_color(position, biomes),
         BlockTint::Foliage => biome_field.foliage_color(position, biomes),
     };
 
