@@ -163,29 +163,6 @@ fn volume_biome_density_delta(
 }
 
 fn density_modifier_delta(
-    current_density: f32,
-    position: Vec3,
-    volume: Option<VolumeBiomeSelection>,
-    biome_field: &BiomeField,
-    cave_depth_strength: f32,
-) -> f32 {
-    let Some(selection) = volume else {
-        return 0.0;
-    };
-    let Some((modifier, seed)) = biome_field.volume_density_modifier(selection) else {
-        return 0.0;
-    };
-
-    density_modifier_delta_impl(
-        modifier,
-        current_density,
-        position,
-        seed,
-        cave_depth_strength,
-    ) * selection.strength
-}
-
-fn density_modifier_delta_impl(
     modifier: BiomeDensityModifier,
     current_density: f32,
     position: Vec3,
@@ -347,7 +324,7 @@ mod tests {
     fn cavern_and_solid_modifiers_move_density_in_opposite_directions() {
         let position = Vec3::new(12.5, 30.5, -8.5);
         let current_density = 20.0;
-        let cavern = density_modifier_delta_impl(
+        let cavern = density_modifier_delta(
             BiomeDensityModifier::Cavern {
                 carve_strength: 4.0,
                 noise_scale: 0.01,
@@ -358,7 +335,7 @@ mod tests {
             7,
             1.0,
         );
-        let solid = density_modifier_delta_impl(
+        let solid = density_modifier_delta(
             BiomeDensityModifier::Solid {
                 fill_strength: 20.0,
                 noise_scale: 0.01,
@@ -378,7 +355,7 @@ mod tests {
     fn cavern_modifier_cannot_open_shallow_terrain_without_an_entrance_connector() {
         let position = Vec3::new(12.5, 70.5, -8.5);
         let current_density = 8.0;
-        let cavern = density_modifier_delta_impl(
+        let cavern = density_modifier_delta(
             BiomeDensityModifier::Cavern {
                 carve_strength: 4.0,
                 noise_scale: 0.01,
