@@ -1,9 +1,12 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::day_night_phase::{DayNightPhase, DayNightPhases};
+use super::{
+    day_night_phase::{DayNightPhase, DayNightPhases},
+    registry::DefinitionMap,
+};
 
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -134,7 +137,7 @@ impl DayNightCycleDefinition {
 
 #[derive(Resource, Default)]
 pub struct DayNightCycleRegistry {
-    definitions: HashMap<String, DayNightCycleDefinition>,
+    definitions: DefinitionMap<DayNightCycleDefinition>,
 }
 
 impl DayNightCycleRegistry {

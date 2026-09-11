@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::dimension_hydrology::DimensionHydrology;
+use super::{dimension_hydrology::DimensionHydrology, registry::DefinitionMap};
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,7 +18,7 @@ pub struct DimensionDefinition {
 
 #[derive(Resource, Default)]
 pub struct DimensionRegistry {
-    definitions: HashMap<String, DimensionDefinition>,
+    definitions: DefinitionMap<DimensionDefinition>,
 }
 
 impl DimensionRegistry {

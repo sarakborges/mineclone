@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::{block_id::intern_block_id, block_orientation::BlockOrientation};
+use super::{
+    block_id::intern_block_id, block_orientation::BlockOrientation, registry::DefinitionMap,
+};
 
 const MAX_LIGHT_DAMPENING: u8 = 15;
 
@@ -125,7 +125,7 @@ impl BlockDefinition {
 
 #[derive(Resource, Default)]
 pub struct BlockRegistry {
-    definitions: HashMap<String, BlockDefinition>,
+    definitions: DefinitionMap<BlockDefinition>,
 }
 
 impl BlockRegistry {

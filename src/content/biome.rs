@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use bevy::prelude::*;
 use serde::Deserialize;
 
@@ -10,6 +8,7 @@ use super::{
     biome_sky_layer::BiomeSkyLayerVisuals, biome_structure::BiomeStructure,
     biome_surface_carver::BiomeSurfaceCarver, biome_terrain::BiomeTerrain,
     biome_terrain_modifier::BiomeTerrainModifier, color::Rgb, day_night_phase::DayNightPhases,
+    registry::DefinitionMap,
 };
 
 mod validation;
@@ -131,7 +130,7 @@ pub struct BiomeDefinition {
 
 #[derive(Resource, Default)]
 pub struct BiomeRegistry {
-    definitions: HashMap<String, BiomeDefinition>,
+    definitions: DefinitionMap<BiomeDefinition>,
 }
 
 impl BiomeRegistry {

@@ -20,6 +20,7 @@ pub(crate) mod dimension_hydrology;
 pub(crate) mod fluid;
 mod json_file;
 mod loader;
+mod registry;
 pub(crate) mod sky;
 pub(crate) mod structure;
 

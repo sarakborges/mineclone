@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::{block::BlockRegistry, block_orientation::BlockOrientation};
+use super::{
+    block::BlockRegistry, block_orientation::BlockOrientation, registry::DefinitionMap,
+};
 
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -219,7 +221,7 @@ impl StructureDefinition {
 
 #[derive(Resource, Default)]
 pub struct StructureRegistry {
-    definitions: HashMap<String, StructureDefinition>,
+    definitions: DefinitionMap<StructureDefinition>,
 }
 
 impl StructureRegistry {

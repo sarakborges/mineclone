@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::{color::Rgb, day_night_phase::DayNightPhase};
+use super::{color::Rgb, day_night_phase::DayNightPhase, registry::DefinitionMap};
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,7 +27,7 @@ pub struct SkyDefinition {
 
 #[derive(Resource, Default)]
 pub struct SkyRegistry {
-    definitions: HashMap<String, SkyDefinition>,
+    definitions: DefinitionMap<SkyDefinition>,
 }
 
 impl SkyRegistry {
