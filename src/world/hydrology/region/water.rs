@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::HydrologyRegion;
 use crate::world::hydrology::{
     constants::{OCEAN_EXTRA_DEPTH, OCEAN_MINIMUM_DEPTH},
-    math::smoothstep,
+    math::{lerp, smoothstep},
     types::HydrologyWaterSample,
 };
 
@@ -45,14 +45,20 @@ impl HydrologyRegion {
 
         let ocean_strength = self.ocean_strength_at(position);
         if ocean_strength > 0.0 {
+            let target_floor =
+                self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * ocean_strength;
+            let bed_level = self
+                .macro_sample_at(position)
+                .map_or(target_floor, |sample| {
+                    lerp(sample.elevation, target_floor, ocean_strength)
+                });
+
             choose_water(
                 &mut selected,
                 HydrologyWaterSample {
                     fluid_id: self.settings.water_fluid.as_str(),
                     water_level: self.sea_level,
-                    bed_level: self.sea_level
-                        - OCEAN_MINIMUM_DEPTH
-                        - OCEAN_EXTRA_DEPTH * ocean_strength,
+                    bed_level,
                 },
             );
         }
