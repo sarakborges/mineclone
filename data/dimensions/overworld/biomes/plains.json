@@ -32,19 +32,19 @@
     },
     {
       "id": "asteria:small_boulder",
-      "placement": { "spacing": 12, "chance": 0.45, "jitter": 4 }
+      "placement": { "spacing": 36, "chance": 0.28, "jitter": 11 }
     },
     {
       "id": "asteria:medium_boulder",
-      "placement": { "spacing": 22, "chance": 0.28, "jitter": 7 }
+      "placement": { "spacing": 58, "chance": 0.20, "jitter": 18 }
     },
     {
       "id": "asteria:big_boulder",
-      "placement": { "spacing": 36, "chance": 0.16, "jitter": 11 }
+      "placement": { "spacing": 88, "chance": 0.13, "jitter": 27 }
     },
     {
       "id": "asteria:huge_boulder",
-      "placement": { "spacing": 64, "chance": 0.08, "jitter": 20 }
+      "placement": { "spacing": 140, "chance": 0.07, "jitter": 43 }
     }
   ],
   "visuals": {
@@ -61,6 +61,7 @@
       "night": { "r": 0.04, "g": 0.06, "b": 0.11 }
     },
     "grassColor": { "r": 0.24, "g": 0.70, "b": 0.16 },
+    "leafColor": { "r": 0.24, "g": 0.70, "b": 0.16 },
     "foliageColor": { "r": 0.24, "g": 0.70, "b": 0.16 },
     "underwaterTint": {
       "color": { "r": 0.12, "g": 0.44, "b": 0.72 },
