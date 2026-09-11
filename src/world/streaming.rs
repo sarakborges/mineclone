@@ -15,6 +15,7 @@ use super::{
     chunk_remesh::ChunkRemeshQueue,
     chunk_rendering::{ChunkRenderPool, spawn_chunk_mesh},
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
+    fluid_updates::PendingFluidUpdates,
     render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
 };
 
@@ -46,6 +47,7 @@ pub fn stream_chunks(
     content: ChunkContent,
     mut renderer: ChunkRenderer,
     mut inputs: ChunkStreamingInputs,
+    mut fluid_updates: ResMut<PendingFluidUpdates>,
 ) {
     let feet_position = inputs.player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = split_dimension_position(feet_position).chunk;
@@ -78,6 +80,7 @@ pub fn stream_chunks(
         }
 
         ensure_chunk_loaded(&mut inputs.world, coord, &generation_context);
+        fluid_updates.enqueue_loaded_fluid_frontier(&inputs.world, coord);
         let lighting_changes =
             initialize_chunk_lighting(&mut inputs.world, coord, &content.blocks, &content.fluids);
         let chunk = inputs
