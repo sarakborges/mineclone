@@ -1,6 +1,6 @@
 {
-  "id": "asteria:oak_wood",
-  "name": "Oak Wood",
+  "id": "asteria:oak_log",
+  "name": "Oak Log",
   "textures": {
     "top": "textures/blocks/trees/oak/top.png",
     "bottom": "textures/blocks/trees/oak/top.png",
