@@ -20,6 +20,26 @@ pub(crate) fn solid_block_id(
     volume: Option<VolumeBiomeSelection>,
     context: &MaterialFieldContext<'_>,
 ) -> &'static str {
+    let hydrology_block = context.hydrology.solid_block_at(position);
+
+    solid_block_id_with_hydrology(
+        position,
+        surface_influences,
+        surface_depth,
+        volume,
+        hydrology_block,
+        context,
+    )
+}
+
+pub(crate) fn solid_block_id_with_hydrology(
+    position: bevy::prelude::Vec3,
+    surface_influences: &[(usize, f32)],
+    surface_depth: u32,
+    volume: Option<VolumeBiomeSelection>,
+    hydrology_block: Option<&str>,
+    context: &MaterialFieldContext<'_>,
+) -> &'static str {
     if let Some(block_id) =
         volume.and_then(|selection| context.biome_field.volume_solid_block(selection))
     {
@@ -30,7 +50,7 @@ pub(crate) fn solid_block_id(
         return intern_block_id(block_id);
     }
 
-    if let Some(block_id) = context.hydrology.solid_block_at(position) {
+    if let Some(block_id) = hydrology_block {
         return intern_block_id(block_id);
     }
 
