@@ -91,6 +91,7 @@ where
                     seed,
                     sea_level,
                 },
+                |position| network.surface_elevation_at(position),
             );
 
             if let Some(pool) = waterfall
