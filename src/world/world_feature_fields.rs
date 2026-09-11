@@ -17,7 +17,7 @@ use super::{
 };
 
 #[derive(Resource)]
-pub struct WorldFeatureFields {
+pub(crate) struct WorldFeatureFields {
     hydrology: HydrologyField,
     cave_connectivity: CaveConnectivityField,
     geology: GeologyField,
@@ -29,7 +29,7 @@ pub struct WorldFeatureFields {
 }
 
 impl WorldFeatureFields {
-    pub fn new(seed: u64, sea_level: i32, hydrology: DimensionHydrology) -> Self {
+    pub(crate) fn new(seed: u64, sea_level: i32, hydrology: DimensionHydrology) -> Self {
         Self {
             hydrology: HydrologyField::new(seed.rotate_left(7), sea_level, hydrology),
             cave_connectivity: CaveConnectivityField::new(seed.rotate_left(23)),
