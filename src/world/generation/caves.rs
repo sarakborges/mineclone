@@ -39,7 +39,7 @@ pub(super) fn anchored_cave_region(
         let search_maximum = maximum + margin;
         let volume_region = biome_field.volume_region_in_bounds(search_minimum, search_maximum);
         let mut anchors = biome_field
-            .volume_anchors_in_bounds(search_minimum, search_maximum)
+            .volume_anchors_in_region(&volume_region)
             .into_iter()
             .filter(|anchor| {
                 let biome = biomes
