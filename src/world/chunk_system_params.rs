@@ -35,6 +35,7 @@ impl<'w> ChunkContent<'w> {
         ChunkRenderContext {
             world,
             blocks: &self.blocks,
+            fluids: &self.fluids,
             biomes: &self.biomes,
             biome_field: &self.biome_field,
             terrain_materials,
