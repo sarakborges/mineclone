@@ -4,10 +4,9 @@ mod river;
 
 use bevy::prelude::*;
 
-use crate::world::feature_graph::FeatureGraph;
+use crate::world::{deterministic::sorted_unique_vec3s, feature_graph::FeatureGraph};
 
 use self::{
-    hash::compare_position,
     lake::{UndergroundLake, lake_for_anchor},
     river::{
         UndergroundWaterfall, add_river_segment, connection_carries_water, river_sample_at,
@@ -29,9 +28,7 @@ pub(super) struct UndergroundWaterRegion {
 
 impl UndergroundWaterRegion {
     pub(super) fn from_anchors(anchors: &[Vec3], seed: u64) -> Self {
-        let mut anchors = anchors.to_vec();
-        anchors.sort_by(compare_position);
-        anchors.dedup_by(|left, right| *left == *right);
+        let anchors = sorted_unique_vec3s(anchors.iter().copied());
 
         let lakes = anchors
             .into_iter()
@@ -127,8 +124,8 @@ fn consider_water(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::lake::anchor_has_lake;
+    use super::*;
 
     #[test]
     fn underground_water_is_deterministic() {

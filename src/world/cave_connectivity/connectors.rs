@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::world::{
-    deterministic::{compare_vec3, hash_unit, mix_u32_components},
+    deterministic::{compare_vec3, hash_unit, mix_u32_components, sorted_unique_vec3s},
     feature_graph::FeatureGraph,
     generation_region::generation_region_world_bounds,
 };
@@ -156,14 +156,12 @@ fn add_connector(
 }
 
 fn normalized_anchors(anchors: &[Vec3]) -> Vec<Vec3> {
-    let mut anchors = anchors
-        .iter()
-        .copied()
-        .filter(|position| position.y >= 0.0)
-        .collect::<Vec<_>>();
-    anchors.sort_by(compare_vec3);
-    anchors.dedup_by(|left, right| *left == *right);
-    anchors
+    sorted_unique_vec3s(
+        anchors
+            .iter()
+            .copied()
+            .filter(|position| position.y >= 0.0),
+    )
 }
 
 fn contains_anchor(anchors: &[Vec3], position: Vec3) -> bool {

@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 
-use crate::world::deterministic::{avalanche_u64, mix_u32_components};
-pub(super) use crate::world::deterministic::{compare_vec3 as compare_position, hash_unit};
+use crate::world::deterministic::{avalanche_u64, compare_vec3, mix_u32_components};
+pub(super) use crate::world::deterministic::hash_unit;
 
 pub(super) fn pair_hash(left: Vec3, right: Vec3, seed: u64) -> u64 {
-    let (first, second) = if compare_position(&left, &right) != std::cmp::Ordering::Greater {
+    let (first, second) = if compare_vec3(&left, &right) != std::cmp::Ordering::Greater {
         (left, right)
     } else {
         (right, left)
