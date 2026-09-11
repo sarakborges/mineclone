@@ -14,6 +14,7 @@ use super::super::{
 
 const RIVER_WATER_SURFACE_OFFSET: f32 = 2.0;
 const RIVER_BANK_SAMPLE_RADIUS_MULTIPLIER: f32 = 1.15;
+const RIVER_CONFLUENCE_UPHILL_TOLERANCE: f32 = 1.0;
 const RIVER_MEANDER_CONTROL_SPACING: f32 = 34.0;
 const RIVER_MEANDER_MIN_INTERVALS: usize = 3;
 const RIVER_MEANDER_MAX_INTERVALS: usize = 8;
@@ -105,6 +106,27 @@ where
         let to_t = (index + 1) as f32 / last as f32;
         let from_radius = lerp(start_radius, end_radius, from_t);
         let to_radius = lerp(start_radius, end_radius, to_t);
+        let from_horizontal = Vec2::new(from.x, from.z);
+        let to_horizontal = Vec2::new(to.x, to.z);
+
+        if let Some(intersection) = graph.first_horizontal_intersection(from_horizontal, to_horizontal)
+        {
+            let path_height = lerp(from.y, to.y, intersection.progress);
+            if intersection.position.y <= path_height + RIVER_CONFLUENCE_UPHILL_TOLERANCE {
+                let confluence = Vec3::new(
+                    intersection.position.x,
+                    path_height.min(intersection.position.y),
+                    intersection.position.z,
+                );
+                let confluence_radius = lerp(from_radius, to_radius, intersection.progress);
+                let from_node = graph.add_node(from);
+                let to_node = graph.add_node(confluence);
+                graph.add_edge(from_node, to_node, from_radius, confluence_radius);
+                path.waterfall = None;
+                break;
+            }
+        }
+
         let from_node = graph.add_node(from);
         let to_node = graph.add_node(to);
         graph.add_edge(from_node, to_node, from_radius, to_radius);
