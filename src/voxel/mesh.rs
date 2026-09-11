@@ -1,5 +1,4 @@
 mod buffer;
-mod face;
 mod geometry;
 pub(crate) mod lighting;
 
