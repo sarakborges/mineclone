@@ -1,14 +1,11 @@
-use bevy::prelude::Vec3;
+use bevy::prelude::*;
 
 use crate::content::{
     biome::{BiomeDefinition, BiomeRegistry},
     block_id::intern_block_id,
 };
 
-use super::{
-    biome_field::{BiomeField, VolumeBiomeSelection},
-    geology::GeologyRegion,
-};
+use super::biome_field::{BiomeField, VolumeBiomeSelection};
 
 #[derive(Clone, Copy)]
 struct ResolvedSurfaceInfluence<'a> {
@@ -22,7 +19,6 @@ pub(crate) struct SurfaceMaterialColumn<'a> {
 
 pub(crate) struct MaterialFieldContext<'a> {
     pub biome_field: &'a BiomeField,
-    pub geology: &'a GeologyRegion,
 }
 
 pub(crate) fn resolve_surface_material_column<'a>(
@@ -59,10 +55,6 @@ pub(crate) fn solid_block_id(
     if let Some(block_id) =
         volume.and_then(|selection| context.biome_field.volume_solid_block(selection))
     {
-        return intern_block_id(block_id);
-    }
-
-    if let Some(block_id) = context.geology.solid_block_at(position) {
         return intern_block_id(block_id);
     }
 

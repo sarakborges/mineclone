@@ -73,8 +73,7 @@ pub(crate) fn sample_density_with_hydrology(
     hydrology_delta: f32,
     context: &DensitySampleContext<'_>,
 ) -> f32 {
-    let geology_delta = context.region.geology.density_delta(position);
-    let mut density = base_density + hydrology_delta + geology_delta;
+    let mut density = base_density + hydrology_delta;
     let water_clearance = cave_water_clearance(position.y, column_hydrology);
     let connector_depth_strength = depth_strength(
         base_density,

@@ -13,7 +13,6 @@ pub(crate) mod feature_graph;
 pub(crate) mod fluid_updates;
 mod generation;
 pub(crate) mod generation_region;
-pub(crate) mod geology;
 pub(crate) mod hydrology;
 mod lighting_updates;
 mod macro_climate;

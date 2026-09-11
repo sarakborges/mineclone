@@ -12,7 +12,6 @@ use super::{
     cave_connectivity::{CaveConnectivityField, CaveConnectivityRegion},
     generation::columns::GenerationColumnSample,
     generation_region::GenerationRegion,
-    geology::GeologyField,
     hydrology::{HydrologyBiomeOverlay, HydrologyField, HydrologyRegion},
 };
 
@@ -20,7 +19,6 @@ use super::{
 pub(crate) struct WorldFeatureFields {
     hydrology: HydrologyField,
     cave_connectivity: CaveConnectivityField,
-    geology: GeologyField,
     caches: FeatureCaches,
 }
 
@@ -29,7 +27,6 @@ impl WorldFeatureFields {
         Self {
             hydrology: HydrologyField::new(seed.rotate_left(7), sea_level, hydrology),
             cave_connectivity: CaveConnectivityField::new(seed.rotate_left(23)),
-            geology: GeologyField::new(seed.rotate_left(41)),
             caches: FeatureCaches::new(),
         }
     }
@@ -87,11 +84,7 @@ impl WorldFeatureFields {
                 hydrology_factory(&self.hydrology)
             });
 
-            GenerationRegion {
-                coord,
-                hydrology,
-                geology: self.geology.region(coord),
-            }
+            GenerationRegion { coord, hydrology }
         })
     }
 

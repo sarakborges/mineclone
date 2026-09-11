@@ -36,7 +36,6 @@ pub(super) fn rasterize_material_pass(
 ) {
     let material_field = MaterialFieldContext {
         biome_field: context.biome_field,
-        geology: &context.region.geology,
     };
 
     for local_z in 0..CHUNK_SIZE {
