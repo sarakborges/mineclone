@@ -7,8 +7,8 @@ use crate::content::fluid::FluidId;
 use super::{
     block_face::BlockFace,
     chunk::{CHUNK_SIZE, VoxelChunk},
-    mesh::lighting::{FaceLighting, face_lighting, should_flip_diagonal},
     mesh_buffer::VoxelMeshBuffer,
+    mesh_lighting::{FaceLighting, face_lighting, should_flip_diagonal},
     quad::VOXEL_FACE_UVS,
     world::VoxelWorld,
 };

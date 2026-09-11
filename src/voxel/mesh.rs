@@ -1,6 +1,5 @@
 mod buffer;
 mod geometry;
-pub(crate) mod lighting;
 
 use std::collections::HashMap;
 
@@ -11,11 +10,11 @@ use crate::content::block::{BlockRegistry, BlockTextureRotations};
 use self::{
     buffer::MeshBuffers,
     geometry::{face_geometry, is_face_exposed, orient_face_geometry},
-    lighting::face_lighting,
 };
 use super::{
     block_face::BlockFace,
     chunk::{CHUNK_SIZE, VoxelChunk},
+    mesh_lighting::face_lighting,
     orientation::orient_face,
     texture_rotation::TextureRotation,
     world::VoxelWorld,

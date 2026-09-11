@@ -1,17 +1,15 @@
 use bevy::prelude::*;
 
-use crate::voxel::{light::VoxelLight, world::VoxelWorld};
-
-use super::BlockFace;
+use super::{block_face::BlockFace, light::VoxelLight, world::VoxelWorld};
 
 const AO_BRIGHTNESS: [f32; 4] = [1.0, 0.92, 0.84, 0.76];
 
-pub(crate) struct FaceLighting {
-    pub(crate) channels: [[f32; 2]; 4],
-    pub(crate) ambient_occlusion: [f32; 4],
+pub(super) struct FaceLighting {
+    pub(super) channels: [[f32; 2]; 4],
+    pub(super) ambient_occlusion: [f32; 4],
 }
 
-pub(crate) fn face_lighting(world: &VoxelWorld, voxel: IVec3, face: BlockFace) -> FaceLighting {
+pub(super) fn face_lighting(world: &VoxelWorld, voxel: IVec3, face: BlockFace) -> FaceLighting {
     let (normal, tangent_a, tangent_b, signs) = face_basis(face);
     let base = voxel + normal;
     let emitted_block_level = world.light_at(voxel).block() as f32;
@@ -48,7 +46,7 @@ pub(crate) fn face_lighting(world: &VoxelWorld, voxel: IVec3, face: BlockFace) -
     }
 }
 
-pub(crate) fn should_flip_diagonal(ambient_occlusion: [f32; 4]) -> bool {
+pub(super) fn should_flip_diagonal(ambient_occlusion: [f32; 4]) -> bool {
     ambient_occlusion[0] + ambient_occlusion[2] > ambient_occlusion[1] + ambient_occlusion[3]
 }
 

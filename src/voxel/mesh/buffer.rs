@@ -1,10 +1,9 @@
 use crate::voxel::{
     mesh_buffer::VoxelMeshBuffer,
+    mesh_lighting::{FaceLighting, should_flip_diagonal},
     quad::VOXEL_FACE_UVS,
     texture_rotation::TextureRotation,
 };
-
-use super::lighting::{FaceLighting, should_flip_diagonal};
 
 #[derive(Default)]
 pub(super) struct MeshBuffers {
