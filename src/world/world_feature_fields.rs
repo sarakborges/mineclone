@@ -13,7 +13,7 @@ use super::{
     generation::columns::GenerationColumnSample,
     generation_region::GenerationRegion,
     geology::GeologyField,
-    hydrology::{HydrologyField, HydrologyRegion},
+    hydrology::{HydrologyBiomeOverlay, HydrologyField, HydrologyRegion},
 };
 
 #[derive(Resource)]
@@ -40,6 +40,13 @@ impl WorldFeatureFields {
             cave_cache: RwLock::new(HashMap::new()),
             region_cache: RwLock::new(HashMap::new()),
         }
+    }
+
+    pub(crate) fn hydrology_biome_overlay(
+        &self,
+        continentalness: f32,
+    ) -> HydrologyBiomeOverlay<'_> {
+        self.hydrology.biome_overlay(continentalness)
     }
 
     pub(crate) fn generation_columns(
