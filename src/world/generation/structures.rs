@@ -7,7 +7,7 @@ use crate::{
         biome_structure::StructurePlacementRules,
         block::BlockRegistry,
         block_id::intern_block_id,
-        structure::StructureDefinition,
+        structure::{StructureDefinition, StructureVoxel},
     },
     voxel::{
         cell::VoxelCell,
@@ -88,6 +88,7 @@ fn rasterize_structure_candidates(
     let chunk_min = IVec2::new(chunk_origin.x, chunk_origin.z);
     let chunk_max = chunk_min + IVec2::splat(chunk_size - 1);
     let (minimum_offset, maximum_offset) = structure.horizontal_bounds();
+    let voxels = structure.voxels();
     let spacing = placement.spacing;
 
     let minimum_candidate = chunk_min - maximum_offset;
@@ -121,22 +122,28 @@ fn rasterize_structure_candidates(
                 continue;
             }
 
-            let Some(origin_y) = structure_origin_y(anchor, structure, context) else {
+            let Some(origin_y) = structure_origin_y(anchor, &voxels, context) else {
                 continue;
             };
             let origin = IVec3::new(anchor.x, origin_y, anchor.y);
-            rasterize_structure(chunk, chunk_origin, context.blocks, structure, origin);
+            rasterize_structure(
+                chunk,
+                chunk_origin,
+                context.blocks,
+                structure,
+                &voxels,
+                origin,
+            );
         }
     }
 }
 
 fn structure_origin_y(
     anchor: IVec2,
-    structure: &StructureDefinition,
+    voxels: &[StructureVoxel<'_>],
     context: &ChunkGenerationContext<'_>,
 ) -> Option<i32> {
     let (region, anchored_caves) = structure_support_context(anchor, context);
-    let voxels = structure.voxels();
     let minimum_offset_y = voxels.iter().map(|voxel| voxel.offset.y).min()?;
     let mut minimum_ground_y = i32::MAX;
     let mut maximum_ground_y = i32::MIN;
@@ -288,11 +295,12 @@ fn rasterize_structure(
     chunk_origin: IVec3,
     blocks: &BlockRegistry,
     structure: &StructureDefinition,
+    voxels: &[StructureVoxel<'_>],
     origin: IVec3,
 ) {
     let chunk_size = CHUNK_SIZE as i32;
 
-    for voxel in structure.voxels() {
+    for voxel in voxels {
         let world_position = origin + voxel.offset;
         let local = world_position - chunk_origin;
         if local.x < 0
