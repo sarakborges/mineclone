@@ -7,7 +7,7 @@ use super::block_model_material::BlockModelMaterial;
 use crate::voxel::mesh::BlockFace;
 
 pub(crate) use geometry::{
-    BlockModelMeshes, block_display_face_basis, block_display_face_shade, block_face_mesh,
+    BlockModelMeshes, block_display_face_basis, block_display_face_shade,
 };
 pub(crate) use materials::{
     BlockModelMaterials, apply_block_display_shading, block_face_material_data, block_face_texture,

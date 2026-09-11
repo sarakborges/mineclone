@@ -4,7 +4,10 @@ use bevy::prelude::*;
 
 use crate::content::{block::BlockRegistry, fluid::FluidRegistry};
 use crate::voxel::{
-    chunk::CHUNK_SIZE, light::VoxelLight, neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
+    coordinates::chunk_coord_from_world,
+    light::VoxelLight,
+    neighbors::CARDINAL_NEIGHBORS,
+    world::VoxelWorld,
 };
 
 use super::{
@@ -49,8 +52,8 @@ pub(super) fn relax_budgeted(
         }
 
         world.set_light_at(position, desired);
-        changed_chunks.insert(chunk_coord(position));
-        queue.enqueue_neighbors(position);
+        changed_chunks.insert(chunk_coord_from_world(position));
+        queue.enqueue_with_neighbors(position);
     }
 
     changed_chunks
@@ -106,14 +109,4 @@ fn propagated_neighbor_level(
         .map(|direction| channel(world.light_at(position + direction)).saturating_sub(attenuation))
         .max()
         .unwrap_or(0)
-}
-
-fn chunk_coord(world_position: IVec3) -> IVec3 {
-    let size = CHUNK_SIZE as i32;
-
-    IVec3::new(
-        world_position.x.div_euclid(size),
-        world_position.y.div_euclid(size),
-        world_position.z.div_euclid(size),
-    )
 }

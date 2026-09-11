@@ -1,4 +1,7 @@
-use crate::voxel::chunk::{CHUNK_SIZE, CHUNK_VOLUME};
+use crate::voxel::chunk::CHUNK_SIZE;
+
+#[cfg(test)]
+use crate::voxel::chunk::CHUNK_VOLUME;
 
 pub(super) fn column_index(x: usize, z: usize) -> usize {
     x + z * CHUNK_SIZE

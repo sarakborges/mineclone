@@ -95,7 +95,7 @@ fn spawn_crosshair(mut commands: Commands) {
                 ));
                 crosshair.spawn((
                     typography::caption("Press R to rotate block"),
-                    TextLayout::new_with_justify(Justify::Center),
+                    TextLayout::justify(Justify::Center),
                     Node {
                         position_type: PositionType::Absolute,
                         top: px(26),
@@ -125,8 +125,8 @@ fn update_rotation_hint(
         Visibility::Hidden
     };
 
-    if *hint != next {
-        *hint = next;
+    if **hint != next {
+        **hint = next;
     }
 }
 
