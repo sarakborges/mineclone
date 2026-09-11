@@ -35,10 +35,9 @@ pub(super) fn is_face_exposed(
     let neighbor = blocks
         .get(neighbor_id)
         .unwrap_or_else(|| panic!("missing block definition: {neighbor_id}"));
-    let block_is_transparent = block.alpha_blend || block.alpha_cutoff.is_some();
     let neighbor_occludes = !neighbor.alpha_blend && neighbor.alpha_cutoff.is_none();
 
-    if block_id == neighbor_id && block_is_transparent {
+    if block_id == neighbor_id && block.alpha_blend {
         return false;
     }
 
