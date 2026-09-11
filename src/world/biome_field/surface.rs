@@ -4,6 +4,7 @@ use super::{
     BiomeField, BiomeFieldSample, BiomeInfluence,
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS},
     mountain_belt::mountain_belt_strength,
+    mountain_peak::mountain_peak_strength,
     selection::select_surface_biome_index,
     spatial::{smoothstep, surface_site_position, warp_surface_position},
 };
@@ -56,27 +57,41 @@ impl BiomeField {
             }
         }
 
-        let strongest_belt = self
+        let strongest_macro = self
             .surface_biomes
             .iter()
             .enumerate()
             .filter_map(|(index, biome)| {
-                let strength = mountain_belt_strength(
-                    biome.distribution,
-                    position,
-                    self.seed,
-                    biome.id.as_str(),
-                );
+                let strength = biome
+                    .distributions
+                    .iter()
+                    .copied()
+                    .map(|distribution| {
+                        mountain_belt_strength(
+                            distribution,
+                            position,
+                            self.seed,
+                            biome.id.as_str(),
+                        )
+                        .max(mountain_peak_strength(
+                            distribution,
+                            position,
+                            self.seed,
+                            biome.id.as_str(),
+                        ))
+                    })
+                    .fold(0.0_f32, f32::max);
+
                 (strength > 0.0).then_some((index, strength))
             })
             .max_by(|left, right| left.1.total_cmp(&right.1));
 
-        if let Some((belt_index, belt_strength)) = strongest_belt {
-            let retained_regional_weight = 1.0 - belt_strength;
+        if let Some((macro_index, macro_strength)) = strongest_macro {
+            let retained_regional_weight = 1.0 - macro_strength;
             for weight in &mut weights {
                 *weight *= retained_regional_weight;
             }
-            weights[belt_index] += belt_strength;
+            weights[macro_index] += macro_strength;
         }
 
         if let Some((index, _)) = weights
