@@ -1,8 +1,11 @@
 use bevy::prelude::*;
 
-use crate::world::math::{lerp, smoothstep};
+use crate::world::{
+    deterministic::hash_unit,
+    math::{lerp, smoothstep},
+};
 
-pub(super) fn value_noise_2d(position: Vec2, seed: u64) -> f32 {
+pub(crate) fn value_noise_2d(position: Vec2, seed: u64) -> f32 {
     let x0 = position.x.floor() as i32;
     let z0 = position.y.floor() as i32;
     let x1 = x0 + 1;
@@ -23,7 +26,7 @@ pub(super) fn value_noise_2d(position: Vec2, seed: u64) -> f32 {
     lerp(top, bottom, tz)
 }
 
-pub(super) fn value_noise_3d(position: Vec3, seed: u64) -> f32 {
+pub(crate) fn value_noise_3d(position: Vec3, seed: u64) -> f32 {
     let x0 = position.x.floor() as i32;
     let y0 = position.y.floor() as i32;
     let z0 = position.z.floor() as i32;
@@ -61,7 +64,6 @@ fn lattice_noise_3d(x: i32, y: i32, z: i32, seed: u64) -> f32 {
     hash ^= hash >> 33;
     hash = hash.wrapping_mul(0xff51_afd7_ed55_8ccd);
     hash ^= hash >> 33;
-    let normalized = (hash & 0xffff) as f32 / u16::MAX as f32;
 
-    normalized * 2.0 - 1.0
+    hash_unit(hash) * 2.0 - 1.0
 }

@@ -1,5 +1,10 @@
 use bevy::prelude::*;
 
+use crate::world::{
+    math::{lerp, smoothstep},
+    noise::value_noise_2d,
+};
+
 const CLIMATE_OCTAVES: usize = 4;
 const CONTINENTALNESS_SCALE: f32 = 0.0012;
 
@@ -51,46 +56,13 @@ fn fractal_noise(position: Vec2, seed: u64) -> f32 {
 
     for octave in 0..CLIMATE_OCTAVES {
         let octave_seed = seed.wrapping_add((octave as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15));
-        value += value_noise(position * frequency, octave_seed) * amplitude;
+        value += value_noise_2d(position * frequency, octave_seed) * amplitude;
         normalization += amplitude;
         amplitude *= 0.5;
         frequency *= 2.0;
     }
 
     value / normalization
-}
-
-fn value_noise(position: Vec2, seed: u64) -> f32 {
-    let x0 = position.x.floor() as i32;
-    let z0 = position.y.floor() as i32;
-    let x1 = x0 + 1;
-    let z1 = z0 + 1;
-    let tx = smoothstep(position.x - x0 as f32);
-    let tz = smoothstep(position.y - z0 as f32);
-    let top = lerp(lattice_noise(x0, z0, seed), lattice_noise(x1, z0, seed), tx);
-    let bottom = lerp(lattice_noise(x0, z1, seed), lattice_noise(x1, z1, seed), tx);
-
-    lerp(top, bottom, tz)
-}
-
-fn lattice_noise(x: i32, z: i32, seed: u64) -> f32 {
-    let mut hash = seed;
-    hash ^= (x as i64 as u64).wrapping_mul(0x9e37_79b1_85eb_ca87);
-    hash ^= (z as i64 as u64).wrapping_mul(0xc2b2_ae3d_27d4_eb4f);
-    hash ^= hash >> 33;
-    hash = hash.wrapping_mul(0xff51_afd7_ed55_8ccd);
-    hash ^= hash >> 33;
-    let normalized = (hash & 0xffff) as f32 / u16::MAX as f32;
-
-    normalized * 2.0 - 1.0
-}
-
-fn smoothstep(value: f32) -> f32 {
-    value * value * (3.0 - 2.0 * value)
-}
-
-fn lerp(from: f32, to: f32, amount: f32) -> f32 {
-    from + (to - from) * amount
 }
 
 #[cfg(test)]

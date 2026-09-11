@@ -19,6 +19,7 @@ mod lighting_updates;
 mod macro_climate;
 pub(crate) mod math;
 mod material_field;
+mod noise;
 mod render_diagnostics;
 pub(crate) mod render_distance;
 mod save;

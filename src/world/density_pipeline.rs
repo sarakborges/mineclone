@@ -1,5 +1,4 @@
 mod hydrology;
-mod noise;
 mod volume;
 
 use bevy::prelude::*;

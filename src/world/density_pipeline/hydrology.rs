@@ -4,9 +4,8 @@ use crate::world::{
     generation_region::GenerationRegion,
     hydrology::{HydrologyRiverSurfaceSample, HydrologyWaterKind, HydrologyWaterSample},
     math::{lerp, smoothstep},
+    noise::value_noise_2d,
 };
-
-use super::noise::value_noise_2d;
 
 const CAVE_WATER_PROTECTION_DEPTH: f32 = 14.0;
 const CAVE_WATER_PROTECTION_FADE_DEPTH: f32 = 20.0;

@@ -5,10 +5,11 @@ use crate::{
     world::{
         biome_field::{BiomeField, VolumeBiomeSelection},
         math::smoothstep,
+        noise::value_noise_3d,
     },
 };
 
-use super::{carve_density_delta, noise::value_noise_3d};
+use super::carve_density_delta;
 
 const DENSITY_NOISE_EDGE: f32 = 0.15;
 
