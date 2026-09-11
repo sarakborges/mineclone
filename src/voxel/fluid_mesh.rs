@@ -33,9 +33,17 @@ struct MeshBuffers {
 }
 
 impl MeshBuffers {
-    fn push(&mut self, vertices: [[f32; 3]; 4], normal: [f32; 3], lighting: FaceLighting) {
+    fn push(
+        &mut self,
+        vertices: [[f32; 3]; 4],
+        normal: [f32; 3],
+        lighting: FaceLighting,
+        tint: [f32; 3],
+    ) {
         let base = self.positions.len() as u32;
-        let vertex_colors = lighting.ambient_occlusion.map(|ao| [1.0, 1.0, 1.0, ao]);
+        let vertex_colors = lighting
+            .ambient_occlusion
+            .map(|ao| [tint[0], tint[1], tint[2], ao]);
 
         self.positions.extend(vertices);
         self.normals.extend([normal; 4]);
@@ -72,11 +80,15 @@ impl MeshBuffers {
     }
 }
 
-pub fn build_fluid_meshes(
+pub fn build_fluid_meshes<F>(
     world: &VoxelWorld,
     chunk_coord: IVec3,
     chunk: &VoxelChunk,
-) -> Vec<ChunkFluidMesh> {
+    tint_at: F,
+) -> Vec<ChunkFluidMesh>
+where
+    F: Fn(IVec3, FluidId) -> [f32; 3],
+{
     let mut buffers = HashMap::<FluidId, MeshBuffers>::new();
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_origin = chunk_coord * chunk_size;
@@ -91,6 +103,7 @@ pub fn build_fluid_meshes(
                 let fluid = buffers.entry(cell.fluid_id).or_default();
                 let local = IVec3::new(x as i32, y as i32, z as i32);
                 let world_voxel = chunk_origin + local;
+                let tint = tint_at(world_voxel, cell.fluid_id);
                 let x0 = x as f32;
                 let y0 = y as f32;
                 let z0 = z as f32;
@@ -111,6 +124,7 @@ pub fn build_fluid_meshes(
                         ],
                         [1.0, 0.0, 0.0],
                         face_lighting(world, world_voxel, BlockFace::Right),
+                        tint,
                     );
                 }
 
@@ -124,6 +138,7 @@ pub fn build_fluid_meshes(
                         ],
                         [-1.0, 0.0, 0.0],
                         face_lighting(world, world_voxel, BlockFace::Left),
+                        tint,
                     );
                 }
 
@@ -137,6 +152,7 @@ pub fn build_fluid_meshes(
                         ],
                         [0.0, 1.0, 0.0],
                         face_lighting(world, world_voxel, BlockFace::Top),
+                        tint,
                     );
                 }
 
@@ -147,6 +163,7 @@ pub fn build_fluid_meshes(
                         [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]],
                         [0.0, -1.0, 0.0],
                         face_lighting(world, world_voxel, BlockFace::Bottom),
+                        tint,
                     );
                 }
 
@@ -160,6 +177,7 @@ pub fn build_fluid_meshes(
                         ],
                         [0.0, 0.0, 1.0],
                         face_lighting(world, world_voxel, BlockFace::Front),
+                        tint,
                     );
                 }
 
@@ -173,6 +191,7 @@ pub fn build_fluid_meshes(
                         ],
                         [0.0, 0.0, -1.0],
                         face_lighting(world, world_voxel, BlockFace::Back),
+                        tint,
                     );
                 }
             }
