@@ -122,7 +122,11 @@ fn rasterize_structure_candidates(
                 continue;
             }
 
-            let Some(origin_y) = structure_origin_y(anchor, &voxels, context) else {
+            let Some(origin_y) = context.feature_fields.structure_origin_y(
+                &structure.id,
+                anchor,
+                || compute_structure_origin_y(anchor, &voxels, context),
+            ) else {
                 continue;
             };
             let origin = IVec3::new(anchor.x, origin_y, anchor.y);
@@ -138,7 +142,7 @@ fn rasterize_structure_candidates(
     }
 }
 
-fn structure_origin_y(
+fn compute_structure_origin_y(
     anchor: IVec2,
     voxels: &[StructureVoxel<'_>],
     context: &ChunkGenerationContext<'_>,
