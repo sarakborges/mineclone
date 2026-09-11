@@ -29,7 +29,7 @@ const BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS: i32 = 2;
 const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 1;
 
 #[derive(SystemParam)]
-struct WorldLoadingInputs<'w> {
+pub(super) struct WorldLoadingInputs<'w> {
     asset_server: Res<'w, AssetServer>,
     current_dimension: Res<'w, CurrentDimension>,
     seed: Res<'w, WorldSeed>,
