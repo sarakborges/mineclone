@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use super::BlockFace;
 use crate::{
-    content::block_orientation::BlockOrientation,
+    content::{block::BlockRegistry, block_orientation::BlockOrientation},
     voxel::{texture_rotation::TextureRotation, world::VoxelWorld},
 };
 
@@ -14,12 +14,35 @@ pub(super) struct FaceGeometry {
     pub texture_rotation: TextureRotation,
 }
 
-pub(super) fn is_face_exposed(world: &VoxelWorld, world_voxel: IVec3, face: BlockFace) -> bool {
+pub(super) fn is_face_exposed(
+    world: &VoxelWorld,
+    blocks: &BlockRegistry,
+    block_id: &str,
+    world_voxel: IVec3,
+    face: BlockFace,
+) -> bool {
     if face == BlockFace::Bottom && world_voxel.y <= 0 {
         return false;
     }
 
-    !world.is_solid(world_voxel + face_offset(face))
+    let neighbor_position = world_voxel + face_offset(face);
+    let Some(neighbor_id) = world.block_id_at(neighbor_position) else {
+        return true;
+    };
+    let block = blocks
+        .get(block_id)
+        .unwrap_or_else(|| panic!("missing block definition: {block_id}"));
+    let neighbor = blocks
+        .get(neighbor_id)
+        .unwrap_or_else(|| panic!("missing block definition: {neighbor_id}"));
+    let block_is_transparent = block.alpha_blend || block.alpha_cutoff.is_some();
+    let neighbor_occludes = !neighbor.alpha_blend && neighbor.alpha_cutoff.is_none();
+
+    if block_id == neighbor_id && block_is_transparent {
+        return false;
+    }
+
+    !neighbor_occludes
 }
 
 pub(super) fn face_geometry(
