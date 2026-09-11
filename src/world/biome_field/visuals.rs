@@ -70,4 +70,26 @@ impl BiomeField {
 
         color
     }
+
+    pub fn water_color(&self, position: Vec2, biomes: &BiomeRegistry, fallback: Rgb) -> Rgb {
+        let sample = self.sample_surface(position);
+        let mut color = Rgb {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+        };
+
+        for influence in sample.influences {
+            let biome = biomes
+                .get(influence.id)
+                .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
+            let water = biome.visuals.water_color.unwrap_or(fallback);
+
+            color.r += water.r * influence.weight;
+            color.g += water.g * influence.weight;
+            color.b += water.b * influence.weight;
+        }
+
+        color
+    }
 }
