@@ -65,6 +65,33 @@ impl HydrologyRegion {
 
         selected
     }
+
+    pub fn water_near(&self, position: Vec2, radius: f32) -> Option<HydrologyWaterSample<'_>> {
+        let mut selected = self.water_at(position);
+        if radius <= f32::EPSILON {
+            return selected;
+        }
+
+        let diagonal = std::f32::consts::FRAC_1_SQRT_2;
+        let directions = [
+            Vec2::X,
+            Vec2::NEG_X,
+            Vec2::Y,
+            Vec2::NEG_Y,
+            Vec2::new(diagonal, diagonal),
+            Vec2::new(-diagonal, diagonal),
+            Vec2::new(diagonal, -diagonal),
+            Vec2::new(-diagonal, -diagonal),
+        ];
+
+        for direction in directions {
+            if let Some(candidate) = self.water_at(position + direction * radius) {
+                choose_water(&mut selected, candidate);
+            }
+        }
+
+        selected
+    }
 }
 
 fn choose_water<'a>(
