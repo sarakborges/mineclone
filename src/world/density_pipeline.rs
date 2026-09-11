@@ -17,6 +17,7 @@ const CAVERN_FULL_STRENGTH_SURFACE_DEPTH: f32 = 20.0;
 const CAVE_WATER_PROTECTION_DEPTH: f32 = 14.0;
 const CAVE_WATER_PROTECTION_FADE_DEPTH: f32 = 20.0;
 const CAVE_WATER_HORIZONTAL_CLEARANCE: f32 = 8.0;
+const RIVER_CHANNEL_HEADROOM: f32 = 5.0;
 const WATER_VOLUME_AIR_DENSITY: f32 = -0.001;
 
 pub fn sample_density(
@@ -74,6 +75,7 @@ fn enforce_hydrology_water_volume(
 
     if let Some(river) = region.hydrology.river_water_at(horizontal)
         && cell_top > river.bed_level
+        && cell_bottom < river.water_level + RIVER_CHANNEL_HEADROOM
         && base_density > 0.0
     {
         return density.min(WATER_VOLUME_AIR_DENSITY);
@@ -161,6 +163,29 @@ fn volume_biome_density_delta(
 }
 
 fn density_modifier_delta(
+    current_density: f32,
+    position: Vec3,
+    volume: Option<VolumeBiomeSelection>,
+    biome_field: &BiomeField,
+    cave_depth_strength: f32,
+) -> f32 {
+    let Some(selection) = volume else {
+        return 0.0;
+    };
+    let Some((modifier, seed)) = biome_field.volume_density_modifier(selection) else {
+        return 0.0;
+    };
+
+    density_modifier_delta_impl(
+        modifier,
+        current_density,
+        position,
+        seed,
+        cave_depth_strength,
+    ) * selection.strength
+}
+
+fn density_modifier_delta_impl(
     modifier: BiomeDensityModifier,
     current_density: f32,
     position: Vec3,
@@ -322,7 +347,7 @@ mod tests {
     fn cavern_and_solid_modifiers_move_density_in_opposite_directions() {
         let position = Vec3::new(12.5, 30.5, -8.5);
         let current_density = 20.0;
-        let cavern = density_modifier_delta(
+        let cavern = density_modifier_delta_impl(
             BiomeDensityModifier::Cavern {
                 carve_strength: 4.0,
                 noise_scale: 0.01,
@@ -333,7 +358,7 @@ mod tests {
             7,
             1.0,
         );
-        let solid = density_modifier_delta(
+        let solid = density_modifier_delta_impl(
             BiomeDensityModifier::Solid {
                 fill_strength: 20.0,
                 noise_scale: 0.01,
@@ -353,7 +378,7 @@ mod tests {
     fn cavern_modifier_cannot_open_shallow_terrain_without_an_entrance_connector() {
         let position = Vec3::new(12.5, 70.5, -8.5);
         let current_density = 8.0;
-        let cavern = density_modifier_delta(
+        let cavern = density_modifier_delta_impl(
             BiomeDensityModifier::Cavern {
                 carve_strength: 4.0,
                 noise_scale: 0.01,
