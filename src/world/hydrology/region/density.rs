@@ -6,7 +6,7 @@ use crate::world::hydrology::{
         LAKE_SHORE_INNER_DISTANCE, LAKE_SHORE_OUTER_DISTANCE, LAKE_SHORE_SURFACE_OFFSET,
         OCEAN_EXTRA_DEPTH, OCEAN_MINIMUM_DEPTH, RIVER_CARVE_STRENGTH,
     },
-    math::smoothstep,
+    math::{lerp, smoothstep},
     types::WaterBody,
 };
 
@@ -100,7 +100,9 @@ impl HydrologyRegion {
         }
 
         let target_floor = self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength;
-        (target_floor - sample.elevation).min(0.0) * strength
+        let floor = lerp(sample.elevation, target_floor, strength);
+
+        floor - sample.elevation
     }
 }
 
