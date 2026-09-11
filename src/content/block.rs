@@ -102,6 +102,10 @@ impl BlockDefinition {
         self.orientations.first().copied().unwrap_or_default()
     }
 
+    pub fn is_rotatable(&self) -> bool {
+        self.orientations.len() > 1
+    }
+
     pub fn next_orientation(&self, current: BlockOrientation) -> BlockOrientation {
         let Some(&first) = self.orientations.first() else {
             return BlockOrientation::default();

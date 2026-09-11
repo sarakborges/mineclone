@@ -2,7 +2,9 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
-    ui::theme,
+    content::block::BlockRegistry,
+    player::hotbar::{PlayerHotbar, PlayerHotbarSet},
+    ui::{theme, typography},
 };
 
 pub struct CrosshairPlugin;
@@ -12,6 +14,13 @@ impl Plugin for CrosshairPlugin {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_crosshair)
             .add_systems(OnEnter(PauseState::Paused), hide_crosshair)
             .add_systems(OnEnter(SettingsState::Open), hide_crosshair)
+            .add_systems(
+                Update,
+                update_rotation_hint
+                    .after(PlayerHotbarSet::Selection)
+                    .run_if(in_state(GameState::Gameplay))
+                    .run_if(in_state(PauseState::Running)),
+            )
             .add_systems(
                 OnEnter(PauseState::Running),
                 show_crosshair
@@ -29,6 +38,9 @@ impl Plugin for CrosshairPlugin {
 
 #[derive(Component)]
 struct CrosshairRoot;
+
+#[derive(Component)]
+struct RotationHint;
 
 fn spawn_crosshair(mut commands: Commands) {
     commands
@@ -81,8 +93,41 @@ fn spawn_crosshair(mut commands: Commands) {
                     },
                     BackgroundColor(theme::TEXT_PRIMARY.with_alpha(0.92)),
                 ));
+                crosshair.spawn((
+                    typography::caption("Press R to rotate block"),
+                    TextLayout::new_with_justify(Justify::Center),
+                    Node {
+                        position_type: PositionType::Absolute,
+                        top: px(26),
+                        left: px(-111),
+                        width: px(240),
+                        ..default()
+                    },
+                    RotationHint,
+                    Visibility::Hidden,
+                ));
             });
         });
+}
+
+fn update_rotation_hint(
+    hotbar: Res<PlayerHotbar>,
+    blocks: Res<BlockRegistry>,
+    mut hint: Single<&mut Visibility, With<RotationHint>>,
+) {
+    let rotatable = hotbar
+        .item_at(hotbar.selected_slot())
+        .and_then(|id| blocks.get(id))
+        .is_some_and(|block| block.is_rotatable());
+    let next = if rotatable {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
+
+    if *hint != next {
+        *hint = next;
+    }
 }
 
 fn hide_crosshair(mut roots: Query<&mut Visibility, With<CrosshairRoot>>) {

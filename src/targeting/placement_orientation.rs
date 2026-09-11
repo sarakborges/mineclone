@@ -75,7 +75,7 @@ fn update_placement_orientation(
         return;
     }
 
-    let Some(block) = block else {
+    let Some(block) = block.filter(|block| block.is_rotatable()) else {
         return;
     };
     placement.orientation = block.next_orientation(placement.orientation);

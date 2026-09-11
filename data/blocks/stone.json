@@ -9,14 +9,6 @@
     "front": "textures/blocks/stone.png",
     "back": "textures/blocks/stone.png"
   },
-  "rotateTexture": {
-    "top": true,
-    "bottom": true,
-    "left": true,
-    "right": true,
-    "front": true,
-    "back": true
-  },
   "lightDampening": 15,
   "castsShadow": true
 }
