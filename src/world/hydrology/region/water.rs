@@ -9,10 +9,22 @@ use crate::world::hydrology::{
 
 impl HydrologyRegion {
     pub fn water_at(&self, position: Vec2) -> Option<HydrologyWaterSample<'_>> {
+        self.water_with_margin(position, 0.0)
+    }
+
+    pub fn water_near(&self, position: Vec2, radius: f32) -> Option<HydrologyWaterSample<'_>> {
+        self.water_with_margin(position, radius.max(0.0))
+    }
+
+    fn water_with_margin(
+        &self,
+        position: Vec2,
+        margin: f32,
+    ) -> Option<HydrologyWaterSample<'_>> {
         let mut selected = None;
 
         for body in &self.water_bodies {
-            let strength = body.horizontal_strength(position);
+            let strength = body.horizontal_strength_with_margin(position, margin);
             if strength <= 0.0 {
                 continue;
             }
@@ -29,7 +41,7 @@ impl HydrologyRegion {
 
         if let Some(river) = self
             .river_graph
-            .sample_horizontal(position)
+            .sample_horizontal_with_margin(position, margin)
             .filter(|river| river.strength > 0.0)
         {
             let profile = smoothstep(river.strength);
@@ -61,33 +73,6 @@ impl HydrologyRegion {
                     bed_level,
                 },
             );
-        }
-
-        selected
-    }
-
-    pub fn water_near(&self, position: Vec2, radius: f32) -> Option<HydrologyWaterSample<'_>> {
-        let mut selected = self.water_at(position);
-        if radius <= f32::EPSILON {
-            return selected;
-        }
-
-        let diagonal = std::f32::consts::FRAC_1_SQRT_2;
-        let directions = [
-            Vec2::X,
-            Vec2::NEG_X,
-            Vec2::Y,
-            Vec2::NEG_Y,
-            Vec2::new(diagonal, diagonal),
-            Vec2::new(-diagonal, diagonal),
-            Vec2::new(diagonal, -diagonal),
-            Vec2::new(-diagonal, -diagonal),
-        ];
-
-        for direction in directions {
-            if let Some(candidate) = self.water_at(position + direction * radius) {
-                choose_water(&mut selected, candidate);
-            }
         }
 
         selected
