@@ -29,7 +29,7 @@ const BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS: i32 = 2;
 const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 1;
 
 #[derive(SystemParam)]
-pub(super) struct WorldLoadingInputs<'w> {
+pub(in crate::world) struct WorldLoadingInputs<'w> {
     asset_server: Res<'w, AssetServer>,
     current_dimension: Res<'w, CurrentDimension>,
     seed: Res<'w, WorldSeed>,
@@ -42,7 +42,7 @@ pub(super) struct WorldLoadingInputs<'w> {
     existing_world: Option<Res<'w, VoxelWorld>>,
 }
 
-pub(super) fn begin_world_loading(
+pub(in crate::world) fn begin_world_loading(
     mut commands: Commands,
     mut terrain_material_assets: ResMut<Assets<TerrainMaterial>>,
     mut save: ResMut<InMemoryWorldSave>,

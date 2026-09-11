@@ -19,7 +19,7 @@ use crate::world::{
 const BOOTSTRAP_LIGHT_BATCH_CHUNKS: usize = 2;
 const INITIAL_LOADING_BUDGET: Duration = Duration::from_millis(12);
 
-pub(super) fn setup_world(
+pub(in crate::world) fn setup_world(
     generation: ChunkGeneration,
     content: ChunkContent,
     mut renderer: ChunkRenderer,
