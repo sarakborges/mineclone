@@ -27,7 +27,7 @@ use super::{
     terrain::surface_height,
 };
 
-const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 2;
+const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 1;
 const STREAMING_LIGHT_BATCH_CHUNKS: usize = 2;
 const STREAMING_BUDGET_MS: u128 = 6;
 const HORIZONTAL_PRELOAD_CHUNKS: i32 = 1;
@@ -119,6 +119,12 @@ pub(super) fn stream_chunks(
         let mut batch = Vec::with_capacity(STREAMING_LIGHT_BATCH_CHUNKS);
 
         while batch.len() < STREAMING_LIGHT_BATCH_CHUNKS {
+            if processed + batch.len() >= MIN_CHUNKS_BEFORE_BUDGET_CHECK
+                && frame_started.elapsed().as_millis() >= STREAMING_BUDGET_MS
+            {
+                break;
+            }
+
             let Some(coord) = inputs.streaming.pending.pop_front() else {
                 break;
             };
