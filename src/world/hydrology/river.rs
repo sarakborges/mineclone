@@ -17,8 +17,6 @@ use super::{
     types::{HydrologySurfaceSample, WaterBody},
 };
 
-const MAX_INCOMING_CHANNELS_PER_CONFLUENCE: usize = 2;
-
 pub(super) struct RiverSystem {
     pub graph: FeatureGraph,
     pub water_bodies: Vec<WaterBody>,
@@ -196,7 +194,7 @@ fn selected_river_sources<F>(
 where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
-    let mut incoming = HashMap::<IVec2, Vec<(IVec2, u32)>>::new();
+    let mut selected = HashSet::new();
 
     for (&cell, &flow) in flow_cache {
         if flow < RIVER_MINIMUM_FLOW {
@@ -210,36 +208,7 @@ where
             continue;
         }
 
-        let Some(downstream_cell) = network.downstream_cell(cell) else {
-            continue;
-        };
-        let downstream = network.node(downstream_cell);
-        if !downstream.biome_hydrology.can_generate_river {
-            continue;
-        }
-
-        incoming
-            .entry(downstream_cell)
-            .or_default()
-            .push((cell, flow));
-    }
-
-    let mut selected = HashSet::new();
-
-    for channels in incoming.values_mut() {
-        channels.sort_by(|(left_cell, left_flow), (right_cell, right_flow)| {
-            right_flow
-                .cmp(left_flow)
-                .then_with(|| left_cell.x.cmp(&right_cell.x))
-                .then_with(|| left_cell.y.cmp(&right_cell.y))
-        });
-
-        selected.extend(
-            channels
-                .iter()
-                .take(MAX_INCOMING_CHANNELS_PER_CONFLUENCE)
-                .map(|(cell, _)| *cell),
-        );
+        selected.insert(cell);
     }
 
     extend_selected_downstream(&mut selected, network);
@@ -337,13 +306,14 @@ fn river_path_points(
 ) -> Vec<Vec3> {
     let delta = downstream.position - source.position;
     let distance = delta.length();
-    let segment_count = ((distance / 16.0).ceil() as usize).clamp(5, 18);
+    let segment_count = ((distance / 10.0).ceil() as usize).clamp(7, 26);
     let direction = delta.normalize_or_zero();
     let perpendicular = Vec2::new(-direction.y, direction.x);
     let hash = cell_hash(source_cell, seed ^ 0x6a09_e667_f3bc_c909);
-    let amplitude = (distance * lerp(0.08, 0.20, hash_unit(hash))).clamp(6.0, 26.0);
+    let amplitude = (distance * lerp(0.12, 0.30, hash_unit(hash))).clamp(8.0, 42.0);
     let phase = hash_unit(hash.rotate_left(23)) * std::f32::consts::TAU;
     let secondary = hash_signed(hash.rotate_left(41));
+    let tertiary = hash_signed(hash.rotate_left(11));
     let start_height = river_height(source, sea_level);
     let raw_end_height = river_height(downstream, sea_level);
     let end_height = raw_end_height
@@ -354,9 +324,14 @@ fn river_path_points(
         .map(|index| {
             let t = index as f32 / segment_count as f32;
             let envelope = (std::f32::consts::PI * t).sin();
-            let broad = (phase + t * std::f32::consts::TAU * 0.72).sin();
-            let detail = (phase * 0.5 + t * std::f32::consts::TAU * 1.65).sin();
-            let lateral = (broad * 0.72 + detail * 0.28 * secondary) * amplitude * envelope;
+            let broad = (phase + t * std::f32::consts::TAU * 0.78).sin();
+            let detail = (phase * 0.5 + t * std::f32::consts::TAU * 1.85).sin();
+            let fine = (phase * 1.7 + t * std::f32::consts::TAU * 3.15).sin();
+            let lateral = (broad * 0.62
+                + detail * 0.26 * secondary
+                + fine * 0.12 * tertiary)
+                * amplitude
+                * envelope;
             let horizontal = source.position.lerp(downstream.position, t) + perpendicular * lateral;
             let height = lerp(start_height, end_height, smoothstep(t));
 
