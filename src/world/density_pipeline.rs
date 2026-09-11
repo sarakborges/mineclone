@@ -43,6 +43,26 @@ pub(crate) struct DensityColumnHydrology {
     water: Option<WaterLevels>,
 }
 
+pub(crate) struct DensitySampleContext<'a> {
+    region: &'a GenerationRegion,
+    anchored_caves: Option<&'a CaveConnectivityRegion>,
+    biome_field: &'a BiomeField,
+}
+
+impl<'a> DensitySampleContext<'a> {
+    pub(crate) fn new(
+        region: &'a GenerationRegion,
+        anchored_caves: Option<&'a CaveConnectivityRegion>,
+        biome_field: &'a BiomeField,
+    ) -> Self {
+        Self {
+            region,
+            anchored_caves,
+            biome_field,
+        }
+    }
+}
+
 pub(crate) fn sample_density_column_hydrology(
     horizontal: Vec2,
     region: &GenerationRegion,
@@ -57,62 +77,37 @@ pub(crate) fn sample_density_column_hydrology(
     }
 }
 
-pub fn sample_density(
+pub(crate) fn sample_density(
     base_density: f32,
     position: Vec3,
-    region: &GenerationRegion,
-    anchored_caves: Option<&CaveConnectivityRegion>,
     volume: Option<VolumeBiomeSelection>,
-    biome_field: &BiomeField,
+    context: &DensitySampleContext<'_>,
 ) -> f32 {
-    let hydrology = sample_density_column_hydrology(Vec2::new(position.x, position.z), region);
+    let column_hydrology = sample_density_column_hydrology(
+        Vec2::new(position.x, position.z),
+        context.region,
+    );
+    let hydrology_delta = context.region.hydrology.density_delta(position);
 
-    sample_density_with_column_hydrology(
+    sample_density_with_hydrology(
         base_density,
         position,
-        region,
-        anchored_caves,
         volume,
-        biome_field,
-        hydrology,
-    )
-}
-
-pub(crate) fn sample_density_with_column_hydrology(
-    base_density: f32,
-    position: Vec3,
-    region: &GenerationRegion,
-    anchored_caves: Option<&CaveConnectivityRegion>,
-    volume: Option<VolumeBiomeSelection>,
-    biome_field: &BiomeField,
-    column_hydrology: DensityColumnHydrology,
-) -> f32 {
-    let hydrology_delta = region.hydrology.density_delta(position);
-
-    sample_density_with_precomputed_hydrology(
-        base_density,
-        position,
-        region,
-        anchored_caves,
-        volume,
-        biome_field,
         column_hydrology,
         hydrology_delta,
+        context,
     )
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn sample_density_with_precomputed_hydrology(
+pub(crate) fn sample_density_with_hydrology(
     base_density: f32,
     position: Vec3,
-    region: &GenerationRegion,
-    anchored_caves: Option<&CaveConnectivityRegion>,
     volume: Option<VolumeBiomeSelection>,
-    biome_field: &BiomeField,
     column_hydrology: DensityColumnHydrology,
     hydrology_delta: f32,
+    context: &DensitySampleContext<'_>,
 ) -> f32 {
-    let geology_delta = region.geology.density_delta(position);
+    let geology_delta = context.region.geology.density_delta(position);
     let mut density = base_density + hydrology_delta + geology_delta;
     let water_clearance = cave_water_clearance(position.y, column_hydrology.cave_water);
     let connector_depth_strength = depth_strength(
@@ -122,7 +117,8 @@ pub(crate) fn sample_density_with_precomputed_hydrology(
     ) * water_clearance;
 
     if connector_depth_strength > 0.0
-        && let Some(connector) = anchored_caves
+        && let Some(connector) = context
+            .anchored_caves
             .and_then(|caves| caves.connector_graph.sample(position))
             .map(|sample| smoothstep(sample.strength) * connector_depth_strength)
     {
@@ -139,7 +135,7 @@ pub(crate) fn sample_density_with_precomputed_hydrology(
         density,
         position,
         volume,
-        biome_field,
+        context.biome_field,
         cavern_depth_strength,
     );
 
