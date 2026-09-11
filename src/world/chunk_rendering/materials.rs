@@ -66,7 +66,7 @@ impl TerrainMaterials {
             .flat_map(|definition| {
                 BLOCK_FACES
                     .into_iter()
-                    .filter_map(|face| block_face_texture(face, definition))
+                    .filter_map(move |face| block_face_texture(face, definition))
             })
             .filter_map(|texture| {
                 let texture = texture.to_owned();
