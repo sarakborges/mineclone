@@ -22,7 +22,6 @@ mod json_file;
 mod loader;
 pub mod sky;
 pub mod structure;
-pub mod structure_set;
 
 use bevy::prelude::*;
 use loader::load_content;

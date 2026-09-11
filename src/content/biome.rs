@@ -1,5 +1,3 @@
-mod validation;
-
 use std::collections::HashMap;
 
 use bevy::prelude::*;
@@ -13,6 +11,8 @@ use super::{
     biome_surface_carver::BiomeSurfaceCarver, biome_terrain::BiomeTerrain,
     biome_terrain_modifier::BiomeTerrainModifier, color::Rgb, day_night_phase::DayNightPhases,
 };
+
+mod validation;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -126,8 +126,6 @@ pub struct BiomeDefinition {
     pub hydrology: BiomeHydrology,
     #[serde(default)]
     pub structures: Vec<BiomeStructure>,
-    #[serde(default)]
-    pub structure_sets: Vec<String>,
     pub visuals: BiomeVisuals,
 }
 

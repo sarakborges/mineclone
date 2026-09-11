@@ -1,7 +1,6 @@
 mod caves;
 pub(super) mod columns;
 mod density;
-mod features;
 mod fluids;
 mod index;
 mod materials;
@@ -16,7 +15,6 @@ use crate::{
     content::{
         biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionDefinition,
         fluid::FluidRegistry, structure::StructureRegistry,
-        structure_set::StructureSetRegistry,
     },
     voxel::chunk::{CHUNK_SIZE, VoxelChunk},
 };
@@ -25,14 +23,13 @@ use self::{
     caves::anchored_cave_region,
     columns::sample_generation_columns,
     density::sample_density_field,
-    features::rasterize_feature_pass,
     fluids::rasterize_fluid_pass,
     materials::{MaterialPassContext, rasterize_material_pass},
+    structures::rasterize_structures,
 };
 use super::{
     biome_field::BiomeField,
     cave_connectivity::CaveConnectivityRegion,
-    generation_pipeline::{GENERATION_STAGE_ORDER, GenerationStage},
     generation_region::{GenerationRegion, generation_region_coord, generation_region_world_bounds},
     hydrology::HydrologySurfaceSample,
     terrain::{chunk_y_bounds, surface_height_from_sample},
@@ -45,7 +42,6 @@ pub(crate) struct ChunkGenerationContext<'a> {
     pub dimension: &'a DimensionDefinition,
     pub biomes: &'a BiomeRegistry,
     pub structures: &'a StructureRegistry,
-    pub structure_sets: &'a StructureSetRegistry,
     pub biome_field: &'a BiomeField,
     pub feature_fields: &'a WorldFeatureFields,
 }
@@ -118,8 +114,6 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         return VoxelChunk::empty();
     }
 
-    debug_assert_generation_order();
-
     let chunk_origin = coord * CHUNK_SIZE as i32;
     let horizontal_chunk = IVec2::new(coord.x, coord.z);
     let region_coord = generation_region_coord(coord);
@@ -178,15 +172,7 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         anchored_caves.as_deref(),
         &context.dimension.hydrology.water_fluid,
     );
-    rasterize_feature_pass(&mut chunk, chunk_origin, context);
+    rasterize_structures(&mut chunk, chunk_origin, context);
 
     chunk
-}
-
-fn debug_assert_generation_order() {
-    debug_assert_eq!(GENERATION_STAGE_ORDER[0], GenerationStage::SurfaceColumns);
-    debug_assert_eq!(GENERATION_STAGE_ORDER[1], GenerationStage::Density);
-    debug_assert_eq!(GENERATION_STAGE_ORDER[2], GenerationStage::Materials);
-    debug_assert_eq!(GENERATION_STAGE_ORDER[3], GenerationStage::Fluids);
-    debug_assert_eq!(GENERATION_STAGE_ORDER[4], GenerationStage::Features);
 }

@@ -12,7 +12,6 @@ pub mod dimension;
 pub(crate) mod feature_graph;
 pub(crate) mod fluid_updates;
 mod generation;
-mod generation_pipeline;
 pub(crate) mod generation_region;
 pub(crate) mod geology;
 pub(crate) mod hydrology;
@@ -25,7 +24,6 @@ mod save;
 mod seed;
 mod setup;
 mod streaming;
-pub(crate) mod structure_placement;
 pub(crate) mod terrain;
 pub(crate) mod world_feature_fields;
 
