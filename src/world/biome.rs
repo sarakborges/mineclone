@@ -7,7 +7,9 @@ use crate::{
     voxel::coordinates::split_dimension_position,
 };
 
-use self::identity::{replace_influences, resolve_final_identity, resolve_surface_identity};
+use self::identity::{
+    VolumeBiomeIdentity, replace_influences, resolve_final_identity, resolve_surface_identity,
+};
 use super::{
     biome_field::BiomeField,
     generation_region::{generation_region_coord, generation_region_world_bounds},
@@ -76,12 +78,17 @@ pub fn track_current_biome(
             let (minimum, maximum) = generation_region_world_bounds(region_coord);
             biome_field.volume_region_in_bounds(minimum, maximum)
         });
+        let selection =
+            biome_field.volume_selection_in_region(position, volume_region.as_ref())?;
 
-        biome_field.sample_volume_in_region(position, volume_region.as_ref())
+        Some(VolumeBiomeIdentity {
+            id: biome_field.volume_biome_id(selection),
+            strength: selection.strength,
+        })
     });
     let hydrology = feature_fields.as_ref().map(|fields| {
         let continentalness = biome_field.climate_at(horizontal).continentalness;
-        fields.hydrology().biome_overlay(continentalness)
+        fields.hydrology_biome_overlay(continentalness)
     });
     let resolved_surface = resolve_surface_identity(&surface, hydrology);
 
@@ -91,17 +98,17 @@ pub fn track_current_biome(
     current_biome.hydrology_influences = resolved_surface.hydrology_influences;
 
     if let Some(volume) = volume {
-        current_biome.volume_id = Some(volume.primary_id.to_owned());
+        current_biome.volume_id = Some(volume.id.to_owned());
         current_biome.volume_strength = volume.strength;
         current_biome.volume_influences.clear();
         current_biome.volume_influences.push(CurrentBiomeInfluence {
-            id: volume.primary_id.to_owned(),
+            id: volume.id.to_owned(),
             weight: 1.0,
         });
         resolve_final_identity(
             &mut current_biome,
             resolved_surface.influences,
-            Some(&volume),
+            Some(volume),
         );
     } else {
         current_biome.volume_id = None;
