@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
@@ -13,6 +13,15 @@ use crate::{
     },
     voxel::mesh::BlockFace,
 };
+
+const BLOCK_FACES: [BlockFace; 6] = [
+    BlockFace::Top,
+    BlockFace::Bottom,
+    BlockFace::Left,
+    BlockFace::Right,
+    BlockFace::Front,
+    BlockFace::Back,
+];
 
 #[derive(Clone)]
 struct BlockTerrainMaterials {
@@ -40,6 +49,7 @@ impl BlockTerrainMaterials {
 #[derive(Resource, Clone)]
 pub struct TerrainMaterials {
     blocks: HashMap<String, BlockTerrainMaterials>,
+    texture_handles: Vec<Handle<Image>>,
 }
 
 impl TerrainMaterials {
@@ -50,6 +60,21 @@ impl TerrainMaterials {
         roughness: f32,
         metallic: f32,
     ) -> Self {
+        let mut seen_textures = HashSet::<String>::new();
+        let texture_handles = blocks
+            .iter()
+            .flat_map(|definition| {
+                BLOCK_FACES
+                    .into_iter()
+                    .filter_map(|face| block_face_texture(face, definition))
+            })
+            .filter_map(|texture| {
+                let texture = texture.to_owned();
+                seen_textures.insert(texture.clone()).then_some(texture)
+            })
+            .map(|texture| asset_server.load(texture))
+            .collect();
+
         let blocks = blocks
             .iter()
             .map(|definition| {
@@ -108,7 +133,16 @@ impl TerrainMaterials {
             })
             .collect();
 
-        Self { blocks }
+        Self {
+            blocks,
+            texture_handles,
+        }
+    }
+
+    pub fn textures_loaded(&self, asset_server: &AssetServer) -> bool {
+        self.texture_handles
+            .iter()
+            .all(|handle| asset_server.is_loaded_with_dependencies(handle.id()))
     }
 
     pub(super) fn for_face(&self, block_id: &str, face: BlockFace) -> &Handle<TerrainMaterial> {
