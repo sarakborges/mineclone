@@ -77,9 +77,11 @@ pub struct BiomeUnderwaterTint {
 pub struct BiomeVisuals {
     pub sky_color: DayNightPhases<Rgb>,
     pub fog_color: DayNightPhases<Rgb>,
+    #[serde(default = "default_vegetation_color")]
     pub grass_color: Rgb,
-    #[serde(default)]
-    pub leaf_color: Option<Rgb>,
+    #[serde(default = "default_vegetation_color")]
+    pub leaf_color: Rgb,
+    #[serde(default = "default_vegetation_color")]
     pub foliage_color: Rgb,
     pub underwater_tint: BiomeUnderwaterTint,
     #[serde(default)]
@@ -145,5 +147,13 @@ impl BiomeRegistry {
         self.definitions.values().any(|definition| {
             definition.kind == BiomeKind::Volume && definition.density_modifier.is_some()
         })
+    }
+}
+
+fn default_vegetation_color() -> Rgb {
+    Rgb {
+        r: 0.24,
+        g: 0.70,
+        b: 0.16,
     }
 }
