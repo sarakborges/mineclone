@@ -21,7 +21,7 @@ pub(super) fn select_surface_biome_index(
     let regional = biomes
         .iter()
         .enumerate()
-        .filter_map(|(index, biome)| biome.distribution.is_regional().then_some(index))
+        .filter_map(|(index, biome)| biome.is_regional().then_some(index))
         .collect::<Vec<_>>();
     assert!(!regional.is_empty(), "surface biome field has no regional biomes");
 
@@ -34,7 +34,7 @@ pub(super) fn select_surface_biome_index(
 
     let climate = climate_field.sample(site);
     let hash = cell_hash(cell, seed);
-    select_weighted_biome_index(biomes, climate, hash, |biome| biome.distribution.is_regional())
+    select_weighted_biome_index(biomes, climate, hash, BiomeFieldEntry::is_regional)
         .unwrap_or_else(|| regional[hash as usize % regional.len()])
 }
 
