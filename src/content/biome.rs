@@ -100,8 +100,8 @@ pub struct BiomeDefinition {
     pub name: String,
     #[serde(default)]
     pub kind: BiomeKind,
-    #[serde(default)]
-    pub distribution: BiomeDistribution,
+    #[serde(default = "default_biome_distributions")]
+    pub distributions: Vec<BiomeDistribution>,
     #[serde(default)]
     pub size: BiomeSize,
     #[serde(default)]
@@ -153,6 +153,10 @@ impl BiomeRegistry {
             definition.kind == BiomeKind::Volume && definition.density_modifier.is_some()
         })
     }
+}
+
+fn default_biome_distributions() -> Vec<BiomeDistribution> {
+    vec![BiomeDistribution::Regional]
 }
 
 fn default_vegetation_color() -> Rgb {
