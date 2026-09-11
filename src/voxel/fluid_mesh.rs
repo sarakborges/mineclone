@@ -8,7 +8,7 @@ use super::{
     block_face::BlockFace,
     chunk::{CHUNK_SIZE, VoxelChunk},
     mesh_buffer::VoxelMeshBuffer,
-    mesh_lighting::{FaceLighting, face_lighting, should_flip_diagonal},
+    mesh_lighting::{face_lighting, push_lit_quad},
     quad::VOXEL_FACE_UVS,
     world::VoxelWorld,
 };
@@ -64,12 +64,13 @@ where
                         continue;
                     }
 
-                    push_fluid_face(
+                    push_lit_quad(
                         fluid,
                         fluid_face_vertices(face, x as f32, y as f32, z as f32, heights),
                         face.normal(),
-                        face_lighting(world, world_voxel, face),
+                        VOXEL_FACE_UVS,
                         tint,
+                        face_lighting(world, world_voxel, face),
                     );
                 }
             }
@@ -129,27 +130,6 @@ fn fluid_face_vertices(
             [x1, y0 + heights.h10, z0],
         ],
     }
-}
-
-fn push_fluid_face(
-    buffer: &mut VoxelMeshBuffer,
-    vertices: [[f32; 3]; 4],
-    normal: [f32; 3],
-    lighting: FaceLighting,
-    tint: [f32; 3],
-) {
-    let colors = lighting
-        .ambient_occlusion
-        .map(|ao| [tint[0], tint[1], tint[2], ao]);
-
-    buffer.push_quad(
-        vertices,
-        normal,
-        VOXEL_FACE_UVS,
-        lighting.channels,
-        colors,
-        should_flip_diagonal(lighting.ambient_occlusion),
-    );
 }
 
 fn fluid_corner_height(

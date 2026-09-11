@@ -1,4 +1,3 @@
-mod buffer;
 mod geometry;
 
 use std::collections::HashMap;
@@ -7,15 +6,14 @@ use bevy::prelude::*;
 
 use crate::content::block::{BlockRegistry, BlockTextureRotations};
 
-use self::{
-    buffer::MeshBuffers,
-    geometry::{face_geometry, is_face_exposed, orient_face_geometry},
-};
+use self::geometry::{face_geometry, is_face_exposed, orient_face_geometry};
 use super::{
     block_face::BlockFace,
     chunk::{CHUNK_SIZE, VoxelChunk},
-    mesh_lighting::face_lighting,
+    mesh_buffer::VoxelMeshBuffer,
+    mesh_lighting::{face_lighting, push_lit_quad},
     orientation::orient_face,
+    quad::VOXEL_FACE_UVS,
     texture_rotation::TextureRotation,
     world::VoxelWorld,
 };
@@ -37,7 +35,7 @@ pub fn build_chunk_mesh<F>(
 where
     F: Fn(IVec3, &'static str) -> [f32; 3],
 {
-    let mut buffers = HashMap::<(&'static str, BlockFace, bool), MeshBuffers>::new();
+    let mut buffers = HashMap::<(&'static str, BlockFace, bool), VoxelMeshBuffer>::new();
     let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
 
     for y in 0..CHUNK_SIZE {
@@ -75,16 +73,17 @@ where
                         y,
                         z,
                     );
-                    buffers
-                        .entry((cell.block_id, block_face, block.casts_shadow))
-                        .or_default()
-                        .push(
-                            geometry.vertices,
-                            geometry.normal,
-                            geometry.texture_rotation,
-                            tint,
-                            face_lighting(world, world_voxel, face),
-                        );
+                    let lighting = face_lighting(world, world_voxel, face);
+                    push_lit_quad(
+                        buffers
+                            .entry((cell.block_id, block_face, block.casts_shadow))
+                            .or_default(),
+                        geometry.vertices,
+                        geometry.normal,
+                        geometry.texture_rotation.rotate_uvs(VOXEL_FACE_UVS),
+                        tint,
+                        lighting,
+                    );
                 }
             }
         }
@@ -92,8 +91,8 @@ where
 
     buffers
         .into_iter()
-        .filter_map(|((block_id, face, casts_shadow), buffers)| {
-            buffers.into_mesh().map(|mesh| ChunkFaceMesh {
+        .filter_map(|((block_id, face, casts_shadow), buffer)| {
+            buffer.into_mesh().map(|mesh| ChunkFaceMesh {
                 block_id,
                 face,
                 mesh,

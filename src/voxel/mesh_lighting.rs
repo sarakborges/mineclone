@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 
-use super::{block_face::BlockFace, light::VoxelLight, world::VoxelWorld};
+use super::{
+    block_face::BlockFace, light::VoxelLight, mesh_buffer::VoxelMeshBuffer, world::VoxelWorld,
+};
 
 const AO_BRIGHTNESS: [f32; 4] = [1.0, 0.92, 0.84, 0.76];
 
@@ -46,7 +48,29 @@ pub(super) fn face_lighting(world: &VoxelWorld, voxel: IVec3, face: BlockFace) -
     }
 }
 
-pub(super) fn should_flip_diagonal(ambient_occlusion: [f32; 4]) -> bool {
+pub(super) fn push_lit_quad(
+    buffer: &mut VoxelMeshBuffer,
+    vertices: [[f32; 3]; 4],
+    normal: [f32; 3],
+    uvs: [[f32; 2]; 4],
+    tint: [f32; 3],
+    lighting: FaceLighting,
+) {
+    let colors = lighting
+        .ambient_occlusion
+        .map(|ao| [tint[0], tint[1], tint[2], ao]);
+
+    buffer.push_quad(
+        vertices,
+        normal,
+        uvs,
+        lighting.channels,
+        colors,
+        should_flip_diagonal(lighting.ambient_occlusion),
+    );
+}
+
+fn should_flip_diagonal(ambient_occlusion: [f32; 4]) -> bool {
     ambient_occlusion[0] + ambient_occlusion[2] > ambient_occlusion[1] + ambient_occlusion[3]
 }
 
