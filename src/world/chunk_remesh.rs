@@ -1,4 +1,7 @@
-use std::collections::{HashSet, VecDeque};
+use std::{
+    collections::{HashSet, VecDeque},
+    time::Instant,
+};
 
 use bevy::prelude::*;
 
@@ -9,7 +12,7 @@ use super::{
     chunk_system_params::{ChunkContent, ChunkRenderer},
 };
 
-const MAX_REMESHES_PER_FRAME: usize = 16;
+const REMESH_BUDGET_MS: u128 = 4;
 
 #[derive(Resource, Default)]
 pub(crate) struct ChunkRemeshQueue {
@@ -69,9 +72,14 @@ pub(super) fn process_chunk_remesh_queue(
         &renderer.terrain_materials,
         &renderer.fluid_materials,
     );
+    let frame_started = Instant::now();
     let mut processed = 0;
 
-    while processed < MAX_REMESHES_PER_FRAME {
+    loop {
+        if processed > 0 && frame_started.elapsed().as_millis() >= REMESH_BUDGET_MS {
+            break;
+        }
+
         let Some(coord) = queue.pop() else {
             break;
         };
