@@ -13,14 +13,12 @@ const CAVE_WATER_HORIZONTAL_CLEARANCE: f32 = 8.0;
 const RIVER_CHANNEL_HEADROOM: f32 = 5.0;
 const RIVER_BANK_NOISE_SCALE: f32 = 0.035;
 const RIVER_BANK_DETAIL_NOISE_SCALE: f32 = 0.11;
-const LAKE_SURFACE_HEADROOM: f32 = 8.0;
 const WATER_VOLUME_AIR_DENSITY: f32 = -0.001;
 
 #[derive(Clone, Copy, Debug)]
 struct WaterLevels {
     water_level: f32,
     bed_level: f32,
-    strength: f32,
     kind: HydrologyWaterKind,
 }
 
@@ -29,7 +27,6 @@ impl From<HydrologyWaterSample<'_>> for WaterLevels {
         Self {
             water_level: sample.water_level,
             bed_level: sample.bed_level,
-            strength: sample.strength,
             kind: sample.kind,
         }
     }
@@ -97,14 +94,11 @@ pub(super) fn enforce_hydrology_water_volume(
         return density;
     };
 
-    if water.kind == HydrologyWaterKind::Lake && base_density > 0.0 {
-        let headroom = lake_surface_headroom(water.strength);
-        if headroom > 0.0
-            && cell_top > water.water_level
-            && cell_bottom < water.water_level + headroom
-        {
-            return density.min(WATER_VOLUME_AIR_DENSITY);
-        }
+    if base_density > 0.0
+        && matches!(water.kind, HydrologyWaterKind::Lake | HydrologyWaterKind::River)
+        && cell_top > water.water_level
+    {
+        return density.min(WATER_VOLUME_AIR_DENSITY);
     }
 
     if cell_top <= water.bed_level || cell_bottom >= water.water_level {
@@ -159,10 +153,6 @@ fn river_headroom(strength: f32, horizontal: Vec2, seed: u64) -> f32 {
     RIVER_CHANNEL_HEADROOM * smoothstep(shaped_strength)
 }
 
-fn lake_surface_headroom(strength: f32) -> f32 {
-    LAKE_SURFACE_HEADROOM * smoothstep(strength.clamp(0.0, 1.0))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,12 +179,5 @@ mod tests {
         let right = river_headroom(0.5, Vec2::new(96.5, 14.5), 42);
 
         assert_ne!(left, right);
-    }
-
-    #[test]
-    fn lake_surface_headroom_tapers_at_the_boundary() {
-        assert_eq!(lake_surface_headroom(0.0), 0.0);
-        assert!(lake_surface_headroom(0.5) > 0.0);
-        assert_eq!(lake_surface_headroom(1.0), LAKE_SURFACE_HEADROOM);
     }
 }
