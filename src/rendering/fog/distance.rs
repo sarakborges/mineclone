@@ -5,8 +5,8 @@ use crate::{
     world::render_distance::RenderDistanceSettings,
 };
 
-const FOG_START_RADIUS_FRACTION: f32 = 0.58;
-const FOG_END_RADIUS_FRACTION: f32 = 0.90;
+const FOG_START_RADIUS_FRACTION: f32 = 0.78;
+const FOG_END_RADIUS_FRACTION: f32 = 0.98;
 
 pub(super) fn fog_distances(render_distance_chunks: i32) -> (f32, f32) {
     let chunk_size = CHUNK_SIZE as f32;
@@ -40,14 +40,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fog_builds_a_wide_transition_before_the_render_boundary() {
+    fn fog_stays_close_to_the_render_boundary() {
         let render_distance_chunks = 10;
         let radius = render_distance_chunks as f32 * CHUNK_SIZE as f32;
         let (start, end) = fog_distances(render_distance_chunks);
 
-        assert!(start <= radius * 0.60);
-        assert!(end <= radius * 0.92);
-        assert!(end < radius);
-        assert!(end - start >= radius * 0.30);
+        assert!(start >= radius * 0.76);
+        assert!(start <= radius * 0.80);
+        assert!(end >= radius * 0.96);
+        assert!(end <= radius);
+        assert!(end > start);
     }
 }
