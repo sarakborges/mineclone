@@ -41,9 +41,12 @@ fn lake_for_basin(
     water_fluid: &str,
     terminal: bool,
 ) -> Option<WaterBody> {
-    if !source.biome_hydrology.can_generate_lake
-        || source.elevation <= sea_level + 1.0
-        || source.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD
+    if source.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD {
+        return None;
+    }
+
+    if !terminal
+        && (!source.biome_hydrology.can_generate_lake || source.elevation <= sea_level + 1.0)
     {
         return None;
     }
