@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::world::deterministic::avalanche_u64;
-pub(super) use crate::world::deterministic::hash_unit;
+pub(super) use crate::world::deterministic::{hash_signed, hash_unit};
 pub(super) use crate::world::math::{lerp, smoothstep};
 
 use super::constants::{
@@ -51,8 +51,4 @@ pub(super) fn cell_hash(cell: IVec2, seed: u64) -> u64 {
     hash ^= (cell.x as i64 as u64).wrapping_mul(0xbf58_476d_1ce4_e5b9);
     hash ^= (cell.y as i64 as u64).wrapping_mul(0x94d0_49bb_1331_11eb);
     avalanche_u64(hash)
-}
-
-pub(super) fn hash_signed(hash: u64) -> f32 {
-    hash_unit(hash) * 2.0 - 1.0
 }
