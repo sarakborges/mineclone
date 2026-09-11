@@ -1,32 +1,43 @@
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
+    content::{biome::BiomeRegistry, dimension::DimensionDefinition},
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
-        coordinates::split_dimension_position, lighting::initialize_chunk_lighting,
-        neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
+        chunk::CHUNK_SIZE, coordinates::split_dimension_position,
+        lighting::initialize_chunk_lighting, neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
     },
 };
 
 use super::{
+    biome_field::BiomeField,
     chunk_loading::ensure_chunk_loaded,
     chunk_remesh::ChunkRemeshQueue,
     chunk_rendering::{ChunkRenderPool, spawn_chunk_mesh},
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
     fluid_updates::PendingFluidUpdates,
     render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
+    terrain::surface_height,
 };
 
 const CHUNKS_PER_FRAME: usize = 2;
+const SURFACE_VERTICAL_PADDING_CHUNKS: i32 = 1;
 
 #[derive(Resource, Default)]
 pub struct ChunkStreamingState {
     center: Option<IVec3>,
     horizontal_render_distance: i32,
     vertical_render_distance: i32,
+    desired: HashSet<IVec3>,
     pending: VecDeque<IVec3>,
+}
+
+impl ChunkStreamingState {
+    pub(crate) fn wants(&self, coord: IVec3) -> bool {
+        self.desired.contains(&coord)
+    }
 }
 
 #[derive(SystemParam)]
@@ -65,6 +76,9 @@ pub fn stream_chunks(
             center,
             horizontal_radius,
             vertical_radius,
+            generation.dimension(),
+            &content.biomes,
+            &content.biome_field,
         );
     }
 
@@ -109,20 +123,112 @@ pub fn stream_chunks(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn rebuild_queue(
     streaming: &mut ChunkStreamingState,
     render_pool: &ChunkRenderPool,
     center: IVec3,
     horizontal_radius: i32,
     vertical_radius: i32,
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
 ) {
-    let coords = chunk_coords_in_volume(center, horizontal_radius, vertical_radius);
+    let desired = desired_chunk_coords(
+        center,
+        horizontal_radius,
+        vertical_radius,
+        dimension,
+        biomes,
+        biome_field,
+    );
+    let mut pending = desired
+        .iter()
+        .copied()
+        .filter(|coord| !render_pool.contains(*coord))
+        .collect::<Vec<_>>();
+
+    pending.sort_by_key(|coord| (*coord - center).length_squared());
 
     streaming.center = Some(center);
     streaming.horizontal_render_distance = horizontal_radius;
     streaming.vertical_render_distance = vertical_radius;
-    streaming.pending = coords
+    streaming.desired = desired;
+    streaming.pending = pending.into();
+}
+
+fn desired_chunk_coords(
+    center: IVec3,
+    horizontal_radius: i32,
+    vertical_radius: i32,
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+) -> HashSet<IVec3> {
+    let mut desired = chunk_coords_in_volume(center, horizontal_radius, vertical_radius)
         .into_iter()
-        .filter(|coord| !render_pool.contains(*coord))
-        .collect();
+        .collect::<HashSet<_>>();
+
+    for z in -horizontal_radius..=horizontal_radius {
+        for x in -horizontal_radius..=horizontal_radius {
+            if x * x + z * z > horizontal_radius * horizontal_radius {
+                continue;
+            }
+
+            let horizontal = IVec2::new(center.x + x, center.z + z);
+            let (own_minimum, own_maximum) =
+                chunk_surface_range(horizontal, dimension, biomes, biome_field);
+            let mut surrounding_minimum = own_minimum;
+
+            for neighbor_z in -1..=1 {
+                for neighbor_x in -1..=1 {
+                    if neighbor_x == 0 && neighbor_z == 0 {
+                        continue;
+                    }
+
+                    let neighbor = horizontal + IVec2::new(neighbor_x, neighbor_z);
+                    let (neighbor_minimum, _) =
+                        chunk_surface_range(neighbor, dimension, biomes, biome_field);
+                    surrounding_minimum = surrounding_minimum.min(neighbor_minimum);
+                }
+            }
+
+            let chunk_size = CHUNK_SIZE as i32;
+            let minimum_y = (surrounding_minimum.div_euclid(chunk_size)
+                - SURFACE_VERTICAL_PADDING_CHUNKS)
+                .max(0);
+            let maximum_y = (own_maximum.div_euclid(chunk_size)
+                + SURFACE_VERTICAL_PADDING_CHUNKS)
+                .max(minimum_y);
+
+            for y in minimum_y..=maximum_y {
+                desired.insert(IVec3::new(horizontal.x, y, horizontal.y));
+            }
+        }
+    }
+
+    desired
+}
+
+fn chunk_surface_range(
+    horizontal_chunk: IVec2,
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+) -> (i32, i32) {
+    let chunk_size = CHUNK_SIZE as i32;
+    let origin = horizontal_chunk * chunk_size;
+    let sample_offsets = [0, chunk_size / 2, chunk_size - 1];
+    let mut minimum = i32::MAX;
+    let mut maximum = i32::MIN;
+
+    for z in sample_offsets {
+        for x in sample_offsets {
+            let height = surface_height(origin + IVec2::new(x, z), dimension, biomes, biome_field);
+            minimum = minimum.min(height);
+            maximum = maximum.max(height);
+        }
+    }
+
+    (minimum, maximum)
 }
