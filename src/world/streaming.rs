@@ -176,13 +176,68 @@ fn rebuild_queue(
         .filter(|coord| !render_pool.contains(*coord))
         .collect::<Vec<_>>();
 
-    pending.sort_by_key(|coord| (*coord - center).length_squared());
+    pending.sort_by_key(|coord| {
+        chunk_streaming_priority(
+            *coord,
+            center,
+            horizontal_radius,
+            vertical_radius,
+            &streaming.surface_ranges,
+        )
+    });
 
     streaming.center = Some(center);
     streaming.horizontal_render_distance = horizontal_radius;
     streaming.vertical_render_distance = vertical_radius;
     streaming.desired = desired;
     streaming.pending = pending.into();
+}
+
+fn chunk_streaming_priority(
+    coord: IVec3,
+    center: IVec3,
+    horizontal_render_distance: i32,
+    vertical_render_distance: i32,
+    surface_ranges: &HashMap<IVec2, (i32, i32)>,
+) -> (i32, i32, i32, i32) {
+    let horizontal = coord.xz();
+    let horizontal_distance_squared = (horizontal - center.xz()).length_squared();
+    let vertical_distance = (coord.y - center.y).abs();
+    let within_visible_radius = horizontal_distance_squared
+        <= horizontal_render_distance * horizontal_render_distance;
+    let near_player = horizontal_distance_squared <= 2
+        && vertical_distance <= vertical_render_distance;
+    let surface_distance = surface_ranges
+        .get(&horizontal)
+        .map_or(i32::MAX, |(minimum, maximum)| {
+            let chunk_size = CHUNK_SIZE as i32;
+            let minimum_chunk_y = minimum.div_euclid(chunk_size);
+            let maximum_chunk_y = maximum.div_euclid(chunk_size);
+
+            if coord.y < minimum_chunk_y {
+                minimum_chunk_y - coord.y
+            } else if coord.y > maximum_chunk_y {
+                coord.y - maximum_chunk_y
+            } else {
+                0
+            }
+        });
+    let priority_class = if near_player {
+        0
+    } else if within_visible_radius && surface_distance <= SURFACE_PADDING_ABOVE_CHUNKS {
+        1
+    } else if within_visible_radius {
+        2
+    } else {
+        3
+    };
+
+    (
+        priority_class,
+        horizontal_distance_squared,
+        surface_distance,
+        vertical_distance,
+    )
 }
 
 fn desired_chunk_coords(
@@ -279,12 +334,11 @@ fn chunk_surface_range(
 ) -> (i32, i32) {
     let chunk_size = CHUNK_SIZE as i32;
     let origin = horizontal_chunk * chunk_size;
-    let sample_offsets = [0, chunk_size / 2, chunk_size - 1];
     let mut minimum = i32::MAX;
     let mut maximum = i32::MIN;
 
-    for z in sample_offsets {
-        for x in sample_offsets {
+    for z in 0..chunk_size {
+        for x in 0..chunk_size {
             let height = surface_height(origin + IVec2::new(x, z), dimension, biomes, biome_field);
             minimum = minimum.min(height);
             maximum = maximum.max(height);
