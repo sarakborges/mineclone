@@ -26,6 +26,7 @@ pub(crate) struct WorldFeatureFields {
     volume_biome_cache: RwLock<HashMap<IVec3, Arc<VolumeBiomeRegion>>>,
     cave_cache: RwLock<HashMap<IVec3, Option<Arc<CaveConnectivityRegion>>>>,
     region_cache: RwLock<HashMap<IVec3, Arc<GenerationRegion>>>,
+    structure_origin_cache: RwLock<HashMap<(String, IVec2), Option<i32>>>,
 }
 
 impl WorldFeatureFields {
@@ -39,6 +40,7 @@ impl WorldFeatureFields {
             volume_biome_cache: RwLock::new(HashMap::new()),
             cave_cache: RwLock::new(HashMap::new()),
             region_cache: RwLock::new(HashMap::new()),
+            structure_origin_cache: RwLock::new(HashMap::new()),
         }
     }
 
@@ -119,6 +121,32 @@ impl WorldFeatureFields {
             .expect("cave region cache write lock was poisoned");
 
         cache.entry(coord).or_insert_with(|| region.clone()).clone()
+    }
+
+    pub(crate) fn structure_origin_y(
+        &self,
+        structure_id: &str,
+        anchor: IVec2,
+        factory: impl FnOnce() -> Option<i32>,
+    ) -> Option<i32> {
+        let key = (structure_id.to_owned(), anchor);
+        if let Some(cached) = self
+            .structure_origin_cache
+            .read()
+            .expect("structure origin cache read lock was poisoned")
+            .get(&key)
+            .copied()
+        {
+            return cached;
+        }
+
+        let origin = factory();
+        let mut cache = self
+            .structure_origin_cache
+            .write()
+            .expect("structure origin cache write lock was poisoned");
+
+        *cache.entry(key).or_insert(origin)
     }
 
     pub(crate) fn region_with_hydrology(
@@ -209,6 +237,14 @@ impl WorldFeatureFields {
             .expect("cave region cache read lock was poisoned")
             .len()
     }
+
+    #[cfg(test)]
+    fn cached_structure_origin_count(&self) -> usize {
+        self.structure_origin_cache
+            .read()
+            .expect("structure origin cache read lock was poisoned")
+            .len()
+    }
 }
 
 #[cfg(test)]
@@ -281,5 +317,34 @@ mod tests {
 
         assert!(Arc::ptr_eq(&first, &second));
         assert_eq!(fields.cached_cave_region_count(), 1);
+    }
+
+    #[test]
+    fn structure_origin_cache_reuses_accepted_and_rejected_placements() {
+        let fields = WorldFeatureFields::new(42, 64, DimensionHydrology::default());
+        let accepted_anchor = IVec2::new(8, 12);
+        let rejected_anchor = IVec2::new(24, -4);
+
+        assert_eq!(
+            fields.structure_origin_y("asteria:test/tree", accepted_anchor, || Some(65)),
+            Some(65),
+        );
+        assert_eq!(
+            fields.structure_origin_y("asteria:test/tree", accepted_anchor, || {
+                panic!("accepted structure origin should be cached")
+            }),
+            Some(65),
+        );
+        assert_eq!(
+            fields.structure_origin_y("asteria:test/tree", rejected_anchor, || None),
+            None,
+        );
+        assert_eq!(
+            fields.structure_origin_y("asteria:test/tree", rejected_anchor, || {
+                panic!("rejected structure origin should be cached")
+            }),
+            None,
+        );
+        assert_eq!(fields.cached_structure_origin_count(), 2);
     }
 }
