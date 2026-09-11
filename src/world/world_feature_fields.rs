@@ -1,20 +1,25 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, RwLock},
 };
 
 use bevy::prelude::*;
 
-use crate::content::dimension_hydrology::DimensionHydrology;
+use crate::{
+    content::dimension_hydrology::DimensionHydrology,
+    voxel::chunk::CHUNK_SIZE,
+};
 
 use super::{
     biome_field::VolumeBiomeRegion,
     cave_connectivity::{CaveConnectivityField, CaveConnectivityRegion},
     generation::columns::GenerationColumnSample,
-    generation_region::GenerationRegion,
+    generation_region::{GenerationRegion, generation_region_coord},
     geology::GeologyField,
     hydrology::{HydrologyBiomeOverlay, HydrologyField, HydrologyRegion},
 };
+
+const CACHE_REGION_MARGIN: i32 = 1;
 
 #[derive(Resource)]
 pub(crate) struct WorldFeatureFields {
@@ -198,6 +203,59 @@ impl WorldFeatureFields {
         cache.entry(coord).or_insert_with(|| region.clone()).clone()
     }
 
+    pub(crate) fn retain_for_chunks(&self, desired: &HashSet<IVec3>) {
+        let horizontal_chunks = desired.iter().map(|coord| coord.xz()).collect::<HashSet<_>>();
+        let mut retained_regions = HashSet::new();
+
+        for &chunk in desired {
+            let region = generation_region_coord(chunk);
+            for y in (region.y - CACHE_REGION_MARGIN).max(0)..=(region.y + CACHE_REGION_MARGIN) {
+                for z in (region.z - CACHE_REGION_MARGIN)..=(region.z + CACHE_REGION_MARGIN) {
+                    for x in (region.x - CACHE_REGION_MARGIN)..=(region.x + CACHE_REGION_MARGIN) {
+                        retained_regions.insert(IVec3::new(x, y, z));
+                    }
+                }
+            }
+        }
+
+        let retained_hydrology = retained_regions
+            .iter()
+            .map(|coord| coord.xz())
+            .collect::<HashSet<_>>();
+
+        self.generation_column_cache
+            .write()
+            .expect("generation column cache write lock was poisoned")
+            .retain(|coord, _| horizontal_chunks.contains(coord));
+        self.volume_biome_cache
+            .write()
+            .expect("volume biome cache write lock was poisoned")
+            .retain(|coord, _| retained_regions.contains(coord));
+        self.cave_cache
+            .write()
+            .expect("cave region cache write lock was poisoned")
+            .retain(|coord, _| retained_regions.contains(coord));
+        self.region_cache
+            .write()
+            .expect("generation region cache write lock was poisoned")
+            .retain(|coord, _| retained_regions.contains(coord));
+        self.hydrology_cache
+            .write()
+            .expect("hydrology region cache write lock was poisoned")
+            .retain(|coord, _| retained_hydrology.contains(coord));
+        self.structure_origin_cache
+            .write()
+            .expect("structure origin cache write lock was poisoned")
+            .retain(|(_, anchor), _| {
+                let chunk_size = CHUNK_SIZE as i32;
+                let chunk = IVec2::new(
+                    anchor.x.div_euclid(chunk_size),
+                    anchor.y.div_euclid(chunk_size),
+                );
+                horizontal_chunks.contains(&chunk)
+            });
+    }
+
     #[cfg(test)]
     fn cached_region_count(&self) -> usize {
         self.region_cache
@@ -346,5 +404,47 @@ mod tests {
             None,
         );
         assert_eq!(fields.cached_structure_origin_count(), 2);
+    }
+
+    #[test]
+    fn cache_retention_drops_entries_outside_the_streaming_window() {
+        let fields = WorldFeatureFields::new(42, 64, DimensionHydrology::default());
+        let near_chunk = IVec3::ZERO;
+        let far_chunk = IVec3::new(32, 0, 0);
+        let near_region = generation_region_coord(near_chunk);
+        let far_region = generation_region_coord(far_chunk);
+
+        fields.generation_columns(near_chunk.xz(), Vec::new);
+        fields.generation_columns(far_chunk.xz(), Vec::new);
+        fields.volume_biome_region(near_region, VolumeBiomeRegion::default);
+        fields.volume_biome_region(far_region, VolumeBiomeRegion::default);
+        fields.cave_region(near_region, |_| Some(CaveConnectivityRegion::default()));
+        fields.cave_region(far_region, |_| Some(CaveConnectivityRegion::default()));
+        fields.structure_origin_y("asteria:test/tree", IVec2::ZERO, || Some(64));
+        fields.structure_origin_y(
+            "asteria:test/tree",
+            IVec2::new(far_chunk.x * CHUNK_SIZE as i32, 0),
+            || Some(64),
+        );
+        for coord in [near_region, far_region] {
+            fields.region_with_hydrology(coord, |hydrology| {
+                hydrology.region_from_macro_terrain(coord.xz(), |_| {
+                    super::super::hydrology::HydrologySurfaceSample {
+                        elevation: 64.0,
+                        continentalness: 0.5,
+                        biome_hydrology: crate::content::biome_hydrology::BiomeHydrology::default(),
+                    }
+                })
+            });
+        }
+
+        fields.retain_for_chunks(&HashSet::from([near_chunk]));
+
+        assert_eq!(fields.cached_generation_column_count(), 1);
+        assert_eq!(fields.cached_volume_biome_region_count(), 1);
+        assert_eq!(fields.cached_cave_region_count(), 1);
+        assert_eq!(fields.cached_structure_origin_count(), 1);
+        assert_eq!(fields.cached_region_count(), 1);
+        assert_eq!(fields.cached_hydrology_region_count(), 1);
     }
 }
