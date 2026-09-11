@@ -42,10 +42,6 @@ impl WorldFeatureFields {
         }
     }
 
-    pub fn hydrology(&self) -> &HydrologyField {
-        &self.hydrology
-    }
-
     pub(crate) fn generation_columns(
         &self,
         coord: IVec2,
@@ -94,7 +90,7 @@ impl WorldFeatureFields {
         cache.entry(coord).or_insert_with(|| region.clone()).clone()
     }
 
-    pub fn cave_region(
+    pub(crate) fn cave_region(
         &self,
         coord: IVec3,
         factory: impl FnOnce(&CaveConnectivityField) -> Option<CaveConnectivityRegion>,
@@ -118,7 +114,7 @@ impl WorldFeatureFields {
         cache.entry(coord).or_insert_with(|| region.clone()).clone()
     }
 
-    pub fn region_with_hydrology(
+    pub(crate) fn region_with_hydrology(
         &self,
         coord: IVec3,
         hydrology_factory: impl FnOnce(&HydrologyField) -> HydrologyRegion,
