@@ -1,10 +1,14 @@
 mod path;
+mod water;
 
 use std::collections::HashSet;
 
 use bevy::prelude::*;
 
-use self::path::{chaotic_connector_points, connector_radius_progress};
+use self::{
+    path::{chaotic_connector_points, connector_radius_progress},
+    water::{UndergroundWaterRegion, UndergroundWaterSample},
+};
 use super::{feature_graph::FeatureGraph, generation_region::generation_region_world_bounds};
 
 const MAX_CONNECTOR_LENGTH: f32 = 256.0;
@@ -15,6 +19,16 @@ const MAX_TUNNEL_RADIUS: f32 = 8.0;
 #[derive(Clone, Debug, Default)]
 pub struct CaveConnectivityRegion {
     pub connector_graph: FeatureGraph,
+    underground_water: UndergroundWaterRegion,
+}
+
+impl CaveConnectivityRegion {
+    pub(crate) fn underground_water_at(
+        &self,
+        position: Vec3,
+    ) -> Option<UndergroundWaterSample> {
+        self.underground_water.water_at(position)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -32,7 +46,16 @@ impl CaveConnectivityField {
     }
 
     pub fn region_from_anchors(&self, coord: IVec3, anchors: &[Vec3]) -> CaveConnectivityRegion {
-        if coord.y < 0 || anchors.len() < 2 {
+        self.region_from_anchors_with_underground_water(coord, anchors, anchors)
+    }
+
+    pub(crate) fn region_from_anchors_with_underground_water(
+        &self,
+        coord: IVec3,
+        anchors: &[Vec3],
+        underground_anchors: &[Vec3],
+    ) -> CaveConnectivityRegion {
+        if coord.y < 0 || anchors.is_empty() {
             return CaveConnectivityRegion::default();
         }
 
@@ -44,6 +67,18 @@ impl CaveConnectivityField {
         anchors.sort_by(compare_position);
         anchors.dedup_by(|left, right| *left == *right);
 
+        if anchors.is_empty() {
+            return CaveConnectivityRegion::default();
+        }
+
+        let underground_anchors = underground_anchors
+            .iter()
+            .copied()
+            .filter(|position| position.y >= 0.0)
+            .collect::<Vec<_>>();
+        let water_seed = self.seed.rotate_left(17) ^ 0xbb67_ae85_84ca_a73b;
+        let mut underground_water =
+            UndergroundWaterRegion::from_anchors(&underground_anchors, water_seed);
         let mut graph = FeatureGraph::default();
         let mut connected_pairs = HashSet::new();
 
@@ -75,23 +110,41 @@ impl CaveConnectivityField {
                     continue;
                 }
 
+                let from = anchors[pair.0];
+                let to = anchors[pair.1];
+                let both_underground = contains_anchor(&underground_anchors, from)
+                    && contains_anchor(&underground_anchors, to);
+                let carries_water = both_underground
+                    && UndergroundWaterRegion::connection_carries_water(from, to, water_seed);
+
                 add_connector(
                     &mut graph,
+                    &mut underground_water,
                     coord,
-                    anchors[pair.0],
-                    anchors[pair.1],
+                    from,
+                    to,
                     self.seed,
+                    carries_water,
                 );
             }
         }
 
         CaveConnectivityRegion {
             connector_graph: graph,
+            underground_water,
         }
     }
 }
 
-fn add_connector(graph: &mut FeatureGraph, coord: IVec3, from: Vec3, to: Vec3, seed: u64) {
+fn add_connector(
+    graph: &mut FeatureGraph,
+    underground_water: &mut UndergroundWaterRegion,
+    coord: IVec3,
+    from: Vec3,
+    to: Vec3,
+    seed: u64,
+    carries_water: bool,
+) {
     let hash = anchor_pair_hash(from, to, seed);
     let start_radius = tunnel_radius(hash);
     let end_radius = tunnel_radius(hash.rotate_left(29));
@@ -119,7 +172,15 @@ fn add_connector(graph: &mut FeatureGraph, coord: IVec3, from: Vec3, to: Vec3, s
         let from_node = graph.add_node(from);
         let to_node = graph.add_node(to);
         graph.add_edge(from_node, to_node, from_radius, to_radius);
+
+        if carries_water {
+            underground_water.add_river_segment(from, to, from_radius, to_radius);
+        }
     }
+}
+
+fn contains_anchor(anchors: &[Vec3], position: Vec3) -> bool {
+    anchors.iter().any(|anchor| *anchor == position)
 }
 
 fn ordered_pair(left: usize, right: usize) -> (usize, usize) {
@@ -279,5 +340,19 @@ mod tests {
         if let (Some(left_sample), Some(right_sample)) = (left_sample, right_sample) {
             assert_eq!(left_sample.strength, right_sample.strength);
         }
+    }
+
+    #[test]
+    fn surface_entrance_does_not_seed_underground_water() {
+        let field = CaveConnectivityField::new(42);
+        let cavern = Vec3::new(32.5, 24.5, 32.5);
+        let entrance = Vec3::new(64.5, 80.5, 32.5);
+        let region = field.region_from_anchors_with_underground_water(
+            IVec3::ZERO,
+            &[cavern, entrance],
+            &[cavern],
+        );
+
+        assert!(region.underground_water_at(entrance).is_none());
     }
 }

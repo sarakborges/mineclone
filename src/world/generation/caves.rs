@@ -61,6 +61,7 @@ pub(super) fn anchored_cave_region(
                 )
             })
             .collect::<Vec<_>>();
+        let underground_anchors = anchors.clone();
 
         if region.coord.y == 0
             && let Some(entrance) = surface_cave_entrance(
@@ -76,7 +77,13 @@ pub(super) fn anchored_cave_region(
             anchors.push(entrance);
         }
 
-        (anchors.len() >= 2).then(|| cave_field.region_from_anchors(region.coord, &anchors))
+        (!anchors.is_empty()).then(|| {
+            cave_field.region_from_anchors_with_underground_water(
+                region.coord,
+                &anchors,
+                &underground_anchors,
+            )
+        })
     })
 }
 
