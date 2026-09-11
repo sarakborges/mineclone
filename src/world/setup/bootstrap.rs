@@ -10,7 +10,7 @@ use crate::{
     },
     rendering::terrain_material::TerrainMaterial,
     voxel::{
-        chunk::CHUNK_SIZE, coordinates::split_dimension_position, world::VoxelWorld,
+        chunk::CHUNK_SIZE, coordinates::chunk_coord_from_position, world::VoxelWorld,
     },
 };
 
@@ -91,7 +91,7 @@ pub(in crate::world) fn begin_world_loading(
     let initial_center = if *inputs.load_mode == WorldLoadMode::Load {
         save.player_position()
             .map(|position| {
-                let chunk = split_dimension_position(position).chunk;
+                let chunk = chunk_coord_from_position(position);
                 IVec3::new(chunk.x, chunk.y.max(0), chunk.z)
             })
             .unwrap_or(IVec3::ZERO)

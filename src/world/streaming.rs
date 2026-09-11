@@ -14,7 +14,7 @@ use crate::{
     },
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
-        coordinates::split_dimension_position, lighting::initialize_chunks_lighting,
+        coordinates::chunk_coord_from_position, lighting::initialize_chunks_lighting,
         neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
     },
 };
@@ -81,7 +81,7 @@ pub(super) fn stream_chunks(
     mut fluid_updates: ResMut<PendingFluidUpdates>,
 ) {
     let feet_position = inputs.player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
-    let player_chunk = split_dimension_position(feet_position).chunk;
+    let player_chunk = chunk_coord_from_position(feet_position);
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
     let horizontal_radius = inputs.render_distance.chunks();
     let vertical_radius = inputs.render_distance.vertical_chunks();
