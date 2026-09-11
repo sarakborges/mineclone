@@ -283,18 +283,18 @@ fn desired_fluid(
         return Some(FluidCell::flowing(above.fluid_id, MAX_FLUID_LEVEL));
     }
 
-    let below = position - IVec3::Y;
-    let supported = position.y == 0 || world.is_solid(below) || world.fluid_at(below).is_some();
-    if !supported {
-        return None;
-    }
-
+    let target_supported = fluid_has_support(world, position);
     let mut strongest: Option<(u8, u16, FluidId)> = None;
 
     for offset in HORIZONTAL_NEIGHBORS {
-        let Some(neighbor) = world.fluid_at(position + offset) else {
+        let neighbor_position = position + offset;
+        let Some(neighbor) = world.fluid_at(neighbor_position) else {
             continue;
         };
+        if !target_supported && !can_spill_over_edge(world, neighbor_position, neighbor) {
+            continue;
+        }
+
         let definition = fluids
             .get(neighbor.fluid_id)
             .unwrap_or_else(|| panic!("missing fluid definition for id {}", neighbor.fluid_id));
@@ -319,6 +319,23 @@ fn desired_fluid(
     strongest.map(|(level, spread_distance, fluid_id)| {
         FluidCell::spreading(fluid_id, level, spread_distance)
     })
+}
+
+fn fluid_has_support(world: &VoxelWorld, position: IVec3) -> bool {
+    if position.y == 0 {
+        return true;
+    }
+
+    let below = position - IVec3::Y;
+    world.is_solid(below) || world.fluid_at(below).is_some()
+}
+
+fn can_spill_over_edge(world: &VoxelWorld, position: IVec3, fluid: FluidCell) -> bool {
+    if fluid.is_source() || position.y == 0 {
+        return true;
+    }
+
+    world.is_solid(position - IVec3::Y)
 }
 
 fn horizontal_spread_state(neighbor: FluidCell, max_spread: u16) -> Option<(u8, u16)> {
