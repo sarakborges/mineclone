@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     content::fluid::{FluidId, FluidRegistry},
     voxel::{
-        chunk::CHUNK_SIZE,
+        coordinates::chunk_coord_from_world,
         fluid::{FluidCell, MAX_FLUID_LEVEL},
         neighbors::CARDINAL_NEIGHBORS,
         world::VoxelWorld,
@@ -98,24 +98,15 @@ fn horizontal_spread_state(neighbor: FluidCell, max_spread: u16) -> Option<(u8, 
 }
 
 pub(super) fn enqueue_remesh(position: IVec3, remesh_queue: &mut ChunkRemeshQueue) {
-    let center = chunk_coord(position);
+    let center = chunk_coord_from_world(position);
     remesh_queue.enqueue_priority(center);
 
     for offset in CARDINAL_NEIGHBORS {
-        let neighbor = chunk_coord(position + offset);
+        let neighbor = chunk_coord_from_world(position + offset);
         if neighbor != center {
             remesh_queue.enqueue(neighbor);
         }
     }
-}
-
-fn chunk_coord(position: IVec3) -> IVec3 {
-    let size = CHUNK_SIZE as i32;
-    IVec3::new(
-        position.x.div_euclid(size),
-        position.y.div_euclid(size),
-        position.z.div_euclid(size),
-    )
 }
 
 #[cfg(test)]

@@ -16,7 +16,7 @@ use self::{
     propagation::{relax, relax_budgeted},
     queue::LightingQueue,
 };
-use super::{chunk::CHUNK_SIZE, world::VoxelWorld};
+use super::{coordinates::chunk_origin, world::VoxelWorld};
 
 #[derive(Resource, Default)]
 pub(crate) struct PendingLightingUpdates {
@@ -29,11 +29,8 @@ impl PendingLightingUpdates {
     }
 
     pub(crate) fn enqueue_chunk_unloads(&mut self, unloaded: &[IVec3]) {
-        let chunk_size = CHUNK_SIZE as i32;
-
         for coord in unloaded {
-            self.queue
-                .enqueue_chunk_boundary_neighbors(*coord * chunk_size);
+            self.queue.enqueue_chunk_boundary_neighbors(chunk_origin(*coord));
         }
     }
 
@@ -59,14 +56,13 @@ pub(crate) fn initialize_chunks_lighting(
     fluids: &FluidRegistry,
 ) -> HashSet<IVec3> {
     let mut queue = LightingQueue::default();
-    let chunk_size = CHUNK_SIZE as i32;
 
     for &coord in coords {
         if !world.clear_chunk_light(coord) {
             continue;
         }
 
-        let origin = coord * chunk_size;
+        let origin = chunk_origin(coord);
         queue.enqueue_chunk_voxels(origin);
         queue.enqueue_chunk_boundary_neighbors(origin);
     }

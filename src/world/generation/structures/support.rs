@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 use crate::{
     content::structure::StructureVoxel,
-    voxel::chunk::CHUNK_SIZE,
+    voxel::coordinates::chunk_coord_from_world,
     world::{
         cave_connectivity::CaveConnectivityRegion,
         density_pipeline::{DensitySampleContext, sample_density},
@@ -73,12 +73,9 @@ fn structure_support_context(
         context.biomes,
         context.biome_field,
     );
-    let chunk_size = CHUNK_SIZE as i32;
-    let anchor_chunk = IVec3::new(
-        anchor.x.div_euclid(chunk_size),
-        (surface_y - 1).div_euclid(chunk_size).max(0),
-        anchor.y.div_euclid(chunk_size),
-    );
+    let mut anchor_chunk =
+        chunk_coord_from_world(IVec3::new(anchor.x, surface_y - 1, anchor.y));
+    anchor_chunk.y = anchor_chunk.y.max(0);
     let region = context.region(generation_region_coord(anchor_chunk));
     let anchored_caves = context.anchored_caves(region.as_ref());
 

@@ -6,6 +6,7 @@ use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, VoxelChunk},
     chunk_archive::ArchivedChunk,
+    coordinates::{chunk_coord_from_world, split_world_position},
     fluid::FluidCell,
     light::VoxelLight,
 };
@@ -139,8 +140,8 @@ impl VoxelWorld {
             return false;
         }
 
-        let (chunk_coord, _) = split_world_position(world_position);
-        self.chunks.contains_key(&chunk_coord)
+        self.chunks
+            .contains_key(&chunk_coord_from_world(world_position))
     }
 
     pub(crate) fn highest_loaded_world_y_in_column(
@@ -149,12 +150,11 @@ impl VoxelWorld {
         world_z: i32,
     ) -> Option<i32> {
         let chunk_size = CHUNK_SIZE as i32;
-        let chunk_x = world_x.div_euclid(chunk_size);
-        let chunk_z = world_z.div_euclid(chunk_size);
+        let horizontal_chunk = chunk_coord_from_world(IVec3::new(world_x, 0, world_z));
 
         self.chunks
             .keys()
-            .filter(|coord| coord.x == chunk_x && coord.z == chunk_z)
+            .filter(|coord| coord.x == horizontal_chunk.x && coord.z == horizontal_chunk.z)
             .map(|coord| (coord.y + 1) * chunk_size - 1)
             .max()
     }
@@ -202,7 +202,11 @@ impl VoxelWorld {
         let y = local_position.y as usize;
         let z = local_position.z as usize;
 
-        if fluid.is_some() && chunk.cell_at(local_position.x, local_position.y, local_position.z).is_some() {
+        if fluid.is_some()
+            && chunk
+                .cell_at(local_position.x, local_position.y, local_position.z)
+                .is_some()
+        {
             return None;
         }
         if chunk.fluid_at(local_position.x, local_position.y, local_position.z) == fluid {
@@ -221,20 +225,4 @@ impl VoxelWorld {
     pub fn block_id_at(&self, world_position: IVec3) -> Option<&'static str> {
         self.cell_at(world_position).map(|cell| cell.block_id)
     }
-}
-
-fn split_world_position(world_position: IVec3) -> (IVec3, IVec3) {
-    let chunk_size = CHUNK_SIZE as i32;
-    let chunk_coord = IVec3::new(
-        world_position.x.div_euclid(chunk_size),
-        world_position.y.div_euclid(chunk_size),
-        world_position.z.div_euclid(chunk_size),
-    );
-    let local_position = IVec3::new(
-        world_position.x.rem_euclid(chunk_size),
-        world_position.y.rem_euclid(chunk_size),
-        world_position.z.rem_euclid(chunk_size),
-    );
-
-    (chunk_coord, local_position)
 }

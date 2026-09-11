@@ -16,7 +16,10 @@ use crate::{
         biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionDefinition,
         fluid::FluidRegistry, structure::StructureRegistry,
     },
-    voxel::chunk::{CHUNK_SIZE, VoxelChunk},
+    voxel::{
+        chunk::{CHUNK_SIZE, VoxelChunk},
+        coordinates::chunk_origin,
+    },
 };
 
 use self::{
@@ -114,7 +117,7 @@ pub(crate) fn generate_chunk(coord: IVec3, context: &ChunkGenerationContext<'_>)
         return VoxelChunk::empty();
     }
 
-    let chunk_origin = coord * CHUNK_SIZE as i32;
+    let chunk_origin = chunk_origin(coord);
     let horizontal_chunk = IVec2::new(coord.x, coord.z);
     let region_coord = generation_region_coord(coord);
     let region = context.region(region_coord);
