@@ -139,8 +139,9 @@ fn update_target_hud(
     }
 
     let tint_position = Vec2::new(hit.voxel.x as f32 + 0.5, hit.voxel.z as f32 + 0.5);
+    let tint = block.map(|block| block.tint).unwrap_or_default();
     material.set_tint(block_tint_at(
-        hit.block_id,
+        tint,
         tint_position,
         &content.biome_field,
         &content.biomes,
