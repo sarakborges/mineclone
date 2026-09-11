@@ -88,6 +88,30 @@ pub(crate) fn sample_density_with_column_hydrology(
     column_hydrology: DensityColumnHydrology,
 ) -> f32 {
     let hydrology_delta = region.hydrology.density_delta(position);
+
+    sample_density_with_precomputed_hydrology(
+        base_density,
+        position,
+        region,
+        anchored_caves,
+        volume,
+        biome_field,
+        column_hydrology,
+        hydrology_delta,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn sample_density_with_precomputed_hydrology(
+    base_density: f32,
+    position: Vec3,
+    region: &GenerationRegion,
+    anchored_caves: Option<&CaveConnectivityRegion>,
+    volume: Option<VolumeBiomeSelection>,
+    biome_field: &BiomeField,
+    column_hydrology: DensityColumnHydrology,
+    hydrology_delta: f32,
+) -> f32 {
     let geology_delta = region.geology.density_delta(position);
     let mut density = base_density + hydrology_delta + geology_delta;
     let water_clearance = cave_water_clearance(position.y, column_hydrology.cave_water);
