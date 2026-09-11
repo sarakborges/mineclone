@@ -8,8 +8,7 @@ use bevy::prelude::*;
 use crate::{
     content::fluid::{FluidId, FluidRegistry},
     voxel::{
-        deduplicated_queue::DeduplicatedQueue, lighting::PendingLightingUpdates,
-        neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
+        lighting::PendingLightingUpdates, update_queue::VoxelUpdateQueue, world::VoxelWorld,
     },
 };
 
@@ -21,16 +20,13 @@ const MAX_FLUID_STEPS_PER_FRAME: usize = 4;
 
 #[derive(Resource, Default)]
 pub(crate) struct PendingFluidUpdates {
-    queue: DeduplicatedQueue<IVec3>,
+    queue: VoxelUpdateQueue,
     accumulated_seconds: HashMap<FluidId, f32>,
 }
 
 impl PendingFluidUpdates {
     pub(crate) fn enqueue_voxel_edit(&mut self, position: IVec3) {
-        self.enqueue(position);
-        for offset in CARDINAL_NEIGHBORS {
-            self.enqueue(position + offset);
-        }
+        self.queue.enqueue_with_neighbors(position);
     }
 
     pub(crate) fn enqueue_loaded_fluid_frontier(&mut self, world: &VoxelWorld, coord: IVec3) {
@@ -38,9 +34,7 @@ impl PendingFluidUpdates {
     }
 
     fn enqueue(&mut self, position: IVec3) {
-        if position.y >= 0 {
-            self.queue.enqueue(position);
-        }
+        self.queue.enqueue(position);
     }
 
     fn pop(&mut self) -> Option<IVec3> {
@@ -141,11 +135,7 @@ pub(super) fn process_fluid_updates(
 
             lighting.enqueue_voxel_edit(position);
             enqueue_remesh(position, &mut remesh_queue);
-
-            pending.enqueue(position);
-            for offset in CARDINAL_NEIGHBORS {
-                pending.enqueue(position + offset);
-            }
+            pending.enqueue_voxel_edit(position);
         }
     }
 }

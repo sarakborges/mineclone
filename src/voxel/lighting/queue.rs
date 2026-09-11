@@ -1,25 +1,19 @@
 use bevy::prelude::*;
 
-use crate::voxel::{
-    chunk::CHUNK_SIZE, deduplicated_queue::DeduplicatedQueue, neighbors::CARDINAL_NEIGHBORS,
-};
+use crate::voxel::{chunk::CHUNK_SIZE, update_queue::VoxelUpdateQueue};
 
 #[derive(Default)]
 pub(super) struct LightingQueue {
-    queue: DeduplicatedQueue<IVec3>,
+    queue: VoxelUpdateQueue,
 }
 
 impl LightingQueue {
     pub fn enqueue(&mut self, position: IVec3) {
-        if position.y >= 0 {
-            self.queue.enqueue(position);
-        }
+        self.queue.enqueue(position);
     }
 
-    pub fn enqueue_neighbors(&mut self, position: IVec3) {
-        for direction in CARDINAL_NEIGHBORS {
-            self.enqueue(position + direction);
-        }
+    pub fn enqueue_with_neighbors(&mut self, position: IVec3) {
+        self.queue.enqueue_with_neighbors(position);
     }
 
     pub fn enqueue_chunk_voxels(&mut self, origin: IVec3) {

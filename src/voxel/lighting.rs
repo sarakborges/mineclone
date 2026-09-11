@@ -25,8 +25,7 @@ pub(crate) struct PendingLightingUpdates {
 
 impl PendingLightingUpdates {
     pub(crate) fn enqueue_voxel_edit(&mut self, position: IVec3) {
-        self.queue.enqueue(position);
-        self.queue.enqueue_neighbors(position);
+        self.queue.enqueue_with_neighbors(position);
     }
 
     pub(crate) fn enqueue_chunk_unloads(&mut self, unloaded: &[IVec3]) {

@@ -12,4 +12,5 @@ pub(crate) mod mesh;
 pub(crate) mod neighbors;
 pub(crate) mod raycast;
 pub(crate) mod texture_rotation;
+pub(crate) mod update_queue;
 pub(crate) mod world;
