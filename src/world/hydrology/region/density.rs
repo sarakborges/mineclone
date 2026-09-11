@@ -3,8 +3,8 @@ use bevy::prelude::*;
 use super::HydrologyRegion;
 use crate::world::hydrology::{
     constants::{
-        LAKE_SHORE_INNER_DISTANCE, LAKE_SHORE_OUTER_DISTANCE, LAKE_SHORE_SURFACE_OFFSET,
-        OCEAN_EXTRA_DEPTH, OCEAN_MINIMUM_DEPTH, RIVER_CARVE_STRENGTH,
+        LAKE_SHORE_OUTER_DISTANCE, LAKE_SHORE_SURFACE_OFFSET, OCEAN_EXTRA_DEPTH,
+        OCEAN_MINIMUM_DEPTH, RIVER_CARVE_STRENGTH,
     },
     math::{lerp, smoothstep},
     types::WaterBody,
@@ -107,16 +107,12 @@ impl HydrologyRegion {
 }
 
 fn lake_shore_strength(distance: f32) -> f32 {
-    if distance < LAKE_SHORE_INNER_DISTANCE || distance > LAKE_SHORE_OUTER_DISTANCE {
+    if distance < 1.0 || distance > LAKE_SHORE_OUTER_DISTANCE {
         return 0.0;
     }
 
-    let progress = if distance <= 1.0 {
-        (distance - LAKE_SHORE_INNER_DISTANCE) / (1.0 - LAKE_SHORE_INNER_DISTANCE)
-    } else {
-        1.0 - (distance - 1.0) / (LAKE_SHORE_OUTER_DISTANCE - 1.0)
-    };
-
+    let progress =
+        1.0 - (distance - 1.0) / (LAKE_SHORE_OUTER_DISTANCE - 1.0).max(f32::EPSILON);
     smoothstep(progress.clamp(0.0, 1.0))
 }
 
@@ -125,9 +121,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn lake_shore_peaks_at_water_boundary_and_fades_on_both_sides() {
-        assert_eq!(lake_shore_strength(0.5), 0.0);
-        assert!(lake_shore_strength(0.9) > 0.0);
+    fn lake_shore_reinforcement_stays_outside_water_boundary() {
+        assert_eq!(lake_shore_strength(0.9), 0.0);
         assert_eq!(lake_shore_strength(1.0), 1.0);
         assert!(lake_shore_strength(1.1) > 0.0);
         assert_eq!(lake_shore_strength(1.3), 0.0);
