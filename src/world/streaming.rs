@@ -10,7 +10,7 @@ use crate::{
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
         chunk::CHUNK_SIZE, coordinates::split_dimension_position,
-        lighting::initialize_chunk_lighting, neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
+        lighting::initialize_chunks_lighting, neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
     },
 };
 
@@ -27,6 +27,7 @@ use super::{
 
 const MIN_CHUNKS_PER_FRAME: usize = 2;
 const MAX_CHUNKS_PER_FRAME: usize = 8;
+const STREAMING_LIGHT_BATCH_CHUNKS: usize = 2;
 const EXTRA_STREAMING_BUDGET_MS: u128 = 6;
 const HORIZONTAL_PRELOAD_CHUNKS: i32 = 1;
 const SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
@@ -102,47 +103,69 @@ pub fn stream_chunks(
             break;
         }
 
-        let Some(coord) = inputs.streaming.pending.pop_front() else {
-            break;
-        };
+        let batch_target = STREAMING_LIGHT_BATCH_CHUNKS.min(MAX_CHUNKS_PER_FRAME - processed);
+        let mut batch = Vec::with_capacity(batch_target);
 
-        if renderer.pool.contains(coord) {
-            continue;
+        while batch.len() < batch_target {
+            let Some(coord) = inputs.streaming.pending.pop_front() else {
+                break;
+            };
+
+            if renderer.pool.contains(coord) {
+                continue;
+            }
+
+            ensure_chunk_loaded(&mut inputs.world, coord, &generation_context);
+            fluid_updates.enqueue_loaded_fluid_frontier(&inputs.world, coord);
+            batch.push(coord);
         }
 
-        ensure_chunk_loaded(&mut inputs.world, coord, &generation_context);
-        fluid_updates.enqueue_loaded_fluid_frontier(&inputs.world, coord);
-        let lighting_changes =
-            initialize_chunk_lighting(&mut inputs.world, coord, &content.blocks, &content.fluids);
-        let chunk = inputs
-            .world
-            .chunk(coord)
-            .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
-        let render_context = content.render_context(
-            &inputs.world,
-            &renderer.terrain_materials,
-            &renderer.fluid_materials,
-        );
+        if batch.is_empty() {
+            break;
+        }
 
-        spawn_chunk_mesh(
-            &mut renderer.commands,
-            &mut renderer.meshes,
-            &mut renderer.pool,
-            coord,
-            chunk,
-            &render_context,
+        let lighting_changes = initialize_chunks_lighting(
+            &mut inputs.world,
+            &batch,
+            &content.blocks,
+            &content.fluids,
         );
-        processed += 1;
+        let batch_coords = batch.iter().copied().collect::<HashSet<_>>();
+
+        for &coord in &batch {
+            let chunk = inputs
+                .world
+                .chunk(coord)
+                .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
+            let render_context = content.render_context(
+                &inputs.world,
+                &renderer.terrain_materials,
+                &renderer.fluid_materials,
+            );
+
+            spawn_chunk_mesh(
+                &mut renderer.commands,
+                &mut renderer.meshes,
+                &mut renderer.pool,
+                coord,
+                chunk,
+                &render_context,
+            );
+        }
+
+        processed += batch.len();
 
         for changed in lighting_changes {
-            if changed != coord && renderer.pool.contains(changed) {
+            if !batch_coords.contains(&changed) && renderer.pool.contains(changed) {
                 inputs.remesh_queue.enqueue_priority(changed);
             }
         }
-        for offset in CARDINAL_NEIGHBORS {
-            let neighbor = coord + offset;
-            if renderer.pool.contains(neighbor) {
-                inputs.remesh_queue.enqueue_priority(neighbor);
+        for coord in batch {
+            for offset in CARDINAL_NEIGHBORS {
+                let neighbor = coord + offset;
+                if !batch_coords.contains(&neighbor) && renderer.pool.contains(neighbor) {
+                    inputs.remesh_queue.enqueue_priority(neighbor);
+                }
             }
         }
     }
