@@ -6,6 +6,6 @@
   "roughness": 0.18,
   "metallic": 0.0,
   "lightDampening": 2,
-  "spreadSpeed": 4.0,
+  "spreadSpeed": 12.0,
   "maxSpread": 7
 }
