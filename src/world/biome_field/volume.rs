@@ -19,6 +19,34 @@ pub(crate) struct VolumeBiomeRegion {
     sites: Vec<ResolvedVolumeBiomeSite>,
 }
 
+impl VolumeBiomeRegion {
+    pub(crate) fn restricted_to_bounds(&self, minimum: Vec3, maximum: Vec3) -> Self {
+        if self.sites.is_empty() {
+            return Self::default();
+        }
+
+        let warp = Vec3::splat(VOLUME_WARP_AMPLITUDE);
+        let sample_minimum = minimum - warp;
+        let sample_maximum = maximum + warp;
+        let sites = self
+            .sites
+            .iter()
+            .copied()
+            .filter(|site| {
+                let expanded = site.radii * (1.0 + VOLUME_BORDER_MARGIN);
+                bounds_intersect(
+                    site.position - expanded,
+                    site.position + expanded,
+                    sample_minimum,
+                    sample_maximum,
+                )
+            })
+            .collect();
+
+        Self { sites }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct VolumeBiomeSelection {
     pub(crate) biome_index: usize,
@@ -325,5 +353,32 @@ mod tests {
 
         assert!(site_is_better(candidate, 0.8, current, 0.5));
         assert!(!site_is_better(candidate, 0.2, current, 0.5));
+    }
+
+    #[test]
+    fn restricted_region_keeps_only_sites_that_can_reach_bounds_with_warp() {
+        let region = VolumeBiomeRegion {
+            sites: vec![
+                ResolvedVolumeBiomeSite {
+                    biome_index: 0,
+                    position: Vec3::new(20.0, 8.0, 8.0),
+                    radii: Vec3::ONE,
+                    priority: 0,
+                    source_hash: 1,
+                },
+                ResolvedVolumeBiomeSite {
+                    biome_index: 0,
+                    position: Vec3::new(100.0, 8.0, 8.0),
+                    radii: Vec3::ONE,
+                    priority: 0,
+                    source_hash: 2,
+                },
+            ],
+        };
+
+        let restricted = region.restricted_to_bounds(Vec3::ZERO, Vec3::splat(16.0));
+
+        assert_eq!(restricted.sites.len(), 1);
+        assert_eq!(restricted.sites[0].source_hash, 1);
     }
 }
