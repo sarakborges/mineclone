@@ -162,6 +162,19 @@ impl BiomeField {
             .id
             .as_str()
     }
+
+    pub(crate) fn volume_biome_id(&self, selection: VolumeBiomeSelection) -> &str {
+        self.volume_biomes
+            .get(selection.biome_index)
+            .unwrap_or_else(|| {
+                panic!(
+                    "volume biome index out of bounds: {}",
+                    selection.biome_index
+                )
+            })
+            .id
+            .as_str()
+    }
 }
 
 fn biome_density_seed(seed: u64, biome_id: &str) -> u64 {
