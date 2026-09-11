@@ -11,7 +11,7 @@ use crate::{
         block_model::block_face_texture,
         terrain_material::{TerrainMaterial, TerrainMaterialExtension},
     },
-    voxel::mesh::{BlockFace, BlockFaces},
+    voxel::block_face::{BlockFace, BlockFaces},
 };
 
 #[derive(Resource, Clone)]

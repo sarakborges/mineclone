@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     content::block::BlockDefinition,
     rendering::block_model_material::{BlockModelMaterial, BlockModelMaterialExtension},
-    voxel::mesh::{BlockFace, BlockFaces},
+    voxel::block_face::{BlockFace, BlockFaces},
 };
 
 use super::geometry::block_display_face_shade;

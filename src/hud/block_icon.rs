@@ -8,7 +8,7 @@ use crate::{
         block_model::{block_display_face_basis, block_display_face_shade, block_face_texture},
         color::color_to_linear_vec4,
     },
-    voxel::mesh::BlockFace,
+    voxel::block_face::BlockFace,
 };
 
 const BLOCK_ICON_SHADER_PATH: &str = "shaders/block_icon_material.wgsl";

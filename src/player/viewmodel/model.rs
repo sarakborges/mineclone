@@ -11,7 +11,7 @@ use crate::{
         block_model_material::BlockModelMaterial,
         block_tint::block_tint_at,
     },
-    voxel::mesh::BlockFace,
+    voxel::block_face::BlockFace,
     world::biome_field::BiomeField,
 };
 

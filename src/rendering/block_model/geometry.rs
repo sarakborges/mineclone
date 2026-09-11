@@ -2,8 +2,9 @@ use bevy::{
     asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology,
 };
 
-use crate::voxel::mesh::{
-    BlockFace, BlockFaces, QUAD_TRIANGLE_INDICES, WORLD_FACE_UVS,
+use crate::voxel::{
+    block_face::{BlockFace, BlockFaces},
+    mesh::{QUAD_TRIANGLE_INDICES, WORLD_FACE_UVS},
 };
 
 #[derive(Clone, Copy)]

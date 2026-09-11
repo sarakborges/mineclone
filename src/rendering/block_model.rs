@@ -4,7 +4,7 @@ mod materials;
 use bevy::prelude::*;
 
 use super::block_model_material::BlockModelMaterial;
-use crate::voxel::mesh::BlockFace;
+use crate::voxel::block_face::BlockFace;
 
 pub(crate) use geometry::{
     BlockModelMeshes, block_display_face_basis, block_display_face_shade,
@@ -78,14 +78,7 @@ impl BlockModel {
 }
 
 const DISPLAY_FACES: [BlockFace; 3] = [BlockFace::Top, BlockFace::Front, BlockFace::Right];
-const WORLD_FACES: [BlockFace; 6] = [
-    BlockFace::Right,
-    BlockFace::Left,
-    BlockFace::Top,
-    BlockFace::Bottom,
-    BlockFace::Front,
-    BlockFace::Back,
-];
+const WORLD_FACES: [BlockFace; 6] = BlockFace::ALL;
 
 pub(crate) fn setup_block_model_assets(
     mut commands: Commands,

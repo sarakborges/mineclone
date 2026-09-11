@@ -17,6 +17,7 @@ use self::{
     geometry::{face_geometry, is_face_exposed, orient_face_geometry},
     lighting::face_lighting,
 };
+pub(crate) use super::block_face::BlockFace;
 use super::{
     chunk::{CHUNK_SIZE, VoxelChunk},
     texture_rotation::TextureRotation,
@@ -26,146 +27,6 @@ use super::{
 pub(crate) const WORLD_FACE_UVS: [[f32; 2]; 4] =
     [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
 pub(crate) const QUAD_TRIANGLE_INDICES: [u32; 6] = [0, 1, 2, 0, 2, 3];
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum BlockFace {
-    Right,
-    Left,
-    Top,
-    Bottom,
-    Front,
-    Back,
-}
-
-impl BlockFace {
-    pub(crate) const ALL: [Self; 6] = [
-        Self::Right,
-        Self::Left,
-        Self::Top,
-        Self::Bottom,
-        Self::Front,
-        Self::Back,
-    ];
-
-    pub(crate) fn unit_vertices(self) -> [[f32; 3]; 4] {
-        match self {
-            Self::Right => [
-                [1.0, 0.0, 1.0],
-                [1.0, 0.0, 0.0],
-                [1.0, 1.0, 0.0],
-                [1.0, 1.0, 1.0],
-            ],
-            Self::Left => [
-                [0.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0],
-                [0.0, 1.0, 1.0],
-                [0.0, 1.0, 0.0],
-            ],
-            Self::Top => [
-                [0.0, 1.0, 1.0],
-                [1.0, 1.0, 1.0],
-                [1.0, 1.0, 0.0],
-                [0.0, 1.0, 0.0],
-            ],
-            Self::Bottom => [
-                [0.0, 0.0, 0.0],
-                [1.0, 0.0, 0.0],
-                [1.0, 0.0, 1.0],
-                [0.0, 0.0, 1.0],
-            ],
-            Self::Front => [
-                [0.0, 0.0, 1.0],
-                [1.0, 0.0, 1.0],
-                [1.0, 1.0, 1.0],
-                [0.0, 1.0, 1.0],
-            ],
-            Self::Back => [
-                [1.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0],
-                [1.0, 1.0, 0.0],
-            ],
-        }
-    }
-
-    pub(crate) fn normal(self) -> [f32; 3] {
-        match self {
-            Self::Right => [1.0, 0.0, 0.0],
-            Self::Left => [-1.0, 0.0, 0.0],
-            Self::Top => [0.0, 1.0, 0.0],
-            Self::Bottom => [0.0, -1.0, 0.0],
-            Self::Front => [0.0, 0.0, 1.0],
-            Self::Back => [0.0, 0.0, -1.0],
-        }
-    }
-
-    pub(crate) fn offset(self) -> IVec3 {
-        match self {
-            Self::Right => IVec3::X,
-            Self::Left => IVec3::NEG_X,
-            Self::Top => IVec3::Y,
-            Self::Bottom => IVec3::NEG_Y,
-            Self::Front => IVec3::Z,
-            Self::Back => IVec3::NEG_Z,
-        }
-    }
-
-    fn oriented(self, orientation: BlockOrientation) -> Self {
-        match orientation {
-            BlockOrientation::Y => self,
-            BlockOrientation::Z => match self {
-                Self::Right => Self::Right,
-                Self::Left => Self::Left,
-                Self::Top => Self::Front,
-                Self::Bottom => Self::Back,
-                Self::Front => Self::Bottom,
-                Self::Back => Self::Top,
-            },
-            BlockOrientation::X => match self {
-                Self::Right => Self::Bottom,
-                Self::Left => Self::Top,
-                Self::Top => Self::Right,
-                Self::Bottom => Self::Left,
-                Self::Front => Self::Front,
-                Self::Back => Self::Back,
-            },
-        }
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct BlockFaces<T> {
-    right: T,
-    left: T,
-    top: T,
-    bottom: T,
-    front: T,
-    back: T,
-}
-
-impl<T> BlockFaces<T> {
-    pub(crate) fn from_fn(mut value_for: impl FnMut(BlockFace) -> T) -> Self {
-        Self {
-            right: value_for(BlockFace::Right),
-            left: value_for(BlockFace::Left),
-            top: value_for(BlockFace::Top),
-            bottom: value_for(BlockFace::Bottom),
-            front: value_for(BlockFace::Front),
-            back: value_for(BlockFace::Back),
-        }
-    }
-
-    pub(crate) fn get(&self, face: BlockFace) -> &T {
-        match face {
-            BlockFace::Right => &self.right,
-            BlockFace::Left => &self.left,
-            BlockFace::Top => &self.top,
-            BlockFace::Bottom => &self.bottom,
-            BlockFace::Front => &self.front,
-            BlockFace::Back => &self.back,
-        }
-    }
-}
 
 pub struct ChunkFaceMesh {
     pub block_id: &'static str,
@@ -204,7 +65,7 @@ where
                 };
 
                 for block_face in BlockFace::ALL {
-                    let face = block_face.oriented(cell.orientation);
+                    let face = oriented_face(block_face, cell.orientation);
                     if !is_face_exposed(world, blocks, cell.block_id, world_voxel, face) {
                         continue;
                     }
@@ -250,6 +111,28 @@ where
         .collect()
 }
 
+fn oriented_face(face: BlockFace, orientation: BlockOrientation) -> BlockFace {
+    match orientation {
+        BlockOrientation::Y => face,
+        BlockOrientation::Z => match face {
+            BlockFace::Right => BlockFace::Right,
+            BlockFace::Left => BlockFace::Left,
+            BlockFace::Top => BlockFace::Front,
+            BlockFace::Bottom => BlockFace::Back,
+            BlockFace::Front => BlockFace::Bottom,
+            BlockFace::Back => BlockFace::Top,
+        },
+        BlockOrientation::X => match face {
+            BlockFace::Right => BlockFace::Bottom,
+            BlockFace::Left => BlockFace::Top,
+            BlockFace::Top => BlockFace::Right,
+            BlockFace::Bottom => BlockFace::Left,
+            BlockFace::Front => BlockFace::Front,
+            BlockFace::Back => BlockFace::Back,
+        },
+    }
+}
+
 fn face_uses_texture_rotation(rotations: BlockTextureRotations, face: BlockFace) -> bool {
     match face {
         BlockFace::Right => rotations.right,
@@ -268,15 +151,15 @@ mod tests {
     #[test]
     fn axial_orientation_moves_top_face_to_selected_axis() {
         assert_eq!(
-            BlockFace::Top.oriented(BlockOrientation::Y),
+            oriented_face(BlockFace::Top, BlockOrientation::Y),
             BlockFace::Top
         );
         assert_eq!(
-            BlockFace::Top.oriented(BlockOrientation::Z),
+            oriented_face(BlockFace::Top, BlockOrientation::Z),
             BlockFace::Front
         );
         assert_eq!(
-            BlockFace::Top.oriented(BlockOrientation::X),
+            oriented_face(BlockFace::Top, BlockOrientation::X),
             BlockFace::Right
         );
     }
