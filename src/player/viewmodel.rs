@@ -19,7 +19,7 @@ use crate::{
 
 use super::{camera::GameplayCamera, hotbar::PlayerHotbar};
 
-const ARM_SIZE: Vec3 = Vec3::new(0.27, 0.60, 0.25);
+const ARM_SIZE: Vec3 = Vec3::new(0.23, 0.60, 0.21);
 const HELD_BLOCK_SCALE: f32 = 0.18;
 const BREAK_ANIMATION_DURATION: f32 = 0.16;
 const PLACE_ANIMATION_DURATION: f32 = 0.22;
@@ -179,247 +179,229 @@ fn spawn_viewmodel(
                     PlayerViewModel,
                     base_viewmodel_transform(),
                     Visibility::Visible,
+                    DespawnOnExit(GameState::Gameplay),
                 ))
                 .with_children(|viewmodel| {
                     viewmodel.spawn((
-                        ViewModelArm,
                         Mesh3d(arm_assets.mesh.clone()),
                         MeshMaterial3d(arm_assets.material.clone()),
-                        Transform::from_translation(Vec3::new(0.0, ARM_SIZE.y * 0.5, 0.0)),
-                        item_visibility,
+                        ViewModelArm,
+                        Transform::from_translation(Vec3::new(0.31, -0.31, -0.57))
+                            .with_rotation(Quat::from_rotation_z(-0.16)),
+                        item_visibility.arm,
                         NotShadowCaster,
                     ));
 
-                    viewmodel
-                        .spawn((HeldBlockRoot, block_model, held_block_transform(), item_visibility))
-                        .with_children(|held| {
-                            let Some(block_id) = selected_block_id else {
-                                return;
-                            };
-                            let block = content.blocks.get(block_id).unwrap_or_else(|| {
-                                panic!("hotbar references missing block: {block_id}")
-                            });
-                            let tint = block_tint_at(
-                                block.tint,
-                                tint_position,
-                                &content.biome_field,
-                                &content.biomes,
-                            );
+                    let held = viewmodel
+                        .spawn((
+                            HeldBlockRoot,
+                            block_model,
+                            Transform::from_translation(Vec3::new(0.33, -0.24, -0.64))
+                                .with_rotation(
+                                    Quat::from_rotation_x(-0.22)
+                                        * Quat::from_rotation_y(-0.58)
+                                        * Quat::from_rotation_z(0.08),
+                                )
+                                .with_scale(Vec3::splat(HELD_BLOCK_SCALE)),
+                            item_visibility.block,
+                            NotShadowCaster,
+                        ))
+                        .id();
 
-                            for &face in block_model.faces() {
-                                let material = block_materials.held_for_face(face);
-                                let Some(mut face_material) = materials.get_mut(&material) else {
-                                    continue;
-                                };
-                                *face_material = block_face_material_data(
-                                    face,
-                                    block,
-                                    &content.asset_server,
-                                    block_model.opacity(),
-                                );
-                                apply_block_display_shading(
-                                    &mut face_material,
-                                    face,
-                                    block_model.opacity(),
-                                );
-                                set_block_model_tint(&mut face_material, tint);
+                    commands.entity(held).with_children(|held| {
+                        for face in BlockModel::display(selected_block_id.unwrap_or_default()).faces()
+                        {
+                            let mesh = block_meshes.face(*face).clone();
+                            let material = selected_block_id
+                                .and_then(|block_id| content.blocks.get(block_id).map(|block| (block_id, block)))
+                                .map(|(block_id, block)| {
+                                    let tint = block_tint_at(
+                                        block.tint,
+                                        tint_position,
+                                        &content.biome_field,
+                                        &content.biomes,
+                                    );
+                                    let mut material = block_face_material_data(
+                                        *face,
+                                        block,
+                                        &content.asset_server,
+                                        1.0,
+                                    );
+                                    set_block_model_tint(&mut material, tint);
+                                    apply_block_display_shading(&mut material, *face, 1.0);
+                                    materials.add(material)
+                                })
+                                .unwrap_or_else(|| block_materials.placeholder().clone());
 
-                                held.spawn((
-                                    HeldBlockFace { face },
-                                    Mesh3d(block_meshes.display_face(face)),
-                                    MeshMaterial3d(material),
-                                    NotShadowCaster,
-                                ));
-                            }
-                        });
+                            held.spawn((
+                                Mesh3d(mesh),
+                                MeshMaterial3d(material),
+                                HeldBlockFace { face: *face },
+                                NotShadowCaster,
+                            ));
+                        }
+                    });
                 });
         });
     }
 }
 
-fn advance_item_switch(
-    time: Res<Time>,
-    hotbar: Res<PlayerHotbar>,
+#[derive(Clone, Copy)]
+struct ItemVisibility {
+    arm: Visibility,
+    block: Visibility,
+}
+
+fn item_visibility(block_id: Option<&str>) -> ItemVisibility {
+    if block_id.is_some() {
+        ItemVisibility {
+            arm: Visibility::Hidden,
+            block: Visibility::Visible,
+        }
+    } else {
+        ItemVisibility {
+            arm: Visibility::Visible,
+            block: Visibility::Hidden,
+        }
+    }
+}
+
+fn sync_held_block(
+    cameras: Query<&Transform, With<GameplayCamera>>,
+    content: ViewModelContent,
+    mut held_roots: HeldBlockRootQuery,
+    faces: Query<(&HeldBlockFace, &MeshMaterial3d<BlockModelMaterial>)>,
+    mut materials: ResMut<Assets<BlockModelMaterial>>,
     mut item_switch: ResMut<ViewModelItemSwitch>,
 ) {
-    let selected_block_id = hotbar.item_at(hotbar.selected_slot());
-
+    let selected_block_id = content.hotbar.item_at(content.hotbar.selected_slot());
     if !item_switch.initialized {
         item_switch.initialized = true;
         item_switch.displayed_block_id = selected_block_id;
         item_switch.target_block_id = selected_block_id;
-        return;
-    }
-
-    if selected_block_id != item_switch.target_block_id {
+    } else if item_switch.target_block_id != selected_block_id {
         item_switch.target_block_id = selected_block_id;
         item_switch.elapsed = 0.0;
         item_switch.active = true;
     }
 
-    if !item_switch.active {
+    let displayed_block_id = item_switch.displayed_block_id;
+    let visibility = item_visibility(displayed_block_id);
+    for (mut model, mut root_visibility) in &mut held_roots {
+        model.set_block_id(displayed_block_id);
+        *root_visibility = visibility.block;
+    }
+
+    let Ok(camera_transform) = cameras.single() else {
         return;
-    }
+    };
+    let tint_position = Vec2::new(
+        camera_transform.translation.x,
+        camera_transform.translation.z,
+    );
 
-    item_switch.elapsed += time.delta_secs();
-    let midpoint = ITEM_SWITCH_ANIMATION_DURATION * 0.5;
-
-    if item_switch.elapsed >= midpoint
-        && item_switch.displayed_block_id != item_switch.target_block_id
-    {
-        item_switch.displayed_block_id = item_switch.target_block_id;
-    }
-
-    if item_switch.elapsed >= ITEM_SWITCH_ANIMATION_DURATION {
-        item_switch.displayed_block_id = item_switch.target_block_id;
-        item_switch.elapsed = 0.0;
-        item_switch.active = false;
-    }
-}
-
-fn sync_held_block(
-    content: ViewModelContent,
-    item_switch: Res<ViewModelItemSwitch>,
-    player: Single<&Transform, With<GameplayCamera>>,
-    mut materials: ResMut<Assets<BlockModelMaterial>>,
-    mut arms: ArmVisibilityQuery,
-    mut roots: HeldBlockRootQuery,
-    faces: Query<(&HeldBlockFace, &MeshMaterial3d<BlockModelMaterial>)>,
-) {
-    let selected_block_id = item_switch.displayed_block_id;
-    let visibility = item_visibility(selected_block_id);
-    let tint_position = Vec2::new(player.translation.x, player.translation.z);
-
-    for mut arm_visibility in &mut arms {
-        if *arm_visibility != visibility {
-            *arm_visibility = visibility;
-        }
-    }
-
-    for (mut held, mut held_visibility) in &mut roots {
-        let block_changed = held.set_block_id(selected_block_id);
-
-        if *held_visibility != visibility {
-            *held_visibility = visibility;
-        }
-
-        let Some(block_id) = held.block_id() else {
+    for (face, material_handle) in &faces {
+        let Some(material) = materials.get_mut(&material_handle.0) else {
+            continue;
+        };
+        let Some(block_id) = displayed_block_id else {
             continue;
         };
         let block = content
             .blocks
             .get(block_id)
-            .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
+            .unwrap_or_else(|| panic!("missing block definition: {block_id}"));
         let tint = block_tint_at(
             block.tint,
             tint_position,
             &content.biome_field,
             &content.biomes,
         );
+        *material = block_face_material_data(face.face, block, &content.asset_server, 1.0);
+        set_block_model_tint(material, tint);
+        apply_block_display_shading(material, face.face, 1.0);
+    }
+}
 
-        for (face, material_handle) in &faces {
-            let Some(mut material) = materials.get_mut(&material_handle.0) else {
-                continue;
-            };
+fn advance_item_switch(
+    time: Res<Time>,
+    mut switch: ResMut<ViewModelItemSwitch>,
+) {
+    if !switch.active {
+        return;
+    }
 
-            if block_changed {
-                *material = block_face_material_data(
-                    face.face,
-                    block,
-                    &content.asset_server,
-                    held.opacity(),
-                );
-                apply_block_display_shading(&mut material, face.face, held.opacity());
-            }
+    switch.elapsed += time.delta_secs();
+    let progress = (switch.elapsed / ITEM_SWITCH_ANIMATION_DURATION).clamp(0.0, 1.0);
 
-            set_block_model_tint(&mut material, tint);
-        }
+    if progress >= 0.5 && switch.displayed_block_id != switch.target_block_id {
+        switch.displayed_block_id = switch.target_block_id;
+    }
+    if progress >= 1.0 {
+        switch.active = false;
+        switch.elapsed = 0.0;
     }
 }
 
 fn animate_viewmodel(
     time: Res<Time>,
     mut animation: ResMut<ViewModelAnimation>,
-    item_switch: Res<ViewModelItemSwitch>,
+    switch: Res<ViewModelItemSwitch>,
     mut viewmodels: Query<&mut Transform, With<PlayerViewModel>>,
+    mut arms: ArmVisibilityQuery,
 ) {
-    let interaction = animation.action.and_then(|action| {
+    let Ok(mut transform) = viewmodels.single_mut() else {
+        return;
+    };
+
+    let mut action_offset = Vec3::ZERO;
+    let mut action_rotation = Quat::IDENTITY;
+    if let Some(action) = animation.action {
         animation.elapsed += time.delta_secs();
         let duration = match action {
             ViewModelAction::Break => BREAK_ANIMATION_DURATION,
             ViewModelAction::Place => PLACE_ANIMATION_DURATION,
         };
         let progress = (animation.elapsed / duration).clamp(0.0, 1.0);
+        let arc = (progress * PI).sin();
+
+        match action {
+            ViewModelAction::Break => {
+                action_offset = Vec3::new(-0.08 * arc, -0.03 * arc, 0.10 * arc);
+                action_rotation = Quat::from_rotation_x(-0.75 * arc)
+                    * Quat::from_rotation_z(0.32 * arc);
+            }
+            ViewModelAction::Place => {
+                action_offset = Vec3::new(0.05 * arc, 0.02 * arc, -0.11 * arc);
+                action_rotation = Quat::from_rotation_x(0.48 * arc)
+                    * Quat::from_rotation_z(-0.18 * arc);
+            }
+        }
 
         if progress >= 1.0 {
             animation.action = None;
             animation.elapsed = 0.0;
-            None
-        } else {
-            Some((action, (progress * PI).sin()))
         }
-    });
+    }
 
-    let switch_wave = if item_switch.active {
-        let progress =
-            (item_switch.elapsed / ITEM_SWITCH_ANIMATION_DURATION).clamp(0.0, 1.0);
-        (progress * PI).sin()
+    let switch_offset = if switch.active {
+        let progress = (switch.elapsed / ITEM_SWITCH_ANIMATION_DURATION).clamp(0.0, 1.0);
+        let dip = (progress * PI).sin();
+        Vec3::new(0.03 * dip, -0.27 * dip, 0.08 * dip)
     } else {
-        0.0
+        Vec3::ZERO
     };
 
-    for mut transform in &mut viewmodels {
-        let mut animated = base_viewmodel_transform();
+    *transform = base_viewmodel_transform();
+    transform.translation += action_offset + switch_offset;
+    transform.rotation = transform.rotation * action_rotation;
 
-        if let Some((action, wave)) = interaction {
-            match action {
-                ViewModelAction::Break => {
-                    animated.translation += Vec3::new(-0.03, 0.01, -0.14) * wave;
-                    animated.rotation *=
-                        Quat::from_euler(EulerRot::XYZ, -0.18 * wave, 0.05 * wave, -0.08 * wave);
-                }
-                ViewModelAction::Place => {
-                    animated.translation += Vec3::new(-0.06, -0.10, -0.06) * wave;
-                    animated.rotation *=
-                        Quat::from_euler(EulerRot::XYZ, -0.68 * wave, 0.12 * wave, -0.34 * wave);
-                }
-            }
-        }
-
-        if switch_wave > 0.0 {
-            animated.translation += Vec3::new(0.10, -0.54, 0.14) * switch_wave;
-            animated.rotation *= Quat::from_euler(
-                EulerRot::XYZ,
-                0.34 * switch_wave,
-                0.0,
-                0.16 * switch_wave,
-            );
-        }
-
-        *transform = animated;
-    }
-}
-
-fn item_visibility(block_id: Option<&'static str>) -> Visibility {
-    if block_id.is_some() {
-        Visibility::Visible
-    } else {
-        Visibility::Hidden
+    let selected_visibility = item_visibility(switch.displayed_block_id);
+    for mut visibility in &mut arms {
+        *visibility = selected_visibility.arm;
     }
 }
 
 fn base_viewmodel_transform() -> Transform {
-    Transform::from_translation(Vec3::new(0.62, -0.80, -1.05)).with_rotation(Quat::from_euler(
-        EulerRot::XYZ,
-        -0.22,
-        -0.10,
-        0.28,
-    ))
-}
-
-fn held_block_transform() -> Transform {
-    let viewmodel_rotation = base_viewmodel_transform().rotation;
-    Transform::from_translation(Vec3::new(-0.02, ARM_SIZE.y + 0.04, 0.20))
-        .with_rotation(viewmodel_rotation.inverse())
-        .with_scale(Vec3::splat(HELD_BLOCK_SCALE))
+    Transform::IDENTITY
 }
