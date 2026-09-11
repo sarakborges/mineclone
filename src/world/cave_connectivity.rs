@@ -55,6 +55,16 @@ impl CaveConnectivityField {
         anchors: &[Vec3],
         underground_anchors: &[Vec3],
     ) -> CaveConnectivityRegion {
+        self.region_from_anchors_with_water_sources(coord, anchors, underground_anchors, &[])
+    }
+
+    pub(crate) fn region_from_anchors_with_water_sources(
+        &self,
+        coord: IVec3,
+        anchors: &[Vec3],
+        underground_anchors: &[Vec3],
+        water_source_anchors: &[Vec3],
+    ) -> CaveConnectivityRegion {
         if coord.y < 0 || anchors.is_empty() {
             return CaveConnectivityRegion::default();
         }
@@ -71,11 +81,8 @@ impl CaveConnectivityField {
             return CaveConnectivityRegion::default();
         }
 
-        let underground_anchors = underground_anchors
-            .iter()
-            .copied()
-            .filter(|position| position.y >= 0.0)
-            .collect::<Vec<_>>();
+        let underground_anchors = normalized_anchors(underground_anchors);
+        let water_source_anchors = normalized_anchors(water_source_anchors);
         let water_seed = self.seed.rotate_left(17) ^ 0xbb67_ae85_84ca_a73b;
         let mut underground_water =
             UndergroundWaterRegion::from_anchors(&underground_anchors, water_seed);
@@ -112,10 +119,13 @@ impl CaveConnectivityField {
 
                 let from = anchors[pair.0];
                 let to = anchors[pair.1];
-                let both_underground = contains_anchor(&underground_anchors, from)
-                    && contains_anchor(&underground_anchors, to);
-                let carries_water = both_underground
-                    && UndergroundWaterRegion::connection_carries_water(from, to, water_seed);
+                let carries_water = connection_carries_underground_water(
+                    from,
+                    to,
+                    &underground_anchors,
+                    &water_source_anchors,
+                    water_seed,
+                );
 
                 add_connector(
                     &mut graph,
@@ -134,6 +144,26 @@ impl CaveConnectivityField {
             underground_water,
         }
     }
+}
+
+fn connection_carries_underground_water(
+    from: Vec3,
+    to: Vec3,
+    underground_anchors: &[Vec3],
+    water_source_anchors: &[Vec3],
+    water_seed: u64,
+) -> bool {
+    let from_underground = contains_anchor(underground_anchors, from);
+    let to_underground = contains_anchor(underground_anchors, to);
+    let from_water_source = contains_anchor(water_source_anchors, from);
+    let to_water_source = contains_anchor(water_source_anchors, to);
+    let water_source_connection =
+        (from_water_source && to_underground) || (to_water_source && from_underground);
+
+    water_source_connection
+        || (from_underground
+            && to_underground
+            && UndergroundWaterRegion::connection_carries_water(from, to, water_seed))
 }
 
 fn add_connector(
@@ -177,6 +207,17 @@ fn add_connector(
             underground_water.add_river_segment(from, to, from_radius, to_radius);
         }
     }
+}
+
+fn normalized_anchors(anchors: &[Vec3]) -> Vec<Vec3> {
+    let mut anchors = anchors
+        .iter()
+        .copied()
+        .filter(|position| position.y >= 0.0)
+        .collect::<Vec<_>>();
+    anchors.sort_by(compare_position);
+    anchors.dedup_by(|left, right| *left == *right);
+    anchors
 }
 
 fn contains_anchor(anchors: &[Vec3], position: Vec3) -> bool {
@@ -354,5 +395,19 @@ mod tests {
         );
 
         assert!(region.underground_water_at(entrance).is_none());
+    }
+
+    #[test]
+    fn explicit_water_source_connection_always_carries_water() {
+        let cavern = Vec3::new(32.5, 24.5, 32.5);
+        let ocean_opening = Vec3::new(48.5, 52.5, 32.5);
+
+        assert!(connection_carries_underground_water(
+            cavern,
+            ocean_opening,
+            &[cavern],
+            &[ocean_opening],
+            42,
+        ));
     }
 }
