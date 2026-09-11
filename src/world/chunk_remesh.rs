@@ -12,7 +12,7 @@ use super::{
     chunk_system_params::{ChunkContent, ChunkRenderer},
 };
 
-const REMESH_BUDGET_MS: u128 = 4;
+const REMESH_BUDGET_MICROS: u128 = 4_000;
 
 #[derive(Resource, Default)]
 pub(crate) struct ChunkRemeshQueue {
@@ -76,7 +76,7 @@ pub(super) fn process_chunk_remesh_queue(
     let mut processed = 0;
 
     loop {
-        if processed > 0 && frame_started.elapsed().as_millis() >= REMESH_BUDGET_MS {
+        if processed > 0 && frame_started.elapsed().as_micros() >= REMESH_BUDGET_MICROS {
             break;
         }
 
