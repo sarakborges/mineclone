@@ -10,8 +10,8 @@ use super::{
     biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
     biome_hydrology::BiomeHydrology, biome_material::BiomeMaterialLayer,
     biome_sky_layer::BiomeSkyLayerVisuals, biome_structure::BiomeStructure,
-    biome_terrain::BiomeTerrain, biome_terrain_modifier::BiomeTerrainModifier, color::Rgb,
-    day_night_phase::DayNightPhases,
+    biome_surface_carver::BiomeSurfaceCarver, biome_terrain::BiomeTerrain,
+    biome_terrain_modifier::BiomeTerrainModifier, color::Rgb, day_night_phase::DayNightPhases,
 };
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
@@ -114,6 +114,8 @@ pub struct BiomeDefinition {
     pub terrain: Option<BiomeTerrain>,
     #[serde(default)]
     pub terrain_modifiers: Vec<BiomeTerrainModifier>,
+    #[serde(default)]
+    pub surface_carvers: Vec<BiomeSurfaceCarver>,
     #[serde(default)]
     pub surface_layers: Vec<BiomeMaterialLayer>,
     #[serde(default)]
