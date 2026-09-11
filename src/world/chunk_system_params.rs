@@ -18,15 +18,15 @@ use super::{
 
 #[derive(SystemParam)]
 pub(crate) struct ChunkContent<'w> {
-    pub blocks: Res<'w, BlockRegistry>,
-    pub fluids: Res<'w, FluidRegistry>,
-    pub biomes: Res<'w, BiomeRegistry>,
-    pub structures: Res<'w, StructureRegistry>,
-    pub biome_field: Res<'w, BiomeField>,
+    pub(crate) blocks: Res<'w, BlockRegistry>,
+    pub(crate) fluids: Res<'w, FluidRegistry>,
+    pub(crate) biomes: Res<'w, BiomeRegistry>,
+    pub(crate) structures: Res<'w, StructureRegistry>,
+    pub(crate) biome_field: Res<'w, BiomeField>,
 }
 
 impl<'w> ChunkContent<'w> {
-    pub fn render_context<'a>(
+    pub(crate) fn render_context<'a>(
         &'a self,
         world: &'a crate::voxel::world::VoxelWorld,
         terrain_materials: &'a TerrainMaterials,
@@ -46,13 +46,13 @@ impl<'w> ChunkContent<'w> {
 
 #[derive(SystemParam)]
 pub(crate) struct ChunkGeneration<'w> {
-    pub current_dimension: Res<'w, CurrentDimension>,
-    pub dimensions: Res<'w, DimensionRegistry>,
-    pub feature_fields: Res<'w, WorldFeatureFields>,
+    pub(crate) current_dimension: Res<'w, CurrentDimension>,
+    pub(crate) dimensions: Res<'w, DimensionRegistry>,
+    pub(crate) feature_fields: Res<'w, WorldFeatureFields>,
 }
 
 impl<'w> ChunkGeneration<'w> {
-    pub fn dimension(&self) -> &DimensionDefinition {
+    pub(crate) fn dimension(&self) -> &DimensionDefinition {
         self.dimensions
             .get(&self.current_dimension.id)
             .unwrap_or_else(|| {
@@ -63,7 +63,7 @@ impl<'w> ChunkGeneration<'w> {
             })
     }
 
-    pub fn context<'a>(&'a self, content: &'a ChunkContent<'_>) -> ChunkGenerationContext<'a> {
+    pub(crate) fn context<'a>(&'a self, content: &'a ChunkContent<'_>) -> ChunkGenerationContext<'a> {
         ChunkGenerationContext {
             blocks: &content.blocks,
             fluids: &content.fluids,
@@ -78,9 +78,9 @@ impl<'w> ChunkGeneration<'w> {
 
 #[derive(SystemParam)]
 pub(crate) struct ChunkRenderer<'w, 's> {
-    pub commands: Commands<'w, 's>,
-    pub meshes: ResMut<'w, Assets<Mesh>>,
-    pub pool: ResMut<'w, ChunkRenderPool>,
-    pub terrain_materials: Res<'w, TerrainMaterials>,
-    pub fluid_materials: Res<'w, FluidMaterials>,
+    pub(crate) commands: Commands<'w, 's>,
+    pub(crate) meshes: ResMut<'w, Assets<Mesh>>,
+    pub(crate) pool: ResMut<'w, ChunkRenderPool>,
+    pub(crate) terrain_materials: Res<'w, TerrainMaterials>,
+    pub(crate) fluid_materials: Res<'w, FluidMaterials>,
 }
