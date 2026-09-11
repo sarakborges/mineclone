@@ -1,5 +1,6 @@
 mod constants;
 mod mountain_belt;
+mod mountain_peak;
 mod selection;
 mod spatial;
 mod surface;
@@ -21,7 +22,7 @@ use super::macro_climate::{MacroClimateField, MacroClimateSample};
 #[derive(Clone)]
 pub(super) struct BiomeFieldEntry {
     pub id: String,
-    pub distribution: BiomeDistribution,
+    pub distributions: Vec<BiomeDistribution>,
     pub size: BiomeSize,
     pub climate: BiomeClimate,
     pub vertical_range: Option<BiomeVerticalRange>,
@@ -29,6 +30,12 @@ pub(super) struct BiomeFieldEntry {
     pub density_modifier: Option<BiomeDensityModifier>,
     pub solid_block: Option<String>,
     pub density_seed: u64,
+}
+
+impl BiomeFieldEntry {
+    pub(super) fn is_regional(&self) -> bool {
+        self.distributions.len() == 1 && self.distributions[0].is_regional()
+    }
 }
 
 #[derive(Resource)]
@@ -86,7 +93,7 @@ impl BiomeField {
                 .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
             let entry = BiomeFieldEntry {
                 id: biome.id.clone(),
-                distribution: biome.distribution,
+                distributions: biome.distributions.clone(),
                 size: biome.size,
                 climate: biome.climate,
                 vertical_range: biome.vertical_range,
@@ -98,7 +105,7 @@ impl BiomeField {
 
             match biome.kind {
                 BiomeKind::Surface => {
-                    if biome.distribution.is_regional() {
+                    if entry.is_regional() {
                         surface_minimum_radius.x = surface_minimum_radius.x.max(biome.size.x.min);
                         surface_minimum_radius.y = surface_minimum_radius.y.max(biome.size.z.min);
                     }
@@ -119,7 +126,7 @@ impl BiomeField {
         }
 
         assert!(
-            surface_biomes.iter().any(|biome| biome.distribution.is_regional()),
+            surface_biomes.iter().any(BiomeFieldEntry::is_regional),
             "dimension {} must define at least one regional surface biome",
             dimension.id
         );
