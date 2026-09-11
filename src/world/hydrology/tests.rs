@@ -58,10 +58,7 @@ fn macro_terrain_generation_is_deterministic() {
     let first = field.region_from_macro_terrain(IVec2::ZERO, sample);
     let second = field.region_from_macro_terrain(IVec2::ZERO, sample);
 
-    assert_eq!(
-        first.river_graph.edges().len(),
-        second.river_graph.edges().len()
-    );
+    assert_eq!(first.river_graph.edge_count(), second.river_graph.edge_count());
     assert_eq!(first.water_bodies.len(), second.water_bodies.len());
 }
 

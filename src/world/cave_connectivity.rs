@@ -94,22 +94,21 @@ mod tests {
         let second = field.region_from_anchors(IVec3::ZERO, &anchors);
 
         assert_eq!(
-            first.connector_graph.nodes().len(),
-            second.connector_graph.nodes().len()
+            first.connector_graph.node_positions().count(),
+            second.connector_graph.node_positions().count()
         );
         assert_eq!(
-            first.connector_graph.edges().len(),
-            second.connector_graph.edges().len()
+            first.connector_graph.edge_count(),
+            second.connector_graph.edge_count()
         );
 
         for (left, right) in first
             .connector_graph
-            .nodes()
-            .iter()
-            .zip(second.connector_graph.nodes())
+            .node_positions()
+            .zip(second.connector_graph.node_positions())
         {
-            assert_eq!(left.position, right.position);
-            assert!(left.position.y >= 0.0);
+            assert_eq!(left, right);
+            assert!(left.y >= 0.0);
         }
     }
 
@@ -121,8 +120,8 @@ mod tests {
             &[Vec3::new(10.0, 20.0, 10.0), Vec3::new(80.0, 30.0, 20.0)],
         );
 
-        assert!(region.connector_graph.nodes().len() > 2);
-        assert!(region.connector_graph.edges().len() > 1);
+        assert!(region.connector_graph.node_positions().count() > 2);
+        assert!(region.connector_graph.edge_count() > 1);
     }
 
     #[test]
@@ -133,7 +132,7 @@ mod tests {
             .collect::<Vec<_>>();
         let region = field.region_from_anchors(IVec3::ZERO, &anchors);
 
-        assert!(region.connector_graph.edges().len() < 12 * 11 / 2 * 5);
+        assert!(region.connector_graph.edge_count() < 12 * 11 / 2 * 5);
     }
 
     #[test]
@@ -144,7 +143,7 @@ mod tests {
             &[Vec3::ZERO, Vec3::new(ANCHOR_SEARCH_MARGIN + 1.0, 0.0, 0.0)],
         );
 
-        assert!(region.connector_graph.edges().is_empty());
+        assert_eq!(region.connector_graph.edge_count(), 0);
     }
 
     #[test]

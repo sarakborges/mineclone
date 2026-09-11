@@ -40,13 +40,13 @@ pub(crate) struct FeatureGraph {
 
 impl FeatureGraph {
     #[cfg(test)]
-    fn nodes(&self) -> &[FeatureNode] {
-        &self.nodes
+    pub(crate) fn node_positions(&self) -> impl Iterator<Item = Vec3> + '_ {
+        self.nodes.iter().map(|node| node.position)
     }
 
     #[cfg(test)]
-    fn edges(&self) -> &[FeatureEdge] {
-        &self.edges
+    pub(crate) fn edge_count(&self) -> usize {
+        self.edges.len()
     }
 
     pub(crate) fn add_node(&mut self, position: Vec3) -> usize {
