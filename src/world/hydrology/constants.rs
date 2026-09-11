@@ -30,9 +30,8 @@ pub(super) const LAKE_MAXIMUM_RADIUS: f32 = 46.0;
 pub(super) const LAKE_CARVE_DEPTH: f32 = 14.0;
 pub(super) const LAKE_MINIMUM_RELIEF: f32 = 0.25;
 pub(super) const LAKE_CHANCE: f32 = 0.38;
-pub(super) const LAKE_SHORE_INNER_DISTANCE: f32 = 0.72;
 pub(super) const LAKE_SHORE_OUTER_DISTANCE: f32 = 1.18;
-pub(super) const LAKE_SHORE_SURFACE_OFFSET: f32 = 0.25;
+pub(super) const LAKE_SHORE_SURFACE_OFFSET: f32 = 0.9;
 
 pub(super) const SHORE_STRENGTH: f32 = 0.25;
 pub(super) const BED_MATERIAL_DEPTH: f32 = 1.5;
