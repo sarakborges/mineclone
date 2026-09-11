@@ -17,10 +17,6 @@ pub(crate) struct SurfaceMaterialColumn<'a> {
     influences: Vec<ResolvedSurfaceInfluence<'a>>,
 }
 
-pub(crate) struct MaterialFieldContext<'a> {
-    pub biome_field: &'a BiomeField,
-}
-
 pub(crate) fn resolve_surface_material_column<'a>(
     surface_influences: &[(usize, f32)],
     biome_field: &BiomeField,
@@ -50,11 +46,9 @@ pub(crate) fn solid_block_id(
     volume: Option<VolumeBiomeSelection>,
     hydrology_block: Option<&str>,
     surface_materials: &SurfaceMaterialColumn<'_>,
-    context: &MaterialFieldContext<'_>,
+    biome_field: &BiomeField,
 ) -> &'static str {
-    if let Some(block_id) =
-        volume.and_then(|selection| context.biome_field.volume_solid_block(selection))
-    {
+    if let Some(block_id) = volume.and_then(|selection| biome_field.volume_solid_block(selection)) {
         return intern_block_id(block_id);
     }
 
@@ -66,7 +60,7 @@ pub(crate) fn solid_block_id(
     let resolved_material = if surface_depth > 0 {
         strongest_surface_material(
             surface_materials,
-            irregular_layer_depth(position, surface_depth, context.biome_field.seed()),
+            irregular_layer_depth(position, surface_depth, biome_field.seed()),
         )
         .or(base_material)
     } else {

@@ -10,7 +10,7 @@ use crate::{
     world::{
         biome_field::BiomeField,
         generation_region::GenerationRegion,
-        material_field::{MaterialFieldContext, resolve_surface_material_column, solid_block_id},
+        material_field::{resolve_surface_material_column, solid_block_id},
     },
 };
 
@@ -34,10 +34,6 @@ pub(super) fn rasterize_material_pass(
     density: &DensityField,
     context: &MaterialPassContext<'_>,
 ) {
-    let material_field = MaterialFieldContext {
-        biome_field: context.biome_field,
-    };
-
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
             let column = &columns[column_index(local_x, local_z)];
@@ -77,7 +73,7 @@ pub(super) fn rasterize_material_pass(
                     density.volume[index],
                     hydrology_blocks[local_y],
                     &surface_materials,
-                    &material_field,
+                    context.biome_field,
                 );
                 let block = context
                     .blocks
