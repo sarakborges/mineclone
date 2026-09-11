@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::world::{
+    deterministic::{compare_vec3, hash_unit, mix_u32_components},
     feature_graph::FeatureGraph,
     generation_region::generation_region_world_bounds,
 };
@@ -54,9 +55,9 @@ pub(super) fn build_connector_graph(
             .collect::<Vec<_>>();
         neighbors.sort_by(
             |(left_index, left_distance), (right_index, right_distance)| {
-                left_distance.total_cmp(right_distance).then_with(|| {
-                    compare_position(&anchors[*left_index], &anchors[*right_index])
-                })
+                left_distance
+                    .total_cmp(right_distance)
+                    .then_with(|| compare_vec3(&anchors[*left_index], &anchors[*right_index]))
             },
         );
 
@@ -160,7 +161,7 @@ fn normalized_anchors(anchors: &[Vec3]) -> Vec<Vec3> {
         .copied()
         .filter(|position| position.y >= 0.0)
         .collect::<Vec<_>>();
-    anchors.sort_by(compare_position);
+    anchors.sort_by(compare_vec3);
     anchors.dedup_by(|left, right| *left == *right);
     anchors
 }
@@ -196,43 +197,28 @@ fn segment_intersects_region(
         && segment_minimum.z <= region_maximum.z
 }
 
-fn compare_position(left: &Vec3, right: &Vec3) -> std::cmp::Ordering {
-    left.x
-        .total_cmp(&right.x)
-        .then_with(|| left.y.total_cmp(&right.y))
-        .then_with(|| left.z.total_cmp(&right.z))
-}
-
 fn anchor_pair_hash(left: Vec3, right: Vec3, seed: u64) -> u64 {
-    let (first, second) = if compare_position(&left, &right) != std::cmp::Ordering::Greater {
+    let (first, second) = if compare_vec3(&left, &right) != std::cmp::Ordering::Greater {
         (left, right)
     } else {
         (right, left)
     };
-    let mut hash = seed ^ 0x6a09_e667_f3bc_c909;
 
-    for component in [
-        first.x.to_bits(),
-        first.y.to_bits(),
-        first.z.to_bits(),
-        second.x.to_bits(),
-        second.y.to_bits(),
-        second.z.to_bits(),
-    ] {
-        hash ^= component as u64;
-        hash = hash.wrapping_mul(0x9e37_79b1_85eb_ca87);
-        hash ^= hash >> 31;
-    }
-
-    hash
+    mix_u32_components(
+        seed ^ 0x6a09_e667_f3bc_c909,
+        [
+            first.x.to_bits(),
+            first.y.to_bits(),
+            first.z.to_bits(),
+            second.x.to_bits(),
+            second.y.to_bits(),
+            second.z.to_bits(),
+        ],
+    )
 }
 
 fn tunnel_radius(hash: u64) -> f32 {
     MIN_TUNNEL_RADIUS + (MAX_TUNNEL_RADIUS - MIN_TUNNEL_RADIUS) * hash_unit(hash)
-}
-
-fn hash_unit(hash: u64) -> f32 {
-    (hash & 0xffff) as f32 / u16::MAX as f32
 }
 
 #[cfg(test)]
