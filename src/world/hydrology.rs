@@ -11,9 +11,9 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub use field::HydrologyField;
-pub use region::HydrologyRegion;
-pub use types::{HydrologyBiomeOverlay, HydrologySurfaceSample};
+pub(crate) use field::HydrologyField;
+pub(crate) use region::HydrologyRegion;
+pub(crate) use types::{HydrologyBiomeOverlay, HydrologySurfaceSample};
 pub(crate) use types::{
     HydrologyRiverSurfaceSample, HydrologyWaterKind, HydrologyWaterSample,
 };
