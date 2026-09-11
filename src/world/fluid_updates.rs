@@ -83,9 +83,12 @@ impl PendingFluidUpdates {
         coord: IVec3,
         direction: IVec3,
     ) {
-        if coord.y < 0 || world.chunk(coord).is_none() {
+        if coord.y < 0 {
             return;
         }
+        let Some(chunk) = world.chunk(coord) else {
+            return;
+        };
 
         let size = CHUNK_SIZE as i32;
         let origin = coord * size;
@@ -94,7 +97,10 @@ impl PendingFluidUpdates {
             let local_x = if direction.x < 0 { 0 } else { size - 1 };
             for local_y in 0..size {
                 for local_z in 0..size {
-                    self.enqueue_fluid_spread_targets_at(
+                    if chunk.fluid_at(local_x, local_y, local_z).is_none() {
+                        continue;
+                    }
+                    self.enqueue_spread_targets_from_fluid(
                         world,
                         origin + IVec3::new(local_x, local_y, local_z),
                     );
@@ -107,7 +113,10 @@ impl PendingFluidUpdates {
             let local_y = if direction.y < 0 { 0 } else { size - 1 };
             for local_z in 0..size {
                 for local_x in 0..size {
-                    self.enqueue_fluid_spread_targets_at(
+                    if chunk.fluid_at(local_x, local_y, local_z).is_none() {
+                        continue;
+                    }
+                    self.enqueue_spread_targets_from_fluid(
                         world,
                         origin + IVec3::new(local_x, local_y, local_z),
                     );
@@ -119,20 +128,15 @@ impl PendingFluidUpdates {
         let local_z = if direction.z < 0 { 0 } else { size - 1 };
         for local_y in 0..size {
             for local_x in 0..size {
-                self.enqueue_fluid_spread_targets_at(
+                if chunk.fluid_at(local_x, local_y, local_z).is_none() {
+                    continue;
+                }
+                self.enqueue_spread_targets_from_fluid(
                     world,
                     origin + IVec3::new(local_x, local_y, local_z),
                 );
             }
         }
-    }
-
-    fn enqueue_fluid_spread_targets_at(&mut self, world: &VoxelWorld, position: IVec3) {
-        if world.fluid_at(position).is_none() {
-            return;
-        }
-
-        self.enqueue_spread_targets_from_fluid(world, position);
     }
 
     fn enqueue_spread_targets_from_fluid(&mut self, world: &VoxelWorld, position: IVec3) {
@@ -386,5 +390,22 @@ mod tests {
         let far = FluidCell::spreading(0, 1, 20);
         assert_eq!(horizontal_spread_state(far, 20), None);
         assert_eq!(horizontal_spread_state(far, 21), Some((1, 21)));
+    }
+
+    #[test]
+    fn source_water_can_spill_over_an_edge_without_airborne_flow_fanning_out() {
+        let world = VoxelWorld::default();
+        let position = IVec3::new(4, 10, 4);
+
+        assert!(can_spill_over_edge(
+            &world,
+            position,
+            FluidCell::source(0, MAX_FLUID_LEVEL),
+        ));
+        assert!(!can_spill_over_edge(
+            &world,
+            position,
+            FluidCell::flowing(0, MAX_FLUID_LEVEL),
+        ));
     }
 }
