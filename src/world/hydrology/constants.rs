@@ -10,7 +10,7 @@ pub(super) const COAST_OCEAN_BLEND_START_STRENGTH: f32 = 0.55;
 pub(super) const COAST_OCEAN_BLEND_END_STRENGTH: f32 = 0.80;
 pub(super) const COAST_MAXIMUM_SURFACE_HEIGHT: f32 = 3.0;
 
-pub(super) const RIVER_EDGE_MARGIN_CELLS: i32 = 2;
+pub(super) const RIVER_EDGE_MARGIN_CELLS: i32 = 4;
 pub(super) const RIVER_MINIMUM_DROP: f32 = 0.01;
 pub(super) const RIVER_MINIMUM_WATER_DROP: f32 = 0.5;
 pub(super) const RIVER_BASIN_ESCAPE_RADIUS_CELLS: i32 = 3;
