@@ -24,6 +24,7 @@ use super::{
     chunk_rendering::{FluidMaterials, TerrainMaterials, spawn_chunk_mesh},
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
     dimension::CurrentDimension,
+    fluid_updates::PendingFluidUpdates,
     render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
     terrain::surface_height,
     world_feature_fields::WorldFeatureFields,
@@ -179,6 +180,7 @@ pub fn setup_world(
     mut world: ResMut<VoxelWorld>,
     mut loading_state: ResMut<WorldLoadingState>,
     mut transition: ResMut<ScreenTransition>,
+    mut fluid_updates: ResMut<PendingFluidUpdates>,
 ) {
     if transition.is_active() {
         return;
@@ -199,6 +201,7 @@ pub fn setup_world(
                 };
 
                 ensure_chunk_loaded(&mut world, coord, &generation_context);
+                fluid_updates.enqueue_loaded_fluid_frontier(&world, coord);
                 loading_state.generated += 1;
             }
 
