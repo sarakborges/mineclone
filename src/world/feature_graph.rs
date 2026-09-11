@@ -129,13 +129,22 @@ impl FeatureGraph {
     }
 
     pub fn sample_horizontal(&self, position: Vec2) -> Option<FeatureGraphHorizontalSample> {
+        self.sample_horizontal_with_margin(position, 0.0)
+    }
+
+    pub fn sample_horizontal_with_margin(
+        &self,
+        position: Vec2,
+        margin: f32,
+    ) -> Option<FeatureGraphHorizontalSample> {
+        let margin = margin.max(0.0);
         let mut strongest: Option<FeatureGraphHorizontalSample> = None;
 
         for edge in &self.edges {
-            if position.x < edge.minimum.x
-                || position.x > edge.maximum.x
-                || position.y < edge.minimum.z
-                || position.y > edge.maximum.z
+            if position.x < edge.minimum.x - margin
+                || position.x > edge.maximum.x + margin
+                || position.y < edge.minimum.z - margin
+                || position.y > edge.maximum.z + margin
             {
                 continue;
             }
@@ -155,7 +164,9 @@ impl FeatureGraph {
             let progress = (relative.dot(segment) / length_squared).clamp(0.0, 1.0);
             let closest = from_horizontal + segment * progress;
             let distance = position.distance(closest);
-            let radius = edge.start_radius + (edge.end_radius - edge.start_radius) * progress;
+            let radius = edge.start_radius
+                + (edge.end_radius - edge.start_radius) * progress
+                + margin;
             let strength = 1.0 - (distance / radius).clamp(0.0, 1.0);
 
             if strength <= 0.0 {
@@ -217,6 +228,18 @@ mod tests {
 
         assert_eq!(sample.height, 15.0);
         assert_eq!(sample.strength, 1.0);
+    }
+
+    #[test]
+    fn horizontal_margin_detects_nearby_feature_without_widening_base_sample() {
+        let mut graph = FeatureGraph::default();
+        let from = graph.add_node(Vec3::ZERO);
+        let to = graph.add_node(Vec3::new(10.0, 0.0, 0.0));
+        graph.add_edge(from, to, 2.0, 2.0);
+
+        let nearby = Vec2::new(5.0, 5.0);
+        assert!(graph.sample_horizontal(nearby).is_none());
+        assert!(graph.sample_horizontal_with_margin(nearby, 4.0).is_some());
     }
 
     #[test]
