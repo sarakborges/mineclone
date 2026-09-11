@@ -48,7 +48,7 @@
       "spacing": 260.0,
       "chance": 0.18,
       "length": { "min": 70.0, "max": 130.0 },
-      "radius": { "min": 3.0, "max": 5.2 },
+      "radius": { "min": 5.0, "max": 8.5 },
       "elevation": { "min": 12.0, "max": 42.0 },
       "jitter": 70.0
     }

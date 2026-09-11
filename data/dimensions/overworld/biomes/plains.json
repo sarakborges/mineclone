@@ -2,8 +2,8 @@
   "id": "asteria:overworld/plains",
   "name": "Plains",
   "size": {
-    "x": { "min": 50.0, "max": 250.0 },
-    "z": { "min": 50.0, "max": 250.0 },
+    "x": { "min": 120.0, "max": 420.0 },
+    "z": { "min": 120.0, "max": 420.0 },
     "y": null
   },
   "terrain": {
