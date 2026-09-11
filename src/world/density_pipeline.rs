@@ -6,7 +6,9 @@ use super::{
     biome_field::{BiomeField, VolumeBiomeSelection},
     cave_connectivity::CaveConnectivityRegion,
     generation_region::GenerationRegion,
-    hydrology::{HydrologyRiverSurfaceSample, HydrologyWaterSample},
+    hydrology::{
+        HydrologyRiverSurfaceSample, HydrologyWaterKind, HydrologyWaterSample,
+    },
 };
 
 const DENSITY_NOISE_EDGE: f32 = 0.15;
@@ -19,12 +21,17 @@ const CAVE_WATER_PROTECTION_DEPTH: f32 = 14.0;
 const CAVE_WATER_PROTECTION_FADE_DEPTH: f32 = 20.0;
 const CAVE_WATER_HORIZONTAL_CLEARANCE: f32 = 8.0;
 const RIVER_CHANNEL_HEADROOM: f32 = 5.0;
+const RIVER_BANK_NOISE_SCALE: f32 = 0.035;
+const RIVER_BANK_DETAIL_NOISE_SCALE: f32 = 0.11;
+const LAKE_SURFACE_HEADROOM: f32 = 8.0;
 const WATER_VOLUME_AIR_DENSITY: f32 = -0.001;
 
 #[derive(Clone, Copy, Debug)]
 struct WaterLevels {
     water_level: f32,
     bed_level: f32,
+    strength: f32,
+    kind: HydrologyWaterKind,
 }
 
 impl From<HydrologyWaterSample<'_>> for WaterLevels {
@@ -32,6 +39,8 @@ impl From<HydrologyWaterSample<'_>> for WaterLevels {
         Self {
             water_level: sample.water_level,
             bed_level: sample.bed_level,
+            strength: sample.strength,
+            kind: sample.kind,
         }
     }
 }
@@ -154,20 +163,28 @@ pub(crate) fn sample_density_with_hydrology(
         cavern_depth_strength,
     );
 
-    enforce_hydrology_water_volume(density, base_density, position.y, column_hydrology)
+    enforce_hydrology_water_volume(
+        density,
+        base_density,
+        position,
+        column_hydrology,
+        context.biome_field.seed(),
+    )
 }
 
 fn enforce_hydrology_water_volume(
     density: f32,
     base_density: f32,
-    y: f32,
+    position: Vec3,
     column_hydrology: DensityColumnHydrology,
+    seed: u64,
 ) -> f32 {
-    let cell_bottom = y - 0.5;
-    let cell_top = y + 0.5;
+    let cell_bottom = position.y - 0.5;
+    let cell_top = position.y + 0.5;
+    let horizontal = Vec2::new(position.x, position.z);
 
     if let Some(river) = column_hydrology.river_surface {
-        let headroom = river_headroom(river.strength);
+        let headroom = river_headroom(river.strength, horizontal, seed);
         if headroom > 0.0
             && cell_top > river.water_level
             && cell_bottom < river.water_level + headroom
@@ -181,6 +198,16 @@ fn enforce_hydrology_water_volume(
         return density;
     };
 
+    if water.kind == HydrologyWaterKind::Lake && base_density > 0.0 {
+        let headroom = lake_surface_headroom(water.strength);
+        if headroom > 0.0
+            && cell_top > water.water_level
+            && cell_bottom < water.water_level + headroom
+        {
+            return density.min(WATER_VOLUME_AIR_DENSITY);
+        }
+    }
+
     if cell_top <= water.bed_level || cell_bottom >= water.water_level {
         return density;
     }
@@ -188,8 +215,31 @@ fn enforce_hydrology_water_volume(
     density.min(WATER_VOLUME_AIR_DENSITY)
 }
 
-fn river_headroom(strength: f32) -> f32 {
-    RIVER_CHANNEL_HEADROOM * smoothstep(strength.clamp(0.0, 1.0))
+fn river_headroom(strength: f32, horizontal: Vec2, seed: u64) -> f32 {
+    let strength = strength.clamp(0.0, 1.0);
+    if strength <= 0.0 {
+        return 0.0;
+    }
+
+    let broad = value_noise_2d(
+        horizontal * RIVER_BANK_NOISE_SCALE,
+        seed ^ 0x243f_6a88_85a3_08d3,
+    ) * 0.5
+        + 0.5;
+    let detail = value_noise_2d(
+        horizontal * RIVER_BANK_DETAIL_NOISE_SCALE,
+        seed ^ 0x1319_8a2e_0370_7344,
+    ) * 0.5
+        + 0.5;
+    let variation = lerp(0.72, 1.28, broad * 0.7 + detail * 0.3);
+    let shaped_strength =
+        (strength * (1.0 + (variation - 1.0) * (1.0 - strength) * 1.5)).clamp(0.0, 1.0);
+
+    RIVER_CHANNEL_HEADROOM * smoothstep(shaped_strength)
+}
+
+fn lake_surface_headroom(strength: f32) -> f32 {
+    LAKE_SURFACE_HEADROOM * smoothstep(strength.clamp(0.0, 1.0))
 }
 
 fn cave_water_clearance(y: f32, water: Option<WaterLevels>) -> f32 {
@@ -304,6 +354,27 @@ fn coverage_mask(noise: f32, coverage: f32) -> f32 {
     smoothstep(((noise - threshold) / DENSITY_NOISE_EDGE).clamp(0.0, 1.0))
 }
 
+fn value_noise_2d(position: Vec2, seed: u64) -> f32 {
+    let x0 = position.x.floor() as i32;
+    let z0 = position.y.floor() as i32;
+    let x1 = x0 + 1;
+    let z1 = z0 + 1;
+    let tx = smoothstep(position.x - x0 as f32);
+    let tz = smoothstep(position.y - z0 as f32);
+    let top = lerp(
+        lattice_noise_3d(x0, 0, z0, seed),
+        lattice_noise_3d(x1, 0, z0, seed),
+        tx,
+    );
+    let bottom = lerp(
+        lattice_noise_3d(x0, 0, z1, seed),
+        lattice_noise_3d(x1, 0, z1, seed),
+        tx,
+    );
+
+    lerp(top, bottom, tz)
+}
+
 fn value_noise_3d(position: Vec3, seed: u64) -> f32 {
     let x0 = position.x.floor() as i32;
     let y0 = position.y.floor() as i32;
@@ -361,10 +432,33 @@ mod tests {
 
     #[test]
     fn river_headroom_tapers_toward_the_bank() {
-        assert_eq!(river_headroom(0.0), 0.0);
-        assert!(river_headroom(0.25) < river_headroom(0.5));
-        assert!(river_headroom(0.5) < river_headroom(1.0));
-        assert_eq!(river_headroom(1.0), RIVER_CHANNEL_HEADROOM);
+        let horizontal = Vec2::new(12.5, -8.5);
+        let seed = 42;
+
+        assert_eq!(river_headroom(0.0, horizontal, seed), 0.0);
+        assert!(
+            river_headroom(0.25, horizontal, seed) < river_headroom(0.5, horizontal, seed)
+        );
+        assert!(river_headroom(0.5, horizontal, seed) < river_headroom(1.0, horizontal, seed));
+        assert_eq!(
+            river_headroom(1.0, horizontal, seed),
+            RIVER_CHANNEL_HEADROOM
+        );
+    }
+
+    #[test]
+    fn river_bank_shape_varies_across_world_positions() {
+        let left = river_headroom(0.5, Vec2::new(-80.5, 14.5), 42);
+        let right = river_headroom(0.5, Vec2::new(96.5, 14.5), 42);
+
+        assert_ne!(left, right);
+    }
+
+    #[test]
+    fn lake_surface_headroom_tapers_at_the_boundary() {
+        assert_eq!(lake_surface_headroom(0.0), 0.0);
+        assert!(lake_surface_headroom(0.5) > 0.0);
+        assert_eq!(lake_surface_headroom(1.0), LAKE_SURFACE_HEADROOM);
     }
 
     #[test]

@@ -4,7 +4,7 @@ use super::HydrologyRegion;
 use crate::world::hydrology::{
     constants::{OCEAN_EXTRA_DEPTH, OCEAN_MINIMUM_DEPTH, SHORE_STRENGTH},
     math::{lerp, smoothstep},
-    types::{HydrologyRiverSurfaceSample, HydrologyWaterSample},
+    types::{HydrologyRiverSurfaceSample, HydrologyWaterKind, HydrologyWaterSample},
 };
 
 impl HydrologyRegion {
@@ -51,6 +51,8 @@ impl HydrologyRegion {
             fluid_id: self.settings.water_fluid.as_str(),
             water_level: river.height,
             bed_level: river.height - self.river_carve_depth * profile,
+            strength: river.strength,
+            kind: HydrologyWaterKind::River,
         })
     }
 
@@ -73,6 +75,8 @@ impl HydrologyRegion {
                     fluid_id: body.fluid_id.as_str(),
                     water_level: body.water_level,
                     bed_level: body.water_level - body.carve_depth * strength,
+                    strength,
+                    kind: HydrologyWaterKind::Lake,
                 },
             );
         }
@@ -97,6 +101,8 @@ impl HydrologyRegion {
                     fluid_id: self.settings.water_fluid.as_str(),
                     water_level: self.sea_level,
                     bed_level,
+                    strength: ocean_strength,
+                    kind: HydrologyWaterKind::Ocean,
                 },
             );
         }

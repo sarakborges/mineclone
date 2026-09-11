@@ -72,11 +72,20 @@ fn irregular_boundary_scale(normalized: Vec2, seed: u64) -> f32 {
     (1.0 + broad + medium + detail).clamp(0.72, 1.28)
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum HydrologyWaterKind {
+    Lake,
+    River,
+    Ocean,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct HydrologyWaterSample<'a> {
     pub fluid_id: &'a str,
     pub water_level: f32,
     pub bed_level: f32,
+    pub strength: f32,
+    pub(crate) kind: HydrologyWaterKind,
 }
 
 #[derive(Clone, Copy, Debug)]
