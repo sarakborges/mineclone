@@ -5,13 +5,15 @@ use crate::content::{
     biome_surface_carver::{BiomeSurfaceCarver, SurfaceCarverRange},
 };
 
+const MAXIMUM_TUNNEL_SLOPE: f32 = 0.06;
+
 pub(super) fn surface_carver_density_delta(
     current_density: f32,
     position: Vec3,
-    surface_height: i32,
     surface: &crate::world::biome_field::BiomeFieldSample<'_>,
     biomes: &BiomeRegistry,
     world_seed: u64,
+    sea_level: f32,
 ) -> f32 {
     if current_density <= 0.0 {
         return 0.0;
@@ -27,8 +29,8 @@ pub(super) fn surface_carver_density_delta(
         for (index, carver) in biome.surface_carvers.iter().copied().enumerate() {
             let strength = tunnel_strength(
                 position,
-                surface_height,
                 world_seed,
+                sea_level,
                 biome.id.as_str(),
                 index,
                 carver,
@@ -46,8 +48,8 @@ pub(super) fn surface_carver_density_delta(
 
 fn tunnel_strength(
     position: Vec3,
-    surface_height: i32,
     world_seed: u64,
+    sea_level: f32,
     biome_id: &str,
     carver_index: usize,
     carver: BiomeSurfaceCarver,
@@ -57,7 +59,7 @@ fn tunnel_strength(
         chance,
         length,
         radius,
-        depth,
+        elevation,
         jitter,
     } = carver;
     let horizontal = Vec2::new(position.x, position.z);
@@ -92,25 +94,25 @@ fn tunnel_strength(
             let direction = Vec2::new(angle.cos(), angle.sin());
             let half_length = sample_range(length, hash.rotate_left(7)) * 0.5;
             let tunnel_radius = sample_range(radius, hash.rotate_left(23));
-            let tunnel_depth = sample_range(depth, hash.rotate_left(41));
-            let start = anchor - direction * half_length;
-            let end = anchor + direction * half_length;
-            let horizontal_distance = distance_to_segment(horizontal, start, end);
+            let center_y = sea_level + sample_range(elevation, hash.rotate_left(41));
+            let vertical_half_span =
+                signed_unit(hash.rotate_left(59)) * half_length * MAXIMUM_TUNNEL_SLOPE;
+            let start_horizontal = anchor - direction * half_length;
+            let end_horizontal = anchor + direction * half_length;
+            let start = Vec3::new(
+                start_horizontal.x,
+                center_y - vertical_half_span,
+                start_horizontal.y,
+            );
+            let end = Vec3::new(
+                end_horizontal.x,
+                center_y + vertical_half_span,
+                end_horizontal.y,
+            );
+            let distance = distance_to_segment(position, start, end);
 
-            if horizontal_distance >= tunnel_radius {
-                continue;
-            }
-
-            let center_y = surface_height as f32 - tunnel_depth;
-            let vertical_distance = (position.y - center_y).abs();
-            let normalized = Vec2::new(
-                horizontal_distance / tunnel_radius,
-                vertical_distance / tunnel_radius,
-            )
-            .length();
-
-            if normalized < 1.0 {
-                strongest = strongest.max(smoothstep(1.0 - normalized));
+            if distance < tunnel_radius {
+                strongest = strongest.max(smoothstep(1.0 - distance / tunnel_radius));
             }
         }
     }
@@ -118,7 +120,7 @@ fn tunnel_strength(
     strongest
 }
 
-fn distance_to_segment(point: Vec2, start: Vec2, end: Vec2) -> f32 {
+fn distance_to_segment(point: Vec3, start: Vec3, end: Vec3) -> f32 {
     let segment = end - start;
     let length_squared = segment.length_squared();
     if length_squared <= f32::EPSILON {
