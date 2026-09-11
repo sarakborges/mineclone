@@ -5,19 +5,16 @@ use crate::{
     world::render_distance::RenderDistanceSettings,
 };
 
-const FOG_START_MARGIN_CHUNKS: f32 = 1.5;
-const FOG_END_MARGIN_CHUNKS: f32 = 0.5;
+const FOG_START_RADIUS_FRACTION: f32 = 0.55;
+const FOG_END_RADIUS_FRACTION: f32 = 0.90;
 
 pub(super) fn fog_falloff(render_distance_chunks: i32) -> FogFalloff {
     let chunk_size = CHUNK_SIZE as f32;
-    let radius = render_distance_chunks as f32;
-    let start_chunks = (radius - FOG_START_MARGIN_CHUNKS).max(1.0);
-    let end_chunks = (radius - FOG_END_MARGIN_CHUNKS).max(start_chunks + 0.5);
+    let radius = render_distance_chunks.max(1) as f32 * chunk_size;
+    let start = (radius * FOG_START_RADIUS_FRACTION).max(chunk_size);
+    let end = (radius * FOG_END_RADIUS_FRACTION).max(start + chunk_size);
 
-    FogFalloff::Linear {
-        start: start_chunks * chunk_size,
-        end: end_chunks * chunk_size,
-    }
+    FogFalloff::Linear { start, end }
 }
 
 pub(super) fn update_fog_distance(
