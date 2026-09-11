@@ -1,3 +1,5 @@
+use bevy::prelude::*;
+
 use crate::{content::block::BlockDefinition, voxel::block_face::BlockFace};
 
 pub(crate) fn block_face_texture(face: BlockFace, block: &BlockDefinition) -> Option<&str> {
@@ -15,6 +17,14 @@ pub(crate) fn block_face_texture(face: BlockFace, block: &BlockDefinition) -> Op
     } else {
         first_block_texture(block)
     }
+}
+
+pub(crate) fn load_block_face_texture(
+    asset_server: &AssetServer,
+    face: BlockFace,
+    block: &BlockDefinition,
+) -> Option<Handle<Image>> {
+    block_face_texture(face, block).map(|texture| asset_server.load(texture.to_owned()))
 }
 
 fn first_block_texture(block: &BlockDefinition) -> Option<&str> {

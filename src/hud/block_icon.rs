@@ -6,7 +6,7 @@ use crate::{
     content::block::BlockDefinition,
     rendering::{
         block_display::{block_display_face_basis, block_display_face_shade},
-        block_texture::block_face_texture,
+        block_texture::load_block_face_texture,
         color::color_to_linear_vec4,
     },
     voxel::block_face::BlockFace,
@@ -82,9 +82,12 @@ impl BlockIconMaterial {
     }
 
     pub(crate) fn set_block(&mut self, block: &BlockDefinition, asset_server: &AssetServer) {
-        self.top_texture = load_face_texture(asset_server, block, BlockFace::Top);
-        self.front_texture = load_face_texture(asset_server, block, BlockFace::Front);
-        self.right_texture = load_face_texture(asset_server, block, BlockFace::Right);
+        self.top_texture = load_block_face_texture(asset_server, BlockFace::Top, block)
+            .unwrap_or_default();
+        self.front_texture = load_block_face_texture(asset_server, BlockFace::Front, block)
+            .unwrap_or_default();
+        self.right_texture = load_block_face_texture(asset_server, BlockFace::Right, block)
+            .unwrap_or_default();
     }
 
     pub(crate) fn set_tint(&mut self, tint: Color) {
@@ -99,14 +102,4 @@ fn block_face_shades() -> Vec4 {
         block_display_face_shade(BlockFace::Right),
         1.0,
     )
-}
-
-fn load_face_texture(
-    asset_server: &AssetServer,
-    block: &BlockDefinition,
-    face: BlockFace,
-) -> Handle<Image> {
-    block_face_texture(face, block)
-        .map(|texture| asset_server.load(texture.to_owned()))
-        .unwrap_or_default()
 }

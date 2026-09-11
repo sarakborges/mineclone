@@ -8,7 +8,7 @@ use crate::{
         fluid::{FluidId, FluidRegistry},
     },
     rendering::{
-        block_texture::block_face_texture,
+        block_texture::{block_face_texture, load_block_face_texture},
         terrain_material::{TerrainMaterial, TerrainMaterialExtension},
     },
     voxel::block_face::{BlockFace, BlockFaces},
@@ -86,8 +86,7 @@ fn create_material(
     materials.add(TerrainMaterial {
         base: StandardMaterial {
             base_color: Color::WHITE,
-            base_color_texture: block_face_texture(face, definition)
-                .map(|texture| asset_server.load(texture.to_owned())),
+            base_color_texture: load_block_face_texture(asset_server, face, definition),
             perceptual_roughness: roughness,
             metallic,
             alpha_mode: definition.alpha_mode(1.0),

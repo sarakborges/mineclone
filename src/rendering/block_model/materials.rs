@@ -5,7 +5,7 @@ use crate::{
     rendering::{
         block_display::block_display_face_shade,
         block_model_material::{BlockModelMaterial, BlockModelMaterialExtension},
-        block_texture::block_face_texture,
+        block_texture::load_block_face_texture,
     },
     voxel::block_face::{BlockFace, BlockFaces},
 };
@@ -46,8 +46,7 @@ pub(crate) fn block_face_material_data(
     BlockModelMaterial {
         base: StandardMaterial {
             base_color: Color::srgba(1.0, 1.0, 1.0, opacity),
-            base_color_texture: block_face_texture(face, block)
-                .map(|texture| asset_server.load(texture.to_owned())),
+            base_color_texture: load_block_face_texture(asset_server, face, block),
             perceptual_roughness: 1.0,
             alpha_mode: block.alpha_mode(opacity),
             unlit: true,
