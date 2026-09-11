@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    time::Instant,
+};
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 
@@ -22,9 +25,13 @@ use super::{
     terrain::surface_height,
 };
 
-const CHUNKS_PER_FRAME: usize = 2;
+const MIN_CHUNKS_PER_FRAME: usize = 2;
+const MAX_CHUNKS_PER_FRAME: usize = 8;
+const EXTRA_STREAMING_BUDGET_MS: u128 = 6;
+const HORIZONTAL_PRELOAD_CHUNKS: i32 = 1;
 const SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const SURFACE_PADDING_ABOVE_CHUNKS: i32 = 1;
+const SURFACE_CACHE_MARGIN_CHUNKS: i32 = 2;
 
 #[derive(Resource, Default)]
 pub struct ChunkStreamingState {
@@ -33,6 +40,7 @@ pub struct ChunkStreamingState {
     vertical_render_distance: i32,
     desired: HashSet<IVec3>,
     pending: VecDeque<IVec3>,
+    surface_ranges: HashMap<IVec2, (i32, i32)>,
 }
 
 impl ChunkStreamingState {
@@ -84,8 +92,16 @@ pub fn stream_chunks(
     }
 
     let generation_context = generation.context(&content);
+    let frame_started = Instant::now();
+    let mut processed = 0;
 
-    for _ in 0..CHUNKS_PER_FRAME {
+    while processed < MAX_CHUNKS_PER_FRAME {
+        if processed >= MIN_CHUNKS_PER_FRAME
+            && frame_started.elapsed().as_millis() >= EXTRA_STREAMING_BUDGET_MS
+        {
+            break;
+        }
+
         let Some(coord) = inputs.streaming.pending.pop_front() else {
             break;
         };
@@ -116,6 +132,7 @@ pub fn stream_chunks(
             chunk,
             &render_context,
         );
+        processed += 1;
 
         for changed in lighting_changes {
             if changed != coord && renderer.pool.contains(changed) {
@@ -142,13 +159,16 @@ fn rebuild_queue(
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
 ) {
+    let preload_radius = horizontal_radius + HORIZONTAL_PRELOAD_CHUNKS;
+    prune_surface_cache(&mut streaming.surface_ranges, center.xz(), preload_radius);
     let desired = desired_chunk_coords(
         center,
-        horizontal_radius,
+        preload_radius,
         vertical_radius,
         dimension,
         biomes,
         biome_field,
+        &mut streaming.surface_ranges,
     );
     let mut pending = desired
         .iter()
@@ -172,11 +192,11 @@ fn desired_chunk_coords(
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
+    surface_ranges: &mut HashMap<IVec2, (i32, i32)>,
 ) -> HashSet<IVec3> {
     let mut desired = chunk_coords_in_volume(center, horizontal_radius, vertical_radius)
         .into_iter()
         .collect::<HashSet<_>>();
-    let mut surface_ranges = HashMap::<IVec2, (i32, i32)>::new();
 
     for z in -horizontal_radius..=horizontal_radius {
         for x in -horizontal_radius..=horizontal_radius {
@@ -185,9 +205,13 @@ fn desired_chunk_coords(
             }
 
             let horizontal = IVec2::new(center.x + x, center.z + z);
-            let (own_minimum, own_maximum) = *surface_ranges.entry(horizontal).or_insert_with(|| {
-                chunk_surface_range(horizontal, dimension, biomes, biome_field)
-            });
+            let (own_minimum, own_maximum) = cached_surface_range(
+                surface_ranges,
+                horizontal,
+                dimension,
+                biomes,
+                biome_field,
+            );
             let mut surrounding_minimum = own_minimum;
 
             for neighbor_z in -1..=1 {
@@ -197,9 +221,13 @@ fn desired_chunk_coords(
                     }
 
                     let neighbor = horizontal + IVec2::new(neighbor_x, neighbor_z);
-                    let (neighbor_minimum, _) = *surface_ranges.entry(neighbor).or_insert_with(|| {
-                        chunk_surface_range(neighbor, dimension, biomes, biome_field)
-                    });
+                    let (neighbor_minimum, _) = cached_surface_range(
+                        surface_ranges,
+                        neighbor,
+                        dimension,
+                        biomes,
+                        biome_field,
+                    );
                     surrounding_minimum = surrounding_minimum.min(neighbor_minimum);
                 }
             }
@@ -219,6 +247,28 @@ fn desired_chunk_coords(
     }
 
     desired
+}
+
+fn cached_surface_range(
+    cache: &mut HashMap<IVec2, (i32, i32)>,
+    horizontal_chunk: IVec2,
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+) -> (i32, i32) {
+    *cache.entry(horizontal_chunk).or_insert_with(|| {
+        chunk_surface_range(horizontal_chunk, dimension, biomes, biome_field)
+    })
+}
+
+fn prune_surface_cache(
+    cache: &mut HashMap<IVec2, (i32, i32)>,
+    center: IVec2,
+    preload_radius: i32,
+) {
+    let retention_radius = preload_radius + SURFACE_CACHE_MARGIN_CHUNKS;
+    let retention_radius_squared = retention_radius * retention_radius;
+    cache.retain(|coord, _| (*coord - center).length_squared() <= retention_radius_squared);
 }
 
 fn chunk_surface_range(
