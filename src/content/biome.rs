@@ -83,6 +83,8 @@ pub struct BiomeVisuals {
     pub leaf_color: Rgb,
     #[serde(default = "default_vegetation_color")]
     pub foliage_color: Rgb,
+    #[serde(default)]
+    pub water_color: Option<Rgb>,
     pub underwater_tint: BiomeUnderwaterTint,
     #[serde(default)]
     pub stars: BiomeSkyLayerVisuals,
