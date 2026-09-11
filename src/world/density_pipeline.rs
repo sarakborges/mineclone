@@ -59,20 +59,29 @@ pub fn sample_density(
         cavern_depth_strength,
     );
 
-    enforce_hydrology_water_volume(density, position, region)
+    enforce_hydrology_water_volume(density, base_density, position, region)
 }
 
 fn enforce_hydrology_water_volume(
     density: f32,
+    base_density: f32,
     position: Vec3,
     region: &GenerationRegion,
 ) -> f32 {
     let horizontal = Vec2::new(position.x, position.z);
+    let cell_bottom = position.y - 0.5;
+    let cell_top = position.y + 0.5;
+
+    if let Some(river) = region.hydrology.river_water_at(horizontal)
+        && cell_top > river.bed_level
+        && base_density > 0.0
+    {
+        return density.min(WATER_VOLUME_AIR_DENSITY);
+    }
+
     let Some(water) = region.hydrology.water_at(horizontal) else {
         return density;
     };
-    let cell_bottom = position.y - 0.5;
-    let cell_top = position.y + 0.5;
 
     if cell_top <= water.bed_level || cell_bottom >= water.water_level {
         return density;
