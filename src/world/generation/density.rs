@@ -42,6 +42,14 @@ pub(super) fn sample_density_field(
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
             let column = &columns[column_index(local_x, local_z)];
+            let horizontal = Vec2::new(
+                chunk_origin.x as f32 + local_x as f32 + 0.5,
+                chunk_origin.z as f32 + local_z as f32 + 0.5,
+            );
+            let surface_carver_allowed = region
+                .hydrology
+                .water_near(horizontal, SURFACE_CARVER_WATER_CLEARANCE)
+                .is_none();
 
             for local_y in 0..CHUNK_SIZE {
                 let world_position = IVec3::new(
@@ -61,12 +69,7 @@ pub(super) fn sample_density_field(
                     volume,
                     biome_field,
                 );
-                let horizontal = Vec2::new(sample_position.x, sample_position.z);
-                let carver_delta = if region
-                    .hydrology
-                    .water_near(horizontal, SURFACE_CARVER_WATER_CLEARANCE)
-                    .is_none()
-                {
+                let carver_delta = if surface_carver_allowed {
                     surface_carver_density_delta(
                         sampled_density,
                         sample_position,
