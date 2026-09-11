@@ -49,10 +49,20 @@ pub(super) fn sample_density_field(
                 );
                 let sample_position = world_position.as_vec3() + Vec3::splat(0.5);
                 let base_density = terrain_density(column.surface_height, world_position.y);
+                let volume = biome_field.volume_selection_in_region(sample_position, volume_region);
+                let index = voxel_index(local_x, local_y, local_z);
+                let sampled_density = sample_density(
+                    base_density,
+                    sample_position,
+                    region,
+                    anchored_caves,
+                    volume,
+                    biome_field,
+                );
                 let horizontal = Vec2::new(sample_position.x, sample_position.z);
                 let carver_delta = if region.hydrology.water_at(horizontal).is_none() {
                     surface_carver_density_delta(
-                        base_density,
+                        sampled_density,
                         sample_position,
                         column.surface_height,
                         &column.surface,
@@ -62,17 +72,8 @@ pub(super) fn sample_density_field(
                 } else {
                     0.0
                 };
-                let volume = biome_field.volume_selection_in_region(sample_position, volume_region);
-                let index = voxel_index(local_x, local_y, local_z);
 
-                field.values[index] = sample_density(
-                    base_density + carver_delta,
-                    sample_position,
-                    region,
-                    anchored_caves,
-                    volume,
-                    biome_field,
-                );
+                field.values[index] = sampled_density + carver_delta;
                 field.volume[index] = volume;
             }
         }
