@@ -10,7 +10,7 @@ use crate::{
     world::{
         biome_field::BiomeField,
         generation_region::GenerationRegion,
-        material_field::{MaterialFieldContext, solid_block_id},
+        material_field::{MaterialFieldContext, solid_block_id_with_hydrology},
     },
 };
 
@@ -44,6 +44,17 @@ pub(super) fn rasterize_material_pass(
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
             let column = &columns[column_index(local_x, local_z)];
+            let horizontal = Vec2::new(
+                chunk_origin.x as f32 + local_x as f32 + 0.5,
+                chunk_origin.z as f32 + local_z as f32 + 0.5,
+            );
+            let hydrology_blocks = context
+                .region
+                .hydrology
+                .solid_blocks_for_column::<CHUNK_SIZE>(
+                    horizontal,
+                    chunk_origin.y as f32 + 0.5,
+                );
 
             for local_y in 0..CHUNK_SIZE {
                 let index = voxel_index(local_x, local_y, local_z);
@@ -58,11 +69,12 @@ pub(super) fn rasterize_material_pass(
                 );
                 let sample_position = world_position.as_vec3() + Vec3::splat(0.5);
                 let surface_depth = (column.surface_height - world_position.y - 1).max(0) as u32;
-                let block_id = solid_block_id(
+                let block_id = solid_block_id_with_hydrology(
                     sample_position,
                     &column.surface_influences,
                     surface_depth,
                     density.volume[index],
+                    hydrology_blocks[local_y],
                     &material_field,
                 );
                 let block = context
