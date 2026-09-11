@@ -7,7 +7,7 @@ use crate::{
         biome_field::{BiomeField, VolumeBiomeRegion, VolumeBiomeSelection},
         cave_connectivity::CaveConnectivityRegion,
         density_pipeline::{
-            sample_density_column_hydrology, sample_density_with_precomputed_hydrology,
+            DensitySampleContext, sample_density_column_hydrology, sample_density_with_hydrology,
         },
         generation_region::GenerationRegion,
         terrain::terrain_density,
@@ -37,6 +37,7 @@ pub(super) fn sample_density_field(
     biomes: &BiomeRegistry,
     sea_level: f32,
 ) -> DensityField {
+    let context = DensitySampleContext::new(region, anchored_caves, biome_field);
     let mut field = DensityField {
         values: vec![0.0; VOXELS_PER_CHUNK],
         volume: vec![None; VOXELS_PER_CHUNK],
@@ -79,15 +80,13 @@ pub(super) fn sample_density_field(
                 let base_density = terrain_density(column.surface_height, world_position.y);
                 let volume = biome_field.volume_selection_in_region(sample_position, volume_region);
                 let index = voxel_index(local_x, local_y, local_z);
-                let sampled_density = sample_density_with_precomputed_hydrology(
+                let sampled_density = sample_density_with_hydrology(
                     base_density,
                     sample_position,
-                    region,
-                    anchored_caves,
                     volume,
-                    biome_field,
                     column_hydrology,
                     hydrology_deltas[local_y],
+                    &context,
                 );
                 let carver_delta = surface_carvers.as_ref().map_or(0.0, |carvers| {
                     surface_carver_density_delta(sampled_density, sample_position, carvers)
