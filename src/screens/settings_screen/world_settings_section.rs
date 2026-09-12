@@ -1,21 +1,23 @@
 use bevy::{prelude::*, ui::InteractionDisabled};
 
 use crate::{
+    app::game_state::GameState,
     localization::{Language, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{theme, typography},
+    world::NewWorldConfig,
 };
 
 const GAME_MODE_BUTTON_HEIGHT: f32 = 44.0;
 const GAME_MODE_BUTTON_GAP: f32 = 12.0;
 
 #[derive(Component, Clone, Copy)]
-pub(super) struct GameModeButton(pub(super) GameMode);
+pub(crate) struct GameModeButton(pub(crate) GameMode);
 
 #[derive(Component, Clone, Copy)]
-pub(super) struct GameModeButtonLabel(GameMode);
+pub(crate) struct GameModeButtonLabel(GameMode);
 
-pub(super) fn world_settings_section(
+pub(crate) fn world_settings_section(
     game_mode: GameMode,
     localization: &UiLocalization,
     language: Language,
@@ -86,26 +88,40 @@ fn game_mode_button(
     )
 }
 
-pub(super) fn handle_game_mode_buttons(
+pub(crate) fn handle_game_mode_buttons(
     interactions: Query<
         (&Interaction, &GameModeButton),
         (Changed<Interaction>, Without<InteractionDisabled>),
     >,
+    game_state: Res<State<GameState>>,
+    mut new_world: ResMut<NewWorldConfig>,
     mut player: Query<&mut GameMode, With<GameplayCamera>>,
 ) {
-    let Ok(mut current_game_mode) = player.single_mut() else {
-        return;
-    };
-
     for (interaction, button) in &interactions {
-        if *interaction == Interaction::Pressed && *current_game_mode != button.0 {
+        if *interaction != Interaction::Pressed {
+            continue;
+        }
+
+        if *game_state.get() == GameState::NewWorld {
+            if new_world.game_mode() != button.0 {
+                new_world.set_game_mode(button.0);
+            }
+            continue;
+        }
+
+        let Ok(mut current_game_mode) = player.single_mut() else {
+            continue;
+        };
+        if *current_game_mode != button.0 {
             *current_game_mode = button.0;
         }
     }
 }
 
-pub(super) fn sync_game_mode_buttons(
+pub(crate) fn sync_game_mode_buttons(
     mut commands: Commands,
+    game_state: Res<State<GameState>>,
+    new_world: Res<NewWorldConfig>,
     player: Query<&GameMode, With<GameplayCamera>>,
     mut buttons: Query<(
         Entity,
@@ -116,12 +132,17 @@ pub(super) fn sync_game_mode_buttons(
     )>,
     mut labels: Query<(&GameModeButtonLabel, &mut TextColor)>,
 ) {
-    let Ok(current_game_mode) = player.single() else {
-        return;
+    let current_game_mode = if *game_state.get() == GameState::NewWorld {
+        new_world.game_mode()
+    } else {
+        let Ok(current_game_mode) = player.single() else {
+            return;
+        };
+        *current_game_mode
     };
 
     for (entity, button, interaction, disabled, mut background) in &mut buttons {
-        let active = button.0 == *current_game_mode;
+        let active = button.0 == current_game_mode;
 
         if active && !disabled {
             commands.entity(entity).insert(InteractionDisabled);
@@ -133,7 +154,7 @@ pub(super) fn sync_game_mode_buttons(
     }
 
     for (label, mut color) in &mut labels {
-        *color = TextColor(if label.0 == *current_game_mode {
+        *color = TextColor(if label.0 == current_game_mode {
             theme::TEXT_SUBTLE
         } else {
             theme::TEXT_PRIMARY
