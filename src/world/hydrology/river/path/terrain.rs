@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::RIVER_WATER_SURFACE_OFFSET;
 use super::super::super::math::lerp;
 
-const RIVER_BANK_SAMPLE_RADIUS_MULTIPLIER: f32 = 1.15;
+const RIVER_BANK_SAMPLE_RADIUS_MULTIPLIER: f32 = 1.45;
 
 pub(super) fn constrain_river_path_to_terrain(
     points: &mut [Vec3],
@@ -32,11 +32,12 @@ pub(super) fn constrain_river_path_to_terrain(
         let bank_normal = Vec2::new(-horizontal_tangent.y, horizontal_tangent.x);
         let radius = lerp(start_radius, end_radius, t);
         let bank_offset = bank_normal * radius * RIVER_BANK_SAMPLE_RADIUS_MULTIPLIER;
-        let supported_surface = [horizontal, horizontal + bank_offset, horizontal - bank_offset]
-            .into_iter()
-            .map(&mut *surface_elevation_at)
-            .min_by(f32::total_cmp)
-            .unwrap_or(points[index].y + RIVER_WATER_SURFACE_OFFSET);
+        let surfaces = [
+            surface_elevation_at(horizontal),
+            surface_elevation_at(horizontal + bank_offset),
+            surface_elevation_at(horizontal - bank_offset),
+        ];
+        let supported_surface = median_of_three(surfaces);
         let supported_height = (supported_surface - RIVER_WATER_SURFACE_OFFSET).max(1.0);
         let constrained_height = points[index]
             .y
@@ -46,6 +47,11 @@ pub(super) fn constrain_river_path_to_terrain(
         points[index].y = constrained_height;
         upstream_height = constrained_height;
     }
+}
+
+fn median_of_three(mut values: [f32; 3]) -> f32 {
+    values.sort_by(f32::total_cmp);
+    values[1]
 }
 
 #[cfg(test)]
@@ -79,5 +85,20 @@ mod tests {
 
         assert_eq!(recovered[1].y, 48.0);
         assert_eq!(recovered[2].y, 48.0);
+    }
+
+    #[test]
+    fn one_low_bank_does_not_drag_the_whole_channel_down() {
+        let mut points = vec![
+            Vec3::new(0.0, 78.0, 0.0),
+            Vec3::new(10.0, 77.0, 0.0),
+            Vec3::new(20.0, 76.0, 0.0),
+        ];
+
+        constrain_river_path_to_terrain(&mut points, 4.0, 4.0, &mut |position| {
+            if position.y > 2.0 { 40.0 } else { 80.0 }
+        });
+
+        assert!(points[1].y >= 76.0);
     }
 }
