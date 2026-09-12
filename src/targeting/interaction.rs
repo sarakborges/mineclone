@@ -9,8 +9,8 @@ use crate::{
     },
     tools::BrushPaletteState,
     voxel::{
-        cell::VoxelCell, lighting::PendingLightingUpdates, neighbors::CARDINAL_NEIGHBORS,
-        raycast::VoxelHit, texture_rotation::TextureRotation, world::VoxelWorld,
+        cell::VoxelCell, lighting::PendingLightingUpdates, raycast::VoxelHit,
+        texture_rotation::TextureRotation, world::VoxelWorld,
     },
     world::{
         chunk_remesh::ChunkRemeshQueue, chunk_system_params::ChunkContent,
@@ -140,11 +140,7 @@ fn edit_targeted_block(
 
     lighting.enqueue_voxel_edit(edited_voxel);
     fluid_updates.enqueue_voxel_edit(edited_voxel);
-
-    remesh_queue.enqueue_priority(coord);
-    for offset in CARDINAL_NEIGHBORS {
-        remesh_queue.enqueue_priority(coord + offset);
-    }
+    remesh_queue.enqueue_voxel_edit(coord);
 
     if placed {
         viewmodel_animation.play_place();
