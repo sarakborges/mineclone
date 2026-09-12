@@ -21,6 +21,9 @@ pub struct ToolRegistry {
 
 impl ToolRegistry {
     pub fn insert(&mut self, definition: ToolDefinition) {
+        definition
+            .name
+            .validate(&format!("tool {} name", definition.id));
         intern_tool_id(&definition.id);
         self.definitions.insert(definition.id.clone(), definition);
     }
