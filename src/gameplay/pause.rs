@@ -1,4 +1,4 @@
-use bevy::{prelude::*, time::Virtual, window::WindowFocused};
+use bevy::{prelude::*, window::WindowFocused};
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
@@ -19,9 +19,7 @@ impl Plugin for PausePlugin {
                 pause_on_focus_lost,
             )
                 .run_if(in_state(GameState::Gameplay)),
-        )
-        .add_systems(OnEnter(PauseState::Paused), pause_time)
-        .add_systems(OnEnter(PauseState::Running), resume_time);
+        );
     }
 }
 
@@ -46,7 +44,6 @@ fn pause_on_focus_lost(
     mut focused_events: MessageReader<WindowFocused>,
     pause_state: Res<State<PauseState>>,
     mut next_pause_state: ResMut<NextState<PauseState>>,
-    mut time: ResMut<Time<Virtual>>,
 ) {
     let lost_focus = focused_events.read().any(|event| !event.focused);
 
@@ -54,14 +51,5 @@ fn pause_on_focus_lost(
         return;
     }
 
-    time.pause();
     next_pause_state.set(PauseState::Paused);
-}
-
-fn pause_time(mut time: ResMut<Time<Virtual>>) {
-    time.pause();
-}
-
-fn resume_time(mut time: ResMut<Time<Virtual>>) {
-    time.unpause();
 }
