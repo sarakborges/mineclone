@@ -20,15 +20,11 @@ pub struct ToolRegistry {
 }
 
 impl ToolRegistry {
-    pub fn insert(&mut self, definition: ToolDefinition) {
+    pub fn insert(&mut self, mut definition: ToolDefinition) {
         definition
             .name
             .validate(&format!("tool {} name", definition.id));
-        assert!(
-            !definition.icon.trim().is_empty(),
-            "tool {} icon cannot be empty",
-            definition.id
-        );
+        definition.icon = definition.icon.trim().to_owned();
         intern_tool_id(&definition.id);
         self.definitions.insert(definition.id.clone(), definition);
     }
