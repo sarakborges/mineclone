@@ -40,9 +40,9 @@ pub(super) fn face_lighting(world: &VoxelWorld, voxel: IVec3, face: BlockFace) -
             voxel,
             [base, side_a, side_b, corner],
         );
-        let normalized_block = normalize_rgb(block_levels);
+        let normalized_block = block_levels.map(normalize_level);
 
-        sky[index] = normalize_rgb(sky_levels);
+        sky[index] = sky_levels.map(normalize_level);
         block[index] = [
             normalized_block[0].max(emitted_block[0]),
             normalized_block[1].max(emitted_block[1]),
