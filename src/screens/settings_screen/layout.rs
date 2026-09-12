@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, ui_widgets::ScrollArea};
 
 use crate::{
     app::settings_state::SettingsState,
@@ -6,26 +6,46 @@ use crate::{
     ui::{
         button::menu_button,
         cosmic_background::{self, STAR_FIELD},
-        theme, typography,
+        surface, theme, typography,
     },
-    world::render_distance::RenderDistanceSettings,
+    world::{
+        InMemoryWorldSave, game_rules::GameRules,
+        render_distance::RenderDistanceSettings,
+    },
 };
 
 use super::{
-    navigation::SettingsBackButton,
+    game_rules_section::game_rules_section,
+    navigation::{
+        SettingsBackButton, SettingsSection, SettingsSectionPanel, SettingsSectionSelection,
+        section_button,
+    },
     render_distance_section::graphics_section,
+    scroll_area::vertical_scrollbar,
     world_settings_section::world_settings_section,
 };
 
-const CONTENT_WIDTH: f32 = 760.0;
+const CONTENT_WIDTH: f32 = 1120.0;
+const SIDEBAR_WIDTH: f32 = 280.0;
 const HEADER_HEIGHT: f32 = 116.0;
 const FOOTER_HEIGHT: f32 = 104.0;
+const COLUMN_GAP: f32 = 22.0;
 
 pub fn spawn_settings_screen(
     mut commands: Commands,
     render_distance: Res<RenderDistanceSettings>,
+    game_rules: Res<GameRules>,
+    save: Res<InMemoryWorldSave>,
     player: Query<&GameMode, With<GameplayCamera>>,
+    mut selection: ResMut<SettingsSectionSelection>,
 ) {
+    let has_world = save.has_world();
+    selection.selected = if has_world {
+        SettingsSection::WorldSettings
+    } else {
+        SettingsSection::Graphics
+    };
+
     let game_mode = player
         .single()
         .map_or_else(|_| GameMode::default(), |game_mode| *game_mode);
@@ -72,22 +92,156 @@ pub fn spawn_settings_screen(
                 bottom: px(FOOTER_HEIGHT),
                 left: px(0),
                 right: px(0),
-                padding: UiRect::axes(px(32), px(24)),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
+                padding: UiRect::axes(px(32), px(18)),
+                align_items: AlignItems::Stretch,
+                justify_content: JustifyContent::Center,
+                min_height: px(0),
                 ..default()
             })
             .with_children(|body| {
                 body.spawn(Node {
                     width: px(CONTENT_WIDTH),
                     max_width: percent(100),
-                    flex_direction: FlexDirection::Column,
-                    row_gap: px(24),
+                    height: percent(100),
+                    min_height: px(0),
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Stretch,
+                    column_gap: px(COLUMN_GAP),
                     ..default()
                 })
-                .with_children(|sections| {
-                    sections.spawn(world_settings_section(game_mode));
-                    sections.spawn(graphics_section(render_distance.chunks()));
+                .with_children(|columns| {
+                    columns
+                        .spawn(surface::settings_sidebar(SIDEBAR_WIDTH))
+                        .with_children(|sidebar| {
+                            sidebar
+                                .spawn(Node {
+                                    display: Display::Grid,
+                                    width: percent(100),
+                                    height: percent(100),
+                                    min_height: px(0),
+                                    grid_template_columns: vec![
+                                        RepeatedGridTrack::flex(1, 1.0),
+                                        RepeatedGridTrack::auto(1),
+                                    ],
+                                    ..default()
+                                })
+                                .with_children(|frame| {
+                                    let scroll_area_id = frame
+                                        .spawn((
+                                            Node {
+                                                width: percent(100),
+                                                height: percent(100),
+                                                min_height: px(0),
+                                                padding: UiRect::right(px(12)),
+                                                flex_direction: FlexDirection::Column,
+                                                align_items: AlignItems::Stretch,
+                                                row_gap: px(8),
+                                                overflow: Overflow::scroll_y(),
+                                                ..default()
+                                            },
+                                            ScrollPosition(Vec2::ZERO),
+                                            ScrollArea,
+                                        ))
+                                        .with_children(|list| {
+                                            if has_world {
+                                                list.spawn(section_button(
+                                                    SettingsSection::WorldSettings,
+                                                    selection.selected
+                                                        == SettingsSection::WorldSettings,
+                                                ));
+                                                list.spawn(section_button(
+                                                    SettingsSection::GameRules,
+                                                    selection.selected == SettingsSection::GameRules,
+                                                ));
+                                            }
+                                            list.spawn(section_button(
+                                                SettingsSection::Graphics,
+                                                selection.selected == SettingsSection::Graphics,
+                                            ));
+                                        })
+                                        .id();
+
+                                    frame.spawn(vertical_scrollbar(scroll_area_id));
+                                });
+                        });
+
+                    columns
+                        .spawn(surface::settings_content())
+                        .with_children(|content| {
+                            content
+                                .spawn(Node {
+                                    display: Display::Grid,
+                                    width: percent(100),
+                                    height: percent(100),
+                                    min_height: px(0),
+                                    grid_template_columns: vec![
+                                        RepeatedGridTrack::flex(1, 1.0),
+                                        RepeatedGridTrack::auto(1),
+                                    ],
+                                    ..default()
+                                })
+                                .with_children(|frame| {
+                                    let scroll_area_id = frame
+                                        .spawn((
+                                            Node {
+                                                width: percent(100),
+                                                height: percent(100),
+                                                min_height: px(0),
+                                                padding: UiRect::right(px(14)),
+                                                flex_direction: FlexDirection::Column,
+                                                align_items: AlignItems::Stretch,
+                                                overflow: Overflow::scroll_y(),
+                                                ..default()
+                                            },
+                                            ScrollPosition(Vec2::ZERO),
+                                            ScrollArea,
+                                        ))
+                                        .with_children(|panels| {
+                                            if has_world {
+                                                panels
+                                                    .spawn((
+                                                        SettingsSectionPanel(
+                                                            SettingsSection::WorldSettings,
+                                                        ),
+                                                        section_panel_node(
+                                                            selection.selected
+                                                                == SettingsSection::WorldSettings,
+                                                        ),
+                                                    ))
+                                                    .with_child(world_settings_section(game_mode));
+
+                                                panels
+                                                    .spawn((
+                                                        SettingsSectionPanel(
+                                                            SettingsSection::GameRules,
+                                                        ),
+                                                        section_panel_node(
+                                                            selection.selected
+                                                                == SettingsSection::GameRules,
+                                                        ),
+                                                    ))
+                                                    .with_child(game_rules_section(
+                                                        game_rules.ticks_per_second(),
+                                                    ));
+                                            }
+
+                                            panels
+                                                .spawn((
+                                                    SettingsSectionPanel(SettingsSection::Graphics),
+                                                    section_panel_node(
+                                                        selection.selected
+                                                            == SettingsSection::Graphics,
+                                                    ),
+                                                ))
+                                                .with_child(graphics_section(
+                                                    render_distance.chunks(),
+                                                ));
+                                        })
+                                        .id();
+
+                                    frame.spawn(vertical_scrollbar(scroll_area_id));
+                                });
+                        });
                 });
             });
 
@@ -102,7 +256,16 @@ pub fn spawn_settings_screen(
                 ..default()
             })
             .with_children(|footer| {
-                footer.spawn(menu_button("Back", SettingsBackButton));
+                footer.spawn(menu_button("Return", SettingsBackButton));
             });
         });
+}
+
+fn section_panel_node(visible: bool) -> Node {
+    Node {
+        width: percent(100),
+        flex_direction: FlexDirection::Column,
+        display: if visible { Display::Flex } else { Display::None },
+        ..default()
+    }
 }
