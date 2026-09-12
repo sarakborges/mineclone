@@ -17,6 +17,7 @@ const SURFACE_PADDING_ABOVE_CHUNKS: i32 = 1;
 const NEAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const FAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS: i32 = 3;
+const IMMEDIATE_PLAYER_PRIORITY_RADIUS_CHUNKS: i32 = 1;
 
 pub(super) fn rebuild_queue(
     streaming: &mut ChunkStreamingState,
@@ -69,7 +70,7 @@ fn pending_priority(
     center: IVec3,
     structure_chunk_allowance: i32,
     surface_ranges: &HashMap<IVec2, (i32, i32)>,
-) -> (i32, i32, i32, i32, i32) {
+) -> (i32, i32, i32, i32, i32, i32, i32) {
     let chunk_size = CHUNK_SIZE as i32;
     let horizontal = coord.xz();
     let (minimum_surface, maximum_surface) = surface_ranges
@@ -86,12 +87,28 @@ fn pending_priority(
     } else {
         0
     };
+    let delta = coord - center;
     let horizontal_distance = (horizontal - center.xz()).length_squared();
-    let vertical_distance = (coord.y - center.y).abs();
-    let total_distance = (coord - center).length_squared();
+    let vertical_distance = delta.y.abs();
+    let total_distance = delta.length_squared();
     let off_surface = if surface_distance > 0 { 1 } else { 0 };
+    let immediate_neighborhood = if delta.x.abs() <= IMMEDIATE_PLAYER_PRIORITY_RADIUS_CHUNKS
+        && delta.y.abs() <= IMMEDIATE_PLAYER_PRIORITY_RADIUS_CHUNKS
+        && delta.z.abs() <= IMMEDIATE_PLAYER_PRIORITY_RADIUS_CHUNKS
+    {
+        0
+    } else {
+        1
+    };
+    let immediate_distance = if immediate_neighborhood == 0 {
+        total_distance
+    } else {
+        0
+    };
 
     (
+        immediate_neighborhood,
+        immediate_distance,
         off_surface,
         horizontal_distance,
         surface_distance,
