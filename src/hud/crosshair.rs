@@ -132,7 +132,7 @@ fn spawn_crosshair(mut commands: Commands) {
                     BackgroundColor(theme::TEXT_PRIMARY.with_alpha(0.92)),
                 ));
                 crosshair.spawn((
-                    typography::opaque_caption(""),
+                    typography::crosshair_hint(""),
                     TextLayout::justify(Justify::Center),
                     Node {
                         position_type: PositionType::Absolute,
