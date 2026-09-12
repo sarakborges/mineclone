@@ -2,6 +2,7 @@ use bevy::{prelude::*, ui_widgets::ScrollArea};
 
 use crate::{
     app::settings_state::SettingsState,
+    hud::HudSettings,
     localization::{ActiveLanguage, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{
@@ -18,6 +19,7 @@ use crate::{
 use super::{
     game_rules_section::game_rules_section,
     languages_section::languages_section,
+    miscellaneous_section::miscellaneous_section,
     navigation::{
         SettingsBackButton, SettingsSection, SettingsSectionPanel, SettingsSectionSelection,
         section_button,
@@ -38,6 +40,7 @@ pub fn spawn_settings_screen(
     render_distance: Res<RenderDistanceSettings>,
     game_rules: Res<GameRules>,
     save: Res<InMemoryWorldSave>,
+    hud_settings: Res<HudSettings>,
     localization: Res<UiLocalization>,
     active_language: Res<ActiveLanguage>,
     player: Query<&GameMode, With<GameplayCamera>>,
@@ -180,6 +183,13 @@ pub fn spawn_settings_screen(
                                                 &localization,
                                                 language,
                                             );
+                                            spawn_section_button(
+                                                list,
+                                                SettingsSection::Miscellaneous,
+                                                selection.selected,
+                                                &localization,
+                                                language,
+                                            );
                                         })
                                         .id();
 
@@ -276,6 +286,22 @@ pub fn spawn_settings_screen(
                                                     ),
                                                 ))
                                                 .with_child(languages_section(
+                                                    &localization,
+                                                    language,
+                                                ));
+
+                                            panels
+                                                .spawn((
+                                                    SettingsSectionPanel(
+                                                        SettingsSection::Miscellaneous,
+                                                    ),
+                                                    section_panel_node(
+                                                        selection.selected
+                                                            == SettingsSection::Miscellaneous,
+                                                    ),
+                                                ))
+                                                .with_child(miscellaneous_section(
+                                                    hud_settings.display_tooltips(),
                                                     &localization,
                                                     language,
                                                 ));

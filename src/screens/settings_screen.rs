@@ -10,6 +10,7 @@ use game_rules_section::{
 };
 use languages_section::{handle_language_buttons, sync_language_buttons};
 use layout::spawn_settings_screen;
+use miscellaneous_section::{handle_display_tooltips_toggle, sync_display_tooltips_toggle};
 use navigation::{
     SettingsSectionSelection, handle_close_requests, handle_section_buttons, sync_section_ui,
 };
@@ -19,6 +20,7 @@ use world_settings_section::{handle_game_mode_buttons, sync_game_mode_buttons};
 mod game_rules_section;
 mod languages_section;
 mod layout;
+mod miscellaneous_section;
 mod navigation;
 mod render_distance_logic;
 mod render_distance_section;
@@ -44,9 +46,11 @@ impl Plugin for SettingsScreenPlugin {
                     handle_ticks_input,
                     handle_ticks_keyboard,
                     handle_language_buttons,
+                    handle_display_tooltips_toggle,
                     sync_section_ui,
                     sync_game_mode_buttons,
                     sync_language_buttons,
+                    sync_display_tooltips_toggle,
                     sync_ticks_per_second_text,
                     sync_render_distance_text,
                     sync_slider_thumb,

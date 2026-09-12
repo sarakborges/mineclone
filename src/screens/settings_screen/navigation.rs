@@ -29,6 +29,7 @@ pub(super) enum SettingsSection {
     GameRules,
     Graphics,
     Languages,
+    Miscellaneous,
 }
 
 impl SettingsSection {
@@ -38,6 +39,7 @@ impl SettingsSection {
             Self::GameRules => "settings.section.gameRules",
             Self::Graphics => "settings.section.graphics",
             Self::Languages => "settings.section.languages",
+            Self::Miscellaneous => "settings.section.miscellaneous",
         }
     }
 }

@@ -11,6 +11,8 @@ use crate::{
     ui::{theme, typography},
 };
 
+use super::HudSettings;
+
 pub struct CrosshairPlugin;
 
 impl Plugin for CrosshairPlugin {
@@ -137,13 +139,14 @@ fn spawn_crosshair(
 fn update_rotation_hint(
     hotbar: Res<PlayerHotbar>,
     blocks: Res<BlockRegistry>,
+    settings: Res<HudSettings>,
     mut hint: Single<&mut Visibility, With<RotationHint>>,
 ) {
     let rotatable = hotbar
         .item_at(hotbar.selected_slot())
         .and_then(|id| blocks.get(id))
         .is_some_and(|block| block.is_rotatable());
-    let next = if rotatable {
+    let next = if settings.display_tooltips() && rotatable {
         Visibility::Visible
     } else {
         Visibility::Hidden
