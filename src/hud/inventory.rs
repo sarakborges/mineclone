@@ -20,6 +20,7 @@ use crate::{
     localization::{ActiveLanguage, Language, UiLocalization},
     player::{
         camera::GameplayCamera,
+        game_mode::GameMode,
         hotbar::{HOTBAR_INVENTORY_OFFSET, HOTBAR_SLOT_COUNT, PlayerHotbar},
         inventory::{CreativeInventoryView, InventoryCursor, InventoryState},
     },
@@ -149,7 +150,7 @@ fn spawn_inventory(
     creative_view: Res<CreativeInventoryView>,
     localization: Res<UiLocalization>,
     active_language: Res<ActiveLanguage>,
-    player: Single<&Transform, With<GameplayCamera>>,
+    player: Single<(&Transform, &GameMode), With<GameplayCamera>>,
     window: Single<&Window>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
     existing: Query<(), With<InventoryHudRoot>>,
@@ -158,6 +159,7 @@ fn spawn_inventory(
         return;
     }
 
+    let (player_transform, game_mode) = *player;
     spawn_inventory_root(
         &mut commands,
         &asset_server,
@@ -166,7 +168,8 @@ fn spawn_inventory(
         &categories,
         &biomes,
         &biome_field,
-        Vec2::new(player.translation.x, player.translation.z),
+        Vec2::new(player_transform.translation.x, player_transform.translation.z),
+        *game_mode,
         &hotbar,
         &cursor,
         &creative_view,
@@ -323,7 +326,7 @@ fn rebuild_inventory_when_changed(
     creative_view: Res<CreativeInventoryView>,
     localization: Res<UiLocalization>,
     active_language: Res<ActiveLanguage>,
-    player: Single<&Transform, With<GameplayCamera>>,
+    player: Single<(&Transform, &GameMode), With<GameplayCamera>>,
     window: Single<&Window>,
     roots: Query<Entity, With<InventoryHudRoot>>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
@@ -340,6 +343,7 @@ fn rebuild_inventory_when_changed(
         commands.entity(entity).despawn();
     }
 
+    let (player_transform, game_mode) = *player;
     spawn_inventory_root(
         &mut commands,
         &asset_server,
@@ -348,7 +352,8 @@ fn rebuild_inventory_when_changed(
         &categories,
         &biomes,
         &biome_field,
-        Vec2::new(player.translation.x, player.translation.z),
+        Vec2::new(player_transform.translation.x, player_transform.translation.z),
+        *game_mode,
         &hotbar,
         &cursor,
         &creative_view,
@@ -383,6 +388,7 @@ fn spawn_inventory_root(
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     player_position: Vec2,
+    game_mode: GameMode,
     hotbar: &PlayerHotbar,
     cursor: &InventoryCursor,
     creative_view: &CreativeInventoryView,
@@ -412,20 +418,22 @@ fn spawn_inventory_root(
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|root| {
-            spawn_creative_panel(
-                root,
-                asset_server,
-                blocks,
-                tools,
-                categories,
-                biomes,
-                biome_field,
-                player_position,
-                creative_view,
-                localization,
-                language,
-                icon_materials,
-            );
+            if game_mode.has_creative_inventory() {
+                spawn_creative_panel(
+                    root,
+                    asset_server,
+                    blocks,
+                    tools,
+                    categories,
+                    biomes,
+                    biome_field,
+                    player_position,
+                    creative_view,
+                    localization,
+                    language,
+                    icon_materials,
+                );
+            }
             spawn_player_inventory_panel(
                 root,
                 asset_server,
