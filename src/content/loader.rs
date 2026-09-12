@@ -15,6 +15,7 @@ use super::{
     secondary_property::{SecondaryPropertyDefinition, SecondaryPropertyRegistry},
     sky::{SkyDefinition, SkyRegistry},
     structure::{StructureDefinition, StructureRegistry},
+    tool::{ToolDefinition, ToolRegistry},
 };
 
 #[derive(Default)]
@@ -28,6 +29,7 @@ pub(crate) struct LoadedContent {
     pub secondary_properties: SecondaryPropertyRegistry,
     pub skies: SkyRegistry,
     pub structures: StructureRegistry,
+    pub tools: ToolRegistry,
 }
 
 impl LoadedContent {
@@ -41,6 +43,7 @@ impl LoadedContent {
         commands.insert_resource(self.secondary_properties);
         commands.insert_resource(self.skies);
         commands.insert_resource(self.structures);
+        commands.insert_resource(self.tools);
     }
 }
 
@@ -77,6 +80,20 @@ pub(crate) fn read_content() -> LoadedContent {
                 property
             );
         }
+    }
+
+    for tool in content.tools.iter() {
+        assert!(
+            content.blocks.get(&tool.id).is_none(),
+            "content id {} cannot be both a block and a tool",
+            tool.id
+        );
+        assert!(
+            content.inventory_categories.get(&tool.category).is_some(),
+            "tool {} references missing inventory category {}",
+            tool.id,
+            tool.category
+        );
     }
 
     for structure in content.structures.iter() {
@@ -130,6 +147,10 @@ fn load_definition(path: &Path, content: &mut LoadedContent) {
         content
             .blocks
             .insert(read_json_definition::<BlockDefinition>(path));
+    } else if path_has_component(path, "tools") {
+        content
+            .tools
+            .insert(read_json_definition::<ToolDefinition>(path));
     } else if path_has_component(path, "fluids") {
         content
             .fluids
