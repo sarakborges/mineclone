@@ -8,17 +8,17 @@ pub(crate) const CHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_SIZE;
 
 #[derive(Component)]
 pub struct VoxelChunk {
-    blocks: [Option<VoxelCell>; CHUNK_VOLUME],
-    fluids: [Option<FluidCell>; CHUNK_VOLUME],
-    light: [VoxelLight; CHUNK_VOLUME],
+    blocks: Box<[Option<VoxelCell>]>,
+    fluids: Box<[Option<FluidCell>]>,
+    light: Box<[VoxelLight]>,
 }
 
 impl VoxelChunk {
     pub fn empty() -> Self {
         Self {
-            blocks: [None; CHUNK_VOLUME],
-            fluids: [None; CHUNK_VOLUME],
-            light: [VoxelLight::DARK; CHUNK_VOLUME],
+            blocks: vec![None; CHUNK_VOLUME].into_boxed_slice(),
+            fluids: vec![None; CHUNK_VOLUME].into_boxed_slice(),
+            light: vec![VoxelLight::DARK; CHUNK_VOLUME].into_boxed_slice(),
         }
     }
 
