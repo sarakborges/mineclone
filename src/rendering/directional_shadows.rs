@@ -44,7 +44,7 @@ fn spawn_sun_shadow_light(mut commands: Commands) {
     commands.spawn((
         DirectionalLight {
             illuminance: 0.0,
-            shadow_maps_enabled: false,
+            shadow_maps_enabled: true,
             ..default()
         },
         CascadeShadowConfigBuilder {
@@ -95,7 +95,7 @@ fn update_sun_shadow_light(
     for (mut light, mut transform, mut visibility) in &mut lights {
         light.color = sky.sun.tint.to_color();
         light.illuminance = BASE_SUN_ILLUMINANCE * sample.sky_light_factor;
-        light.shadow_maps_enabled = false;
+        light.shadow_maps_enabled = true;
         transform.rotation = rotation;
         *visibility = Visibility::Visible;
     }
