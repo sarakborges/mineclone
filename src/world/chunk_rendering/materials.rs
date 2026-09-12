@@ -90,7 +90,7 @@ fn create_material(
             perceptual_roughness: roughness,
             metallic,
             alpha_mode: definition.alpha_mode(1.0),
-            fog_enabled: false,
+            fog_enabled: true,
             unlit: false,
             ..default()
         },
@@ -116,7 +116,7 @@ impl FluidMaterials {
                         alpha_mode: AlphaMode::Blend,
                         double_sided: true,
                         cull_mode: None,
-                        fog_enabled: false,
+                        fog_enabled: true,
                         unlit: true,
                         ..default()
                     },
