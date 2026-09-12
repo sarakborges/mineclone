@@ -141,6 +141,16 @@ impl BiomeRegistry {
             definition.kind == BiomeKind::Volume && definition.density_modifier.is_some()
         })
     }
+
+    pub fn has_volume_solid_density_modifiers(&self) -> bool {
+        self.definitions.values().any(|definition| {
+            definition.kind == BiomeKind::Volume
+                && matches!(
+                    definition.density_modifier,
+                    Some(BiomeDensityModifier::Solid { .. })
+                )
+        })
+    }
 }
 
 fn default_biome_distributions() -> Vec<BiomeDistribution> {
