@@ -4,6 +4,7 @@ use bevy::prelude::*;
 pub(crate) enum GameMode {
     #[default]
     Creative,
+    Survival,
 }
 
 impl GameMode {
