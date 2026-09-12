@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
     player::inventory::InventoryState,
+    tools::BrushPaletteState,
 };
 
 pub const BACKPACK_SLOT_COUNT: usize = 27;
@@ -59,10 +60,12 @@ impl PlayerHotbar {
         }
 
         let hotbar_index = index - HOTBAR_INVENTORY_OFFSET;
-        let slot = self
-            .slots
-            .get_mut(hotbar_index)
-            .unwrap_or_else(|| panic!("inventory slot must be between 0 and {}", INVENTORY_SLOT_COUNT - 1));
+        let slot = self.slots.get_mut(hotbar_index).unwrap_or_else(|| {
+            panic!(
+                "inventory slot must be between 0 and {}",
+                INVENTORY_SLOT_COUNT - 1
+            )
+        });
         std::mem::replace(slot, item)
     }
 
@@ -87,7 +90,8 @@ impl Plugin for PlayerHotbarPlugin {
                     .in_set(PlayerHotbarSet::Selection)
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(PauseState::Running))
-                    .run_if(in_state(InventoryState::Closed)),
+                    .run_if(in_state(InventoryState::Closed))
+                    .run_if(in_state(BrushPaletteState::Closed)),
             );
     }
 }

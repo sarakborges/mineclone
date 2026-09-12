@@ -29,7 +29,11 @@
   "inventory.searchPlaceholder": "Search items...",
   "inventory.everything": "Everything",
   "hud.rotateBlock": "Press R to rotate block",
+  "hud.brushPaint": "Left click to paint {color}. Right click to choose color.",
+  "hud.brushClear": "Left click to clear. Right click to choose color.",
   "hud.light": "Light",
   "hud.day": "Day",
-  "hud.coordinates": "X: {x} | Z: {z} | Y: {y}"
+  "hud.coordinates": "X: {x} | Z: {z} | Y: {y}",
+  "brush.palette.title": "Brush",
+  "brush.palette.clear": "Clear"
 }

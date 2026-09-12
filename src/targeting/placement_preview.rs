@@ -72,12 +72,17 @@ fn spawn_placement_preview(
     blocks: Res<BlockRegistry>,
     hotbar: Res<PlayerHotbar>,
 ) {
-    let block_id = hotbar
-        .item_at(hotbar.selected_slot())
-        .unwrap_or(GRASS_BLOCK_ID);
-    let block = blocks
-        .get(block_id)
-        .unwrap_or_else(|| panic!("placement preview references missing block: {block_id}"));
+    let selected = hotbar.item_at(hotbar.selected_slot()).and_then(|block_id| {
+        blocks.get(block_id).map(|block| (block_id, block))
+    });
+    let (block_id, block) = selected.unwrap_or_else(|| {
+        let block = blocks
+            .get(GRASS_BLOCK_ID)
+            .unwrap_or_else(|| {
+                panic!("placement preview references missing block: {GRASS_BLOCK_ID}")
+            });
+        (GRASS_BLOCK_ID, block)
+    });
     let block_model = BlockModel::world(block_id, PREVIEW_OPACITY);
 
     commands
@@ -135,10 +140,10 @@ fn update_placement_preview(
         *root.2 = Visibility::Hidden;
         return;
     };
-    let block = input
-        .blocks
-        .get(block_id)
-        .unwrap_or_else(|| panic!("placement preview references missing block: {block_id}"));
+    let Some(block) = input.blocks.get(block_id) else {
+        *root.2 = Visibility::Hidden;
+        return;
+    };
 
     if root.0.set_block_id(Some(block_id)) {
         for (face, material_handle) in &faces {

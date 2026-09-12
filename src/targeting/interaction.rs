@@ -7,6 +7,7 @@ use crate::{
         camera::GameplayCamera, hotbar::PlayerHotbar, inventory::InventoryState,
         viewmodel::ViewModelAnimation,
     },
+    tools::BrushPaletteState,
     voxel::{
         cell::VoxelCell, lighting::PendingLightingUpdates, neighbors::CARDINAL_NEIGHBORS,
         raycast::VoxelHit, texture_rotation::TextureRotation, world::VoxelWorld,
@@ -46,7 +47,8 @@ impl Plugin for BlockInteractionPlugin {
                 .in_set(BlockTargetingSet::Interaction)
                 .run_if(in_state(GameState::Gameplay))
                 .run_if(in_state(PauseState::Running))
-                .run_if(in_state(InventoryState::Closed)),
+                .run_if(in_state(InventoryState::Closed))
+                .run_if(in_state(BrushPaletteState::Closed)),
         );
     }
 }

@@ -6,6 +6,7 @@ pub const LAMP_BLOCK_ID: &str = "asteria:lamp";
 pub const OAK_WOOD_BLOCK_ID: &str = "asteria:oak_log";
 pub const OAK_LEAF_BLOCK_ID: &str = "asteria:oak_leaf";
 pub const GLASS_BLOCK_ID: &str = "asteria:glass";
+pub const BRUSH_TOOL_ID: &str = "asteria:brush";
 pub const WATER_FLUID_ID: &str = "asteria:water";
 pub const OVERWORLD_DIMENSION_ID: &str = "asteria:overworld";
 pub const PLAINS_BIOME_ID: &str = "asteria:overworld/plains";

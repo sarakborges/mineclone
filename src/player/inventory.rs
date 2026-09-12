@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::app::{game_state::GameState, pause_state::PauseState};
+use crate::{
+    app::{game_state::GameState, pause_state::PauseState},
+    tools::BrushPaletteState,
+};
 
 use super::{game_mode::GameMode, hotbar::PlayerHotbar};
 
@@ -113,7 +116,8 @@ impl Plugin for PlayerInventoryPlugin {
                 Update,
                 toggle_inventory
                     .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running)),
+                    .run_if(in_state(PauseState::Running))
+                    .run_if(in_state(BrushPaletteState::Closed)),
             )
             .add_systems(
                 OnExit(InventoryState::Open),

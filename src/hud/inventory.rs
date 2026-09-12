@@ -14,6 +14,8 @@ use crate::{
         block::{BlockDefinition, BlockRegistry},
         block_id::intern_block_id,
         inventory_category::{InventoryCategoryDefinition, InventoryCategoryRegistry},
+        tool::{ToolDefinition, ToolRegistry},
+        tool_id::intern_tool_id,
     },
     localization::{ActiveLanguage, Language, UiLocalization},
     player::{
@@ -71,6 +73,42 @@ struct CreativeCategoryButton {
 #[derive(Component)]
 struct InventoryCursorIcon;
 
+#[derive(Clone, Copy)]
+enum CreativeCatalogItem<'a> {
+    Block(&'a BlockDefinition),
+    Tool(&'a ToolDefinition),
+}
+
+impl<'a> CreativeCatalogItem<'a> {
+    fn id(self) -> &'a str {
+        match self {
+            Self::Block(block) => &block.id,
+            Self::Tool(tool) => &tool.id,
+        }
+    }
+
+    fn category(self) -> &'a str {
+        match self {
+            Self::Block(block) => &block.category,
+            Self::Tool(tool) => &tool.category,
+        }
+    }
+
+    fn name(self, language: Language) -> &'a str {
+        match self {
+            Self::Block(block) => block.name.text(language),
+            Self::Tool(tool) => tool.name.text(language),
+        }
+    }
+
+    fn interned_id(self) -> &'static str {
+        match self {
+            Self::Block(block) => intern_block_id(&block.id),
+            Self::Tool(tool) => intern_tool_id(&tool.id),
+        }
+    }
+}
+
 pub(super) struct InventoryHudPlugin;
 
 impl Plugin for InventoryHudPlugin {
@@ -102,6 +140,7 @@ fn spawn_inventory(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     blocks: Res<BlockRegistry>,
+    tools: Res<ToolRegistry>,
     categories: Res<InventoryCategoryRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
@@ -123,6 +162,7 @@ fn spawn_inventory(
         &mut commands,
         &asset_server,
         &blocks,
+        &tools,
         &categories,
         &biomes,
         &biome_field,
@@ -192,6 +232,7 @@ fn handle_category_clicks(
 fn handle_creative_scroll(
     mut wheel: MessageReader<MouseWheel>,
     blocks: Res<BlockRegistry>,
+    tools: Res<ToolRegistry>,
     active_language: Res<ActiveLanguage>,
     mut creative_view: ResMut<CreativeInventoryView>,
 ) {
@@ -209,6 +250,7 @@ fn handle_creative_scroll(
 
     let total_rows = creative_total_rows(
         &blocks,
+        &tools,
         creative_view.search_query(),
         creative_view.selected_category(),
         active_language.get(),
@@ -272,6 +314,7 @@ fn rebuild_inventory_when_changed(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     blocks: Res<BlockRegistry>,
+    tools: Res<ToolRegistry>,
     categories: Res<InventoryCategoryRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
@@ -301,6 +344,7 @@ fn rebuild_inventory_when_changed(
         &mut commands,
         &asset_server,
         &blocks,
+        &tools,
         &categories,
         &biomes,
         &biome_field,
@@ -334,6 +378,7 @@ fn spawn_inventory_root(
     commands: &mut Commands,
     asset_server: &AssetServer,
     blocks: &BlockRegistry,
+    tools: &ToolRegistry,
     categories: &InventoryCategoryRegistry,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
@@ -371,6 +416,7 @@ fn spawn_inventory_root(
                 root,
                 asset_server,
                 blocks,
+                tools,
                 categories,
                 biomes,
                 biome_field,
@@ -384,41 +430,63 @@ fn spawn_inventory_root(
                 root,
                 asset_server,
                 blocks,
+                tools,
                 biomes,
                 biome_field,
                 player_position,
                 hotbar,
+                language,
                 icon_materials,
             );
 
-            let Some(block_id) = cursor.item() else {
+            let Some(item_id) = cursor.item() else {
                 return;
             };
-            let block = blocks
-                .get(block_id)
-                .unwrap_or_else(|| panic!("inventory cursor references missing block: {block_id}"));
-            let tint = block_tint_at(block.tint, player_position, biome_field, biomes);
-            let material = icon_materials.add(BlockIconMaterial::from_block(
-                block,
-                asset_server,
-                tint,
-            ));
             let position = cursor_position.unwrap_or(Vec2::ZERO);
 
-            root.spawn((
-                InventoryCursorIcon,
-                BlockModel::display(block_id),
-                MaterialNode(material),
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: px(position.x - ITEM_ICON_SIZE * 0.5),
-                    top: px(position.y - ITEM_ICON_SIZE * 0.5),
-                    width: px(ITEM_ICON_SIZE),
-                    height: px(ITEM_ICON_SIZE),
-                    ..default()
-                },
-                Pickable::IGNORE,
-            ));
+            if let Some(block) = blocks.get(item_id) {
+                let tint = block_tint_at(block.tint, player_position, biome_field, biomes);
+                let material = icon_materials.add(BlockIconMaterial::from_block(
+                    block,
+                    asset_server,
+                    tint,
+                ));
+
+                root.spawn((
+                    InventoryCursorIcon,
+                    BlockModel::display(item_id),
+                    MaterialNode(material),
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: px(position.x - ITEM_ICON_SIZE * 0.5),
+                        top: px(position.y - ITEM_ICON_SIZE * 0.5),
+                        width: px(ITEM_ICON_SIZE),
+                        height: px(ITEM_ICON_SIZE),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ));
+                return;
+            }
+
+            if let Some(tool) = tools.get(item_id) {
+                root.spawn((
+                    InventoryCursorIcon,
+                    typography::caption(tool.name.text(language)),
+                    TextLayout::justify(Justify::Center),
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: px(position.x - 36.0),
+                        top: px(position.y - ITEM_ICON_SIZE * 0.5),
+                        width: px(72),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ));
+                return;
+            }
+
+            panic!("inventory cursor references missing item: {item_id}");
         });
 }
 
@@ -427,6 +495,7 @@ fn spawn_creative_panel(
     root: &mut ChildSpawnerCommands,
     asset_server: &AssetServer,
     blocks: &BlockRegistry,
+    tools: &ToolRegistry,
     categories: &InventoryCategoryRegistry,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
@@ -438,6 +507,7 @@ fn spawn_creative_panel(
 ) {
     let catalog = filtered_creative_catalog(
         blocks,
+        tools,
         creative_view.search_query(),
         creative_view.selected_category(),
         language,
@@ -506,6 +576,7 @@ fn spawn_creative_panel(
                             biomes,
                             biome_field,
                             player_position,
+                            language,
                             icon_materials,
                         );
                         spawn_creative_scrollbar(catalog_content, total_rows, scroll_row);
@@ -686,12 +757,13 @@ fn spawn_category_button(
 #[allow(clippy::too_many_arguments)]
 fn spawn_creative_grid(
     parent: &mut ChildSpawnerCommands,
-    catalog: &[&BlockDefinition],
+    catalog: &[CreativeCatalogItem<'_>],
     first_item: usize,
     asset_server: &AssetServer,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     player_position: Vec2,
+    language: Language,
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
     parent
@@ -724,6 +796,7 @@ fn spawn_creative_grid(
                             biomes,
                             biome_field,
                             player_position,
+                            language,
                             icon_materials,
                         );
                     }
@@ -737,10 +810,12 @@ fn spawn_player_inventory_panel(
     root: &mut ChildSpawnerCommands,
     asset_server: &AssetServer,
     blocks: &BlockRegistry,
+    tools: &ToolRegistry,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     player_position: Vec2,
     hotbar: &PlayerHotbar,
+    language: Language,
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
     root.spawn((
@@ -789,9 +864,11 @@ fn spawn_player_inventory_panel(
                                     hotbar,
                                     asset_server,
                                     blocks,
+                                    tools,
                                     biomes,
                                     biome_field,
                                     player_position,
+                                    language,
                                     icon_materials,
                                 );
                             }
@@ -817,9 +894,11 @@ fn spawn_player_inventory_panel(
                         hotbar,
                         asset_server,
                         blocks,
+                        tools,
                         biomes,
                         biome_field,
                         player_position,
+                        language,
                         icon_materials,
                     );
                 }
@@ -874,19 +953,20 @@ fn spawn_creative_scrollbar(
 #[allow(clippy::too_many_arguments)]
 fn spawn_creative_slot(
     parent: &mut ChildSpawnerCommands,
-    block: Option<&BlockDefinition>,
+    item: Option<CreativeCatalogItem<'_>>,
     asset_server: &AssetServer,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     player_position: Vec2,
+    language: Language,
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
-    let item = block.map(|block| intern_block_id(&block.id));
+    let item_id = item.map(CreativeCatalogItem::interned_id);
 
     parent
         .spawn((
             Button,
-            CreativeInventorySlot { item },
+            CreativeInventorySlot { item: item_id },
             Node {
                 width: px(SLOT_SIZE),
                 height: px(SLOT_SIZE),
@@ -899,27 +979,39 @@ fn spawn_creative_slot(
             BorderColor::all(Color::srgba(0.70, 0.72, 0.82, 0.28)),
         ))
         .with_children(|slot| {
-            let Some(block) = block else {
+            let Some(item) = item else {
                 return;
             };
-            let block_id = intern_block_id(&block.id);
-            let tint = block_tint_at(block.tint, player_position, biome_field, biomes);
-            let material = icon_materials.add(BlockIconMaterial::from_block(
-                block,
-                asset_server,
-                tint,
-            ));
 
-            slot.spawn((
-                BlockModel::display(block_id),
-                MaterialNode(material),
-                Node {
-                    width: px(ITEM_ICON_SIZE),
-                    height: px(ITEM_ICON_SIZE),
-                    ..default()
-                },
-                Pickable::IGNORE,
-            ));
+            match item {
+                CreativeCatalogItem::Block(block) => {
+                    let block_id = intern_block_id(&block.id);
+                    let tint = block_tint_at(block.tint, player_position, biome_field, biomes);
+                    let material = icon_materials.add(BlockIconMaterial::from_block(
+                        block,
+                        asset_server,
+                        tint,
+                    ));
+
+                    slot.spawn((
+                        BlockModel::display(block_id),
+                        MaterialNode(material),
+                        Node {
+                            width: px(ITEM_ICON_SIZE),
+                            height: px(ITEM_ICON_SIZE),
+                            ..default()
+                        },
+                        Pickable::IGNORE,
+                    ));
+                }
+                CreativeCatalogItem::Tool(tool) => {
+                    slot.spawn((
+                        typography::caption(tool.name.text(language)),
+                        TextLayout::justify(Justify::Center),
+                        Pickable::IGNORE,
+                    ));
+                }
+            }
         });
 }
 
@@ -931,9 +1023,11 @@ fn spawn_slot(
     hotbar: &PlayerHotbar,
     asset_server: &AssetServer,
     blocks: &BlockRegistry,
+    tools: &ToolRegistry,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     player_position: Vec2,
+    language: Language,
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
     let border = if selected {
@@ -963,64 +1057,77 @@ fn spawn_slot(
             BorderColor::all(border),
         ))
         .with_children(|slot| {
-            let Some(block_id) = hotbar.inventory_item_at(index) else {
+            let Some(item_id) = hotbar.inventory_item_at(index) else {
                 return;
             };
-            let block = blocks
-                .get(block_id)
-                .unwrap_or_else(|| panic!("inventory references missing block: {block_id}"));
-            let tint = block_tint_at(block.tint, player_position, biome_field, biomes);
-            let material = icon_materials.add(BlockIconMaterial::from_block(
-                block,
-                asset_server,
-                tint,
-            ));
 
-            slot.spawn((
-                BlockModel::display(block_id),
-                MaterialNode(material),
-                Node {
-                    width: px(ITEM_ICON_SIZE),
-                    height: px(ITEM_ICON_SIZE),
-                    ..default()
-                },
-                Pickable::IGNORE,
-            ));
+            if let Some(block) = blocks.get(item_id) {
+                let tint = block_tint_at(block.tint, player_position, biome_field, biomes);
+                let material = icon_materials.add(BlockIconMaterial::from_block(
+                    block,
+                    asset_server,
+                    tint,
+                ));
+
+                slot.spawn((
+                    BlockModel::display(item_id),
+                    MaterialNode(material),
+                    Node {
+                        width: px(ITEM_ICON_SIZE),
+                        height: px(ITEM_ICON_SIZE),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ));
+                return;
+            }
+
+            if let Some(tool) = tools.get(item_id) {
+                slot.spawn((
+                    typography::caption(tool.name.text(language)),
+                    TextLayout::justify(Justify::Center),
+                    Pickable::IGNORE,
+                ));
+                return;
+            }
+
+            panic!("inventory references missing item: {item_id}");
         });
 }
 
 fn filtered_creative_catalog<'a>(
     blocks: &'a BlockRegistry,
+    tools: &'a ToolRegistry,
     query: &str,
     category: Option<&str>,
     language: Language,
-) -> Vec<&'a BlockDefinition> {
+) -> Vec<CreativeCatalogItem<'a>> {
     let query = query.trim().to_lowercase();
     let mut catalog = blocks
         .iter()
-        .filter(|block| category.map_or(true, |category| block.category == category))
-        .filter(|block| {
-            query.is_empty() || block.name.text(language).to_lowercase().contains(&query)
-        })
+        .map(CreativeCatalogItem::Block)
+        .chain(tools.iter().map(CreativeCatalogItem::Tool))
+        .filter(|item| category.map_or(true, |category| item.category() == category))
+        .filter(|item| query.is_empty() || item.name(language).to_lowercase().contains(&query))
         .collect::<Vec<_>>();
 
     catalog.sort_by(|left, right| {
-        left.name
-            .text(language)
+        left.name(language)
             .to_lowercase()
-            .cmp(&right.name.text(language).to_lowercase())
-            .then_with(|| left.id.cmp(&right.id))
+            .cmp(&right.name(language).to_lowercase())
+            .then_with(|| left.id().cmp(right.id()))
     });
     catalog
 }
 
 fn creative_total_rows(
     blocks: &BlockRegistry,
+    tools: &ToolRegistry,
     query: &str,
     category: Option<&str>,
     language: Language,
 ) -> usize {
-    let count = filtered_creative_catalog(blocks, query, category, language).len();
+    let count = filtered_creative_catalog(blocks, tools, query, category, language).len();
     count.div_ceil(CREATIVE_COLUMNS).max(1)
 }
 

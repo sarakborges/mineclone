@@ -36,6 +36,11 @@ impl VoxelCell {
         self
     }
 
+    pub fn without_secondary_property(mut self, property: &str) -> Self {
+        self.secondary_properties.remove(property);
+        self
+    }
+
     pub fn secondary_property(self, property: &str) -> Option<&'static str> {
         self.secondary_properties.get(property)
     }

@@ -3,6 +3,7 @@ use std::f32::consts::PI;
 use bevy::prelude::*;
 
 use crate::{
+    content::block::BlockRegistry,
     player::hotbar::PlayerHotbar,
     world::tick::WorldTickClock,
 };
@@ -72,9 +73,12 @@ impl ViewModelItemSwitch {
 pub(super) fn advance_item_switch(
     world_ticks: Res<WorldTickClock>,
     hotbar: Res<PlayerHotbar>,
+    blocks: Res<BlockRegistry>,
     mut item_switch: ResMut<ViewModelItemSwitch>,
 ) {
-    let selected_block_id = hotbar.item_at(hotbar.selected_slot());
+    let selected_block_id = hotbar
+        .item_at(hotbar.selected_slot())
+        .filter(|block_id| blocks.get(block_id).is_some());
 
     if !item_switch.initialized {
         item_switch.initialize(selected_block_id);

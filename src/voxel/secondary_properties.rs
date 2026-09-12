@@ -66,6 +66,18 @@ impl SecondaryProperties {
 
         *slot = Some(SecondaryPropertyValue { property, value });
     }
+
+    pub(crate) fn remove(&mut self, property: &str) -> bool {
+        let Some(slot) = self.values.iter_mut().find(|slot| {
+            slot.as_ref()
+                .is_some_and(|entry| entry.property == property)
+        }) else {
+            return false;
+        };
+
+        *slot = None;
+        true
+    }
 }
 
 fn intern_token(token: &str) -> &'static str {
@@ -94,5 +106,14 @@ mod tests {
             .with("dyed", "blue");
 
         assert_eq!(properties.get("dyed"), Some("blue"));
+    }
+
+    #[test]
+    fn removes_secondary_property_values() {
+        let mut properties = SecondaryProperties::default().with("dyed", "red");
+
+        assert!(properties.remove("dyed"));
+        assert_eq!(properties.get("dyed"), None);
+        assert!(!properties.remove("dyed"));
     }
 }

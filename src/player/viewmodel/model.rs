@@ -18,9 +18,7 @@ use crate::{
     world::biome_field::BiomeField,
 };
 
-use super::animation::{
-    PlayerViewModel, ViewModelItemSwitch, base_viewmodel_transform,
-};
+use super::animation::{PlayerViewModel, ViewModelItemSwitch, base_viewmodel_transform};
 
 const ARM_SIZE: Vec3 = Vec3::new(0.23, 0.60, 0.21);
 const HELD_BLOCK_SCALE: f32 = 0.18;
@@ -107,7 +105,10 @@ pub(super) fn spawn_viewmodel(
 ) {
     for (camera, camera_transform) in &cameras {
         let selected_slot = content.hotbar.selected_slot();
-        let selected_block_id = content.hotbar.item_at(selected_slot);
+        let selected_block_id = content
+            .hotbar
+            .item_at(selected_slot)
+            .filter(|block_id| content.blocks.get(block_id).is_some());
         item_switch.initialize(selected_block_id);
 
         let item_visibility = item_visibility(selected_block_id);
@@ -206,7 +207,10 @@ pub(super) fn sync_held_block(
 ) {
     let selected_block_id = item_switch.displayed_block_id();
     let selected_slot = content.hotbar.selected_slot();
-    let hotbar_block_id = content.hotbar.item_at(selected_slot);
+    let hotbar_block_id = content
+        .hotbar
+        .item_at(selected_slot)
+        .filter(|block_id| content.blocks.get(block_id).is_some());
     let visibility = item_visibility(selected_block_id);
     let tint_position = Vec2::new(player.translation.x, player.translation.z);
 

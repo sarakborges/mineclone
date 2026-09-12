@@ -12,6 +12,7 @@ mod player;
 mod rendering;
 mod screens;
 mod targeting;
+mod tools;
 mod ui;
 mod voxel;
 mod world;
@@ -34,6 +35,7 @@ use screens::{
     settings_screen::SettingsScreenPlugin, starting_screen::StartingScreenPlugin,
 };
 use targeting::block::BlockTargetingPlugin;
+use tools::ToolsPlugin;
 use ui::UiDesignSystemPlugin;
 use world::WorldPlugin;
 
@@ -80,6 +82,7 @@ fn run_game() {
             GameplayPlugin,
             RenderingPlugin,
             BlockTargetingPlugin,
+            ToolsPlugin,
             HudPlugin,
         ))
         .run();

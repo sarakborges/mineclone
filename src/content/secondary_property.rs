@@ -59,4 +59,14 @@ impl SecondaryPropertyRegistry {
     pub fn get(&self, property: &str, id: &str) -> Option<&SecondaryPropertyDefinition> {
         self.definitions.get(property)?.get(id)
     }
+
+    pub fn iter<'a>(
+        &'a self,
+        property: &str,
+    ) -> impl Iterator<Item = &'a SecondaryPropertyDefinition> {
+        self.definitions
+            .get(property)
+            .into_iter()
+            .flat_map(|definitions| definitions.values())
+    }
 }
