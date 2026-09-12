@@ -22,6 +22,7 @@ pub(crate) mod inventory_category;
 mod json_file;
 mod loader;
 mod registry;
+pub(crate) mod secondary_property;
 pub(crate) mod sky;
 pub(crate) mod structure;
 

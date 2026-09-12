@@ -12,6 +12,7 @@ use super::{
     fluid::{FluidDefinition, FluidRegistry},
     inventory_category::{InventoryCategoryDefinition, InventoryCategoryRegistry},
     json_file::{collect_json_files, read_json_definition},
+    secondary_property::{SecondaryPropertyDefinition, SecondaryPropertyRegistry},
     sky::{SkyDefinition, SkyRegistry},
     structure::{StructureDefinition, StructureRegistry},
 };
@@ -24,6 +25,7 @@ pub(crate) struct LoadedContent {
     pub day_night_cycles: DayNightCycleRegistry,
     pub fluids: FluidRegistry,
     pub inventory_categories: InventoryCategoryRegistry,
+    pub secondary_properties: SecondaryPropertyRegistry,
     pub skies: SkyRegistry,
     pub structures: StructureRegistry,
 }
@@ -36,6 +38,7 @@ impl LoadedContent {
         commands.insert_resource(self.day_night_cycles);
         commands.insert_resource(self.fluids);
         commands.insert_resource(self.inventory_categories);
+        commands.insert_resource(self.secondary_properties);
         commands.insert_resource(self.skies);
         commands.insert_resource(self.structures);
     }
@@ -66,6 +69,14 @@ pub(crate) fn read_content() -> LoadedContent {
             block.id,
             block.category
         );
+        for property in &block.secondary_properties {
+            assert!(
+                content.secondary_properties.contains_property(property),
+                "block {} references missing secondary property {}",
+                block.id,
+                property
+            );
+        }
     }
 
     for structure in content.structures.iter() {
@@ -100,6 +111,17 @@ fn load_definition(path: &Path, content: &mut LoadedContent) {
         content
             .inventory_categories
             .insert(read_json_definition::<InventoryCategoryDefinition>(path));
+    } else if path_has_component(path, "secondary_properties") {
+        let property = secondary_property_group(path).unwrap_or_else(|| {
+            panic!(
+                "secondary property definition must be inside data/secondary_properties/<property>: {}",
+                path.display()
+            )
+        });
+        content.secondary_properties.insert(
+            property,
+            read_json_definition::<SecondaryPropertyDefinition>(path),
+        );
     } else if path_has_component(path, "biomes") {
         content
             .biomes
@@ -117,6 +139,23 @@ fn load_definition(path: &Path, content: &mut LoadedContent) {
             .structures
             .insert(read_json_definition::<StructureDefinition>(path));
     }
+}
+
+fn secondary_property_group(path: &Path) -> Option<String> {
+    let mut components = path.components();
+
+    while let Some(component) = components.next() {
+        if component.as_os_str() != OsStr::new("secondary_properties") {
+            continue;
+        }
+
+        return components
+            .next()
+            .and_then(|component| component.as_os_str().to_str())
+            .map(str::to_owned);
+    }
+
+    None
 }
 
 fn path_has_component(path: &Path, component: &str) -> bool {

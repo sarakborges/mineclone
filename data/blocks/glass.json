@@ -2,6 +2,9 @@
   "id": "asteria:glass",
   "name": "Glass",
   "category": "crafted_blocks",
+  "secondaryProperties": [
+    "dyed"
+  ],
   "textures": {
     "top": "textures/blocks/glass.png",
     "bottom": "textures/blocks/glass.png",

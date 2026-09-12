@@ -77,6 +77,8 @@ pub struct BlockDefinition {
     #[serde(default)]
     pub orientations: Vec<BlockOrientation>,
     #[serde(default)]
+    pub secondary_properties: Vec<String>,
+    #[serde(default)]
     pub alpha_cutoff: Option<f32>,
     #[serde(default)]
     pub alpha_blend: bool,
@@ -157,6 +159,18 @@ impl BlockRegistry {
             assert!(
                 !definition.orientations[..index].contains(orientation),
                 "block {} orientations cannot contain duplicates",
+                definition.id
+            );
+        }
+        for (index, property) in definition.secondary_properties.iter().enumerate() {
+            assert!(
+                !property.is_empty(),
+                "block {} secondaryProperties cannot contain empty ids",
+                definition.id
+            );
+            assert!(
+                !definition.secondary_properties[..index].contains(property),
+                "block {} secondaryProperties cannot contain duplicates",
                 definition.id
             );
         }
