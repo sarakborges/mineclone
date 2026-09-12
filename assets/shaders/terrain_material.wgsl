@@ -36,6 +36,7 @@ const AMBIENT_FLOOR: f32 = 0.055;
 const LIGHT_GAMMA: f32 = 1.35;
 const SUN_AMBIENT_SHARE: f32 = 0.38;
 const DYNAMIC_LIGHT_SCALE: f32 = 0.08;
+const TINTED_TRANSPARENCY_ALPHA_FLOOR: f32 = 0.18;
 
 #ifndef PREPASS_PIPELINE
 fn directional_sun_visibility(in: VertexOutput) -> f32 {
@@ -256,9 +257,16 @@ fn fragment(
 #endif
 
     let lighting_multiplier = vec3<f32>(local_light) + dynamic_light;
+    var surface_alpha = texel.a * pbr_bindings::material.base_color.a;
+    if tint_delta > 0.001 {
+        surface_alpha = max(
+            surface_alpha,
+            TINTED_TRANSPARENCY_ALPHA_FLOOR * clamp(tint_delta, 0.0, 1.0),
+        );
+    }
     pbr_input.material.base_color = vec4<f32>(
         material_rgb * lighting_multiplier,
-        texel.a * pbr_bindings::material.base_color.a,
+        surface_alpha,
     );
     pbr_input.material.base_color = alpha_discard(
         pbr_input.material,
