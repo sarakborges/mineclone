@@ -1,6 +1,6 @@
 {
   "id": "asteria:grass",
-  "name": "Grass Block",
+  "name": { "english": "Grass Block" },
   "category": "natural_blocks",
   "tint": "grass",
   "textures": {
@@ -11,14 +11,7 @@
     "front": "textures/blocks/grass/front.png",
     "back": "textures/blocks/grass/back.png"
   },
-  "rotateTexture": {
-    "top": true,
-    "bottom": true,
-    "left": false,
-    "right": false,
-    "front": false,
-    "back": false
-  },
+  "rotateTexture": { "top": true, "bottom": true, "left": false, "right": false, "front": false, "back": false },
   "lightDampening": 15,
   "castsShadow": true
 }

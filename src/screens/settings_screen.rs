@@ -8,6 +8,7 @@ use game_rules_section::{
     TicksPerSecondInputState, handle_ticks_input, handle_ticks_keyboard,
     handle_ticks_step_buttons, sync_ticks_per_second_text,
 };
+use languages_section::{handle_language_buttons, sync_language_buttons};
 use layout::spawn_settings_screen;
 use navigation::{
     SettingsSectionSelection, handle_close_requests, handle_section_buttons, sync_section_ui,
@@ -16,6 +17,7 @@ use render_distance_logic::{sync_render_distance_text, sync_slider_thumb};
 use world_settings_section::{handle_game_mode_buttons, sync_game_mode_buttons};
 
 mod game_rules_section;
+mod languages_section;
 mod layout;
 mod navigation;
 mod render_distance_logic;
@@ -41,8 +43,10 @@ impl Plugin for SettingsScreenPlugin {
                     handle_ticks_step_buttons,
                     handle_ticks_input,
                     handle_ticks_keyboard,
+                    handle_language_buttons,
                     sync_section_ui,
                     sync_game_mode_buttons,
+                    sync_language_buttons,
                     sync_ticks_per_second_text,
                     sync_render_distance_text,
                     sync_slider_thumb,

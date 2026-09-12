@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
+    localization::{ActiveLanguage, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode, player_id::PlayerId},
     ui::{
         button::menu_button,
@@ -42,7 +43,13 @@ enum PauseMenuAction {
     ExitGame,
 }
 
-fn spawn_pause_menu(mut commands: Commands) {
+fn spawn_pause_menu(
+    mut commands: Commands,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
+) {
+    let language = language.get();
+
     commands
         .spawn((
             DespawnOnExit(PauseState::Paused),
@@ -62,16 +69,28 @@ fn spawn_pause_menu(mut commands: Commands) {
         .with_children(|root| {
             root.spawn(surface::modal_panel()).with_children(|panel| {
                 panel.spawn((
-                    typography::title("PAUSED"),
+                    typography::title(localization.text(language, "pause.title").to_owned()),
                     Node {
                         margin: UiRect::bottom(px(10)),
                         ..default()
                     },
                 ));
-                panel.spawn(menu_button("Resume", PauseMenuAction::Resume));
-                panel.spawn(menu_button("Settings", PauseMenuAction::Settings));
-                panel.spawn(menu_button("Leave World", PauseMenuAction::LeaveWorld));
-                panel.spawn(menu_button("Exit Game", PauseMenuAction::ExitGame));
+                panel.spawn(menu_button(
+                    localization.text(language, "pause.resume").to_owned(),
+                    PauseMenuAction::Resume,
+                ));
+                panel.spawn(menu_button(
+                    localization.text(language, "common.settings").to_owned(),
+                    PauseMenuAction::Settings,
+                ));
+                panel.spawn(menu_button(
+                    localization.text(language, "pause.leaveWorld").to_owned(),
+                    PauseMenuAction::LeaveWorld,
+                ));
+                panel.spawn(menu_button(
+                    localization.text(language, "common.exitGame").to_owned(),
+                    PauseMenuAction::ExitGame,
+                ));
             });
         });
 }

@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use serde::Deserialize;
 
+use crate::localization::LocalizedText;
+
 use super::{
     block_id::intern_block_id, block_orientation::BlockOrientation, registry::DefinitionMap,
 };
@@ -66,7 +68,7 @@ pub enum BlockTint {
 #[serde(rename_all = "camelCase")]
 pub struct BlockDefinition {
     pub id: String,
-    pub name: String,
+    pub name: LocalizedText,
     pub category: String,
     #[serde(default)]
     pub tint: BlockTint,
@@ -133,6 +135,7 @@ pub struct BlockRegistry {
 
 impl BlockRegistry {
     pub fn insert(&mut self, definition: BlockDefinition) {
+        definition.name.validate(&format!("block {} name", definition.id));
         assert!(
             definition.light_emission <= MAX_LIGHT_DAMPENING,
             "block {} light emission must be between 0 and 15",

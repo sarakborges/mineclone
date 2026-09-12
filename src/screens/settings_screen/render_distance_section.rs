@@ -4,6 +4,7 @@ use bevy::{
 };
 
 use crate::{
+    localization::{Language, UiLocalization},
     ui::{surface, theme, typography},
     world::render_distance::{MAX_RENDER_DISTANCE_CHUNKS, MIN_RENDER_DISTANCE_CHUNKS},
 };
@@ -21,11 +22,19 @@ pub(super) struct RenderDistanceSliderThumb;
 #[derive(Component)]
 pub(super) struct RenderDistanceValueText;
 
-pub(super) fn graphics_section(chunks: i32) -> impl Bundle {
+pub(super) fn graphics_section(
+    chunks: i32,
+    localization: &UiLocalization,
+    language: Language,
+) -> impl Bundle {
     (
         surface::settings_section(),
         children![
-            typography::heading("Graphics"),
+            typography::heading(
+                localization
+                    .text(language, "settings.section.graphics")
+                    .to_owned(),
+            ),
             (
                 Node {
                     width: percent(100),
@@ -34,14 +43,24 @@ pub(super) fn graphics_section(chunks: i32) -> impl Bundle {
                     ..default()
                 },
                 children![
-                    typography::muted("Render Distance"),
+                    typography::muted(
+                        localization
+                            .text(language, "settings.renderDistance")
+                            .to_owned(),
+                    ),
                     (
-                        typography::muted(render_distance_label(chunks)),
+                        typography::muted(render_distance_label(
+                            chunks,
+                            localization,
+                            language,
+                        )),
                         RenderDistanceValueText,
                     ),
                     render_distance_slider(chunks),
                     typography::caption(
-                        "Controls how far terrain is generated and rendered around the player.",
+                        localization
+                            .text(language, "settings.renderDistance.description")
+                            .to_owned(),
                     ),
                 ],
             ),

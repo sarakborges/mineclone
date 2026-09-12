@@ -1,26 +1,10 @@
 {
   "id": "asteria:small_boulder",
-  "name": "Small Boulder",
+  "name": { "english": "Small Boulder" },
   "anchor": { "x": 1, "y": 0, "z": 1 },
-  "palette": {
-    "S": { "block": "asteria:stone" }
-  },
+  "palette": { "S": { "block": "asteria:stone" } },
   "layers": [
-    {
-      "y": 0,
-      "rows": [
-        ".SS",
-        "SSS",
-        ".SS"
-      ]
-    },
-    {
-      "y": 1,
-      "rows": [
-        "...",
-        ".SS",
-        ".S."
-      ]
-    }
+    { "y": 0, "rows": [".SS", "SSS", ".SS"] },
+    { "y": 1, "rows": ["...", ".SS", ".S."] }
   ]
 }

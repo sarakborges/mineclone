@@ -2,6 +2,7 @@ use bevy::{prelude::*, ui_widgets::ScrollArea};
 
 use crate::{
     app::settings_state::SettingsState,
+    localization::{ActiveLanguage, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{
         button::menu_button,
@@ -16,6 +17,7 @@ use crate::{
 
 use super::{
     game_rules_section::game_rules_section,
+    languages_section::languages_section,
     navigation::{
         SettingsBackButton, SettingsSection, SettingsSectionPanel, SettingsSectionSelection,
         section_button,
@@ -36,6 +38,8 @@ pub fn spawn_settings_screen(
     render_distance: Res<RenderDistanceSettings>,
     game_rules: Res<GameRules>,
     save: Res<InMemoryWorldSave>,
+    localization: Res<UiLocalization>,
+    active_language: Res<ActiveLanguage>,
     player: Query<&GameMode, With<GameplayCamera>>,
     mut selection: ResMut<SettingsSectionSelection>,
 ) {
@@ -46,6 +50,7 @@ pub fn spawn_settings_screen(
         SettingsSection::Graphics
     };
 
+    let language = active_language.get();
     let game_mode = player
         .single()
         .map_or_else(|_| GameMode::default(), |game_mode| *game_mode);
@@ -83,7 +88,9 @@ pub fn spawn_settings_screen(
                 ..default()
             })
             .with_children(|header| {
-                header.spawn(typography::title("SETTINGS"));
+                header.spawn(typography::title(
+                    localization.text(language, "settings.title").to_owned(),
+                ));
             });
 
             root.spawn(Node {
@@ -144,20 +151,35 @@ pub fn spawn_settings_screen(
                                         ))
                                         .with_children(|list| {
                                             if has_world {
-                                                list.spawn(section_button(
+                                                spawn_section_button(
+                                                    list,
                                                     SettingsSection::WorldSettings,
-                                                    selection.selected
-                                                        == SettingsSection::WorldSettings,
-                                                ));
-                                                list.spawn(section_button(
+                                                    selection.selected,
+                                                    &localization,
+                                                    language,
+                                                );
+                                                spawn_section_button(
+                                                    list,
                                                     SettingsSection::GameRules,
-                                                    selection.selected == SettingsSection::GameRules,
-                                                ));
+                                                    selection.selected,
+                                                    &localization,
+                                                    language,
+                                                );
                                             }
-                                            list.spawn(section_button(
+                                            spawn_section_button(
+                                                list,
                                                 SettingsSection::Graphics,
-                                                selection.selected == SettingsSection::Graphics,
-                                            ));
+                                                selection.selected,
+                                                &localization,
+                                                language,
+                                            );
+                                            spawn_section_button(
+                                                list,
+                                                SettingsSection::Languages,
+                                                selection.selected,
+                                                &localization,
+                                                language,
+                                            );
                                         })
                                         .id();
 
@@ -208,7 +230,11 @@ pub fn spawn_settings_screen(
                                                                 == SettingsSection::WorldSettings,
                                                         ),
                                                     ))
-                                                    .with_child(world_settings_section(game_mode));
+                                                    .with_child(world_settings_section(
+                                                        game_mode,
+                                                        &localization,
+                                                        language,
+                                                    ));
 
                                                 panels
                                                     .spawn((
@@ -222,6 +248,8 @@ pub fn spawn_settings_screen(
                                                     ))
                                                     .with_child(game_rules_section(
                                                         game_rules.ticks_per_second(),
+                                                        &localization,
+                                                        language,
                                                     ));
                                             }
 
@@ -235,6 +263,21 @@ pub fn spawn_settings_screen(
                                                 ))
                                                 .with_child(graphics_section(
                                                     render_distance.chunks(),
+                                                    &localization,
+                                                    language,
+                                                ));
+
+                                            panels
+                                                .spawn((
+                                                    SettingsSectionPanel(SettingsSection::Languages),
+                                                    section_panel_node(
+                                                        selection.selected
+                                                            == SettingsSection::Languages,
+                                                    ),
+                                                ))
+                                                .with_child(languages_section(
+                                                    &localization,
+                                                    language,
                                                 ));
                                         })
                                         .id();
@@ -256,16 +299,39 @@ pub fn spawn_settings_screen(
                 ..default()
             })
             .with_children(|footer| {
-                footer.spawn(menu_button("Return", SettingsBackButton));
+                footer.spawn(menu_button(
+                    localization.text(language, "settings.return").to_owned(),
+                    SettingsBackButton,
+                ));
             });
         });
+}
+
+fn spawn_section_button(
+    parent: &mut ChildSpawnerCommands,
+    section: SettingsSection,
+    selected: SettingsSection,
+    localization: &UiLocalization,
+    language: crate::localization::Language,
+) {
+    parent.spawn(section_button(
+        section,
+        selected == section,
+        localization
+            .text(language, section.localization_key())
+            .to_owned(),
+    ));
 }
 
 fn section_panel_node(visible: bool) -> Node {
     Node {
         width: percent(100),
         flex_direction: FlexDirection::Column,
-        display: if visible { Display::Flex } else { Display::None },
+        display: if visible {
+            Display::Flex
+        } else {
+            Display::None
+        },
         ..default()
     }
 }

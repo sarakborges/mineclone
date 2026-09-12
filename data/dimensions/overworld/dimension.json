@@ -1,6 +1,6 @@
 {
   "id": "asteria:overworld",
-  "name": "The Overworld",
+  "name": { "english": "The Overworld" },
   "biomes": [
     "asteria:overworld/plains",
     "asteria:overworld/wasteland",

@@ -1,6 +1,6 @@
 {
   "id": "asteria:sand",
-  "name": "Sand",
+  "name": { "english": "Sand" },
   "category": "natural_blocks",
   "textures": {
     "top": "textures/blocks/sand.png",
@@ -10,14 +10,7 @@
     "front": "textures/blocks/sand.png",
     "back": "textures/blocks/sand.png"
   },
-  "rotateTexture": {
-    "top": true,
-    "bottom": true,
-    "left": true,
-    "right": true,
-    "front": true,
-    "back": true
-  },
+  "rotateTexture": { "top": true, "bottom": true, "left": true, "right": true, "front": true, "back": true },
   "lightDampening": 15,
   "castsShadow": true
 }

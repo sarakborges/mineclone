@@ -2,7 +2,12 @@ use bevy::prelude::*;
 
 use crate::{
     app::settings_state::SettingsState,
-    ui::{theme, transition::{ScreenTransition, ScreenTransitionTarget}, typography},
+    localization::{ActiveLanguage, UiLocalization},
+    ui::{
+        theme,
+        transition::{ScreenTransition, ScreenTransitionTarget},
+        typography,
+    },
 };
 
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,14 +28,16 @@ pub(super) enum SettingsSection {
     WorldSettings,
     GameRules,
     Graphics,
+    Languages,
 }
 
 impl SettingsSection {
-    pub(super) fn label(self) -> &'static str {
+    pub(super) const fn localization_key(self) -> &'static str {
         match self {
-            Self::WorldSettings => "World Settings",
-            Self::GameRules => "Game Rules",
-            Self::Graphics => "Graphics",
+            Self::WorldSettings => "settings.section.worldSettings",
+            Self::GameRules => "settings.section.gameRules",
+            Self::Graphics => "settings.section.graphics",
+            Self::Languages => "settings.section.languages",
         }
     }
 }
@@ -47,7 +54,11 @@ pub(super) struct SettingsSectionPanel(pub(super) SettingsSection);
 #[derive(Component)]
 pub(super) struct SettingsBackButton;
 
-pub(super) fn section_button(section: SettingsSection, active: bool) -> impl Bundle {
+pub(super) fn section_button(
+    section: SettingsSection,
+    active: bool,
+    label: impl Into<String>,
+) -> impl Bundle {
     (
         Button,
         SettingsSectionButton(section),
@@ -61,7 +72,7 @@ pub(super) fn section_button(section: SettingsSection, active: bool) -> impl Bun
         },
         BackgroundColor(section_button_background(active, Interaction::None)),
         children![(
-            typography::button_label(section.label()),
+            typography::button_label(label),
             SettingsSectionButtonLabel(section),
         )],
     )
@@ -80,9 +91,11 @@ pub(super) fn handle_section_buttons(
 
 pub(super) fn sync_section_ui(
     selection: Res<SettingsSectionSelection>,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
     mut panels: Query<(&SettingsSectionPanel, &mut Node)>,
     mut buttons: Query<(&SettingsSectionButton, &Interaction, &mut BackgroundColor)>,
-    mut labels: Query<(&SettingsSectionButtonLabel, &mut TextColor)>,
+    mut labels: Query<(&SettingsSectionButtonLabel, &mut Text, &mut TextColor)>,
 ) {
     for (panel, mut node) in &mut panels {
         node.display = if panel.0 == selection.selected {
@@ -99,7 +112,11 @@ pub(super) fn sync_section_ui(
         ));
     }
 
-    for (label, mut color) in &mut labels {
+    for (label, mut text, mut color) in &mut labels {
+        let next = localization.text(language.get(), label.0.localization_key());
+        if text.0 != next {
+            text.0 = next.to_owned();
+        }
         *color = TextColor(if label.0 == selection.selected {
             theme::TEXT_PRIMARY
         } else {

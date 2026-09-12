@@ -7,6 +7,7 @@ mod app;
 mod content;
 mod gameplay;
 mod hud;
+mod localization;
 mod player;
 mod rendering;
 mod screens;
@@ -26,6 +27,7 @@ use bevy::prelude::*;
 use content::ContentPlugin;
 use gameplay::GameplayPlugin;
 use hud::HudPlugin;
+use localization::LocalizationPlugin;
 use rendering::RenderingPlugin;
 use screens::{
     loading_screen::LoadingScreenPlugin, pause_menu::PauseMenuPlugin,
@@ -68,6 +70,7 @@ fn run_game() {
         .add_plugins((
             WindowIconPlugin,
             UiDesignSystemPlugin,
+            LocalizationPlugin,
             ContentPlugin,
             SettingsScreenPlugin,
             StartingScreenPlugin,

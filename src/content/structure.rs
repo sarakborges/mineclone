@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use serde::Deserialize;
 
+use crate::localization::LocalizedText;
+
 use super::{
     block::BlockRegistry, block_orientation::BlockOrientation, registry::DefinitionMap,
 };
@@ -37,7 +39,7 @@ pub struct StructureLayer {
 #[serde(rename_all = "camelCase")]
 pub struct StructureDefinition {
     pub id: String,
-    pub name: String,
+    pub name: LocalizedText,
     #[serde(default)]
     pub anchor: StructureAnchor,
     pub palette: HashMap<String, StructurePaletteEntry>,
@@ -122,11 +124,8 @@ impl StructureDefinition {
 
     fn validate_layout(&self) {
         assert!(!self.id.trim().is_empty(), "structure id cannot be empty");
-        assert!(
-            !self.name.trim().is_empty(),
-            "structure {} name cannot be empty",
-            self.id
-        );
+        self.name
+            .validate(&format!("structure {} name", self.id));
         assert!(
             !self.palette.is_empty(),
             "structure {} palette cannot be empty",

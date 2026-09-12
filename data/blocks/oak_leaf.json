@@ -1,6 +1,6 @@
 {
   "id": "asteria:oak_leaf",
-  "name": "Oak Leaf",
+  "name": { "english": "Oak Leaf" },
   "category": "foliage",
   "tint": "leaf",
   "textures": {
@@ -11,14 +11,7 @@
     "front": "textures/blocks/trees/oak/leaf.png",
     "back": "textures/blocks/trees/oak/leaf.png"
   },
-  "rotateTexture": {
-    "top": false,
-    "bottom": false,
-    "left": false,
-    "right": false,
-    "front": false,
-    "back": false
-  },
+  "rotateTexture": { "top": false, "bottom": false, "left": false, "right": false, "front": false, "back": false },
   "alphaCutoff": 0.5,
   "lightDampening": 1,
   "castsShadow": true

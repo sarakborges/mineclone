@@ -10,7 +10,7 @@ pub struct AsteriaButtonVisual {
     level: f32,
 }
 
-pub fn menu_button<A: Component>(label: &'static str, action: A) -> impl Bundle {
+pub fn menu_button<A: Component>(label: impl Into<String>, action: A) -> impl Bundle {
     (
         Button,
         action,

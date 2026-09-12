@@ -1,13 +1,15 @@
 use bevy::prelude::*;
 use serde::Deserialize;
 
+use crate::localization::LocalizedText;
+
 use super::{dimension_hydrology::DimensionHydrology, registry::DefinitionMap};
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DimensionDefinition {
     pub id: String,
-    pub name: String,
+    pub name: LocalizedText,
     pub biomes: Vec<String>,
     pub day_night_cycle: String,
     pub sky: String,
@@ -23,6 +25,9 @@ pub struct DimensionRegistry {
 
 impl DimensionRegistry {
     pub fn insert(&mut self, definition: DimensionDefinition) {
+        definition
+            .name
+            .validate(&format!("dimension {} name", definition.id));
         self.definitions.insert(definition.id.clone(), definition);
     }
 

@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
+    localization::{Language, UiLocalization},
     ui::{surface, theme, typography},
     world::{InMemoryWorldSave, game_rules::GameRules},
 };
@@ -28,11 +29,19 @@ pub(super) struct TicksPerSecondInputState {
     buffer: String,
 }
 
-pub(super) fn game_rules_section(ticks_per_second: u32) -> impl Bundle {
+pub(super) fn game_rules_section(
+    ticks_per_second: u32,
+    localization: &UiLocalization,
+    language: Language,
+) -> impl Bundle {
     (
         surface::settings_section(),
         children![
-            typography::heading("Game Rules"),
+            typography::heading(
+                localization
+                    .text(language, "settings.section.gameRules")
+                    .to_owned(),
+            ),
             (
                 Node {
                     width: percent(100),
@@ -41,7 +50,11 @@ pub(super) fn game_rules_section(ticks_per_second: u32) -> impl Bundle {
                     ..default()
                 },
                 children![
-                    typography::muted("Ticks by Second"),
+                    typography::muted(
+                        localization
+                            .text(language, "settings.ticksBySecond")
+                            .to_owned(),
+                    ),
                     (
                         Node {
                             width: percent(100),
@@ -57,7 +70,9 @@ pub(super) fn game_rules_section(ticks_per_second: u32) -> impl Bundle {
                         ],
                     ),
                     typography::caption(
-                        "Controls how many simulation ticks the world advances per real second.",
+                        localization
+                            .text(language, "settings.ticksBySecond.description")
+                            .to_owned(),
                     ),
                 ],
             ),

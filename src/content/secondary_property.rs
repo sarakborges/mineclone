@@ -3,13 +3,15 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use serde::Deserialize;
 
+use crate::localization::LocalizedText;
+
 use super::{color::Rgb, registry::DefinitionMap};
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SecondaryPropertyDefinition {
     pub id: String,
-    pub name: String,
+    pub name: LocalizedText,
     pub color: Rgb,
 }
 
@@ -28,11 +30,10 @@ impl SecondaryPropertyRegistry {
             !definition.id.is_empty(),
             "secondary property {property} cannot contain a value with an empty id"
         );
-        assert!(
-            !definition.name.is_empty(),
-            "secondary property {property}:{} cannot have an empty name",
+        definition.name.validate(&format!(
+            "secondary property {property}:{} name",
             definition.id
-        );
+        ));
         for (channel, value) in [
             ("r", definition.color.r),
             ("g", definition.color.g),

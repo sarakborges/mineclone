@@ -1,7 +1,1 @@
-{
-  "id": "crafted_blocks",
-  "displayName": "Crafted Blocks",
-  "blockIcon": {
-    "block": "asteria:glass"
-  }
-}
+{ "id": "crafted_blocks", "displayName": { "english": "Crafted Blocks" }, "blockIcon": { "block": "asteria:glass" } }

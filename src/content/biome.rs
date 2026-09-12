@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use serde::Deserialize;
 
+use crate::localization::LocalizedText;
+
 use self::validation::validate_biome_definition;
 use super::{
     biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
@@ -98,7 +100,7 @@ pub struct BiomeVisuals {
 #[serde(rename_all = "camelCase")]
 pub struct BiomeDefinition {
     pub id: String,
-    pub name: String,
+    pub name: LocalizedText,
     #[serde(default)]
     pub kind: BiomeKind,
     #[serde(default = "default_biome_distributions")]
@@ -137,6 +139,9 @@ pub struct BiomeRegistry {
 
 impl BiomeRegistry {
     pub fn insert(&mut self, definition: BiomeDefinition) {
+        definition
+            .name
+            .validate(&format!("biome {} name", definition.id));
         validate_biome_definition(&definition);
         self.definitions.insert(definition.id.clone(), definition);
     }

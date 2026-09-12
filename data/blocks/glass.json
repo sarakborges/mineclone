@@ -1,10 +1,8 @@
 {
   "id": "asteria:glass",
-  "name": "Glass",
+  "name": { "english": "Glass" },
   "category": "crafted_blocks",
-  "secondaryProperties": [
-    "dyed"
-  ],
+  "secondaryProperties": ["dyed"],
   "textures": {
     "top": "textures/blocks/glass.png",
     "bottom": "textures/blocks/glass.png",
@@ -13,14 +11,7 @@
     "front": "textures/blocks/glass.png",
     "back": "textures/blocks/glass.png"
   },
-  "rotateTexture": {
-    "top": false,
-    "bottom": false,
-    "left": false,
-    "right": false,
-    "front": false,
-    "back": false
-  },
+  "rotateTexture": { "top": false, "bottom": false, "left": false, "right": false, "front": false, "back": false },
   "alphaBlend": true,
   "lightDampening": 0,
   "castsShadow": false

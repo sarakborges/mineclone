@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, settings_state::SettingsState},
+    localization::{ActiveLanguage, UiLocalization},
     ui::{
         button::menu_button,
         cosmic_background::{self, STAR_FIELD},
@@ -37,7 +38,12 @@ enum StartingScreenAction {
     ExitGame,
 }
 
-fn setup_starting_screen(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup_starting_screen(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
+) {
     commands.spawn((
         Camera2d,
         BoxShadowSamples(8),
@@ -45,6 +51,7 @@ fn setup_starting_screen(mut commands: Commands, asset_server: Res<AssetServer>)
     ));
 
     let logo = asset_server.load("branding/asteria_logo.png");
+    let language = language.get();
 
     commands
         .spawn((
@@ -83,10 +90,22 @@ fn setup_starting_screen(mut commands: Commands, asset_server: Res<AssetServer>)
                         },
                     ));
 
-                    content.spawn(menu_button("New World", StartingScreenAction::NewWorld));
-                    content.spawn(menu_button("Load Worlds", StartingScreenAction::LoadWorlds));
-                    content.spawn(menu_button("Settings", StartingScreenAction::Settings));
-                    content.spawn(menu_button("Exit Game", StartingScreenAction::ExitGame));
+                    content.spawn(menu_button(
+                        localization.text(language, "starting.newWorld").to_owned(),
+                        StartingScreenAction::NewWorld,
+                    ));
+                    content.spawn(menu_button(
+                        localization.text(language, "starting.loadWorlds").to_owned(),
+                        StartingScreenAction::LoadWorlds,
+                    ));
+                    content.spawn(menu_button(
+                        localization.text(language, "common.settings").to_owned(),
+                        StartingScreenAction::Settings,
+                    ));
+                    content.spawn(menu_button(
+                        localization.text(language, "common.exitGame").to_owned(),
+                        StartingScreenAction::ExitGame,
+                    ));
                 });
 
             parent.spawn((

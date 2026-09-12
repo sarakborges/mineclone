@@ -1,6 +1,6 @@
 {
   "id": "asteria:stone",
-  "name": "Stone",
+  "name": { "english": "Stone" },
   "category": "natural_blocks",
   "textures": {
     "top": "textures/blocks/stone.png",

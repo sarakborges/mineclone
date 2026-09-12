@@ -1,69 +1,24 @@
 {
   "id": "asteria:overworld/enchanted_forest",
-  "name": "Enchanted Forest",
-  "size": {
-    "x": { "min": 140.0, "max": 460.0 },
-    "z": { "min": 140.0, "max": 460.0 },
-    "y": null
-  },
-  "terrain": {
-    "type": "rolling",
-    "baseHeight": 4.0,
-    "amplitude": 3.0,
-    "scale": 0.012,
-    "detailAmplitude": 1.0,
-    "detailScale": 0.045
-  },
-  "surfaceLayers": [
-    { "block": "asteria:grass", "depth": 1 },
-    { "block": "asteria:dirt", "depth": 4 },
-    { "block": "asteria:stone" }
-  ],
-  "hydrology": {
-    "canGenerateLake": true,
-    "canGenerateRiver": true,
-    "lakeChanceMultiplier": 1.0,
-    "riverWidthMultiplier": 1.0
-  },
+  "name": { "english": "Enchanted Forest" },
+  "size": { "x": { "min": 140.0, "max": 460.0 }, "z": { "min": 140.0, "max": 460.0 }, "y": null },
+  "terrain": { "type": "rolling", "baseHeight": 4.0, "amplitude": 3.0, "scale": 0.012, "detailAmplitude": 1.0, "detailScale": 0.045 },
+  "surfaceLayers": [ { "block": "asteria:grass", "depth": 1 }, { "block": "asteria:dirt", "depth": 4 }, { "block": "asteria:stone" } ],
+  "hydrology": { "canGenerateLake": true, "canGenerateRiver": true, "lakeChanceMultiplier": 1.0, "riverWidthMultiplier": 1.0 },
   "structures": [
-    {
-      "id": "asteria:oak_tree",
-      "placement": { "spacing": 12, "chance": 0.62, "jitter": 3 }
-    },
-    {
-      "id": "asteria:small_boulder",
-      "placement": { "spacing": 48, "chance": 0.20, "jitter": 14 }
-    }
+    { "id": "asteria:oak_tree", "placement": { "spacing": 12, "chance": 0.62, "jitter": 3 } },
+    { "id": "asteria:small_boulder", "placement": { "spacing": 48, "chance": 0.20, "jitter": 14 } }
   ],
   "visuals": {
-    "skyColor": {
-      "dawn": { "r": 0.35, "g": 0.92, "b": 0.94 },
-      "day": { "r": 0.18, "g": 0.88, "b": 1.00 },
-      "dusk": { "r": 0.31, "g": 0.82, "b": 0.91 },
-      "night": { "r": 0.16, "g": 0.58, "b": 0.68 }
-    },
-    "fogColor": {
-      "dawn": { "r": 0.54, "g": 0.96, "b": 0.91 },
-      "day": { "r": 0.45, "g": 0.94, "b": 0.95 },
-      "dusk": { "r": 0.48, "g": 0.89, "b": 0.84 },
-      "night": { "r": 0.25, "g": 0.67, "b": 0.66 }
-    },
+    "skyColor": { "dawn": { "r": 0.35, "g": 0.92, "b": 0.94 }, "day": { "r": 0.18, "g": 0.88, "b": 1.00 }, "dusk": { "r": 0.31, "g": 0.82, "b": 0.91 }, "night": { "r": 0.16, "g": 0.58, "b": 0.68 } },
+    "fogColor": { "dawn": { "r": 0.54, "g": 0.96, "b": 0.91 }, "day": { "r": 0.45, "g": 0.94, "b": 0.95 }, "dusk": { "r": 0.48, "g": 0.89, "b": 0.84 }, "night": { "r": 0.25, "g": 0.67, "b": 0.66 } },
     "grassColor": { "r": 0.04, "g": 0.82, "b": 0.58 },
     "leafColor": { "r": 0.10, "g": 0.95, "b": 0.74 },
     "foliageColor": { "r": 0.20, "g": 0.90, "b": 0.92 },
     "waterColor": { "r": 0.78, "g": 0.24, "b": 0.98 },
-    "underwaterTint": {
-      "color": { "r": 0.42, "g": 0.12, "b": 0.62 },
-      "opacity": 0.20
-    },
-    "stars": {
-      "density": 0.78,
-      "color": { "r": 0.66, "g": 1.0, "b": 0.98 }
-    },
-    "clouds": {
-      "density": 0.50,
-      "color": { "r": 1.0, "g": 0.72, "b": 0.18 }
-    },
+    "underwaterTint": { "color": { "r": 0.42, "g": 0.12, "b": 0.62 }, "opacity": 0.20 },
+    "stars": { "density": 0.78, "color": { "r": 0.66, "g": 1.0, "b": 0.98 } },
+    "clouds": { "density": 0.50, "color": { "r": 1.0, "g": 0.72, "b": 0.18 } },
     "terrainRoughness": 0.90,
     "terrainMetallic": 0.0
   }

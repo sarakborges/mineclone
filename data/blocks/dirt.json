@@ -1,6 +1,6 @@
 {
   "id": "asteria:dirt",
-  "name": "Dirt",
+  "name": { "english": "Dirt" },
   "category": "natural_blocks",
   "textures": {
     "top": "textures/blocks/dirt.png",
@@ -10,14 +10,7 @@
     "front": "textures/blocks/dirt.png",
     "back": "textures/blocks/dirt.png"
   },
-  "rotateTexture": {
-    "top": true,
-    "bottom": true,
-    "left": true,
-    "right": true,
-    "front": true,
-    "back": true
-  },
+  "rotateTexture": { "top": true, "bottom": true, "left": true, "right": true, "front": true, "back": true },
   "lightDampening": 15,
   "castsShadow": true
 }

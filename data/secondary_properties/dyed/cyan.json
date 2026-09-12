@@ -1,5 +1,5 @@
 {
   "id": "cyan",
-  "name": "Cyan",
+  "name": { "english": "Cyan" },
   "color": { "r": 0.086275, "g": 0.611765, "b": 0.611765 }
 }

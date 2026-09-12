@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::{
     app::game_state::GameState,
     content::{day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry},
+    localization::{ActiveLanguage, UiLocalization},
     ui::{surface, typography},
     world::{day_night::DayNightClock, dimension::CurrentDimension},
 };
@@ -22,7 +23,11 @@ impl Plugin for TimeHudPlugin {
 #[derive(Component)]
 struct TimeHudText;
 
-fn spawn_time_hud(mut commands: Commands) {
+fn spawn_time_hud(
+    mut commands: Commands,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
+) {
     commands
         .spawn((
             Node {
@@ -37,7 +42,10 @@ fn spawn_time_hud(mut commands: Commands) {
         .with_children(|root| {
             root.spawn(surface::hud_panel()).with_children(|panel| {
                 panel.spawn((
-                    typography::hud("Day 1\n00:00"),
+                    typography::hud(format!(
+                        "{} 1\n00:00",
+                        localization.text(language.get(), "hud.day")
+                    )),
                     TextLayout::justify(Justify::Center),
                     TimeHudText,
                 ));
@@ -50,6 +58,8 @@ fn update_time_hud(
     clock: Res<DayNightClock>,
     dimensions: Res<DimensionRegistry>,
     cycles: Res<DayNightCycleRegistry>,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
     mut time_text: Single<&mut Text, With<TimeHudText>>,
 ) {
     let (hour, minute) = dimensions
@@ -57,7 +67,13 @@ fn update_time_hud(
         .and_then(|definition| cycles.get(&definition.day_night_cycle))
         .map(|cycle| cycle.world_time(clock.normalized_time))
         .unwrap_or((0, 0));
-    let next_text = format!("Day {}\n{:02}:{:02}", clock.day, hour, minute);
+    let next_text = format!(
+        "{} {}\n{:02}:{:02}",
+        localization.text(language.get(), "hud.day"),
+        clock.day,
+        hour,
+        minute
+    );
 
     if time_text.0 != next_text {
         time_text.0 = next_text;

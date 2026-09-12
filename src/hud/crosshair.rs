@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     content::block::BlockRegistry,
+    localization::{ActiveLanguage, UiLocalization},
     player::{
         hotbar::{PlayerHotbar, PlayerHotbarSet},
         inventory::InventoryState,
@@ -59,7 +60,11 @@ struct CrosshairRoot;
 #[derive(Component)]
 struct RotationHint;
 
-fn spawn_crosshair(mut commands: Commands) {
+fn spawn_crosshair(
+    mut commands: Commands,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
+) {
     commands
         .spawn((
             CrosshairRoot,
@@ -111,7 +116,9 @@ fn spawn_crosshair(mut commands: Commands) {
                     BackgroundColor(theme::TEXT_PRIMARY.with_alpha(0.92)),
                 ));
                 crosshair.spawn((
-                    typography::opaque_caption("Press R to rotate block"),
+                    typography::opaque_caption(
+                        localization.text(language.get(), "hud.rotateBlock").to_owned(),
+                    ),
                     TextLayout::justify(Justify::Center),
                     Node {
                         position_type: PositionType::Absolute,

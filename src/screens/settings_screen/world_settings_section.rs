@@ -1,6 +1,7 @@
 use bevy::{prelude::*, ui::InteractionDisabled};
 
 use crate::{
+    localization::{Language, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{surface, theme, typography},
 };
@@ -14,11 +15,19 @@ pub(super) struct GameModeButton(pub(super) GameMode);
 #[derive(Component, Clone, Copy)]
 struct GameModeButtonLabel(GameMode);
 
-pub(super) fn world_settings_section(game_mode: GameMode) -> impl Bundle {
+pub(super) fn world_settings_section(
+    game_mode: GameMode,
+    localization: &UiLocalization,
+    language: Language,
+) -> impl Bundle {
     (
         surface::settings_section(),
         children![
-            typography::heading("World Settings"),
+            typography::heading(
+                localization
+                    .text(language, "settings.section.worldSettings")
+                    .to_owned(),
+            ),
             (
                 Node {
                     width: percent(100),
@@ -27,7 +36,9 @@ pub(super) fn world_settings_section(game_mode: GameMode) -> impl Bundle {
                     ..default()
                 },
                 children![
-                    typography::muted("Game Mode"),
+                    typography::muted(
+                        localization.text(language, "settings.gameMode").to_owned(),
+                    ),
                     (
                         Node {
                             width: percent(100),
@@ -36,8 +47,20 @@ pub(super) fn world_settings_section(game_mode: GameMode) -> impl Bundle {
                             ..default()
                         },
                         children![
-                            game_mode_button("Survival", GameMode::Survival, game_mode),
-                            game_mode_button("Creative", GameMode::Creative, game_mode),
+                            game_mode_button(
+                                localization
+                                    .text(language, "settings.gameMode.survival")
+                                    .to_owned(),
+                                GameMode::Survival,
+                                game_mode,
+                            ),
+                            game_mode_button(
+                                localization
+                                    .text(language, "settings.gameMode.creative")
+                                    .to_owned(),
+                                GameMode::Creative,
+                                game_mode,
+                            ),
                         ],
                     ),
                 ],
@@ -47,7 +70,7 @@ pub(super) fn world_settings_section(game_mode: GameMode) -> impl Bundle {
 }
 
 fn game_mode_button(
-    label: &'static str,
+    label: impl Into<String>,
     mode: GameMode,
     current_game_mode: GameMode,
 ) -> impl Bundle {

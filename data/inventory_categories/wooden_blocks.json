@@ -1,7 +1,1 @@
-{
-  "id": "wooden_blocks",
-  "displayName": "Wooden Blocks",
-  "blockIcon": {
-    "block": "asteria:oak_log"
-  }
-}
+{ "id": "wooden_blocks", "displayName": { "english": "Wooden Blocks" }, "blockIcon": { "block": "asteria:oak_log" } }

@@ -4,6 +4,7 @@ use crate::{
     app::game_state::GameState,
     content::{biome::BiomeRegistry, block::BlockRegistry},
     hud::block_icon::BlockIconMaterial,
+    localization::{ActiveLanguage, UiLocalization},
     rendering::{block_model::BlockModel, block_tint::block_tint_at},
     targeting::block::TargetedBlock,
     ui::{surface, typography},
@@ -41,6 +42,8 @@ struct TargetHudContent<'w> {
     biomes: Res<'w, BiomeRegistry>,
     biome_field: Res<'w, BiomeField>,
     world: Res<'w, VoxelWorld>,
+    localization: Res<'w, UiLocalization>,
+    language: Res<'w, ActiveLanguage>,
 }
 
 fn spawn_target_hud(mut commands: Commands, mut icon_materials: ResMut<Assets<BlockIconMaterial>>) {
@@ -109,8 +112,9 @@ fn update_target_hud(
         *root_visibility = Visibility::Visible;
     }
 
+    let language = content.language.get();
     let block = content.blocks.get(hit.block_id);
-    let block_name = block.map_or(hit.block_id, |block| block.name.as_str());
+    let block_name = block.map_or(hit.block_id, |block| block.name.text(language));
     let light_position = if hit.normal == IVec3::ZERO {
         hit.voxel + IVec3::Y
     } else {
@@ -119,8 +123,11 @@ fn update_target_hud(
     let light = content.world.light_at(light_position);
     let light_level = light.sky().max(light.block());
     let next_text = format!(
-        "{block_name}\nLight: {light_level}\nX: {} | Z: {} | Y: {}",
-        hit.voxel.x, hit.voxel.z, hit.voxel.y
+        "{block_name}\n{}: {light_level}\nX: {} | Z: {} | Y: {}",
+        content.localization.text(language, "hud.light"),
+        hit.voxel.x,
+        hit.voxel.z,
+        hit.voxel.y
     );
 
     if target_text.0 != next_text {

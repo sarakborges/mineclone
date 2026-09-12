@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use serde::Deserialize;
 
+use crate::localization::LocalizedText;
+
 use super::color::Rgb;
 
 pub type FluidId = u16;
@@ -11,7 +13,7 @@ pub type FluidId = u16;
 #[serde(rename_all = "camelCase")]
 pub struct FluidDefinition {
     pub id: String,
-    pub name: String,
+    pub name: LocalizedText,
     pub color: Rgb,
     pub opacity: f32,
     pub roughness: f32,
@@ -31,11 +33,9 @@ pub struct FluidRegistry {
 
 impl FluidRegistry {
     pub fn insert(&mut self, definition: FluidDefinition) {
-        assert!(
-            !definition.name.trim().is_empty(),
-            "fluid {} name cannot be empty",
-            definition.id
-        );
+        definition
+            .name
+            .validate(&format!("fluid {} name", definition.id));
         assert!(
             (0.0..=1.0).contains(&definition.opacity),
             "fluid {} opacity must be between 0 and 1",

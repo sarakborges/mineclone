@@ -1,7 +1,1 @@
-{
-  "id": "natural_blocks",
-  "displayName": "Natural Blocks",
-  "blockIcon": {
-    "block": "asteria:grass"
-  }
-}
+{ "id": "natural_blocks", "displayName": { "english": "Natural Blocks" }, "blockIcon": { "block": "asteria:grass" } }

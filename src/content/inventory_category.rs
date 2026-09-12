@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use serde::Deserialize;
 
+use crate::localization::LocalizedText;
+
 use super::{
     block::{BlockDefinition, BlockRegistry, BlockTint},
     color::Rgb,
@@ -35,12 +37,14 @@ pub struct InventoryCategoryBlockIcon {
 #[serde(rename_all = "camelCase")]
 pub struct InventoryCategoryDefinition {
     pub id: String,
-    pub display_name: String,
+    pub display_name: LocalizedText,
     pub block_icon: InventoryCategoryBlockIcon,
 }
 
 impl InventoryCategoryDefinition {
     pub fn validate_references(&self, blocks: &BlockRegistry) {
+        self.display_name
+            .validate(&format!("inventory category {} display name", self.id));
         assert!(
             blocks.get(&self.block_icon.block).is_some(),
             "inventory category {} references missing block icon {}",
