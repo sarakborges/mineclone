@@ -11,6 +11,7 @@ enum WorldLoadingPhase {
     Generating,
     Lighting,
     Meshing,
+    Spawning,
 }
 
 #[derive(Resource)]
@@ -19,6 +20,7 @@ pub(crate) struct WorldLoadingState {
     generated: usize,
     lit: usize,
     meshed: usize,
+    spawn_column: IVec2,
     phase: WorldLoadingPhase,
     screen_rendered: bool,
     transition_requested: bool,
