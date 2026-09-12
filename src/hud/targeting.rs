@@ -122,12 +122,15 @@ fn update_target_hud(
     };
     let light = content.world.light_at(light_position);
     let light_level = light.sky().max(light.block());
+    let coordinates = content
+        .localization
+        .text(language, "hud.coordinates")
+        .replace("{x}", &hit.voxel.x.to_string())
+        .replace("{z}", &hit.voxel.z.to_string())
+        .replace("{y}", &hit.voxel.y.to_string());
     let next_text = format!(
-        "{block_name}\n{}: {light_level}\nX: {} | Z: {} | Y: {}",
+        "{block_name}\n{}: {light_level}\n{coordinates}",
         content.localization.text(language, "hud.light"),
-        hit.voxel.x,
-        hit.voxel.z,
-        hit.voxel.y
     );
 
     if target_text.0 != next_text {
