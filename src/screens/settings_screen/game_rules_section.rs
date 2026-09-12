@@ -160,6 +160,13 @@ pub(super) fn handle_ticks_keyboard(
         return;
     }
 
+    if keys.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight])
+        && keys.just_pressed(KeyCode::KeyA)
+    {
+        input_state.replace_on_next_digit = true;
+        return;
+    }
+
     if keys.just_pressed(KeyCode::Enter)
         || keys.just_pressed(KeyCode::NumpadEnter)
         || keys.just_pressed(KeyCode::Escape)
