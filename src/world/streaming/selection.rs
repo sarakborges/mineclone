@@ -3,8 +3,11 @@ use std::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 
 use crate::{
+    content::{
+        biome::BiomeRegistry, dimension::DimensionDefinition, structure::StructureRegistry,
+    },
     voxel::{chunk::CHUNK_SIZE, coordinates::chunks_for_block_extent},
-    world::render_distance::chunk_coords_in_volume,
+    world::{biome_field::BiomeField, render_distance::chunk_coords_in_volume},
 };
 
 use super::{
@@ -17,6 +20,45 @@ const SURFACE_PADDING_ABOVE_CHUNKS: i32 = 1;
 const NEAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const FAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS: i32 = 3;
+
+pub(super) fn initial_chunk_coords(
+    center: IVec3,
+    horizontal_radius: i32,
+    vertical_radius: i32,
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    structures: &StructureRegistry,
+    biome_field: &BiomeField,
+) -> Vec<IVec3> {
+    let horizontal_structure_allowance =
+        chunks_for_block_extent(structures.max_horizontal_extent_from_anchor());
+    let preload_radius =
+        horizontal_radius + HORIZONTAL_PRELOAD_CHUNKS.max(horizontal_structure_allowance);
+    let vertical_structure_allowance =
+        chunks_for_block_extent(structures.max_height_above_anchor());
+    let mut surface_ranges = HashMap::new();
+    let desired = desired_chunk_coords(
+        center,
+        preload_radius,
+        vertical_radius,
+        vertical_structure_allowance,
+        dimension,
+        biomes,
+        biome_field,
+        &mut surface_ranges,
+    );
+    let mut coords = desired.into_iter().collect::<Vec<_>>();
+
+    coords.sort_by_key(|coord| {
+        pending_priority(
+            *coord,
+            center,
+            vertical_structure_allowance,
+            &surface_ranges,
+        )
+    });
+    coords
+}
 
 pub(super) fn rebuild_queue(
     streaming: &mut ChunkStreamingState,
@@ -38,7 +80,9 @@ pub(super) fn rebuild_queue(
         preload_radius,
         vertical_radius,
         vertical_structure_allowance,
-        context,
+        context.dimension,
+        context.biomes,
+        context.biome_field,
         &mut streaming.surface_ranges,
     );
     context.feature_fields.retain_for_chunks(&desired);
@@ -105,7 +149,9 @@ fn desired_chunk_coords(
     horizontal_radius: i32,
     vertical_radius: i32,
     structure_chunk_allowance: i32,
-    context: &QueueRebuildContext<'_>,
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
     surface_ranges: &mut HashMap<IVec2, (i32, i32)>,
 ) -> HashSet<IVec3> {
     let local_radius = horizontal_radius.min(PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS);
@@ -124,9 +170,9 @@ fn desired_chunk_coords(
             let (own_minimum, own_maximum) = cached_surface_range(
                 surface_ranges,
                 horizontal,
-                context.dimension,
-                context.biomes,
-                context.biome_field,
+                dimension,
+                biomes,
+                biome_field,
             );
             let mut surrounding_minimum = own_minimum;
 
@@ -140,9 +186,9 @@ fn desired_chunk_coords(
                     let (neighbor_minimum, _) = cached_surface_range(
                         surface_ranges,
                         neighbor,
-                        context.dimension,
-                        context.biomes,
-                        context.biome_field,
+                        dimension,
+                        biomes,
+                        biome_field,
                     );
                     surrounding_minimum = surrounding_minimum.min(neighbor_minimum);
                 }
