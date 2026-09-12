@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::{player::camera::GameplayCamera, voxel::world::VoxelWorld};
+use crate::{
+    player::{camera::GameplayCamera, game_mode::GameMode},
+    voxel::world::VoxelWorld,
+};
 
 use super::{
     collision::{Axis, move_axis},
@@ -32,10 +35,24 @@ impl Default for FlightState {
 pub(super) fn handle_flight_toggle(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
+    game_mode: Single<&GameMode>,
     mut flight: Single<&mut FlightState>,
     mut gravity: Single<&mut GravityState>,
 ) {
     flight.toggle_window = (flight.toggle_window - time.delta_secs()).max(0.0);
+
+    if !game_mode.allows_flight() {
+        flight.toggle_window = 0.0;
+
+        if flight.active {
+            flight.active = false;
+            flight.velocity = Vec3::ZERO;
+            gravity.vertical_velocity = 0.0;
+            gravity.grounded = false;
+        }
+
+        return;
+    }
 
     if !keys.just_pressed(KeyCode::Space) {
         return;
