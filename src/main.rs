@@ -32,9 +32,8 @@ use hud::HudPlugin;
 use localization::LocalizationPlugin;
 use rendering::RenderingPlugin;
 use screens::{
-    loading_screen::LoadingScreenPlugin, new_world_screen::NewWorldScreenPlugin,
-    pause_menu::PauseMenuPlugin, settings_screen::SettingsScreenPlugin,
-    starting_screen::StartingScreenPlugin,
+    loading_screen::LoadingScreenPlugin, pause_menu::PauseMenuPlugin,
+    settings_screen::SettingsScreenPlugin, starting_screen::StartingScreenPlugin,
 };
 use targeting::block::BlockTargetingPlugin;
 use tools::ToolsPlugin;
@@ -88,6 +87,5 @@ fn run_game() {
             ToolsPlugin,
             HudPlugin,
         ))
-        .add_plugins(NewWorldScreenPlugin)
         .run();
 }

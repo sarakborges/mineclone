@@ -2,6 +2,7 @@
   "id": "asteria:lamp",
   "name": { "english": "Lamp" },
   "category": "light_sources",
+  "secondaryProperties": ["dyed"],
   "textures": {
     "top": "textures/blocks/lamp.png",
     "bottom": "textures/blocks/lamp.png",

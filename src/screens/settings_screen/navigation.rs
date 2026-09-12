@@ -24,6 +24,7 @@ impl Default for SettingsSectionSelection {
 
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SettingsSection {
+    General,
     WorldSettings,
     GameRules,
     Graphics,
@@ -34,6 +35,7 @@ pub(super) enum SettingsSection {
 impl SettingsSection {
     pub(super) const fn localization_key(self) -> &'static str {
         match self {
+            Self::General => "newWorld.section.general",
             Self::WorldSettings => "settings.section.worldSettings",
             Self::GameRules => "settings.section.gameRules",
             Self::Graphics => "settings.section.graphics",
