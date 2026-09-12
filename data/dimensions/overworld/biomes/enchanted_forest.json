@@ -43,13 +43,13 @@
       "dusk": { "r": 0.48, "g": 0.89, "b": 0.84 },
       "night": { "r": 0.25, "g": 0.67, "b": 0.66 }
     },
-    "grassColor": { "r": 0.04, "g": 0.82, "b": 0.58 },
-    "leafColor": { "r": 0.10, "g": 0.95, "b": 0.74 },
-    "foliageColor": { "r": 0.20, "g": 0.90, "b": 0.92 },
-    "waterColor": { "r": 0.78, "g": 0.24, "b": 0.98 },
+    "grassColor": { "r": 0.02, "g": 1.00, "b": 0.46 },
+    "leafColor": { "r": 0.02, "g": 1.00, "b": 0.86 },
+    "foliageColor": { "r": 0.36, "g": 0.54, "b": 1.00 },
+    "waterColor": { "r": 0.86, "g": 0.12, "b": 1.00 },
     "underwaterTint": {
-      "color": { "r": 0.42, "g": 0.12, "b": 0.62 },
-      "opacity": 0.20
+      "color": { "r": 0.48, "g": 0.08, "b": 0.72 },
+      "opacity": 0.24
     },
     "stars": {
       "density": 0.78,
