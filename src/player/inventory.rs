@@ -25,8 +25,66 @@ impl InventoryCursor {
         self.item = inventory.replace_inventory_item(index, self.item);
     }
 
+    pub(crate) fn pick_creative_item(&mut self, item: &'static str) {
+        self.item = Some(item);
+    }
+
     fn clear(&mut self) {
         self.item = None;
+    }
+}
+
+#[derive(Resource, Default)]
+pub(crate) struct CreativeInventoryView {
+    search_query: String,
+    search_focused: bool,
+    scroll_row: usize,
+}
+
+impl CreativeInventoryView {
+    pub(crate) fn search_query(&self) -> &str {
+        &self.search_query
+    }
+
+    pub(crate) fn search_focused(&self) -> bool {
+        self.search_focused
+    }
+
+    pub(crate) fn scroll_row(&self) -> usize {
+        self.scroll_row
+    }
+
+    pub(crate) fn focus_search(&mut self) {
+        self.search_focused = true;
+    }
+
+    pub(crate) fn blur_search(&mut self) {
+        self.search_focused = false;
+    }
+
+    pub(crate) fn push_search_text(&mut self, text: &str) {
+        let previous_len = self.search_query.len();
+        self.search_query
+            .extend(text.chars().filter(|character| !character.is_control()));
+        if self.search_query.len() != previous_len {
+            self.scroll_row = 0;
+        }
+    }
+
+    pub(crate) fn backspace_search(&mut self) {
+        if self.search_query.pop().is_some() {
+            self.scroll_row = 0;
+        }
+    }
+
+    pub(crate) fn set_scroll_row(&mut self, row: usize) {
+        self.scroll_row = row;
+    }
+
+    fn reset(&mut self) {
+        self.search_query.clear();
+        self.search_focused = false;
+        self.scroll_row = 0;
     }
 }
 
@@ -36,13 +94,17 @@ impl Plugin for PlayerInventoryPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<InventoryState>()
             .init_resource::<InventoryCursor>()
+            .init_resource::<CreativeInventoryView>()
             .add_systems(
                 Update,
                 toggle_inventory
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(PauseState::Running)),
             )
-            .add_systems(OnExit(InventoryState::Open), discard_cursor_item)
+            .add_systems(
+                OnExit(InventoryState::Open),
+                (discard_cursor_item, reset_creative_inventory_view),
+            )
             .add_systems(
                 OnEnter(PauseState::Paused),
                 close_inventory.run_if(in_state(GameState::Gameplay)),
@@ -54,14 +116,18 @@ impl Plugin for PlayerInventoryPlugin {
 fn toggle_inventory(
     keys: Res<ButtonInput<KeyCode>>,
     inventory_state: Res<State<InventoryState>>,
+    creative_view: Res<CreativeInventoryView>,
     mut next_inventory_state: ResMut<NextState<InventoryState>>,
 ) {
     match inventory_state.get() {
         InventoryState::Closed if keys.just_pressed(KeyCode::KeyE) => {
             next_inventory_state.set(InventoryState::Open);
         }
+        InventoryState::Open if keys.just_pressed(KeyCode::Escape) => {
+            next_inventory_state.set(InventoryState::Closed);
+        }
         InventoryState::Open
-            if keys.just_pressed(KeyCode::KeyE) || keys.just_pressed(KeyCode::Escape) =>
+            if keys.just_pressed(KeyCode::KeyE) && !creative_view.search_focused() =>
         {
             next_inventory_state.set(InventoryState::Closed);
         }
@@ -75,4 +141,8 @@ fn close_inventory(mut next_inventory_state: ResMut<NextState<InventoryState>>) 
 
 fn discard_cursor_item(mut cursor: ResMut<InventoryCursor>) {
     cursor.clear();
+}
+
+fn reset_creative_inventory_view(mut creative_view: ResMut<CreativeInventoryView>) {
+    creative_view.reset();
 }
