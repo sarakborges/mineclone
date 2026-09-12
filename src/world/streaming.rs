@@ -24,8 +24,8 @@ use super::{
     biome_field::BiomeField,
     chunk_loading::ensure_chunk_loaded,
     chunk_remesh::ChunkRemeshQueue,
-    chunk_rendering::ChunkRenderPool,
-    chunk_system_params::{ChunkContent, ChunkGeneration},
+    chunk_rendering::{ChunkRenderPool, spawn_chunk_mesh},
+    chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
     fluid_updates::PendingFluidUpdates,
     render_distance::RenderDistanceSettings,
     world_feature_fields::WorldFeatureFields,
@@ -64,7 +64,6 @@ struct QueueRebuildContext<'a> {
 pub(super) struct ChunkStreamingInputs<'w, 's> {
     player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
     render_distance: Res<'w, RenderDistanceSettings>,
-    render_pool: Res<'w, ChunkRenderPool>,
     world: ResMut<'w, VoxelWorld>,
     streaming: ResMut<'w, ChunkStreamingState>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
@@ -77,6 +76,7 @@ pub(super) fn reset_chunk_streaming(mut state: ResMut<ChunkStreamingState>) {
 pub(super) fn stream_chunks(
     generation: ChunkGeneration,
     content: ChunkContent,
+    mut renderer: ChunkRenderer,
     mut inputs: ChunkStreamingInputs,
     mut fluid_updates: ResMut<PendingFluidUpdates>,
     mut lighting_updates: ResMut<PendingLightingUpdates>,
@@ -92,7 +92,7 @@ pub(super) fn stream_chunks(
         || inputs.streaming.vertical_radius != vertical_radius
     {
         let rebuild_context = QueueRebuildContext {
-            render_pool: &inputs.render_pool,
+            render_pool: &renderer.pool,
             dimension: generation.dimension(),
             biomes: &content.biomes,
             structures: &content.structures,
@@ -132,7 +132,7 @@ pub(super) fn stream_chunks(
                 break;
             };
 
-            if inputs.render_pool.contains(coord) {
+            if renderer.pool.contains(coord) {
                 continue;
             }
 
@@ -145,23 +145,44 @@ pub(super) fn stream_chunks(
             break;
         }
 
-        // Lighting is bounded in PostUpdate. The chunk itself is also meshed there,
-        // after the lighting pass, so streaming no longer builds every new chunk
-        // twice in the same frame.
         lighting_updates.enqueue_chunks_initialization(&mut inputs.world, &batch);
+
+        // A generated chunk must become visible immediately instead of depending
+        // on the bounded remesh queue. PostUpdate will refresh it after lighting,
+        // but geometry is never allowed to remain resident without a mesh.
+        for &coord in &batch {
+            let chunk = inputs
+                .world
+                .chunk(coord)
+                .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
+            let render_context = content.render_context(
+                &inputs.world,
+                &renderer.terrain_materials,
+                &renderer.fluid_materials,
+            );
+
+            spawn_chunk_mesh(
+                &mut renderer.commands,
+                &mut renderer.meshes,
+                &mut renderer.pool,
+                coord,
+                chunk,
+                &render_context,
+            );
+        }
+
         processed += batch.len();
 
         for &coord in &batch {
             for offset in CARDINAL_NEIGHBORS {
                 let neighbor = coord + offset;
-                if !batch.contains(&neighbor) && inputs.render_pool.contains(neighbor) {
+                if !batch.contains(&neighbor) && renderer.pool.contains(neighbor) {
                     inputs.remesh_queue.enqueue_priority(neighbor);
                 }
             }
 
-            // Put the newly loaded chunk at the very front after its neighbors.
-            // process_chunk_remesh_queue always processes at least one item, so a
-            // generated chunk cannot remain resident without a mesh.
+            // Keep a post-lighting refresh queued so the immediate mesh receives
+            // the final propagated voxel lighting as soon as the queue reaches it.
             inputs.remesh_queue.enqueue_priority(coord);
         }
     }
