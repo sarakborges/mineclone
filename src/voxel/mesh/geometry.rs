@@ -26,15 +26,6 @@ pub(super) fn is_face_exposed(
     }
 
     let neighbor_position = world_voxel + face.offset();
-
-    // An unloaded horizontal/bottom neighbor is a streaming boundary, not air.
-    // Rendering those faces produced black walls and visible strips down to the
-    // void while the adjacent chunk was still pending. Top faces remain visible
-    // so terrain surfaces do not disappear when the chunk above is unnecessary.
-    if !world.is_loaded_at(neighbor_position) {
-        return face == BlockFace::Top;
-    }
-
     let Some(neighbor_id) = world.block_id_at(neighbor_position) else {
         return true;
     };
