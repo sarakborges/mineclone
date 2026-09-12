@@ -2,10 +2,16 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::{biome::BiomeRegistry, block::BlockRegistry},
+    content::{
+        biome::BiomeRegistry, block::BlockRegistry,
+        secondary_property::SecondaryPropertyRegistry,
+    },
     hud::block_icon::BlockIconMaterial,
     localization::{ActiveLanguage, UiLocalization},
-    rendering::{block_model::BlockModel, block_tint::block_tint_at},
+    rendering::{
+        block_model::BlockModel,
+        block_tint::{apply_secondary_property_tint, block_tint_at},
+    },
     targeting::block::TargetedBlock,
     ui::{surface, typography},
     voxel::world::VoxelWorld,
@@ -39,6 +45,7 @@ struct TargetBlockModel;
 struct TargetHudContent<'w> {
     asset_server: Res<'w, AssetServer>,
     blocks: Res<'w, BlockRegistry>,
+    secondary_properties: Res<'w, SecondaryPropertyRegistry>,
     biomes: Res<'w, BiomeRegistry>,
     biome_field: Res<'w, BiomeField>,
     world: Res<'w, VoxelWorld>,
@@ -115,6 +122,7 @@ fn update_target_hud(
     let language = content.language.get();
     let block = content.blocks.get(hit.block_id);
     let block_name = block.map_or(hit.block_id, |block| block.name.text(language));
+    let cell = content.world.cell_at(hit.voxel);
     let light_position = if hit.normal == IVec3::ZERO {
         hit.voxel + IVec3::Y
     } else {
@@ -128,8 +136,30 @@ fn update_target_hud(
         .replace("{x}", &hit.voxel.x.to_string())
         .replace("{z}", &hit.voxel.z.to_string())
         .replace("{y}", &hit.voxel.y.to_string());
+    let properties = cell
+        .map(|cell| {
+            let mut properties = cell
+                .secondary_properties()
+                .iter()
+                .map(|(property, value)| {
+                    let value_name = content
+                        .secondary_properties
+                        .get(property, value)
+                        .map_or(value, |definition| definition.name.text(language));
+                    format!("{property}: {value_name}")
+                })
+                .collect::<Vec<_>>();
+            properties.sort();
+            properties
+        })
+        .unwrap_or_default();
+    let properties_text = if properties.is_empty() {
+        String::new()
+    } else {
+        format!("\n{}", properties.join("\n"))
+    };
     let next_text = format!(
-        "{block_name}\n{}: {light_level}\n{coordinates}",
+        "{block_name}\n{}: {light_level}\n{coordinates}{properties_text}",
         content.localization.text(language, "hud.light"),
     );
 
@@ -149,11 +179,20 @@ fn update_target_hud(
     }
 
     let tint_position = Vec2::new(hit.voxel.x as f32 + 0.5, hit.voxel.z as f32 + 0.5);
-    let tint = block.map(|block| block.tint).unwrap_or_default();
-    material.set_tint(block_tint_at(
-        tint,
+    let base_tint = block_tint_at(
+        block.map(|block| block.tint).unwrap_or_default(),
         tint_position,
         &content.biome_field,
         &content.biomes,
-    ));
+    );
+    let tint = match (block, cell) {
+        (Some(block), Some(cell)) => apply_secondary_property_tint(
+            base_tint,
+            block,
+            cell,
+            &content.secondary_properties,
+        ),
+        _ => base_tint,
+    };
+    material.set_tint(tint);
 }
