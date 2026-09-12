@@ -16,7 +16,8 @@ use super::{
     streaming::ChunkStreamingState,
 };
 
-const CHUNK_UNLOAD_BUDGET: Duration = Duration::from_millis(2);
+const MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK: usize = 8;
+const CHUNK_UNLOAD_BUDGET: Duration = Duration::from_millis(4);
 
 pub(super) fn unload_chunk_meshes(
     player: Single<&Transform, With<GameplayCamera>>,
@@ -41,7 +42,9 @@ pub(super) fn unload_chunk_meshes(
     let mut unloaded = Vec::new();
 
     for coord in pending_unloads {
-        if !unloaded.is_empty() && frame_started.elapsed() >= CHUNK_UNLOAD_BUDGET {
+        if unloaded.len() >= MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK
+            && frame_started.elapsed() >= CHUNK_UNLOAD_BUDGET
+        {
             break;
         }
 
