@@ -2,7 +2,9 @@ use std::time::{Duration, Instant};
 
 use bevy::prelude::*;
 
-use crate::voxel::{deduplicated_queue::DeduplicatedQueue, world::VoxelWorld};
+use crate::voxel::{
+    deduplicated_queue::DeduplicatedQueue, neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
+};
 
 use super::{
     chunk_rendering::refresh_chunk_mesh,
@@ -27,6 +29,16 @@ impl ChunkRemeshQueue {
         if coord.y >= 0 {
             self.queue.enqueue_front(coord);
         }
+    }
+
+    pub(crate) fn enqueue_voxel_edit(&mut self, coord: IVec3) {
+        // Neighbor meshes need their shared faces refreshed too, but the edited
+        // chunk must be processed first so transparent blocks never linger as a
+        // visible ghost while the neighbor refreshes wait for later frames.
+        for offset in CARDINAL_NEIGHBORS {
+            self.enqueue_priority(coord + offset);
+        }
+        self.enqueue_priority(coord);
     }
 
     pub(crate) fn extend(&mut self, coords: impl IntoIterator<Item = IVec3>) {
@@ -109,5 +121,14 @@ mod tests {
 
         assert_eq!(queue.pop(), Some(IVec3::Z));
         assert_eq!(queue.pop(), Some(IVec3::X));
+    }
+
+    #[test]
+    fn voxel_edit_prioritizes_edited_chunk_before_neighbors() {
+        let mut queue = ChunkRemeshQueue::default();
+        let coord = IVec3::new(4, 2, -3);
+        queue.enqueue_voxel_edit(coord);
+
+        assert_eq!(queue.pop(), Some(coord));
     }
 }
