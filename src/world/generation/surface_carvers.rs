@@ -23,6 +23,7 @@ pub(super) struct SurfaceCarverColumn {
     tunnels: Vec<ResolvedSurfaceTunnel>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn resolve_surface_carver_column(
     horizontal: Vec2,
     surface_influences: &[(usize, f32)],
@@ -30,6 +31,8 @@ pub(super) fn resolve_surface_carver_column(
     biome_field: &BiomeField,
     world_seed: u64,
     sea_level: f32,
+    minimum_y: f32,
+    maximum_y: f32,
 ) -> SurfaceCarverColumn {
     let mut tunnels = Vec::new();
 
@@ -44,6 +47,10 @@ pub(super) fn resolve_surface_carver_column(
             .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
 
         for (index, carver) in biome.surface_carvers.iter().copied().enumerate() {
+            if !carver_intersects_vertical_range(carver, sea_level, minimum_y, maximum_y) {
+                continue;
+            }
+
             resolve_tunnel_candidates(
                 &mut tunnels,
                 horizontal,
@@ -85,6 +92,27 @@ pub(super) fn surface_carver_density_delta(
     }
 
     -(current_density + 6.0) * strongest.clamp(0.0, 1.0)
+}
+
+fn carver_intersects_vertical_range(
+    carver: BiomeSurfaceCarver,
+    sea_level: f32,
+    minimum_y: f32,
+    maximum_y: f32,
+) -> bool {
+    let BiomeSurfaceCarver::Tunnel {
+        length,
+        radius,
+        elevation,
+        ..
+    } = carver;
+    let maximum_vertical_half_span = length.max * 0.5 * MAXIMUM_TUNNEL_SLOPE;
+    let carver_minimum =
+        sea_level + elevation.min - radius.max - maximum_vertical_half_span;
+    let carver_maximum =
+        sea_level + elevation.max + radius.max + maximum_vertical_half_span;
+
+    carver_maximum >= minimum_y && carver_minimum <= maximum_y
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -210,4 +238,24 @@ fn mix_seed(mut seed: u64) -> u64 {
 
 fn smoothstep(value: f32) -> f32 {
     value * value * (3.0 - 2.0 * value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tunnel_range_rejects_chunks_that_cannot_intersect() {
+        let carver = BiomeSurfaceCarver::Tunnel {
+            spacing: 100.0,
+            chance: 1.0,
+            length: SurfaceCarverRange { min: 80.0, max: 120.0 },
+            radius: SurfaceCarverRange { min: 6.0, max: 10.0 },
+            elevation: SurfaceCarverRange { min: 10.0, max: 30.0 },
+            jitter: 20.0,
+        };
+
+        assert!(!carver_intersects_vertical_range(carver, 64.0, 0.0, 31.0));
+        assert!(carver_intersects_vertical_range(carver, 64.0, 64.0, 111.0));
+    }
 }
