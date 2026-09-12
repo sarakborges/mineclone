@@ -92,9 +92,10 @@ fn pending_priority(
     let horizontal_distance = (horizontal - center.xz()).length_squared();
     let vertical_distance = (coord.y - center.y).abs();
     let total_distance = (coord - center).length_squared();
+    let off_surface = if surface_distance > 0 { 1 } else { 0 };
 
     (
-        i32::from(surface_distance > 0),
+        off_surface,
         horizontal_distance,
         surface_distance,
         vertical_distance,
