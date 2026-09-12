@@ -1,6 +1,7 @@
 {
   "id": "asteria:sand",
   "name": "Sand",
+  "category": "natural_blocks",
   "textures": {
     "top": "textures/blocks/sand.png",
     "bottom": "textures/blocks/sand.png",

@@ -9,6 +9,7 @@ pub(crate) mod biome_surface_carver;
 pub(crate) mod biome_terrain;
 pub(crate) mod biome_terrain_modifier;
 pub(crate) mod block;
+pub(crate) mod block_category;
 pub(crate) mod block_id;
 pub(crate) mod block_orientation;
 pub(crate) mod builtin_ids;

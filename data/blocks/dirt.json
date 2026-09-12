@@ -1,6 +1,7 @@
 {
   "id": "asteria:dirt",
   "name": "Dirt",
+  "category": "natural_blocks",
   "textures": {
     "top": "textures/blocks/dirt.png",
     "bottom": "textures/blocks/dirt.png",

@@ -1,6 +1,7 @@
 {
   "id": "asteria:grass",
   "name": "Grass Block",
+  "category": "natural_blocks",
   "tint": "grass",
   "textures": {
     "top": "textures/blocks/grass/top.png",

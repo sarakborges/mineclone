@@ -2,10 +2,6 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
-    content::builtin_ids::{
-        DIRT_BLOCK_ID, GLASS_BLOCK_ID, GRASS_BLOCK_ID, LAMP_BLOCK_ID, OAK_LEAF_BLOCK_ID,
-        OAK_WOOD_BLOCK_ID, SAND_BLOCK_ID, STONE_BLOCK_ID,
-    },
     player::inventory::InventoryState,
 };
 
@@ -28,20 +24,10 @@ pub struct PlayerHotbar {
 
 impl Default for PlayerHotbar {
     fn default() -> Self {
-        let mut slots = [None; HOTBAR_SLOT_COUNT];
-        slots[0] = Some(GRASS_BLOCK_ID);
-        slots[1] = Some(DIRT_BLOCK_ID);
-        slots[2] = Some(STONE_BLOCK_ID);
-        slots[3] = Some(LAMP_BLOCK_ID);
-        slots[4] = Some(SAND_BLOCK_ID);
-        slots[5] = Some(OAK_WOOD_BLOCK_ID);
-        slots[6] = Some(OAK_LEAF_BLOCK_ID);
-        slots[7] = Some(GLASS_BLOCK_ID);
-
         Self {
             selected_slot: 0,
             backpack: [None; BACKPACK_SLOT_COUNT],
-            slots,
+            slots: [None; HOTBAR_SLOT_COUNT],
         }
     }
 }

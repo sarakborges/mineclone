@@ -1,6 +1,7 @@
 {
   "id": "asteria:lamp",
   "name": "Lamp Block",
+  "category": "light_sources",
   "textures": {
     "top": "textures/blocks/lamp.png",
     "bottom": "textures/blocks/lamp.png",
