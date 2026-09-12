@@ -26,13 +26,13 @@ const CONTROL_HEIGHT: f32 = 44.0;
 const RANDOM_SEED_BUTTON_WIDTH: f32 = 190.0;
 
 #[derive(Component)]
-struct SeedInput;
+pub(super) struct SeedInput;
 
 #[derive(Component)]
-struct SeedValueText;
+pub(super) struct SeedValueText;
 
 #[derive(Component)]
-struct RandomSeedButton;
+pub(super) struct RandomSeedButton;
 
 #[derive(Resource, Default)]
 pub(super) struct SeedInputState {
