@@ -11,14 +11,15 @@ use crate::world::feature_graph::FeatureGraph;
 use self::{
     path::{RiverEdgeSpec, add_curved_river_edge},
     selection::{
-        build_flow_cache, connected_lake_cells, drainage_reaches_water_destination,
-        selected_river_sources,
+        RiverSelection, build_flow_cache, connected_lake_cells,
+        drainage_reaches_water_destination, selected_river_sources,
     },
     water_bodies::{mountain_spring_body, plunge_pool_for_waterfall},
 };
 use super::{
     constants::RIVER_EDGE_MARGIN_CELLS,
-    drainage::DrainageNetwork,
+    drainage::{DrainageNetwork, DrainageNode},
+    math::{cell_hash, hash_unit, lerp},
     spatial::water_body_intersects_region,
     types::{HydrologySurfaceSample, WaterBody},
 };
@@ -112,6 +113,18 @@ where
                 .get(&downstream_cell)
                 .filter(|_| connected_lakes.contains(&downstream_cell))
                 .map(|lake| lake.water_level);
+            let (downstream, downstream_water_level, downstream_flow) = confluence_target(
+                cell,
+                downstream_cell,
+                downstream,
+                downstream_water_level,
+                flow,
+                downstream_flow,
+                seed,
+                &selection,
+                &flow_cache,
+                network,
+            );
             let waterfall = add_curved_river_edge(
                 &mut graph,
                 RiverEdgeSpec {
@@ -144,4 +157,56 @@ where
         graph,
         water_bodies,
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn confluence_target<F>(
+    source_cell: IVec2,
+    downstream_cell: IVec2,
+    downstream: DrainageNode,
+    downstream_water_level: Option<f32>,
+    flow: u32,
+    downstream_flow: u32,
+    seed: u64,
+    selection: &RiverSelection,
+    flow_cache: &HashMap<IVec2, u32>,
+    network: &mut DrainageNetwork<'_, F>,
+) -> (DrainageNode, Option<f32>, u32)
+where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    if downstream_water_level.is_some()
+        || downstream_flow <= flow
+        || !selection.channels.contains(&downstream_cell)
+    {
+        return (downstream, downstream_water_level, downstream_flow);
+    }
+
+    let Some(next_cell) = network.downstream_cell(downstream_cell) else {
+        return (downstream, downstream_water_level, downstream_flow);
+    };
+    if !selection.channels.contains(&next_cell) {
+        return (downstream, downstream_water_level, downstream_flow);
+    }
+
+    let next = network.node(next_cell);
+    let hash = cell_hash(source_cell, seed ^ 0x3c6e_f372_fe94_f82b);
+    let progress = lerp(0.18, 0.42, hash_unit(hash.rotate_left(31)));
+    let target = DrainageNode {
+        position: downstream.position.lerp(next.position, progress),
+        elevation: lerp(downstream.elevation, next.elevation, progress),
+        continentalness: lerp(
+            downstream.continentalness,
+            next.continentalness,
+            progress,
+        ),
+        biome_hydrology: downstream.biome_hydrology,
+    };
+    let target_flow = flow_cache
+        .get(&next_cell)
+        .copied()
+        .unwrap_or(downstream_flow)
+        .max(downstream_flow);
+
+    (target, None, target_flow)
 }
