@@ -6,6 +6,7 @@ use super::{
 };
 use crate::{
     app::game_state::GameState,
+    content::block::BlockRegistry,
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     voxel::world::VoxelWorld,
 };
@@ -59,6 +60,7 @@ fn spawn_highlight(
 fn update_highlight(
     targeted: Res<TargetedBlock>,
     hotbar: Res<PlayerHotbar>,
+    blocks: Res<BlockRegistry>,
     world: Res<VoxelWorld>,
     player: Single<&Transform, With<GameplayCamera>>,
     mut highlight: HighlightTarget,
@@ -68,7 +70,10 @@ fn update_highlight(
         return;
     };
 
-    let placement_preview_visible = hotbar.item_at(hotbar.selected_slot()).is_some()
+    let selected_block = hotbar
+        .item_at(hotbar.selected_slot())
+        .filter(|item_id| blocks.get(item_id).is_some());
+    let placement_preview_visible = selected_block.is_some()
         && placement_voxel(hit, &world, player.translation).is_some();
 
     if placement_preview_visible {
