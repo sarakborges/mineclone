@@ -141,36 +141,39 @@ pub(super) fn spawn_viewmodel(
                             item_visibility,
                         ))
                         .with_children(|held| {
-                            let Some(block_id) = selected_block_id else {
-                                return;
-                            };
-                            let block = content.blocks.get(block_id).unwrap_or_else(|| {
-                                panic!("hotbar references missing block: {block_id}")
+                            let selected_block = selected_block_id.and_then(|block_id| {
+                                content.blocks.get(block_id).map(|block| (block_id, block))
                             });
-                            let tint = block_tint_at(
-                                block.tint,
-                                tint_position,
-                                &content.biome_field,
-                                &content.biomes,
-                            );
+                            let tint = selected_block.map(|(_, block)| {
+                                block_tint_at(
+                                    block.tint,
+                                    tint_position,
+                                    &content.biome_field,
+                                    &content.biomes,
+                                )
+                            });
 
                             for &face in block_model.faces() {
                                 let material = block_materials.held_for_face(face);
-                                let Some(mut face_material) = materials.get_mut(&material) else {
-                                    continue;
-                                };
-                                *face_material = block_face_material_data(
-                                    face,
-                                    block,
-                                    &content.asset_server,
-                                    block_model.opacity(),
-                                );
-                                apply_block_display_shading(
-                                    &mut face_material,
-                                    face,
-                                    block_model.opacity(),
-                                );
-                                set_block_model_tint(&mut face_material, tint);
+                                if let Some((_, block)) = selected_block
+                                    && let Some(mut face_material) = materials.get_mut(&material)
+                                {
+                                    *face_material = block_face_material_data(
+                                        face,
+                                        block,
+                                        &content.asset_server,
+                                        block_model.opacity(),
+                                    );
+                                    apply_block_display_shading(
+                                        &mut face_material,
+                                        face,
+                                        block_model.opacity(),
+                                    );
+                                    set_block_model_tint(
+                                        &mut face_material,
+                                        tint.unwrap_or(Color::WHITE),
+                                    );
+                                }
 
                                 held.spawn((
                                     HeldBlockFace { face },
