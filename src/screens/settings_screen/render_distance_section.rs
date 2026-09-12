@@ -36,9 +36,14 @@ pub(super) fn graphics_section(
             ..default()
         },
         children![
-            typography::muted(
+            typography::setting_title(
                 localization
                     .text(language, "settings.renderDistance")
+                    .to_owned(),
+            ),
+            typography::caption(
+                localization
+                    .text(language, "settings.renderDistance.description")
                     .to_owned(),
             ),
             (
@@ -50,11 +55,6 @@ pub(super) fn graphics_section(
                 RenderDistanceValueText,
             ),
             render_distance_slider(chunks),
-            typography::caption(
-                localization
-                    .text(language, "settings.renderDistance.description")
-                    .to_owned(),
-            ),
         ],
     )
 }
