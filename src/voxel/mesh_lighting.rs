@@ -13,7 +13,12 @@ pub(super) struct FaceLighting {
     pub(super) ambient_occlusion: [f32; 4],
 }
 
-pub(super) fn face_lighting(world: &VoxelWorld, voxel: IVec3, face: BlockFace) -> FaceLighting {
+pub(super) fn face_lighting(
+    world: &VoxelWorld,
+    voxel: IVec3,
+    face: BlockFace,
+    neutralize_emissive_surface_light: bool,
+) -> FaceLighting {
     let (normal, tangent_a, tangent_b, signs) = face_basis(face);
     let base = voxel + normal;
     let emitted_block = normalize_rgb(world.light_at(voxel).block_rgb());
@@ -41,13 +46,25 @@ pub(super) fn face_lighting(world: &VoxelWorld, voxel: IVec3, face: BlockFace) -
             [base, side_a, side_b, corner],
         );
         let normalized_block = block_levels.map(normalize_level);
-
-        sky[index] = sky_levels.map(normalize_level);
-        block[index] = [
+        let resolved_block = [
             normalized_block[0].max(emitted_block[0]),
             normalized_block[1].max(emitted_block[1]),
             normalized_block[2].max(emitted_block[2]),
         ];
+
+        sky[index] = sky_levels.map(normalize_level);
+        block[index] = if neutralize_emissive_surface_light {
+            // A dyed emitter must color the light it sends into the world, not
+            // wash its entire authored texture with that same hue. Keep the
+            // emitter surface brightness from voxel light while letting the
+            // shader's grayscale/transparent mask decide which texels are dyed.
+            let brightness = resolved_block[0]
+                .max(resolved_block[1])
+                .max(resolved_block[2]);
+            [brightness; 3]
+        } else {
+            resolved_block
+        };
         ambient_occlusion[index] = AO_BRIGHTNESS[occlusion];
     }
 
