@@ -14,7 +14,7 @@ use navigation::{
 use render_distance_logic::{sync_render_distance_text, sync_slider_thumb};
 use world_settings_section::{handle_game_mode_buttons, sync_game_mode_buttons};
 
-mod game_rules_section;
+pub(crate) mod game_rules_section;
 mod languages_section;
 mod layout;
 mod miscellaneous_section;
