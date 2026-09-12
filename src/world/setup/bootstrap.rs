@@ -15,7 +15,7 @@ use crate::{
 
 use super::{WorldLoadingPhase, WorldLoadingState};
 use crate::world::{
-    InMemoryWorldSave, WorldLoadMode, WorldSeed,
+    InMemoryWorldSave, NewWorldConfig, WorldLoadMode, WorldSeed,
     biome_field::BiomeField,
     chunk_rendering::{FluidMaterials, TerrainMaterials},
     dimension::CurrentDimension,
@@ -34,6 +34,7 @@ pub(in crate::world) struct WorldLoadingInputs<'w> {
     current_dimension: Res<'w, CurrentDimension>,
     seed: Res<'w, WorldSeed>,
     load_mode: Res<'w, WorldLoadMode>,
+    new_world_config: Res<'w, NewWorldConfig>,
     render_distance: Res<'w, RenderDistanceSettings>,
     game_rules: ResMut<'w, GameRules>,
     dimensions: Res<'w, DimensionRegistry>,
@@ -105,7 +106,7 @@ pub(in crate::world) fn begin_world_loading(
 
     match *inputs.load_mode {
         WorldLoadMode::New => {
-            *inputs.game_rules = GameRules::default();
+            *inputs.game_rules = inputs.new_world_config.game_rules();
             commands.insert_resource(VoxelWorld::default());
             save.begin_new_world(
                 *inputs.seed,

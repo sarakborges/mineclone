@@ -11,8 +11,7 @@ use crate::{
         typography,
     },
     world::{
-        InMemoryWorldSave, WorldLoadMode, WorldSeed, biome::CurrentBiome,
-        dimension::CurrentDimension,
+        InMemoryWorldSave, WorldLoadMode, WorldSeed, dimension::CurrentDimension,
     },
 };
 
@@ -134,11 +133,7 @@ fn handle_menu_buttons(
 
         match action {
             StartingScreenAction::NewWorld => {
-                commands.insert_resource(CurrentDimension::default());
-                commands.insert_resource(CurrentBiome::default());
-                commands.insert_resource(WorldSeed::fresh());
-                commands.insert_resource(WorldLoadMode::New);
-                transition.request(ScreenTransitionTarget::game(GameState::Loading));
+                transition.request(ScreenTransitionTarget::game(GameState::NewWorld));
             }
             StartingScreenAction::LoadWorlds => {
                 let (Some(seed), Some(dimension_id)) = (save.seed(), save.dimension_id()) else {

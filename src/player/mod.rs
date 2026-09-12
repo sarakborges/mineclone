@@ -13,8 +13,8 @@ use crate::{
     app::game_state::GameState,
     content::{biome::BiomeRegistry, dimension::DimensionRegistry},
     world::{
-        InMemoryWorldSave, WorldLoadMode, biome_field::BiomeField, dimension::CurrentDimension,
-        terrain::surface_height,
+        InMemoryWorldSave, NewWorldConfig, WorldLoadMode, biome_field::BiomeField,
+        dimension::CurrentDimension, terrain::surface_height,
     },
 };
 use camera::GameplayCamera;
@@ -46,6 +46,7 @@ fn spawn_player(
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
     load_mode: Res<WorldLoadMode>,
+    new_world_config: Res<NewWorldConfig>,
     save: Res<InMemoryWorldSave>,
 ) {
     let translation = if *load_mode == WorldLoadMode::Load {
@@ -58,7 +59,7 @@ fn spawn_player(
     let game_mode = if *load_mode == WorldLoadMode::Load {
         save.player_game_mode(LOCAL_PLAYER_ID)
     } else {
-        GameMode::default()
+        new_world_config.game_mode()
     };
 
     commands.spawn((

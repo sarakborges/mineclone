@@ -20,6 +20,7 @@ mod lighting_updates;
 mod macro_climate;
 pub(crate) mod math;
 mod material_field;
+pub(crate) mod new_world;
 mod noise;
 mod render_diagnostics;
 pub(crate) mod render_distance;
@@ -43,6 +44,7 @@ use dimension::CurrentDimension;
 use fluid_updates::{PendingFluidUpdates, clear_fluid_updates, process_fluid_updates};
 use game_rules::GameRules;
 use lighting_updates::{clear_dynamic_lighting, process_dynamic_lighting};
+pub(crate) use new_world::NewWorldConfig;
 use render_diagnostics::log_render_asset_pressure;
 use render_distance::RenderDistanceSettings;
 pub(crate) use save::{InMemoryWorldSave, WorldLoadMode};
@@ -61,6 +63,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<WorldSeed>()
             .init_resource::<WorldLoadMode>()
             .init_resource::<InMemoryWorldSave>()
+            .init_resource::<NewWorldConfig>()
             .init_resource::<GameRules>()
             .init_resource::<WorldTickClock>()
             .init_resource::<RenderDistanceSettings>()
