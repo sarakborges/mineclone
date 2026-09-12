@@ -42,6 +42,8 @@ pub(super) fn sample_density_field(
         values: vec![0.0; CHUNK_VOLUME],
         volume: vec![None; CHUNK_VOLUME],
     };
+    let chunk_minimum_y = chunk_origin.y as f32 + 0.5;
+    let chunk_maximum_y = chunk_origin.y as f32 + CHUNK_SIZE as f32 - 0.5;
 
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
@@ -67,6 +69,8 @@ pub(super) fn sample_density_field(
                     biome_field,
                     biome_field.seed(),
                     sea_level,
+                    chunk_minimum_y,
+                    chunk_maximum_y,
                 )
             });
 
