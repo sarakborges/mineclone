@@ -127,6 +127,7 @@ fn desired_chunk_coords(
                 context.dimension,
                 context.biomes,
                 context.biome_field,
+                context.feature_fields,
             );
             let mut surrounding_minimum = own_minimum;
 
@@ -143,6 +144,7 @@ fn desired_chunk_coords(
                         context.dimension,
                         context.biomes,
                         context.biome_field,
+                        context.feature_fields,
                     );
                     surrounding_minimum = surrounding_minimum.min(neighbor_minimum);
                 }

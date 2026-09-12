@@ -4,7 +4,7 @@ use super::HydrologyRegion;
 use crate::world::hydrology::{
     constants::{
         LAKE_SHORE_OUTER_DISTANCE, LAKE_SHORE_SURFACE_OFFSET, OCEAN_EXTRA_DEPTH,
-        OCEAN_MINIMUM_DEPTH, RIVER_CARVE_STRENGTH,
+        OCEAN_MINIMUM_DEPTH, RIVER_CARVE_STRENGTH, SHORE_STRENGTH,
     },
     math::{lerp, ocean_strength, smoothstep},
     types::WaterBody,
@@ -66,7 +66,10 @@ impl HydrologyRegion {
     }
 
     fn density_column_profile(&self, horizontal: Vec2) -> DensityColumnProfile {
-        let river_sample = self.river_graph.sample_horizontal(horizontal);
+        let river_sample = self
+            .river_graph
+            .sample_horizontal(horizontal)
+            .filter(|sample| sample.strength > SHORE_STRENGTH);
         let (river, river_opening) = river_sample.map_or((None, 0.0), |sample| {
             let profile = smoothstep(sample.strength);
             let bed = sample.height - self.river_carve_depth * profile;

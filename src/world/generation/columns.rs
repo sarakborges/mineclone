@@ -7,11 +7,11 @@ use crate::{
 };
 
 pub(crate) struct GenerationColumnSample {
-    pub(super) surface_height: i32,
+    pub(crate) surface_height: i32,
     pub(super) surface_influences: Vec<(usize, f32)>,
 }
 
-pub(super) fn sample_generation_columns(
+pub(crate) fn sample_generation_columns(
     horizontal_chunk: IVec2,
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
