@@ -8,7 +8,7 @@ const AO_BRIGHTNESS: [f32; 4] = [1.0, 0.92, 0.84, 0.76];
 const PACKED_RGB_MAX: f32 = 16_777_215.0;
 
 pub(super) struct FaceLighting {
-    pub(super) sky: [[f32; 3]; 4],
+    pub(super) sky: [f32; 4],
     pub(super) block: [[f32; 3]; 4],
     pub(super) ambient_occlusion: [f32; 4],
 }
@@ -22,7 +22,7 @@ pub(super) fn face_lighting(
     let (normal, tangent_a, tangent_b, signs) = face_basis(face);
     let base = voxel + normal;
     let emitted_block = normalize_rgb(world.light_at(voxel).block_rgb());
-    let mut sky = [[0.0; 3]; 4];
+    let mut sky = [0.0; 4];
     let mut block = [[0.0; 3]; 4];
     let mut ambient_occlusion = [1.0; 4];
 
@@ -40,7 +40,7 @@ pub(super) fn face_lighting(
         } else {
             side_a_solid as usize + side_b_solid as usize + corner_solid as usize
         };
-        let (sky_levels, block_levels) = average_light_levels(
+        let (sky_level, block_levels) = average_light_levels(
             world,
             voxel,
             [base, side_a, side_b, corner],
@@ -52,12 +52,12 @@ pub(super) fn face_lighting(
             normalized_block[2].max(emitted_block[2]),
         ];
 
-        sky[index] = sky_levels.map(normalize_level);
+        // Skylight stays scalar at the mesh boundary. Packing a varying RGB
+        // triplet into one interpolated float makes the GPU interpolate the
+        // packed integer itself, so unpacking it per fragment creates visible
+        // color/brightness bands across otherwise flat voxel faces.
+        sky[index] = normalize_level(sky_level);
         block[index] = if neutralize_emissive_surface_light {
-            // A dyed emitter must color the light it sends into the world, not
-            // wash its entire authored texture with that same hue. Keep the
-            // emitter surface brightness from voxel light while letting the
-            // shader's grayscale/transparent mask decide which texels are dyed.
             let brightness = resolved_block[0]
                 .max(resolved_block[1])
                 .max(resolved_block[2]);
@@ -84,7 +84,7 @@ pub(super) fn push_lit_quad(
     lighting: FaceLighting,
 ) {
     let packed_tint = pack_rgb(tint);
-    let light_uvs = lighting.sky.map(|sky| [pack_rgb(sky), packed_tint]);
+    let light_uvs = lighting.sky.map(|sky| [sky, packed_tint]);
     let colors = std::array::from_fn(|index| {
         let block = lighting.block[index];
         [
@@ -113,8 +113,8 @@ fn average_light_levels(
     world: &VoxelWorld,
     source: IVec3,
     samples: [IVec3; 4],
-) -> ([f32; 3], [f32; 3]) {
-    let mut sky_total = [0.0; 3];
+) -> (f32, [f32; 3]) {
+    let mut sky_total = 0.0;
     let mut block_total = [0.0; 3];
     let mut count = 0_u32;
 
@@ -124,10 +124,9 @@ fn average_light_levels(
         }
 
         let light = world.light_at(position);
-        let sky = light.sky_rgb();
+        sky_total += light.sky() as f32;
         let block = light.block_rgb();
         for channel in 0..3 {
-            sky_total[channel] += sky[channel] as f32;
             block_total[channel] += block[channel] as f32;
         }
         count += 1;
@@ -135,19 +134,19 @@ fn average_light_levels(
 
     if count == 0 {
         if !world.is_loaded_at(source) {
-            return ([0.0; 3], [0.0; 3]);
+            return (0.0, [0.0; 3]);
         }
 
         let light = world.light_at(source);
         return (
-            light.sky_rgb().map(|level| level as f32),
+            light.sky() as f32,
             light.block_rgb().map(|level| level as f32),
         );
     }
 
     let count = count as f32;
     (
-        sky_total.map(|level| level / count),
+        sky_total / count,
         block_total.map(|level| level / count),
     )
 }
@@ -234,7 +233,7 @@ mod tests {
 
         assert_eq!(
             average_light_levels(&world, source, samples),
-            ([12.0; 3], [8.0, 2.0, 1.0]),
+            (12.0, [8.0, 2.0, 1.0]),
         );
     }
 }
