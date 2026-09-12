@@ -37,20 +37,37 @@ pub(super) fn game_rules_section(
     (
         Node {
             width: percent(100),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Stretch,
-            row_gap: px(12),
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::SpaceBetween,
+            column_gap: px(24),
             ..default()
         },
         children![
-            typography::muted(
-                localization
-                    .text(language, "settings.ticksBySecond")
-                    .to_owned(),
+            (
+                Node {
+                    flex_grow: 1.0,
+                    min_width: px(0),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(6),
+                    ..default()
+                },
+                children![
+                    typography::setting_title(
+                        localization
+                            .text(language, "settings.ticksBySecond")
+                            .to_owned(),
+                    ),
+                    typography::caption(
+                        localization
+                            .text(language, "settings.ticksBySecond.description")
+                            .to_owned(),
+                    ),
+                ],
             ),
             (
                 Node {
-                    width: percent(100),
+                    flex_shrink: 0.0,
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
                     column_gap: px(10),
@@ -61,11 +78,6 @@ pub(super) fn game_rules_section(
                     ticks_input(ticks_per_second),
                     step_button("+", TicksPerSecondStep::Increment),
                 ],
-            ),
-            typography::caption(
-                localization
-                    .text(language, "settings.ticksBySecond.description")
-                    .to_owned(),
             ),
         ],
     )
@@ -145,7 +157,7 @@ pub(super) fn handle_ticks_input(
         .any(|interaction| *interaction == Interaction::Pressed)
     {
         input_state.editing = true;
-        input_state.replace_on_next_digit = true;
+        input_state.replace_on_next_digit = false;
         input_state.buffer = game_rules.ticks_per_second().to_string();
     }
 }
