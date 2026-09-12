@@ -16,11 +16,26 @@ impl VoxelUpdateQueue {
         self.queue.enqueue(position)
     }
 
+    pub(crate) fn enqueue_priority(&mut self, position: IVec3) {
+        if position.y < 0 {
+            return;
+        }
+
+        self.queue.enqueue_front(position);
+    }
+
     pub(crate) fn enqueue_with_neighbors(&mut self, position: IVec3) {
         self.enqueue(position);
         for offset in CARDINAL_NEIGHBORS {
             self.enqueue(position + offset);
         }
+    }
+
+    pub(crate) fn enqueue_with_neighbors_priority(&mut self, position: IVec3) {
+        for offset in CARDINAL_NEIGHBORS {
+            self.enqueue_priority(position + offset);
+        }
+        self.enqueue_priority(position);
     }
 
     pub(crate) fn pop(&mut self) -> Option<IVec3> {
@@ -54,5 +69,14 @@ mod tests {
 
         assert!(positions.contains(&IVec3::ZERO));
         assert!(!positions.contains(&IVec3::NEG_Y));
+    }
+
+    #[test]
+    fn priority_edit_puts_the_edited_voxel_first() {
+        let mut queue = VoxelUpdateQueue::default();
+        queue.enqueue(IVec3::new(20, 4, 20));
+        queue.enqueue_with_neighbors_priority(IVec3::new(3, 4, 7));
+
+        assert_eq!(queue.pop(), Some(IVec3::new(3, 4, 7)));
     }
 }
