@@ -6,6 +6,7 @@ use crate::{
         biome::BiomeRegistry, block::BlockRegistry, block_orientation::BlockOrientation,
     },
     hud::block_icon::BlockIconMaterial,
+    localization::{ActiveLanguage, Language},
     player::{
         camera::GameplayCamera,
         hotbar::{HOTBAR_SLOT_COUNT, PlayerHotbar},
@@ -35,6 +36,7 @@ struct HotbarHudContent<'w> {
     blocks: Res<'w, BlockRegistry>,
     hotbar: Res<'w, PlayerHotbar>,
     inventory_state: Res<'w, State<InventoryState>>,
+    language: Res<'w, ActiveLanguage>,
 }
 
 pub struct HotbarHudPlugin;
@@ -84,6 +86,7 @@ fn spawn_hotbar(
         &content.asset_server,
         &content.blocks,
         &content.hotbar,
+        content.language.get(),
         visibility,
         &mut icon_materials,
     );
@@ -95,7 +98,7 @@ fn refresh_hotbar(
     roots: Query<Entity, With<HotbarHudRoot>>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
-    if !content.hotbar.is_changed() {
+    if !content.hotbar.is_changed() && !content.language.is_changed() {
         return;
     }
 
@@ -114,6 +117,7 @@ fn refresh_hotbar(
         &content.asset_server,
         &content.blocks,
         &content.hotbar,
+        content.language.get(),
         visibility,
         &mut icon_materials,
     );
@@ -124,13 +128,14 @@ fn spawn_hotbar_root(
     asset_server: &AssetServer,
     blocks: &BlockRegistry,
     hotbar: &PlayerHotbar,
+    language: Language,
     visibility: Visibility,
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
     let selected_name = hotbar
         .item_at(hotbar.selected_slot())
         .and_then(|block_id| blocks.get(block_id))
-        .map_or("", |block| block.name.as_str());
+        .map_or("", |block| block.name.text(language));
 
     commands
         .spawn((
