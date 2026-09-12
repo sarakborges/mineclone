@@ -13,10 +13,10 @@ use super::{
     water::UndergroundWaterRegion,
 };
 
-const MAX_CONNECTOR_LENGTH: f32 = 256.0;
-const MAX_CONNECTIONS_PER_ANCHOR: usize = 3;
-const MIN_TUNNEL_RADIUS: f32 = 3.0;
-const MAX_TUNNEL_RADIUS: f32 = 8.0;
+const MAX_CONNECTOR_LENGTH: f32 = 384.0;
+const MAX_EXTRA_CONNECTIONS_PER_ANCHOR: usize = 2;
+const MIN_TUNNEL_RADIUS: f32 = 5.0;
+const MAX_TUNNEL_RADIUS: f32 = 11.0;
 
 pub(super) const ANCHOR_SEARCH_MARGIN: f32 = MAX_CONNECTOR_LENGTH;
 
@@ -38,58 +38,111 @@ pub(super) fn build_connector_graph(
     let water_source_anchors = normalized_anchors(water_source_anchors);
     let mut graph = FeatureGraph::default();
     let mut connected_pairs = HashSet::new();
+    let mut candidates = Vec::new();
 
     for left in 0..anchors.len() {
-        let mut neighbors = anchors
-            .iter()
-            .enumerate()
-            .filter_map(|(right, position)| {
-                if left == right {
-                    return None;
-                }
-
-                let distance = anchors[left].distance(*position);
-                (distance > f32::EPSILON && distance <= MAX_CONNECTOR_LENGTH)
-                    .then_some((right, distance))
-            })
-            .collect::<Vec<_>>();
-        neighbors.sort_by(
-            |(left_index, left_distance), (right_index, right_distance)| {
-                left_distance
-                    .total_cmp(right_distance)
-                    .then_with(|| compare_vec3(&anchors[*left_index], &anchors[*right_index]))
-            },
-        );
-
-        for (right, _) in neighbors.into_iter().take(MAX_CONNECTIONS_PER_ANCHOR) {
-            let pair = ordered_pair(left, right);
-            if !connected_pairs.insert(pair) {
-                continue;
+        for right in left + 1..anchors.len() {
+            let distance = anchors[left].distance(anchors[right]);
+            if distance > f32::EPSILON && distance <= MAX_CONNECTOR_LENGTH {
+                candidates.push((left, right, distance));
             }
-
-            let from = anchors[pair.0];
-            let to = anchors[pair.1];
-            let carries_water = connection_carries_underground_water(
-                from,
-                to,
-                &underground_anchors,
-                &water_source_anchors,
-                water_seed,
-            );
-
-            add_connector(
-                &mut graph,
-                underground_water,
-                coord,
-                from,
-                to,
-                seed,
-                carries_water,
-            );
         }
     }
 
+    candidates.sort_by(|(left_a, right_a, distance_a), (left_b, right_b, distance_b)| {
+        distance_a
+            .total_cmp(distance_b)
+            .then_with(|| compare_vec3(&anchors[*left_a], &anchors[*left_b]))
+            .then_with(|| compare_vec3(&anchors[*right_a], &anchors[*right_b]))
+    });
+
+    let mut parents = (0..anchors.len()).collect::<Vec<_>>();
+    let mut extra_degree = vec![0_usize; anchors.len()];
+
+    // Build a minimum spanning forest first. Any anchors that can reach each other inside the
+    // connector search radius become one continuous tunnel network instead of disconnected
+    // nearest-neighbour clusters.
+    for &(left, right, _) in &candidates {
+        if !union_components(&mut parents, left, right) {
+            continue;
+        }
+
+        let pair = ordered_pair(left, right);
+        connected_pairs.insert(pair);
+        add_connector_pair(
+            &mut graph,
+            underground_water,
+            coord,
+            &anchors,
+            &underground_anchors,
+            &water_source_anchors,
+            pair,
+            seed,
+            water_seed,
+        );
+    }
+
+    // Add a small number of nearby alternate routes after connectivity is guaranteed. This keeps
+    // cave systems organic without producing dense webs or arbitrary dead-end branches.
+    for &(left, right, _) in &candidates {
+        let pair = ordered_pair(left, right);
+        if connected_pairs.contains(&pair)
+            || extra_degree[left] >= MAX_EXTRA_CONNECTIONS_PER_ANCHOR
+            || extra_degree[right] >= MAX_EXTRA_CONNECTIONS_PER_ANCHOR
+        {
+            continue;
+        }
+
+        connected_pairs.insert(pair);
+        extra_degree[left] += 1;
+        extra_degree[right] += 1;
+        add_connector_pair(
+            &mut graph,
+            underground_water,
+            coord,
+            &anchors,
+            &underground_anchors,
+            &water_source_anchors,
+            pair,
+            seed,
+            water_seed,
+        );
+    }
+
     graph
+}
+
+#[allow(clippy::too_many_arguments)]
+fn add_connector_pair(
+    graph: &mut FeatureGraph,
+    underground_water: &mut UndergroundWaterRegion,
+    coord: IVec3,
+    anchors: &[Vec3],
+    underground_anchors: &[Vec3],
+    water_source_anchors: &[Vec3],
+    pair: (usize, usize),
+    seed: u64,
+    water_seed: u64,
+) {
+    let from = anchors[pair.0];
+    let to = anchors[pair.1];
+    let carries_water = connection_carries_underground_water(
+        from,
+        to,
+        underground_anchors,
+        water_source_anchors,
+        water_seed,
+    );
+
+    add_connector(
+        graph,
+        underground_water,
+        coord,
+        from,
+        to,
+        seed,
+        carries_water,
+    );
 }
 
 fn connection_carries_underground_water(
@@ -176,6 +229,27 @@ fn ordered_pair(left: usize, right: usize) -> (usize, usize) {
     }
 }
 
+fn find_component(parents: &mut [usize], index: usize) -> usize {
+    if parents[index] == index {
+        return index;
+    }
+
+    let root = find_component(parents, parents[index]);
+    parents[index] = root;
+    root
+}
+
+fn union_components(parents: &mut [usize], left: usize, right: usize) -> bool {
+    let left_root = find_component(parents, left);
+    let right_root = find_component(parents, right);
+    if left_root == right_root {
+        return false;
+    }
+
+    parents[right_root] = left_root;
+    true
+}
+
 fn segment_intersects_region(
     from: Vec3,
     to: Vec3,
@@ -247,5 +321,26 @@ mod tests {
             &[ocean_opening],
             42,
         ));
+    }
+
+    #[test]
+    fn candidate_network_connects_reachable_anchor_chain() {
+        let anchors = [
+            Vec3::new(0.0, 30.0, 0.0),
+            Vec3::new(180.0, 30.0, 0.0),
+            Vec3::new(360.0, 30.0, 0.0),
+        ];
+        let mut water = UndergroundWaterRegion::default();
+        let graph = build_connector_graph(
+            IVec3::ZERO,
+            &anchors,
+            &anchors,
+            &[],
+            42,
+            84,
+            &mut water,
+        );
+
+        assert!(graph.edge_count() > 2);
     }
 }
