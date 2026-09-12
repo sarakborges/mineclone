@@ -33,7 +33,7 @@ use super::{
 
 const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 1;
 const STREAMING_LIGHT_BATCH_CHUNKS: usize = 1;
-const STREAMING_BUDGET: Duration = Duration::from_millis(5);
+const STREAMING_BUDGET: Duration = Duration::from_millis(3);
 
 #[derive(Resource, Default)]
 pub(super) struct ChunkStreamingState {
