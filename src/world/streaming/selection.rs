@@ -18,7 +18,7 @@ use super::{
 const HORIZONTAL_PRELOAD_CHUNKS: i32 = 1;
 const SURFACE_PADDING_ABOVE_CHUNKS: i32 = 1;
 const NEAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 4;
-const FAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 1;
+const FAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS: i32 = 4;
 
 pub(super) fn rebuild_queue(
@@ -156,6 +156,9 @@ fn desired_chunk_coords(
             let padding_below = if near_player {
                 NEAR_SURFACE_PADDING_BELOW_CHUNKS
             } else {
+                // Lakes can carve eighteen blocks below their source surface,
+                // already deeper than one chunk. Two support chunks prevent
+                // distant hydrology cuts from opening directly into unloaded void.
                 FAR_SURFACE_PADDING_BELOW_CHUNKS
             };
             let minimum_y =
