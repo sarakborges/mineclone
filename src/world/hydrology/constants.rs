@@ -18,7 +18,7 @@ pub(super) const RIVER_OCEAN_OUTLET_RADIUS_CELLS: i32 = 4;
 pub(super) const RIVER_ROUTE_VARIATION: f32 = 2.4;
 pub(super) const RIVER_FLOW_SEARCH_RADIUS: i32 = 6;
 pub(super) const RIVER_FLOW_TRACE_STEPS: usize = 64;
-pub(super) const RIVER_MINIMUM_FLOW: u32 = 3;
+pub(super) const RIVER_MINIMUM_FLOW: u32 = 2;
 pub(super) const RIVER_FLOW_FOR_MAX_WIDTH: f32 = 20.0;
 pub(super) const RIVER_MINIMUM_RADIUS: f32 = 5.5;
 pub(super) const RIVER_MAXIMUM_RADIUS: f32 = 11.0;
@@ -29,7 +29,7 @@ pub(super) const LAKE_MINIMUM_RADIUS: f32 = 48.0;
 pub(super) const LAKE_MAXIMUM_RADIUS: f32 = 112.0;
 pub(super) const LAKE_CARVE_DEPTH: f32 = 18.0;
 pub(super) const LAKE_MINIMUM_RELIEF: f32 = 0.25;
-pub(super) const LAKE_CHANCE: f32 = 0.38;
+pub(super) const LAKE_CHANCE: f32 = 0.62;
 pub(super) const LAKE_SHORE_OUTER_DISTANCE: f32 = 1.18;
 pub(super) const LAKE_SHORE_SURFACE_OFFSET: f32 = 0.9;
 

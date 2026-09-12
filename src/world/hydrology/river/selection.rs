@@ -14,9 +14,9 @@ use super::super::{
     types::{HydrologySurfaceSample, WaterBody},
 };
 
-const MOUNTAIN_SPRING_MINIMUM_HEIGHT_ABOVE_SEA: f32 = 30.0;
-const MOUNTAIN_SPRING_MINIMUM_LOCAL_RELIEF: f32 = 6.0;
-const MOUNTAIN_SPRING_CHANCE: f32 = 0.34;
+const MOUNTAIN_SPRING_MINIMUM_HEIGHT_ABOVE_SEA: f32 = 24.0;
+const MOUNTAIN_SPRING_MINIMUM_LOCAL_RELIEF: f32 = 5.0;
+const MOUNTAIN_SPRING_CHANCE: f32 = 0.52;
 
 pub(super) struct RiverSelection {
     pub(super) channels: HashSet<IVec2>,
@@ -24,8 +24,44 @@ pub(super) struct RiverSelection {
     pub(super) lakes: HashMap<IVec2, WaterBody>,
 }
 
-pub(super) fn drainage_reaches_ocean<F>(
+pub(super) fn connected_lake_cells<F>(
+    lakes: &HashMap<IVec2, WaterBody>,
+    network: &mut DrainageNetwork<'_, F>,
+) -> HashSet<IVec2>
+where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    let mut connected = HashSet::new();
+
+    for &start in lakes.keys() {
+        let mut current = start;
+
+        for _ in 0..RIVER_FLOW_TRACE_STEPS {
+            let Some(next) = network.downstream_cell(current) else {
+                break;
+            };
+            current = next;
+            let node = network.node(current);
+
+            if node.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD {
+                connected.insert(start);
+                break;
+            }
+
+            if current != start && lakes.contains_key(&current) {
+                connected.insert(start);
+                connected.insert(current);
+                break;
+            }
+        }
+    }
+
+    connected
+}
+
+pub(super) fn drainage_reaches_water_destination<F>(
     start: IVec2,
+    lake_cells: &HashSet<IVec2>,
     network: &mut DrainageNetwork<'_, F>,
     cache: &mut HashMap<IVec2, bool>,
 ) -> bool
@@ -38,7 +74,10 @@ where
 
     let mut path = Vec::new();
     let mut current = start;
-    let reaches_ocean = loop {
+    let reaches_destination = loop {
+        if current != start && lake_cells.contains(&current) {
+            break true;
+        }
         if let Some(&cached) = cache.get(&current) {
             break cached;
         }
@@ -60,10 +99,10 @@ where
     };
 
     for cell in path {
-        cache.insert(cell, reaches_ocean);
+        cache.insert(cell, reaches_destination);
     }
 
-    reaches_ocean
+    reaches_destination
 }
 
 pub(super) fn build_flow_cache<F>(

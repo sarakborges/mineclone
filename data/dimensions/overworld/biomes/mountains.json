@@ -45,12 +45,12 @@
   "surfaceCarvers": [
     {
       "type": "tunnel",
-      "spacing": 260.0,
-      "chance": 0.18,
-      "length": { "min": 70.0, "max": 130.0 },
-      "radius": { "min": 5.0, "max": 8.5 },
-      "elevation": { "min": 12.0, "max": 42.0 },
-      "jitter": 70.0
+      "spacing": 190.0,
+      "chance": 0.55,
+      "length": { "min": 90.0, "max": 170.0 },
+      "radius": { "min": 6.0, "max": 10.5 },
+      "elevation": { "min": 10.0, "max": 46.0 },
+      "jitter": 65.0
     }
   ],
   "surfaceLayers": [
@@ -59,7 +59,7 @@
   "hydrology": {
     "canGenerateLake": true,
     "canGenerateRiver": true,
-    "lakeChanceMultiplier": 0.55,
+    "lakeChanceMultiplier": 0.80,
     "riverWidthMultiplier": 0.75
   },
   "structures": [

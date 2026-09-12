@@ -10,7 +10,10 @@ use crate::world::feature_graph::FeatureGraph;
 
 use self::{
     path::{RiverEdgeSpec, add_curved_river_edge},
-    selection::{build_flow_cache, drainage_reaches_ocean, selected_river_sources},
+    selection::{
+        build_flow_cache, connected_lake_cells, drainage_reaches_water_destination,
+        selected_river_sources,
+    },
     water_bodies::{mountain_spring_body, plunge_pool_for_waterfall},
 };
 use super::{
@@ -39,28 +42,37 @@ where
     let mut water_bodies = Vec::new();
     let flow_cache = build_flow_cache(coord, network);
     let selection = selected_river_sources(&flow_cache, seed, sea_level, water_fluid, network);
-    let mut outlet_cache = HashMap::new();
+    let connected_lakes = connected_lake_cells(&selection.lakes, network);
+    let mut destination_cache = HashMap::new();
 
     for dz in -RIVER_EDGE_MARGIN_CELLS..=RIVER_EDGE_MARGIN_CELLS {
         for dx in -RIVER_EDGE_MARGIN_CELLS..=RIVER_EDGE_MARGIN_CELLS {
             let cell = coord + IVec2::new(dx, dz);
             let source = network.node(cell);
 
-            if source.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD
-                || !drainage_reaches_ocean(cell, network, &mut outlet_cache)
-            {
+            if source.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD {
                 continue;
             }
 
-            let Some(downstream_cell) = network.downstream_cell(cell) else {
+            let reaches_destination = connected_lakes.contains(&cell)
+                || drainage_reaches_water_destination(
+                    cell,
+                    &connected_lakes,
+                    network,
+                    &mut destination_cache,
+                );
+            if !reaches_destination {
                 continue;
-            };
-            let downstream = network.node(downstream_cell);
-            let flow = flow_cache.get(&cell).copied().unwrap_or(1);
+            }
+
             let spring = selection.springs.contains(&cell).then(|| {
                 mountain_spring_body(cell, source, seed, sea_level, water_fluid)
             });
-            let lake = selection.lakes.get(&cell).cloned();
+            let lake = selection
+                .lakes
+                .get(&cell)
+                .filter(|_| connected_lakes.contains(&cell))
+                .cloned();
 
             if let Some(body) = spring
                 .or(lake)
@@ -73,7 +85,22 @@ where
                 continue;
             }
 
+            let Some(downstream_cell) = network.downstream_cell(cell) else {
+                continue;
+            };
+            let downstream = network.node(downstream_cell);
+            let flow = flow_cache.get(&cell).copied().unwrap_or(1);
             let downstream_flow = flow_cache.get(&downstream_cell).copied().unwrap_or(flow);
+            let source_water_level = selection
+                .lakes
+                .get(&cell)
+                .filter(|_| connected_lakes.contains(&cell))
+                .map(|lake| lake.water_level);
+            let downstream_water_level = selection
+                .lakes
+                .get(&downstream_cell)
+                .filter(|_| connected_lakes.contains(&downstream_cell))
+                .map(|lake| lake.water_level);
             let waterfall = add_curved_river_edge(
                 &mut graph,
                 RiverEdgeSpec {
@@ -81,11 +108,8 @@ where
                     source_cell: cell,
                     source,
                     downstream,
-                    source_water_level: selection.lakes.get(&cell).map(|lake| lake.water_level),
-                    downstream_water_level: selection
-                        .lakes
-                        .get(&downstream_cell)
-                        .map(|lake| lake.water_level),
+                    source_water_level,
+                    downstream_water_level,
                     flow,
                     downstream_flow,
                     seed,
