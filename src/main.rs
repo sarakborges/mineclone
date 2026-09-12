@@ -19,6 +19,7 @@ mod world;
 
 use app::{
     crash_log::{install_crash_logger, mark_clean_shutdown, write_caught_panic},
+    game_config::GameConfigPlugin,
     game_state::GameState,
     pause_state::PauseState,
     runtime_paths::prepare_runtime_directory,
@@ -71,6 +72,7 @@ fn run_game() {
         .insert_resource(ClearColor(Color::srgb(0.02, 0.025, 0.04)))
         .add_plugins((
             WindowIconPlugin,
+            GameConfigPlugin,
             UiDesignSystemPlugin,
             LocalizationPlugin,
             ContentPlugin,
