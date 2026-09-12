@@ -41,7 +41,7 @@ pub(super) fn miscellaneous_section(
                     ..default()
                 },
                 children![
-                    typography::muted(
+                    typography::setting_title(
                         localization
                             .text(language, "settings.displayTooltips")
                             .to_owned(),
