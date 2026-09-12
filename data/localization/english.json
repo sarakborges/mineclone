@@ -27,5 +27,6 @@
   "inventory.everything": "Everything",
   "hud.rotateBlock": "Press R to rotate block",
   "hud.light": "Light",
-  "hud.day": "Day"
+  "hud.day": "Day",
+  "hud.coordinates": "X: {x} | Z: {z} | Y: {y}"
 }
