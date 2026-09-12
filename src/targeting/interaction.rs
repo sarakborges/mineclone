@@ -13,9 +13,7 @@ use crate::{
         texture_rotation::TextureRotation, world::VoxelWorld,
     },
     world::{
-        chunk_remesh::ChunkRemeshQueue,
-        chunk_rendering::refresh_chunk_mesh,
-        chunk_system_params::{ChunkContent, ChunkRenderer},
+        chunk_remesh::ChunkRemeshQueue, chunk_system_params::ChunkContent,
         fluid_updates::PendingFluidUpdates,
     },
 };
@@ -71,7 +69,6 @@ fn edit_targeted_block(
     mut tool_uses: MessageWriter<ToolUse>,
     mut viewmodel_animation: ResMut<ViewModelAnimation>,
     mut world: ResMut<VoxelWorld>,
-    mut renderer: ChunkRenderer,
     mut lighting: ResMut<PendingLightingUpdates>,
     mut fluid_updates: ResMut<PendingFluidUpdates>,
     mut remesh_queue: ResMut<ChunkRemeshQueue>,
@@ -108,15 +105,8 @@ fn edit_targeted_block(
         return;
     };
 
-    let (edited_chunk, edited_voxel, placed, previous_cell, next_cell) = if left_pressed {
-        let previous = world.cell_at(hit.voxel);
-        (
-            world.set_block_at(hit.voxel, None),
-            hit.voxel,
-            false,
-            previous,
-            None,
-        )
+    let (edited_chunk, edited_voxel, placed) = if left_pressed {
+        (world.set_block_at(hit.voxel, None), hit.voxel, false)
     } else {
         let Some(block_id) = selected_item else {
             return;
@@ -130,15 +120,8 @@ fn edit_targeted_block(
         let texture_rotation = TextureRotation::for_position(voxel, block.rotate_texture.any());
         let orientation = input.placement_orientation.for_block(selected_slot, block);
         let cell = VoxelCell::oriented(block_id, texture_rotation, orientation);
-        let previous = world.cell_at(voxel);
 
-        (
-            world.set_block_at(voxel, Some(cell)),
-            voxel,
-            true,
-            previous,
-            Some(cell),
-        )
+        (world.set_block_at(voxel, Some(cell)), voxel, true)
     };
 
     let Some(coord) = edited_chunk else {
@@ -148,25 +131,11 @@ fn edit_targeted_block(
     lighting.enqueue_voxel_edit(edited_voxel);
     fluid_updates.enqueue_voxel_edit(edited_voxel);
 
-    let transparency_changed = block_uses_transparency(previous_cell, &content.blocks)
-        || block_uses_transparency(next_cell, &content.blocks);
-    if transparency_changed {
-        let render_context = content.render_context(
-            &world,
-            &renderer.terrain_materials,
-            &renderer.fluid_materials,
-        );
-        refresh_chunk_mesh(
-            &mut renderer.commands,
-            &mut renderer.meshes,
-            &mut renderer.pool,
-            coord,
-            &render_context,
-        );
-        remesh_queue.enqueue_voxel_edit_neighbors(coord);
-    } else {
-        remesh_queue.enqueue_voxel_edit(coord);
-    }
+    // Geometry, face exposure, shadow casters and baked voxel lighting all
+    // converge through the same post-lighting remesh path. The old transparent
+    // fast-path rebuilt glass before lighting had updated, which could leave the
+    // edited chunk stale until a later neighboring edit.
+    remesh_queue.enqueue_voxel_edit(coord);
 
     if placed {
         viewmodel_animation.play_place();
@@ -175,9 +144,4 @@ fn edit_targeted_block(
     }
 
     input.targeted.0 = None;
-}
-
-fn block_uses_transparency(cell: Option<VoxelCell>, blocks: &BlockRegistry) -> bool {
-    cell.and_then(|cell| blocks.get(cell.block_id))
-        .is_some_and(|block| block.alpha_blend || block.alpha_cutoff.is_some())
 }
