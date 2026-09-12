@@ -40,6 +40,8 @@ use self::{
 };
 pub(crate) use self::columns::GenerationColumnSample;
 
+const LOCAL_EMPTY_HEADROOM_CHUNKS: i32 = 2;
+
 pub(crate) struct ChunkGenerationContext<'a> {
     pub(crate) blocks: &'a BlockRegistry,
     pub(crate) fluids: &'a FluidRegistry,
@@ -113,6 +115,33 @@ pub(crate) fn generate_chunk(
 
     let chunk_origin = chunk_origin(chunk_coord);
     let horizontal_chunk = chunk_coord.xz();
+    let columns = context.feature_fields.generation_columns(horizontal_chunk, || {
+        sample_generation_columns(
+            horizontal_chunk,
+            context.dimension,
+            context.biomes,
+            context.biome_field,
+        )
+    });
+    let local_surface_chunk = columns
+        .iter()
+        .map(|column| column.surface_height)
+        .max()
+        .unwrap_or(1)
+        .max(context.dimension.sea_level)
+        .div_euclid(CHUNK_SIZE as i32);
+    let structure_allowance = maximum_structure_vertical_chunk_allowance(context.structures);
+
+    // Most volume modifiers only carve existing terrain. Avoid constructing a
+    // hydrology/cave/volume region for chunks that are well above any local
+    // surface, while retaining two full chunks of headroom for high lake water,
+    // biome transitions and structures reaching in from neighboring columns.
+    if chunk_coord.y > local_surface_chunk + structure_allowance + LOCAL_EMPTY_HEADROOM_CHUNKS
+        && !context.biomes.has_volume_solid_density_modifiers()
+    {
+        return VoxelChunk::empty();
+    }
+
     let region_coord = generation_region_coord(chunk_coord);
     let region = context.region(region_coord);
     let volume_region = context
@@ -127,14 +156,6 @@ pub(crate) fn generate_chunk(
     let chunk_maximum = chunk_minimum + Vec3::splat(CHUNK_SIZE as f32);
     let chunk_volume_region = volume_region.restricted_to_bounds(chunk_minimum, chunk_maximum);
     let anchored_caves = context.anchored_caves(region.as_ref());
-    let columns = context.feature_fields.generation_columns(horizontal_chunk, || {
-        sample_generation_columns(
-            horizontal_chunk,
-            context.dimension,
-            context.biomes,
-            context.biome_field,
-        )
-    });
     let density = sample_density_field(
         chunk_origin,
         columns.as_ref(),
