@@ -1,5 +1,6 @@
 pub(crate) mod button;
 pub(crate) mod cosmic_background;
+pub(crate) mod scrollbar;
 pub(crate) mod surface;
 pub(crate) mod theme;
 pub(crate) mod transition;
@@ -20,6 +21,7 @@ impl Plugin for UiDesignSystemPlugin {
                     cosmic_background::animate_stars,
                     transition::animate_screen_transition,
                 ),
-            );
+            )
+            .add_systems(Last, scrollbar::sync_auto_scrollbars);
     }
 }

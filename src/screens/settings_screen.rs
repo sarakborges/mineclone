@@ -21,7 +21,6 @@ mod miscellaneous_section;
 mod navigation;
 mod render_distance_logic;
 mod render_distance_section;
-mod scroll_area;
 mod world_settings_section;
 
 pub struct SettingsScreenPlugin;

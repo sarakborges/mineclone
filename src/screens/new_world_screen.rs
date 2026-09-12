@@ -1,12 +1,13 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, ui_widgets::ScrollArea};
 
 use crate::{
     app::game_state::GameState,
     localization::{ActiveLanguage, Language, UiLocalization},
     player::game_mode::GameMode,
     ui::{
-        button::menu_button,
+        button::{menu_button, sidebar_menu_button},
         cosmic_background::{self, STAR_FIELD},
+        scrollbar::vertical_scrollbar,
         surface, theme,
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
@@ -22,16 +23,17 @@ const SIDEBAR_WIDTH: f32 = 280.0;
 const HEADER_HEIGHT: f32 = 116.0;
 const FOOTER_HEIGHT: f32 = 104.0;
 const COLUMN_GAP: f32 = 22.0;
+const SIDEBAR_BUTTON_GAP: f32 = 11.0;
 const CONTROL_HEIGHT: f32 = 44.0;
 const STEP_BUTTON_SIZE: f32 = 44.0;
-const TICKS_INPUT_WIDTH: f32 = 124.0;
+const TICKS_INPUT_WIDTH: f32 = 180.0;
+const RANDOM_SEED_BUTTON_WIDTH: f32 = 190.0;
 
 pub(crate) struct NewWorldScreenPlugin;
 
 impl Plugin for NewWorldScreenPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<NewWorldConfig>()
-            .init_resource::<NewWorldSectionSelection>()
+        app.init_resource::<NewWorldSectionSelection>()
             .init_resource::<SeedInputState>()
             .init_resource::<TicksInputState>()
             .add_systems(
@@ -43,12 +45,13 @@ impl Plugin for NewWorldScreenPlugin {
                 (
                     handle_section_buttons,
                     handle_seed_focus,
-                    handle_seed_keyboard,
+                    handle_random_seed,
                     handle_game_mode_buttons,
                     handle_ticks_step_buttons,
                     handle_ticks_focus,
-                    handle_ticks_keyboard,
                     handle_footer_buttons,
+                    handle_seed_keyboard,
+                    handle_ticks_keyboard,
                     sync_section_ui,
                     sync_seed_text,
                     sync_game_mode_buttons,
@@ -102,6 +105,9 @@ struct SeedInput;
 
 #[derive(Component)]
 struct SeedValueText;
+
+#[derive(Component)]
+struct RandomSeedButton;
 
 #[derive(Resource, Default)]
 struct SeedInputState {
@@ -183,6 +189,7 @@ fn spawn_new_world_screen(
             },
             BackgroundColor(theme::SCREEN_BACKGROUND),
             theme::cosmic_background_gradient(),
+            GlobalZIndex(500),
         ))
         .with_children(|root| {
             for &spec in STAR_FIELD {
@@ -229,48 +236,8 @@ fn spawn_new_world_screen(
                     ..default()
                 })
                 .with_children(|columns| {
-                    columns
-                        .spawn(surface::settings_sidebar(SIDEBAR_WIDTH))
-                        .with_children(|sidebar| {
-                            sidebar.spawn(section_button(
-                                NewWorldSection::General,
-                                selection.selected == NewWorldSection::General,
-                                &localization,
-                                language,
-                            ));
-                            sidebar.spawn(section_button(
-                                NewWorldSection::GameRules,
-                                selection.selected == NewWorldSection::GameRules,
-                                &localization,
-                                language,
-                            ));
-                        });
-
-                    columns
-                        .spawn(surface::settings_content())
-                        .with_children(|content| {
-                            content
-                                .spawn((
-                                    NewWorldSectionPanel(NewWorldSection::General),
-                                    panel_node(selection.selected == NewWorldSection::General),
-                                ))
-                                .with_child(general_section(
-                                    &config,
-                                    &localization,
-                                    language,
-                                ));
-
-                            content
-                                .spawn((
-                                    NewWorldSectionPanel(NewWorldSection::GameRules),
-                                    panel_node(selection.selected == NewWorldSection::GameRules),
-                                ))
-                                .with_child(game_rules_section(
-                                    config.game_rules().ticks_per_second(),
-                                    &localization,
-                                    language,
-                                ));
-                        });
+                    spawn_sidebar(columns, &localization, language);
+                    spawn_content(columns, &config, &localization, language, selection.selected);
                 });
             });
 
@@ -301,48 +268,160 @@ fn spawn_new_world_screen(
         });
 }
 
-fn section_button(
-    section: NewWorldSection,
-    active: bool,
+fn spawn_sidebar(
+    columns: &mut ChildSpawnerCommands,
     localization: &UiLocalization,
     language: Language,
-) -> impl Bundle {
-    (
-        Button,
-        NewWorldSectionButton(section),
-        Node {
-            width: percent(100),
-            min_height: px(48),
-            padding: UiRect::axes(px(16), px(10)),
-            align_items: AlignItems::Center,
-            border_radius: BorderRadius::all(px(7)),
-            ..default()
-        },
-        BackgroundColor(section_button_background(active, Interaction::None)),
-        children![(
-            typography::button_label(
-                localization
-                    .text(language, section.localization_key())
-                    .to_owned(),
-            ),
-            NewWorldSectionButtonLabel(section),
-        )],
-    )
+) {
+    columns
+        .spawn(surface::settings_sidebar(SIDEBAR_WIDTH))
+        .with_children(|sidebar| {
+            sidebar
+                .spawn(Node {
+                    display: Display::Grid,
+                    width: percent(100),
+                    height: percent(100),
+                    min_height: px(0),
+                    grid_template_columns: vec![
+                        RepeatedGridTrack::flex(1, 1.0),
+                        RepeatedGridTrack::auto(1),
+                    ],
+                    ..default()
+                })
+                .with_children(|frame| {
+                    let scroll_area_id = frame
+                        .spawn((
+                            Node {
+                                width: percent(100),
+                                height: percent(100),
+                                min_height: px(0),
+                                padding: UiRect::right(px(12)),
+                                flex_direction: FlexDirection::Column,
+                                align_items: AlignItems::Stretch,
+                                row_gap: px(SIDEBAR_BUTTON_GAP),
+                                overflow: Overflow::scroll_y(),
+                                ..default()
+                            },
+                            ScrollPosition(Vec2::ZERO),
+                            ScrollArea,
+                        ))
+                        .with_children(|list| {
+                            list.spawn(section_button(
+                                NewWorldSection::General,
+                                localization,
+                                language,
+                            ));
+                            list.spawn(section_button(
+                                NewWorldSection::GameRules,
+                                localization,
+                                language,
+                            ));
+                        })
+                        .id();
+
+                    frame.spawn(vertical_scrollbar(scroll_area_id));
+                });
+        });
 }
 
-fn general_section(
+fn spawn_content(
+    columns: &mut ChildSpawnerCommands,
     config: &NewWorldConfig,
     localization: &UiLocalization,
     language: Language,
+    selected: NewWorldSection,
+) {
+    columns
+        .spawn(surface::settings_content())
+        .with_children(|content| {
+            content
+                .spawn(Node {
+                    display: Display::Grid,
+                    width: percent(100),
+                    height: percent(100),
+                    min_height: px(0),
+                    grid_template_columns: vec![
+                        RepeatedGridTrack::flex(1, 1.0),
+                        RepeatedGridTrack::auto(1),
+                    ],
+                    ..default()
+                })
+                .with_children(|frame| {
+                    let scroll_area_id = frame
+                        .spawn((
+                            Node {
+                                width: percent(100),
+                                height: percent(100),
+                                min_height: px(0),
+                                padding: UiRect::right(px(14)),
+                                flex_direction: FlexDirection::Column,
+                                align_items: AlignItems::Stretch,
+                                overflow: Overflow::scroll_y(),
+                                ..default()
+                            },
+                            ScrollPosition(Vec2::ZERO),
+                            ScrollArea,
+                        ))
+                        .with_children(|panels| {
+                            panels
+                                .spawn((
+                                    NewWorldSectionPanel(NewWorldSection::General),
+                                    panel_node(selected == NewWorldSection::General),
+                                ))
+                                .with_children(|panel| {
+                                    spawn_general_content(panel, config, localization, language);
+                                });
+
+                            panels
+                                .spawn((
+                                    NewWorldSectionPanel(NewWorldSection::GameRules),
+                                    panel_node(selected == NewWorldSection::GameRules),
+                                ))
+                                .with_children(|panel| {
+                                    spawn_game_rules_content(
+                                        panel,
+                                        config.game_rules().ticks_per_second(),
+                                        localization,
+                                        language,
+                                    );
+                                });
+                        })
+                        .id();
+
+                    frame.spawn(vertical_scrollbar(scroll_area_id));
+                });
+        });
+}
+
+fn section_button(
+    section: NewWorldSection,
+    localization: &UiLocalization,
+    language: Language,
 ) -> impl Bundle {
-    (
-        surface::settings_section(),
+    sidebar_menu_button(
+        localization
+            .text(language, section.localization_key())
+            .to_owned(),
+        NewWorldSectionButton(section),
+        NewWorldSectionButtonLabel(section),
+    )
+}
+
+fn spawn_general_content(
+    panel: &mut ChildSpawnerCommands,
+    config: &NewWorldConfig,
+    localization: &UiLocalization,
+    language: Language,
+) {
+    panel.spawn((
+        Node {
+            width: percent(100),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Stretch,
+            row_gap: px(24),
+            ..default()
+        },
         children![
-            typography::heading(
-                localization
-                    .text(language, "newWorld.section.general")
-                    .to_owned(),
-            ),
             (
                 Node {
                     width: percent(100),
@@ -352,7 +431,25 @@ fn general_section(
                 },
                 children![
                     typography::muted(localization.text(language, "newWorld.seed").to_owned()),
-                    seed_input(config.seed().0),
+                    (
+                        Node {
+                            width: percent(100),
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            column_gap: px(12),
+                            ..default()
+                        },
+                        children![
+                            seed_input(config.seed().0),
+                            compact_button(
+                                localization
+                                    .text(language, "newWorld.randomSeed")
+                                    .to_owned(),
+                                RandomSeedButton,
+                                RANDOM_SEED_BUTTON_WIDTH,
+                            ),
+                        ],
+                    ),
                 ],
             ),
             (
@@ -393,7 +490,49 @@ fn general_section(
                 ],
             ),
         ],
-    )
+    ));
+}
+
+fn spawn_game_rules_content(
+    panel: &mut ChildSpawnerCommands,
+    ticks_per_second: u32,
+    localization: &UiLocalization,
+    language: Language,
+) {
+    panel.spawn((
+        Node {
+            width: percent(100),
+            flex_direction: FlexDirection::Column,
+            row_gap: px(12),
+            ..default()
+        },
+        children![
+            typography::muted(
+                localization
+                    .text(language, "settings.ticksBySecond")
+                    .to_owned(),
+            ),
+            (
+                Node {
+                    width: percent(100),
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    column_gap: px(10),
+                    ..default()
+                },
+                children![
+                    ticks_step_button("−", TicksStep::Decrement),
+                    ticks_input(ticks_per_second),
+                    ticks_step_button("+", TicksStep::Increment),
+                ],
+            ),
+            typography::caption(
+                localization
+                    .text(language, "settings.ticksBySecond.description")
+                    .to_owned(),
+            ),
+        ],
+    ));
 }
 
 fn seed_input(seed: u64) -> impl Bundle {
@@ -401,20 +540,39 @@ fn seed_input(seed: u64) -> impl Bundle {
         Button,
         SeedInput,
         Node {
-            width: percent(100),
+            flex_grow: 1.0,
+            min_width: px(0),
             height: px(CONTROL_HEIGHT),
             border: UiRect::all(px(1)),
             padding: UiRect::axes(px(14), px(0)),
             align_items: AlignItems::Center,
+            justify_content: JustifyContent::FlexStart,
             border_radius: BorderRadius::all(px(7)),
             ..default()
         },
         BackgroundColor(Color::srgba(0.045, 0.035, 0.09, 0.88)),
-        BorderColor::all(Color::srgba(0.43, 0.36, 0.68, 0.72)),
+        BorderColor::all(input_border(false)),
         children![(
             typography::button_label(seed.to_string()),
             SeedValueText,
         )],
+    )
+}
+
+fn compact_button<A: Component>(label: impl Into<String>, action: A, width: f32) -> impl Bundle {
+    (
+        Button,
+        action,
+        Node {
+            width: px(width),
+            height: px(CONTROL_HEIGHT),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            border_radius: BorderRadius::all(px(7)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.20, 0.14, 0.38, 0.72)),
+        children![typography::button_label(label)],
     )
 }
 
@@ -438,57 +596,6 @@ fn game_mode_button(
         },
         BackgroundColor(game_mode_button_background(active, Interaction::None)),
         children![(typography::button_label(label), GameModeButtonLabel(mode))],
-    )
-}
-
-fn game_rules_section(
-    ticks_per_second: u32,
-    localization: &UiLocalization,
-    language: Language,
-) -> impl Bundle {
-    (
-        surface::settings_section(),
-        children![
-            typography::heading(
-                localization
-                    .text(language, "settings.section.gameRules")
-                    .to_owned(),
-            ),
-            (
-                Node {
-                    width: percent(100),
-                    flex_direction: FlexDirection::Column,
-                    row_gap: px(12),
-                    ..default()
-                },
-                children![
-                    typography::muted(
-                        localization
-                            .text(language, "settings.ticksBySecond")
-                            .to_owned(),
-                    ),
-                    (
-                        Node {
-                            width: percent(100),
-                            flex_direction: FlexDirection::Row,
-                            align_items: AlignItems::Center,
-                            column_gap: px(10),
-                            ..default()
-                        },
-                        children![
-                            ticks_step_button("−", TicksStep::Decrement),
-                            ticks_input(ticks_per_second),
-                            ticks_step_button("+", TicksStep::Increment),
-                        ],
-                    ),
-                    typography::caption(
-                        localization
-                            .text(language, "settings.ticksBySecond.description")
-                            .to_owned(),
-                    ),
-                ],
-            ),
-        ],
     )
 }
 
@@ -517,13 +624,14 @@ fn ticks_input(value: u32) -> impl Bundle {
             width: px(TICKS_INPUT_WIDTH),
             height: px(CONTROL_HEIGHT),
             border: UiRect::all(px(1)),
+            padding: UiRect::axes(px(14), px(0)),
             align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
+            justify_content: JustifyContent::FlexStart,
             border_radius: BorderRadius::all(px(7)),
             ..default()
         },
         BackgroundColor(Color::srgba(0.045, 0.035, 0.09, 0.88)),
-        BorderColor::all(Color::srgba(0.43, 0.36, 0.68, 0.72)),
+        BorderColor::all(input_border(false)),
         children![(
             typography::button_label(value.to_string()),
             TicksValueText,
@@ -570,6 +678,20 @@ fn handle_seed_focus(
     }
 }
 
+fn handle_random_seed(
+    interactions: Query<&Interaction, (Changed<Interaction>, With<RandomSeedButton>)>,
+    mut config: ResMut<NewWorldConfig>,
+    mut input: ResMut<SeedInputState>,
+) {
+    if interactions
+        .iter()
+        .any(|interaction| *interaction == Interaction::Pressed)
+    {
+        config.set_seed(WorldSeed::fresh().0);
+        *input = SeedInputState::default();
+    }
+}
+
 fn handle_seed_keyboard(
     keys: Res<ButtonInput<KeyCode>>,
     mut config: ResMut<NewWorldConfig>,
@@ -579,14 +701,17 @@ fn handle_seed_keyboard(
         return;
     }
 
-    if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Escape) {
+    if keys.just_pressed(KeyCode::Enter)
+        || keys.just_pressed(KeyCode::NumpadEnter)
+        || keys.just_pressed(KeyCode::Escape)
+    {
         input.editing = false;
         input.replace_on_next_digit = false;
         input.buffer.clear();
         return;
     }
 
-    if keys.just_pressed(KeyCode::Backspace) {
+    if keys.just_pressed(KeyCode::Backspace) || keys.just_pressed(KeyCode::NumpadBackspace) {
         if input.replace_on_next_digit {
             input.buffer.clear();
             input.replace_on_next_digit = false;
@@ -609,10 +734,12 @@ fn handle_seed_keyboard(
         };
         next.push(digit);
 
-        if next.parse::<u64>().is_ok() {
+        if next.len() <= 20
+            && let Ok(value) = next.parse::<u64>()
+        {
             input.buffer = next;
             input.replace_on_next_digit = false;
-            apply_seed_buffer(&input.buffer, &mut config);
+            config.set_seed(value);
         }
         break;
     }
@@ -645,9 +772,7 @@ fn handle_ticks_step_buttons(
             TicksStep::Increment => current.saturating_add(1),
         };
         config.set_ticks_per_second(next);
-        input.editing = false;
-        input.replace_on_next_digit = false;
-        input.buffer.clear();
+        *input = TicksInputState::default();
     }
 }
 
@@ -675,14 +800,17 @@ fn handle_ticks_keyboard(
         return;
     }
 
-    if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Escape) {
+    if keys.just_pressed(KeyCode::Enter)
+        || keys.just_pressed(KeyCode::NumpadEnter)
+        || keys.just_pressed(KeyCode::Escape)
+    {
         input.editing = false;
         input.replace_on_next_digit = false;
         input.buffer.clear();
         return;
     }
 
-    if keys.just_pressed(KeyCode::Backspace) {
+    if keys.just_pressed(KeyCode::Backspace) || keys.just_pressed(KeyCode::NumpadBackspace) {
         if input.replace_on_next_digit {
             input.buffer.clear();
             input.replace_on_next_digit = false;
@@ -705,7 +833,8 @@ fn handle_ticks_keyboard(
         };
         next.push(digit);
 
-        if let Ok(value) = next.parse::<u32>()
+        if next.len() <= 10
+            && let Ok(value) = next.parse::<u32>()
             && value > 0
         {
             input.buffer = next;
@@ -729,11 +858,10 @@ fn handle_footer_buttons(
         (*interaction == Interaction::Pressed).then_some(*action)
     });
 
-    let escape_pressed = keys.just_pressed(KeyCode::Escape)
-        && !seed_input.editing
-        && !ticks_input.editing;
-
-    if escape_pressed || matches!(action, Some(NewWorldFooterAction::Return)) {
+    let input_editing = seed_input.editing || ticks_input.editing;
+    if matches!(action, Some(NewWorldFooterAction::Return))
+        || (keys.just_pressed(KeyCode::Escape) && !input_editing)
+    {
         transition.request(ScreenTransitionTarget::game(GameState::StartingScreen));
         return;
     }
@@ -742,13 +870,17 @@ fn handle_footer_buttons(
         return;
     }
 
-    if let Ok(seed) = seed_input.buffer.parse::<u64>() {
-        config.set_seed(seed);
+    if seed_input.editing {
+        apply_seed_buffer(&seed_input.buffer, &mut config);
+    }
+    if ticks_input.editing {
+        apply_ticks_buffer(&ticks_input.buffer, &mut config);
     }
 
     commands.insert_resource(CurrentDimension::default());
     commands.insert_resource(CurrentBiome::default());
     commands.insert_resource(WorldSeed(config.seed().0));
+    commands.insert_resource(config.game_rules());
     commands.insert_resource(WorldLoadMode::New);
     transition.request(ScreenTransitionTarget::game(GameState::Loading));
 }
@@ -758,7 +890,7 @@ fn sync_section_ui(
     localization: Res<UiLocalization>,
     active_language: Res<ActiveLanguage>,
     mut panels: Query<(&NewWorldSectionPanel, &mut Node)>,
-    mut buttons: Query<(&NewWorldSectionButton, &Interaction, &mut BackgroundColor)>,
+    mut buttons: Query<(&NewWorldSectionButton, &mut BackgroundColor)>,
     mut labels: Query<(&NewWorldSectionButtonLabel, &mut Text, &mut TextColor)>,
 ) {
     for (panel, mut node) in &mut panels {
@@ -769,11 +901,8 @@ fn sync_section_ui(
         };
     }
 
-    for (button, interaction, mut background) in &mut buttons {
-        *background = BackgroundColor(section_button_background(
-            button.0 == selection.selected,
-            *interaction,
-        ));
+    for (button, mut background) in &mut buttons {
+        *background = BackgroundColor(section_button_background(button.0 == selection.selected));
     }
 
     for (label, mut text, mut color) in &mut labels {
@@ -793,9 +922,10 @@ fn sync_seed_text(
     config: Res<NewWorldConfig>,
     input: Res<SeedInputState>,
     mut labels: Query<&mut Text, With<SeedValueText>>,
+    mut inputs: Query<&mut BorderColor, With<SeedInput>>,
 ) {
     let value = if input.editing {
-        input.buffer.clone()
+        format!("{}|", input.buffer)
     } else {
         config.seed().0.to_string()
     };
@@ -804,6 +934,10 @@ fn sync_seed_text(
         if label.0 != value {
             label.0 = value.clone();
         }
+    }
+
+    for mut border in &mut inputs {
+        *border = BorderColor::all(input_border(input.editing));
     }
 }
 
@@ -834,9 +968,10 @@ fn sync_ticks_text(
     config: Res<NewWorldConfig>,
     input: Res<TicksInputState>,
     mut labels: Query<&mut Text, With<TicksValueText>>,
+    mut inputs: Query<&mut BorderColor, With<TicksInput>>,
 ) {
     let value = if input.editing {
-        input.buffer.clone()
+        format!("{}|", input.buffer)
     } else {
         config.game_rules().ticks_per_second().to_string()
     };
@@ -846,11 +981,15 @@ fn sync_ticks_text(
             label.0 = value.clone();
         }
     }
+
+    for mut border in &mut inputs {
+        *border = BorderColor::all(input_border(input.editing));
+    }
 }
 
 fn apply_seed_buffer(buffer: &str, config: &mut NewWorldConfig) {
-    if let Ok(seed) = buffer.parse::<u64>() {
-        config.set_seed(seed);
+    if let Ok(value) = buffer.parse::<u64>() {
+        config.set_seed(value);
     }
 }
 
@@ -863,7 +1002,7 @@ fn apply_ticks_buffer(buffer: &str, config: &mut NewWorldConfig) {
     }
 }
 
-fn digit_keys() -> [(KeyCode, char); 10] {
+fn digit_keys() -> [(KeyCode, char); 20] {
     [
         (KeyCode::Digit0, '0'),
         (KeyCode::Digit1, '1'),
@@ -875,18 +1014,24 @@ fn digit_keys() -> [(KeyCode, char); 10] {
         (KeyCode::Digit7, '7'),
         (KeyCode::Digit8, '8'),
         (KeyCode::Digit9, '9'),
+        (KeyCode::Numpad0, '0'),
+        (KeyCode::Numpad1, '1'),
+        (KeyCode::Numpad2, '2'),
+        (KeyCode::Numpad3, '3'),
+        (KeyCode::Numpad4, '4'),
+        (KeyCode::Numpad5, '5'),
+        (KeyCode::Numpad6, '6'),
+        (KeyCode::Numpad7, '7'),
+        (KeyCode::Numpad8, '8'),
+        (KeyCode::Numpad9, '9'),
     ]
 }
 
-fn section_button_background(active: bool, interaction: Interaction) -> Color {
+fn section_button_background(active: bool) -> Color {
     if active {
-        return Color::srgba(0.31, 0.20, 0.56, 0.86);
-    }
-
-    match interaction {
-        Interaction::Pressed => Color::srgba(0.26, 0.18, 0.48, 0.84),
-        Interaction::Hovered => Color::srgba(0.20, 0.14, 0.38, 0.78),
-        Interaction::None => Color::srgba(0.08, 0.06, 0.16, 0.34),
+        Color::srgba(0.18, 0.10, 0.34, 0.58)
+    } else {
+        Color::srgba(0.0, 0.0, 0.0, 0.0)
     }
 }
 
@@ -899,5 +1044,13 @@ fn game_mode_button_background(active: bool, interaction: Interaction) -> Color 
         Interaction::Pressed => Color::srgba(0.34, 0.22, 0.62, 0.92),
         Interaction::Hovered => Color::srgba(0.29, 0.19, 0.54, 0.82),
         Interaction::None => Color::srgba(0.20, 0.14, 0.38, 0.72),
+    }
+}
+
+fn input_border(editing: bool) -> Color {
+    if editing {
+        theme::TEXT_PRIMARY.with_alpha(0.92)
+    } else {
+        Color::srgba(0.43, 0.36, 0.68, 0.72)
     }
 }

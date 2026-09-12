@@ -4,6 +4,7 @@ use super::typography;
 
 pub const MENU_BUTTON_WIDTH: f32 = 470.0;
 pub const MENU_BUTTON_HEIGHT: f32 = 54.0;
+pub const SIDEBAR_MENU_BUTTON_HEIGHT: f32 = 54.0;
 
 #[derive(Component, Default)]
 pub struct AsteriaButtonVisual {
@@ -27,6 +28,31 @@ pub fn menu_button<A: Component>(label: impl Into<String>, action: A) -> impl Bu
         button_gradient(0.0),
         button_shadow(0.0),
         children![typography::button_label(label)],
+    )
+}
+
+pub fn sidebar_menu_button<A: Component, L: Component>(
+    label: impl Into<String>,
+    action: A,
+    label_marker: L,
+) -> impl Bundle {
+    (
+        Button,
+        action,
+        AsteriaButtonVisual::default(),
+        Node {
+            width: percent(100),
+            height: px(SIDEBAR_MENU_BUTTON_HEIGHT),
+            padding: UiRect::axes(px(14), px(0)),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            border_radius: BorderRadius::all(px(8)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+        button_gradient(0.0),
+        button_shadow(0.0),
+        children![(typography::button_label(label), label_marker)],
     )
 }
 

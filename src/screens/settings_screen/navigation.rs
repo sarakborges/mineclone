@@ -4,9 +4,9 @@ use crate::{
     app::settings_state::SettingsState,
     localization::{ActiveLanguage, UiLocalization},
     ui::{
+        button::sidebar_menu_button,
         theme,
         transition::{ScreenTransition, ScreenTransitionTarget},
-        typography,
     },
 };
 
@@ -58,25 +58,13 @@ pub(super) struct SettingsBackButton;
 
 pub(super) fn section_button(
     section: SettingsSection,
-    active: bool,
+    _active: bool,
     label: impl Into<String>,
 ) -> impl Bundle {
-    (
-        Button,
+    sidebar_menu_button(
+        label,
         SettingsSectionButton(section),
-        Node {
-            width: percent(100),
-            min_height: px(48),
-            padding: UiRect::axes(px(16), px(10)),
-            align_items: AlignItems::Center,
-            border_radius: BorderRadius::all(px(7)),
-            ..default()
-        },
-        BackgroundColor(section_button_background(active, Interaction::None)),
-        children![(
-            typography::button_label(label),
-            SettingsSectionButtonLabel(section),
-        )],
+        SettingsSectionButtonLabel(section),
     )
 }
 
@@ -96,7 +84,7 @@ pub(super) fn sync_section_ui(
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
     mut panels: Query<(&SettingsSectionPanel, &mut Node)>,
-    mut buttons: Query<(&SettingsSectionButton, &Interaction, &mut BackgroundColor)>,
+    mut buttons: Query<(&SettingsSectionButton, &mut BackgroundColor)>,
     mut labels: Query<(&SettingsSectionButtonLabel, &mut Text, &mut TextColor)>,
 ) {
     for (panel, mut node) in &mut panels {
@@ -107,11 +95,8 @@ pub(super) fn sync_section_ui(
         };
     }
 
-    for (button, interaction, mut background) in &mut buttons {
-        *background = BackgroundColor(section_button_background(
-            button.0 == selection.selected,
-            *interaction,
-        ));
+    for (button, mut background) in &mut buttons {
+        *background = BackgroundColor(section_button_background(button.0 == selection.selected));
     }
 
     for (label, mut text, mut color) in &mut labels {
@@ -141,14 +126,10 @@ pub(super) fn handle_close_requests(
     }
 }
 
-fn section_button_background(active: bool, interaction: Interaction) -> Color {
+fn section_button_background(active: bool) -> Color {
     if active {
-        return Color::srgba(0.31, 0.20, 0.56, 0.86);
-    }
-
-    match interaction {
-        Interaction::Pressed => Color::srgba(0.26, 0.18, 0.48, 0.84),
-        Interaction::Hovered => Color::srgba(0.20, 0.14, 0.38, 0.78),
-        Interaction::None => Color::srgba(0.08, 0.06, 0.16, 0.34),
+        Color::srgba(0.18, 0.10, 0.34, 0.58)
+    } else {
+        Color::srgba(0.0, 0.0, 0.0, 0.0)
     }
 }

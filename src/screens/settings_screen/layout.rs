@@ -8,6 +8,7 @@ use crate::{
     ui::{
         button::menu_button,
         cosmic_background::{self, STAR_FIELD},
+        scrollbar::vertical_scrollbar,
         surface, theme, typography,
     },
     world::{
@@ -25,7 +26,6 @@ use super::{
         section_button,
     },
     render_distance_section::graphics_section,
-    scroll_area::vertical_scrollbar,
     world_settings_section::world_settings_section,
 };
 
@@ -34,6 +34,7 @@ const SIDEBAR_WIDTH: f32 = 280.0;
 const HEADER_HEIGHT: f32 = 116.0;
 const FOOTER_HEIGHT: f32 = 104.0;
 const COLUMN_GAP: f32 = 22.0;
+const SIDEBAR_BUTTON_GAP: f32 = 11.0;
 
 pub fn spawn_settings_screen(
     mut commands: Commands,
@@ -145,7 +146,7 @@ pub fn spawn_settings_screen(
                                                 padding: UiRect::right(px(12)),
                                                 flex_direction: FlexDirection::Column,
                                                 align_items: AlignItems::Stretch,
-                                                row_gap: px(8),
+                                                row_gap: px(SIDEBAR_BUTTON_GAP),
                                                 overflow: Overflow::scroll_y(),
                                                 ..default()
                                             },

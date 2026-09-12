@@ -2,13 +2,13 @@ use bevy::prelude::*;
 
 use crate::{
     localization::{Language, UiLocalization},
-    ui::{surface, typography},
+    ui::{surface, theme, typography},
     world::{InMemoryWorldSave, game_rules::GameRules},
 };
 
 const CONTROL_HEIGHT: f32 = 44.0;
 const STEP_BUTTON_SIZE: f32 = 44.0;
-const INPUT_WIDTH: f32 = 124.0;
+const INPUT_WIDTH: f32 = 180.0;
 
 #[derive(Component, Clone, Copy)]
 pub(super) enum TicksPerSecondStep {
@@ -105,13 +105,14 @@ fn ticks_input(value: u32) -> impl Bundle {
             width: px(INPUT_WIDTH),
             height: px(CONTROL_HEIGHT),
             border: UiRect::all(px(1)),
+            padding: UiRect::axes(px(14), px(0)),
             align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
+            justify_content: JustifyContent::FlexStart,
             border_radius: BorderRadius::all(px(7)),
             ..default()
         },
         BackgroundColor(Color::srgba(0.045, 0.035, 0.09, 0.88)),
-        BorderColor::all(Color::srgba(0.43, 0.36, 0.68, 0.72)),
+        BorderColor::all(input_border(false)),
         children![(
             typography::button_label(value.to_string()),
             TicksPerSecondValueText,
@@ -168,14 +169,17 @@ pub(super) fn handle_ticks_keyboard(
         return;
     }
 
-    if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Escape) {
+    if keys.just_pressed(KeyCode::Enter)
+        || keys.just_pressed(KeyCode::NumpadEnter)
+        || keys.just_pressed(KeyCode::Escape)
+    {
         input_state.editing = false;
         input_state.replace_on_next_digit = false;
         input_state.buffer.clear();
         return;
     }
 
-    if keys.just_pressed(KeyCode::Backspace) {
+    if keys.just_pressed(KeyCode::Backspace) || keys.just_pressed(KeyCode::NumpadBackspace) {
         if input_state.replace_on_next_digit {
             input_state.buffer.clear();
             input_state.replace_on_next_digit = false;
@@ -186,18 +190,7 @@ pub(super) fn handle_ticks_keyboard(
         return;
     }
 
-    for (key, digit) in [
-        (KeyCode::Digit0, '0'),
-        (KeyCode::Digit1, '1'),
-        (KeyCode::Digit2, '2'),
-        (KeyCode::Digit3, '3'),
-        (KeyCode::Digit4, '4'),
-        (KeyCode::Digit5, '5'),
-        (KeyCode::Digit6, '6'),
-        (KeyCode::Digit7, '7'),
-        (KeyCode::Digit8, '8'),
-        (KeyCode::Digit9, '9'),
-    ] {
+    for (key, digit) in digit_keys() {
         if !keys.just_pressed(key) {
             continue;
         }
@@ -219,6 +212,7 @@ pub(super) fn sync_ticks_per_second_text(
     game_rules: Res<GameRules>,
     input_state: Res<TicksPerSecondInputState>,
     mut labels: Query<&mut Text, With<TicksPerSecondValueText>>,
+    mut inputs: Query<&mut BorderColor, With<TicksPerSecondInput>>,
 ) {
     let value = if input_state.editing {
         input_state.buffer.clone()
@@ -231,6 +225,35 @@ pub(super) fn sync_ticks_per_second_text(
             label.0 = value.clone();
         }
     }
+
+    for mut border in &mut inputs {
+        *border = BorderColor::all(input_border(input_state.editing));
+    }
+}
+
+fn digit_keys() -> [(KeyCode, char); 20] {
+    [
+        (KeyCode::Digit0, '0'),
+        (KeyCode::Digit1, '1'),
+        (KeyCode::Digit2, '2'),
+        (KeyCode::Digit3, '3'),
+        (KeyCode::Digit4, '4'),
+        (KeyCode::Digit5, '5'),
+        (KeyCode::Digit6, '6'),
+        (KeyCode::Digit7, '7'),
+        (KeyCode::Digit8, '8'),
+        (KeyCode::Digit9, '9'),
+        (KeyCode::Numpad0, '0'),
+        (KeyCode::Numpad1, '1'),
+        (KeyCode::Numpad2, '2'),
+        (KeyCode::Numpad3, '3'),
+        (KeyCode::Numpad4, '4'),
+        (KeyCode::Numpad5, '5'),
+        (KeyCode::Numpad6, '6'),
+        (KeyCode::Numpad7, '7'),
+        (KeyCode::Numpad8, '8'),
+        (KeyCode::Numpad9, '9'),
+    ]
 }
 
 fn apply_input_buffer(
@@ -255,4 +278,12 @@ fn set_ticks_per_second(
 ) {
     game_rules.set_ticks_per_second(value);
     save.save_game_rules(*game_rules);
+}
+
+fn input_border(editing: bool) -> Color {
+    if editing {
+        theme::TEXT_PRIMARY.with_alpha(0.92)
+    } else {
+        Color::srgba(0.43, 0.36, 0.68, 0.72)
+    }
 }
