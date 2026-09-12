@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::settings_state::SettingsState,
+    player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{
         button::menu_button,
         cosmic_background::{self, STAR_FIELD},
@@ -10,13 +11,25 @@ use crate::{
     world::render_distance::RenderDistanceSettings,
 };
 
-use super::{navigation::SettingsBackButton, render_distance_section::render_distance_section};
+use super::{
+    navigation::SettingsBackButton,
+    render_distance_section::graphics_section,
+    world_settings_section::world_settings_section,
+};
 
 const CONTENT_WIDTH: f32 = 760.0;
 const HEADER_HEIGHT: f32 = 116.0;
 const FOOTER_HEIGHT: f32 = 104.0;
 
-pub fn spawn_settings_screen(mut commands: Commands, render_distance: Res<RenderDistanceSettings>) {
+pub fn spawn_settings_screen(
+    mut commands: Commands,
+    render_distance: Res<RenderDistanceSettings>,
+    player: Query<&GameMode, With<GameplayCamera>>,
+) {
+    let game_mode = player
+        .single()
+        .map_or_else(|_| GameMode::default(), |game_mode| *game_mode);
+
     commands
         .spawn((
             DespawnOnExit(SettingsState::Open),
@@ -73,7 +86,8 @@ pub fn spawn_settings_screen(mut commands: Commands, render_distance: Res<Render
                     ..default()
                 })
                 .with_children(|sections| {
-                    sections.spawn(render_distance_section(render_distance.chunks()));
+                    sections.spawn(world_settings_section(game_mode));
+                    sections.spawn(graphics_section(render_distance.chunks()));
                 });
             });
 
