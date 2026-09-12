@@ -2,11 +2,14 @@ use std::f32::consts::PI;
 
 use bevy::prelude::*;
 
-use crate::player::hotbar::PlayerHotbar;
+use crate::{
+    player::hotbar::PlayerHotbar,
+    world::tick::WorldTickClock,
+};
 
-const BREAK_ANIMATION_DURATION: f32 = 0.16;
-const PLACE_ANIMATION_DURATION: f32 = 0.22;
-pub(super) const ITEM_SWITCH_ANIMATION_DURATION: f32 = 0.30;
+const BREAK_ANIMATION_DURATION_TICKS: u64 = 6;
+const PLACE_ANIMATION_DURATION_TICKS: u64 = 9;
+pub(super) const ITEM_SWITCH_ANIMATION_DURATION_TICKS: u64 = 12;
 
 #[derive(Component)]
 pub(super) struct PlayerViewModel;
@@ -20,18 +23,18 @@ enum ViewModelAction {
 #[derive(Resource, Default)]
 pub(crate) struct ViewModelAnimation {
     action: Option<ViewModelAction>,
-    elapsed: f32,
+    elapsed_ticks: u64,
 }
 
 impl ViewModelAnimation {
     pub(crate) fn play_break(&mut self) {
         self.action = Some(ViewModelAction::Break);
-        self.elapsed = 0.0;
+        self.elapsed_ticks = 0;
     }
 
     pub(crate) fn play_place(&mut self) {
         self.action = Some(ViewModelAction::Place);
-        self.elapsed = 0.0;
+        self.elapsed_ticks = 0;
     }
 }
 
@@ -40,7 +43,7 @@ pub(super) struct ViewModelItemSwitch {
     initialized: bool,
     displayed_block_id: Option<&'static str>,
     target_block_id: Option<&'static str>,
-    elapsed: f32,
+    elapsed_ticks: u64,
     active: bool,
 }
 
@@ -49,7 +52,7 @@ impl ViewModelItemSwitch {
         self.initialized = true;
         self.displayed_block_id = block_id;
         self.target_block_id = block_id;
-        self.elapsed = 0.0;
+        self.elapsed_ticks = 0;
         self.active = false;
     }
 
@@ -61,13 +64,13 @@ impl ViewModelItemSwitch {
         self.active
     }
 
-    pub(super) fn elapsed(&self) -> f32 {
-        self.elapsed
+    pub(super) fn elapsed_ticks(&self) -> u64 {
+        self.elapsed_ticks
     }
 }
 
 pub(super) fn advance_item_switch(
-    time: Res<Time>,
+    world_ticks: Res<WorldTickClock>,
     hotbar: Res<PlayerHotbar>,
     mut item_switch: ResMut<ViewModelItemSwitch>,
 ) {
@@ -80,7 +83,7 @@ pub(super) fn advance_item_switch(
 
     if selected_block_id != item_switch.target_block_id {
         item_switch.target_block_id = selected_block_id;
-        item_switch.elapsed = 0.0;
+        item_switch.elapsed_ticks = 0;
         item_switch.active = true;
     }
 
@@ -88,39 +91,43 @@ pub(super) fn advance_item_switch(
         return;
     }
 
-    item_switch.elapsed += time.delta_secs();
-    let midpoint = ITEM_SWITCH_ANIMATION_DURATION * 0.5;
+    item_switch.elapsed_ticks = item_switch
+        .elapsed_ticks
+        .saturating_add(world_ticks.ticks_this_frame() as u64);
+    let midpoint = ITEM_SWITCH_ANIMATION_DURATION_TICKS / 2;
 
-    if item_switch.elapsed >= midpoint
+    if item_switch.elapsed_ticks >= midpoint
         && item_switch.displayed_block_id != item_switch.target_block_id
     {
         item_switch.displayed_block_id = item_switch.target_block_id;
     }
 
-    if item_switch.elapsed >= ITEM_SWITCH_ANIMATION_DURATION {
+    if item_switch.elapsed_ticks >= ITEM_SWITCH_ANIMATION_DURATION_TICKS {
         item_switch.displayed_block_id = item_switch.target_block_id;
-        item_switch.elapsed = 0.0;
+        item_switch.elapsed_ticks = 0;
         item_switch.active = false;
     }
 }
 
 pub(super) fn animate_viewmodel(
-    time: Res<Time>,
+    world_ticks: Res<WorldTickClock>,
     mut animation: ResMut<ViewModelAnimation>,
     item_switch: Res<ViewModelItemSwitch>,
     mut viewmodels: Query<&mut Transform, With<PlayerViewModel>>,
 ) {
     let interaction = animation.action.and_then(|action| {
-        animation.elapsed += time.delta_secs();
-        let duration = match action {
-            ViewModelAction::Break => BREAK_ANIMATION_DURATION,
-            ViewModelAction::Place => PLACE_ANIMATION_DURATION,
+        animation.elapsed_ticks = animation
+            .elapsed_ticks
+            .saturating_add(world_ticks.ticks_this_frame() as u64);
+        let duration_ticks = match action {
+            ViewModelAction::Break => BREAK_ANIMATION_DURATION_TICKS,
+            ViewModelAction::Place => PLACE_ANIMATION_DURATION_TICKS,
         };
-        let progress = (animation.elapsed / duration).clamp(0.0, 1.0);
+        let progress = (animation.elapsed_ticks as f32 / duration_ticks as f32).clamp(0.0, 1.0);
 
         if progress >= 1.0 {
             animation.action = None;
-            animation.elapsed = 0.0;
+            animation.elapsed_ticks = 0;
             None
         } else {
             Some((action, (progress * PI).sin()))
@@ -128,7 +135,9 @@ pub(super) fn animate_viewmodel(
     });
 
     let switch_wave = if item_switch.is_active() {
-        let progress = (item_switch.elapsed() / ITEM_SWITCH_ANIMATION_DURATION).clamp(0.0, 1.0);
+        let progress = (item_switch.elapsed_ticks() as f32
+            / ITEM_SWITCH_ANIMATION_DURATION_TICKS as f32)
+            .clamp(0.0, 1.0);
         (progress * PI).sin()
     } else {
         0.0
