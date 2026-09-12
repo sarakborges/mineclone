@@ -2,7 +2,11 @@
     pbr_bindings,
     pbr_fragment::pbr_input_from_standard_material,
     pbr_functions::alpha_discard,
-    pbr_types::STANDARD_MATERIAL_FLAGS_UNLIT_BIT,
+    pbr_types::{
+        STANDARD_MATERIAL_FLAGS_ALPHA_MODE_BLEND,
+        STANDARD_MATERIAL_FLAGS_ALPHA_MODE_RESERVED_BITS,
+        STANDARD_MATERIAL_FLAGS_UNLIT_BIT,
+    },
 }
 
 #ifdef PREPASS_PIPELINE
@@ -29,9 +33,11 @@ var<uniform> terrain_material_extension: TerrainMaterialExtension;
 
 const PACKED_RGB_MAX: f32 = 16777215.0;
 const LIGHT_RESPONSE_GAMMA: f32 = 1.35;
-const AMBIENT_FLOOR: f32 = 0.015;
-const SKY_AMBIENT_STRENGTH: f32 = 0.24;
+const SKY_TIME_RESPONSE_GAMMA: f32 = 0.78;
+const AMBIENT_FLOOR: f32 = 0.018;
+const SKY_AMBIENT_STRENGTH: f32 = 0.34;
 const BLOCK_LIGHT_STRENGTH: f32 = 0.85;
+const DYED_TRANSPARENT_ALPHA: f32 = 0.20;
 
 fn unpack_rgb(value: f32) -> vec3<f32> {
     let packed = round(clamp(value, 0.0, 1.0) * PACKED_RGB_MAX);
@@ -59,14 +65,18 @@ fn srgb_to_linear(color: vec3<f32>) -> vec3<f32> {
     );
 }
 
-fn apply_authored_tint(texel: vec4<f32>, tint_srgb: vec3<f32>) -> vec3<f32> {
+fn apply_authored_tint(
+    texel: vec4<f32>,
+    tint_srgb: vec3<f32>,
+    reveal_transparent: bool,
+) -> vec4<f32> {
     let tint_delta = max(
         abs(1.0 - tint_srgb.r),
         max(abs(1.0 - tint_srgb.g), abs(1.0 - tint_srgb.b)),
     );
 
     if tint_delta <= 0.001 {
-        return texel.rgb;
+        return texel;
     }
 
     let tint = srgb_to_linear(tint_srgb);
@@ -76,16 +86,26 @@ fn apply_authored_tint(texel: vec4<f32>, tint_srgb: vec3<f32>) -> vec3<f32> {
     let texture_min = min(min(texel.r, texel.g), texel.b);
     let texture_chroma = texture_max - texture_min;
 
-    // Biome/dye tinting is authored around desaturated masks. Transparent
-    // texels are also tintable so colored glass and similar materials keep
-    // their intended hue without flattening opaque colored details.
-    let neutral_mask = 1.0 - smoothstep(0.025, 0.10, texture_chroma);
-    let translucent_mask = 1.0 - smoothstep(0.985, 0.999, texel.a);
-    let tint_mask = max(neutral_mask, translucent_mask);
+    // Tint is an authored-mask convention, not a blanket color multiply.
+    // Only genuinely grayscale pixels and transparent pixels are tintable.
+    // The previous 0.10 chroma threshold was broad enough to swallow subtly
+    // colored lamp details and made the whole texture look dyed.
+    let grayscale_mask = 1.0 - smoothstep(0.006, 0.020, texture_chroma);
+    let transparent_mask = 1.0 - smoothstep(0.985, 0.999, texel.a);
+    let tint_mask = max(grayscale_mask, transparent_mask);
     let shade = mix(0.55, 1.15, clamp(luminance, 0.0, 1.0));
     let tinted = clamp(tint * shade, vec3<f32>(0.0), vec3<f32>(1.0));
+    let rgb = mix(texel.rgb, tinted, tint_mask);
 
-    return mix(texel.rgb, tinted, tint_mask);
+    var alpha = texel.a;
+    if reveal_transparent {
+        // RGB cannot be visible through an authored alpha of exactly zero.
+        // Dyed alpha-blended textures (glass) therefore get a small alpha only
+        // in their authored transparent pixels. Opaque details keep alpha 1.
+        alpha = max(alpha, DYED_TRANSPARENT_ALPHA * transparent_mask);
+    }
+
+    return vec4<f32>(rgb, alpha);
 }
 
 fn light_response(light: vec3<f32>) -> vec3<f32> {
@@ -101,8 +121,12 @@ fn voxel_emissive(
     block_light: vec3<f32>,
     ambient_occlusion: f32,
 ) -> vec3<f32> {
+    let sky_time = pow(
+        clamp(terrain_material_extension.sky_light_factor, 0.0, 1.0),
+        SKY_TIME_RESPONSE_GAMMA,
+    );
     let sky_fill = light_response(sky_light)
-        * clamp(terrain_material_extension.sky_light_factor, 0.0, 1.0)
+        * sky_time
         * SKY_AMBIENT_STRENGTH;
     let block_fill = light_response(block_light) * BLOCK_LIGHT_STRENGTH;
     let local_fill = max(sky_fill, block_fill) + vec3<f32>(AMBIENT_FLOOR);
@@ -170,8 +194,11 @@ fn fragment(
     );
     let tint_srgb = unpack_rgb(in.uv_b.y);
     let material_base_color = pbr_bindings::material.base_color;
-    var material_rgb = apply_authored_tint(texel, tint_srgb)
-        * material_base_color.rgb;
+    let alpha_mode = pbr_input.material.flags
+        & STANDARD_MATERIAL_FLAGS_ALPHA_MODE_RESERVED_BITS;
+    let is_alpha_blend = alpha_mode == STANDARD_MATERIAL_FLAGS_ALPHA_MODE_BLEND;
+    let tinted_texel = apply_authored_tint(texel, tint_srgb, is_alpha_blend);
+    var material_rgb = tinted_texel.rgb * material_base_color.rgb;
 
 #ifndef PREPASS_PIPELINE
     material_rgb = animate_fluid_color(material_rgb, in.world_position.xyz);
@@ -179,7 +206,7 @@ fn fragment(
 
     pbr_input.material.base_color = vec4<f32>(
         material_rgb,
-        texel.a * material_base_color.a,
+        tinted_texel.a * material_base_color.a,
     );
     pbr_input.material.base_color = alpha_discard(
         pbr_input.material,
