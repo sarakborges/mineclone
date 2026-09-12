@@ -12,7 +12,7 @@ use super::medium::{light_filter, medium_dampening};
 
 #[derive(Default)]
 pub(super) struct LightingContext {
-    direct_sky_levels_by_column: HashMap<IVec2, Vec<[u8; 3]>>,
+    direct_sky_levels_by_column: HashMap<IVec2, Vec<u8>>,
     highest_loaded_y_by_chunk_column: HashMap<IVec2, Option<i32>>,
 }
 
@@ -24,9 +24,9 @@ impl LightingContext {
         fluids: &FluidRegistry,
         secondary_properties: &SecondaryPropertyRegistry,
         position: IVec3,
-    ) -> [u8; 3] {
+    ) -> u8 {
         if position.y < 0 {
-            return [0; 3];
+            return 0;
         }
 
         let column = IVec2::new(position.x, position.z);
@@ -47,7 +47,7 @@ impl LightingContext {
             .get(&column)
             .and_then(|levels| levels.get(position.y as usize))
             .copied()
-            .unwrap_or([VoxelLight::MAX_LEVEL; 3])
+            .unwrap_or(VoxelLight::MAX_LEVEL)
     }
 
     fn highest_loaded_y(&mut self, world: &VoxelWorld, position: IVec3) -> Option<i32> {
@@ -72,38 +72,33 @@ fn build_direct_sky_column(
     secondary_properties: &SecondaryPropertyRegistry,
     column: IVec2,
     highest_y: Option<i32>,
-) -> Vec<[u8; 3]> {
+) -> Vec<u8> {
     let Some(highest_y) = highest_y else {
         return Vec::new();
     };
-    let mut levels = vec![[0; 3]; highest_y as usize + 1];
-    let mut level = [VoxelLight::MAX_LEVEL; 3];
+    let mut levels = vec![0; highest_y as usize + 1];
+    let mut level = VoxelLight::MAX_LEVEL;
 
     for y in (0..=highest_y).rev() {
         let position = IVec3::new(column.x, y, column.y);
         if !world.is_loaded_at(position) {
-            level = [0; 3];
+            level = 0;
             continue;
         }
 
         let attenuation = medium_dampening(world, blocks, fluids, position);
-        level = level.map(|channel| channel.saturating_sub(attenuation));
-        level = filter_levels(
-            level,
-            light_filter(world, blocks, secondary_properties, position),
-        );
+        level = level.saturating_sub(attenuation);
+
+        // Skylight is the simplified neutral outdoor visibility field. Dyed
+        // transparent media may still reduce its intensity, but hue belongs to
+        // RGB block light rather than duplicating three sky propagation channels.
+        let filter = light_filter(world, blocks, secondary_properties, position);
+        let transmission = filter[0].max(filter[1]).max(filter[2]);
+        level = filtered_level(level, transmission);
         levels[y as usize] = level;
     }
 
     levels
-}
-
-fn filter_levels(levels: [u8; 3], filter: [f32; 3]) -> [u8; 3] {
-    [
-        filtered_level(levels[0], filter[0]),
-        filtered_level(levels[1], filter[1]),
-        filtered_level(levels[2], filter[2]),
-    ]
 }
 
 fn filtered_level(level: u8, factor: f32) -> u8 {
