@@ -1,7 +1,10 @@
 pub(crate) mod camera;
+pub(crate) mod game_mode;
 pub(crate) mod hotbar;
 pub(crate) mod inventory;
 pub(crate) mod movement;
+pub(crate) mod player_id;
+pub(crate) mod save;
 pub(crate) mod viewmodel;
 
 use bevy::prelude::*;
@@ -15,9 +18,11 @@ use crate::{
     },
 };
 use camera::GameplayCamera;
+use game_mode::GameMode;
 use movement::{
     flight::FlightState, gravity::GravityState, swimming::SwimmingState, walking::WalkingState,
 };
+use player_id::LOCAL_PLAYER_ID;
 
 pub(crate) const PLAYER_HEIGHT: f32 = 1.8;
 pub(crate) const PLAYER_EYE_HEIGHT: f32 = 1.62;
@@ -44,11 +49,16 @@ fn spawn_player(
     save: Res<InMemoryWorldSave>,
 ) {
     let translation = if *load_mode == WorldLoadMode::Load {
-        save.player_position().unwrap_or_else(|| {
+        save.player_position(LOCAL_PLAYER_ID).unwrap_or_else(|| {
             default_spawn_position(&current_dimension, &dimensions, &biomes, &biome_field)
         })
     } else {
         default_spawn_position(&current_dimension, &dimensions, &biomes, &biome_field)
+    };
+    let game_mode = if *load_mode == WorldLoadMode::Load {
+        save.player_game_mode(LOCAL_PLAYER_ID)
+    } else {
+        GameMode::default()
     };
 
     commands.spawn((
@@ -56,6 +66,8 @@ fn spawn_player(
         Msaa::Off,
         Transform::from_translation(translation),
         GameplayCamera::default(),
+        LOCAL_PLAYER_ID,
+        game_mode,
         WalkingState::default(),
         FlightState::default(),
         GravityState::default(),

@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
-    player::camera::GameplayCamera,
+    player::{camera::GameplayCamera, game_mode::GameMode, player_id::PlayerId},
     ui::{
         button::menu_button,
         surface, theme,
@@ -90,7 +90,7 @@ fn show_pause_menu(mut roots: Query<&mut Visibility, With<PauseMenuRoot>>) {
 
 fn handle_pause_menu_buttons(
     interactions: Query<(&Interaction, &PauseMenuAction), Changed<Interaction>>,
-    player: Query<&Transform, With<GameplayCamera>>,
+    player: Query<(&PlayerId, &Transform, &GameMode), With<GameplayCamera>>,
     mut save: ResMut<InMemoryWorldSave>,
     mut transition: ResMut<ScreenTransition>,
     mut app_exit: MessageWriter<AppExit>,
@@ -108,8 +108,8 @@ fn handle_pause_menu_buttons(
                 transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
             }
             PauseMenuAction::LeaveWorld => {
-                if let Ok(transform) = player.single() {
-                    save.save_player_position(transform.translation);
+                if let Ok((player_id, transform, game_mode)) = player.single() {
+                    save.save_player_state(*player_id, transform.translation, *game_mode);
                 }
 
                 transition.request(
