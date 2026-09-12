@@ -16,8 +16,6 @@ pub(crate) struct TerrainMaterialExtension {
     pub sky_light_factor: f32,
     #[uniform(100)]
     pub fluid_animation_factor: f32,
-    #[uniform(100)]
-    pub padding: Vec2,
 }
 
 impl Default for TerrainMaterialExtension {
@@ -25,7 +23,6 @@ impl Default for TerrainMaterialExtension {
         Self {
             sky_light_factor: 1.0,
             fluid_animation_factor: 0.0,
-            padding: Vec2::ZERO,
         }
     }
 }
