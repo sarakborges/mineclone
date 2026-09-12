@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     localization::{Language, UiLocalization},
-    ui::{theme, typography},
+    ui::{text_input::select_all_pressed, theme, typography},
     world::{InMemoryWorldSave, game_rules::GameRules},
 };
 
@@ -160,9 +160,7 @@ pub(super) fn handle_ticks_keyboard(
         return;
     }
 
-    if keys.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight])
-        && keys.just_pressed(KeyCode::KeyA)
-    {
+    if select_all_pressed(&keys) {
         input_state.replace_on_next_digit = true;
         return;
     }
