@@ -4,7 +4,7 @@ use super::{
     block_face::BlockFace, light::VoxelLight, mesh_buffer::VoxelMeshBuffer, world::VoxelWorld,
 };
 
-const AO_BRIGHTNESS: [f32; 4] = [1.0, 0.92, 0.84, 0.76];
+const AO_BRIGHTNESS: [f32; 4] = [1.0, 0.86, 0.72, 0.58];
 
 pub(super) struct FaceLighting {
     pub(super) channels: [[f32; 2]; 4],

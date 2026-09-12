@@ -11,14 +11,12 @@ impl VoxelLight {
 
     pub const fn new_colored(sky: [u8; 3], block: [u8; 3]) -> Self {
         let sky = clamp_channel(max_channel(sky)) as u16;
-        let block_r = clamp_channel(block[0]) as u16;
-        let block_g = clamp_channel(block[1]) as u16;
-        let block_b = clamp_channel(block[2]) as u16;
+        let block = clamp_channel(max_channel(block)) as u16;
 
-        // Outdoor skylight is intentionally scalar: the terrain renderer uses it
-        // as a simple shadow/visibility field. Only local block light needs RGB
-        // channels for dyed lamps and light passing through dyed glass.
-        Self(sky | (block_r << 4) | (block_g << 8) | (block_b << 12))
+        // Keep the wider storage/API for compatibility with newer systems, but
+        // preserve the September 9 lighting contract: both propagated channels
+        // are scalar. Block light is mirrored into RGB rather than tinted.
+        Self(sky | (block << 4) | (block << 8) | (block << 12))
     }
 
     pub const fn sky(self) -> u8 {
@@ -73,12 +71,12 @@ mod tests {
     }
 
     #[test]
-    fn keeps_colored_block_light_and_collapses_skylight() {
+    fn collapses_colored_inputs_to_scalar_light() {
         let light = VoxelLight::new_colored([15, 6, 1], [2, 9, 14]);
 
         assert_eq!(light.sky(), 15);
         assert_eq!(light.sky_rgb(), [15, 15, 15]);
-        assert_eq!(light.block_rgb(), [2, 9, 14]);
+        assert_eq!(light.block_rgb(), [14, 14, 14]);
         assert_eq!(light.block(), 14);
     }
 
@@ -87,6 +85,6 @@ mod tests {
         let light = VoxelLight::new_colored([42, 1, 31], [2, 99, 7]);
 
         assert_eq!(light.sky(), 15);
-        assert_eq!(light.block_rgb(), [2, 15, 7]);
+        assert_eq!(light.block_rgb(), [15, 15, 15]);
     }
 }

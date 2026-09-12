@@ -8,7 +8,7 @@ use crate::content::{
 };
 use crate::voxel::{chunk::CHUNK_SIZE, light::VoxelLight, world::VoxelWorld};
 
-use super::medium::{light_filter, medium_dampening};
+use super::medium::medium_dampening;
 
 #[derive(Default)]
 pub(super) struct LightingContext {
@@ -69,7 +69,7 @@ fn build_direct_sky_column(
     world: &VoxelWorld,
     blocks: &BlockRegistry,
     fluids: &FluidRegistry,
-    secondary_properties: &SecondaryPropertyRegistry,
+    _secondary_properties: &SecondaryPropertyRegistry,
     column: IVec2,
     highest_y: Option<i32>,
 ) -> Vec<u8> {
@@ -81,28 +81,9 @@ fn build_direct_sky_column(
 
     for y in (0..=highest_y).rev() {
         let position = IVec3::new(column.x, y, column.y);
-        if !world.is_loaded_at(position) {
-            level = 0;
-            continue;
-        }
-
-        let attenuation = medium_dampening(world, blocks, fluids, position);
-        level = level.saturating_sub(attenuation);
-
-        // Skylight is the simplified neutral outdoor visibility field. Dyed
-        // transparent media may still reduce its intensity, but hue belongs to
-        // RGB block light rather than duplicating three sky propagation channels.
-        let filter = light_filter(world, blocks, secondary_properties, position);
-        let transmission = filter[0].max(filter[1]).max(filter[2]);
-        level = filtered_level(level, transmission);
+        level = level.saturating_sub(medium_dampening(world, blocks, fluids, position));
         levels[y as usize] = level;
     }
 
     levels
-}
-
-fn filtered_level(level: u8, factor: f32) -> u8 {
-    (level as f32 * factor.clamp(0.0, 1.0))
-        .round()
-        .clamp(0.0, VoxelLight::MAX_LEVEL as f32) as u8
 }
