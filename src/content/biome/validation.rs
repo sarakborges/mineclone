@@ -1,4 +1,4 @@
-use super::{BiomeClimate, BiomeClimateRange, BiomeDefinition, BiomeKind, BiomeSizeAxis};
+use super::{BiomeClimate, BiomeClimateRange, BiomeDefinition, BiomeKind};
 
 pub(super) fn validate_biome_definition(definition: &BiomeDefinition) {
     match definition.kind {
@@ -40,12 +40,6 @@ pub(super) fn validate_biome_definition(definition: &BiomeDefinition) {
 }
 
 fn validate_surface_biome(definition: &BiomeDefinition) {
-    validate_size_axis(&definition.id, "x", definition.size.x);
-    validate_size_axis(&definition.id, "z", definition.size.z);
-    if let Some(vertical_size) = definition.size.y {
-        validate_size_axis(&definition.id, "y", vertical_size);
-    }
-
     assert!(
         definition.terrain.is_some(),
         "surface biome {} must define terrain",
@@ -71,14 +65,6 @@ fn validate_surface_biome(definition: &BiomeDefinition) {
 }
 
 fn validate_volume_biome(definition: &BiomeDefinition) {
-    validate_size_axis(&definition.id, "x", definition.size.x);
-    validate_size_axis(&definition.id, "z", definition.size.z);
-    let vertical_size = definition
-        .size
-        .y
-        .unwrap_or_else(|| panic!("volume biome {} must define size.y", definition.id));
-    validate_size_axis(&definition.id, "y", vertical_size);
-
     assert!(
         distributions_are_regional(definition),
         "volume biome {} cannot define a surface distribution",
@@ -197,17 +183,6 @@ fn validate_visuals(definition: &BiomeDefinition) {
         (0.0..=1.0).contains(&definition.visuals.underwater_tint.opacity),
         "biome {} underwaterTint opacity must be between 0 and 1",
         definition.id
-    );
-}
-
-fn validate_size_axis(biome_id: &str, axis: &str, size: BiomeSizeAxis) {
-    assert!(
-        size.min > 0.0,
-        "biome {biome_id} size.{axis}.min must be positive"
-    );
-    assert!(
-        size.max >= size.min,
-        "biome {biome_id} size.{axis}.max must be greater than or equal to min"
     );
 }
 

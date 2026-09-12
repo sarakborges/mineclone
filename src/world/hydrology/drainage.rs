@@ -6,9 +6,8 @@ use crate::content::biome_hydrology::BiomeHydrology;
 
 use super::{
     constants::{
-        HYDROLOGY_REGION_SIZE, OCEAN_CONTINENTALNESS_THRESHOLD,
-        RIVER_BASIN_ESCAPE_RADIUS_CELLS, RIVER_MINIMUM_DROP, RIVER_OCEAN_OUTLET_RADIUS_CELLS,
-        RIVER_ROUTE_VARIATION,
+        HYDROLOGY_REGION_SIZE, RIVER_BASIN_ESCAPE_RADIUS_CELLS, RIVER_MINIMUM_DROP,
+        RIVER_OCEAN_OUTLET_RADIUS_CELLS, RIVER_ROUTE_VARIATION,
     },
     math::{cell_hash, hash_signed, hash_unit},
     types::HydrologySurfaceSample,
@@ -27,6 +26,7 @@ where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
     seed: u64,
+    ocean_threshold: f32,
     sample: &'a mut F,
     nodes: HashMap<IVec2, DrainageNode>,
     downstream: HashMap<IVec2, Option<IVec2>>,
@@ -36,13 +36,18 @@ impl<'a, F> DrainageNetwork<'a, F>
 where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
-    pub fn new(seed: u64, sample: &'a mut F) -> Self {
+    pub fn new(seed: u64, ocean_threshold: f32, sample: &'a mut F) -> Self {
         Self {
             seed,
+            ocean_threshold,
             sample,
             nodes: HashMap::new(),
             downstream: HashMap::new(),
         }
+    }
+
+    pub fn ocean_threshold(&self) -> f32 {
+        self.ocean_threshold
     }
 
     pub fn node(&mut self, cell: IVec2) -> DrainageNode {
@@ -93,7 +98,7 @@ where
 
                 let candidate_cell = source_cell + IVec2::new(dx, dz);
                 let candidate = self.node(candidate_cell);
-                if candidate.continentalness > OCEAN_CONTINENTALNESS_THRESHOLD {
+                if candidate.continentalness > self.ocean_threshold {
                     continue;
                 }
 

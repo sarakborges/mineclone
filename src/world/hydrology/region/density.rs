@@ -82,7 +82,7 @@ impl HydrologyRegion {
 
         let macro_sample = self.macro_sample_at(horizontal);
         let ocean_delta = macro_sample.map_or(0.0, |sample| {
-            let strength = ocean_strength(sample.continentalness);
+            let strength = ocean_strength(sample.continentalness, self.ocean_weight);
             if strength <= 0.0 {
                 return 0.0;
             }

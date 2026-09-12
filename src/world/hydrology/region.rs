@@ -17,5 +17,6 @@ pub struct HydrologyRegion {
     pub(super) water_bodies: Vec<WaterBody>,
     pub(super) sea_level: f32,
     pub(super) settings: DimensionHydrology,
+    pub(super) ocean_weight: f32,
     pub(super) macro_samples: Vec<HydrologyMacroSample>,
 }

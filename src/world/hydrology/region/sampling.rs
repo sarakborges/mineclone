@@ -9,8 +9,9 @@ use crate::world::hydrology::{
 
 impl HydrologyRegion {
     pub fn ocean_strength_at(&self, position: Vec2) -> f32 {
-        self.macro_sample_at(position)
-            .map_or(0.0, |sample| ocean_strength(sample.continentalness))
+        self.macro_sample_at(position).map_or(0.0, |sample| {
+            ocean_strength(sample.continentalness, self.ocean_weight)
+        })
     }
 
     pub(super) fn macro_sample_at(&self, position: Vec2) -> Option<HydrologyMacroSample> {

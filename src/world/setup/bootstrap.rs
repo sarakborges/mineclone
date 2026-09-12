@@ -10,9 +10,7 @@ use crate::{
     },
     player::player_id::LOCAL_PLAYER_ID,
     rendering::terrain_material::TerrainMaterial,
-    voxel::{
-        chunk::CHUNK_SIZE, coordinates::chunk_coord_from_position, world::VoxelWorld,
-    },
+    voxel::{chunk::CHUNK_SIZE, coordinates::chunk_coord_from_position, world::VoxelWorld},
 };
 
 use super::{WorldLoadingPhase, WorldLoadingState};
@@ -77,6 +75,7 @@ pub(in crate::world) fn begin_world_loading(
             )
         });
 
+    dimension.validate_biomes(biomes);
     dimension
         .hydrology
         .validate_references(&dimension.id, biomes, blocks, fluids);
@@ -127,11 +126,24 @@ pub(in crate::world) fn begin_world_loading(
         }
     }
 
+    let coast_weight = dimension
+        .hydrology
+        .coast_biome
+        .as_deref()
+        .map_or(1.0, |biome_id| dimension.biome_weight(biome_id));
+    let ocean_weight = dimension
+        .hydrology
+        .ocean_biome
+        .as_deref()
+        .map_or(1.0, |biome_id| dimension.biome_weight(biome_id));
+
     commands.insert_resource(biome_field);
     commands.insert_resource(WorldFeatureFields::new(
         inputs.seed.0,
         dimension.sea_level,
         dimension.hydrology.clone(),
+        coast_weight,
+        ocean_weight,
     ));
     commands.insert_resource(terrain_materials);
     commands.insert_resource(fluid_materials);
@@ -163,7 +175,8 @@ fn average_terrain_material(dimension: &DimensionDefinition, biomes: &BiomeRegis
     let mut metallic = 0.0;
     let mut count = 0.0;
 
-    for biome_id in &dimension.biomes {
+    for dimension_biome in &dimension.biomes {
+        let biome_id = &dimension_biome.id;
         let biome = biomes
             .get(biome_id)
             .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));

@@ -105,6 +105,16 @@ pub(crate) fn read_content() -> LoadedContent {
         biome.validate_structure_references(&content.structures);
     }
 
+    for dimension in content.dimensions.iter() {
+        dimension.validate_biomes(&content.biomes);
+        dimension.hydrology.validate_references(
+            &dimension.id,
+            &content.biomes,
+            &content.blocks,
+            &content.fluids,
+        );
+    }
+
     content
 }
 

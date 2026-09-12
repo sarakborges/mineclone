@@ -23,9 +23,21 @@ pub(crate) struct WorldFeatureFields {
 }
 
 impl WorldFeatureFields {
-    pub(crate) fn new(seed: u64, sea_level: i32, hydrology: DimensionHydrology) -> Self {
+    pub(crate) fn new(
+        seed: u64,
+        sea_level: i32,
+        hydrology: DimensionHydrology,
+        coast_weight: f32,
+        ocean_weight: f32,
+    ) -> Self {
         Self {
-            hydrology: HydrologyField::new(seed.rotate_left(7), sea_level, hydrology),
+            hydrology: HydrologyField::new(
+                seed.rotate_left(7),
+                sea_level,
+                hydrology,
+                coast_weight,
+                ocean_weight,
+            ),
             cave_connectivity: CaveConnectivityField::new(seed.rotate_left(23)),
             caches: FeatureCaches::new(),
         }
@@ -131,9 +143,13 @@ mod tests {
         world::generation_region::generation_region_coord,
     };
 
+    fn test_fields() -> WorldFeatureFields {
+        WorldFeatureFields::new(42, 64, DimensionHydrology::default(), 1.0, 1.0)
+    }
+
     #[test]
     fn region_cache_reuses_hydrology_across_vertical_regions() {
-        let fields = WorldFeatureFields::new(42, 64, DimensionHydrology::default());
+        let fields = test_fields();
         let coord = IVec3::new(2, 0, -1);
         let first = fields.region_with_hydrology(coord, |hydrology| {
             hydrology.region_from_macro_terrain(IVec2::new(coord.x, coord.z), |_| {
@@ -160,7 +176,7 @@ mod tests {
 
     #[test]
     fn generation_column_cache_reuses_horizontal_chunk_samples() {
-        let fields = WorldFeatureFields::new(42, 64, DimensionHydrology::default());
+        let fields = test_fields();
         let coord = IVec2::new(3, -2);
         let first = fields.generation_columns(coord, Vec::new);
         let second = fields.generation_columns(coord, || {
@@ -173,7 +189,7 @@ mod tests {
 
     #[test]
     fn volume_biome_cache_reuses_the_same_generation_region_result() {
-        let fields = WorldFeatureFields::new(42, 64, DimensionHydrology::default());
+        let fields = test_fields();
         let coord = IVec3::new(1, 2, 3);
         let first = fields.volume_biome_region(coord, VolumeBiomeRegion::default);
         let second = fields.volume_biome_region(coord, || {
@@ -186,7 +202,7 @@ mod tests {
 
     #[test]
     fn cave_cache_reuses_the_same_generation_region_result() {
-        let fields = WorldFeatureFields::new(42, 64, DimensionHydrology::default());
+        let fields = test_fields();
         let coord = IVec3::new(1, 2, 3);
         let first = fields
             .cave_region(coord, |_| Some(CaveConnectivityRegion::default()))
@@ -201,7 +217,7 @@ mod tests {
 
     #[test]
     fn structure_origin_cache_reuses_accepted_and_rejected_placements() {
-        let fields = WorldFeatureFields::new(42, 64, DimensionHydrology::default());
+        let fields = test_fields();
         let accepted_anchor = IVec2::new(8, 12);
         let rejected_anchor = IVec2::new(24, -4);
 
@@ -230,7 +246,7 @@ mod tests {
 
     #[test]
     fn cache_retention_drops_entries_outside_the_streaming_window() {
-        let fields = WorldFeatureFields::new(42, 64, DimensionHydrology::default());
+        let fields = test_fields();
         let near_chunk = IVec3::ZERO;
         let far_chunk = IVec3::new(32, 0, 0);
         let near_region = generation_region_coord(near_chunk);

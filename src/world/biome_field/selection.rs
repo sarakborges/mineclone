@@ -8,7 +8,7 @@ use crate::{
 use super::{
     BiomeFieldEntry,
     constants::CLIMATE_BLEND_MARGIN,
-    spatial::{biome_index, cell_hash, hash_unit},
+    spatial::{cell_hash, hash_unit},
 };
 
 pub(super) fn select_surface_biome_index(
@@ -21,19 +21,15 @@ pub(super) fn select_surface_biome_index(
     let regional = biomes
         .iter()
         .enumerate()
-        .filter_map(|(index, biome)| biome.is_regional().then_some(index))
+        .filter_map(|(index, biome)| {
+            (biome.is_regional() && biome.weight > f32::EPSILON).then_some(index)
+        })
         .collect::<Vec<_>>();
-    assert!(!regional.is_empty(), "surface biome field has no regional biomes");
-
-    if regional
-        .iter()
-        .all(|index| climate_is_unrestricted(biomes[*index].climate))
-    {
-        return regional[biome_index(cell, regional.len(), seed)];
-    }
+    assert!(!regional.is_empty(), "surface biome field has no active regional biomes");
 
     let climate = climate_field.sample(site);
     let hash = cell_hash(cell, seed);
+
     select_weighted_biome_index(biomes, climate, hash, BiomeFieldEntry::is_regional)
         .unwrap_or_else(|| regional[hash as usize % regional.len()])
 }
@@ -58,39 +54,52 @@ fn select_weighted_biome_index(
     let eligible = biomes
         .iter()
         .enumerate()
-        .filter_map(|(index, biome)| predicate(biome).then_some(index))
+        .filter_map(|(index, biome)| {
+            (predicate(biome) && biome.weight > f32::EPSILON).then_some(index)
+        })
         .collect::<Vec<_>>();
 
     if eligible.is_empty() {
         return None;
     }
 
-    if eligible
+    let climate_weighted = eligible
         .iter()
-        .all(|index| climate_is_unrestricted(biomes[*index].climate))
-    {
-        return Some(eligible[hash as usize % eligible.len()]);
-    }
-
-    let weighted = eligible
-        .iter()
-        .map(|index| (*index, climate_suitability(biomes[*index].climate, climate)))
+        .map(|index| {
+            (
+                *index,
+                biomes[*index].weight * climate_suitability(biomes[*index].climate, climate),
+            )
+        })
         .collect::<Vec<_>>();
-    let total_weight: f32 = weighted.iter().map(|(_, weight)| *weight).sum();
 
-    if total_weight <= f32::EPSILON {
-        return Some(eligible[hash as usize % eligible.len()]);
+    if let Some(index) = pick_weighted(&climate_weighted, hash.rotate_left(17)) {
+        return Some(index);
     }
 
-    let mut selector = hash_unit(hash.rotate_left(17)) * total_weight;
+    let fallback = eligible
+        .iter()
+        .map(|index| (*index, biomes[*index].weight))
+        .collect::<Vec<_>>();
+
+    pick_weighted(&fallback, hash.rotate_left(29))
+}
+
+fn pick_weighted(weighted: &[(usize, f32)], hash: u64) -> Option<usize> {
+    let total_weight: f32 = weighted.iter().map(|(_, weight)| *weight).sum();
+    if total_weight <= f32::EPSILON {
+        return None;
+    }
+
+    let mut selector = hash_unit(hash) * total_weight;
     for (index, weight) in weighted {
-        selector -= weight;
+        selector -= *weight;
         if selector <= 0.0 {
-            return Some(index);
+            return Some(*index);
         }
     }
 
-    eligible.last().copied()
+    weighted.last().map(|(index, _)| *index)
 }
 
 fn climate_suitability(profile: BiomeClimate, climate: MacroClimateSample) -> f32 {
@@ -116,13 +125,6 @@ fn climate_axis_suitability(range: Option<BiomeClimateRange>, value: f32) -> f32
     };
 
     1.0 - (distance / CLIMATE_BLEND_MARGIN).clamp(0.0, 1.0)
-}
-
-fn climate_is_unrestricted(climate: BiomeClimate) -> bool {
-    climate.temperature.is_none()
-        && climate.humidity.is_none()
-        && climate.continentalness.is_none()
-        && climate.erosion.is_none()
 }
 
 fn vertical_range_contains(range: Option<BiomeVerticalRange>, y: f32) -> bool {

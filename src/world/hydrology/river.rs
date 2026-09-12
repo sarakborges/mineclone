@@ -17,7 +17,7 @@ use self::{
     water_bodies::{mountain_spring_body, plunge_pool_for_waterfall},
 };
 use super::{
-    constants::{OCEAN_CONTINENTALNESS_THRESHOLD, RIVER_EDGE_MARGIN_CELLS},
+    constants::RIVER_EDGE_MARGIN_CELLS,
     drainage::DrainageNetwork,
     spatial::water_body_intersects_region,
     types::{HydrologySurfaceSample, WaterBody},
@@ -33,6 +33,8 @@ pub(super) fn build_river_system<F>(
     seed: u64,
     sea_level: f32,
     water_fluid: &str,
+    river_weight: f32,
+    lake_weight: f32,
     network: &mut DrainageNetwork<'_, F>,
 ) -> RiverSystem
 where
@@ -41,8 +43,17 @@ where
     let mut graph = FeatureGraph::default();
     let mut water_bodies = Vec::new();
     let flow_cache = build_flow_cache(coord, network);
-    let selection = selected_river_sources(&flow_cache, seed, sea_level, water_fluid, network);
+    let selection = selected_river_sources(
+        &flow_cache,
+        seed,
+        sea_level,
+        water_fluid,
+        river_weight,
+        lake_weight,
+        network,
+    );
     let connected_lakes = connected_lake_cells(&selection.lakes, network);
+    let ocean_threshold = network.ocean_threshold();
     let mut destination_cache = HashMap::new();
 
     for dz in -RIVER_EDGE_MARGIN_CELLS..=RIVER_EDGE_MARGIN_CELLS {
@@ -50,7 +61,7 @@ where
             let cell = coord + IVec2::new(dx, dz);
             let source = network.node(cell);
 
-            if source.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD {
+            if source.continentalness <= ocean_threshold {
                 continue;
             }
 

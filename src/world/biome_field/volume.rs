@@ -93,7 +93,8 @@ impl BiomeField {
 
             let normalized_distance =
                 normalized_ellipsoid_distance(warped - site.position, site.radii);
-            let strength = volume_site_strength(normalized_distance);
+            let strength =
+                volume_site_strength(normalized_distance) * biome.weight.clamp(0.0, 1.0);
             if strength <= 0.0 {
                 continue;
             }
@@ -228,14 +229,17 @@ fn site_is_better(
 }
 
 fn maximum_volume_radii(biomes: &[BiomeFieldEntry]) -> Vec3 {
-    biomes.iter().fold(Vec3::ZERO, |maximum, biome| {
-        let vertical = biome
-            .size
-            .y
-            .expect("volume biome field entry must define size.y");
+    biomes
+        .iter()
+        .filter(|biome| biome.weight > f32::EPSILON)
+        .fold(Vec3::ZERO, |maximum, biome| {
+            let vertical = biome
+                .size
+                .y
+                .expect("volume biome field entry must define size.y");
 
-        maximum.max(Vec3::new(biome.size.x.max, vertical.max, biome.size.z.max))
-    })
+            maximum.max(Vec3::new(biome.size.x.max, vertical.max, biome.size.z.max))
+        })
 }
 
 fn bounds_intersect(

@@ -9,8 +9,13 @@ use super::constants::{
     COAST_SURFACE_BLEND_END_STRENGTH, OCEAN_CONTINENTALNESS_THRESHOLD, OCEAN_TRANSITION_WIDTH,
 };
 
-pub(super) fn ocean_strength(continentalness: f32) -> f32 {
-    let raw = (OCEAN_CONTINENTALNESS_THRESHOLD - continentalness) / OCEAN_TRANSITION_WIDTH;
+pub(super) fn ocean_continentalness_threshold(ocean_weight: f32) -> f32 {
+    (OCEAN_CONTINENTALNESS_THRESHOLD * ocean_weight.max(0.0)).clamp(0.0, 1.0)
+}
+
+pub(super) fn ocean_strength(continentalness: f32, ocean_weight: f32) -> f32 {
+    let threshold = ocean_continentalness_threshold(ocean_weight);
+    let raw = (threshold - continentalness) / OCEAN_TRANSITION_WIDTH;
     smoothstep(raw.clamp(0.0, 1.0))
 }
 

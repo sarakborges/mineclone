@@ -23,7 +23,7 @@ fn settings() -> DimensionHydrology {
 }
 
 fn field() -> HydrologyField {
-    HydrologyField::new(42, 64, settings())
+    HydrologyField::new(42, 64, settings(), 1.0, 1.0)
 }
 
 fn surface(elevation: f32, continentalness: f32) -> HydrologySurfaceSample {
@@ -135,7 +135,17 @@ fn biome_can_disable_lake_generation() {
     }];
 
     assert!(
-        lake_for_local_basin(IVec2::ZERO, source, &neighbors, 42, 64.0, WATER_FLUID_ID,).is_none()
+        lake_for_local_basin(
+            IVec2::ZERO,
+            source,
+            &neighbors,
+            42,
+            64.0,
+            WATER_FLUID_ID,
+            OCEAN_CONTINENTALNESS_THRESHOLD,
+            1.0,
+        )
+        .is_none()
     );
 }
 

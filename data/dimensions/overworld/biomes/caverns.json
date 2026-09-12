@@ -2,7 +2,6 @@
   "id": "asteria:overworld/caverns",
   "name": { "english": "Caverns" },
   "kind": "volume",
-  "size": { "x": { "min": 48.0, "max": 96.0 }, "z": { "min": 48.0, "max": 96.0 }, "y": { "min": 18.0, "max": 34.0 } },
   "verticalRange": { "min": 8.0, "max": 64.0 },
   "priority": 0,
   "densityModifier": { "type": "cavern", "carveStrength": 4.0, "noiseScale": 0.045, "openness": 0.34 },

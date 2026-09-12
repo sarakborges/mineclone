@@ -5,7 +5,7 @@ use crate::content::dimension_hydrology::DimensionHydrology;
 use super::{
     constants::{MACRO_SAMPLE_GRID, RIVER_CARVE_DEPTH},
     drainage::DrainageNetwork,
-    math::{hydrology_biome_weights, ocean_strength},
+    math::{hydrology_biome_weights, ocean_continentalness_threshold, ocean_strength},
     region::HydrologyRegion,
     river::build_river_system,
     spatial::macro_sample_position,
@@ -17,19 +17,29 @@ pub struct HydrologyField {
     seed: u64,
     sea_level: i32,
     settings: DimensionHydrology,
+    coast_weight: f32,
+    ocean_weight: f32,
 }
 
 impl HydrologyField {
-    pub fn new(seed: u64, sea_level: i32, settings: DimensionHydrology) -> Self {
+    pub fn new(
+        seed: u64,
+        sea_level: i32,
+        settings: DimensionHydrology,
+        coast_weight: f32,
+        ocean_weight: f32,
+    ) -> Self {
         Self {
             seed,
             sea_level,
             settings,
+            coast_weight,
+            ocean_weight,
         }
     }
 
     pub fn biome_overlay(&self, continentalness: f32) -> HydrologyBiomeOverlay<'_> {
-        let strength = ocean_strength(continentalness);
+        let strength = ocean_strength(continentalness, self.ocean_weight);
         let (mut surface_weight, mut coast_weight, mut ocean_weight) =
             hydrology_biome_weights(strength);
         let coast_biome = self.settings.coast_biome.as_deref();
@@ -42,6 +52,8 @@ impl HydrologyField {
                 ocean_weight += coast_weight;
             }
             coast_weight = 0.0;
+        } else {
+            coast_weight *= self.coast_weight;
         }
 
         if ocean_biome.is_none() {
@@ -51,6 +63,8 @@ impl HydrologyField {
                 surface_weight += ocean_weight;
             }
             ocean_weight = 0.0;
+        } else {
+            ocean_weight *= self.ocean_weight;
         }
 
         let total = surface_weight + coast_weight + ocean_weight;
@@ -58,6 +72,10 @@ impl HydrologyField {
             surface_weight /= total;
             coast_weight /= total;
             ocean_weight /= total;
+        } else {
+            surface_weight = 1.0;
+            coast_weight = 0.0;
+            ocean_weight = 0.0;
         }
 
         HydrologyBiomeOverlay {
@@ -87,12 +105,15 @@ impl HydrologyField {
             }
         }
 
-        let mut drainage = DrainageNetwork::new(self.seed, &mut sample);
+        let ocean_threshold = ocean_continentalness_threshold(self.ocean_weight);
+        let mut drainage = DrainageNetwork::new(self.seed, ocean_threshold, &mut sample);
         let rivers = build_river_system(
             coord,
             self.seed,
             self.sea_level as f32,
             &self.settings.water_fluid,
+            self.settings.river_weight,
+            self.settings.lake_weight,
             &mut drainage,
         );
 
@@ -103,6 +124,7 @@ impl HydrologyField {
             water_bodies: rivers.water_bodies,
             sea_level: self.sea_level as f32,
             settings: self.settings.clone(),
+            ocean_weight: self.ocean_weight,
             macro_samples,
         }
     }

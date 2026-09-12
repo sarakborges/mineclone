@@ -4,9 +4,8 @@ use bevy::prelude::*;
 
 use super::super::{
     constants::{
-        OCEAN_CONTINENTALNESS_THRESHOLD, RIVER_BASIN_ESCAPE_RADIUS_CELLS,
-        RIVER_EDGE_MARGIN_CELLS, RIVER_FLOW_SEARCH_RADIUS, RIVER_FLOW_TRACE_STEPS,
-        RIVER_MINIMUM_FLOW,
+        RIVER_BASIN_ESCAPE_RADIUS_CELLS, RIVER_EDGE_MARGIN_CELLS, RIVER_FLOW_SEARCH_RADIUS,
+        RIVER_FLOW_TRACE_STEPS, RIVER_MINIMUM_FLOW,
     },
     drainage::{DrainageNetwork, DrainageNode},
     lake::lake_for_local_basin,
@@ -32,6 +31,7 @@ where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
     let mut connected = HashSet::new();
+    let ocean_threshold = network.ocean_threshold();
 
     for &start in lakes.keys() {
         let mut current = start;
@@ -43,7 +43,7 @@ where
             current = next;
             let node = network.node(current);
 
-            if node.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD {
+            if node.continentalness <= ocean_threshold {
                 connected.insert(start);
                 break;
             }
@@ -72,6 +72,7 @@ where
         return cached;
     }
 
+    let ocean_threshold = network.ocean_threshold();
     let mut path = Vec::new();
     let mut current = start;
     let reaches_destination = loop {
@@ -85,7 +86,7 @@ where
         let node = network.node(current);
         path.push(current);
 
-        if node.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD {
+        if node.continentalness <= ocean_threshold {
             break true;
         }
         if path.len() >= RIVER_FLOW_TRACE_STEPS {
@@ -114,6 +115,7 @@ where
 {
     let target_radius = RIVER_EDGE_MARGIN_CELLS + RIVER_BASIN_ESCAPE_RADIUS_CELLS;
     let source_radius = target_radius + RIVER_FLOW_SEARCH_RADIUS;
+    let ocean_threshold = network.ocean_threshold();
     let mut flow = HashMap::<IVec2, u32>::new();
 
     for dz in -source_radius..=source_radius {
@@ -134,7 +136,7 @@ where
                 }
 
                 let node = network.node(current);
-                if node.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD {
+                if node.continentalness <= ocean_threshold {
                     break;
                 }
 
@@ -154,6 +156,8 @@ pub(super) fn selected_river_sources<F>(
     seed: u64,
     sea_level: f32,
     water_fluid: &str,
+    river_weight: f32,
+    lake_weight: f32,
     network: &mut DrainageNetwork<'_, F>,
 ) -> RiverSelection
 where
@@ -162,10 +166,13 @@ where
     let mut channels = HashSet::new();
     let mut springs = HashSet::new();
     let mut lakes = HashMap::new();
+    let ocean_threshold = network.ocean_threshold();
+    let river_weight = river_weight.clamp(0.0, 1.0);
+    let lake_weight = lake_weight.clamp(0.0, 1.0);
 
     for (&cell, &flow) in flow_cache {
         let source = network.node(cell);
-        if source.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD {
+        if source.continentalness <= ocean_threshold {
             continue;
         }
 
@@ -178,6 +185,8 @@ where
                 seed,
                 sea_level,
                 water_fluid,
+                ocean_threshold,
+                lake_weight,
             ) {
                 channels.insert(cell);
                 lakes.insert(cell, lake);
@@ -189,11 +198,22 @@ where
         }
 
         if flow >= RIVER_MINIMUM_FLOW {
-            channels.insert(cell);
+            let hash = cell_hash(cell, seed ^ 0x6a09_e667_f3bc_c909);
+            if hash_unit(hash.rotate_left(7)) < river_weight {
+                channels.insert(cell);
+            }
             continue;
         }
 
-        if is_mountain_spring(cell, source, flow, seed, sea_level, network) {
+        if is_mountain_spring(
+            cell,
+            source,
+            flow,
+            seed,
+            sea_level,
+            river_weight,
+            network,
+        ) {
             channels.insert(cell);
             springs.insert(cell);
         }
@@ -213,6 +233,7 @@ fn is_mountain_spring<F>(
     flow: u32,
     seed: u64,
     sea_level: f32,
+    river_weight: f32,
     network: &mut DrainageNetwork<'_, F>,
 ) -> bool
 where
@@ -235,7 +256,7 @@ where
     }
 
     let hash = cell_hash(cell, seed ^ 0x510e_527f_ade6_82d1);
-    hash_unit(hash.rotate_left(19)) < MOUNTAIN_SPRING_CHANCE
+    hash_unit(hash.rotate_left(19)) < MOUNTAIN_SPRING_CHANCE * river_weight
 }
 
 fn extend_selected_downstream<F>(
@@ -245,6 +266,7 @@ fn extend_selected_downstream<F>(
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
     let starts = selected.iter().copied().collect::<Vec<_>>();
+    let ocean_threshold = network.ocean_threshold();
 
     for start in starts {
         let mut current = start;
@@ -257,7 +279,7 @@ fn extend_selected_downstream<F>(
             };
             let downstream = network.node(next);
 
-            if downstream.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD {
+            if downstream.continentalness <= ocean_threshold {
                 break;
             }
 

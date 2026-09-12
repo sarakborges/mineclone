@@ -24,6 +24,10 @@ pub struct DimensionHydrology {
     pub lake_bed_block: Option<String>,
     #[serde(default)]
     pub shore_block: Option<String>,
+    #[serde(default = "default_feature_weight")]
+    pub river_weight: f32,
+    #[serde(default = "default_feature_weight")]
+    pub lake_weight: f32,
 }
 
 impl Default for DimensionHydrology {
@@ -36,6 +40,8 @@ impl Default for DimensionHydrology {
             river_bed_block: None,
             lake_bed_block: None,
             shore_block: None,
+            river_weight: default_feature_weight(),
+            lake_weight: default_feature_weight(),
         }
     }
 }
@@ -53,6 +59,16 @@ impl DimensionHydrology {
             "dimension {dimension_id} hydrology references missing waterFluid: {}",
             self.water_fluid
         );
+
+        for (field, weight) in [
+            ("riverWeight", self.river_weight),
+            ("lakeWeight", self.lake_weight),
+        ] {
+            assert!(
+                weight.is_finite() && weight >= 0.0,
+                "dimension {dimension_id} hydrology.{field} must be finite and non-negative"
+            );
+        }
 
         for (field, biome_id) in [
             ("oceanBiome", self.ocean_biome.as_deref()),
@@ -92,4 +108,8 @@ impl DimensionHydrology {
 
 fn default_water_fluid() -> String {
     WATER_FLUID_ID.to_owned()
+}
+
+fn default_feature_weight() -> f32 {
+    1.0
 }

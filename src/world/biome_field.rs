@@ -10,9 +10,9 @@ mod volume;
 use bevy::prelude::*;
 
 use crate::content::{
-    biome::{BiomeClimate, BiomeKind, BiomeRegistry, BiomeSize, BiomeVerticalRange},
+    biome::{BiomeClimate, BiomeKind, BiomeRegistry, BiomeVerticalRange},
     biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
-    dimension::DimensionDefinition,
+    dimension::{DimensionBiomeSize, DimensionDefinition},
 };
 
 pub(crate) use self::volume::{VolumeBiomeRegion, VolumeBiomeSelection};
@@ -23,7 +23,8 @@ use super::macro_climate::{MacroClimateField, MacroClimateSample};
 pub(super) struct BiomeFieldEntry {
     pub id: String,
     pub distributions: Vec<BiomeDistribution>,
-    pub size: BiomeSize,
+    pub size: DimensionBiomeSize,
+    pub weight: f32,
     pub climate: BiomeClimate,
     pub vertical_range: Option<BiomeVerticalRange>,
     pub priority: i32,
@@ -81,15 +82,29 @@ impl BiomeField {
         let mut volume_biomes = Vec::new();
         let mut surface_minimum_radius = Vec2::ZERO;
         let mut volume_minimum_radius = Vec3::ZERO;
+        let mut has_active_volume_biome = false;
 
-        for biome_id in &dimension.biomes {
+        for dimension_biome in &dimension.biomes {
+            let biome_id = &dimension_biome.id;
             let biome = biomes
                 .get(biome_id)
                 .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
+
+            if biome.kind == BiomeKind::Hydrology {
+                continue;
+            }
+
+            let size = dimension_biome.size.unwrap_or_else(|| {
+                panic!(
+                    "dimension {} biome {} must define size",
+                    dimension.id, biome.id
+                )
+            });
             let entry = BiomeFieldEntry {
                 id: biome.id.clone(),
                 distributions: biome.distributions.clone(),
-                size: biome.size,
+                size,
+                weight: dimension_biome.weight,
                 climate: biome.climate,
                 vertical_range: biome.vertical_range,
                 priority: biome.priority,
@@ -100,34 +115,38 @@ impl BiomeField {
 
             match biome.kind {
                 BiomeKind::Surface => {
-                    if entry.is_regional() {
-                        surface_minimum_radius.x = surface_minimum_radius.x.max(biome.size.x.min);
-                        surface_minimum_radius.y = surface_minimum_radius.y.max(biome.size.z.min);
+                    if entry.weight > 0.0 && entry.is_regional() {
+                        surface_minimum_radius.x = surface_minimum_radius.x.max(entry.size.x.min);
+                        surface_minimum_radius.y = surface_minimum_radius.y.max(entry.size.z.min);
                     }
                     surface_biomes.push(entry);
                 }
                 BiomeKind::Volume => {
-                    let vertical_size = biome
-                        .size
-                        .y
-                        .unwrap_or_else(|| panic!("volume biome {} must define size.y", biome.id));
-                    volume_minimum_radius.x = volume_minimum_radius.x.max(biome.size.x.min);
-                    volume_minimum_radius.y = volume_minimum_radius.y.max(vertical_size.min);
-                    volume_minimum_radius.z = volume_minimum_radius.z.max(biome.size.z.min);
+                    if entry.weight > 0.0 {
+                        let vertical_size = entry.size.y.unwrap_or_else(|| {
+                            panic!("volume biome {} must define dimension size.y", biome.id)
+                        });
+                        volume_minimum_radius.x = volume_minimum_radius.x.max(entry.size.x.min);
+                        volume_minimum_radius.y = volume_minimum_radius.y.max(vertical_size.min);
+                        volume_minimum_radius.z = volume_minimum_radius.z.max(entry.size.z.min);
+                        has_active_volume_biome = true;
+                    }
                     volume_biomes.push(entry);
                 }
-                BiomeKind::Hydrology => continue,
+                BiomeKind::Hydrology => unreachable!(),
             }
         }
 
         assert!(
-            surface_biomes.iter().any(BiomeFieldEntry::is_regional),
-            "dimension {} must define at least one regional surface biome",
+            surface_biomes
+                .iter()
+                .any(|biome| biome.weight > 0.0 && biome.is_regional()),
+            "dimension {} must define at least one active regional surface biome",
             dimension.id
         );
 
         let surface_site_spacing = surface_minimum_spacing(surface_minimum_radius);
-        let volume_site_spacing = (!volume_biomes.is_empty())
+        let volume_site_spacing = has_active_volume_biome
             .then_some(volume_minimum_radius * 2.0 + Vec3::splat(VOLUME_SITE_GAP));
 
         Self {

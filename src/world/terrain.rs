@@ -64,7 +64,8 @@ pub(crate) fn chunk_y_bounds(
     let maximum_offset = dimension
         .biomes
         .iter()
-        .filter_map(|biome_id| {
+        .filter_map(|dimension_biome| {
+            let biome_id = &dimension_biome.id;
             let biome = biomes
                 .get(biome_id)
                 .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));

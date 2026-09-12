@@ -24,22 +24,6 @@ pub enum BiomeKind {
     Hydrology,
 }
 
-#[derive(Clone, Copy, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BiomeSizeAxis {
-    pub min: f32,
-    pub max: f32,
-}
-
-#[derive(Clone, Copy, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BiomeSize {
-    pub x: BiomeSizeAxis,
-    pub z: BiomeSizeAxis,
-    #[serde(default)]
-    pub y: Option<BiomeSizeAxis>,
-}
-
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BiomeClimateRange {
@@ -105,8 +89,6 @@ pub struct BiomeDefinition {
     pub kind: BiomeKind,
     #[serde(default = "default_biome_distributions")]
     pub distributions: Vec<BiomeDistribution>,
-    #[serde(default)]
-    pub size: BiomeSize,
     #[serde(default)]
     pub climate: BiomeClimate,
     #[serde(default)]

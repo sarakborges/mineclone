@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::{
     constants::{
         LAKE_CARVE_DEPTH, LAKE_CHANCE, LAKE_MAXIMUM_RADIUS, LAKE_MINIMUM_RADIUS,
-        LAKE_MINIMUM_RELIEF, OCEAN_CONTINENTALNESS_THRESHOLD,
+        LAKE_MINIMUM_RELIEF,
     },
     drainage::DrainageNode,
     math::{cell_hash, hash_unit, lerp},
@@ -17,8 +17,10 @@ pub(super) fn lake_for_local_basin(
     seed: u64,
     sea_level: f32,
     water_fluid: &str,
+    ocean_threshold: f32,
+    lake_weight: f32,
 ) -> Option<WaterBody> {
-    if source.continentalness <= OCEAN_CONTINENTALNESS_THRESHOLD
+    if source.continentalness <= ocean_threshold
         || !source.biome_hydrology.can_generate_lake
         || source.elevation <= sea_level + 1.0
     {
@@ -36,8 +38,10 @@ pub(super) fn lake_for_local_basin(
     }
 
     let hash = cell_hash(cell, seed ^ 0xbb67_ae85_84ca_a73b);
-    let lake_chance =
-        (LAKE_CHANCE * source.biome_hydrology.lake_chance_multiplier).clamp(0.0, 1.0);
+    let lake_chance = (LAKE_CHANCE
+        * source.biome_hydrology.lake_chance_multiplier
+        * lake_weight.clamp(0.0, 1.0))
+    .clamp(0.0, 1.0);
 
     if hash_unit(hash.rotate_left(17)) > lake_chance {
         return None;

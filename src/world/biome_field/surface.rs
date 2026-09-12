@@ -80,7 +80,9 @@ impl BiomeField {
                             biome.id.as_str(),
                         ))
                     })
-                    .fold(0.0_f32, f32::max);
+                    .fold(0.0_f32, f32::max)
+                    * biome.weight;
+                let strength = strength.clamp(0.0, 1.0);
 
                 (strength > 0.0).then_some((index, strength))
             })
