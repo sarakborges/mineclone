@@ -198,6 +198,10 @@ where
         }
 
         if flow >= RIVER_MINIMUM_FLOW {
+            if !is_river_head(cell, flow_cache, network) {
+                continue;
+            }
+
             let hash = cell_hash(cell, seed ^ 0x6a09_e667_f3bc_c909);
             if hash_unit(hash.rotate_left(7)) < river_weight {
                 channels.insert(cell);
@@ -225,6 +229,33 @@ where
         springs,
         lakes,
     }
+}
+
+fn is_river_head<F>(
+    cell: IVec2,
+    flow_cache: &HashMap<IVec2, u32>,
+    network: &mut DrainageNetwork<'_, F>,
+) -> bool
+where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    for dz in -1..=1 {
+        for dx in -1..=1 {
+            if dx == 0 && dz == 0 {
+                continue;
+            }
+
+            let upstream = cell + IVec2::new(dx, dz);
+            if flow_cache.get(&upstream).copied().unwrap_or(0) < RIVER_MINIMUM_FLOW {
+                continue;
+            }
+            if network.downstream_cell(upstream) == Some(cell) {
+                return false;
+            }
+        }
+    }
+
+    true
 }
 
 fn is_mountain_spring<F>(
