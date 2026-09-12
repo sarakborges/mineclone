@@ -146,7 +146,7 @@ fn update_highlight(
                 )
             },
         );
-        if let Some(material) = materials.get_mut(&brush_ghost.2.0) {
+        if let Some(mut material) = materials.get_mut(&brush_ghost.2.0) {
             material.base_color = color;
         }
 
