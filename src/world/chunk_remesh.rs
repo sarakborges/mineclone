@@ -86,10 +86,6 @@ pub(super) fn process_chunk_remesh_queue(
             break;
         };
 
-        if !renderer.pool.contains(coord) {
-            continue;
-        }
-
         refresh_chunk_mesh(
             &mut renderer.commands,
             &mut renderer.meshes,

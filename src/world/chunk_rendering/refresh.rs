@@ -9,10 +9,6 @@ pub fn refresh_chunk_mesh(
     coord: IVec3,
     context: &ChunkRenderContext<'_>,
 ) {
-    if !render_pool.contains(coord) {
-        return;
-    }
-
     let Some(chunk) = context.world.chunk(coord) else {
         return;
     };
@@ -26,5 +22,8 @@ pub fn refresh_chunk_mesh(
         }
     }
 
+    // refresh is also the creation path for a resident chunk that has not been
+    // rendered yet. This lets streaming defer the only mesh build until after its
+    // bounded lighting pass without ever depending on a second streaming frame.
     spawn_chunk_mesh(commands, meshes, render_pool, coord, chunk, context);
 }
