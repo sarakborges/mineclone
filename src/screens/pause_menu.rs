@@ -9,7 +9,7 @@ use crate::{
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
     },
-    world::InMemoryWorldSave,
+    world::{InMemoryWorldSave, game_rules::GameRules},
 };
 
 pub struct PauseMenuPlugin;
@@ -91,6 +91,7 @@ fn show_pause_menu(mut roots: Query<&mut Visibility, With<PauseMenuRoot>>) {
 fn handle_pause_menu_buttons(
     interactions: Query<(&Interaction, &PauseMenuAction), Changed<Interaction>>,
     player: Query<(&PlayerId, &Transform, &GameMode), With<GameplayCamera>>,
+    game_rules: Res<GameRules>,
     mut save: ResMut<InMemoryWorldSave>,
     mut transition: ResMut<ScreenTransition>,
     mut app_exit: MessageWriter<AppExit>,
@@ -108,6 +109,7 @@ fn handle_pause_menu_buttons(
                 transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
             }
             PauseMenuAction::LeaveWorld => {
+                save.save_game_rules(*game_rules);
                 if let Ok((player_id, transform, game_mode)) = player.single() {
                     save.save_player_state(*player_id, transform.translation, *game_mode);
                 }

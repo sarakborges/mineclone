@@ -1,6 +1,10 @@
 use bevy::prelude::*;
 
-use crate::{player::camera::GameplayCamera, voxel::world::VoxelWorld};
+use crate::{
+    player::camera::GameplayCamera,
+    voxel::world::VoxelWorld,
+    world::{game_rules::GameRules, tick::WorldTickClock},
+};
 
 use super::{
     collision::{Axis, move_axis},
@@ -15,7 +19,8 @@ pub struct WalkingState {
 }
 
 pub(super) fn walk(
-    time: Res<Time>,
+    game_rules: Res<GameRules>,
+    world_ticks: Res<WorldTickClock>,
     keys: Res<ButtonInput<KeyCode>>,
     world: Res<VoxelWorld>,
     player: Single<(
@@ -29,6 +34,11 @@ pub(super) fn walk(
 
     if flight.active {
         walking.velocity = Vec3::ZERO;
+        return;
+    }
+
+    let delta_seconds = world_ticks.delta_seconds(&game_rules);
+    if delta_seconds <= 0.0 {
         return;
     }
 
@@ -64,14 +74,14 @@ pub(super) fn walk(
     walking.velocity = approach_velocity(
         walking.velocity,
         target_velocity,
-        acceleration * time.delta_secs(),
+        acceleration * delta_seconds,
     );
 
     let velocity = walking.velocity;
     if move_axis(
         &mut transform,
         &world,
-        velocity.x * time.delta_secs(),
+        velocity.x * delta_seconds,
         Axis::X,
     ) {
         walking.velocity.x = 0.0;
@@ -79,7 +89,7 @@ pub(super) fn walk(
     if move_axis(
         &mut transform,
         &world,
-        velocity.z * time.delta_secs(),
+        velocity.z * delta_seconds,
         Axis::Z,
     ) {
         walking.velocity.z = 0.0;

@@ -12,6 +12,7 @@ mod deterministic;
 pub(crate) mod dimension;
 pub(crate) mod feature_graph;
 pub(crate) mod fluid_updates;
+pub(crate) mod game_rules;
 mod generation;
 pub(crate) mod generation_region;
 pub(crate) mod hydrology;
@@ -27,6 +28,7 @@ mod seed;
 mod setup;
 mod streaming;
 pub(crate) mod terrain;
+pub(crate) mod tick;
 pub(crate) mod world_feature_fields;
 
 use bevy::prelude::*;
@@ -39,6 +41,7 @@ use chunk_unloading::unload_chunk_meshes;
 use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
 use fluid_updates::{PendingFluidUpdates, clear_fluid_updates, process_fluid_updates};
+use game_rules::GameRules;
 use lighting_updates::{clear_dynamic_lighting, process_dynamic_lighting};
 use render_diagnostics::log_render_asset_pressure;
 use render_distance::RenderDistanceSettings;
@@ -47,6 +50,7 @@ pub(crate) use seed::WorldSeed;
 pub(crate) use setup::WorldLoadingState;
 use setup::{begin_world_loading, setup_world};
 use streaming::{ChunkStreamingState, reset_chunk_streaming, stream_chunks};
+use tick::{WorldTickClock, WorldTickSet, advance_world_ticks, reset_world_ticks};
 
 pub(crate) struct WorldPlugin;
 
@@ -57,6 +61,8 @@ impl Plugin for WorldPlugin {
             .init_resource::<WorldSeed>()
             .init_resource::<WorldLoadMode>()
             .init_resource::<InMemoryWorldSave>()
+            .init_resource::<GameRules>()
+            .init_resource::<WorldTickClock>()
             .init_resource::<RenderDistanceSettings>()
             .init_resource::<ChunkStreamingState>()
             .init_resource::<ChunkRenderPool>()
@@ -65,7 +71,10 @@ impl Plugin for WorldPlugin {
             .init_resource::<PendingFluidUpdates>()
             .add_plugins(DayNightPlugin)
             .add_systems(OnEnter(GameState::Loading), begin_world_loading)
-            .add_systems(OnEnter(GameState::Gameplay), reset_chunk_streaming)
+            .add_systems(
+                OnEnter(GameState::Gameplay),
+                (reset_chunk_streaming, reset_world_ticks),
+            )
             .add_systems(
                 OnExit(GameState::Gameplay),
                 (
@@ -76,6 +85,12 @@ impl Plugin for WorldPlugin {
                 ),
             )
             .add_systems(Update, setup_world.run_if(in_state(GameState::Loading)))
+            .add_systems(
+                PreUpdate,
+                advance_world_ticks
+                    .in_set(WorldTickSet)
+                    .run_if(in_state(GameState::Gameplay)),
+            )
             .add_systems(
                 Update,
                 (stream_chunks, unload_chunk_meshes, track_current_biome)

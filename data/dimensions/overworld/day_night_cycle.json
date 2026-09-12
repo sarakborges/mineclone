@@ -1,24 +1,24 @@
 {
   "id": "asteria:overworld/day_night_cycle",
-  "dayDurationSeconds": 1200.0,
+  "dayDurationTicks": 48000,
   "initialTime": 0.0,
   "worldTimeStartHour": 6.0,
   "sequence": ["Dawn", "Day", "Dusk", "Night"],
   "phases": {
     "dawn": {
-      "durationSeconds": 300.0,
+      "durationTicks": 12000,
       "skyLightFactor": 0.35
     },
     "day": {
-      "durationSeconds": 300.0,
+      "durationTicks": 12000,
       "skyLightFactor": 1.0
     },
     "dusk": {
-      "durationSeconds": 300.0,
+      "durationTicks": 12000,
       "skyLightFactor": 0.35
     },
     "night": {
-      "durationSeconds": 300.0,
+      "durationTicks": 12000,
       "skyLightFactor": 0.06
     }
   }

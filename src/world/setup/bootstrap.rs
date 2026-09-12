@@ -8,6 +8,7 @@ use crate::{
         fluid::FluidRegistry,
         read_content,
     },
+    player::player_id::LOCAL_PLAYER_ID,
     rendering::terrain_material::TerrainMaterial,
     voxel::{
         chunk::CHUNK_SIZE, coordinates::chunk_coord_from_position, world::VoxelWorld,
@@ -20,6 +21,7 @@ use crate::world::{
     biome_field::BiomeField,
     chunk_rendering::{FluidMaterials, TerrainMaterials},
     dimension::CurrentDimension,
+    game_rules::GameRules,
     render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
     terrain::surface_height,
     world_feature_fields::WorldFeatureFields,
@@ -35,6 +37,7 @@ pub(in crate::world) struct WorldLoadingInputs<'w> {
     seed: Res<'w, WorldSeed>,
     load_mode: Res<'w, WorldLoadMode>,
     render_distance: Res<'w, RenderDistanceSettings>,
+    game_rules: ResMut<'w, GameRules>,
     dimensions: Res<'w, DimensionRegistry>,
     biomes: Res<'w, BiomeRegistry>,
     blocks: Res<'w, BlockRegistry>,
@@ -46,7 +49,7 @@ pub(in crate::world) fn begin_world_loading(
     mut commands: Commands,
     mut terrain_material_assets: ResMut<Assets<TerrainMaterial>>,
     mut save: ResMut<InMemoryWorldSave>,
-    inputs: WorldLoadingInputs,
+    mut inputs: WorldLoadingInputs,
 ) {
     let fresh_content = if *inputs.load_mode == WorldLoadMode::New {
         Some(read_content())
@@ -89,7 +92,7 @@ pub(in crate::world) fn begin_world_loading(
     );
     let fluid_materials = FluidMaterials::from_registry(fluids, &mut terrain_material_assets);
     let initial_center = if *inputs.load_mode == WorldLoadMode::Load {
-        save.player_position()
+        save.player_position(LOCAL_PLAYER_ID)
             .map(|position| {
                 let chunk = chunk_coord_from_position(position);
                 IVec3::new(chunk.x, chunk.y.max(0), chunk.z)
@@ -103,8 +106,13 @@ pub(in crate::world) fn begin_world_loading(
 
     match *inputs.load_mode {
         WorldLoadMode::New => {
+            *inputs.game_rules = GameRules::default();
             commands.insert_resource(VoxelWorld::default());
-            save.begin_new_world(*inputs.seed, &inputs.current_dimension.id);
+            save.begin_new_world(
+                *inputs.seed,
+                &inputs.current_dimension.id,
+                *inputs.game_rules,
+            );
         }
         WorldLoadMode::Load => {
             assert!(
@@ -115,6 +123,7 @@ pub(in crate::world) fn begin_world_loading(
                 inputs.existing_world.is_some(),
                 "saved world voxel state is missing from memory"
             );
+            *inputs.game_rules = save.game_rules();
         }
     }
 

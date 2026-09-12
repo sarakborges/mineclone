@@ -3,12 +3,13 @@ use bevy::prelude::*;
 use crate::{
     player::{camera::GameplayCamera, game_mode::GameMode},
     voxel::world::VoxelWorld,
+    world::{game_rules::GameRules, tick::WorldTickClock},
 };
 
 use super::{
     collision::{Axis, move_axis},
     config::{
-        FLIGHT_TOGGLE_WINDOW_SECONDS, FLY_ACCELERATION, FLY_DECELERATION, FLY_SPEED_MULTIPLIER,
+        FLIGHT_TOGGLE_WINDOW_TICKS, FLY_ACCELERATION, FLY_DECELERATION, FLY_SPEED_MULTIPLIER,
         WALK_SPEED,
     },
     gravity::GravityState,
@@ -18,7 +19,7 @@ use super::{
 #[derive(Component)]
 pub struct FlightState {
     pub(super) active: bool,
-    toggle_window: f32,
+    toggle_deadline_tick: Option<u64>,
     velocity: Vec3,
 }
 
@@ -26,23 +27,21 @@ impl Default for FlightState {
     fn default() -> Self {
         Self {
             active: false,
-            toggle_window: 0.0,
+            toggle_deadline_tick: None,
             velocity: Vec3::ZERO,
         }
     }
 }
 
 pub(super) fn handle_flight_toggle(
-    time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
+    world_ticks: Res<WorldTickClock>,
     game_mode: Single<&GameMode>,
     mut flight: Single<&mut FlightState>,
     mut gravity: Single<&mut GravityState>,
 ) {
-    flight.toggle_window = (flight.toggle_window - time.delta_secs()).max(0.0);
-
     if !game_mode.allows_flight() {
-        flight.toggle_window = 0.0;
+        flight.toggle_deadline_tick = None;
 
         if flight.active {
             flight.active = false;
@@ -58,19 +57,24 @@ pub(super) fn handle_flight_toggle(
         return;
     }
 
-    if flight.toggle_window > 0.0 {
+    let current_tick = world_ticks.current_tick();
+    if flight
+        .toggle_deadline_tick
+        .is_some_and(|deadline| current_tick <= deadline)
+    {
         flight.active = !flight.active;
-        flight.toggle_window = 0.0;
+        flight.toggle_deadline_tick = None;
         flight.velocity = Vec3::ZERO;
         gravity.vertical_velocity = 0.0;
         gravity.grounded = false;
     } else {
-        flight.toggle_window = FLIGHT_TOGGLE_WINDOW_SECONDS;
+        flight.toggle_deadline_tick = Some(current_tick.saturating_add(FLIGHT_TOGGLE_WINDOW_TICKS));
     }
 }
 
 pub(super) fn move_flying(
-    time: Res<Time>,
+    game_rules: Res<GameRules>,
+    world_ticks: Res<WorldTickClock>,
     keys: Res<ButtonInput<KeyCode>>,
     world: Res<VoxelWorld>,
     player: Single<(&mut Transform, &GameplayCamera, &mut FlightState)>,
@@ -79,6 +83,11 @@ pub(super) fn move_flying(
 
     if !flight.active {
         flight.velocity = Vec3::ZERO;
+        return;
+    }
+
+    let delta_seconds = world_ticks.delta_seconds(&game_rules);
+    if delta_seconds <= 0.0 {
         return;
     }
 
@@ -123,7 +132,7 @@ pub(super) fn move_flying(
     flight.velocity = approach_velocity(
         flight.velocity,
         target_velocity,
-        acceleration * time.delta_secs(),
+        acceleration * delta_seconds,
     );
 
     let velocity = flight.velocity;
@@ -131,7 +140,7 @@ pub(super) fn move_flying(
     if move_axis(
         &mut transform,
         &world,
-        velocity.x * time.delta_secs(),
+        velocity.x * delta_seconds,
         Axis::X,
     ) {
         flight.velocity.x = 0.0;
@@ -139,7 +148,7 @@ pub(super) fn move_flying(
     if move_axis(
         &mut transform,
         &world,
-        velocity.z * time.delta_secs(),
+        velocity.z * delta_seconds,
         Axis::Z,
     ) {
         flight.velocity.z = 0.0;
@@ -147,7 +156,7 @@ pub(super) fn move_flying(
     if move_axis(
         &mut transform,
         &world,
-        velocity.y * time.delta_secs(),
+        velocity.y * delta_seconds,
         Axis::Y,
     ) {
         flight.velocity.y = 0.0;
