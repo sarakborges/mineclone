@@ -11,7 +11,7 @@ use crate::voxel::chunk::CHUNK_SIZE;
 use super::super::{
     biome_field::VolumeBiomeRegion,
     cave_connectivity::CaveConnectivityRegion,
-    generation::columns::GenerationColumnSample,
+    generation::GenerationColumnSample,
     generation_region::{GenerationRegion, generation_region_coord},
     hydrology::HydrologyRegion,
 };

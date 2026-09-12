@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 use crate::{
     content::builtin_ids::PLAINS_BIOME_ID, player::camera::GameplayCamera,
-    voxel::coordinates::split_dimension_position,
+    voxel::coordinates::chunk_coord_from_position,
 };
 
 use self::identity::{
@@ -72,7 +72,7 @@ pub fn track_current_biome(
     let horizontal = Vec2::new(position.x, position.z);
     let surface = biome_field.sample_surface(horizontal);
     let volume = feature_fields.as_ref().and_then(|fields| {
-        let chunk_coord = split_dimension_position(position).chunk;
+        let chunk_coord = chunk_coord_from_position(position);
         let region_coord = generation_region_coord(chunk_coord);
         let volume_region = fields.volume_biome_region(region_coord, || {
             let (minimum, maximum) = generation_region_world_bounds(region_coord);

@@ -10,7 +10,7 @@ use self::cache::FeatureCaches;
 use super::{
     biome_field::VolumeBiomeRegion,
     cave_connectivity::{CaveConnectivityField, CaveConnectivityRegion},
-    generation::columns::GenerationColumnSample,
+    generation::GenerationColumnSample,
     generation_region::GenerationRegion,
     hydrology::{HydrologyBiomeOverlay, HydrologyField, HydrologyRegion},
 };

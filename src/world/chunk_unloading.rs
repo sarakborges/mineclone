@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use crate::{
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
-        coordinates::split_dimension_position, lighting::PendingLightingUpdates,
+        coordinates::chunk_coord_from_position, lighting::PendingLightingUpdates,
         neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
     },
 };
@@ -27,7 +27,7 @@ pub(super) fn unload_chunk_meshes(
     mut remesh_queue: ResMut<ChunkRemeshQueue>,
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
-    let player_chunk = split_dimension_position(feet_position).chunk;
+    let player_chunk = chunk_coord_from_position(feet_position);
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
     let mut pending_unloads = renderer
         .pool

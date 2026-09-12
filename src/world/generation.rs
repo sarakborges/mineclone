@@ -1,3 +1,4 @@
+mod caves;
 mod columns;
 mod density;
 mod fluids;
@@ -15,23 +16,22 @@ use crate::{
         biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionDefinition,
         fluid::FluidRegistry, structure::StructureRegistry,
     },
-    voxel::{
-        chunk::VoxelChunk,
-        coordinates::chunks_for_block_extent,
-    },
+    voxel::{chunk::VoxelChunk, coordinates::chunks_for_block_extent},
     world::{
-        biome_field::BiomeField, cave_connectivity::CaveConnectivityRegion,
-        generation_region::GenerationRegion, world_feature_fields::WorldFeatureFields,
+        biome_field::BiomeField, generation_region::GenerationRegion,
+        world_feature_fields::WorldFeatureFields,
     },
 };
 
 use self::{
-    columns::{GenerationColumnSample, sample_generation_columns},
+    caves::anchored_cave_region,
+    columns::sample_generation_columns,
     density::sample_density_field,
     fluids::rasterize_fluid_pass,
     materials::{MaterialPassContext, rasterize_material_pass},
     structures::rasterize_structures,
 };
+pub(crate) use self::columns::GenerationColumnSample;
 
 pub(crate) struct ChunkGenerationContext<'a> {
     pub(crate) blocks: &'a BlockRegistry,
@@ -56,7 +56,13 @@ pub(crate) fn generate_chunk(
             .biome_field
             .volume_region_in_bounds(minimum, maximum)
     });
-    let anchored_caves = cave_region(region.coord, context, &region, &volume_region);
+    let anchored_caves = anchored_cave_region(
+        region.as_ref(),
+        context.biome_field,
+        context.biomes,
+        context.dimension,
+        context.feature_fields,
+    );
     let horizontal_chunk = chunk_coord.xz();
     let columns = context.feature_fields.generation_columns(horizontal_chunk, || {
         sample_generation_columns(
@@ -94,22 +100,13 @@ pub(crate) fn generate_chunk(
     rasterize_fluid_pass(
         &mut chunk,
         chunk_origin,
-        &density,
+        &density.values,
+        context.fluids,
         &region,
         anchored_caves.as_deref(),
-        context.fluids,
+        &context.dimension.hydrology.water_fluid,
     );
-    rasterize_structures(
-        &mut chunk,
-        chunk_coord,
-        context.blocks,
-        context.structures,
-        context.dimension,
-        context.biomes,
-        context.biome_field,
-        context.feature_fields,
-        &region,
-    );
+    rasterize_structures(&mut chunk, chunk_origin, context);
 
     chunk
 }
@@ -147,56 +144,6 @@ fn generation_region(
                 }
             })
         })
-}
-
-fn cave_region(
-    region_coord: IVec3,
-    context: &ChunkGenerationContext<'_>,
-    region: &GenerationRegion,
-    volume_region: &crate::world::biome_field::VolumeBiomeRegion,
-) -> Option<Arc<CaveConnectivityRegion>> {
-    context.feature_fields.cave_region(region_coord, |field| {
-        let anchors = crate::world::generation::structures::cave_anchors_for_region(
-            region_coord,
-            region,
-            volume_region,
-            context.dimension,
-            context.biomes,
-            context.biome_field,
-            field.anchor_search_margin(),
-        );
-        let underground_anchors = anchors
-            .iter()
-            .copied()
-            .filter(|anchor| {
-                anchor.y
-                    < crate::world::terrain::surface_height(
-                        IVec2::new(anchor.x.floor() as i32, anchor.z.floor() as i32),
-                        context.dimension,
-                        context.biomes,
-                        context.biome_field,
-                    ) as f32
-            })
-            .collect::<Vec<_>>();
-        let water_source_anchors =
-            crate::world::generation::structures::cave_water_source_anchors_for_region(
-                region_coord,
-                region,
-                volume_region,
-                context.dimension,
-                context.biomes,
-                context.biome_field,
-            );
-
-        (!anchors.is_empty()).then(|| {
-            field.region_from_anchors_with_water_sources(
-                region_coord,
-                &anchors,
-                &underground_anchors,
-                &water_source_anchors,
-            )
-        })
-    })
 }
 
 pub(crate) fn maximum_structure_vertical_chunk_allowance(

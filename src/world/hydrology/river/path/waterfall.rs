@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::RiverPath;
 use super::super::super::math::{cell_hash, hash_unit, lerp, smoothstep};
 
-pub(super) const WATERFALL_MINIMUM_DROP: f32 = 10.0;
+pub(in crate::world::hydrology::river) const WATERFALL_MINIMUM_DROP: f32 = 10.0;
 const WATERFALL_MINIMUM_SLOPE: f32 = 0.075;
 const WATERFALL_CHANCE: f32 = 0.72;
 
@@ -15,9 +15,9 @@ pub(super) struct WaterfallProfile {
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct WaterfallLanding {
-    pub(super) position: Vec3,
-    pub(super) drop: f32,
+pub(in crate::world::hydrology::river) struct WaterfallLanding {
+    pub(in crate::world::hydrology::river) position: Vec3,
+    pub(in crate::world::hydrology::river) drop: f32,
 }
 
 pub(super) fn waterfall_profile(
