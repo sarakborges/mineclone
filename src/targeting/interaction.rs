@@ -143,7 +143,7 @@ fn edit_targeted_block(
 
     remesh_queue.enqueue_priority(coord);
     for offset in CARDINAL_NEIGHBORS {
-        remesh_queue.enqueue(coord + offset);
+        remesh_queue.enqueue_priority(coord + offset);
     }
 
     if placed {
