@@ -21,18 +21,29 @@ pub(super) struct RenderDistanceSliderThumb;
 #[derive(Component)]
 pub(super) struct RenderDistanceValueText;
 
-pub(super) fn render_distance_section(chunks: i32) -> impl Bundle {
+pub(super) fn graphics_section(chunks: i32) -> impl Bundle {
     (
         surface::settings_section(),
         children![
-            typography::heading("Render Distance"),
+            typography::heading("Graphics"),
             (
-                typography::muted(render_distance_label(chunks)),
-                RenderDistanceValueText,
-            ),
-            render_distance_slider(chunks),
-            typography::caption(
-                "Controls how far terrain is generated and rendered around the player.",
+                Node {
+                    width: percent(100),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(12),
+                    ..default()
+                },
+                children![
+                    typography::muted("Render Distance"),
+                    (
+                        typography::muted(render_distance_label(chunks)),
+                        RenderDistanceValueText,
+                    ),
+                    render_distance_slider(chunks),
+                    typography::caption(
+                        "Controls how far terrain is generated and rendered around the player.",
+                    ),
+                ],
             ),
         ],
     )
