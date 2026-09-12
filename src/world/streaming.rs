@@ -19,6 +19,7 @@ use crate::{
     },
 };
 
+pub(super) use self::selection::initial_chunk_coords;
 use self::selection::rebuild_queue;
 use super::{
     biome_field::BiomeField,
