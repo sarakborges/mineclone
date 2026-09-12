@@ -21,7 +21,7 @@ const NEAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const FAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS: i32 = 3;
 
-pub(super) fn initial_chunk_coords(
+pub(in crate::world) fn initial_chunk_coords(
     center: IVec3,
     horizontal_radius: i32,
     vertical_radius: i32,
