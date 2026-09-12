@@ -11,7 +11,7 @@ use super::{
     chunk_system_params::{ChunkContent, ChunkRenderer},
 };
 
-const REMESH_BUDGET: Duration = Duration::from_millis(4);
+const REMESH_BUDGET: Duration = Duration::from_millis(2);
 
 #[derive(Resource, Default)]
 pub(crate) struct ChunkRemeshQueue {
