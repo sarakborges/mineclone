@@ -29,7 +29,12 @@ pub(super) fn world_settings_section(
             ..default()
         },
         children![
-            typography::muted(localization.text(language, "settings.gameMode").to_owned()),
+            typography::setting_title(localization.text(language, "settings.gameMode").to_owned()),
+            typography::caption(
+                localization
+                    .text(language, "settings.gameMode.description")
+                    .to_owned(),
+            ),
             (
                 Node {
                     width: percent(100),
@@ -53,11 +58,6 @@ pub(super) fn world_settings_section(
                         game_mode,
                     ),
                 ],
-            ),
-            typography::caption(
-                localization
-                    .text(language, "settings.gameMode.description")
-                    .to_owned(),
             ),
         ],
     )
