@@ -3,10 +3,7 @@ use std::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 
 use crate::{
-    voxel::{
-        chunk::CHUNK_SIZE,
-        coordinates::chunks_for_block_extent,
-    },
+    voxel::{chunk::CHUNK_SIZE, coordinates::chunks_for_block_extent},
     world::render_distance::chunk_coords_in_volume,
 };
 
@@ -17,9 +14,9 @@ use super::{
 
 const HORIZONTAL_PRELOAD_CHUNKS: i32 = 1;
 const SURFACE_PADDING_ABOVE_CHUNKS: i32 = 1;
-const NEAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 4;
+const NEAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const FAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
-const PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS: i32 = 4;
+const PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS: i32 = 3;
 
 pub(super) fn rebuild_queue(
     streaming: &mut ChunkStreamingState,
