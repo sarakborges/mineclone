@@ -135,7 +135,14 @@ pub(super) fn stream_chunks(
                 continue;
             }
 
+            let generated_now = !inputs.world.has_generated_chunk(coord);
             ensure_chunk_loaded(&mut inputs.world, coord, &generation_context);
+
+            if generated_now && frame_started.elapsed() >= STREAMING_BUDGET {
+                inputs.streaming.pending.push_front(coord);
+                break;
+            }
+
             fluid_updates.enqueue_loaded_fluid_frontier(&inputs.world, coord);
             batch.push(coord);
         }

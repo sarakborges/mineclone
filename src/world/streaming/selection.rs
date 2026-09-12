@@ -16,9 +16,10 @@ use super::{
 };
 
 const HORIZONTAL_PRELOAD_CHUNKS: i32 = 1;
-const SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const SURFACE_PADDING_ABOVE_CHUNKS: i32 = 1;
-const FULL_DEPTH_VISIBILITY_RADIUS_CHUNKS: i32 = 4;
+const NEAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 4;
+const FAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 1;
+const PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS: i32 = 4;
 
 pub(super) fn rebuild_queue(
     streaming: &mut ChunkStreamingState,
@@ -71,7 +72,7 @@ fn pending_priority(
     center: IVec3,
     structure_chunk_allowance: i32,
     surface_ranges: &HashMap<IVec2, (i32, i32)>,
-) -> (i32, i32, i32, i32) {
+) -> (i32, i32, i32, i32, i32) {
     let chunk_size = CHUNK_SIZE as i32;
     let horizontal = coord.xz();
     let (minimum_surface, maximum_surface) = surface_ranges
@@ -93,6 +94,7 @@ fn pending_priority(
     let total_distance = (coord - center).length_squared();
 
     (
+        i32::from(surface_distance > 0),
         horizontal_distance,
         surface_distance,
         vertical_distance,
@@ -108,7 +110,8 @@ fn desired_chunk_coords(
     context: &QueueRebuildContext<'_>,
     surface_ranges: &mut HashMap<IVec2, (i32, i32)>,
 ) -> HashSet<IVec3> {
-    let mut desired = chunk_coords_in_volume(center, horizontal_radius, vertical_radius)
+    let local_radius = horizontal_radius.min(PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS);
+    let mut desired = chunk_coords_in_volume(center, local_radius, vertical_radius)
         .into_iter()
         .collect::<HashSet<_>>();
 
@@ -148,13 +151,14 @@ fn desired_chunk_coords(
             }
 
             let chunk_size = CHUNK_SIZE as i32;
-            let minimum_y = if horizontal_distance_squared
-                <= FULL_DEPTH_VISIBILITY_RADIUS_CHUNKS * FULL_DEPTH_VISIBILITY_RADIUS_CHUNKS
-            {
-                0
+            let near_player = horizontal_distance_squared <= local_radius * local_radius;
+            let padding_below = if near_player {
+                NEAR_SURFACE_PADDING_BELOW_CHUNKS
             } else {
-                (surrounding_minimum.div_euclid(chunk_size) - SURFACE_PADDING_BELOW_CHUNKS).max(0)
+                FAR_SURFACE_PADDING_BELOW_CHUNKS
             };
+            let minimum_y =
+                (surrounding_minimum.div_euclid(chunk_size) - padding_below).max(0);
             let maximum_y = (own_maximum.div_euclid(chunk_size)
                 + SURFACE_PADDING_ABOVE_CHUNKS.max(structure_chunk_allowance))
                 .max(minimum_y);
