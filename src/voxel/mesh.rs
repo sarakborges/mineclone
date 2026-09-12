@@ -74,7 +74,12 @@ where
                         y,
                         z,
                     );
-                    let lighting = face_lighting(world, world_voxel, face);
+                    let lighting = face_lighting(
+                        world,
+                        world_voxel,
+                        face,
+                        block.light_emission > 0,
+                    );
                     push_lit_quad(
                         buffers
                             .entry((cell.block_id, block_face, block.casts_shadow))
