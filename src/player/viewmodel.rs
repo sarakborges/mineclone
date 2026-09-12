@@ -3,7 +3,10 @@ mod model;
 
 use bevy::prelude::*;
 
-use crate::app::game_state::GameState;
+use crate::{
+    app::game_state::GameState,
+    targeting::block::BlockTargetingSet,
+};
 
 pub(crate) use animation::ViewModelAnimation;
 use animation::{ViewModelItemSwitch, advance_item_switch, animate_viewmodel};
@@ -25,6 +28,7 @@ impl Plugin for PlayerViewModelPlugin {
                     animate_viewmodel,
                 )
                     .chain()
+                    .after(BlockTargetingSet::PlacementState)
                     .run_if(in_state(GameState::Gameplay)),
             );
     }

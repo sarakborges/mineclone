@@ -14,6 +14,18 @@ pub(crate) fn orient_face(face: BlockFace, orientation: BlockOrientation) -> Blo
         .unwrap_or_else(|| panic!("block orientation produced invalid face offset: {offset}"))
 }
 
+pub(crate) fn source_face_for_oriented_face(
+    oriented_face: BlockFace,
+    orientation: BlockOrientation,
+) -> BlockFace {
+    BlockFace::ALL
+        .into_iter()
+        .find(|source_face| orient_face(*source_face, orientation) == oriented_face)
+        .unwrap_or_else(|| {
+            panic!("block orientation has no source face for oriented face: {oriented_face:?}")
+        })
+}
+
 pub(crate) fn orientation_rotation(orientation: BlockOrientation) -> Quat {
     Quat::from_mat3(&orientation_matrix(orientation))
 }
@@ -35,5 +47,17 @@ mod tests {
         assert_eq!(orient_face(BlockFace::Top, BlockOrientation::Y), BlockFace::Top);
         assert_eq!(orient_face(BlockFace::Top, BlockOrientation::Z), BlockFace::Front);
         assert_eq!(orient_face(BlockFace::Top, BlockOrientation::X), BlockFace::Right);
+    }
+
+    #[test]
+    fn source_face_inverts_oriented_face_mapping() {
+        assert_eq!(
+            source_face_for_oriented_face(BlockFace::Front, BlockOrientation::Z),
+            BlockFace::Top,
+        );
+        assert_eq!(
+            source_face_for_oriented_face(BlockFace::Right, BlockOrientation::X),
+            BlockFace::Top,
+        );
     }
 }

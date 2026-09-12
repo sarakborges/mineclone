@@ -2,13 +2,16 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::{biome::BiomeRegistry, block::BlockRegistry},
+    content::{
+        biome::BiomeRegistry, block::BlockRegistry, block_orientation::BlockOrientation,
+    },
     hud::block_icon::BlockIconMaterial,
     player::{
         camera::GameplayCamera,
         hotbar::{HOTBAR_SLOT_COUNT, PlayerHotbar},
     },
     rendering::{block_model::BlockModel, block_tint::block_tint_at},
+    targeting::{PlacementOrientation, block::BlockTargetingSet},
     ui::{theme, typography},
     world::biome_field::BiomeField,
 };
@@ -28,7 +31,10 @@ struct HotbarSlot {
 struct HotbarItemName;
 
 #[derive(Component)]
-struct HotbarBlockModel;
+struct HotbarBlockModel {
+    index: usize,
+    orientation: BlockOrientation,
+}
 
 #[derive(SystemParam)]
 struct HotbarHudContent<'w> {
@@ -44,7 +50,13 @@ impl Plugin for HotbarHudPlugin {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_hotbar)
             .add_systems(
                 Update,
-                (update_hotbar, update_hotbar_item_tints).run_if(in_state(GameState::Gameplay)),
+                update_hotbar.run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                Update,
+                update_hotbar_item_visuals
+                    .after(BlockTargetingSet::PlacementState)
+                    .run_if(in_state(GameState::Gameplay)),
             );
     }
 }
@@ -135,6 +147,7 @@ fn spawn_hotbar(
                         let block = content.blocks.get(block_id).unwrap_or_else(|| {
                             panic!("hotbar references missing block: {block_id}")
                         });
+                        let orientation = block.default_orientation();
                         let material = icon_materials.add(BlockIconMaterial::from_block(
                             block,
                             &content.asset_server,
@@ -142,7 +155,7 @@ fn spawn_hotbar(
                         ));
 
                         slot.spawn((
-                            HotbarBlockModel,
+                            HotbarBlockModel { index, orientation },
                             BlockModel::display(block_id),
                             MaterialNode(material),
                             Node {
@@ -194,28 +207,40 @@ fn update_hotbar(
     }
 }
 
-fn update_hotbar_item_tints(
+fn update_hotbar_item_visuals(
     player: Single<&Transform, With<GameplayCamera>>,
+    asset_server: Res<AssetServer>,
     blocks: Res<BlockRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
-    icons: Query<(&BlockModel, &MaterialNode<BlockIconMaterial>), With<HotbarBlockModel>>,
+    hotbar: Res<PlayerHotbar>,
+    placement_orientation: Res<PlacementOrientation>,
+    mut icons: Query<(
+        &BlockModel,
+        &mut HotbarBlockModel,
+        &MaterialNode<BlockIconMaterial>,
+    )>,
     mut materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
     let position = Vec2::new(player.translation.x, player.translation.z);
 
-    for (model, material_handle) in &icons {
+    for (model, mut icon, material_handle) in &mut icons {
         let Some(block_id) = model.block_id() else {
             continue;
         };
         let block = blocks
             .get(block_id)
             .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
+        let orientation = placement_orientation.for_block(icon.index, block);
         let tint = block_tint_at(block.tint, position, &biome_field, &biomes);
         let Some(mut material) = materials.get_mut(&material_handle.0) else {
             continue;
         };
 
+        if icon.orientation != orientation {
+            material.set_block_orientation(block, orientation, &asset_server);
+            icon.orientation = orientation;
+        }
         material.set_tint(tint);
     }
 }

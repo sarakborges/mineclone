@@ -94,7 +94,7 @@ fn spawn_crosshair(mut commands: Commands) {
                     BackgroundColor(theme::TEXT_PRIMARY.with_alpha(0.92)),
                 ));
                 crosshair.spawn((
-                    typography::caption("Press R to rotate block"),
+                    typography::opaque_caption("Press R to rotate block"),
                     TextLayout::justify(Justify::Center),
                     Node {
                         position_type: PositionType::Absolute,

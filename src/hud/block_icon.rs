@@ -3,13 +3,16 @@ use bevy::{
 };
 
 use crate::{
-    content::block::BlockDefinition,
+    content::{block::BlockDefinition, block_orientation::BlockOrientation},
     rendering::{
         block_display::{block_display_face_basis, block_display_face_shade},
         block_texture::load_block_face_texture,
         color::color_to_linear_vec4,
     },
-    voxel::block_face::BlockFace,
+    voxel::{
+        block_face::BlockFace,
+        orientation::source_face_for_oriented_face,
+    },
 };
 
 const BLOCK_ICON_SHADER_PATH: &str = "shaders/block_icon_material.wgsl";
@@ -82,17 +85,48 @@ impl BlockIconMaterial {
     }
 
     pub(crate) fn set_block(&mut self, block: &BlockDefinition, asset_server: &AssetServer) {
-        self.top_texture = load_block_face_texture(asset_server, BlockFace::Top, block)
-            .unwrap_or_default();
-        self.front_texture = load_block_face_texture(asset_server, BlockFace::Front, block)
-            .unwrap_or_default();
-        self.right_texture = load_block_face_texture(asset_server, BlockFace::Right, block)
-            .unwrap_or_default();
+        self.set_block_orientation(block, block.default_orientation(), asset_server);
+    }
+
+    pub(crate) fn set_block_orientation(
+        &mut self,
+        block: &BlockDefinition,
+        orientation: BlockOrientation,
+        asset_server: &AssetServer,
+    ) {
+        self.top_texture = load_oriented_face_texture(
+            asset_server,
+            BlockFace::Top,
+            orientation,
+            block,
+        );
+        self.front_texture = load_oriented_face_texture(
+            asset_server,
+            BlockFace::Front,
+            orientation,
+            block,
+        );
+        self.right_texture = load_oriented_face_texture(
+            asset_server,
+            BlockFace::Right,
+            orientation,
+            block,
+        );
     }
 
     pub(crate) fn set_tint(&mut self, tint: Color) {
         self.tint = color_to_linear_vec4(tint);
     }
+}
+
+fn load_oriented_face_texture(
+    asset_server: &AssetServer,
+    face: BlockFace,
+    orientation: BlockOrientation,
+    block: &BlockDefinition,
+) -> Handle<Image> {
+    let source_face = source_face_for_oriented_face(face, orientation);
+    load_block_face_texture(asset_server, source_face, block).unwrap_or_default()
 }
 
 fn block_face_shades() -> Vec4 {

@@ -1,7 +1,9 @@
 use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use crate::{
-    content::{biome::BiomeRegistry, block::BlockRegistry},
+    content::{
+        biome::BiomeRegistry, block::BlockRegistry, block_orientation::BlockOrientation,
+    },
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::{
         block_model::{
@@ -11,7 +13,8 @@ use crate::{
         block_model_material::BlockModelMaterial,
         block_tint::block_tint_at,
     },
-    voxel::block_face::BlockFace,
+    targeting::PlacementOrientation,
+    voxel::{block_face::BlockFace, orientation::orientation_rotation},
     world::biome_field::BiomeField,
 };
 
@@ -47,7 +50,11 @@ pub(super) type ArmVisibilityQuery<'w, 's> = Query<
 pub(super) type HeldBlockRootQuery<'w, 's> = Query<
     'w,
     's,
-    (&'static mut BlockModel, &'static mut Visibility),
+    (
+        &'static mut BlockModel,
+        &'static mut Transform,
+        &'static mut Visibility,
+    ),
     (
         With<HeldBlockRoot>,
         Without<ViewModelArm>,
@@ -68,6 +75,7 @@ pub(super) struct ViewModelContent<'w> {
     biomes: Res<'w, BiomeRegistry>,
     biome_field: Res<'w, BiomeField>,
     hotbar: Res<'w, PlayerHotbar>,
+    placement_orientation: Res<'w, PlacementOrientation>,
 }
 
 pub(super) fn setup_viewmodel_arm_assets(
@@ -97,7 +105,8 @@ pub(super) fn spawn_viewmodel(
     mut materials: ResMut<Assets<BlockModelMaterial>>,
 ) {
     for (camera, camera_transform) in &cameras {
-        let selected_block_id = content.hotbar.item_at(content.hotbar.selected_slot());
+        let selected_slot = content.hotbar.selected_slot();
+        let selected_block_id = content.hotbar.item_at(selected_slot);
         item_switch.initialize(selected_block_id);
 
         let item_visibility = item_visibility(selected_block_id);
@@ -108,6 +117,13 @@ pub(super) fn spawn_viewmodel(
         let block_model = selected_block_id
             .map(BlockModel::display)
             .unwrap_or_else(BlockModel::empty_display);
+        let held_orientation = selected_block_id
+            .and_then(|block_id| content.blocks.get(block_id))
+            .map_or(BlockOrientation::default(), |block| {
+                content
+                    .placement_orientation
+                    .for_block(selected_slot, block)
+            });
 
         commands.entity(camera).with_children(|camera| {
             camera
@@ -127,7 +143,12 @@ pub(super) fn spawn_viewmodel(
                     ));
 
                     viewmodel
-                        .spawn((HeldBlockRoot, block_model, held_block_transform(), item_visibility))
+                        .spawn((
+                            HeldBlockRoot,
+                            block_model,
+                            held_block_transform(held_orientation),
+                            item_visibility,
+                        ))
                         .with_children(|held| {
                             let Some(block_id) = selected_block_id else {
                                 return;
@@ -183,6 +204,8 @@ pub(super) fn sync_held_block(
     faces: Query<(&HeldBlockFace, &MeshMaterial3d<BlockModelMaterial>)>,
 ) {
     let selected_block_id = item_switch.displayed_block_id();
+    let selected_slot = content.hotbar.selected_slot();
+    let hotbar_block_id = content.hotbar.item_at(selected_slot);
     let visibility = item_visibility(selected_block_id);
     let tint_position = Vec2::new(player.translation.x, player.translation.z);
 
@@ -192,7 +215,7 @@ pub(super) fn sync_held_block(
         }
     }
 
-    for (mut held, mut held_visibility) in &mut roots {
+    for (mut held, mut held_transform, mut held_visibility) in &mut roots {
         let block_changed = held.set_block_id(selected_block_id);
 
         if *held_visibility != visibility {
@@ -206,6 +229,15 @@ pub(super) fn sync_held_block(
             .blocks
             .get(block_id)
             .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
+        let orientation = if Some(block_id) == hotbar_block_id {
+            content
+                .placement_orientation
+                .for_block(selected_slot, block)
+        } else {
+            block.default_orientation()
+        };
+        held_transform.rotation = held_block_transform(orientation).rotation;
+
         let tint = block_tint_at(
             block.tint,
             tint_position,
@@ -241,9 +273,9 @@ fn item_visibility(block_id: Option<&'static str>) -> Visibility {
     }
 }
 
-fn held_block_transform() -> Transform {
+fn held_block_transform(orientation: BlockOrientation) -> Transform {
     let viewmodel_rotation = base_viewmodel_transform().rotation;
     Transform::from_translation(Vec3::new(-0.02, ARM_SIZE.y + 0.04, 0.20))
-        .with_rotation(viewmodel_rotation.inverse())
+        .with_rotation(viewmodel_rotation.inverse() * orientation_rotation(orientation))
         .with_scale(Vec3::splat(HELD_BLOCK_SCALE))
 }

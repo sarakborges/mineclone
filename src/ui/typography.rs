@@ -50,6 +50,15 @@ pub fn caption(label: impl Into<String>) -> impl Bundle {
     )
 }
 
+pub fn opaque_caption(label: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(label),
+        ui_font(14.0, FontWeight::NORMAL),
+        LetterSpacing::Px(0.8),
+        TextColor(theme::TEXT_SUBTLE.with_alpha(1.0)),
+    )
+}
+
 pub fn button_label(label: impl Into<String>) -> impl Bundle {
     (
         Text::new(label),
