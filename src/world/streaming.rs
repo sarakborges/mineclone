@@ -14,7 +14,7 @@ use crate::{
     },
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
-        coordinates::chunk_coord_from_position, lighting::PendingLightingUpdates,
+        coordinates::chunk_coord_from_position, lighting::initialize_chunks_lighting,
         neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
     },
 };
@@ -79,7 +79,6 @@ pub(super) fn stream_chunks(
     mut renderer: ChunkRenderer,
     mut inputs: ChunkStreamingInputs,
     mut fluid_updates: ResMut<PendingFluidUpdates>,
-    mut lighting_updates: ResMut<PendingLightingUpdates>,
 ) {
     let feet_position = inputs.player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = chunk_coord_from_position(feet_position);
@@ -145,11 +144,17 @@ pub(super) fn stream_chunks(
             break;
         }
 
-        lighting_updates.enqueue_chunks_initialization(&mut inputs.world, &batch);
+        // Finish voxel lighting before the first visible mesh is built. Rendering
+        // a freshly generated chunk with cleared/default light values produced
+        // block-sized dark patches until a later remesh happened to catch up.
+        let lighting_changed = initialize_chunks_lighting(
+            &mut inputs.world,
+            &batch,
+            &content.blocks,
+            &content.fluids,
+            &content.secondary_properties,
+        );
 
-        // A generated chunk must become visible immediately instead of depending
-        // on the bounded remesh queue. PostUpdate will refresh it after lighting,
-        // but geometry is never allowed to remain resident without a mesh.
         for &coord in &batch {
             let chunk = inputs
                 .world
@@ -180,10 +185,12 @@ pub(super) fn stream_chunks(
                     inputs.remesh_queue.enqueue_priority(neighbor);
                 }
             }
+        }
 
-            // Keep a post-lighting refresh queued so the immediate mesh receives
-            // the final propagated voxel lighting as soon as the queue reaches it.
-            inputs.remesh_queue.enqueue_priority(coord);
+        for changed in lighting_changed {
+            if !batch.contains(&changed) && renderer.pool.contains(changed) {
+                inputs.remesh_queue.enqueue_priority(changed);
+            }
         }
     }
 }
