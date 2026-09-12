@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     localization::{Language, UiLocalization},
-    ui::{surface, theme, typography},
+    ui::{surface, typography},
     world::{InMemoryWorldSave, game_rules::GameRules},
 };
 

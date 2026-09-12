@@ -87,7 +87,7 @@ impl HydrologyRegion {
         });
 
         let ocean = self.macro_sample_at(horizontal).and_then(|sample| {
-            let strength = ocean_strength(sample.continentalness);
+            let strength = ocean_strength(sample.continentalness, self.ocean_weight);
             if strength <= 0.0 || !hydrology_dominates_surface(strength) {
                 return None;
             }

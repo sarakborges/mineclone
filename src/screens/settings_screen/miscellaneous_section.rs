@@ -108,7 +108,8 @@ pub(super) fn handle_display_tooltips_toggle(
         .iter()
         .any(|interaction| *interaction == Interaction::Pressed)
     {
-        settings.set_display_tooltips(!settings.display_tooltips());
+        let enabled = settings.display_tooltips();
+        settings.set_display_tooltips(!enabled);
     }
 }
 

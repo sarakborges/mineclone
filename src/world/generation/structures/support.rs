@@ -8,13 +8,13 @@ use crate::{
     world::{
         cave_connectivity::CaveConnectivityRegion,
         density_sampling::{DensitySampleContext, sample_density},
-        generation_region::GenerationRegion,
+        generation_region::{GenerationRegion, generation_region_coord},
         terrain::{surface_height, terrain_density},
     },
 };
 
 use super::super::{
-    ChunkGenerationContext, caves::anchored_cave_region, generation_region,
+    ChunkGenerationContext, caves::anchored_cave_region,
     surface_carvers::{resolve_surface_carver_column, surface_carver_density_delta},
 };
 
@@ -76,7 +76,7 @@ fn structure_support_context(
     let mut anchor_chunk =
         chunk_coord_from_world(IVec3::new(anchor.x, surface_y - 1, anchor.y));
     anchor_chunk.y = anchor_chunk.y.max(0);
-    let region = generation_region(anchor_chunk, context);
+    let region = context.region(generation_region_coord(anchor_chunk));
     let anchored_caves = anchored_cave_region(
         region.as_ref(),
         context.biome_field,
