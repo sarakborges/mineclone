@@ -59,6 +59,7 @@ pub(super) type HeldBlockRootQuery<'w, 's> = Query<
         With<HeldBlockRoot>,
         Without<ViewModelArm>,
         Without<PlayerViewModel>,
+        Without<GameplayCamera>,
     ),
 >;
 
