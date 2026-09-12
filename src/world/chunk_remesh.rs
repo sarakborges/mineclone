@@ -50,6 +50,12 @@ impl ChunkRemeshQueue {
         }
     }
 
+    pub(crate) fn extend_priority(&mut self, coords: impl IntoIterator<Item = IVec3>) {
+        for coord in coords {
+            self.enqueue_priority(coord);
+        }
+    }
+
     fn pop(&mut self) -> Option<IVec3> {
         self.queue.pop()
     }
