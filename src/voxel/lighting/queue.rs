@@ -16,6 +16,10 @@ impl LightingQueue {
         self.queue.enqueue_with_neighbors(position);
     }
 
+    pub fn enqueue_with_neighbors_priority(&mut self, position: IVec3) {
+        self.queue.enqueue_with_neighbors_priority(position);
+    }
+
     pub fn enqueue_chunk_voxels(&mut self, origin: IVec3) {
         let size = CHUNK_SIZE as i32;
 
