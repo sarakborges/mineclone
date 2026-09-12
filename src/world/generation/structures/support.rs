@@ -103,6 +103,9 @@ fn supported_surface_ground_y(
         context.biome_field,
     );
     let raw_ground_y = raw_surface_height - 1;
+    let surface_carver_minimum_y = raw_ground_y as f32 + 0.5;
+    let surface_carver_maximum_y =
+        (raw_ground_y + MAX_STRUCTURE_GROUND_RISE) as f32 + 0.5;
     let influences = surface
         .influences
         .iter()
@@ -125,6 +128,8 @@ fn supported_surface_ground_y(
                 context.biome_field,
                 context.biome_field.seed(),
                 context.dimension.sea_level as f32,
+                surface_carver_minimum_y,
+                surface_carver_maximum_y,
             )
         });
     let density_context = DensitySampleContext::new(region, anchored_caves, context.biome_field);
