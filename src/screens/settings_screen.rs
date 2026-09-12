@@ -1,7 +1,4 @@
-use bevy::{
-    prelude::*,
-    ui_widgets::{ScrollAreaPlugin, ScrollbarPlugin},
-};
+use bevy::prelude::*;
 
 use crate::app::settings_state::SettingsState;
 use game_rules_section::{
@@ -31,8 +28,7 @@ pub struct SettingsScreenPlugin;
 
 impl Plugin for SettingsScreenPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((ScrollAreaPlugin, ScrollbarPlugin))
-            .init_state::<SettingsState>()
+        app.init_state::<SettingsState>()
             .init_resource::<SettingsSectionSelection>()
             .init_resource::<TicksPerSecondInputState>()
             .add_systems(OnEnter(SettingsState::Open), spawn_settings_screen)
