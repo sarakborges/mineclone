@@ -165,22 +165,20 @@ fn fragment(
     let is_unlit = (
         pbr_input.material.flags & STANDARD_MATERIAL_FLAGS_UNLIT_BIT
     ) != 0u;
-    let sky_rgb = unpack_rgb(in.uv_b.x);
+    let sky_level = clamp(in.uv_b.x, 0.0, 1.0);
     let block_rgb = clamp(
         in.color.rgb,
         vec3<f32>(0.0),
         vec3<f32>(1.0),
     );
     let ambient_occlusion = clamp(in.color.a, 0.0, 1.0);
-    let sky_light = pow(
-        clamp(sky_rgb, vec3<f32>(0.0), vec3<f32>(1.0)),
-        vec3<f32>(LIGHT_GAMMA),
-    ) * clamp(terrain_material_extension.sky_light_factor, 0.0, 1.0);
+    let sky_light = pow(sky_level, LIGHT_GAMMA)
+        * clamp(terrain_material_extension.sky_light_factor, 0.0, 1.0);
     let block_light = pow(
         block_rgb,
         vec3<f32>(LIGHT_GAMMA),
     );
-    let propagated_light = max(sky_light, block_light);
+    let propagated_light = max(vec3<f32>(sky_light), block_light);
     let local_light = mix(
         vec3<f32>(AMBIENT_FLOOR),
         vec3<f32>(1.0),
