@@ -3,7 +3,10 @@ use bevy::prelude::*;
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     content::block::BlockRegistry,
-    player::hotbar::{PlayerHotbar, PlayerHotbarSet},
+    player::{
+        hotbar::{PlayerHotbar, PlayerHotbarSet},
+        inventory::InventoryState,
+    },
     ui::{theme, typography},
 };
 
@@ -15,23 +18,37 @@ impl Plugin for CrosshairPlugin {
             .add_systems(OnEnter(PauseState::Paused), hide_crosshair)
             .add_systems(OnEnter(SettingsState::Open), hide_crosshair)
             .add_systems(
+                OnEnter(InventoryState::Open),
+                hide_crosshair.run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
                 Update,
                 update_rotation_hint
                     .after(PlayerHotbarSet::Selection)
                     .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running)),
+                    .run_if(in_state(PauseState::Running))
+                    .run_if(in_state(InventoryState::Closed)),
             )
             .add_systems(
                 OnEnter(PauseState::Running),
                 show_crosshair
                     .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(SettingsState::Closed)),
+                    .run_if(in_state(SettingsState::Closed))
+                    .run_if(in_state(InventoryState::Closed)),
             )
             .add_systems(
                 OnEnter(SettingsState::Closed),
                 show_crosshair
                     .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running)),
+                    .run_if(in_state(PauseState::Running))
+                    .run_if(in_state(InventoryState::Closed)),
+            )
+            .add_systems(
+                OnEnter(InventoryState::Closed),
+                show_crosshair
+                    .run_if(in_state(GameState::Gameplay))
+                    .run_if(in_state(PauseState::Running))
+                    .run_if(in_state(SettingsState::Closed)),
             );
     }
 }

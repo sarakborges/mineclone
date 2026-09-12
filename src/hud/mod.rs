@@ -1,6 +1,7 @@
 mod block_icon;
 mod crosshair;
 mod hotbar;
+mod inventory;
 mod targeting;
 mod time;
 mod underwater;
@@ -10,6 +11,7 @@ use bevy::prelude::*;
 use block_icon::BlockIconMaterial;
 use crosshair::CrosshairPlugin;
 use hotbar::HotbarHudPlugin;
+use inventory::InventoryHudPlugin;
 use targeting::TargetHudPlugin;
 use time::TimeHudPlugin;
 use underwater::UnderwaterTintPlugin;
@@ -24,6 +26,7 @@ impl Plugin for HudPlugin {
                 UnderwaterTintPlugin,
                 CrosshairPlugin,
                 HotbarHudPlugin,
+                InventoryHudPlugin,
                 TimeHudPlugin,
                 WorldHudPlugin,
                 TargetHudPlugin,

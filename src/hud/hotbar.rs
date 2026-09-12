@@ -9,6 +9,7 @@ use crate::{
     player::{
         camera::GameplayCamera,
         hotbar::{HOTBAR_SLOT_COUNT, PlayerHotbar},
+        inventory::InventoryState,
     },
     rendering::{block_model::BlockModel, block_tint::block_tint_at},
     targeting::{PlacementOrientation, block::BlockTargetingSet},
@@ -23,14 +24,6 @@ const ITEM_ICON_SIZE: f32 = 34.0;
 struct HotbarHudRoot;
 
 #[derive(Component)]
-struct HotbarSlot {
-    index: usize,
-}
-
-#[derive(Component)]
-struct HotbarItemName;
-
-#[derive(Component)]
 struct HotbarBlockModel {
     index: usize,
     orientation: BlockOrientation,
@@ -41,6 +34,7 @@ struct HotbarHudContent<'w> {
     asset_server: Res<'w, AssetServer>,
     blocks: Res<'w, BlockRegistry>,
     hotbar: Res<'w, PlayerHotbar>,
+    inventory_state: Res<'w, State<InventoryState>>,
 }
 
 pub struct HotbarHudPlugin;
@@ -50,13 +44,21 @@ impl Plugin for HotbarHudPlugin {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_hotbar)
             .add_systems(
                 Update,
-                update_hotbar.run_if(in_state(GameState::Gameplay)),
+                refresh_hotbar.run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
                 Update,
                 update_hotbar_item_visuals
                     .after(BlockTargetingSet::PlacementState)
                     .run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                OnEnter(InventoryState::Open),
+                hide_hotbar.run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                OnEnter(InventoryState::Closed),
+                show_hotbar.run_if(in_state(GameState::Gameplay)),
             );
     }
 }
@@ -71,10 +73,63 @@ fn spawn_hotbar(
         return;
     }
 
-    let selected_name = content
-        .hotbar
-        .item_at(content.hotbar.selected_slot())
-        .and_then(|block_id| content.blocks.get(block_id))
+    let visibility = if *content.inventory_state.get() == InventoryState::Open {
+        Visibility::Hidden
+    } else {
+        Visibility::Visible
+    };
+
+    spawn_hotbar_root(
+        &mut commands,
+        &content.asset_server,
+        &content.blocks,
+        &content.hotbar,
+        visibility,
+        &mut icon_materials,
+    );
+}
+
+fn refresh_hotbar(
+    mut commands: Commands,
+    content: HotbarHudContent,
+    roots: Query<Entity, With<HotbarHudRoot>>,
+    mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
+) {
+    if !content.hotbar.is_changed() {
+        return;
+    }
+
+    for entity in &roots {
+        commands.entity(entity).despawn();
+    }
+
+    let visibility = if *content.inventory_state.get() == InventoryState::Open {
+        Visibility::Hidden
+    } else {
+        Visibility::Visible
+    };
+
+    spawn_hotbar_root(
+        &mut commands,
+        &content.asset_server,
+        &content.blocks,
+        &content.hotbar,
+        visibility,
+        &mut icon_materials,
+    );
+}
+
+fn spawn_hotbar_root(
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    blocks: &BlockRegistry,
+    hotbar: &PlayerHotbar,
+    visibility: Visibility,
+    icon_materials: &mut Assets<BlockIconMaterial>,
+) {
+    let selected_name = hotbar
+        .item_at(hotbar.selected_slot())
+        .and_then(|block_id| blocks.get(block_id))
         .map_or("", |block| block.name.as_str());
 
     commands
@@ -90,6 +145,7 @@ fn spawn_hotbar(
                 row_gap: px(8),
                 ..default()
             },
+            visibility,
             GlobalZIndex(10),
             Pickable::IGNORE,
             DespawnOnExit(GameState::Gameplay),
@@ -102,7 +158,6 @@ fn spawn_hotbar(
                     min_height: px(18),
                     ..default()
                 },
-                HotbarItemName,
             ));
 
             root.spawn(Node {
@@ -114,7 +169,7 @@ fn spawn_hotbar(
             })
             .with_children(|row| {
                 for index in 0..HOTBAR_SLOT_COUNT {
-                    let selected = index == content.hotbar.selected_slot();
+                    let selected = index == hotbar.selected_slot();
                     let border_color = if selected {
                         theme::TEXT_PRIMARY
                     } else {
@@ -127,7 +182,6 @@ fn spawn_hotbar(
                     };
 
                     row.spawn((
-                        HotbarSlot { index },
                         Node {
                             width: px(SLOT_SIZE),
                             height: px(SLOT_SIZE),
@@ -141,16 +195,16 @@ fn spawn_hotbar(
                         Pickable::IGNORE,
                     ))
                     .with_children(|slot| {
-                        let Some(block_id) = content.hotbar.item_at(index) else {
+                        let Some(block_id) = hotbar.item_at(index) else {
                             return;
                         };
-                        let block = content.blocks.get(block_id).unwrap_or_else(|| {
+                        let block = blocks.get(block_id).unwrap_or_else(|| {
                             panic!("hotbar references missing block: {block_id}")
                         });
                         let orientation = block.default_orientation();
                         let material = icon_materials.add(BlockIconMaterial::from_block(
                             block,
-                            &content.asset_server,
+                            asset_server,
                             Color::WHITE,
                         ));
 
@@ -171,39 +225,15 @@ fn spawn_hotbar(
         });
 }
 
-fn update_hotbar(
-    hotbar: Res<PlayerHotbar>,
-    blocks: Res<BlockRegistry>,
-    mut slots: Query<(&HotbarSlot, &mut BackgroundColor, &mut BorderColor)>,
-    mut item_name: Single<&mut Text, With<HotbarItemName>>,
-) {
-    if !hotbar.is_changed() {
-        return;
+fn hide_hotbar(mut roots: Query<&mut Visibility, With<HotbarHudRoot>>) {
+    for mut visibility in &mut roots {
+        *visibility = Visibility::Hidden;
     }
+}
 
-    for (slot, mut background, mut border) in &mut slots {
-        let selected = slot.index == hotbar.selected_slot();
-
-        background.0 = if selected {
-            Color::srgba(0.08, 0.07, 0.16, 0.94)
-        } else {
-            theme::HUD_SURFACE
-        };
-        *border = BorderColor::all(if selected {
-            theme::TEXT_PRIMARY
-        } else {
-            Color::srgba(0.70, 0.72, 0.82, 0.28)
-        });
-    }
-
-    let selected_name = hotbar
-        .item_at(hotbar.selected_slot())
-        .and_then(|block_id| blocks.get(block_id))
-        .map_or("", |block| block.name.as_str());
-
-    if item_name.0 != selected_name {
-        item_name.0.clear();
-        item_name.0.push_str(selected_name);
+fn show_hotbar(mut roots: Query<&mut Visibility, With<HotbarHudRoot>>) {
+    for mut visibility in &mut roots {
+        *visibility = Visibility::Visible;
     }
 }
 
@@ -213,7 +243,6 @@ fn update_hotbar_item_visuals(
     blocks: Res<BlockRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
-    hotbar: Res<PlayerHotbar>,
     placement_orientation: Res<PlacementOrientation>,
     mut icons: Query<(
         &BlockModel,
