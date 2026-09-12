@@ -142,11 +142,17 @@ fn update_target_hud(
                 .secondary_properties()
                 .iter()
                 .map(|(property, value)| {
+                    let property_name = match property {
+                        "dyed" => content
+                            .localization
+                            .text(language, "secondaryProperty.dyed"),
+                        _ => property,
+                    };
                     let value_name = content
                         .secondary_properties
                         .get(property, value)
                         .map_or(value, |definition| definition.name.text(language));
-                    format!("{property}: {value_name}")
+                    format!("{property_name}: {value_name}")
                 })
                 .collect::<Vec<_>>();
             properties.sort();
@@ -159,7 +165,7 @@ fn update_target_hud(
         format!("\n{}", properties.join("\n"))
     };
     let next_text = format!(
-        "{block_name}\n{}: {light_level}\n{coordinates}{properties_text}",
+        "{block_name}{properties_text}\n{}: {light_level}\n{coordinates}",
         content.localization.text(language, "hud.light"),
     );
 
