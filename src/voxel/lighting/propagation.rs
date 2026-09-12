@@ -92,21 +92,21 @@ fn desired_light(
     let filter = light_filter(world, blocks, secondary_properties, position);
 
     let sky = if blocks_light {
-        [0; 3]
+        0
     } else {
-        component_max(
-            context.direct_sky_light(
+        let transmission = filter[0].max(filter[1]).max(filter[2]);
+        context
+            .direct_sky_light(
                 world,
                 blocks,
                 fluids,
                 secondary_properties,
                 position,
-            ),
-            filter_levels(
-                propagated_neighbor_levels(world, position, attenuation, VoxelLight::sky_rgb),
-                filter,
-            ),
-        )
+            )
+            .max(filtered_level(
+                propagated_neighbor_sky(world, position, attenuation),
+                transmission,
+            ))
     };
 
     let emitted = block_emission(world, blocks, secondary_properties, position);
@@ -116,25 +116,40 @@ fn desired_light(
         component_max(
             emitted,
             filter_levels(
-                propagated_neighbor_levels(world, position, attenuation, VoxelLight::block_rgb),
+                propagated_neighbor_block(world, position, attenuation),
                 filter,
             ),
         )
     };
 
-    VoxelLight::new_colored(sky, block)
+    VoxelLight::new_colored([sky; 3], block)
 }
 
-fn propagated_neighbor_levels(
+fn propagated_neighbor_sky(world: &VoxelWorld, position: IVec3, attenuation: u8) -> u8 {
+    let mut result = 0;
+
+    for direction in CARDINAL_NEIGHBORS {
+        let incoming = world
+            .light_at(position + direction)
+            .sky()
+            .saturating_sub(attenuation);
+        result = result.max(incoming);
+    }
+
+    result
+}
+
+fn propagated_neighbor_block(
     world: &VoxelWorld,
     position: IVec3,
     attenuation: u8,
-    channel: fn(VoxelLight) -> [u8; 3],
 ) -> [u8; 3] {
     let mut result = [0; 3];
 
     for direction in CARDINAL_NEIGHBORS {
-        let incoming = channel(world.light_at(position + direction))
+        let incoming = world
+            .light_at(position + direction)
+            .block_rgb()
             .map(|level| level.saturating_sub(attenuation));
         result = component_max(result, incoming);
     }
