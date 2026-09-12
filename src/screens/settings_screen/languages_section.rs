@@ -2,7 +2,7 @@ use bevy::{prelude::*, ui::InteractionDisabled};
 
 use crate::{
     localization::{ActiveLanguage, Language, UiLocalization},
-    ui::{surface, theme, typography},
+    ui::{theme, typography},
 };
 
 const LANGUAGE_BUTTON_HEIGHT: f32 = 44.0;
@@ -18,27 +18,30 @@ pub(super) fn languages_section(
     active_language: Language,
 ) -> impl Bundle {
     (
-        surface::settings_section(),
+        Node {
+            width: percent(100),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Stretch,
+            row_gap: px(10),
+            ..default()
+        },
         children![
-            typography::heading(
+            typography::muted(
                 localization
-                    .text(active_language, "settings.section.languages")
+                    .text(active_language, "settings.language")
                     .to_owned(),
             ),
-            (
-                Node {
-                    width: percent(100),
-                    flex_direction: FlexDirection::Column,
-                    row_gap: px(10),
-                    ..default()
-                },
-                children![language_button(
-                    localization
-                        .text(active_language, Language::English.localization_key())
-                        .to_owned(),
-                    Language::English,
-                    active_language,
-                )],
+            language_button(
+                localization
+                    .text(active_language, Language::English.localization_key())
+                    .to_owned(),
+                Language::English,
+                active_language,
+            ),
+            typography::caption(
+                localization
+                    .text(active_language, "settings.language.description")
+                    .to_owned(),
             ),
         ],
     )

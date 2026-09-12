@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     localization::{Language, UiLocalization},
-    ui::{surface, theme, typography},
+    ui::{theme, typography},
     world::{InMemoryWorldSave, game_rules::GameRules},
 };
 
@@ -35,46 +35,37 @@ pub(super) fn game_rules_section(
     language: Language,
 ) -> impl Bundle {
     (
-        surface::settings_section(),
+        Node {
+            width: percent(100),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Stretch,
+            row_gap: px(12),
+            ..default()
+        },
         children![
-            typography::heading(
+            typography::muted(
                 localization
-                    .text(language, "settings.section.gameRules")
+                    .text(language, "settings.ticksBySecond")
                     .to_owned(),
             ),
             (
                 Node {
                     width: percent(100),
-                    flex_direction: FlexDirection::Column,
-                    row_gap: px(12),
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    column_gap: px(10),
                     ..default()
                 },
                 children![
-                    typography::muted(
-                        localization
-                            .text(language, "settings.ticksBySecond")
-                            .to_owned(),
-                    ),
-                    (
-                        Node {
-                            width: percent(100),
-                            flex_direction: FlexDirection::Row,
-                            align_items: AlignItems::Center,
-                            column_gap: px(10),
-                            ..default()
-                        },
-                        children![
-                            step_button("−", TicksPerSecondStep::Decrement),
-                            ticks_input(ticks_per_second),
-                            step_button("+", TicksPerSecondStep::Increment),
-                        ],
-                    ),
-                    typography::caption(
-                        localization
-                            .text(language, "settings.ticksBySecond.description")
-                            .to_owned(),
-                    ),
+                    step_button("−", TicksPerSecondStep::Decrement),
+                    ticks_input(ticks_per_second),
+                    step_button("+", TicksPerSecondStep::Increment),
                 ],
+            ),
+            typography::caption(
+                localization
+                    .text(language, "settings.ticksBySecond.description")
+                    .to_owned(),
             ),
         ],
     )

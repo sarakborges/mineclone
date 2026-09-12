@@ -5,7 +5,7 @@ use bevy::{
 
 use crate::{
     localization::{Language, UiLocalization},
-    ui::{surface, theme, typography},
+    ui::{theme, typography},
     world::render_distance::{MAX_RENDER_DISTANCE_CHUNKS, MIN_RENDER_DISTANCE_CHUNKS},
 };
 
@@ -28,41 +28,32 @@ pub(super) fn graphics_section(
     language: Language,
 ) -> impl Bundle {
     (
-        surface::settings_section(),
+        Node {
+            width: percent(100),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Stretch,
+            row_gap: px(12),
+            ..default()
+        },
         children![
-            typography::heading(
+            typography::muted(
                 localization
-                    .text(language, "settings.section.graphics")
+                    .text(language, "settings.renderDistance")
                     .to_owned(),
             ),
             (
-                Node {
-                    width: percent(100),
-                    flex_direction: FlexDirection::Column,
-                    row_gap: px(12),
-                    ..default()
-                },
-                children![
-                    typography::muted(
-                        localization
-                            .text(language, "settings.renderDistance")
-                            .to_owned(),
-                    ),
-                    (
-                        typography::muted(render_distance_label(
-                            chunks,
-                            localization,
-                            language,
-                        )),
-                        RenderDistanceValueText,
-                    ),
-                    render_distance_slider(chunks),
-                    typography::caption(
-                        localization
-                            .text(language, "settings.renderDistance.description")
-                            .to_owned(),
-                    ),
-                ],
+                typography::muted(render_distance_label(
+                    chunks,
+                    localization,
+                    language,
+                )),
+                RenderDistanceValueText,
+            ),
+            render_distance_slider(chunks),
+            typography::caption(
+                localization
+                    .text(language, "settings.renderDistance.description")
+                    .to_owned(),
             ),
         ],
     )

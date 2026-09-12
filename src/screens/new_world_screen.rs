@@ -274,7 +274,15 @@ fn spawn_sidebar(
     language: Language,
 ) {
     columns
-        .spawn(surface::settings_sidebar(SIDEBAR_WIDTH))
+        .spawn(Node {
+            width: px(SIDEBAR_WIDTH),
+            height: percent(100),
+            min_height: px(0),
+            flex_shrink: 0.0,
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Stretch,
+            ..default()
+        })
         .with_children(|sidebar| {
             sidebar
                 .spawn(Node {
@@ -450,6 +458,11 @@ fn spawn_general_content(
                             ),
                         ],
                     ),
+                    typography::caption(
+                        localization
+                            .text(language, "newWorld.seed.description")
+                            .to_owned(),
+                    ),
                 ],
             ),
             (
@@ -486,6 +499,11 @@ fn spawn_general_content(
                                 config.game_mode(),
                             ),
                         ],
+                    ),
+                    typography::caption(
+                        localization
+                            .text(language, "settings.gameMode.description")
+                            .to_owned(),
                     ),
                 ],
             ),
@@ -890,8 +908,7 @@ fn sync_section_ui(
     localization: Res<UiLocalization>,
     active_language: Res<ActiveLanguage>,
     mut panels: Query<(&NewWorldSectionPanel, &mut Node)>,
-    mut buttons: Query<(&NewWorldSectionButton, &mut BackgroundColor)>,
-    mut labels: Query<(&NewWorldSectionButtonLabel, &mut Text, &mut TextColor)>,
+    mut labels: Query<(&NewWorldSectionButtonLabel, &mut Text)>,
 ) {
     for (panel, mut node) in &mut panels {
         node.display = if panel.0 == selection.selected {
@@ -901,20 +918,11 @@ fn sync_section_ui(
         };
     }
 
-    for (button, mut background) in &mut buttons {
-        *background = BackgroundColor(section_button_background(button.0 == selection.selected));
-    }
-
-    for (label, mut text, mut color) in &mut labels {
+    for (label, mut text) in &mut labels {
         let next = localization.text(active_language.get(), label.0.localization_key());
         if text.0 != next {
             text.0 = next.to_owned();
         }
-        *color = TextColor(if label.0 == selection.selected {
-            theme::TEXT_PRIMARY
-        } else {
-            theme::TEXT_MUTED
-        });
     }
 }
 
@@ -1025,14 +1033,6 @@ fn digit_keys() -> [(KeyCode, char); 20] {
         (KeyCode::Numpad8, '8'),
         (KeyCode::Numpad9, '9'),
     ]
-}
-
-fn section_button_background(active: bool) -> Color {
-    if active {
-        Color::srgba(0.18, 0.10, 0.34, 0.58)
-    } else {
-        Color::srgba(0.0, 0.0, 0.0, 0.0)
-    }
 }
 
 fn game_mode_button_background(active: bool, interaction: Interaction) -> Color {

@@ -3,7 +3,7 @@ use bevy::{prelude::*, ui::InteractionDisabled};
 use crate::{
     localization::{Language, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
-    ui::{surface, theme, typography},
+    ui::{theme, typography},
 };
 
 const GAME_MODE_BUTTON_HEIGHT: f32 = 44.0;
@@ -21,49 +21,43 @@ pub(super) fn world_settings_section(
     language: Language,
 ) -> impl Bundle {
     (
-        surface::settings_section(),
+        Node {
+            width: percent(100),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Stretch,
+            row_gap: px(10),
+            ..default()
+        },
         children![
-            typography::heading(
-                localization
-                    .text(language, "settings.section.worldSettings")
-                    .to_owned(),
-            ),
+            typography::muted(localization.text(language, "settings.gameMode").to_owned()),
             (
                 Node {
                     width: percent(100),
-                    flex_direction: FlexDirection::Column,
-                    row_gap: px(10),
+                    flex_direction: FlexDirection::Row,
+                    column_gap: px(GAME_MODE_BUTTON_GAP),
                     ..default()
                 },
                 children![
-                    typography::muted(
-                        localization.text(language, "settings.gameMode").to_owned(),
+                    game_mode_button(
+                        localization
+                            .text(language, "settings.gameMode.survival")
+                            .to_owned(),
+                        GameMode::Survival,
+                        game_mode,
                     ),
-                    (
-                        Node {
-                            width: percent(100),
-                            flex_direction: FlexDirection::Row,
-                            column_gap: px(GAME_MODE_BUTTON_GAP),
-                            ..default()
-                        },
-                        children![
-                            game_mode_button(
-                                localization
-                                    .text(language, "settings.gameMode.survival")
-                                    .to_owned(),
-                                GameMode::Survival,
-                                game_mode,
-                            ),
-                            game_mode_button(
-                                localization
-                                    .text(language, "settings.gameMode.creative")
-                                    .to_owned(),
-                                GameMode::Creative,
-                                game_mode,
-                            ),
-                        ],
+                    game_mode_button(
+                        localization
+                            .text(language, "settings.gameMode.creative")
+                            .to_owned(),
+                        GameMode::Creative,
+                        game_mode,
                     ),
                 ],
+            ),
+            typography::caption(
+                localization
+                    .text(language, "settings.gameMode.description")
+                    .to_owned(),
             ),
         ],
     )

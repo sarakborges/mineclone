@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     hud::HudSettings,
     localization::{Language, UiLocalization},
-    ui::{surface, theme, typography},
+    ui::{theme, typography},
 };
 
 const TOGGLE_WIDTH: f32 = 52.0;
@@ -24,46 +24,36 @@ pub(super) fn miscellaneous_section(
     language: Language,
 ) -> impl Bundle {
     (
-        surface::settings_section(),
+        Node {
+            width: percent(100),
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::SpaceBetween,
+            column_gap: px(18),
+            ..default()
+        },
         children![
-            typography::heading(
-                localization
-                    .text(language, "settings.section.miscellaneous")
-                    .to_owned(),
-            ),
             (
                 Node {
-                    width: percent(100),
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::SpaceBetween,
-                    column_gap: px(18),
+                    flex_grow: 1.0,
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(5),
                     ..default()
                 },
                 children![
-                    (
-                        Node {
-                            flex_grow: 1.0,
-                            flex_direction: FlexDirection::Column,
-                            row_gap: px(5),
-                            ..default()
-                        },
-                        children![
-                            typography::muted(
-                                localization
-                                    .text(language, "settings.displayTooltips")
-                                    .to_owned(),
-                            ),
-                            typography::caption(
-                                localization
-                                    .text(language, "settings.displayTooltips.description")
-                                    .to_owned(),
-                            ),
-                        ],
+                    typography::muted(
+                        localization
+                            .text(language, "settings.displayTooltips")
+                            .to_owned(),
                     ),
-                    display_tooltips_toggle(display_tooltips),
+                    typography::caption(
+                        localization
+                            .text(language, "settings.displayTooltips.description")
+                            .to_owned(),
+                    ),
                 ],
             ),
+            display_tooltips_toggle(display_tooltips),
         ],
     )
 }
