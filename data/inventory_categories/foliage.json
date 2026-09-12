@@ -1,0 +1,7 @@
+{
+  "id": "foliage",
+  "displayName": "Foliage",
+  "blockIcon": {
+    "block": "asteria:oak_leaf"
+  }
+}

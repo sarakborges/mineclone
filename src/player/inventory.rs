@@ -38,6 +38,7 @@ impl InventoryCursor {
 pub(crate) struct CreativeInventoryView {
     search_query: String,
     search_focused: bool,
+    selected_category: Option<String>,
     scroll_row: usize,
 }
 
@@ -48,6 +49,10 @@ impl CreativeInventoryView {
 
     pub(crate) fn search_focused(&self) -> bool {
         self.search_focused
+    }
+
+    pub(crate) fn selected_category(&self) -> Option<&str> {
+        self.selected_category.as_deref()
     }
 
     pub(crate) fn scroll_row(&self) -> usize {
@@ -77,6 +82,14 @@ impl CreativeInventoryView {
         }
     }
 
+    pub(crate) fn select_category(&mut self, category: Option<&str>) {
+        let category = category.map(str::to_owned);
+        if self.selected_category != category {
+            self.selected_category = category;
+            self.scroll_row = 0;
+        }
+    }
+
     pub(crate) fn set_scroll_row(&mut self, row: usize) {
         self.scroll_row = row;
     }
@@ -84,6 +97,7 @@ impl CreativeInventoryView {
     fn reset(&mut self) {
         self.search_query.clear();
         self.search_focused = false;
+        self.selected_category = None;
         self.scroll_row = 0;
     }
 }

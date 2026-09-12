@@ -13,6 +13,7 @@ use crate::{
         biome::BiomeRegistry,
         block::{BlockDefinition, BlockRegistry},
         block_id::intern_block_id,
+        inventory_category::{InventoryCategoryDefinition, InventoryCategoryRegistry},
     },
     player::{
         camera::GameplayCamera,
@@ -34,9 +35,12 @@ const PANEL_GAP: f32 = 24.0;
 const PANEL_PADDING: f32 = 18.0;
 const SEARCH_HEIGHT: f32 = 40.0;
 const SEARCH_GAP: f32 = 14.0;
+const CATEGORY_WIDTH: f32 = 172.0;
+const CATEGORY_ROW_HEIGHT: f32 = 38.0;
+const CATEGORY_ICON_SIZE: f32 = 28.0;
+const CATEGORY_GAP: f32 = 12.0;
 const CREATIVE_VISIBLE_ROWS: usize = 5;
 const CREATIVE_COLUMNS: usize = 9;
-const CREATIVE_VISIBLE_SLOT_COUNT: usize = CREATIVE_VISIBLE_ROWS * CREATIVE_COLUMNS;
 const SCROLLBAR_WIDTH: f32 = 8.0;
 const SCROLLBAR_GAP: f32 = 8.0;
 const CREATIVE_GRID_HEIGHT: f32 =
@@ -59,6 +63,11 @@ struct CreativeInventorySlot {
 struct CreativeSearchBar;
 
 #[derive(Component)]
+struct CreativeCategoryButton {
+    id: Option<String>,
+}
+
+#[derive(Component)]
 struct InventoryCursorIcon;
 
 pub(super) struct InventoryHudPlugin;
@@ -74,6 +83,7 @@ impl Plugin for InventoryHudPlugin {
             (
                 handle_search_focus,
                 handle_search_input,
+                handle_category_clicks,
                 handle_creative_scroll,
                 handle_creative_slot_clicks,
                 handle_slot_clicks,
@@ -91,6 +101,7 @@ fn spawn_inventory(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     blocks: Res<BlockRegistry>,
+    categories: Res<InventoryCategoryRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
     hotbar: Res<PlayerHotbar>,
@@ -109,6 +120,7 @@ fn spawn_inventory(
         &mut commands,
         &asset_server,
         &blocks,
+        &categories,
         &biomes,
         &biome_field,
         Vec2::new(player.translation.x, player.translation.z),
@@ -157,6 +169,21 @@ fn handle_search_input(
     }
 }
 
+fn handle_category_clicks(
+    mut creative_view: ResMut<CreativeInventoryView>,
+    categories: Query<(&Interaction, &CreativeCategoryButton), Changed<Interaction>>,
+) {
+    for (interaction, category) in &categories {
+        if *interaction != Interaction::Pressed {
+            continue;
+        }
+
+        creative_view.blur_search();
+        creative_view.select_category(category.id.as_deref());
+        break;
+    }
+}
+
 fn handle_creative_scroll(
     mut wheel: MessageReader<MouseWheel>,
     blocks: Res<BlockRegistry>,
@@ -174,7 +201,11 @@ fn handle_creative_scroll(
         return;
     }
 
-    let total_rows = creative_total_rows(&blocks, creative_view.search_query());
+    let total_rows = creative_total_rows(
+        &blocks,
+        creative_view.search_query(),
+        creative_view.selected_category(),
+    );
     let max_scroll = total_rows.saturating_sub(CREATIVE_VISIBLE_ROWS);
     if max_scroll == 0 {
         if creative_view.scroll_row() != 0 {
@@ -234,6 +265,7 @@ fn rebuild_inventory_when_changed(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     blocks: Res<BlockRegistry>,
+    categories: Res<InventoryCategoryRegistry>,
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
     hotbar: Res<PlayerHotbar>,
@@ -256,6 +288,7 @@ fn rebuild_inventory_when_changed(
         &mut commands,
         &asset_server,
         &blocks,
+        &categories,
         &biomes,
         &biome_field,
         Vec2::new(player.translation.x, player.translation.z),
@@ -286,6 +319,7 @@ fn spawn_inventory_root(
     commands: &mut Commands,
     asset_server: &AssetServer,
     blocks: &BlockRegistry,
+    categories: &InventoryCategoryRegistry,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     player_position: Vec2,
@@ -320,6 +354,7 @@ fn spawn_inventory_root(
                 root,
                 asset_server,
                 blocks,
+                categories,
                 biomes,
                 biome_field,
                 player_position,
@@ -373,13 +408,18 @@ fn spawn_creative_panel(
     root: &mut ChildSpawnerCommands,
     asset_server: &AssetServer,
     blocks: &BlockRegistry,
+    categories: &InventoryCategoryRegistry,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     player_position: Vec2,
     creative_view: &CreativeInventoryView,
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
-    let catalog = filtered_creative_catalog(blocks, creative_view.search_query());
+    let catalog = filtered_creative_catalog(
+        blocks,
+        creative_view.search_query(),
+        creative_view.selected_category(),
+    );
     let total_rows = catalog.len().div_ceil(CREATIVE_COLUMNS).max(1);
     let max_scroll = total_rows.saturating_sub(CREATIVE_VISIBLE_ROWS);
     let scroll_row = creative_view.scroll_row().min(max_scroll);
@@ -401,88 +441,254 @@ fn spawn_creative_panel(
         Pickable::IGNORE,
     ))
     .with_children(|panel| {
-        let search_border = if creative_view.search_focused() {
-            theme::TEXT_PRIMARY
-        } else {
-            Color::srgba(0.70, 0.72, 0.82, 0.28)
-        };
-        let search_text = if creative_view.search_query().is_empty() {
-            "Search items..."
-        } else {
-            creative_view.search_query()
-        };
-
-        panel
-            .spawn((
-                Button,
-                CreativeSearchBar,
-                Node {
-                    width: px(creative_grid_width()),
-                    height: px(SEARCH_HEIGHT),
-                    padding: UiRect::horizontal(px(12)),
-                    border: UiRect::all(px(1)),
-                    border_radius: BorderRadius::all(px(7)),
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-                BackgroundColor(Color::srgba(0.02, 0.018, 0.05, 0.88)),
-                BorderColor::all(search_border),
-            ))
-            .with_children(|search| {
-                search.spawn((typography::hud(search_text), Pickable::IGNORE));
-            });
+        spawn_search_bar(panel, creative_view);
 
         panel
             .spawn((
                 Node {
                     flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Stretch,
-                    column_gap: px(SCROLLBAR_GAP),
+                    align_items: AlignItems::FlexStart,
+                    column_gap: px(CATEGORY_GAP),
                     ..default()
                 },
                 Pickable::IGNORE,
             ))
             .with_children(|content| {
+                spawn_category_list(
+                    content,
+                    asset_server,
+                    blocks,
+                    categories,
+                    creative_view,
+                    icon_materials,
+                );
+
                 content
                     .spawn((
                         Node {
-                            flex_direction: FlexDirection::Column,
-                            row_gap: px(SLOT_GAP),
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Stretch,
+                            column_gap: px(SCROLLBAR_GAP),
                             ..default()
                         },
                         Pickable::IGNORE,
                     ))
-                    .with_children(|grid| {
-                        for row in 0..CREATIVE_VISIBLE_ROWS {
-                            grid.spawn((
-                                Node {
-                                    flex_direction: FlexDirection::Row,
-                                    column_gap: px(SLOT_GAP),
-                                    ..default()
-                                },
-                                Pickable::IGNORE,
-                            ))
-                            .with_children(|row_node| {
-                                for column in 0..CREATIVE_COLUMNS {
-                                    let visible_index = row * CREATIVE_COLUMNS + column;
-                                    let item = catalog.get(first_item + visible_index).copied();
-                                    spawn_creative_slot(
-                                        row_node,
-                                        item,
-                                        asset_server,
-                                        biomes,
-                                        biome_field,
-                                        player_position,
-                                        icon_materials,
-                                    );
-                                }
-                            });
-                        }
+                    .with_children(|catalog_content| {
+                        spawn_creative_grid(
+                            catalog_content,
+                            &catalog,
+                            first_item,
+                            asset_server,
+                            biomes,
+                            biome_field,
+                            player_position,
+                            icon_materials,
+                        );
+                        spawn_creative_scrollbar(catalog_content, total_rows, scroll_row);
                     });
-
-                spawn_creative_scrollbar(content, total_rows, scroll_row);
             });
     });
+}
+
+fn spawn_search_bar(parent: &mut ChildSpawnerCommands, creative_view: &CreativeInventoryView) {
+    let search_border = if creative_view.search_focused() {
+        theme::TEXT_PRIMARY
+    } else {
+        Color::srgba(0.70, 0.72, 0.82, 0.28)
+    };
+    let search_text = if creative_view.search_query().is_empty() {
+        "Search items..."
+    } else {
+        creative_view.search_query()
+    };
+
+    parent
+        .spawn((
+            Button,
+            CreativeSearchBar,
+            Node {
+                width: px(creative_content_width()),
+                height: px(SEARCH_HEIGHT),
+                padding: UiRect::horizontal(px(12)),
+                border: UiRect::all(px(1)),
+                border_radius: BorderRadius::all(px(7)),
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.02, 0.018, 0.05, 0.88)),
+            BorderColor::all(search_border),
+        ))
+        .with_children(|search| {
+            search.spawn((typography::hud(search_text), Pickable::IGNORE));
+        });
+}
+
+fn spawn_category_list(
+    parent: &mut ChildSpawnerCommands,
+    asset_server: &AssetServer,
+    blocks: &BlockRegistry,
+    categories: &InventoryCategoryRegistry,
+    creative_view: &CreativeInventoryView,
+    icon_materials: &mut Assets<BlockIconMaterial>,
+) {
+    let mut ordered = categories.iter().collect::<Vec<_>>();
+    ordered.sort_by(|left, right| {
+        left.display_name
+            .to_lowercase()
+            .cmp(&right.display_name.to_lowercase())
+            .then_with(|| left.id.cmp(&right.id))
+    });
+
+    parent
+        .spawn((
+            Node {
+                width: px(CATEGORY_WIDTH),
+                flex_direction: FlexDirection::Column,
+                row_gap: px(SLOT_GAP),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
+        .with_children(|list| {
+            spawn_category_button(
+                list,
+                None,
+                creative_view.selected_category().is_none(),
+                asset_server,
+                blocks,
+                icon_materials,
+            );
+
+            for category in ordered {
+                let selected = creative_view.selected_category() == Some(category.id.as_str());
+                spawn_category_button(
+                    list,
+                    Some(category),
+                    selected,
+                    asset_server,
+                    blocks,
+                    icon_materials,
+                );
+            }
+        });
+}
+
+fn spawn_category_button(
+    parent: &mut ChildSpawnerCommands,
+    category: Option<&InventoryCategoryDefinition>,
+    selected: bool,
+    asset_server: &AssetServer,
+    blocks: &BlockRegistry,
+    icon_materials: &mut Assets<BlockIconMaterial>,
+) {
+    let id = category.map(|category| category.id.clone());
+    let label = category.map_or("Everything", |category| category.display_name.as_str());
+    let border = if selected {
+        theme::TEXT_PRIMARY
+    } else {
+        Color::srgba(0.70, 0.72, 0.82, 0.28)
+    };
+    let background = if selected {
+        Color::srgba(0.08, 0.07, 0.16, 0.94)
+    } else {
+        theme::HUD_SURFACE
+    };
+
+    parent
+        .spawn((
+            Button,
+            CreativeCategoryButton { id },
+            Node {
+                width: percent(100),
+                height: px(CATEGORY_ROW_HEIGHT),
+                padding: UiRect::horizontal(px(8)),
+                border: UiRect::all(px(1)),
+                border_radius: BorderRadius::all(px(6)),
+                align_items: AlignItems::Center,
+                column_gap: px(8),
+                ..default()
+            },
+            BackgroundColor(background),
+            BorderColor::all(border),
+        ))
+        .with_children(|button| {
+            if let Some(category) = category {
+                let block = blocks.get(&category.block_icon.block).unwrap_or_else(|| {
+                    panic!(
+                        "inventory category {} references missing block icon {}",
+                        category.id, category.block_icon.block
+                    )
+                });
+                let block_id = intern_block_id(&block.id);
+                let material = icon_materials.add(BlockIconMaterial::from_block(
+                    block,
+                    asset_server,
+                    category.icon_tint(block),
+                ));
+
+                button.spawn((
+                    BlockModel::display(block_id),
+                    MaterialNode(material),
+                    Node {
+                        width: px(CATEGORY_ICON_SIZE),
+                        height: px(CATEGORY_ICON_SIZE),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ));
+            }
+
+            button.spawn((typography::hud(label), Pickable::IGNORE));
+        });
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_creative_grid(
+    parent: &mut ChildSpawnerCommands,
+    catalog: &[&BlockDefinition],
+    first_item: usize,
+    asset_server: &AssetServer,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+    player_position: Vec2,
+    icon_materials: &mut Assets<BlockIconMaterial>,
+) {
+    parent
+        .spawn((
+            Node {
+                flex_direction: FlexDirection::Column,
+                row_gap: px(SLOT_GAP),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
+        .with_children(|grid| {
+            for row in 0..CREATIVE_VISIBLE_ROWS {
+                grid.spawn((
+                    Node {
+                        flex_direction: FlexDirection::Row,
+                        column_gap: px(SLOT_GAP),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ))
+                .with_children(|row_node| {
+                    for column in 0..CREATIVE_COLUMNS {
+                        let visible_index = row * CREATIVE_COLUMNS + column;
+                        let item = catalog.get(first_item + visible_index).copied();
+                        spawn_creative_slot(
+                            row_node,
+                            item,
+                            asset_server,
+                            biomes,
+                            biome_field,
+                            player_position,
+                            icon_materials,
+                        );
+                    }
+                });
+            }
+        });
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -745,10 +951,12 @@ fn spawn_slot(
 fn filtered_creative_catalog<'a>(
     blocks: &'a BlockRegistry,
     query: &str,
+    category: Option<&str>,
 ) -> Vec<&'a BlockDefinition> {
     let query = query.trim().to_lowercase();
     let mut catalog = blocks
         .iter()
+        .filter(|block| category.map_or(true, |category| block.category == category))
         .filter(|block| query.is_empty() || block.name.to_lowercase().contains(&query))
         .collect::<Vec<_>>();
 
@@ -761,11 +969,15 @@ fn filtered_creative_catalog<'a>(
     catalog
 }
 
-fn creative_total_rows(blocks: &BlockRegistry, query: &str) -> usize {
-    let count = filtered_creative_catalog(blocks, query).len();
+fn creative_total_rows(blocks: &BlockRegistry, query: &str, category: Option<&str>) -> usize {
+    let count = filtered_creative_catalog(blocks, query, category).len();
     count.div_ceil(CREATIVE_COLUMNS).max(1)
 }
 
 fn creative_grid_width() -> f32 {
     CREATIVE_COLUMNS as f32 * SLOT_SIZE + (CREATIVE_COLUMNS - 1) as f32 * SLOT_GAP
+}
+
+fn creative_content_width() -> f32 {
+    CATEGORY_WIDTH + CATEGORY_GAP + creative_grid_width() + SCROLLBAR_GAP + SCROLLBAR_WIDTH
 }

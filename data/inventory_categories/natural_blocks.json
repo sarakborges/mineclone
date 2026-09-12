@@ -1,0 +1,7 @@
+{
+  "id": "natural_blocks",
+  "displayName": "Natural Blocks",
+  "blockIcon": {
+    "block": "asteria:grass"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "id": "light_sources",
+  "displayName": "Light Sources",
+  "blockIcon": {
+    "block": "asteria:lamp"
+  }
+}

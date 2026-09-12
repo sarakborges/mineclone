@@ -2,8 +2,7 @@ use bevy::prelude::*;
 use serde::Deserialize;
 
 use super::{
-    block_category::BlockCategory, block_id::intern_block_id,
-    block_orientation::BlockOrientation, registry::DefinitionMap,
+    block_id::intern_block_id, block_orientation::BlockOrientation, registry::DefinitionMap,
 };
 
 const MAX_LIGHT_DAMPENING: u8 = 15;
@@ -68,7 +67,7 @@ pub enum BlockTint {
 pub struct BlockDefinition {
     pub id: String,
     pub name: String,
-    pub category: BlockCategory,
+    pub category: String,
     #[serde(default)]
     pub tint: BlockTint,
     #[serde(default)]

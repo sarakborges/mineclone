@@ -10,6 +10,7 @@ use super::{
     day_night_cycle::{DayNightCycleDefinition, DayNightCycleRegistry},
     dimension::{DimensionDefinition, DimensionRegistry},
     fluid::{FluidDefinition, FluidRegistry},
+    inventory_category::{InventoryCategoryDefinition, InventoryCategoryRegistry},
     json_file::{collect_json_files, read_json_definition},
     sky::{SkyDefinition, SkyRegistry},
     structure::{StructureDefinition, StructureRegistry},
@@ -22,6 +23,7 @@ pub(crate) struct LoadedContent {
     pub dimensions: DimensionRegistry,
     pub day_night_cycles: DayNightCycleRegistry,
     pub fluids: FluidRegistry,
+    pub inventory_categories: InventoryCategoryRegistry,
     pub skies: SkyRegistry,
     pub structures: StructureRegistry,
 }
@@ -33,6 +35,7 @@ impl LoadedContent {
         commands.insert_resource(self.dimensions);
         commands.insert_resource(self.day_night_cycles);
         commands.insert_resource(self.fluids);
+        commands.insert_resource(self.inventory_categories);
         commands.insert_resource(self.skies);
         commands.insert_resource(self.structures);
     }
@@ -50,6 +53,19 @@ pub(crate) fn read_content() -> LoadedContent {
 
     for path in files {
         load_definition(&path, &mut content);
+    }
+
+    for category in content.inventory_categories.iter() {
+        category.validate_references(&content.blocks);
+    }
+
+    for block in content.blocks.iter() {
+        assert!(
+            content.inventory_categories.get(&block.category).is_some(),
+            "block {} references missing inventory category {}",
+            block.id,
+            block.category
+        );
     }
 
     for structure in content.structures.iter() {
@@ -80,6 +96,10 @@ fn load_definition(path: &Path, content: &mut LoadedContent) {
             .insert(read_json_definition::<DayNightCycleDefinition>(path));
     } else if file_name == "sky.json" {
         content.skies.insert(read_json_definition::<SkyDefinition>(path));
+    } else if path_has_component(path, "inventory_categories") {
+        content
+            .inventory_categories
+            .insert(read_json_definition::<InventoryCategoryDefinition>(path));
     } else if path_has_component(path, "biomes") {
         content
             .biomes
