@@ -36,6 +36,13 @@ impl SecondaryProperties {
             .map(|entry| entry.value)
     }
 
+    pub(crate) fn iter(self) -> impl Iterator<Item = (&'static str, &'static str)> {
+        self.values
+            .into_iter()
+            .flatten()
+            .map(|entry| (entry.property, entry.value))
+    }
+
     #[cfg(test)]
     pub(crate) fn with(mut self, property: &str, value: &str) -> Self {
         self.set(property, value);
@@ -107,6 +114,17 @@ mod tests {
             .with("dyed", "blue");
 
         assert_eq!(properties.get("dyed"), Some("blue"));
+    }
+
+    #[test]
+    fn iterates_secondary_property_values() {
+        let properties = SecondaryProperties::default()
+            .with("dyed", "blue")
+            .with("variant", "mossy");
+        let values = properties.iter().collect::<Vec<_>>();
+
+        assert!(values.contains(&("dyed", "blue")));
+        assert!(values.contains(&("variant", "mossy")));
     }
 
     #[test]
