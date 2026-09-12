@@ -270,20 +270,12 @@ fn fragment(
 #ifdef PREPASS_PIPELINE
     return deferred_output(in, pbr_input);
 #else
-    let block_light_floor = apply_asteria_distance_fog(
-        vec4<f32>(
-            material_rgb * block_light * ambient_occlusion,
-            pbr_input.material.base_color.a,
-        ),
-        in.world_position.xyz,
-    );
     var out: FragmentOutput;
     out.color = apply_asteria_distance_fog(
         pbr_input.material.base_color,
         in.world_position.xyz,
     );
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
-    out.color.rgb = max(out.color.rgb, block_light_floor.rgb);
     return out;
 #endif
 }
