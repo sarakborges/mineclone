@@ -56,14 +56,11 @@ pub(crate) fn player_position_is_clear(world: &VoxelWorld, translation: Vec3) ->
     let feet = translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let feet_voxel = feet.floor().as_ivec3();
     let head_voxel = feet_voxel + IVec3::Y;
-    let support_voxel = feet_voxel - IVec3::Y;
 
     world.is_loaded_at(feet_voxel)
         && world.is_loaded_at(head_voxel)
-        && world.is_loaded_at(support_voxel)
         && !world.is_solid(feet_voxel)
         && !world.is_solid(head_voxel)
-        && world.is_solid(support_voxel)
         && world.fluid_at(feet_voxel).is_none()
         && world.fluid_at(head_voxel).is_none()
 }
