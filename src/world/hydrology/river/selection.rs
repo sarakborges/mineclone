@@ -19,6 +19,7 @@ const MOUNTAIN_SPRING_CHANCE: f32 = 0.52;
 
 pub(super) struct RiverSelection {
     pub(super) channels: HashSet<IVec2>,
+    pub(super) heads: HashSet<IVec2>,
     pub(super) springs: HashSet<IVec2>,
     pub(super) lakes: HashMap<IVec2, WaterBody>,
 }
@@ -164,11 +165,13 @@ where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
     let mut channels = HashSet::new();
+    let mut heads = HashSet::new();
     let mut springs = HashSet::new();
     let mut lakes = HashMap::new();
     let ocean_threshold = network.ocean_threshold();
     let river_weight = river_weight.clamp(0.0, 1.0);
     let lake_weight = lake_weight.clamp(0.0, 1.0);
+    let river_flow_threshold = river_flow_threshold(river_weight);
 
     for (&cell, &flow) in flow_cache {
         let source = network.node(cell);
@@ -189,6 +192,7 @@ where
                 lake_weight,
             ) {
                 channels.insert(cell);
+                heads.insert(cell);
                 lakes.insert(cell, lake);
             }
         }
@@ -197,14 +201,14 @@ where
             continue;
         }
 
-        if flow >= RIVER_MINIMUM_FLOW {
-            if !is_river_head(cell, flow_cache, network) {
-                continue;
-            }
-
-            let hash = cell_hash(cell, seed ^ 0x6a09_e667_f3bc_c909);
-            if hash_unit(hash.rotate_left(7)) < river_weight {
-                channels.insert(cell);
+        // Selecting every cell above one deterministic threshold makes a river a
+        // continuous drainage network. The previous per-head random gate was
+        // recomputed per hydrology region and could make a channel disappear at a
+        // region boundary, producing rivers that visibly ended in open terrain.
+        if flow >= river_flow_threshold {
+            channels.insert(cell);
+            if is_river_head(cell, flow_cache, river_flow_threshold, network) {
+                heads.insert(cell);
             }
             continue;
         }
@@ -219,6 +223,7 @@ where
             network,
         ) {
             channels.insert(cell);
+            heads.insert(cell);
             springs.insert(cell);
         }
     }
@@ -226,14 +231,24 @@ where
     extend_selected_downstream(&mut channels, network);
     RiverSelection {
         channels,
+        heads,
         springs,
         lakes,
     }
 }
 
+fn river_flow_threshold(river_weight: f32) -> u32 {
+    if river_weight <= f32::EPSILON {
+        return u32::MAX;
+    }
+
+    ((RIVER_MINIMUM_FLOW as f32 / river_weight.max(0.15)).ceil() as u32).max(RIVER_MINIMUM_FLOW)
+}
+
 fn is_river_head<F>(
     cell: IVec2,
     flow_cache: &HashMap<IVec2, u32>,
+    river_flow_threshold: u32,
     network: &mut DrainageNetwork<'_, F>,
 ) -> bool
 where
@@ -246,7 +261,7 @@ where
             }
 
             let upstream = cell + IVec2::new(dx, dz);
-            if flow_cache.get(&upstream).copied().unwrap_or(0) < RIVER_MINIMUM_FLOW {
+            if flow_cache.get(&upstream).copied().unwrap_or(0) < river_flow_threshold {
                 continue;
             }
             if network.downstream_cell(upstream) == Some(cell) {
