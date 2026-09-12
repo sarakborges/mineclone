@@ -1,11 +1,10 @@
-use crate::{
-    content::{block_orientation::BlockOrientation, fluid::FluidId},
-};
+use crate::content::{block_orientation::BlockOrientation, fluid::FluidId};
 
 use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk},
     fluid::FluidCell,
+    secondary_properties::SecondaryProperties,
     texture_rotation::TextureRotation,
 };
 
@@ -17,6 +16,7 @@ struct ArchivedCell {
     palette_index: u16,
     rotation: u8,
     orientation: u8,
+    secondary_properties: SecondaryProperties,
 }
 
 #[derive(Clone, Copy)]
@@ -67,6 +67,7 @@ impl ArchivedChunk {
                 palette_index: palette_index as u16,
                 rotation: rotation_index(cell.texture_rotation),
                 orientation: cell.orientation.index(),
+                secondary_properties: cell.secondary_properties(),
             });
         }
 
@@ -115,11 +116,14 @@ impl ArchivedChunk {
                 x,
                 y,
                 z,
-                Some(VoxelCell::oriented(
-                    block_id,
-                    TextureRotation::from_quarter_turn(archived.rotation),
-                    BlockOrientation::from_index(archived.orientation),
-                )),
+                Some(
+                    VoxelCell::oriented(
+                        block_id,
+                        TextureRotation::from_quarter_turn(archived.rotation),
+                        BlockOrientation::from_index(archived.orientation),
+                    )
+                    .with_secondary_properties(archived.secondary_properties),
+                ),
             );
         }
 

@@ -16,6 +16,7 @@ pub(crate) mod neighbors;
 pub(crate) mod orientation;
 pub(crate) mod quad;
 pub(crate) mod raycast;
+pub(crate) mod secondary_properties;
 pub(crate) mod texture_rotation;
 pub(crate) mod update_queue;
 pub(crate) mod world;

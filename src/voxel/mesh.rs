@@ -9,6 +9,7 @@ use crate::content::block::{BlockRegistry, BlockTextureRotations};
 use self::geometry::{face_geometry, is_face_exposed, orient_face_geometry};
 use super::{
     block_face::BlockFace,
+    cell::VoxelCell,
     chunk::{CHUNK_SIZE, VoxelChunk},
     mesh_buffer::VoxelMeshBuffer,
     mesh_lighting::{face_lighting, push_lit_quad},
@@ -33,7 +34,7 @@ pub fn build_chunk_mesh<F>(
     tint_at: F,
 ) -> Vec<ChunkFaceMesh>
 where
-    F: Fn(IVec3, &'static str) -> [f32; 3],
+    F: Fn(IVec3, VoxelCell) -> [f32; 3],
 {
     let mut buffers = HashMap::<(&'static str, BlockFace, bool), VoxelMeshBuffer>::new();
     let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
@@ -51,7 +52,7 @@ where
                 let tint = if block.textures.is_empty() {
                     [1.0, 1.0, 1.0]
                 } else {
-                    tint_at(world_voxel, cell.block_id)
+                    tint_at(world_voxel, cell)
                 };
 
                 for block_face in BlockFace::ALL {

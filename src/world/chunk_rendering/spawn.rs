@@ -2,7 +2,7 @@ use bevy::{light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    rendering::block_tint::block_tint_at,
+    rendering::block_tint::{apply_secondary_property_tint, block_tint_at},
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         fluid_mesh::build_fluid_meshes,
@@ -34,14 +34,26 @@ pub fn spawn_chunk_mesh(
         coord,
         chunk,
         context.blocks,
-        |voxel, block_id| {
+        |voxel, cell| {
             let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
             let block = context
                 .blocks
-                .get(block_id)
-                .unwrap_or_else(|| panic!("missing block definition: {block_id}"));
-            let tint =
-                block_tint_at(block.tint, position, context.biome_field, context.biomes).to_srgba();
+                .get(cell.block_id)
+                .unwrap_or_else(|| panic!("missing block definition: {}", cell.block_id));
+            let base_tint = block_tint_at(
+                block.tint,
+                position,
+                context.biome_field,
+                context.biomes,
+            );
+            let tint = apply_secondary_property_tint(
+                base_tint,
+                block,
+                cell,
+                context.secondary_properties,
+            )
+            .to_srgba();
+
             [tint.red, tint.green, tint.blue]
         },
     );

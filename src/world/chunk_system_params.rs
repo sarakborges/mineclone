@@ -5,6 +5,7 @@ use crate::content::{
     block::BlockRegistry,
     dimension::{DimensionDefinition, DimensionRegistry},
     fluid::FluidRegistry,
+    secondary_property::SecondaryPropertyRegistry,
     structure::StructureRegistry,
 };
 
@@ -21,6 +22,7 @@ pub(crate) struct ChunkContent<'w> {
     pub(crate) blocks: Res<'w, BlockRegistry>,
     pub(crate) fluids: Res<'w, FluidRegistry>,
     pub(crate) biomes: Res<'w, BiomeRegistry>,
+    pub(crate) secondary_properties: Res<'w, SecondaryPropertyRegistry>,
     pub(crate) structures: Res<'w, StructureRegistry>,
     pub(crate) biome_field: Res<'w, BiomeField>,
 }
@@ -37,6 +39,7 @@ impl<'w> ChunkContent<'w> {
             blocks: &self.blocks,
             fluids: &self.fluids,
             biomes: &self.biomes,
+            secondary_properties: &self.secondary_properties,
             biome_field: &self.biome_field,
             terrain_materials,
             fluid_materials,
