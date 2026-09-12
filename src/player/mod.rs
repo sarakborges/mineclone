@@ -1,5 +1,6 @@
 pub(crate) mod camera;
 pub(crate) mod hotbar;
+pub(crate) mod inventory;
 pub(crate) mod movement;
 pub(crate) mod viewmodel;
 

@@ -6,9 +6,13 @@ use crate::{
         DIRT_BLOCK_ID, GLASS_BLOCK_ID, GRASS_BLOCK_ID, LAMP_BLOCK_ID, OAK_LEAF_BLOCK_ID,
         OAK_WOOD_BLOCK_ID, SAND_BLOCK_ID, STONE_BLOCK_ID,
     },
+    player::inventory::InventoryState,
 };
 
+pub const BACKPACK_SLOT_COUNT: usize = 27;
 pub const HOTBAR_SLOT_COUNT: usize = 9;
+pub const INVENTORY_SLOT_COUNT: usize = BACKPACK_SLOT_COUNT + HOTBAR_SLOT_COUNT;
+pub const HOTBAR_INVENTORY_OFFSET: usize = BACKPACK_SLOT_COUNT;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum PlayerHotbarSet {
@@ -18,6 +22,7 @@ pub(crate) enum PlayerHotbarSet {
 #[derive(Resource)]
 pub struct PlayerHotbar {
     selected_slot: usize,
+    backpack: [Option<&'static str>; BACKPACK_SLOT_COUNT],
     slots: [Option<&'static str>; HOTBAR_SLOT_COUNT],
 }
 
@@ -35,6 +40,7 @@ impl Default for PlayerHotbar {
 
         Self {
             selected_slot: 0,
+            backpack: [None; BACKPACK_SLOT_COUNT],
             slots,
         }
     }
@@ -47,6 +53,31 @@ impl PlayerHotbar {
 
     pub fn item_at(&self, slot: usize) -> Option<&'static str> {
         self.slots.get(slot).copied().flatten()
+    }
+
+    pub(crate) fn inventory_item_at(&self, index: usize) -> Option<&'static str> {
+        if index < BACKPACK_SLOT_COUNT {
+            return self.backpack[index];
+        }
+
+        self.item_at(index - HOTBAR_INVENTORY_OFFSET)
+    }
+
+    pub(crate) fn replace_inventory_item(
+        &mut self,
+        index: usize,
+        item: Option<&'static str>,
+    ) -> Option<&'static str> {
+        if index < BACKPACK_SLOT_COUNT {
+            return std::mem::replace(&mut self.backpack[index], item);
+        }
+
+        let hotbar_index = index - HOTBAR_INVENTORY_OFFSET;
+        let slot = self
+            .slots
+            .get_mut(hotbar_index)
+            .unwrap_or_else(|| panic!("inventory slot must be between 0 and {}", INVENTORY_SLOT_COUNT - 1));
+        std::mem::replace(slot, item)
     }
 
     fn select(&mut self, slot: usize) {
@@ -69,7 +100,8 @@ impl Plugin for PlayerHotbarPlugin {
                 select_hotbar_slot
                     .in_set(PlayerHotbarSet::Selection)
                     .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running)),
+                    .run_if(in_state(PauseState::Running))
+                    .run_if(in_state(InventoryState::Closed)),
             );
     }
 }

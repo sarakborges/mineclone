@@ -3,7 +3,10 @@ use bevy::prelude::*;
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
     content::{block::BlockDefinition, block::BlockRegistry, block_orientation::BlockOrientation},
-    player::hotbar::{PlayerHotbar, PlayerHotbarSet},
+    player::{
+        hotbar::{PlayerHotbar, PlayerHotbarSet},
+        inventory::InventoryState,
+    },
 };
 
 use super::block::BlockTargetingSet;
@@ -46,7 +49,8 @@ impl Plugin for PlacementOrientationPlugin {
                     .in_set(BlockTargetingSet::PlacementState)
                     .after(PlayerHotbarSet::Selection)
                     .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running)),
+                    .run_if(in_state(PauseState::Running))
+                    .run_if(in_state(InventoryState::Closed)),
             );
     }
 }

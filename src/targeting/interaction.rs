@@ -2,7 +2,10 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
-    player::{camera::GameplayCamera, hotbar::PlayerHotbar, viewmodel::ViewModelAnimation},
+    player::{
+        camera::GameplayCamera, hotbar::PlayerHotbar, inventory::InventoryState,
+        viewmodel::ViewModelAnimation,
+    },
     voxel::{
         cell::VoxelCell, lighting::PendingLightingUpdates, neighbors::CARDINAL_NEIGHBORS,
         texture_rotation::TextureRotation, world::VoxelWorld,
@@ -28,7 +31,8 @@ impl Plugin for BlockInteractionPlugin {
             edit_targeted_block
                 .in_set(BlockTargetingSet::Interaction)
                 .run_if(in_state(GameState::Gameplay))
-                .run_if(in_state(PauseState::Running)),
+                .run_if(in_state(PauseState::Running))
+                .run_if(in_state(InventoryState::Closed)),
         );
     }
 }

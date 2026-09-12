@@ -2,6 +2,7 @@ use bevy::{prelude::*, time::Virtual, window::WindowFocused};
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
+    player::inventory::InventoryState,
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
 };
 
@@ -12,7 +13,9 @@ impl Plugin for PausePlugin {
         app.add_systems(
             Update,
             (
-                toggle_pause.run_if(in_state(SettingsState::Closed)),
+                toggle_pause
+                    .run_if(in_state(SettingsState::Closed))
+                    .run_if(in_state(InventoryState::Closed)),
                 pause_on_focus_lost,
             )
                 .run_if(in_state(GameState::Gameplay)),
