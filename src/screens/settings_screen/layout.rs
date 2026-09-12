@@ -122,7 +122,15 @@ pub fn spawn_settings_screen(
                 })
                 .with_children(|columns| {
                     columns
-                        .spawn(surface::settings_sidebar(SIDEBAR_WIDTH))
+                        .spawn(Node {
+                            width: px(SIDEBAR_WIDTH),
+                            height: percent(100),
+                            min_height: px(0),
+                            flex_shrink: 0.0,
+                            flex_direction: FlexDirection::Column,
+                            align_items: AlignItems::Stretch,
+                            ..default()
+                        })
                         .with_children(|sidebar| {
                             sidebar
                                 .spawn(Node {
@@ -158,14 +166,12 @@ pub fn spawn_settings_screen(
                                                 spawn_section_button(
                                                     list,
                                                     SettingsSection::WorldSettings,
-                                                    selection.selected,
                                                     &localization,
                                                     language,
                                                 );
                                                 spawn_section_button(
                                                     list,
                                                     SettingsSection::GameRules,
-                                                    selection.selected,
                                                     &localization,
                                                     language,
                                                 );
@@ -173,21 +179,18 @@ pub fn spawn_settings_screen(
                                             spawn_section_button(
                                                 list,
                                                 SettingsSection::Graphics,
-                                                selection.selected,
                                                 &localization,
                                                 language,
                                             );
                                             spawn_section_button(
                                                 list,
                                                 SettingsSection::Languages,
-                                                selection.selected,
                                                 &localization,
                                                 language,
                                             );
                                             spawn_section_button(
                                                 list,
                                                 SettingsSection::Miscellaneous,
-                                                selection.selected,
                                                 &localization,
                                                 language,
                                             );
@@ -337,13 +340,11 @@ pub fn spawn_settings_screen(
 fn spawn_section_button(
     parent: &mut ChildSpawnerCommands,
     section: SettingsSection,
-    selected: SettingsSection,
     localization: &UiLocalization,
     language: crate::localization::Language,
 ) {
     parent.spawn(section_button(
         section,
-        selected == section,
         localization
             .text(language, section.localization_key())
             .to_owned(),
