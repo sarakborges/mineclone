@@ -214,8 +214,9 @@ fn fragment(
         let texture_max = max(max(texel.r, texel.g), texel.b);
         let texture_min = min(min(texel.r, texel.g), texel.b);
         let texture_chroma = texture_max - texture_min;
-        let neutral_texture_mask = 1.0 - smoothstep(0.08, 0.24, texture_chroma);
-        let translucent_texture_mask = 1.0 - smoothstep(0.72, 0.98, texel.a);
+        let neutral_texture_mask = 1.0 - smoothstep(0.015, 0.045, texture_chroma);
+        let translucent_texture_mask = 1.0 - smoothstep(0.97, 0.999, texel.a);
+        let dye_mask = max(neutral_texture_mask, translucent_texture_mask);
         let texel_luma = dot(texel.rgb, luminance_weights);
         let tint_peak = max(max(tint.r, tint.g), max(tint.b, 0.001));
         let tint_hue = tint / tint_peak;
@@ -227,15 +228,10 @@ fn fragment(
             vec3<f32>(1.0),
         );
 
-        // Authored colored details (for example the dirt on a grass side) stay
-        // intact. Neutral pixels are the dye mask, and partially transparent
-        // pixels receive the dye strongly while keeping their authored alpha.
-        base_rgb = mix(texel.rgb, dyed_rgb, neutral_texture_mask * 0.96);
-        base_rgb = mix(
-            base_rgb,
-            dyed_rgb,
-            translucent_texture_mask * 0.98,
-        );
+        // Dye is an authored mask convention: nearly neutral/gray pixels and
+        // pixels with authored transparency are tintable. Opaque colored pixels
+        // keep their original texture color even when they are desaturated.
+        base_rgb = mix(texel.rgb, dyed_rgb, dye_mask * 0.98);
     }
 
     var material_rgb = base_rgb * pbr_bindings::material.base_color.rgb;
