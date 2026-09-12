@@ -14,7 +14,7 @@ use self::{
         RiverSelection, build_flow_cache, connected_lake_cells,
         drainage_reaches_water_destination, selected_river_sources,
     },
-    water_bodies::{mountain_spring_body, plunge_pool_for_waterfall},
+    water_bodies::{mountain_spring_body, plunge_pool_for_waterfall, river_head_body},
 };
 use super::{
     constants::RIVER_EDGE_MARGIN_CELLS,
@@ -85,9 +85,13 @@ where
                 .get(&cell)
                 .filter(|_| connected_lakes.contains(&cell))
                 .cloned();
+            let head = selection.heads.contains(&cell).then(|| {
+                river_head_body(cell, source, seed, sea_level, water_fluid)
+            });
 
             if let Some(body) = spring
                 .or(lake)
+                .or(head)
                 .filter(|body| water_body_intersects_region(coord, body))
             {
                 water_bodies.push(body);
@@ -118,7 +122,6 @@ where
                 downstream_cell,
                 downstream,
                 downstream_water_level,
-                flow,
                 downstream_flow,
                 seed,
                 &selection,
@@ -165,7 +168,6 @@ fn confluence_target<F>(
     downstream_cell: IVec2,
     downstream: DrainageNode,
     downstream_water_level: Option<f32>,
-    flow: u32,
     downstream_flow: u32,
     seed: u64,
     selection: &RiverSelection,
@@ -175,10 +177,23 @@ fn confluence_target<F>(
 where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
-    if downstream_water_level.is_some()
-        || downstream_flow <= flow
-        || !selection.channels.contains(&downstream_cell)
-    {
+    if downstream_water_level.is_some() || !selection.channels.contains(&downstream_cell) {
+        return (downstream, downstream_water_level, downstream_flow);
+    }
+
+    let upstreams = channel_upstreams(downstream_cell, selection, flow_cache, seed, network);
+    if upstreams.len() <= 1 {
+        return (downstream, downstream_water_level, downstream_flow);
+    }
+
+    // Exactly one incoming branch owns the drainage node and becomes the trunk.
+    // Every other tributary joins later along the trunk's next segment. This
+    // prevents several river edges from radiating into one grid node as a star.
+    let trunk = upstreams
+        .iter()
+        .max_by_key(|(cell, flow, tie_break)| (*flow, *tie_break, cell.x, cell.y))
+        .map(|(cell, _, _)| *cell);
+    if trunk == Some(source_cell) {
         return (downstream, downstream_water_level, downstream_flow);
     }
 
@@ -191,7 +206,7 @@ where
 
     let next = network.node(next_cell);
     let hash = cell_hash(source_cell, seed ^ 0x3c6e_f372_fe94_f82b);
-    let progress = lerp(0.18, 0.42, hash_unit(hash.rotate_left(31)));
+    let progress = lerp(0.20, 0.78, hash_unit(hash.rotate_left(31)));
     let target = DrainageNode {
         position: downstream.position.lerp(next.position, progress),
         elevation: lerp(downstream.elevation, next.elevation, progress),
@@ -209,4 +224,38 @@ where
         .max(downstream_flow);
 
     (target, None, target_flow)
+}
+
+fn channel_upstreams<F>(
+    target: IVec2,
+    selection: &RiverSelection,
+    flow_cache: &HashMap<IVec2, u32>,
+    seed: u64,
+    network: &mut DrainageNetwork<'_, F>,
+) -> Vec<(IVec2, u32, u64)>
+where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    let mut upstreams = Vec::new();
+
+    for dz in -1..=1 {
+        for dx in -1..=1 {
+            if dx == 0 && dz == 0 {
+                continue;
+            }
+
+            let candidate = target + IVec2::new(dx, dz);
+            if !selection.channels.contains(&candidate)
+                || network.downstream_cell(candidate) != Some(target)
+            {
+                continue;
+            }
+
+            let flow = flow_cache.get(&candidate).copied().unwrap_or(1);
+            let tie_break = cell_hash(candidate, seed ^ 0xa54f_f53a_5f1d_36f1);
+            upstreams.push((candidate, flow, tie_break));
+        }
+    }
+
+    upstreams
 }
