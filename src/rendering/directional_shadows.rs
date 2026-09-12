@@ -1,39 +1,26 @@
-use bevy::{
-    light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap},
-    prelude::*,
-};
+use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
     content::{
         day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry, sky::SkyRegistry,
     },
-    voxel::chunk::CHUNK_SIZE,
-    world::{
-        day_night::DayNightClock, dimension::CurrentDimension,
-        render_distance::MAX_RENDER_DISTANCE_CHUNKS,
-    },
+    world::{day_night::DayNightClock, dimension::CurrentDimension},
 };
 
 use super::celestial_path::celestial_direction;
 
-const SHADOW_MAP_SIZE: usize = 2048;
-const FIRST_CASCADE_FAR_BOUND: f32 = CHUNK_SIZE as f32;
-const MAXIMUM_SHADOW_DISTANCE: f32 = ((MAX_RENDER_DISTANCE_CHUNKS + 1) * CHUNK_SIZE as i32) as f32;
 const BASE_SUN_ILLUMINANCE: f32 = 10_000.0;
 
 pub struct DirectionalShadowsPlugin;
 
 impl Plugin for DirectionalShadowsPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(DirectionalLightShadowMap {
-            size: SHADOW_MAP_SIZE,
-        })
-        .add_systems(OnEnter(GameState::Gameplay), spawn_sun_shadow_light)
-        .add_systems(
-            Update,
-            update_sun_shadow_light.run_if(in_state(GameState::Gameplay)),
-        );
+        app.add_systems(OnEnter(GameState::Gameplay), spawn_sun_shadow_light)
+            .add_systems(
+                Update,
+                update_sun_shadow_light.run_if(in_state(GameState::Gameplay)),
+            );
     }
 }
 
@@ -44,16 +31,9 @@ fn spawn_sun_shadow_light(mut commands: Commands) {
     commands.spawn((
         DirectionalLight {
             illuminance: 0.0,
-            shadow_maps_enabled: true,
+            shadow_maps_enabled: false,
             ..default()
         },
-        CascadeShadowConfigBuilder {
-            num_cascades: 4,
-            first_cascade_far_bound: FIRST_CASCADE_FAR_BOUND,
-            maximum_distance: MAXIMUM_SHADOW_DISTANCE,
-            ..default()
-        }
-        .build(),
         Transform::default(),
         Visibility::Hidden,
         SunShadowLight,
@@ -95,7 +75,7 @@ fn update_sun_shadow_light(
     for (mut light, mut transform, mut visibility) in &mut lights {
         light.color = sky.sun.tint.to_color();
         light.illuminance = BASE_SUN_ILLUMINANCE * sample.sky_light_factor;
-        light.shadow_maps_enabled = true;
+        light.shadow_maps_enabled = false;
         transform.rotation = rotation;
         *visibility = Visibility::Visible;
     }
@@ -109,6 +89,7 @@ fn hide_lights(
 ) {
     for (mut light, _, mut visibility) in lights.iter_mut() {
         light.illuminance = 0.0;
+        light.shadow_maps_enabled = false;
         *visibility = Visibility::Hidden;
     }
 }
