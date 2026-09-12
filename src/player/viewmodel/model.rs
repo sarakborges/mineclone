@@ -1,4 +1,6 @@
-use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
+use bevy::{
+    camera::visibility::RenderLayers, ecs::system::SystemParam, light::NotShadowCaster, prelude::*,
+};
 
 use crate::{
     content::{
@@ -22,6 +24,8 @@ use super::animation::{PlayerViewModel, ViewModelItemSwitch, base_viewmodel_tran
 
 const ARM_SIZE: Vec3 = Vec3::new(0.23, 0.60, 0.21);
 const HELD_BLOCK_SCALE: f32 = 0.18;
+const VIEW_MODEL_RENDER_LAYER: usize = 1;
+const VIEW_MODEL_FOV_DEGREES: f32 = 70.0;
 
 #[derive(Component)]
 pub(super) struct ViewModelArm;
@@ -117,6 +121,21 @@ pub(super) fn spawn_viewmodel(
             });
 
         commands.entity(camera).with_children(|camera| {
+            camera.spawn((
+                Camera3d::default(),
+                Camera {
+                    order: 1,
+                    clear_color: ClearColorConfig::None,
+                    ..default()
+                },
+                Projection::from(PerspectiveProjection {
+                    fov: VIEW_MODEL_FOV_DEGREES.to_radians(),
+                    ..default()
+                }),
+                Msaa::Off,
+                RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
+            ));
+
             camera
                 .spawn((
                     PlayerViewModel,
@@ -130,6 +149,7 @@ pub(super) fn spawn_viewmodel(
                         MeshMaterial3d(arm_assets.material.clone()),
                         Transform::from_translation(Vec3::new(0.0, ARM_SIZE.y * 0.5, 0.0)),
                         Visibility::Visible,
+                        RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
                         NotShadowCaster,
                     ));
 
@@ -179,6 +199,7 @@ pub(super) fn spawn_viewmodel(
                                     HeldBlockFace { face },
                                     Mesh3d(block_meshes.display_face(face)),
                                     MeshMaterial3d(material),
+                                    RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
                                     NotShadowCaster,
                                 ));
                             }
