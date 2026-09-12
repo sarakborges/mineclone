@@ -70,7 +70,7 @@ where
                         face.normal(),
                         VOXEL_FACE_UVS,
                         tint,
-                        face_lighting(world, world_voxel, face),
+                        face_lighting(world, world_voxel, face, false),
                     );
                 }
             }
