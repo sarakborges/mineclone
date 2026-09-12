@@ -10,7 +10,9 @@ use crate::{
     player::inventory::InventoryState,
     targeting::{ToolUse, ToolUseButton, block::BlockTargetingSet},
     ui::{theme, typography},
-    voxel::{neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld},
+    voxel::{
+        lighting::PendingLightingUpdates, neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
+    },
     world::chunk_remesh::ChunkRemeshQueue,
 };
 
@@ -104,6 +106,7 @@ fn handle_brush_use(
     blocks: Res<BlockRegistry>,
     mode: Res<BrushMode>,
     mut world: ResMut<VoxelWorld>,
+    mut lighting: ResMut<PendingLightingUpdates>,
     mut remesh_queue: ResMut<ChunkRemeshQueue>,
     mut next_palette: ResMut<NextState<BrushPaletteState>>,
 ) {
@@ -151,6 +154,7 @@ fn handle_brush_use(
         };
 
         if let Some(chunk) = world.set_block_at(hit.voxel, Some(updated)) {
+            lighting.enqueue_voxel_edit(hit.voxel);
             remesh_queue.enqueue_priority(chunk);
             for offset in CARDINAL_NEIGHBORS {
                 remesh_queue.enqueue_priority(chunk + offset);
