@@ -7,6 +7,7 @@ use crate::{
         dimension::{DimensionDefinition, DimensionRegistry},
         fluid::FluidRegistry,
         read_content,
+        structure::StructureRegistry,
     },
     player::player_id::LOCAL_PLAYER_ID,
     rendering::terrain_material::TerrainMaterial,
@@ -20,13 +21,12 @@ use crate::world::{
     chunk_rendering::{FluidMaterials, TerrainMaterials},
     dimension::CurrentDimension,
     game_rules::GameRules,
-    render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
+    render_distance::RenderDistanceSettings,
+    streaming::initial_chunk_coords,
     terrain::surface_height,
     world_feature_fields::WorldFeatureFields,
 };
 
-const BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS: i32 = 4;
-const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 2;
 const DEFAULT_SPAWN_COLUMN: IVec2 = IVec2::new(8, 8);
 const SPAWN_SEARCH_STEP_BLOCKS: i32 = 8;
 const SPAWN_SEARCH_RADIUS_STEPS: i32 = 64;
@@ -44,6 +44,7 @@ pub(in crate::world) struct WorldLoadingInputs<'w> {
     biomes: Res<'w, BiomeRegistry>,
     blocks: Res<'w, BlockRegistry>,
     fluids: Res<'w, FluidRegistry>,
+    structures: Res<'w, StructureRegistry>,
     existing_world: Option<Res<'w, VoxelWorld>>,
 }
 
@@ -70,6 +71,9 @@ pub(in crate::world) fn begin_world_loading(
     let fluids = fresh_content
         .as_ref()
         .map_or(&*inputs.fluids, |content| &content.fluids);
+    let structures = fresh_content
+        .as_ref()
+        .map_or(&*inputs.structures, |content| &content.structures);
     let dimension = dimensions
         .get(&inputs.current_dimension.id)
         .unwrap_or_else(|| {
@@ -123,7 +127,20 @@ pub(in crate::world) fn begin_world_loading(
             spawn_column.y.div_euclid(CHUNK_SIZE as i32),
         )
     };
-    let coords = bootstrap_chunk_coords(initial_center, &inputs.render_distance);
+
+    // Loading now prepares exactly the same surface-aware chunk set that
+    // gameplay streaming wants around the player. The player is not created
+    // until every one of these chunks has been generated, lit and meshed, so
+    // entering Gameplay no longer starts a second large generation wave.
+    let coords = initial_chunk_coords(
+        initial_center,
+        inputs.render_distance.chunks(),
+        inputs.render_distance.vertical_chunks(),
+        dimension,
+        biomes,
+        structures,
+        &biome_field,
+    );
 
     match *inputs.load_mode {
         WorldLoadMode::New => {
@@ -182,14 +199,6 @@ pub(in crate::world) fn begin_world_loading(
     if let Some(content) = fresh_content {
         content.insert(&mut commands);
     }
-}
-
-fn bootstrap_chunk_coords(center: IVec3, render_distance: &RenderDistanceSettings) -> Vec<IVec3> {
-    chunk_coords_in_volume(
-        center,
-        BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS.min(render_distance.chunks()),
-        BOOTSTRAP_VERTICAL_RADIUS_CHUNKS.min(render_distance.vertical_chunks()),
-    )
 }
 
 fn find_initial_spawn_column(
