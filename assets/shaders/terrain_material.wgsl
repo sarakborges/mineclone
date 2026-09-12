@@ -201,11 +201,32 @@ fn fragment(
         let luminance_weights = vec3<f32>(0.2126, 0.7152, 0.0722);
         let softened_luma = max(dot(softened_hue, luminance_weights), 0.001);
         let luminance_compensation = min(1.25, 1.0 / softened_luma);
-
-        base_rgb = clamp(
+        let texture_max = max(max(texel.r, texel.g), texel.b);
+        let texture_min = min(min(texel.r, texel.g), texel.b);
+        let texture_chroma = texture_max - texture_min;
+        let neutral_texture_mask = 1.0 - smoothstep(0.08, 0.24, texture_chroma);
+        let translucent_texture_mask = 1.0 - smoothstep(0.72, 0.98, texel.a);
+        let multiplicative_tint = clamp(
             texel.rgb * softened_hue * luminance_compensation,
             vec3<f32>(0.0),
             vec3<f32>(1.0)
+        );
+        let texel_luma = dot(texel.rgb, luminance_weights);
+        let translucent_tint = clamp(
+            hue * max(texel_luma, 0.62),
+            vec3<f32>(0.0),
+            vec3<f32>(1.0)
+        );
+
+        // Opaque, already-colored texture details (for example the dirt on the
+        // side of a grass block) keep their authored color. Neutral pixels are
+        // treated as tint masks. Partially transparent pixels use the dye hue
+        // directly so glass is visibly colored through its clear center too.
+        base_rgb = mix(texel.rgb, multiplicative_tint, neutral_texture_mask);
+        base_rgb = mix(
+            base_rgb,
+            translucent_tint,
+            translucent_texture_mask * 0.88,
         );
     }
 
