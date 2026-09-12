@@ -34,17 +34,6 @@ pub(super) struct HeldBlockFace {
     face: BlockFace,
 }
 
-pub(super) type ArmVisibilityQuery<'w, 's> = Query<
-    'w,
-    's,
-    &'static mut Visibility,
-    (
-        With<ViewModelArm>,
-        Without<HeldBlockRoot>,
-        Without<PlayerViewModel>,
-    ),
->;
-
 pub(super) type HeldBlockRootQuery<'w, 's> = Query<
     'w,
     's,
@@ -140,7 +129,7 @@ pub(super) fn spawn_viewmodel(
                         Mesh3d(arm_assets.mesh.clone()),
                         MeshMaterial3d(arm_assets.material.clone()),
                         Transform::from_translation(Vec3::new(0.0, ARM_SIZE.y * 0.5, 0.0)),
-                        item_visibility,
+                        Visibility::Visible,
                         NotShadowCaster,
                     ));
 
@@ -201,7 +190,6 @@ pub(super) fn sync_held_block(
     item_switch: Res<ViewModelItemSwitch>,
     player: Single<&Transform, With<GameplayCamera>>,
     mut materials: ResMut<Assets<BlockModelMaterial>>,
-    mut arms: ArmVisibilityQuery,
     mut roots: HeldBlockRootQuery,
     faces: Query<(&HeldBlockFace, &MeshMaterial3d<BlockModelMaterial>)>,
 ) {
@@ -213,12 +201,6 @@ pub(super) fn sync_held_block(
         .filter(|block_id| content.blocks.get(block_id).is_some());
     let visibility = item_visibility(selected_block_id);
     let tint_position = Vec2::new(player.translation.x, player.translation.z);
-
-    for mut arm_visibility in &mut arms {
-        if *arm_visibility != visibility {
-            *arm_visibility = visibility;
-        }
-    }
 
     for (mut held, mut held_transform, mut held_visibility) in &mut roots {
         let block_changed = held.set_block_id(selected_block_id);

@@ -5,7 +5,7 @@ use crate::{
     tools::BrushPaletteState,
 };
 
-use super::{game_mode::GameMode, hotbar::PlayerHotbar};
+use super::hotbar::PlayerHotbar;
 
 #[derive(States, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub(crate) enum InventoryState {
@@ -135,16 +135,10 @@ fn toggle_inventory(
     keys: Res<ButtonInput<KeyCode>>,
     inventory_state: Res<State<InventoryState>>,
     creative_view: Res<CreativeInventoryView>,
-    game_mode: Single<&GameMode>,
     mut next_inventory_state: ResMut<NextState<InventoryState>>,
 ) {
     match inventory_state.get() {
-        InventoryState::Open if !game_mode.has_creative_inventory() => {
-            next_inventory_state.set(InventoryState::Closed);
-        }
-        InventoryState::Closed
-            if keys.just_pressed(KeyCode::KeyE) && game_mode.has_creative_inventory() =>
-        {
+        InventoryState::Closed if keys.just_pressed(KeyCode::KeyE) => {
             next_inventory_state.set(InventoryState::Open);
         }
         InventoryState::Open if keys.just_pressed(KeyCode::Escape) => {
