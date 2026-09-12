@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
     tools::BrushPaletteState,
+    ui::text_input::select_all_pressed,
 };
 
 use super::hotbar::PlayerHotbar;
@@ -41,6 +42,7 @@ impl InventoryCursor {
 pub(crate) struct CreativeInventoryView {
     search_query: String,
     search_focused: bool,
+    replace_search_on_next_input: bool,
     selected_category: Option<String>,
     scroll_row: usize,
 }
@@ -64,22 +66,48 @@ impl CreativeInventoryView {
 
     pub(crate) fn focus_search(&mut self) {
         self.search_focused = true;
+        self.replace_search_on_next_input = false;
     }
 
     pub(crate) fn blur_search(&mut self) {
         self.search_focused = false;
+        self.replace_search_on_next_input = false;
     }
 
-    pub(crate) fn push_search_text(&mut self, text: &str) {
-        let previous_len = self.search_query.len();
-        self.search_query
-            .extend(text.chars().filter(|character| !character.is_control()));
-        if self.search_query.len() != previous_len {
-            self.scroll_row = 0;
+    fn select_all_search(&mut self) {
+        if self.search_focused {
+            self.replace_search_on_next_input = true;
         }
     }
 
+    pub(crate) fn push_search_text(&mut self, text: &str) {
+        let filtered = text
+            .chars()
+            .filter(|character| !character.is_control())
+            .collect::<String>();
+        if filtered.is_empty() {
+            return;
+        }
+
+        if self.replace_search_on_next_input {
+            self.search_query.clear();
+            self.replace_search_on_next_input = false;
+        }
+
+        self.search_query.push_str(&filtered);
+        self.scroll_row = 0;
+    }
+
     pub(crate) fn backspace_search(&mut self) {
+        if self.replace_search_on_next_input {
+            if !self.search_query.is_empty() {
+                self.search_query.clear();
+                self.scroll_row = 0;
+            }
+            self.replace_search_on_next_input = false;
+            return;
+        }
+
         if self.search_query.pop().is_some() {
             self.scroll_row = 0;
         }
@@ -100,6 +128,7 @@ impl CreativeInventoryView {
     fn reset(&mut self) {
         self.search_query.clear();
         self.search_focused = false;
+        self.replace_search_on_next_input = false;
         self.selected_category = None;
         self.scroll_row = 0;
     }
@@ -114,7 +143,7 @@ impl Plugin for PlayerInventoryPlugin {
             .init_resource::<CreativeInventoryView>()
             .add_systems(
                 Update,
-                toggle_inventory
+                (toggle_inventory, handle_search_select_all)
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(PauseState::Running))
                     .run_if(in_state(BrushPaletteState::Closed)),
@@ -150,6 +179,16 @@ fn toggle_inventory(
             next_inventory_state.set(InventoryState::Closed);
         }
         _ => {}
+    }
+}
+
+fn handle_search_select_all(
+    keys: Res<ButtonInput<KeyCode>>,
+    inventory_state: Res<State<InventoryState>>,
+    mut creative_view: ResMut<CreativeInventoryView>,
+) {
+    if *inventory_state.get() == InventoryState::Open && select_all_pressed(&keys) {
+        creative_view.select_all_search();
     }
 }
 
