@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use bevy::prelude::*;
 
 use crate::{
@@ -13,6 +15,9 @@ use super::{
     chunk_system_params::ChunkRenderer,
     streaming::ChunkStreamingState,
 };
+
+const MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK: usize = 8;
+const CHUNK_UNLOAD_BUDGET: Duration = Duration::from_millis(4);
 
 pub(super) fn unload_chunk_meshes(
     player: Single<&Transform, With<GameplayCamera>>,
@@ -31,24 +36,28 @@ pub(super) fn unload_chunk_meshes(
         .filter(|coord| !streaming.wants(*coord))
         .collect::<Vec<_>>();
 
-    // Render correctness takes priority over amortizing despawns. Leaving unwanted
-    // render slots alive for several frames produces visible "ghost chunks" while
-    // the player moves or the desired streaming set changes. Remove every stale
-    // slot immediately; chunk generation remains independently budgeted.
     pending_unloads.sort_by_key(|coord| -(*coord - center).length_squared());
 
-    let mut unloaded = Vec::with_capacity(pending_unloads.len());
+    let frame_started = Instant::now();
+    let mut unloaded = Vec::new();
 
     for coord in pending_unloads {
+        if unloaded.len() >= MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK
+            && frame_started.elapsed() >= CHUNK_UNLOAD_BUDGET
+        {
+            break;
+        }
+
         let Some((entities, mesh_handles)) = renderer.pool.take(coord) else {
             continue;
         };
 
-        for entity in entities {
-            renderer.commands.entity(entity).despawn();
-        }
         for mesh_handle in mesh_handles {
             let _ = renderer.meshes.remove(&mesh_handle);
+        }
+
+        for entity in entities {
+            renderer.commands.entity(entity).despawn();
         }
 
         world.archive_chunk(coord);
