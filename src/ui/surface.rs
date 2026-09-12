@@ -14,31 +14,6 @@ pub fn modal_panel() -> impl Bundle {
     })
 }
 
-pub fn settings_section() -> impl Bundle {
-    frosted_surface(Node {
-        width: percent(100),
-        padding: UiRect::all(px(30)),
-        flex_direction: FlexDirection::Column,
-        align_items: AlignItems::Stretch,
-        row_gap: px(18),
-        border_radius: BorderRadius::all(px(8)),
-        ..default()
-    })
-}
-
-pub fn settings_sidebar(width: f32) -> impl Bundle {
-    frosted_surface(Node {
-        width: px(width),
-        height: percent(100),
-        min_height: px(0),
-        padding: UiRect::all(px(16)),
-        flex_direction: FlexDirection::Column,
-        align_items: AlignItems::Stretch,
-        border_radius: BorderRadius::all(px(8)),
-        ..default()
-    })
-}
-
 pub fn settings_content() -> impl Bundle {
     frosted_surface(Node {
         flex_grow: 1.0,
