@@ -25,8 +25,12 @@ use crate::world::{
     world_feature_fields::WorldFeatureFields,
 };
 
-const BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS: i32 = 2;
-const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 1;
+const BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS: i32 = 4;
+const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 2;
+const DEFAULT_SPAWN_COLUMN: IVec2 = IVec2::new(8, 8);
+const SPAWN_SEARCH_STEP_BLOCKS: i32 = 8;
+const SPAWN_SEARCH_RADIUS_STEPS: i32 = 64;
+const SPAWN_MINIMUM_HEIGHT_ABOVE_SEA: i32 = 2;
 
 #[derive(SystemParam)]
 pub(in crate::world) struct WorldLoadingInputs<'w> {
@@ -90,16 +94,34 @@ pub(in crate::world) fn begin_world_loading(
         metallic,
     );
     let fluid_materials = FluidMaterials::from_registry(fluids, &mut terrain_material_assets);
+    let spawn_column = if *inputs.load_mode == WorldLoadMode::Load {
+        save.player_position(LOCAL_PLAYER_ID)
+            .map(|position| IVec2::new(position.x.floor() as i32, position.z.floor() as i32))
+            .unwrap_or(DEFAULT_SPAWN_COLUMN)
+    } else {
+        find_initial_spawn_column(dimension, biomes, &biome_field)
+    };
     let initial_center = if *inputs.load_mode == WorldLoadMode::Load {
         save.player_position(LOCAL_PLAYER_ID)
             .map(|position| {
                 let chunk = chunk_coord_from_position(position);
                 IVec3::new(chunk.x, chunk.y.max(0), chunk.z)
             })
-            .unwrap_or(IVec3::ZERO)
+            .unwrap_or_else(|| {
+                let surface_y = surface_height(spawn_column, dimension, biomes, &biome_field);
+                IVec3::new(
+                    spawn_column.x.div_euclid(CHUNK_SIZE as i32),
+                    surface_y.div_euclid(CHUNK_SIZE as i32),
+                    spawn_column.y.div_euclid(CHUNK_SIZE as i32),
+                )
+            })
     } else {
-        let surface_y = surface_height(IVec2::ZERO, dimension, biomes, &biome_field);
-        IVec3::new(0, surface_y.div_euclid(CHUNK_SIZE as i32), 0)
+        let surface_y = surface_height(spawn_column, dimension, biomes, &biome_field);
+        IVec3::new(
+            spawn_column.x.div_euclid(CHUNK_SIZE as i32),
+            surface_y.div_euclid(CHUNK_SIZE as i32),
+            spawn_column.y.div_euclid(CHUNK_SIZE as i32),
+        )
     };
     let coords = bootstrap_chunk_coords(initial_center, &inputs.render_distance);
 
@@ -151,6 +173,7 @@ pub(in crate::world) fn begin_world_loading(
         generated: 0,
         lit: 0,
         meshed: 0,
+        spawn_column,
         phase: WorldLoadingPhase::Generating,
         screen_rendered: false,
         transition_requested: false,
@@ -167,6 +190,46 @@ fn bootstrap_chunk_coords(center: IVec3, render_distance: &RenderDistanceSetting
         BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS.min(render_distance.chunks()),
         BOOTSTRAP_VERTICAL_RADIUS_CHUNKS.min(render_distance.vertical_chunks()),
     )
+}
+
+fn find_initial_spawn_column(
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+) -> IVec2 {
+    let ocean_biome = dimension.hydrology.ocean_biome.as_deref();
+
+    for radius in 0..=SPAWN_SEARCH_RADIUS_STEPS {
+        for z_step in -radius..=radius {
+            for x_step in -radius..=radius {
+                if radius > 0 && x_step.abs() != radius && z_step.abs() != radius {
+                    continue;
+                }
+
+                let candidate = DEFAULT_SPAWN_COLUMN
+                    + IVec2::new(
+                        x_step * SPAWN_SEARCH_STEP_BLOCKS,
+                        z_step * SPAWN_SEARCH_STEP_BLOCKS,
+                    );
+                let sample = biome_field.sample_surface(candidate.as_vec2() + Vec2::splat(0.5));
+                if ocean_biome.is_some_and(|ocean| sample.primary_id == ocean) {
+                    continue;
+                }
+
+                let height = surface_height(candidate, dimension, biomes, biome_field);
+                if height <= dimension.sea_level + SPAWN_MINIMUM_HEIGHT_ABOVE_SEA {
+                    continue;
+                }
+
+                return candidate;
+            }
+        }
+    }
+
+    panic!(
+        "could not find a non-ocean spawn column within {} blocks",
+        SPAWN_SEARCH_RADIUS_STEPS * SPAWN_SEARCH_STEP_BLOCKS
+    );
 }
 
 fn average_terrain_material(dimension: &DimensionDefinition, biomes: &BiomeRegistry) -> (f32, f32) {
