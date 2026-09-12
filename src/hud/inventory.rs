@@ -15,6 +15,7 @@ use crate::{
         block_id::intern_block_id,
         inventory_category::{InventoryCategoryDefinition, InventoryCategoryRegistry},
     },
+    localization::{ActiveLanguage, Language, UiLocalization},
     player::{
         camera::GameplayCamera,
         hotbar::{HOTBAR_INVENTORY_OFFSET, HOTBAR_SLOT_COUNT, PlayerHotbar},
@@ -107,6 +108,8 @@ fn spawn_inventory(
     hotbar: Res<PlayerHotbar>,
     cursor: Res<InventoryCursor>,
     creative_view: Res<CreativeInventoryView>,
+    localization: Res<UiLocalization>,
+    active_language: Res<ActiveLanguage>,
     player: Single<&Transform, With<GameplayCamera>>,
     window: Single<&Window>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
@@ -127,6 +130,8 @@ fn spawn_inventory(
         &hotbar,
         &cursor,
         &creative_view,
+        &localization,
+        active_language.get(),
         window.cursor_position(),
         &mut icon_materials,
     );
@@ -187,6 +192,7 @@ fn handle_category_clicks(
 fn handle_creative_scroll(
     mut wheel: MessageReader<MouseWheel>,
     blocks: Res<BlockRegistry>,
+    active_language: Res<ActiveLanguage>,
     mut creative_view: ResMut<CreativeInventoryView>,
 ) {
     let mut delta = 0.0;
@@ -205,6 +211,7 @@ fn handle_creative_scroll(
         &blocks,
         creative_view.search_query(),
         creative_view.selected_category(),
+        active_language.get(),
     );
     let max_scroll = total_rows.saturating_sub(CREATIVE_VISIBLE_ROWS);
     if max_scroll == 0 {
@@ -271,12 +278,18 @@ fn rebuild_inventory_when_changed(
     hotbar: Res<PlayerHotbar>,
     cursor: Res<InventoryCursor>,
     creative_view: Res<CreativeInventoryView>,
+    localization: Res<UiLocalization>,
+    active_language: Res<ActiveLanguage>,
     player: Single<&Transform, With<GameplayCamera>>,
     window: Single<&Window>,
     roots: Query<Entity, With<InventoryHudRoot>>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
-    if !hotbar.is_changed() && !cursor.is_changed() && !creative_view.is_changed() {
+    if !hotbar.is_changed()
+        && !cursor.is_changed()
+        && !creative_view.is_changed()
+        && !active_language.is_changed()
+    {
         return;
     }
 
@@ -295,6 +308,8 @@ fn rebuild_inventory_when_changed(
         &hotbar,
         &cursor,
         &creative_view,
+        &localization,
+        active_language.get(),
         window.cursor_position(),
         &mut icon_materials,
     );
@@ -326,6 +341,8 @@ fn spawn_inventory_root(
     hotbar: &PlayerHotbar,
     cursor: &InventoryCursor,
     creative_view: &CreativeInventoryView,
+    localization: &UiLocalization,
+    language: Language,
     cursor_position: Option<Vec2>,
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
@@ -359,6 +376,8 @@ fn spawn_inventory_root(
                 biome_field,
                 player_position,
                 creative_view,
+                localization,
+                language,
                 icon_materials,
             );
             spawn_player_inventory_panel(
@@ -413,12 +432,15 @@ fn spawn_creative_panel(
     biome_field: &BiomeField,
     player_position: Vec2,
     creative_view: &CreativeInventoryView,
+    localization: &UiLocalization,
+    language: Language,
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
     let catalog = filtered_creative_catalog(
         blocks,
         creative_view.search_query(),
         creative_view.selected_category(),
+        language,
     );
     let total_rows = catalog.len().div_ceil(CREATIVE_COLUMNS).max(1);
     let max_scroll = total_rows.saturating_sub(CREATIVE_VISIBLE_ROWS);
@@ -441,7 +463,7 @@ fn spawn_creative_panel(
         Pickable::IGNORE,
     ))
     .with_children(|panel| {
-        spawn_search_bar(panel, creative_view);
+        spawn_search_bar(panel, creative_view, localization, language);
 
         panel
             .spawn((
@@ -460,6 +482,8 @@ fn spawn_creative_panel(
                     blocks,
                     categories,
                     creative_view,
+                    localization,
+                    language,
                     icon_materials,
                 );
 
@@ -490,14 +514,19 @@ fn spawn_creative_panel(
     });
 }
 
-fn spawn_search_bar(parent: &mut ChildSpawnerCommands, creative_view: &CreativeInventoryView) {
+fn spawn_search_bar(
+    parent: &mut ChildSpawnerCommands,
+    creative_view: &CreativeInventoryView,
+    localization: &UiLocalization,
+    language: Language,
+) {
     let search_border = if creative_view.search_focused() {
         theme::TEXT_PRIMARY
     } else {
         Color::srgba(0.70, 0.72, 0.82, 0.28)
     };
     let search_text = if creative_view.search_query().is_empty() {
-        "Search items..."
+        localization.text(language, "inventory.searchPlaceholder")
     } else {
         creative_view.search_query()
     };
@@ -529,13 +558,16 @@ fn spawn_category_list(
     blocks: &BlockRegistry,
     categories: &InventoryCategoryRegistry,
     creative_view: &CreativeInventoryView,
+    localization: &UiLocalization,
+    language: Language,
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
     let mut ordered = categories.iter().collect::<Vec<_>>();
     ordered.sort_by(|left, right| {
         left.display_name
+            .text(language)
             .to_lowercase()
-            .cmp(&right.display_name.to_lowercase())
+            .cmp(&right.display_name.text(language).to_lowercase())
             .then_with(|| left.id.cmp(&right.id))
     });
 
@@ -556,6 +588,8 @@ fn spawn_category_list(
                 creative_view.selected_category().is_none(),
                 asset_server,
                 blocks,
+                localization,
+                language,
                 icon_materials,
             );
 
@@ -567,6 +601,8 @@ fn spawn_category_list(
                     selected,
                     asset_server,
                     blocks,
+                    localization,
+                    language,
                     icon_materials,
                 );
             }
@@ -579,10 +615,15 @@ fn spawn_category_button(
     selected: bool,
     asset_server: &AssetServer,
     blocks: &BlockRegistry,
+    localization: &UiLocalization,
+    language: Language,
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
     let id = category.map(|category| category.id.clone());
-    let label = category.map_or("Everything", |category| category.display_name.as_str());
+    let label = match category {
+        Some(category) => category.display_name.text(language),
+        None => localization.text(language, "inventory.everything"),
+    };
     let border = if selected {
         theme::TEXT_PRIMARY
     } else {
@@ -952,25 +993,34 @@ fn filtered_creative_catalog<'a>(
     blocks: &'a BlockRegistry,
     query: &str,
     category: Option<&str>,
+    language: Language,
 ) -> Vec<&'a BlockDefinition> {
     let query = query.trim().to_lowercase();
     let mut catalog = blocks
         .iter()
         .filter(|block| category.map_or(true, |category| block.category == category))
-        .filter(|block| query.is_empty() || block.name.to_lowercase().contains(&query))
+        .filter(|block| {
+            query.is_empty() || block.name.text(language).to_lowercase().contains(&query)
+        })
         .collect::<Vec<_>>();
 
     catalog.sort_by(|left, right| {
         left.name
+            .text(language)
             .to_lowercase()
-            .cmp(&right.name.to_lowercase())
+            .cmp(&right.name.text(language).to_lowercase())
             .then_with(|| left.id.cmp(&right.id))
     });
     catalog
 }
 
-fn creative_total_rows(blocks: &BlockRegistry, query: &str, category: Option<&str>) -> usize {
-    let count = filtered_creative_catalog(blocks, query, category).len();
+fn creative_total_rows(
+    blocks: &BlockRegistry,
+    query: &str,
+    category: Option<&str>,
+    language: Language,
+) -> usize {
+    let count = filtered_creative_catalog(blocks, query, category, language).len();
     count.div_ceil(CREATIVE_COLUMNS).max(1)
 }
 
