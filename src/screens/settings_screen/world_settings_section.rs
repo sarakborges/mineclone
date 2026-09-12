@@ -65,15 +65,7 @@ fn game_mode_button(
             ..default()
         },
         BackgroundColor(game_mode_button_background(active, Interaction::None)),
-        children![(
-            typography::button_label(label),
-            GameModeButtonLabel(mode),
-            TextColor(if active {
-                theme::TEXT_SUBTLE
-            } else {
-                theme::TEXT_PRIMARY
-            }),
-        )],
+        children![(typography::button_label(label), GameModeButtonLabel(mode))],
     )
 }
 
