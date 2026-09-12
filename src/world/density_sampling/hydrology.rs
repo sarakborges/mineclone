@@ -10,7 +10,7 @@ use crate::world::{
 const CAVE_WATER_PROTECTION_DEPTH: f32 = 14.0;
 const CAVE_WATER_PROTECTION_FADE_DEPTH: f32 = 20.0;
 const CAVE_WATER_HORIZONTAL_CLEARANCE: f32 = 8.0;
-const RIVER_CHANNEL_HEADROOM: f32 = 5.0;
+const RIVER_CHANNEL_HEADROOM: f32 = 8.0;
 const RIVER_BANK_NOISE_SCALE: f32 = 0.035;
 const RIVER_BANK_DETAIL_NOISE_SCALE: f32 = 0.11;
 const WATER_VOLUME_AIR_DENSITY: f32 = -0.001;
@@ -94,8 +94,11 @@ pub(super) fn enforce_hydrology_water_volume(
         return density;
     };
 
+    // Lakes are open basins. Rivers are not: their opening is controlled only by
+    // the bounded headroom profile above, so high terrain can close again once it
+    // is more than eight blocks above the water instead of being carved to sky.
     if base_density > 0.0
-        && matches!(water.kind, HydrologyWaterKind::Lake | HydrologyWaterKind::River)
+        && matches!(water.kind, HydrologyWaterKind::Lake)
         && cell_top > water.water_level
     {
         return density.min(WATER_VOLUME_AIR_DENSITY);
@@ -171,6 +174,13 @@ mod tests {
             river_headroom(1.0, horizontal, seed),
             RIVER_CHANNEL_HEADROOM
         );
+    }
+
+    #[test]
+    fn river_headroom_never_exceeds_eight_blocks() {
+        for strength in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            assert!(river_headroom(strength, Vec2::ZERO, 42) <= 8.0);
+        }
     }
 
     #[test]

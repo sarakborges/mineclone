@@ -201,10 +201,6 @@ where
             continue;
         }
 
-        // Selecting every cell above one deterministic threshold makes a river a
-        // continuous drainage network. The previous per-head random gate was
-        // recomputed per hydrology region and could make a channel disappear at a
-        // region boundary, producing rivers that visibly ended in open terrain.
         if flow >= river_flow_threshold {
             channels.insert(cell);
             if is_river_head(cell, flow_cache, river_flow_threshold, network) {
@@ -228,7 +224,10 @@ where
         }
     }
 
-    extend_selected_downstream(&mut channels, network);
+    keep_only_complete_downstream_paths(&mut channels, &lakes, network);
+    heads.retain(|cell| channels.contains(cell));
+    springs.retain(|cell| channels.contains(cell));
+
     RiverSelection {
         channels,
         heads,
@@ -254,8 +253,10 @@ fn is_river_head<F>(
 where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
-    for dz in -1..=1 {
-        for dx in -1..=1 {
+    let radius = RIVER_BASIN_ESCAPE_RADIUS_CELLS;
+
+    for dz in -radius..=radius {
+        for dx in -radius..=radius {
             if dx == 0 && dz == 0 {
                 continue;
             }
@@ -305,31 +306,45 @@ where
     hash_unit(hash.rotate_left(19)) < MOUNTAIN_SPRING_CHANCE * river_weight
 }
 
-fn extend_selected_downstream<F>(
+fn keep_only_complete_downstream_paths<F>(
     selected: &mut HashSet<IVec2>,
+    lakes: &HashMap<IVec2, WaterBody>,
     network: &mut DrainageNetwork<'_, F>,
 ) where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
     let starts = selected.iter().copied().collect::<Vec<_>>();
     let ocean_threshold = network.ocean_threshold();
+    let mut complete = HashSet::new();
 
     for start in starts {
         let mut current = start;
+        let mut path = Vec::new();
+        let mut reaches_destination = false;
 
         for _ in 0..RIVER_FLOW_TRACE_STEPS {
-            selected.insert(current);
+            path.push(current);
+            let node = network.node(current);
+
+            if node.continentalness <= ocean_threshold {
+                reaches_destination = true;
+                break;
+            }
+            if current != start && lakes.contains_key(&current) {
+                reaches_destination = true;
+                break;
+            }
 
             let Some(next) = network.downstream_cell(current) else {
                 break;
             };
-            let downstream = network.node(next);
-
-            if downstream.continentalness <= ocean_threshold {
-                break;
-            }
-
             current = next;
         }
+
+        if reaches_destination {
+            complete.extend(path);
+        }
     }
+
+    *selected = complete;
 }

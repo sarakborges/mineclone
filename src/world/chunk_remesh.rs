@@ -32,13 +32,16 @@ impl ChunkRemeshQueue {
     }
 
     pub(crate) fn enqueue_voxel_edit(&mut self, coord: IVec3) {
-        // Neighbor meshes need their shared faces refreshed too, but the edited
-        // chunk must be processed first so transparent blocks never linger as a
-        // visible ghost while the neighbor refreshes wait for later frames.
         for offset in CARDINAL_NEIGHBORS {
             self.enqueue_priority(coord + offset);
         }
         self.enqueue_priority(coord);
+    }
+
+    pub(crate) fn enqueue_voxel_edit_neighbors(&mut self, coord: IVec3) {
+        for offset in CARDINAL_NEIGHBORS {
+            self.enqueue_priority(coord + offset);
+        }
     }
 
     pub(crate) fn extend(&mut self, coords: impl IntoIterator<Item = IVec3>) {

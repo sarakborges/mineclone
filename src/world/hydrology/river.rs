@@ -17,7 +17,7 @@ use self::{
     water_bodies::{mountain_spring_body, plunge_pool_for_waterfall, river_head_body},
 };
 use super::{
-    constants::RIVER_EDGE_MARGIN_CELLS,
+    constants::{RIVER_BASIN_ESCAPE_RADIUS_CELLS, RIVER_EDGE_MARGIN_CELLS},
     drainage::{DrainageNetwork, DrainageNode},
     math::{cell_hash, hash_unit, lerp},
     spatial::water_body_intersects_region,
@@ -186,9 +186,6 @@ where
         return (downstream, downstream_water_level, downstream_flow);
     }
 
-    // Exactly one incoming branch owns the drainage node and becomes the trunk.
-    // Every other tributary joins later along the trunk's next segment. This
-    // prevents several river edges from radiating into one grid node as a star.
     let trunk = upstreams
         .iter()
         .max_by_key(|(cell, flow, tie_break)| (*flow, *tie_break, cell.x, cell.y))
@@ -204,9 +201,22 @@ where
         return (downstream, downstream_water_level, downstream_flow);
     }
 
-    let next = network.node(next_cell);
+    let mut tributaries = upstreams
+        .iter()
+        .filter(|(cell, _, _)| Some(*cell) != trunk)
+        .map(|(cell, _, tie_break)| (*cell, *tie_break))
+        .collect::<Vec<_>>();
+    tributaries.sort_by_key(|(cell, tie_break)| (*tie_break, cell.x, cell.y));
+    let rank = tributaries
+        .iter()
+        .position(|(cell, _)| *cell == source_cell)
+        .unwrap_or(0);
+    let slot = (rank + 1) as f32 / (tributaries.len() + 1) as f32;
     let hash = cell_hash(source_cell, seed ^ 0x3c6e_f372_fe94_f82b);
-    let progress = lerp(0.20, 0.78, hash_unit(hash.rotate_left(31)));
+    let jitter = (hash_unit(hash.rotate_left(31)) - 0.5)
+        * (0.16 / tributaries.len().max(1) as f32);
+    let progress = lerp(0.16, 0.84, (slot + jitter).clamp(0.0, 1.0));
+    let next = network.node(next_cell);
     let target = DrainageNode {
         position: downstream.position.lerp(next.position, progress),
         elevation: lerp(downstream.elevation, next.elevation, progress),
@@ -237,9 +247,13 @@ where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
     let mut upstreams = Vec::new();
+    let radius = RIVER_BASIN_ESCAPE_RADIUS_CELLS;
 
-    for dz in -1..=1 {
-        for dx in -1..=1 {
+    // Drainage can escape a local basin by several cells. Searching only the
+    // immediate 3x3 neighborhood missed those incoming branches, so the trunk
+    // rule was never applied and they still converged as stars.
+    for dz in -radius..=radius {
+        for dx in -radius..=radius {
             if dx == 0 && dz == 0 {
                 continue;
             }
