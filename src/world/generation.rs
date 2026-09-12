@@ -32,13 +32,12 @@ use crate::{
 
 use self::{
     caves::anchored_cave_region,
-    columns::sample_generation_columns,
     density::sample_density_field,
     fluids::rasterize_fluid_pass,
     materials::{MaterialPassContext, rasterize_material_pass},
     structures::rasterize_structures,
 };
-pub(crate) use self::columns::GenerationColumnSample;
+pub(crate) use self::columns::{GenerationColumnSample, sample_generation_columns};
 
 const LOCAL_EMPTY_HEADROOM_CHUNKS: i32 = 2;
 
