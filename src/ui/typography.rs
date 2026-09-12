@@ -59,6 +59,19 @@ pub fn opaque_caption(label: impl Into<String>) -> impl Bundle {
     )
 }
 
+pub fn crosshair_hint(label: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(label),
+        ui_font(14.0, FontWeight::MEDIUM),
+        LetterSpacing::Px(0.8),
+        TextColor(Color::WHITE),
+        TextShadow {
+            offset: Vec2::new(1.5, 1.5),
+            color: Color::BLACK,
+        },
+    )
+}
+
 pub fn button_label(label: impl Into<String>) -> impl Bundle {
     (
         Text::new(label),
