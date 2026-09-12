@@ -16,9 +16,14 @@
 }
 #else
 #import bevy_pbr::{
+    clustered_forward as clustering,
     forward_io::{VertexOutput, FragmentOutput},
+    lighting,
     mesh_view_bindings as view_bindings,
-    pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
+    mesh_view_types,
+    pbr_functions::main_pass_post_lighting_processing,
+    shadows,
+    view_transformations,
 }
 #endif
 
@@ -31,12 +36,11 @@ struct TerrainMaterialExtension {
 @group(#{MATERIAL_BIND_GROUP}) @binding(100)
 var<uniform> terrain_material_extension: TerrainMaterialExtension;
 
+const AMBIENT_FLOOR: f32 = 0.055;
+const LIGHT_GAMMA: f32 = 1.35;
+const SUN_AMBIENT_SHARE: f32 = 0.38;
+const DYNAMIC_LIGHT_SCALE: f32 = 0.08;
 const PACKED_RGB_MAX: f32 = 16777215.0;
-const LIGHT_RESPONSE_GAMMA: f32 = 1.35;
-const SKY_TIME_RESPONSE_GAMMA: f32 = 0.78;
-const AMBIENT_FLOOR: f32 = 0.018;
-const SKY_AMBIENT_STRENGTH: f32 = 0.34;
-const BLOCK_LIGHT_STRENGTH: f32 = 0.85;
 const DYED_TRANSPARENT_ALPHA: f32 = 0.20;
 
 fn unpack_rgb(value: f32) -> vec3<f32> {
@@ -85,11 +89,6 @@ fn apply_authored_tint(
     let texture_max = max(max(texel.r, texel.g), texel.b);
     let texture_min = min(min(texel.r, texel.g), texel.b);
     let texture_chroma = texture_max - texture_min;
-
-    // Tint is an authored-mask convention, not a blanket color multiply.
-    // Only genuinely grayscale pixels and transparent pixels are tintable.
-    // The previous 0.10 chroma threshold was broad enough to swallow subtly
-    // colored lamp details and made the whole texture look dyed.
     let grayscale_mask = 1.0 - smoothstep(0.006, 0.020, texture_chroma);
     let transparent_mask = 1.0 - smoothstep(0.985, 0.999, texel.a);
     let tint_mask = max(grayscale_mask, transparent_mask);
@@ -99,42 +98,110 @@ fn apply_authored_tint(
 
     var alpha = texel.a;
     if reveal_transparent {
-        // RGB cannot be visible through an authored alpha of exactly zero.
-        // Dyed alpha-blended textures (glass) therefore get a small alpha only
-        // in their authored transparent pixels. Opaque details keep alpha 1.
         alpha = max(alpha, DYED_TRANSPARENT_ALPHA * transparent_mask);
     }
 
     return vec4<f32>(rgb, alpha);
 }
 
-fn light_response(light: vec3<f32>) -> vec3<f32> {
-    return pow(
-        clamp(light, vec3<f32>(0.0), vec3<f32>(1.0)),
-        vec3<f32>(LIGHT_RESPONSE_GAMMA),
-    );
-}
-
-fn voxel_emissive(
-    base_color: vec3<f32>,
-    sky_light: vec3<f32>,
-    block_light: vec3<f32>,
-    ambient_occlusion: f32,
-) -> vec3<f32> {
-    let sky_time = pow(
-        clamp(terrain_material_extension.sky_light_factor, 0.0, 1.0),
-        SKY_TIME_RESPONSE_GAMMA,
-    );
-    let sky_fill = light_response(sky_light)
-        * sky_time
-        * SKY_AMBIENT_STRENGTH;
-    let block_fill = light_response(block_light) * BLOCK_LIGHT_STRENGTH;
-    let local_fill = max(sky_fill, block_fill) + vec3<f32>(AMBIENT_FLOOR);
-
-    return base_color * local_fill * ambient_occlusion;
-}
-
 #ifndef PREPASS_PIPELINE
+fn directional_sun_visibility(in: VertexOutput) -> f32 {
+    let view_z = view_transformations::position_world_to_view(in.world_position.xyz).z;
+    let surface_normal = normalize(in.world_normal);
+    let directional_light_count = view_bindings::lights.n_directional_lights;
+
+    for (var light_id: u32 = 0u; light_id < directional_light_count; light_id = light_id + 1u) {
+        let light = &view_bindings::lights.directional_lights[light_id];
+        let casts_shadows = ((*light).flags
+            & mesh_view_types::DIRECTIONAL_LIGHT_FLAGS_SHADOWS_ENABLED_BIT) != 0u;
+
+        if !casts_shadows {
+            continue;
+        }
+
+        let shadow = shadows::fetch_directional_shadow(
+            light_id,
+            in.world_position,
+            surface_normal,
+            view_z,
+            in.position.xy,
+        );
+        let incidence = max(
+            dot(surface_normal, normalize((*light).direction_to_light)),
+            0.0,
+        );
+
+        return mix(SUN_AMBIENT_SHARE, 1.0, shadow * incidence);
+    }
+
+    return 1.0;
+}
+
+fn dynamic_point_lighting(
+    in: VertexOutput,
+    surface_normal: vec3<f32>,
+    is_orthographic: bool,
+) -> vec3<f32> {
+    let view_z = dot(
+        vec4<f32>(
+            view_bindings::view.view_from_world[0].z,
+            view_bindings::view.view_from_world[1].z,
+            view_bindings::view.view_from_world[2].z,
+            view_bindings::view.view_from_world[3].z,
+        ),
+        in.world_position,
+    );
+    let cluster_index = clustering::view_fragment_cluster_index(
+        in.position.xy,
+        view_z,
+        is_orthographic,
+    );
+    let ranges = clustering::unpack_clusterable_object_index_ranges(cluster_index);
+    var result = vec3<f32>(0.0);
+
+    for (
+        var index = ranges.first_point_light_index_offset;
+        index < ranges.first_spot_light_index_offset;
+        index = index + 1u
+    ) {
+        let light_id = clustering::get_clusterable_object_id(index);
+        let light = &view_bindings::clustered_lights.data[light_id];
+        let to_light = (*light).position_radius.xyz - in.world_position.xyz;
+        let distance_squared = max(dot(to_light, to_light), 0.0001);
+        let light_direction = to_light * inverseSqrt(distance_squared);
+        let incidence = max(dot(surface_normal, light_direction), 0.0);
+
+        if incidence <= 0.0 {
+            continue;
+        }
+
+        let attenuation = lighting::getDistanceAttenuation(
+            distance_squared,
+            (*light).color_inverse_square_range.w,
+        );
+        var visibility = 1.0;
+        let casts_shadows = ((*light).flags
+            & mesh_view_types::POINT_LIGHT_FLAGS_SHADOWS_ENABLED_BIT) != 0u;
+
+        if casts_shadows {
+            visibility = shadows::fetch_point_shadow(
+                light_id,
+                in.world_position,
+                surface_normal,
+                in.position.xy,
+            );
+        }
+
+        result += (*light).color_inverse_square_range.rgb
+            * attenuation
+            * incidence
+            * visibility
+            * DYNAMIC_LIGHT_SCALE;
+    }
+
+    return result;
+}
+
 fn animate_fluid_color(color: vec3<f32>, world_position: vec3<f32>) -> vec3<f32> {
     let amount = clamp(
         terrain_material_extension.fluid_animation_factor,
@@ -180,13 +247,8 @@ fn fragment(
     in: VertexOutput,
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
-    // Start from Bevy's StandardMaterial input so roughness, metallic,
-    // normals, material flags and the forward/deferred paths stay native.
     var pbr_input = pbr_input_from_standard_material(in, is_front);
 
-    // Voxel vertex color and UV-B are intentionally repurposed for lighting
-    // and tint data, so rebuild the albedo instead of using the vertex-color-
-    // multiplied base color produced by StandardMaterial.
     let texel = textureSample(
         pbr_bindings::base_color_texture,
         pbr_bindings::base_color_sampler,
@@ -204,8 +266,55 @@ fn fragment(
     material_rgb = animate_fluid_color(material_rgb, in.world_position.xyz);
 #endif
 
+    let is_unlit = (
+        pbr_input.material.flags & STANDARD_MATERIAL_FLAGS_UNLIT_BIT
+    ) != 0u;
+    let sky_rgb = unpack_rgb(in.uv_b.x);
+    let block_rgb = clamp(
+        in.color.rgb,
+        vec3<f32>(0.0),
+        vec3<f32>(1.0),
+    );
+    let ambient_occlusion = clamp(in.color.a, 0.0, 1.0);
+    let sky_light = pow(
+        clamp(sky_rgb, vec3<f32>(0.0), vec3<f32>(1.0)),
+        vec3<f32>(LIGHT_GAMMA),
+    ) * clamp(terrain_material_extension.sky_light_factor, 0.0, 1.0);
+    let block_light = pow(
+        block_rgb,
+        vec3<f32>(LIGHT_GAMMA),
+    );
+
+    var sun_visibility = 1.0;
+    var dynamic_light = vec3<f32>(0.0);
+
+#ifndef PREPASS_PIPELINE
+    if !is_unlit {
+        let surface_normal = normalize(pbr_input.world_normal);
+        sun_visibility = directional_sun_visibility(in);
+        dynamic_light = dynamic_point_lighting(
+            in,
+            surface_normal,
+            pbr_input.is_orthographic,
+        );
+    }
+#endif
+
+    let shadowed_sky_light = sky_light * sun_visibility;
+    let propagated_light = max(shadowed_sky_light, block_light);
+    let local_light = mix(
+        vec3<f32>(AMBIENT_FLOOR),
+        vec3<f32>(1.0),
+        propagated_light,
+    ) * ambient_occlusion;
+
+    var lighting_multiplier = vec3<f32>(1.0);
+    if !is_unlit {
+        lighting_multiplier = local_light + dynamic_light;
+    }
+
     pbr_input.material.base_color = vec4<f32>(
-        material_rgb,
+        material_rgb * lighting_multiplier,
         tinted_texel.a * material_base_color.a,
     );
     pbr_input.material.base_color = alpha_discard(
@@ -213,50 +322,11 @@ fn fragment(
         pbr_input.material.base_color,
     );
 
-    let is_unlit = (
-        pbr_input.material.flags & STANDARD_MATERIAL_FLAGS_UNLIT_BIT
-    ) != 0u;
-
-    if !is_unlit {
-        let sky_light = unpack_rgb(in.uv_b.x);
-        let block_light = clamp(
-            in.color.rgb,
-            vec3<f32>(0.0),
-            vec3<f32>(1.0),
-        );
-        let ambient_occlusion = clamp(in.color.a, 0.0, 1.0);
-        let baked_emissive = voxel_emissive(
-            material_rgb,
-            sky_light,
-            block_light,
-            ambient_occlusion,
-        );
-
-        // Voxel light is indirect/local fill. Bevy's PBR lighting remains
-        // responsible for the directional sun, native point lights and their
-        // shadows, avoiding the previous double/manual light implementation.
-        pbr_input.material.emissive = vec4<f32>(
-            pbr_input.material.emissive.rgb + baked_emissive,
-            pbr_input.material.emissive.a,
-        );
-        pbr_input.diffuse_occlusion = pbr_input.diffuse_occlusion
-            * vec3<f32>(ambient_occlusion);
-        pbr_input.specular_occlusion = pbr_input.specular_occlusion
-            * ambient_occlusion;
-    }
-
 #ifdef PREPASS_PIPELINE
     return deferred_output(in, pbr_input);
 #else
     var out: FragmentOutput;
-    if is_unlit {
-        out.color = pbr_input.material.base_color;
-    } else {
-        out.color = apply_pbr_lighting(pbr_input);
-    }
-
-    // Keep Bevy's native fog, alpha handling, tonemapping and debanding in
-    // the same order as the stock PBR shader.
+    out.color = pbr_input.material.base_color;
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
     return out;
 #endif
