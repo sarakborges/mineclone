@@ -32,6 +32,15 @@ pub fn heading(label: impl Into<String>) -> impl Bundle {
     )
 }
 
+pub fn setting_title(label: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(label),
+        ui_font(21.0, FontWeight::SEMIBOLD),
+        LetterSpacing::Px(0.5),
+        TextColor(Color::WHITE),
+    )
+}
+
 pub fn muted(label: impl Into<String>) -> impl Bundle {
     (
         Text::new(label),
