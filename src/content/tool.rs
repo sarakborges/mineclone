@@ -24,6 +24,11 @@ impl ToolRegistry {
         definition
             .name
             .validate(&format!("tool {} name", definition.id));
+        assert!(
+            !definition.icon.trim().is_empty(),
+            "tool {} icon cannot be empty",
+            definition.id
+        );
         intern_tool_id(&definition.id);
         self.definitions.insert(definition.id.clone(), definition);
     }

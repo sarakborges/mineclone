@@ -13,7 +13,7 @@ const GAME_MODE_BUTTON_GAP: f32 = 12.0;
 pub(super) struct GameModeButton(pub(super) GameMode);
 
 #[derive(Component, Clone, Copy)]
-struct GameModeButtonLabel(GameMode);
+pub(super) struct GameModeButtonLabel(GameMode);
 
 pub(super) fn world_settings_section(
     game_mode: GameMode,

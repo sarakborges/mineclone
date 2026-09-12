@@ -39,10 +39,12 @@ impl CaveConnectivityField {
         ANCHOR_SEARCH_MARGIN
     }
 
+    #[cfg(test)]
     pub fn region_from_anchors(&self, coord: IVec3, anchors: &[Vec3]) -> CaveConnectivityRegion {
         self.region_from_anchors_with_underground_water(coord, anchors, anchors)
     }
 
+    #[cfg(test)]
     pub(crate) fn region_from_anchors_with_underground_water(
         &self,
         coord: IVec3,

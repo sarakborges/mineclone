@@ -36,6 +36,7 @@ impl SecondaryProperties {
             .map(|entry| entry.value)
     }
 
+    #[cfg(test)]
     pub(crate) fn with(mut self, property: &str, value: &str) -> Self {
         self.set(property, value);
         self

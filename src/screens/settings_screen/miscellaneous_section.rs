@@ -16,7 +16,7 @@ const TOGGLE_THUMB_ENABLED_LEFT: f32 = TOGGLE_WIDTH - TOGGLE_THUMB_SIZE - TOGGLE
 pub(super) struct DisplayTooltipsToggle;
 
 #[derive(Component)]
-struct DisplayTooltipsToggleThumb;
+pub(super) struct DisplayTooltipsToggleThumb;
 
 pub(super) fn miscellaneous_section(
     display_tooltips: bool,

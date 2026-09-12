@@ -11,10 +11,6 @@ pub struct FluidCell {
 }
 
 impl FluidCell {
-    pub fn new(fluid_id: FluidId, level: u8) -> Self {
-        Self::source(fluid_id, level)
-    }
-
     pub fn source(fluid_id: FluidId, level: u8) -> Self {
         Self::with_state(fluid_id, level, true, 0)
     }
@@ -25,10 +21,6 @@ impl FluidCell {
 
     pub fn spreading(fluid_id: FluidId, level: u8, spread_distance: u16) -> Self {
         Self::with_state(fluid_id, level, false, spread_distance)
-    }
-
-    pub fn with_source(fluid_id: FluidId, level: u8, source: bool) -> Self {
-        Self::with_state(fluid_id, level, source, 0)
     }
 
     pub fn with_state(fluid_id: FluidId, level: u8, source: bool, spread_distance: u16) -> Self {

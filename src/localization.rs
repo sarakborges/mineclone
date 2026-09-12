@@ -47,22 +47,6 @@ impl LocalizedText {
             "{context} english localization cannot be empty"
         );
     }
-
-    pub(crate) fn as_str(&self) -> &str {
-        self.text(Language::English)
-    }
-
-    pub(crate) fn to_lowercase(&self) -> String {
-        self.as_str().to_lowercase()
-    }
-
-    pub(crate) fn is_empty(&self) -> bool {
-        self.as_str().is_empty()
-    }
-
-    pub(crate) fn trim(&self) -> &str {
-        self.as_str().trim()
-    }
 }
 
 #[derive(Resource, Debug, Clone, Copy, Default, PartialEq, Eq)]

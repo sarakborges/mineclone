@@ -20,10 +20,6 @@ impl HydrologyRegion {
         self.water_with_margin(position, radius.max(0.0))
     }
 
-    pub(crate) fn river_water_at(&self, position: Vec2) -> Option<HydrologyWaterSample<'_>> {
-        self.river_water_with_margin(position, 0.0)
-    }
-
     pub(crate) fn river_surface_at(
         &self,
         position: Vec2,

@@ -51,10 +51,6 @@ impl WaterBody {
         smoothstep(1.0 - distance.clamp(0.0, 1.0))
     }
 
-    pub fn contains_horizontal(&self, position: Vec2) -> bool {
-        self.horizontal_strength(position) > 0.0
-    }
-
     pub fn maximum_horizontal_extent(&self) -> f32 {
         self.radius.max_element() * 1.3
     }

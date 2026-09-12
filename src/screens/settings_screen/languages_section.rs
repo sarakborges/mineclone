@@ -11,7 +11,7 @@ const LANGUAGE_BUTTON_HEIGHT: f32 = 44.0;
 pub(super) struct LanguageButton(pub(super) Language);
 
 #[derive(Component, Clone, Copy)]
-struct LanguageButtonLabel(Language);
+pub(super) struct LanguageButtonLabel(Language);
 
 pub(super) fn languages_section(
     localization: &UiLocalization,

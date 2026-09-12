@@ -75,14 +75,6 @@ pub(super) fn volume_site_position(cell: IVec3, spacing: Vec3, seed: u64) -> Vec
     position
 }
 
-pub(super) fn biome_index(cell: IVec2, biome_count: usize, seed: u64) -> usize {
-    if cell == IVec2::ZERO {
-        return 0;
-    }
-
-    cell_hash(cell, seed) as usize % biome_count
-}
-
 pub(super) fn cell_hash(cell: IVec2, seed: u64) -> u64 {
     let mut hash = seed ^ 0xa076_1d64_78bd_642f;
     hash ^= (cell.x as i64 as u64).wrapping_mul(0x9e37_79b1_85eb_ca87);
