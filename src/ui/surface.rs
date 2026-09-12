@@ -14,13 +14,15 @@ pub fn modal_panel() -> impl Bundle {
     })
 }
 
-pub fn settings_section() -> impl Bundle {
+pub fn settings_content() -> impl Bundle {
     frosted_surface(Node {
-        width: percent(100),
-        padding: UiRect::all(px(30)),
+        flex_grow: 1.0,
+        height: percent(100),
+        min_width: px(0),
+        min_height: px(0),
+        padding: UiRect::all(px(18)),
         flex_direction: FlexDirection::Column,
         align_items: AlignItems::Stretch,
-        row_gap: px(18),
         border_radius: BorderRadius::all(px(8)),
         ..default()
     })

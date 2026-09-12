@@ -1,94 +1,16 @@
 use bevy::prelude::*;
 
-use crate::{
-    content::{
-        biome::BiomeRegistry,
-        biome_terrain::BiomeTerrain,
-        block::BlockRegistry,
-        dimension::DimensionDefinition,
-        fluid::{FluidId, FluidRegistry},
-    },
-    voxel::{
-        cell::VoxelCell,
-        chunk::{VoxelChunk, CHUNK_SIZE},
-        fluid::FluidCell,
-        texture_rotation::TextureRotation,
-    },
+use crate::content::{
+    biome::{BiomeKind, BiomeRegistry},
+    biome_terrain::BiomeTerrain,
+    biome_terrain_modifier::BiomeTerrainModifier,
+    dimension::DimensionDefinition,
 };
 
 use super::biome_field::{BiomeField, BiomeFieldSample};
 
-const GRASS_BLOCK_ID: &str = "mineclone:grass";
 const TERRAIN_MIN_CHUNK_Y: i32 = 0;
 const NOISE_OCTAVES: usize = 4;
-
-pub fn build_chunk(
-    coord: IVec3,
-    blocks: &BlockRegistry,
-    fluids: &FluidRegistry,
-    dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
-    biome_field: &BiomeField,
-) -> VoxelChunk {
-    let (min_chunk_y, max_chunk_y) = chunk_y_bounds(dimension, biomes);
-
-    if coord.y < min_chunk_y || coord.y > max_chunk_y {
-        return VoxelChunk::empty();
-    }
-
-    let grass = blocks
-        .get(GRASS_BLOCK_ID)
-        .unwrap_or_else(|| panic!("missing block definition: {GRASS_BLOCK_ID}"));
-    let mut chunk = VoxelChunk::empty();
-    let chunk_size = CHUNK_SIZE as i32;
-    let chunk_origin = coord * chunk_size;
-
-    for local_z in 0..CHUNK_SIZE {
-        for local_x in 0..CHUNK_SIZE {
-            let world_x = chunk_origin.x + local_x as i32;
-            let world_z = chunk_origin.z + local_z as i32;
-            let position = IVec2::new(world_x, world_z);
-            let sample = biome_field.sample(position.as_vec2() + Vec2::splat(0.5));
-            let column_height = surface_height_from_sample(
-                position,
-                dimension,
-                biomes,
-                biome_field.seed(),
-                &sample,
-            );
-            let surface_fluid = surface_fluid_from_sample(&sample, biomes, fluids);
-
-            for local_y in 0..CHUNK_SIZE {
-                let world_y = chunk_origin.y + local_y as i32;
-
-                if world_y < column_height {
-                    let world_position = IVec3::new(world_x, world_y, world_z);
-                    let rotation = texture_rotation_for(world_position, grass.rotate_texture);
-                    chunk.set_block(
-                        local_x,
-                        local_y,
-                        local_z,
-                        Some(VoxelCell::new(GRASS_BLOCK_ID, rotation)),
-                    );
-                    continue;
-                }
-
-                if world_y < dimension.sea_level {
-                    if let Some(fluid_id) = surface_fluid {
-                        chunk.set_fluid(
-                            local_x,
-                            local_y,
-                            local_z,
-                            Some(FluidCell::source(fluid_id)),
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    chunk
-}
 
 pub fn surface_height(
     position: IVec2,
@@ -96,12 +18,12 @@ pub fn surface_height(
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
 ) -> i32 {
-    let sample = biome_field.sample(position.as_vec2() + Vec2::splat(0.5));
+    let sample = biome_field.sample_surface(position.as_vec2() + Vec2::splat(0.5));
 
     surface_height_from_sample(position, dimension, biomes, biome_field.seed(), &sample)
 }
 
-fn surface_height_from_sample(
+pub(crate) fn surface_height_from_sample(
     position: IVec2,
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
@@ -114,63 +36,63 @@ fn surface_height_from_sample(
         let biome = biomes
             .get(influence.id)
             .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
+        let terrain = biome
+            .terrain
+            .as_ref()
+            .unwrap_or_else(|| panic!("surface biome {} must define terrain", biome.id));
         height += biome_surface_height(
             position.as_vec2(),
             dimension.sea_level,
             world_seed,
             biome.id.as_str(),
-            &biome.terrain,
+            terrain,
+            &biome.terrain_modifiers,
         ) * influence.weight;
     }
 
     height.round().max(1.0) as i32
 }
 
-fn surface_fluid_from_sample(
-    sample: &BiomeFieldSample<'_>,
-    biomes: &BiomeRegistry,
-    fluids: &FluidRegistry,
-) -> Option<FluidId> {
-    sample
-        .influences
-        .iter()
-        .filter_map(|influence| {
-            let biome = biomes
-                .get(influence.id)
-                .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
-            let fluid_id = biome.surface_fluid.as_deref()?;
-            let fluid = fluids.id_of(fluid_id).unwrap_or_else(|| {
-                panic!(
-                    "biome {} references missing surface fluid: {fluid_id}",
-                    biome.id
-                )
-            });
-
-            Some((fluid, influence.weight))
-        })
-        .max_by(|(_, left_weight), (_, right_weight)| left_weight.total_cmp(right_weight))
-        .map(|(fluid_id, _)| fluid_id)
+pub(crate) fn terrain_density(surface_height: i32, world_y: i32) -> f32 {
+    surface_height as f32 - (world_y as f32 + 0.5)
 }
 
-pub fn chunk_y_bounds(
+pub(crate) fn chunk_y_bounds(
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
 ) -> (i32, i32) {
     let maximum_offset = dimension
         .biomes
         .iter()
-        .map(|biome_id| {
-            biomes
+        .filter_map(|dimension_biome| {
+            let biome_id = &dimension_biome.id;
+            let biome = biomes
                 .get(biome_id)
-                .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"))
+                .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
+
+            if biome.kind != BiomeKind::Surface {
+                return None;
+            }
+
+            let terrain_offset = biome
                 .terrain
-                .maximum_height_offset()
+                .as_ref()
+                .unwrap_or_else(|| panic!("surface biome {} must define terrain", biome.id))
+                .maximum_height_offset();
+            let modifier_offset: f32 = biome
+                .terrain_modifiers
+                .iter()
+                .copied()
+                .map(BiomeTerrainModifier::maximum_height_offset)
+                .sum();
+
+            Some(terrain_offset + modifier_offset)
         })
         .fold(0.0_f32, f32::max)
         .max(0.0);
     let maximum_surface = dimension.sea_level as f32 + maximum_offset;
     let maximum_block_y = maximum_surface.ceil().max(1.0) as i32 - 1;
-    let maximum_chunk_y = maximum_block_y.div_euclid(CHUNK_SIZE as i32);
+    let maximum_chunk_y = maximum_block_y.div_euclid(crate::voxel::chunk::CHUNK_SIZE as i32);
 
     (TERRAIN_MIN_CHUNK_Y, maximum_chunk_y)
 }
@@ -181,11 +103,12 @@ fn biome_surface_height(
     world_seed: u64,
     biome_id: &str,
     terrain: &BiomeTerrain,
+    modifiers: &[BiomeTerrainModifier],
 ) -> f32 {
     let seed = mix_seed(world_seed ^ string_hash(biome_id));
     let sea_level = sea_level as f32;
 
-    match *terrain {
+    let base_height = match *terrain {
         BiomeTerrain::Rolling {
             base_height,
             amplitude,
@@ -207,13 +130,54 @@ fn biome_surface_height(
             let ridge = (1.0 - noise.abs()).clamp(0.0, 1.0).powf(sharpness);
             sea_level + base_height + ridge * amplitude
         }
-        BiomeTerrain::Ocean {
-            floor_depth,
-            amplitude,
+    };
+
+    base_height
+        + modifiers
+            .iter()
+            .enumerate()
+            .map(|(index, modifier)| {
+                terrain_modifier_height(
+                    position,
+                    seed.wrapping_add((index as u64 + 1).wrapping_mul(0x517c_c1b7_2722_0a95)),
+                    *modifier,
+                )
+            })
+            .sum::<f32>()
+}
+
+fn terrain_modifier_height(position: Vec2, seed: u64, modifier: BiomeTerrainModifier) -> f32 {
+    match modifier {
+        BiomeTerrainModifier::Cliffs {
             scale,
+            threshold,
+            height,
+            edge_width,
+            warp_scale,
+            warp_strength,
         } => {
-            let floor = fractal_noise(position * scale, seed);
-            sea_level - floor_depth + floor * amplitude
+            let warp_position = position * warp_scale;
+            let warp = Vec2::new(
+                fractal_noise(warp_position, seed ^ 0x9e37_79b9_7f4a_7c15),
+                fractal_noise(
+                    warp_position + Vec2::new(-23.1, 41.9),
+                    seed ^ 0xc2b2_ae3d_27d4_eb4f,
+                ),
+            ) * warp_strength;
+            let value = ((fractal_noise((position + warp) * scale, seed) + 1.0) * 0.5)
+                .clamp(0.0, 1.0);
+            let half_edge = edge_width * 0.5;
+            let lower = (threshold - half_edge).clamp(0.0, 1.0);
+            let upper = (threshold + half_edge).clamp(0.0, 1.0);
+            let progress = if upper > lower {
+                ((value - lower) / (upper - lower)).clamp(0.0, 1.0)
+            } else if value >= threshold {
+                1.0
+            } else {
+                0.0
+            };
+
+            smoothstep(progress) * height
         }
     }
 }
@@ -286,18 +250,4 @@ fn smoothstep(value: f32) -> f32 {
 
 fn lerp(from: f32, to: f32, amount: f32) -> f32 {
     from + (to - from) * amount
-}
-
-fn texture_rotation_for(position: IVec3, enabled: bool) -> TextureRotation {
-    if !enabled {
-        return TextureRotation::default();
-    }
-
-    let mut hash = position.x as u32;
-    hash ^= (position.y as u32).wrapping_mul(0x9e37_79b9);
-    hash = hash.rotate_left(13);
-    hash ^= (position.z as u32).wrapping_mul(0x85eb_ca6b);
-    hash ^= hash >> 16;
-
-    TextureRotation::from_quarter_turn((hash & 3) as u8)
 }

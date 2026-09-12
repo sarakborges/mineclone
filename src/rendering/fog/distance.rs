@@ -1,24 +1,25 @@
 use bevy::prelude::*;
 
 use crate::{
-    player::camera::GameplayCamera,
-    voxel::chunk::CHUNK_SIZE,
+    player::camera::GameplayCamera, voxel::chunk::CHUNK_SIZE,
     world::render_distance::RenderDistanceSettings,
 };
 
-const FOG_START_MARGIN_CHUNKS: f32 = 2.0;
-const FOG_END_MARGIN_CHUNKS: f32 = 1.25;
+const FOG_START_RADIUS_FRACTION: f32 = 0.78;
+const FOG_END_RADIUS_FRACTION: f32 = 0.98;
+
+pub(super) fn fog_distances(render_distance_chunks: i32) -> (f32, f32) {
+    let chunk_size = CHUNK_SIZE as f32;
+    let radius = render_distance_chunks.max(1) as f32 * chunk_size;
+    let start = (radius * FOG_START_RADIUS_FRACTION).max(chunk_size);
+    let end = (radius * FOG_END_RADIUS_FRACTION).max(start + chunk_size);
+
+    (start, end)
+}
 
 pub(super) fn fog_falloff(render_distance_chunks: i32) -> FogFalloff {
-    let chunk_size = CHUNK_SIZE as f32;
-    let radius = render_distance_chunks as f32;
-    let start_chunks = (radius - FOG_START_MARGIN_CHUNKS).max(1.0);
-    let end_chunks = (radius - FOG_END_MARGIN_CHUNKS).max(start_chunks + 0.5);
-
-    FogFalloff::Linear {
-        start: start_chunks * chunk_size,
-        end: end_chunks * chunk_size,
-    }
+    let (start, end) = fog_distances(render_distance_chunks);
+    FogFalloff::Linear { start, end }
 }
 
 pub(super) fn update_fog_distance(
@@ -31,5 +32,23 @@ pub(super) fn update_fog_distance(
 
     for mut fog in &mut fogs {
         fog.falloff = fog_falloff(render_distance.chunks());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fog_stays_close_to_the_render_boundary() {
+        let render_distance_chunks = 10;
+        let radius = render_distance_chunks as f32 * CHUNK_SIZE as f32;
+        let (start, end) = fog_distances(render_distance_chunks);
+
+        assert!(start >= radius * 0.76);
+        assert!(start <= radius * 0.80);
+        assert!(end >= radius * 0.96);
+        assert!(end <= radius);
+        assert!(end > start);
     }
 }

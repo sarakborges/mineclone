@@ -1,16 +1,15 @@
 use std::collections::HashMap;
 
-use bevy::{
-    asset::RenderAssetUsages,
-    mesh::Indices,
-    prelude::*,
-    render::render_resource::PrimitiveTopology,
-};
+use bevy::prelude::*;
 
 use crate::content::fluid::FluidId;
 
 use super::{
-    chunk::{VoxelChunk, CHUNK_SIZE},
+    block_face::BlockFace,
+    chunk::{CHUNK_SIZE, VoxelChunk},
+    mesh_buffer::VoxelMeshBuffer,
+    mesh_lighting::{face_lighting, push_lit_quad},
+    quad::VOXEL_FACE_UVS,
     world::VoxelWorld,
 };
 
@@ -19,46 +18,24 @@ pub struct ChunkFluidMesh {
     pub mesh: Mesh,
 }
 
-#[derive(Default)]
-struct MeshBuffers {
-    positions: Vec<[f32; 3]>,
-    normals: Vec<[f32; 3]>,
-    indices: Vec<u32>,
+#[derive(Clone, Copy)]
+struct FluidFaceHeights {
+    h00: f32,
+    h10: f32,
+    h11: f32,
+    h01: f32,
 }
 
-impl MeshBuffers {
-    fn push(&mut self, vertices: [[f32; 3]; 4], normal: [f32; 3]) {
-        let base = self.positions.len() as u32;
-
-        self.positions.extend(vertices);
-        self.normals.extend([normal; 4]);
-        self.indices
-            .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
-    }
-
-    fn into_mesh(self) -> Option<Mesh> {
-        if self.positions.is_empty() {
-            return None;
-        }
-
-        Some(
-            Mesh::new(
-                PrimitiveTopology::TriangleList,
-                RenderAssetUsages::RENDER_WORLD,
-            )
-            .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
-            .with_inserted_indices(Indices::U32(self.indices)),
-        )
-    }
-}
-
-pub fn build_fluid_meshes(
+pub fn build_fluid_meshes<F>(
     world: &VoxelWorld,
     chunk_coord: IVec3,
     chunk: &VoxelChunk,
-) -> Vec<ChunkFluidMesh> {
-    let mut buffers = HashMap::<FluidId, MeshBuffers>::new();
+    tint_at: F,
+) -> Vec<ChunkFluidMesh>
+where
+    F: Fn(IVec3, FluidId) -> [f32; 3],
+{
+    let mut buffers = HashMap::<FluidId, VoxelMeshBuffer>::new();
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_origin = chunk_coord * chunk_size;
 
@@ -70,56 +47,30 @@ pub fn build_fluid_meshes(
                 };
 
                 let fluid = buffers.entry(cell.fluid_id).or_default();
-                let local = IVec3::new(x as i32, y as i32, z as i32);
-                let world_voxel = chunk_origin + local;
-                let x0 = x as f32;
-                let y0 = y as f32;
-                let z0 = z as f32;
-                let x1 = x0 + 1.0;
-                let y1 = y0 + cell.height();
-                let z1 = z0 + 1.0;
+                let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
+                let tint = tint_at(world_voxel, cell.fluid_id);
+                let heights = FluidFaceHeights {
+                    h00: fluid_corner_height(world, world_voxel, cell.fluid_id, -1, -1),
+                    h10: fluid_corner_height(world, world_voxel, cell.fluid_id, 1, -1),
+                    h11: fluid_corner_height(world, world_voxel, cell.fluid_id, 1, 1),
+                    h01: fluid_corner_height(world, world_voxel, cell.fluid_id, -1, 1),
+                };
 
-                if face_is_exposed(world, world_voxel + IVec3::X, cell.fluid_id) {
-                    fluid.push(
-                        [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]],
-                        [1.0, 0.0, 0.0],
-                    );
-                }
+                for face in BlockFace::ALL {
+                    if face == BlockFace::Bottom && world_voxel.y <= 0 {
+                        continue;
+                    }
+                    if !face_is_exposed(world, world_voxel + face.offset(), cell.fluid_id) {
+                        continue;
+                    }
 
-                if face_is_exposed(world, world_voxel - IVec3::X, cell.fluid_id) {
-                    fluid.push(
-                        [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]],
-                        [-1.0, 0.0, 0.0],
-                    );
-                }
-
-                if face_is_exposed(world, world_voxel + IVec3::Y, cell.fluid_id) {
-                    fluid.push(
-                        [[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]],
-                        [0.0, 1.0, 0.0],
-                    );
-                }
-
-                if world_voxel.y > 0
-                    && face_is_exposed(world, world_voxel - IVec3::Y, cell.fluid_id)
-                {
-                    fluid.push(
-                        [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]],
-                        [0.0, -1.0, 0.0],
-                    );
-                }
-
-                if face_is_exposed(world, world_voxel + IVec3::Z, cell.fluid_id) {
-                    fluid.push(
-                        [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]],
-                        [0.0, 0.0, 1.0],
-                    );
-                }
-
-                if face_is_exposed(world, world_voxel - IVec3::Z, cell.fluid_id) {
-                    fluid.push(
-                        [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]],
-                        [0.0, 0.0, -1.0],
+                    push_lit_quad(
+                        fluid,
+                        fluid_face_vertices(face, x as f32, y as f32, z as f32, heights),
+                        face.normal(),
+                        VOXEL_FACE_UVS,
+                        tint,
+                        face_lighting(world, world_voxel, face, false),
                     );
                 }
             }
@@ -128,12 +79,94 @@ pub fn build_fluid_meshes(
 
     buffers
         .into_iter()
-        .filter_map(|(fluid_id, buffers)| {
-            buffers
+        .filter_map(|(fluid_id, buffer)| {
+            buffer
                 .into_mesh()
                 .map(|mesh| ChunkFluidMesh { fluid_id, mesh })
         })
         .collect()
+}
+
+fn fluid_face_vertices(
+    face: BlockFace,
+    x0: f32,
+    y0: f32,
+    z0: f32,
+    heights: FluidFaceHeights,
+) -> [[f32; 3]; 4] {
+    let x1 = x0 + 1.0;
+    let z1 = z0 + 1.0;
+
+    match face {
+        BlockFace::Right => [
+            [x1, y0, z1],
+            [x1, y0, z0],
+            [x1, y0 + heights.h10, z0],
+            [x1, y0 + heights.h11, z1],
+        ],
+        BlockFace::Left => [
+            [x0, y0, z0],
+            [x0, y0, z1],
+            [x0, y0 + heights.h01, z1],
+            [x0, y0 + heights.h00, z0],
+        ],
+        BlockFace::Top => [
+            [x0, y0 + heights.h01, z1],
+            [x1, y0 + heights.h11, z1],
+            [x1, y0 + heights.h10, z0],
+            [x0, y0 + heights.h00, z0],
+        ],
+        BlockFace::Bottom => [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]],
+        BlockFace::Front => [
+            [x0, y0, z1],
+            [x1, y0, z1],
+            [x1, y0 + heights.h11, z1],
+            [x0, y0 + heights.h01, z1],
+        ],
+        BlockFace::Back => [
+            [x1, y0, z0],
+            [x0, y0, z0],
+            [x0, y0 + heights.h00, z0],
+            [x1, y0 + heights.h10, z0],
+        ],
+    }
+}
+
+fn fluid_corner_height(
+    world: &VoxelWorld,
+    position: IVec3,
+    fluid_id: FluidId,
+    x_sign: i32,
+    z_sign: i32,
+) -> f32 {
+    let offsets = [
+        IVec3::ZERO,
+        IVec3::new(x_sign, 0, 0),
+        IVec3::new(0, 0, z_sign),
+        IVec3::new(x_sign, 0, z_sign),
+    ];
+    let mut total = 0.0;
+    let mut count = 0.0;
+
+    for offset in offsets {
+        let sample_position = position + offset;
+        if world
+            .fluid_at(sample_position + IVec3::Y)
+            .is_some_and(|cell| cell.fluid_id == fluid_id)
+        {
+            return 1.0;
+        }
+
+        if let Some(cell) = world
+            .fluid_at(sample_position)
+            .filter(|cell| cell.fluid_id == fluid_id)
+        {
+            total += cell.height();
+            count += 1.0;
+        }
+    }
+
+    if count > 0.0 { total / count } else { 0.0 }
 }
 
 fn face_is_exposed(world: &VoxelWorld, position: IVec3, fluid_id: FluidId) -> bool {

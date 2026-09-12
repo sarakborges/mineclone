@@ -1,0 +1,21 @@
+{
+  "id": "asteria:oak_tree",
+  "name": { "english": "Oak Tree" },
+  "anchor": { "x": 2, "y": 0, "z": 2 },
+  "palette": {
+    "G": { "block": "asteria:grass" },
+    "W": { "block": "asteria:oak_log", "orientation": "y" },
+    "F": { "block": "asteria:oak_leaf" }
+  },
+  "layers": [
+    { "y": 0, "rows": [".....", "..G..", ".GGG.", "..G..", "....."] },
+    { "y": 1, "rows": [".....", ".....", "..W..", ".....", "....."] },
+    { "y": 2, "rows": [".....", ".....", "..W..", ".....", "....."] },
+    { "y": 3, "rows": ["..F..", ".FFF.", "FFWFF", ".FFF.", "...F."] },
+    { "y": 4, "rows": [".FFF.", "FFFF.", "FFWFF", ".FFFF", ".FFF."] },
+    { "y": 5, "rows": [".FFF.", "FFFFF", "FFWFF", "FFFF.", "..FF."] },
+    { "y": 6, "rows": ["..FF.", ".FFFF", "FFFFF", "FFFF.", ".FFF."] },
+    { "y": 7, "rows": [".....", ".FFF.", "FFFF.", ".FFF.", "..F.."] },
+    { "y": 8, "rows": [".....", "..F..", ".FFF.", "..FF.", "....."] }
+  ]
+}

@@ -3,9 +3,7 @@ use bevy::prelude::*;
 use crate::{app::game_state::GameState, ui::typography};
 
 use super::{
-    banner::world_banner,
-    biome::BiomeHudText,
-    coordinates::CoordinatesHudText,
+    banner::world_banner, biome::BiomeHudText, coordinates::CoordinatesHudText,
     dimension::DimensionHudText,
 };
 
@@ -31,19 +29,19 @@ pub(super) fn spawn_world_hud(mut commands: Commands) {
         .with_children(|root| {
             root.spawn(world_banner()).with_children(|banner| {
                 banner.spawn((
-                    typography::hud_heading("-"),
+                    typography::hud_heading(""),
                     TextLayout::justify(Justify::Center),
                     shadow,
                     DimensionHudText,
                 ));
                 banner.spawn((
-                    typography::hud_subheading("-"),
+                    typography::hud_subheading(""),
                     TextLayout::justify(Justify::Center),
                     shadow,
                     BiomeHudText,
                 ));
                 banner.spawn((
-                    typography::hud("X: 0 | Z: 0 | Y: 0"),
+                    typography::hud(""),
                     TextLayout::justify(Justify::Center),
                     shadow,
                     CoordinatesHudText,

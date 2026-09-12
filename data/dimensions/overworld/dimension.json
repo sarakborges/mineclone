@@ -1,14 +1,76 @@
 {
-  "id": "mineclone:overworld",
-  "name": "The Overworld",
+  "id": "asteria:overworld",
+  "name": { "english": "The Overworld" },
   "biomes": [
-    "mineclone:overworld/plains",
-    "mineclone:overworld/wasteland",
-    "mineclone:overworld/wicked_realm",
-    "mineclone:overworld/enchanted_realm",
-    "mineclone:overworld/ocean"
+    {
+      "id": "asteria:overworld/plains",
+      "weight": 1.0,
+      "size": {
+        "x": { "min": 120.0, "max": 420.0 },
+        "z": { "min": 120.0, "max": 420.0 },
+        "y": null
+      }
+    },
+    {
+      "id": "asteria:overworld/wasteland",
+      "weight": 1.0,
+      "size": {
+        "x": { "min": 120.0, "max": 420.0 },
+        "z": { "min": 120.0, "max": 420.0 },
+        "y": null
+      }
+    },
+    {
+      "id": "asteria:overworld/witchwood",
+      "weight": 1.0,
+      "size": {
+        "x": { "min": 140.0, "max": 460.0 },
+        "z": { "min": 140.0, "max": 460.0 },
+        "y": null
+      }
+    },
+    {
+      "id": "asteria:overworld/enchanted_forest",
+      "weight": 1.0,
+      "size": {
+        "x": { "min": 140.0, "max": 460.0 },
+        "z": { "min": 140.0, "max": 460.0 },
+        "y": null
+      }
+    },
+    {
+      "id": "asteria:overworld/mountains",
+      "weight": 0.75,
+      "size": {
+        "x": { "min": 90.0, "max": 260.0 },
+        "z": { "min": 90.0, "max": 260.0 },
+        "y": null
+      }
+    },
+    {
+      "id": "asteria:overworld/caverns",
+      "weight": 1.0,
+      "size": {
+        "x": { "min": 48.0, "max": 96.0 },
+        "z": { "min": 48.0, "max": 96.0 },
+        "y": { "min": 18.0, "max": 34.0 }
+      }
+    },
+    { "id": "asteria:overworld/coast", "weight": 1.0 },
+    { "id": "asteria:overworld/ocean", "weight": 0.75 }
   ],
-  "day_night_cycle": "mineclone:overworld/day_night_cycle",
-  "sky": "mineclone:overworld/sky",
-  "sea_level": 90
+  "dayNightCycle": "asteria:overworld/day_night_cycle",
+  "sky": "asteria:overworld/sky",
+  "seaLevel": 90,
+  "hydrology": {
+    "waterFluid": "asteria:water",
+    "coastBiome": "asteria:overworld/coast",
+    "oceanBiome": "asteria:overworld/ocean",
+    "shoreBlock": "asteria:sand",
+    "riverBedBlock": "asteria:sand",
+    "lakeBedBlock": "asteria:sand",
+    "oceanBedBlock": "asteria:sand",
+    "riverWeight": 1.0,
+    "lakeWeight": 1.0
+  }
 }

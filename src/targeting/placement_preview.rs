@@ -1,27 +1,48 @@
-use bevy::{light::NotShadowCaster, prelude::*};
+use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::block::BlockRegistry,
-    player::{
-        camera::GameplayCamera,
-        hotbar::{GRASS_BLOCK_ID, PlayerHotbar},
+    content::{biome::BiomeRegistry, block::BlockRegistry, builtin_ids::GRASS_BLOCK_ID},
+    player::{camera::GameplayCamera, hotbar::PlayerHotbar},
+    rendering::{
+        block_model::{
+            BlockModel, BlockModelMaterials, BlockModelMeshes, block_face_material_data,
+            set_block_model_tint,
+        },
+        block_model_material::BlockModelMaterial,
+        block_tint::block_tint_at,
     },
-    rendering::block_model::{block_face_material, block_face_mesh, block_faces},
-    voxel::mesh::BlockFace,
+    voxel::{
+        block_face::BlockFace, orientation::orientation_rotation, world::VoxelWorld,
+    },
+    world::biome_field::BiomeField,
 };
 
 use super::{
     block::{BlockTargetingSet, TargetedBlock},
     placement::placement_voxel,
+    placement_orientation::PlacementOrientation,
 };
 
-const PREVIEW_OPACITY: f32 = 0.68;
+const PREVIEW_OPACITY: f32 = 0.82;
+
+type PreviewRoot<'w, 's> = Single<
+    'w,
+    's,
+    (
+        &'static mut BlockModel,
+        &'static mut Transform,
+        &'static mut Visibility,
+    ),
+    (
+        With<PlacementPreviewRoot>,
+        Without<PlacementPreviewFace>,
+        Without<GameplayCamera>,
+    ),
+>;
 
 #[derive(Component)]
-struct PlacementPreviewRoot {
-    block_id: &'static str,
-}
+struct PlacementPreviewRoot;
 
 #[derive(Component)]
 struct PlacementPreviewFace {
@@ -45,88 +66,124 @@ impl Plugin for PlacementPreviewPlugin {
 fn spawn_placement_preview(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    block_meshes: Res<BlockModelMeshes>,
+    block_materials: Res<BlockModelMaterials>,
+    mut materials: ResMut<Assets<BlockModelMaterial>>,
     blocks: Res<BlockRegistry>,
     hotbar: Res<PlayerHotbar>,
 ) {
-    let block_id = hotbar
-        .item_at(hotbar.selected_slot())
-        .unwrap_or(GRASS_BLOCK_ID);
-    let block = blocks
-        .get(block_id)
-        .unwrap_or_else(|| panic!("placement preview references missing block: {block_id}"));
+    let selected = hotbar.item_at(hotbar.selected_slot()).and_then(|block_id| {
+        blocks.get(block_id).map(|block| (block_id, block))
+    });
+    let (block_id, block) = selected.unwrap_or_else(|| {
+        let block = blocks
+            .get(GRASS_BLOCK_ID)
+            .unwrap_or_else(|| {
+                panic!("placement preview references missing block: {GRASS_BLOCK_ID}")
+            });
+        (GRASS_BLOCK_ID, block)
+    });
+    let block_model = BlockModel::world(block_id, PREVIEW_OPACITY);
 
     commands
         .spawn((
-            PlacementPreviewRoot { block_id },
-            Transform::default(),
+            PlacementPreviewRoot,
+            block_model,
+            Transform::from_rotation(orientation_rotation(block.default_orientation())),
             Visibility::Hidden,
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|preview| {
-            for face in block_faces() {
+            for &face in block_model.faces() {
+                let material = block_materials.preview_for_face(face);
+                let Some(mut face_material) = materials.get_mut(&material) else {
+                    continue;
+                };
+                *face_material = block_face_material_data(
+                    face,
+                    block,
+                    &asset_server,
+                    block_model.opacity(),
+                );
+
                 preview.spawn((
                     PlacementPreviewFace { face },
-                    Mesh3d(meshes.add(block_face_mesh(face))),
-                    MeshMaterial3d(block_face_material(
-                        face,
-                        block,
-                        &asset_server,
-                        &mut materials,
-                        PREVIEW_OPACITY,
-                    )),
+                    Mesh3d(block_meshes.world_face(face)),
+                    MeshMaterial3d(material),
                     NotShadowCaster,
                 ));
             }
         });
 }
 
+#[derive(SystemParam)]
+struct PlacementPreviewInput<'w, 's> {
+    targeted: Res<'w, TargetedBlock>,
+    hotbar: Res<'w, PlayerHotbar>,
+    placement_orientation: Res<'w, PlacementOrientation>,
+    blocks: Res<'w, BlockRegistry>,
+    biomes: Res<'w, BiomeRegistry>,
+    biome_field: Res<'w, BiomeField>,
+    asset_server: Res<'w, AssetServer>,
+    world: Res<'w, VoxelWorld>,
+    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
+}
+
 fn update_placement_preview(
-    targeted: Res<TargetedBlock>,
-    hotbar: Res<PlayerHotbar>,
-    blocks: Res<BlockRegistry>,
-    asset_server: Res<AssetServer>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    world: Res<crate::voxel::world::VoxelWorld>,
-    player: Single<&Transform, With<GameplayCamera>>,
-    mut root: Single<
-        (&mut PlacementPreviewRoot, &mut Transform, &mut Visibility),
-        (Without<PlacementPreviewFace>, Without<GameplayCamera>),
-    >,
-    mut faces: Query<(&PlacementPreviewFace, &mut MeshMaterial3d<StandardMaterial>)>,
+    input: PlacementPreviewInput,
+    mut materials: ResMut<Assets<BlockModelMaterial>>,
+    mut root: PreviewRoot,
+    faces: Query<(&PlacementPreviewFace, &MeshMaterial3d<BlockModelMaterial>)>,
 ) {
-    let Some(block_id) = hotbar.item_at(hotbar.selected_slot()) else {
+    let selected_slot = input.hotbar.selected_slot();
+    let Some(block_id) = input.hotbar.item_at(selected_slot) else {
+        *root.2 = Visibility::Hidden;
+        return;
+    };
+    let Some(block) = input.blocks.get(block_id) else {
         *root.2 = Visibility::Hidden;
         return;
     };
 
-    if root.0.block_id != block_id {
-        let block = blocks
-            .get(block_id)
-            .unwrap_or_else(|| panic!("placement preview references missing block: {block_id}"));
+    if root.0.set_block_id(Some(block_id)) {
+        for (face, material_handle) in &faces {
+            let Some(mut material) = materials.get_mut(&material_handle.0) else {
+                continue;
+            };
 
-        root.0.block_id = block_id;
-
-        for (face, mut material) in &mut faces {
-            material.0 = block_face_material(
+            *material = block_face_material_data(
                 face.face,
                 block,
-                &asset_server,
-                &mut materials,
-                PREVIEW_OPACITY,
+                &input.asset_server,
+                root.0.opacity(),
             );
         }
     }
 
-    let Some(hit) = targeted.0 else {
+    let orientation = input
+        .placement_orientation
+        .for_block(selected_slot, block);
+    root.1.rotation = orientation_rotation(orientation);
+
+    let Some(hit) = input.targeted.0 else {
         *root.2 = Visibility::Hidden;
         return;
     };
-    let Some(voxel) = placement_voxel(hit, &world, player.translation) else {
+    let Some(voxel) = placement_voxel(hit, &input.world, input.player.translation) else {
         *root.2 = Visibility::Hidden;
         return;
     };
+
+    let tint_position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
+    let tint = block_tint_at(block.tint, tint_position, &input.biome_field, &input.biomes);
+
+    for (_, material_handle) in &faces {
+        let Some(mut material) = materials.get_mut(&material_handle.0) else {
+            continue;
+        };
+
+        set_block_model_tint(&mut material, tint);
+    }
 
     root.1.translation = voxel.as_vec3() + Vec3::splat(0.5);
     *root.2 = Visibility::Visible;

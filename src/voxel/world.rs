@@ -6,7 +6,9 @@ use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, VoxelChunk},
     chunk_archive::ArchivedChunk,
+    coordinates::{chunk_coord_from_world, split_world_position},
     fluid::FluidCell,
+    light::VoxelLight,
 };
 
 #[derive(Resource, Default)]
@@ -14,6 +16,7 @@ pub struct VoxelWorld {
     chunks: HashMap<IVec3, VoxelChunk>,
     archived_chunks: HashMap<IVec3, ArchivedChunk>,
     generated_chunks: HashSet<IVec3>,
+    dirty_chunks: HashSet<IVec3>,
 }
 
 impl VoxelWorld {
@@ -41,8 +44,12 @@ impl VoxelWorld {
             return;
         };
 
-        self.archived_chunks
-            .insert(coord, ArchivedChunk::from_chunk(&chunk));
+        if self.dirty_chunks.contains(&coord) {
+            self.archived_chunks
+                .insert(coord, ArchivedChunk::from_chunk(&chunk));
+        } else {
+            self.generated_chunks.remove(&coord);
+        }
     }
 
     pub fn restore_chunk(&mut self, coord: IVec3) -> bool {
@@ -69,11 +76,9 @@ impl VoxelWorld {
 
         let (chunk_coord, local_position) = split_world_position(world_position);
 
-        self.chunks.get(&chunk_coord)?.cell_at(
-            local_position.x,
-            local_position.y,
-            local_position.z,
-        )
+        self.chunks
+            .get(&chunk_coord)?
+            .cell_at(local_position.x, local_position.y, local_position.z)
     }
 
     pub fn fluid_at(&self, world_position: IVec3) -> Option<FluidCell> {
@@ -90,13 +95,68 @@ impl VoxelWorld {
         )
     }
 
+    pub(crate) fn light_at(&self, world_position: IVec3) -> VoxelLight {
+        if world_position.y < 0 {
+            return VoxelLight::DARK;
+        }
+
+        let (chunk_coord, local_position) = split_world_position(world_position);
+        let Some(chunk) = self.chunks.get(&chunk_coord) else {
+            return VoxelLight::DARK;
+        };
+
+        chunk.light_at(local_position.x, local_position.y, local_position.z)
+    }
+
+    pub(crate) fn set_light_at(&mut self, world_position: IVec3, light: VoxelLight) -> bool {
+        if world_position.y < 0 {
+            return false;
+        }
+
+        let (chunk_coord, local_position) = split_world_position(world_position);
+        let Some(chunk) = self.chunks.get_mut(&chunk_coord) else {
+            return false;
+        };
+
+        chunk.set_light(
+            local_position.x as usize,
+            local_position.y as usize,
+            local_position.z as usize,
+            light,
+        )
+    }
+
+    pub(crate) fn clear_chunk_light(&mut self, coord: IVec3) -> bool {
+        let Some(chunk) = self.chunks.get_mut(&coord) else {
+            return false;
+        };
+
+        chunk.clear_light();
+        true
+    }
+
     pub fn is_loaded_at(&self, world_position: IVec3) -> bool {
         if world_position.y < 0 {
             return false;
         }
 
-        let (chunk_coord, _) = split_world_position(world_position);
-        self.chunks.contains_key(&chunk_coord)
+        self.chunks
+            .contains_key(&chunk_coord_from_world(world_position))
+    }
+
+    pub(crate) fn highest_loaded_world_y_in_column(
+        &self,
+        world_x: i32,
+        world_z: i32,
+    ) -> Option<i32> {
+        let chunk_size = CHUNK_SIZE as i32;
+        let horizontal_chunk = chunk_coord_from_world(IVec3::new(world_x, 0, world_z));
+
+        self.chunks
+            .keys()
+            .filter(|coord| coord.x == horizontal_chunk.x && coord.z == horizontal_chunk.z)
+            .map(|coord| (coord.y + 1) * chunk_size - 1)
+            .max()
     }
 
     pub fn set_block_at(
@@ -123,6 +183,38 @@ impl VoxelWorld {
             }
         }
 
+        self.dirty_chunks.insert(chunk_coord);
+        Some(chunk_coord)
+    }
+
+    pub(crate) fn set_fluid_at(
+        &mut self,
+        world_position: IVec3,
+        fluid: Option<FluidCell>,
+    ) -> Option<IVec3> {
+        if world_position.y < 0 {
+            return None;
+        }
+
+        let (chunk_coord, local_position) = split_world_position(world_position);
+        let chunk = self.chunks.get_mut(&chunk_coord)?;
+        let x = local_position.x as usize;
+        let y = local_position.y as usize;
+        let z = local_position.z as usize;
+
+        if fluid.is_some()
+            && chunk
+                .cell_at(local_position.x, local_position.y, local_position.z)
+                .is_some()
+        {
+            return None;
+        }
+        if chunk.fluid_at(local_position.x, local_position.y, local_position.z) == fluid {
+            return None;
+        }
+
+        chunk.set_fluid(x, y, z, fluid);
+        self.dirty_chunks.insert(chunk_coord);
         Some(chunk_coord)
     }
 
@@ -133,20 +225,4 @@ impl VoxelWorld {
     pub fn block_id_at(&self, world_position: IVec3) -> Option<&'static str> {
         self.cell_at(world_position).map(|cell| cell.block_id)
     }
-}
-
-fn split_world_position(world_position: IVec3) -> (IVec3, IVec3) {
-    let chunk_size = CHUNK_SIZE as i32;
-    let chunk_coord = IVec3::new(
-        world_position.x.div_euclid(chunk_size),
-        world_position.y.div_euclid(chunk_size),
-        world_position.z.div_euclid(chunk_size),
-    );
-    let local_position = IVec3::new(
-        world_position.x.rem_euclid(chunk_size),
-        world_position.y.rem_euclid(chunk_size),
-        world_position.z.rem_euclid(chunk_size),
-    );
-
-    (chunk_coord, local_position)
 }

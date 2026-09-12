@@ -1,91 +1,90 @@
-use bevy::{
-    asset::RenderAssetUsages,
-    mesh::Indices,
-    prelude::*,
-    render::render_resource::PrimitiveTopology,
+mod geometry;
+mod materials;
+
+use bevy::prelude::*;
+
+use super::{
+    block_display::BLOCK_DISPLAY_FACES,
+    block_model_material::BlockModelMaterial,
+};
+use crate::voxel::block_face::BlockFace;
+
+pub(crate) use geometry::BlockModelMeshes;
+pub(crate) use materials::{
+    BlockModelMaterials, apply_block_display_shading, block_face_material_data,
+    set_block_model_tint,
 };
 
-use crate::{content::block::BlockDefinition, voxel::mesh::BlockFace};
-
-pub(crate) fn block_faces() -> [BlockFace; 6] {
-    [
-        BlockFace::Right,
-        BlockFace::Left,
-        BlockFace::Top,
-        BlockFace::Bottom,
-        BlockFace::Front,
-        BlockFace::Back,
-    ]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BlockModelMode {
+    Display,
+    World,
 }
 
-pub(crate) fn block_face_material(
-    face: BlockFace,
-    block: &BlockDefinition,
-    asset_server: &AssetServer,
-    materials: &mut Assets<StandardMaterial>,
+#[derive(Component, Clone, Copy, Debug)]
+pub(crate) struct BlockModel {
+    block_id: Option<&'static str>,
+    mode: BlockModelMode,
     opacity: f32,
-) -> Handle<StandardMaterial> {
-    let texture = match face {
-        BlockFace::Right => &block.textures.right,
-        BlockFace::Left => &block.textures.left,
-        BlockFace::Top => &block.textures.top,
-        BlockFace::Bottom => &block.textures.bottom,
-        BlockFace::Front => &block.textures.front,
-        BlockFace::Back => &block.textures.back,
-    };
-    let opacity = opacity.clamp(0.0, 1.0);
-
-    materials.add(StandardMaterial {
-        base_color: Color::srgba(1.0, 1.0, 1.0, opacity),
-        base_color_texture: Some(asset_server.load(texture.clone())),
-        perceptual_roughness: 1.0,
-        alpha_mode: if opacity < 1.0 {
-            AlphaMode::Blend
-        } else {
-            AlphaMode::Opaque
-        },
-        unlit: true,
-        ..default()
-    })
 }
 
-pub(crate) fn block_face_mesh(face: BlockFace) -> Mesh {
-    let (vertices, normal) = match face {
-        BlockFace::Right => (
-            [[0.5, -0.5, 0.5], [0.5, -0.5, -0.5], [0.5, 0.5, -0.5], [0.5, 0.5, 0.5]],
-            [1.0, 0.0, 0.0],
-        ),
-        BlockFace::Left => (
-            [[-0.5, -0.5, -0.5], [-0.5, -0.5, 0.5], [-0.5, 0.5, 0.5], [-0.5, 0.5, -0.5]],
-            [-1.0, 0.0, 0.0],
-        ),
-        BlockFace::Top => (
-            [[-0.5, 0.5, 0.5], [0.5, 0.5, 0.5], [0.5, 0.5, -0.5], [-0.5, 0.5, -0.5]],
-            [0.0, 1.0, 0.0],
-        ),
-        BlockFace::Bottom => (
-            [[-0.5, -0.5, -0.5], [0.5, -0.5, -0.5], [0.5, -0.5, 0.5], [-0.5, -0.5, 0.5]],
-            [0.0, -1.0, 0.0],
-        ),
-        BlockFace::Front => (
-            [[-0.5, -0.5, 0.5], [0.5, -0.5, 0.5], [0.5, 0.5, 0.5], [-0.5, 0.5, 0.5]],
-            [0.0, 0.0, 1.0],
-        ),
-        BlockFace::Back => (
-            [[0.5, -0.5, -0.5], [-0.5, -0.5, -0.5], [-0.5, 0.5, -0.5], [0.5, 0.5, -0.5]],
-            [0.0, 0.0, -1.0],
-        ),
-    };
+impl BlockModel {
+    pub(crate) fn display(block_id: &'static str) -> Self {
+        Self {
+            block_id: Some(block_id),
+            mode: BlockModelMode::Display,
+            opacity: 1.0,
+        }
+    }
 
-    Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::RENDER_WORLD,
-    )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, vertices.to_vec())
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![normal; 4])
-    .with_inserted_attribute(
-        Mesh::ATTRIBUTE_UV_0,
-        vec![[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]],
-    )
-    .with_inserted_indices(Indices::U32(vec![0, 1, 2, 0, 2, 3]))
+    pub(crate) fn empty_display() -> Self {
+        Self {
+            block_id: None,
+            mode: BlockModelMode::Display,
+            opacity: 1.0,
+        }
+    }
+
+    pub(crate) fn world(block_id: &'static str, opacity: f32) -> Self {
+        Self {
+            block_id: Some(block_id),
+            mode: BlockModelMode::World,
+            opacity: opacity.clamp(0.0, 1.0),
+        }
+    }
+
+    pub(crate) fn block_id(&self) -> Option<&'static str> {
+        self.block_id
+    }
+
+    pub(crate) fn set_block_id(&mut self, block_id: Option<&'static str>) -> bool {
+        if self.block_id == block_id {
+            return false;
+        }
+
+        self.block_id = block_id;
+        true
+    }
+
+    pub(crate) fn opacity(&self) -> f32 {
+        self.opacity
+    }
+
+    pub(crate) fn faces(&self) -> &'static [BlockFace] {
+        match self.mode {
+            BlockModelMode::Display => &BLOCK_DISPLAY_FACES,
+            BlockModelMode::World => &WORLD_FACES,
+        }
+    }
+}
+
+const WORLD_FACES: [BlockFace; 6] = BlockFace::ALL;
+
+pub(crate) fn setup_block_model_assets(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<BlockModelMaterial>>,
+) {
+    commands.insert_resource(BlockModelMeshes::new(&mut meshes));
+    commands.insert_resource(BlockModelMaterials::new(&mut materials));
 }

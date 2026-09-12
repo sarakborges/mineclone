@@ -1,49 +1,78 @@
+use std::time::{Duration, Instant};
+
 use bevy::prelude::*;
 
 use crate::{
-    player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
-    voxel::{coordinates::split_dimension_position, world::VoxelWorld},
+    player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
+    voxel::{
+        coordinates::chunk_coord_from_position, lighting::PendingLightingUpdates,
+        neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
+    },
 };
 
 use super::{
-    chunk_rendering::ChunkRenderPool,
-    render_distance::RenderDistanceSettings,
+    chunk_remesh::ChunkRemeshQueue,
+    chunk_system_params::ChunkRenderer,
+    streaming::ChunkStreamingState,
 };
 
-pub fn unload_chunk_meshes(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
+const MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK: usize = 8;
+const CHUNK_UNLOAD_BUDGET: Duration = Duration::from_millis(4);
+
+pub(super) fn unload_chunk_meshes(
     player: Single<&Transform, With<GameplayCamera>>,
-    render_distance: Res<RenderDistanceSettings>,
+    streaming: Res<ChunkStreamingState>,
+    mut renderer: ChunkRenderer,
     mut world: ResMut<VoxelWorld>,
-    mut render_pool: ResMut<ChunkRenderPool>,
+    mut lighting: ResMut<PendingLightingUpdates>,
+    mut remesh_queue: ResMut<ChunkRemeshQueue>,
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
-    let player_chunk = split_dimension_position(feet_position).chunk;
-    let radius = render_distance.chunks();
-    let radius_squared = radius * radius;
-    let to_unload = render_pool
+    let player_chunk = chunk_coord_from_position(feet_position);
+    let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
+    let mut pending_unloads = renderer
+        .pool
         .active_coords()
-        .filter(|coord| {
-            let dx = coord.x - player_chunk.x;
-            let dz = coord.z - player_chunk.z;
-            dx * dx + dz * dz > radius_squared
-        })
+        .filter(|coord| !streaming.wants(*coord))
         .collect::<Vec<_>>();
 
-    for coord in to_unload {
-        let Some((entities, mesh_handles)) = render_pool.take(coord) else {
+    pending_unloads.sort_by_key(|coord| -(*coord - center).length_squared());
+
+    let frame_started = Instant::now();
+    let mut unloaded = Vec::new();
+
+    for coord in pending_unloads {
+        if unloaded.len() >= MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK
+            && frame_started.elapsed() >= CHUNK_UNLOAD_BUDGET
+        {
+            break;
+        }
+
+        let Some((entities, mesh_handles)) = renderer.pool.take(coord) else {
             continue;
         };
 
         for mesh_handle in mesh_handles {
-            let _ = meshes.remove(&mesh_handle);
+            let _ = renderer.meshes.remove(&mesh_handle);
         }
 
         for entity in entities {
-            commands.entity(entity).despawn();
+            renderer.commands.entity(entity).despawn();
         }
 
         world.archive_chunk(coord);
+        unloaded.push(coord);
+    }
+
+    if unloaded.is_empty() {
+        return;
+    }
+
+    lighting.enqueue_chunk_unloads(&unloaded);
+
+    for coord in unloaded {
+        for offset in CARDINAL_NEIGHBORS {
+            remesh_queue.enqueue_priority(coord + offset);
+        }
     }
 }

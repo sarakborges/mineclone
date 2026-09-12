@@ -3,22 +3,17 @@ use bevy::prelude::*;
 use crate::{
     app::game_state::GameState,
     content::{
-        biome::BiomeRegistry,
-        color::Rgb,
-        day_night_cycle::DayNightCycleRegistry,
+        biome::BiomeRegistry, color::Rgb, day_night_cycle::DayNightCycleRegistry,
         dimension::DimensionRegistry,
     },
-    world::{
-        biome::CurrentBiome,
-        day_night::DayNightClock,
-        dimension::CurrentDimension,
-    },
+    world::{biome::CurrentBiome, day_night::DayNightClock, dimension::CurrentDimension},
 };
 
 #[derive(Resource)]
 pub struct EnvironmentVisualState {
     pub sky_color: Color,
     pub fog_color: Color,
+    pub sky_light_factor: f32,
 }
 
 impl Default for EnvironmentVisualState {
@@ -26,6 +21,7 @@ impl Default for EnvironmentVisualState {
         Self {
             sky_color: Color::srgb(0.38, 0.68, 1.0),
             fog_color: Color::srgb(0.52, 0.72, 0.90),
+            sky_light_factor: 1.0,
         }
     }
 }
@@ -73,16 +69,14 @@ fn update_environment_visuals(
         let Some(biome) = biomes.get(&influence.id) else {
             continue;
         };
-        let biome_sky = biome
-            .visuals
-            .sky_color
-            .get(sample.phase)
-            .lerp(*biome.visuals.sky_color.get(sample.next_phase), sample.transition);
-        let biome_fog = biome
-            .visuals
-            .fog_color
-            .get(sample.phase)
-            .lerp(*biome.visuals.fog_color.get(sample.next_phase), sample.transition);
+        let biome_sky = biome.visuals.sky_color.get(sample.phase).lerp(
+            *biome.visuals.sky_color.get(sample.next_phase),
+            sample.transition,
+        );
+        let biome_fog = biome.visuals.fog_color.get(sample.phase).lerp(
+            *biome.visuals.fog_color.get(sample.next_phase),
+            sample.transition,
+        );
 
         sky.r += biome_sky.r * influence.weight;
         sky.g += biome_sky.g * influence.weight;
@@ -94,4 +88,5 @@ fn update_environment_visuals(
 
     visuals.sky_color = sky.to_color();
     visuals.fog_color = fog.to_color();
+    visuals.sky_light_factor = sample.sky_light_factor;
 }

@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     content::dimension::DimensionRegistry,
+    localization::ActiveLanguage,
     world::dimension::CurrentDimension,
 };
 
@@ -11,12 +12,15 @@ pub(super) struct DimensionHudText;
 pub(super) fn update_dimension_hud(
     dimension: Res<CurrentDimension>,
     dimensions: Res<DimensionRegistry>,
+    language: Res<ActiveLanguage>,
     mut dimension_text: Single<&mut Text, With<DimensionHudText>>,
 ) {
     let dimension_name = dimensions
         .get(&dimension.id)
-        .map(|definition| definition.name.as_str())
+        .map(|definition| definition.name.text(language.get()))
         .unwrap_or(dimension.id.as_str());
 
-    dimension_text.0 = dimension_name.to_string();
+    if dimension_text.0 != dimension_name {
+        dimension_text.0 = dimension_name.to_string();
+    }
 }

@@ -4,9 +4,10 @@ use bevy::{
 };
 
 use crate::{
+    localization::{ActiveLanguage, Language, UiLocalization},
     voxel::chunk::CHUNK_SIZE,
     world::render_distance::{
-        RenderDistanceSettings, MAX_RENDER_DISTANCE_CHUNKS, MIN_RENDER_DISTANCE_CHUNKS,
+        MAX_RENDER_DISTANCE_CHUNKS, MIN_RENDER_DISTANCE_CHUNKS, RenderDistanceSettings,
     },
 };
 
@@ -28,14 +29,19 @@ pub(super) fn apply_render_distance(
 
 pub(super) fn sync_render_distance_text(
     render_distance: Res<RenderDistanceSettings>,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
     mut labels: Query<&mut Text, With<RenderDistanceValueText>>,
 ) {
-    if !render_distance.is_changed() {
+    if !render_distance.is_changed() && !language.is_changed() {
         return;
     }
 
+    let next = render_distance_label(render_distance.chunks(), &localization, language.get());
     for mut label in &mut labels {
-        **label = render_distance_label(render_distance.chunks());
+        if label.0 != next {
+            label.0 = next.clone();
+        }
     }
 }
 
@@ -58,6 +64,13 @@ pub(super) fn slider_position(value: f32) -> f32 {
     ((value - min) / (max - min)).clamp(0.0, 1.0)
 }
 
-pub(super) fn render_distance_label(chunks: i32) -> String {
-    format!("{chunks} chunks ({} blocks)", chunks * CHUNK_SIZE as i32)
+pub(super) fn render_distance_label(
+    chunks: i32,
+    localization: &UiLocalization,
+    language: Language,
+) -> String {
+    localization
+        .text(language, "settings.renderDistance.value")
+        .replace("{chunks}", &chunks.to_string())
+        .replace("{blocks}", &(chunks * CHUNK_SIZE as i32).to_string())
 }

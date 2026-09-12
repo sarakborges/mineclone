@@ -1,13 +1,15 @@
-pub mod button;
-pub mod cosmic_background;
-pub mod surface;
-pub mod theme;
-pub mod transition;
-pub mod typography;
+pub(crate) mod button;
+pub(crate) mod cosmic_background;
+pub(crate) mod scrollbar;
+pub(crate) mod surface;
+pub(crate) mod text_input;
+pub(crate) mod theme;
+pub(crate) mod transition;
+pub(crate) mod typography;
 
 use bevy::prelude::*;
 
-pub struct UiDesignSystemPlugin;
+pub(crate) struct UiDesignSystemPlugin;
 
 impl Plugin for UiDesignSystemPlugin {
     fn build(&self, app: &mut App) {
@@ -20,6 +22,7 @@ impl Plugin for UiDesignSystemPlugin {
                     cosmic_background::animate_stars,
                     transition::animate_screen_transition,
                 ),
-            );
+            )
+            .add_systems(Last, scrollbar::sync_auto_scrollbars);
     }
 }

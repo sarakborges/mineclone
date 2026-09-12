@@ -1,102 +1,43 @@
-mod face;
+mod geometry;
 
-use bevy::{
-    asset::RenderAssetUsages,
-    mesh::Indices,
-    prelude::*,
-    render::render_resource::PrimitiveTopology,
-};
-use face::push_face;
+use std::collections::HashMap;
 
+use bevy::prelude::*;
+
+use crate::content::block::{BlockRegistry, BlockTextureRotations};
+
+use self::geometry::{face_geometry, is_face_exposed, orient_face_geometry};
 use super::{
+    block_face::BlockFace,
+    cell::VoxelCell,
     chunk::{CHUNK_SIZE, VoxelChunk},
+    mesh_buffer::VoxelMeshBuffer,
+    mesh_lighting::{face_lighting, push_lit_quad},
+    orientation::orient_face,
+    quad::VOXEL_FACE_UVS,
     texture_rotation::TextureRotation,
     world::VoxelWorld,
 };
 
-const FACE_OVERDRAW: f32 = 0.002;
-
-#[derive(Clone, Copy)]
-pub enum BlockFace {
-    Right,
-    Left,
-    Top,
-    Bottom,
-    Front,
-    Back,
-}
-
 pub struct ChunkFaceMesh {
+    pub block_id: &'static str,
     pub face: BlockFace,
     pub mesh: Mesh,
-}
-
-#[derive(Default)]
-struct MeshBuffers {
-    positions: Vec<[f32; 3]>,
-    normals: Vec<[f32; 3]>,
-    uvs: Vec<[f32; 2]>,
-    colors: Vec<[f32; 4]>,
-    indices: Vec<u32>,
-}
-
-impl MeshBuffers {
-    fn push(
-        &mut self,
-        vertices: [[f32; 3]; 4],
-        normal: [f32; 3],
-        texture_rotation: TextureRotation,
-        tint: [f32; 3],
-    ) {
-        push_face(
-            &mut self.positions,
-            &mut self.normals,
-            &mut self.uvs,
-            &mut self.colors,
-            &mut self.indices,
-            vertices,
-            normal,
-            texture_rotation,
-            tint,
-        );
-    }
-
-    fn into_mesh(self) -> Option<Mesh> {
-        if self.positions.is_empty() {
-            return None;
-        }
-
-        Some(
-            Mesh::new(
-                PrimitiveTopology::TriangleList,
-                RenderAssetUsages::RENDER_WORLD,
-            )
-            .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors)
-            .with_inserted_indices(Indices::U32(self.indices)),
-        )
-    }
+    pub casts_shadow: bool,
 }
 
 pub fn build_chunk_mesh<F>(
     world: &VoxelWorld,
     chunk_coord: IVec3,
     chunk: &VoxelChunk,
+    blocks: &BlockRegistry,
     tint_at: F,
 ) -> Vec<ChunkFaceMesh>
 where
-    F: Fn(IVec3) -> [f32; 3],
+    F: Fn(IVec3, VoxelCell) -> [f32; 3],
 {
-    let mut right = MeshBuffers::default();
-    let mut left = MeshBuffers::default();
-    let mut top = MeshBuffers::default();
-    let mut bottom = MeshBuffers::default();
-    let mut front = MeshBuffers::default();
-    let mut back = MeshBuffers::default();
-    let chunk_size = CHUNK_SIZE as i32;
-    let chunk_origin = chunk_coord * chunk_size;
+    let mut buffers = HashMap::<(&'static str, BlockFace, bool), VoxelMeshBuffer>::new();
+    let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
 
     for y in 0..CHUNK_SIZE {
         for z in 0..CHUNK_SIZE {
@@ -104,118 +45,76 @@ where
                 let Some(cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
                     continue;
                 };
+                let block = blocks
+                    .get(cell.block_id)
+                    .unwrap_or_else(|| panic!("missing block definition: {}", cell.block_id));
+                let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
+                let tint = if block.textures.is_empty() {
+                    [1.0, 1.0, 1.0]
+                } else {
+                    tint_at(world_voxel, cell)
+                };
 
-                let local = IVec3::new(x as i32, y as i32, z as i32);
-                let world_voxel = chunk_origin + local;
-                let grass_tint = tint_at(world_voxel);
-                let x0 = x as f32;
-                let y0 = y as f32;
-                let z0 = z as f32;
-                let x1 = x0 + 1.0;
-                let y1 = y0 + 1.0;
-                let z1 = z0 + 1.0;
-                let e = FACE_OVERDRAW;
+                for block_face in BlockFace::ALL {
+                    let face = orient_face(block_face, cell.orientation);
+                    if !is_face_exposed(world, blocks, cell.block_id, world_voxel, face) {
+                        continue;
+                    }
 
-                if !world.is_solid(world_voxel + IVec3::X) {
-                    right.push(
-                        [
-                            [x1, y0 - e, z1 + e],
-                            [x1, y0 - e, z0 - e],
-                            [x1, y1 + e, z0 - e],
-                            [x1, y1 + e, z1 + e],
-                        ],
-                        [1.0, 0.0, 0.0],
-                        TextureRotation::default(),
-                        grass_tint,
+                    let texture_rotation =
+                        if face_uses_texture_rotation(block.rotate_texture, block_face) {
+                            cell.texture_rotation
+                        } else {
+                            TextureRotation::default()
+                        };
+                    let geometry = orient_face_geometry(
+                        face_geometry(block_face, x, y, z, texture_rotation),
+                        cell.orientation,
+                        x,
+                        y,
+                        z,
                     );
-                }
-
-                if !world.is_solid(world_voxel - IVec3::X) {
-                    left.push(
-                        [
-                            [x0, y0 - e, z0 - e],
-                            [x0, y0 - e, z1 + e],
-                            [x0, y1 + e, z1 + e],
-                            [x0, y1 + e, z0 - e],
-                        ],
-                        [-1.0, 0.0, 0.0],
-                        TextureRotation::default(),
-                        grass_tint,
+                    let lighting = face_lighting(
+                        world,
+                        world_voxel,
+                        face,
+                        block.light_emission > 0,
                     );
-                }
-
-                if !world.is_solid(world_voxel + IVec3::Y) {
-                    top.push(
-                        [
-                            [x0 - e, y1, z1 + e],
-                            [x1 + e, y1, z1 + e],
-                            [x1 + e, y1, z0 - e],
-                            [x0 - e, y1, z0 - e],
-                        ],
-                        [0.0, 1.0, 0.0],
-                        cell.texture_rotation,
-                        grass_tint,
-                    );
-                }
-
-                if world_voxel.y > 0 && !world.is_solid(world_voxel - IVec3::Y) {
-                    bottom.push(
-                        [
-                            [x0 - e, y0, z0 - e],
-                            [x1 + e, y0, z0 - e],
-                            [x1 + e, y0, z1 + e],
-                            [x0 - e, y0, z1 + e],
-                        ],
-                        [0.0, -1.0, 0.0],
-                        cell.texture_rotation,
-                        grass_tint,
-                    );
-                }
-
-                if !world.is_solid(world_voxel + IVec3::Z) {
-                    front.push(
-                        [
-                            [x0 - e, y0 - e, z1],
-                            [x1 + e, y0 - e, z1],
-                            [x1 + e, y1 + e, z1],
-                            [x0 - e, y1 + e, z1],
-                        ],
-                        [0.0, 0.0, 1.0],
-                        TextureRotation::default(),
-                        grass_tint,
-                    );
-                }
-
-                if !world.is_solid(world_voxel - IVec3::Z) {
-                    back.push(
-                        [
-                            [x1 + e, y0 - e, z0],
-                            [x0 - e, y0 - e, z0],
-                            [x0 - e, y1 + e, z0],
-                            [x1 + e, y1 + e, z0],
-                        ],
-                        [0.0, 0.0, -1.0],
-                        TextureRotation::default(),
-                        grass_tint,
+                    push_lit_quad(
+                        buffers
+                            .entry((cell.block_id, block_face, block.casts_shadow))
+                            .or_default(),
+                        geometry.vertices,
+                        geometry.normal,
+                        geometry.texture_rotation.rotate_uvs(VOXEL_FACE_UVS),
+                        tint,
+                        lighting,
                     );
                 }
             }
         }
     }
 
-    [
-        (BlockFace::Right, right),
-        (BlockFace::Left, left),
-        (BlockFace::Top, top),
-        (BlockFace::Bottom, bottom),
-        (BlockFace::Front, front),
-        (BlockFace::Back, back),
-    ]
-    .into_iter()
-    .filter_map(|(face, buffers)| {
-        buffers
-            .into_mesh()
-            .map(|mesh| ChunkFaceMesh { face, mesh })
-    })
-    .collect()
+    buffers
+        .into_iter()
+        .filter_map(|((block_id, face, casts_shadow), buffer)| {
+            buffer.into_mesh().map(|mesh| ChunkFaceMesh {
+                block_id,
+                face,
+                mesh,
+                casts_shadow,
+            })
+        })
+        .collect()
+}
+
+fn face_uses_texture_rotation(rotations: BlockTextureRotations, face: BlockFace) -> bool {
+    match face {
+        BlockFace::Right => rotations.right,
+        BlockFace::Left => rotations.left,
+        BlockFace::Top => rotations.top,
+        BlockFace::Bottom => rotations.bottom,
+        BlockFace::Front => rotations.front,
+        BlockFace::Back => rotations.back,
+    }
 }

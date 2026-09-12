@@ -1,154 +1,196 @@
-use std::collections::VecDeque;
+mod selection;
+mod surface_cache;
 
-use bevy::prelude::*;
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    time::{Duration, Instant},
+};
+
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     content::{
-        biome::BiomeRegistry,
-        block::BlockRegistry,
-        dimension::DimensionRegistry,
-        fluid::FluidRegistry,
+        biome::BiomeRegistry, dimension::DimensionDefinition, structure::StructureRegistry,
     },
-    player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
-    voxel::{coordinates::split_dimension_position, world::VoxelWorld},
+    player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
+    voxel::{
+        coordinates::chunk_coord_from_position, lighting::initialize_chunks_lighting,
+        neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
+    },
 };
 
+use self::selection::rebuild_queue;
 use super::{
     biome_field::BiomeField,
-    chunk_rendering::{
-        refresh_adjacent_chunk_meshes, spawn_chunk_mesh, ChunkRenderPool, FluidMaterials,
-        TerrainMaterials,
-    },
-    dimension::CurrentDimension,
-    render_distance::{chunk_coords_in_cylinder, RenderDistanceSettings},
-    terrain::{build_chunk, chunk_y_bounds},
+    chunk_loading::ensure_chunk_loaded,
+    chunk_remesh::ChunkRemeshQueue,
+    chunk_rendering::{ChunkRenderPool, spawn_chunk_mesh},
+    chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
+    fluid_updates::PendingFluidUpdates,
+    render_distance::RenderDistanceSettings,
+    world_feature_fields::WorldFeatureFields,
 };
 
-const CHUNKS_PER_FRAME: usize = 2;
+const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 1;
+const STREAMING_LIGHT_BATCH_CHUNKS: usize = 1;
+const STREAMING_BUDGET: Duration = Duration::from_millis(3);
 
 #[derive(Resource, Default)]
-pub struct ChunkStreamingState {
-    center: Option<IVec2>,
-    render_distance: i32,
+pub(super) struct ChunkStreamingState {
+    center: Option<IVec3>,
+    horizontal_radius: i32,
+    vertical_radius: i32,
+    desired: HashSet<IVec3>,
     pending: VecDeque<IVec3>,
+    surface_ranges: HashMap<IVec2, (i32, i32)>,
 }
 
-pub fn reset_chunk_streaming(mut state: ResMut<ChunkStreamingState>) {
+impl ChunkStreamingState {
+    pub(super) fn wants(&self, coord: IVec3) -> bool {
+        self.desired.contains(&coord)
+    }
+}
+
+struct QueueRebuildContext<'a> {
+    render_pool: &'a ChunkRenderPool,
+    dimension: &'a DimensionDefinition,
+    biomes: &'a BiomeRegistry,
+    structures: &'a StructureRegistry,
+    biome_field: &'a BiomeField,
+    feature_fields: &'a WorldFeatureFields,
+}
+
+#[derive(SystemParam)]
+pub(super) struct ChunkStreamingInputs<'w, 's> {
+    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
+    render_distance: Res<'w, RenderDistanceSettings>,
+    world: ResMut<'w, VoxelWorld>,
+    streaming: ResMut<'w, ChunkStreamingState>,
+    remesh_queue: ResMut<'w, ChunkRemeshQueue>,
+}
+
+pub(super) fn reset_chunk_streaming(mut state: ResMut<ChunkStreamingState>) {
     *state = ChunkStreamingState::default();
 }
 
-pub fn stream_chunks(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    player: Single<&Transform, With<GameplayCamera>>,
-    current_dimension: Res<CurrentDimension>,
-    dimensions: Res<DimensionRegistry>,
-    blocks: Res<BlockRegistry>,
-    fluids: Res<FluidRegistry>,
-    biomes: Res<BiomeRegistry>,
-    biome_field: Res<BiomeField>,
-    terrain_materials: Res<TerrainMaterials>,
-    fluid_materials: Res<FluidMaterials>,
-    render_distance: Res<RenderDistanceSettings>,
-    mut world: ResMut<VoxelWorld>,
-    mut streaming: ResMut<ChunkStreamingState>,
-    mut render_pool: ResMut<ChunkRenderPool>,
+pub(super) fn stream_chunks(
+    generation: ChunkGeneration,
+    content: ChunkContent,
+    mut renderer: ChunkRenderer,
+    mut inputs: ChunkStreamingInputs,
+    mut fluid_updates: ResMut<PendingFluidUpdates>,
 ) {
-    let dimension = dimensions
-        .get(&current_dimension.id)
-        .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
-    let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
-    let player_chunk = split_dimension_position(feet_position).chunk;
-    let center = IVec2::new(player_chunk.x, player_chunk.z);
-    let radius = render_distance.chunks();
-    let (min_chunk_y, max_chunk_y) = chunk_y_bounds(dimension, &biomes);
+    let feet_position = inputs.player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
+    let player_chunk = chunk_coord_from_position(feet_position);
+    let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
+    let horizontal_radius = inputs.render_distance.chunks();
+    let vertical_radius = inputs.render_distance.vertical_chunks();
 
-    if streaming.center != Some(center) || streaming.render_distance != radius {
-        rebuild_queue(
-            &mut streaming,
-            &render_pool,
-            center,
-            radius,
-            min_chunk_y,
-            max_chunk_y,
-        );
-    }
-
-    for _ in 0..CHUNKS_PER_FRAME {
-        let Some(coord) = streaming.pending.pop_front() else {
-            break;
+    if inputs.streaming.center != Some(center)
+        || inputs.streaming.horizontal_radius != horizontal_radius
+        || inputs.streaming.vertical_radius != vertical_radius
+    {
+        let rebuild_context = QueueRebuildContext {
+            render_pool: &renderer.pool,
+            dimension: generation.dimension(),
+            biomes: &content.biomes,
+            structures: &content.structures,
+            biome_field: &content.biome_field,
+            feature_fields: &generation.feature_fields,
         };
-
-        if render_pool.contains(coord) {
-            continue;
-        }
-
-        if world.has_generated_chunk(coord) {
-            assert!(
-                world.restore_chunk(coord),
-                "generated chunk must be resident or archived: {coord:?}"
-            );
-        } else {
-            let chunk = build_chunk(
-                coord,
-                &blocks,
-                &fluids,
-                dimension,
-                &biomes,
-                &biome_field,
-            );
-            world.insert_chunk(coord, chunk);
-        }
-
-        let chunk = world
-            .chunk(coord)
-            .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
-        spawn_chunk_mesh(
-            &mut commands,
-            &mut meshes,
-            &mut render_pool,
-            &world,
-            coord,
-            chunk,
-            &biomes,
-            &biome_field,
-            &terrain_materials,
-            &fluid_materials,
-        );
-        refresh_adjacent_chunk_meshes(
-            &mut commands,
-            &mut meshes,
-            &mut render_pool,
-            &world,
-            coord,
-            &biomes,
-            &biome_field,
-            &terrain_materials,
-            &fluid_materials,
+        rebuild_queue(
+            &mut inputs.streaming,
+            center,
+            horizontal_radius,
+            vertical_radius,
+            &rebuild_context,
         );
     }
-}
 
-fn rebuild_queue(
-    streaming: &mut ChunkStreamingState,
-    render_pool: &ChunkRenderPool,
-    center: IVec2,
-    radius: i32,
-    min_chunk_y: i32,
-    max_chunk_y: i32,
-) {
-    let center_3d = IVec3::new(center.x, min_chunk_y, center.y);
-    let coords = chunk_coords_in_cylinder(
-        center_3d,
-        radius,
-        min_chunk_y,
-        max_chunk_y,
-    );
+    let generation_context = generation.context(&content);
+    let frame_started = Instant::now();
+    let mut processed = 0;
 
-    streaming.center = Some(center);
-    streaming.render_distance = radius;
-    streaming.pending = coords
-        .into_iter()
-        .filter(|coord| !render_pool.contains(*coord))
-        .collect();
+    loop {
+        if processed >= MIN_CHUNKS_BEFORE_BUDGET_CHECK
+            && frame_started.elapsed() >= STREAMING_BUDGET
+        {
+            break;
+        }
+
+        let mut batch = Vec::with_capacity(STREAMING_LIGHT_BATCH_CHUNKS);
+
+        while batch.len() < STREAMING_LIGHT_BATCH_CHUNKS {
+            if processed + batch.len() >= MIN_CHUNKS_BEFORE_BUDGET_CHECK
+                && frame_started.elapsed() >= STREAMING_BUDGET
+            {
+                break;
+            }
+
+            let Some(coord) = inputs.streaming.pending.pop_front() else {
+                break;
+            };
+
+            if renderer.pool.contains(coord) {
+                continue;
+            }
+
+            ensure_chunk_loaded(&mut inputs.world, coord, &generation_context);
+            fluid_updates.enqueue_loaded_fluid_frontier(&inputs.world, coord);
+            batch.push(coord);
+        }
+
+        if batch.is_empty() {
+            break;
+        }
+
+        // Finish voxel lighting before the first visible mesh is built. Rendering
+        // a freshly generated chunk with cleared/default light values produced
+        // block-sized dark patches until a later remesh happened to catch up.
+        let lighting_changed = initialize_chunks_lighting(
+            &mut inputs.world,
+            &batch,
+            &content.blocks,
+            &content.fluids,
+            &content.secondary_properties,
+        );
+
+        for &coord in &batch {
+            let chunk = inputs
+                .world
+                .chunk(coord)
+                .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
+            let render_context = content.render_context(
+                &inputs.world,
+                &renderer.terrain_materials,
+                &renderer.fluid_materials,
+            );
+
+            spawn_chunk_mesh(
+                &mut renderer.commands,
+                &mut renderer.meshes,
+                &mut renderer.pool,
+                coord,
+                chunk,
+                &render_context,
+            );
+        }
+
+        processed += batch.len();
+
+        for &coord in &batch {
+            for offset in CARDINAL_NEIGHBORS {
+                let neighbor = coord + offset;
+                if !batch.contains(&neighbor) && renderer.pool.contains(neighbor) {
+                    inputs.remesh_queue.enqueue_priority(neighbor);
+                }
+            }
+        }
+
+        for changed in lighting_changed {
+            if !batch.contains(&changed) && renderer.pool.contains(changed) {
+                inputs.remesh_queue.enqueue_priority(changed);
+            }
+        }
+    }
 }

@@ -1,10 +1,6 @@
 use bevy::prelude::*;
 
-use crate::app::{
-    game_state::GameState,
-    pause_state::PauseState,
-    settings_state::SettingsState,
-};
+use crate::app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState};
 
 use super::theme;
 

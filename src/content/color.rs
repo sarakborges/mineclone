@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use serde::Deserialize;
 
 #[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Rgb {
     pub r: f32,
     pub g: f32,

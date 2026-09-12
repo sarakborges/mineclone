@@ -1,16 +1,15 @@
 use bevy::{
     prelude::*,
-    ui_widgets::{observe, Slider, SliderRange, SliderThumb, SliderValue, TrackClick},
+    ui_widgets::{Slider, SliderRange, SliderThumb, SliderValue, TrackClick, observe},
 };
 
 use crate::{
-    ui::{surface, theme, typography},
+    localization::{Language, UiLocalization},
+    ui::{theme, typography},
     world::render_distance::{MAX_RENDER_DISTANCE_CHUNKS, MIN_RENDER_DISTANCE_CHUNKS},
 };
 
-use super::render_distance_logic::{
-    apply_render_distance, render_distance_label, slider_position,
-};
+use super::render_distance_logic::{apply_render_distance, render_distance_label, slider_position};
 
 const SLIDER_THUMB_SIZE: f32 = 16.0;
 
@@ -23,19 +22,39 @@ pub(super) struct RenderDistanceSliderThumb;
 #[derive(Component)]
 pub(super) struct RenderDistanceValueText;
 
-pub(super) fn render_distance_section(chunks: i32) -> impl Bundle {
+pub(super) fn graphics_section(
+    chunks: i32,
+    localization: &UiLocalization,
+    language: Language,
+) -> impl Bundle {
     (
-        surface::settings_section(),
+        Node {
+            width: percent(100),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Stretch,
+            row_gap: px(12),
+            ..default()
+        },
         children![
-            typography::heading("Render Distance"),
+            typography::setting_title(
+                localization
+                    .text(language, "settings.renderDistance")
+                    .to_owned(),
+            ),
+            typography::caption(
+                localization
+                    .text(language, "settings.renderDistance.description")
+                    .to_owned(),
+            ),
             (
-                typography::muted(render_distance_label(chunks)),
+                typography::muted(render_distance_label(
+                    chunks,
+                    localization,
+                    language,
+                )),
                 RenderDistanceValueText,
             ),
             render_distance_slider(chunks),
-            typography::caption(
-                "Controls how far terrain is generated and rendered around the player.",
-            ),
         ],
     )
 }

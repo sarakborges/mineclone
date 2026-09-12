@@ -3,6 +3,7 @@ use serde::Deserialize;
 use super::color::Rgb;
 
 #[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BiomeSkyLayerVisuals {
     pub density: f32,
     pub color: Rgb,

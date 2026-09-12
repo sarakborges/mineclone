@@ -1,0 +1,350 @@
+use std::collections::{HashMap, HashSet};
+
+use bevy::prelude::*;
+
+use super::super::{
+    constants::{
+        RIVER_BASIN_ESCAPE_RADIUS_CELLS, RIVER_EDGE_MARGIN_CELLS, RIVER_FLOW_SEARCH_RADIUS,
+        RIVER_FLOW_TRACE_STEPS, RIVER_MINIMUM_FLOW,
+    },
+    drainage::{DrainageNetwork, DrainageNode},
+    lake::lake_for_local_basin,
+    math::{cell_hash, hash_unit},
+    types::{HydrologySurfaceSample, WaterBody},
+};
+
+const MOUNTAIN_SPRING_MINIMUM_HEIGHT_ABOVE_SEA: f32 = 24.0;
+const MOUNTAIN_SPRING_MINIMUM_LOCAL_RELIEF: f32 = 5.0;
+const MOUNTAIN_SPRING_CHANCE: f32 = 0.52;
+
+pub(super) struct RiverSelection {
+    pub(super) channels: HashSet<IVec2>,
+    pub(super) heads: HashSet<IVec2>,
+    pub(super) springs: HashSet<IVec2>,
+    pub(super) lakes: HashMap<IVec2, WaterBody>,
+}
+
+pub(super) fn connected_lake_cells<F>(
+    lakes: &HashMap<IVec2, WaterBody>,
+    network: &mut DrainageNetwork<'_, F>,
+) -> HashSet<IVec2>
+where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    let mut connected = HashSet::new();
+    let ocean_threshold = network.ocean_threshold();
+
+    for &start in lakes.keys() {
+        let mut current = start;
+
+        for _ in 0..RIVER_FLOW_TRACE_STEPS {
+            let Some(next) = network.downstream_cell(current) else {
+                break;
+            };
+            current = next;
+            let node = network.node(current);
+
+            if node.continentalness <= ocean_threshold {
+                connected.insert(start);
+                break;
+            }
+
+            if current != start && lakes.contains_key(&current) {
+                connected.insert(start);
+                connected.insert(current);
+                break;
+            }
+        }
+    }
+
+    connected
+}
+
+pub(super) fn drainage_reaches_water_destination<F>(
+    start: IVec2,
+    lake_cells: &HashSet<IVec2>,
+    network: &mut DrainageNetwork<'_, F>,
+    cache: &mut HashMap<IVec2, bool>,
+) -> bool
+where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    if let Some(&cached) = cache.get(&start) {
+        return cached;
+    }
+
+    let ocean_threshold = network.ocean_threshold();
+    let mut path = Vec::new();
+    let mut current = start;
+    let reaches_destination = loop {
+        if current != start && lake_cells.contains(&current) {
+            break true;
+        }
+        if let Some(&cached) = cache.get(&current) {
+            break cached;
+        }
+
+        let node = network.node(current);
+        path.push(current);
+
+        if node.continentalness <= ocean_threshold {
+            break true;
+        }
+        if path.len() >= RIVER_FLOW_TRACE_STEPS {
+            break false;
+        }
+
+        let Some(next) = network.downstream_cell(current) else {
+            break false;
+        };
+        current = next;
+    };
+
+    for cell in path {
+        cache.insert(cell, reaches_destination);
+    }
+
+    reaches_destination
+}
+
+pub(super) fn build_flow_cache<F>(
+    coord: IVec2,
+    network: &mut DrainageNetwork<'_, F>,
+) -> HashMap<IVec2, u32>
+where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    let target_radius = RIVER_EDGE_MARGIN_CELLS + RIVER_BASIN_ESCAPE_RADIUS_CELLS;
+    let source_radius = target_radius + RIVER_FLOW_SEARCH_RADIUS;
+    let ocean_threshold = network.ocean_threshold();
+    let mut flow = HashMap::<IVec2, u32>::new();
+
+    for dz in -source_radius..=source_radius {
+        for dx in -source_radius..=source_radius {
+            let source = coord + IVec2::new(dx, dz);
+            let mut current = source;
+
+            for _ in 0..RIVER_FLOW_TRACE_STEPS {
+                let relative = current - coord;
+                let source_delta = source - current;
+                let inside_target =
+                    relative.x.abs() <= target_radius && relative.y.abs() <= target_radius;
+                let inside_source_radius = source_delta.x.abs() <= RIVER_FLOW_SEARCH_RADIUS
+                    && source_delta.y.abs() <= RIVER_FLOW_SEARCH_RADIUS;
+
+                if inside_target && inside_source_radius {
+                    *flow.entry(current).or_default() += 1;
+                }
+
+                let node = network.node(current);
+                if node.continentalness <= ocean_threshold {
+                    break;
+                }
+
+                let Some(next) = network.downstream_cell(current) else {
+                    break;
+                };
+                current = next;
+            }
+        }
+    }
+
+    flow
+}
+
+pub(super) fn selected_river_sources<F>(
+    flow_cache: &HashMap<IVec2, u32>,
+    seed: u64,
+    sea_level: f32,
+    water_fluid: &str,
+    river_weight: f32,
+    lake_weight: f32,
+    network: &mut DrainageNetwork<'_, F>,
+) -> RiverSelection
+where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    let mut channels = HashSet::new();
+    let mut heads = HashSet::new();
+    let mut springs = HashSet::new();
+    let mut lakes = HashMap::new();
+    let ocean_threshold = network.ocean_threshold();
+    let river_weight = river_weight.clamp(0.0, 1.0);
+    let lake_weight = lake_weight.clamp(0.0, 1.0);
+    let river_flow_threshold = river_flow_threshold(river_weight);
+
+    for (&cell, &flow) in flow_cache {
+        let source = network.node(cell);
+        if source.continentalness <= ocean_threshold {
+            continue;
+        }
+
+        if source.biome_hydrology.can_generate_lake && source.elevation > sea_level + 1.0 {
+            let neighbors = network.neighbor_nodes(cell);
+            if let Some(lake) = lake_for_local_basin(
+                cell,
+                source,
+                &neighbors,
+                seed,
+                sea_level,
+                water_fluid,
+                ocean_threshold,
+                lake_weight,
+            ) {
+                channels.insert(cell);
+                heads.insert(cell);
+                lakes.insert(cell, lake);
+            }
+        }
+
+        if !source.biome_hydrology.can_generate_river {
+            continue;
+        }
+
+        if flow >= river_flow_threshold {
+            channels.insert(cell);
+            if is_river_head(cell, flow_cache, river_flow_threshold, network) {
+                heads.insert(cell);
+            }
+            continue;
+        }
+
+        if is_mountain_spring(
+            cell,
+            source,
+            flow,
+            seed,
+            sea_level,
+            river_weight,
+            network,
+        ) {
+            channels.insert(cell);
+            heads.insert(cell);
+            springs.insert(cell);
+        }
+    }
+
+    keep_only_complete_downstream_paths(&mut channels, &lakes, network);
+    heads.retain(|cell| channels.contains(cell));
+    springs.retain(|cell| channels.contains(cell));
+
+    RiverSelection {
+        channels,
+        heads,
+        springs,
+        lakes,
+    }
+}
+
+fn river_flow_threshold(river_weight: f32) -> u32 {
+    if river_weight <= f32::EPSILON {
+        return u32::MAX;
+    }
+
+    ((RIVER_MINIMUM_FLOW as f32 / river_weight.max(0.15)).ceil() as u32).max(RIVER_MINIMUM_FLOW)
+}
+
+fn is_river_head<F>(
+    cell: IVec2,
+    flow_cache: &HashMap<IVec2, u32>,
+    river_flow_threshold: u32,
+    network: &mut DrainageNetwork<'_, F>,
+) -> bool
+where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    let radius = RIVER_BASIN_ESCAPE_RADIUS_CELLS;
+
+    for dz in -radius..=radius {
+        for dx in -radius..=radius {
+            if dx == 0 && dz == 0 {
+                continue;
+            }
+
+            let upstream = cell + IVec2::new(dx, dz);
+            if flow_cache.get(&upstream).copied().unwrap_or(0) < river_flow_threshold {
+                continue;
+            }
+            if network.downstream_cell(upstream) == Some(cell) {
+                return false;
+            }
+        }
+    }
+
+    true
+}
+
+fn is_mountain_spring<F>(
+    cell: IVec2,
+    source: DrainageNode,
+    flow: u32,
+    seed: u64,
+    sea_level: f32,
+    river_weight: f32,
+    network: &mut DrainageNetwork<'_, F>,
+) -> bool
+where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    if flow >= RIVER_MINIMUM_FLOW
+        || source.elevation < sea_level + MOUNTAIN_SPRING_MINIMUM_HEIGHT_ABOVE_SEA
+    {
+        return false;
+    }
+
+    let lowest_neighbor = network
+        .neighbor_nodes(cell)
+        .into_iter()
+        .map(|neighbor| neighbor.elevation)
+        .min_by(f32::total_cmp)
+        .unwrap_or(source.elevation);
+    if source.elevation - lowest_neighbor < MOUNTAIN_SPRING_MINIMUM_LOCAL_RELIEF {
+        return false;
+    }
+
+    let hash = cell_hash(cell, seed ^ 0x510e_527f_ade6_82d1);
+    hash_unit(hash.rotate_left(19)) < MOUNTAIN_SPRING_CHANCE * river_weight
+}
+
+fn keep_only_complete_downstream_paths<F>(
+    selected: &mut HashSet<IVec2>,
+    lakes: &HashMap<IVec2, WaterBody>,
+    network: &mut DrainageNetwork<'_, F>,
+) where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    let starts = selected.iter().copied().collect::<Vec<_>>();
+    let ocean_threshold = network.ocean_threshold();
+    let mut complete = HashSet::new();
+
+    for start in starts {
+        let mut current = start;
+        let mut path = Vec::new();
+        let mut reaches_destination = false;
+
+        for _ in 0..RIVER_FLOW_TRACE_STEPS {
+            path.push(current);
+            let node = network.node(current);
+
+            if node.continentalness <= ocean_threshold {
+                reaches_destination = true;
+                break;
+            }
+            if current != start && lakes.contains_key(&current) {
+                reaches_destination = true;
+                break;
+            }
+
+            let Some(next) = network.downstream_cell(current) else {
+                break;
+            };
+            current = next;
+        }
+
+        if reaches_destination {
+            complete.extend(path);
+        }
+    }
+
+    *selected = complete;
+}

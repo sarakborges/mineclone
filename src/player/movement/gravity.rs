@@ -1,9 +1,13 @@
 use bevy::prelude::*;
 
-use crate::{player::camera::GameplayCamera, voxel::world::VoxelWorld};
+use crate::{
+    player::camera::GameplayCamera,
+    voxel::world::VoxelWorld,
+    world::{game_rules::GameRules, tick::WorldTickClock},
+};
 
 use super::{
-    collision::{move_axis, player_collides, Axis},
+    collision::{Axis, move_axis, player_collides},
     config::{GRAVITY, GROUND_PROBE, JUMP_SPEED},
     flight::FlightState,
     swimming::SwimmingState,
@@ -25,7 +29,8 @@ impl Default for GravityState {
 }
 
 pub(super) fn apply_gravity(
-    time: Res<Time>,
+    game_rules: Res<GameRules>,
+    world_ticks: Res<WorldTickClock>,
     keys: Res<ButtonInput<KeyCode>>,
     world: Res<VoxelWorld>,
     mut transform: Single<&mut Transform, With<GameplayCamera>>,
@@ -46,8 +51,13 @@ pub(super) fn apply_gravity(
         gravity.grounded = false;
     }
 
-    gravity.vertical_velocity += GRAVITY * time.delta_secs();
-    let vertical_delta = gravity.vertical_velocity * time.delta_secs();
+    let delta_seconds = world_ticks.delta_seconds(&game_rules);
+    if delta_seconds <= 0.0 {
+        return;
+    }
+
+    gravity.vertical_velocity += GRAVITY * delta_seconds;
+    let vertical_delta = gravity.vertical_velocity * delta_seconds;
     let hit_vertical_surface = move_axis(&mut transform, &world, vertical_delta, Axis::Y);
 
     if hit_vertical_surface {

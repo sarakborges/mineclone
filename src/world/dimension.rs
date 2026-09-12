@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 
-pub const DEFAULT_DIMENSION_ID: &str = "mineclone:overworld";
+use crate::content::builtin_ids::OVERWORLD_DIMENSION_ID;
+
+pub const DEFAULT_DIMENSION_ID: &str = OVERWORLD_DIMENSION_ID;
 
 #[derive(Resource)]
 pub struct CurrentDimension {

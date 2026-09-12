@@ -1,21 +1,25 @@
 {
-  "id": "mineclone:overworld/day_night_cycle",
-  "day_duration_seconds": 1200.0,
-  "initial_time": 0.0,
-  "world_time_start_hour": 6.0,
+  "id": "asteria:overworld/day_night_cycle",
+  "dayDurationTicks": 48000,
+  "initialTime": 0.0,
+  "worldTimeStartHour": 6.0,
   "sequence": ["Dawn", "Day", "Dusk", "Night"],
   "phases": {
     "dawn": {
-      "duration_seconds": 300.0
+      "durationTicks": 12000,
+      "skyLightFactor": 0.35
     },
     "day": {
-      "duration_seconds": 300.0
+      "durationTicks": 12000,
+      "skyLightFactor": 1.0
     },
     "dusk": {
-      "duration_seconds": 300.0
+      "durationTicks": 12000,
+      "skyLightFactor": 0.35
     },
     "night": {
-      "duration_seconds": 300.0
+      "durationTicks": 12000,
+      "skyLightFactor": 0.06
     }
   }
 }

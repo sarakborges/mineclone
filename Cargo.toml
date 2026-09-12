@@ -1,9 +1,9 @@
 [package]
-name = "mineclone"
-version = "0.1.1"
+name = "asteria"
+version = "0.8.14"
 edition = "2024"
 build = "build.rs"
-default-run = "mineclone"
+default-run = "asteria"
 
 [dependencies]
 bevy = { version = "0.19.1", features = ["system_font_discovery"] }
@@ -15,3 +15,11 @@ winit = { version = "0.30", default-features = false }
 [build-dependencies]
 image = { version = "0.25", default-features = false, features = ["png"] }
 winresource = "0.1.31"
+
+# Keep development builds fast to iterate on without making runtime-heavy
+# world generation and rendering effectively unoptimized.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

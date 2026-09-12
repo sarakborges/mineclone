@@ -1,94 +1,141 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
-    content::{biome::BiomeRegistry, block::BlockRegistry},
+    content::{block::BlockRegistry, tool::ToolRegistry},
     player::{
-        camera::GameplayCamera,
-        hotbar::PlayerHotbar,
+        camera::GameplayCamera, hotbar::PlayerHotbar, inventory::InventoryState,
         viewmodel::ViewModelAnimation,
     },
-    voxel::{cell::VoxelCell, texture_rotation::TextureRotation, world::VoxelWorld},
+    tools::BrushPaletteState,
+    voxel::{
+        cell::VoxelCell, lighting::PendingLightingUpdates, raycast::VoxelHit,
+        texture_rotation::TextureRotation, world::VoxelWorld,
+    },
     world::{
-        biome_field::BiomeField,
-        chunk_rendering::{
-            refresh_adjacent_chunk_meshes, refresh_chunk_mesh, ChunkRenderPool, FluidMaterials,
-            TerrainMaterials,
-        },
+        chunk_remesh::ChunkRemeshQueue, chunk_system_params::ChunkContent,
+        fluid_updates::PendingFluidUpdates,
     },
 };
 
 use super::{
     block::{BlockTargetingSet, TargetedBlock},
     placement::placement_voxel,
+    placement_orientation::PlacementOrientation,
 };
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ToolUseButton {
+    Left,
+    Right,
+}
+
+#[derive(Message, Clone, Copy)]
+pub(crate) struct ToolUse {
+    pub tool_id: &'static str,
+    pub button: ToolUseButton,
+    pub target: Option<VoxelHit>,
+}
 
 pub struct BlockInteractionPlugin;
 
 impl Plugin for BlockInteractionPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        app.add_message::<ToolUse>().add_systems(
             Update,
             edit_targeted_block
                 .in_set(BlockTargetingSet::Interaction)
                 .run_if(in_state(GameState::Gameplay))
-                .run_if(in_state(PauseState::Running)),
+                .run_if(in_state(PauseState::Running))
+                .run_if(in_state(InventoryState::Closed))
+                .run_if(in_state(BrushPaletteState::Closed)),
         );
     }
 }
 
+#[derive(SystemParam)]
+struct BlockEditInput<'w, 's> {
+    buttons: Res<'w, ButtonInput<MouseButton>>,
+    hotbar: Res<'w, PlayerHotbar>,
+    placement_orientation: Res<'w, PlacementOrientation>,
+    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
+    targeted: ResMut<'w, TargetedBlock>,
+}
+
 fn edit_targeted_block(
-    mut commands: Commands,
-    buttons: Res<ButtonInput<MouseButton>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    blocks: Res<BlockRegistry>,
-    biomes: Res<BiomeRegistry>,
-    biome_field: Res<BiomeField>,
-    terrain_materials: Res<TerrainMaterials>,
-    fluid_materials: Res<FluidMaterials>,
-    hotbar: Res<PlayerHotbar>,
-    player: Single<&Transform, With<GameplayCamera>>,
+    mut input: BlockEditInput,
+    content: ChunkContent,
+    tools: Res<ToolRegistry>,
+    mut tool_uses: MessageWriter<ToolUse>,
     mut viewmodel_animation: ResMut<ViewModelAnimation>,
     mut world: ResMut<VoxelWorld>,
-    mut render_pool: ResMut<ChunkRenderPool>,
-    mut targeted: ResMut<TargetedBlock>,
+    mut lighting: ResMut<PendingLightingUpdates>,
+    mut fluid_updates: ResMut<PendingFluidUpdates>,
+    mut remesh_queue: ResMut<ChunkRemeshQueue>,
 ) {
-    let break_pressed = buttons.just_pressed(MouseButton::Left);
-    let place_pressed = buttons.just_pressed(MouseButton::Right);
+    let left_pressed = input.buttons.just_pressed(MouseButton::Left);
+    let right_pressed = input.buttons.just_pressed(MouseButton::Right);
 
-    if !break_pressed && !place_pressed {
+    if !left_pressed && !right_pressed {
         return;
     }
 
-    let Some(hit) = targeted.0 else {
+    let selected_slot = input.hotbar.selected_slot();
+    let selected_item = input.hotbar.item_at(selected_slot);
+
+    if let Some(tool_id) = selected_item.filter(|item_id| tools.get(item_id).is_some()) {
+        if left_pressed {
+            tool_uses.write(ToolUse {
+                tool_id,
+                button: ToolUseButton::Left,
+                target: input.targeted.0,
+            });
+        }
+        if right_pressed {
+            tool_uses.write(ToolUse {
+                tool_id,
+                button: ToolUseButton::Right,
+                target: input.targeted.0,
+            });
+        }
+        return;
+    }
+
+    let Some(hit) = input.targeted.0 else {
         return;
     };
 
-    let (edited_chunk, placed) = if break_pressed {
-        (world.set_block_at(hit.voxel, None), false)
+    let (edited_chunk, edited_voxel, placed) = if left_pressed {
+        (world.set_block_at(hit.voxel, None), hit.voxel, false)
     } else {
-        let Some(block_id) = hotbar.item_at(hotbar.selected_slot()) else {
+        let Some(block_id) = selected_item else {
             return;
         };
-        let Some(voxel) = placement_voxel(hit, &world, player.translation) else {
+        let Some(voxel) = placement_voxel(hit, &world, input.player.translation) else {
             return;
         };
-        if blocks.get(block_id).is_none() {
+        let Some(block) = content.blocks.get(block_id) else {
             return;
-        }
+        };
+        let texture_rotation = TextureRotation::for_position(voxel, block.rotate_texture.any());
+        let orientation = input.placement_orientation.for_block(selected_slot, block);
+        let cell = VoxelCell::oriented(block_id, texture_rotation, orientation);
 
-        (
-            world.set_block_at(
-                voxel,
-                Some(VoxelCell::new(block_id, TextureRotation::default())),
-            ),
-            true,
-        )
+        (world.set_block_at(voxel, Some(cell)), voxel, true)
     };
 
     let Some(coord) = edited_chunk else {
         return;
     };
+
+    lighting.enqueue_voxel_edit(edited_voxel);
+    fluid_updates.enqueue_voxel_edit(edited_voxel);
+
+    // Geometry, face exposure, shadow casters and baked voxel lighting all
+    // converge through the same post-lighting remesh path. The old transparent
+    // fast-path rebuilt glass before lighting had updated, which could leave the
+    // edited chunk stale until a later neighboring edit.
+    remesh_queue.enqueue_voxel_edit(coord);
 
     if placed {
         viewmodel_animation.play_place();
@@ -96,28 +143,5 @@ fn edit_targeted_block(
         viewmodel_animation.play_break();
     }
 
-    targeted.0 = None;
-
-    refresh_chunk_mesh(
-        &mut commands,
-        &mut meshes,
-        &mut render_pool,
-        &world,
-        coord,
-        &biomes,
-        &biome_field,
-        &terrain_materials,
-        &fluid_materials,
-    );
-    refresh_adjacent_chunk_meshes(
-        &mut commands,
-        &mut meshes,
-        &mut render_pool,
-        &world,
-        coord,
-        &biomes,
-        &biome_field,
-        &terrain_materials,
-        &fluid_materials,
-    );
+    input.targeted.0 = None;
 }

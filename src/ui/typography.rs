@@ -32,6 +32,15 @@ pub fn heading(label: impl Into<String>) -> impl Bundle {
     )
 }
 
+pub fn setting_title(label: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(label),
+        ui_font(21.0, FontWeight::SEMIBOLD),
+        LetterSpacing::Px(0.5),
+        TextColor(Color::WHITE),
+    )
+}
+
 pub fn muted(label: impl Into<String>) -> impl Bundle {
     (
         Text::new(label),
@@ -47,6 +56,19 @@ pub fn caption(label: impl Into<String>) -> impl Bundle {
         ui_font(14.0, FontWeight::NORMAL),
         LetterSpacing::Px(0.8),
         TextColor(theme::TEXT_SUBTLE),
+    )
+}
+
+pub fn crosshair_hint(label: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(label),
+        ui_font(14.0, FontWeight::MEDIUM),
+        LetterSpacing::Px(0.8),
+        TextColor(Color::WHITE),
+        TextShadow {
+            offset: Vec2::new(1.5, 1.5),
+            color: Color::BLACK,
+        },
     )
 }
 

@@ -1,0 +1,18 @@
+{
+  "id": "asteria:lamp",
+  "name": { "english": "Lamp" },
+  "category": "light_sources",
+  "secondaryProperties": ["dyed"],
+  "textures": {
+    "top": "textures/blocks/lamp.png",
+    "bottom": "textures/blocks/lamp.png",
+    "left": "textures/blocks/lamp.png",
+    "right": "textures/blocks/lamp.png",
+    "front": "textures/blocks/lamp.png",
+    "back": "textures/blocks/lamp.png"
+  },
+  "rotateTexture": { "top": false, "bottom": false, "left": false, "right": false, "front": false, "back": false },
+  "lightEmission": 15,
+  "lightDampening": 15,
+  "castsShadow": true
+}
