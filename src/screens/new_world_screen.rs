@@ -8,7 +8,9 @@ use crate::{
         button::{menu_button, sidebar_menu_button},
         cosmic_background::{self, STAR_FIELD},
         scrollbar::vertical_scrollbar,
-        surface, theme,
+        surface,
+        text_input::select_all_pressed,
+        theme,
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
     },
@@ -719,6 +721,11 @@ fn handle_seed_keyboard(
         return;
     }
 
+    if select_all_pressed(&keys) {
+        input.replace_on_next_digit = true;
+        return;
+    }
+
     if keys.just_pressed(KeyCode::Enter)
         || keys.just_pressed(KeyCode::NumpadEnter)
         || keys.just_pressed(KeyCode::Escape)
@@ -815,6 +822,11 @@ fn handle_ticks_keyboard(
     mut input: ResMut<TicksInputState>,
 ) {
     if !input.editing {
+        return;
+    }
+
+    if select_all_pressed(&keys) {
+        input.replace_on_next_digit = true;
         return;
     }
 
