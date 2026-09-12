@@ -2,6 +2,7 @@ pub(crate) mod button;
 pub(crate) mod cosmic_background;
 pub(crate) mod scrollbar;
 pub(crate) mod surface;
+pub(crate) mod text_input;
 pub(crate) mod theme;
 pub(crate) mod transition;
 pub(crate) mod typography;
