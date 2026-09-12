@@ -18,7 +18,6 @@ use crate::{
     },
 };
 use camera::GameplayCamera;
-use game_mode::GameMode;
 use movement::{
     flight::FlightState, gravity::GravityState, swimming::SwimmingState, walking::WalkingState,
 };
