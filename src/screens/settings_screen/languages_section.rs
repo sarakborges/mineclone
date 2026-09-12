@@ -26,9 +26,14 @@ pub(super) fn languages_section(
             ..default()
         },
         children![
-            typography::muted(
+            typography::setting_title(
                 localization
                     .text(active_language, "settings.language")
+                    .to_owned(),
+            ),
+            typography::caption(
+                localization
+                    .text(active_language, "settings.language.description")
                     .to_owned(),
             ),
             language_button(
@@ -37,11 +42,6 @@ pub(super) fn languages_section(
                     .to_owned(),
                 Language::English,
                 active_language,
-            ),
-            typography::caption(
-                localization
-                    .text(active_language, "settings.language.description")
-                    .to_owned(),
             ),
         ],
     )
