@@ -6,12 +6,19 @@
   "textures": {
     "top": "textures/blocks/grass/top.png",
     "bottom": "textures/blocks/grass/bottom.png",
-    "left": "textures/blocks/grass/left.png",
-    "right": "textures/blocks/grass/right.png",
-    "front": "textures/blocks/grass/front.png",
-    "back": "textures/blocks/grass/back.png"
+    "left": "textures/blocks/grass/side.png",
+    "right": "textures/blocks/grass/side.png",
+    "front": "textures/blocks/grass/side.png",
+    "back": "textures/blocks/grass/side.png"
   },
-  "rotateTexture": { "top": true, "bottom": true, "left": false, "right": false, "front": false, "back": false },
+  "rotateTexture": {
+    "top": true,
+    "bottom": true,
+    "left": false,
+    "right": false,
+    "front": false,
+    "back": false
+  },
   "lightDampening": 15,
   "castsShadow": true
 }
