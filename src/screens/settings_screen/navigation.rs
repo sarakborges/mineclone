@@ -5,7 +5,6 @@ use crate::{
     localization::{ActiveLanguage, UiLocalization},
     ui::{
         button::sidebar_menu_button,
-        theme,
         transition::{ScreenTransition, ScreenTransitionTarget},
     },
 };
@@ -56,11 +55,7 @@ pub(super) struct SettingsSectionPanel(pub(super) SettingsSection);
 #[derive(Component)]
 pub(super) struct SettingsBackButton;
 
-pub(super) fn section_button(
-    section: SettingsSection,
-    _active: bool,
-    label: impl Into<String>,
-) -> impl Bundle {
+pub(super) fn section_button(section: SettingsSection, label: impl Into<String>) -> impl Bundle {
     sidebar_menu_button(
         label,
         SettingsSectionButton(section),
@@ -84,8 +79,7 @@ pub(super) fn sync_section_ui(
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
     mut panels: Query<(&SettingsSectionPanel, &mut Node)>,
-    mut buttons: Query<(&SettingsSectionButton, &mut BackgroundColor)>,
-    mut labels: Query<(&SettingsSectionButtonLabel, &mut Text, &mut TextColor)>,
+    mut labels: Query<(&SettingsSectionButtonLabel, &mut Text)>,
 ) {
     for (panel, mut node) in &mut panels {
         node.display = if panel.0 == selection.selected {
@@ -95,20 +89,11 @@ pub(super) fn sync_section_ui(
         };
     }
 
-    for (button, mut background) in &mut buttons {
-        *background = BackgroundColor(section_button_background(button.0 == selection.selected));
-    }
-
-    for (label, mut text, mut color) in &mut labels {
+    for (label, mut text) in &mut labels {
         let next = localization.text(language.get(), label.0.localization_key());
         if text.0 != next {
             text.0 = next.to_owned();
         }
-        *color = TextColor(if label.0 == selection.selected {
-            theme::TEXT_PRIMARY
-        } else {
-            theme::TEXT_MUTED
-        });
     }
 }
 
@@ -123,13 +108,5 @@ pub(super) fn handle_close_requests(
 
     if back_pressed || keys.just_pressed(KeyCode::Escape) {
         transition.request(ScreenTransitionTarget::settings(SettingsState::Closed));
-    }
-}
-
-fn section_button_background(active: bool) -> Color {
-    if active {
-        Color::srgba(0.18, 0.10, 0.34, 0.58)
-    } else {
-        Color::srgba(0.0, 0.0, 0.0, 0.0)
     }
 }
