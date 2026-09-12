@@ -24,7 +24,7 @@ pub(super) fn process_dynamic_lighting(
         MAX_LIGHTING_VOXELS_PER_FRAME,
     );
 
-    remesh_queue.extend(changed_chunks);
+    remesh_queue.extend_priority(changed_chunks);
 }
 
 pub(super) fn clear_dynamic_lighting(mut lighting: ResMut<PendingLightingUpdates>) {
