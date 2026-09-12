@@ -11,7 +11,7 @@ use crate::{
 };
 
 const DYED_PROPERTY_ID: &str = "dyed";
-const DYED_TINT_STRENGTH: f32 = 0.12;
+const DYED_TINT_STRENGTH: f32 = 0.72;
 
 pub(crate) fn block_tint_at(
     tint: BlockTint,
