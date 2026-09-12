@@ -4,10 +4,7 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use crate::{
-    content::block::{BlockDefinition, BlockRegistry, BlockTextureRotations},
-    rendering::block_texture::block_face_texture,
-};
+use crate::content::block::{BlockRegistry, BlockTextureRotations};
 
 use self::geometry::{face_geometry, is_face_exposed, orient_face_geometry};
 use super::{
@@ -39,10 +36,6 @@ pub fn build_chunk_mesh<F>(
 where
     F: Fn(IVec3, VoxelCell) -> [f32; 3],
 {
-    // The face stored in the key is a canonical material face, not necessarily
-    // the geometric face. Faces of the same block that reference the same
-    // texture can live in one mesh and one draw call while retaining their own
-    // normals, UVs, rotations and per-vertex lighting.
     let mut buffers = HashMap::<(&'static str, BlockFace, bool), VoxelMeshBuffer>::new();
     let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
 
@@ -87,10 +80,9 @@ where
                         face,
                         block.light_emission > 0,
                     );
-                    let material_face = canonical_material_face(block, block_face);
                     push_lit_quad(
                         buffers
-                            .entry((cell.block_id, material_face, block.casts_shadow))
+                            .entry((cell.block_id, block_face, block.casts_shadow))
                             .or_default(),
                         geometry.vertices,
                         geometry.normal,
@@ -114,15 +106,6 @@ where
             })
         })
         .collect()
-}
-
-fn canonical_material_face(block: &BlockDefinition, face: BlockFace) -> BlockFace {
-    let texture = block_face_texture(face, block);
-
-    BlockFace::ALL
-        .into_iter()
-        .find(|candidate| block_face_texture(*candidate, block) == texture)
-        .unwrap_or(face)
 }
 
 fn face_uses_texture_rotation(rotations: BlockTextureRotations, face: BlockFace) -> bool {
