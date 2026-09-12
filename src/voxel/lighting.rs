@@ -10,7 +10,10 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 
-use crate::content::{block::BlockRegistry, fluid::FluidRegistry};
+use crate::content::{
+    block::BlockRegistry, fluid::FluidRegistry,
+    secondary_property::SecondaryPropertyRegistry,
+};
 
 use self::{
     propagation::{relax, relax_budgeted},
@@ -34,6 +37,22 @@ impl PendingLightingUpdates {
         }
     }
 
+    pub(crate) fn enqueue_chunks_initialization(
+        &mut self,
+        world: &mut VoxelWorld,
+        coords: &[IVec3],
+    ) {
+        for &coord in coords {
+            if !world.clear_chunk_light(coord) {
+                continue;
+            }
+
+            let origin = chunk_origin(coord);
+            self.queue.enqueue_chunk_voxels(origin);
+            self.queue.enqueue_chunk_boundary_neighbors(origin);
+        }
+    }
+
     pub(crate) fn clear(&mut self) {
         self.queue = LightingQueue::default();
     }
@@ -44,9 +63,17 @@ pub(crate) fn process_pending_lighting(
     pending: &mut PendingLightingUpdates,
     blocks: &BlockRegistry,
     fluids: &FluidRegistry,
+    secondary_properties: &SecondaryPropertyRegistry,
     max_voxels: usize,
 ) -> HashSet<IVec3> {
-    relax_budgeted(world, blocks, fluids, &mut pending.queue, max_voxels)
+    relax_budgeted(
+        world,
+        blocks,
+        fluids,
+        secondary_properties,
+        &mut pending.queue,
+        max_voxels,
+    )
 }
 
 pub(crate) fn initialize_chunks_lighting(
@@ -54,6 +81,7 @@ pub(crate) fn initialize_chunks_lighting(
     coords: &[IVec3],
     blocks: &BlockRegistry,
     fluids: &FluidRegistry,
+    secondary_properties: &SecondaryPropertyRegistry,
 ) -> HashSet<IVec3> {
     let mut queue = LightingQueue::default();
 
@@ -67,7 +95,7 @@ pub(crate) fn initialize_chunks_lighting(
         queue.enqueue_chunk_boundary_neighbors(origin);
     }
 
-    relax(world, blocks, fluids, &mut queue)
+    relax(world, blocks, fluids, secondary_properties, &mut queue)
 }
 
 #[cfg(test)]
@@ -77,7 +105,14 @@ fn initialize_chunk_lighting(
     blocks: &BlockRegistry,
     fluids: &FluidRegistry,
 ) -> HashSet<IVec3> {
-    initialize_chunks_lighting(world, std::slice::from_ref(&coord), blocks, fluids)
+    let secondary_properties = SecondaryPropertyRegistry::default();
+    initialize_chunks_lighting(
+        world,
+        std::slice::from_ref(&coord),
+        blocks,
+        fluids,
+        &secondary_properties,
+    )
 }
 
 #[cfg(test)]
@@ -87,9 +122,16 @@ fn relight_after_voxel_edit(
     blocks: &BlockRegistry,
     fluids: &FluidRegistry,
 ) {
+    let secondary_properties = SecondaryPropertyRegistry::default();
     let mut pending = PendingLightingUpdates::default();
     pending.enqueue_voxel_edit(position);
-    drop(relax(world, blocks, fluids, &mut pending.queue));
+    drop(relax(
+        world,
+        blocks,
+        fluids,
+        &secondary_properties,
+        &mut pending.queue,
+    ));
 }
 
 #[cfg(test)]
@@ -99,7 +141,14 @@ fn relight_after_chunk_unloads(
     blocks: &BlockRegistry,
     fluids: &FluidRegistry,
 ) {
+    let secondary_properties = SecondaryPropertyRegistry::default();
     let mut pending = PendingLightingUpdates::default();
     pending.enqueue_chunk_unloads(unloaded);
-    drop(relax(world, blocks, fluids, &mut pending.queue));
+    drop(relax(
+        world,
+        blocks,
+        fluids,
+        &secondary_properties,
+        &mut pending.queue,
+    ));
 }

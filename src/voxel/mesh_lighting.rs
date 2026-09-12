@@ -5,17 +5,20 @@ use super::{
 };
 
 const AO_BRIGHTNESS: [f32; 4] = [1.0, 0.92, 0.84, 0.76];
+const PACKED_RGB_MAX: f32 = 16_777_215.0;
 
 pub(super) struct FaceLighting {
-    pub(super) channels: [[f32; 2]; 4],
+    pub(super) sky: [[f32; 3]; 4],
+    pub(super) block: [[f32; 3]; 4],
     pub(super) ambient_occlusion: [f32; 4],
 }
 
 pub(super) fn face_lighting(world: &VoxelWorld, voxel: IVec3, face: BlockFace) -> FaceLighting {
     let (normal, tangent_a, tangent_b, signs) = face_basis(face);
     let base = voxel + normal;
-    let emitted_block_level = world.light_at(voxel).block() as f32;
-    let mut channels = [[0.0; 2]; 4];
+    let emitted_block = normalize_rgb(world.light_at(voxel).block_rgb());
+    let mut sky = [[0.0; 3]; 4];
+    let mut block = [[0.0; 3]; 4];
     let mut ambient_occlusion = [1.0; 4];
 
     for (index, (sign_a, sign_b)) in signs.into_iter().enumerate() {
@@ -32,18 +35,25 @@ pub(super) fn face_lighting(world: &VoxelWorld, voxel: IVec3, face: BlockFace) -
         } else {
             side_a_solid as usize + side_b_solid as usize + corner_solid as usize
         };
-        let (sky_level, block_level) =
-            average_light_levels(world, base, [base, side_a, side_b, corner]);
+        let (sky_levels, block_levels) = average_light_levels(
+            world,
+            voxel,
+            [base, side_a, side_b, corner],
+        );
+        let normalized_block = normalize_rgb(block_levels);
 
-        channels[index] = [
-            normalize_level(sky_level),
-            normalize_level(block_level.max(emitted_block_level)),
+        sky[index] = normalize_rgb(sky_levels);
+        block[index] = [
+            normalized_block[0].max(emitted_block[0]),
+            normalized_block[1].max(emitted_block[1]),
+            normalized_block[2].max(emitted_block[2]),
         ];
         ambient_occlusion[index] = AO_BRIGHTNESS[occlusion];
     }
 
     FaceLighting {
-        channels,
+        sky,
+        block,
         ambient_occlusion,
     }
 }
@@ -56,15 +66,23 @@ pub(super) fn push_lit_quad(
     tint: [f32; 3],
     lighting: FaceLighting,
 ) {
-    let colors = lighting
-        .ambient_occlusion
-        .map(|ao| [tint[0], tint[1], tint[2], ao]);
+    let packed_tint = pack_rgb(tint);
+    let light_uvs = lighting.sky.map(|sky| [pack_rgb(sky), packed_tint]);
+    let colors = std::array::from_fn(|index| {
+        let block = lighting.block[index];
+        [
+            block[0],
+            block[1],
+            block[2],
+            lighting.ambient_occlusion[index],
+        ]
+    });
 
     buffer.push_quad(
         vertices,
         normal,
         uvs,
-        lighting.channels,
+        light_uvs,
         colors,
         should_flip_diagonal(lighting.ambient_occlusion),
     );
@@ -76,11 +94,11 @@ fn should_flip_diagonal(ambient_occlusion: [f32; 4]) -> bool {
 
 fn average_light_levels(
     world: &VoxelWorld,
-    fallback: IVec3,
+    source: IVec3,
     samples: [IVec3; 4],
-) -> (f32, f32) {
-    let mut sky_total = 0.0;
-    let mut block_total = 0.0;
+) -> ([f32; 3], [f32; 3]) {
+    let mut sky_total = [0.0; 3];
+    let mut block_total = [0.0; 3];
     let mut count = 0_u32;
 
     for position in samples {
@@ -89,25 +107,49 @@ fn average_light_levels(
         }
 
         let light = world.light_at(position);
-        sky_total += light.sky() as f32;
-        block_total += light.block() as f32;
+        let sky = light.sky_rgb();
+        let block = light.block_rgb();
+        for channel in 0..3 {
+            sky_total[channel] += sky[channel] as f32;
+            block_total[channel] += block[channel] as f32;
+        }
         count += 1;
     }
 
     if count == 0 {
-        if !world.is_loaded_at(fallback) {
-            return (0.0, 0.0);
+        if !world.is_loaded_at(source) {
+            return ([0.0; 3], [0.0; 3]);
         }
 
-        let light = world.light_at(fallback);
-        (light.sky() as f32, light.block() as f32)
-    } else {
-        (sky_total / count as f32, block_total / count as f32)
+        let light = world.light_at(source);
+        return (
+            light.sky_rgb().map(|level| level as f32),
+            light.block_rgb().map(|level| level as f32),
+        );
     }
+
+    let count = count as f32;
+    (
+        sky_total.map(|level| level / count),
+        block_total.map(|level| level / count),
+    )
+}
+
+fn normalize_rgb(levels: [u8; 3]) -> [f32; 3] {
+    levels.map(|level| normalize_level(level as f32))
 }
 
 fn normalize_level(level: f32) -> f32 {
     (level / VoxelLight::MAX_LEVEL as f32).clamp(0.0, 1.0)
+}
+
+fn pack_rgb(rgb: [f32; 3]) -> f32 {
+    let r = (rgb[0].clamp(0.0, 1.0) * 255.0).round() as u32;
+    let g = (rgb[1].clamp(0.0, 1.0) * 255.0).round() as u32;
+    let b = (rgb[2].clamp(0.0, 1.0) * 255.0).round() as u32;
+    let packed = (r << 16) | (g << 8) | b;
+
+    packed as f32 / PACKED_RGB_MAX
 }
 
 fn face_basis(face: BlockFace) -> (IVec3, IVec3, IVec3, [(i32, i32); 4]) {
@@ -154,7 +196,7 @@ fn face_basis(face: BlockFace) -> (IVec3, IVec3, IVec3, [(i32, i32); 4]) {
 #[cfg(test)]
 mod tests {
     use super::{average_light_levels, should_flip_diagonal};
-    use crate::voxel::world::VoxelWorld;
+    use crate::voxel::{chunk::VoxelChunk, light::VoxelLight, world::VoxelWorld};
     use bevy::prelude::*;
 
     #[test]
@@ -164,11 +206,18 @@ mod tests {
     }
 
     #[test]
-    fn unloaded_face_samples_do_not_fall_back_to_full_skylight() {
-        let world = VoxelWorld::default();
-        let base = IVec3::new(16, 8, 8);
+    fn unloaded_face_samples_fall_back_to_source_light() {
+        let mut world = VoxelWorld::default();
+        let mut chunk = VoxelChunk::empty();
+        chunk.set_light(15, 8, 8, VoxelLight::new_colored([12, 12, 12], [8, 2, 1]));
+        world.insert_chunk(IVec3::ZERO, chunk);
+        let source = IVec3::new(15, 8, 8);
+        let base = source + IVec3::X;
         let samples = [base, base + IVec3::Y, base + IVec3::Z, base + IVec3::Y + IVec3::Z];
 
-        assert_eq!(average_light_levels(&world, base, samples), (0.0, 0.0));
+        assert_eq!(
+            average_light_levels(&world, source, samples),
+            ([12.0; 3], [8.0, 2.0, 1.0]),
+        );
     }
 }

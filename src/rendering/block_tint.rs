@@ -11,7 +11,7 @@ use crate::{
 };
 
 const DYED_PROPERTY_ID: &str = "dyed";
-const DYED_TINT_STRENGTH: f32 = 0.72;
+const DYED_TINT_STRENGTH: f32 = 0.96;
 
 pub(crate) fn block_tint_at(
     tint: BlockTint,
@@ -51,14 +51,12 @@ pub(crate) fn apply_secondary_property_tint(
     };
 
     let base = base.to_srgba();
-    let tint_r = 1.0 - DYED_TINT_STRENGTH + dye.color.r * DYED_TINT_STRENGTH;
-    let tint_g = 1.0 - DYED_TINT_STRENGTH + dye.color.g * DYED_TINT_STRENGTH;
-    let tint_b = 1.0 - DYED_TINT_STRENGTH + dye.color.b * DYED_TINT_STRENGTH;
+    let keep_base = 1.0 - DYED_TINT_STRENGTH;
 
     Color::srgba(
-        base.red * tint_r,
-        base.green * tint_g,
-        base.blue * tint_b,
+        base.red * keep_base + dye.color.r * DYED_TINT_STRENGTH,
+        base.green * keep_base + dye.color.g * DYED_TINT_STRENGTH,
+        base.blue * keep_base + dye.color.b * DYED_TINT_STRENGTH,
         base.alpha,
     )
 }

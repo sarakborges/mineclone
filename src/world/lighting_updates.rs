@@ -20,6 +20,7 @@ pub(super) fn process_dynamic_lighting(
         &mut lighting,
         &content.blocks,
         &content.fluids,
+        &content.secondary_properties,
         MAX_LIGHTING_VOXELS_PER_FRAME,
     );
 

@@ -83,6 +83,7 @@ pub(in crate::world) fn setup_world(
                     &loading_state.coords[start..end],
                     &content.blocks,
                     &content.fluids,
+                    &content.secondary_properties,
                 ));
                 loading_state.lit = end;
                 processed += end - start;

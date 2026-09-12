@@ -36,6 +36,17 @@ const AMBIENT_FLOOR: f32 = 0.055;
 const LIGHT_GAMMA: f32 = 1.35;
 const SUN_AMBIENT_SHARE: f32 = 0.38;
 const DYNAMIC_LIGHT_SCALE: f32 = 0.08;
+const PACKED_RGB_MAX: f32 = 16777215.0;
+
+fn unpack_rgb(value: f32) -> vec3<f32> {
+    let packed = round(clamp(value, 0.0, 1.0) * PACKED_RGB_MAX);
+    let red = floor(packed / 65536.0);
+    let remainder = packed - red * 65536.0;
+    let green = floor(remainder / 256.0);
+    let blue = remainder - green * 256.0;
+
+    return vec3<f32>(red, green, blue) / 255.0;
+}
 
 #ifndef PREPASS_PIPELINE
 fn directional_sun_visibility(in: VertexOutput) -> f32 {
@@ -164,12 +175,13 @@ fn fragment(
         pbr_bindings::base_color_sampler,
         in.uv,
     );
-    let tint = clamp(in.color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+    let sky_rgb = unpack_rgb(in.uv_b.x);
+    let tint = unpack_rgb(in.uv_b.y);
+    let block_rgb = clamp(in.color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
     let ambient_occlusion = clamp(in.color.a, 0.0, 1.0);
-    let sky_level = clamp(in.uv_b.x, 0.0, 1.0);
-    let block_level = clamp(in.uv_b.y, 0.0, 1.0);
-    let sky_light = pow(sky_level, LIGHT_GAMMA) * terrain_material_extension.sky_light_factor;
-    let block_light = pow(block_level, LIGHT_GAMMA);
+    let sky_light = pow(sky_rgb, vec3<f32>(LIGHT_GAMMA))
+        * terrain_material_extension.sky_light_factor;
+    let block_light = pow(block_rgb, vec3<f32>(LIGHT_GAMMA));
 
 #ifdef PREPASS_PIPELINE
     let sun_visibility = 1.0;
@@ -186,7 +198,11 @@ fn fragment(
 
     let shadowed_sky_light = sky_light * sun_visibility;
     let propagated_light = max(shadowed_sky_light, block_light);
-    let local_light = mix(AMBIENT_FLOOR, 1.0, propagated_light) * ambient_occlusion;
+    let local_light = mix(
+        vec3<f32>(AMBIENT_FLOOR),
+        vec3<f32>(1.0),
+        propagated_light,
+    ) * ambient_occlusion;
 
     var base_rgb = texel.rgb;
     let tint_delta = max(
@@ -194,37 +210,31 @@ fn fragment(
         max(abs(1.0 - tint.g), abs(1.0 - tint.b)),
     );
     if tint_delta > 0.001 {
-        let tint_peak = max(max(tint.r, tint.g), max(tint.b, 0.001));
-        let hue = tint / tint_peak;
-        let softened_hue = mix(vec3<f32>(1.0), hue, 0.82);
         let luminance_weights = vec3<f32>(0.2126, 0.7152, 0.0722);
-        let softened_luma = max(dot(softened_hue, luminance_weights), 0.001);
-        let luminance_compensation = min(1.25, 1.0 / softened_luma);
         let texture_max = max(max(texel.r, texel.g), texel.b);
         let texture_min = min(min(texel.r, texel.g), texel.b);
         let texture_chroma = texture_max - texture_min;
         let neutral_texture_mask = 1.0 - smoothstep(0.08, 0.24, texture_chroma);
         let translucent_texture_mask = 1.0 - smoothstep(0.72, 0.98, texel.a);
-        let multiplicative_tint = clamp(
-            texel.rgb * softened_hue * luminance_compensation,
-            vec3<f32>(0.0),
-            vec3<f32>(1.0)
-        );
         let texel_luma = dot(texel.rgb, luminance_weights);
-        let translucent_tint = clamp(
-            hue * max(texel_luma, 0.62),
+        let tint_peak = max(max(tint.r, tint.g), max(tint.b, 0.001));
+        let tint_hue = tint / tint_peak;
+        let tint_value = clamp(tint_peak * 1.18, 0.08, 1.0);
+        let dyed_luma = clamp(max(texel_luma, 0.42) * tint_value, 0.0, 1.0);
+        let dyed_rgb = clamp(
+            tint_hue * dyed_luma,
             vec3<f32>(0.0),
-            vec3<f32>(1.0)
+            vec3<f32>(1.0),
         );
 
-        // Opaque, already-colored texture details keep their authored color.
-        // Neutral pixels act as tint masks. Partially transparent pixels receive
-        // the dye hue through RGB only; their authored alpha remains untouched.
-        base_rgb = mix(texel.rgb, multiplicative_tint, neutral_texture_mask);
+        // Authored colored details (for example the dirt on a grass side) stay
+        // intact. Neutral pixels are the dye mask, and partially transparent
+        // pixels receive the dye strongly while keeping their authored alpha.
+        base_rgb = mix(texel.rgb, dyed_rgb, neutral_texture_mask * 0.96);
         base_rgb = mix(
             base_rgb,
-            translucent_tint,
-            translucent_texture_mask * 0.88,
+            dyed_rgb,
+            translucent_texture_mask * 0.98,
         );
     }
 
@@ -275,7 +285,7 @@ fn fragment(
     );
 #endif
 
-    let lighting_multiplier = vec3<f32>(local_light) + dynamic_light;
+    let lighting_multiplier = local_light + dynamic_light;
     let surface_alpha = texel.a * pbr_bindings::material.base_color.a;
     pbr_input.material.base_color = vec4<f32>(
         material_rgb * lighting_multiplier,

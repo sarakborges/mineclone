@@ -14,7 +14,7 @@ use crate::{
     },
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
-        coordinates::chunk_coord_from_position, lighting::initialize_chunks_lighting,
+        coordinates::chunk_coord_from_position, lighting::PendingLightingUpdates,
         neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
     },
 };
@@ -33,7 +33,7 @@ use super::{
 
 const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 1;
 const STREAMING_LIGHT_BATCH_CHUNKS: usize = 1;
-const STREAMING_BUDGET: Duration = Duration::from_millis(6);
+const STREAMING_BUDGET: Duration = Duration::from_millis(5);
 
 #[derive(Resource, Default)]
 pub(super) struct ChunkStreamingState {
@@ -79,6 +79,7 @@ pub(super) fn stream_chunks(
     mut renderer: ChunkRenderer,
     mut inputs: ChunkStreamingInputs,
     mut fluid_updates: ResMut<PendingFluidUpdates>,
+    mut lighting_updates: ResMut<PendingLightingUpdates>,
 ) {
     let feet_position = inputs.player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = chunk_coord_from_position(feet_position);
@@ -144,12 +145,10 @@ pub(super) fn stream_chunks(
             break;
         }
 
-        let lighting_changes = initialize_chunks_lighting(
-            &mut inputs.world,
-            &batch,
-            &content.blocks,
-            &content.fluids,
-        );
+        // Streaming only seeds the lighting queue. The bounded PostUpdate lighting
+        // pass performs propagation, preventing one newly generated chunk from
+        // monopolizing a frame while still allowing the chunk mesh to appear now.
+        lighting_updates.enqueue_chunks_initialization(&mut inputs.world, &batch);
 
         for &coord in &batch {
             let chunk = inputs
@@ -162,10 +161,6 @@ pub(super) fn stream_chunks(
                 &renderer.fluid_materials,
             );
 
-            // Once a chunk has finished generation, finish the load transaction in
-            // this frame. Deferring mesh spawn after generation left resident
-            // chunks without render entities, which showed up as square holes in
-            // otherwise loaded terrain under sustained movement.
             spawn_chunk_mesh(
                 &mut renderer.commands,
                 &mut renderer.meshes,
@@ -178,11 +173,6 @@ pub(super) fn stream_chunks(
 
         processed += batch.len();
 
-        for changed in lighting_changes {
-            if !batch.contains(&changed) && renderer.pool.contains(changed) {
-                inputs.remesh_queue.enqueue_priority(changed);
-            }
-        }
         for &coord in &batch {
             for offset in CARDINAL_NEIGHBORS {
                 let neighbor = coord + offset;
