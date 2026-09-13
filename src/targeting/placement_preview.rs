@@ -2,7 +2,7 @@ use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::{biome::BiomeRegistry, block::BlockRegistry, builtin_ids::GRASS_BLOCK_ID},
+    content::{biome::BiomeRegistry, block::BlockRegistry},
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::{
         block_model::{
@@ -76,21 +76,18 @@ fn spawn_placement_preview(
     let selected = hotbar.item_at(hotbar.selected_slot()).and_then(|block_id| {
         blocks.get(block_id).map(|block| (block_id, block))
     });
-    let (block_id, block) = selected.unwrap_or_else(|| {
-        let block = blocks
-            .get(GRASS_BLOCK_ID)
-            .unwrap_or_else(|| {
-                panic!("placement preview references missing block: {GRASS_BLOCK_ID}")
-            });
-        (GRASS_BLOCK_ID, block)
+    let block_model = selected
+        .map(|(block_id, _)| BlockModel::world(block_id, PREVIEW_OPACITY))
+        .unwrap_or_else(|| BlockModel::empty_world(PREVIEW_OPACITY));
+    let initial_rotation = selected.map_or(Quat::IDENTITY, |(_, block)| {
+        orientation_rotation(block.default_orientation())
     });
-    let block_model = BlockModel::world(block_id, PREVIEW_OPACITY);
 
     commands
         .spawn((
             PlacementPreviewRoot,
             block_model,
-            Transform::from_rotation(orientation_rotation(block.default_orientation())),
+            Transform::from_rotation(initial_rotation),
             Visibility::Hidden,
             DespawnOnExit(GameState::Gameplay),
         ))
@@ -101,13 +98,15 @@ fn spawn_placement_preview(
                     block_materials.preview_for_face(face, layer_count, &mut materials);
 
                 for (layer_index, material) in layer_materials.into_iter().enumerate() {
-                    let visibility = if let Some(face_material) = block_face_material_data(
-                        face,
-                        layer_index,
-                        block,
-                        &asset_server,
-                        block_model.opacity(),
-                    ) {
+                    let visibility = if let Some((_, block)) = selected
+                        && let Some(face_material) = block_face_material_data(
+                            face,
+                            layer_index,
+                            block,
+                            &asset_server,
+                            block_model.opacity(),
+                        )
+                    {
                         if let Some(mut material_asset) = materials.get_mut(&material) {
                             *material_asset = face_material;
                         }
@@ -152,11 +151,14 @@ fn update_placement_preview(
     )>,
 ) {
     let selected_slot = input.hotbar.selected_slot();
-    let Some(block_id) = input.hotbar.item_at(selected_slot) else {
-        *root.2 = Visibility::Hidden;
-        return;
-    };
-    let Some(block) = input.blocks.get(block_id) else {
+    let selected = input.hotbar.item_at(selected_slot).and_then(|block_id| {
+        input.blocks.get(block_id).map(|block| (block_id, block))
+    });
+    let Some((block_id, block)) = selected else {
+        root.0.set_block_id(None);
+        for (_, _, mut visibility) in &mut faces {
+            *visibility = Visibility::Hidden;
+        }
         *root.2 = Visibility::Hidden;
         return;
     };

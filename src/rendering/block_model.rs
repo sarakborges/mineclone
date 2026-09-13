@@ -53,6 +53,14 @@ impl BlockModel {
         }
     }
 
+    pub(crate) fn empty_world(opacity: f32) -> Self {
+        Self {
+            block_id: None,
+            mode: BlockModelMode::World,
+            opacity: opacity.clamp(0.0, 1.0),
+        }
+    }
+
     pub(crate) fn block_id(&self) -> Option<&'static str> {
         self.block_id
     }
