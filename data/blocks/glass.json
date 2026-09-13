@@ -4,12 +4,12 @@
   "category": "crafted_blocks",
   "secondaryProperties": ["dyed"],
   "textures": {
-    "top": "textures/blocks/glass.png",
-    "bottom": "textures/blocks/glass.png",
-    "left": "textures/blocks/glass.png",
-    "right": "textures/blocks/glass.png",
-    "front": "textures/blocks/glass.png",
-    "back": "textures/blocks/glass.png"
+    "top": [{ "texture": "textures/blocks/glass.png", "dyable": true }],
+    "bottom": [{ "texture": "textures/blocks/glass.png", "dyable": true }],
+    "left": [{ "texture": "textures/blocks/glass.png", "dyable": true }],
+    "right": [{ "texture": "textures/blocks/glass.png", "dyable": true }],
+    "front": [{ "texture": "textures/blocks/glass.png", "dyable": true }],
+    "back": [{ "texture": "textures/blocks/glass.png", "dyable": true }]
   },
   "rotateTexture": { "top": false, "bottom": false, "left": false, "right": false, "front": false, "back": false },
   "alphaBlend": true,
