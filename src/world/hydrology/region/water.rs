@@ -24,7 +24,10 @@ impl HydrologyRegion {
         &self,
         position: Vec2,
     ) -> Option<HydrologyRiverSurfaceSample> {
-        let river = self.river_graph.sample_horizontal(position)?;
+        let river = self
+            .river_graph
+            .sample_horizontal(position)
+            .filter(|river| river.strength > SHORE_STRENGTH)?;
 
         Some(HydrologyRiverSurfaceSample {
             water_level: river.height,
