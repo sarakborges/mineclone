@@ -38,6 +38,7 @@ impl ChunkRemeshQueue {
         }
 
         if coord.y >= 0 {
+            self.enqueue_priority(coord);
             self.immediate_geometry.enqueue_front(coord);
         }
     }
@@ -162,12 +163,12 @@ mod tests {
     }
 
     #[test]
-    fn voxel_edit_sends_edited_chunk_to_immediate_geometry_queue() {
+    fn voxel_edit_sends_edited_chunk_to_both_remesh_phases() {
         let mut queue = ChunkRemeshQueue::default();
         let coord = IVec3::new(4, 2, -3);
         queue.enqueue_voxel_edit(coord);
 
         assert_eq!(queue.pop_immediate_geometry(), Some(coord));
-        assert_ne!(queue.pop(), Some(coord));
+        assert_eq!(queue.pop(), Some(coord));
     }
 }

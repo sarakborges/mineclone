@@ -24,7 +24,10 @@ pub(super) fn process_dynamic_lighting(
         MAX_LIGHTING_VOXELS_PER_FRAME,
     );
 
-    remesh_queue.extend_priority(changed_chunks);
+    for coord in changed_chunks {
+        remesh_queue.enqueue_priority(coord);
+        remesh_queue.enqueue_voxel_edit_neighbors(coord);
+    }
 }
 
 pub(super) fn clear_dynamic_lighting(mut lighting: ResMut<PendingLightingUpdates>) {
