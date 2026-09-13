@@ -11,7 +11,7 @@ use crate::{
     rendering::{
         block_model::{
             BlockModel, BlockModelMaterials, BlockModelMeshes, apply_block_display_shading,
-            block_face_material_data, set_block_model_tint,
+            block_face_material_data, maximum_block_model_layers, set_block_model_tint,
         },
         block_model_material::BlockModelMaterial,
         block_tint::block_tint_at,
@@ -36,6 +36,7 @@ pub(super) struct HeldBlockRoot;
 #[derive(Component)]
 pub(super) struct HeldBlockFace {
     face: BlockFace,
+    layer_index: usize,
 }
 
 pub(super) type HeldBlockRootQuery<'w, 's> = Query<
@@ -48,6 +49,7 @@ pub(super) type HeldBlockRootQuery<'w, 's> = Query<
     ),
     (
         With<HeldBlockRoot>,
+        Without<HeldBlockFace>,
         Without<ViewModelArm>,
         Without<PlayerViewModel>,
         Without<GameplayCamera>,
@@ -91,7 +93,7 @@ pub(super) fn spawn_viewmodel(
     cameras: Query<(Entity, &Transform), Added<GameplayCamera>>,
     content: ViewModelContent,
     block_meshes: Res<BlockModelMeshes>,
-    block_materials: Res<BlockModelMaterials>,
+    mut block_materials: ResMut<BlockModelMaterials>,
     arm_assets: Res<ViewModelArmAssets>,
     mut item_switch: ResMut<ViewModelItemSwitch>,
     mut materials: ResMut<Assets<BlockModelMaterial>>,
@@ -171,34 +173,50 @@ pub(super) fn spawn_viewmodel(
                             });
 
                             for &face in block_model.faces() {
-                                let material = block_materials.held_for_face(face);
-                                if let Some((_, block)) = selected_block
-                                    && let Some(mut face_material) = materials.get_mut(&material)
-                                {
-                                    *face_material = block_face_material_data(
-                                        face,
-                                        block,
-                                        &content.asset_server,
-                                        block_model.opacity(),
-                                    );
-                                    apply_block_display_shading(
-                                        &mut face_material,
-                                        face,
-                                        block_model.opacity(),
-                                    );
-                                    set_block_model_tint(
-                                        &mut face_material,
-                                        tint.unwrap_or(Color::WHITE),
-                                    );
-                                }
+                                let layer_count = maximum_block_model_layers(&content.blocks, face);
+                                let layer_materials = block_materials.held_for_face(
+                                    face,
+                                    layer_count,
+                                    &mut materials,
+                                );
 
-                                held.spawn((
-                                    HeldBlockFace { face },
-                                    Mesh3d(block_meshes.display_face(face)),
-                                    MeshMaterial3d(material),
-                                    RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
-                                    NotShadowCaster,
-                                ));
+                                for (layer_index, material) in
+                                    layer_materials.into_iter().enumerate()
+                                {
+                                    let mut visibility = Visibility::Hidden;
+
+                                    if let Some((_, block)) = selected_block
+                                        && let Some(face_material) = block_face_material_data(
+                                            face,
+                                            layer_index,
+                                            block,
+                                            &content.asset_server,
+                                            block_model.opacity(),
+                                        )
+                                        && let Some(mut material_asset) = materials.get_mut(&material)
+                                    {
+                                        *material_asset = face_material;
+                                        apply_block_display_shading(
+                                            &mut material_asset,
+                                            face,
+                                            block_model.opacity(),
+                                        );
+                                        set_block_model_tint(
+                                            &mut material_asset,
+                                            tint.unwrap_or(Color::WHITE),
+                                        );
+                                        visibility = Visibility::Visible;
+                                    }
+
+                                    held.spawn((
+                                        HeldBlockFace { face, layer_index },
+                                        Mesh3d(block_meshes.display_face(face)),
+                                        MeshMaterial3d(material),
+                                        visibility,
+                                        RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
+                                        NotShadowCaster,
+                                    ));
+                                }
                             }
                         });
                 });
@@ -212,7 +230,14 @@ pub(super) fn sync_held_block(
     player: Single<&Transform, With<GameplayCamera>>,
     mut materials: ResMut<Assets<BlockModelMaterial>>,
     mut roots: HeldBlockRootQuery,
-    faces: Query<(&HeldBlockFace, &MeshMaterial3d<BlockModelMaterial>)>,
+    mut faces: Query<
+        (
+            &HeldBlockFace,
+            &MeshMaterial3d<BlockModelMaterial>,
+            &mut Visibility,
+        ),
+        Without<HeldBlockRoot>,
+    >,
 ) {
     let selected_block_id = item_switch.displayed_block_id();
     let selected_slot = content.hotbar.selected_slot();
@@ -253,19 +278,26 @@ pub(super) fn sync_held_block(
             &content.biomes,
         );
 
-        for (face, material_handle) in &faces {
+        for (face, material_handle, mut layer_visibility) in &mut faces {
             let Some(mut material) = materials.get_mut(&material_handle.0) else {
                 continue;
             };
 
             if block_changed {
-                *material = block_face_material_data(
+                if let Some(face_material) = block_face_material_data(
                     face.face,
+                    face.layer_index,
                     block,
                     &content.asset_server,
                     held.opacity(),
-                );
-                apply_block_display_shading(&mut material, face.face, held.opacity());
+                ) {
+                    *material = face_material;
+                    apply_block_display_shading(&mut material, face.face, held.opacity());
+                    *layer_visibility = Visibility::Visible;
+                } else {
+                    *layer_visibility = Visibility::Hidden;
+                    continue;
+                }
             }
 
             set_block_model_tint(&mut material, tint);
