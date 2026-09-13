@@ -16,6 +16,7 @@ const REMESH_BUDGET: Duration = Duration::from_millis(2);
 #[derive(Resource, Default)]
 pub(crate) struct ChunkRemeshQueue {
     queue: DeduplicatedQueue<IVec3>,
+    immediate_geometry: DeduplicatedQueue<IVec3>,
 }
 
 impl ChunkRemeshQueue {
@@ -35,7 +36,10 @@ impl ChunkRemeshQueue {
         for offset in CARDINAL_NEIGHBORS {
             self.enqueue_priority(coord + offset);
         }
-        self.enqueue_priority(coord);
+
+        if coord.y >= 0 {
+            self.immediate_geometry.enqueue_front(coord);
+        }
     }
 
     pub(crate) fn enqueue_voxel_edit_neighbors(&mut self, coord: IVec3) {
@@ -60,13 +64,42 @@ impl ChunkRemeshQueue {
         self.queue.pop()
     }
 
+    fn pop_immediate_geometry(&mut self) -> Option<IVec3> {
+        self.immediate_geometry.pop()
+    }
+
     fn clear(&mut self) {
         self.queue.clear();
+        self.immediate_geometry.clear();
     }
 }
 
 pub(super) fn clear_chunk_remesh_queue(mut queue: ResMut<ChunkRemeshQueue>) {
     queue.clear();
+}
+
+pub(super) fn process_immediate_geometry_remesh(
+    content: ChunkContent,
+    mut renderer: ChunkRenderer,
+    world: Res<VoxelWorld>,
+    mut queue: ResMut<ChunkRemeshQueue>,
+) {
+    let Some(coord) = queue.pop_immediate_geometry() else {
+        return;
+    };
+    let render_context = content.render_context(
+        &world,
+        &renderer.terrain_materials,
+        &renderer.fluid_materials,
+    );
+
+    refresh_chunk_mesh(
+        &mut renderer.commands,
+        &mut renderer.meshes,
+        &mut renderer.pool,
+        coord,
+        &render_context,
+    );
 }
 
 pub(super) fn process_chunk_remesh_queue(
@@ -129,11 +162,12 @@ mod tests {
     }
 
     #[test]
-    fn voxel_edit_prioritizes_edited_chunk_before_neighbors() {
+    fn voxel_edit_sends_edited_chunk_to_immediate_geometry_queue() {
         let mut queue = ChunkRemeshQueue::default();
         let coord = IVec3::new(4, 2, -3);
         queue.enqueue_voxel_edit(coord);
 
-        assert_eq!(queue.pop(), Some(coord));
+        assert_eq!(queue.pop_immediate_geometry(), Some(coord));
+        assert_ne!(queue.pop(), Some(coord));
     }
 }
