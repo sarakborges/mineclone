@@ -4,12 +4,28 @@
   "category": "natural_blocks",
   "tint": "grass",
   "textures": {
-    "top": [{ "texture": "textures/blocks/grass/top.png", "dyable": true }],
-    "bottom": [{ "texture": "textures/blocks/grass/bottom.png", "dyable": false }],
-    "left": [{ "texture": "textures/blocks/grass/side.png", "dyable": true }],
-    "right": [{ "texture": "textures/blocks/grass/side.png", "dyable": true }],
-    "front": [{ "texture": "textures/blocks/grass/side.png", "dyable": true }],
-    "back": [{ "texture": "textures/blocks/grass/side.png", "dyable": true }]
+    "top": [
+      { "texture": "textures/blocks/grass/top.png", "dyable": true }
+    ],
+    "bottom": [
+      { "texture": "textures/blocks/dirt.png", "dyable": false }
+    ],
+    "left": [
+      { "texture": "textures/blocks/grass/side.png", "dyable": false },
+      { "texture": "textures/blocks/grass/side_overlay.png", "dyable": true }
+    ],
+    "right": [
+      { "texture": "textures/blocks/grass/side.png", "dyable": false },
+      { "texture": "textures/blocks/grass/side_overlay.png", "dyable": true }
+    ],
+    "front": [
+      { "texture": "textures/blocks/grass/side.png", "dyable": false },
+      { "texture": "textures/blocks/grass/side_overlay.png", "dyable": true }
+    ],
+    "back": [
+      { "texture": "textures/blocks/grass/side.png", "dyable": false },
+      { "texture": "textures/blocks/grass/side_overlay.png", "dyable": true }
+    ]
   },
   "rotateTexture": {
     "top": true,
