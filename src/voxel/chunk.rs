@@ -26,6 +26,10 @@ impl VoxelChunk {
         self.blocks.iter().all(Option::is_none) && self.fluids.iter().all(Option::is_none)
     }
 
+    pub(crate) fn has_fluid(&self) -> bool {
+        self.fluids.iter().any(Option::is_some)
+    }
+
     pub fn cell_at(&self, x: i32, y: i32, z: i32) -> Option<VoxelCell> {
         if !in_bounds(x, y, z) {
             return None;
@@ -58,13 +62,14 @@ impl VoxelChunk {
         self.fluids[index(x, y, z)] = fluid;
     }
 
-    pub(crate) fn set_light(&mut self, x: usize, y: usize, z: usize, light: VoxelLight) -> bool {
-        let index = index(x, y, z);
-
+    pub(crate) fn set_light(&mut self, x: i32, y: i32, z: i32, light: VoxelLight) -> bool {
+        if !in_bounds(x, y, z) {
+            return false;
+        }
+        let index = index(x as usize, y as usize, z as usize);
         if self.light[index] == light {
             return false;
         }
-
         self.light[index] = light;
         true
     }
