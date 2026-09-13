@@ -42,8 +42,7 @@ impl ViewModelAnimation {
 #[derive(Resource, Default)]
 pub(super) struct ViewModelItemSwitch {
     initialized: bool,
-    displayed_block_id: Option<&'static str>,
-    target_block_id: Option<&'static str>,
+    observed_block_id: Option<&'static str>,
     elapsed_ticks: u64,
     active: bool,
 }
@@ -51,14 +50,9 @@ pub(super) struct ViewModelItemSwitch {
 impl ViewModelItemSwitch {
     pub(super) fn initialize(&mut self, block_id: Option<&'static str>) {
         self.initialized = true;
-        self.displayed_block_id = block_id;
-        self.target_block_id = block_id;
+        self.observed_block_id = block_id;
         self.elapsed_ticks = 0;
         self.active = false;
-    }
-
-    pub(super) fn displayed_block_id(&self) -> Option<&'static str> {
-        self.displayed_block_id
     }
 
     pub(super) fn is_active(&self) -> bool {
@@ -85,8 +79,8 @@ pub(super) fn advance_item_switch(
         return;
     }
 
-    if selected_block_id != item_switch.target_block_id {
-        item_switch.target_block_id = selected_block_id;
+    if selected_block_id != item_switch.observed_block_id {
+        item_switch.observed_block_id = selected_block_id;
         item_switch.elapsed_ticks = 0;
         item_switch.active = true;
     }
@@ -98,16 +92,8 @@ pub(super) fn advance_item_switch(
     item_switch.elapsed_ticks = item_switch
         .elapsed_ticks
         .saturating_add(world_ticks.ticks_this_frame() as u64);
-    let midpoint = ITEM_SWITCH_ANIMATION_DURATION_TICKS / 2;
-
-    if item_switch.elapsed_ticks >= midpoint
-        && item_switch.displayed_block_id != item_switch.target_block_id
-    {
-        item_switch.displayed_block_id = item_switch.target_block_id;
-    }
 
     if item_switch.elapsed_ticks >= ITEM_SWITCH_ANIMATION_DURATION_TICKS {
-        item_switch.displayed_block_id = item_switch.target_block_id;
         item_switch.elapsed_ticks = 0;
         item_switch.active = false;
     }
