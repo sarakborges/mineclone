@@ -7,7 +7,7 @@ pub(crate) mod player_id;
 pub(crate) mod save;
 pub(crate) mod viewmodel;
 
-use bevy::{prelude::*, ui::IsDefaultUiCamera};
+use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
@@ -43,7 +43,6 @@ pub(crate) fn spawn_player_entity(
         Msaa::Off,
         Transform::from_translation(translation),
         GameplayCamera::default(),
-        IsDefaultUiCamera,
         LOCAL_PLAYER_ID,
         game_mode,
         WalkingState::default(),
