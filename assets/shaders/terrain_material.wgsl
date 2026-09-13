@@ -203,13 +203,12 @@ fn fragment(
     let shadowed_sky_light = clamp(sky_light * sun_visibility, 0.0, 1.0);
     let sky_local_light = mix(AMBIENT_FLOOR, 1.0, shadowed_sky_light);
 
-    // Combine intensity without entering HDR. The previous >1.0 block-light
-    // multiplier was being desaturated by tone mapping, which made saturated
-    // red+blue overlap look white. Hue is blended separately from luminance.
+    // Sky light controls luminance, but it must not erase the hue of a strong
+    // voxel light. Weight color only by block intensity so the same red/blue
+    // overlap stays magenta in open sky and underground.
     let combined_intensity =
         1.0 - (1.0 - sky_local_light) * (1.0 - block_intensity);
-    let block_hue_weight = block_intensity
-        / max(block_intensity + sky_local_light, 0.001);
+    let block_hue_weight = smoothstep(0.08, 0.55, block_intensity);
     let combined_hue = mix(vec3<f32>(1.0), block_hue, block_hue_weight);
     let local_light = combined_hue * combined_intensity * ambient_occlusion;
 
@@ -265,7 +264,10 @@ fn fragment(
     );
 #endif
 
-    let lighting_multiplier = local_light + dynamic_light;
+    // Dynamic held-item light is useful in darkness, but white point light must
+    // not wash out a saturated voxel-light gradient that is already authoritative.
+    let lighting_multiplier =
+        local_light + dynamic_light * (1.0 - block_hue_weight);
     pbr_input.material.base_color = vec4<f32>(
         material_rgb * lighting_multiplier,
         texel.a * pbr_bindings::material.base_color.a,
