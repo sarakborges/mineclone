@@ -11,6 +11,7 @@ const CAVE_WATER_PROTECTION_DEPTH: f32 = 14.0;
 const CAVE_WATER_PROTECTION_FADE_DEPTH: f32 = 20.0;
 const CAVE_WATER_HORIZONTAL_CLEARANCE: f32 = 8.0;
 const RIVER_CHANNEL_HEADROOM: f32 = 8.0;
+const RIVER_MINIMUM_SURFACE_HEADROOM: f32 = 2.5;
 const RIVER_BANK_NOISE_SCALE: f32 = 0.035;
 const RIVER_BANK_DETAIL_NOISE_SCALE: f32 = 0.11;
 const WATER_VOLUME_AIR_DENSITY: f32 = -0.001;
@@ -153,7 +154,12 @@ fn river_headroom(strength: f32, horizontal: Vec2, seed: u64) -> f32 {
     let shaped_strength =
         (strength * (1.0 + (variation - 1.0) * (1.0 - strength) * 1.5)).clamp(0.0, 1.0);
 
-    RIVER_CHANNEL_HEADROOM * smoothstep(shaped_strength)
+    // River water is positioned below the sampled terrain surface. Near the
+    // channel edge, the tapered headroom used to become shorter than that
+    // offset and could leave the original top grass voxel suspended over the
+    // carved channel. Every actual river-water column therefore keeps enough
+    // vertical clearance to remove that stale surface cap.
+    (RIVER_CHANNEL_HEADROOM * smoothstep(shaped_strength)).max(RIVER_MINIMUM_SURFACE_HEADROOM)
 }
 
 #[cfg(test)]
@@ -181,6 +187,14 @@ mod tests {
         for strength in [0.0, 0.25, 0.5, 0.75, 1.0] {
             assert!(river_headroom(strength, Vec2::ZERO, 42) <= 8.0);
         }
+    }
+
+    #[test]
+    fn river_edge_headroom_clears_the_original_surface_cap() {
+        assert!(
+            river_headroom(0.25, Vec2::new(32.5, -17.5), 42)
+                >= RIVER_MINIMUM_SURFACE_HEADROOM
+        );
     }
 
     #[test]
