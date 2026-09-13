@@ -32,7 +32,9 @@ struct TerrainMaterialExtension {
 var<uniform> terrain_material_extension: TerrainMaterialExtension;
 
 const AMBIENT_FLOOR: f32 = 0.055;
-const LIGHT_GAMMA: f32 = 1.35;
+const SKY_LIGHT_GAMMA: f32 = 1.35;
+const BLOCK_LIGHT_GAMMA: f32 = 1.10;
+const BLOCK_LIGHT_STRENGTH: f32 = 1.30;
 const SUN_AMBIENT_SHARE: f32 = 0.62;
 const DYNAMIC_LIGHT_SCALE: f32 = 0.08;
 const TINT_LUMINANCE_WEIGHTS: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
@@ -167,7 +169,7 @@ fn fragment(
     let ambient_occlusion = clamp(in.color.a, 0.0, 1.0);
     let sky_level = clamp(in.uv_b.x, 0.0, 1.0);
     let block_level = clamp(in.uv_b.y, 0.0, 1.0);
-    let sky_light = pow(sky_level, LIGHT_GAMMA) * terrain_material_extension.sky_light_factor;
+    let sky_light = pow(sky_level, SKY_LIGHT_GAMMA) * terrain_material_extension.sky_light_factor;
 
 #ifdef VERTEX_TANGENTS
     // Voxel meshes encode normalized block-light RGB in tangent.xyz and its
@@ -181,7 +183,7 @@ fn fragment(
 #else
     let block_levels = vec3<f32>(block_level);
 #endif
-    let block_light = pow(block_levels, vec3<f32>(LIGHT_GAMMA));
+    let block_light = pow(block_levels, vec3<f32>(BLOCK_LIGHT_GAMMA)) * BLOCK_LIGHT_STRENGTH;
 
 #ifdef PREPASS_PIPELINE
     let sun_visibility = 1.0;
