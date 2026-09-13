@@ -1,5 +1,6 @@
 mod block_icon;
 mod crosshair;
+mod fps;
 mod hotbar;
 mod inventory;
 mod targeting;
@@ -10,6 +11,7 @@ mod world;
 use bevy::prelude::*;
 use block_icon::BlockIconMaterial;
 use crosshair::CrosshairPlugin;
+use fps::FpsHudPlugin;
 use hotbar::HotbarHudPlugin;
 use inventory::InventoryHudPlugin;
 use targeting::TargetHudPlugin;
@@ -52,6 +54,7 @@ impl Plugin for HudPlugin {
                 HotbarHudPlugin,
                 InventoryHudPlugin,
                 TimeHudPlugin,
+                FpsHudPlugin,
                 WorldHudPlugin,
                 TargetHudPlugin,
             ));
