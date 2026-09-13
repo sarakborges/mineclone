@@ -24,6 +24,7 @@ pub(crate) struct FeatureGraphSample {
 pub(crate) struct FeatureGraphHorizontalSample {
     pub(crate) height: f32,
     pub(crate) strength: f32,
+    pub(crate) normalized_distance: f32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -167,9 +168,9 @@ impl FeatureGraph {
             let progress = (relative.dot(segment) / length_squared).clamp(0.0, 1.0);
             let closest = from_horizontal + segment * progress;
             let distance = position.distance(closest);
-            let radius = edge.start_radius
-                + (edge.end_radius - edge.start_radius) * progress
-                + margin;
+            let base_radius =
+                edge.start_radius + (edge.end_radius - edge.start_radius) * progress;
+            let radius = base_radius + margin;
             let strength = 1.0 - (distance / radius).clamp(0.0, 1.0);
 
             if strength <= 0.0 {
@@ -179,6 +180,7 @@ impl FeatureGraph {
             let candidate = FeatureGraphHorizontalSample {
                 height: from.y + (to.y - from.y) * progress,
                 strength,
+                normalized_distance: distance / base_radius,
             };
             if strongest
                 .as_ref()
@@ -231,6 +233,19 @@ mod tests {
 
         assert_eq!(sample.height, 15.0);
         assert_eq!(sample.strength, 1.0);
+        assert_eq!(sample.normalized_distance, 0.0);
+    }
+
+    #[test]
+    fn horizontal_sampling_reports_distance_relative_to_feature_radius() {
+        let mut graph = FeatureGraph::default();
+        let from = graph.add_node(Vec3::ZERO);
+        let to = graph.add_node(Vec3::new(10.0, 0.0, 0.0));
+        graph.add_edge(from, to, 4.0, 4.0);
+
+        let sample = graph.sample_horizontal(Vec2::new(5.0, 3.0)).unwrap();
+
+        assert!((sample.normalized_distance - 0.75).abs() <= f32::EPSILON);
     }
 
     #[test]
@@ -242,7 +257,8 @@ mod tests {
 
         let nearby = Vec2::new(5.0, 5.0);
         assert!(graph.sample_horizontal(nearby).is_none());
-        assert!(graph.sample_horizontal_with_margin(nearby, 4.0).is_some());
+        let expanded = graph.sample_horizontal_with_margin(nearby, 4.0).unwrap();
+        assert!(expanded.normalized_distance > 1.0);
     }
 
     #[test]
