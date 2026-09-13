@@ -4,12 +4,12 @@
   "category": "light_sources",
   "secondaryProperties": ["dyed"],
   "textures": {
-    "top": "textures/blocks/lamp.png",
-    "bottom": "textures/blocks/lamp.png",
-    "left": "textures/blocks/lamp.png",
-    "right": "textures/blocks/lamp.png",
-    "front": "textures/blocks/lamp.png",
-    "back": "textures/blocks/lamp.png"
+    "top": [{ "texture": "textures/blocks/lamp.png", "dyable": true }],
+    "bottom": [{ "texture": "textures/blocks/lamp.png", "dyable": true }],
+    "left": [{ "texture": "textures/blocks/lamp.png", "dyable": true }],
+    "right": [{ "texture": "textures/blocks/lamp.png", "dyable": true }],
+    "front": [{ "texture": "textures/blocks/lamp.png", "dyable": true }],
+    "back": [{ "texture": "textures/blocks/lamp.png", "dyable": true }]
   },
   "rotateTexture": { "top": false, "bottom": false, "left": false, "right": false, "front": false, "back": false },
   "lightEmission": 15,
