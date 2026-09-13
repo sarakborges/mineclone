@@ -247,13 +247,16 @@ pub(super) fn sync_held_block(
     let tint_position = Vec2::new(player.translation.x, player.translation.z);
 
     for (mut held, mut held_transform, mut held_visibility) in &mut roots {
-        let block_changed = held.set_block_id(selected_block_id);
+        held.set_block_id(selected_block_id);
 
         if *held_visibility != visibility {
             *held_visibility = visibility;
         }
 
-        let Some(block_id) = held.block_id() else {
+        let Some(block_id) = selected_block_id else {
+            for (_, _, mut layer_visibility) in &mut faces {
+                *layer_visibility = Visibility::Hidden;
+            }
             continue;
         };
         let block = content
@@ -277,24 +280,21 @@ pub(super) fn sync_held_block(
                 continue;
             };
 
-            if block_changed {
-                if let Some(face_material) = block_face_material_data(
-                    face.face,
-                    face.layer_index,
-                    block,
-                    &content.asset_server,
-                    held.opacity(),
-                ) {
-                    *material = face_material;
-                    apply_block_display_shading(&mut material, face.face, held.opacity());
-                    *layer_visibility = Visibility::Visible;
-                } else {
-                    *layer_visibility = Visibility::Hidden;
-                    continue;
-                }
-            }
+            let Some(face_material) = block_face_material_data(
+                face.face,
+                face.layer_index,
+                block,
+                &content.asset_server,
+                held.opacity(),
+            ) else {
+                *layer_visibility = Visibility::Hidden;
+                continue;
+            };
 
+            *material = face_material;
+            apply_block_display_shading(&mut material, face.face, held.opacity());
             set_block_model_tint(&mut material, tint);
+            *layer_visibility = Visibility::Visible;
         }
     }
 }
