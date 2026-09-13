@@ -152,10 +152,16 @@ impl FeatureCaches {
 
     pub(super) fn retain_for_chunks(&self, desired: &HashSet<IVec3>) {
         let horizontal_chunks = desired.iter().map(|coord| coord.xz()).collect::<HashSet<_>>();
+        let generation_regions = desired
+            .iter()
+            .copied()
+            .map(generation_region_coord)
+            .collect::<HashSet<_>>();
         let mut retained_regions = HashSet::new();
 
-        for &chunk in desired {
-            let region = generation_region_coord(chunk);
+        // Many desired chunks share one 8x8x8 generation region. Expand the
+        // cache margin once per unique region rather than once per chunk.
+        for region in generation_regions {
             for y in (region.y - CACHE_REGION_MARGIN).max(0)..=(region.y + CACHE_REGION_MARGIN) {
                 for z in (region.z - CACHE_REGION_MARGIN)..=(region.z + CACHE_REGION_MARGIN) {
                     for x in (region.x - CACHE_REGION_MARGIN)..=(region.x + CACHE_REGION_MARGIN) {
