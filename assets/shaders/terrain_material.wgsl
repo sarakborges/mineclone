@@ -35,6 +35,21 @@ const AMBIENT_FLOOR: f32 = 0.055;
 const LIGHT_GAMMA: f32 = 1.35;
 const SUN_AMBIENT_SHARE: f32 = 0.62;
 const DYNAMIC_LIGHT_SCALE: f32 = 0.08;
+const TINT_LUMINANCE_WEIGHTS: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
+
+fn apply_layer_tint(source: vec3<f32>, tint: vec3<f32>) -> vec3<f32> {
+    let source_luma = max(dot(source, TINT_LUMINANCE_WEIGHTS), 0.0);
+    let tint_peak = max(max(tint.r, tint.g), max(tint.b, 0.001));
+    let hue = tint / tint_peak;
+    let hue_luma = max(dot(hue, TINT_LUMINANCE_WEIGHTS), 0.001);
+    let luminance_compensation = min(2.0, 1.0 / hue_luma);
+
+    return clamp(
+        vec3<f32>(source_luma) * hue * luminance_compensation * 1.08,
+        vec3<f32>(0.0),
+        vec3<f32>(1.0),
+    );
+}
 
 #ifndef PREPASS_PIPELINE
 fn directional_sun_visibility(in: VertexOutput) -> f32 {
@@ -171,27 +186,10 @@ fn fragment(
     let shadowed_sky_light = sky_light * sun_visibility;
     let propagated_light = max(shadowed_sky_light, block_light);
     let local_light = mix(AMBIENT_FLOOR, 1.0, propagated_light) * ambient_occlusion;
-    let maximum_channel = max(texel.r, max(texel.g, texel.b));
-    let minimum_channel = min(texel.r, min(texel.g, texel.b));
-    let chroma = maximum_channel - minimum_channel;
 
     var base_rgb = texel.rgb;
-    if tint_enabled && chroma <= 0.02 {
-        let tint_peak = max(max(tint.r, tint.g), max(tint.b, 0.001));
-        let hue = tint / tint_peak;
-        let softened_hue = mix(vec3<f32>(1.0), hue, 0.72);
-        let luminance_weights = vec3<f32>(0.2126, 0.7152, 0.0722);
-        let softened_luma = max(dot(softened_hue, luminance_weights), 0.001);
-        let luminance_compensation = min(1.35, 1.0 / softened_luma);
-
-        base_rgb = clamp(
-            vec3<f32>(texel.r)
-                * softened_hue
-                * luminance_compensation
-                * 1.08,
-            vec3<f32>(0.0),
-            vec3<f32>(1.0)
-        );
+    if tint_enabled {
+        base_rgb = apply_layer_tint(texel.rgb, tint);
     }
 
     var material_rgb = base_rgb * pbr_bindings::material.base_color.rgb;
