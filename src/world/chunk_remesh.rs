@@ -12,6 +12,7 @@ use super::{
 };
 
 const REMESH_BUDGET: Duration = Duration::from_millis(2);
+const MAX_IMMEDIATE_LIGHTING_REMESHES_PER_FRAME: usize = 4;
 
 #[derive(Resource, Default)]
 pub(crate) struct ChunkRemeshQueue {
@@ -61,13 +62,12 @@ impl ChunkRemeshQueue {
             self.immediate_lighting.enqueue_front(coord);
         }
 
-        for offset in CARDINAL_NEIGHBORS {
-            let neighbor = coord + offset;
-            self.enqueue_priority(neighbor);
-            if neighbor.y >= 0 {
-                self.immediate_lighting.enqueue_front(neighbor);
-            }
-        }
+        // Neighbor meshes can sample light across a chunk boundary, but forcing
+        // every neighbor through the unbounded immediate path multiplies one
+        // lighting edit into dozens of full chunk rebuilds. Keep neighbors at
+        // priority in the budgeted queue; chunks whose own light changed will be
+        // promoted independently by process_dynamic_lighting.
+        self.enqueue_voxel_edit_neighbors(coord);
     }
 
     pub(crate) fn extend(&mut self, coords: impl IntoIterator<Item = IVec3>) {
@@ -141,7 +141,11 @@ pub(super) fn process_immediate_lighting_remesh(
         &renderer.fluid_materials,
     );
 
-    while let Some(coord) = queue.pop_immediate_lighting() {
+    for _ in 0..MAX_IMMEDIATE_LIGHTING_REMESHES_PER_FRAME {
+        let Some(coord) = queue.pop_immediate_lighting() else {
+            break;
+        };
+
         refresh_chunk_mesh(
             &mut renderer.commands,
             &mut renderer.meshes,
@@ -223,19 +227,22 @@ mod tests {
     }
 
     #[test]
-    fn lighting_change_immediately_refreshes_chunk_and_neighbors() {
+    fn lighting_change_immediately_refreshes_changed_chunk_and_prioritizes_neighbors() {
         let mut queue = ChunkRemeshQueue::default();
         let coord = IVec3::new(4, 2, -3);
         queue.enqueue_lighting_change(coord);
 
-        let mut immediate = Vec::new();
-        while let Some(value) = queue.pop_immediate_lighting() {
-            immediate.push(value);
+        assert_eq!(queue.pop_immediate_lighting(), Some(coord));
+        assert_eq!(queue.pop_immediate_lighting(), None);
+
+        let mut queued = Vec::new();
+        while let Some(value) = queue.pop() {
+            queued.push(value);
         }
 
-        assert!(immediate.contains(&coord));
+        assert!(queued.contains(&coord));
         for offset in CARDINAL_NEIGHBORS {
-            assert!(immediate.contains(&(coord + offset)));
+            assert!(queued.contains(&(coord + offset)));
         }
     }
 }

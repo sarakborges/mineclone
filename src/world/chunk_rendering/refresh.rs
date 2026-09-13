@@ -17,8 +17,19 @@ pub fn refresh_chunk_mesh(
         for entity in entities {
             commands.entity(entity).despawn();
         }
-        for handle in mesh_handles {
-            let _ = meshes.remove(&handle);
+
+        // Entity despawns are deferred. Removing their mesh assets immediately
+        // leaves the still-live render entities without a mesh for the rest of
+        // the frame, which becomes visible as flicker during frequent remeshes.
+        // Queue asset cleanup after the despawns so extraction only ever sees the
+        // old complete mesh set or the newly spawned one.
+        if !mesh_handles.is_empty() {
+            commands.queue(move |world: &mut World| {
+                let mut meshes = world.resource_mut::<Assets<Mesh>>();
+                for handle in mesh_handles {
+                    let _ = meshes.remove(&handle);
+                }
+            });
         }
     }
 
