@@ -4,12 +4,12 @@
   "category": "foliage",
   "tint": "leaf",
   "textures": {
-    "top": "textures/blocks/trees/oak/leaf.png",
-    "bottom": "textures/blocks/trees/oak/leaf.png",
-    "left": "textures/blocks/trees/oak/leaf.png",
-    "right": "textures/blocks/trees/oak/leaf.png",
-    "front": "textures/blocks/trees/oak/leaf.png",
-    "back": "textures/blocks/trees/oak/leaf.png"
+    "top": [{ "texture": "textures/blocks/trees/oak/leaf.png", "dyable": true }],
+    "bottom": [{ "texture": "textures/blocks/trees/oak/leaf.png", "dyable": true }],
+    "left": [{ "texture": "textures/blocks/trees/oak/leaf.png", "dyable": true }],
+    "right": [{ "texture": "textures/blocks/trees/oak/leaf.png", "dyable": true }],
+    "front": [{ "texture": "textures/blocks/trees/oak/leaf.png", "dyable": true }],
+    "back": [{ "texture": "textures/blocks/trees/oak/leaf.png", "dyable": true }]
   },
   "rotateTexture": { "top": false, "bottom": false, "left": false, "right": false, "front": false, "back": false },
   "alphaCutoff": 0.5,
