@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 use crate::localization::LocalizedText;
 
@@ -12,12 +12,18 @@ const MAX_LIGHT_DAMPENING: u8 = 15;
 #[derive(Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockTextures {
-    pub top: String,
-    pub bottom: String,
-    pub left: String,
-    pub right: String,
-    pub front: String,
-    pub back: String,
+    #[serde(default, deserialize_with = "deserialize_texture_layers")]
+    pub top: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_texture_layers")]
+    pub bottom: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_texture_layers")]
+    pub left: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_texture_layers")]
+    pub right: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_texture_layers")]
+    pub front: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_texture_layers")]
+    pub back: Vec<String>,
 }
 
 impl BlockTextures {
@@ -29,6 +35,23 @@ impl BlockTextures {
             && self.front.is_empty()
             && self.back.is_empty()
     }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum TextureLayersValue {
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+fn deserialize_texture_layers<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(match TextureLayersValue::deserialize(deserializer)? {
+        TextureLayersValue::Single(texture) => vec![texture],
+        TextureLayersValue::Multiple(textures) => textures,
+    })
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
@@ -176,6 +199,22 @@ impl BlockRegistry {
                 "block {} secondaryProperties cannot contain duplicates",
                 definition.id
             );
+        }
+        for (face, layers) in [
+            ("top", &definition.textures.top),
+            ("bottom", &definition.textures.bottom),
+            ("left", &definition.textures.left),
+            ("right", &definition.textures.right),
+            ("front", &definition.textures.front),
+            ("back", &definition.textures.back),
+        ] {
+            for (layer, texture) in layers.iter().enumerate() {
+                assert!(
+                    !texture.is_empty(),
+                    "block {} textures.{face}[{layer}] cannot be empty",
+                    definition.id
+                );
+            }
         }
 
         intern_block_id(&definition.id);
