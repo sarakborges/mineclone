@@ -6,7 +6,7 @@ use crate::{
     content::{block::BlockDefinition, block_orientation::BlockOrientation},
     rendering::{
         block_display::{block_display_face_basis, block_display_face_shade},
-        block_texture::load_block_face_texture,
+        block_texture::{block_face_texture_layers, load_block_texture_layer},
         color::color_to_linear_vec4,
     },
     voxel::{
@@ -28,21 +28,36 @@ pub(crate) struct BlockIconMaterial {
     #[texture(4)]
     #[sampler(5)]
     right_texture: Handle<Image>,
-    #[uniform(6)]
-    tint: Vec4,
-    #[uniform(7)]
-    face_shades: Vec4,
-    #[uniform(8)]
-    top_origin_axis_u: Vec4,
-    #[uniform(9)]
-    top_axis_v: Vec4,
-    #[uniform(10)]
-    front_origin_axis_u: Vec4,
-    #[uniform(11)]
-    front_axis_v: Vec4,
+    #[texture(6)]
+    #[sampler(7)]
+    top_overlay_texture: Handle<Image>,
+    #[texture(8)]
+    #[sampler(9)]
+    front_overlay_texture: Handle<Image>,
+    #[texture(10)]
+    #[sampler(11)]
+    right_overlay_texture: Handle<Image>,
     #[uniform(12)]
-    right_origin_axis_u: Vec4,
+    tint: Vec4,
     #[uniform(13)]
+    face_shades: Vec4,
+    #[uniform(14)]
+    base_tint_flags: Vec4,
+    #[uniform(15)]
+    overlay_tint_flags: Vec4,
+    #[uniform(16)]
+    overlay_present_flags: Vec4,
+    #[uniform(17)]
+    top_origin_axis_u: Vec4,
+    #[uniform(18)]
+    top_axis_v: Vec4,
+    #[uniform(19)]
+    front_origin_axis_u: Vec4,
+    #[uniform(20)]
+    front_axis_v: Vec4,
+    #[uniform(21)]
+    right_origin_axis_u: Vec4,
+    #[uniform(22)]
     right_axis_v: Vec4,
 }
 
@@ -62,8 +77,14 @@ impl BlockIconMaterial {
             top_texture: Handle::default(),
             front_texture: Handle::default(),
             right_texture: Handle::default(),
+            top_overlay_texture: Handle::default(),
+            front_overlay_texture: Handle::default(),
+            right_overlay_texture: Handle::default(),
             tint: Vec4::ONE,
             face_shades: block_face_shades(),
+            base_tint_flags: Vec4::ZERO,
+            overlay_tint_flags: Vec4::ZERO,
+            overlay_present_flags: Vec4::ZERO,
             top_origin_axis_u,
             top_axis_v,
             front_origin_axis_u,
@@ -94,23 +115,28 @@ impl BlockIconMaterial {
         orientation: BlockOrientation,
         asset_server: &AssetServer,
     ) {
-        self.top_texture = load_oriented_face_texture(
-            asset_server,
-            BlockFace::Top,
-            orientation,
-            block,
+        let top = load_oriented_face_layers(asset_server, BlockFace::Top, orientation, block);
+        let front = load_oriented_face_layers(asset_server, BlockFace::Front, orientation, block);
+        let right = load_oriented_face_layers(asset_server, BlockFace::Right, orientation, block);
+
+        self.top_texture = top.base;
+        self.front_texture = front.base;
+        self.right_texture = right.base;
+        self.top_overlay_texture = top.overlay;
+        self.front_overlay_texture = front.overlay;
+        self.right_overlay_texture = right.overlay;
+        self.base_tint_flags = Vec4::new(top.base_dyable, front.base_dyable, right.base_dyable, 0.0);
+        self.overlay_tint_flags = Vec4::new(
+            top.overlay_dyable,
+            front.overlay_dyable,
+            right.overlay_dyable,
+            0.0,
         );
-        self.front_texture = load_oriented_face_texture(
-            asset_server,
-            BlockFace::Front,
-            orientation,
-            block,
-        );
-        self.right_texture = load_oriented_face_texture(
-            asset_server,
-            BlockFace::Right,
-            orientation,
-            block,
+        self.overlay_present_flags = Vec4::new(
+            top.overlay_present,
+            front.overlay_present,
+            right.overlay_present,
+            0.0,
         );
     }
 
@@ -119,14 +145,38 @@ impl BlockIconMaterial {
     }
 }
 
-fn load_oriented_face_texture(
+struct IconFaceLayers {
+    base: Handle<Image>,
+    overlay: Handle<Image>,
+    base_dyable: f32,
+    overlay_dyable: f32,
+    overlay_present: f32,
+}
+
+fn load_oriented_face_layers(
     asset_server: &AssetServer,
     face: BlockFace,
     orientation: BlockOrientation,
     block: &BlockDefinition,
-) -> Handle<Image> {
+) -> IconFaceLayers {
     let source_face = source_face_for_oriented_face(face, orientation);
-    load_block_face_texture(asset_server, source_face, block).unwrap_or_default()
+    let layers = block_face_texture_layers(source_face, block);
+    let base = layers
+        .first()
+        .map(|layer| load_block_texture_layer(asset_server, layer))
+        .unwrap_or_default();
+    let overlay_layer = layers.get(1);
+    let overlay = overlay_layer
+        .map(|layer| load_block_texture_layer(asset_server, layer))
+        .unwrap_or_default();
+
+    IconFaceLayers {
+        base,
+        overlay,
+        base_dyable: layers.first().is_some_and(|layer| layer.dyable) as u8 as f32,
+        overlay_dyable: overlay_layer.is_some_and(|layer| layer.dyable) as u8 as f32,
+        overlay_present: overlay_layer.is_some() as u8 as f32,
+    }
 }
 
 fn block_face_shades() -> Vec4 {

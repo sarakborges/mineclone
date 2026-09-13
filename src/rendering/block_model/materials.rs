@@ -104,7 +104,7 @@ pub(crate) fn apply_block_display_shading(
     opacity: f32,
 ) {
     let shade = block_display_face_shade(face);
-    material.base.base_color = Color::srgb(shade, shade, shade);
+    material.base.base_color = Color::linear_rgb(shade, shade, shade);
     material.extension.set_opacity(opacity);
 }
 
