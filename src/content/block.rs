@@ -9,21 +9,29 @@ use super::{
 
 const MAX_LIGHT_DAMPENING: u8 = 15;
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockTextureLayer {
+    pub texture: String,
+    #[serde(default, alias = "dyeable")]
+    pub dyable: bool,
+}
+
 #[derive(Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockTextures {
     #[serde(default, deserialize_with = "deserialize_texture_layers")]
-    pub top: Vec<String>,
+    pub top: Vec<BlockTextureLayer>,
     #[serde(default, deserialize_with = "deserialize_texture_layers")]
-    pub bottom: Vec<String>,
+    pub bottom: Vec<BlockTextureLayer>,
     #[serde(default, deserialize_with = "deserialize_texture_layers")]
-    pub left: Vec<String>,
+    pub left: Vec<BlockTextureLayer>,
     #[serde(default, deserialize_with = "deserialize_texture_layers")]
-    pub right: Vec<String>,
+    pub right: Vec<BlockTextureLayer>,
     #[serde(default, deserialize_with = "deserialize_texture_layers")]
-    pub front: Vec<String>,
+    pub front: Vec<BlockTextureLayer>,
     #[serde(default, deserialize_with = "deserialize_texture_layers")]
-    pub back: Vec<String>,
+    pub back: Vec<BlockTextureLayer>,
 }
 
 impl BlockTextures {
@@ -39,18 +47,40 @@ impl BlockTextures {
 
 #[derive(Deserialize)]
 #[serde(untagged)]
-enum TextureLayersValue {
-    Single(String),
-    Multiple(Vec<String>),
+enum TextureLayerValue {
+    Legacy(String),
+    Layer(BlockTextureLayer),
 }
 
-fn deserialize_texture_layers<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum TextureLayersValue {
+    Legacy(String),
+    Layer(BlockTextureLayer),
+    Multiple(Vec<TextureLayerValue>),
+}
+
+fn deserialize_texture_layers<'de, D>(deserializer: D) -> Result<Vec<BlockTextureLayer>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    Ok(match TextureLayersValue::deserialize(deserializer)? {
-        TextureLayersValue::Single(texture) => vec![texture],
-        TextureLayersValue::Multiple(textures) => textures,
+    let value = TextureLayersValue::deserialize(deserializer)?;
+    Ok(match value {
+        TextureLayersValue::Legacy(texture) => vec![BlockTextureLayer {
+            texture,
+            dyable: false,
+        }],
+        TextureLayersValue::Layer(layer) => vec![layer],
+        TextureLayersValue::Multiple(layers) => layers
+            .into_iter()
+            .map(|layer| match layer {
+                TextureLayerValue::Legacy(texture) => BlockTextureLayer {
+                    texture,
+                    dyable: false,
+                },
+                TextureLayerValue::Layer(layer) => layer,
+            })
+            .collect(),
     })
 }
 
@@ -210,8 +240,8 @@ impl BlockRegistry {
         ] {
             for (layer, texture) in layers.iter().enumerate() {
                 assert!(
-                    !texture.is_empty(),
-                    "block {} textures.{face}[{layer}] cannot be empty",
+                    !texture.texture.is_empty(),
+                    "block {} textures.{face}[{layer}].texture cannot be empty",
                     definition.id
                 );
             }
