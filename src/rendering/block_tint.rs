@@ -11,8 +11,6 @@ use crate::{
 };
 
 const DYED_PROPERTY_ID: &str = "dyed";
-pub(crate) const DYE_VERTEX_COLOR_MARKER: f32 = 2.0;
-const DYED_TINT_STRENGTH: f32 = 0.96;
 
 pub(crate) fn block_tint_at(
     tint: BlockTint,
@@ -55,17 +53,9 @@ pub(crate) fn block_vertex_tint(
     cell: VoxelCell,
     secondary_properties: &SecondaryPropertyRegistry,
 ) -> [f32; 3] {
-    if let Some(dye) = secondary_property_dye_tint(block, cell, secondary_properties) {
-        let dye = dye.to_srgba();
-        return [
-            dye.red + DYE_VERTEX_COLOR_MARKER,
-            dye.green + DYE_VERTEX_COLOR_MARKER,
-            dye.blue + DYE_VERTEX_COLOR_MARKER,
-        ];
-    }
-
-    let base = base.to_srgba();
-    [base.red, base.green, base.blue]
+    let tint = secondary_property_dye_tint(block, cell, secondary_properties).unwrap_or(base);
+    let tint = tint.to_srgba();
+    [tint.red, tint.green, tint.blue]
 }
 
 pub(crate) fn apply_secondary_property_tint(
@@ -74,18 +64,5 @@ pub(crate) fn apply_secondary_property_tint(
     cell: VoxelCell,
     secondary_properties: &SecondaryPropertyRegistry,
 ) -> Color {
-    let Some(dye) = secondary_property_dye_tint(block, cell, secondary_properties) else {
-        return base;
-    };
-
-    let base = base.to_srgba();
-    let dye = dye.to_srgba();
-    let keep_base = 1.0 - DYED_TINT_STRENGTH;
-
-    Color::srgba(
-        base.red * keep_base + dye.red * DYED_TINT_STRENGTH,
-        base.green * keep_base + dye.green * DYED_TINT_STRENGTH,
-        base.blue * keep_base + dye.blue * DYED_TINT_STRENGTH,
-        base.alpha,
-    )
+    secondary_property_dye_tint(block, cell, secondary_properties).unwrap_or(base)
 }
