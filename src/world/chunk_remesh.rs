@@ -17,6 +17,7 @@ const REMESH_BUDGET: Duration = Duration::from_millis(2);
 pub(crate) struct ChunkRemeshQueue {
     queue: DeduplicatedQueue<IVec3>,
     immediate_geometry: DeduplicatedQueue<IVec3>,
+    immediate_lighting: DeduplicatedQueue<IVec3>,
 }
 
 impl ChunkRemeshQueue {
@@ -40,6 +41,7 @@ impl ChunkRemeshQueue {
         if coord.y >= 0 {
             self.enqueue_priority(coord);
             self.immediate_geometry.enqueue_front(coord);
+            self.immediate_lighting.enqueue_front(coord);
         }
     }
 
@@ -69,9 +71,14 @@ impl ChunkRemeshQueue {
         self.immediate_geometry.pop()
     }
 
+    fn pop_immediate_lighting(&mut self) -> Option<IVec3> {
+        self.immediate_lighting.pop()
+    }
+
     fn clear(&mut self) {
         self.queue.clear();
         self.immediate_geometry.clear();
+        self.immediate_lighting.clear();
     }
 }
 
@@ -101,6 +108,29 @@ pub(super) fn process_immediate_geometry_remesh(
         coord,
         &render_context,
     );
+}
+
+pub(super) fn process_immediate_lighting_remesh(
+    content: ChunkContent,
+    mut renderer: ChunkRenderer,
+    world: Res<VoxelWorld>,
+    mut queue: ResMut<ChunkRemeshQueue>,
+) {
+    let render_context = content.render_context(
+        &world,
+        &renderer.terrain_materials,
+        &renderer.fluid_materials,
+    );
+
+    while let Some(coord) = queue.pop_immediate_lighting() {
+        refresh_chunk_mesh(
+            &mut renderer.commands,
+            &mut renderer.meshes,
+            &mut renderer.pool,
+            coord,
+            &render_context,
+        );
+    }
 }
 
 pub(super) fn process_chunk_remesh_queue(
@@ -163,12 +193,13 @@ mod tests {
     }
 
     #[test]
-    fn voxel_edit_sends_edited_chunk_to_both_remesh_phases() {
+    fn voxel_edit_runs_before_and_after_lighting() {
         let mut queue = ChunkRemeshQueue::default();
         let coord = IVec3::new(4, 2, -3);
         queue.enqueue_voxel_edit(coord);
 
         assert_eq!(queue.pop_immediate_geometry(), Some(coord));
+        assert_eq!(queue.pop_immediate_lighting(), Some(coord));
         assert_eq!(queue.pop(), Some(coord));
     }
 }

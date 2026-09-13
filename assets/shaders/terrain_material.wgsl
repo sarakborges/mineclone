@@ -33,8 +33,7 @@ var<uniform> terrain_material_extension: TerrainMaterialExtension;
 
 const AMBIENT_FLOOR: f32 = 0.055;
 const SKY_LIGHT_GAMMA: f32 = 1.35;
-const BLOCK_LIGHT_GAMMA: f32 = 0.85;
-const BLOCK_LIGHT_STRENGTH: f32 = 1.75;
+const BLOCK_LIGHT_INTENSITY_GAMMA: f32 = 0.50;
 const SUN_AMBIENT_SHARE: f32 = 0.62;
 const DYNAMIC_LIGHT_SCALE: f32 = 0.08;
 const TINT_LUMINANCE_WEIGHTS: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
@@ -180,13 +179,13 @@ fn fragment(
     let sky_level = clamp(in.uv_b.x, 0.0, 1.0);
     let sky_light = pow(sky_level, SKY_LIGHT_GAMMA) * terrain_material_extension.sky_light_factor;
 
-    // Vertex color RGB carries normalized block-light RGB directly. Keeping the
-    // channels linear here lets rasterization blend different light colors
-    // smoothly across each face.
+    // RGB remains linear all the way through interpolation. Strength is shaped
+    // from the peak only, so boosting dim light never raises the weaker color
+    // channels and therefore cannot wash red+blue toward white.
     let block_levels = clamp(in.color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
-    let block_light = pow(block_levels, vec3<f32>(BLOCK_LIGHT_GAMMA));
-    let block_peak = max(max(block_light.r, block_light.g), block_light.b);
-    let block_hue = block_light / max(block_peak, 0.001);
+    let block_peak = max(max(block_levels.r, block_levels.g), block_levels.b);
+    let block_hue = block_levels / max(block_peak, 0.001);
+    let block_intensity = pow(block_peak, BLOCK_LIGHT_INTENSITY_GAMMA);
 
 #ifdef PREPASS_PIPELINE
     let sun_visibility = 1.0;
@@ -203,15 +202,16 @@ fn fragment(
 
     let shadowed_sky_light = clamp(sky_light * sun_visibility, 0.0, 1.0);
     let sky_local_light = mix(AMBIENT_FLOOR, 1.0, shadowed_sky_light);
-    let block_strength = block_peak * BLOCK_LIGHT_STRENGTH;
-    // Strong block light owns the local hue. White skylight is progressively
-    // suppressed as block light grows instead of being added on top until the
-    // tone mapper washes red+blue mixtures toward white.
-    let sky_weight = 1.0 - clamp(block_strength, 0.0, 1.0);
-    let local_light = (
-        vec3<f32>(sky_local_light * sky_weight)
-            + block_hue * block_strength
-    ) * ambient_occlusion;
+
+    // Combine intensity without entering HDR. The previous >1.0 block-light
+    // multiplier was being desaturated by tone mapping, which made saturated
+    // red+blue overlap look white. Hue is blended separately from luminance.
+    let combined_intensity =
+        1.0 - (1.0 - sky_local_light) * (1.0 - block_intensity);
+    let block_hue_weight = block_intensity
+        / max(block_intensity + sky_local_light, 0.001);
+    let combined_hue = mix(vec3<f32>(1.0), block_hue, block_hue_weight);
+    let local_light = combined_hue * combined_intensity * ambient_occlusion;
 
     var base_rgb = texel.rgb;
     if tint_enabled {
