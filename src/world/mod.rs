@@ -36,7 +36,10 @@ use bevy::prelude::*;
 
 use crate::{app::game_state::GameState, voxel::lighting::PendingLightingUpdates};
 use biome::{CurrentBiome, track_current_biome};
-use chunk_remesh::{ChunkRemeshQueue, clear_chunk_remesh_queue, process_chunk_remesh_queue};
+use chunk_remesh::{
+    ChunkRemeshQueue, clear_chunk_remesh_queue, process_chunk_remesh_queue,
+    process_immediate_geometry_remesh,
+};
 use chunk_rendering::{ChunkRenderPool, clear_chunk_render_pool};
 use chunk_unloading::unload_chunk_meshes;
 use day_night::DayNightPlugin;
@@ -103,6 +106,7 @@ impl Plugin for WorldPlugin {
             .add_systems(
                 PostUpdate,
                 (
+                    process_immediate_geometry_remesh,
                     process_fluid_updates,
                     process_dynamic_lighting,
                     process_chunk_remesh_queue,
