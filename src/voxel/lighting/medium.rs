@@ -6,6 +6,8 @@ use crate::content::{
 };
 use crate::voxel::{light::VoxelLight, world::VoxelWorld};
 
+const DYED_PROPERTY_ID: &str = "dyed";
+
 pub(super) fn medium_dampening(
     world: &VoxelWorld,
     blocks: &BlockRegistry,
@@ -18,19 +20,46 @@ pub(super) fn medium_dampening(
 pub(super) fn block_emission(
     world: &VoxelWorld,
     blocks: &BlockRegistry,
-    _secondary_properties: &SecondaryPropertyRegistry,
+    secondary_properties: &SecondaryPropertyRegistry,
     position: IVec3,
 ) -> [u8; 3] {
-    let Some(block_id) = world.block_id_at(position) else {
+    let Some(cell) = world.cell_at(position) else {
+        return [0; 3];
+    };
+    let Some(block) = blocks.get(cell.block_id) else {
         return [0; 3];
     };
 
-    let level = blocks
-        .get(block_id)
-        .map(|block| block.light_emission.min(VoxelLight::MAX_LEVEL))
-        .unwrap_or(0);
+    let level = block.light_emission.min(VoxelLight::MAX_LEVEL);
+    if level == 0 {
+        return [0; 3];
+    }
 
-    [level; 3]
+    if !block
+        .secondary_properties
+        .iter()
+        .any(|property| property == DYED_PROPERTY_ID)
+    {
+        return [level; 3];
+    }
+
+    let Some(dye_id) = cell.secondary_property(DYED_PROPERTY_ID) else {
+        return [level; 3];
+    };
+    let Some(dye) = secondary_properties.get(DYED_PROPERTY_ID, dye_id) else {
+        return [level; 3];
+    };
+
+    let peak = dye.color.r.max(dye.color.g).max(dye.color.b);
+    if peak <= f32::EPSILON {
+        return [level; 3];
+    }
+
+    [
+        colored_emission_channel(level, dye.color.r / peak),
+        colored_emission_channel(level, dye.color.g / peak),
+        colored_emission_channel(level, dye.color.b / peak),
+    ]
 }
 
 pub(super) fn light_filter(
@@ -40,6 +69,12 @@ pub(super) fn light_filter(
     _position: IVec3,
 ) -> [f32; 3] {
     [1.0; 3]
+}
+
+fn colored_emission_channel(level: u8, factor: f32) -> u8 {
+    (level as f32 * factor.clamp(0.0, 1.0))
+        .round()
+        .clamp(0.0, VoxelLight::MAX_LEVEL as f32) as u8
 }
 
 fn block_dampening(world: &VoxelWorld, blocks: &BlockRegistry, position: IVec3) -> u8 {

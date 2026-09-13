@@ -8,6 +8,7 @@ const AO_BRIGHTNESS: [f32; 4] = [1.0, 0.86, 0.72, 0.58];
 
 pub(super) struct FaceLighting {
     pub(super) channels: [[f32; 2]; 4],
+    pub(super) block_rgb: [[f32; 3]; 4],
     pub(super) ambient_occlusion: [f32; 4],
 }
 
@@ -15,12 +16,18 @@ pub(super) fn face_lighting(
     world: &VoxelWorld,
     voxel: IVec3,
     face: BlockFace,
-    _neutralize_emissive_surface_light: bool,
+    neutralize_emissive_surface_light: bool,
 ) -> FaceLighting {
     let (normal, tangent_a, tangent_b, signs) = face_basis(face);
     let base = voxel + normal;
-    let emitted_block_level = world.light_at(voxel).block() as f32;
+    let emitted_block_rgb = world.light_at(voxel).block_rgb().map(|level| level as f32);
+    let emitted_block_rgb = if neutralize_emissive_surface_light {
+        [max_rgb(emitted_block_rgb); 3]
+    } else {
+        emitted_block_rgb
+    };
     let mut channels = [[0.0; 2]; 4];
+    let mut block_rgb = [[0.0; 3]; 4];
     let mut ambient_occlusion = [1.0; 4];
 
     for (index, (sign_a, sign_b)) in signs.into_iter().enumerate() {
@@ -37,18 +44,21 @@ pub(super) fn face_lighting(
         } else {
             side_a_solid as usize + side_b_solid as usize + corner_solid as usize
         };
-        let (sky_level, block_level) =
+        let (sky_level, sampled_block_rgb) =
             average_light_levels(world, [base, side_a, side_b, corner]);
+        let sampled_block_rgb = component_max(sampled_block_rgb, emitted_block_rgb);
 
         channels[index] = [
             normalize_level(sky_level),
-            normalize_level(block_level.max(emitted_block_level)),
+            normalize_level(max_rgb(sampled_block_rgb)),
         ];
+        block_rgb[index] = sampled_block_rgb.map(normalize_level);
         ambient_occlusion[index] = AO_BRIGHTNESS[occlusion];
     }
 
     FaceLighting {
         channels,
+        block_rgb,
         ambient_occlusion,
     }
 }
@@ -75,6 +85,7 @@ pub(super) fn push_lit_quad(
         normal,
         uvs,
         lighting.channels,
+        lighting.block_rgb,
         colors,
         should_flip_diagonal(lighting.ambient_occlusion),
     );
@@ -84,9 +95,9 @@ fn should_flip_diagonal(ambient_occlusion: [f32; 4]) -> bool {
     ambient_occlusion[0] + ambient_occlusion[2] > ambient_occlusion[1] + ambient_occlusion[3]
 }
 
-fn average_light_levels(world: &VoxelWorld, samples: [IVec3; 4]) -> (f32, f32) {
+fn average_light_levels(world: &VoxelWorld, samples: [IVec3; 4]) -> (f32, [f32; 3]) {
     let mut sky_total = 0.0;
-    let mut block_total = 0.0;
+    let mut block_total = [0.0; 3];
     let mut count = 0_u32;
 
     for position in samples {
@@ -96,15 +107,38 @@ fn average_light_levels(world: &VoxelWorld, samples: [IVec3; 4]) -> (f32, f32) {
 
         let light = world.light_at(position);
         sky_total += light.sky() as f32;
-        block_total += light.block() as f32;
+        let block = light.block_rgb();
+        block_total[0] += block[0] as f32;
+        block_total[1] += block[1] as f32;
+        block_total[2] += block[2] as f32;
         count += 1;
     }
 
     if count == 0 {
-        (VoxelLight::MAX_LEVEL as f32, 0.0)
+        (VoxelLight::MAX_LEVEL as f32, [0.0; 3])
     } else {
-        (sky_total / count as f32, block_total / count as f32)
+        let count = count as f32;
+        (
+            sky_total / count,
+            [
+                block_total[0] / count,
+                block_total[1] / count,
+                block_total[2] / count,
+            ],
+        )
     }
+}
+
+fn component_max(left: [f32; 3], right: [f32; 3]) -> [f32; 3] {
+    [
+        left[0].max(right[0]),
+        left[1].max(right[1]),
+        left[2].max(right[2]),
+    ]
+}
+
+fn max_rgb(rgb: [f32; 3]) -> f32 {
+    rgb[0].max(rgb[1]).max(rgb[2])
 }
 
 fn normalize_level(level: f32) -> f32 {

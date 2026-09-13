@@ -168,7 +168,20 @@ fn fragment(
     let sky_level = clamp(in.uv_b.x, 0.0, 1.0);
     let block_level = clamp(in.uv_b.y, 0.0, 1.0);
     let sky_light = pow(sky_level, LIGHT_GAMMA) * terrain_material_extension.sky_light_factor;
-    let block_light = pow(block_level, LIGHT_GAMMA);
+
+#ifdef VERTEX_TANGENTS
+    // Voxel meshes encode normalized block-light RGB in tangent.xyz and its
+    // magnitude in tangent.w. Chunk transforms are translation-only, so the
+    // standard mesh vertex stage preserves that color direction.
+    let block_levels = clamp(
+        in.world_tangent.xyz * abs(in.world_tangent.w),
+        vec3<f32>(0.0),
+        vec3<f32>(1.0),
+    );
+#else
+    let block_levels = vec3<f32>(block_level);
+#endif
+    let block_light = pow(block_levels, vec3<f32>(LIGHT_GAMMA));
 
 #ifdef PREPASS_PIPELINE
     let sun_visibility = 1.0;
@@ -184,8 +197,12 @@ fn fragment(
 #endif
 
     let shadowed_sky_light = sky_light * sun_visibility;
-    let propagated_light = max(shadowed_sky_light, block_light);
-    let local_light = mix(AMBIENT_FLOOR, 1.0, propagated_light) * ambient_occlusion;
+    let propagated_light = max(vec3<f32>(shadowed_sky_light), block_light);
+    let local_light = mix(
+        vec3<f32>(AMBIENT_FLOOR),
+        vec3<f32>(1.0),
+        propagated_light,
+    ) * ambient_occlusion;
 
     var base_rgb = texel.rgb;
     if tint_enabled {
@@ -239,7 +256,7 @@ fn fragment(
     );
 #endif
 
-    let lighting_multiplier = vec3<f32>(local_light) + dynamic_light;
+    let lighting_multiplier = local_light + dynamic_light;
     pbr_input.material.base_color = vec4<f32>(
         material_rgb * lighting_multiplier,
         texel.a * pbr_bindings::material.base_color.a,
