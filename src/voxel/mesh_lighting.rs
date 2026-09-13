@@ -73,9 +73,9 @@ pub(super) fn push_lit_quad(
 ) {
     let colors = std::array::from_fn(|index| {
         [
-            tint[0],
-            tint[1],
-            tint[2],
+            lighting.block_rgb[index][0],
+            lighting.block_rgb[index][1],
+            lighting.block_rgb[index][2],
             lighting.ambient_occlusion[index],
         ]
     });
@@ -85,7 +85,7 @@ pub(super) fn push_lit_quad(
         normal,
         uvs,
         lighting.channels,
-        lighting.block_rgb,
+        tint,
         colors,
         should_flip_diagonal(lighting.ambient_occlusion),
     );

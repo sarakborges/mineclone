@@ -33,8 +33,8 @@ var<uniform> terrain_material_extension: TerrainMaterialExtension;
 
 const AMBIENT_FLOOR: f32 = 0.055;
 const SKY_LIGHT_GAMMA: f32 = 1.35;
-const BLOCK_LIGHT_GAMMA: f32 = 1.10;
-const BLOCK_LIGHT_STRENGTH: f32 = 1.30;
+const BLOCK_LIGHT_GAMMA: f32 = 0.85;
+const BLOCK_LIGHT_STRENGTH: f32 = 1.75;
 const SUN_AMBIENT_SHARE: f32 = 0.62;
 const DYNAMIC_LIGHT_SCALE: f32 = 0.08;
 const TINT_LUMINANCE_WEIGHTS: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
@@ -164,26 +164,28 @@ fn fragment(
         pbr_bindings::base_color_sampler,
         in.uv,
     );
-    let tint = clamp(in.color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
-    let tint_enabled = terrain_material_extension.tint_enabled > 0.5;
-    let ambient_occlusion = clamp(in.color.a, 0.0, 1.0);
-    let sky_level = clamp(in.uv_b.x, 0.0, 1.0);
-    let block_level = clamp(in.uv_b.y, 0.0, 1.0);
-    let sky_light = pow(sky_level, SKY_LIGHT_GAMMA) * terrain_material_extension.sky_light_factor;
-
 #ifdef VERTEX_TANGENTS
-    // Voxel meshes encode normalized block-light RGB in tangent.xyz and its
-    // magnitude in tangent.w. Chunk transforms are translation-only, so the
-    // standard mesh vertex stage preserves that color direction.
-    let block_levels = clamp(
+    // Tint is constant per voxel quad, so the tangent direction+magnitude
+    // encoding is stable and does not participate in the colored-light gradient.
+    let tint = clamp(
         in.world_tangent.xyz * abs(in.world_tangent.w),
         vec3<f32>(0.0),
         vec3<f32>(1.0),
     );
 #else
-    let block_levels = vec3<f32>(block_level);
+    let tint = vec3<f32>(1.0);
 #endif
-    let block_light = pow(block_levels, vec3<f32>(BLOCK_LIGHT_GAMMA)) * BLOCK_LIGHT_STRENGTH;
+    let tint_enabled = terrain_material_extension.tint_enabled > 0.5;
+    let ambient_occlusion = clamp(in.color.a, 0.0, 1.0);
+    let sky_level = clamp(in.uv_b.x, 0.0, 1.0);
+    let sky_light = pow(sky_level, SKY_LIGHT_GAMMA) * terrain_material_extension.sky_light_factor;
+
+    // Vertex color RGB carries normalized block-light RGB directly. Keeping the
+    // channels linear here lets rasterization blend different light colors
+    // smoothly across each face instead of interpolating a hue direction and a
+    // separate magnitude.
+    let block_levels = clamp(in.color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+    let block_light = pow(block_levels, vec3<f32>(BLOCK_LIGHT_GAMMA));
 
 #ifdef PREPASS_PIPELINE
     let sun_visibility = 1.0;
@@ -198,12 +200,14 @@ fn fragment(
     );
 #endif
 
-    let shadowed_sky_light = sky_light * sun_visibility;
-    let propagated_light = max(vec3<f32>(shadowed_sky_light), block_light);
-    let local_light = mix(
-        vec3<f32>(AMBIENT_FLOOR),
-        vec3<f32>(1.0),
-        propagated_light,
+    let shadowed_sky_light = clamp(sky_light * sun_visibility, 0.0, 1.0);
+    let sky_local_light = mix(AMBIENT_FLOOR, 1.0, shadowed_sky_light);
+    // Block light is an additive local contribution rather than competing with
+    // skylight through max(). This avoids hard thresholds where a colored light
+    // abruptly disappears as soon as skylight becomes the larger channel.
+    let local_light = (
+        vec3<f32>(sky_local_light)
+            + block_light * BLOCK_LIGHT_STRENGTH
     ) * ambient_occlusion;
 
     var base_rgb = texel.rgb;
