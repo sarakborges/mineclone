@@ -2,7 +2,7 @@ use bevy::{light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    rendering::block_tint::{apply_secondary_property_tint, block_tint_at},
+    rendering::block_tint::{block_tint_at, block_vertex_tint},
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         fluid_mesh::build_fluid_meshes,
@@ -46,15 +46,13 @@ pub fn spawn_chunk_mesh(
                 context.biome_field,
                 context.biomes,
             );
-            let tint = apply_secondary_property_tint(
+
+            block_vertex_tint(
                 base_tint,
                 block,
                 cell,
                 context.secondary_properties,
             )
-            .to_srgba();
-
-            [tint.red, tint.green, tint.blue]
         },
     );
     let fluid_meshes = build_fluid_meshes(context.world, coord, chunk, |voxel, fluid_id| {
