@@ -4,14 +4,15 @@ use bevy::prelude::*;
 
 use crate::{
     content::{biome::BiomeRegistry, dimension::DimensionDefinition},
+    voxel::chunk::CHUNK_SIZE,
     world::{
-        biome_field::BiomeField,
-        generation::sample_generation_columns,
+        biome_field::BiomeField, terrain::surface_height,
         world_feature_fields::WorldFeatureFields,
     },
 };
 
 const SURFACE_CACHE_MARGIN_CHUNKS: i32 = 2;
+const SURFACE_RANGE_GUARD_BLOCKS: i32 = CHUNK_SIZE as i32;
 
 pub(super) fn cached_surface_range(
     cache: &mut HashMap<IVec2, (i32, i32)>,
@@ -19,16 +20,10 @@ pub(super) fn cached_surface_range(
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
-    feature_fields: &WorldFeatureFields,
+    _feature_fields: &WorldFeatureFields,
 ) -> (i32, i32) {
     *cache.entry(horizontal_chunk).or_insert_with(|| {
-        chunk_surface_range(
-            horizontal_chunk,
-            dimension,
-            biomes,
-            biome_field,
-            feature_fields,
-        )
+        chunk_surface_range(horizontal_chunk, dimension, biomes, biome_field)
     })
 }
 
@@ -47,17 +42,27 @@ fn chunk_surface_range(
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
-    feature_fields: &WorldFeatureFields,
 ) -> (i32, i32) {
-    let columns = feature_fields.generation_columns(horizontal_chunk, || {
-        sample_generation_columns(horizontal_chunk, dimension, biomes, biome_field)
-    });
-    let mut heights = columns.iter().map(|column| column.surface_height);
-    let Some(first) = heights.next() else {
-        return (1, 1);
-    };
+    let chunk_size = CHUNK_SIZE as i32;
+    let origin = horizontal_chunk * chunk_size;
+    let offsets = [0, chunk_size / 3, chunk_size * 2 / 3, chunk_size - 1];
+    let mut minimum = i32::MAX;
+    let mut maximum = i32::MIN;
 
-    heights.fold((first, first), |(minimum, maximum), height| {
-        (minimum.min(height), maximum.max(height))
-    })
+    for z in offsets {
+        for x in offsets {
+            let height = surface_height(origin + IVec2::new(x, z), dimension, biomes, biome_field);
+            minimum = minimum.min(height);
+            maximum = maximum.max(height);
+        }
+    }
+
+    // The nearby player volume is loaded independently of this estimate. For
+    // distant columns, a full chunk of guard in both directions keeps narrow
+    // unsampled ridges and cuts inside the selected vertical range without
+    // paying the 16x16 generation-column cost during every queue rebuild.
+    (
+        (minimum - SURFACE_RANGE_GUARD_BLOCKS).max(1),
+        maximum + SURFACE_RANGE_GUARD_BLOCKS,
+    )
 }
