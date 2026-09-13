@@ -14,6 +14,7 @@
 
 struct BlockModelMaterialExtension {
     tint: vec4<f32>,
+    tint_enabled: f32,
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(100)
@@ -30,7 +31,7 @@ fn fragment(
     let minimum_channel = min(base_color.r, min(base_color.g, base_color.b));
     let chroma = maximum_channel - minimum_channel;
 
-    if chroma <= 0.02 {
+    if block_model_material.tint_enabled > 0.5 && chroma <= 0.02 {
         let tint = clamp(block_model_material.tint.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
         let tint_peak = max(max(tint.r, tint.g), max(tint.b, 0.001));
         let hue = tint / tint_peak;

@@ -12,7 +12,7 @@ use crate::voxel::block_face::BlockFace;
 pub(crate) use geometry::BlockModelMeshes;
 pub(crate) use materials::{
     BlockModelMaterials, apply_block_display_shading, block_face_material_data,
-    set_block_model_tint,
+    maximum_block_model_layers, set_block_model_tint,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

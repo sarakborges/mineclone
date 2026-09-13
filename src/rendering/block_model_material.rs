@@ -17,15 +17,24 @@ pub(crate) type BlockModelMaterial =
 pub(crate) struct BlockModelMaterialExtension {
     #[uniform(100)]
     tint: Vec4,
+    #[uniform(100)]
+    tint_enabled: f32,
 }
 
 impl Default for BlockModelMaterialExtension {
     fn default() -> Self {
-        Self { tint: Vec4::ONE }
+        Self {
+            tint: Vec4::ONE,
+            tint_enabled: 0.0,
+        }
     }
 }
 
 impl BlockModelMaterialExtension {
+    pub(crate) fn set_dyable(&mut self, dyable: bool) {
+        self.tint_enabled = dyable as u8 as f32;
+    }
+
     pub(crate) fn set_tint(&mut self, color: Color) {
         self.tint = color_to_linear_vec4(color);
     }

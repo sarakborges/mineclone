@@ -128,4 +128,15 @@ impl<T> BlockFaces<T> {
             BlockFace::Back => &self.back,
         }
     }
+
+    pub(crate) fn get_mut(&mut self, face: BlockFace) -> &mut T {
+        match face {
+            BlockFace::Right => &mut self.right,
+            BlockFace::Left => &mut self.left,
+            BlockFace::Top => &mut self.top,
+            BlockFace::Bottom => &mut self.bottom,
+            BlockFace::Front => &mut self.front,
+            BlockFace::Back => &mut self.back,
+        }
+    }
 }

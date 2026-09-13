@@ -73,24 +73,27 @@ pub fn spawn_chunk_mesh(
     let mut pooled_mesh_bytes = 0;
 
     for face_mesh in face_meshes {
-        let material = context
-            .terrain_materials
-            .for_face(face_mesh.block_id, face_mesh.face)
-            .clone();
         pooled_mesh_bytes += mesh_asset_bytes(&face_mesh.mesh);
         let mesh_handle = meshes.add(face_mesh.mesh);
-        let mut entity_commands = commands.spawn((
-            Mesh3d(mesh_handle.clone()),
-            MeshMaterial3d(material),
-            transform,
-            DespawnOnExit(GameState::Gameplay),
-        ));
+        let layer_materials = context
+            .terrain_materials
+            .for_face(face_mesh.block_id, face_mesh.face);
 
-        if !face_mesh.casts_shadow {
-            entity_commands.insert(NotShadowCaster);
+        for (layer_index, material) in layer_materials.iter().enumerate() {
+            let mut entity_commands = commands.spawn((
+                Mesh3d(mesh_handle.clone()),
+                MeshMaterial3d(material.clone()),
+                transform,
+                DespawnOnExit(GameState::Gameplay),
+            ));
+
+            if !face_mesh.casts_shadow || layer_index > 0 {
+                entity_commands.insert(NotShadowCaster);
+            }
+
+            entities.push(entity_commands.id());
         }
 
-        entities.push(entity_commands.id());
         mesh_handles.push(mesh_handle);
     }
 

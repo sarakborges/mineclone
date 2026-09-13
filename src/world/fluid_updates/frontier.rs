@@ -19,21 +19,13 @@ pub(super) fn enqueue_loaded_fluid_frontier(
     world: &VoxelWorld,
     coord: IVec3,
 ) {
-    // Pristine worldgen fluid is already rasterized deterministically on both
-    // sides of a chunk boundary. Treating every generated river/lake/ocean cell
-    // as an active runtime source made natural water spread beyond its intended
-    // hydrology footprint as soon as a chunk entered streaming range.
-    if world.is_chunk_dirty(coord) {
-        enqueue_chunk_spread_targets(pending, world, coord);
-    }
+    // Generated hydrology still needs to enter the runtime solver for exposed
+    // drops, waterfalls and newly loaded boundaries. Physical river/lake banks
+    // contain the generated footprint; chunk dirtiness must not disable flow.
+    enqueue_chunk_spread_targets(pending, world, coord);
 
-    // Dirty neighbors can contain player-created or previously simulated fluid
-    // that really does need to continue across a newly loaded boundary.
     for offset in CARDINAL_NEIGHBORS {
-        let neighbor = coord + offset;
-        if world.is_chunk_dirty(neighbor) {
-            enqueue_neighbor_boundary_spread_targets(pending, world, neighbor, -offset);
-        }
+        enqueue_neighbor_boundary_spread_targets(pending, world, coord + offset, -offset);
     }
 }
 
@@ -48,6 +40,9 @@ fn enqueue_chunk_spread_targets(
     let Some(chunk) = world.chunk(coord) else {
         return;
     };
+    if !chunk.has_fluid() {
+        return;
+    }
 
     let origin = coord * CHUNK_SIZE as i32;
 
@@ -81,6 +76,9 @@ fn enqueue_neighbor_boundary_spread_targets(
     let Some(chunk) = world.chunk(coord) else {
         return;
     };
+    if !chunk.has_fluid() {
+        return;
+    }
 
     let size = CHUNK_SIZE as i32;
     let origin = coord * size;

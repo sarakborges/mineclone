@@ -35,6 +35,8 @@ pub struct DimensionBiome {
     pub weight: f32,
     #[serde(default)]
     pub size: Option<DimensionBiomeSize>,
+    #[serde(default)]
+    pub avoid_near: Vec<String>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -136,6 +138,32 @@ impl DimensionDefinition {
             "dimension {} must define at least one regional surface biome with positive weight",
             self.id
         );
+
+        for entry in &self.biomes {
+            let mut avoided = HashSet::new();
+            for avoided_id in &entry.avoid_near {
+                assert!(
+                    avoided.insert(avoided_id.as_str()),
+                    "dimension {} biome {} avoidNear cannot contain duplicates: {}",
+                    self.id,
+                    entry.id,
+                    avoided_id
+                );
+                assert!(
+                    avoided_id != &entry.id,
+                    "dimension {} biome {} cannot avoid itself",
+                    self.id,
+                    entry.id
+                );
+                assert!(
+                    self.biomes.iter().any(|candidate| candidate.id == *avoided_id),
+                    "dimension {} biome {} avoidNear references missing biome: {}",
+                    self.id,
+                    entry.id,
+                    avoided_id
+                );
+            }
+        }
 
         for (field, biome_id) in [
             ("hydrology.oceanBiome", self.hydrology.ocean_biome.as_deref()),
