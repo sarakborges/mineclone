@@ -19,16 +19,18 @@ use self::{
     propagation::{relax, relax_budgeted},
     queue::LightingQueue,
 };
-use super::{coordinates::chunk_origin, world::VoxelWorld};
+use super::{coordinates::chunk_origin, light::VoxelLight, world::VoxelWorld};
 
 #[derive(Resource, Default)]
 pub(crate) struct PendingLightingUpdates {
     queue: LightingQueue,
+    emission_edit_centers: HashSet<IVec3>,
 }
 
 impl PendingLightingUpdates {
     pub(crate) fn enqueue_voxel_edit(&mut self, position: IVec3) {
         self.queue.enqueue_with_neighbors_priority(position);
+        self.emission_edit_centers.insert(position);
     }
 
     pub(crate) fn enqueue_chunk_unloads(&mut self, unloaded: &[IVec3]) {
@@ -53,8 +55,46 @@ impl PendingLightingUpdates {
         }
     }
 
+    fn enqueue_emission_edit_volumes(&mut self, world: &VoxelWorld, blocks: &BlockRegistry) {
+        let centers = std::mem::take(&mut self.emission_edit_centers);
+        let radius = VoxelLight::MAX_LEVEL as i32;
+
+        for center in centers {
+            let is_emitter = world
+                .block_id_at(center)
+                .and_then(|block_id| blocks.get(block_id))
+                .is_some_and(|block| block.light_emission > 0);
+            if !is_emitter {
+                continue;
+            }
+
+            // A source color change can leave stale RGB channels mutually
+            // supporting one another in the incremental field. Re-evaluate the
+            // complete maximum Manhattan footprint of the source so recoloring an
+            // existing emitter converges immediately instead of waiting for a
+            // later geometry edit to disturb the old field.
+            for y in -radius..=radius {
+                let y_cost = y.abs();
+                for z in -radius..=radius {
+                    let yz_cost = y_cost + z.abs();
+                    if yz_cost > radius {
+                        continue;
+                    }
+
+                    let x_span = radius - yz_cost;
+                    for x in -x_span..=x_span {
+                        self.queue.enqueue(center + IVec3::new(x, y, z));
+                    }
+                }
+            }
+
+            self.queue.enqueue_with_neighbors_priority(center);
+        }
+    }
+
     pub(crate) fn clear(&mut self) {
         self.queue = LightingQueue::default();
+        self.emission_edit_centers.clear();
     }
 }
 
@@ -66,6 +106,7 @@ pub(crate) fn process_pending_lighting(
     secondary_properties: &SecondaryPropertyRegistry,
     max_voxels: usize,
 ) -> HashSet<IVec3> {
+    pending.enqueue_emission_edit_volumes(world, blocks);
     relax_budgeted(
         world,
         blocks,
@@ -125,6 +166,7 @@ fn relight_after_voxel_edit(
     let secondary_properties = SecondaryPropertyRegistry::default();
     let mut pending = PendingLightingUpdates::default();
     pending.enqueue_voxel_edit(position);
+    pending.enqueue_emission_edit_volumes(world, blocks);
     drop(relax(
         world,
         blocks,

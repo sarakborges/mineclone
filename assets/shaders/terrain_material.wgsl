@@ -182,10 +182,11 @@ fn fragment(
 
     // Vertex color RGB carries normalized block-light RGB directly. Keeping the
     // channels linear here lets rasterization blend different light colors
-    // smoothly across each face instead of interpolating a hue direction and a
-    // separate magnitude.
+    // smoothly across each face.
     let block_levels = clamp(in.color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
     let block_light = pow(block_levels, vec3<f32>(BLOCK_LIGHT_GAMMA));
+    let block_peak = max(max(block_light.r, block_light.g), block_light.b);
+    let block_hue = block_light / max(block_peak, 0.001);
 
 #ifdef PREPASS_PIPELINE
     let sun_visibility = 1.0;
@@ -202,12 +203,14 @@ fn fragment(
 
     let shadowed_sky_light = clamp(sky_light * sun_visibility, 0.0, 1.0);
     let sky_local_light = mix(AMBIENT_FLOOR, 1.0, shadowed_sky_light);
-    // Block light is an additive local contribution rather than competing with
-    // skylight through max(). This avoids hard thresholds where a colored light
-    // abruptly disappears as soon as skylight becomes the larger channel.
+    let block_strength = block_peak * BLOCK_LIGHT_STRENGTH;
+    // Strong block light owns the local hue. White skylight is progressively
+    // suppressed as block light grows instead of being added on top until the
+    // tone mapper washes red+blue mixtures toward white.
+    let sky_weight = 1.0 - clamp(block_strength, 0.0, 1.0);
     let local_light = (
-        vec3<f32>(sky_local_light)
-            + block_light * BLOCK_LIGHT_STRENGTH
+        vec3<f32>(sky_local_light * sky_weight)
+            + block_hue * block_strength
     ) * ambient_occlusion;
 
     var base_rgb = texel.rgb;

@@ -7,6 +7,7 @@ use crate::content::{
 use crate::voxel::{light::VoxelLight, world::VoxelWorld};
 
 const DYED_PROPERTY_ID: &str = "dyed";
+const DYE_LIGHT_SATURATION_GAMMA: f32 = 1.85;
 
 pub(super) fn medium_dampening(
     world: &VoxelWorld,
@@ -52,13 +53,20 @@ pub(super) fn block_emission(
 
     let peak = dye.color.r.max(dye.color.g).max(dye.color.b);
     if peak <= f32::EPSILON {
+        // Light fallback is always white, including invalid/black dye colors.
         return [level; 3];
     }
 
+    let strengthen = |channel: f32| {
+        (channel / peak)
+            .clamp(0.0, 1.0)
+            .powf(DYE_LIGHT_SATURATION_GAMMA)
+    };
+
     [
-        colored_emission_channel(level, dye.color.r / peak),
-        colored_emission_channel(level, dye.color.g / peak),
-        colored_emission_channel(level, dye.color.b / peak),
+        colored_emission_channel(level, strengthen(dye.color.r)),
+        colored_emission_channel(level, strengthen(dye.color.g)),
+        colored_emission_channel(level, strengthen(dye.color.b)),
     ]
 }
 
