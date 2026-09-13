@@ -20,6 +20,22 @@ struct BlockModelMaterialExtension {
 @group(#{MATERIAL_BIND_GROUP}) @binding(100)
 var<uniform> block_model_material: BlockModelMaterialExtension;
 
+const TINT_LUMINANCE_WEIGHTS: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
+
+fn apply_layer_tint(source: vec3<f32>, tint: vec3<f32>) -> vec3<f32> {
+    let source_luma = max(dot(source, TINT_LUMINANCE_WEIGHTS), 0.0);
+    let tint_peak = max(max(tint.r, tint.g), max(tint.b, 0.001));
+    let hue = tint / tint_peak;
+    let hue_luma = max(dot(hue, TINT_LUMINANCE_WEIGHTS), 0.001);
+    let luminance_compensation = min(2.0, 1.0 / hue_luma);
+
+    return clamp(
+        vec3<f32>(source_luma) * hue * luminance_compensation * 1.08,
+        vec3<f32>(0.0),
+        vec3<f32>(1.0),
+    );
+}
+
 @fragment
 fn fragment(
     in: VertexOutput,
@@ -27,28 +43,11 @@ fn fragment(
 ) -> FragmentOutput {
     var pbr_input = pbr_input_from_standard_material(in, is_front);
     let base_color = pbr_input.material.base_color;
-    let maximum_channel = max(base_color.r, max(base_color.g, base_color.b));
-    let minimum_channel = min(base_color.r, min(base_color.g, base_color.b));
-    let chroma = maximum_channel - minimum_channel;
 
-    if block_model_material.tint_enabled > 0.5 && chroma <= 0.02 {
+    if block_model_material.tint_enabled > 0.5 {
         let tint = clamp(block_model_material.tint.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
-        let tint_peak = max(max(tint.r, tint.g), max(tint.b, 0.001));
-        let hue = tint / tint_peak;
-        let softened_hue = mix(vec3<f32>(1.0), hue, 0.72);
-        let luminance_weights = vec3<f32>(0.2126, 0.7152, 0.0722);
-        let softened_luma = max(dot(softened_hue, luminance_weights), 0.001);
-        let luminance_compensation = min(1.35, 1.0 / softened_luma);
-
         pbr_input.material.base_color = vec4<f32>(
-            clamp(
-                vec3<f32>(base_color.r)
-                    * softened_hue
-                    * luminance_compensation
-                    * 1.08,
-                vec3<f32>(0.0),
-                vec3<f32>(1.0),
-            ),
+            apply_layer_tint(base_color.rgb, tint),
             base_color.a,
         );
     }
