@@ -27,7 +27,11 @@ pub(super) fn desired_fluid(
     }
 
     if let Some(above) = world.fluid_at(position + IVec3::Y) {
-        return Some(FluidCell::flowing(above.fluid_id, MAX_FLUID_LEVEL));
+        return Some(FluidCell::spreading(
+            above.fluid_id,
+            MAX_FLUID_LEVEL,
+            above.spread_distance(),
+        ));
     }
 
     let target_supported = fluid_has_support(world, position);

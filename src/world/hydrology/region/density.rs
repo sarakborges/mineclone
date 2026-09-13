@@ -171,7 +171,11 @@ fn shore_density_delta(
 }
 
 fn river_shore_normalized_distance(graph_distance: f32) -> f32 {
-    graph_distance / RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE.max(f32::EPSILON)
+    let bank_width = (1.0 - RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE).max(f32::EPSILON);
+    let progress =
+        (graph_distance - RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE) / bank_width;
+
+    1.0 + progress * (LAKE_SHORE_OUTER_DISTANCE - 1.0)
 }
 
 fn shore_strength(distance: f32) -> f32 {
@@ -201,6 +205,14 @@ mod tests {
         assert_eq!(
             river_shore_normalized_distance(RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE),
             1.0
+        );
+    }
+
+    #[test]
+    fn river_feature_edge_maps_to_shared_shore_outer_edge() {
+        assert!(
+            (river_shore_normalized_distance(1.0) - LAKE_SHORE_OUTER_DISTANCE).abs()
+                <= f32::EPSILON
         );
     }
 
