@@ -19,10 +19,21 @@ pub(super) fn enqueue_loaded_fluid_frontier(
     world: &VoxelWorld,
     coord: IVec3,
 ) {
-    enqueue_chunk_spread_targets(pending, world, coord);
+    // Pristine worldgen fluid is already rasterized deterministically on both
+    // sides of a chunk boundary. Treating every generated river/lake/ocean cell
+    // as an active runtime source made natural water spread beyond its intended
+    // hydrology footprint as soon as a chunk entered streaming range.
+    if world.is_chunk_dirty(coord) {
+        enqueue_chunk_spread_targets(pending, world, coord);
+    }
 
+    // Dirty neighbors can contain player-created or previously simulated fluid
+    // that really does need to continue across a newly loaded boundary.
     for offset in CARDINAL_NEIGHBORS {
-        enqueue_neighbor_boundary_spread_targets(pending, world, coord + offset, -offset);
+        let neighbor = coord + offset;
+        if world.is_chunk_dirty(neighbor) {
+            enqueue_neighbor_boundary_spread_targets(pending, world, neighbor, -offset);
+        }
     }
 }
 
