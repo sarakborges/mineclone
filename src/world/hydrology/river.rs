@@ -14,7 +14,7 @@ use self::{
         RiverSelection, build_flow_cache, connected_lake_cells,
         drainage_reaches_water_destination, selected_river_sources,
     },
-    water_bodies::{mountain_spring_body, plunge_pool_for_waterfall, river_head_body},
+    water_bodies::{mountain_spring_body, plunge_pool_for_waterfall},
 };
 use super::{
     constants::{RIVER_BASIN_ESCAPE_RADIUS_CELLS, RIVER_EDGE_MARGIN_CELLS},
@@ -85,13 +85,9 @@ where
                 .get(&cell)
                 .filter(|_| connected_lakes.contains(&cell))
                 .cloned();
-            let head = selection.heads.contains(&cell).then(|| {
-                river_head_body(cell, source, seed, sea_level, water_fluid)
-            });
 
             if let Some(body) = spring
                 .or(lake)
-                .or(head)
                 .filter(|body| water_body_intersects_region(coord, body))
             {
                 water_bodies.push(body);
@@ -249,9 +245,6 @@ where
     let mut upstreams = Vec::new();
     let radius = RIVER_BASIN_ESCAPE_RADIUS_CELLS;
 
-    // Drainage can escape a local basin by several cells. Searching only the
-    // immediate 3x3 neighborhood missed those incoming branches, so the trunk
-    // rule was never applied and they still converged as stars.
     for dz in -radius..=radius {
         for dx in -radius..=radius {
             if dx == 0 && dz == 0 {
