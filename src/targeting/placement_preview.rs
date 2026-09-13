@@ -156,6 +156,8 @@ fn update_placement_preview(
     });
     let Some((block_id, block)) = selected else {
         root.0.set_block_id(None);
+        root.1.translation = Vec3::ZERO;
+        root.1.rotation = Quat::IDENTITY;
         for (_, _, mut visibility) in &mut faces {
             *visibility = Visibility::Hidden;
         }
@@ -163,7 +165,14 @@ fn update_placement_preview(
         return;
     };
 
-    if root.0.set_block_id(Some(block_id)) {
+    let block_changed = root.0.set_block_id(Some(block_id));
+    if block_changed {
+        // The preview is derived from the current target. Never carry a world
+        // position across item selection changes; a valid target below will set a
+        // fresh translation before the preview becomes visible again.
+        root.1.translation = Vec3::ZERO;
+        *root.2 = Visibility::Hidden;
+
         for (face, material_handle, mut visibility) in &mut faces {
             let Some(mut material) = materials.get_mut(&material_handle.0) else {
                 continue;
@@ -190,10 +199,12 @@ fn update_placement_preview(
     root.1.rotation = orientation_rotation(orientation);
 
     let Some(hit) = input.targeted.0 else {
+        root.1.translation = Vec3::ZERO;
         *root.2 = Visibility::Hidden;
         return;
     };
     let Some(voxel) = placement_voxel(hit, &input.world, input.player.translation) else {
+        root.1.translation = Vec3::ZERO;
         *root.2 = Visibility::Hidden;
         return;
     };
