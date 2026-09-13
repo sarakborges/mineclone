@@ -55,19 +55,6 @@ pub(crate) fn maximum_block_model_layers(blocks: &BlockRegistry, face: BlockFace
         .unwrap_or(1)
 }
 
-pub(crate) fn block_model_has_layer(
-    face: BlockFace,
-    layer_index: usize,
-    block: &BlockDefinition,
-) -> bool {
-    let layers = block_face_texture_layers(face, block);
-    if layers.is_empty() {
-        layer_index == 0
-    } else {
-        layer_index < layers.len()
-    }
-}
-
 pub(crate) fn block_face_material_data(
     face: BlockFace,
     layer_index: usize,
@@ -111,10 +98,6 @@ pub(crate) fn block_face_material_data(
 
 pub(crate) fn set_block_model_tint(material: &mut BlockModelMaterial, tint: Color) {
     material.extension.set_tint(tint);
-}
-
-pub(crate) fn set_block_model_dye_tint(material: &mut BlockModelMaterial, tint: Color) {
-    material.extension.set_dye_tint(tint);
 }
 
 pub(crate) fn apply_block_display_shading(
