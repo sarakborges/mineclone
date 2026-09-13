@@ -25,13 +25,29 @@ impl BiomeField {
                 let cell = center + IVec2::new(x, z);
                 let site = surface_site_position(cell, self.surface_site_spacing, self.seed);
                 let distance = warped.distance(site);
-                let candidate_index = select_surface_biome_index(
-                    cell,
-                    site,
-                    &self.surface_biomes,
-                    &self.climate,
-                    self.seed,
-                );
+                let cached = self
+                    .surface_site_biomes
+                    .read()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .get(&cell)
+                    .copied();
+                let candidate_index = cached.unwrap_or_else(|| {
+                    let selected = select_surface_biome_index(
+                        cell,
+                        site,
+                        self.surface_site_spacing,
+                        &self.surface_biomes,
+                        &self.climate,
+                        self.seed,
+                        self.ocean_biome_id.as_deref(),
+                        self.ocean_weight,
+                    );
+                    self.surface_site_biomes
+                        .write()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .insert(cell, selected);
+                    selected
+                });
 
                 if distance < nearest_distance {
                     nearest_distance = distance;
