@@ -7,6 +7,8 @@ mod surface;
 mod visuals;
 mod volume;
 
+use std::{collections::HashMap, sync::RwLock};
+
 use bevy::prelude::*;
 
 use crate::content::{
@@ -31,6 +33,7 @@ pub(super) struct BiomeFieldEntry {
     pub density_modifier: Option<BiomeDensityModifier>,
     pub solid_block: Option<String>,
     pub density_seed: u64,
+    pub avoid_near: Vec<String>,
 }
 
 impl BiomeFieldEntry {
@@ -47,6 +50,9 @@ pub struct BiomeField {
     pub(super) volume_site_spacing: Option<Vec3>,
     pub(super) climate: MacroClimateField,
     pub(super) seed: u64,
+    pub(super) surface_site_biomes: RwLock<HashMap<IVec2, usize>>,
+    pub(super) ocean_biome_id: Option<String>,
+    pub(super) ocean_weight: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -111,6 +117,7 @@ impl BiomeField {
                 density_modifier: biome.density_modifier,
                 solid_block: biome.solid_block.clone(),
                 density_seed: biome_density_seed(seed, &biome.id),
+                avoid_near: dimension_biome.avoid_near.clone(),
             };
 
             match biome.kind {
@@ -148,6 +155,11 @@ impl BiomeField {
         let surface_site_spacing = surface_minimum_spacing(surface_minimum_radius);
         let volume_site_spacing = has_active_volume_biome
             .then_some(volume_minimum_radius * 2.0 + Vec3::splat(VOLUME_SITE_GAP));
+        let ocean_biome_id = dimension.hydrology.ocean_biome.clone();
+        let ocean_weight = ocean_biome_id
+            .as_deref()
+            .map(|id| dimension.biome_weight(id))
+            .unwrap_or(0.0);
 
         Self {
             surface_biomes,
@@ -156,6 +168,9 @@ impl BiomeField {
             volume_site_spacing,
             climate: MacroClimateField::new(seed),
             seed,
+            surface_site_biomes: RwLock::new(HashMap::new()),
+            ocean_biome_id,
+            ocean_weight,
         }
     }
 
