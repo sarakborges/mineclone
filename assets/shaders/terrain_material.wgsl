@@ -25,6 +25,7 @@
 struct TerrainMaterialExtension {
     sky_light_factor: f32,
     fluid_animation_factor: f32,
+    tint_enabled: f32,
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(100)
@@ -34,6 +35,8 @@ const AMBIENT_FLOOR: f32 = 0.055;
 const LIGHT_GAMMA: f32 = 1.35;
 const SUN_AMBIENT_SHARE: f32 = 0.62;
 const DYNAMIC_LIGHT_SCALE: f32 = 0.08;
+const DYE_VERTEX_COLOR_MARKER: f32 = 2.0;
+const DYE_MODE_THRESHOLD: f32 = 1.5;
 
 #ifndef PREPASS_PIPELINE
 fn directional_sun_visibility(in: VertexOutput) -> f32 {
@@ -146,7 +149,18 @@ fn fragment(
         pbr_bindings::base_color_sampler,
         in.uv,
     );
-    let tint = clamp(in.color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+    let encoded_tint = in.color.rgb;
+    let dye_paint = min(encoded_tint.r, min(encoded_tint.g, encoded_tint.b))
+        >= DYE_MODE_THRESHOLD;
+    var tint = clamp(encoded_tint, vec3<f32>(0.0), vec3<f32>(1.0));
+    if dye_paint {
+        tint = clamp(
+            encoded_tint - vec3<f32>(DYE_VERTEX_COLOR_MARKER),
+            vec3<f32>(0.0),
+            vec3<f32>(1.0),
+        );
+    }
+    let tint_enabled = terrain_material_extension.tint_enabled > 0.5;
     let ambient_occlusion = clamp(in.color.a, 0.0, 1.0);
     let sky_level = clamp(in.uv_b.x, 0.0, 1.0);
     let block_level = clamp(in.uv_b.y, 0.0, 1.0);
@@ -172,13 +186,29 @@ fn fragment(
     let maximum_channel = max(texel.r, max(texel.g, texel.b));
     let minimum_channel = min(texel.r, min(texel.g, texel.b));
     let chroma = maximum_channel - minimum_channel;
+    let luminance_weights = vec3<f32>(0.2126, 0.7152, 0.0722);
 
     var base_rgb = texel.rgb;
-    if chroma <= 0.02 {
+    if tint_enabled && dye_paint {
+        let source_luma = dot(texel.rgb, luminance_weights);
+        let tint_peak = max(max(tint.r, tint.g), max(tint.b, 0.001));
+        let hue = tint / tint_peak;
+        let painted_hue = mix(vec3<f32>(1.0), hue, 0.96);
+        let painted_luma = max(dot(painted_hue, luminance_weights), 0.001);
+        let luminance_compensation = min(1.35, 1.0 / painted_luma);
+
+        base_rgb = clamp(
+            vec3<f32>(source_luma)
+                * painted_hue
+                * luminance_compensation
+                * 1.08,
+            vec3<f32>(0.0),
+            vec3<f32>(1.0),
+        );
+    } else if tint_enabled && chroma <= 0.02 {
         let tint_peak = max(max(tint.r, tint.g), max(tint.b, 0.001));
         let hue = tint / tint_peak;
         let softened_hue = mix(vec3<f32>(1.0), hue, 0.72);
-        let luminance_weights = vec3<f32>(0.2126, 0.7152, 0.0722);
         let softened_luma = max(dot(softened_hue, luminance_weights), 0.001);
         let luminance_compensation = min(1.35, 1.0 / softened_luma);
 
