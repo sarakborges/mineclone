@@ -4,12 +4,30 @@
   "category": "light_sources",
   "secondaryProperties": ["dyed"],
   "textures": {
-    "top": [{ "texture": "textures/blocks/lamp.png", "dyable": true }],
-    "bottom": [{ "texture": "textures/blocks/lamp.png", "dyable": true }],
-    "left": [{ "texture": "textures/blocks/lamp.png", "dyable": true }],
-    "right": [{ "texture": "textures/blocks/lamp.png", "dyable": true }],
-    "front": [{ "texture": "textures/blocks/lamp.png", "dyable": true }],
-    "back": [{ "texture": "textures/blocks/lamp.png", "dyable": true }]
+    "top": [
+      { "texture": "textures/blocks/lamp/base.png", "dyable": true },
+      { "texture": "textures/blocks/lamp/frame.png", "dyable": false }
+    ],
+    "bottom": [
+      { "texture": "textures/blocks/lamp/base.png", "dyable": true },
+      { "texture": "textures/blocks/lamp/frame.png", "dyable": false }
+    ],
+    "left": [
+      { "texture": "textures/blocks/lamp/base.png", "dyable": true },
+      { "texture": "textures/blocks/lamp/frame.png", "dyable": false }
+    ],
+    "right": [
+      { "texture": "textures/blocks/lamp/base.png", "dyable": true },
+      { "texture": "textures/blocks/lamp/frame.png", "dyable": false }
+    ],
+    "front": [
+      { "texture": "textures/blocks/lamp/base.png", "dyable": true },
+      { "texture": "textures/blocks/lamp/frame.png", "dyable": false }
+    ],
+    "back": [
+      { "texture": "textures/blocks/lamp/base.png", "dyable": true },
+      { "texture": "textures/blocks/lamp/frame.png", "dyable": false }
+    ]
   },
   "rotateTexture": { "top": false, "bottom": false, "left": false, "right": false, "front": false, "back": false },
   "lightEmission": 15,
