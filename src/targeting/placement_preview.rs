@@ -7,7 +7,7 @@ use crate::{
     rendering::{
         block_model::{
             BlockModel, BlockModelMaterials, BlockModelMeshes, block_face_material_data,
-            set_block_model_tint,
+            maximum_block_model_layers, set_block_model_tint,
         },
         block_model_material::BlockModelMaterial,
         block_tint::block_tint_at,
@@ -47,6 +47,7 @@ struct PlacementPreviewRoot;
 #[derive(Component)]
 struct PlacementPreviewFace {
     face: BlockFace,
+    layer_index: usize,
 }
 
 pub struct PlacementPreviewPlugin;
@@ -67,7 +68,7 @@ fn spawn_placement_preview(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     block_meshes: Res<BlockModelMeshes>,
-    block_materials: Res<BlockModelMaterials>,
+    mut block_materials: ResMut<BlockModelMaterials>,
     mut materials: ResMut<Assets<BlockModelMaterial>>,
     blocks: Res<BlockRegistry>,
     hotbar: Res<PlayerHotbar>,
@@ -95,23 +96,34 @@ fn spawn_placement_preview(
         ))
         .with_children(|preview| {
             for &face in block_model.faces() {
-                let material = block_materials.preview_for_face(face);
-                let Some(mut face_material) = materials.get_mut(&material) else {
-                    continue;
-                };
-                *face_material = block_face_material_data(
-                    face,
-                    block,
-                    &asset_server,
-                    block_model.opacity(),
-                );
+                let layer_count = maximum_block_model_layers(&blocks, face);
+                let layer_materials =
+                    block_materials.preview_for_face(face, layer_count, &mut materials);
 
-                preview.spawn((
-                    PlacementPreviewFace { face },
-                    Mesh3d(block_meshes.world_face(face)),
-                    MeshMaterial3d(material),
-                    NotShadowCaster,
-                ));
+                for (layer_index, material) in layer_materials.into_iter().enumerate() {
+                    let visibility = if let Some(face_material) = block_face_material_data(
+                        face,
+                        layer_index,
+                        block,
+                        &asset_server,
+                        block_model.opacity(),
+                    ) {
+                        if let Some(mut material_asset) = materials.get_mut(&material) {
+                            *material_asset = face_material;
+                        }
+                        Visibility::Visible
+                    } else {
+                        Visibility::Hidden
+                    };
+
+                    preview.spawn((
+                        PlacementPreviewFace { face, layer_index },
+                        Mesh3d(block_meshes.world_face(face)),
+                        MeshMaterial3d(material),
+                        visibility,
+                        NotShadowCaster,
+                    ));
+                }
             }
         });
 }
@@ -133,7 +145,11 @@ fn update_placement_preview(
     input: PlacementPreviewInput,
     mut materials: ResMut<Assets<BlockModelMaterial>>,
     mut root: PreviewRoot,
-    faces: Query<(&PlacementPreviewFace, &MeshMaterial3d<BlockModelMaterial>)>,
+    mut faces: Query<(
+        &PlacementPreviewFace,
+        &MeshMaterial3d<BlockModelMaterial>,
+        &mut Visibility,
+    )>,
 ) {
     let selected_slot = input.hotbar.selected_slot();
     let Some(block_id) = input.hotbar.item_at(selected_slot) else {
@@ -146,17 +162,23 @@ fn update_placement_preview(
     };
 
     if root.0.set_block_id(Some(block_id)) {
-        for (face, material_handle) in &faces {
+        for (face, material_handle, mut visibility) in &mut faces {
             let Some(mut material) = materials.get_mut(&material_handle.0) else {
                 continue;
             };
 
-            *material = block_face_material_data(
+            if let Some(face_material) = block_face_material_data(
                 face.face,
+                face.layer_index,
                 block,
                 &input.asset_server,
                 root.0.opacity(),
-            );
+            ) {
+                *material = face_material;
+                *visibility = Visibility::Visible;
+            } else {
+                *visibility = Visibility::Hidden;
+            }
         }
     }
 
@@ -177,7 +199,7 @@ fn update_placement_preview(
     let tint_position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
     let tint = block_tint_at(block.tint, tint_position, &input.biome_field, &input.biomes);
 
-    for (_, material_handle) in &faces {
+    for (_, material_handle, _) in &mut faces {
         let Some(mut material) = materials.get_mut(&material_handle.0) else {
             continue;
         };
