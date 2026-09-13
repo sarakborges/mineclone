@@ -19,7 +19,6 @@ const MOUNTAIN_SPRING_CHANCE: f32 = 0.42;
 
 pub(super) struct RiverSelection {
     pub(super) channels: HashSet<IVec2>,
-    pub(super) heads: HashSet<IVec2>,
     pub(super) springs: HashSet<IVec2>,
     pub(super) lakes: HashMap<IVec2, WaterBody>,
 }
@@ -165,7 +164,6 @@ where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
     let mut channels = HashSet::new();
-    let mut heads = HashSet::new();
     let mut springs = HashSet::new();
     let mut lakes = HashMap::new();
     let ocean_threshold = network.ocean_threshold();
@@ -192,7 +190,6 @@ where
                 lake_weight,
             ) {
                 channels.insert(cell);
-                heads.insert(cell);
                 lakes.insert(cell, lake);
             }
         }
@@ -203,9 +200,6 @@ where
 
         if flow >= river_flow_threshold {
             channels.insert(cell);
-            if is_river_head(cell, flow_cache, river_flow_threshold, network) {
-                heads.insert(cell);
-            }
             continue;
         }
 
@@ -219,18 +213,15 @@ where
             network,
         ) {
             channels.insert(cell);
-            heads.insert(cell);
             springs.insert(cell);
         }
     }
 
     keep_only_complete_downstream_paths(&mut channels, &lakes, network);
-    heads.retain(|cell| channels.contains(cell));
     springs.retain(|cell| channels.contains(cell));
 
     RiverSelection {
         channels,
-        heads,
         springs,
         lakes,
     }
@@ -242,36 +233,6 @@ fn river_flow_threshold(river_weight: f32) -> u32 {
     }
 
     ((RIVER_MINIMUM_FLOW as f32 / river_weight.max(0.15)).ceil() as u32).max(RIVER_MINIMUM_FLOW)
-}
-
-fn is_river_head<F>(
-    cell: IVec2,
-    flow_cache: &HashMap<IVec2, u32>,
-    river_flow_threshold: u32,
-    network: &mut DrainageNetwork<'_, F>,
-) -> bool
-where
-    F: FnMut(Vec2) -> HydrologySurfaceSample,
-{
-    let radius = RIVER_BASIN_ESCAPE_RADIUS_CELLS;
-
-    for dz in -radius..=radius {
-        for dx in -radius..=radius {
-            if dx == 0 && dz == 0 {
-                continue;
-            }
-
-            let upstream = cell + IVec2::new(dx, dz);
-            if flow_cache.get(&upstream).copied().unwrap_or(0) < river_flow_threshold {
-                continue;
-            }
-            if network.downstream_cell(upstream) == Some(cell) {
-                return false;
-            }
-        }
-    }
-
-    true
 }
 
 fn is_mountain_spring<F>(
