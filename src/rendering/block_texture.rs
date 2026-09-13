@@ -1,22 +1,34 @@
 use bevy::prelude::*;
 
-use crate::{content::block::BlockDefinition, voxel::block_face::BlockFace};
+use crate::{
+    content::block::{BlockDefinition, BlockTextureLayer},
+    voxel::block_face::BlockFace,
+};
 
-pub(crate) fn block_face_texture(face: BlockFace, block: &BlockDefinition) -> Option<&str> {
-    let texture = match face {
-        BlockFace::Right => block.textures.right.as_str(),
-        BlockFace::Left => block.textures.left.as_str(),
-        BlockFace::Top => block.textures.top.as_str(),
-        BlockFace::Bottom => block.textures.bottom.as_str(),
-        BlockFace::Front => block.textures.front.as_str(),
-        BlockFace::Back => block.textures.back.as_str(),
+pub(crate) fn block_face_texture_layers<'a>(
+    face: BlockFace,
+    block: &'a BlockDefinition,
+) -> &'a [BlockTextureLayer] {
+    let layers = match face {
+        BlockFace::Right => block.textures.right.as_slice(),
+        BlockFace::Left => block.textures.left.as_slice(),
+        BlockFace::Top => block.textures.top.as_slice(),
+        BlockFace::Bottom => block.textures.bottom.as_slice(),
+        BlockFace::Front => block.textures.front.as_slice(),
+        BlockFace::Back => block.textures.back.as_slice(),
     };
 
-    if !texture.is_empty() {
-        Some(texture)
+    if layers.is_empty() {
+        first_block_texture_layers(block)
     } else {
-        first_block_texture(block)
+        layers
     }
+}
+
+pub(crate) fn block_face_texture(face: BlockFace, block: &BlockDefinition) -> Option<&str> {
+    block_face_texture_layers(face, block)
+        .first()
+        .map(|layer| layer.texture.as_str())
 }
 
 pub(crate) fn load_block_face_texture(
@@ -27,15 +39,23 @@ pub(crate) fn load_block_face_texture(
     block_face_texture(face, block).map(|texture| asset_server.load(texture.to_owned()))
 }
 
-fn first_block_texture(block: &BlockDefinition) -> Option<&str> {
+pub(crate) fn load_block_texture_layer(
+    asset_server: &AssetServer,
+    layer: &BlockTextureLayer,
+) -> Handle<Image> {
+    asset_server.load(layer.texture.clone())
+}
+
+fn first_block_texture_layers(block: &BlockDefinition) -> &[BlockTextureLayer] {
     [
-        block.textures.top.as_str(),
-        block.textures.front.as_str(),
-        block.textures.right.as_str(),
-        block.textures.left.as_str(),
-        block.textures.back.as_str(),
-        block.textures.bottom.as_str(),
+        block.textures.top.as_slice(),
+        block.textures.front.as_slice(),
+        block.textures.right.as_slice(),
+        block.textures.left.as_slice(),
+        block.textures.back.as_slice(),
+        block.textures.bottom.as_slice(),
     ]
     .into_iter()
-    .find(|texture| !texture.is_empty())
+    .find(|layers| !layers.is_empty())
+    .unwrap_or_default()
 }
