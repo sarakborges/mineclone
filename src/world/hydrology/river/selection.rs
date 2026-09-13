@@ -13,9 +13,9 @@ use super::super::{
     types::{HydrologySurfaceSample, WaterBody},
 };
 
-const MOUNTAIN_SPRING_MINIMUM_HEIGHT_ABOVE_SEA: f32 = 24.0;
-const MOUNTAIN_SPRING_MINIMUM_LOCAL_RELIEF: f32 = 5.0;
-const MOUNTAIN_SPRING_CHANCE: f32 = 0.52;
+const MOUNTAIN_SPRING_MINIMUM_HEIGHT_ABOVE_SEA: f32 = 36.0;
+const MOUNTAIN_SPRING_MINIMUM_LOCAL_RELIEF: f32 = 10.0;
+const MOUNTAIN_SPRING_CHANCE: f32 = 0.42;
 
 pub(super) struct RiverSelection {
     pub(super) channels: HashSet<IVec2>,
