@@ -226,7 +226,6 @@ pub(super) fn spawn_viewmodel(
 
 pub(super) fn sync_held_block(
     content: ViewModelContent,
-    item_switch: Res<ViewModelItemSwitch>,
     player: Single<&Transform, With<GameplayCamera>>,
     mut materials: ResMut<Assets<BlockModelMaterial>>,
     mut roots: HeldBlockRootQuery,
@@ -239,9 +238,8 @@ pub(super) fn sync_held_block(
         Without<HeldBlockRoot>,
     >,
 ) {
-    let selected_block_id = item_switch.displayed_block_id();
     let selected_slot = content.hotbar.selected_slot();
-    let hotbar_block_id = content
+    let selected_block_id = content
         .hotbar
         .item_at(selected_slot)
         .filter(|block_id| content.blocks.get(block_id).is_some());
@@ -262,13 +260,9 @@ pub(super) fn sync_held_block(
             .blocks
             .get(block_id)
             .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
-        let orientation = if Some(block_id) == hotbar_block_id {
-            content
-                .placement_orientation
-                .for_block(selected_slot, block)
-        } else {
-            block.default_orientation()
-        };
+        let orientation = content
+            .placement_orientation
+            .for_block(selected_slot, block);
         held_transform.rotation = held_block_transform(orientation).rotation;
 
         let tint = block_tint_at(
