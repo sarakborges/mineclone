@@ -102,7 +102,7 @@ pub(super) fn enqueue_remesh(position: IVec3, remesh_queue: &mut ChunkRemeshQueu
     for offset in CARDINAL_NEIGHBORS {
         let neighbor = chunk_coord_from_world(position + offset);
         if neighbor != center {
-            remesh_queue.enqueue(neighbor);
+            remesh_queue.enqueue_priority(neighbor);
         }
     }
 }
