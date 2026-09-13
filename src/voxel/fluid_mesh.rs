@@ -60,7 +60,8 @@ where
                     if face == BlockFace::Bottom && world_voxel.y <= 0 {
                         continue;
                     }
-                    if !face_is_exposed(world, world_voxel + face.offset(), cell.fluid_id) {
+                    let neighbor_position = world_voxel + face.offset();
+                    if !face_is_exposed(world, neighbor_position, cell.fluid_id, face) {
                         continue;
                     }
 
@@ -169,7 +170,19 @@ fn fluid_corner_height(
     if count > 0.0 { total / count } else { 0.0 }
 }
 
-fn face_is_exposed(world: &VoxelWorld, position: IVec3, fluid_id: FluidId) -> bool {
+fn face_is_exposed(
+    world: &VoxelWorld,
+    position: IVec3,
+    fluid_id: FluidId,
+    face: BlockFace,
+) -> bool {
+    // Transparent side and bottom faces against an unloaded chunk render as
+    // temporary curtains. The top surface remains visible while streaming; once
+    // the neighbor arrives, the normal neighbor remesh restores any real edge.
+    if !world.is_loaded_at(position) {
+        return face == BlockFace::Top;
+    }
+
     if world.is_solid(position) {
         return false;
     }
