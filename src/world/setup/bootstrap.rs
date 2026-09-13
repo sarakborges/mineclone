@@ -20,8 +20,10 @@ use crate::world::{
     chunk_rendering::{FluidMaterials, TerrainMaterials},
     dimension::CurrentDimension,
     game_rules::GameRules,
+    generation_region::generation_region_coord,
+    hydrology::{HydrologySurfaceSample, HydrologyWaterKind},
     render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
-    terrain::surface_height,
+    terrain::{surface_height, surface_height_from_sample},
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -85,6 +87,23 @@ pub(in crate::world) fn begin_world_loading(
         .validate_references(&dimension.id, biomes, blocks, fluids);
 
     let biome_field = BiomeField::from_dimension(dimension, biomes, inputs.seed.0);
+    let coast_weight = dimension
+        .hydrology
+        .coast_biome
+        .as_deref()
+        .map_or(1.0, |biome_id| dimension.biome_weight(biome_id));
+    let ocean_weight = dimension
+        .hydrology
+        .ocean_biome
+        .as_deref()
+        .map_or(1.0, |biome_id| dimension.biome_weight(biome_id));
+    let feature_fields = WorldFeatureFields::new(
+        inputs.seed.0,
+        dimension.sea_level,
+        dimension.hydrology.clone(),
+        coast_weight,
+        ocean_weight,
+    );
     let (roughness, metallic) = average_terrain_material(dimension, biomes);
     let terrain_materials = TerrainMaterials::from_registry(
         blocks,
@@ -99,7 +118,7 @@ pub(in crate::world) fn begin_world_loading(
             .map(|position| IVec2::new(position.x.floor() as i32, position.z.floor() as i32))
             .unwrap_or(DEFAULT_SPAWN_COLUMN)
     } else {
-        find_initial_spawn_column(dimension, biomes, &biome_field)
+        find_initial_spawn_column(dimension, biomes, &biome_field, &feature_fields)
     };
     let initial_center = if *inputs.load_mode == WorldLoadMode::Load {
         save.player_position(LOCAL_PLAYER_ID)
@@ -147,25 +166,8 @@ pub(in crate::world) fn begin_world_loading(
         }
     }
 
-    let coast_weight = dimension
-        .hydrology
-        .coast_biome
-        .as_deref()
-        .map_or(1.0, |biome_id| dimension.biome_weight(biome_id));
-    let ocean_weight = dimension
-        .hydrology
-        .ocean_biome
-        .as_deref()
-        .map_or(1.0, |biome_id| dimension.biome_weight(biome_id));
-
     commands.insert_resource(biome_field);
-    commands.insert_resource(WorldFeatureFields::new(
-        inputs.seed.0,
-        dimension.sea_level,
-        dimension.hydrology.clone(),
-        coast_weight,
-        ocean_weight,
-    ));
+    commands.insert_resource(feature_fields);
     commands.insert_resource(terrain_materials);
     commands.insert_resource(fluid_materials);
     commands.insert_resource(WorldLoadingState {
@@ -196,9 +198,8 @@ fn find_initial_spawn_column(
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
+    feature_fields: &WorldFeatureFields,
 ) -> IVec2 {
-    let ocean_biome = dimension.hydrology.ocean_biome.as_deref();
-
     for radius in 0..=SPAWN_SEARCH_RADIUS_STEPS {
         for z_step in -radius..=radius {
             for x_step in -radius..=radius {
@@ -211,13 +212,13 @@ fn find_initial_spawn_column(
                         x_step * SPAWN_SEARCH_STEP_BLOCKS,
                         z_step * SPAWN_SEARCH_STEP_BLOCKS,
                     );
-                let sample = biome_field.sample_surface(candidate.as_vec2() + Vec2::splat(0.5));
-                if ocean_biome.is_some_and(|ocean| sample.primary_id == ocean) {
-                    continue;
-                }
 
                 let height = surface_height(candidate, dimension, biomes, biome_field);
                 if height <= dimension.sea_level + SPAWN_MINIMUM_HEIGHT_ABOVE_SEA {
+                    continue;
+                }
+
+                if spawn_column_is_ocean(candidate, dimension, biomes, biome_field, feature_fields) {
                     continue;
                 }
 
@@ -230,6 +231,54 @@ fn find_initial_spawn_column(
         "could not find a non-ocean spawn column within {} blocks",
         SPAWN_SEARCH_RADIUS_STEPS * SPAWN_SEARCH_STEP_BLOCKS
     );
+}
+
+fn spawn_column_is_ocean(
+    column: IVec2,
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+    feature_fields: &WorldFeatureFields,
+) -> bool {
+    if dimension.hydrology.ocean_biome.is_none() {
+        return false;
+    }
+
+    let chunk_coord = IVec3::new(
+        column.x.div_euclid(CHUNK_SIZE as i32),
+        0,
+        column.y.div_euclid(CHUNK_SIZE as i32),
+    );
+    let region_coord = generation_region_coord(chunk_coord);
+    let region = feature_fields.region_with_hydrology(region_coord, |hydrology| {
+        hydrology.region_from_macro_terrain(region_coord.xz(), |position| {
+            let surface_position = position.floor().as_ivec2();
+            let surface = biome_field.sample_surface(surface_position.as_vec2() + Vec2::splat(0.5));
+            let elevation = surface_height_from_sample(
+                surface_position,
+                dimension,
+                biomes,
+                biome_field.seed(),
+                &surface,
+            ) as f32;
+            let continentalness = biome_field.climate_at(position).continentalness;
+            let primary = biomes
+                .get(surface.primary_id)
+                .unwrap_or_else(|| panic!("missing biome definition: {}", surface.primary_id));
+
+            HydrologySurfaceSample {
+                elevation,
+                continentalness,
+                biome_hydrology: primary.hydrology,
+            }
+        })
+    });
+    let position = column.as_vec2() + Vec2::splat(0.5);
+
+    region
+        .hydrology
+        .water_at(position)
+        .is_some_and(|water| water.kind == HydrologyWaterKind::Ocean)
 }
 
 fn average_terrain_material(dimension: &DimensionDefinition, biomes: &BiomeRegistry) -> (f32, f32) {
