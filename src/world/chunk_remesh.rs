@@ -51,6 +51,25 @@ impl ChunkRemeshQueue {
         }
     }
 
+    pub(crate) fn has_immediate_lighting(&self) -> bool {
+        self.immediate_lighting.len() > 0
+    }
+
+    pub(crate) fn enqueue_lighting_change(&mut self, coord: IVec3) {
+        self.enqueue_priority(coord);
+        if coord.y >= 0 {
+            self.immediate_lighting.enqueue_front(coord);
+        }
+
+        for offset in CARDINAL_NEIGHBORS {
+            let neighbor = coord + offset;
+            self.enqueue_priority(neighbor);
+            if neighbor.y >= 0 {
+                self.immediate_lighting.enqueue_front(neighbor);
+            }
+        }
+    }
+
     pub(crate) fn extend(&mut self, coords: impl IntoIterator<Item = IVec3>) {
         for coord in coords {
             self.enqueue(coord);
@@ -201,5 +220,22 @@ mod tests {
         assert_eq!(queue.pop_immediate_geometry(), Some(coord));
         assert_eq!(queue.pop_immediate_lighting(), Some(coord));
         assert_eq!(queue.pop(), Some(coord));
+    }
+
+    #[test]
+    fn lighting_change_immediately_refreshes_chunk_and_neighbors() {
+        let mut queue = ChunkRemeshQueue::default();
+        let coord = IVec3::new(4, 2, -3);
+        queue.enqueue_lighting_change(coord);
+
+        let mut immediate = Vec::new();
+        while let Some(value) = queue.pop_immediate_lighting() {
+            immediate.push(value);
+        }
+
+        assert!(immediate.contains(&coord));
+        for offset in CARDINAL_NEIGHBORS {
+            assert!(immediate.contains(&(coord + offset)));
+        }
     }
 }

@@ -5,6 +5,7 @@ use super::{
 };
 
 const AO_BRIGHTNESS: [f32; 4] = [1.0, 0.86, 0.72, 0.58];
+const AO_DIAGONAL_EPSILON: f32 = 0.001;
 
 pub(super) struct FaceLighting {
     pub(super) channels: [[f32; 2]; 4],
@@ -79,6 +80,7 @@ pub(super) fn push_lit_quad(
             lighting.ambient_occlusion[index],
         ]
     });
+    let flip_diagonal = should_flip_diagonal(lighting.ambient_occlusion, lighting.block_rgb);
 
     buffer.push_quad(
         vertices,
@@ -87,12 +89,32 @@ pub(super) fn push_lit_quad(
         lighting.channels,
         tint,
         colors,
-        should_flip_diagonal(lighting.ambient_occlusion),
+        flip_diagonal,
     );
 }
 
-fn should_flip_diagonal(ambient_occlusion: [f32; 4]) -> bool {
-    ambient_occlusion[0] + ambient_occlusion[2] > ambient_occlusion[1] + ambient_occlusion[3]
+fn should_flip_diagonal(
+    ambient_occlusion: [f32; 4],
+    block_rgb: [[f32; 3]; 4],
+) -> bool {
+    let ao_balance = ambient_occlusion[0] + ambient_occlusion[2]
+        - ambient_occlusion[1]
+        - ambient_occlusion[3];
+
+    if ao_balance.abs() > AO_DIAGONAL_EPSILON {
+        return ao_balance > 0.0;
+    }
+
+    let diagonal_02 = rgb_distance_squared(block_rgb[0], block_rgb[2]);
+    let diagonal_13 = rgb_distance_squared(block_rgb[1], block_rgb[3]);
+    diagonal_13 < diagonal_02
+}
+
+fn rgb_distance_squared(left: [f32; 3], right: [f32; 3]) -> f32 {
+    let red = left[0] - right[0];
+    let green = left[1] - right[1];
+    let blue = left[2] - right[2];
+    red * red + green * green + blue * blue
 }
 
 fn average_light_levels(world: &VoxelWorld, samples: [IVec3; 4]) -> (f32, [f32; 3]) {
@@ -190,9 +212,33 @@ fn face_basis(face: BlockFace) -> (IVec3, IVec3, IVec3, [(i32, i32); 4]) {
 mod tests {
     use super::should_flip_diagonal;
 
+    const DARK: [f32; 3] = [0.0; 3];
+
     #[test]
     fn chooses_the_lower_error_ao_diagonal() {
-        assert!(should_flip_diagonal([1.0, 0.6, 1.0, 0.6]));
-        assert!(!should_flip_diagonal([0.6, 1.0, 0.6, 1.0]));
+        assert!(should_flip_diagonal(
+            [1.0, 0.6, 1.0, 0.6],
+            [DARK; 4],
+        ));
+        assert!(!should_flip_diagonal(
+            [0.6, 1.0, 0.6, 1.0],
+            [DARK; 4],
+        ));
+    }
+
+    #[test]
+    fn uses_rgb_similarity_when_ao_is_tied() {
+        let red = [1.0, 0.0, 0.0];
+        let blue = [0.0, 0.0, 1.0];
+        let purple = [0.5, 0.0, 0.5];
+
+        assert!(should_flip_diagonal(
+            [1.0; 4],
+            [red, purple, blue, purple],
+        ));
+        assert!(!should_flip_diagonal(
+            [1.0; 4],
+            [purple, red, purple, blue],
+        ));
     }
 }

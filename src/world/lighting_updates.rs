@@ -15,6 +15,7 @@ pub(super) fn process_dynamic_lighting(
     mut lighting: ResMut<PendingLightingUpdates>,
     mut remesh_queue: ResMut<ChunkRemeshQueue>,
 ) {
+    let immediate_refresh = remesh_queue.has_immediate_lighting();
     let changed_chunks = process_pending_lighting(
         &mut world,
         &mut lighting,
@@ -25,8 +26,12 @@ pub(super) fn process_dynamic_lighting(
     );
 
     for coord in changed_chunks {
-        remesh_queue.enqueue_priority(coord);
-        remesh_queue.enqueue_voxel_edit_neighbors(coord);
+        if immediate_refresh {
+            remesh_queue.enqueue_lighting_change(coord);
+        } else {
+            remesh_queue.enqueue_priority(coord);
+            remesh_queue.enqueue_voxel_edit_neighbors(coord);
+        }
     }
 }
 
