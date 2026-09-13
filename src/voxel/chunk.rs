@@ -62,11 +62,8 @@ impl VoxelChunk {
         self.fluids[index(x, y, z)] = fluid;
     }
 
-    pub(crate) fn set_light(&mut self, x: i32, y: i32, z: i32, light: VoxelLight) -> bool {
-        if !in_bounds(x, y, z) {
-            return false;
-        }
-        let index = index(x as usize, y as usize, z as usize);
+    pub(crate) fn set_light(&mut self, x: usize, y: usize, z: usize, light: VoxelLight) -> bool {
+        let index = index(x, y, z);
         if self.light[index] == light {
             return false;
         }
