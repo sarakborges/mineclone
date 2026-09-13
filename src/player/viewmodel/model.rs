@@ -1,5 +1,6 @@
 use bevy::{
     camera::visibility::RenderLayers, ecs::system::SystemParam, light::NotShadowCaster, prelude::*,
+    ui::IsDefaultUiCamera,
 };
 
 use crate::{
@@ -25,7 +26,6 @@ use super::animation::{PlayerViewModel, ViewModelItemSwitch, base_viewmodel_tran
 const ARM_SIZE: Vec3 = Vec3::new(0.23, 0.60, 0.21);
 const HELD_BLOCK_SCALE: f32 = 0.18;
 const VIEW_MODEL_RENDER_LAYER: usize = 1;
-const VIEW_MODEL_FOV_DEGREES: f32 = 70.0;
 
 #[derive(Component)]
 pub(super) struct ViewModelArm;
@@ -128,12 +128,9 @@ pub(super) fn spawn_viewmodel(
                     clear_color: ClearColorConfig::None,
                     ..default()
                 },
-                Projection::from(PerspectiveProjection {
-                    fov: VIEW_MODEL_FOV_DEGREES.to_radians(),
-                    ..default()
-                }),
                 Msaa::Off,
                 RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
+                IsDefaultUiCamera,
             ));
 
             camera
