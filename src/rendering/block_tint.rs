@@ -11,6 +11,7 @@ use crate::{
 };
 
 const DYED_PROPERTY_ID: &str = "dyed";
+const DYE_SATURATION_GAMMA: f32 = 1.85;
 
 pub(crate) fn block_tint_at(
     tint: BlockTint,
@@ -43,8 +44,19 @@ pub(crate) fn secondary_property_dye_tint(
 
     let value_id = cell.secondary_property(DYED_PROPERTY_ID)?;
     let dye = secondary_properties.get(DYED_PROPERTY_ID, value_id)?;
+    let peak = dye.color.r.max(dye.color.g).max(dye.color.b);
 
-    Some(Color::srgb(dye.color.r, dye.color.g, dye.color.b))
+    if peak <= f32::EPSILON {
+        return Some(Color::BLACK);
+    }
+
+    let strengthen = |channel: f32| (channel / peak).clamp(0.0, 1.0).powf(DYE_SATURATION_GAMMA);
+
+    Some(Color::srgb(
+        strengthen(dye.color.r),
+        strengthen(dye.color.g),
+        strengthen(dye.color.b),
+    ))
 }
 
 pub(crate) fn block_vertex_tint(
