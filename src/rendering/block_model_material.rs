@@ -19,6 +19,8 @@ pub(crate) struct BlockModelMaterialExtension {
     tint: Vec4,
     #[uniform(100)]
     tint_enabled: f32,
+    #[uniform(100)]
+    opacity: f32,
 }
 
 impl Default for BlockModelMaterialExtension {
@@ -26,6 +28,7 @@ impl Default for BlockModelMaterialExtension {
         Self {
             tint: Vec4::ONE,
             tint_enabled: 0.0,
+            opacity: 1.0,
         }
     }
 }
@@ -37,6 +40,10 @@ impl BlockModelMaterialExtension {
 
     pub(crate) fn set_tint(&mut self, color: Color) {
         self.tint = color_to_linear_vec4(color);
+    }
+
+    pub(crate) fn set_opacity(&mut self, opacity: f32) {
+        self.opacity = opacity.clamp(0.0, 1.0);
     }
 }
 

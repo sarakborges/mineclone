@@ -15,6 +15,7 @@
 struct BlockModelMaterialExtension {
     tint: vec4<f32>,
     tint_enabled: f32,
+    opacity: f32,
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(100)
@@ -34,6 +35,18 @@ fn apply_layer_tint(source: vec3<f32>, tint: vec3<f32>) -> vec3<f32> {
         vec3<f32>(0.0),
         vec3<f32>(1.0),
     );
+}
+
+fn block_opacity_threshold(position: vec2<f32>) -> f32 {
+    let thresholds = array<f32, 16>(
+        0.0, 8.0, 2.0, 10.0,
+        12.0, 4.0, 14.0, 6.0,
+        3.0, 11.0, 1.0, 9.0,
+        15.0, 7.0, 13.0, 5.0,
+    );
+    let x = u32(floor(position.x)) & 3u;
+    let y = u32(floor(position.y)) & 3u;
+    return (thresholds[y * 4u + x] + 0.5) / 16.0;
 }
 
 @fragment
@@ -56,6 +69,11 @@ fn fragment(
         pbr_input.material,
         pbr_input.material.base_color,
     );
+
+    let opacity = clamp(block_model_material.opacity, 0.0, 1.0);
+    if opacity < 0.999 && opacity <= block_opacity_threshold(in.position.xy) {
+        discard;
+    }
 
 #ifdef PREPASS_PIPELINE
     return deferred_output(in, pbr_input);
