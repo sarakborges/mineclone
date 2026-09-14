@@ -106,9 +106,9 @@ pub(crate) fn generate_chunk(
         return VoxelChunk::empty();
     }
 
+    let structure_allowance = maximum_structure_vertical_chunk_allowance(context.structures);
     let (_, maximum_surface_chunk_y) = chunk_y_bounds(context.dimension, context.biomes);
-    if chunk_coord.y
-        > maximum_surface_chunk_y + maximum_structure_vertical_chunk_allowance(context.structures)
+    if chunk_coord.y > maximum_surface_chunk_y + structure_allowance
         && !context.biomes.has_volume_density_modifiers()
     {
         return VoxelChunk::empty();
@@ -131,7 +131,6 @@ pub(crate) fn generate_chunk(
         .unwrap_or(1)
         .max(context.dimension.sea_level)
         .div_euclid(CHUNK_SIZE as i32);
-    let structure_allowance = maximum_structure_vertical_chunk_allowance(context.structures);
 
     // Most volume modifiers only carve existing terrain. Avoid constructing a
     // hydrology/cave/volume region for chunks that are well above any local
