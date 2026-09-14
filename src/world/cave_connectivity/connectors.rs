@@ -20,6 +20,15 @@ const MAX_TUNNEL_RADIUS: f32 = 11.0;
 
 pub(super) const ANCHOR_SEARCH_MARGIN: f32 = MAX_CONNECTOR_LENGTH;
 
+struct ConnectorBuildInputs<'a> {
+    coord: IVec3,
+    anchors: &'a [Vec3],
+    underground_anchors: &'a [Vec3],
+    water_source_anchors: &'a [Vec3],
+    seed: u64,
+    water_seed: u64,
+}
+
 pub(super) fn build_connector_graph(
     coord: IVec3,
     anchors: &[Vec3],
@@ -36,6 +45,14 @@ pub(super) fn build_connector_graph(
 
     let underground_anchors = normalized_anchors(underground_anchors);
     let water_source_anchors = normalized_anchors(water_source_anchors);
+    let inputs = ConnectorBuildInputs {
+        coord,
+        anchors: &anchors,
+        underground_anchors: &underground_anchors,
+        water_source_anchors: &water_source_anchors,
+        seed,
+        water_seed,
+    };
     let mut graph = FeatureGraph::default();
     let mut connected_pairs = HashSet::new();
     let mut candidates = Vec::new();
@@ -69,17 +86,7 @@ pub(super) fn build_connector_graph(
 
         let pair = ordered_pair(left, right);
         connected_pairs.insert(pair);
-        add_connector_pair(
-            &mut graph,
-            underground_water,
-            coord,
-            &anchors,
-            &underground_anchors,
-            &water_source_anchors,
-            pair,
-            seed,
-            water_seed,
-        );
+        add_connector_pair(&mut graph, underground_water, &inputs, pair);
     }
 
     // Add a small number of nearby alternate routes after connectivity is guaranteed. This keeps
@@ -96,51 +103,35 @@ pub(super) fn build_connector_graph(
         connected_pairs.insert(pair);
         extra_degree[left] += 1;
         extra_degree[right] += 1;
-        add_connector_pair(
-            &mut graph,
-            underground_water,
-            coord,
-            &anchors,
-            &underground_anchors,
-            &water_source_anchors,
-            pair,
-            seed,
-            water_seed,
-        );
+        add_connector_pair(&mut graph, underground_water, &inputs, pair);
     }
 
     graph
 }
 
-#[allow(clippy::too_many_arguments)]
 fn add_connector_pair(
     graph: &mut FeatureGraph,
     underground_water: &mut UndergroundWaterRegion,
-    coord: IVec3,
-    anchors: &[Vec3],
-    underground_anchors: &[Vec3],
-    water_source_anchors: &[Vec3],
+    inputs: &ConnectorBuildInputs<'_>,
     pair: (usize, usize),
-    seed: u64,
-    water_seed: u64,
 ) {
-    let from = anchors[pair.0];
-    let to = anchors[pair.1];
+    let from = inputs.anchors[pair.0];
+    let to = inputs.anchors[pair.1];
     let carries_water = connection_carries_underground_water(
         from,
         to,
-        underground_anchors,
-        water_source_anchors,
-        water_seed,
+        inputs.underground_anchors,
+        inputs.water_source_anchors,
+        inputs.water_seed,
     );
 
     add_connector(
         graph,
         underground_water,
-        coord,
+        inputs.coord,
         from,
         to,
-        seed,
+        inputs.seed,
         carries_water,
     );
 }
