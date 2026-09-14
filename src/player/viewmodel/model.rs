@@ -39,6 +39,11 @@ pub(super) struct HeldBlockFace {
     layer_index: usize,
 }
 
+#[derive(Default)]
+struct HeldBlockVisualCache {
+    tint_cell: Option<IVec2>,
+}
+
 pub(super) type HeldBlockRootQuery<'w, 's> = Query<
     'w,
     's,
@@ -227,6 +232,7 @@ pub(super) fn spawn_viewmodel(
 pub(super) fn sync_held_block(
     content: ViewModelContent,
     player: Single<&Transform, With<GameplayCamera>>,
+    mut cache: Local<HeldBlockVisualCache>,
     mut materials: ResMut<Assets<BlockModelMaterial>>,
     mut roots: HeldBlockRootQuery,
     mut faces: Query<
@@ -238,13 +244,28 @@ pub(super) fn sync_held_block(
         Without<HeldBlockRoot>,
     >,
 ) {
+    let tint_cell = IVec2::new(
+        player.translation.x.floor() as i32,
+        player.translation.z.floor() as i32,
+    );
+    let needs_refresh = cache.tint_cell != Some(tint_cell)
+        || content.hotbar.is_changed()
+        || content.placement_orientation.is_changed()
+        || content.blocks.is_changed()
+        || content.biomes.is_changed()
+        || content.biome_field.is_changed();
+    if !needs_refresh {
+        return;
+    }
+    cache.tint_cell = Some(tint_cell);
+
     let selected_slot = content.hotbar.selected_slot();
     let selected_block_id = content
         .hotbar
         .item_at(selected_slot)
         .filter(|block_id| content.blocks.get(block_id).is_some());
     let visibility = item_visibility(selected_block_id);
-    let tint_position = Vec2::new(player.translation.x, player.translation.z);
+    let tint_position = tint_cell.as_vec2() + Vec2::splat(0.5);
 
     for (mut held, mut held_transform, mut held_visibility) in &mut roots {
         held.set_block_id(selected_block_id);
