@@ -39,6 +39,10 @@ impl VoxelWorld {
         self.chunks.get(&coord)
     }
 
+    pub(crate) fn loaded_chunk_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
+        self.chunks.keys().copied()
+    }
+
     pub fn archive_chunk(&mut self, coord: IVec3) {
         let Some(chunk) = self.chunks.remove(&coord) else {
             return;
