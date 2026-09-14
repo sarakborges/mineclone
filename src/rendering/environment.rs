@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     app::game_state::GameState,
     content::{
-        biome::BiomeRegistry, color::Rgb, day_night_cycle::DayNightCycleRegistry,
+        biome::BiomeRegistry, color::Hsi, day_night_cycle::DayNightCycleRegistry,
         dimension::DimensionRegistry,
     },
     world::{biome::CurrentBiome, day_night::DayNightClock, dimension::CurrentDimension},
@@ -19,8 +19,8 @@ pub struct EnvironmentVisualState {
 impl Default for EnvironmentVisualState {
     fn default() -> Self {
         Self {
-            sky_color: Color::srgb(0.38, 0.68, 1.0),
-            fog_color: Color::srgb(0.52, 0.72, 0.90),
+            sky_color: Hsi::from_srgb([0.38, 0.68, 1.0]).to_color(),
+            fog_color: Hsi::from_srgb([0.52, 0.72, 0.90]).to_color(),
             sky_light_factor: 1.0,
         }
     }
@@ -54,37 +54,22 @@ fn update_environment_visuals(
     };
 
     let sample = cycle.sample(clock.normalized_time);
-    let mut sky = Rgb {
-        r: 0.0,
-        g: 0.0,
-        b: 0.0,
-    };
-    let mut fog = Rgb {
-        r: 0.0,
-        g: 0.0,
-        b: 0.0,
-    };
-
-    for influence in &current_biome.influences {
-        let Some(biome) = biomes.get(&influence.id) else {
-            continue;
-        };
-        let biome_sky = biome.visuals.sky_color.get(sample.phase).lerp(
+    let sky = Hsi::blend_weighted(current_biome.influences.iter().filter_map(|influence| {
+        let biome = biomes.get(&influence.id)?;
+        let color = biome.visuals.sky_color.get(sample.phase).lerp(
             *biome.visuals.sky_color.get(sample.next_phase),
             sample.transition,
         );
-        let biome_fog = biome.visuals.fog_color.get(sample.phase).lerp(
+        Some((color, influence.weight))
+    }));
+    let fog = Hsi::blend_weighted(current_biome.influences.iter().filter_map(|influence| {
+        let biome = biomes.get(&influence.id)?;
+        let color = biome.visuals.fog_color.get(sample.phase).lerp(
             *biome.visuals.fog_color.get(sample.next_phase),
             sample.transition,
         );
-
-        sky.r += biome_sky.r * influence.weight;
-        sky.g += biome_sky.g * influence.weight;
-        sky.b += biome_sky.b * influence.weight;
-        fog.r += biome_fog.r * influence.weight;
-        fog.g += biome_fog.g * influence.weight;
-        fog.b += biome_fog.b * influence.weight;
-    }
+        Some((color, influence.weight))
+    }));
 
     visuals.sky_color = sky.to_color();
     visuals.fog_color = fog.to_color();
