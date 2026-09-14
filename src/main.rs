@@ -35,10 +35,7 @@ use gameplay::GameplayPlugin;
 use hud::HudPlugin;
 use localization::LocalizationPlugin;
 use rendering::RenderingPlugin;
-use screens::{
-    loading_screen::LoadingScreenPlugin, pause_menu::PauseMenuPlugin,
-    settings_screen::SettingsScreenPlugin, starting_screen::StartingScreenPlugin,
-};
+use screens::ScreensPlugin;
 use targeting::block::BlockTargetingPlugin;
 use tools::ToolsPlugin;
 use ui::UiDesignSystemPlugin;
@@ -80,10 +77,7 @@ fn run_game() {
             UiDesignSystemPlugin,
             LocalizationPlugin,
             ContentPlugin,
-            SettingsScreenPlugin,
-            StartingScreenPlugin,
-            LoadingScreenPlugin,
-            PauseMenuPlugin,
+            ScreensPlugin,
             WorldPlugin,
             GameplayPlugin,
             RenderingPlugin,
