@@ -6,12 +6,9 @@ use bevy::{
 
 use crate::{
     app::game_state::GameState,
-    content::{
-        day_night_cycle::DayNightCycleRegistry, day_night_phase::DayNightPhase,
-        dimension::DimensionRegistry,
-    },
+    content::day_night_phase::DayNightPhase,
     player::camera::GameplayCamera,
-    world::{day_night::DayNightClock, dimension::CurrentDimension},
+    world::current_context::DayNightContext,
 };
 
 use super::state::SkyLayerVisualState;
@@ -72,10 +69,7 @@ pub(super) fn spawn_stars(mut commands: Commands, assets: Res<StarAssets>) {
 #[derive(SystemParam)]
 pub(super) struct StarScene<'w> {
     visuals: Res<'w, SkyLayerVisualState>,
-    clock: Res<'w, DayNightClock>,
-    current_dimension: Res<'w, CurrentDimension>,
-    dimensions: Res<'w, DimensionRegistry>,
-    cycles: Res<'w, DayNightCycleRegistry>,
+    day_night: DayNightContext<'w>,
 }
 
 #[derive(SystemParam)]
@@ -90,13 +84,9 @@ pub(super) fn update_stars(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut stars: Query<(&Star, &mut Transform, &mut Visibility)>,
 ) {
-    let Some(dimension) = scene.dimensions.get(&scene.current_dimension.id) else {
+    let Some(sample) = scene.day_night.sample() else {
         return;
     };
-    let Some(cycle) = scene.cycles.get(&dimension.day_night_cycle) else {
-        return;
-    };
-    let sample = cycle.sample(scene.clock.normalized_time);
     let time_factor = star_time_factor(sample.phase, sample.next_phase, sample.transition);
     let visible_count =
         (scene.visuals.star_density * time_factor * MAX_STARS as f32).round() as usize;
