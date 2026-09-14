@@ -13,7 +13,7 @@ use crate::{
     },
     targeting::block::TargetedBlock,
     tools::{BrushMode, BrushPaletteState, DYED_PROPERTY_ID},
-    ui::{theme, typography},
+    ui::{theme, typography, visibility::set_visibility},
 };
 
 use super::HudSettings;
@@ -23,12 +23,21 @@ pub struct CrosshairPlugin;
 impl Plugin for CrosshairPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_crosshair)
-            .add_systems(OnEnter(PauseState::Paused), hide_crosshair)
-            .add_systems(OnEnter(SettingsState::Open), hide_crosshair)
-            .add_systems(OnEnter(BrushPaletteState::Open), hide_crosshair)
+            .add_systems(
+                OnEnter(PauseState::Paused),
+                set_visibility::<CrosshairRoot, false>,
+            )
+            .add_systems(
+                OnEnter(SettingsState::Open),
+                set_visibility::<CrosshairRoot, false>,
+            )
+            .add_systems(
+                OnEnter(BrushPaletteState::Open),
+                set_visibility::<CrosshairRoot, false>,
+            )
             .add_systems(
                 OnEnter(InventoryState::Open),
-                hide_crosshair.run_if(in_state(GameState::Gameplay)),
+                set_visibility::<CrosshairRoot, false>.run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
                 Update,
@@ -41,7 +50,7 @@ impl Plugin for CrosshairPlugin {
             )
             .add_systems(
                 OnEnter(PauseState::Running),
-                show_crosshair
+                set_visibility::<CrosshairRoot, true>
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(SettingsState::Closed))
                     .run_if(in_state(InventoryState::Closed))
@@ -49,7 +58,7 @@ impl Plugin for CrosshairPlugin {
             )
             .add_systems(
                 OnEnter(SettingsState::Closed),
-                show_crosshair
+                set_visibility::<CrosshairRoot, true>
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(PauseState::Running))
                     .run_if(in_state(InventoryState::Closed))
@@ -57,7 +66,7 @@ impl Plugin for CrosshairPlugin {
             )
             .add_systems(
                 OnEnter(InventoryState::Closed),
-                show_crosshair
+                set_visibility::<CrosshairRoot, true>
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(PauseState::Running))
                     .run_if(in_state(SettingsState::Closed))
@@ -65,7 +74,7 @@ impl Plugin for CrosshairPlugin {
             )
             .add_systems(
                 OnEnter(BrushPaletteState::Closed),
-                show_crosshair
+                set_visibility::<CrosshairRoot, true>
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(PauseState::Running))
                     .run_if(in_state(SettingsState::Closed))
@@ -225,17 +234,5 @@ fn update_action_hint(
                 *visibility = Visibility::Hidden;
             }
         }
-    }
-}
-
-fn hide_crosshair(mut roots: Query<&mut Visibility, With<CrosshairRoot>>) {
-    for mut visibility in &mut roots {
-        *visibility = Visibility::Hidden;
-    }
-}
-
-fn show_crosshair(mut roots: Query<&mut Visibility, With<CrosshairRoot>>) {
-    for mut visibility in &mut roots {
-        *visibility = Visibility::Visible;
     }
 }
