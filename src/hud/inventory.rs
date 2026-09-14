@@ -153,6 +153,7 @@ impl Plugin for InventoryHudPlugin {
                     handle_slot_clicks,
                     handle_inventory_trash_clicks,
                     handle_empty_inventory_click,
+                    sync_inventory_cursor_icon,
                     rebuild_inventory_when_changed,
                     style_category_buttons,
                     style_creative_slots,
@@ -315,7 +316,9 @@ fn handle_creative_slot_clicks(
             continue;
         }
 
-        creative_view.blur_search();
+        if creative_view.search_focused() {
+            creative_view.blur_search();
+        }
         if let Some(item) = slot.item {
             cursor.pick_creative_item(item);
         }
@@ -399,6 +402,56 @@ fn reset_creative_scroll_state(mut state: ResMut<CreativeScrollState>) {
     *state = default();
 }
 
+#[allow(clippy::too_many_arguments)]
+fn sync_inventory_cursor_icon(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    blocks: Res<BlockRegistry>,
+    tools: Res<ToolRegistry>,
+    biomes: Res<BiomeRegistry>,
+    biome_field: Res<BiomeField>,
+    cursor: Res<InventoryCursor>,
+    active_language: Res<ActiveLanguage>,
+    player: Single<&Transform, With<GameplayCamera>>,
+    window: Single<&Window>,
+    roots: Query<Entity, With<InventoryHudRoot>>,
+    icons: Query<Entity, With<InventoryCursorIcon>>,
+    mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
+) {
+    if !cursor.is_changed() {
+        return;
+    }
+
+    for entity in &icons {
+        commands.entity(entity).despawn();
+    }
+
+    let Some(item_id) = cursor.item() else {
+        return;
+    };
+    let Some(root_entity) = roots.iter().next() else {
+        return;
+    };
+    let position = window.cursor_position().unwrap_or(Vec2::ZERO);
+    let player_position = Vec2::new(player.translation.x, player.translation.z);
+
+    commands.entity(root_entity).with_children(|root| {
+        spawn_cursor_icon(
+            root,
+            &asset_server,
+            &blocks,
+            &tools,
+            &biomes,
+            &biome_field,
+            player_position,
+            item_id,
+            active_language.get(),
+            position,
+            &mut icon_materials,
+        );
+    });
+}
+
 fn rebuild_inventory_when_changed(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -417,11 +470,7 @@ fn rebuild_inventory_when_changed(
     roots: Query<Entity, With<InventoryHudRoot>>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
-    if !hotbar.is_changed()
-        && !cursor.is_changed()
-        && !creative_view.is_changed()
-        && !active_language.is_changed()
-    {
+    if !hotbar.is_changed() && !creative_view.is_changed() && !active_language.is_changed() {
         return;
     }
 
@@ -623,52 +672,75 @@ fn spawn_inventory_root(
             let Some(item_id) = cursor.item() else {
                 return;
             };
-            let position = cursor_position.unwrap_or(Vec2::ZERO);
-
-            if let Some(block) = blocks.get(item_id) {
-                let tint = block_tint_at(block.tint, player_position, biome_field, biomes);
-                let material = icon_materials.add(BlockIconMaterial::from_block(
-                    block,
-                    asset_server,
-                    tint,
-                ));
-
-                root.spawn((
-                    InventoryCursorIcon,
-                    BlockModel::display(item_id),
-                    MaterialNode(material),
-                    Node {
-                        position_type: PositionType::Absolute,
-                        left: px(position.x - ITEM_ICON_SIZE * 0.5),
-                        top: px(position.y - ITEM_ICON_SIZE * 0.5),
-                        width: px(ITEM_ICON_SIZE),
-                        height: px(ITEM_ICON_SIZE),
-                        ..default()
-                    },
-                    Pickable::IGNORE,
-                ));
-                return;
-            }
-
-            if let Some(tool) = tools.get(item_id) {
-                root.spawn((
-                    InventoryCursorIcon,
-                    typography::caption(tool.name.text(language)),
-                    TextLayout::justify(Justify::Center),
-                    Node {
-                        position_type: PositionType::Absolute,
-                        left: px(position.x - 36.0),
-                        top: px(position.y - ITEM_ICON_SIZE * 0.5),
-                        width: px(72),
-                        ..default()
-                    },
-                    Pickable::IGNORE,
-                ));
-                return;
-            }
-
-            panic!("inventory cursor references missing item: {item_id}");
+            spawn_cursor_icon(
+                root,
+                asset_server,
+                blocks,
+                tools,
+                biomes,
+                biome_field,
+                player_position,
+                item_id,
+                language,
+                cursor_position.unwrap_or(Vec2::ZERO),
+                icon_materials,
+            );
         });
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_cursor_icon(
+    root: &mut ChildSpawnerCommands,
+    asset_server: &AssetServer,
+    blocks: &BlockRegistry,
+    tools: &ToolRegistry,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+    player_position: Vec2,
+    item_id: &'static str,
+    language: Language,
+    position: Vec2,
+    icon_materials: &mut Assets<BlockIconMaterial>,
+) {
+    if let Some(block) = blocks.get(item_id) {
+        let tint = block_tint_at(block.tint, player_position, biome_field, biomes);
+        let material = icon_materials.add(BlockIconMaterial::from_block(block, asset_server, tint));
+
+        root.spawn((
+            InventoryCursorIcon,
+            BlockModel::display(item_id),
+            MaterialNode(material),
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(position.x - ITEM_ICON_SIZE * 0.5),
+                top: px(position.y - ITEM_ICON_SIZE * 0.5),
+                width: px(ITEM_ICON_SIZE),
+                height: px(ITEM_ICON_SIZE),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ));
+        return;
+    }
+
+    if let Some(tool) = tools.get(item_id) {
+        root.spawn((
+            InventoryCursorIcon,
+            typography::caption(tool.name.text(language)),
+            TextLayout::justify(Justify::Center),
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(position.x - 36.0),
+                top: px(position.y - ITEM_ICON_SIZE * 0.5),
+                width: px(72),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ));
+        return;
+    }
+
+    panic!("inventory cursor references missing item: {item_id}");
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -697,16 +769,16 @@ fn spawn_creative_panel(
         language,
     );
 
-    root.spawn((
-        Node {
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Center,
-            row_gap: px(SEARCH_GAP),
-            padding: UiRect::all(px(PANEL_PADDING)),
-            ..default()
-        },
-        Pickable::IGNORE,
-    ))
+    root.spawn(surface::hud_container(Node {
+        flex_direction: FlexDirection::Column,
+        align_items: AlignItems::Center,
+        row_gap: px(SEARCH_GAP),
+        padding: UiRect::all(px(PANEL_PADDING)),
+        border: UiRect::all(px(1)),
+        border_radius: BorderRadius::all(px(8)),
+        ..default()
+    }))
+    .insert(Pickable::IGNORE)
     .with_children(|panel| {
         spawn_search_bar(panel, creative_view, localization, language);
 
@@ -1022,17 +1094,19 @@ fn spawn_player_inventory_panel(
     language: Language,
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
-    root.spawn((
-        Node {
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Center,
-            row_gap: px(SECTION_GAP),
-            padding: UiRect::all(px(PANEL_PADDING)),
-            ..default()
-        },
-        Pickable::IGNORE,
-    ))
+    root.spawn(surface::hud_container(Node {
+        flex_direction: FlexDirection::Column,
+        align_items: AlignItems::Center,
+        row_gap: px(SECTION_GAP),
+        padding: UiRect::all(px(PANEL_PADDING)),
+        border: UiRect::all(px(1)),
+        border_radius: BorderRadius::all(px(8)),
+        ..default()
+    }))
+    .insert(Pickable::IGNORE)
     .with_children(|panel| {
+        panel.spawn((typography::hud_subheading("Inventory"), Pickable::IGNORE));
+
         panel
             .spawn((
                 Node {
