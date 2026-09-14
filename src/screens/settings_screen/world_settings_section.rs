@@ -22,6 +22,13 @@ pub(crate) struct GameModeButton(pub(crate) GameMode);
 #[derive(Component, Clone, Copy)]
 pub(crate) struct GameModeButtonLabel(GameMode);
 
+pub(crate) type GameModeButtonInteractions<'w, 's> = Query<
+    'w,
+    's,
+    (&'static Interaction, &'static GameModeButton),
+    (Changed<Interaction>, Without<InteractionDisabled>),
+>;
+
 pub(crate) fn world_settings_section(
     game_mode: GameMode,
     localization: &UiLocalization,
@@ -94,10 +101,7 @@ fn game_mode_button(
 }
 
 pub(crate) fn handle_game_mode_buttons(
-    interactions: Query<
-        (&Interaction, &GameModeButton),
-        (Changed<Interaction>, Without<InteractionDisabled>),
-    >,
+    interactions: GameModeButtonInteractions,
     game_state: Res<State<GameState>>,
     mut new_world: ResMut<NewWorldConfig>,
     mut player: Query<&mut GameMode, With<GameplayCamera>>,

@@ -18,6 +18,13 @@ pub(super) struct LanguageButton(pub(super) Language);
 #[derive(Component, Clone, Copy)]
 pub(super) struct LanguageButtonLabel(Language);
 
+pub(super) type LanguageButtonInteractions<'w, 's> = Query<
+    'w,
+    's,
+    (&'static Interaction, &'static LanguageButton),
+    (Changed<Interaction>, Without<InteractionDisabled>),
+>;
+
 pub(super) fn languages_section(
     localization: &UiLocalization,
     active_language: Language,
@@ -79,10 +86,7 @@ fn language_button(
 }
 
 pub(super) fn handle_language_buttons(
-    interactions: Query<
-        (&Interaction, &LanguageButton),
-        (Changed<Interaction>, Without<InteractionDisabled>),
-    >,
+    interactions: LanguageButtonInteractions,
     mut active_language: ResMut<ActiveLanguage>,
 ) {
     for (interaction, button) in &interactions {

@@ -92,6 +92,17 @@ pub(super) struct InventoryRebuildView<'w, 's> {
     search_text: Query<'w, 's, &'static mut Text, With<CreativeSearchText>>,
 }
 
+pub(super) type InventoryTrashButtonQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Interaction,
+        &'static mut BackgroundColor,
+        &'static mut BorderColor,
+    ),
+    (With<Button>, With<InventoryTrashButton>),
+>;
+
 pub(super) fn spawn_inventory(
     mut commands: Commands,
     content: InventoryItemContent,
@@ -337,12 +348,7 @@ pub(super) fn style_inventory_slots(
     }
 }
 
-pub(super) fn style_inventory_trash_button(
-    mut buttons: Query<
-        (&Interaction, &mut BackgroundColor, &mut BorderColor),
-        (With<Button>, With<InventoryTrashButton>),
-    >,
-) {
+pub(super) fn style_inventory_trash_button(mut buttons: InventoryTrashButtonQuery) {
     for (interaction, mut background, mut border) in &mut buttons {
         let (background_color, border_color) = surface::hud_danger_control_colors(*interaction);
         background.0 = background_color;
