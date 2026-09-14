@@ -3,7 +3,6 @@ use bevy::prelude::*;
 use crate::{
     player::{PLAYER_EYE_HEIGHT, PLAYER_HEIGHT, camera::GameplayCamera},
     voxel::world::VoxelWorld,
-    world::{game_rules::GameRules, tick::WorldTickClock},
 };
 
 use super::{
@@ -14,6 +13,7 @@ use super::{
     },
     flight::FlightState,
     gravity::GravityState,
+    vertical::VerticalMovementContext,
 };
 
 #[derive(Component, Default)]
@@ -30,10 +30,7 @@ pub(super) fn update_swimming_state(
 }
 
 pub(super) fn swim_vertical(
-    game_rules: Res<GameRules>,
-    world_ticks: Res<WorldTickClock>,
-    keys: Res<ButtonInput<KeyCode>>,
-    world: Res<VoxelWorld>,
+    context: VerticalMovementContext,
     mut transform: Single<&mut Transform, With<GameplayCamera>>,
     flight: Single<&FlightState>,
     swimming: Single<&SwimmingState>,
@@ -45,19 +42,21 @@ pub(super) fn swim_vertical(
 
     gravity.grounded = false;
 
-    let target_velocity = if keys.pressed(KeyCode::Space) {
-        if player_near_fluid_surface(transform.translation, &world) {
+    let target_velocity = if context.keys.pressed(KeyCode::Space) {
+        if player_near_fluid_surface(transform.translation, &context.world) {
             JUMP_SPEED
         } else {
             SWIM_ASCEND_SPEED
         }
-    } else if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
+    } else if context.keys.pressed(KeyCode::ShiftLeft)
+        || context.keys.pressed(KeyCode::ShiftRight)
+    {
         -SWIM_DESCEND_SPEED
     } else {
         SWIM_BUOYANCY_SPEED
     };
 
-    let delta_seconds = world_ticks.delta_seconds(&game_rules);
+    let delta_seconds = context.delta_seconds();
     if delta_seconds <= 0.0 {
         return;
     }
@@ -69,7 +68,12 @@ pub(super) fn swim_vertical(
     );
 
     let vertical_delta = gravity.vertical_velocity * delta_seconds;
-    if move_axis(&mut transform, &world, vertical_delta, Axis::Y) {
+    if move_axis(
+        &mut transform,
+        &context.world,
+        vertical_delta,
+        Axis::Y,
+    ) {
         gravity.vertical_velocity = 0.0;
     }
 }

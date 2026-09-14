@@ -13,6 +13,7 @@ pub(crate) mod flight;
 pub(crate) mod gravity;
 mod smoothing;
 pub(crate) mod swimming;
+mod vertical;
 pub(crate) mod walking;
 mod world_bounds;
 
