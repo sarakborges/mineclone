@@ -35,7 +35,10 @@ Use `SystemParam` to name coherent read/write contexts and to keep Bevy system s
 - Compose smaller contexts when one context is a strict subset of another. `ChunkContent` composing `VoxelContent` is the model to follow.
 - Reuse existing contexts such as `CurrentDimensionContext`, `BlockTargetingScene`, `BlockVisualContent`, and the chunk contexts instead of redeclaring the same resource cluster.
 - Keep mutable contexts narrow. Broad mutable access makes scheduling conflicts harder to reason about.
-- Bevy 0.19 systems must remain within the 16-system-parameter limit.
+- Bevy 0.19 systems have a technical limit of 16 system parameters, but code should keep comfortable architectural margin instead of treating 16 as a target.
+- As a practical guideline, keep systems and substantial helpers at roughly 8–12 top-level parameters or fewer. Around 10 meaningful dependencies, review ownership and cohesion before adding another dependency.
+- The same dependency discipline applies to helpers. Moving an oversized system signature into a giant helper does not resolve the architectural problem.
+- Group dependencies only when they form a real operation or domain context. Do not introduce a `GodParam`, `GameContext`, or other generic bag merely to lower the visible count.
 - Schedule tuples must remain within the 20-item tuple limit. Split large orchestration into sets or coherent subgroups before reaching the limit.
 
 ## 4. States, availability, and run conditions
@@ -131,6 +134,21 @@ Asteria targets stable 60 FPS and world streaming must protect frame time.
 - Avoid broad neighbor remeshes when a boundary/content test can determine whether work is necessary.
 - Do not trade away correctness of authoritative world data to hide a performance problem. Move or stage expensive work instead.
 
+### Async world pipeline
+
+Heavy generation and initial meshing belong off the main frame when they can operate on immutable inputs. The canonical pipeline is:
+
+`generation task → integrate chunk → initial lighting seed → halo snapshot → mesh task → spawn render entities`
+
+- Background tasks operate on immutable snapshots or task-owned data. They must not carry `Commands`, mutable `Assets`, mutable material handles, or an ECS `World` for off-thread mutation.
+- Inputs that can change while a task is in flight must be versioned or otherwise revision-tracked. Task results are valid only for the authoritative input revision they were built from.
+- Stale generation or mesh results must be discarded and, when the work is still required, rescheduled from current authoritative inputs.
+- Snapshot boundaries must contain everything the task needs, including neighbor/halo data required for culling, ambient occlusion, lighting, and fluid-surface decisions. A task must not reach back into mutable runtime world state.
+- Integrating a completed task is main-thread work and must respect frame budgets. Moving CPU construction off-thread does not justify unbounded result integration, entity spawning, asset insertion, lighting, or remesh work in one frame.
+- Updates that arrive while work is in flight must not be lost. Remesh, lighting, fluid, or topology invalidation remains pending until the authoritative result reflecting that update has been integrated.
+- Generation and runtime simulation remain separate responsibilities. Natural rivers, lakes, and oceans are authored by deterministic generation rather than reconstructed by the runtime fluid solver.
+- Initial direct-light seeding may remain synchronous when required to preserve approved lighting semantics, but its frame cost must stay explicit and budgetable.
+
 ## 12. Versioning and commits
 
 The root `VERSION` file is the canonical application version.
@@ -150,7 +168,7 @@ Before adding a new system or helper, answer these questions:
 4. Is there already a UI, queue, lifecycle, rendering, targeting, or budget primitive for this behavior?
 5. Does this system need to run when world interaction is unavailable?
 6. Can the update be change-driven instead of every frame?
-7. Does the system signature remain comfortably below Bevy's parameter and tuple limits?
+7. Does the system signature remain comfortably below Bevy's parameter and tuple limits, with architectural review around ten meaningful dependencies?
 8. Am I preserving HSI internally and converting only at a rendering/I/O boundary?
 9. Is immutable content metadata being derived once by its owner rather than rediscovered in a hot path?
 10. If this completes an update block, has `VERSION` been bumped appropriately?
