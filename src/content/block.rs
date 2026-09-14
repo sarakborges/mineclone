@@ -181,7 +181,7 @@ impl BlockDefinition {
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 pub struct BlockRegistry {
     definitions: DefinitionMap<BlockDefinition>,
 }
