@@ -10,7 +10,10 @@ use crate::{
     },
 };
 
-use super::{ChunkRenderContext, pool::ChunkRenderPool};
+use super::{
+    ChunkRenderContext,
+    pool::{ChunkMeshKey, ChunkRenderPool},
+};
 
 pub(super) enum BuiltChunkMesh {
     Terrain(ChunkFaceMesh),
@@ -18,6 +21,17 @@ pub(super) enum BuiltChunkMesh {
 }
 
 impl BuiltChunkMesh {
+    pub(super) fn key(&self) -> ChunkMeshKey {
+        match self {
+            Self::Terrain(mesh) => ChunkMeshKey::Terrain {
+                block_id: mesh.block_id,
+                face: mesh.face,
+                casts_shadow: mesh.casts_shadow,
+            },
+            Self::Fluid(mesh) => ChunkMeshKey::Fluid(mesh.fluid_id),
+        }
+    }
+
     pub(super) fn mesh(&self) -> &Mesh {
         match self {
             Self::Terrain(mesh) => &mesh.mesh,
@@ -105,7 +119,15 @@ pub fn spawn_chunk_mesh(
     }
 
     if chunk.is_empty() {
-        render_pool.insert(coord, Vec::new(), Vec::new(), Vec::new(), 0, 0);
+        render_pool.insert(
+            coord,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            0,
+            0,
+        );
         return;
     }
 
@@ -124,11 +146,14 @@ pub(super) fn spawn_built_chunk_meshes(
     let transform = Transform::from_translation(coord.as_vec3() * CHUNK_SIZE as f32);
     let mut entities = Vec::new();
     let mut mesh_handles = Vec::new();
+    let mut mesh_keys = Vec::new();
     let mut fluid_ids = Vec::new();
     let mut pooled_mesh_bytes = 0;
     let mut fluid_mesh_bytes = 0;
 
     for built_mesh in built_meshes {
+        mesh_keys.push(built_mesh.key());
+
         match built_mesh {
             BuiltChunkMesh::Terrain(face_mesh) => {
                 pooled_mesh_bytes += mesh_asset_bytes(&face_mesh.mesh);
@@ -180,6 +205,7 @@ pub(super) fn spawn_built_chunk_meshes(
         coord,
         entities,
         mesh_handles,
+        mesh_keys,
         fluid_ids,
         pooled_mesh_bytes,
         fluid_mesh_bytes,
