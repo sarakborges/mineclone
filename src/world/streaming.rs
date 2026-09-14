@@ -99,7 +99,7 @@ pub(super) fn stream_chunks(
             render_pool: &renderer.pool,
             dimension: generation.dimension(),
             biomes: &content.biomes,
-            structures: &content.structures,
+            structures: &generation.structures,
             biome_field: &content.biome_field,
             feature_fields: &generation.feature_fields,
         };
