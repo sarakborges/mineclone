@@ -8,9 +8,12 @@ use bevy::{
     prelude::*,
 };
 
-use crate::player::{
-    hotbar::PlayerHotbar,
-    inventory::{CreativeInventoryView, InventoryCursor},
+use crate::{
+    player::{
+        hotbar::PlayerHotbar,
+        inventory::{CreativeInventoryView, InventoryCursor, InventoryState},
+    },
+    ui::text_input::select_all_pressed,
 };
 
 use super::state::{
@@ -29,6 +32,25 @@ pub(super) fn handle_search_focus(
             creative_view.focus_search();
             break;
         }
+    }
+}
+
+pub(super) fn handle_search_select_all(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut creative_view: ResMut<CreativeInventoryView>,
+) {
+    if select_all_pressed(&keys) {
+        creative_view.select_all_search();
+    }
+}
+
+pub(super) fn handle_inventory_close_shortcut(
+    keys: Res<ButtonInput<KeyCode>>,
+    creative_view: Res<CreativeInventoryView>,
+    mut next_inventory: ResMut<NextState<InventoryState>>,
+) {
+    if keys.just_pressed(KeyCode::KeyE) && !creative_view.search_focused() {
+        next_inventory.set(InventoryState::Closed);
     }
 }
 
