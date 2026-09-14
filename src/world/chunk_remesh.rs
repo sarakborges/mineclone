@@ -292,7 +292,7 @@ mod tests {
 
         assert!(lighting.contains(&coord));
         for offset in CARDINAL_NEIGHBORS {
-            assert!(lighting.contains(&(coord + offset));
+            assert!(lighting.contains(&(coord + offset)));
         }
         assert_eq!(queue.pop(), None);
     }
