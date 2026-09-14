@@ -31,6 +31,36 @@ pub(super) fn mountain_spring_body(
     }
 }
 
+pub(super) fn confluence_lake(
+    cell: IVec2,
+    source: DrainageNode,
+    incoming_rivers: usize,
+    flow: u32,
+    seed: u64,
+    sea_level: f32,
+    water_fluid: &str,
+) -> WaterBody {
+    let hash = cell_hash(cell, seed ^ 0x7137_4491_23ef_65cd);
+    let incoming_strength = ((incoming_rivers.saturating_sub(3)) as f32 / 3.0).clamp(0.0, 1.0);
+    let flow_strength = ((flow as f32 - 4.0) / 20.0).clamp(0.0, 1.0);
+    let size_strength = (incoming_strength * 0.55
+        + flow_strength * 0.30
+        + hash_unit(hash.rotate_left(19)) * 0.15)
+        .clamp(0.0, 1.0);
+    let base_radius = lerp(18.0, 38.0, size_strength);
+    let aspect = lerp(0.72, 1.28, hash_unit(hash.rotate_left(37)));
+
+    WaterBody {
+        center: source.position,
+        radius: Vec2::new(base_radius * aspect, base_radius * (2.0 - aspect)),
+        rotation: hash_unit(hash.rotate_left(51)) * std::f32::consts::TAU,
+        shape_seed: hash.rotate_left(11),
+        water_level: river_height(source, sea_level) + 0.25,
+        carve_depth: lerp(7.0, 13.0, size_strength),
+        fluid_id: water_fluid.to_owned(),
+    }
+}
+
 pub(super) fn plunge_pool_for_waterfall(
     source_cell: IVec2,
     waterfall: WaterfallLanding,
