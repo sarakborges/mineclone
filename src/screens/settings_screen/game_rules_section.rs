@@ -4,13 +4,16 @@ use crate::{
     app::game_state::GameState,
     localization::{Language, UiLocalization},
     ui::{
-        numeric_input::{NumericInputEvent, NumericInputState, numeric_input_border},
+        button::compact_control_button,
+        numeric_input::{
+            NumericInputEvent, NumericInputSizing, NumericInputState, numeric_input_border,
+            numeric_input_field,
+        },
         typography,
     },
     world::{InMemoryWorldSave, NewWorldConfig, game_rules::GameRules},
 };
 
-const CONTROL_HEIGHT: f32 = 44.0;
 const STEP_BUTTON_SIZE: f32 = 44.0;
 const INPUT_WIDTH: f32 = 180.0;
 const TICKS_INPUT_MAX_DIGITS: usize = 10;
@@ -75,52 +78,25 @@ pub(crate) fn game_rules_section(
                     ..default()
                 },
                 children![
-                    step_button("−", TicksPerSecondStep::Decrement),
-                    ticks_input(ticks_per_second),
-                    step_button("+", TicksPerSecondStep::Increment),
+                    compact_control_button(
+                        "−",
+                        TicksPerSecondStep::Decrement,
+                        STEP_BUTTON_SIZE,
+                    ),
+                    numeric_input_field(
+                        ticks_per_second.to_string(),
+                        TicksPerSecondInput,
+                        TicksPerSecondValueText,
+                        NumericInputSizing::Fixed(INPUT_WIDTH),
+                    ),
+                    compact_control_button(
+                        "+",
+                        TicksPerSecondStep::Increment,
+                        STEP_BUTTON_SIZE,
+                    ),
                 ],
             ),
         ],
-    )
-}
-
-fn step_button(label: &'static str, step: TicksPerSecondStep) -> impl Bundle {
-    (
-        Button,
-        step,
-        Node {
-            width: px(STEP_BUTTON_SIZE),
-            height: px(STEP_BUTTON_SIZE),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            border_radius: BorderRadius::all(px(7)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.20, 0.14, 0.38, 0.72)),
-        children![typography::button_label(label)],
-    )
-}
-
-fn ticks_input(value: u32) -> impl Bundle {
-    (
-        Button,
-        TicksPerSecondInput,
-        Node {
-            width: px(INPUT_WIDTH),
-            height: px(CONTROL_HEIGHT),
-            border: UiRect::all(px(1)),
-            padding: UiRect::axes(px(14), px(0)),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::FlexStart,
-            border_radius: BorderRadius::all(px(7)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.045, 0.035, 0.09, 0.88)),
-        BorderColor::all(numeric_input_border(false)),
-        children![(
-            typography::button_label(value.to_string()),
-            TicksPerSecondValueText,
-        )],
     )
 }
 
