@@ -10,7 +10,7 @@ use crate::{
         camera::GameplayCamera,
         game_mode::GameMode,
         hotbar::{HOTBAR_INVENTORY_OFFSET, PlayerHotbar},
-        inventory::{CreativeInventoryView, InventoryCursor},
+        inventory::InventoryCursor,
     },
     ui::surface,
     world::biome_field::BiomeField,
@@ -25,8 +25,8 @@ use super::{
     },
     state::{
         CreativeCategoryButton, CreativeInventorySlot, CreativeInventoryUiDirty,
-        CreativeScrollState, CreativeSearchBar, InventoryCursorIcon, InventoryHudRoot,
-        InventorySlot, InventoryTrashButton, ITEM_ICON_SIZE,
+        CreativeInventoryView, CreativeScrollState, CreativeSearchBar, InventoryCursorIcon,
+        InventoryHudRoot, InventorySlot, InventoryTrashButton, ITEM_ICON_SIZE,
     },
 };
 
