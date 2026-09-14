@@ -2,7 +2,12 @@ use bevy::{prelude::*, ui::InteractionDisabled};
 
 use crate::{
     localization::{ActiveLanguage, Language, UiLocalization},
-    ui::{theme, typography},
+    ui::{
+        selectable::{
+            selectable_button_background, selectable_label_color, sync_selectable_button,
+        },
+        typography,
+    },
 };
 
 const LANGUAGE_BUTTON_HEIGHT: f32 = 44.0;
@@ -65,7 +70,7 @@ fn language_button(
             border_radius: BorderRadius::all(px(7)),
             ..default()
         },
-        BackgroundColor(language_button_background(active, Interaction::None)),
+        BackgroundColor(selectable_button_background(active, Interaction::None)),
         children![(
             typography::button_label(label),
             LanguageButtonLabel(language),
@@ -98,43 +103,30 @@ pub(super) fn sync_language_buttons(
         Has<InteractionDisabled>,
         &mut BackgroundColor,
     )>,
-    mut labels: Query<(&LanguageButtonLabel, &mut Text, &mut TextColor)>,
+    mut label_colors: Query<(&LanguageButtonLabel, &mut TextColor)>,
+    mut label_texts: Query<(&LanguageButtonLabel, &mut Text)>,
 ) {
     let active_language = active_language.get();
 
     for (entity, button, interaction, disabled, mut background) in &mut buttons {
-        let active = button.0 == active_language;
-
-        if active && !disabled {
-            commands.entity(entity).insert(InteractionDisabled);
-        } else if !active && disabled {
-            commands.entity(entity).remove::<InteractionDisabled>();
-        }
-
-        *background = BackgroundColor(language_button_background(active, *interaction));
+        sync_selectable_button(
+            &mut commands,
+            entity,
+            button.0 == active_language,
+            disabled,
+            *interaction,
+            &mut background,
+        );
     }
 
-    for (label, mut text, mut color) in &mut labels {
+    for (label, mut color) in &mut label_colors {
+        *color = TextColor(selectable_label_color(label.0 == active_language));
+    }
+
+    for (label, mut text) in &mut label_texts {
         let next = localization.text(active_language, label.0.localization_key());
         if text.0 != next {
             text.0 = next.to_owned();
         }
-        *color = TextColor(if label.0 == active_language {
-            theme::TEXT_SUBTLE
-        } else {
-            theme::TEXT_PRIMARY
-        });
-    }
-}
-
-fn language_button_background(active: bool, interaction: Interaction) -> Color {
-    if active {
-        return Color::srgba(0.08, 0.07, 0.12, 0.62);
-    }
-
-    match interaction {
-        Interaction::Pressed => Color::srgba(0.34, 0.22, 0.62, 0.92),
-        Interaction::Hovered => Color::srgba(0.29, 0.19, 0.54, 0.82),
-        Interaction::None => Color::srgba(0.20, 0.14, 0.38, 0.72),
     }
 }
