@@ -1105,7 +1105,14 @@ fn spawn_player_inventory_panel(
     }))
     .insert(Pickable::IGNORE)
     .with_children(|panel| {
-        panel.spawn((typography::hud_subheading("Inventory"), Pickable::IGNORE));
+        panel.spawn((
+            typography::hud_subheading("Inventory"),
+            Node {
+                align_self: AlignSelf::FlexStart,
+                ..default()
+            },
+            Pickable::IGNORE,
+        ));
 
         panel
             .spawn((
@@ -1152,15 +1159,15 @@ fn spawn_player_inventory_panel(
         panel
             .spawn((
                 Node {
-                    position_type: PositionType::Relative,
-                    width: px(creative_grid_width()),
-                    height: px(SLOT_SIZE),
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    column_gap: px(TRASH_GAP),
                     ..default()
                 },
                 Pickable::IGNORE,
             ))
-            .with_children(|hotbar_anchor| {
-                hotbar_anchor
+            .with_children(|footer| {
+                footer
                     .spawn((
                         Node {
                             flex_direction: FlexDirection::Row,
@@ -1189,7 +1196,7 @@ fn spawn_player_inventory_panel(
                         }
                     });
 
-                spawn_inventory_trash_button(hotbar_anchor);
+                spawn_inventory_trash_button(footer);
             });
     });
 }
@@ -1203,11 +1210,10 @@ fn spawn_inventory_trash_button(parent: &mut ChildSpawnerCommands) {
             Button,
             InventoryTrashButton,
             Node {
-                position_type: PositionType::Absolute,
-                left: px(creative_grid_width() + TRASH_GAP),
-                top: px(0),
                 width: px(SLOT_SIZE),
                 height: px(SLOT_SIZE),
+                min_width: px(SLOT_SIZE),
+                min_height: px(SLOT_SIZE),
                 border: UiRect::all(px(2)),
                 border_radius: BorderRadius::all(px(4)),
                 align_items: AlignItems::Center,
