@@ -1,4 +1,5 @@
 use bevy::{
+    ecs::system::SystemParam,
     light::{CascadeShadowConfig, CascadeShadowConfigBuilder, DirectionalLightShadowMap},
     prelude::*,
 };
@@ -25,6 +26,18 @@ const SHADOW_DEPTH_BIAS: f32 = 0.02;
 const SHADOW_NORMAL_BIAS: f32 = 0.8;
 const BASE_SUN_ILLUMINANCE: f32 = 10_000.0;
 
+type SunShadowLights<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut DirectionalLight,
+        &'static mut CascadeShadowConfig,
+        &'static mut Transform,
+        &'static mut Visibility,
+    ),
+    With<SunShadowLight>,
+>;
+
 pub struct DirectionalShadowsPlugin;
 
 impl Plugin for DirectionalShadowsPlugin {
@@ -42,6 +55,15 @@ impl Plugin for DirectionalShadowsPlugin {
 
 #[derive(Component)]
 struct SunShadowLight;
+
+#[derive(SystemParam)]
+struct SunShadowScene<'w> {
+    current_dimension: Res<'w, CurrentDimension>,
+    dimensions: Res<'w, DimensionRegistry>,
+    skies: Res<'w, SkyRegistry>,
+    cycles: Res<'w, DayNightCycleRegistry>,
+    clock: Res<'w, DayNightClock>,
+}
 
 fn spawn_sun_shadow_light(
     mut commands: Commands,
@@ -64,21 +86,9 @@ fn spawn_sun_shadow_light(
 }
 
 fn update_sun_shadow_light(
-    current_dimension: Res<CurrentDimension>,
-    dimensions: Res<DimensionRegistry>,
-    skies: Res<SkyRegistry>,
-    cycles: Res<DayNightCycleRegistry>,
-    clock: Res<DayNightClock>,
+    scene: SunShadowScene,
     render_distance: Res<RenderDistanceSettings>,
-    mut lights: Query<
-        (
-            &mut DirectionalLight,
-            &mut CascadeShadowConfig,
-            &mut Transform,
-            &mut Visibility,
-        ),
-        With<SunShadowLight>,
-    >,
+    mut lights: SunShadowLights,
 ) {
     if render_distance.is_changed() {
         let config = shadow_config(render_distance.chunks());
@@ -87,24 +97,24 @@ fn update_sun_shadow_light(
         }
     }
 
-    let Some(dimension) = dimensions.get(&current_dimension.id) else {
+    let Some(dimension) = scene.dimensions.get(&scene.current_dimension.id) else {
         hide_lights(&mut lights);
         return;
     };
-    let Some(sky) = skies.get(&dimension.sky) else {
+    let Some(sky) = scene.skies.get(&dimension.sky) else {
         hide_lights(&mut lights);
         return;
     };
-    let Some(cycle) = cycles.get(&dimension.day_night_cycle) else {
+    let Some(cycle) = scene.cycles.get(&dimension.day_night_cycle) else {
         hide_lights(&mut lights);
         return;
     };
-    let Some(sun_direction) = celestial_direction(&sky.sun, cycle, clock.normalized_time) else {
+    let Some(sun_direction) = celestial_direction(&sky.sun, cycle, scene.clock.normalized_time) else {
         hide_lights(&mut lights);
         return;
     };
 
-    let sample = cycle.sample(clock.normalized_time);
+    let sample = cycle.sample(scene.clock.normalized_time);
     let rotation = shadow_light_rotation(sun_direction);
 
     for (mut light, _, mut transform, mut visibility) in &mut lights {
@@ -115,17 +125,7 @@ fn update_sun_shadow_light(
     }
 }
 
-fn hide_lights(
-    lights: &mut Query<
-        (
-            &mut DirectionalLight,
-            &mut CascadeShadowConfig,
-            &mut Transform,
-            &mut Visibility,
-        ),
-        With<SunShadowLight>,
-    >,
-) {
+fn hide_lights(lights: &mut SunShadowLights) {
     for (mut light, _, _, mut visibility) in lights.iter_mut() {
         light.illuminance = 0.0;
         *visibility = Visibility::Hidden;
