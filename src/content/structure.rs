@@ -35,6 +35,14 @@ pub struct StructureLayer {
     pub rows: Vec<String>,
 }
 
+#[derive(Clone, Debug, Default)]
+struct StructureRuntime {
+    voxels: Vec<StructureVoxel>,
+    horizontal_minimum: IVec2,
+    horizontal_maximum: IVec2,
+    max_y_offset: i32,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StructureDefinition {
@@ -44,12 +52,14 @@ pub struct StructureDefinition {
     pub anchor: StructureAnchor,
     pub palette: HashMap<String, StructurePaletteEntry>,
     pub layers: Vec<StructureLayer>,
+    #[serde(skip)]
+    runtime: StructureRuntime,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct StructureVoxel<'a> {
+#[derive(Clone, Debug)]
+pub(crate) struct StructureVoxel {
     pub offset: IVec3,
-    pub block_id: &'a str,
+    pub block_id: String,
     pub orientation: BlockOrientation,
 }
 
@@ -65,8 +75,26 @@ impl StructureDefinition {
         }
     }
 
-    pub(crate) fn voxels(&self) -> Vec<StructureVoxel<'_>> {
+    pub(crate) fn voxels(&self) -> &[StructureVoxel] {
+        &self.runtime.voxels
+    }
+
+    pub(crate) fn horizontal_bounds(&self) -> (IVec2, IVec2) {
+        (
+            self.runtime.horizontal_minimum,
+            self.runtime.horizontal_maximum,
+        )
+    }
+
+    pub(crate) fn max_y_offset(&self) -> i32 {
+        self.runtime.max_y_offset
+    }
+
+    fn rebuild_runtime(&mut self) {
         let mut voxels = Vec::new();
+        let mut horizontal_minimum = IVec2::splat(i32::MAX);
+        let mut horizontal_maximum = IVec2::splat(i32::MIN);
+        let mut max_y_offset = i32::MIN;
 
         for layer in &self.layers {
             for (z, row) in layer.rows.iter().enumerate() {
@@ -81,51 +109,39 @@ impl StructureDefinition {
                             self.id
                         )
                     });
+                    let offset = IVec3::new(
+                        x as i32 - self.anchor.x,
+                        layer.y - self.anchor.y,
+                        z as i32 - self.anchor.z,
+                    );
+                    let horizontal = IVec2::new(offset.x, offset.z);
+                    horizontal_minimum = horizontal_minimum.min(horizontal);
+                    horizontal_maximum = horizontal_maximum.max(horizontal);
+                    max_y_offset = max_y_offset.max(offset.y);
                     voxels.push(StructureVoxel {
-                        offset: IVec3::new(
-                            x as i32 - self.anchor.x,
-                            layer.y - self.anchor.y,
-                            z as i32 - self.anchor.z,
-                        ),
-                        block_id: entry.block.as_str(),
+                        offset,
+                        block_id: entry.block.clone(),
                         orientation: entry.orientation,
                     });
                 }
             }
         }
 
-        voxels
-    }
-
-    pub(crate) fn horizontal_bounds(&self) -> (IVec2, IVec2) {
-        let mut minimum = IVec2::splat(i32::MAX);
-        let mut maximum = IVec2::splat(i32::MIN);
-
-        for voxel in self.voxels() {
-            let horizontal = IVec2::new(voxel.offset.x, voxel.offset.z);
-            minimum = minimum.min(horizontal);
-            maximum = maximum.max(horizontal);
-        }
-
-        if minimum.x == i32::MAX {
-            (IVec2::ZERO, IVec2::ZERO)
+        self.runtime = if voxels.is_empty() {
+            StructureRuntime::default()
         } else {
-            (minimum, maximum)
-        }
-    }
-
-    pub(crate) fn max_y_offset(&self) -> i32 {
-        self.voxels()
-            .into_iter()
-            .map(|voxel| voxel.offset.y)
-            .max()
-            .unwrap_or(0)
+            StructureRuntime {
+                voxels,
+                horizontal_minimum,
+                horizontal_maximum,
+                max_y_offset,
+            }
+        };
     }
 
     fn validate_layout(&self) {
         assert!(!self.id.trim().is_empty(), "structure id cannot be empty");
-        self.name
-            .validate(&format!("structure {} name", self.id));
+        self.name.validate(&format!("structure {} name", self.id));
         assert!(
             !self.palette.is_empty(),
             "structure {} palette cannot be empty",
@@ -221,12 +237,16 @@ impl StructureDefinition {
 #[derive(Resource, Default)]
 pub struct StructureRegistry {
     definitions: DefinitionMap<StructureDefinition>,
+    max_height_above_anchor: i32,
+    max_horizontal_extent_from_anchor: i32,
 }
 
 impl StructureRegistry {
-    pub fn insert(&mut self, definition: StructureDefinition) {
+    pub fn insert(&mut self, mut definition: StructureDefinition) {
         definition.validate_layout();
+        definition.rebuild_runtime();
         self.definitions.insert(definition.id.clone(), definition);
+        self.rebuild_runtime_metadata();
     }
 
     pub fn get(&self, id: &str) -> Option<&StructureDefinition> {
@@ -238,16 +258,23 @@ impl StructureRegistry {
     }
 
     pub(crate) fn max_height_above_anchor(&self) -> i32 {
-        self.definitions
+        self.max_height_above_anchor
+    }
+
+    pub(crate) fn max_horizontal_extent_from_anchor(&self) -> i32 {
+        self.max_horizontal_extent_from_anchor
+    }
+
+    fn rebuild_runtime_metadata(&mut self) {
+        self.max_height_above_anchor = self
+            .definitions
             .values()
             .map(StructureDefinition::max_y_offset)
             .max()
             .unwrap_or(0)
-            .max(0)
-    }
-
-    pub(crate) fn max_horizontal_extent_from_anchor(&self) -> i32 {
-        self.definitions
+            .max(0);
+        self.max_horizontal_extent_from_anchor = self
+            .definitions
             .values()
             .map(|definition| {
                 let (minimum, maximum) = definition.horizontal_bounds();
@@ -259,6 +286,6 @@ impl StructureRegistry {
                     .max(maximum.y.abs())
             })
             .max()
-            .unwrap_or(0)
+            .unwrap_or(0);
     }
 }
