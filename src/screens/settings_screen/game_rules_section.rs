@@ -6,8 +6,8 @@ use crate::{
     ui::{
         button::compact_control_button,
         numeric_input::{
-            NumericInputEvent, NumericInputSizing, NumericInputState, numeric_input_border,
-            numeric_input_field,
+            NumericInputEvent, NumericInputSizing, NumericInputState, numeric_input_field,
+            sync_numeric_input_view,
         },
         typography,
     },
@@ -137,16 +137,8 @@ pub(crate) fn handle_ticks_input(
     new_world: Res<NewWorldConfig>,
     mut input_state: ResMut<TicksPerSecondInputState>,
 ) {
-    if interactions
-        .iter()
-        .any(|interaction| *interaction == Interaction::Pressed)
-    {
-        input_state.begin(current_ticks_per_second(
-            *game_state.get(),
-            &game_rules,
-            &new_world,
-        ));
-    }
+    let current = current_ticks_per_second(*game_state.get(), &game_rules, &new_world);
+    input_state.begin_if_pressed(interactions.iter(), current);
 }
 
 pub(crate) fn handle_ticks_keyboard(
@@ -179,21 +171,8 @@ pub(crate) fn sync_ticks_per_second_text(
     mut labels: Query<&mut Text, With<TicksPerSecondValueText>>,
     mut inputs: Query<&mut BorderColor, With<TicksPerSecondInput>>,
 ) {
-    let value = input_state.display(current_ticks_per_second(
-        *game_state.get(),
-        &game_rules,
-        &new_world,
-    ));
-
-    for mut label in &mut labels {
-        if label.0 != value {
-            label.0 = value.clone();
-        }
-    }
-
-    for mut border in &mut inputs {
-        *border = BorderColor::all(numeric_input_border(input_state.editing()));
-    }
+    let current = current_ticks_per_second(*game_state.get(), &game_rules, &new_world);
+    sync_numeric_input_view(&input_state, current, &mut labels, &mut inputs);
 }
 
 fn current_ticks_per_second(
