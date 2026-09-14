@@ -198,6 +198,7 @@ fn update_target_hud(
         light_level,
         language,
     };
+    let block_definitions_changed = content.visual.block_definitions_changed();
     let definitions_changed = content.visual.inputs_changed()
         || content.secondary_properties.is_changed()
         || state.language.is_changed();
@@ -255,7 +256,7 @@ fn update_target_hud(
         return;
     };
 
-    if model.set_block_id(Some(hit.block_id))
+    if (model.set_block_id(Some(hit.block_id)) || block_definitions_changed)
         && let Some(block) = block
     {
         material.set_block(block, &content.visual.asset_server);
