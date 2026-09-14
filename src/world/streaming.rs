@@ -65,12 +65,14 @@ struct QueueRebuildContext<'a> {
 }
 
 #[derive(SystemParam)]
-pub(super) struct ChunkStreamingInputs<'w, 's> {
+pub(super) struct ChunkStreamingRuntime<'w, 's> {
     player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
     render_distance: Res<'w, RenderDistanceSettings>,
     world: ResMut<'w, VoxelWorld>,
-    streaming: ResMut<'w, ChunkStreamingState>,
+    state: ResMut<'w, ChunkStreamingState>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
+    fluid_updates: ResMut<'w, PendingFluidUpdates>,
+    lighting_updates: ResMut<'w, PendingLightingUpdates>,
 }
 
 pub(super) fn reset_chunk_streaming(mut state: ResMut<ChunkStreamingState>) {
@@ -81,19 +83,17 @@ pub(super) fn stream_chunks(
     generation: ChunkGeneration,
     content: ChunkContent,
     mut renderer: ChunkRenderer,
-    mut inputs: ChunkStreamingInputs,
-    mut fluid_updates: ResMut<PendingFluidUpdates>,
-    mut lighting_updates: ResMut<PendingLightingUpdates>,
+    mut runtime: ChunkStreamingRuntime,
 ) {
-    let feet_position = inputs.player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
+    let feet_position = runtime.player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = chunk_coord_from_position(feet_position);
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
-    let horizontal_radius = inputs.render_distance.chunks();
-    let vertical_radius = inputs.render_distance.vertical_chunks();
+    let horizontal_radius = runtime.render_distance.chunks();
+    let vertical_radius = runtime.render_distance.vertical_chunks();
 
-    if inputs.streaming.center != Some(center)
-        || inputs.streaming.horizontal_radius != horizontal_radius
-        || inputs.streaming.vertical_radius != vertical_radius
+    if runtime.state.center != Some(center)
+        || runtime.state.horizontal_radius != horizontal_radius
+        || runtime.state.vertical_radius != vertical_radius
     {
         let rebuild_context = QueueRebuildContext {
             render_pool: &renderer.pool,
@@ -104,7 +104,7 @@ pub(super) fn stream_chunks(
             feature_fields: &generation.feature_fields,
         };
         rebuild_queue(
-            &mut inputs.streaming,
+            &mut runtime.state,
             center,
             horizontal_radius,
             vertical_radius,
@@ -124,7 +124,7 @@ pub(super) fn stream_chunks(
             break;
         }
 
-        let Some(coord) = inputs.streaming.pending.pop_front() else {
+        let Some(coord) = runtime.state.pending.pop_front() else {
             break;
         };
 
@@ -132,25 +132,27 @@ pub(super) fn stream_chunks(
             continue;
         }
 
-        ensure_chunk_loaded(&mut inputs.world, coord, &generation_context);
-        fluid_updates.enqueue_loaded_fluid_frontier(&inputs.world, coord);
+        ensure_chunk_loaded(&mut runtime.world, coord, &generation_context);
+        runtime
+            .fluid_updates
+            .enqueue_loaded_fluid_frontier(&runtime.world, coord);
 
         seed_chunk_direct_lighting(
-            &mut inputs.world,
+            &mut runtime.world,
             coord,
             &content.blocks,
             &content.fluids,
             &content.secondary_properties,
         );
-        lighting_updates.enqueue_chunk_relaxation(coord);
+        runtime.lighting_updates.enqueue_chunk_relaxation(coord);
 
-        let chunk = inputs
+        let chunk = runtime
             .world
             .chunk(coord)
             .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
         let chunk_is_empty = chunk.is_empty();
         let render_context = content.render_context(
-            &inputs.world,
+            &runtime.world,
             &renderer.terrain_materials,
             &renderer.fluid_materials,
         );
@@ -172,22 +174,22 @@ pub(super) fn stream_chunks(
             }
 
             if chunk_is_empty {
-                inputs.remesh_queue.enqueue_fluid_priority(neighbor);
+                runtime.remesh_queue.enqueue_fluid_priority(neighbor);
                 continue;
             }
 
-            let Some(neighbor_chunk) = inputs.world.chunk(neighbor) else {
+            let Some(neighbor_chunk) = runtime.world.chunk(neighbor) else {
                 continue;
             };
             let chunk_boundary_has_content = boundary_has_content(chunk, offset);
             let neighbor_boundary_has_content = boundary_has_content(neighbor_chunk, -offset);
 
             if chunk_boundary_has_content && neighbor_boundary_has_content {
-                inputs.remesh_queue.enqueue_priority(neighbor);
+                runtime.remesh_queue.enqueue_priority(neighbor);
             } else if boundary_has_fluid(chunk, offset)
                 || boundary_has_fluid(neighbor_chunk, -offset)
             {
-                inputs.remesh_queue.enqueue_fluid_priority(neighbor);
+                runtime.remesh_queue.enqueue_fluid_priority(neighbor);
             }
         }
     }
