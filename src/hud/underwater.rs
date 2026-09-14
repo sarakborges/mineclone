@@ -2,10 +2,9 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    content::{biome::BiomeRegistry, color::Hsi},
     player::camera::GameplayCamera,
+    rendering::biome_visuals::CurrentBiomeVisuals,
     voxel::world::VoxelWorld,
-    world::biome::CurrentBiome,
 };
 
 #[derive(Component)]
@@ -45,8 +44,7 @@ fn spawn_underwater_tint(mut commands: Commands) {
 fn update_underwater_tint(
     camera: Single<&Transform, With<GameplayCamera>>,
     world: Res<VoxelWorld>,
-    biomes: Res<BiomeRegistry>,
-    current_biome: Res<CurrentBiome>,
+    biome_visuals: CurrentBiomeVisuals,
     mut tint: Single<(&mut BackgroundColor, &mut Visibility), With<UnderwaterTint>>,
 ) {
     let eye = camera.translation;
@@ -67,19 +65,9 @@ fn update_underwater_tint(
         return;
     }
 
-    let color = Hsi::blend_weighted(current_biome.influences.iter().filter_map(|influence| {
-        let biome = biomes.get(&influence.id)?;
-        Some((biome.visuals.underwater_tint.color, influence.weight))
-    }));
-    let opacity = current_biome
-        .influences
-        .iter()
-        .filter_map(|influence| {
-            biomes
-                .get(&influence.id)
-                .map(|biome| biome.visuals.underwater_tint.opacity * influence.weight)
-        })
-        .sum::<f32>()
+    let color = biome_visuals.blend_hsi(|biome| biome.visuals.underwater_tint.color);
+    let opacity = biome_visuals
+        .weighted_scalar(|biome| biome.visuals.underwater_tint.opacity)
         .clamp(0.0, 1.0);
     let [red, green, blue] = color.to_srgb();
 
