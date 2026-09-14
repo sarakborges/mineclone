@@ -2,11 +2,22 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use crate::content::fluid::FluidId;
+use crate::{content::fluid::FluidId, voxel::block_face::BlockFace};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum ChunkMeshKey {
+    Terrain {
+        block_id: &'static str,
+        face: BlockFace,
+        casts_shadow: bool,
+    },
+    Fluid(FluidId),
+}
 
 struct ChunkRenderSlot {
     entities: Vec<Entity>,
     meshes: Vec<Handle<Mesh>>,
+    mesh_keys: Vec<ChunkMeshKey>,
     fluid_ids: Vec<FluidId>,
     mesh_bytes: usize,
     fluid_mesh_bytes: usize,
@@ -48,20 +59,22 @@ impl ChunkRenderPool {
         &mut self,
         coord: IVec3,
         meshes: &mut Assets<Mesh>,
+        replacement_keys: &[ChunkMeshKey],
         replacements: Vec<Mesh>,
         mesh_bytes: usize,
     ) -> bool {
         let Some(slot) = self.active.get_mut(&coord) else {
             return false;
         };
-        if slot.meshes.len() != replacements.len()
+        if slot.mesh_keys.as_slice() != replacement_keys
+            || slot.meshes.len() != replacements.len()
             || slot.meshes.iter().any(|handle| !meshes.contains(handle))
         {
             return false;
         }
 
         for (handle, replacement) in slot.meshes.iter().zip(replacements) {
-            let Some(mut existing) = meshes.get_mut(handle) else {
+            let Some(existing) = meshes.get_mut(handle) else {
                 return false;
             };
             *existing = replacement;
@@ -97,7 +110,7 @@ impl ChunkRenderPool {
         }
 
         for (handle, (_, replacement)) in fluid_handles.iter().zip(replacements) {
-            let Some(mut existing) = meshes.get_mut(handle) else {
+            let Some(existing) = meshes.get_mut(handle) else {
                 return false;
             };
             *existing = replacement;
@@ -116,6 +129,7 @@ impl ChunkRenderPool {
         coord: IVec3,
         entities: Vec<Entity>,
         meshes: Vec<Handle<Mesh>>,
+        mesh_keys: Vec<ChunkMeshKey>,
         fluid_ids: Vec<FluidId>,
         mesh_bytes: usize,
         fluid_mesh_bytes: usize,
@@ -125,6 +139,7 @@ impl ChunkRenderPool {
             ChunkRenderSlot {
                 entities,
                 meshes,
+                mesh_keys,
                 fluid_ids,
                 mesh_bytes,
                 fluid_mesh_bytes,
