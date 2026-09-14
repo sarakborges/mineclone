@@ -17,7 +17,7 @@ use crate::{
     },
     rendering::{block_model::BlockModel, block_tint::block_tint_at},
     targeting::{PlacementOrientation, block::BlockTargetingSet},
-    ui::{theme, typography},
+    ui::{theme, typography, visibility::set_visibility},
     world::biome_field::BiomeField,
 };
 
@@ -81,11 +81,8 @@ pub struct HotbarHudPlugin;
 
 impl Plugin for HotbarHudPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Gameplay), spawn_hotbar)
-            .add_systems(
-                Update,
-                refresh_hotbar.run_if(in_state(GameState::Gameplay)),
-            )
+        app.add_systems(OnEnter(GameState::Gameplay), sync_hotbar)
+            .add_systems(Update, sync_hotbar.run_if(in_state(GameState::Gameplay)))
             .add_systems(
                 Update,
                 update_hotbar_item_visuals
@@ -94,50 +91,23 @@ impl Plugin for HotbarHudPlugin {
             )
             .add_systems(
                 OnEnter(InventoryState::Open),
-                hide_hotbar.run_if(in_state(GameState::Gameplay)),
+                set_visibility::<HotbarHudRoot, false>.run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
                 OnEnter(InventoryState::Closed),
-                show_hotbar.run_if(in_state(GameState::Gameplay)),
+                set_visibility::<HotbarHudRoot, true>.run_if(in_state(GameState::Gameplay)),
             );
     }
 }
 
-fn spawn_hotbar(
-    mut commands: Commands,
-    content: HotbarHudContent,
-    existing: Query<(), With<HotbarHudRoot>>,
-    mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
-) {
-    if !existing.is_empty() {
-        return;
-    }
-
-    let visibility = if *content.inventory_state.get() == InventoryState::Open {
-        Visibility::Hidden
-    } else {
-        Visibility::Visible
-    };
-
-    spawn_hotbar_root(
-        &mut commands,
-        &content.asset_server,
-        &content.blocks,
-        &content.tools,
-        &content.hotbar,
-        content.language.get(),
-        visibility,
-        &mut icon_materials,
-    );
-}
-
-fn refresh_hotbar(
+fn sync_hotbar(
     mut commands: Commands,
     content: HotbarHudContent,
     roots: Query<Entity, With<HotbarHudRoot>>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
-    if !content.hotbar.is_changed() && !content.language.is_changed() {
+    let has_root = !roots.is_empty();
+    if has_root && !content.hotbar.is_changed() && !content.language.is_changed() {
         return;
     }
 
@@ -314,18 +284,6 @@ fn item_name<'a>(
         return tool.name.text(language);
     }
     item_id
-}
-
-fn hide_hotbar(mut roots: Query<&mut Visibility, With<HotbarHudRoot>>) {
-    for mut visibility in &mut roots {
-        *visibility = Visibility::Hidden;
-    }
-}
-
-fn show_hotbar(mut roots: Query<&mut Visibility, With<HotbarHudRoot>>) {
-    for mut visibility in &mut roots {
-        *visibility = Visibility::Visible;
-    }
 }
 
 fn update_hotbar_item_visuals(
