@@ -1,4 +1,4 @@
-use bevy::{prelude::*, ui_widgets::ScrollArea};
+use bevy::{ecs::system::SystemParam, prelude::*, ui_widgets::ScrollArea};
 
 use crate::{
     app::{game_state::GameState, settings_state::SettingsState},
@@ -91,6 +91,48 @@ impl SettingsScreenContext {
     }
 }
 
+#[derive(SystemParam)]
+pub(super) struct SettingsScreenWorldContext<'w, 's> {
+    game_state: Res<'w, State<GameState>>,
+    game_rules: Res<'w, GameRules>,
+    new_world: Res<'w, NewWorldConfig>,
+    player: Query<'w, 's, &'static GameMode, With<GameplayCamera>>,
+}
+
+impl SettingsScreenWorldContext<'_, '_> {
+    fn screen_context(&self) -> SettingsScreenContext {
+        SettingsScreenContext::from_game_state(*self.game_state.get())
+    }
+
+    fn game_mode(&self, context: SettingsScreenContext) -> GameMode {
+        match context {
+            SettingsScreenContext::CreateWorld => self.new_world.game_mode(),
+            SettingsScreenContext::InWorld => self
+                .player
+                .single()
+                .map_or_else(|_| GameMode::default(), |game_mode| *game_mode),
+            SettingsScreenContext::Start => GameMode::default(),
+        }
+    }
+
+    fn ticks_per_second(&self, context: SettingsScreenContext) -> u32 {
+        match context {
+            SettingsScreenContext::CreateWorld => self.new_world.game_rules().ticks_per_second(),
+            SettingsScreenContext::Start | SettingsScreenContext::InWorld => {
+                self.game_rules.ticks_per_second()
+            }
+        }
+    }
+}
+
+#[derive(SystemParam)]
+pub(super) struct SettingsScreenContent<'w> {
+    render_distance: Res<'w, RenderDistanceSettings>,
+    hud_settings: Res<'w, HudSettings>,
+    localization: Res<'w, UiLocalization>,
+    active_language: Res<'w, ActiveLanguage>,
+}
+
 struct SettingsContentView<'a> {
     context: SettingsScreenContext,
     render_distance: &'a RenderDistanceSettings,
@@ -104,35 +146,18 @@ struct SettingsContentView<'a> {
     ticks_per_second: u32,
 }
 
-pub fn spawn_settings_screen(
+pub(super) fn spawn_settings_screen(
     mut commands: Commands,
-    game_state: Res<State<GameState>>,
-    render_distance: Res<RenderDistanceSettings>,
-    game_rules: Res<GameRules>,
-    new_world: Res<NewWorldConfig>,
-    hud_settings: Res<HudSettings>,
-    localization: Res<UiLocalization>,
-    active_language: Res<ActiveLanguage>,
-    player: Query<&GameMode, With<GameplayCamera>>,
+    world: SettingsScreenWorldContext,
+    content: SettingsScreenContent,
     mut selection: ResMut<SettingsSectionSelection>,
 ) {
-    let context = SettingsScreenContext::from_game_state(*game_state.get());
+    let context = world.screen_context();
     selection.selected = context.initial_section();
 
-    let language = active_language.get();
-    let game_mode = match context {
-        SettingsScreenContext::CreateWorld => new_world.game_mode(),
-        SettingsScreenContext::InWorld => player
-            .single()
-            .map_or_else(|_| GameMode::default(), |game_mode| *game_mode),
-        SettingsScreenContext::Start => GameMode::default(),
-    };
-    let ticks_per_second = match context {
-        SettingsScreenContext::CreateWorld => new_world.game_rules().ticks_per_second(),
-        SettingsScreenContext::Start | SettingsScreenContext::InWorld => {
-            game_rules.ticks_per_second()
-        }
-    };
+    let language = content.active_language.get();
+    let game_mode = world.game_mode(context);
+    let ticks_per_second = world.ticks_per_second(context);
 
     if context == SettingsScreenContext::CreateWorld {
         commands.spawn((
@@ -185,7 +210,10 @@ pub fn spawn_settings_screen(
         })
         .with_children(|header| {
             header.spawn(typography::title(
-                localization.text(language, context.title_key()).to_owned(),
+                content
+                    .localization
+                    .text(language, context.title_key())
+                    .to_owned(),
             ));
         });
 
@@ -213,17 +241,17 @@ pub fn spawn_settings_screen(
                 ..default()
             })
             .with_children(|columns| {
-                spawn_sidebar(columns, context, &localization, language);
+                spawn_sidebar(columns, context, &content.localization, language);
                 spawn_content(
                     columns,
                     SettingsContentView {
                         context,
-                        render_distance: &render_distance,
-                        game_rules: &game_rules,
-                        new_world: &new_world,
-                        hud_settings: &hud_settings,
+                        render_distance: &content.render_distance,
+                        game_rules: &world.game_rules,
+                        new_world: &world.new_world,
+                        hud_settings: &content.hud_settings,
                         game_mode,
-                        localization: &localization,
+                        localization: &content.localization,
                         language,
                         selected: selection.selected,
                         ticks_per_second,
@@ -246,11 +274,14 @@ pub fn spawn_settings_screen(
         })
         .with_children(|footer| match context {
             SettingsScreenContext::CreateWorld => {
-                spawn_new_world_footer(footer, &localization, language);
+                spawn_new_world_footer(footer, &content.localization, language);
             }
             SettingsScreenContext::Start | SettingsScreenContext::InWorld => {
                 footer.spawn(menu_button(
-                    localization.text(language, "settings.return").to_owned(),
+                    content
+                        .localization
+                        .text(language, "settings.return")
+                        .to_owned(),
                     SettingsBackButton,
                 ));
             }
