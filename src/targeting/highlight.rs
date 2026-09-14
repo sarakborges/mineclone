@@ -1,4 +1,4 @@
-use bevy::{light::NotShadowCaster, prelude::*};
+use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use super::{
     block::{BlockTargetingSet, TargetedBlock},
@@ -58,6 +58,28 @@ struct TargetHighlight;
 #[derive(Component)]
 struct BrushGhost;
 
+#[derive(SystemParam)]
+struct TargetHighlightInput<'w, 's> {
+    targeted: Res<'w, TargetedBlock>,
+    hotbar: Res<'w, PlayerHotbar>,
+    brush_mode: Res<'w, BrushMode>,
+    world: Res<'w, VoxelWorld>,
+    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
+}
+
+#[derive(SystemParam)]
+struct TargetHighlightContent<'w> {
+    blocks: Res<'w, BlockRegistry>,
+    secondary_properties: Res<'w, SecondaryPropertyRegistry>,
+}
+
+#[derive(SystemParam)]
+struct TargetHighlightView<'w, 's> {
+    materials: ResMut<'w, Assets<StandardMaterial>>,
+    highlight: HighlightTarget<'w, 's>,
+    brush_ghost: BrushGhostTarget<'w, 's>,
+}
+
 fn spawn_highlight(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -94,31 +116,23 @@ fn spawn_highlight(
     ));
 }
 
-#[allow(clippy::too_many_arguments)]
 fn update_highlight(
-    targeted: Res<TargetedBlock>,
-    hotbar: Res<PlayerHotbar>,
-    blocks: Res<BlockRegistry>,
-    secondary_properties: Res<SecondaryPropertyRegistry>,
-    brush_mode: Res<BrushMode>,
-    world: Res<VoxelWorld>,
-    player: Single<&Transform, With<GameplayCamera>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut highlight: HighlightTarget,
-    mut brush_ghost: BrushGhostTarget,
+    input: TargetHighlightInput,
+    content: TargetHighlightContent,
+    mut view: TargetHighlightView,
 ) {
-    let Some(hit) = targeted.0 else {
-        *highlight.1 = Visibility::Hidden;
-        *brush_ghost.1 = Visibility::Hidden;
+    let Some(hit) = input.targeted.0 else {
+        *view.highlight.1 = Visibility::Hidden;
+        *view.brush_ghost.1 = Visibility::Hidden;
         return;
     };
 
-    let selected_item = hotbar.item_at(hotbar.selected_slot());
+    let selected_item = input.hotbar.item_at(input.hotbar.selected_slot());
     if selected_item == Some(BRUSH_TOOL_ID) {
-        *highlight.1 = Visibility::Hidden;
+        *view.highlight.1 = Visibility::Hidden;
 
-        let Some(block) = blocks.get(hit.block_id) else {
-            *brush_ghost.1 = Visibility::Hidden;
+        let Some(block) = content.blocks.get(hit.block_id) else {
+            *view.brush_ghost.1 = Visibility::Hidden;
             return;
         };
         if !block
@@ -126,42 +140,45 @@ fn update_highlight(
             .iter()
             .any(|property| property == DYED_PROPERTY_ID)
         {
-            *brush_ghost.1 = Visibility::Hidden;
+            *view.brush_ghost.1 = Visibility::Hidden;
             return;
         }
 
-        let color = brush_mode.dye_id().map_or(
+        let color = input.brush_mode.dye_id().map_or(
             Color::srgba(0.92, 0.92, 1.0, BRUSH_CLEAR_GHOST_ALPHA),
             |dye_id| {
-                secondary_properties.get(DYED_PROPERTY_ID, dye_id).map_or(
-                    Color::srgba(1.0, 1.0, 1.0, BRUSH_GHOST_ALPHA),
-                    |definition| {
-                        let [red, green, blue] = definition.color.to_srgb();
-                        Color::srgba(red, green, blue, BRUSH_GHOST_ALPHA)
-                    },
-                )
+                content
+                    .secondary_properties
+                    .get(DYED_PROPERTY_ID, dye_id)
+                    .map_or(
+                        Color::srgba(1.0, 1.0, 1.0, BRUSH_GHOST_ALPHA),
+                        |definition| {
+                            let [red, green, blue] = definition.color.to_srgb();
+                            Color::srgba(red, green, blue, BRUSH_GHOST_ALPHA)
+                        },
+                    )
             },
         );
-        if let Some(mut material) = materials.get_mut(&brush_ghost.2.0) {
+        if let Some(mut material) = view.materials.get_mut(&view.brush_ghost.2.0) {
             material.base_color = color;
         }
 
-        brush_ghost.0.translation = hit.voxel.as_vec3() + Vec3::splat(0.5);
-        *brush_ghost.1 = Visibility::Visible;
+        view.brush_ghost.0.translation = hit.voxel.as_vec3() + Vec3::splat(0.5);
+        *view.brush_ghost.1 = Visibility::Visible;
         return;
     }
 
-    *brush_ghost.1 = Visibility::Hidden;
+    *view.brush_ghost.1 = Visibility::Hidden;
 
-    let selected_block = selected_item.filter(|item_id| blocks.get(item_id).is_some());
+    let selected_block = selected_item.filter(|item_id| content.blocks.get(item_id).is_some());
     let placement_preview_visible = selected_block.is_some()
-        && placement_voxel(hit, &world, player.translation).is_some();
+        && placement_voxel(hit, &input.world, input.player.translation).is_some();
 
     if placement_preview_visible {
-        *highlight.1 = Visibility::Hidden;
+        *view.highlight.1 = Visibility::Hidden;
         return;
     }
 
-    highlight.0.translation = hit.voxel.as_vec3() + Vec3::splat(0.5);
-    *highlight.1 = Visibility::Visible;
+    view.highlight.0.translation = hit.voxel.as_vec3() + Vec3::splat(0.5);
+    *view.highlight.1 = Visibility::Visible;
 }
