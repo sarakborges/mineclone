@@ -2,12 +2,12 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    content::{day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry},
+    content::day_night_cycle::DayNightCycleRegistry,
 };
 
 use super::{
     WorldLoadMode,
-    dimension::CurrentDimension,
+    current_context::CurrentDimensionContext,
     tick::{WorldTickClock, WorldTickSet},
 };
 
@@ -44,8 +44,7 @@ impl Plugin for DayNightPlugin {
 }
 
 fn initialize_clock(
-    dimension: Res<CurrentDimension>,
-    dimensions: Res<DimensionRegistry>,
+    dimension: CurrentDimensionContext,
     cycles: Res<DayNightCycleRegistry>,
     load_mode: Res<WorldLoadMode>,
     mut clock: ResMut<DayNightClock>,
@@ -54,12 +53,12 @@ fn initialize_clock(
         return;
     }
 
-    let dimension = dimensions
-        .get(&dimension.id)
-        .unwrap_or_else(|| panic!("missing dimension definition: {}", dimension.id));
+    let definition = dimension
+        .definition()
+        .unwrap_or_else(|| panic!("missing dimension definition: {}", dimension.id()));
     let cycle = cycles
-        .get(&dimension.day_night_cycle)
-        .unwrap_or_else(|| panic!("missing day-night cycle: {}", dimension.day_night_cycle));
+        .get(&definition.day_night_cycle)
+        .unwrap_or_else(|| panic!("missing day-night cycle: {}", definition.day_night_cycle));
 
     clock.day = 1;
     clock.tick_in_day =
@@ -69,8 +68,7 @@ fn initialize_clock(
 }
 
 fn advance_clock(
-    dimension: Res<CurrentDimension>,
-    dimensions: Res<DimensionRegistry>,
+    dimension: CurrentDimensionContext,
     cycles: Res<DayNightCycleRegistry>,
     world_ticks: Res<WorldTickClock>,
     mut clock: ResMut<DayNightClock>,
@@ -80,10 +78,10 @@ fn advance_clock(
         return;
     }
 
-    let Some(dimension) = dimensions.get(&dimension.id) else {
+    let Some(definition) = dimension.definition() else {
         return;
     };
-    let Some(cycle) = cycles.get(&dimension.day_night_cycle) else {
+    let Some(cycle) = cycles.get(&definition.day_night_cycle) else {
         return;
     };
 
