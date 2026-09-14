@@ -3,7 +3,7 @@ mod solver;
 
 use std::collections::HashMap;
 
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     content::fluid::{FluidId, FluidRegistry},
@@ -90,6 +90,14 @@ impl PendingFluidUpdates {
     }
 }
 
+#[derive(SystemParam)]
+struct FluidSimulationRuntime<'w> {
+    world: ResMut<'w, VoxelWorld>,
+    pending: ResMut<'w, PendingFluidUpdates>,
+    lighting: ResMut<'w, PendingLightingUpdates>,
+    remesh_queue: ResMut<'w, ChunkRemeshQueue>,
+}
+
 pub(super) fn clear_fluid_updates(mut pending: ResMut<PendingFluidUpdates>) {
     pending.clear();
 }
@@ -98,12 +106,9 @@ pub(super) fn process_fluid_updates(
     world_ticks: Res<WorldTickClock>,
     game_rules: Res<GameRules>,
     fluids: Res<FluidRegistry>,
-    mut world: ResMut<VoxelWorld>,
-    mut pending: ResMut<PendingFluidUpdates>,
-    mut lighting: ResMut<PendingLightingUpdates>,
-    mut remesh_queue: ResMut<ChunkRemeshQueue>,
+    mut runtime: FluidSimulationRuntime,
 ) {
-    let ready_steps = pending.ready_steps(
+    let ready_steps = runtime.pending.ready_steps(
         world_ticks.ticks_this_frame(),
         game_rules.ticks_per_second(),
         &fluids,
@@ -120,19 +125,19 @@ pub(super) fn process_fluid_updates(
             break;
         }
 
-        let batch_len = pending.queue.len().min(remaining_budget);
+        let batch_len = runtime.pending.queue.len().min(remaining_budget);
         for _ in 0..batch_len {
             remaining_budget -= 1;
 
-            let Some(position) = pending.pop() else {
+            let Some(position) = runtime.pending.pop() else {
                 break;
             };
-            if !world.is_loaded_at(position) {
+            if !runtime.world.is_loaded_at(position) {
                 continue;
             }
 
-            let current = world.fluid_at(position);
-            let desired = desired_fluid(&world, position, current, &fluids);
+            let current = runtime.world.fluid_at(position);
+            let desired = desired_fluid(&runtime.world, position, current, &fluids);
             let Some(fluid_id) = current.or(desired).map(|fluid| fluid.fluid_id) else {
                 continue;
             };
@@ -143,7 +148,7 @@ pub(super) fn process_fluid_updates(
 
             if fluid_ready_steps <= step_index {
                 if definition.spread_speed > f32::EPSILON {
-                    pending.enqueue(position);
+                    runtime.pending.enqueue(position);
                 }
                 continue;
             }
@@ -154,7 +159,7 @@ pub(super) fn process_fluid_updates(
             let lighting_medium_changed = current.map(|fluid| fluid.fluid_id)
                 != desired.map(|fluid| fluid.fluid_id);
 
-            if world.set_fluid_at(position, desired).is_none() {
+            if runtime.world.set_fluid_at(position, desired).is_none() {
                 continue;
             }
 
@@ -163,10 +168,10 @@ pub(super) fn process_fluid_updates(
             // its fluid id. Avoid flooding the lighting queue for every flowing
             // water height update when the lighting medium itself did not change.
             if lighting_medium_changed {
-                lighting.enqueue_voxel_edit(position);
+                runtime.lighting.enqueue_voxel_edit(position);
             }
-            enqueue_remesh(position, &mut remesh_queue);
-            pending.enqueue_voxel_edit(position);
+            enqueue_remesh(position, &mut runtime.remesh_queue);
+            runtime.pending.enqueue_voxel_edit(position);
         }
     }
 }
