@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+#[derive(Clone)]
 pub(super) struct DefinitionMap<T> {
     definitions: HashMap<String, T>,
 }
