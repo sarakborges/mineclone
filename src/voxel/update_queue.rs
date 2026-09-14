@@ -45,10 +45,6 @@ impl VoxelUpdateQueue {
     pub(crate) fn len(&self) -> usize {
         self.queue.len()
     }
-
-    pub(crate) fn clear(&mut self) {
-        self.queue.clear();
-    }
 }
 
 #[cfg(test)]

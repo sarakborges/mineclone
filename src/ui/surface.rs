@@ -33,15 +33,6 @@ pub fn settings_content() -> impl Bundle {
     })
 }
 
-pub fn hud_panel() -> impl Bundle {
-    hud_surface(Node {
-        padding: UiRect::axes(px(14), px(10)),
-        border: UiRect::all(px(1)),
-        border_radius: BorderRadius::all(px(6)),
-        ..default()
-    })
-}
-
 pub fn hud_container(node: Node) -> impl Bundle {
     hud_surface(node)
 }

@@ -67,11 +67,6 @@ where
     pub(crate) fn len(&self) -> usize {
         self.pending.len()
     }
-
-    pub(crate) fn clear(&mut self) {
-        self.pending.clear();
-        self.queued.clear();
-    }
 }
 
 #[cfg(test)]
