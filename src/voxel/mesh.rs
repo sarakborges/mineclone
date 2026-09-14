@@ -52,11 +52,7 @@ where
                     .get(cell.block_id)
                     .unwrap_or_else(|| panic!("missing block definition: {}", cell.block_id));
                 let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
-                let tint = if block.textures.is_empty() {
-                    [1.0, 1.0, 1.0]
-                } else {
-                    tint_at(world_voxel, cell)
-                };
+                let mut tint = None;
 
                 for block_face in BlockFace::ALL {
                     let face = orient_face(block_face, cell.orientation);
@@ -64,6 +60,13 @@ where
                         continue;
                     }
 
+                    let tint = *tint.get_or_insert_with(|| {
+                        if block.textures.is_empty() {
+                            [1.0, 1.0, 1.0]
+                        } else {
+                            tint_at(world_voxel, cell)
+                        }
+                    });
                     let texture_rotation =
                         if face_uses_texture_rotation(block.rotate_texture, block_face) {
                             cell.texture_rotation
