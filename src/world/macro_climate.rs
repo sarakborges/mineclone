@@ -13,6 +13,7 @@ pub struct MacroClimateSample {
     pub erosion: f32,
 }
 
+#[derive(Clone, Copy)]
 pub struct MacroClimateField {
     seed: u64,
 }
