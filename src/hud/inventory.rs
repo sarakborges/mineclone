@@ -7,7 +7,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
-    player::inventory::{CreativeInventoryView, InventoryState},
+    player::inventory::InventoryState,
 };
 
 use interaction::{
@@ -16,7 +16,7 @@ use interaction::{
     handle_search_focus, handle_search_input, handle_search_select_all, handle_slot_clicks,
     remember_creative_scroll_positions,
 };
-use state::{CreativeInventoryUiDirty, CreativeScrollState};
+use state::{CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState};
 use sync::{
     rebuild_inventory_when_changed, spawn_inventory, style_category_buttons,
     style_creative_slots, style_inventory_slots, style_inventory_trash_button,
