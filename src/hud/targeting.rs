@@ -18,7 +18,9 @@ use crate::{
     world::biome_field::BiomeField,
 };
 
-const TARGET_ICON_SIZE: f32 = 46.0;
+const TARGET_SLOT_SIZE: f32 = 44.0;
+const TARGET_ICON_SIZE: f32 = 34.0;
+const TARGET_CROSSHAIR_OFFSET: f32 = 62.0;
 
 pub struct TargetHudPlugin;
 
@@ -55,6 +57,7 @@ struct TargetHudContent<'w> {
 
 fn spawn_target_hud(mut commands: Commands, mut icon_materials: ResMut<Assets<BlockIconMaterial>>) {
     let icon_material = icon_materials.add(BlockIconMaterial::empty());
+    let (slot_background, slot_border) = surface::hud_control_static(false);
 
     commands
         .spawn((
@@ -62,35 +65,66 @@ fn spawn_target_hud(mut commands: Commands, mut icon_materials: ResMut<Assets<Bl
             Visibility::Hidden,
             Node {
                 position_type: PositionType::Absolute,
-                top: px(16),
-                right: px(16),
+                left: px(0),
+                top: px(0),
+                width: percent(100),
+                height: percent(100),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
                 ..default()
             },
+            GlobalZIndex(10),
             Pickable::IGNORE,
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|root| {
-            root.spawn(surface::hud_panel()).with_children(|panel| {
-                panel
-                    .spawn(Node {
+            root.spawn((
+                Node {
+                    position_type: PositionType::Relative,
+                    bottom: px(TARGET_CROSSHAIR_OFFSET),
+                    align_items: AlignItems::Center,
+                    column_gap: px(10),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|row| {
+                row.spawn((
+                    Node {
+                        width: px(TARGET_SLOT_SIZE),
+                        height: px(TARGET_SLOT_SIZE),
+                        min_width: px(TARGET_SLOT_SIZE),
+                        min_height: px(TARGET_SLOT_SIZE),
+                        border: UiRect::all(px(2)),
+                        border_radius: BorderRadius::all(px(4)),
                         align_items: AlignItems::Center,
-                        column_gap: px(10),
+                        justify_content: JustifyContent::Center,
                         ..default()
-                    })
-                    .with_children(|row| {
-                        row.spawn((
-                            TargetBlockModel,
-                            BlockModel::empty_display(),
-                            MaterialNode(icon_material),
-                            Node {
-                                width: px(TARGET_ICON_SIZE),
-                                height: px(TARGET_ICON_SIZE),
-                                ..default()
-                            },
-                            Pickable::IGNORE,
-                        ));
-                        row.spawn((typography::hud(""), TargetBlockText));
-                    });
+                    },
+                    BackgroundColor(slot_background),
+                    BorderColor::all(slot_border),
+                    Pickable::IGNORE,
+                ))
+                .with_children(|slot| {
+                    slot.spawn((
+                        TargetBlockModel,
+                        BlockModel::empty_display(),
+                        MaterialNode(icon_material),
+                        Node {
+                            width: px(TARGET_ICON_SIZE),
+                            height: px(TARGET_ICON_SIZE),
+                            ..default()
+                        },
+                        Pickable::IGNORE,
+                    ));
+                });
+
+                row.spawn((
+                    typography::hud(""),
+                    typography::tooltip_shadow(),
+                    TargetBlockText,
+                    Pickable::IGNORE,
+                ));
             });
         });
 }
