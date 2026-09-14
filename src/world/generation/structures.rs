@@ -114,7 +114,7 @@ fn rasterize_structure_candidates(
             let Some(origin_y) = context.feature_fields.structure_origin_y(
                 &structure.id,
                 anchor,
-                || compute_structure_origin_y(anchor, &voxels, context),
+                || compute_structure_origin_y(anchor, voxels, context),
             ) else {
                 continue;
             };
@@ -124,7 +124,7 @@ fn rasterize_structure_candidates(
                 chunk_origin,
                 context.blocks,
                 structure,
-                &voxels,
+                voxels,
                 origin,
             );
         }
@@ -136,7 +136,7 @@ fn rasterize_structure(
     chunk_origin: IVec3,
     blocks: &BlockRegistry,
     structure: &StructureDefinition,
-    voxels: &[StructureVoxel<'_>],
+    voxels: &[StructureVoxel],
     origin: IVec3,
 ) {
     let chunk_size = CHUNK_SIZE as i32;
@@ -154,13 +154,13 @@ fn rasterize_structure(
             continue;
         }
 
-        let block = blocks.get(voxel.block_id).unwrap_or_else(|| {
+        let block = blocks.get(&voxel.block_id).unwrap_or_else(|| {
             panic!(
                 "structure {} references missing block: {}",
                 structure.id, voxel.block_id
             )
         });
-        let block_id = intern_block_id(voxel.block_id);
+        let block_id = intern_block_id(&voxel.block_id);
         let texture_rotation =
             TextureRotation::for_position(world_position, block.rotate_texture.any());
         let local_x = local.x as usize;
