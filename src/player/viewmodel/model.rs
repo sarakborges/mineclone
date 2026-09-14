@@ -44,7 +44,7 @@ struct HeldBlockVisualCache {
     tint_cell: Option<IVec2>,
 }
 
-pub(super) type HeldBlockRootQuery<'w, 's> = Query<
+type HeldBlockRootQuery<'w, 's> = Query<
     'w,
     's,
     (
@@ -68,13 +68,41 @@ pub(super) struct ViewModelArmAssets {
 }
 
 #[derive(SystemParam)]
-pub(super) struct ViewModelContent<'w> {
+pub(super) struct ViewModelDefinitions<'w> {
     asset_server: Res<'w, AssetServer>,
     blocks: Res<'w, BlockRegistry>,
     biomes: Res<'w, BiomeRegistry>,
     biome_field: Res<'w, BiomeField>,
+}
+
+#[derive(SystemParam)]
+pub(super) struct ViewModelSelection<'w> {
     hotbar: Res<'w, PlayerHotbar>,
     placement_orientation: Res<'w, PlacementOrientation>,
+}
+
+#[derive(SystemParam)]
+pub(super) struct ViewModelSpawnAssets<'w> {
+    block_meshes: Res<'w, BlockModelMeshes>,
+    block_materials: ResMut<'w, BlockModelMaterials>,
+    arm_assets: Res<'w, ViewModelArmAssets>,
+    materials: ResMut<'w, Assets<BlockModelMaterial>>,
+}
+
+#[derive(SystemParam)]
+pub(super) struct HeldBlockView<'w, 's> {
+    materials: ResMut<'w, Assets<BlockModelMaterial>>,
+    roots: HeldBlockRootQuery<'w, 's>,
+    faces: Query<
+        'w,
+        's,
+        (
+            &'static HeldBlockFace,
+            &'static MeshMaterial3d<BlockModelMaterial>,
+            &'static mut Visibility,
+        ),
+        Without<HeldBlockRoot>,
+    >,
 }
 
 pub(super) fn setup_viewmodel_arm_assets(
@@ -96,19 +124,24 @@ pub(super) fn setup_viewmodel_arm_assets(
 pub(super) fn spawn_viewmodel(
     mut commands: Commands,
     cameras: Query<(Entity, &Transform), Added<GameplayCamera>>,
-    content: ViewModelContent,
-    block_meshes: Res<BlockModelMeshes>,
-    mut block_materials: ResMut<BlockModelMaterials>,
-    arm_assets: Res<ViewModelArmAssets>,
+    definitions: ViewModelDefinitions,
+    selection: ViewModelSelection,
+    assets: ViewModelSpawnAssets,
     mut item_switch: ResMut<ViewModelItemSwitch>,
-    mut materials: ResMut<Assets<BlockModelMaterial>>,
 ) {
+    let ViewModelSpawnAssets {
+        block_meshes,
+        mut block_materials,
+        arm_assets,
+        mut materials,
+    } = assets;
+
     for (camera, camera_transform) in &cameras {
-        let selected_slot = content.hotbar.selected_slot();
-        let selected_block_id = content
+        let selected_slot = selection.hotbar.selected_slot();
+        let selected_block_id = selection
             .hotbar
             .item_at(selected_slot)
-            .filter(|block_id| content.blocks.get(block_id).is_some());
+            .filter(|block_id| definitions.blocks.get(block_id).is_some());
         item_switch.initialize(selected_block_id);
 
         let item_visibility = item_visibility(selected_block_id);
@@ -120,9 +153,9 @@ pub(super) fn spawn_viewmodel(
             .map(BlockModel::display)
             .unwrap_or_else(BlockModel::empty_display);
         let held_orientation = selected_block_id
-            .and_then(|block_id| content.blocks.get(block_id))
+            .and_then(|block_id| definitions.blocks.get(block_id))
             .map_or(BlockOrientation::default(), |block| {
-                content
+                selection
                     .placement_orientation
                     .for_block(selected_slot, block)
             });
@@ -166,19 +199,22 @@ pub(super) fn spawn_viewmodel(
                         ))
                         .with_children(|held| {
                             let selected_block = selected_block_id.and_then(|block_id| {
-                                content.blocks.get(block_id).map(|block| (block_id, block))
+                                definitions
+                                    .blocks
+                                    .get(block_id)
+                                    .map(|block| (block_id, block))
                             });
                             let tint = selected_block.map(|(_, block)| {
                                 block_tint_at(
                                     block.tint,
                                     tint_position,
-                                    &content.biome_field,
-                                    &content.biomes,
+                                    &definitions.biome_field,
+                                    &definitions.biomes,
                                 )
                             });
 
                             for &face in block_model.faces() {
-                                let layer_count = maximum_block_model_layers(&content.blocks, face);
+                                let layer_count = maximum_block_model_layers(&definitions.blocks, face);
                                 let layer_materials = block_materials.held_for_face(
                                     face,
                                     layer_count,
@@ -195,7 +231,7 @@ pub(super) fn spawn_viewmodel(
                                             face,
                                             layer_index,
                                             block,
-                                            &content.asset_server,
+                                            &definitions.asset_server,
                                             block_model.opacity(),
                                         )
                                         && let Some(mut material_asset) = materials.get_mut(&material)
@@ -230,40 +266,37 @@ pub(super) fn spawn_viewmodel(
 }
 
 pub(super) fn sync_held_block(
-    content: ViewModelContent,
+    definitions: ViewModelDefinitions,
+    selection: ViewModelSelection,
     player: Single<&Transform, With<GameplayCamera>>,
     mut cache: Local<HeldBlockVisualCache>,
-    mut materials: ResMut<Assets<BlockModelMaterial>>,
-    mut roots: HeldBlockRootQuery,
-    mut faces: Query<
-        (
-            &HeldBlockFace,
-            &MeshMaterial3d<BlockModelMaterial>,
-            &mut Visibility,
-        ),
-        Without<HeldBlockRoot>,
-    >,
+    view: HeldBlockView,
 ) {
+    let HeldBlockView {
+        mut materials,
+        mut roots,
+        mut faces,
+    } = view;
     let tint_cell = IVec2::new(
         player.translation.x.floor() as i32,
         player.translation.z.floor() as i32,
     );
     let needs_refresh = cache.tint_cell != Some(tint_cell)
-        || content.hotbar.is_changed()
-        || content.placement_orientation.is_changed()
-        || content.blocks.is_changed()
-        || content.biomes.is_changed()
-        || content.biome_field.is_changed();
+        || selection.hotbar.is_changed()
+        || selection.placement_orientation.is_changed()
+        || definitions.blocks.is_changed()
+        || definitions.biomes.is_changed()
+        || definitions.biome_field.is_changed();
     if !needs_refresh {
         return;
     }
     cache.tint_cell = Some(tint_cell);
 
-    let selected_slot = content.hotbar.selected_slot();
-    let selected_block_id = content
+    let selected_slot = selection.hotbar.selected_slot();
+    let selected_block_id = selection
         .hotbar
         .item_at(selected_slot)
-        .filter(|block_id| content.blocks.get(block_id).is_some());
+        .filter(|block_id| definitions.blocks.get(block_id).is_some());
     let visibility = item_visibility(selected_block_id);
     let tint_position = tint_cell.as_vec2() + Vec2::splat(0.5);
 
@@ -280,11 +313,11 @@ pub(super) fn sync_held_block(
             }
             continue;
         };
-        let block = content
+        let block = definitions
             .blocks
             .get(block_id)
             .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
-        let orientation = content
+        let orientation = selection
             .placement_orientation
             .for_block(selected_slot, block);
         held_transform.rotation = held_block_transform(orientation).rotation;
@@ -292,8 +325,8 @@ pub(super) fn sync_held_block(
         let tint = block_tint_at(
             block.tint,
             tint_position,
-            &content.biome_field,
-            &content.biomes,
+            &definitions.biome_field,
+            &definitions.biomes,
         );
 
         for (face, material_handle, mut layer_visibility) in &mut faces {
@@ -305,7 +338,7 @@ pub(super) fn sync_held_block(
                 face.face,
                 face.layer_index,
                 block,
-                &content.asset_server,
+                &definitions.asset_server,
                 held.opacity(),
             ) else {
                 *layer_visibility = Visibility::Hidden;
