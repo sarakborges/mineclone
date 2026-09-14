@@ -16,8 +16,8 @@ use super::{
     mesh_lighting::{face_lighting, push_lit_quad},
     orientation::orient_face,
     quad::VOXEL_FACE_UVS,
+    read::VoxelRead,
     texture_rotation::TextureRotation,
-    world::VoxelWorld,
 };
 
 mod geometry;
@@ -29,14 +29,15 @@ pub struct ChunkFaceMesh {
     pub casts_shadow: bool,
 }
 
-pub fn build_chunk_mesh<F>(
-    world: &VoxelWorld,
+pub fn build_chunk_mesh<W, F>(
+    world: &W,
     chunk_coord: IVec3,
     chunk: &VoxelChunk,
     blocks: &BlockRegistry,
     tint_at: F,
 ) -> Vec<ChunkFaceMesh>
 where
+    W: VoxelRead + ?Sized,
     F: Fn(IVec3, VoxelCell) -> [f32; 3],
 {
     let mut buffers = HashMap::<(&'static str, BlockFace, bool), VoxelMeshBuffer>::new();
@@ -114,8 +115,6 @@ where
         })
         .collect::<Vec<_>>();
 
-    // Stable ordering lets lighting-only remeshes update the existing mesh
-    // assets in place instead of destroying and recreating render entities.
     meshes.sort_by_key(|mesh| (mesh.block_id, face_sort_key(mesh.face), mesh.casts_shadow));
     meshes
 }
