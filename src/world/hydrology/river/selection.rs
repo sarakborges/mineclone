@@ -8,7 +8,7 @@ use super::super::{
         RIVER_FLOW_TRACE_STEPS, RIVER_MINIMUM_FLOW,
     },
     drainage::{DrainageNetwork, DrainageNode},
-    lake::lake_for_local_basin,
+    lake::{LakeBasinContext, lake_for_local_basin},
     math::{cell_hash, hash_unit},
     types::{HydrologySurfaceSample, WaterBody},
 };
@@ -170,6 +170,13 @@ where
     let river_weight = river_weight.clamp(0.0, 1.0);
     let lake_weight = lake_weight.clamp(0.0, 1.0);
     let river_flow_threshold = river_flow_threshold(river_weight);
+    let lake_context = LakeBasinContext {
+        seed,
+        sea_level,
+        water_fluid,
+        ocean_threshold,
+        lake_weight,
+    };
 
     for (&cell, &flow) in flow_cache {
         let source = network.node(cell);
@@ -179,16 +186,7 @@ where
 
         if source.biome_hydrology.can_generate_lake && source.elevation > sea_level + 1.0 {
             let neighbors = network.neighbor_nodes(cell);
-            if let Some(lake) = lake_for_local_basin(
-                cell,
-                source,
-                &neighbors,
-                seed,
-                sea_level,
-                water_fluid,
-                ocean_threshold,
-                lake_weight,
-            ) {
+            if let Some(lake) = lake_for_local_basin(cell, source, &neighbors, &lake_context) {
                 channels.insert(cell);
                 lakes.insert(cell, lake);
             }

@@ -31,6 +31,14 @@ pub(super) struct RiverSystem {
     pub water_bodies: Vec<WaterBody>,
 }
 
+struct ConfluenceTargetRequest {
+    source_cell: IVec2,
+    downstream_cell: IVec2,
+    downstream: DrainageNode,
+    downstream_water_level: Option<f32>,
+    downstream_flow: u32,
+}
+
 pub(super) fn build_river_system<F>(
     coord: IVec2,
     seed: u64,
@@ -152,11 +160,13 @@ where
                 .map(|lake| lake.water_level)
                 .or_else(|| confluence_water_levels.get(&downstream_cell).copied());
             let (downstream, downstream_water_level, downstream_flow) = confluence_target(
-                cell,
-                downstream_cell,
-                downstream,
-                downstream_water_level,
-                downstream_flow,
+                ConfluenceTargetRequest {
+                    source_cell: cell,
+                    downstream_cell,
+                    downstream,
+                    downstream_water_level,
+                    downstream_flow,
+                },
                 seed,
                 &selection,
                 &flow_cache,
@@ -217,13 +227,8 @@ where
     incoming
 }
 
-#[allow(clippy::too_many_arguments)]
 fn confluence_target<F>(
-    source_cell: IVec2,
-    downstream_cell: IVec2,
-    downstream: DrainageNode,
-    downstream_water_level: Option<f32>,
-    downstream_flow: u32,
+    request: ConfluenceTargetRequest,
     seed: u64,
     selection: &RiverSelection,
     flow_cache: &HashMap<IVec2, u32>,
@@ -232,6 +237,14 @@ fn confluence_target<F>(
 where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
+    let ConfluenceTargetRequest {
+        source_cell,
+        downstream_cell,
+        downstream,
+        downstream_water_level,
+        downstream_flow,
+    } = request;
+
     if downstream_water_level.is_some() || !selection.channels.contains(&downstream_cell) {
         return (downstream, downstream_water_level, downstream_flow);
     }

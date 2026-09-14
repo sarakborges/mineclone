@@ -10,19 +10,23 @@ use super::{
     types::WaterBody,
 };
 
+pub(super) struct LakeBasinContext<'a> {
+    pub(super) seed: u64,
+    pub(super) sea_level: f32,
+    pub(super) water_fluid: &'a str,
+    pub(super) ocean_threshold: f32,
+    pub(super) lake_weight: f32,
+}
+
 pub(super) fn lake_for_local_basin(
     cell: IVec2,
     source: DrainageNode,
     neighbors: &[DrainageNode],
-    seed: u64,
-    sea_level: f32,
-    water_fluid: &str,
-    ocean_threshold: f32,
-    lake_weight: f32,
+    context: &LakeBasinContext<'_>,
 ) -> Option<WaterBody> {
-    if source.continentalness <= ocean_threshold
+    if source.continentalness <= context.ocean_threshold
         || !source.biome_hydrology.can_generate_lake
-        || source.elevation <= sea_level + 1.0
+        || source.elevation <= context.sea_level + 1.0
     {
         return None;
     }
@@ -37,10 +41,10 @@ pub(super) fn lake_for_local_basin(
         return None;
     }
 
-    let hash = cell_hash(cell, seed ^ 0xbb67_ae85_84ca_a73b);
+    let hash = cell_hash(cell, context.seed ^ 0xbb67_ae85_84ca_a73b);
     let lake_chance = (LAKE_CHANCE
         * source.biome_hydrology.lake_chance_multiplier
-        * lake_weight.clamp(0.0, 1.0))
+        * context.lake_weight.clamp(0.0, 1.0))
     .clamp(0.0, 1.0);
 
     if hash_unit(hash.rotate_left(17)) > lake_chance {
@@ -55,7 +59,7 @@ pub(super) fn lake_for_local_basin(
     let aspect = lerp(0.68, 1.32, hash_unit(hash.rotate_left(43)));
     let radius = Vec2::new(base_radius * aspect, base_radius * (2.0 - aspect));
     let rotation = hash_unit(hash.rotate_left(11)) * std::f32::consts::TAU;
-    let water_level = (source.elevation - 0.65).max(sea_level);
+    let water_level = (source.elevation - 0.65).max(context.sea_level);
 
     Some(WaterBody {
         center: source.position,
@@ -64,6 +68,6 @@ pub(super) fn lake_for_local_basin(
         shape_seed: hash.rotate_left(7),
         water_level,
         carve_depth: LAKE_CARVE_DEPTH,
-        fluid_id: water_fluid.to_owned(),
+        fluid_id: context.water_fluid.to_owned(),
     })
 }
