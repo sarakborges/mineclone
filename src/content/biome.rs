@@ -7,7 +7,8 @@ use self::validation::validate_biome_definition;
 use super::{
     biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
     biome_hydrology::BiomeHydrology, biome_material::BiomeMaterialLayer,
-    biome_sky_layer::BiomeSkyLayerVisuals, biome_structure::BiomeStructure,
+    biome_sky_layer::BiomeSkyLayerVisuals,
+    biome_structure::{BiomeStructure, StructurePlacementRules},
     biome_surface_carver::BiomeSurfaceCarver, biome_terrain::BiomeTerrain,
     biome_terrain_modifier::BiomeTerrainModifier, color::Hsi, day_night_phase::DayNightPhases,
     registry::DefinitionMap,
@@ -114,11 +115,19 @@ pub struct BiomeDefinition {
     pub visuals: BiomeVisuals,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct BiomeStructurePlacement {
+    pub(crate) biome_id: String,
+    pub(crate) structure_id: String,
+    pub(crate) placement: StructurePlacementRules,
+}
+
 #[derive(Resource, Default)]
 pub struct BiomeRegistry {
     definitions: DefinitionMap<BiomeDefinition>,
     has_volume_density_modifiers: bool,
     has_volume_solid_density_modifiers: bool,
+    structure_placements: Vec<BiomeStructurePlacement>,
 }
 
 impl BiomeRegistry {
@@ -128,7 +137,7 @@ impl BiomeRegistry {
             .validate(&format!("biome {} name", definition.id));
         validate_biome_definition(&definition);
         self.definitions.insert(definition.id.clone(), definition);
-        self.rebuild_capabilities();
+        self.rebuild_runtime_metadata();
     }
 
     pub fn get(&self, id: &str) -> Option<&BiomeDefinition> {
@@ -147,7 +156,11 @@ impl BiomeRegistry {
         self.has_volume_solid_density_modifiers
     }
 
-    fn rebuild_capabilities(&mut self) {
+    pub(crate) fn structure_placements(&self) -> &[BiomeStructurePlacement] {
+        &self.structure_placements
+    }
+
+    fn rebuild_runtime_metadata(&mut self) {
         self.has_volume_density_modifiers = self.definitions.values().any(|definition| {
             definition.kind == BiomeKind::Volume && definition.density_modifier.is_some()
         });
@@ -157,6 +170,23 @@ impl BiomeRegistry {
                     definition.density_modifier,
                     Some(BiomeDensityModifier::Solid { .. })
                 )
+        });
+
+        self.structure_placements = self
+            .definitions
+            .values()
+            .flat_map(|biome| {
+                biome.structures.iter().map(|structure| BiomeStructurePlacement {
+                    biome_id: biome.id.clone(),
+                    structure_id: structure.id.clone(),
+                    placement: structure.placement,
+                })
+            })
+            .collect();
+        self.structure_placements.sort_by(|left, right| {
+            left.biome_id
+                .cmp(&right.biome_id)
+                .then_with(|| left.structure_id.cmp(&right.structure_id))
         });
     }
 }
