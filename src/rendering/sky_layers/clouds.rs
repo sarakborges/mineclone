@@ -5,7 +5,10 @@ use bevy::{
 
 use crate::{app::game_state::GameState, player::camera::GameplayCamera};
 
-use super::state::SkyLayerVisualState;
+use super::{
+    deterministic::{hash_signed, hash01},
+    state::SkyLayerVisualState,
+};
 
 const MAX_CLOUDS: usize = 24;
 const CLOUD_PARTS: usize = 3;
@@ -126,17 +129,4 @@ fn cloud_part_shape(seed: u32, part_index: usize) -> (Vec3, Vec3) {
             Vec3::new(width * 0.42, 0.7, depth * 0.62),
         ),
     }
-}
-
-fn hash01(mut value: u32) -> f32 {
-    value ^= value >> 16;
-    value = value.wrapping_mul(0x7feb_352d);
-    value ^= value >> 15;
-    value = value.wrapping_mul(0x846c_a68b);
-    value ^= value >> 16;
-    value as f32 / u32::MAX as f32
-}
-
-fn hash_signed(value: u32) -> f32 {
-    hash01(value) * 2.0 - 1.0
 }
