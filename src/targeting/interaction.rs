@@ -2,7 +2,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
-    content::{block::BlockRegistry, tool::ToolRegistry},
+    content::tool::ToolRegistry,
     player::{
         camera::GameplayCamera, hotbar::PlayerHotbar, inventory::InventoryState,
         viewmodel::ViewModelAnimation,
