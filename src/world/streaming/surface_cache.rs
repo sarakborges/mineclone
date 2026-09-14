@@ -45,22 +45,27 @@ fn chunk_surface_range(
 ) -> (i32, i32) {
     let chunk_size = CHUNK_SIZE as i32;
     let origin = horizontal_chunk * chunk_size;
-    let offsets = [0, chunk_size / 3, chunk_size * 2 / 3, chunk_size - 1];
+    let last = chunk_size - 1;
+    let center = chunk_size / 2;
+    let probes = [
+        IVec2::new(0, 0),
+        IVec2::new(last, 0),
+        IVec2::new(0, last),
+        IVec2::new(last, last),
+        IVec2::new(center, center),
+    ];
     let mut minimum = i32::MAX;
     let mut maximum = i32::MIN;
 
-    for z in offsets {
-        for x in offsets {
-            let height = surface_height(origin + IVec2::new(x, z), dimension, biomes, biome_field);
-            minimum = minimum.min(height);
-            maximum = maximum.max(height);
-        }
+    for offset in probes {
+        let height = surface_height(origin + offset, dimension, biomes, biome_field);
+        minimum = minimum.min(height);
+        maximum = maximum.max(height);
     }
 
-    // The nearby player volume is loaded independently of this estimate. For
-    // distant columns, a full chunk of guard in both directions keeps narrow
-    // unsampled ridges and cuts inside the selected vertical range without
-    // paying the 16x16 generation-column cost during every queue rebuild.
+    // Distant streaming only needs a conservative vertical envelope. Five
+    // probes plus a full-chunk guard retain narrow ridges/cuts while avoiding
+    // the previous 16 expensive biome/terrain samples for every new column.
     (
         (minimum - SURFACE_RANGE_GUARD_BLOCKS).max(1),
         maximum + SURFACE_RANGE_GUARD_BLOCKS,
