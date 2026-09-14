@@ -54,7 +54,6 @@ struct HotbarHudContent<'w> {
     blocks: Res<'w, BlockRegistry>,
     tools: Res<'w, ToolRegistry>,
     hotbar: Res<'w, PlayerHotbar>,
-    inventory_state: Res<'w, State<InventoryState>>,
     language: Res<'w, ActiveLanguage>,
 }
 
@@ -105,9 +104,10 @@ impl Plugin for HotbarHudPlugin {
 fn spawn_hotbar(
     mut commands: Commands,
     content: HotbarHudContent,
+    inventory_state: Res<State<InventoryState>>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
-    let visibility = if *content.inventory_state.get() == InventoryState::Open {
+    let visibility = if *inventory_state.get() == InventoryState::Open {
         Visibility::Hidden
     } else {
         Visibility::Visible
@@ -355,6 +355,7 @@ fn update_hotbar_item_visuals(
         state.player.translation.x.floor() as i32,
         state.player.translation.z.floor() as i32,
     );
+    let block_definitions_changed = content.block_definitions_changed();
     let global_refresh = cache.tint_cell != Some(tint_cell)
         || state.hotbar.is_changed()
         || state.placement_orientation.is_changed()
@@ -380,7 +381,7 @@ fn update_hotbar_item_visuals(
             continue;
         };
 
-        if icon.orientation != orientation {
+        if icon.orientation != orientation || block_definitions_changed {
             material.set_block_orientation(block, orientation, &content.asset_server);
             icon.orientation = orientation;
         }
