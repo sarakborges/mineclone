@@ -10,7 +10,7 @@ use super::{chunk_remesh::ChunkRemeshQueue, chunk_system_params::VoxelContent};
 const MAX_LIGHTING_VOXELS_PER_FRAME: usize = 4_096;
 
 #[derive(SystemParam)]
-struct DynamicLightingRuntime<'w> {
+pub(super) struct DynamicLightingRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
     lighting: ResMut<'w, PendingLightingUpdates>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
