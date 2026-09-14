@@ -229,11 +229,3 @@ pub(super) fn remember_creative_scroll_positions(
         state.catalog_y = position.0.y;
     }
 }
-
-pub(super) fn reset_creative_ui_state(
-    mut scroll_state: ResMut<CreativeScrollState>,
-    mut ui_dirty: ResMut<CreativeInventoryUiDirty>,
-) {
-    *scroll_state = default();
-    ui_dirty.clear();
-}
