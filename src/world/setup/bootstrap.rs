@@ -1,11 +1,9 @@
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::prelude::*;
 
 use crate::{
     content::{
         biome::{BiomeKind, BiomeRegistry},
-        block::BlockRegistry,
-        dimension::{DimensionDefinition, DimensionRegistry},
-        fluid::FluidRegistry,
+        dimension::DimensionDefinition,
         read_content,
     },
     player::player_id::LOCAL_PLAYER_ID,
@@ -13,13 +11,14 @@ use crate::{
     voxel::{chunk::CHUNK_SIZE, coordinates::chunk_coord_from_position, world::VoxelWorld},
 };
 
-use super::{WorldLoadingPhase, WorldLoadingState};
+use super::{
+    WorldLoadingPhase, WorldLoadingState,
+    system_params::{WorldBootstrapConfig, WorldBootstrapContent, WorldBootstrapPersistence},
+};
 use crate::world::{
-    InMemoryWorldSave, WorldLoadMode, WorldSeed,
+    WorldLoadMode,
     biome_field::BiomeField,
     chunk_rendering::{FluidMaterials, TerrainMaterials},
-    dimension::CurrentDimension,
-    game_rules::GameRules,
     generation_region::generation_region_coord,
     hydrology::HydrologySurfaceSample,
     render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
@@ -33,50 +32,36 @@ const DEFAULT_SPAWN_COLUMN: IVec2 = IVec2::new(8, 8);
 const SPAWN_SEARCH_STEP_BLOCKS: i32 = 8;
 const SPAWN_SEARCH_RADIUS_STEPS: i32 = 64;
 
-#[derive(SystemParam)]
-pub(in crate::world) struct WorldLoadingInputs<'w> {
-    asset_server: Res<'w, AssetServer>,
-    current_dimension: Res<'w, CurrentDimension>,
-    seed: Res<'w, WorldSeed>,
-    load_mode: Res<'w, WorldLoadMode>,
-    render_distance: Res<'w, RenderDistanceSettings>,
-    game_rules: ResMut<'w, GameRules>,
-    dimensions: Res<'w, DimensionRegistry>,
-    biomes: Res<'w, BiomeRegistry>,
-    blocks: Res<'w, BlockRegistry>,
-    fluids: Res<'w, FluidRegistry>,
-    existing_world: Option<Res<'w, VoxelWorld>>,
-}
-
 pub(in crate::world) fn begin_world_loading(
     mut commands: Commands,
     mut terrain_material_assets: ResMut<Assets<TerrainMaterial>>,
-    mut save: ResMut<InMemoryWorldSave>,
-    mut inputs: WorldLoadingInputs,
+    content: WorldBootstrapContent,
+    mut config: WorldBootstrapConfig,
+    mut persistence: WorldBootstrapPersistence,
 ) {
-    let fresh_content = if *inputs.load_mode == WorldLoadMode::New {
+    let fresh_content = if *persistence.load_mode == WorldLoadMode::New {
         Some(read_content())
     } else {
         None
     };
     let dimensions = fresh_content
         .as_ref()
-        .map_or(&*inputs.dimensions, |content| &content.dimensions);
+        .map_or(&*content.dimensions, |content| &content.dimensions);
     let biomes = fresh_content
         .as_ref()
-        .map_or(&*inputs.biomes, |content| &content.biomes);
+        .map_or(&*content.biomes, |content| &content.biomes);
     let blocks = fresh_content
         .as_ref()
-        .map_or(&*inputs.blocks, |content| &content.blocks);
+        .map_or(&*content.blocks, |content| &content.blocks);
     let fluids = fresh_content
         .as_ref()
-        .map_or(&*inputs.fluids, |content| &content.fluids);
+        .map_or(&*content.fluids, |content| &content.fluids);
     let dimension = dimensions
-        .get(&inputs.current_dimension.id)
+        .get(&config.current_dimension.id)
         .unwrap_or_else(|| {
             panic!(
                 "missing dimension definition: {}",
-                inputs.current_dimension.id
+                config.current_dimension.id
             )
         });
 
@@ -85,7 +70,7 @@ pub(in crate::world) fn begin_world_loading(
         .hydrology
         .validate_references(&dimension.id, biomes, blocks, fluids);
 
-    let biome_field = BiomeField::from_dimension(dimension, biomes, inputs.seed.0);
+    let biome_field = BiomeField::from_dimension(dimension, biomes, config.seed.0);
     let coast_weight = dimension
         .hydrology
         .coast_biome
@@ -97,7 +82,7 @@ pub(in crate::world) fn begin_world_loading(
         .as_deref()
         .map_or(1.0, |biome_id| dimension.biome_weight(biome_id));
     let feature_fields = WorldFeatureFields::new(
-        inputs.seed.0,
+        config.seed.0,
         dimension.sea_level,
         dimension.hydrology.clone(),
         coast_weight,
@@ -106,21 +91,25 @@ pub(in crate::world) fn begin_world_loading(
     let (roughness, metallic) = average_terrain_material(dimension, biomes);
     let terrain_materials = TerrainMaterials::from_registry(
         blocks,
-        &inputs.asset_server,
+        &content.asset_server,
         &mut terrain_material_assets,
         roughness,
         metallic,
     );
     let fluid_materials = FluidMaterials::from_registry(fluids, &mut terrain_material_assets);
-    let spawn_column = if *inputs.load_mode == WorldLoadMode::Load {
-        save.player_position(LOCAL_PLAYER_ID)
+    let spawn_column = if *persistence.load_mode == WorldLoadMode::Load {
+        persistence
+            .save
+            .player_position(LOCAL_PLAYER_ID)
             .map(|position| IVec2::new(position.x.floor() as i32, position.z.floor() as i32))
             .unwrap_or(DEFAULT_SPAWN_COLUMN)
     } else {
         find_initial_spawn_column(dimension, biomes, &biome_field, &feature_fields)
     };
-    let initial_center = if *inputs.load_mode == WorldLoadMode::Load {
-        save.player_position(LOCAL_PLAYER_ID)
+    let initial_center = if *persistence.load_mode == WorldLoadMode::Load {
+        persistence
+            .save
+            .player_position(LOCAL_PLAYER_ID)
             .map(|position| {
                 let chunk = chunk_coord_from_position(position);
                 IVec3::new(chunk.x, chunk.y.max(0), chunk.z)
@@ -141,27 +130,27 @@ pub(in crate::world) fn begin_world_loading(
             spawn_column.y.div_euclid(CHUNK_SIZE as i32),
         )
     };
-    let coords = bootstrap_chunk_coords(initial_center, &inputs.render_distance);
+    let coords = bootstrap_chunk_coords(initial_center, &config.render_distance);
 
-    match *inputs.load_mode {
+    match *persistence.load_mode {
         WorldLoadMode::New => {
             commands.insert_resource(VoxelWorld::default());
-            save.begin_new_world(
-                *inputs.seed,
-                &inputs.current_dimension.id,
-                *inputs.game_rules,
+            persistence.save.begin_new_world(
+                *config.seed,
+                &config.current_dimension.id,
+                *config.game_rules,
             );
         }
         WorldLoadMode::Load => {
             assert!(
-                save.has_world(),
+                persistence.save.has_world(),
                 "cannot load a world that is not saved in memory"
             );
             assert!(
-                inputs.existing_world.is_some(),
+                persistence.existing_world.is_some(),
                 "saved world voxel state is missing from memory"
             );
-            *inputs.game_rules = save.game_rules();
+            *config.game_rules = persistence.save.game_rules();
         }
     }
 
