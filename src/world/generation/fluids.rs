@@ -16,22 +16,29 @@ use crate::{
 
 use super::index::{column_index, voxel_index};
 
+pub(super) struct FluidPassContext<'a> {
+    pub(super) fluids: &'a FluidRegistry,
+    pub(super) region: &'a GenerationRegion,
+    pub(super) anchored_caves: Option<&'a CaveConnectivityRegion>,
+    pub(super) underground_water_fluid: &'a str,
+}
+
 pub(super) fn rasterize_fluid_pass(
     chunk: &mut VoxelChunk,
     chunk_origin: IVec3,
     columns: &[GenerationColumnSample],
     density: &[f32],
-    fluids: &FluidRegistry,
-    region: &GenerationRegion,
-    anchored_caves: Option<&CaveConnectivityRegion>,
-    underground_water_fluid: &str,
+    pass: &FluidPassContext<'_>,
 ) {
-    let underground_fluid_id = anchored_caves.map(|_| {
-        fluids.id_of(underground_water_fluid).unwrap_or_else(|| {
-            panic!(
-                "underground hydrology references missing fluid: {underground_water_fluid}"
-            )
-        })
+    let underground_fluid_id = pass.anchored_caves.map(|_| {
+        pass.fluids
+            .id_of(pass.underground_water_fluid)
+            .unwrap_or_else(|| {
+                panic!(
+                    "underground hydrology references missing fluid: {}",
+                    pass.underground_water_fluid
+                )
+            })
     });
 
     for local_z in 0..CHUNK_SIZE {
@@ -40,12 +47,13 @@ pub(super) fn rasterize_fluid_pass(
             let world_z = chunk_origin.z + local_z as i32;
             let horizontal = Vec2::new(world_x as f32 + 0.5, world_z as f32 + 0.5);
             let surface_height = columns[column_index(local_x, local_z)].surface_height as f32;
-            let surface_water = region
+            let surface_water = pass
+                .region
                 .hydrology
                 .water_at(horizontal)
                 .filter(|water| surface_water_is_supported(*water, surface_height));
             let surface_fluid_id = surface_water.as_ref().map(|water| {
-                fluids.id_of(water.fluid_id).unwrap_or_else(|| {
+                pass.fluids.id_of(water.fluid_id).unwrap_or_else(|| {
                     panic!("hydrology references missing fluid: {}", water.fluid_id)
                 })
             });
@@ -69,7 +77,7 @@ pub(super) fn rasterize_fluid_pass(
                     continue;
                 }
 
-                let (Some(caves), Some(fluid_id)) = (anchored_caves, underground_fluid_id)
+                let (Some(caves), Some(fluid_id)) = (pass.anchored_caves, underground_fluid_id)
                 else {
                     continue;
                 };

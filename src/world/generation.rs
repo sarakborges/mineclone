@@ -34,8 +34,8 @@ use crate::{
 
 use self::{
     caves::anchored_cave_region,
-    density::sample_density_field,
-    fluids::rasterize_fluid_pass,
+    density::{DensityPassContext, sample_density_field},
+    fluids::{FluidPassContext, rasterize_fluid_pass},
     materials::{MaterialPassContext, rasterize_material_pass},
     structures::rasterize_structures,
 };
@@ -159,12 +159,14 @@ pub(crate) fn generate_chunk(
     let density = sample_density_field(
         chunk_origin,
         columns.as_ref(),
-        region.as_ref(),
-        &chunk_volume_region,
-        anchored_caves.as_deref(),
-        context.biome_field,
-        context.biomes,
-        context.dimension.sea_level as f32,
+        &DensityPassContext {
+            region: region.as_ref(),
+            volume_region: &chunk_volume_region,
+            anchored_caves: anchored_caves.as_deref(),
+            biome_field: context.biome_field,
+            biomes: context.biomes,
+            sea_level: context.dimension.sea_level as f32,
+        },
     );
     let mut chunk = VoxelChunk::empty();
 
@@ -185,10 +187,12 @@ pub(crate) fn generate_chunk(
         chunk_origin,
         columns.as_ref(),
         &density.values,
-        context.fluids,
-        region.as_ref(),
-        anchored_caves.as_deref(),
-        &context.dimension.hydrology.water_fluid,
+        &FluidPassContext {
+            fluids: context.fluids,
+            region: region.as_ref(),
+            anchored_caves: anchored_caves.as_deref(),
+            underground_water_fluid: &context.dimension.hydrology.water_fluid,
+        },
     );
     rasterize_structures(&mut chunk, chunk_origin, context);
 
