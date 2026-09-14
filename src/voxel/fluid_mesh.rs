@@ -78,14 +78,16 @@ where
         }
     }
 
-    buffers
+    let mut meshes = buffers
         .into_iter()
         .filter_map(|(fluid_id, buffer)| {
             buffer
                 .into_mesh()
                 .map(|mesh| ChunkFluidMesh { fluid_id, mesh })
         })
-        .collect()
+        .collect::<Vec<_>>();
+    meshes.sort_by_key(|mesh| mesh.fluid_id);
+    meshes
 }
 
 fn fluid_face_vertices(

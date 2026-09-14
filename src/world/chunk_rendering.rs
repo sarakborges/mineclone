@@ -17,7 +17,7 @@ use super::biome_field::BiomeField;
 
 pub(crate) use materials::{FluidMaterials, TerrainMaterials};
 pub(crate) use pool::{ChunkRenderPool, clear_chunk_render_pool};
-pub(crate) use refresh::refresh_chunk_mesh;
+pub(crate) use refresh::{refresh_chunk_lighting_mesh, refresh_chunk_mesh};
 pub(crate) use spawn::spawn_chunk_mesh;
 
 pub(crate) struct ChunkRenderContext<'a> {

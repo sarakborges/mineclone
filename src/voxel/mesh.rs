@@ -1,5 +1,3 @@
-mod geometry;
-
 use std::collections::HashMap;
 
 use bevy::prelude::*;
@@ -21,6 +19,8 @@ use super::{
     texture_rotation::TextureRotation,
     world::VoxelWorld,
 };
+
+mod geometry;
 
 pub struct ChunkFaceMesh {
     pub block_id: &'static str,
@@ -99,7 +99,7 @@ where
         }
     }
 
-    buffers
+    let mut meshes = buffers
         .into_iter()
         .filter_map(|((block_id, face, casts_shadow), buffer)| {
             buffer.into_mesh().map(|mesh| ChunkFaceMesh {
@@ -109,7 +109,23 @@ where
                 casts_shadow,
             })
         })
-        .collect()
+        .collect::<Vec<_>>();
+
+    // Stable ordering lets lighting-only remeshes update the existing mesh
+    // assets in place instead of destroying and recreating render entities.
+    meshes.sort_by_key(|mesh| (mesh.block_id, face_sort_key(mesh.face), mesh.casts_shadow));
+    meshes
+}
+
+fn face_sort_key(face: BlockFace) -> u8 {
+    match face {
+        BlockFace::Right => 0,
+        BlockFace::Left => 1,
+        BlockFace::Top => 2,
+        BlockFace::Bottom => 3,
+        BlockFace::Front => 4,
+        BlockFace::Back => 5,
+    }
 }
 
 fn face_uses_texture_rotation(rotations: BlockTextureRotations, face: BlockFace) -> bool {

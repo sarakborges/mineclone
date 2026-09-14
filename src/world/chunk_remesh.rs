@@ -7,7 +7,7 @@ use crate::voxel::{
 };
 
 use super::{
-    chunk_rendering::refresh_chunk_mesh,
+    chunk_rendering::{refresh_chunk_lighting_mesh, refresh_chunk_mesh},
     chunk_system_params::{ChunkContent, ChunkRenderer},
 };
 
@@ -42,7 +42,6 @@ impl ChunkRemeshQueue {
         if coord.y >= 0 {
             self.enqueue_priority(coord);
             self.immediate_geometry.enqueue_front(coord);
-            self.immediate_lighting.enqueue_front(coord);
         }
     }
 
@@ -52,17 +51,17 @@ impl ChunkRemeshQueue {
         }
     }
 
-    pub(crate) fn has_immediate_lighting(&self) -> bool {
-        self.immediate_lighting.len() > 0
-    }
-
     pub(crate) fn enqueue_lighting_change(&mut self, coord: IVec3) {
-        self.enqueue_priority(coord);
         if coord.y >= 0 {
             self.immediate_lighting.enqueue_front(coord);
         }
 
-        self.enqueue_voxel_edit_neighbors(coord);
+        for offset in CARDINAL_NEIGHBORS {
+            let neighbor = coord + offset;
+            if neighbor.y >= 0 {
+                self.immediate_lighting.enqueue(neighbor);
+            }
+        }
     }
 
     pub(crate) fn extend(&mut self, coords: impl IntoIterator<Item = IVec3>) {
@@ -88,9 +87,7 @@ impl ChunkRemeshQueue {
     }
 
     fn pop_immediate_lighting(&mut self) -> Option<IVec3> {
-        let coord = self.immediate_lighting.pop()?;
-        self.queue.remove(coord);
-        Some(coord)
+        self.immediate_lighting.pop()
     }
 
     fn clear(&mut self) {
@@ -145,7 +142,7 @@ pub(super) fn process_immediate_lighting_remesh(
             break;
         };
 
-        refresh_chunk_mesh(
+        refresh_chunk_lighting_mesh(
             &mut renderer.commands,
             &mut renderer.meshes,
             &mut renderer.pool,
@@ -215,13 +212,13 @@ mod tests {
     }
 
     #[test]
-    fn voxel_edit_drops_redundant_center_from_budgeted_queue() {
+    fn voxel_edit_keeps_lighting_refresh_separate_from_geometry() {
         let mut queue = ChunkRemeshQueue::default();
         let coord = IVec3::new(4, 2, -3);
         queue.enqueue_voxel_edit(coord);
 
         assert_eq!(queue.pop_immediate_geometry(), Some(coord));
-        assert_eq!(queue.pop_immediate_lighting(), Some(coord));
+        assert_eq!(queue.pop_immediate_lighting(), None);
 
         let mut queued = Vec::new();
         while let Some(value) = queue.pop() {
@@ -234,22 +231,20 @@ mod tests {
     }
 
     #[test]
-    fn lighting_change_immediately_refreshes_changed_chunk_and_prioritizes_neighbors() {
+    fn lighting_change_uses_only_stable_lighting_remesh_queue() {
         let mut queue = ChunkRemeshQueue::default();
         let coord = IVec3::new(4, 2, -3);
         queue.enqueue_lighting_change(coord);
 
-        assert_eq!(queue.pop_immediate_lighting(), Some(coord));
-        assert_eq!(queue.pop_immediate_lighting(), None);
-
-        let mut queued = Vec::new();
-        while let Some(value) = queue.pop() {
-            queued.push(value);
+        let mut lighting = Vec::new();
+        while let Some(value) = queue.pop_immediate_lighting() {
+            lighting.push(value);
         }
 
-        assert!(!queued.contains(&coord));
+        assert!(lighting.contains(&coord));
         for offset in CARDINAL_NEIGHBORS {
-            assert!(queued.contains(&(coord + offset)));
+            assert!(lighting.contains(&(coord + offset)));
         }
+        assert_eq!(queue.pop(), None);
     }
 }

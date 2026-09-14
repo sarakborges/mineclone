@@ -5,30 +5,39 @@ use crate::{
     rendering::block_tint::{block_tint_at, block_vertex_tint},
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
-        fluid_mesh::build_fluid_meshes,
-        mesh::build_chunk_mesh,
+        fluid_mesh::{ChunkFluidMesh, build_fluid_meshes},
+        mesh::{ChunkFaceMesh, build_chunk_mesh},
     },
 };
 
 use super::{ChunkRenderContext, pool::ChunkRenderPool};
 
-pub fn spawn_chunk_mesh(
-    commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    render_pool: &mut ChunkRenderPool,
+pub(super) enum BuiltChunkMesh {
+    Terrain(ChunkFaceMesh),
+    Fluid(ChunkFluidMesh),
+}
+
+impl BuiltChunkMesh {
+    pub(super) fn mesh(&self) -> &Mesh {
+        match self {
+            Self::Terrain(mesh) => &mesh.mesh,
+            Self::Fluid(mesh) => &mesh.mesh,
+        }
+    }
+
+    pub(super) fn into_mesh(self) -> Mesh {
+        match self {
+            Self::Terrain(mesh) => mesh.mesh,
+            Self::Fluid(mesh) => mesh.mesh,
+        }
+    }
+}
+
+pub(super) fn build_chunk_render_meshes(
     coord: IVec3,
     chunk: &VoxelChunk,
     context: &ChunkRenderContext<'_>,
-) {
-    if render_pool.contains(coord) {
-        return;
-    }
-
-    if chunk.is_empty() {
-        render_pool.insert(coord, Vec::new(), Vec::new(), 0);
-        return;
-    }
-
+) -> Vec<BuiltChunkMesh> {
     let face_meshes = build_chunk_mesh(
         context.world,
         coord,
@@ -67,56 +76,96 @@ pub fn spawn_chunk_mesh(
 
         [tint.r, tint.g, tint.b]
     });
+
+    face_meshes
+        .into_iter()
+        .map(BuiltChunkMesh::Terrain)
+        .chain(fluid_meshes.into_iter().map(BuiltChunkMesh::Fluid))
+        .collect()
+}
+
+pub fn spawn_chunk_mesh(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    render_pool: &mut ChunkRenderPool,
+    coord: IVec3,
+    chunk: &VoxelChunk,
+    context: &ChunkRenderContext<'_>,
+) {
+    if render_pool.contains(coord) {
+        return;
+    }
+
+    if chunk.is_empty() {
+        render_pool.insert(coord, Vec::new(), Vec::new(), 0);
+        return;
+    }
+
+    let built_meshes = build_chunk_render_meshes(coord, chunk, context);
+    spawn_built_chunk_meshes(commands, meshes, render_pool, coord, built_meshes, context);
+}
+
+pub(super) fn spawn_built_chunk_meshes(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    render_pool: &mut ChunkRenderPool,
+    coord: IVec3,
+    built_meshes: Vec<BuiltChunkMesh>,
+    context: &ChunkRenderContext<'_>,
+) {
     let transform = Transform::from_translation(coord.as_vec3() * CHUNK_SIZE as f32);
     let mut entities = Vec::new();
     let mut mesh_handles = Vec::new();
     let mut pooled_mesh_bytes = 0;
 
-    for face_mesh in face_meshes {
-        pooled_mesh_bytes += mesh_asset_bytes(&face_mesh.mesh);
-        let mesh_handle = meshes.add(face_mesh.mesh);
-        let layer_materials = context
-            .terrain_materials
-            .for_face(face_mesh.block_id, face_mesh.face);
+    for built_mesh in built_meshes {
+        match built_mesh {
+            BuiltChunkMesh::Terrain(face_mesh) => {
+                pooled_mesh_bytes += mesh_asset_bytes(&face_mesh.mesh);
+                let mesh_handle = meshes.add(face_mesh.mesh);
+                let layer_materials = context
+                    .terrain_materials
+                    .for_face(face_mesh.block_id, face_mesh.face);
 
-        for (layer_index, material) in layer_materials.iter().enumerate() {
-            let mut entity_commands = commands.spawn((
-                Mesh3d(mesh_handle.clone()),
-                MeshMaterial3d(material.clone()),
-                transform,
-                DespawnOnExit(GameState::Gameplay),
-            ));
+                for (layer_index, material) in layer_materials.iter().enumerate() {
+                    let mut entity_commands = commands.spawn((
+                        Mesh3d(mesh_handle.clone()),
+                        MeshMaterial3d(material.clone()),
+                        transform,
+                        DespawnOnExit(GameState::Gameplay),
+                    ));
 
-            if !face_mesh.casts_shadow || layer_index > 0 {
-                entity_commands.insert(NotShadowCaster);
+                    if !face_mesh.casts_shadow || layer_index > 0 {
+                        entity_commands.insert(NotShadowCaster);
+                    }
+
+                    entities.push(entity_commands.id());
+                }
+
+                mesh_handles.push(mesh_handle);
             }
-
-            entities.push(entity_commands.id());
+            BuiltChunkMesh::Fluid(fluid_mesh) => {
+                pooled_mesh_bytes += mesh_asset_bytes(&fluid_mesh.mesh);
+                let mesh_handle = meshes.add(fluid_mesh.mesh);
+                let entity = commands
+                    .spawn((
+                        Mesh3d(mesh_handle.clone()),
+                        MeshMaterial3d(context.fluid_materials.get(fluid_mesh.fluid_id).clone()),
+                        transform,
+                        NotShadowCaster,
+                        DespawnOnExit(GameState::Gameplay),
+                    ))
+                    .id();
+                entities.push(entity);
+                mesh_handles.push(mesh_handle);
+            }
         }
-
-        mesh_handles.push(mesh_handle);
-    }
-
-    for fluid_mesh in fluid_meshes {
-        pooled_mesh_bytes += mesh_asset_bytes(&fluid_mesh.mesh);
-        let mesh_handle = meshes.add(fluid_mesh.mesh);
-        let entity = commands
-            .spawn((
-                Mesh3d(mesh_handle.clone()),
-                MeshMaterial3d(context.fluid_materials.get(fluid_mesh.fluid_id).clone()),
-                transform,
-                NotShadowCaster,
-                DespawnOnExit(GameState::Gameplay),
-            ))
-            .id();
-        entities.push(entity);
-        mesh_handles.push(mesh_handle);
     }
 
     render_pool.insert(coord, entities, mesh_handles, pooled_mesh_bytes);
 }
 
-fn mesh_asset_bytes(mesh: &Mesh) -> usize {
+pub(super) fn mesh_asset_bytes(mesh: &Mesh) -> usize {
     mesh.get_vertex_buffer_size()
         + mesh
             .get_index_buffer_bytes()

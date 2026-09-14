@@ -40,6 +40,32 @@ impl ChunkRenderPool {
             .map(|slot| (slot.entities, slot.meshes))
     }
 
+    pub(super) fn replace_mesh_assets(
+        &mut self,
+        coord: IVec3,
+        meshes: &mut Assets<Mesh>,
+        replacements: Vec<Mesh>,
+        mesh_bytes: usize,
+    ) -> bool {
+        let Some(slot) = self.active.get_mut(&coord) else {
+            return false;
+        };
+        if slot.meshes.len() != replacements.len()
+            || slot.meshes.iter().any(|handle| !meshes.contains(handle))
+        {
+            return false;
+        }
+
+        for (handle, replacement) in slot.meshes.iter().zip(replacements) {
+            let Some(mut existing) = meshes.get_mut(handle) else {
+                return false;
+            };
+            *existing = replacement;
+        }
+        slot.mesh_bytes = mesh_bytes;
+        true
+    }
+
     pub(super) fn insert(
         &mut self,
         coord: IVec3,
