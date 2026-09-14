@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use bevy::prelude::*;
 
@@ -21,6 +21,7 @@ use crate::world::{
     chunk_loading::ensure_chunk_loaded,
     chunk_rendering::spawn_chunk_mesh,
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
+    work_budget::FrameWorkBudget,
 };
 
 const BOOTSTRAP_LIGHT_BATCH_CHUNKS: usize = 2;
@@ -62,11 +63,10 @@ fn generate_initial_chunks(
     runtime: &mut WorldSetupRuntime<'_>,
 ) {
     let generation_context = generation.context(content);
-    let frame_started = Instant::now();
-    let mut processed = 0;
+    let mut budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 1);
 
     loop {
-        if processed > 0 && frame_started.elapsed() >= INITIAL_LOADING_BUDGET {
+        if budget.exhausted() {
             break;
         }
 
@@ -84,7 +84,7 @@ fn generate_initial_chunks(
             .fluid_updates
             .enqueue_loaded_fluid_frontier(&runtime.world, coord);
         runtime.loading_state.generated += 1;
-        processed += 1;
+        budget.record(1);
     }
 
     if runtime.loading_state.generated >= runtime.loading_state.coords.len() {
@@ -93,11 +93,10 @@ fn generate_initial_chunks(
 }
 
 fn light_initial_chunks(content: &ChunkContent<'_>, runtime: &mut WorldSetupRuntime<'_>) {
-    let frame_started = Instant::now();
-    let mut processed = 0;
+    let mut budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 1);
 
     loop {
-        if processed > 0 && frame_started.elapsed() >= INITIAL_LOADING_BUDGET {
+        if budget.exhausted() {
             break;
         }
 
@@ -116,7 +115,7 @@ fn light_initial_chunks(content: &ChunkContent<'_>, runtime: &mut WorldSetupRunt
             &content.secondary_properties,
         ));
         runtime.loading_state.lit = end;
-        processed += end - start;
+        budget.record(end - start);
     }
 
     if runtime.loading_state.lit >= runtime.loading_state.coords.len() {
@@ -129,11 +128,10 @@ fn mesh_initial_chunks(
     renderer: &mut ChunkRenderer<'_, '_>,
     runtime: &mut WorldSetupRuntime<'_>,
 ) {
-    let frame_started = Instant::now();
-    let mut processed = 0;
+    let mut budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 1);
 
     loop {
-        if processed > 0 && frame_started.elapsed() >= INITIAL_LOADING_BUDGET {
+        if budget.exhausted() {
             break;
         }
 
@@ -164,7 +162,7 @@ fn mesh_initial_chunks(
             &render_context,
         );
         runtime.loading_state.meshed += 1;
-        processed += 1;
+        budget.record(1);
     }
 
     if runtime.loading_state.meshed >= runtime.loading_state.coords.len() {
