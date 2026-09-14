@@ -14,7 +14,7 @@ use crate::{
     player::{
         game_mode::GameMode,
         hotbar::{HOTBAR_INVENTORY_OFFSET, HOTBAR_SLOT_COUNT, PlayerHotbar},
-        inventory::{CreativeInventoryView, InventoryCursor, InventoryState},
+        inventory::{InventoryCursor, InventoryState},
     },
     rendering::{block_model::BlockModel, block_tint::block_tint_at},
     ui::{scrollbar, surface, theme, typography},
@@ -27,7 +27,7 @@ use super::state::{
     CATEGORY_GAP, CATEGORY_ICON_SIZE, CATEGORY_ROW_HEIGHT, CATEGORY_WIDTH,
     CREATIVE_COLUMNS, CREATIVE_GRID_HEIGHT, CreativeCatalogScrollArea,
     CreativeCatalogScrollbar, CreativeCategoryButton, CreativeCategoryScrollArea,
-    CreativeCategoryScrollbar, CreativeInventorySlot, CreativeScrollState,
+    CreativeCategoryScrollbar, CreativeInventorySlot, CreativeInventoryView, CreativeScrollState,
     CreativeSearchBar, InventoryCursorIcon, InventoryHudRoot, InventorySlot,
     InventoryTrashButton, ITEM_ICON_SIZE, PANEL_GAP, PANEL_PADDING, SCROLLBAR_TOTAL_WIDTH,
     SEARCH_GAP, SEARCH_HEIGHT, SECTION_GAP, SLOT_GAP, SLOT_SIZE, TRASH_GAP,
