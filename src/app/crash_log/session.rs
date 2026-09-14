@@ -7,6 +7,8 @@ use std::{
     time::SystemTime,
 };
 
+use crate::app::version::VERSION;
+
 use super::timestamp::format_timestamp;
 
 const LOG_DIRECTORY: &str = "logs";
@@ -36,6 +38,7 @@ pub(super) fn initialize_session_log() {
         let _ = writeln!(file, "Asteria session log");
         let _ = writeln!(file, "===================");
         let _ = writeln!(file, "START");
+        let _ = writeln!(file, "Version: {VERSION}");
         let _ = writeln!(file, "Started (UTC): {}", timestamp.display);
         let _ = writeln!(file, "Process ID: {}", std::process::id());
         let _ = writeln!(
