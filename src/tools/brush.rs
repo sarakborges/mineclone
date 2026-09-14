@@ -1,6 +1,6 @@
 mod palette;
 
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::prelude::*;
 
 use crate::{
     app::{
@@ -11,8 +11,7 @@ use crate::{
     content::{block::BlockRegistry, builtin_ids::BRUSH_TOOL_ID},
     player::inventory::InventoryState,
     targeting::{ToolUse, ToolUseButton, block::BlockTargetingSet},
-    voxel::{lighting::PendingLightingUpdates, world::VoxelWorld},
-    world::chunk_remesh::ChunkRemeshQueue,
+    voxel::edit::VoxelMutationRuntime,
 };
 
 use self::palette::{handle_palette_selection, spawn_brush_palette};
@@ -53,14 +52,6 @@ impl BrushMode {
             BrushSelection::Dye(id) => Some(id),
         }
     }
-}
-
-#[derive(SystemParam)]
-struct BrushUseRuntime<'w> {
-    world: ResMut<'w, VoxelWorld>,
-    lighting: ResMut<'w, PendingLightingUpdates>,
-    remesh_queue: ResMut<'w, ChunkRemeshQueue>,
-    next_palette: ResMut<'w, NextState<BrushPaletteState>>,
 }
 
 pub(super) struct BrushPlugin;
@@ -106,7 +97,8 @@ fn handle_brush_use(
     mut uses: MessageReader<ToolUse>,
     blocks: Res<BlockRegistry>,
     mode: Res<BrushMode>,
-    mut runtime: BrushUseRuntime,
+    mut runtime: VoxelMutationRuntime,
+    mut next_palette: ResMut<NextState<BrushPaletteState>>,
 ) {
     for usage in uses.read() {
         if usage.tool_id != BRUSH_TOOL_ID {
@@ -114,7 +106,7 @@ fn handle_brush_use(
         }
 
         if usage.button == ToolUseButton::Right {
-            runtime.next_palette.set(BrushPaletteState::Open);
+            next_palette.set(BrushPaletteState::Open);
             continue;
         }
 
@@ -132,7 +124,7 @@ fn handle_brush_use(
             continue;
         }
 
-        let Some(cell) = runtime.world.cell_at(hit.voxel) else {
+        let Some(cell) = runtime.cell_at(hit.voxel) else {
             continue;
         };
         let current_dye = cell.secondary_property(DYED_PROPERTY_ID);
@@ -151,9 +143,6 @@ fn handle_brush_use(
             }
         };
 
-        if let Some(chunk) = runtime.world.set_block_at(hit.voxel, Some(updated)) {
-            runtime.lighting.enqueue_voxel_edit(hit.voxel);
-            runtime.remesh_queue.enqueue_voxel_edit(chunk);
-        }
+        runtime.set_block(hit.voxel, Some(updated));
     }
 }
