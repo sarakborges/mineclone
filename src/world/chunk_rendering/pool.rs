@@ -30,11 +30,11 @@ pub struct ChunkRenderPool {
 }
 
 impl ChunkRenderPool {
-    pub fn contains(&self, coord: IVec3) -> bool {
+    pub(crate) fn contains(&self, coord: IVec3) -> bool {
         self.active.contains_key(&coord)
     }
 
-    pub fn active_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
+    pub(crate) fn active_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
         self.active.keys().copied()
     }
 
@@ -50,7 +50,7 @@ impl ChunkRenderPool {
         self.active.values().map(|slot| slot.mesh_bytes).sum()
     }
 
-    pub fn take(&mut self, coord: IVec3) -> Option<(Vec<Entity>, Vec<Handle<Mesh>>)> {
+    pub(crate) fn take(&mut self, coord: IVec3) -> Option<(Vec<Entity>, Vec<Handle<Mesh>>)> {
         self.active
             .remove(&coord)
             .map(|slot| (slot.entities, slot.meshes))
@@ -138,7 +138,7 @@ impl ChunkRenderPool {
     }
 }
 
-pub fn clear_chunk_render_pool(
+pub(crate) fn clear_chunk_render_pool(
     mut meshes: ResMut<Assets<Mesh>>,
     mut render_pool: ResMut<ChunkRenderPool>,
 ) {
