@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
@@ -19,21 +19,77 @@ const INPUT_WIDTH: f32 = 180.0;
 const TICKS_INPUT_MAX_DIGITS: usize = 10;
 
 #[derive(Component, Clone, Copy)]
-pub(crate) enum TicksPerSecondStep {
+enum TicksPerSecondStep {
     Decrement,
     Increment,
 }
 
 #[derive(Component)]
-pub(crate) struct TicksPerSecondInput;
+struct TicksPerSecondInput;
 
 #[derive(Component)]
-pub(crate) struct TicksPerSecondValueText;
+struct TicksPerSecondValueText;
 
-pub(crate) struct TicksPerSecondInputKind;
-pub(crate) type TicksPerSecondInputState = NumericInputState<TicksPerSecondInputKind>;
+pub(super) struct TicksPerSecondInputKind;
+pub(super) type TicksPerSecondInputState = NumericInputState<TicksPerSecondInputKind>;
 
-pub(crate) fn game_rules_section(
+#[derive(SystemParam)]
+pub(super) struct TicksPerSecondSettings<'w> {
+    game_state: Res<'w, State<GameState>>,
+    game_rules: Res<'w, GameRules>,
+    new_world: Res<'w, NewWorldConfig>,
+}
+
+impl TicksPerSecondSettings<'_> {
+    fn current(&self) -> u32 {
+        if *self.game_state.get() == GameState::NewWorld {
+            self.new_world.game_rules().ticks_per_second()
+        } else {
+            self.game_rules.ticks_per_second()
+        }
+    }
+}
+
+#[derive(SystemParam)]
+pub(super) struct TicksPerSecondEditor<'w> {
+    game_state: Res<'w, State<GameState>>,
+    game_rules: ResMut<'w, GameRules>,
+    new_world: ResMut<'w, NewWorldConfig>,
+    save: ResMut<'w, InMemoryWorldSave>,
+}
+
+impl TicksPerSecondEditor<'_> {
+    fn current(&self) -> u32 {
+        if *self.game_state.get() == GameState::NewWorld {
+            self.new_world.game_rules().ticks_per_second()
+        } else {
+            self.game_rules.ticks_per_second()
+        }
+    }
+
+    fn set(&mut self, value: u32) {
+        if *self.game_state.get() == GameState::NewWorld {
+            self.new_world.set_ticks_per_second(value);
+            return;
+        }
+
+        self.game_rules.set_ticks_per_second(value);
+        self.save.save_game_rules(*self.game_rules);
+    }
+
+    fn apply_buffer(&mut self, buffer: &str) {
+        let Ok(value) = buffer.parse::<u32>() else {
+            return;
+        };
+        if value == 0 {
+            return;
+        }
+
+        self.set(value);
+    }
+}
+
+pub(super) fn game_rules_section(
     ticks_per_second: u32,
     localization: &UiLocalization,
     language: Language,
@@ -100,12 +156,9 @@ pub(crate) fn game_rules_section(
     )
 }
 
-pub(crate) fn handle_ticks_step_buttons(
+pub(super) fn handle_ticks_step_buttons(
     interactions: Query<(&Interaction, &TicksPerSecondStep), Changed<Interaction>>,
-    game_state: Res<State<GameState>>,
-    mut game_rules: ResMut<GameRules>,
-    mut new_world: ResMut<NewWorldConfig>,
-    mut save: ResMut<InMemoryWorldSave>,
+    mut settings: TicksPerSecondEditor,
     mut input_state: ResMut<TicksPerSecondInputState>,
 ) {
     for (interaction, step) in &interactions {
@@ -113,40 +166,28 @@ pub(crate) fn handle_ticks_step_buttons(
             continue;
         }
 
-        let current = current_ticks_per_second(*game_state.get(), &game_rules, &new_world);
+        let current = settings.current();
         let next = match step {
             TicksPerSecondStep::Decrement => current.saturating_sub(1).max(1),
             TicksPerSecondStep::Increment => current.saturating_add(1),
         };
 
-        set_ticks_per_second(
-            next,
-            *game_state.get(),
-            &mut game_rules,
-            &mut new_world,
-            &mut save,
-        );
+        settings.set(next);
         input_state.reset();
     }
 }
 
-pub(crate) fn handle_ticks_input(
+pub(super) fn handle_ticks_input(
     interactions: Query<&Interaction, (Changed<Interaction>, With<TicksPerSecondInput>)>,
-    game_state: Res<State<GameState>>,
-    game_rules: Res<GameRules>,
-    new_world: Res<NewWorldConfig>,
+    settings: TicksPerSecondSettings,
     mut input_state: ResMut<TicksPerSecondInputState>,
 ) {
-    let current = current_ticks_per_second(*game_state.get(), &game_rules, &new_world);
-    input_state.begin_if_pressed(interactions.iter(), current);
+    input_state.begin_if_pressed(interactions.iter(), settings.current());
 }
 
-pub(crate) fn handle_ticks_keyboard(
+pub(super) fn handle_ticks_keyboard(
     keys: Res<ButtonInput<KeyCode>>,
-    game_state: Res<State<GameState>>,
-    mut game_rules: ResMut<GameRules>,
-    mut new_world: ResMut<NewWorldConfig>,
-    mut save: ResMut<InMemoryWorldSave>,
+    mut settings: TicksPerSecondEditor,
     mut input_state: ResMut<TicksPerSecondInputState>,
 ) {
     let event = input_state.handle_keyboard(&keys, TICKS_INPUT_MAX_DIGITS, |_| true);
@@ -154,68 +195,14 @@ pub(crate) fn handle_ticks_keyboard(
         return;
     }
 
-    apply_input_buffer(
-        input_state.buffer(),
-        *game_state.get(),
-        &mut game_rules,
-        &mut new_world,
-        &mut save,
-    );
+    settings.apply_buffer(input_state.buffer());
 }
 
-pub(crate) fn sync_ticks_per_second_text(
-    game_state: Res<State<GameState>>,
-    game_rules: Res<GameRules>,
-    new_world: Res<NewWorldConfig>,
+pub(super) fn sync_ticks_per_second_text(
+    settings: TicksPerSecondSettings,
     input_state: Res<TicksPerSecondInputState>,
     mut labels: Query<&mut Text, With<TicksPerSecondValueText>>,
     mut inputs: Query<&mut BorderColor, With<TicksPerSecondInput>>,
 ) {
-    let current = current_ticks_per_second(*game_state.get(), &game_rules, &new_world);
-    sync_numeric_input_view(&input_state, current, &mut labels, &mut inputs);
-}
-
-fn current_ticks_per_second(
-    game_state: GameState,
-    game_rules: &GameRules,
-    new_world: &NewWorldConfig,
-) -> u32 {
-    if game_state == GameState::NewWorld {
-        new_world.game_rules().ticks_per_second()
-    } else {
-        game_rules.ticks_per_second()
-    }
-}
-
-fn apply_input_buffer(
-    buffer: &str,
-    game_state: GameState,
-    game_rules: &mut GameRules,
-    new_world: &mut NewWorldConfig,
-    save: &mut InMemoryWorldSave,
-) {
-    let Ok(value) = buffer.parse::<u32>() else {
-        return;
-    };
-    if value == 0 {
-        return;
-    }
-
-    set_ticks_per_second(value, game_state, game_rules, new_world, save);
-}
-
-fn set_ticks_per_second(
-    value: u32,
-    game_state: GameState,
-    game_rules: &mut GameRules,
-    new_world: &mut NewWorldConfig,
-    save: &mut InMemoryWorldSave,
-) {
-    if game_state == GameState::NewWorld {
-        new_world.set_ticks_per_second(value);
-        return;
-    }
-
-    game_rules.set_ticks_per_second(value);
-    save.save_game_rules(*game_rules);
+    sync_numeric_input_view(&input_state, settings.current(), &mut labels, &mut inputs);
 }

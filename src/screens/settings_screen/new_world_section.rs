@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
@@ -43,6 +43,29 @@ pub(super) type SeedInputState = NumericInputState<SeedInputKind>;
 pub(super) enum NewWorldFooterAction {
     Return,
     CreateWorld,
+}
+
+#[derive(SystemParam)]
+pub(super) struct NewWorldDraft<'w> {
+    config: ResMut<'w, NewWorldConfig>,
+    seed_input: Res<'w, SeedInputState>,
+    ticks_input: Res<'w, TicksPerSecondInputState>,
+}
+
+impl NewWorldDraft<'_> {
+    fn input_editing(&self) -> bool {
+        self.seed_input.editing() || self.ticks_input.editing()
+    }
+
+    fn commit_seed_input(&mut self) {
+        if !self.seed_input.editing() {
+            return;
+        }
+        let Ok(value) = self.seed_input.buffer().parse::<u64>() else {
+            return;
+        };
+        self.config.set_seed(value);
+    }
 }
 
 pub(super) fn reset_new_world_settings(
@@ -182,9 +205,7 @@ pub(super) fn handle_new_world_footer(
     game_state: Res<State<GameState>>,
     keys: Res<ButtonInput<KeyCode>>,
     interactions: Query<(&Interaction, &NewWorldFooterAction), Changed<Interaction>>,
-    mut config: ResMut<NewWorldConfig>,
-    seed_input: Res<SeedInputState>,
-    ticks_input: Res<TicksPerSecondInputState>,
+    mut draft: NewWorldDraft,
     mut transition: ResMut<ScreenTransition>,
 ) {
     if *game_state.get() != GameState::NewWorld {
@@ -195,9 +216,8 @@ pub(super) fn handle_new_world_footer(
         (*interaction == Interaction::Pressed).then_some(*action)
     });
 
-    let input_editing = seed_input.editing() || ticks_input.editing();
     if matches!(action, Some(NewWorldFooterAction::Return))
-        || (keys.just_pressed(KeyCode::Escape) && !input_editing)
+        || (keys.just_pressed(KeyCode::Escape) && !draft.input_editing())
     {
         transition.request(ScreenTransitionTarget::game(GameState::StartingScreen));
         return;
@@ -207,14 +227,12 @@ pub(super) fn handle_new_world_footer(
         return;
     }
 
-    if seed_input.editing() {
-        apply_seed_buffer(seed_input.buffer(), &mut config);
-    }
+    draft.commit_seed_input();
 
     commands.insert_resource(CurrentDimension::default());
     commands.insert_resource(CurrentBiome::default());
-    commands.insert_resource(WorldSeed(config.seed().0));
-    commands.insert_resource(config.game_rules());
+    commands.insert_resource(WorldSeed(draft.config.seed().0));
+    commands.insert_resource(draft.config.game_rules());
     commands.insert_resource(WorldLoadMode::New);
     transition.request(ScreenTransitionTarget::game(GameState::Loading));
 }
