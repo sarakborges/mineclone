@@ -6,7 +6,7 @@ use crate::{app::game_state::GameState, rendering::terrain_material::TerrainMate
 
 use super::chunk_rendering::ChunkRenderPool;
 
-const RENDER_DIAGNOSTIC_INTERVAL_SECONDS: f32 = 2.0;
+const RENDER_DIAGNOSTIC_INTERVAL_SECONDS: f32 = 10.0;
 const MESH_ASSET_OVERHEAD_WARNING: usize = 128;
 const RUNTIME_IMAGE_SHAPE_LIMIT: usize = 4;
 
