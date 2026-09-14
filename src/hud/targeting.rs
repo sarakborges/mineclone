@@ -3,19 +3,19 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     app::game_state::GameState,
     content::{
-        biome::BiomeRegistry, block::BlockRegistry,
+        builtin_ids::DYED_PROPERTY_ID,
         secondary_property::SecondaryPropertyRegistry,
     },
     hud::block_icon::BlockIconMaterial,
     localization::{ActiveLanguage, Language, UiLocalization},
     rendering::{
         block_model::BlockModel,
-        block_tint::{apply_secondary_property_tint, block_tint_at},
+        block_tint::apply_secondary_property_tint,
+        block_visual_content::BlockVisualContent,
     },
     targeting::block::TargetedBlock,
     ui::{surface, typography},
     voxel::{secondary_properties::SecondaryProperties, world::VoxelWorld},
-    world::biome_field::BiomeField,
 };
 
 const TARGET_SLOT_SIZE: f32 = 44.0;
@@ -63,11 +63,8 @@ struct TargetHudState<'w> {
 
 #[derive(SystemParam)]
 struct TargetHudContent<'w> {
-    asset_server: Res<'w, AssetServer>,
-    blocks: Res<'w, BlockRegistry>,
+    visual: BlockVisualContent<'w>,
     secondary_properties: Res<'w, SecondaryPropertyRegistry>,
-    biomes: Res<'w, BiomeRegistry>,
-    biome_field: Res<'w, BiomeField>,
 }
 
 #[derive(SystemParam)]
@@ -201,10 +198,8 @@ fn update_target_hud(
         light_level,
         language,
     };
-    let definitions_changed = content.blocks.is_changed()
+    let definitions_changed = content.visual.inputs_changed()
         || content.secondary_properties.is_changed()
-        || content.biomes.is_changed()
-        || content.biome_field.is_changed()
         || state.language.is_changed();
 
     if cached.as_ref() == Some(&snapshot)
@@ -219,7 +214,7 @@ fn update_target_hud(
         *root_visibility = Visibility::Visible;
     }
 
-    let block = content.blocks.get(hit.block_id);
+    let block = content.visual.blocks.get(hit.block_id);
     let block_name = block.map_or(hit.block_id, |block| block.name.text(language));
     let coordinates = state
         .localization
@@ -231,7 +226,7 @@ fn update_target_hud(
         .iter()
         .map(|(property, value)| {
             let property_name = match property {
-                "dyed" => state.localization.text(language, "secondaryProperty.dyed"),
+                DYED_PROPERTY_ID => state.localization.text(language, "secondaryProperty.dyed"),
                 _ => property,
             };
             let value_name = content
@@ -263,16 +258,14 @@ fn update_target_hud(
     if model.set_block_id(Some(hit.block_id))
         && let Some(block) = block
     {
-        material.set_block(block, &content.asset_server);
+        material.set_block(block, &content.visual.asset_server);
     }
 
     let tint_position = Vec2::new(hit.voxel.x as f32 + 0.5, hit.voxel.z as f32 + 0.5);
-    let base_tint = block_tint_at(
-        block.map(|block| block.tint).unwrap_or_default(),
-        tint_position,
-        &content.biome_field,
-        &content.biomes,
-    );
+    let base_tint = content
+        .visual
+        .tint_at(hit.block_id, tint_position)
+        .unwrap_or(Color::WHITE);
     let tint = match (block, cell) {
         (Some(block), Some(cell)) => apply_secondary_property_tint(
             base_tint,
