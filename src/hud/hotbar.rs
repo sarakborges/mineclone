@@ -319,19 +319,20 @@ fn update_hotbar_item_visuals(
         player.translation.x.floor() as i32,
         player.translation.z.floor() as i32,
     );
-    let needs_refresh = cache.tint_cell != Some(tint_cell)
+    let global_refresh = cache.tint_cell != Some(tint_cell)
         || hotbar.is_changed()
         || placement_orientation.is_changed()
         || blocks.is_changed()
         || biomes.is_changed()
         || biome_field.is_changed();
-    if !needs_refresh {
-        return;
-    }
     cache.tint_cell = Some(tint_cell);
     let position = tint_cell.as_vec2() + Vec2::splat(0.5);
 
     for (model, mut icon, material_handle) in &mut icons {
+        if !global_refresh && !icon.is_added() {
+            continue;
+        }
+
         let Some(block_id) = model.block_id() else {
             continue;
         };
