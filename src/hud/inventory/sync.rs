@@ -23,8 +23,8 @@ use super::{
     state::{
         CreativeCatalogScrollArea, CreativeCategoryButton, CreativeInventorySlot,
         CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState, CreativeSearchBar,
-        CreativeSearchText, InventoryCursorIcon, InventoryHudRoot, InventorySlot,
-        InventoryTrashButton, ITEM_ICON_SIZE,
+        CreativeSearchText, ITEM_ICON_SIZE, InventoryCursorIcon, InventoryHudRoot, InventorySlot,
+        InventoryTrashButton,
     },
 };
 
@@ -86,7 +86,11 @@ pub(super) struct InventoryRebuildView<'w, 's> {
     catalog_scroll: Query<
         'w,
         's,
-        (Entity, &'static mut ScrollPosition, Option<&'static Children>),
+        (
+            Entity,
+            &'static mut ScrollPosition,
+            Option<&'static Children>,
+        ),
         With<CreativeCatalogScrollArea>,
     >,
     search_text: Query<'w, 's, &'static mut Text, With<CreativeSearchText>>,
@@ -153,10 +157,7 @@ pub(super) fn sync_inventory_cursor_icon(
         return;
     };
     let position = context.window.cursor_position().unwrap_or(Vec2::ZERO);
-    let player_position = Vec2::new(
-        context.player.translation.x,
-        context.player.translation.z,
-    );
+    let player_position = Vec2::new(context.player.translation.x, context.player.translation.z);
     let mut items = content.view(player_position, &mut icon_materials);
 
     commands.entity(root_entity).with_children(|root| {

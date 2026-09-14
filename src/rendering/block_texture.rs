@@ -43,9 +43,10 @@ pub(crate) fn load_block_texture_layer(
 
 fn same_texture_layers(left: &[BlockTextureLayer], right: &[BlockTextureLayer]) -> bool {
     left.len() == right.len()
-        && left.iter().zip(right).all(|(left, right)| {
-            left.texture == right.texture && left.dyable == right.dyable
-        })
+        && left
+            .iter()
+            .zip(right)
+            .all(|(left, right)| left.texture == right.texture && left.dyable == right.dyable)
 }
 
 fn first_block_texture_layers(block: &BlockDefinition) -> &[BlockTextureLayer] {
