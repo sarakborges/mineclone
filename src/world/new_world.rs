@@ -4,21 +4,11 @@ use crate::player::game_mode::GameMode;
 
 use super::{game_rules::GameRules, WorldSeed};
 
-#[derive(Resource, Debug, Clone, Copy)]
+#[derive(Resource, Debug, Clone, Copy, Default)]
 pub(crate) struct NewWorldConfig {
     seed: WorldSeed,
     game_mode: GameMode,
     game_rules: GameRules,
-}
-
-impl Default for NewWorldConfig {
-    fn default() -> Self {
-        Self {
-            seed: WorldSeed::fresh(),
-            game_mode: GameMode::default(),
-            game_rules: GameRules::default(),
-        }
-    }
 }
 
 impl NewWorldConfig {

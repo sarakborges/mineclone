@@ -5,10 +5,10 @@ use crate::{
     voxel::block_face::BlockFace,
 };
 
-pub(crate) fn block_face_texture_layers<'a>(
+pub(crate) fn block_face_texture_layers(
     face: BlockFace,
-    block: &'a BlockDefinition,
-) -> &'a [BlockTextureLayer] {
+    block: &BlockDefinition,
+) -> &[BlockTextureLayer] {
     let layers = match face {
         BlockFace::Right => block.textures.right.as_slice(),
         BlockFace::Left => block.textures.left.as_slice(),

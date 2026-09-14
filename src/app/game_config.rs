@@ -16,22 +16,12 @@ use crate::{
 const CONFIG_FILE_NAME: &str = "config.json";
 const CONFIG_DIRECTORY_NAME: &str = "Asteria";
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct GameConfig {
     language: Language,
     graphics: GraphicsConfig,
     miscellaneous: MiscellaneousConfig,
-}
-
-impl Default for GameConfig {
-    fn default() -> Self {
-        Self {
-            language: Language::default(),
-            graphics: GraphicsConfig::default(),
-            miscellaneous: MiscellaneousConfig::default(),
-        }
-    }
 }
 
 impl GameConfig {
