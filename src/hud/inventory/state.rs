@@ -76,8 +76,4 @@ impl CreativeInventoryUiDirty {
     pub(super) fn take(&mut self) -> bool {
         std::mem::take(&mut self.0)
     }
-
-    pub(super) fn clear(&mut self) {
-        self.0 = false;
-    }
 }
