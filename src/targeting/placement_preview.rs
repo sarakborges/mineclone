@@ -12,12 +12,13 @@ use crate::{
         block_model_material::BlockModelMaterial,
         block_tint::block_tint_at,
     },
-    voxel::{block_face::BlockFace, orientation::orientation_rotation, world::VoxelWorld},
+    voxel::{block_face::BlockFace, orientation::orientation_rotation},
     world::biome_field::BiomeField,
 };
 
 use super::{
-    block::{BlockTargetingSet, TargetedBlock},
+    BlockTargetingScene,
+    block::BlockTargetingSet,
     placement::placement_voxel,
     placement_orientation::PlacementOrientation,
 };
@@ -147,11 +148,8 @@ fn spawn_placement_preview(
 
 #[derive(SystemParam)]
 struct PlacementPreviewSelection<'w, 's> {
-    targeted: Res<'w, TargetedBlock>,
-    hotbar: Res<'w, PlayerHotbar>,
+    scene: BlockTargetingScene<'w, 's>,
     placement_orientation: Res<'w, PlacementOrientation>,
-    world: Res<'w, VoxelWorld>,
-    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
 }
 
 #[derive(SystemParam)]
@@ -187,8 +185,8 @@ fn update_placement_preview(
         mut root,
         mut faces,
     } = view;
-    let selected_slot = selection.hotbar.selected_slot();
-    let selected = selection.hotbar.item_at(selected_slot).and_then(|block_id| {
+    let selected_slot = selection.scene.selected_slot();
+    let selected = selection.scene.selected_item().and_then(|block_id| {
         content
             .blocks
             .get(block_id)
@@ -207,9 +205,6 @@ fn update_placement_preview(
 
     let block_changed = root.0.set_block_id(Some(block_id));
     if block_changed {
-        // The preview is derived from the current target. Never carry a world
-        // position across item selection changes; a valid target below will set a
-        // fresh translation before the preview becomes visible again.
         root.1.translation = Vec3::ZERO;
         *root.2 = Visibility::Hidden;
 
@@ -238,12 +233,16 @@ fn update_placement_preview(
         .for_block(selected_slot, block);
     root.1.rotation = orientation_rotation(orientation);
 
-    let Some(hit) = selection.targeted.0 else {
+    let Some(hit) = selection.scene.hit() else {
         root.1.translation = Vec3::ZERO;
         *root.2 = Visibility::Hidden;
         return;
     };
-    let Some(voxel) = placement_voxel(hit, &selection.world, selection.player.translation) else {
+    let Some(voxel) = placement_voxel(
+        hit,
+        selection.scene.world(),
+        selection.scene.player_translation(),
+    ) else {
         root.1.translation = Vec3::ZERO;
         *root.2 = Visibility::Hidden;
         return;
