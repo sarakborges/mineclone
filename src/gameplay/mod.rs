@@ -1,3 +1,4 @@
+pub(crate) mod availability;
 mod pause;
 
 use bevy::prelude::*;
