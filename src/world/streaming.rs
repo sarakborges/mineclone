@@ -14,8 +14,10 @@ use crate::{
     },
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
-        coordinates::chunk_coord_from_position, lighting::PendingLightingUpdates,
-        neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
+        coordinates::chunk_coord_from_position,
+        lighting::{PendingLightingUpdates, seed_chunk_direct_lighting},
+        neighbors::CARDINAL_NEIGHBORS,
+        world::VoxelWorld,
     },
 };
 
@@ -132,20 +134,25 @@ pub(super) fn stream_chunks(
         ensure_chunk_loaded(&mut inputs.world, coord, &generation_context);
         fluid_updates.enqueue_loaded_fluid_frontier(&inputs.world, coord);
 
-        // Streaming used to fully relax lighting here before checking its frame
-        // budget. A single newly generated chunk could therefore spend an
-        // unbounded amount of time propagating light on the main thread. Seed
-        // the existing budgeted lighting queue instead; PostUpdate converges it
-        // incrementally and remeshes affected chunks as lighting changes.
-        lighting_updates.enqueue_chunks_initialization(
+        // Give the first visible mesh the cheap, deterministic part of the light
+        // field immediately: direct skylight and local emission. Indirect
+        // propagation remains budgeted in PostUpdate, so a new chunk no longer
+        // appears completely black while lighting catches up without bringing
+        // back the old unbounded relaxation stall.
+        seed_chunk_direct_lighting(
             &mut inputs.world,
-            std::slice::from_ref(&coord),
+            coord,
+            &content.blocks,
+            &content.fluids,
+            &content.secondary_properties,
         );
+        lighting_updates.enqueue_chunk_relaxation(coord);
 
         let chunk = inputs
             .world
             .chunk(coord)
             .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
+        let chunk_is_empty = chunk.is_empty();
         let render_context = content.render_context(
             &inputs.world,
             &renderer.terrain_materials,
@@ -164,7 +171,16 @@ pub(super) fn stream_chunks(
 
         for offset in CARDINAL_NEIGHBORS {
             let neighbor = coord + offset;
-            if renderer.pool.contains(neighbor) {
+            if !renderer.pool.contains(neighbor) {
+                continue;
+            }
+
+            if chunk_is_empty {
+                // Terrain faces are identical against unloaded space and a
+                // loaded empty chunk. Only transparent fluid side faces need to
+                // be reconsidered in this case.
+                inputs.remesh_queue.enqueue_fluid_priority(neighbor);
+            } else {
                 inputs.remesh_queue.enqueue_priority(neighbor);
             }
         }
