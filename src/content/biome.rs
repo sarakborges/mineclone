@@ -9,7 +9,7 @@ use super::{
     biome_hydrology::BiomeHydrology, biome_material::BiomeMaterialLayer,
     biome_sky_layer::BiomeSkyLayerVisuals, biome_structure::BiomeStructure,
     biome_surface_carver::BiomeSurfaceCarver, biome_terrain::BiomeTerrain,
-    biome_terrain_modifier::BiomeTerrainModifier, color::Rgb, day_night_phase::DayNightPhases,
+    biome_terrain_modifier::BiomeTerrainModifier, color::Hsi, day_night_phase::DayNightPhases,
     registry::DefinitionMap,
 };
 
@@ -54,23 +54,23 @@ pub struct BiomeVerticalRange {
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BiomeUnderwaterTint {
-    pub color: Rgb,
+    pub color: Hsi,
     pub opacity: f32,
 }
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BiomeVisuals {
-    pub sky_color: DayNightPhases<Rgb>,
-    pub fog_color: DayNightPhases<Rgb>,
+    pub sky_color: DayNightPhases<Hsi>,
+    pub fog_color: DayNightPhases<Hsi>,
     #[serde(default = "default_vegetation_color")]
-    pub grass_color: Rgb,
+    pub grass_color: Hsi,
     #[serde(default = "default_vegetation_color")]
-    pub leaf_color: Rgb,
+    pub leaf_color: Hsi,
     #[serde(default = "default_vegetation_color")]
-    pub foliage_color: Rgb,
+    pub foliage_color: Hsi,
     #[serde(default)]
-    pub water_color: Option<Rgb>,
+    pub water_color: Option<Hsi>,
     pub underwater_tint: BiomeUnderwaterTint,
     #[serde(default)]
     pub stars: BiomeSkyLayerVisuals,
@@ -157,10 +157,6 @@ fn default_biome_distributions() -> Vec<BiomeDistribution> {
     vec![BiomeDistribution::Regional]
 }
 
-fn default_vegetation_color() -> Rgb {
-    Rgb {
-        r: 0.24,
-        g: 0.70,
-        b: 0.16,
-    }
+fn default_vegetation_color() -> Hsi {
+    Hsi::new(112.1111, 0.56363636, 0.36666667)
 }
