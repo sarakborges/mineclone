@@ -810,7 +810,7 @@ fn filtered_creative_catalog<'a>(
         .iter()
         .map(CreativeCatalogItem::Block)
         .chain(tools.iter().map(CreativeCatalogItem::Tool))
-        .filter(|item| category.map_or(true, |category| item.category() == category))
+        .filter(|item| category.is_none_or(|category| item.category() == category))
         .filter(|item| query.is_empty() || item.name(language).to_lowercase().contains(&query))
         .collect::<Vec<_>>();
 
