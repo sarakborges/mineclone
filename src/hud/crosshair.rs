@@ -6,6 +6,7 @@ use crate::{
         block::BlockRegistry, builtin_ids::BRUSH_TOOL_ID,
         secondary_property::SecondaryPropertyRegistry,
     },
+    gameplay::availability::world_interaction_available,
     localization::{ActiveLanguage, UiLocalization},
     player::{
         hotbar::{PlayerHotbar, PlayerHotbarSet},
@@ -43,42 +44,23 @@ impl Plugin for CrosshairPlugin {
                 Update,
                 update_action_hint
                     .after(PlayerHotbarSet::Selection)
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running))
-                    .run_if(in_state(InventoryState::Closed))
-                    .run_if(in_state(BrushPaletteState::Closed)),
+                    .run_if(world_interaction_available),
             )
             .add_systems(
                 OnEnter(PauseState::Running),
-                set_visibility::<CrosshairRoot, true>
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(SettingsState::Closed))
-                    .run_if(in_state(InventoryState::Closed))
-                    .run_if(in_state(BrushPaletteState::Closed)),
+                set_visibility::<CrosshairRoot, true>.run_if(world_interaction_available),
             )
             .add_systems(
                 OnEnter(SettingsState::Closed),
-                set_visibility::<CrosshairRoot, true>
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running))
-                    .run_if(in_state(InventoryState::Closed))
-                    .run_if(in_state(BrushPaletteState::Closed)),
+                set_visibility::<CrosshairRoot, true>.run_if(world_interaction_available),
             )
             .add_systems(
                 OnEnter(InventoryState::Closed),
-                set_visibility::<CrosshairRoot, true>
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running))
-                    .run_if(in_state(SettingsState::Closed))
-                    .run_if(in_state(BrushPaletteState::Closed)),
+                set_visibility::<CrosshairRoot, true>.run_if(world_interaction_available),
             )
             .add_systems(
                 OnEnter(BrushPaletteState::Closed),
-                set_visibility::<CrosshairRoot, true>
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running))
-                    .run_if(in_state(SettingsState::Closed))
-                    .run_if(in_state(InventoryState::Closed)),
+                set_visibility::<CrosshairRoot, true>.run_if(world_interaction_available),
             );
     }
 }
