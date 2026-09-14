@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::content::{
-    block::BlockRegistry, fluid::FluidRegistry,
+    block::BlockRegistry, color::Hsi, fluid::FluidRegistry,
     secondary_property::SecondaryPropertyRegistry,
 };
 use crate::voxel::{
@@ -15,7 +15,7 @@ use crate::voxel::{
 
 use super::{
     context::LightingContext,
-    medium::{block_emission, light_filter, medium_dampening},
+    medium::{block_emission, light_transmission, medium_dampening},
     queue::LightingQueue,
 };
 
@@ -101,12 +101,11 @@ fn desired_light(
     let dampening = medium_dampening(world, blocks, fluids, position);
     let blocks_light = dampening >= VoxelLight::MAX_LEVEL;
     let attenuation = dampening.max(1);
-    let filter = light_filter(world, blocks, secondary_properties, position);
+    let transmission = light_transmission(world, blocks, secondary_properties, position);
 
     let sky = if blocks_light {
         0
     } else {
-        let transmission = filter[0].max(filter[1]).max(filter[2]);
         context
             .direct_sky_light(
                 world,
@@ -121,20 +120,14 @@ fn desired_light(
             ))
     };
 
-    let emitted = BlockLight::from_rgb_levels(block_emission(
-        world,
-        blocks,
-        secondary_properties,
-        position,
-    ));
+    let emitted = block_emission(world, blocks, secondary_properties, position);
     let block = if blocks_light {
         emitted
     } else {
-        let propagated = filter_block_light(
+        mix_strongest_block_lights([
+            emitted,
             propagated_neighbor_block(world, position, attenuation),
-            filter,
-        );
-        mix_strongest_block_lights([emitted, propagated])
+        ])
     };
 
     VoxelLight::new_hsi(sky, block)
@@ -207,10 +200,6 @@ fn mix_strongest_block_lights<const N: usize>(lights: [BlockLight; N]) -> BlockL
         return BlockLight::new(0, 0, strongest_intensity);
     }
 
-    // Hue is circular, so average it as a vector instead of averaging the
-    // quantized angle directly. The vector coherence also lowers saturation
-    // when equally strong colors oppose one another (for example red + cyan),
-    // while nearby hues keep almost all of their chroma.
     let vector_length = ((vector_x as f32 * vector_x as f32)
         + (vector_y as f32 * vector_y as f32))
         .sqrt();
@@ -245,22 +234,6 @@ fn nearest_hue(vector_x: i32, vector_y: i32) -> u8 {
     best_hue
 }
 
-fn filter_block_light(light: BlockLight, filter: [f32; 3]) -> BlockLight {
-    if light.intensity() == 0 {
-        return BlockLight::DARK;
-    }
-    if filter[0] >= 1.0 && filter[1] >= 1.0 && filter[2] >= 1.0 {
-        return light;
-    }
-
-    let levels = light.to_rgb_levels();
-    BlockLight::from_rgb_levels([
-        filtered_level(levels[0], filter[0]),
-        filtered_level(levels[1], filter[1]),
-        filtered_level(levels[2], filter[2]),
-    ])
-}
-
 fn filtered_level(level: u8, factor: f32) -> u8 {
     (level as f32 * factor.clamp(0.0, 1.0))
         .round()
@@ -270,11 +243,11 @@ fn filtered_level(level: u8, factor: f32) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::mix_strongest_block_lights;
-    use crate::voxel::light::BlockLight;
+    use crate::{content::color::Hsi, voxel::light::BlockLight};
 
     #[test]
     fn colored_attenuation_preserves_hue_and_saturation() {
-        let source = BlockLight::from_rgb_levels([15, 3, 2]);
+        let source = BlockLight::from_hsi(Hsi::new(5.0, 0.9, 0.35), 15);
         let faded = source.attenuated(4);
 
         assert_eq!(faded.hue(), source.hue());
@@ -284,34 +257,31 @@ mod tests {
 
     #[test]
     fn equal_red_and_blue_mix_toward_magenta() {
-        let red = BlockLight::from_rgb_levels([15, 0, 0]);
-        let blue = BlockLight::from_rgb_levels([0, 0, 15]);
+        let red = BlockLight::from_hsi(Hsi::new(0.0, 1.0, 1.0 / 3.0), 15);
+        let blue = BlockLight::from_hsi(Hsi::new(240.0, 1.0, 1.0 / 3.0), 15);
         let mixed = mix_strongest_block_lights([red, blue]);
-        let rgb = mixed.to_rgb_levels();
+        let color = mixed.color();
 
         assert_eq!(mixed.intensity(), 15);
-        assert!(rgb[0] >= 13, "red channel should stay strong: {rgb:?}");
-        assert!(rgb[2] >= 13, "blue channel should stay strong: {rgb:?}");
-        assert!(rgb[1] <= 6, "green channel should stay subdued: {rgb:?}");
+        assert!(color.hue > 270.0 && color.hue < 330.0, "hue should be magenta: {color:?}");
     }
 
     #[test]
     fn stronger_color_wins_before_hue_blending() {
-        let red = BlockLight::from_rgb_levels([15, 0, 0]);
-        let blue = BlockLight::from_rgb_levels([0, 0, 14]);
+        let red = BlockLight::from_hsi(Hsi::new(0.0, 1.0, 1.0 / 3.0), 15);
+        let blue = BlockLight::from_hsi(Hsi::new(240.0, 1.0, 1.0 / 3.0), 14);
         let mixed = mix_strongest_block_lights([red, blue]);
 
         assert_eq!(mixed, red);
     }
 
     #[test]
-    fn opposing_equal_hues_desaturate_instead_of_choosing_an_arbitrary_side() {
-        let red = BlockLight::from_rgb_levels([15, 0, 0]);
-        let cyan = BlockLight::from_rgb_levels([0, 15, 15]);
+    fn opposing_equal_hues_desaturate() {
+        let red = BlockLight::from_hsi(Hsi::new(0.0, 1.0, 1.0 / 3.0), 15);
+        let cyan = BlockLight::from_hsi(Hsi::new(180.0, 1.0, 2.0 / 3.0), 15);
         let mixed = mix_strongest_block_lights([red, cyan]);
 
         assert_eq!(mixed.intensity(), 15);
         assert_eq!(mixed.saturation(), 0);
-        assert_eq!(mixed.to_rgb_levels(), [15, 15, 15]);
     }
 }
