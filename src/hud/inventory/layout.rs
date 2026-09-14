@@ -24,13 +24,13 @@ use crate::{
 use crate::hud::block_icon::BlockIconMaterial;
 
 use super::state::{
-    CATEGORY_GAP, CATEGORY_ICON_SIZE, CATEGORY_ROW_HEIGHT, CATEGORY_WIDTH,
-    CREATIVE_COLUMNS, CREATIVE_GRID_HEIGHT, CreativeCatalogScrollArea,
-    CreativeCatalogScrollbar, CreativeCategoryButton, CreativeCategoryScrollArea,
-    CreativeCategoryScrollbar, CreativeInventorySlot, CreativeInventoryView, CreativeScrollState,
-    CreativeSearchBar, CreativeSearchText, InventoryCursorIcon, InventoryHudRoot, InventorySlot,
-    InventoryTrashButton, ITEM_ICON_SIZE, PANEL_GAP, PANEL_PADDING, SCROLLBAR_TOTAL_WIDTH,
-    SEARCH_GAP, SEARCH_HEIGHT, SECTION_GAP, SLOT_GAP, SLOT_SIZE, TRASH_GAP,
+    CATEGORY_GAP, CATEGORY_ICON_SIZE, CATEGORY_ROW_HEIGHT, CATEGORY_WIDTH, CREATIVE_COLUMNS,
+    CREATIVE_GRID_HEIGHT, CreativeCatalogScrollArea, CreativeCatalogScrollbar,
+    CreativeCategoryButton, CreativeCategoryScrollArea, CreativeCategoryScrollbar,
+    CreativeInventorySlot, CreativeInventoryView, CreativeScrollState, CreativeSearchBar,
+    CreativeSearchText, ITEM_ICON_SIZE, InventoryCursorIcon, InventoryHudRoot, InventorySlot,
+    InventoryTrashButton, PANEL_GAP, PANEL_PADDING, SCROLLBAR_TOTAL_WIDTH, SEARCH_GAP,
+    SEARCH_HEIGHT, SECTION_GAP, SLOT_GAP, SLOT_SIZE, TRASH_GAP,
 };
 
 #[derive(Clone, Copy)]
@@ -371,13 +371,7 @@ fn spawn_category_list(
                     for category in ordered {
                         let selected =
                             creative_view.selected_category() == Some(category.id.as_str());
-                        spawn_category_button(
-                            list,
-                            Some(category),
-                            selected,
-                            localization,
-                            items,
-                        );
+                        spawn_category_button(list, Some(category), selected, localization, items);
                     }
                 })
                 .id();
@@ -449,10 +443,7 @@ fn spawn_category_button(
                 ));
             }
 
-            button.spawn((
-                typography::inventory_category(label),
-                Pickable::IGNORE,
-            ));
+            button.spawn((typography::inventory_category(label), Pickable::IGNORE));
         });
 }
 
