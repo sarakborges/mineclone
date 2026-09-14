@@ -3,7 +3,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::content::{
     biome::BiomeRegistry,
     block::BlockRegistry,
-    dimension::{DimensionDefinition, DimensionRegistry},
+    dimension::DimensionDefinition,
     fluid::FluidRegistry,
     secondary_property::SecondaryPropertyRegistry,
     structure::StructureRegistry,
@@ -12,7 +12,7 @@ use crate::content::{
 use super::{
     biome_field::BiomeField,
     chunk_rendering::{ChunkRenderContext, ChunkRenderPool, FluidMaterials, TerrainMaterials},
-    dimension::CurrentDimension,
+    current_context::CurrentDimensionContext,
     generation::ChunkGenerationContext,
     world_feature_fields::WorldFeatureFields,
 };
@@ -55,22 +55,16 @@ impl<'w> ChunkContent<'w> {
 
 #[derive(SystemParam)]
 pub(crate) struct ChunkGeneration<'w> {
-    pub(crate) current_dimension: Res<'w, CurrentDimension>,
-    pub(crate) dimensions: Res<'w, DimensionRegistry>,
+    pub(crate) dimension: CurrentDimensionContext<'w>,
     pub(crate) structures: Res<'w, StructureRegistry>,
     pub(crate) feature_fields: Res<'w, WorldFeatureFields>,
 }
 
 impl<'w> ChunkGeneration<'w> {
     pub(crate) fn dimension(&self) -> &DimensionDefinition {
-        self.dimensions
-            .get(&self.current_dimension.id)
-            .unwrap_or_else(|| {
-                panic!(
-                    "missing dimension definition: {}",
-                    self.current_dimension.id
-                )
-            })
+        self.dimension.definition().unwrap_or_else(|| {
+            panic!("missing dimension definition: {}", self.dimension.id())
+        })
     }
 
     pub(crate) fn context<'a>(&'a self, content: &'a ChunkContent<'_>) -> ChunkGenerationContext<'a> {
