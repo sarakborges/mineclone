@@ -34,20 +34,6 @@ pub(crate) fn block_face_material_face(face: BlockFace, block: &BlockDefinition)
         .unwrap_or(face)
 }
 
-pub(crate) fn block_face_texture(face: BlockFace, block: &BlockDefinition) -> Option<&str> {
-    block_face_texture_layers(face, block)
-        .first()
-        .map(|layer| layer.texture.as_str())
-}
-
-pub(crate) fn load_block_face_texture(
-    asset_server: &AssetServer,
-    face: BlockFace,
-    block: &BlockDefinition,
-) -> Option<Handle<Image>> {
-    block_face_texture(face, block).map(|texture| asset_server.load(texture.to_owned()))
-}
-
 pub(crate) fn load_block_texture_layer(
     asset_server: &AssetServer,
     layer: &BlockTextureLayer,

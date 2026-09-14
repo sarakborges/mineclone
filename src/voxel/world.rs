@@ -69,10 +69,6 @@ impl VoxelWorld {
         coord.y >= 0 && self.generated_chunks.contains(&coord)
     }
 
-    pub(crate) fn is_chunk_dirty(&self, coord: IVec3) -> bool {
-        coord.y >= 0 && self.dirty_chunks.contains(&coord)
-    }
-
     pub fn cell_at(&self, world_position: IVec3) -> Option<VoxelCell> {
         if world_position.y < 0 {
             return None;

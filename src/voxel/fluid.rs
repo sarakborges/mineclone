@@ -15,6 +15,7 @@ impl FluidCell {
         Self::with_state(fluid_id, level, true, 0)
     }
 
+    #[cfg(test)]
     pub fn flowing(fluid_id: FluidId, level: u8) -> Self {
         Self::with_state(fluid_id, level, false, 0)
     }

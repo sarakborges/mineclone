@@ -42,34 +42,8 @@ pub fn hud_panel() -> impl Bundle {
     })
 }
 
-pub fn hud_strip() -> impl Bundle {
-    hud_surface(Node {
-        flex_direction: FlexDirection::Row,
-        align_items: AlignItems::Center,
-        column_gap: px(4),
-        padding: UiRect::all(px(4)),
-        border: UiRect::all(px(1)),
-        border_radius: BorderRadius::all(px(6)),
-        ..default()
-    })
-}
-
 pub fn hud_container(node: Node) -> impl Bundle {
     hud_surface(node)
-}
-
-pub fn hud_banner() -> impl Bundle {
-    hud_surface(Node {
-        width: px(520),
-        max_width: percent(80),
-        padding: UiRect::axes(px(28), px(7)),
-        flex_direction: FlexDirection::Column,
-        align_items: AlignItems::Center,
-        row_gap: px(1),
-        border: UiRect::all(px(1)),
-        border_radius: BorderRadius::all(px(6)),
-        ..default()
-    })
 }
 
 pub fn hud_control_static(selected: bool) -> (Color, Color) {

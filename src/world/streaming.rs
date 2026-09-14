@@ -47,10 +47,6 @@ pub(super) struct ChunkStreamingState {
 }
 
 impl ChunkStreamingState {
-    pub(super) fn wants(&self, coord: IVec3) -> bool {
-        self.desired.contains(&coord)
-    }
-
     pub(super) fn keeps_loaded(&self, coord: IVec3) -> bool {
         self.desired.contains(&coord) || self.retained.contains(&coord)
     }

@@ -5,7 +5,7 @@ use super::{
     pool::ChunkRenderPool,
     spawn::{
         build_chunk_fluid_render_meshes, build_chunk_render_meshes, mesh_asset_bytes,
-        spawn_built_chunk_meshes, spawn_chunk_mesh,
+        spawn_chunk_mesh,
     },
 };
 

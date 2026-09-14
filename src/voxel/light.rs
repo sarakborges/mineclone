@@ -26,6 +26,7 @@ impl BlockLight {
         }
     }
 
+    #[cfg(test)]
     pub(crate) const fn from_rgb_levels(rgb: [u8; 3]) -> Self {
         let red = clamp_channel(rgb[0]);
         let green = clamp_channel(rgb[1]);
@@ -110,10 +111,12 @@ impl VoxelLight {
     pub const MAX_LEVEL: u8 = 15;
     pub const DARK: Self = Self(0);
 
+    #[cfg(test)]
     pub const fn new(sky: u8, block: u8) -> Self {
         Self::new_hsi(sky, BlockLight::new(0, 0, block))
     }
 
+    #[cfg(test)]
     pub const fn new_colored(sky: [u8; 3], block: [u8; 3]) -> Self {
         Self::new_hsi(max_channel(sky), BlockLight::from_rgb_levels(block))
     }
@@ -135,6 +138,7 @@ impl VoxelLight {
         (self.0 & 0x0f) as u8
     }
 
+    #[cfg(test)]
     pub const fn sky_rgb(self) -> [u8; 3] {
         [self.sky(); 3]
     }
@@ -164,6 +168,7 @@ const fn clamp_channel(value: u8) -> u8 {
     }
 }
 
+#[cfg(test)]
 const fn max_channel(value: [u8; 3]) -> u8 {
     let first = if value[0] > value[1] {
         value[0]
@@ -173,6 +178,7 @@ const fn max_channel(value: [u8; 3]) -> u8 {
     if first > value[2] { first } else { value[2] }
 }
 
+#[cfg(test)]
 const fn min_channel(value: [u8; 3]) -> u8 {
     let first = if value[0] < value[1] {
         value[0]
@@ -182,6 +188,7 @@ const fn min_channel(value: [u8; 3]) -> u8 {
     if first < value[2] { first } else { value[2] }
 }
 
+#[cfg(test)]
 const fn quantized_hue(red: u8, green: u8, blue: u8, maximum: u8, delta: u8) -> u8 {
     let delta = delta as i32;
     let mut sector_numerator = if maximum == red {

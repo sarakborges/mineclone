@@ -25,6 +25,7 @@ pub(crate) struct ChunkRemeshQueue {
 }
 
 impl ChunkRemeshQueue {
+    #[cfg(test)]
     pub(crate) fn enqueue(&mut self, coord: IVec3) {
         if coord.y >= 0 {
             self.fluid.remove(coord);
@@ -56,12 +57,6 @@ impl ChunkRemeshQueue {
         }
     }
 
-    pub(crate) fn enqueue_voxel_edit_neighbors(&mut self, coord: IVec3) {
-        for offset in CARDINAL_NEIGHBORS {
-            self.enqueue_priority(coord + offset);
-        }
-    }
-
     pub(crate) fn enqueue_lighting_change(&mut self, coord: IVec3) {
         if coord.y >= 0 {
             self.immediate_lighting.enqueue_front(coord);
@@ -72,18 +67,6 @@ impl ChunkRemeshQueue {
             if neighbor.y >= 0 {
                 self.immediate_lighting.enqueue(neighbor);
             }
-        }
-    }
-
-    pub(crate) fn extend(&mut self, coords: impl IntoIterator<Item = IVec3>) {
-        for coord in coords {
-            self.enqueue(coord);
-        }
-    }
-
-    pub(crate) fn extend_priority(&mut self, coords: impl IntoIterator<Item = IVec3>) {
-        for coord in coords {
-            self.enqueue_priority(coord);
         }
     }
 
