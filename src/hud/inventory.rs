@@ -25,7 +25,7 @@ use crate::{
         inventory::{CreativeInventoryView, InventoryCursor, InventoryState},
     },
     rendering::{block_model::BlockModel, block_tint::block_tint_at},
-    ui::{surface, theme, typography},
+    ui::{scrollbar, surface, theme, typography},
     world::biome_field::BiomeField,
 };
 
@@ -45,8 +45,7 @@ const CATEGORY_ICON_SIZE: f32 = 28.0;
 const CATEGORY_GAP: f32 = 12.0;
 const CREATIVE_VISIBLE_ROWS: usize = 5;
 const CREATIVE_COLUMNS: usize = 9;
-const SCROLLBAR_WIDTH: f32 = 8.0;
-const SCROLLBAR_GAP: f32 = 8.0;
+const SCROLLBAR_TOTAL_WIDTH: f32 = 14.0;
 const TRASH_GAP: f32 = 10.0;
 const CREATIVE_GRID_HEIGHT: f32 =
     CREATIVE_VISIBLE_ROWS as f32 * SLOT_SIZE + (CREATIVE_VISIBLE_ROWS - 1) as f32 * SLOT_GAP;
@@ -76,7 +75,25 @@ struct CreativeCategoryButton {
 }
 
 #[derive(Component)]
+struct CreativeCategoryScrollArea;
+
+#[derive(Component)]
+struct CreativeCatalogScrollArea;
+
+#[derive(Component)]
+struct CreativeCategoryScrollbar;
+
+#[derive(Component)]
+struct CreativeCatalogScrollbar;
+
+#[derive(Component)]
 struct InventoryCursorIcon;
+
+#[derive(Resource, Default)]
+struct CreativeScrollState {
+    category_y: f32,
+    catalog_y: f32,
+}
 
 #[derive(Clone, Copy)]
 enum CreativeCatalogItem<'a> {
@@ -118,32 +135,35 @@ pub(super) struct InventoryHudPlugin;
 
 impl Plugin for InventoryHudPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            OnEnter(InventoryState::Open),
-            spawn_inventory.run_if(in_state(GameState::Gameplay)),
-        )
-        .add_systems(
-            Update,
-            (
-                handle_search_focus,
-                handle_search_input,
-                handle_category_clicks,
-                handle_creative_scroll,
-                handle_creative_slot_clicks,
-                handle_slot_clicks,
-                handle_inventory_trash_clicks,
-                handle_empty_inventory_click,
-                rebuild_inventory_when_changed,
-                style_category_buttons,
-                style_creative_slots,
-                style_inventory_slots,
-                style_inventory_trash_button,
-                update_cursor_icon_position,
+        app.init_resource::<CreativeScrollState>()
+            .add_systems(
+                OnEnter(InventoryState::Open),
+                spawn_inventory.run_if(in_state(GameState::Gameplay)),
             )
-                .chain()
-                .run_if(in_state(GameState::Gameplay))
-                .run_if(in_state(InventoryState::Open)),
-        );
+            .add_systems(OnExit(InventoryState::Open), reset_creative_scroll_state)
+            .add_systems(
+                Update,
+                (
+                    handle_search_focus,
+                    handle_search_input,
+                    handle_category_clicks,
+                    handle_creative_scroll,
+                    handle_creative_slot_clicks,
+                    handle_slot_clicks,
+                    handle_inventory_trash_clicks,
+                    handle_empty_inventory_click,
+                    remember_creative_scroll_positions,
+                    rebuild_inventory_when_changed,
+                    style_category_buttons,
+                    style_creative_slots,
+                    style_inventory_slots,
+                    style_inventory_trash_button,
+                    update_cursor_icon_position,
+                )
+                    .chain()
+                    .run_if(in_state(GameState::Gameplay))
+                    .run_if(in_state(InventoryState::Open)),
+            );
     }
 }
 
@@ -158,6 +178,7 @@ fn spawn_inventory(
     hotbar: Res<PlayerHotbar>,
     cursor: Res<InventoryCursor>,
     creative_view: Res<CreativeInventoryView>,
+    scroll_state: Res<CreativeScrollState>,
     localization: Res<UiLocalization>,
     active_language: Res<ActiveLanguage>,
     player: Single<(&Transform, &GameMode), With<GameplayCamera>>,
@@ -183,6 +204,7 @@ fn spawn_inventory(
         &hotbar,
         &cursor,
         &creative_view,
+        &scroll_state,
         &localization,
         active_language.get(),
         window.cursor_position(),
@@ -205,6 +227,7 @@ fn handle_search_focus(
 fn handle_search_input(
     mut keyboard_input: MessageReader<KeyboardInput>,
     mut creative_view: ResMut<CreativeInventoryView>,
+    mut scroll_state: ResMut<CreativeScrollState>,
 ) {
     if !creative_view.search_focused() {
         keyboard_input.clear();
@@ -218,17 +241,20 @@ fn handle_search_input(
 
         if event.key_code == KeyCode::Backspace {
             creative_view.backspace_search();
+            scroll_state.catalog_y = 0.0;
             continue;
         }
 
         if let Some(text) = &event.text {
             creative_view.push_search_text(text);
+            scroll_state.catalog_y = 0.0;
         }
     }
 }
 
 fn handle_category_clicks(
     mut creative_view: ResMut<CreativeInventoryView>,
+    mut scroll_state: ResMut<CreativeScrollState>,
     categories: Query<(&Interaction, &CreativeCategoryButton), Changed<Interaction>>,
 ) {
     for (interaction, category) in &categories {
@@ -238,24 +264,29 @@ fn handle_category_clicks(
 
         creative_view.blur_search();
         creative_view.select_category(category.id.as_deref());
+        scroll_state.catalog_y = 0.0;
         break;
     }
 }
 
 fn handle_creative_scroll(
     mut wheel: MessageReader<MouseWheel>,
-    blocks: Res<BlockRegistry>,
-    tools: Res<ToolRegistry>,
-    categories: Res<InventoryCategoryRegistry>,
     category_buttons: Query<&Interaction, With<CreativeCategoryButton>>,
-    active_language: Res<ActiveLanguage>,
-    mut creative_view: ResMut<CreativeInventoryView>,
+    category_scrollbars: Query<&Interaction, With<CreativeCategoryScrollbar>>,
+    mut category_scroll: Query<
+        &mut ScrollPosition,
+        (With<CreativeCategoryScrollArea>, Without<CreativeCatalogScrollArea>),
+    >,
+    mut catalog_scroll: Query<
+        &mut ScrollPosition,
+        (With<CreativeCatalogScrollArea>, Without<CreativeCategoryScrollArea>),
+    >,
 ) {
     let mut delta = 0.0;
     for event in wheel.read() {
         delta += match event.unit {
-            MouseScrollUnit::Line => event.y,
-            MouseScrollUnit::Pixel => event.y / 40.0,
+            MouseScrollUnit::Line => -event.y * (SLOT_SIZE + SLOT_GAP),
+            MouseScrollUnit::Pixel => -event.y,
         };
     }
 
@@ -263,50 +294,19 @@ fn handle_creative_scroll(
         return;
     }
 
-    let steps = delta.abs().ceil().max(1.0) as usize;
     let pointer_is_over_categories = category_buttons
         .iter()
+        .chain(category_scrollbars.iter())
         .any(|interaction| *interaction != Interaction::None);
 
-    if pointer_is_over_categories {
-        let total_rows = categories.iter().count() + 1;
-        let max_scroll = total_rows.saturating_sub(CREATIVE_VISIBLE_ROWS);
-        let next = if delta < 0.0 {
-            (creative_view.category_scroll_row() + steps).min(max_scroll)
-        } else {
-            creative_view.category_scroll_row().saturating_sub(steps)
-        };
-
-        if next != creative_view.category_scroll_row() {
-            creative_view.set_category_scroll_row(next);
-        }
-        return;
-    }
-
-    let total_rows = creative_total_rows(
-        &blocks,
-        &tools,
-        &categories,
-        creative_view.search_query(),
-        creative_view.selected_category(),
-        active_language.get(),
-    );
-    let max_scroll = total_rows.saturating_sub(CREATIVE_VISIBLE_ROWS);
-    if max_scroll == 0 {
-        if creative_view.scroll_row() != 0 {
-            creative_view.set_scroll_row(0);
-        }
-        return;
-    }
-
-    let next = if delta < 0.0 {
-        (creative_view.scroll_row() + steps).min(max_scroll)
+    let target = if pointer_is_over_categories {
+        &mut category_scroll
     } else {
-        creative_view.scroll_row().saturating_sub(steps)
+        &mut catalog_scroll
     };
 
-    if next != creative_view.scroll_row() {
-        creative_view.set_scroll_row(next);
+    for mut position in target.iter_mut() {
+        position.0.y = (position.0.y + delta).max(0.0);
     }
 }
 
@@ -364,6 +364,8 @@ fn handle_empty_inventory_click(
     inventory_slots: Query<&Interaction, With<InventorySlot>>,
     search_bars: Query<&Interaction, With<CreativeSearchBar>>,
     trash_buttons: Query<&Interaction, With<InventoryTrashButton>>,
+    category_scrollbars: Query<&Interaction, With<CreativeCategoryScrollbar>>,
+    catalog_scrollbars: Query<&Interaction, With<CreativeCatalogScrollbar>>,
     mut cursor: ResMut<InventoryCursor>,
 ) {
     if !mouse.just_pressed(MouseButton::Left) || cursor.item().is_none() {
@@ -376,11 +378,30 @@ fn handle_empty_inventory_click(
         .chain(inventory_slots.iter())
         .chain(search_bars.iter())
         .chain(trash_buttons.iter())
+        .chain(category_scrollbars.iter())
+        .chain(catalog_scrollbars.iter())
         .any(|interaction| *interaction != Interaction::None);
 
     if !pointer_is_over_control {
         cursor.discard();
     }
+}
+
+fn remember_creative_scroll_positions(
+    category_scroll: Query<&ScrollPosition, With<CreativeCategoryScrollArea>>,
+    catalog_scroll: Query<&ScrollPosition, With<CreativeCatalogScrollArea>>,
+    mut state: ResMut<CreativeScrollState>,
+) {
+    if let Some(position) = category_scroll.iter().next() {
+        state.category_y = position.0.y;
+    }
+    if let Some(position) = catalog_scroll.iter().next() {
+        state.catalog_y = position.0.y;
+    }
+}
+
+fn reset_creative_scroll_state(mut state: ResMut<CreativeScrollState>) {
+    *state = default();
 }
 
 fn rebuild_inventory_when_changed(
@@ -394,6 +415,7 @@ fn rebuild_inventory_when_changed(
     hotbar: Res<PlayerHotbar>,
     cursor: Res<InventoryCursor>,
     creative_view: Res<CreativeInventoryView>,
+    scroll_state: Res<CreativeScrollState>,
     localization: Res<UiLocalization>,
     active_language: Res<ActiveLanguage>,
     player: Single<(&Transform, &GameMode), With<GameplayCamera>>,
@@ -427,6 +449,7 @@ fn rebuild_inventory_when_changed(
         &hotbar,
         &cursor,
         &creative_view,
+        &scroll_state,
         &localization,
         active_language.get(),
         window.cursor_position(),
@@ -545,6 +568,7 @@ fn spawn_inventory_root(
     hotbar: &PlayerHotbar,
     cursor: &InventoryCursor,
     creative_view: &CreativeInventoryView,
+    scroll_state: &CreativeScrollState,
     localization: &UiLocalization,
     language: Language,
     cursor_position: Option<Vec2>,
@@ -583,6 +607,7 @@ fn spawn_inventory_root(
                     player_position,
                     cursor,
                     creative_view,
+                    scroll_state,
                     localization,
                     language,
                     icon_materials,
@@ -664,6 +689,7 @@ fn spawn_creative_panel(
     player_position: Vec2,
     cursor: &InventoryCursor,
     creative_view: &CreativeInventoryView,
+    scroll_state: &CreativeScrollState,
     localization: &UiLocalization,
     language: Language,
     icon_materials: &mut Assets<BlockIconMaterial>,
@@ -676,20 +702,17 @@ fn spawn_creative_panel(
         creative_view.selected_category(),
         language,
     );
-    let total_rows = catalog.len().div_ceil(CREATIVE_COLUMNS).max(1);
-    let max_scroll = total_rows.saturating_sub(CREATIVE_VISIBLE_ROWS);
-    let scroll_row = creative_view.scroll_row().min(max_scroll);
-    let first_item = scroll_row * CREATIVE_COLUMNS;
 
-    root.spawn(surface::hud_container(Node {
-        flex_direction: FlexDirection::Column,
-        align_items: AlignItems::Center,
-        row_gap: px(SEARCH_GAP),
-        padding: UiRect::all(px(PANEL_PADDING)),
-        border: UiRect::all(px(1)),
-        border_radius: BorderRadius::all(px(6)),
-        ..default()
-    }))
+    root.spawn((
+        Node {
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            row_gap: px(SEARCH_GAP),
+            padding: UiRect::all(px(PANEL_PADDING)),
+            ..default()
+        },
+        Pickable::IGNORE,
+    ))
     .with_children(|panel| {
         spawn_search_bar(panel, creative_view, localization, language);
 
@@ -710,6 +733,7 @@ fn spawn_creative_panel(
                     blocks,
                     categories,
                     creative_view,
+                    scroll_state.category_y,
                     localization,
                     language,
                     icon_materials,
@@ -720,25 +744,44 @@ fn spawn_creative_panel(
                         Node {
                             flex_direction: FlexDirection::Row,
                             align_items: AlignItems::Stretch,
-                            column_gap: px(SCROLLBAR_GAP),
+                            height: px(CREATIVE_GRID_HEIGHT),
                             ..default()
                         },
                         Pickable::IGNORE,
                     ))
                     .with_children(|catalog_content| {
-                        spawn_creative_grid(
-                            catalog_content,
-                            &catalog,
-                            first_item,
-                            cursor.item(),
-                            asset_server,
-                            biomes,
-                            biome_field,
-                            player_position,
-                            language,
-                            icon_materials,
-                        );
-                        spawn_scrollbar(catalog_content, total_rows, scroll_row);
+                        let scroll_area = catalog_content
+                            .spawn((
+                                CreativeCatalogScrollArea,
+                                ScrollPosition(Vec2::new(0.0, scroll_state.catalog_y)),
+                                Node {
+                                    width: px(creative_grid_width()),
+                                    height: px(CREATIVE_GRID_HEIGHT),
+                                    flex_direction: FlexDirection::Column,
+                                    row_gap: px(SLOT_GAP),
+                                    overflow: Overflow::scroll_y(),
+                                    ..default()
+                                },
+                                Pickable::IGNORE,
+                            ))
+                            .with_children(|scroll| {
+                                spawn_creative_grid(
+                                    scroll,
+                                    &catalog,
+                                    cursor.item(),
+                                    asset_server,
+                                    biomes,
+                                    biome_field,
+                                    player_position,
+                                    language,
+                                    icon_materials,
+                                );
+                            })
+                            .id();
+
+                        catalog_content
+                            .spawn(scrollbar::vertical_scrollbar(scroll_area))
+                            .insert(CreativeCatalogScrollbar);
                     });
             });
     });
@@ -788,6 +831,7 @@ fn spawn_category_list(
     blocks: &BlockRegistry,
     categories: &InventoryCategoryRegistry,
     creative_view: &CreativeInventoryView,
+    initial_scroll_y: f32,
     localization: &UiLocalization,
     language: Language,
     icon_materials: &mut Assets<BlockIconMaterial>,
@@ -799,52 +843,44 @@ fn spawn_category_list(
             .then_with(|| left.id.cmp(&right.id))
     });
 
-    let total_rows = ordered.len() + 1;
-    let max_scroll = total_rows.saturating_sub(CREATIVE_VISIBLE_ROWS);
-    let scroll_row = creative_view.category_scroll_row().min(max_scroll);
-
     parent
         .spawn((
             Node {
                 flex_direction: FlexDirection::Row,
                 align_items: AlignItems::Stretch,
-                column_gap: px(SCROLLBAR_GAP),
                 height: px(CREATIVE_GRID_HEIGHT),
                 ..default()
             },
             Pickable::IGNORE,
         ))
         .with_children(|category_content| {
-            category_content
+            let scroll_area = category_content
                 .spawn((
+                    CreativeCategoryScrollArea,
+                    ScrollPosition(Vec2::new(0.0, initial_scroll_y)),
                     Node {
                         width: px(CATEGORY_WIDTH),
                         height: px(CREATIVE_GRID_HEIGHT),
                         flex_direction: FlexDirection::Column,
                         row_gap: px(SLOT_GAP),
-                        overflow: Overflow::clip_y(),
+                        overflow: Overflow::scroll_y(),
                         ..default()
                     },
                     Pickable::IGNORE,
                 ))
                 .with_children(|list| {
-                    let visible_end = (scroll_row + CREATIVE_VISIBLE_ROWS).min(total_rows);
-                    for index in scroll_row..visible_end {
-                        if index == 0 {
-                            spawn_category_button(
-                                list,
-                                None,
-                                creative_view.selected_category().is_none(),
-                                asset_server,
-                                blocks,
-                                localization,
-                                language,
-                                icon_materials,
-                            );
-                            continue;
-                        }
+                    spawn_category_button(
+                        list,
+                        None,
+                        creative_view.selected_category().is_none(),
+                        asset_server,
+                        blocks,
+                        localization,
+                        language,
+                        icon_materials,
+                    );
 
-                        let category = ordered[index - 1];
+                    for category in ordered {
                         let selected =
                             creative_view.selected_category() == Some(category.id.as_str());
                         spawn_category_button(
@@ -858,9 +894,12 @@ fn spawn_category_list(
                             icon_materials,
                         );
                     }
-                });
+                })
+                .id();
 
-            spawn_scrollbar(category_content, total_rows.max(1), scroll_row);
+            category_content
+                .spawn(scrollbar::vertical_scrollbar(scroll_area))
+                .insert(CreativeCategoryScrollbar);
         });
 }
 
@@ -936,7 +975,6 @@ fn spawn_category_button(
 fn spawn_creative_grid(
     parent: &mut ChildSpawnerCommands,
     catalog: &[CreativeCatalogItem<'_>],
-    first_item: usize,
     selected_item: Option<&'static str>,
     asset_server: &AssetServer,
     biomes: &BiomeRegistry,
@@ -945,44 +983,36 @@ fn spawn_creative_grid(
     language: Language,
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
-    parent
-        .spawn((
-            Node {
-                flex_direction: FlexDirection::Column,
-                row_gap: px(SLOT_GAP),
-                ..default()
-            },
-            Pickable::IGNORE,
-        ))
-        .with_children(|grid| {
-            for row in 0..CREATIVE_VISIBLE_ROWS {
-                grid.spawn((
-                    Node {
-                        flex_direction: FlexDirection::Row,
-                        column_gap: px(SLOT_GAP),
-                        ..default()
-                    },
-                    Pickable::IGNORE,
-                ))
-                .with_children(|row_node| {
-                    for column in 0..CREATIVE_COLUMNS {
-                        let visible_index = row * CREATIVE_COLUMNS + column;
-                        let item = catalog.get(first_item + visible_index).copied();
-                        spawn_creative_slot(
-                            row_node,
-                            item,
-                            selected_item,
-                            asset_server,
-                            biomes,
-                            biome_field,
-                            player_position,
-                            language,
-                            icon_materials,
-                        );
-                    }
-                });
-            }
-        });
+    let total_rows = catalog.len().div_ceil(CREATIVE_COLUMNS).max(1);
+
+    for row in 0..total_rows {
+        parent
+            .spawn((
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    column_gap: px(SLOT_GAP),
+                    min_height: px(SLOT_SIZE),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|row_node| {
+                for column in 0..CREATIVE_COLUMNS {
+                    let item = catalog.get(row * CREATIVE_COLUMNS + column).copied();
+                    spawn_creative_slot(
+                        row_node,
+                        item,
+                        selected_item,
+                        asset_server,
+                        biomes,
+                        biome_field,
+                        player_position,
+                        language,
+                        icon_materials,
+                    );
+                }
+            });
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -998,15 +1028,16 @@ fn spawn_player_inventory_panel(
     language: Language,
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
-    root.spawn(surface::hud_container(Node {
-        flex_direction: FlexDirection::Column,
-        align_items: AlignItems::Center,
-        row_gap: px(SECTION_GAP),
-        padding: UiRect::all(px(PANEL_PADDING)),
-        border: UiRect::all(px(1)),
-        border_radius: BorderRadius::all(px(6)),
-        ..default()
-    }))
+    root.spawn((
+        Node {
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            row_gap: px(SECTION_GAP),
+            padding: UiRect::all(px(PANEL_PADDING)),
+            ..default()
+        },
+        Pickable::IGNORE,
+    ))
     .with_children(|panel| {
         panel
             .spawn((
@@ -1053,32 +1084,44 @@ fn spawn_player_inventory_panel(
         panel
             .spawn((
                 Node {
-                    flex_direction: FlexDirection::Row,
-                    align_items: AlignItems::Center,
-                    column_gap: px(SLOT_GAP),
+                    position_type: PositionType::Relative,
+                    width: px(creative_grid_width()),
+                    height: px(SLOT_SIZE),
                     ..default()
                 },
                 Pickable::IGNORE,
             ))
-            .with_children(|hotbar_row| {
-                for hotbar_index in 0..HOTBAR_SLOT_COUNT {
-                    spawn_slot(
-                        hotbar_row,
-                        HOTBAR_INVENTORY_OFFSET + hotbar_index,
-                        hotbar_index == hotbar.selected_slot(),
-                        hotbar,
-                        asset_server,
-                        blocks,
-                        tools,
-                        biomes,
-                        biome_field,
-                        player_position,
-                        language,
-                        icon_materials,
-                    );
-                }
+            .with_children(|hotbar_anchor| {
+                hotbar_anchor
+                    .spawn((
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            column_gap: px(SLOT_GAP),
+                            ..default()
+                        },
+                        Pickable::IGNORE,
+                    ))
+                    .with_children(|hotbar_row| {
+                        for hotbar_index in 0..HOTBAR_SLOT_COUNT {
+                            spawn_slot(
+                                hotbar_row,
+                                HOTBAR_INVENTORY_OFFSET + hotbar_index,
+                                hotbar_index == hotbar.selected_slot(),
+                                hotbar,
+                                asset_server,
+                                blocks,
+                                tools,
+                                biomes,
+                                biome_field,
+                                player_position,
+                                language,
+                                icon_materials,
+                            );
+                        }
+                    });
 
-                spawn_inventory_trash_button(hotbar_row);
+                spawn_inventory_trash_button(hotbar_anchor);
             });
     });
 }
@@ -1092,9 +1135,11 @@ fn spawn_inventory_trash_button(parent: &mut ChildSpawnerCommands) {
             Button,
             InventoryTrashButton,
             Node {
+                position_type: PositionType::Absolute,
+                left: px(creative_grid_width() + TRASH_GAP),
+                top: px(0),
                 width: px(SLOT_SIZE),
                 height: px(SLOT_SIZE),
-                margin: UiRect::left(px(TRASH_GAP)),
                 border: UiRect::all(px(2)),
                 border_radius: BorderRadius::all(px(4)),
                 align_items: AlignItems::Center,
@@ -1154,46 +1199,6 @@ fn spawn_inventory_trash_button(parent: &mut ChildSpawnerCommands) {
         });
 }
 
-fn spawn_scrollbar(parent: &mut ChildSpawnerCommands, total_rows: usize, scroll_row: usize) {
-    let visible_ratio = (CREATIVE_VISIBLE_ROWS as f32 / total_rows as f32).min(1.0);
-    let thumb_height = CREATIVE_GRID_HEIGHT * visible_ratio;
-    let max_scroll = total_rows.saturating_sub(CREATIVE_VISIBLE_ROWS);
-    let travel = CREATIVE_GRID_HEIGHT - thumb_height;
-    let thumb_top = if max_scroll == 0 {
-        0.0
-    } else {
-        travel * scroll_row as f32 / max_scroll as f32
-    };
-
-    parent
-        .spawn((
-            Node {
-                width: px(SCROLLBAR_WIDTH),
-                height: px(CREATIVE_GRID_HEIGHT),
-                position_type: PositionType::Relative,
-                border_radius: BorderRadius::MAX,
-                ..default()
-            },
-            BackgroundColor(Color::srgba(0.65, 0.68, 0.82, 0.10)),
-            Pickable::IGNORE,
-        ))
-        .with_children(|track| {
-            track.spawn((
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: px(0),
-                    top: px(thumb_top),
-                    width: px(SCROLLBAR_WIDTH),
-                    height: px(thumb_height),
-                    border_radius: BorderRadius::MAX,
-                    ..default()
-                },
-                BackgroundColor(Color::srgba(0.78, 0.80, 0.94, 0.55)),
-                Pickable::IGNORE,
-            ));
-        });
-}
-
 #[allow(clippy::too_many_arguments)]
 fn spawn_creative_slot(
     parent: &mut ChildSpawnerCommands,
@@ -1217,6 +1222,8 @@ fn spawn_creative_slot(
             Node {
                 width: px(SLOT_SIZE),
                 height: px(SLOT_SIZE),
+                min_width: px(SLOT_SIZE),
+                min_height: px(SLOT_SIZE),
                 border: UiRect::all(px(2)),
                 border_radius: BorderRadius::all(px(4)),
                 align_items: AlignItems::Center,
@@ -1371,28 +1378,14 @@ fn category_order(categories: &InventoryCategoryRegistry, category: &str) -> u16
         .map_or(u16::MAX, |definition| definition.order)
 }
 
-fn creative_total_rows(
-    blocks: &BlockRegistry,
-    tools: &ToolRegistry,
-    categories: &InventoryCategoryRegistry,
-    query: &str,
-    category: Option<&str>,
-    language: Language,
-) -> usize {
-    let count = filtered_creative_catalog(blocks, tools, categories, query, category, language).len();
-    count.div_ceil(CREATIVE_COLUMNS).max(1)
-}
-
 fn creative_grid_width() -> f32 {
     CREATIVE_COLUMNS as f32 * SLOT_SIZE + (CREATIVE_COLUMNS - 1) as f32 * SLOT_GAP
 }
 
 fn creative_content_width() -> f32 {
     CATEGORY_WIDTH
-        + SCROLLBAR_GAP
-        + SCROLLBAR_WIDTH
+        + SCROLLBAR_TOTAL_WIDTH
         + CATEGORY_GAP
         + creative_grid_width()
-        + SCROLLBAR_GAP
-        + SCROLLBAR_WIDTH
+        + SCROLLBAR_TOTAL_WIDTH
 }
