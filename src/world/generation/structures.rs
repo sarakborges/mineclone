@@ -7,7 +7,6 @@ use crate::{
     content::{
         biome_structure::StructurePlacementRules,
         block::BlockRegistry,
-        block_id::intern_block_id,
         structure::{StructureDefinition, StructureVoxel},
     },
     voxel::{
@@ -136,13 +135,12 @@ fn rasterize_structure(
             continue;
         }
 
-        let block = blocks.get(&voxel.block_id).unwrap_or_else(|| {
+        let block = blocks.get(voxel.block_id).unwrap_or_else(|| {
             panic!(
                 "structure {} references missing block: {}",
                 structure.id, voxel.block_id
             )
         });
-        let block_id = intern_block_id(&voxel.block_id);
         let texture_rotation =
             TextureRotation::for_position(world_position, block.rotate_texture.any());
         let local_x = local.x as usize;
@@ -154,7 +152,7 @@ fn rasterize_structure(
             local_y,
             local_z,
             Some(VoxelCell::oriented(
-                block_id,
+                voxel.block_id,
                 texture_rotation,
                 voxel.orientation,
             )),
