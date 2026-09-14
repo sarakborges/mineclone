@@ -33,7 +33,7 @@ Use `SystemParam` to name coherent read/write contexts and to keep Bevy system s
 
 - A context should represent one domain concern, not a generic bag of unrelated resources.
 - Compose smaller contexts when one context is a strict subset of another. `ChunkContent` composing `VoxelContent` is the model to follow.
-- Reuse existing contexts such as `CurrentDimensionContext`, `BlockTargetingScene`, and the chunk contexts instead of redeclaring the same resource cluster.
+- Reuse existing contexts such as `CurrentDimensionContext`, `BlockTargetingScene`, `BlockVisualContent`, and the chunk contexts instead of redeclaring the same resource cluster.
 - Keep mutable contexts narrow. Broad mutable access makes scheduling conflicts harder to reason about.
 - Bevy 0.19 systems must remain within the 16-system-parameter limit.
 - Schedule tuples must remain within the 20-item tuple limit. Split large orchestration into sets or coherent subgroups before reaching the limit.
@@ -55,6 +55,7 @@ Use schedule sets to express ordering between domains. Prefer named sets over ch
 Reusable UI behavior and appearance belong under `src/ui`.
 
 - Screens and HUD modules resolve domain data and assemble layouts; they should not clone interaction mechanics or control styling.
+- View-only state such as search focus, filter text, selected presentation categories, scroll positions, and UI dirtiness belongs to the owning HUD/screen module rather than gameplay/player domains.
 - Numeric fields use `numeric_input_field`, `NumericInputState`, and `sync_numeric_input_view`.
 - Compact controls use the shared button primitives.
 - Shared typography, shadows, surfaces, selectable visuals, scrollbar behavior, text input behavior, and visibility helpers remain centralized.
@@ -69,6 +70,7 @@ Targeting has one raycast result and downstream consumers observe it.
 - `BlockTargetingScene` is the shared read context for target, hotbar selection, player transform, and voxel world.
 - Placement orientation, interaction, highlight, placement preview, and target HUD must derive from the same target/selection sources rather than maintaining independent copies.
 - Shared block model/material/tint/orientation transforms belong in rendering/block-model utilities. Hotbar icons, held blocks, target icons, and placement previews may have different lifecycles but should reuse those transformations.
+- Block display consumers that need asset, block, biome, and biome-field reads should reuse `BlockVisualContent` instead of redeclaring that cluster locally.
 
 ## 7. World queues and frame budgets
 
@@ -123,6 +125,9 @@ Asteria targets stable 60 FPS and world streaming must protect frame time.
 - Expensive work must not be repeated every frame without a demonstrated need.
 - Streaming/generation/remesh/lighting work that remains synchronous must be explicitly budgeted.
 - Prefer change-driven updates and caches for UI/model/material refreshes.
+- Rebuild only the smallest stable UI/render subtree whose authoritative inputs changed; preserve unaffected roots, controls, slots, and materials.
+- Derived metadata from loaded definitions belongs to the owning definition or registry. Precompute immutable voxel expansions, bounds, capability flags, sorted lookup lists, and similar summaries during load/insert instead of rescanning or reparsing definitions in generation, rendering, or UI hot paths.
+- If definitions may replace an existing ID, rebuild derived metadata from authoritative definitions so cached summaries remain exact rather than monotonic or stale.
 - Avoid broad neighbor remeshes when a boundary/content test can determine whether work is necessary.
 - Do not trade away correctness of authoritative world data to hide a performance problem. Move or stage expensive work instead.
 
@@ -147,6 +152,7 @@ Before adding a new system or helper, answer these questions:
 6. Can the update be change-driven instead of every frame?
 7. Does the system signature remain comfortably below Bevy's parameter and tuple limits?
 8. Am I preserving HSI internally and converting only at a rendering/I/O boundary?
-9. If this completes an update block, has `VERSION` been bumped appropriately?
+9. Is immutable content metadata being derived once by its owner rather than rediscovered in a hot path?
+10. If this completes an update block, has `VERSION` been bumped appropriately?
 
 When in doubt, prefer one authoritative owner plus small reusable primitives over mirrored state, copied systems, or one oversized context.
