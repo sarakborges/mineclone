@@ -39,6 +39,15 @@ where
         self.pending.push_front(value);
     }
 
+    pub(crate) fn remove(&mut self, value: T) -> bool {
+        if !self.queued.remove(&value) {
+            return false;
+        }
+
+        self.pending.retain(|pending| *pending != value);
+        true
+    }
+
     pub(crate) fn pop(&mut self) -> Option<T> {
         let value = self.pending.pop_front()?;
         self.queued.remove(&value);
@@ -79,5 +88,17 @@ mod tests {
 
         assert_eq!(queue.pop(), Some(2));
         assert_eq!(queue.pop(), Some(1));
+    }
+
+    #[test]
+    fn remove_drops_pending_value() {
+        let mut queue = DeduplicatedQueue::default();
+        queue.enqueue(1);
+        queue.enqueue(2);
+
+        assert!(queue.remove(1));
+        assert!(!queue.remove(3));
+        assert_eq!(queue.pop(), Some(2));
+        assert_eq!(queue.pop(), None);
     }
 }
