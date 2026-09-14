@@ -60,6 +60,78 @@ pub(super) struct CreativeCatalogScrollbar;
 pub(super) struct InventoryCursorIcon;
 
 #[derive(Resource, Default)]
+pub(super) struct CreativeInventoryView {
+    search_query: String,
+    search_focused: bool,
+    replace_search_on_next_input: bool,
+    selected_category: Option<String>,
+}
+
+impl CreativeInventoryView {
+    pub(super) fn search_query(&self) -> &str {
+        &self.search_query
+    }
+
+    pub(super) fn search_focused(&self) -> bool {
+        self.search_focused
+    }
+
+    pub(super) fn selected_category(&self) -> Option<&str> {
+        self.selected_category.as_deref()
+    }
+
+    pub(super) fn focus_search(&mut self) {
+        self.search_focused = true;
+        self.replace_search_on_next_input = false;
+    }
+
+    pub(super) fn blur_search(&mut self) {
+        self.search_focused = false;
+        self.replace_search_on_next_input = false;
+    }
+
+    pub(super) fn select_all_search(&mut self) {
+        if self.search_focused {
+            self.replace_search_on_next_input = true;
+        }
+    }
+
+    pub(super) fn push_search_text(&mut self, text: &str) {
+        let filtered = text
+            .chars()
+            .filter(|character| !character.is_control())
+            .collect::<String>();
+        if filtered.is_empty() {
+            return;
+        }
+
+        if self.replace_search_on_next_input {
+            self.search_query.clear();
+            self.replace_search_on_next_input = false;
+        }
+
+        self.search_query.push_str(&filtered);
+    }
+
+    pub(super) fn backspace_search(&mut self) {
+        if self.replace_search_on_next_input {
+            self.search_query.clear();
+            self.replace_search_on_next_input = false;
+            return;
+        }
+
+        self.search_query.pop();
+    }
+
+    pub(super) fn select_category(&mut self, category: Option<&str>) {
+        let category = category.map(str::to_owned);
+        if self.selected_category != category {
+            self.selected_category = category;
+        }
+    }
+}
+
+#[derive(Resource, Default)]
 pub(super) struct CreativeScrollState {
     pub(super) category_y: f32,
     pub(super) catalog_y: f32,
