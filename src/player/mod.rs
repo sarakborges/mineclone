@@ -11,7 +11,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    voxel::world::VoxelWorld,
+    voxel::{spatial_search::find_map_square_rings, world::VoxelWorld},
 };
 use camera::GameplayCamera;
 use game_mode::GameMode;
@@ -61,31 +61,25 @@ pub(crate) fn player_position_is_clear(world: &VoxelWorld, translation: Vec3) ->
 }
 
 pub(crate) fn safe_spawn_position(world: &VoxelWorld, preferred_column: IVec2) -> Vec3 {
-    for radius in 0..=SPAWN_SEARCH_RADIUS_BLOCKS {
-        for z_offset in -radius..=radius {
-            for x_offset in -radius..=radius {
-                if radius > 0 && x_offset.abs() != radius && z_offset.abs() != radius {
-                    continue;
-                }
-
-                let column = preferred_column + IVec2::new(x_offset, z_offset);
-                let Some(feet_y) = safe_surface_feet_y(world, column) else {
-                    continue;
-                };
-
-                return Vec3::new(
-                    column.x as f32 + 0.5,
-                    feet_y as f32 + PLAYER_EYE_HEIGHT,
-                    column.y as f32 + 0.5,
-                );
-            }
-        }
-    }
-
-    panic!(
-        "could not find a safe generated player spawn within {} blocks of {:?}",
-        SPAWN_SEARCH_RADIUS_BLOCKS, preferred_column
-    );
+    find_map_square_rings(
+        preferred_column,
+        SPAWN_SEARCH_RADIUS_BLOCKS,
+        1,
+        |column| {
+            let feet_y = safe_surface_feet_y(world, column)?;
+            Some(Vec3::new(
+                column.x as f32 + 0.5,
+                feet_y as f32 + PLAYER_EYE_HEIGHT,
+                column.y as f32 + 0.5,
+            ))
+        },
+    )
+    .unwrap_or_else(|| {
+        panic!(
+            "could not find a safe generated player spawn within {} blocks of {:?}",
+            SPAWN_SEARCH_RADIUS_BLOCKS, preferred_column
+        )
+    })
 }
 
 fn safe_surface_feet_y(world: &VoxelWorld, column: IVec2) -> Option<i32> {
