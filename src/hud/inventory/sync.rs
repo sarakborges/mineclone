@@ -20,13 +20,13 @@ use crate::hud::block_icon::BlockIconMaterial;
 
 use super::{
     layout::{
-        InventoryItemView, InventoryLayoutState, spawn_cursor_icon, spawn_inventory_item,
-        spawn_inventory_root,
+        InventoryItemView, InventoryLayoutState, spawn_creative_panel, spawn_cursor_icon,
+        spawn_inventory_item, spawn_inventory_root,
     },
     state::{
-        CreativeCategoryButton, CreativeInventorySlot, CreativeInventoryUiDirty,
-        CreativeInventoryView, CreativeScrollState, CreativeSearchBar, InventoryCursorIcon,
-        InventoryHudRoot, InventorySlot, InventoryTrashButton, ITEM_ICON_SIZE,
+        CreativeCategoryButton, CreativeInventoryPanel, CreativeInventorySlot,
+        CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState, CreativeSearchBar,
+        InventoryCursorIcon, InventoryHudRoot, InventorySlot, InventoryTrashButton, ITEM_ICON_SIZE,
     },
 };
 
@@ -175,15 +175,14 @@ pub(super) fn rebuild_inventory_when_changed(
     localization: Res<UiLocalization>,
     state: InventoryPanelState,
     roots: Query<Entity, With<InventoryHudRoot>>,
+    creative_panels: Query<Entity, With<CreativeInventoryPanel>>,
     mut ui_dirty: ResMut<CreativeInventoryUiDirty>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
-    if !ui_dirty.take() && !content.language.is_changed() {
+    let ui_changed = ui_dirty.take();
+    let language_changed = content.language.is_changed();
+    if !ui_changed && !language_changed {
         return;
-    }
-
-    for entity in &roots {
-        commands.entity(entity).despawn();
     }
 
     let (player_transform, game_mode) = *state.player;
@@ -203,7 +202,27 @@ pub(super) fn rebuild_inventory_when_changed(
         cursor_position: None,
     };
 
-    spawn_inventory_root(&mut commands, &layout, &mut items);
+    if language_changed {
+        for entity in &roots {
+            commands.entity(entity).despawn();
+        }
+        spawn_inventory_root(&mut commands, &layout, &mut items);
+        return;
+    }
+
+    let Some(root_entity) = roots.iter().next() else {
+        return;
+    };
+    for entity in &creative_panels {
+        commands.entity(entity).despawn();
+    }
+    if !game_mode.has_creative_inventory() {
+        return;
+    }
+
+    commands.entity(root_entity).with_children(|root| {
+        spawn_creative_panel(root, &layout, &mut items);
+    });
 }
 
 pub(super) fn style_search_bar(
