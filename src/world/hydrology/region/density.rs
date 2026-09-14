@@ -68,11 +68,14 @@ impl HydrologyRegion {
 
     fn density_column_profile(&self, horizontal: Vec2) -> DensityColumnProfile {
         let river_graph_sample = self.river_graph.sample_horizontal(horizontal);
-        let river_sample = river_graph_sample.filter(|sample| sample.strength > SHORE_STRENGTH);
-        let (river, river_opening) = river_sample.map_or((None, 0.0), |sample| {
-            let profile = smoothstep(sample.strength);
+        let (river, river_opening) = river_graph_sample.map_or((None, 0.0), |sample| {
+            // Carving uses the complete feature radius instead of abruptly
+            // stopping at SHORE_STRENGTH. Water itself still starts at the
+            // narrower channel boundary, while this low-strength outer ring
+            // creates a continuous bank transition instead of a flat wall.
+            let profile = smoothstep(sample.strength.clamp(0.0, 1.0));
             let bed = sample.height - self.river_carve_depth * profile;
-            let river = Some(VerticalDensityDelta {
+            let river = (profile > 0.0).then_some(VerticalDensityDelta {
                 minimum_y: bed - 0.5,
                 maximum_y: sample.height + 1.5,
                 delta: -RIVER_CARVE_STRENGTH * profile,
