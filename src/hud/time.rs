@@ -4,7 +4,7 @@ use crate::{
     app::game_state::GameState,
     content::{day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry},
     localization::{ActiveLanguage, UiLocalization},
-    ui::{surface, typography},
+    ui::typography,
     world::{day_night::DayNightClock, dimension::CurrentDimension},
 };
 
@@ -28,29 +28,26 @@ fn spawn_time_hud(
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
 ) {
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                top: px(16),
-                left: px(16),
-                ..default()
-            },
-            Pickable::IGNORE,
-            DespawnOnExit(GameState::Gameplay),
-        ))
-        .with_children(|root| {
-            root.spawn(surface::hud_panel()).with_children(|panel| {
-                panel.spawn((
-                    typography::hud(format!(
-                        "{} 1\n00:00",
-                        localization.text(language.get(), "hud.day")
-                    )),
-                    TextLayout::justify(Justify::Center),
-                    TimeHudText,
-                ));
-            });
-        });
+    commands.spawn((
+        typography::hud(format!(
+            "{} 1\n00:00",
+            localization.text(language.get(), "hud.day")
+        )),
+        TextLayout::justify(Justify::Center),
+        TextShadow {
+            offset: Vec2::new(1.5, 1.5),
+            color: Color::srgba(0.0, 0.0, 0.0, 0.92),
+        },
+        TimeHudText,
+        Node {
+            position_type: PositionType::Absolute,
+            top: px(16),
+            left: px(16),
+            ..default()
+        },
+        Pickable::IGNORE,
+        DespawnOnExit(GameState::Gameplay),
+    ));
 }
 
 fn update_time_hud(
