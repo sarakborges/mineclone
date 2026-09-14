@@ -8,17 +8,19 @@ use crate::{
         player_id::LOCAL_PLAYER_ID, player_position_is_clear, safe_spawn_position,
         spawn_player_entity,
     },
-    ui::transition::{ScreenTransition, ScreenTransitionTarget},
-    voxel::{lighting::initialize_chunks_lighting, world::VoxelWorld},
+    ui::transition::ScreenTransitionTarget,
+    voxel::lighting::initialize_chunks_lighting,
 };
 
-use super::{WorldLoadingPhase, WorldLoadingState};
+use super::{
+    WorldLoadingPhase,
+    system_params::{WorldSetupPersistence, WorldSetupRuntime},
+};
 use crate::world::{
-    InMemoryWorldSave, NewWorldConfig, WorldLoadMode,
+    WorldLoadMode,
     chunk_loading::ensure_chunk_loaded,
     chunk_rendering::spawn_chunk_mesh,
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
-    fluid_updates::PendingFluidUpdates,
 };
 
 const BOOTSTRAP_LIGHT_BATCH_CHUNKS: usize = 2;
@@ -28,26 +30,21 @@ pub(in crate::world) fn setup_world(
     generation: ChunkGeneration,
     content: ChunkContent,
     mut renderer: ChunkRenderer,
-    mut world: ResMut<VoxelWorld>,
-    mut loading_state: ResMut<WorldLoadingState>,
-    mut transition: ResMut<ScreenTransition>,
-    mut fluid_updates: ResMut<PendingFluidUpdates>,
-    load_mode: Res<WorldLoadMode>,
-    new_world_config: Res<NewWorldConfig>,
-    save: Res<InMemoryWorldSave>,
+    mut runtime: WorldSetupRuntime,
+    persistence: WorldSetupPersistence,
 ) {
-    if transition.is_active() {
+    if runtime.transition.is_active() {
         return;
     }
 
-    if !loading_state.screen_rendered {
-        loading_state.screen_rendered = true;
+    if !runtime.loading_state.screen_rendered {
+        runtime.loading_state.screen_rendered = true;
         return;
     }
 
     let generation_context = generation.context(&content);
 
-    match loading_state.phase {
+    match runtime.loading_state.phase {
         WorldLoadingPhase::Generating => {
             let frame_started = Instant::now();
             let mut processed = 0;
@@ -57,18 +54,25 @@ pub(in crate::world) fn setup_world(
                     break;
                 }
 
-                let Some(coord) = loading_state.coords.get(loading_state.generated).copied() else {
+                let Some(coord) = runtime
+                    .loading_state
+                    .coords
+                    .get(runtime.loading_state.generated)
+                    .copied()
+                else {
                     break;
                 };
 
-                ensure_chunk_loaded(&mut world, coord, &generation_context);
-                fluid_updates.enqueue_loaded_fluid_frontier(&world, coord);
-                loading_state.generated += 1;
+                ensure_chunk_loaded(&mut runtime.world, coord, &generation_context);
+                runtime
+                    .fluid_updates
+                    .enqueue_loaded_fluid_frontier(&runtime.world, coord);
+                runtime.loading_state.generated += 1;
                 processed += 1;
             }
 
-            if loading_state.generated >= loading_state.coords.len() {
-                loading_state.phase = WorldLoadingPhase::Lighting;
+            if runtime.loading_state.generated >= runtime.loading_state.coords.len() {
+                runtime.loading_state.phase = WorldLoadingPhase::Lighting;
             }
         }
         WorldLoadingPhase::Lighting => {
@@ -80,25 +84,26 @@ pub(in crate::world) fn setup_world(
                     break;
                 }
 
-                let start = loading_state.lit;
-                if start >= loading_state.coords.len() {
+                let start = runtime.loading_state.lit;
+                if start >= runtime.loading_state.coords.len() {
                     break;
                 }
-                let end = (start + BOOTSTRAP_LIGHT_BATCH_CHUNKS).min(loading_state.coords.len());
+                let end = (start + BOOTSTRAP_LIGHT_BATCH_CHUNKS)
+                    .min(runtime.loading_state.coords.len());
 
                 drop(initialize_chunks_lighting(
-                    &mut world,
-                    &loading_state.coords[start..end],
+                    &mut runtime.world,
+                    &runtime.loading_state.coords[start..end],
                     &content.blocks,
                     &content.fluids,
                     &content.secondary_properties,
                 ));
-                loading_state.lit = end;
+                runtime.loading_state.lit = end;
                 processed += end - start;
             }
 
-            if loading_state.lit >= loading_state.coords.len() {
-                loading_state.phase = WorldLoadingPhase::Meshing;
+            if runtime.loading_state.lit >= runtime.loading_state.coords.len() {
+                runtime.loading_state.phase = WorldLoadingPhase::Meshing;
             }
         }
         WorldLoadingPhase::Meshing => {
@@ -110,14 +115,20 @@ pub(in crate::world) fn setup_world(
                     break;
                 }
 
-                let Some(coord) = loading_state.coords.get(loading_state.meshed).copied() else {
+                let Some(coord) = runtime
+                    .loading_state
+                    .coords
+                    .get(runtime.loading_state.meshed)
+                    .copied()
+                else {
                     break;
                 };
-                let chunk = world
+                let chunk = runtime
+                    .world
                     .chunk(coord)
                     .unwrap_or_else(|| panic!("generated chunk should exist at {coord:?}"));
                 let render_context = content.render_context(
-                    &world,
+                    &runtime.world,
                     &renderer.terrain_materials,
                     &renderer.fluid_materials,
                 );
@@ -130,34 +141,38 @@ pub(in crate::world) fn setup_world(
                     chunk,
                     &render_context,
                 );
-                loading_state.meshed += 1;
+                runtime.loading_state.meshed += 1;
                 processed += 1;
             }
 
-            if loading_state.meshed >= loading_state.coords.len() {
-                loading_state.phase = WorldLoadingPhase::Spawning;
+            if runtime.loading_state.meshed >= runtime.loading_state.coords.len() {
+                runtime.loading_state.phase = WorldLoadingPhase::Spawning;
             }
         }
         WorldLoadingPhase::Spawning => {
-            if loading_state.transition_requested {
+            if runtime.loading_state.transition_requested {
                 return;
             }
 
-            let saved_position = (*load_mode == WorldLoadMode::Load)
-                .then(|| save.player_position(LOCAL_PLAYER_ID))
+            let saved_position = (*persistence.load_mode == WorldLoadMode::Load)
+                .then(|| persistence.save.player_position(LOCAL_PLAYER_ID))
                 .flatten();
             let translation = saved_position
-                .filter(|position| player_position_is_clear(&world, *position))
-                .unwrap_or_else(|| safe_spawn_position(&world, loading_state.spawn_column));
-            let game_mode = if *load_mode == WorldLoadMode::Load {
-                save.player_game_mode(LOCAL_PLAYER_ID)
+                .filter(|position| player_position_is_clear(&runtime.world, *position))
+                .unwrap_or_else(|| {
+                    safe_spawn_position(&runtime.world, runtime.loading_state.spawn_column)
+                });
+            let game_mode = if *persistence.load_mode == WorldLoadMode::Load {
+                persistence.save.player_game_mode(LOCAL_PLAYER_ID)
             } else {
-                new_world_config.game_mode()
+                persistence.new_world_config.game_mode()
             };
 
             spawn_player_entity(&mut renderer.commands, translation, game_mode);
-            loading_state.transition_requested = true;
-            transition.request(ScreenTransitionTarget::game(GameState::Gameplay));
+            runtime.loading_state.transition_requested = true;
+            runtime
+                .transition
+                .request(ScreenTransitionTarget::game(GameState::Gameplay));
         }
     }
 }
