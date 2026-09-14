@@ -60,6 +60,16 @@ where
         self.buffer = value.to_string();
     }
 
+    pub(crate) fn begin_if_pressed<'a>(
+        &mut self,
+        mut interactions: impl Iterator<Item = &'a Interaction>,
+        value: impl Display,
+    ) {
+        if interactions.any(|interaction| *interaction == Interaction::Pressed) {
+            self.begin(value);
+        }
+    }
+
     pub(crate) fn reset(&mut self) {
         self.editing = false;
         self.replace_on_next_digit = false;
@@ -162,7 +172,30 @@ pub(crate) fn numeric_input_field<I: Component, L: Component>(
     )
 }
 
-pub(crate) fn numeric_input_border(editing: bool) -> Color {
+pub(crate) fn sync_numeric_input_view<M, I, L>(
+    state: &NumericInputState<M>,
+    value: impl Display,
+    labels: &mut Query<&mut Text, With<L>>,
+    inputs: &mut Query<&mut BorderColor, With<I>>,
+) where
+    M: Send + Sync + 'static,
+    I: Component,
+    L: Component,
+{
+    let next = state.display(value);
+
+    for mut label in labels {
+        if label.0 != next {
+            label.0 = next.clone();
+        }
+    }
+
+    for mut border in inputs {
+        *border = BorderColor::all(numeric_input_border(state.editing()));
+    }
+}
+
+fn numeric_input_border(editing: bool) -> Color {
     if editing {
         theme::TEXT_PRIMARY.with_alpha(0.92)
     } else {
