@@ -6,7 +6,7 @@ mod sync;
 use bevy::prelude::*;
 
 use crate::{
-    app::game_state::GameState,
+    app::{game_state::GameState, resource_systems::reset_resource},
     player::inventory::InventoryState,
 };
 
@@ -14,7 +14,6 @@ use interaction::{
     handle_category_clicks, handle_creative_scroll, handle_creative_slot_clicks,
     handle_empty_inventory_click, handle_inventory_trash_clicks, handle_search_focus,
     handle_search_input, handle_slot_clicks, remember_creative_scroll_positions,
-    reset_creative_ui_state,
 };
 use state::{CreativeInventoryUiDirty, CreativeScrollState};
 use sync::{
@@ -50,7 +49,13 @@ impl Plugin for InventoryHudPlugin {
                 OnEnter(InventoryState::Open),
                 spawn_inventory.run_if(in_state(GameState::Gameplay)),
             )
-            .add_systems(OnExit(InventoryState::Open), reset_creative_ui_state)
+            .add_systems(
+                OnExit(InventoryState::Open),
+                (
+                    reset_resource::<CreativeScrollState>,
+                    reset_resource::<CreativeInventoryUiDirty>,
+                ),
+            )
             .add_systems(
                 Update,
                 (
