@@ -98,11 +98,11 @@ pub(super) fn build_chunk_fluid_render_meshes(
             .fluids
             .get(fluid_id)
             .unwrap_or_else(|| panic!("missing fluid definition for id {fluid_id}"));
-        let tint = context
-            .biome_field
-            .water_color(position, context.biomes, fluid.color);
 
-        [tint.r, tint.g, tint.b]
+        context
+            .biome_field
+            .water_color(position, context.biomes, fluid.color)
+            .to_srgb()
     })
 }
 
