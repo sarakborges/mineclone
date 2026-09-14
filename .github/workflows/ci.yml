@@ -36,8 +36,17 @@ jobs:
             libxi-dev \
             libxrandr-dev
 
-      - name: Format
-        run: cargo fmt --all -- --check
+      - name: Normalize formatting
+        run: cargo fmt --all
+
+      - name: Upload formatted sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: formatted-rust-sources
+          path: |
+            src/**/*.rs
+            build.rs
+          if-no-files-found: error
 
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
@@ -47,3 +56,6 @@ jobs:
 
       - name: Test
         run: cargo test
+
+      - name: Format
+        run: git diff --exit-code -- '*.rs'
