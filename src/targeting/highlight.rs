@@ -8,11 +8,12 @@ use super::{
 use crate::{
     app::game_state::GameState,
     content::{
-        block::BlockRegistry, builtin_ids::BRUSH_TOOL_ID,
+        block::BlockRegistry,
+        builtin_ids::{BRUSH_TOOL_ID, DYED_PROPERTY_ID},
         secondary_property::SecondaryPropertyRegistry,
     },
     player::camera::GameplayCamera,
-    tools::{BrushMode, DYED_PROPERTY_ID},
+    tools::BrushMode,
 };
 
 const HIGHLIGHT_SCALE: f32 = 1.01;
