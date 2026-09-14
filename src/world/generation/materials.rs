@@ -54,7 +54,7 @@ pub(super) fn rasterize_material_pass(
                 context.biomes,
             );
 
-            for local_y in 0..CHUNK_SIZE {
+            for (local_y, hydrology_block) in hydrology_blocks.iter().copied().enumerate() {
                 let index = voxel_index(local_x, local_y, local_z);
                 if density.values[index] <= 0.0 {
                     continue;
@@ -71,7 +71,7 @@ pub(super) fn rasterize_material_pass(
                     sample_position,
                     surface_depth,
                     density.volume[index],
-                    hydrology_blocks[local_y],
+                    hydrology_block,
                     &surface_materials,
                     context.biome_field,
                 );

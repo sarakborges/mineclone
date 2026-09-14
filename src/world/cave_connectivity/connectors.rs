@@ -209,7 +209,7 @@ fn normalized_anchors(anchors: &[Vec3]) -> Vec<Vec3> {
 }
 
 fn contains_anchor(anchors: &[Vec3], position: Vec3) -> bool {
-    anchors.iter().any(|anchor| *anchor == position)
+    anchors.contains(&position)
 }
 
 fn ordered_pair(left: usize, right: usize) -> (usize, usize) {

@@ -85,7 +85,7 @@ pub(super) fn sample_density_field(
                 )
             });
 
-            for local_y in 0..CHUNK_SIZE {
+            for (local_y, hydrology_delta) in hydrology_deltas.iter().copied().enumerate() {
                 let world_position = IVec3::new(
                     chunk_origin.x + local_x as i32,
                     chunk_origin.y + local_y as i32,
@@ -102,7 +102,7 @@ pub(super) fn sample_density_field(
                     sample_position,
                     volume,
                     column_hydrology,
-                    hydrology_deltas[local_y],
+                    hydrology_delta,
                     &context,
                 );
                 let carver_delta = surface_carvers.as_ref().map_or(0.0, |carvers| {
