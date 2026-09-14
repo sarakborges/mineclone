@@ -34,6 +34,7 @@ var<uniform> terrain_material_extension: TerrainMaterialExtension;
 const AMBIENT_FLOOR: f32 = 0.055;
 const SKY_LIGHT_GAMMA: f32 = 1.35;
 const BLOCK_LIGHT_INTENSITY_GAMMA: f32 = 0.50;
+const BLOCK_LIGHT_COLOR_STRENGTH: f32 = 0.72;
 const SUN_AMBIENT_SHARE: f32 = 0.62;
 const DYNAMIC_LIGHT_SCALE: f32 = 0.08;
 const TINT_LUMINANCE_WEIGHTS: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
@@ -204,12 +205,13 @@ fn fragment(
     let sky_local_light = mix(AMBIENT_FLOOR, 1.0, shadowed_sky_light);
 
     // Sky light controls luminance, but it must not erase the hue of a strong
-    // voxel light. Weight color only by block intensity so the same red/blue
-    // overlap stays magenta in open sky and underground.
+    // voxel light. Keep most of the propagated hue while leaving a small white
+    // component so saturated colors do not make the scene unnaturally dark.
     let combined_intensity =
         1.0 - (1.0 - sky_local_light) * (1.0 - block_intensity);
     let block_hue_weight = smoothstep(0.08, 0.55, block_intensity);
-    let combined_hue = mix(vec3<f32>(1.0), block_hue, block_hue_weight);
+    let color_weight = block_hue_weight * BLOCK_LIGHT_COLOR_STRENGTH;
+    let combined_hue = mix(vec3<f32>(1.0), block_hue, color_weight);
     let local_light = combined_hue * combined_intensity * ambient_occlusion;
 
     var base_rgb = texel.rgb;
