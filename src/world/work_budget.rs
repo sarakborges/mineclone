@@ -33,8 +33,4 @@ impl FrameWorkBudget {
     pub(super) fn record(&mut self, items: usize) {
         self.processed = self.processed.saturating_add(items);
     }
-
-    pub(super) fn processed(&self) -> usize {
-        self.processed
-    }
 }
