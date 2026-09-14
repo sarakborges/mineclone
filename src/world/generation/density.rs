@@ -17,7 +17,9 @@ use crate::{
 use super::{
     columns::GenerationColumnSample,
     index::{column_index, voxel_index},
-    surface_carvers::{resolve_surface_carver_column, surface_carver_density_delta},
+    surface_carvers::{
+        SurfaceCarverResolveContext, resolve_surface_carver_column, surface_carver_density_delta,
+    },
 };
 
 pub(super) struct DensityField {
@@ -46,6 +48,14 @@ pub(super) fn sample_density_field(
     };
     let chunk_minimum_y = chunk_origin.y as f32 + 0.5;
     let chunk_maximum_y = chunk_origin.y as f32 + CHUNK_SIZE as f32 - 0.5;
+    let surface_carver_context = SurfaceCarverResolveContext {
+        biomes: pass.biomes,
+        biome_field: pass.biome_field,
+        world_seed: pass.biome_field.seed(),
+        sea_level: pass.sea_level,
+        minimum_y: chunk_minimum_y,
+        maximum_y: chunk_maximum_y,
+    };
 
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
@@ -71,12 +81,7 @@ pub(super) fn sample_density_field(
                 resolve_surface_carver_column(
                     horizontal,
                     &column.surface_influences,
-                    pass.biomes,
-                    pass.biome_field,
-                    pass.biome_field.seed(),
-                    pass.sea_level,
-                    chunk_minimum_y,
-                    chunk_maximum_y,
+                    &surface_carver_context,
                 )
             });
 

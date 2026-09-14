@@ -24,16 +24,26 @@ pub(super) struct SurfaceCarverColumn {
     tunnels: Vec<ResolvedSurfaceTunnel>,
 }
 
-#[allow(clippy::too_many_arguments)]
+pub(super) struct SurfaceCarverResolveContext<'a> {
+    pub(super) biomes: &'a BiomeRegistry,
+    pub(super) biome_field: &'a BiomeField,
+    pub(super) world_seed: u64,
+    pub(super) sea_level: f32,
+    pub(super) minimum_y: f32,
+    pub(super) maximum_y: f32,
+}
+
+struct SurfaceTunnelCandidate<'a> {
+    biome_id: &'a str,
+    carver_index: usize,
+    carver: BiomeSurfaceCarver,
+    weight: f32,
+}
+
 pub(super) fn resolve_surface_carver_column(
     horizontal: Vec2,
     surface_influences: &[(usize, f32)],
-    biomes: &BiomeRegistry,
-    biome_field: &BiomeField,
-    world_seed: u64,
-    sea_level: f32,
-    minimum_y: f32,
-    maximum_y: f32,
+    context: &SurfaceCarverResolveContext<'_>,
 ) -> SurfaceCarverColumn {
     let mut tunnels = Vec::new();
 
@@ -42,25 +52,32 @@ pub(super) fn resolve_surface_carver_column(
             continue;
         }
 
-        let biome_id = biome_field.surface_biome_id(biome_index);
-        let biome = biomes
+        let biome_id = context.biome_field.surface_biome_id(biome_index);
+        let biome = context
+            .biomes
             .get(biome_id)
             .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
 
         for (index, carver) in biome.surface_carvers.iter().copied().enumerate() {
-            if !carver_intersects_vertical_range(carver, sea_level, minimum_y, maximum_y) {
+            if !carver_intersects_vertical_range(
+                carver,
+                context.sea_level,
+                context.minimum_y,
+                context.maximum_y,
+            ) {
                 continue;
             }
 
             resolve_tunnel_candidates(
                 &mut tunnels,
                 horizontal,
-                world_seed,
-                sea_level,
-                biome.id.as_str(),
-                index,
-                carver,
-                weight,
+                context,
+                SurfaceTunnelCandidate {
+                    biome_id: biome.id.as_str(),
+                    carver_index: index,
+                    carver,
+                    weight,
+                },
             );
         }
     }
@@ -121,17 +138,18 @@ fn carver_intersects_vertical_range(
     carver_maximum >= minimum_y && carver_minimum <= maximum_y
 }
 
-#[allow(clippy::too_many_arguments)]
 fn resolve_tunnel_candidates(
     tunnels: &mut Vec<ResolvedSurfaceTunnel>,
     horizontal: Vec2,
-    world_seed: u64,
-    sea_level: f32,
-    biome_id: &str,
-    carver_index: usize,
-    carver: BiomeSurfaceCarver,
-    weight: f32,
+    context: &SurfaceCarverResolveContext<'_>,
+    candidate: SurfaceTunnelCandidate<'_>,
 ) {
+    let SurfaceTunnelCandidate {
+        biome_id,
+        carver_index,
+        carver,
+        weight,
+    } = candidate;
     let BiomeSurfaceCarver::Tunnel {
         spacing,
         chance,
@@ -147,7 +165,7 @@ fn resolve_tunnel_candidates(
     let maximum_reach = length.max * 0.5 + radius.max + jitter;
     let search_radius = (maximum_reach / spacing).ceil() as i32 + 1;
     let seed = mix_seed(
-        world_seed
+        context.world_seed
             ^ string_hash(biome_id)
             ^ (carver_index as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15),
     );
@@ -171,7 +189,7 @@ fn resolve_tunnel_candidates(
             let perpendicular = Vec2::new(-direction.y, direction.x);
             let half_length = sample_range(length, hash.rotate_left(7)) * 0.5;
             let tunnel_radius = sample_range(radius, hash.rotate_left(23));
-            let center_y = sea_level + sample_range(elevation, hash.rotate_left(41));
+            let center_y = context.sea_level + sample_range(elevation, hash.rotate_left(41));
             let vertical_half_span =
                 signed_unit(hash.rotate_left(59)) * half_length * MAXIMUM_TUNNEL_SLOPE;
             let start_horizontal = anchor - direction * half_length;
