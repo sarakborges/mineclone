@@ -11,6 +11,6 @@ pub(super) fn update_fog_color(
     }
 
     for mut fog in &mut fogs {
-        fog.color = visuals.fog_color;
+        fog.color = visuals.fog_color.to_color();
     }
 }
