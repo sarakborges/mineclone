@@ -134,9 +134,9 @@ pub(super) fn stream_chunks(
         seed_chunk_direct_lighting(
             &mut runtime.world,
             coord,
-            &content.blocks,
-            &content.fluids,
-            &content.secondary_properties,
+            content.blocks(),
+            content.fluids(),
+            content.secondary_properties(),
         );
         runtime.lighting_updates.enqueue_chunk_relaxation(coord);
 
