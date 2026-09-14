@@ -147,14 +147,38 @@ fn propagated_neighbor_block(
     let mut result = [0; 3];
 
     for direction in CARDINAL_NEIGHBORS {
-        let incoming = world
-            .light_at(position + direction)
-            .block_rgb()
-            .map(|level| level.saturating_sub(attenuation));
+        let incoming = attenuate_colored(
+            world.light_at(position + direction).block_rgb(),
+            attenuation,
+        );
         result = component_max(result, incoming);
     }
 
     result
+}
+
+fn attenuate_colored(levels: [u8; 3], attenuation: u8) -> [u8; 3] {
+    let peak = levels[0].max(levels[1]).max(levels[2]);
+    if peak == 0 {
+        return [0; 3];
+    }
+
+    let next_peak = peak.saturating_sub(attenuation);
+    if next_peak == 0 {
+        return [0; 3];
+    }
+
+    // Block-light distance is carried by the peak channel. Scale every channel
+    // by the same ratio instead of subtracting the attenuation from R/G/B
+    // independently. Independent subtraction made weak channels disappear first,
+    // so colored light became progressively more saturated the farther it
+    // travelled. Shared scaling keeps the hue approximately stable while the
+    // overall intensity falls.
+    levels.map(|level| {
+        let scaled = level as u16 * next_peak as u16;
+        let rounded = scaled + peak as u16 / 2;
+        (rounded / peak as u16).min(next_peak as u16) as u8
+    })
 }
 
 fn component_max(left: [u8; 3], right: [u8; 3]) -> [u8; 3] {
@@ -177,4 +201,27 @@ fn filtered_level(level: u8, factor: f32) -> u8 {
     (level as f32 * factor.clamp(0.0, 1.0))
         .round()
         .clamp(0.0, VoxelLight::MAX_LEVEL as f32) as u8
+}
+
+#[cfg(test)]
+mod tests {
+    use super::attenuate_colored;
+
+    #[test]
+    fn colored_attenuation_preserves_relative_channels() {
+        assert_eq!(attenuate_colored([15, 3, 2], 1), [14, 3, 2]);
+        assert_eq!(attenuate_colored([3, 4, 15], 1), [3, 4, 14]);
+    }
+
+    #[test]
+    fn colored_attenuation_reduces_peak_by_medium_cost() {
+        assert_eq!(attenuate_colored([15, 8, 4], 2), [13, 7, 3]);
+        assert_eq!(attenuate_colored([2, 1, 1], 2), [0, 0, 0]);
+    }
+
+    #[test]
+    fn white_light_stays_white_while_fading() {
+        assert_eq!(attenuate_colored([15, 15, 15], 1), [14, 14, 14]);
+        assert_eq!(attenuate_colored([7, 7, 7], 3), [4, 4, 4]);
+    }
 }
