@@ -8,7 +8,7 @@ use crate::content::{
 };
 use crate::voxel::{
     coordinates::chunk_coord_from_world,
-    light::VoxelLight,
+    light::{BlockLight, VoxelLight},
     neighbors::CARDINAL_NEIGHBORS,
     world::VoxelWorld,
 };
@@ -18,6 +18,18 @@ use super::{
     medium::{block_emission, light_filter, medium_dampening},
     queue::LightingQueue,
 };
+
+const HUE_VECTOR_SCALE: i32 = 1024;
+const HUE_VECTOR_X: [i32; 32] = [
+    1024, 1004, 946, 851, 724, 569, 392, 200, 0, -200, -392, -569, -724, -851, -946,
+    -1004, -1024, -1004, -946, -851, -724, -569, -392, -200, 0, 200, 392, 569, 724, 851,
+    946, 1004,
+];
+const HUE_VECTOR_Y: [i32; 32] = [
+    0, 200, 392, 569, 724, 851, 946, 1004, 1024, 1004, 946, 851, 724, 569, 392, 200, 0,
+    -200, -392, -569, -724, -851, -946, -1004, -1024, -1004, -946, -851, -724, -569,
+    -392, -200,
+];
 
 pub(super) fn relax(
     world: &mut VoxelWorld,
@@ -109,20 +121,23 @@ fn desired_light(
             ))
     };
 
-    let emitted = block_emission(world, blocks, secondary_properties, position);
+    let emitted = BlockLight::from_rgb_levels(block_emission(
+        world,
+        blocks,
+        secondary_properties,
+        position,
+    ));
     let block = if blocks_light {
         emitted
     } else {
-        component_max(
-            emitted,
-            filter_levels(
-                propagated_neighbor_block(world, position, attenuation),
-                filter,
-            ),
-        )
+        let propagated = filter_block_light(
+            propagated_neighbor_block(world, position, attenuation),
+            filter,
+        );
+        mix_strongest_block_lights([emitted, propagated])
     };
 
-    VoxelLight::new_colored([sky; 3], block)
+    VoxelLight::new_hsi(sky, block)
 }
 
 fn propagated_neighbor_sky(world: &VoxelWorld, position: IVec3, attenuation: u8) -> u8 {
@@ -143,58 +158,107 @@ fn propagated_neighbor_block(
     world: &VoxelWorld,
     position: IVec3,
     attenuation: u8,
-) -> [u8; 3] {
-    let mut result = [0; 3];
+) -> BlockLight {
+    let mut incoming = [BlockLight::DARK; CARDINAL_NEIGHBORS.len()];
 
-    for direction in CARDINAL_NEIGHBORS {
-        let incoming = attenuate_colored(
-            world.light_at(position + direction).block_rgb(),
-            attenuation,
-        );
-        result = component_max(result, incoming);
+    for (index, direction) in CARDINAL_NEIGHBORS.into_iter().enumerate() {
+        incoming[index] = world
+            .light_at(position + direction)
+            .block_hsi()
+            .attenuated(attenuation);
     }
 
-    result
+    mix_strongest_block_lights(incoming)
 }
 
-fn attenuate_colored(levels: [u8; 3], attenuation: u8) -> [u8; 3] {
-    let peak = levels[0].max(levels[1]).max(levels[2]);
-    if peak == 0 {
-        return [0; 3];
+fn mix_strongest_block_lights<const N: usize>(lights: [BlockLight; N]) -> BlockLight {
+    let mut strongest_intensity = 0;
+    for light in &lights {
+        strongest_intensity = strongest_intensity.max(light.intensity());
     }
 
-    let next_peak = peak.saturating_sub(attenuation);
-    if next_peak == 0 {
-        return [0; 3];
+    if strongest_intensity == 0 {
+        return BlockLight::DARK;
     }
 
-    // Block-light distance is carried by the peak channel. Scale every channel
-    // by the same ratio instead of subtracting the attenuation from R/G/B
-    // independently. Independent subtraction made weak channels disappear first,
-    // so colored light became progressively more saturated the farther it
-    // travelled. Shared scaling keeps the hue approximately stable while the
-    // overall intensity falls.
-    levels.map(|level| {
-        let scaled = level as u16 * next_peak as u16;
-        let rounded = scaled + peak as u16 / 2;
-        (rounded / peak as u16).min(next_peak as u16) as u8
-    })
+    let mut vector_x = 0_i32;
+    let mut vector_y = 0_i32;
+    let mut saturation_sum = 0_u32;
+    let mut strongest_count = 0_u32;
+
+    for light in &lights {
+        if light.intensity() != strongest_intensity {
+            continue;
+        }
+
+        strongest_count += 1;
+        let saturation = light.saturation() as i32;
+        saturation_sum += saturation as u32;
+        if saturation == 0 {
+            continue;
+        }
+
+        let hue = light.hue() as usize;
+        vector_x += HUE_VECTOR_X[hue] * saturation;
+        vector_y += HUE_VECTOR_Y[hue] * saturation;
+    }
+
+    if saturation_sum == 0 {
+        return BlockLight::new(0, 0, strongest_intensity);
+    }
+
+    // Hue is circular, so average it as a vector instead of averaging the
+    // quantized angle directly. The vector coherence also lowers saturation
+    // when equally strong colors oppose one another (for example red + cyan),
+    // while nearby hues keep almost all of their chroma.
+    let vector_length = ((vector_x as f32 * vector_x as f32)
+        + (vector_y as f32 * vector_y as f32))
+        .sqrt();
+    let maximum_length = HUE_VECTOR_SCALE as f32 * saturation_sum as f32;
+    let coherence = (vector_length / maximum_length).clamp(0.0, 1.0);
+    let average_saturation = saturation_sum as f32 / strongest_count as f32;
+    let saturation = (average_saturation * coherence.sqrt())
+        .round()
+        .clamp(0.0, BlockLight::MAX_SATURATION as f32) as u8;
+
+    if saturation == 0 {
+        return BlockLight::new(0, 0, strongest_intensity);
+    }
+
+    let hue = nearest_hue(vector_x, vector_y);
+    BlockLight::new(hue, saturation, strongest_intensity)
 }
 
-fn component_max(left: [u8; 3], right: [u8; 3]) -> [u8; 3] {
-    [
-        left[0].max(right[0]),
-        left[1].max(right[1]),
-        left[2].max(right[2]),
-    ]
+fn nearest_hue(vector_x: i32, vector_y: i32) -> u8 {
+    let mut best_hue = 0_u8;
+    let mut best_dot = i64::MIN;
+
+    for hue in 0..32_usize {
+        let dot = vector_x as i64 * HUE_VECTOR_X[hue] as i64
+            + vector_y as i64 * HUE_VECTOR_Y[hue] as i64;
+        if dot > best_dot {
+            best_dot = dot;
+            best_hue = hue as u8;
+        }
+    }
+
+    best_hue
 }
 
-fn filter_levels(levels: [u8; 3], filter: [f32; 3]) -> [u8; 3] {
-    [
+fn filter_block_light(light: BlockLight, filter: [f32; 3]) -> BlockLight {
+    if light.intensity() == 0 {
+        return BlockLight::DARK;
+    }
+    if filter[0] >= 1.0 && filter[1] >= 1.0 && filter[2] >= 1.0 {
+        return light;
+    }
+
+    let levels = light.to_rgb_levels();
+    BlockLight::from_rgb_levels([
         filtered_level(levels[0], filter[0]),
         filtered_level(levels[1], filter[1]),
         filtered_level(levels[2], filter[2]),
-    ]
+    ])
 }
 
 fn filtered_level(level: u8, factor: f32) -> u8 {
@@ -205,23 +269,49 @@ fn filtered_level(level: u8, factor: f32) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::attenuate_colored;
+    use super::mix_strongest_block_lights;
+    use crate::voxel::light::BlockLight;
 
     #[test]
-    fn colored_attenuation_preserves_relative_channels() {
-        assert_eq!(attenuate_colored([15, 3, 2], 1), [14, 3, 2]);
-        assert_eq!(attenuate_colored([3, 4, 15], 1), [3, 4, 14]);
+    fn colored_attenuation_preserves_hue_and_saturation() {
+        let source = BlockLight::from_rgb_levels([15, 3, 2]);
+        let faded = source.attenuated(4);
+
+        assert_eq!(faded.hue(), source.hue());
+        assert_eq!(faded.saturation(), source.saturation());
+        assert_eq!(faded.intensity(), 11);
     }
 
     #[test]
-    fn colored_attenuation_reduces_peak_by_medium_cost() {
-        assert_eq!(attenuate_colored([15, 8, 4], 2), [13, 7, 3]);
-        assert_eq!(attenuate_colored([2, 1, 1], 2), [0, 0, 0]);
+    fn equal_red_and_blue_mix_toward_magenta() {
+        let red = BlockLight::from_rgb_levels([15, 0, 0]);
+        let blue = BlockLight::from_rgb_levels([0, 0, 15]);
+        let mixed = mix_strongest_block_lights([red, blue]);
+        let rgb = mixed.to_rgb_levels();
+
+        assert_eq!(mixed.intensity(), 15);
+        assert!(rgb[0] >= 13, "red channel should stay strong: {rgb:?}");
+        assert!(rgb[2] >= 13, "blue channel should stay strong: {rgb:?}");
+        assert!(rgb[1] <= 6, "green channel should stay subdued: {rgb:?}");
     }
 
     #[test]
-    fn white_light_stays_white_while_fading() {
-        assert_eq!(attenuate_colored([15, 15, 15], 1), [14, 14, 14]);
-        assert_eq!(attenuate_colored([7, 7, 7], 3), [4, 4, 4]);
+    fn stronger_color_wins_before_hue_blending() {
+        let red = BlockLight::from_rgb_levels([15, 0, 0]);
+        let blue = BlockLight::from_rgb_levels([0, 0, 14]);
+        let mixed = mix_strongest_block_lights([red, blue]);
+
+        assert_eq!(mixed, red);
+    }
+
+    #[test]
+    fn opposing_equal_hues_desaturate_instead_of_choosing_an_arbitrary_side() {
+        let red = BlockLight::from_rgb_levels([15, 0, 0]);
+        let cyan = BlockLight::from_rgb_levels([0, 15, 15]);
+        let mixed = mix_strongest_block_lights([red, cyan]);
+
+        assert_eq!(mixed.intensity(), 15);
+        assert_eq!(mixed.saturation(), 0);
+        assert_eq!(mixed.to_rgb_levels(), [15, 15, 15]);
     }
 }
