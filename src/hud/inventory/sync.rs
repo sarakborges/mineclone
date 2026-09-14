@@ -1,10 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    content::{
-        biome::BiomeRegistry, block::BlockRegistry,
-        inventory_category::InventoryCategoryRegistry, tool::ToolRegistry,
-    },
+    content::{inventory_category::InventoryCategoryRegistry, tool::ToolRegistry},
     localization::{ActiveLanguage, UiLocalization},
     player::{
         camera::GameplayCamera,
@@ -12,8 +9,8 @@ use crate::{
         hotbar::{HOTBAR_INVENTORY_OFFSET, PlayerHotbar},
         inventory::InventoryCursor,
     },
+    rendering::block_visual_content::BlockVisualContent,
     ui::surface,
-    world::biome_field::BiomeField,
 };
 
 use crate::hud::block_icon::BlockIconMaterial;
@@ -33,11 +30,8 @@ use super::{
 
 #[derive(SystemParam)]
 pub(super) struct InventoryItemContent<'w> {
-    asset_server: Res<'w, AssetServer>,
-    blocks: Res<'w, BlockRegistry>,
+    visual: BlockVisualContent<'w>,
     tools: Res<'w, ToolRegistry>,
-    biomes: Res<'w, BiomeRegistry>,
-    biome_field: Res<'w, BiomeField>,
     language: Res<'w, ActiveLanguage>,
 }
 
@@ -48,11 +42,11 @@ impl InventoryItemContent<'_> {
         icon_materials: &'a mut Assets<BlockIconMaterial>,
     ) -> InventoryItemView<'a> {
         InventoryItemView {
-            asset_server: &self.asset_server,
-            blocks: &self.blocks,
+            asset_server: &self.visual.asset_server,
+            blocks: &self.visual.blocks,
             tools: &self.tools,
-            biomes: &self.biomes,
-            biome_field: &self.biome_field,
+            biomes: &self.visual.biomes,
+            biome_field: &self.visual.biome_field,
             player_position,
             language: self.language.get(),
             icon_materials,
