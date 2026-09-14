@@ -32,32 +32,32 @@
   ],
   "visuals": {
     "skyColor": {
-      "dawn": { "r": 0.32, "g": 0.045, "b": 0.14 },
-      "day": { "r": 0.38, "g": 0.04, "b": 0.14 },
-      "dusk": { "r": 0.25, "g": 0.02, "b": 0.08 },
-      "night": { "r": 0.10, "g": 0.008, "b": 0.035 }
+      "dawn": { "hue": 340.1181, "saturation": 0.7327, "intensity": 0.1683 },
+      "day": { "hue": 343.3728, "saturation": 0.7857, "intensity": 0.1867 },
+      "dusk": { "hue": 345.4361, "saturation": 0.8286, "intensity": 0.1167 },
+      "night": { "hue": 343.4129, "saturation": 0.8322, "intensity": 0.0477 }
     },
     "fogColor": {
-      "dawn": { "r": 0.22, "g": 0.04, "b": 0.10 },
-      "day": { "r": 0.27, "g": 0.04, "b": 0.11 },
-      "dusk": { "r": 0.18, "g": 0.025, "b": 0.07 },
-      "night": { "r": 0.07, "g": 0.01, "b": 0.03 }
+      "dawn": { "hue": 340.8934, "saturation": 0.6667, "intensity": 0.1200 },
+      "day": { "hue": 342.7305, "saturation": 0.7143, "intensity": 0.1400 },
+      "dusk": { "hue": 343.6102, "saturation": 0.7273, "intensity": 0.0917 },
+      "night": { "hue": 340.8934, "saturation": 0.7273, "intensity": 0.0367 }
     },
-    "grassColor": { "r": 0.32, "g": 0.05, "b": 0.72 },
-    "leafColor": { "r": 0.58, "g": 0.12, "b": 0.88 },
-    "foliageColor": { "r": 0.72, "g": 0.20, "b": 0.95 },
-    "waterColor": { "r": 0.28, "g": 0.90, "b": 0.38 },
+    "grassColor": { "hue": 263.6082, "saturation": 0.8624, "intensity": 0.3633 },
+    "leafColor": { "hue": 276.9302, "saturation": 0.7722, "intensity": 0.5267 },
+    "foliageColor": { "hue": 282.5845, "saturation": 0.6791, "intensity": 0.6233 },
+    "waterColor": { "hue": 128.6391, "saturation": 0.4615, "intensity": 0.5200 },
     "underwaterTint": {
-      "color": { "r": 0.08, "g": 0.38, "b": 0.13 },
+      "color": { "hue": 128.9483, "saturation": 0.5932, "intensity": 0.1967 },
       "opacity": 0.20
     },
     "stars": {
       "density": 0.82,
-      "color": { "r": 0.56, "g": 0.48, "b": 1.0 }
+      "color": { "hue": 248.2132, "saturation": 0.2941, "intensity": 0.6800 }
     },
     "clouds": {
       "density": 0.08,
-      "color": { "r": 0.24, "g": 0.12, "b": 0.36 }
+      "color": { "hue": 270.0000, "saturation": 0.5000, "intensity": 0.2400 }
     },
     "terrainRoughness": 0.94,
     "terrainMetallic": 0.0
