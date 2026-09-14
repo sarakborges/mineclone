@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{game_state::GameState, pause_state::PauseState},
+    app::{
+        game_state::GameState, pause_state::PauseState, state_systems::reset_next_state,
+    },
     tools::BrushPaletteState,
     ui::text_input::select_all_pressed,
 };
@@ -141,9 +143,12 @@ impl Plugin for PlayerInventoryPlugin {
             )
             .add_systems(
                 OnEnter(PauseState::Paused),
-                close_inventory.run_if(in_state(GameState::Gameplay)),
+                reset_next_state::<InventoryState>.run_if(in_state(GameState::Gameplay)),
             )
-            .add_systems(OnExit(GameState::Gameplay), close_inventory);
+            .add_systems(
+                OnExit(GameState::Gameplay),
+                reset_next_state::<InventoryState>,
+            );
     }
 }
 
@@ -177,10 +182,6 @@ fn handle_search_select_all(
     if *inventory_state.get() == InventoryState::Open && select_all_pressed(&keys) {
         creative_view.select_all_search();
     }
-}
-
-fn close_inventory(mut next_inventory_state: ResMut<NextState<InventoryState>>) {
-    next_inventory_state.set(InventoryState::Closed);
 }
 
 fn discard_cursor_item(mut cursor: ResMut<InventoryCursor>) {
