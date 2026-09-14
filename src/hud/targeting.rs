@@ -54,15 +54,33 @@ struct TargetHudSnapshot {
 }
 
 #[derive(SystemParam)]
+struct TargetHudState<'w> {
+    targeted: Res<'w, TargetedBlock>,
+    world: Res<'w, VoxelWorld>,
+    localization: Res<'w, UiLocalization>,
+    language: Res<'w, ActiveLanguage>,
+}
+
+#[derive(SystemParam)]
 struct TargetHudContent<'w> {
     asset_server: Res<'w, AssetServer>,
     blocks: Res<'w, BlockRegistry>,
     secondary_properties: Res<'w, SecondaryPropertyRegistry>,
     biomes: Res<'w, BiomeRegistry>,
     biome_field: Res<'w, BiomeField>,
-    world: Res<'w, VoxelWorld>,
-    localization: Res<'w, UiLocalization>,
-    language: Res<'w, ActiveLanguage>,
+}
+
+#[derive(SystemParam)]
+struct TargetHudView<'w, 's> {
+    root_visibility: Single<'w, 's, &'static mut Visibility, With<TargetHudRoot>>,
+    target_text: Single<'w, 's, &'static mut Text, With<TargetBlockText>>,
+    icon: Single<
+        'w,
+        's,
+        (&'static mut BlockModel, &'static MaterialNode<BlockIconMaterial>),
+        With<TargetBlockModel>,
+    >,
+    icon_materials: ResMut<'w, Assets<BlockIconMaterial>>,
 }
 
 fn spawn_target_hud(mut commands: Commands, mut icon_materials: ResMut<Assets<BlockIconMaterial>>) {
@@ -140,20 +158,22 @@ fn spawn_target_hud(mut commands: Commands, mut icon_materials: ResMut<Assets<Bl
 }
 
 fn update_target_hud(
-    targeted: Res<TargetedBlock>,
+    state: TargetHudState,
     content: TargetHudContent,
-    root_visibility: Single<&mut Visibility, With<TargetHudRoot>>,
-    mut target_text: Single<&mut Text, With<TargetBlockText>>,
-    mut icon: Single<
-        (&mut BlockModel, &MaterialNode<BlockIconMaterial>),
-        With<TargetBlockModel>,
-    >,
-    mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
+    view: TargetHudView,
     mut cached: Local<Option<TargetHudSnapshot>>,
 ) {
+    let TargetHudView {
+        root_visibility,
+        target_text,
+        icon,
+        mut icon_materials,
+    } = view;
     let mut root_visibility = root_visibility.into_inner();
+    let mut target_text = target_text.into_inner();
+    let mut icon = icon.into_inner();
 
-    let Some(hit) = targeted.0 else {
+    let Some(hit) = state.targeted.0 else {
         *cached = None;
         if *root_visibility != Visibility::Hidden {
             *root_visibility = Visibility::Hidden;
@@ -161,8 +181,8 @@ fn update_target_hud(
         return;
     };
 
-    let language = content.language.get();
-    let cell = content.world.cell_at(hit.voxel);
+    let language = state.language.get();
+    let cell = state.world.cell_at(hit.voxel);
     let properties = cell
         .map(|cell| cell.secondary_properties())
         .unwrap_or_default();
@@ -171,7 +191,7 @@ fn update_target_hud(
     } else {
         hit.voxel + hit.normal
     };
-    let light = content.world.light_at(light_position);
+    let light = state.world.light_at(light_position);
     let light_level = light.sky().max(light.block());
     let snapshot = TargetHudSnapshot {
         voxel: hit.voxel,
@@ -185,7 +205,7 @@ fn update_target_hud(
         || content.secondary_properties.is_changed()
         || content.biomes.is_changed()
         || content.biome_field.is_changed()
-        || content.language.is_changed();
+        || state.language.is_changed();
 
     if cached.as_ref() == Some(&snapshot)
         && !definitions_changed
@@ -201,7 +221,7 @@ fn update_target_hud(
 
     let block = content.blocks.get(hit.block_id);
     let block_name = block.map_or(hit.block_id, |block| block.name.text(language));
-    let coordinates = content
+    let coordinates = state
         .localization
         .text(language, "hud.coordinates")
         .replace("{x}", &hit.voxel.x.to_string())
@@ -211,9 +231,7 @@ fn update_target_hud(
         .iter()
         .map(|(property, value)| {
             let property_name = match property {
-                "dyed" => content
-                    .localization
-                    .text(language, "secondaryProperty.dyed"),
+                "dyed" => state.localization.text(language, "secondaryProperty.dyed"),
                 _ => property,
             };
             let value_name = content
@@ -231,7 +249,7 @@ fn update_target_hud(
     };
     let next_text = format!(
         "{block_name}{properties_text}\n{}: {light_level}\n{coordinates}",
-        content.localization.text(language, "hud.light"),
+        state.localization.text(language, "hud.light"),
     );
 
     if target_text.0 != next_text {
