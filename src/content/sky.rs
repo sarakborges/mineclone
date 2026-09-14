@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::{color::Rgb, day_night_phase::DayNightPhase, registry::DefinitionMap};
+use super::{color::Hsi, day_night_phase::DayNightPhase, registry::DefinitionMap};
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,7 +14,7 @@ pub struct CelestialBodyDefinition {
     pub rise_azimuth_degrees: f32,
     pub set_azimuth_degrees: f32,
     pub max_altitude_degrees: f32,
-    pub tint: Rgb,
+    pub tint: Hsi,
 }
 
 #[derive(Clone, Deserialize)]
@@ -32,6 +32,8 @@ pub struct SkyRegistry {
 
 impl SkyRegistry {
     pub fn insert(&mut self, definition: SkyDefinition) {
+        assert!(definition.sun.tint.is_valid(), "sky {} sun HSI tint is invalid", definition.id);
+        assert!(definition.moon.tint.is_valid(), "sky {} moon HSI tint is invalid", definition.id);
         self.definitions.insert(definition.id.clone(), definition);
     }
 
