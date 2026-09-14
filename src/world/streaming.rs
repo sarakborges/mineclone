@@ -17,6 +17,7 @@ use crate::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         coordinates::chunk_coord_from_position,
         lighting::{PendingLightingUpdates, seed_chunk_direct_lighting},
+        mesh_snapshot::ChunkMeshSnapshot,
         neighbors::CARDINAL_NEIGHBORS,
         world::VoxelWorld,
     },
@@ -25,11 +26,10 @@ use crate::{
 use self::selection::rebuild_queue;
 use super::{
     biome_field::BiomeField,
-    chunk_generation_tasks::{
-        ChunkGenerationTasks, MAX_GENERATION_TASKS_IN_FLIGHT,
-    },
+    chunk_generation_tasks::{ChunkGenerationTasks, MAX_GENERATION_TASKS_IN_FLIGHT},
+    chunk_mesh_tasks::{ChunkMeshTasks, MAX_MESH_TASKS_IN_FLIGHT},
     chunk_remesh::ChunkRemeshQueue,
-    chunk_rendering::{ChunkRenderPool, spawn_chunk_mesh},
+    chunk_rendering::{ChunkRenderPool, spawn_built_chunk_meshes},
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
     fluid_updates::PendingFluidUpdates,
     render_distance::RenderDistanceSettings,
@@ -41,6 +41,7 @@ const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 1;
 const MAX_CHUNKS_PER_FRAME: usize = 4;
 const MAX_GENERATION_TASKS_DISPATCHED_PER_FRAME: usize = 4;
 const MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME: usize = 8;
+const MAX_MESH_RESULTS_COLLECTED_PER_FRAME: usize = 4;
 const STREAMING_BUDGET: Duration = Duration::from_millis(4);
 
 #[derive(Resource, Default)]
@@ -74,6 +75,12 @@ impl ChunkStreamingState {
             self.ready.push_back(coord);
         }
     }
+
+    fn defer_ready(&mut self, coord: IVec3) {
+        if self.keeps_loaded(coord) && !self.ready.contains(&coord) {
+            self.ready.push_front(coord);
+        }
+    }
 }
 
 struct QueueRebuildContext<'a> {
@@ -92,6 +99,7 @@ pub(super) struct ChunkStreamingRuntime<'w, 's> {
     world: ResMut<'w, VoxelWorld>,
     state: ResMut<'w, ChunkStreamingState>,
     generation_tasks: ResMut<'w, ChunkGenerationTasks>,
+    mesh_tasks: ResMut<'w, ChunkMeshTasks>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
     fluid_updates: ResMut<'w, PendingFluidUpdates>,
     lighting_updates: ResMut<'w, PendingLightingUpdates>,
@@ -133,9 +141,12 @@ pub(super) fn stream_chunks(
     runtime
         .generation_tasks
         .sync_snapshot(&generation, &content);
+    runtime.mesh_tasks.sync_snapshot(&content);
+
     collect_generated_chunks(&mut runtime);
+    collect_built_chunk_meshes(&content, &mut renderer, &mut runtime);
     dispatch_generation_tasks(&renderer.pool, &mut runtime);
-    finalize_ready_chunks(&content, &mut renderer, &mut runtime);
+    dispatch_initial_mesh_tasks(&content, &renderer.pool, &mut runtime);
 }
 
 fn collect_generated_chunks(runtime: &mut ChunkStreamingRuntime<'_, '_>) {
@@ -175,7 +186,10 @@ fn dispatch_generation_tasks(
             break;
         };
 
-        if render_pool.contains(coord) || runtime.state.ready.contains(&coord) {
+        if render_pool.contains(coord)
+            || runtime.state.ready.contains(&coord)
+            || runtime.mesh_tasks.contains(coord)
+        {
             continue;
         }
         if runtime.generation_tasks.contains(coord) {
@@ -200,9 +214,9 @@ fn dispatch_generation_tasks(
     }
 }
 
-fn finalize_ready_chunks(
+fn dispatch_initial_mesh_tasks(
     content: &ChunkContent<'_>,
-    renderer: &mut ChunkRenderer<'_, '_>,
+    render_pool: &ChunkRenderPool,
     runtime: &mut ChunkStreamingRuntime<'_, '_>,
 ) {
     let mut budget = FrameWorkBudget::new(STREAMING_BUDGET, MIN_CHUNKS_BEFORE_BUDGET_CHECK)
@@ -216,7 +230,18 @@ fn finalize_ready_chunks(
         let Some(coord) = runtime.state.ready.pop_front() else {
             break;
         };
-        if !runtime.state.keeps_loaded(coord) || renderer.pool.contains(coord) {
+        if !runtime.state.keeps_loaded(coord) || render_pool.contains(coord) {
+            continue;
+        }
+        if runtime.mesh_tasks.contains(coord) {
+            continue;
+        }
+        if runtime.mesh_tasks.pending_count() >= MAX_MESH_TASKS_IN_FLIGHT {
+            runtime.state.defer_ready(coord);
+            break;
+        }
+        if runtime.world.chunk(coord).is_none() {
+            runtime.state.requeue(coord);
             continue;
         }
 
@@ -232,10 +257,39 @@ fn finalize_ready_chunks(
         );
         runtime.lighting_updates.enqueue_chunk_relaxation(coord);
 
-        let chunk = runtime
-            .world
-            .chunk(coord)
+        let snapshot = ChunkMeshSnapshot::capture(&runtime.world, coord)
             .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
+        if !runtime.mesh_tasks.schedule(coord, snapshot) {
+            runtime.state.defer_ready(coord);
+            break;
+        }
+
+        budget.record(1);
+    }
+}
+
+fn collect_built_chunk_meshes(
+    content: &ChunkContent<'_>,
+    renderer: &mut ChunkRenderer<'_, '_>,
+    runtime: &mut ChunkStreamingRuntime<'_, '_>,
+) {
+    let current_revision = runtime.mesh_tasks.revision();
+    let completed = runtime
+        .mesh_tasks
+        .collect_ready(MAX_MESH_RESULTS_COLLECTED_PER_FRAME);
+
+    for completed in completed {
+        if completed.revision != current_revision {
+            runtime.state.mark_ready(completed.coord);
+            continue;
+        }
+        if !runtime.state.keeps_loaded(completed.coord) || renderer.pool.contains(completed.coord) {
+            continue;
+        }
+        let Some(chunk) = runtime.world.chunk(completed.coord) else {
+            runtime.state.requeue(completed.coord);
+            continue;
+        };
         let chunk_is_empty = chunk.is_empty();
         let render_context = content.render_context(
             &runtime.world,
@@ -243,40 +297,56 @@ fn finalize_ready_chunks(
             &renderer.fluid_materials,
         );
 
-        spawn_chunk_mesh(
+        spawn_built_chunk_meshes(
             &mut renderer.commands,
             &mut renderer.meshes,
             &mut renderer.pool,
-            coord,
-            chunk,
+            completed.coord,
+            completed.meshes,
             &render_context,
         );
-        budget.record(1);
+        notify_loaded_chunk_neighbors(
+            completed.coord,
+            chunk_is_empty,
+            &runtime.world,
+            &renderer.pool,
+            &mut runtime.remesh_queue,
+        );
+    }
+}
 
-        for offset in CARDINAL_NEIGHBORS {
-            let neighbor = coord + offset;
-            if !renderer.pool.contains(neighbor) {
-                continue;
-            }
+fn notify_loaded_chunk_neighbors(
+    coord: IVec3,
+    chunk_is_empty: bool,
+    world: &VoxelWorld,
+    render_pool: &ChunkRenderPool,
+    remesh_queue: &mut ChunkRemeshQueue,
+) {
+    let chunk = world
+        .chunk(coord)
+        .unwrap_or_else(|| panic!("rendered chunk data should exist at {coord:?}"));
 
-            if chunk_is_empty {
-                runtime.remesh_queue.enqueue_fluid_priority(neighbor);
-                continue;
-            }
+    for offset in CARDINAL_NEIGHBORS {
+        let neighbor = coord + offset;
+        if !render_pool.contains(neighbor) {
+            continue;
+        }
 
-            let Some(neighbor_chunk) = runtime.world.chunk(neighbor) else {
-                continue;
-            };
-            let chunk_boundary_has_content = boundary_has_content(chunk, offset);
-            let neighbor_boundary_has_content = boundary_has_content(neighbor_chunk, -offset);
+        if chunk_is_empty {
+            remesh_queue.enqueue_fluid_priority(neighbor);
+            continue;
+        }
 
-            if chunk_boundary_has_content && neighbor_boundary_has_content {
-                runtime.remesh_queue.enqueue_priority(neighbor);
-            } else if boundary_has_fluid(chunk, offset)
-                || boundary_has_fluid(neighbor_chunk, -offset)
-            {
-                runtime.remesh_queue.enqueue_fluid_priority(neighbor);
-            }
+        let Some(neighbor_chunk) = world.chunk(neighbor) else {
+            continue;
+        };
+        let chunk_boundary_has_content = boundary_has_content(chunk, offset);
+        let neighbor_boundary_has_content = boundary_has_content(neighbor_chunk, -offset);
+
+        if chunk_boundary_has_content && neighbor_boundary_has_content {
+            remesh_queue.enqueue_priority(neighbor);
+        } else if boundary_has_fluid(chunk, offset) || boundary_has_fluid(neighbor_chunk, -offset) {
+            remesh_queue.enqueue_fluid_priority(neighbor);
         }
     }
 }
