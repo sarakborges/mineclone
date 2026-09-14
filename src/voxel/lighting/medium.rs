@@ -1,10 +1,13 @@
 use bevy::prelude::*;
 
 use crate::content::{
-    block::BlockRegistry, fluid::FluidRegistry,
+    block::BlockRegistry, color::Hsi, fluid::FluidRegistry,
     secondary_property::SecondaryPropertyRegistry,
 };
-use crate::voxel::{light::VoxelLight, world::VoxelWorld};
+use crate::voxel::{
+    light::{BlockLight, VoxelLight},
+    world::VoxelWorld,
+};
 
 const DYED_PROPERTY_ID: &str = "dyed";
 const DYE_LIGHT_SATURATION_GAMMA: f32 = 1.85;
@@ -23,17 +26,17 @@ pub(super) fn block_emission(
     blocks: &BlockRegistry,
     secondary_properties: &SecondaryPropertyRegistry,
     position: IVec3,
-) -> [u8; 3] {
+) -> BlockLight {
     let Some(cell) = world.cell_at(position) else {
-        return [0; 3];
+        return BlockLight::DARK;
     };
     let Some(block) = blocks.get(cell.block_id) else {
-        return [0; 3];
+        return BlockLight::DARK;
     };
 
     let level = block.light_emission.min(VoxelLight::MAX_LEVEL);
     if level == 0 {
-        return [0; 3];
+        return BlockLight::DARK;
     }
 
     if !block
@@ -41,48 +44,34 @@ pub(super) fn block_emission(
         .iter()
         .any(|property| property == DYED_PROPERTY_ID)
     {
-        return [level; 3];
+        return BlockLight::new(0, 0, level);
     }
 
     let Some(dye_id) = cell.secondary_property(DYED_PROPERTY_ID) else {
-        return [level; 3];
+        return BlockLight::new(0, 0, level);
     };
     let Some(dye) = secondary_properties.get(DYED_PROPERTY_ID, dye_id) else {
-        return [level; 3];
+        return BlockLight::new(0, 0, level);
     };
-
-    let peak = dye.color.r.max(dye.color.g).max(dye.color.b);
-    if peak <= f32::EPSILON {
-        // Light fallback is always white, including invalid/black dye colors.
-        return [level; 3];
+    if dye.color.intensity <= f32::EPSILON {
+        return BlockLight::new(0, 0, level);
     }
 
-    let strengthen = |channel: f32| {
-        (channel / peak)
-            .clamp(0.0, 1.0)
-            .powf(DYE_LIGHT_SATURATION_GAMMA)
-    };
-
-    [
-        colored_emission_channel(level, strengthen(dye.color.r)),
-        colored_emission_channel(level, strengthen(dye.color.g)),
-        colored_emission_channel(level, strengthen(dye.color.b)),
-    ]
+    let saturation =
+        1.0 - (1.0 - dye.color.saturation.clamp(0.0, 1.0)).powf(DYE_LIGHT_SATURATION_GAMMA);
+    BlockLight::from_hsi(
+        Hsi::new(dye.color.hue, saturation, dye.color.intensity),
+        level,
+    )
 }
 
-pub(super) fn light_filter(
+pub(super) fn light_transmission(
     _world: &VoxelWorld,
     _blocks: &BlockRegistry,
     _secondary_properties: &SecondaryPropertyRegistry,
     _position: IVec3,
-) -> [f32; 3] {
-    [1.0; 3]
-}
-
-fn colored_emission_channel(level: u8, factor: f32) -> u8 {
-    (level as f32 * factor.clamp(0.0, 1.0))
-        .round()
-        .clamp(0.0, VoxelLight::MAX_LEVEL as f32) as u8
+) -> f32 {
+    1.0
 }
 
 fn block_dampening(world: &VoxelWorld, blocks: &BlockRegistry, position: IVec3) -> u8 {
