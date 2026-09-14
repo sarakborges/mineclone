@@ -4,12 +4,12 @@ use crate::{
     content::biome::{BiomeClimate, BiomeClimateRange, BiomeVerticalRange},
     world::{
         hydrology::ocean_strength,
-        macro_climate::{MacroClimateField, MacroClimateSample},
+        macro_climate::MacroClimateSample,
     },
 };
 
 use super::{
-    BiomeFieldEntry,
+    BiomeField, BiomeFieldEntry,
     constants::CLIMATE_BLEND_MARGIN,
     spatial::{cell_hash, hash_unit, surface_site_position},
 };
@@ -17,62 +17,80 @@ use super::{
 const PROXIMITY_SITE_RADIUS: i32 = 1;
 const DOMINANT_NEIGHBOR_LIMIT: usize = 5;
 
-pub(super) fn select_surface_biome_index(
-    cell: IVec2,
-    site: Vec2,
-    site_spacing: Vec2,
-    biomes: &[BiomeFieldEntry],
-    climate_field: &MacroClimateField,
-    seed: u64,
-    ocean_biome_id: Option<&str>,
-    ocean_weight: f32,
-) -> usize {
-    let mut nearby_biomes = Vec::new();
-    let mut near_ocean = ocean_biome_id.is_some()
-        && ocean_strength(climate_field.sample(site).continentalness, ocean_weight) > f32::EPSILON;
+impl BiomeField {
+    pub(super) fn select_surface_biome_index(&self, cell: IVec2, site: Vec2) -> usize {
+        let mut nearby_biomes = Vec::new();
+        let mut near_ocean = self.ocean_biome_id.is_some()
+            && ocean_strength(
+                self.climate.sample(site).continentalness,
+                self.ocean_weight,
+            ) > f32::EPSILON;
 
-    for z in -PROXIMITY_SITE_RADIUS..=PROXIMITY_SITE_RADIUS {
-        for x in -PROXIMITY_SITE_RADIUS..=PROXIMITY_SITE_RADIUS {
-            if x == 0 && z == 0 {
-                continue;
-            }
+        for z in -PROXIMITY_SITE_RADIUS..=PROXIMITY_SITE_RADIUS {
+            for x in -PROXIMITY_SITE_RADIUS..=PROXIMITY_SITE_RADIUS {
+                if x == 0 && z == 0 {
+                    continue;
+                }
 
-            let neighbor_cell = cell + IVec2::new(x, z);
-            let neighbor_site = surface_site_position(neighbor_cell, site_spacing, seed);
-            nearby_biomes.push(raw_surface_biome_index(
-                neighbor_cell,
-                neighbor_site,
-                biomes,
-                climate_field,
-                seed,
-            ));
+                let neighbor_cell = cell + IVec2::new(x, z);
+                let neighbor_site =
+                    surface_site_position(neighbor_cell, self.surface_site_spacing, self.seed);
+                nearby_biomes.push(self.raw_surface_biome_index(neighbor_cell, neighbor_site));
 
-            if ocean_biome_id.is_some()
-                && ocean_strength(
-                    climate_field.sample(neighbor_site).continentalness,
-                    ocean_weight,
-                ) > f32::EPSILON
-            {
-                near_ocean = true;
+                if self.ocean_biome_id.is_some()
+                    && ocean_strength(
+                        self.climate.sample(neighbor_site).continentalness,
+                        self.ocean_weight,
+                    ) > f32::EPSILON
+                {
+                    near_ocean = true;
+                }
             }
         }
+
+        let dominant_neighbor = dominant_neighbor_biome(&nearby_biomes);
+        let climate = self.climate.sample(site);
+        let hash = cell_hash(cell, self.seed);
+        select_weighted_biome_index(&self.surface_biomes, climate, hash, |candidate| {
+            candidate.is_regional()
+                && dominant_neighbor
+                    .is_none_or(|index| candidate.id != self.surface_biomes[index].id)
+                && proximity_allows(
+                    candidate,
+                    &nearby_biomes,
+                    &self.surface_biomes,
+                    self.ocean_biome_id.as_deref(),
+                    near_ocean,
+                )
+        })
+        .unwrap_or_else(|| self.raw_surface_biome_index(cell, site))
     }
 
-    let dominant_neighbor = dominant_neighbor_biome(&nearby_biomes);
-    let climate = climate_field.sample(site);
-    let hash = cell_hash(cell, seed);
-    select_weighted_biome_index(biomes, climate, hash, |candidate| {
-        candidate.is_regional()
-            && dominant_neighbor.is_none_or(|index| candidate.id != biomes[index].id)
-            && proximity_allows(
-                candidate,
-                &nearby_biomes,
-                biomes,
-                ocean_biome_id,
-                near_ocean,
-            )
-    })
-    .unwrap_or_else(|| raw_surface_biome_index(cell, site, biomes, climate_field, seed))
+    fn raw_surface_biome_index(&self, cell: IVec2, site: Vec2) -> usize {
+        let regional = self
+            .surface_biomes
+            .iter()
+            .enumerate()
+            .filter_map(|(index, biome)| {
+                (biome.is_regional() && biome.weight > f32::EPSILON).then_some(index)
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            !regional.is_empty(),
+            "surface biome field has no active regional biomes"
+        );
+
+        let climate = self.climate.sample(site);
+        let hash = cell_hash(cell, self.seed);
+
+        select_weighted_biome_index(
+            &self.surface_biomes,
+            climate,
+            hash,
+            BiomeFieldEntry::is_regional,
+        )
+        .unwrap_or_else(|| regional[hash as usize % regional.len()])
+    }
 }
 
 fn dominant_neighbor_biome(nearby_biomes: &[usize]) -> Option<usize> {
@@ -91,32 +109,6 @@ fn dominant_neighbor_biome(nearby_biomes: &[usize]) -> Option<usize> {
     }
 
     dominant
-}
-
-fn raw_surface_biome_index(
-    cell: IVec2,
-    site: Vec2,
-    biomes: &[BiomeFieldEntry],
-    climate_field: &MacroClimateField,
-    seed: u64,
-) -> usize {
-    let regional = biomes
-        .iter()
-        .enumerate()
-        .filter_map(|(index, biome)| {
-            (biome.is_regional() && biome.weight > f32::EPSILON).then_some(index)
-        })
-        .collect::<Vec<_>>();
-    assert!(
-        !regional.is_empty(),
-        "surface biome field has no active regional biomes"
-    );
-
-    let climate = climate_field.sample(site);
-    let hash = cell_hash(cell, seed);
-
-    select_weighted_biome_index(biomes, climate, hash, BiomeFieldEntry::is_regional)
-        .unwrap_or_else(|| regional[hash as usize % regional.len()])
 }
 
 fn proximity_allows(

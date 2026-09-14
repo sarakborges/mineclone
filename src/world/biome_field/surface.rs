@@ -5,7 +5,6 @@ use super::{
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS},
     mountain_belt::mountain_belt_strength,
     mountain_peak::mountain_peak_strength,
-    selection::select_surface_biome_index,
     spatial::{smoothstep, surface_site_position, warp_surface_position},
 };
 
@@ -38,16 +37,7 @@ impl BiomeField {
                 continue;
             }
 
-            let selected = select_surface_biome_index(
-                *cell,
-                *site,
-                self.surface_site_spacing,
-                &self.surface_biomes,
-                &self.climate,
-                self.seed,
-                self.ocean_biome_id.as_deref(),
-                self.ocean_weight,
-            );
+            let selected = self.select_surface_biome_index(*cell, *site);
             *candidate_index = Some(selected);
             cache_updates.push((*cell, selected));
         }
