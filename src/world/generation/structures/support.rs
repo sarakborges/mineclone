@@ -15,7 +15,7 @@ use crate::{
 
 use super::super::{
     ChunkGenerationContext, caves::anchored_cave_region,
-    surface_carvers::{resolve_surface_carver_column, surface_carver_density_delta},
+    surface_carvers::{SurfaceCarverResolveContext, resolve_surface_carver_column, surface_carver_density_delta},
 };
 
 const MAX_STRUCTURE_GROUND_VARIATION: i32 = 1;
@@ -124,12 +124,14 @@ fn supported_surface_ground_y(
             resolve_surface_carver_column(
                 horizontal,
                 &influences,
-                context.biomes,
-                context.biome_field,
-                context.biome_field.seed(),
-                context.dimension.sea_level as f32,
-                surface_carver_minimum_y,
-                surface_carver_maximum_y,
+                &SurfaceCarverResolveContext {
+                    biomes: context.biomes,
+                    biome_field: context.biome_field,
+                    world_seed: context.biome_field.seed(),
+                    sea_level: context.dimension.sea_level as f32,
+                    minimum_y: surface_carver_minimum_y,
+                    maximum_y: surface_carver_maximum_y,
+                },
             )
         });
     let density_context = DensitySampleContext::new(region, anchored_caves, context.biome_field);

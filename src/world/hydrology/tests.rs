@@ -2,7 +2,7 @@ use super::{
     HydrologyField, HydrologySurfaceSample, WaterBody,
     constants::{HYDROLOGY_REGION_SIZE, MACRO_SAMPLE_GRID, OCEAN_CONTINENTALNESS_THRESHOLD},
     drainage::{DrainageNode, drainage_position},
-    lake::lake_for_local_basin,
+    lake::{LakeBasinContext, lake_for_local_basin},
     spatial::macro_sample_position,
 };
 use crate::{
@@ -139,11 +139,13 @@ fn biome_can_disable_lake_generation() {
             IVec2::ZERO,
             source,
             &neighbors,
-            42,
-            64.0,
-            WATER_FLUID_ID,
-            OCEAN_CONTINENTALNESS_THRESHOLD,
-            1.0,
+            &LakeBasinContext {
+                seed: 42,
+                sea_level: 64.0,
+                water_fluid: WATER_FLUID_ID,
+                ocean_threshold: OCEAN_CONTINENTALNESS_THRESHOLD,
+                lake_weight: 1.0,
+            },
         )
         .is_none()
     );
