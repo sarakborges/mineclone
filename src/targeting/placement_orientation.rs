@@ -1,12 +1,10 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{game_state::GameState, pause_state::PauseState},
+    app::{game_state::GameState, resource_systems::reset_resource},
     content::{block::BlockDefinition, block::BlockRegistry, block_orientation::BlockOrientation},
-    player::{
-        hotbar::{PlayerHotbar, PlayerHotbarSet},
-        inventory::InventoryState,
-    },
+    gameplay::availability::world_interaction_available,
+    player::hotbar::{PlayerHotbar, PlayerHotbarSet},
 };
 
 use super::block::BlockTargetingSet;
@@ -42,21 +40,18 @@ pub(super) struct PlacementOrientationPlugin;
 impl Plugin for PlacementOrientationPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PlacementOrientation>()
-            .add_systems(OnEnter(GameState::Gameplay), reset_placement_orientation)
+            .add_systems(
+                OnEnter(GameState::Gameplay),
+                reset_resource::<PlacementOrientation>,
+            )
             .add_systems(
                 Update,
                 update_placement_orientation
                     .in_set(BlockTargetingSet::PlacementState)
                     .after(PlayerHotbarSet::Selection)
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running))
-                    .run_if(in_state(InventoryState::Closed)),
+                    .run_if(world_interaction_available),
             );
     }
-}
-
-fn reset_placement_orientation(mut placement: ResMut<PlacementOrientation>) {
-    *placement = PlacementOrientation::default();
 }
 
 fn update_placement_orientation(
