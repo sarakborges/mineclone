@@ -4,8 +4,11 @@ use crate::{
     app::game_state::GameState,
     localization::{Language, UiLocalization},
     ui::{
-        button::menu_button,
-        numeric_input::{NumericInputEvent, NumericInputState, numeric_input_border},
+        button::{compact_control_button, menu_button},
+        numeric_input::{
+            NumericInputEvent, NumericInputSizing, NumericInputState, numeric_input_border,
+            numeric_input_field,
+        },
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
     },
@@ -21,7 +24,6 @@ use super::{
     world_settings_section::world_settings_section,
 };
 
-const CONTROL_HEIGHT: f32 = 44.0;
 const RANDOM_SEED_BUTTON_WIDTH: f32 = 190.0;
 const SEED_INPUT_MAX_DIGITS: usize = 20;
 
@@ -104,8 +106,13 @@ fn seed_setting(
                     ..default()
                 },
                 children![
-                    seed_input(seed),
-                    compact_button(
+                    numeric_input_field(
+                        seed.to_string(),
+                        SeedInput,
+                        SeedValueText,
+                        NumericInputSizing::Flexible,
+                    ),
+                    compact_control_button(
                         localization
                             .text(language, "newWorld.randomSeed")
                             .to_owned(),
@@ -115,47 +122,6 @@ fn seed_setting(
                 ],
             ),
         ],
-    )
-}
-
-fn seed_input(seed: u64) -> impl Bundle {
-    (
-        Button,
-        SeedInput,
-        Node {
-            flex_grow: 1.0,
-            min_width: px(0),
-            height: px(CONTROL_HEIGHT),
-            border: UiRect::all(px(1)),
-            padding: UiRect::axes(px(14), px(0)),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::FlexStart,
-            border_radius: BorderRadius::all(px(7)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.045, 0.035, 0.09, 0.88)),
-        BorderColor::all(numeric_input_border(false)),
-        children![(
-            typography::button_label(seed.to_string()),
-            SeedValueText,
-        )],
-    )
-}
-
-fn compact_button<A: Component>(label: impl Into<String>, action: A, width: f32) -> impl Bundle {
-    (
-        Button,
-        action,
-        Node {
-            width: px(width),
-            height: px(CONTROL_HEIGHT),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            border_radius: BorderRadius::all(px(7)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.20, 0.14, 0.38, 0.72)),
-        children![typography::button_label(label)],
     )
 }
 
