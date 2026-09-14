@@ -4,6 +4,7 @@ use crate::{
     content::{
         biome::BiomeRegistry,
         block::{BlockDefinition, BlockTint},
+        color::Hsi,
         secondary_property::SecondaryPropertyRegistry,
     },
     voxel::cell::VoxelCell,
@@ -19,14 +20,12 @@ pub(crate) fn block_tint_at(
     biome_field: &BiomeField,
     biomes: &BiomeRegistry,
 ) -> Color {
-    let color = match tint {
-        BlockTint::None => return Color::WHITE,
-        BlockTint::Grass => biome_field.grass_color(position, biomes),
-        BlockTint::Leaf => biome_field.leaf_color(position, biomes),
-        BlockTint::Foliage => biome_field.foliage_color(position, biomes),
-    };
-
-    Color::srgb(color.r, color.g, color.b)
+    match tint {
+        BlockTint::None => Color::WHITE,
+        BlockTint::Grass => biome_field.grass_color(position, biomes).to_color(),
+        BlockTint::Leaf => biome_field.leaf_color(position, biomes).to_color(),
+        BlockTint::Foliage => biome_field.foliage_color(position, biomes).to_color(),
+    }
 }
 
 pub(crate) fn secondary_property_dye_tint(
@@ -44,19 +43,17 @@ pub(crate) fn secondary_property_dye_tint(
 
     let value_id = cell.secondary_property(DYED_PROPERTY_ID)?;
     let dye = secondary_properties.get(DYED_PROPERTY_ID, value_id)?;
-    let peak = dye.color.r.max(dye.color.g).max(dye.color.b);
-
-    if peak <= f32::EPSILON {
+    if dye.color.intensity <= f32::EPSILON {
         return Some(Color::BLACK);
     }
 
-    let strengthen = |channel: f32| (channel / peak).clamp(0.0, 1.0).powf(DYE_SATURATION_GAMMA);
-
-    Some(Color::srgb(
-        strengthen(dye.color.r),
-        strengthen(dye.color.g),
-        strengthen(dye.color.b),
-    ))
+    let saturation =
+        1.0 - (1.0 - dye.color.saturation.clamp(0.0, 1.0)).powf(DYE_SATURATION_GAMMA);
+    Some(
+        Hsi::new(dye.color.hue, saturation, dye.color.intensity)
+            .normalized()
+            .to_color(),
+    )
 }
 
 pub(crate) fn block_vertex_tint(
