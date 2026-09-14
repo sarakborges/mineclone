@@ -19,9 +19,6 @@ pub(super) fn enqueue_loaded_fluid_frontier(
     world: &VoxelWorld,
     coord: IVec3,
 ) {
-    // Generated hydrology still needs to enter the runtime solver for exposed
-    // drops, waterfalls and newly loaded boundaries. Physical river/lake banks
-    // contain the generated footprint; chunk dirtiness must not disable flow.
     enqueue_chunk_spread_targets(pending, world, coord);
 
     for offset in CARDINAL_NEIGHBORS {
@@ -143,6 +140,10 @@ fn enqueue_spread_targets_from_fluid(
             continue;
         }
 
-        pending.enqueue(target);
+        if offset == IVec3::NEG_Y {
+            pending.enqueue_priority(target);
+        } else {
+            pending.enqueue(target);
+        }
     }
 }
