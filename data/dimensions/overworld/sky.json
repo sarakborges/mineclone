@@ -9,7 +9,7 @@
     "riseAzimuthDegrees": 90.0,
     "setAzimuthDegrees": 270.0,
     "maxAltitudeDegrees": 72.0,
-    "tint": { "r": 1.0, "g": 0.96, "b": 0.72 }
+    "tint": { "hue": 52.4109, "saturation": 0.1940, "intensity": 0.8933 }
   },
   "moon": {
     "texture": null,
@@ -20,6 +20,6 @@
     "riseAzimuthDegrees": 90.0,
     "setAzimuthDegrees": 270.0,
     "maxAltitudeDegrees": 64.0,
-    "tint": { "r": 0.78, "g": 0.84, "b": 1.0 }
+    "tint": { "hue": 224.7047, "saturation": 0.1069, "intensity": 0.8733 }
   }
 }
