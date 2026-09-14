@@ -91,7 +91,7 @@ impl PendingFluidUpdates {
 }
 
 #[derive(SystemParam)]
-struct FluidSimulationRuntime<'w> {
+pub(super) struct FluidSimulationRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
     pending: ResMut<'w, PendingFluidUpdates>,
     lighting: ResMut<'w, PendingLightingUpdates>,
