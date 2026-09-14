@@ -12,9 +12,7 @@ use crate::{
         block_model_material::BlockModelMaterial,
         block_tint::block_tint_at,
     },
-    voxel::{
-        block_face::BlockFace, orientation::orientation_rotation, world::VoxelWorld,
-    },
+    voxel::{block_face::BlockFace, orientation::orientation_rotation, world::VoxelWorld},
     world::biome_field::BiomeField,
 };
 
@@ -64,18 +62,38 @@ impl Plugin for PlacementPreviewPlugin {
     }
 }
 
+#[derive(SystemParam)]
+struct PlacementPreviewSpawnContent<'w> {
+    asset_server: Res<'w, AssetServer>,
+    block_meshes: Res<'w, BlockModelMeshes>,
+    blocks: Res<'w, BlockRegistry>,
+    hotbar: Res<'w, PlayerHotbar>,
+}
+
+#[derive(SystemParam)]
+struct PlacementPreviewSpawnAssets<'w> {
+    block_materials: ResMut<'w, BlockModelMaterials>,
+    materials: ResMut<'w, Assets<BlockModelMaterial>>,
+}
+
 fn spawn_placement_preview(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    block_meshes: Res<BlockModelMeshes>,
-    mut block_materials: ResMut<BlockModelMaterials>,
-    mut materials: ResMut<Assets<BlockModelMaterial>>,
-    blocks: Res<BlockRegistry>,
-    hotbar: Res<PlayerHotbar>,
+    content: PlacementPreviewSpawnContent,
+    assets: PlacementPreviewSpawnAssets,
 ) {
-    let selected = hotbar.item_at(hotbar.selected_slot()).and_then(|block_id| {
-        blocks.get(block_id).map(|block| (block_id, block))
-    });
+    let PlacementPreviewSpawnAssets {
+        mut block_materials,
+        mut materials,
+    } = assets;
+    let selected = content
+        .hotbar
+        .item_at(content.hotbar.selected_slot())
+        .and_then(|block_id| {
+            content
+                .blocks
+                .get(block_id)
+                .map(|block| (block_id, block))
+        });
     let block_model = selected
         .map(|(block_id, _)| BlockModel::world(block_id, PREVIEW_OPACITY))
         .unwrap_or_else(|| BlockModel::empty_world(PREVIEW_OPACITY));
@@ -93,7 +111,7 @@ fn spawn_placement_preview(
         ))
         .with_children(|preview| {
             for &face in block_model.faces() {
-                let layer_count = maximum_block_model_layers(&blocks, face);
+                let layer_count = maximum_block_model_layers(&content.blocks, face);
                 let layer_materials =
                     block_materials.preview_for_face(face, layer_count, &mut materials);
 
@@ -103,7 +121,7 @@ fn spawn_placement_preview(
                             face,
                             layer_index,
                             block,
-                            &asset_server,
+                            &content.asset_server,
                             block_model.opacity(),
                         )
                     {
@@ -117,7 +135,7 @@ fn spawn_placement_preview(
 
                     preview.spawn((
                         PlacementPreviewFace { face, layer_index },
-                        Mesh3d(block_meshes.world_face(face)),
+                        Mesh3d(content.block_meshes.world_face(face)),
                         MeshMaterial3d(material),
                         visibility,
                         NotShadowCaster,
@@ -128,31 +146,53 @@ fn spawn_placement_preview(
 }
 
 #[derive(SystemParam)]
-struct PlacementPreviewInput<'w, 's> {
+struct PlacementPreviewSelection<'w, 's> {
     targeted: Res<'w, TargetedBlock>,
     hotbar: Res<'w, PlayerHotbar>,
     placement_orientation: Res<'w, PlacementOrientation>,
-    blocks: Res<'w, BlockRegistry>,
-    biomes: Res<'w, BiomeRegistry>,
-    biome_field: Res<'w, BiomeField>,
-    asset_server: Res<'w, AssetServer>,
     world: Res<'w, VoxelWorld>,
     player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
 }
 
+#[derive(SystemParam)]
+struct PlacementPreviewContent<'w> {
+    blocks: Res<'w, BlockRegistry>,
+    biomes: Res<'w, BiomeRegistry>,
+    biome_field: Res<'w, BiomeField>,
+    asset_server: Res<'w, AssetServer>,
+}
+
+#[derive(SystemParam)]
+struct PlacementPreviewView<'w, 's> {
+    materials: ResMut<'w, Assets<BlockModelMaterial>>,
+    root: PreviewRoot<'w, 's>,
+    faces: Query<
+        'w,
+        's,
+        (
+            &'static PlacementPreviewFace,
+            &'static MeshMaterial3d<BlockModelMaterial>,
+            &'static mut Visibility,
+        ),
+    >,
+}
+
 fn update_placement_preview(
-    input: PlacementPreviewInput,
-    mut materials: ResMut<Assets<BlockModelMaterial>>,
-    mut root: PreviewRoot,
-    mut faces: Query<(
-        &PlacementPreviewFace,
-        &MeshMaterial3d<BlockModelMaterial>,
-        &mut Visibility,
-    )>,
+    selection: PlacementPreviewSelection,
+    content: PlacementPreviewContent,
+    view: PlacementPreviewView,
 ) {
-    let selected_slot = input.hotbar.selected_slot();
-    let selected = input.hotbar.item_at(selected_slot).and_then(|block_id| {
-        input.blocks.get(block_id).map(|block| (block_id, block))
+    let PlacementPreviewView {
+        mut materials,
+        mut root,
+        mut faces,
+    } = view;
+    let selected_slot = selection.hotbar.selected_slot();
+    let selected = selection.hotbar.item_at(selected_slot).and_then(|block_id| {
+        content
+            .blocks
+            .get(block_id)
+            .map(|block| (block_id, block))
     });
     let Some((block_id, block)) = selected else {
         root.0.set_block_id(None);
@@ -182,7 +222,7 @@ fn update_placement_preview(
                 face.face,
                 face.layer_index,
                 block,
-                &input.asset_server,
+                &content.asset_server,
                 root.0.opacity(),
             ) {
                 *material = face_material;
@@ -193,24 +233,29 @@ fn update_placement_preview(
         }
     }
 
-    let orientation = input
+    let orientation = selection
         .placement_orientation
         .for_block(selected_slot, block);
     root.1.rotation = orientation_rotation(orientation);
 
-    let Some(hit) = input.targeted.0 else {
+    let Some(hit) = selection.targeted.0 else {
         root.1.translation = Vec3::ZERO;
         *root.2 = Visibility::Hidden;
         return;
     };
-    let Some(voxel) = placement_voxel(hit, &input.world, input.player.translation) else {
+    let Some(voxel) = placement_voxel(hit, &selection.world, selection.player.translation) else {
         root.1.translation = Vec3::ZERO;
         *root.2 = Visibility::Hidden;
         return;
     };
 
     let tint_position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-    let tint = block_tint_at(block.tint, tint_position, &input.biome_field, &input.biomes);
+    let tint = block_tint_at(
+        block.tint,
+        tint_position,
+        &content.biome_field,
+        &content.biomes,
+    );
 
     for (_, material_handle, _) in &mut faces {
         let Some(mut material) = materials.get_mut(&material_handle.0) else {
