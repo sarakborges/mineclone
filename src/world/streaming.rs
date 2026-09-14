@@ -14,6 +14,7 @@ use crate::{
     },
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
+        chunk::{CHUNK_SIZE, VoxelChunk},
         coordinates::chunk_coord_from_position,
         lighting::{PendingLightingUpdates, seed_chunk_direct_lighting},
         neighbors::CARDINAL_NEIGHBORS,
@@ -34,8 +35,8 @@ use super::{
 };
 
 const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 1;
-const MAX_CHUNKS_PER_FRAME: usize = 8;
-const STREAMING_BUDGET: Duration = Duration::from_millis(6);
+const MAX_CHUNKS_PER_FRAME: usize = 4;
+const STREAMING_BUDGET: Duration = Duration::from_millis(4);
 
 #[derive(Resource, Default)]
 pub(super) struct ChunkStreamingState {
@@ -134,11 +135,6 @@ pub(super) fn stream_chunks(
         ensure_chunk_loaded(&mut inputs.world, coord, &generation_context);
         fluid_updates.enqueue_loaded_fluid_frontier(&inputs.world, coord);
 
-        // Give the first visible mesh the cheap, deterministic part of the light
-        // field immediately: direct skylight and local emission. Indirect
-        // propagation remains budgeted in PostUpdate, so a new chunk no longer
-        // appears completely black while lighting catches up without bringing
-        // back the old unbounded relaxation stall.
         seed_chunk_direct_lighting(
             &mut inputs.world,
             coord,
@@ -176,13 +172,48 @@ pub(super) fn stream_chunks(
             }
 
             if chunk_is_empty {
-                // Terrain faces are identical against unloaded space and a
-                // loaded empty chunk. Only transparent fluid side faces need to
-                // be reconsidered in this case.
                 inputs.remesh_queue.enqueue_fluid_priority(neighbor);
-            } else {
+                continue;
+            }
+
+            let Some(neighbor_chunk) = inputs.world.chunk(neighbor) else {
+                continue;
+            };
+            if boundary_has_content(chunk, offset)
+                && boundary_has_content(neighbor_chunk, -offset)
+            {
                 inputs.remesh_queue.enqueue_priority(neighbor);
             }
         }
     }
+}
+
+fn boundary_has_content(chunk: &VoxelChunk, outward: IVec3) -> bool {
+    let last = CHUNK_SIZE as i32 - 1;
+
+    match outward {
+        IVec3::X => (0..CHUNK_SIZE as i32).any(|y| {
+            (0..CHUNK_SIZE as i32).any(|z| voxel_has_content(chunk, last, y, z))
+        }),
+        IVec3::NEG_X => (0..CHUNK_SIZE as i32).any(|y| {
+            (0..CHUNK_SIZE as i32).any(|z| voxel_has_content(chunk, 0, y, z))
+        }),
+        IVec3::Y => (0..CHUNK_SIZE as i32).any(|z| {
+            (0..CHUNK_SIZE as i32).any(|x| voxel_has_content(chunk, x, last, z))
+        }),
+        IVec3::NEG_Y => (0..CHUNK_SIZE as i32).any(|z| {
+            (0..CHUNK_SIZE as i32).any(|x| voxel_has_content(chunk, x, 0, z))
+        }),
+        IVec3::Z => (0..CHUNK_SIZE as i32).any(|y| {
+            (0..CHUNK_SIZE as i32).any(|x| voxel_has_content(chunk, x, y, last))
+        }),
+        IVec3::NEG_Z => (0..CHUNK_SIZE as i32).any(|y| {
+            (0..CHUNK_SIZE as i32).any(|x| voxel_has_content(chunk, x, y, 0))
+        }),
+        _ => false,
+    }
+}
+
+fn voxel_has_content(chunk: &VoxelChunk, x: i32, y: i32, z: i32) -> bool {
+    chunk.cell_at(x, y, z).is_some() || chunk.fluid_at(x, y, z).is_some()
 }
