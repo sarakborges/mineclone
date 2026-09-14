@@ -195,7 +195,8 @@ fn update_placement_preview(
     };
 
     let block_changed = root.0.set_block_id(Some(block_id));
-    if block_changed {
+    let block_definitions_changed = content.block_definitions_changed();
+    if block_changed || block_definitions_changed {
         root.1.translation = Vec3::ZERO;
         *root.2 = Visibility::Hidden;
 
