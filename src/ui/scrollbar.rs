@@ -13,6 +13,7 @@ pub(crate) struct AutoScrollbar {
 pub(crate) fn vertical_scrollbar(target: Entity) -> impl Bundle {
     (
         AutoScrollbar { target },
+        Interaction::default(),
         Node {
             display: Display::None,
             min_width: px(8),
