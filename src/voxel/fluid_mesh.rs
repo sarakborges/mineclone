@@ -10,7 +10,7 @@ use super::{
     mesh_buffer::VoxelMeshBuffer,
     mesh_lighting::{face_lighting, push_lit_quad},
     quad::VOXEL_FACE_UVS,
-    world::VoxelWorld,
+    read::VoxelRead,
 };
 
 pub struct ChunkFluidMesh {
@@ -26,13 +26,14 @@ struct FluidFaceHeights {
     h01: f32,
 }
 
-pub fn build_fluid_meshes<F>(
-    world: &VoxelWorld,
+pub fn build_fluid_meshes<W, F>(
+    world: &W,
     chunk_coord: IVec3,
     chunk: &VoxelChunk,
     tint_at: F,
 ) -> Vec<ChunkFluidMesh>
 where
+    W: VoxelRead + ?Sized,
     F: Fn(IVec3, FluidId) -> [f32; 3],
 {
     let mut buffers = HashMap::<FluidId, VoxelMeshBuffer>::new();
@@ -146,8 +147,8 @@ fn fluid_face_vertices(
     }
 }
 
-fn fluid_corner_height(
-    world: &VoxelWorld,
+fn fluid_corner_height<W: VoxelRead + ?Sized>(
+    world: &W,
     position: IVec3,
     fluid_id: FluidId,
     x_sign: i32,
@@ -183,15 +184,12 @@ fn fluid_corner_height(
     if count > 0.0 { total / count } else { 0.0 }
 }
 
-fn face_is_exposed(
-    world: &VoxelWorld,
+fn face_is_exposed<W: VoxelRead + ?Sized>(
+    world: &W,
     position: IVec3,
     fluid_id: FluidId,
     face: BlockFace,
 ) -> bool {
-    // Transparent side and bottom faces against an unloaded chunk render as
-    // temporary curtains. The top surface remains visible while streaming; once
-    // the neighbor arrives, the normal neighbor remesh restores any real edge.
     if !world.is_loaded_at(position) {
         return face == BlockFace::Top;
     }
