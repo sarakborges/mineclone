@@ -4,7 +4,12 @@ use crate::{
     app::game_state::GameState,
     localization::{Language, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
-    ui::{theme, typography},
+    ui::{
+        selectable::{
+            selectable_button_background, selectable_label_color, sync_selectable_button,
+        },
+        typography,
+    },
     world::NewWorldConfig,
 };
 
@@ -83,7 +88,7 @@ fn game_mode_button(
             border_radius: BorderRadius::all(px(7)),
             ..default()
         },
-        BackgroundColor(game_mode_button_background(active, Interaction::None)),
+        BackgroundColor(selectable_button_background(active, Interaction::None)),
         children![(typography::button_label(label), GameModeButtonLabel(mode))],
     )
 }
@@ -142,34 +147,17 @@ pub(crate) fn sync_game_mode_buttons(
     };
 
     for (entity, button, interaction, disabled, mut background) in &mut buttons {
-        let active = button.0 == current_game_mode;
-
-        if active && !disabled {
-            commands.entity(entity).insert(InteractionDisabled);
-        } else if !active && disabled {
-            commands.entity(entity).remove::<InteractionDisabled>();
-        }
-
-        *background = BackgroundColor(game_mode_button_background(active, *interaction));
+        sync_selectable_button(
+            &mut commands,
+            entity,
+            button.0 == current_game_mode,
+            disabled,
+            *interaction,
+            &mut background,
+        );
     }
 
     for (label, mut color) in &mut labels {
-        *color = TextColor(if label.0 == current_game_mode {
-            theme::TEXT_SUBTLE
-        } else {
-            theme::TEXT_PRIMARY
-        });
-    }
-}
-
-fn game_mode_button_background(active: bool, interaction: Interaction) -> Color {
-    if active {
-        return Color::srgba(0.08, 0.07, 0.12, 0.62);
-    }
-
-    match interaction {
-        Interaction::Pressed => Color::srgba(0.34, 0.22, 0.62, 0.92),
-        Interaction::Hovered => Color::srgba(0.29, 0.19, 0.54, 0.82),
-        Interaction::None => Color::srgba(0.20, 0.14, 0.38, 0.72),
+        *color = TextColor(selectable_label_color(label.0 == current_game_mode));
     }
 }
