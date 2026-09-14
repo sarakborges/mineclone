@@ -19,6 +19,7 @@ use super::celestial_path::celestial_direction;
 
 const SHADOW_MAP_SIZE: usize = 1024;
 const SHADOW_CASCADES: usize = 3;
+const SHADOW_DISTANCE_CHUNK_CAP: i32 = 8;
 const FIRST_CASCADE_FAR_BOUND: f32 = CHUNK_SIZE as f32;
 const SHADOW_DEPTH_BIAS: f32 = 0.02;
 const SHADOW_NORMAL_BIAS: f32 = 0.8;
@@ -132,7 +133,8 @@ fn hide_lights(
 }
 
 fn shadow_config(horizontal_chunks: i32) -> CascadeShadowConfig {
-    let maximum_distance = ((horizontal_chunks + 1) * CHUNK_SIZE as i32) as f32;
+    let shadow_chunks = horizontal_chunks.clamp(1, SHADOW_DISTANCE_CHUNK_CAP);
+    let maximum_distance = ((shadow_chunks + 1) * CHUNK_SIZE as i32) as f32;
 
     CascadeShadowConfigBuilder {
         num_cascades: SHADOW_CASCADES,
@@ -161,10 +163,13 @@ mod tests {
     }
 
     #[test]
-    fn directional_shadow_budget_uses_three_cascades() {
+    fn directional_shadow_budget_caps_distance_and_uses_three_cascades() {
         let config = shadow_config(12);
 
         assert_eq!(config.bounds.len(), SHADOW_CASCADES);
-        assert_eq!(config.bounds.last().copied(), Some(13.0 * CHUNK_SIZE as f32));
+        assert_eq!(
+            config.bounds.last().copied(),
+            Some((SHADOW_DISTANCE_CHUNK_CAP + 1) as f32 * CHUNK_SIZE as f32),
+        );
     }
 }
