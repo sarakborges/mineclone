@@ -5,14 +5,14 @@ use serde::Deserialize;
 
 use crate::localization::LocalizedText;
 
-use super::{color::Rgb, registry::DefinitionMap};
+use super::{color::Hsi, registry::DefinitionMap};
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SecondaryPropertyDefinition {
     pub id: String,
     pub name: LocalizedText,
-    pub color: Rgb,
+    pub color: Hsi,
 }
 
 #[derive(Resource, Default)]
@@ -34,17 +34,11 @@ impl SecondaryPropertyRegistry {
             "secondary property {property}:{} name",
             definition.id
         ));
-        for (channel, value) in [
-            ("r", definition.color.r),
-            ("g", definition.color.g),
-            ("b", definition.color.b),
-        ] {
-            assert!(
-                (0.0..=1.0).contains(&value),
-                "secondary property {property}:{} color.{channel} must be between 0 and 1",
-                definition.id
-            );
-        }
+        assert!(
+            definition.color.is_valid(),
+            "secondary property {property}:{} HSI color must use finite hue and saturation/intensity between 0 and 1",
+            definition.id
+        );
 
         self.definitions
             .entry(property)
