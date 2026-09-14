@@ -83,11 +83,6 @@ impl PendingLightingUpdates {
             self.queue.enqueue_with_neighbors_priority(center);
         }
     }
-
-    pub(crate) fn clear(&mut self) {
-        self.queue = LightingQueue::default();
-        self.emission_edit_centers.clear();
-    }
 }
 
 pub(crate) fn seed_chunk_direct_lighting(
