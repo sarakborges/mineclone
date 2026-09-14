@@ -11,6 +11,7 @@ use crate::{
         block::BlockRegistry, builtin_ids::BRUSH_TOOL_ID,
         secondary_property::SecondaryPropertyRegistry,
     },
+    player::camera::GameplayCamera,
     tools::{BrushMode, DYED_PROPERTY_ID},
 };
 
@@ -23,7 +24,11 @@ type HighlightTarget<'w, 's> = Single<
     'w,
     's,
     (&'static mut Transform, &'static mut Visibility),
-    (With<TargetHighlight>, Without<BrushGhost>),
+    (
+        With<TargetHighlight>,
+        Without<BrushGhost>,
+        Without<GameplayCamera>,
+    ),
 >;
 
 type BrushGhostTarget<'w, 's> = Single<
@@ -34,7 +39,11 @@ type BrushGhostTarget<'w, 's> = Single<
         &'static mut Visibility,
         &'static MeshMaterial3d<StandardMaterial>,
     ),
-    (With<BrushGhost>, Without<TargetHighlight>),
+    (
+        With<BrushGhost>,
+        Without<TargetHighlight>,
+        Without<GameplayCamera>,
+    ),
 >;
 
 pub struct TargetHighlightPlugin;
