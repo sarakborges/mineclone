@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use super::{
-    block_face::BlockFace, light::VoxelLight, mesh_buffer::VoxelMeshBuffer, world::VoxelWorld,
+    block_face::BlockFace, light::VoxelLight, mesh_buffer::VoxelMeshBuffer, read::VoxelRead,
 };
 
 const AO_BRIGHTNESS: [f32; 4] = [1.0, 0.86, 0.72, 0.58];
@@ -13,8 +13,8 @@ pub(super) struct FaceLighting {
     pub(super) ambient_occlusion: [f32; 4],
 }
 
-pub(super) fn face_lighting(
-    world: &VoxelWorld,
+pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
+    world: &W,
     voxel: IVec3,
     face: BlockFace,
     neutralize_emissive_surface_light: bool,
@@ -120,7 +120,10 @@ fn srgb_distance_squared(left: [f32; 3], right: [f32; 3]) -> f32 {
     red * red + green * green + blue * blue
 }
 
-fn average_shader_light_levels(world: &VoxelWorld, samples: [IVec3; 4]) -> (f32, [f32; 3]) {
+fn average_shader_light_levels<W: VoxelRead + ?Sized>(
+    world: &W,
+    samples: [IVec3; 4],
+) -> (f32, [f32; 3]) {
     let mut sky_total = 0.0;
     let mut block_total = [0.0; 3];
     let mut count = 0_u32;
