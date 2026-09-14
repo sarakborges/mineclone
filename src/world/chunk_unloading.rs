@@ -33,7 +33,7 @@ pub(super) fn unload_chunk_meshes(
     let mut pending_unloads = renderer
         .pool
         .active_coords()
-        .filter(|coord| !streaming.wants(*coord))
+        .filter(|coord| !streaming.keeps_loaded(*coord))
         .collect::<Vec<_>>();
 
     pending_unloads.sort_by_key(|coord| -(*coord - center).length_squared());
@@ -52,12 +52,17 @@ pub(super) fn unload_chunk_meshes(
             continue;
         };
 
-        for mesh_handle in mesh_handles {
-            let _ = renderer.meshes.remove(&mesh_handle);
-        }
-
         for entity in entities {
             renderer.commands.entity(entity).despawn();
+        }
+
+        if !mesh_handles.is_empty() {
+            renderer.commands.queue(move |world: &mut World| {
+                let mut meshes = world.resource_mut::<Assets<Mesh>>();
+                for mesh_handle in mesh_handles {
+                    let _ = meshes.remove(&mesh_handle);
+                }
+            });
         }
 
         world.archive_chunk(coord);

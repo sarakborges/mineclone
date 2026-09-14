@@ -41,6 +41,7 @@ pub(super) struct ChunkStreamingState {
     horizontal_radius: i32,
     vertical_radius: i32,
     desired: HashSet<IVec3>,
+    retained: HashSet<IVec3>,
     pending: VecDeque<IVec3>,
     surface_ranges: HashMap<IVec2, (i32, i32)>,
 }
@@ -48,6 +49,10 @@ pub(super) struct ChunkStreamingState {
 impl ChunkStreamingState {
     pub(super) fn wants(&self, coord: IVec3) -> bool {
         self.desired.contains(&coord)
+    }
+
+    pub(super) fn keeps_loaded(&self, coord: IVec3) -> bool {
+        self.desired.contains(&coord) || self.retained.contains(&coord)
     }
 }
 

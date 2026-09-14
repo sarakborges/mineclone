@@ -58,10 +58,11 @@ pub(super) fn rebuild_queue(
         )
     });
 
+    let previous_desired = std::mem::replace(&mut streaming.desired, desired);
     streaming.center = Some(center);
     streaming.horizontal_radius = horizontal_radius;
     streaming.vertical_radius = vertical_radius;
-    streaming.desired = desired;
+    streaming.retained = previous_desired;
     streaming.pending = pending.into();
 }
 
