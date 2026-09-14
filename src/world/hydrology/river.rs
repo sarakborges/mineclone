@@ -59,6 +59,7 @@ where
     let connected_lakes = connected_lake_cells(&selection.lakes, network);
     let ocean_threshold = network.ocean_threshold();
     let mut destination_cache = HashMap::new();
+    let mut confluence_water_levels = HashMap::new();
 
     for (&cell, &incoming_rivers) in &confluences {
         if incoming_rivers < CONFLUENCE_LAKE_MINIMUM_INCOMING_RIVERS
@@ -71,7 +72,11 @@ where
         if source.continentalness <= ocean_threshold {
             continue;
         }
-        let flow = flow_cache.get(&cell).copied().unwrap_or(incoming_rivers as u32);
+
+        let flow = flow_cache
+            .get(&cell)
+            .copied()
+            .unwrap_or(incoming_rivers as u32);
         let body = confluence_lake(
             cell,
             source,
@@ -81,6 +86,8 @@ where
             sea_level,
             water_fluid,
         );
+        confluence_water_levels.insert(cell, body.water_level);
+
         if water_body_intersects_region(coord, &body) {
             water_bodies.push(body);
         }
@@ -137,34 +144,13 @@ where
                 .get(&cell)
                 .filter(|_| connected_lakes.contains(&cell))
                 .map(|lake| lake.water_level)
-                .or_else(|| {
-                    confluences
-                        .get(&cell)
-                        .filter(|&&incoming| incoming >= CONFLUENCE_LAKE_MINIMUM_INCOMING_RIVERS)
-                        .map(|_| river_height_for_confluence(cell, source, seed, sea_level, water_fluid))
-                });
+                .or_else(|| confluence_water_levels.get(&cell).copied());
             let downstream_water_level = selection
                 .lakes
                 .get(&downstream_cell)
                 .filter(|_| connected_lakes.contains(&downstream_cell))
                 .map(|lake| lake.water_level)
-                .or_else(|| {
-                    confluences
-                        .get(&downstream_cell)
-                        .filter(|&&incoming| incoming >= CONFLUENCE_LAKE_MINIMUM_INCOMING_RIVERS)
-                        .map(|&incoming| {
-                            confluence_lake(
-                                downstream_cell,
-                                downstream,
-                                incoming,
-                                downstream_flow,
-                                seed,
-                                sea_level,
-                                water_fluid,
-                            )
-                            .water_level
-                        })
-                });
+                .or_else(|| confluence_water_levels.get(&downstream_cell).copied());
             let (downstream, downstream_water_level, downstream_flow) = confluence_target(
                 cell,
                 downstream_cell,
@@ -208,16 +194,6 @@ where
         graph,
         water_bodies,
     }
-}
-
-fn river_height_for_confluence(
-    cell: IVec2,
-    source: DrainageNode,
-    seed: u64,
-    sea_level: f32,
-    water_fluid: &str,
-) -> f32 {
-    confluence_lake(cell, source, 3, 4, seed, sea_level, water_fluid).water_level
 }
 
 fn direct_confluence_counts<F>(
