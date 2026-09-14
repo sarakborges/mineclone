@@ -7,7 +7,10 @@ mod surface;
 mod visuals;
 mod volume;
 
-use std::{collections::HashMap, sync::RwLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use bevy::prelude::*;
 
@@ -42,7 +45,7 @@ impl BiomeFieldEntry {
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 pub struct BiomeField {
     pub(super) surface_biomes: Vec<BiomeFieldEntry>,
     pub(super) volume_biomes: Vec<BiomeFieldEntry>,
@@ -50,7 +53,7 @@ pub struct BiomeField {
     pub(super) volume_site_spacing: Option<Vec3>,
     pub(super) climate: MacroClimateField,
     pub(super) seed: u64,
-    pub(super) surface_site_biomes: RwLock<HashMap<IVec2, usize>>,
+    pub(super) surface_site_biomes: Arc<RwLock<HashMap<IVec2, usize>>>,
     pub(super) ocean_biome_id: Option<String>,
     pub(super) ocean_weight: f32,
 }
@@ -168,7 +171,7 @@ impl BiomeField {
             volume_site_spacing,
             climate: MacroClimateField::new(seed),
             seed,
-            surface_site_biomes: RwLock::new(HashMap::new()),
+            surface_site_biomes: Arc::new(RwLock::new(HashMap::new())),
             ocean_biome_id,
             ocean_weight,
         }
