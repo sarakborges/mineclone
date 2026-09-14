@@ -2,10 +2,14 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
+use crate::content::fluid::FluidId;
+
 struct ChunkRenderSlot {
     entities: Vec<Entity>,
     meshes: Vec<Handle<Mesh>>,
+    fluid_ids: Vec<FluidId>,
     mesh_bytes: usize,
+    fluid_mesh_bytes: usize,
 }
 
 #[derive(Resource, Default)]
@@ -66,19 +70,64 @@ impl ChunkRenderPool {
         true
     }
 
+    pub(super) fn replace_fluid_mesh_assets(
+        &mut self,
+        coord: IVec3,
+        meshes: &mut Assets<Mesh>,
+        replacements: Vec<(FluidId, Mesh)>,
+        fluid_mesh_bytes: usize,
+    ) -> bool {
+        let Some(slot) = self.active.get_mut(&coord) else {
+            return false;
+        };
+        if slot.fluid_ids.len() != replacements.len()
+            || slot
+                .fluid_ids
+                .iter()
+                .zip(&replacements)
+                .any(|(existing, (replacement, _))| existing != replacement)
+        {
+            return false;
+        }
+
+        let terrain_mesh_count = slot.meshes.len().saturating_sub(slot.fluid_ids.len());
+        let fluid_handles = &slot.meshes[terrain_mesh_count..];
+        if fluid_handles.iter().any(|handle| !meshes.contains(handle)) {
+            return false;
+        }
+
+        for (handle, (_, replacement)) in fluid_handles.iter().zip(replacements) {
+            let Some(mut existing) = meshes.get_mut(handle) else {
+                return false;
+            };
+            *existing = replacement;
+        }
+
+        slot.mesh_bytes = slot
+            .mesh_bytes
+            .saturating_sub(slot.fluid_mesh_bytes)
+            .saturating_add(fluid_mesh_bytes);
+        slot.fluid_mesh_bytes = fluid_mesh_bytes;
+        true
+    }
+
     pub(super) fn insert(
         &mut self,
         coord: IVec3,
         entities: Vec<Entity>,
         meshes: Vec<Handle<Mesh>>,
+        fluid_ids: Vec<FluidId>,
         mesh_bytes: usize,
+        fluid_mesh_bytes: usize,
     ) {
         self.active.insert(
             coord,
             ChunkRenderSlot {
                 entities,
                 meshes,
+                fluid_ids,
                 mesh_bytes,
+                fluid_mesh_bytes,
             },
         );
     }

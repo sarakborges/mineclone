@@ -7,7 +7,9 @@ use crate::voxel::{
 };
 
 use super::{
-    chunk_rendering::{refresh_chunk_lighting_mesh, refresh_chunk_mesh},
+    chunk_rendering::{
+        refresh_chunk_fluid_mesh, refresh_chunk_lighting_mesh, refresh_chunk_mesh,
+    },
     chunk_system_params::{ChunkContent, ChunkRenderer},
 };
 
@@ -17,6 +19,7 @@ const MAX_IMMEDIATE_LIGHTING_REMESHES_PER_FRAME: usize = 6;
 #[derive(Resource, Default)]
 pub(crate) struct ChunkRemeshQueue {
     queue: DeduplicatedQueue<IVec3>,
+    fluid: DeduplicatedQueue<IVec3>,
     immediate_geometry: DeduplicatedQueue<IVec3>,
     immediate_lighting: DeduplicatedQueue<IVec3>,
 }
@@ -24,13 +27,21 @@ pub(crate) struct ChunkRemeshQueue {
 impl ChunkRemeshQueue {
     pub(crate) fn enqueue(&mut self, coord: IVec3) {
         if coord.y >= 0 {
+            self.fluid.remove(coord);
             self.queue.enqueue(coord);
         }
     }
 
     pub(crate) fn enqueue_priority(&mut self, coord: IVec3) {
         if coord.y >= 0 {
+            self.fluid.remove(coord);
             self.queue.enqueue_front(coord);
+        }
+    }
+
+    pub(crate) fn enqueue_fluid_priority(&mut self, coord: IVec3) {
+        if coord.y >= 0 {
+            self.fluid.enqueue_front(coord);
         }
     }
 
@@ -77,12 +88,19 @@ impl ChunkRemeshQueue {
     }
 
     fn pop(&mut self) -> Option<IVec3> {
-        self.queue.pop()
+        let coord = self.queue.pop()?;
+        self.fluid.remove(coord);
+        Some(coord)
+    }
+
+    fn pop_fluid(&mut self) -> Option<IVec3> {
+        self.fluid.pop()
     }
 
     fn pop_immediate_geometry(&mut self) -> Option<IVec3> {
         let coord = self.immediate_geometry.pop()?;
         self.queue.remove(coord);
+        self.fluid.remove(coord);
         Some(coord)
     }
 
@@ -92,6 +110,7 @@ impl ChunkRemeshQueue {
 
     fn clear(&mut self) {
         self.queue.clear();
+        self.fluid.clear();
         self.immediate_geometry.clear();
         self.immediate_lighting.clear();
     }
@@ -171,11 +190,23 @@ pub(super) fn process_chunk_remesh_queue(
             break;
         }
 
-        let Some(coord) = queue.pop() else {
+        if let Some(coord) = queue.pop() {
+            refresh_chunk_mesh(
+                &mut renderer.commands,
+                &mut renderer.meshes,
+                &mut renderer.pool,
+                coord,
+                &render_context,
+            );
+            processed += 1;
+            continue;
+        }
+
+        let Some(coord) = queue.pop_fluid() else {
             break;
         };
 
-        refresh_chunk_mesh(
+        refresh_chunk_fluid_mesh(
             &mut renderer.commands,
             &mut renderer.meshes,
             &mut renderer.pool,
@@ -209,6 +240,17 @@ mod tests {
 
         assert_eq!(queue.pop(), Some(IVec3::Z));
         assert_eq!(queue.pop(), Some(IVec3::X));
+    }
+
+    #[test]
+    fn full_remesh_supersedes_pending_fluid_remesh() {
+        let mut queue = ChunkRemeshQueue::default();
+        let coord = IVec3::new(2, 1, 3);
+        queue.enqueue_fluid_priority(coord);
+        queue.enqueue_priority(coord);
+
+        assert_eq!(queue.pop(), Some(coord));
+        assert_eq!(queue.pop_fluid(), None);
     }
 
     #[test]

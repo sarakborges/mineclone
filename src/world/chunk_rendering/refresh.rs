@@ -4,7 +4,8 @@ use super::{
     ChunkRenderContext,
     pool::ChunkRenderPool,
     spawn::{
-        build_chunk_render_meshes, mesh_asset_bytes, spawn_built_chunk_meshes, spawn_chunk_mesh,
+        build_chunk_fluid_render_meshes, build_chunk_render_meshes, mesh_asset_bytes,
+        spawn_built_chunk_meshes, spawn_chunk_mesh,
     },
 };
 
@@ -80,5 +81,44 @@ pub fn refresh_chunk_lighting_mesh(
 
     // A layout mismatch means geometry actually changed (or the chunk has not
     // been rendered yet). Fall back to the full replacement path in that case.
+    refresh_chunk_mesh(commands, meshes, render_pool, coord, context);
+}
+
+pub fn refresh_chunk_fluid_mesh(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    render_pool: &mut ChunkRenderPool,
+    coord: IVec3,
+    context: &ChunkRenderContext<'_>,
+) {
+    let Some(chunk) = context.world.chunk(coord) else {
+        return;
+    };
+
+    let fluid_meshes = build_chunk_fluid_render_meshes(coord, chunk, context);
+    let fluid_mesh_bytes = fluid_meshes
+        .iter()
+        .map(|fluid| mesh_asset_bytes(&fluid.mesh))
+        .sum();
+    let replacements = fluid_meshes
+        .into_iter()
+        .map(|fluid| (fluid.fluid_id, fluid.mesh))
+        .collect::<Vec<_>>();
+
+    // Flowing water changes geometry frequently, but the terrain meshes in the
+    // same chunk are unaffected. Update only the existing fluid mesh assets when
+    // the fluid layout is stable; this avoids rebuilding/despawning the complete
+    // chunk for every water-level step.
+    if render_pool.replace_fluid_mesh_assets(
+        coord,
+        meshes,
+        replacements,
+        fluid_mesh_bytes,
+    ) {
+        return;
+    }
+
+    // Fluid appearing/disappearing or changing type requires entity/material
+    // layout changes, so use the full path only for those structural transitions.
     refresh_chunk_mesh(commands, meshes, render_pool, coord, context);
 }

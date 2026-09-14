@@ -64,7 +64,21 @@ pub(super) fn build_chunk_render_meshes(
             )
         },
     );
-    let fluid_meshes = build_fluid_meshes(context.world, coord, chunk, |voxel, fluid_id| {
+    let fluid_meshes = build_chunk_fluid_render_meshes(coord, chunk, context);
+
+    face_meshes
+        .into_iter()
+        .map(BuiltChunkMesh::Terrain)
+        .chain(fluid_meshes.into_iter().map(BuiltChunkMesh::Fluid))
+        .collect()
+}
+
+pub(super) fn build_chunk_fluid_render_meshes(
+    coord: IVec3,
+    chunk: &VoxelChunk,
+    context: &ChunkRenderContext<'_>,
+) -> Vec<ChunkFluidMesh> {
+    build_fluid_meshes(context.world, coord, chunk, |voxel, fluid_id| {
         let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
         let fluid = context
             .fluids
@@ -75,13 +89,7 @@ pub(super) fn build_chunk_render_meshes(
             .water_color(position, context.biomes, fluid.color);
 
         [tint.r, tint.g, tint.b]
-    });
-
-    face_meshes
-        .into_iter()
-        .map(BuiltChunkMesh::Terrain)
-        .chain(fluid_meshes.into_iter().map(BuiltChunkMesh::Fluid))
-        .collect()
+    })
 }
 
 pub fn spawn_chunk_mesh(
@@ -97,7 +105,7 @@ pub fn spawn_chunk_mesh(
     }
 
     if chunk.is_empty() {
-        render_pool.insert(coord, Vec::new(), Vec::new(), 0);
+        render_pool.insert(coord, Vec::new(), Vec::new(), Vec::new(), 0, 0);
         return;
     }
 
@@ -116,7 +124,9 @@ pub(super) fn spawn_built_chunk_meshes(
     let transform = Transform::from_translation(coord.as_vec3() * CHUNK_SIZE as f32);
     let mut entities = Vec::new();
     let mut mesh_handles = Vec::new();
+    let mut fluid_ids = Vec::new();
     let mut pooled_mesh_bytes = 0;
+    let mut fluid_mesh_bytes = 0;
 
     for built_mesh in built_meshes {
         match built_mesh {
@@ -145,7 +155,11 @@ pub(super) fn spawn_built_chunk_meshes(
                 mesh_handles.push(mesh_handle);
             }
             BuiltChunkMesh::Fluid(fluid_mesh) => {
-                pooled_mesh_bytes += mesh_asset_bytes(&fluid_mesh.mesh);
+                let bytes = mesh_asset_bytes(&fluid_mesh.mesh);
+                pooled_mesh_bytes += bytes;
+                fluid_mesh_bytes += bytes;
+                fluid_ids.push(fluid_mesh.fluid_id);
+
                 let mesh_handle = meshes.add(fluid_mesh.mesh);
                 let entity = commands
                     .spawn((
@@ -162,7 +176,14 @@ pub(super) fn spawn_built_chunk_meshes(
         }
     }
 
-    render_pool.insert(coord, entities, mesh_handles, pooled_mesh_bytes);
+    render_pool.insert(
+        coord,
+        entities,
+        mesh_handles,
+        fluid_ids,
+        pooled_mesh_bytes,
+        fluid_mesh_bytes,
+    );
 }
 
 pub(super) fn mesh_asset_bytes(mesh: &Mesh) -> usize {

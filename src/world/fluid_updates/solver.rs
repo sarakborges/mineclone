@@ -101,12 +101,12 @@ fn horizontal_spread_state(neighbor: FluidCell, max_spread: u16) -> Option<(u8, 
 
 pub(super) fn enqueue_remesh(position: IVec3, remesh_queue: &mut ChunkRemeshQueue) {
     let center = chunk_coord_from_world(position);
-    remesh_queue.enqueue_priority(center);
+    remesh_queue.enqueue_fluid_priority(center);
 
     for offset in CARDINAL_NEIGHBORS {
         let neighbor = chunk_coord_from_world(position + offset);
         if neighbor != center {
-            remesh_queue.enqueue_priority(neighbor);
+            remesh_queue.enqueue_fluid_priority(neighbor);
         }
     }
 }
