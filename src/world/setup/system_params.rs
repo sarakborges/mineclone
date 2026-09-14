@@ -19,7 +19,7 @@ use crate::world::{
 };
 
 #[derive(SystemParam)]
-pub(super) struct WorldBootstrapContent<'w> {
+pub(in crate::world) struct WorldBootstrapContent<'w> {
     pub(super) asset_server: Res<'w, AssetServer>,
     pub(super) dimensions: Res<'w, DimensionRegistry>,
     pub(super) biomes: Res<'w, BiomeRegistry>,
@@ -28,7 +28,7 @@ pub(super) struct WorldBootstrapContent<'w> {
 }
 
 #[derive(SystemParam)]
-pub(super) struct WorldBootstrapConfig<'w> {
+pub(in crate::world) struct WorldBootstrapConfig<'w> {
     pub(super) current_dimension: Res<'w, CurrentDimension>,
     pub(super) seed: Res<'w, WorldSeed>,
     pub(super) render_distance: Res<'w, RenderDistanceSettings>,
@@ -36,14 +36,14 @@ pub(super) struct WorldBootstrapConfig<'w> {
 }
 
 #[derive(SystemParam)]
-pub(super) struct WorldBootstrapPersistence<'w> {
+pub(in crate::world) struct WorldBootstrapPersistence<'w> {
     pub(super) load_mode: Res<'w, WorldLoadMode>,
     pub(super) save: ResMut<'w, InMemoryWorldSave>,
     pub(super) existing_world: Option<Res<'w, VoxelWorld>>,
 }
 
 #[derive(SystemParam)]
-pub(super) struct WorldSetupRuntime<'w> {
+pub(in crate::world) struct WorldSetupRuntime<'w> {
     pub(super) world: ResMut<'w, VoxelWorld>,
     pub(super) loading_state: ResMut<'w, WorldLoadingState>,
     pub(super) transition: ResMut<'w, ScreenTransition>,
@@ -51,7 +51,7 @@ pub(super) struct WorldSetupRuntime<'w> {
 }
 
 #[derive(SystemParam)]
-pub(super) struct WorldSetupPersistence<'w> {
+pub(in crate::world) struct WorldSetupPersistence<'w> {
     pub(super) load_mode: Res<'w, WorldLoadMode>,
     pub(super) new_world_config: Res<'w, NewWorldConfig>,
     pub(super) save: Res<'w, InMemoryWorldSave>,
