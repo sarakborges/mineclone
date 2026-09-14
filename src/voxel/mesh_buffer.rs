@@ -4,6 +4,16 @@ use bevy::{
 
 use super::quad::quad_triangle_indices;
 
+pub(crate) struct VoxelMeshQuad {
+    pub(crate) vertices: [[f32; 3]; 4],
+    pub(crate) normal: [f32; 3],
+    pub(crate) uvs: [[f32; 2]; 4],
+    pub(crate) light_uvs: [[f32; 2]; 4],
+    pub(crate) tint: [f32; 3],
+    pub(crate) colors: [[f32; 4]; 4],
+    pub(crate) flip_diagonal: bool,
+}
+
 #[derive(Default)]
 pub(crate) struct VoxelMeshBuffer {
     positions: Vec<[f32; 3]>,
@@ -16,27 +26,18 @@ pub(crate) struct VoxelMeshBuffer {
 }
 
 impl VoxelMeshBuffer {
-    pub(crate) fn push_quad(
-        &mut self,
-        vertices: [[f32; 3]; 4],
-        normal: [f32; 3],
-        uvs: [[f32; 2]; 4],
-        light_uvs: [[f32; 2]; 4],
-        tint: [f32; 3],
-        colors: [[f32; 4]; 4],
-        flip_diagonal: bool,
-    ) {
+    pub(crate) fn push_quad(&mut self, quad: VoxelMeshQuad) {
         let base = self.positions.len() as u32;
-        let encoded_tint = encode_tint_tangent(tint);
+        let encoded_tint = encode_tint_tangent(quad.tint);
 
-        self.positions.extend(vertices);
-        self.normals.extend([normal; 4]);
-        self.uvs.extend(uvs);
-        self.light_uvs.extend(light_uvs);
+        self.positions.extend(quad.vertices);
+        self.normals.extend([quad.normal; 4]);
+        self.uvs.extend(quad.uvs);
+        self.light_uvs.extend(quad.light_uvs);
         self.tangents.extend([encoded_tint; 4]);
-        self.colors.extend(colors);
+        self.colors.extend(quad.colors);
         self.indices
-            .extend(quad_triangle_indices(base, flip_diagonal));
+            .extend(quad_triangle_indices(base, quad.flip_diagonal));
     }
 
     pub(crate) fn into_mesh(self) -> Option<Mesh> {

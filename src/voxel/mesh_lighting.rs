@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 
 use super::{
-    block_face::BlockFace, light::VoxelLight, mesh_buffer::VoxelMeshBuffer, read::VoxelRead,
+    block_face::BlockFace,
+    light::VoxelLight,
+    mesh_buffer::{VoxelMeshBuffer, VoxelMeshQuad},
+    read::VoxelRead,
 };
 
 const AO_BRIGHTNESS: [f32; 4] = [1.0, 0.86, 0.72, 0.58];
@@ -85,15 +88,15 @@ pub(super) fn push_lit_quad(
     });
     let flip_diagonal = should_flip_diagonal(lighting.ambient_occlusion, lighting.block_srgb);
 
-    buffer.push_quad(
+    buffer.push_quad(VoxelMeshQuad {
         vertices,
         normal,
         uvs,
-        lighting.channels,
+        light_uvs: lighting.channels,
         tint,
         colors,
         flip_diagonal,
-    );
+    });
 }
 
 fn should_flip_diagonal(
