@@ -10,14 +10,11 @@ use crate::{
         cave_connectivity::CaveConnectivityRegion,
         generation::GenerationColumnSample,
         generation_region::GenerationRegion,
-        hydrology::{HydrologyWaterKind, HydrologyWaterSample},
+        hydrology::HydrologyWaterSample,
     },
 };
 
 use super::index::{column_index, voxel_index};
-
-const LAKE_MAXIMUM_SURFACE_HEADROOM: f32 = 3.5;
-const RIVER_MAXIMUM_SURFACE_HEADROOM: f32 = 3.25;
 
 pub(super) fn rasterize_fluid_pass(
     chunk: &mut VoxelChunk,
@@ -103,17 +100,11 @@ pub(super) fn rasterize_fluid_pass(
 }
 
 fn surface_water_is_supported(water: HydrologyWaterSample<'_>, surface_height: f32) -> bool {
-    if surface_height + 0.5 < water.bed_level {
-        return false;
-    }
-
-    let maximum_headroom = match water.kind {
-        HydrologyWaterKind::Lake => LAKE_MAXIMUM_SURFACE_HEADROOM,
-        HydrologyWaterKind::River => RIVER_MAXIMUM_SURFACE_HEADROOM,
-        HydrologyWaterKind::Ocean => return true,
-    };
-
-    surface_height <= water.water_level + maximum_headroom
+    // The original surface only decides whether there is a plausible floor.
+    // Terrain above the water level is intentionally not a rejection condition:
+    // hydrology may have carved that material away to create the lake/river and
+    // rejecting the source afterwards leaves dry holes in otherwise valid channels.
+    surface_height + 0.5 >= water.bed_level
 }
 
 fn fluid_level_for_surface(water_level: f32, world_y: i32) -> Option<u8> {
@@ -129,6 +120,7 @@ fn fluid_level_for_surface(water_level: f32, world_y: i32) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::world::hydrology::HydrologyWaterKind;
 
     fn sample(
         kind: HydrologyWaterKind,
@@ -161,12 +153,12 @@ mod tests {
     }
 
     #[test]
-    fn surface_water_does_not_cut_through_tall_terrain() {
-        assert!(!surface_water_is_supported(
+    fn carved_surface_above_water_does_not_remove_valid_sources() {
+        assert!(surface_water_is_supported(
             sample(HydrologyWaterKind::Lake, 80.0, 70.0),
             90.0,
         ));
-        assert!(!surface_water_is_supported(
+        assert!(surface_water_is_supported(
             sample(HydrologyWaterKind::River, 80.0, 74.0),
             90.0,
         ));
