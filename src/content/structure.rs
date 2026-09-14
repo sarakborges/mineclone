@@ -6,7 +6,8 @@ use serde::Deserialize;
 use crate::localization::LocalizedText;
 
 use super::{
-    block::BlockRegistry, block_orientation::BlockOrientation, registry::DefinitionMap,
+    block::BlockRegistry, block_id::intern_block_id, block_orientation::BlockOrientation,
+    registry::DefinitionMap,
 };
 
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
@@ -56,10 +57,10 @@ pub struct StructureDefinition {
     runtime: StructureRuntime,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct StructureVoxel {
     pub offset: IVec3,
-    pub block_id: String,
+    pub block_id: &'static str,
     pub orientation: BlockOrientation,
 }
 
@@ -120,7 +121,7 @@ impl StructureDefinition {
                     max_y_offset = max_y_offset.max(offset.y);
                     voxels.push(StructureVoxel {
                         offset,
-                        block_id: entry.block.clone(),
+                        block_id: intern_block_id(&entry.block),
                         orientation: entry.orientation,
                     });
                 }
