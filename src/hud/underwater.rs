@@ -1,8 +1,11 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::game_state::GameState, content::biome::BiomeRegistry, player::camera::GameplayCamera,
-    voxel::world::VoxelWorld, world::biome::CurrentBiome,
+    app::game_state::GameState,
+    content::{biome::BiomeRegistry, color::Hsi},
+    player::camera::GameplayCamera,
+    voxel::world::VoxelWorld,
+    world::biome::CurrentBiome,
 };
 
 #[derive(Component)]
@@ -64,22 +67,21 @@ fn update_underwater_tint(
         return;
     }
 
-    let mut red = 0.0;
-    let mut green = 0.0;
-    let mut blue = 0.0;
-    let mut opacity = 0.0;
-
-    for influence in &current_biome.influences {
-        let Some(biome) = biomes.get(&influence.id) else {
-            continue;
-        };
-        let biome_tint = biome.visuals.underwater_tint;
-
-        red += biome_tint.color.r * influence.weight;
-        green += biome_tint.color.g * influence.weight;
-        blue += biome_tint.color.b * influence.weight;
-        opacity += biome_tint.opacity * influence.weight;
-    }
+    let color = Hsi::blend_weighted(current_biome.influences.iter().filter_map(|influence| {
+        let biome = biomes.get(&influence.id)?;
+        Some((biome.visuals.underwater_tint.color, influence.weight))
+    }));
+    let opacity = current_biome
+        .influences
+        .iter()
+        .filter_map(|influence| {
+            biomes
+                .get(&influence.id)
+                .map(|biome| biome.visuals.underwater_tint.opacity * influence.weight)
+        })
+        .sum::<f32>()
+        .clamp(0.0, 1.0);
+    let [red, green, blue] = color.to_srgb();
 
     tint.0.0 = Color::srgba(red, green, blue, opacity);
     *tint.1 = Visibility::Visible;
