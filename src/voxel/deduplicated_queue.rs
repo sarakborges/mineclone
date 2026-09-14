@@ -54,6 +54,16 @@ where
         Some(value)
     }
 
+    pub(crate) fn pop_where(&mut self, mut predicate: impl FnMut(T) -> bool) -> Option<T> {
+        let index = self.pending.iter().position(|value| predicate(*value))?;
+        let value = self
+            .pending
+            .remove(index)
+            .expect("located queue index must remain valid");
+        self.queued.remove(&value);
+        Some(value)
+    }
+
     pub(crate) fn len(&self) -> usize {
         self.pending.len()
     }
@@ -100,5 +110,17 @@ mod tests {
         assert!(!queue.remove(3));
         assert_eq!(queue.pop(), Some(2));
         assert_eq!(queue.pop(), None);
+    }
+
+    #[test]
+    fn pop_where_preserves_deferred_entries() {
+        let mut queue = DeduplicatedQueue::default();
+        queue.enqueue(1);
+        queue.enqueue(2);
+        queue.enqueue(3);
+
+        assert_eq!(queue.pop_where(|value| value % 2 == 0), Some(2));
+        assert_eq!(queue.pop(), Some(1));
+        assert_eq!(queue.pop(), Some(3));
     }
 }
