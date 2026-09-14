@@ -26,7 +26,6 @@ impl BlockLight {
         }
     }
 
-    #[cfg(test)]
     pub(crate) const fn from_rgb_levels(rgb: [u8; 3]) -> Self {
         let red = clamp_channel(rgb[0]);
         let green = clamp_channel(rgb[1]);
@@ -168,7 +167,6 @@ const fn clamp_channel(value: u8) -> u8 {
     }
 }
 
-#[cfg(test)]
 const fn max_channel(value: [u8; 3]) -> u8 {
     let first = if value[0] > value[1] {
         value[0]
@@ -178,7 +176,6 @@ const fn max_channel(value: [u8; 3]) -> u8 {
     if first > value[2] { first } else { value[2] }
 }
 
-#[cfg(test)]
 const fn min_channel(value: [u8; 3]) -> u8 {
     let first = if value[0] < value[1] {
         value[0]
@@ -188,7 +185,6 @@ const fn min_channel(value: [u8; 3]) -> u8 {
     if first < value[2] { first } else { value[2] }
 }
 
-#[cfg(test)]
 const fn quantized_hue(red: u8, green: u8, blue: u8, maximum: u8, delta: u8) -> u8 {
     let delta = delta as i32;
     let mut sector_numerator = if maximum == red {
