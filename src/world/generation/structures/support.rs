@@ -24,7 +24,7 @@ const SURFACE_CARVER_WATER_CLEARANCE: f32 = 12.0;
 
 pub(super) fn compute_structure_origin_y(
     anchor: IVec2,
-    voxels: &[StructureVoxel<'_>],
+    voxels: &[StructureVoxel],
     context: &ChunkGenerationContext<'_>,
 ) -> Option<i32> {
     let (region, anchored_caves) = structure_support_context(anchor, context);
