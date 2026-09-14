@@ -25,6 +25,10 @@ pub(super) fn update_sky_layer_visuals(
     biome_visuals: CurrentBiomeVisuals,
     mut visuals: ResMut<SkyLayerVisualState>,
 ) {
+    if !biome_visuals.inputs_changed() {
+        return;
+    }
+
     visuals.star_density = biome_visuals
         .weighted_scalar(|biome| biome.visuals.stars.density)
         .clamp(0.0, 1.0);
