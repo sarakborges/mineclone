@@ -3,7 +3,11 @@ mod palette;
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    app::{game_state::GameState, pause_state::PauseState},
+    app::{
+        game_state::GameState,
+        pause_state::PauseState,
+        state_systems::{reset_next_state, reset_next_state_on_escape},
+    },
     content::{block::BlockRegistry, builtin_ids::BRUSH_TOOL_ID},
     player::inventory::InventoryState,
     targeting::{ToolUse, ToolUseButton, block::BlockTargetingSet},
@@ -11,9 +15,7 @@ use crate::{
     world::chunk_remesh::ChunkRemeshQueue,
 };
 
-use self::palette::{
-    close_brush_palette, close_palette_with_escape, handle_palette_selection, spawn_brush_palette,
-};
+use self::palette::{handle_palette_selection, spawn_brush_palette};
 
 pub(crate) const DYED_PROPERTY_ID: &str = "dyed";
 const DEFAULT_DYE_ID: &str = "red";
@@ -82,15 +84,21 @@ impl Plugin for BrushPlugin {
             )
             .add_systems(
                 Update,
-                (handle_palette_selection, close_palette_with_escape)
+                (
+                    handle_palette_selection,
+                    reset_next_state_on_escape::<BrushPaletteState>,
+                )
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(BrushPaletteState::Open)),
             )
             .add_systems(
                 OnEnter(PauseState::Paused),
-                close_brush_palette.run_if(in_state(GameState::Gameplay)),
+                reset_next_state::<BrushPaletteState>.run_if(in_state(GameState::Gameplay)),
             )
-            .add_systems(OnExit(GameState::Gameplay), close_brush_palette);
+            .add_systems(
+                OnExit(GameState::Gameplay),
+                reset_next_state::<BrushPaletteState>,
+            );
     }
 }
 
