@@ -15,11 +15,11 @@ use super::{
     hydrology::{HydrologyBiomeOverlay, HydrologyField, HydrologyRegion},
 };
 
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 pub(crate) struct WorldFeatureFields {
     hydrology: HydrologyField,
     cave_connectivity: CaveConnectivityField,
-    caches: FeatureCaches,
+    caches: Arc<FeatureCaches>,
 }
 
 impl WorldFeatureFields {
@@ -39,7 +39,7 @@ impl WorldFeatureFields {
                 ocean_weight,
             ),
             cave_connectivity: CaveConnectivityField::new(seed.rotate_left(23)),
-            caches: FeatureCaches::new(),
+            caches: Arc::new(FeatureCaches::new()),
         }
     }
 
@@ -258,31 +258,35 @@ mod tests {
         fields.volume_biome_region(far_region, VolumeBiomeRegion::default);
         fields.cave_region(near_region, |_| Some(CaveConnectivityRegion::default()));
         fields.cave_region(far_region, |_| Some(CaveConnectivityRegion::default()));
-        fields.structure_origin_y("asteria:test/tree", IVec2::ZERO, || Some(64));
-        fields.structure_origin_y(
-            "asteria:test/tree",
-            IVec2::new(far_chunk.x * CHUNK_SIZE as i32, 0),
-            || Some(64),
-        );
-        for coord in [near_region, far_region] {
-            fields.region_with_hydrology(coord, |hydrology| {
-                hydrology.region_from_macro_terrain(coord.xz(), |_| {
-                    super::super::hydrology::HydrologySurfaceSample {
-                        elevation: 64.0,
-                        continentalness: 0.5,
-                        biome_hydrology: crate::content::biome_hydrology::BiomeHydrology::default(),
-                    }
-                })
-            });
-        }
+        fields.region_with_hydrology(near_region, |hydrology| {
+            hydrology.region_from_macro_terrain(near_region.xz(), |_| {
+                super::super::hydrology::HydrologySurfaceSample {
+                    elevation: 64.0,
+                    continentalness: 0.5,
+                    biome_hydrology: crate::content::biome_hydrology::BiomeHydrology::default(),
+                }
+            })
+        });
+        fields.region_with_hydrology(far_region, |hydrology| {
+            hydrology.region_from_macro_terrain(far_region.xz(), |_| {
+                super::super::hydrology::HydrologySurfaceSample {
+                    elevation: 64.0,
+                    continentalness: 0.5,
+                    biome_hydrology: crate::content::biome_hydrology::BiomeHydrology::default(),
+                }
+            })
+        });
+        fields.structure_origin_y("test", IVec2::ZERO, || Some(64));
+        fields.structure_origin_y("test", IVec2::new(32 * CHUNK_SIZE as i32, 0), || Some(64));
 
-        fields.retain_for_chunks(&HashSet::from([near_chunk]));
+        let desired = HashSet::from([near_chunk]);
+        fields.retain_for_chunks(&desired);
 
         assert_eq!(fields.cached_generation_column_count(), 1);
         assert_eq!(fields.cached_volume_biome_region_count(), 1);
         assert_eq!(fields.cached_cave_region_count(), 1);
-        assert_eq!(fields.cached_structure_origin_count(), 1);
         assert_eq!(fields.cached_region_count(), 1);
         assert_eq!(fields.cached_hydrology_region_count(), 1);
+        assert_eq!(fields.cached_structure_origin_count(), 1);
     }
 }
