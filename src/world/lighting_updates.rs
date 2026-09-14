@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::voxel::{
     lighting::{PendingLightingUpdates, process_pending_lighting},
@@ -9,15 +9,20 @@ use super::{chunk_remesh::ChunkRemeshQueue, chunk_system_params::ChunkContent};
 
 const MAX_LIGHTING_VOXELS_PER_FRAME: usize = 4_096;
 
+#[derive(SystemParam)]
+struct DynamicLightingRuntime<'w> {
+    world: ResMut<'w, VoxelWorld>,
+    lighting: ResMut<'w, PendingLightingUpdates>,
+    remesh_queue: ResMut<'w, ChunkRemeshQueue>,
+}
+
 pub(super) fn process_dynamic_lighting(
     content: ChunkContent,
-    mut world: ResMut<VoxelWorld>,
-    mut lighting: ResMut<PendingLightingUpdates>,
-    mut remesh_queue: ResMut<ChunkRemeshQueue>,
+    mut runtime: DynamicLightingRuntime,
 ) {
     let changed_chunks = process_pending_lighting(
-        &mut world,
-        &mut lighting,
+        &mut runtime.world,
+        &mut runtime.lighting,
         &content.blocks,
         &content.fluids,
         &content.secondary_properties,
@@ -25,7 +30,7 @@ pub(super) fn process_dynamic_lighting(
     );
 
     for coord in changed_chunks {
-        remesh_queue.enqueue_lighting_change(coord);
+        runtime.remesh_queue.enqueue_lighting_change(coord);
     }
 }
 
