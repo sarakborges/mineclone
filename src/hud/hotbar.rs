@@ -29,6 +29,15 @@ const ITEM_ICON_SIZE: f32 = 34.0;
 struct HotbarHudRoot;
 
 #[derive(Component)]
+struct HotbarSelectedName;
+
+#[derive(Component)]
+struct HotbarSlot {
+    index: usize,
+    item: Option<&'static str>,
+}
+
+#[derive(Component)]
 struct HotbarBlockModel {
     index: usize,
     orientation: BlockOrientation,
@@ -74,7 +83,7 @@ pub struct HotbarHudPlugin;
 
 impl Plugin for HotbarHudPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Gameplay), sync_hotbar)
+        app.add_systems(OnEnter(GameState::Gameplay), spawn_hotbar)
             .add_systems(Update, sync_hotbar.run_if(in_state(GameState::Gameplay)))
             .add_systems(
                 Update,
@@ -93,52 +102,21 @@ impl Plugin for HotbarHudPlugin {
     }
 }
 
-fn sync_hotbar(
+fn spawn_hotbar(
     mut commands: Commands,
     content: HotbarHudContent,
-    roots: Query<Entity, With<HotbarHudRoot>>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
-    let has_root = !roots.is_empty();
-    if has_root && !content.hotbar.is_changed() && !content.language.is_changed() {
-        return;
-    }
-
-    for entity in &roots {
-        commands.entity(entity).despawn();
-    }
-
     let visibility = if *content.inventory_state.get() == InventoryState::Open {
         Visibility::Hidden
     } else {
         Visibility::Visible
     };
 
-    spawn_hotbar_root(
-        &mut commands,
-        &content.asset_server,
-        &content.blocks,
-        &content.tools,
-        &content.hotbar,
-        content.language.get(),
-        visibility,
-        &mut icon_materials,
-    );
-}
-
-fn spawn_hotbar_root(
-    commands: &mut Commands,
-    asset_server: &AssetServer,
-    blocks: &BlockRegistry,
-    tools: &ToolRegistry,
-    hotbar: &PlayerHotbar,
-    language: Language,
-    visibility: Visibility,
-    icon_materials: &mut Assets<BlockIconMaterial>,
-) {
-    let selected_name = hotbar
-        .item_at(hotbar.selected_slot())
-        .map(|item_id| item_name(item_id, blocks, tools, language))
+    let selected_name = content
+        .hotbar
+        .item_at(content.hotbar.selected_slot())
+        .map(|item_id| item_name(item_id, &content.blocks, &content.tools, content.language.get()))
         .unwrap_or("");
 
     commands
@@ -161,6 +139,7 @@ fn spawn_hotbar_root(
         ))
         .with_children(|root| {
             root.spawn((
+                HotbarSelectedName,
                 typography::hud(selected_name),
                 TextLayout::justify(Justify::Center),
                 Node {
@@ -178,19 +157,12 @@ fn spawn_hotbar_root(
             })
             .with_children(|row| {
                 for index in 0..HOTBAR_SLOT_COUNT {
-                    let selected = index == hotbar.selected_slot();
-                    let border_color = if selected {
-                        theme::TEXT_PRIMARY
-                    } else {
-                        Color::srgba(0.70, 0.72, 0.82, 0.28)
-                    };
-                    let background = if selected {
-                        Color::srgba(0.08, 0.07, 0.16, 0.94)
-                    } else {
-                        theme::HUD_SURFACE
-                    };
+                    let selected = index == content.hotbar.selected_slot();
+                    let (background, border) = slot_colors(selected);
+                    let item = content.hotbar.item_at(index);
 
                     row.spawn((
+                        HotbarSlot { index, item },
                         Node {
                             width: px(SLOT_SIZE),
                             height: px(SLOT_SIZE),
@@ -200,40 +172,119 @@ fn spawn_hotbar_root(
                             ..default()
                         },
                         BackgroundColor(background),
-                        BorderColor::all(border_color),
+                        BorderColor::all(border),
                         Pickable::IGNORE,
                     ))
                     .with_children(|slot| {
-                        let Some(item_id) = hotbar.item_at(index) else {
-                            return;
-                        };
-
-                        if let Some(block) = blocks.get(item_id) {
-                            spawn_block_icon(
+                        if let Some(item_id) = item {
+                            spawn_hotbar_item(
                                 slot,
                                 index,
                                 item_id,
-                                block,
-                                asset_server,
-                                icon_materials,
+                                &content.asset_server,
+                                &content.blocks,
+                                &content.tools,
+                                content.language.get(),
+                                &mut icon_materials,
                             );
-                            return;
                         }
-
-                        if let Some(tool) = tools.get(item_id) {
-                            slot.spawn((
-                                typography::caption(tool.name.text(language)),
-                                TextLayout::justify(Justify::Center),
-                                Pickable::IGNORE,
-                            ));
-                            return;
-                        }
-
-                        panic!("hotbar references missing item: {item_id}");
                     });
                 }
             });
         });
+}
+
+fn sync_hotbar(
+    mut commands: Commands,
+    content: HotbarHudContent,
+    mut selected_name: Single<&mut Text, With<HotbarSelectedName>>,
+    mut slots: Query<
+        (
+            Entity,
+            &mut HotbarSlot,
+            &mut BackgroundColor,
+            &mut BorderColor,
+            Option<&Children>,
+        ),
+    >,
+    mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
+) {
+    if !content.hotbar.is_changed() && !content.language.is_changed() {
+        return;
+    }
+
+    let language = content.language.get();
+    let next_name = content
+        .hotbar
+        .item_at(content.hotbar.selected_slot())
+        .map(|item_id| item_name(item_id, &content.blocks, &content.tools, language))
+        .unwrap_or("");
+    if selected_name.0 != next_name {
+        selected_name.0 = next_name.to_owned();
+    }
+
+    let language_changed = content.language.is_changed();
+    for (entity, mut slot, mut background, mut border, children) in &mut slots {
+        let selected = slot.index == content.hotbar.selected_slot();
+        let (next_background, next_border) = slot_colors(selected);
+        background.0 = next_background;
+        *border = BorderColor::all(next_border);
+
+        let next_item = content.hotbar.item_at(slot.index);
+        if slot.item == next_item && !language_changed {
+            continue;
+        }
+
+        if let Some(children) = children {
+            for &child in children {
+                commands.entity(child).despawn();
+            }
+        }
+        slot.item = next_item;
+
+        let Some(item_id) = next_item else {
+            continue;
+        };
+        commands.entity(entity).with_children(|slot_node| {
+            spawn_hotbar_item(
+                slot_node,
+                slot.index,
+                item_id,
+                &content.asset_server,
+                &content.blocks,
+                &content.tools,
+                language,
+                &mut icon_materials,
+            );
+        });
+    }
+}
+
+fn spawn_hotbar_item(
+    slot: &mut ChildSpawnerCommands,
+    index: usize,
+    item_id: &'static str,
+    asset_server: &AssetServer,
+    blocks: &BlockRegistry,
+    tools: &ToolRegistry,
+    language: Language,
+    icon_materials: &mut Assets<BlockIconMaterial>,
+) {
+    if let Some(block) = blocks.get(item_id) {
+        spawn_block_icon(slot, index, item_id, block, asset_server, icon_materials);
+        return;
+    }
+
+    if let Some(tool) = tools.get(item_id) {
+        slot.spawn((
+            typography::caption(tool.name.text(language)),
+            TextLayout::justify(Justify::Center),
+            Pickable::IGNORE,
+        ));
+        return;
+    }
+
+    panic!("hotbar references missing item: {item_id}");
 }
 
 fn spawn_block_icon(
@@ -277,6 +328,17 @@ fn item_name<'a>(
         return tool.name.text(language);
     }
     item_id
+}
+
+fn slot_colors(selected: bool) -> (Color, Color) {
+    if selected {
+        (
+            Color::srgba(0.08, 0.07, 0.16, 0.94),
+            theme::TEXT_PRIMARY,
+        )
+    } else {
+        (theme::HUD_SURFACE, Color::srgba(0.70, 0.72, 0.82, 0.28))
+    }
 }
 
 fn update_hotbar_item_visuals(
