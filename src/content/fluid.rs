@@ -25,7 +25,7 @@ pub struct FluidDefinition {
     pub max_spread: u16,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 pub struct FluidRegistry {
     definitions: Vec<FluidDefinition>,
     ids: HashMap<String, FluidId>,
