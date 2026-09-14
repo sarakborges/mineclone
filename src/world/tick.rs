@@ -26,10 +26,6 @@ impl WorldTickClock {
     }
 }
 
-pub(crate) fn reset_world_ticks(mut clock: ResMut<WorldTickClock>) {
-    *clock = WorldTickClock::default();
-}
-
 pub(crate) fn advance_world_ticks(
     time: Res<Time<Real>>,
     game_rules: Res<GameRules>,
