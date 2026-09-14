@@ -83,11 +83,6 @@ impl PendingFluidUpdates {
 
         ready
     }
-
-    fn clear(&mut self) {
-        self.queue.clear();
-        self.accumulated_steps.clear();
-    }
 }
 
 #[derive(SystemParam)]
@@ -96,10 +91,6 @@ pub(super) struct FluidSimulationRuntime<'w> {
     pending: ResMut<'w, PendingFluidUpdates>,
     lighting: ResMut<'w, PendingLightingUpdates>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
-}
-
-pub(super) fn clear_fluid_updates(mut pending: ResMut<PendingFluidUpdates>) {
-    pending.clear();
 }
 
 pub(super) fn process_fluid_updates(
@@ -163,10 +154,6 @@ pub(super) fn process_fluid_updates(
                 continue;
             }
 
-            // Fluid level/spread changes alter the rendered surface, but voxel
-            // light dampening depends only on whether a fluid is present and on
-            // its fluid id. Avoid flooding the lighting queue for every flowing
-            // water height update when the lighting medium itself did not change.
             if lighting_medium_changed {
                 runtime.lighting.enqueue_voxel_edit(position);
             }
