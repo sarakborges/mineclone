@@ -90,17 +90,6 @@ impl ChunkRemeshQueue {
     fn pop_immediate_lighting(&mut self) -> Option<IVec3> {
         self.immediate_lighting.pop()
     }
-
-    fn clear(&mut self) {
-        self.queue.clear();
-        self.fluid.clear();
-        self.immediate_geometry.clear();
-        self.immediate_lighting.clear();
-    }
-}
-
-pub(super) fn clear_chunk_remesh_queue(mut queue: ResMut<ChunkRemeshQueue>) {
-    queue.clear();
 }
 
 pub(super) fn process_immediate_geometry_remesh(
