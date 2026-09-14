@@ -63,12 +63,22 @@ pub fn track_current_biome(
     biome_field: Option<Res<BiomeField>>,
     feature_fields: Option<Res<WorldFeatureFields>>,
     mut current_biome: ResMut<CurrentBiome>,
+    mut last_position: Local<Option<Vec3>>,
 ) {
     let Some(biome_field) = biome_field else {
         return;
     };
 
     let position = player.translation;
+    let source_changed = biome_field.is_changed()
+        || feature_fields
+            .as_ref()
+            .is_some_and(|fields| fields.is_changed());
+    if !source_changed && last_position.is_some_and(|previous| previous == position) {
+        return;
+    }
+    *last_position = Some(position);
+
     let horizontal = Vec2::new(position.x, position.z);
     let surface = biome_field.sample_surface(horizontal);
     let volume = feature_fields.as_ref().and_then(|fields| {
