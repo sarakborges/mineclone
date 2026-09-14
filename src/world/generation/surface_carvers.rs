@@ -9,11 +9,12 @@ use crate::{
 };
 
 const MAXIMUM_TUNNEL_SLOPE: f32 = 0.06;
+const TUNNEL_CURVE_STRENGTH: f32 = 0.38;
+const TUNNEL_PATH_SAMPLES: usize = 5;
 
 #[derive(Clone, Copy, Debug)]
 struct ResolvedSurfaceTunnel {
-    start: Vec3,
-    end: Vec3,
+    points: [Vec3; TUNNEL_PATH_SAMPLES],
     radius: f32,
     weight: f32,
 }
@@ -79,7 +80,12 @@ pub(super) fn surface_carver_density_delta(
     let mut strongest = 0.0_f32;
 
     for tunnel in &column.tunnels {
-        let distance = distance_to_segment(position, tunnel.start, tunnel.end);
+        let distance = tunnel
+            .points
+            .windows(2)
+            .map(|segment| distance_to_segment(position, segment[0], segment[1]))
+            .min_by(f32::total_cmp)
+            .unwrap_or(f32::MAX);
 
         if distance < tunnel.radius {
             let strength = smoothstep(1.0 - distance / tunnel.radius) * tunnel.weight;
@@ -162,6 +168,7 @@ fn resolve_tunnel_candidates(
                 );
             let angle = hash_unit(hash.rotate_left(47)) * std::f32::consts::TAU;
             let direction = Vec2::new(angle.cos(), angle.sin());
+            let perpendicular = Vec2::new(-direction.y, direction.x);
             let half_length = sample_range(length, hash.rotate_left(7)) * 0.5;
             let tunnel_radius = sample_range(radius, hash.rotate_left(23));
             let center_y = sea_level + sample_range(elevation, hash.rotate_left(41));
@@ -169,23 +176,39 @@ fn resolve_tunnel_candidates(
                 signed_unit(hash.rotate_left(59)) * half_length * MAXIMUM_TUNNEL_SLOPE;
             let start_horizontal = anchor - direction * half_length;
             let end_horizontal = anchor + direction * half_length;
+            let curve_offset = signed_unit(hash.rotate_left(17))
+                * half_length
+                * TUNNEL_CURVE_STRENGTH;
+            let control_horizontal = anchor + perpendicular * curve_offset;
+            let control_y = center_y + signed_unit(hash.rotate_left(37)) * tunnel_radius * 0.8;
+            let start = Vec3::new(
+                start_horizontal.x,
+                center_y - vertical_half_span,
+                start_horizontal.y,
+            );
+            let control = Vec3::new(control_horizontal.x, control_y, control_horizontal.y);
+            let end = Vec3::new(
+                end_horizontal.x,
+                center_y + vertical_half_span,
+                end_horizontal.y,
+            );
+            let points = std::array::from_fn(|index| {
+                let t = index as f32 / (TUNNEL_PATH_SAMPLES - 1) as f32;
+                quadratic_bezier(start, control, end, t)
+            });
 
             tunnels.push(ResolvedSurfaceTunnel {
-                start: Vec3::new(
-                    start_horizontal.x,
-                    center_y - vertical_half_span,
-                    start_horizontal.y,
-                ),
-                end: Vec3::new(
-                    end_horizontal.x,
-                    center_y + vertical_half_span,
-                    end_horizontal.y,
-                ),
+                points,
                 radius: tunnel_radius,
                 weight,
             });
         }
     }
+}
+
+fn quadratic_bezier(start: Vec3, control: Vec3, end: Vec3, t: f32) -> Vec3 {
+    let inverse = 1.0 - t;
+    start * inverse * inverse + control * (2.0 * inverse * t) + end * t * t
 }
 
 fn distance_to_segment(point: Vec3, start: Vec3, end: Vec3) -> f32 {
@@ -257,5 +280,16 @@ mod tests {
 
         assert!(!carver_intersects_vertical_range(carver, 64.0, 0.0, 31.0));
         assert!(carver_intersects_vertical_range(carver, 64.0, 64.0, 111.0));
+    }
+
+    #[test]
+    fn quadratic_path_passes_through_both_endpoints() {
+        let start = Vec3::new(-10.0, 2.0, 0.0);
+        let control = Vec3::new(0.0, 5.0, 8.0);
+        let end = Vec3::new(10.0, 3.0, 0.0);
+
+        assert_eq!(quadratic_bezier(start, control, end, 0.0), start);
+        assert_eq!(quadratic_bezier(start, control, end, 1.0), end);
+        assert_ne!(quadratic_bezier(start, control, end, 0.5).z, 0.0);
     }
 }
