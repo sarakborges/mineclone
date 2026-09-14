@@ -51,6 +51,14 @@ impl ChunkContent<'_> {
             || self.biome_field.is_changed()
     }
 
+    pub(crate) fn mesh_inputs_changed(&self) -> bool {
+        self.voxel.blocks.is_changed()
+            || self.voxel.fluids.is_changed()
+            || self.voxel.secondary_properties.is_changed()
+            || self.biomes.is_changed()
+            || self.biome_field.is_changed()
+    }
+
     pub(crate) fn render_context<'a>(
         &'a self,
         world: &'a crate::voxel::world::VoxelWorld,
