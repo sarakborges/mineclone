@@ -27,11 +27,10 @@ use super::state::{
     CATEGORY_GAP, CATEGORY_ICON_SIZE, CATEGORY_ROW_HEIGHT, CATEGORY_WIDTH,
     CREATIVE_COLUMNS, CREATIVE_GRID_HEIGHT, CreativeCatalogScrollArea,
     CreativeCatalogScrollbar, CreativeCategoryButton, CreativeCategoryScrollArea,
-    CreativeCategoryScrollbar, CreativeInventoryPanel, CreativeInventorySlot,
-    CreativeInventoryView, CreativeScrollState, CreativeSearchBar, InventoryCursorIcon,
-    InventoryHudRoot, InventorySlot, InventoryTrashButton, ITEM_ICON_SIZE, PANEL_GAP,
-    PANEL_PADDING, SCROLLBAR_TOTAL_WIDTH, SEARCH_GAP, SEARCH_HEIGHT, SECTION_GAP, SLOT_GAP,
-    SLOT_SIZE, TRASH_GAP,
+    CreativeCategoryScrollbar, CreativeInventorySlot, CreativeInventoryView, CreativeScrollState,
+    CreativeSearchBar, CreativeSearchText, InventoryCursorIcon, InventoryHudRoot, InventorySlot,
+    InventoryTrashButton, ITEM_ICON_SIZE, PANEL_GAP, PANEL_PADDING, SCROLLBAR_TOTAL_WIDTH,
+    SEARCH_GAP, SEARCH_HEIGHT, SECTION_GAP, SLOT_GAP, SLOT_SIZE, TRASH_GAP,
 };
 
 #[derive(Clone, Copy)]
@@ -191,20 +190,11 @@ pub(super) fn spawn_cursor_icon(
     panic!("inventory cursor references missing item: {item_id}");
 }
 
-pub(super) fn spawn_creative_panel(
+fn spawn_creative_panel(
     root: &mut ChildSpawnerCommands,
     state: &InventoryLayoutState<'_>,
     items: &mut InventoryItemView<'_>,
 ) {
-    let catalog = filtered_creative_catalog(
-        items.blocks,
-        items.tools,
-        state.categories,
-        state.creative_view.search_query(),
-        state.creative_view.selected_category(),
-        items.language,
-    );
-
     root.spawn(surface::hud_container(Node {
         flex_direction: FlexDirection::Column,
         align_items: AlignItems::Center,
@@ -214,7 +204,7 @@ pub(super) fn spawn_creative_panel(
         border_radius: BorderRadius::all(px(8)),
         ..default()
     }))
-    .insert((CreativeInventoryPanel, Pickable::IGNORE))
+    .insert(Pickable::IGNORE)
     .with_children(|panel| {
         spawn_search_bar(
             panel,
@@ -269,9 +259,10 @@ pub(super) fn spawn_creative_panel(
                                 Pickable::IGNORE,
                             ))
                             .with_children(|scroll| {
-                                spawn_creative_grid(
+                                spawn_creative_catalog_rows(
                                     scroll,
-                                    &catalog,
+                                    state.categories,
+                                    state.creative_view,
                                     state.cursor.item(),
                                     items,
                                 );
@@ -320,7 +311,11 @@ fn spawn_search_bar(
             BorderColor::all(search_border),
         ))
         .with_children(|search| {
-            search.spawn((typography::hud(search_text), Pickable::IGNORE));
+            search.spawn((
+                CreativeSearchText,
+                typography::hud(search_text),
+                Pickable::IGNORE,
+            ));
         });
 }
 
@@ -459,6 +454,24 @@ fn spawn_category_button(
                 Pickable::IGNORE,
             ));
         });
+}
+
+pub(super) fn spawn_creative_catalog_rows(
+    parent: &mut ChildSpawnerCommands,
+    categories: &InventoryCategoryRegistry,
+    creative_view: &CreativeInventoryView,
+    selected_item: Option<&'static str>,
+    items: &mut InventoryItemView<'_>,
+) {
+    let catalog = filtered_creative_catalog(
+        items.blocks,
+        items.tools,
+        categories,
+        creative_view.search_query(),
+        creative_view.selected_category(),
+        items.language,
+    );
+    spawn_creative_grid(parent, &catalog, selected_item, items);
 }
 
 fn spawn_creative_grid(
