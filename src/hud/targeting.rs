@@ -166,9 +166,9 @@ fn update_target_hud(
         icon,
         mut icon_materials,
     } = view;
-    let root_visibility = root_visibility.into_inner();
-    let target_text = target_text.into_inner();
-    let (model, material_handle) = icon.into_inner();
+    let mut root_visibility = root_visibility.into_inner();
+    let mut target_text = target_text.into_inner();
+    let (mut model, material_handle) = icon.into_inner();
 
     let Some(hit) = state.targeted.0 else {
         *cached = None;

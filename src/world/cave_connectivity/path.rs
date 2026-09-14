@@ -144,8 +144,8 @@ mod tests {
 
     #[test]
     fn connector_width_does_not_collapse_between_anchors() {
-        let start = 7.0;
-        let end = 4.0;
+        let start: f32 = 7.0;
+        let end: f32 = 4.0;
         let minimum = start.max(end) * 0.90;
 
         for step in 0..=20 {
