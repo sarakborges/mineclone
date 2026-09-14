@@ -8,15 +8,21 @@ use crate::{
     },
     world::{
         cave_connectivity::CaveConnectivityRegion,
+        generation::GenerationColumnSample,
         generation_region::GenerationRegion,
+        hydrology::{HydrologyWaterKind, HydrologyWaterSample},
     },
 };
 
-use super::index::voxel_index;
+use super::index::{column_index, voxel_index};
+
+const LAKE_MAXIMUM_SURFACE_HEADROOM: f32 = 3.5;
+const RIVER_MAXIMUM_SURFACE_HEADROOM: f32 = 3.25;
 
 pub(super) fn rasterize_fluid_pass(
     chunk: &mut VoxelChunk,
     chunk_origin: IVec3,
+    columns: &[GenerationColumnSample],
     density: &[f32],
     fluids: &FluidRegistry,
     region: &GenerationRegion,
@@ -36,7 +42,11 @@ pub(super) fn rasterize_fluid_pass(
             let world_x = chunk_origin.x + local_x as i32;
             let world_z = chunk_origin.z + local_z as i32;
             let horizontal = Vec2::new(world_x as f32 + 0.5, world_z as f32 + 0.5);
-            let surface_water = region.hydrology.water_at(horizontal);
+            let surface_height = columns[column_index(local_x, local_z)].surface_height as f32;
+            let surface_water = region
+                .hydrology
+                .water_at(horizontal)
+                .filter(|water| surface_water_is_supported(*water, surface_height));
             let surface_fluid_id = surface_water.as_ref().map(|water| {
                 fluids.id_of(water.fluid_id).unwrap_or_else(|| {
                     panic!("hydrology references missing fluid: {}", water.fluid_id)
@@ -92,6 +102,20 @@ pub(super) fn rasterize_fluid_pass(
     }
 }
 
+fn surface_water_is_supported(water: HydrologyWaterSample<'_>, surface_height: f32) -> bool {
+    if surface_height + 0.5 < water.bed_level {
+        return false;
+    }
+
+    let maximum_headroom = match water.kind {
+        HydrologyWaterKind::Lake => LAKE_MAXIMUM_SURFACE_HEADROOM,
+        HydrologyWaterKind::River => RIVER_MAXIMUM_SURFACE_HEADROOM,
+        HydrologyWaterKind::Ocean => return true,
+    };
+
+    surface_height <= water.water_level + maximum_headroom
+}
+
 fn fluid_level_for_surface(water_level: f32, world_y: i32) -> Option<u8> {
     let coverage = water_level - world_y as f32;
     if coverage <= 0.0 {
@@ -106,11 +130,45 @@ fn fluid_level_for_surface(water_level: f32, world_y: i32) -> Option<u8> {
 mod tests {
     use super::*;
 
+    fn sample(
+        kind: HydrologyWaterKind,
+        water_level: f32,
+        bed_level: f32,
+    ) -> HydrologyWaterSample<'static> {
+        HydrologyWaterSample {
+            fluid_id: "asteria:test/water",
+            water_level,
+            bed_level,
+            strength: 1.0,
+            kind,
+        }
+    }
+
     #[test]
     fn fractional_water_surface_produces_partial_fluid_level() {
         assert_eq!(fluid_level_for_surface(10.25, 10), Some(2));
         assert_eq!(fluid_level_for_surface(10.75, 10), Some(6));
         assert_eq!(fluid_level_for_surface(10.0, 9), Some(MAX_FLUID_LEVEL));
         assert_eq!(fluid_level_for_surface(10.0, 10), None);
+    }
+
+    #[test]
+    fn surface_water_rejects_columns_without_a_supporting_floor() {
+        assert!(!surface_water_is_supported(
+            sample(HydrologyWaterKind::Lake, 80.0, 72.0),
+            60.0,
+        ));
+    }
+
+    #[test]
+    fn surface_water_does_not_cut_through_tall_terrain() {
+        assert!(!surface_water_is_supported(
+            sample(HydrologyWaterKind::Lake, 80.0, 70.0),
+            90.0,
+        ));
+        assert!(!surface_water_is_supported(
+            sample(HydrologyWaterKind::River, 80.0, 74.0),
+            90.0,
+        ));
     }
 }
