@@ -13,7 +13,7 @@ pub(super) fn attach_fog(
 ) {
     for entity in &cameras {
         commands.entity(entity).insert(DistanceFog {
-            color: visuals.fog_color,
+            color: visuals.fog_color.to_color(),
             falloff: fog_falloff(render_distance.chunks()),
             ..default()
         });
