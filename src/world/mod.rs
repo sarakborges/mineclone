@@ -35,19 +35,22 @@ pub(crate) mod world_feature_fields;
 
 use bevy::prelude::*;
 
-use crate::{app::game_state::GameState, voxel::lighting::PendingLightingUpdates};
+use crate::{
+    app::{game_state::GameState, resource_systems::reset_resource},
+    voxel::lighting::PendingLightingUpdates,
+};
 use biome::{CurrentBiome, track_current_biome};
 use chunk_remesh::{
-    ChunkRemeshQueue, clear_chunk_remesh_queue, process_chunk_remesh_queue,
-    process_immediate_geometry_remesh, process_immediate_lighting_remesh,
+    ChunkRemeshQueue, process_chunk_remesh_queue, process_immediate_geometry_remesh,
+    process_immediate_lighting_remesh,
 };
 use chunk_rendering::{ChunkRenderPool, clear_chunk_render_pool};
 use chunk_unloading::unload_chunk_meshes;
 use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
-use fluid_updates::{PendingFluidUpdates, clear_fluid_updates, process_fluid_updates};
+use fluid_updates::{PendingFluidUpdates, process_fluid_updates};
 use game_rules::GameRules;
-use lighting_updates::{clear_dynamic_lighting, process_dynamic_lighting};
+use lighting_updates::process_dynamic_lighting;
 pub(crate) use new_world::NewWorldConfig;
 use render_diagnostics::log_render_asset_pressure;
 use render_distance::RenderDistanceSettings;
@@ -55,8 +58,8 @@ pub(crate) use save::{InMemoryWorldSave, WorldLoadMode};
 pub(crate) use seed::WorldSeed;
 pub(crate) use setup::WorldLoadingState;
 use setup::{begin_world_loading, setup_world};
-use streaming::{ChunkStreamingState, reset_chunk_streaming, stream_chunks};
-use tick::{WorldTickClock, WorldTickSet, advance_world_ticks, reset_world_ticks};
+use streaming::{ChunkStreamingState, stream_chunks};
+use tick::{WorldTickClock, WorldTickSet, advance_world_ticks};
 
 pub(crate) struct WorldPlugin;
 
@@ -80,15 +83,18 @@ impl Plugin for WorldPlugin {
             .add_systems(OnEnter(GameState::Loading), begin_world_loading)
             .add_systems(
                 OnEnter(GameState::Gameplay),
-                (reset_chunk_streaming, reset_world_ticks),
+                (
+                    reset_resource::<ChunkStreamingState>,
+                    reset_resource::<WorldTickClock>,
+                ),
             )
             .add_systems(
                 OnExit(GameState::Gameplay),
                 (
                     clear_chunk_render_pool,
-                    clear_chunk_remesh_queue,
-                    clear_dynamic_lighting,
-                    clear_fluid_updates,
+                    reset_resource::<ChunkRemeshQueue>,
+                    reset_resource::<PendingLightingUpdates>,
+                    reset_resource::<PendingFluidUpdates>,
                 ),
             )
             .add_systems(Update, setup_world.run_if(in_state(GameState::Loading)))
