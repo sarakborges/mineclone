@@ -4,17 +4,17 @@
   "distributions": [
     {
       "type": "mountain_belt",
-      "scale": 0.0015,
-      "threshold": 0.93,
-      "width": 0.18,
+      "scale": 0.0017,
+      "threshold": 0.86,
+      "width": 0.22,
       "warpScale": 0.0025,
       "warpStrength": 85.0
     },
     {
       "type": "mountain_peak",
-      "spacing": 1100.0,
-      "chance": 0.32,
-      "radius": { "min": 110.0, "max": 210.0 },
+      "spacing": 760.0,
+      "chance": 0.48,
+      "radius": { "min": 120.0, "max": 230.0 },
       "warpScale": 0.004,
       "warpStrength": 42.0
     }
