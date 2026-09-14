@@ -9,6 +9,7 @@ use crate::{
         surface, theme,
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
+        visibility::set_visibility,
     },
     world::{InMemoryWorldSave, game_rules::GameRules},
 };
@@ -18,10 +19,13 @@ pub struct PauseMenuPlugin;
 impl Plugin for PauseMenuPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(PauseState::Paused), spawn_pause_menu)
-            .add_systems(OnEnter(SettingsState::Open), hide_pause_menu)
+            .add_systems(
+                OnEnter(SettingsState::Open),
+                set_visibility::<PauseMenuRoot, false>,
+            )
             .add_systems(
                 OnEnter(SettingsState::Closed),
-                show_pause_menu.run_if(in_state(PauseState::Paused)),
+                set_visibility::<PauseMenuRoot, true>.run_if(in_state(PauseState::Paused)),
             )
             .add_systems(
                 Update,
@@ -93,18 +97,6 @@ fn spawn_pause_menu(
                 ));
             });
         });
-}
-
-fn hide_pause_menu(mut roots: Query<&mut Visibility, With<PauseMenuRoot>>) {
-    for mut visibility in &mut roots {
-        *visibility = Visibility::Hidden;
-    }
-}
-
-fn show_pause_menu(mut roots: Query<&mut Visibility, With<PauseMenuRoot>>) {
-    for mut visibility in &mut roots {
-        *visibility = Visibility::Visible;
-    }
 }
 
 fn handle_pause_menu_buttons(
