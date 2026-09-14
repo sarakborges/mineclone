@@ -1,18 +1,13 @@
 use bevy::{
-    ecs::system::SystemParam,
     light::{CascadeShadowConfig, CascadeShadowConfigBuilder, DirectionalLightShadowMap},
     prelude::*,
 };
 
 use crate::{
     app::game_state::GameState,
-    content::{
-        day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry, sky::SkyRegistry,
-    },
     voxel::chunk::CHUNK_SIZE,
     world::{
-        day_night::DayNightClock, dimension::CurrentDimension,
-        render_distance::RenderDistanceSettings,
+        current_context::SkyDayNightContext, render_distance::RenderDistanceSettings,
     },
 };
 
@@ -56,15 +51,6 @@ impl Plugin for DirectionalShadowsPlugin {
 #[derive(Component)]
 struct SunShadowLight;
 
-#[derive(SystemParam)]
-struct SunShadowScene<'w> {
-    current_dimension: Res<'w, CurrentDimension>,
-    dimensions: Res<'w, DimensionRegistry>,
-    skies: Res<'w, SkyRegistry>,
-    cycles: Res<'w, DayNightCycleRegistry>,
-    clock: Res<'w, DayNightClock>,
-}
-
 fn spawn_sun_shadow_light(
     mut commands: Commands,
     render_distance: Res<RenderDistanceSettings>,
@@ -86,7 +72,7 @@ fn spawn_sun_shadow_light(
 }
 
 fn update_sun_shadow_light(
-    scene: SunShadowScene,
+    scene: SkyDayNightContext,
     render_distance: Res<RenderDistanceSettings>,
     mut lights: SunShadowLights,
 ) {
@@ -97,24 +83,19 @@ fn update_sun_shadow_light(
         }
     }
 
-    let Some(dimension) = scene.dimensions.get(&scene.current_dimension.id) else {
+    let (Some(sky), Some(cycle), Some(sample)) = (scene.sky(), scene.cycle(), scene.sample()) else {
         hide_lights(&mut lights);
         return;
     };
-    let Some(sky) = scene.skies.get(&dimension.sky) else {
-        hide_lights(&mut lights);
-        return;
-    };
-    let Some(cycle) = scene.cycles.get(&dimension.day_night_cycle) else {
-        hide_lights(&mut lights);
-        return;
-    };
-    let Some(sun_direction) = celestial_direction(&sky.sun, cycle, scene.clock.normalized_time) else {
+    let Some(sun_direction) = celestial_direction(
+        &sky.sun,
+        cycle,
+        scene.clock().normalized_time,
+    ) else {
         hide_lights(&mut lights);
         return;
     };
 
-    let sample = cycle.sample(scene.clock.normalized_time);
     let rotation = shadow_light_rotation(sun_direction);
 
     for (mut light, _, mut transform, mut visibility) in &mut lights {
