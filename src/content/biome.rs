@@ -117,6 +117,8 @@ pub struct BiomeDefinition {
 #[derive(Resource, Default)]
 pub struct BiomeRegistry {
     definitions: DefinitionMap<BiomeDefinition>,
+    has_volume_density_modifiers: bool,
+    has_volume_solid_density_modifiers: bool,
 }
 
 impl BiomeRegistry {
@@ -126,6 +128,7 @@ impl BiomeRegistry {
             .validate(&format!("biome {} name", definition.id));
         validate_biome_definition(&definition);
         self.definitions.insert(definition.id.clone(), definition);
+        self.rebuild_capabilities();
     }
 
     pub fn get(&self, id: &str) -> Option<&BiomeDefinition> {
@@ -137,19 +140,24 @@ impl BiomeRegistry {
     }
 
     pub fn has_volume_density_modifiers(&self) -> bool {
-        self.definitions.values().any(|definition| {
-            definition.kind == BiomeKind::Volume && definition.density_modifier.is_some()
-        })
+        self.has_volume_density_modifiers
     }
 
     pub fn has_volume_solid_density_modifiers(&self) -> bool {
-        self.definitions.values().any(|definition| {
+        self.has_volume_solid_density_modifiers
+    }
+
+    fn rebuild_capabilities(&mut self) {
+        self.has_volume_density_modifiers = self.definitions.values().any(|definition| {
+            definition.kind == BiomeKind::Volume && definition.density_modifier.is_some()
+        });
+        self.has_volume_solid_density_modifiers = self.definitions.values().any(|definition| {
             definition.kind == BiomeKind::Volume
                 && matches!(
                     definition.density_modifier,
                     Some(BiomeDensityModifier::Solid { .. })
                 )
-        })
+        });
     }
 }
 
