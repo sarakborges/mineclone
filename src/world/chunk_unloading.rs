@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
@@ -19,13 +19,18 @@ use super::{
 const MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK: usize = 8;
 const CHUNK_UNLOAD_BUDGET: Duration = Duration::from_millis(4);
 
+#[derive(SystemParam)]
+struct ChunkUnloadRuntime<'w> {
+    world: ResMut<'w, VoxelWorld>,
+    lighting: ResMut<'w, PendingLightingUpdates>,
+    remesh_queue: ResMut<'w, ChunkRemeshQueue>,
+}
+
 pub(super) fn unload_chunk_meshes(
     player: Single<&Transform, With<GameplayCamera>>,
     streaming: Res<ChunkStreamingState>,
     mut renderer: ChunkRenderer,
-    mut world: ResMut<VoxelWorld>,
-    mut lighting: ResMut<PendingLightingUpdates>,
-    mut remesh_queue: ResMut<ChunkRemeshQueue>,
+    mut runtime: ChunkUnloadRuntime,
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = chunk_coord_from_position(feet_position);
@@ -65,7 +70,7 @@ pub(super) fn unload_chunk_meshes(
             });
         }
 
-        world.archive_chunk(coord);
+        runtime.world.archive_chunk(coord);
         unloaded.push(coord);
     }
 
@@ -73,11 +78,11 @@ pub(super) fn unload_chunk_meshes(
         return;
     }
 
-    lighting.enqueue_chunk_unloads(&unloaded);
+    runtime.lighting.enqueue_chunk_unloads(&unloaded);
 
     for coord in unloaded {
         for offset in CARDINAL_NEIGHBORS {
-            remesh_queue.enqueue_priority(coord + offset);
+            runtime.remesh_queue.enqueue_priority(coord + offset);
         }
     }
 }
