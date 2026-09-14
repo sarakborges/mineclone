@@ -2,7 +2,8 @@ use bevy::prelude::*;
 
 use crate::{
     app::{
-        game_state::GameState, pause_state::PauseState, state_systems::reset_next_state,
+        game_state::GameState, pause_state::PauseState, resource_systems::reset_resource,
+        state_systems::reset_next_state,
     },
     tools::BrushPaletteState,
     ui::text_input::select_all_pressed,
@@ -36,10 +37,6 @@ impl InventoryCursor {
     }
 
     pub(crate) fn discard(&mut self) {
-        self.item = None;
-    }
-
-    fn clear(&mut self) {
         self.item = None;
     }
 }
@@ -114,13 +111,6 @@ impl CreativeInventoryView {
             self.selected_category = category;
         }
     }
-
-    fn reset(&mut self) {
-        self.search_query.clear();
-        self.search_focused = false;
-        self.replace_search_on_next_input = false;
-        self.selected_category = None;
-    }
 }
 
 pub(crate) struct PlayerInventoryPlugin;
@@ -139,7 +129,10 @@ impl Plugin for PlayerInventoryPlugin {
             )
             .add_systems(
                 OnExit(InventoryState::Open),
-                (discard_cursor_item, reset_creative_inventory_view),
+                (
+                    reset_resource::<InventoryCursor>,
+                    reset_resource::<CreativeInventoryView>,
+                ),
             )
             .add_systems(
                 OnEnter(PauseState::Paused),
@@ -182,12 +175,4 @@ fn handle_search_select_all(
     if *inventory_state.get() == InventoryState::Open && select_all_pressed(&keys) {
         creative_view.select_all_search();
     }
-}
-
-fn discard_cursor_item(mut cursor: ResMut<InventoryCursor>) {
-    cursor.clear();
-}
-
-fn reset_creative_inventory_view(mut creative_view: ResMut<CreativeInventoryView>) {
-    creative_view.reset();
 }
