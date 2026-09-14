@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::world::{
     generation_region::GenerationRegion,
-    hydrology::{HydrologyRiverSurfaceSample, HydrologyWaterKind, HydrologyWaterSample},
+    hydrology::{HydrologyRiverSurfaceSample, HydrologyWaterSample},
     math::{lerp, smoothstep},
     noise::value_noise_2d,
 };
@@ -20,7 +20,6 @@ const WATER_VOLUME_AIR_DENSITY: f32 = -0.001;
 struct WaterLevels {
     water_level: f32,
     bed_level: f32,
-    kind: HydrologyWaterKind,
 }
 
 impl From<HydrologyWaterSample<'_>> for WaterLevels {
@@ -28,7 +27,6 @@ impl From<HydrologyWaterSample<'_>> for WaterLevels {
         Self {
             water_level: sample.water_level,
             bed_level: sample.bed_level,
-            kind: sample.kind,
         }
     }
 }
