@@ -5,9 +5,7 @@ mod spawn;
 
 use crate::{
     content::{
-        biome::BiomeRegistry,
-        block::BlockRegistry,
-        fluid::FluidRegistry,
+        biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry,
         secondary_property::SecondaryPropertyRegistry,
     },
     voxel::world::VoxelWorld,
@@ -18,7 +16,8 @@ use super::biome_field::BiomeField;
 pub(crate) use materials::{FluidMaterials, TerrainMaterials};
 pub(crate) use pool::{ChunkRenderPool, clear_chunk_render_pool};
 pub(crate) use refresh::{
-    refresh_chunk_fluid_mesh, refresh_chunk_lighting_mesh, refresh_chunk_mesh,
+    refresh_chunk_fluid_mesh, refresh_chunk_geometry_mesh, refresh_chunk_lighting_mesh,
+    refresh_chunk_mesh,
 };
 pub(crate) use spawn::spawn_chunk_mesh;
 
