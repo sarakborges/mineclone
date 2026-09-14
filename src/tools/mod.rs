@@ -3,7 +3,7 @@ mod brush;
 use bevy::prelude::*;
 use brush::BrushPlugin;
 
-pub(crate) use brush::{BrushMode, BrushPaletteState, DYED_PROPERTY_ID};
+pub(crate) use brush::{BrushMode, BrushPaletteState};
 
 pub(crate) struct ToolsPlugin;
 
