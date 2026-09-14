@@ -5,8 +5,8 @@ use super::{
     placement_orientation::PlacementOrientationPlugin, placement_preview::PlacementPreviewPlugin,
 };
 use crate::{
-    app::game_state::GameState,
-    player::camera::GameplayCamera,
+    app::{game_state::GameState, pause_state::PauseState},
+    player::{camera::GameplayCamera, inventory::InventoryState},
     voxel::{
         raycast::{VoxelHit, raycast_voxels},
         world::VoxelWorld,
@@ -59,8 +59,15 @@ pub struct TargetedBlock(pub Option<VoxelHit>);
 fn update_targeted_block(
     camera: Single<&GlobalTransform, With<GameplayCamera>>,
     world: Res<VoxelWorld>,
+    pause: Res<State<PauseState>>,
+    inventory: Res<State<InventoryState>>,
     mut targeted: ResMut<TargetedBlock>,
 ) {
+    if *pause.get() != PauseState::Running || *inventory.get() != InventoryState::Closed {
+        targeted.0 = None;
+        return;
+    }
+
     targeted.0 = raycast_voxels(
         &world,
         camera.translation(),
