@@ -63,10 +63,6 @@ pub(crate) struct SkyContext<'w> {
 }
 
 impl SkyContext<'_> {
-    pub(crate) fn dimension(&self) -> Option<&DimensionDefinition> {
-        self.dimension.definition()
-    }
-
     pub(crate) fn sky(&self) -> Option<&SkyDefinition> {
         let dimension = self.dimension.definition()?;
         self.skies.get(&dimension.sky)
