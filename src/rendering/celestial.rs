@@ -1,4 +1,5 @@
 use bevy::{
+    ecs::system::SystemParam,
     light::{NotShadowCaster, NotShadowReceiver},
     prelude::*,
 };
@@ -31,19 +32,50 @@ impl Plugin for CelestialPlugin {
 #[derive(Component)]
 struct CelestialBody(CelestialBodyDefinition);
 
+#[derive(SystemParam)]
+struct CelestialDefinitionScene<'w> {
+    current_dimension: Res<'w, CurrentDimension>,
+    dimensions: Res<'w, DimensionRegistry>,
+    skies: Res<'w, SkyRegistry>,
+}
+
+#[derive(SystemParam)]
+struct CelestialSpawnAssets<'w> {
+    meshes: ResMut<'w, Assets<Mesh>>,
+    materials: ResMut<'w, Assets<StandardMaterial>>,
+    asset_server: Res<'w, AssetServer>,
+}
+
+#[derive(SystemParam)]
+struct CelestialRuntimeScene<'w, 's> {
+    clock: Res<'w, DayNightClock>,
+    current_dimension: Res<'w, CurrentDimension>,
+    dimensions: Res<'w, DimensionRegistry>,
+    cycles: Res<'w, DayNightCycleRegistry>,
+    camera: Single<'w, 's, &'static GlobalTransform, With<GameplayCamera>>,
+}
+
 fn spawn_celestial_bodies(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
-    current_dimension: Res<CurrentDimension>,
-    dimensions: Res<DimensionRegistry>,
-    skies: Res<SkyRegistry>,
+    scene: CelestialDefinitionScene,
+    assets: CelestialSpawnAssets,
 ) {
-    let dimension = dimensions
-        .get(&current_dimension.id)
-        .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
-    let sky = skies
+    let CelestialSpawnAssets {
+        mut meshes,
+        mut materials,
+        asset_server,
+    } = assets;
+    let dimension = scene
+        .dimensions
+        .get(&scene.current_dimension.id)
+        .unwrap_or_else(|| {
+            panic!(
+                "missing dimension definition: {}",
+                scene.current_dimension.id
+            )
+        });
+    let sky = scene
+        .skies
         .get(&dimension.sky)
         .unwrap_or_else(|| panic!("missing sky definition: {}", dimension.sky));
 
@@ -98,23 +130,19 @@ fn spawn_body(
 }
 
 fn update_celestial_bodies(
-    clock: Res<DayNightClock>,
-    current_dimension: Res<CurrentDimension>,
-    dimensions: Res<DimensionRegistry>,
-    cycles: Res<DayNightCycleRegistry>,
-    camera: Single<&GlobalTransform, With<GameplayCamera>>,
+    scene: CelestialRuntimeScene,
     mut bodies: Query<(&CelestialBody, &mut Transform, &mut Visibility)>,
 ) {
-    let Some(dimension) = dimensions.get(&current_dimension.id) else {
+    let Some(dimension) = scene.dimensions.get(&scene.current_dimension.id) else {
         return;
     };
-    let Some(cycle) = cycles.get(&dimension.day_night_cycle) else {
+    let Some(cycle) = scene.cycles.get(&dimension.day_night_cycle) else {
         return;
     };
-    let camera_position = camera.translation();
+    let camera_position = scene.camera.translation();
 
     for (body, mut transform, mut visibility) in &mut bodies {
-        let Some(offset) = celestial_offset(&body.0, cycle, clock.normalized_time) else {
+        let Some(offset) = celestial_offset(&body.0, cycle, scene.clock.normalized_time) else {
             *visibility = Visibility::Hidden;
             continue;
         };
