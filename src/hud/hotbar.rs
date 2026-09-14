@@ -3,7 +3,6 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     app::game_state::GameState,
     content::{
-        biome::BiomeRegistry,
         block::{BlockDefinition, BlockRegistry},
         block_orientation::BlockOrientation,
         tool::ToolRegistry,
@@ -15,10 +14,12 @@ use crate::{
         hotbar::{HOTBAR_SLOT_COUNT, PlayerHotbar},
         inventory::InventoryState,
     },
-    rendering::{block_model::BlockModel, block_tint::block_tint_at},
+    rendering::{
+        block_model::BlockModel,
+        block_visual_content::BlockVisualContent,
+    },
     targeting::{PlacementOrientation, block::BlockTargetingSet},
     ui::{theme, typography, visibility::set_visibility},
-    world::biome_field::BiomeField,
 };
 
 const SLOT_SIZE: f32 = 44.0;
@@ -53,14 +54,6 @@ struct HotbarVisualState<'w, 's> {
     player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
     placement_orientation: Res<'w, PlacementOrientation>,
     hotbar: Res<'w, PlayerHotbar>,
-}
-
-#[derive(SystemParam)]
-struct HotbarVisualContent<'w> {
-    asset_server: Res<'w, AssetServer>,
-    blocks: Res<'w, BlockRegistry>,
-    biomes: Res<'w, BiomeRegistry>,
-    biome_field: Res<'w, BiomeField>,
 }
 
 #[derive(SystemParam)]
@@ -288,7 +281,7 @@ fn item_name<'a>(
 
 fn update_hotbar_item_visuals(
     state: HotbarVisualState,
-    content: HotbarVisualContent,
+    content: BlockVisualContent,
     mut cache: Local<HotbarVisualCache>,
     view: HotbarVisualView,
 ) {
@@ -303,9 +296,7 @@ fn update_hotbar_item_visuals(
     let global_refresh = cache.tint_cell != Some(tint_cell)
         || state.hotbar.is_changed()
         || state.placement_orientation.is_changed()
-        || content.blocks.is_changed()
-        || content.biomes.is_changed()
-        || content.biome_field.is_changed();
+        || content.inputs_changed();
     cache.tint_cell = Some(tint_cell);
     let position = tint_cell.as_vec2() + Vec2::splat(0.5);
 
@@ -322,12 +313,7 @@ fn update_hotbar_item_visuals(
             .get(block_id)
             .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
         let orientation = state.placement_orientation.for_block(icon.index, block);
-        let tint = block_tint_at(
-            block.tint,
-            position,
-            &content.biome_field,
-            &content.biomes,
-        );
+        let tint = content.tint_at(block_id, position).unwrap_or(Color::WHITE);
         let Some(mut material) = materials.get_mut(&material_handle.0) else {
             continue;
         };
