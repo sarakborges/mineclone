@@ -26,12 +26,6 @@ pub(crate) const PLAYER_HALF_WIDTH: f32 = 0.3;
 
 const SPAWN_SEARCH_RADIUS_BLOCKS: i32 = 64;
 
-pub(crate) struct PlayerPlugin;
-
-impl Plugin for PlayerPlugin {
-    fn build(&self, _app: &mut App) {}
-}
-
 pub(crate) fn spawn_player_entity(
     commands: &mut Commands,
     translation: Vec3,
@@ -70,10 +64,7 @@ pub(crate) fn safe_spawn_position(world: &VoxelWorld, preferred_column: IVec2) -
     for radius in 0..=SPAWN_SEARCH_RADIUS_BLOCKS {
         for z_offset in -radius..=radius {
             for x_offset in -radius..=radius {
-                if radius > 0
-                    && x_offset.abs() != radius
-                    && z_offset.abs() != radius
-                {
+                if radius > 0 && x_offset.abs() != radius && z_offset.abs() != radius {
                     continue;
                 }
 
