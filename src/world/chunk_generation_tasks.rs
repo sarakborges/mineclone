@@ -16,6 +16,7 @@ use crate::{
 use super::{
     biome_field::BiomeField,
     chunk_system_params::{ChunkContent, ChunkGeneration},
+    chunk_task_snapshots::{clone_biome_registry, clone_structure_registry},
     generation::{ChunkGenerationContext, generate_chunk},
     world_feature_fields::WorldFeatureFields,
 };
@@ -159,20 +160,4 @@ impl ChunkGenerationTasks {
 
         completed
     }
-}
-
-fn clone_biome_registry(source: &BiomeRegistry) -> BiomeRegistry {
-    let mut cloned = BiomeRegistry::default();
-    for definition in source.iter() {
-        cloned.insert(definition.clone());
-    }
-    cloned
-}
-
-fn clone_structure_registry(source: &StructureRegistry) -> StructureRegistry {
-    let mut cloned = StructureRegistry::default();
-    for definition in source.iter() {
-        cloned.insert(definition.clone());
-    }
-    cloned
 }
