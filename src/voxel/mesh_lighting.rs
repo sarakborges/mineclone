@@ -9,7 +9,7 @@ const AO_DIAGONAL_EPSILON: f32 = 0.001;
 
 pub(super) struct FaceLighting {
     pub(super) channels: [[f32; 2]; 4],
-    pub(super) block_rgb: [[f32; 3]; 4],
+    pub(super) block_srgb: [[f32; 3]; 4],
     pub(super) ambient_occlusion: [f32; 4],
 }
 
@@ -21,14 +21,17 @@ pub(super) fn face_lighting(
 ) -> FaceLighting {
     let (normal, tangent_a, tangent_b, signs) = face_basis(face);
     let base = voxel + normal;
-    let emitted_block_rgb = world.light_at(voxel).block_rgb().map(|level| level as f32);
-    let emitted_block_rgb = if neutralize_emissive_surface_light {
-        [max_rgb(emitted_block_rgb); 3]
+    let emitted_block_srgb = world
+        .light_at(voxel)
+        .block_srgb_levels()
+        .map(|level| level as f32);
+    let emitted_block_srgb = if neutralize_emissive_surface_light {
+        [max_component(emitted_block_srgb); 3]
     } else {
-        emitted_block_rgb
+        emitted_block_srgb
     };
     let mut channels = [[0.0; 2]; 4];
-    let mut block_rgb = [[0.0; 3]; 4];
+    let mut block_srgb = [[0.0; 3]; 4];
     let mut ambient_occlusion = [1.0; 4];
 
     for (index, (sign_a, sign_b)) in signs.into_iter().enumerate() {
@@ -45,21 +48,21 @@ pub(super) fn face_lighting(
         } else {
             side_a_solid as usize + side_b_solid as usize + corner_solid as usize
         };
-        let (sky_level, sampled_block_rgb) =
-            average_light_levels(world, [base, side_a, side_b, corner]);
-        let sampled_block_rgb = component_max(sampled_block_rgb, emitted_block_rgb);
+        let (sky_level, sampled_block_srgb) =
+            average_shader_light_levels(world, [base, side_a, side_b, corner]);
+        let sampled_block_srgb = component_max(sampled_block_srgb, emitted_block_srgb);
 
         channels[index] = [
             normalize_level(sky_level),
-            normalize_level(max_rgb(sampled_block_rgb)),
+            normalize_level(max_component(sampled_block_srgb)),
         ];
-        block_rgb[index] = sampled_block_rgb.map(normalize_level);
+        block_srgb[index] = sampled_block_srgb.map(normalize_level);
         ambient_occlusion[index] = AO_BRIGHTNESS[occlusion];
     }
 
     FaceLighting {
         channels,
-        block_rgb,
+        block_srgb,
         ambient_occlusion,
     }
 }
@@ -74,13 +77,13 @@ pub(super) fn push_lit_quad(
 ) {
     let colors = std::array::from_fn(|index| {
         [
-            lighting.block_rgb[index][0],
-            lighting.block_rgb[index][1],
-            lighting.block_rgb[index][2],
+            lighting.block_srgb[index][0],
+            lighting.block_srgb[index][1],
+            lighting.block_srgb[index][2],
             lighting.ambient_occlusion[index],
         ]
     });
-    let flip_diagonal = should_flip_diagonal(lighting.ambient_occlusion, lighting.block_rgb);
+    let flip_diagonal = should_flip_diagonal(lighting.ambient_occlusion, lighting.block_srgb);
 
     buffer.push_quad(
         vertices,
@@ -95,7 +98,7 @@ pub(super) fn push_lit_quad(
 
 fn should_flip_diagonal(
     ambient_occlusion: [f32; 4],
-    block_rgb: [[f32; 3]; 4],
+    block_srgb: [[f32; 3]; 4],
 ) -> bool {
     let ao_balance = ambient_occlusion[0] + ambient_occlusion[2]
         - ambient_occlusion[1]
@@ -105,19 +108,19 @@ fn should_flip_diagonal(
         return ao_balance > 0.0;
     }
 
-    let diagonal_02 = rgb_distance_squared(block_rgb[0], block_rgb[2]);
-    let diagonal_13 = rgb_distance_squared(block_rgb[1], block_rgb[3]);
+    let diagonal_02 = srgb_distance_squared(block_srgb[0], block_srgb[2]);
+    let diagonal_13 = srgb_distance_squared(block_srgb[1], block_srgb[3]);
     diagonal_13 < diagonal_02
 }
 
-fn rgb_distance_squared(left: [f32; 3], right: [f32; 3]) -> f32 {
+fn srgb_distance_squared(left: [f32; 3], right: [f32; 3]) -> f32 {
     let red = left[0] - right[0];
     let green = left[1] - right[1];
     let blue = left[2] - right[2];
     red * red + green * green + blue * blue
 }
 
-fn average_light_levels(world: &VoxelWorld, samples: [IVec3; 4]) -> (f32, [f32; 3]) {
+fn average_shader_light_levels(world: &VoxelWorld, samples: [IVec3; 4]) -> (f32, [f32; 3]) {
     let mut sky_total = 0.0;
     let mut block_total = [0.0; 3];
     let mut count = 0_u32;
@@ -129,7 +132,7 @@ fn average_light_levels(world: &VoxelWorld, samples: [IVec3; 4]) -> (f32, [f32; 
 
         let light = world.light_at(position);
         sky_total += light.sky() as f32;
-        let block = light.block_rgb();
+        let block = light.block_srgb_levels();
         block_total[0] += block[0] as f32;
         block_total[1] += block[1] as f32;
         block_total[2] += block[2] as f32;
@@ -137,9 +140,6 @@ fn average_light_levels(world: &VoxelWorld, samples: [IVec3; 4]) -> (f32, [f32; 
     }
 
     if count == 0 {
-        // Missing/unloaded neighbors are unknown, not open sky. Treating this
-        // case as maximum skylight creates bright chunk-border bands until the
-        // neighboring chunk arrives and forces a remesh.
         (0.0, [0.0; 3])
     } else {
         let count = count as f32;
@@ -162,8 +162,8 @@ fn component_max(left: [f32; 3], right: [f32; 3]) -> [f32; 3] {
     ]
 }
 
-fn max_rgb(rgb: [f32; 3]) -> f32 {
-    rgb[0].max(rgb[1]).max(rgb[2])
+fn max_component(value: [f32; 3]) -> f32 {
+    value[0].max(value[1]).max(value[2])
 }
 
 fn normalize_level(level: f32) -> f32 {
@@ -230,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn uses_rgb_similarity_when_ao_is_tied() {
+    fn uses_shader_color_similarity_when_ao_is_tied() {
         let red = [1.0, 0.0, 0.0];
         let blue = [0.0, 0.0, 1.0];
         let purple = [0.5, 0.0, 0.5];
