@@ -5,6 +5,7 @@ pub(crate) mod chunk_archive;
 pub(crate) mod collision;
 pub(crate) mod coordinates;
 pub(crate) mod deduplicated_queue;
+pub(crate) mod edit;
 pub(crate) mod fluid;
 pub(crate) mod fluid_mesh;
 pub(crate) mod light;
