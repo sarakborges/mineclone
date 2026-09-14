@@ -6,6 +6,7 @@ use bevy::{
 use crate::{app::game_state::GameState, player::camera::GameplayCamera};
 
 use super::{
+    assets::CloudAssets,
     deterministic::{hash_signed, hash01},
     state::SkyLayerVisualState,
 };
@@ -15,12 +16,6 @@ const CLOUD_PARTS: usize = 3;
 const CLOUD_SPAN: f32 = 180.0;
 const CLOUD_SPEED: f32 = 1.6;
 
-#[derive(Resource)]
-pub(super) struct CloudAssets {
-    mesh: Handle<Mesh>,
-    material: Handle<StandardMaterial>,
-}
-
 #[derive(Component)]
 pub(super) struct CloudPart {
     cloud_index: usize,
@@ -28,23 +23,6 @@ pub(super) struct CloudPart {
     altitude: f32,
     offset: Vec3,
     scale: Vec3,
-}
-
-pub(super) fn setup_cloud_assets(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    let mesh = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
-    let material = materials.add(StandardMaterial {
-        base_color: Color::srgba(1.0, 1.0, 1.0, 0.78),
-        alpha_mode: AlphaMode::Blend,
-        unlit: true,
-        fog_enabled: false,
-        ..default()
-    });
-
-    commands.insert_resource(CloudAssets { mesh, material });
 }
 
 pub(super) fn spawn_clouds(mut commands: Commands, assets: Res<CloudAssets>) {
