@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{
-    app::game_state::GameState,
-    ui::{surface, typography},
-};
+use crate::{app::game_state::GameState, ui::typography};
 
 const FPS_UPDATE_INTERVAL_SECONDS: f32 = 0.25;
 
@@ -26,22 +23,22 @@ struct FpsHud {
 }
 
 fn spawn_fps_hud(mut commands: Commands) {
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                right: px(16),
-                bottom: px(16),
-                ..default()
-            },
-            Pickable::IGNORE,
-            DespawnOnExit(GameState::Gameplay),
-        ))
-        .with_children(|root| {
-            root.spawn(surface::hud_panel()).with_children(|panel| {
-                panel.spawn((typography::hud("0 FPS"), FpsHud::default()));
-            });
-        });
+    commands.spawn((
+        typography::hud("0 FPS"),
+        TextShadow {
+            offset: Vec2::new(1.5, 1.5),
+            color: Color::srgba(0.0, 0.0, 0.0, 0.92),
+        },
+        FpsHud::default(),
+        Node {
+            position_type: PositionType::Absolute,
+            right: px(16),
+            bottom: px(16),
+            ..default()
+        },
+        Pickable::IGNORE,
+        DespawnOnExit(GameState::Gameplay),
+    ));
 }
 
 fn update_fps_hud(time: Res<Time>, fps_hud: Single<(&mut Text, &mut FpsHud)>) {
