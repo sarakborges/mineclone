@@ -13,7 +13,7 @@ use crate::{
     },
     targeting::block::TargetedBlock,
     tools::{BrushMode, BrushPaletteState, DYED_PROPERTY_ID},
-    ui::{surface, theme, typography},
+    ui::{theme, typography},
 };
 
 use super::HudSettings;
@@ -80,9 +80,6 @@ struct CrosshairRoot;
 #[derive(Component)]
 struct ActionHint;
 
-#[derive(Component)]
-struct ActionHintText;
-
 fn spawn_crosshair(mut commands: Commands) {
     commands
         .spawn((
@@ -134,36 +131,19 @@ fn spawn_crosshair(mut commands: Commands) {
                     },
                     BackgroundColor(theme::TEXT_PRIMARY.with_alpha(0.92)),
                 ));
-                crosshair
-                    .spawn((
-                        Node {
-                            position_type: PositionType::Absolute,
-                            top: px(26),
-                            left: px(-171),
-                            width: px(360),
-                            justify_content: JustifyContent::Center,
-                            ..default()
-                        },
-                        ActionHint,
-                        Visibility::Hidden,
-                        Pickable::IGNORE,
-                    ))
-                    .with_children(|hint_root| {
-                        hint_root
-                            .spawn(surface::hud_container(Node {
-                                padding: UiRect::axes(px(12), px(6)),
-                                border: UiRect::all(px(1)),
-                                border_radius: BorderRadius::all(px(6)),
-                                ..default()
-                            }))
-                            .with_children(|panel| {
-                                panel.spawn((
-                                    typography::crosshair_hint(""),
-                                    TextLayout::justify(Justify::Center),
-                                    ActionHintText,
-                                ));
-                            });
-                    });
+                crosshair.spawn((
+                    typography::crosshair_hint(""),
+                    TextLayout::justify(Justify::Center),
+                    Node {
+                        position_type: PositionType::Absolute,
+                        top: px(26),
+                        left: px(-171),
+                        width: px(360),
+                        ..default()
+                    },
+                    ActionHint,
+                    Visibility::Hidden,
+                ));
             });
         });
 }
@@ -178,8 +158,7 @@ fn update_action_hint(
     secondary_properties: Res<SecondaryPropertyRegistry>,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
-    hint_text: Single<&mut Text, With<ActionHintText>>,
-    hint_visibility: Single<&mut Visibility, With<ActionHint>>,
+    hint: Single<(&mut Text, &mut Visibility), With<ActionHint>>,
 ) {
     let language = language.get();
     let selected_item = hotbar.item_at(hotbar.selected_slot());
@@ -220,8 +199,7 @@ fn update_action_hint(
             })
     };
 
-    let mut text = hint_text.into_inner();
-    let mut visibility = hint_visibility.into_inner();
+    let (mut text, mut visibility) = hint.into_inner();
     match next_text {
         Some(next_text) => {
             if text.0 != next_text {

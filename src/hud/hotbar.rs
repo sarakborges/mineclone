@@ -17,7 +17,7 @@ use crate::{
     },
     rendering::{block_model::BlockModel, block_tint::block_tint_at},
     targeting::{PlacementOrientation, block::BlockTargetingSet},
-    ui::{surface, typography},
+    ui::{theme, typography},
     world::biome_field::BiomeField,
 };
 
@@ -172,10 +172,26 @@ fn spawn_hotbar_root(
                 },
             ));
 
-            root.spawn(surface::hud_strip()).with_children(|row| {
+            root.spawn(Node {
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                column_gap: px(4),
+                padding: UiRect::all(px(4)),
+                ..default()
+            })
+            .with_children(|row| {
                 for index in 0..HOTBAR_SLOT_COUNT {
                     let selected = index == hotbar.selected_slot();
-                    let (background, border_color) = surface::hud_control_static(selected);
+                    let border_color = if selected {
+                        theme::TEXT_PRIMARY
+                    } else {
+                        Color::srgba(0.70, 0.72, 0.82, 0.28)
+                    };
+                    let background = if selected {
+                        Color::srgba(0.08, 0.07, 0.16, 0.94)
+                    } else {
+                        theme::HUD_SURFACE
+                    };
 
                     row.spawn((
                         Node {
