@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 use crate::localization::LocalizedText;
 
-use super::color::Rgb;
+use super::color::Hsi;
 
 pub type FluidId = u16;
 
@@ -14,7 +14,7 @@ pub type FluidId = u16;
 pub struct FluidDefinition {
     pub id: String,
     pub name: LocalizedText,
-    pub color: Rgb,
+    pub color: Hsi,
     pub opacity: f32,
     pub roughness: f32,
     #[serde(default)]
@@ -36,6 +36,7 @@ impl FluidRegistry {
         definition
             .name
             .validate(&format!("fluid {} name", definition.id));
+        assert!(definition.color.is_valid(), "fluid {} HSI color is invalid", definition.id);
         assert!(
             (0.0..=1.0).contains(&definition.opacity),
             "fluid {} opacity must be between 0 and 1",
