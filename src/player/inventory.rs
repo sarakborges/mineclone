@@ -49,6 +49,7 @@ pub(crate) struct CreativeInventoryView {
     replace_search_on_next_input: bool,
     selected_category: Option<String>,
     scroll_row: usize,
+    category_scroll_row: usize,
 }
 
 impl CreativeInventoryView {
@@ -66,6 +67,10 @@ impl CreativeInventoryView {
 
     pub(crate) fn scroll_row(&self) -> usize {
         self.scroll_row
+    }
+
+    pub(crate) fn category_scroll_row(&self) -> usize {
+        self.category_scroll_row
     }
 
     pub(crate) fn focus_search(&mut self) {
@@ -129,12 +134,17 @@ impl CreativeInventoryView {
         self.scroll_row = row;
     }
 
+    pub(crate) fn set_category_scroll_row(&mut self, row: usize) {
+        self.category_scroll_row = row;
+    }
+
     fn reset(&mut self) {
         self.search_query.clear();
         self.search_focused = false;
         self.replace_search_on_next_input = false;
         self.selected_category = None;
         self.scroll_row = 0;
+        self.category_scroll_row = 0;
     }
 }
 
