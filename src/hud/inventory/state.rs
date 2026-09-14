@@ -23,9 +23,6 @@ pub(super) const CREATIVE_GRID_HEIGHT: f32 =
 pub(super) struct InventoryHudRoot;
 
 #[derive(Component)]
-pub(super) struct CreativeInventoryPanel;
-
-#[derive(Component)]
 pub(super) struct InventorySlot {
     pub(super) index: usize,
     pub(super) item: Option<&'static str>,
@@ -41,6 +38,9 @@ pub(super) struct CreativeInventorySlot {
 
 #[derive(Component)]
 pub(super) struct CreativeSearchBar;
+
+#[derive(Component)]
+pub(super) struct CreativeSearchText;
 
 #[derive(Component)]
 pub(super) struct CreativeCategoryButton {
