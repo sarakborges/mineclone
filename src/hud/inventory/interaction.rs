@@ -11,7 +11,7 @@ use bevy::{
 use crate::{
     player::{
         hotbar::PlayerHotbar,
-        inventory::{CreativeInventoryView, InventoryCursor, InventoryState},
+        inventory::{InventoryCursor, InventoryState},
     },
     ui::text_input::select_all_pressed,
 };
@@ -19,8 +19,8 @@ use crate::{
 use super::state::{
     CreativeCatalogScrollArea, CreativeCatalogScrollbar, CreativeCategoryButton,
     CreativeCategoryScrollArea, CreativeCategoryScrollbar, CreativeInventorySlot,
-    CreativeInventoryUiDirty, CreativeScrollState, CreativeSearchBar, InventorySlot,
-    InventoryTrashButton, SLOT_GAP, SLOT_SIZE,
+    CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState, CreativeSearchBar,
+    InventorySlot, InventoryTrashButton, SLOT_GAP, SLOT_SIZE,
 };
 
 pub(super) fn handle_search_focus(
