@@ -27,6 +27,7 @@ pub(crate) mod sky;
 pub(crate) mod structure;
 pub(crate) mod tool;
 pub(crate) mod tool_id;
+mod validation;
 
 use bevy::prelude::*;
 use loader::load_content;
