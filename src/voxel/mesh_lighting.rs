@@ -137,7 +137,10 @@ fn average_light_levels(world: &VoxelWorld, samples: [IVec3; 4]) -> (f32, [f32; 
     }
 
     if count == 0 {
-        (VoxelLight::MAX_LEVEL as f32, [0.0; 3])
+        // Missing/unloaded neighbors are unknown, not open sky. Treating this
+        // case as maximum skylight creates bright chunk-border bands until the
+        // neighboring chunk arrives and forces a remesh.
+        (0.0, [0.0; 3])
     } else {
         let count = count as f32;
         (
