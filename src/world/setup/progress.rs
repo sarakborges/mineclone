@@ -42,137 +42,160 @@ pub(in crate::world) fn setup_world(
         return;
     }
 
-    let generation_context = generation.context(&content);
-
     match runtime.loading_state.phase {
         WorldLoadingPhase::Generating => {
-            let frame_started = Instant::now();
-            let mut processed = 0;
-
-            loop {
-                if processed > 0 && frame_started.elapsed() >= INITIAL_LOADING_BUDGET {
-                    break;
-                }
-
-                let Some(coord) = runtime
-                    .loading_state
-                    .coords
-                    .get(runtime.loading_state.generated)
-                    .copied()
-                else {
-                    break;
-                };
-
-                ensure_chunk_loaded(&mut runtime.world, coord, &generation_context);
-                runtime
-                    .fluid_updates
-                    .enqueue_loaded_fluid_frontier(&runtime.world, coord);
-                runtime.loading_state.generated += 1;
-                processed += 1;
-            }
-
-            if runtime.loading_state.generated >= runtime.loading_state.coords.len() {
-                runtime.loading_state.phase = WorldLoadingPhase::Lighting;
-            }
+            generate_initial_chunks(&generation, &content, &mut runtime)
         }
-        WorldLoadingPhase::Lighting => {
-            let frame_started = Instant::now();
-            let mut processed = 0;
-
-            loop {
-                if processed > 0 && frame_started.elapsed() >= INITIAL_LOADING_BUDGET {
-                    break;
-                }
-
-                let start = runtime.loading_state.lit;
-                if start >= runtime.loading_state.coords.len() {
-                    break;
-                }
-                let end = (start + BOOTSTRAP_LIGHT_BATCH_CHUNKS)
-                    .min(runtime.loading_state.coords.len());
-
-                drop(initialize_chunks_lighting(
-                    &mut runtime.world,
-                    &runtime.loading_state.coords[start..end],
-                    &content.blocks,
-                    &content.fluids,
-                    &content.secondary_properties,
-                ));
-                runtime.loading_state.lit = end;
-                processed += end - start;
-            }
-
-            if runtime.loading_state.lit >= runtime.loading_state.coords.len() {
-                runtime.loading_state.phase = WorldLoadingPhase::Meshing;
-            }
-        }
+        WorldLoadingPhase::Lighting => light_initial_chunks(&content, &mut runtime),
         WorldLoadingPhase::Meshing => {
-            let frame_started = Instant::now();
-            let mut processed = 0;
-
-            loop {
-                if processed > 0 && frame_started.elapsed() >= INITIAL_LOADING_BUDGET {
-                    break;
-                }
-
-                let Some(coord) = runtime
-                    .loading_state
-                    .coords
-                    .get(runtime.loading_state.meshed)
-                    .copied()
-                else {
-                    break;
-                };
-                let chunk = runtime
-                    .world
-                    .chunk(coord)
-                    .unwrap_or_else(|| panic!("generated chunk should exist at {coord:?}"));
-                let render_context = content.render_context(
-                    &runtime.world,
-                    &renderer.terrain_materials,
-                    &renderer.fluid_materials,
-                );
-
-                spawn_chunk_mesh(
-                    &mut renderer.commands,
-                    &mut renderer.meshes,
-                    &mut renderer.pool,
-                    coord,
-                    chunk,
-                    &render_context,
-                );
-                runtime.loading_state.meshed += 1;
-                processed += 1;
-            }
-
-            if runtime.loading_state.meshed >= runtime.loading_state.coords.len() {
-                runtime.loading_state.phase = WorldLoadingPhase::Spawning;
-            }
+            mesh_initial_chunks(&content, &mut renderer, &mut runtime)
         }
         WorldLoadingPhase::Spawning => {
-            if runtime.loading_state.transition_requested {
-                return;
-            }
-
-            let saved_position = (*persistence.load_mode == WorldLoadMode::Load)
-                .then(|| persistence.save.player_position(LOCAL_PLAYER_ID))
-                .flatten();
-            let translation = saved_position
-                .filter(|position| player_position_is_clear(&runtime.world, *position))
-                .unwrap_or_else(|| {
-                    safe_spawn_position(&runtime.world, runtime.loading_state.spawn_column)
-                });
-            let game_mode = if *persistence.load_mode == WorldLoadMode::Load {
-                persistence.save.player_game_mode(LOCAL_PLAYER_ID)
-            } else {
-                persistence.new_world_config.game_mode()
-            };
-
-            spawn_player_entity(&mut renderer.commands, translation, game_mode);
-            runtime.loading_state.transition_requested = true;
-            runtime
-                .transition
-                .request(ScreenTransitionTarget::game(GameState::Gameplay));
+            spawn_loaded_world(&mut renderer, &mut runtime, &persistence)
         }
     }
+}
+
+fn generate_initial_chunks(
+    generation: &ChunkGeneration<'_>,
+    content: &ChunkContent<'_>,
+    runtime: &mut WorldSetupRuntime<'_>,
+) {
+    let generation_context = generation.context(content);
+    let frame_started = Instant::now();
+    let mut processed = 0;
+
+    loop {
+        if processed > 0 && frame_started.elapsed() >= INITIAL_LOADING_BUDGET {
+            break;
+        }
+
+        let Some(coord) = runtime
+            .loading_state
+            .coords
+            .get(runtime.loading_state.generated)
+            .copied()
+        else {
+            break;
+        };
+
+        ensure_chunk_loaded(&mut runtime.world, coord, &generation_context);
+        runtime
+            .fluid_updates
+            .enqueue_loaded_fluid_frontier(&runtime.world, coord);
+        runtime.loading_state.generated += 1;
+        processed += 1;
+    }
+
+    if runtime.loading_state.generated >= runtime.loading_state.coords.len() {
+        runtime.loading_state.phase = WorldLoadingPhase::Lighting;
+    }
+}
+
+fn light_initial_chunks(content: &ChunkContent<'_>, runtime: &mut WorldSetupRuntime<'_>) {
+    let frame_started = Instant::now();
+    let mut processed = 0;
+
+    loop {
+        if processed > 0 && frame_started.elapsed() >= INITIAL_LOADING_BUDGET {
+            break;
+        }
+
+        let start = runtime.loading_state.lit;
+        if start >= runtime.loading_state.coords.len() {
+            break;
+        }
+        let end =
+            (start + BOOTSTRAP_LIGHT_BATCH_CHUNKS).min(runtime.loading_state.coords.len());
+
+        drop(initialize_chunks_lighting(
+            &mut runtime.world,
+            &runtime.loading_state.coords[start..end],
+            &content.blocks,
+            &content.fluids,
+            &content.secondary_properties,
+        ));
+        runtime.loading_state.lit = end;
+        processed += end - start;
+    }
+
+    if runtime.loading_state.lit >= runtime.loading_state.coords.len() {
+        runtime.loading_state.phase = WorldLoadingPhase::Meshing;
+    }
+}
+
+fn mesh_initial_chunks(
+    content: &ChunkContent<'_>,
+    renderer: &mut ChunkRenderer<'_, '_>,
+    runtime: &mut WorldSetupRuntime<'_>,
+) {
+    let frame_started = Instant::now();
+    let mut processed = 0;
+
+    loop {
+        if processed > 0 && frame_started.elapsed() >= INITIAL_LOADING_BUDGET {
+            break;
+        }
+
+        let Some(coord) = runtime
+            .loading_state
+            .coords
+            .get(runtime.loading_state.meshed)
+            .copied()
+        else {
+            break;
+        };
+        let chunk = runtime
+            .world
+            .chunk(coord)
+            .unwrap_or_else(|| panic!("generated chunk should exist at {coord:?}"));
+        let render_context = content.render_context(
+            &runtime.world,
+            &renderer.terrain_materials,
+            &renderer.fluid_materials,
+        );
+
+        spawn_chunk_mesh(
+            &mut renderer.commands,
+            &mut renderer.meshes,
+            &mut renderer.pool,
+            coord,
+            chunk,
+            &render_context,
+        );
+        runtime.loading_state.meshed += 1;
+        processed += 1;
+    }
+
+    if runtime.loading_state.meshed >= runtime.loading_state.coords.len() {
+        runtime.loading_state.phase = WorldLoadingPhase::Spawning;
+    }
+}
+
+fn spawn_loaded_world(
+    renderer: &mut ChunkRenderer<'_, '_>,
+    runtime: &mut WorldSetupRuntime<'_>,
+    persistence: &WorldSetupPersistence<'_>,
+) {
+    if runtime.loading_state.transition_requested {
+        return;
+    }
+
+    let saved_position = (*persistence.load_mode == WorldLoadMode::Load)
+        .then(|| persistence.save.player_position(LOCAL_PLAYER_ID))
+        .flatten();
+    let translation = saved_position
+        .filter(|position| player_position_is_clear(&runtime.world, *position))
+        .unwrap_or_else(|| safe_spawn_position(&runtime.world, runtime.loading_state.spawn_column));
+    let game_mode = if *persistence.load_mode == WorldLoadMode::Load {
+        persistence.save.player_game_mode(LOCAL_PLAYER_ID)
+    } else {
+        persistence.new_world_config.game_mode()
+    };
+
+    spawn_player_entity(&mut renderer.commands, translation, game_mode);
+    runtime.loading_state.transition_requested = true;
+    runtime
+        .transition
+        .request(ScreenTransitionTarget::game(GameState::Gameplay));
 }
