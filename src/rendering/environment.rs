@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
@@ -26,6 +26,16 @@ impl Default for EnvironmentVisualState {
     }
 }
 
+#[derive(SystemParam)]
+struct EnvironmentScene<'w> {
+    current_dimension: Res<'w, CurrentDimension>,
+    current_biome: Res<'w, CurrentBiome>,
+    dimensions: Res<'w, DimensionRegistry>,
+    biomes: Res<'w, BiomeRegistry>,
+    cycles: Res<'w, DayNightCycleRegistry>,
+    clock: Res<'w, DayNightClock>,
+}
+
 pub struct EnvironmentPlugin;
 
 impl Plugin for EnvironmentPlugin {
@@ -38,37 +48,36 @@ impl Plugin for EnvironmentPlugin {
 }
 
 fn update_environment_visuals(
-    current_dimension: Res<CurrentDimension>,
-    current_biome: Res<CurrentBiome>,
-    dimensions: Res<DimensionRegistry>,
-    biomes: Res<BiomeRegistry>,
-    cycles: Res<DayNightCycleRegistry>,
-    clock: Res<DayNightClock>,
+    scene: EnvironmentScene,
     mut visuals: ResMut<EnvironmentVisualState>,
 ) {
-    let Some(dimension) = dimensions.get(&current_dimension.id) else {
+    let Some(dimension) = scene.dimensions.get(&scene.current_dimension.id) else {
         return;
     };
-    let Some(cycle) = cycles.get(&dimension.day_night_cycle) else {
+    let Some(cycle) = scene.cycles.get(&dimension.day_night_cycle) else {
         return;
     };
 
-    let sample = cycle.sample(clock.normalized_time);
-    visuals.sky_color = Hsi::blend_weighted(current_biome.influences.iter().filter_map(|influence| {
-        let biome = biomes.get(&influence.id)?;
-        let color = biome.visuals.sky_color.get(sample.phase).lerp(
-            *biome.visuals.sky_color.get(sample.next_phase),
-            sample.transition,
-        );
-        Some((color, influence.weight))
-    }));
-    visuals.fog_color = Hsi::blend_weighted(current_biome.influences.iter().filter_map(|influence| {
-        let biome = biomes.get(&influence.id)?;
-        let color = biome.visuals.fog_color.get(sample.phase).lerp(
-            *biome.visuals.fog_color.get(sample.next_phase),
-            sample.transition,
-        );
-        Some((color, influence.weight))
-    }));
+    let sample = cycle.sample(scene.clock.normalized_time);
+    visuals.sky_color = Hsi::blend_weighted(scene.current_biome.influences.iter().filter_map(
+        |influence| {
+            let biome = scene.biomes.get(&influence.id)?;
+            let color = biome.visuals.sky_color.get(sample.phase).lerp(
+                *biome.visuals.sky_color.get(sample.next_phase),
+                sample.transition,
+            );
+            Some((color, influence.weight))
+        },
+    ));
+    visuals.fog_color = Hsi::blend_weighted(scene.current_biome.influences.iter().filter_map(
+        |influence| {
+            let biome = scene.biomes.get(&influence.id)?;
+            let color = biome.visuals.fog_color.get(sample.phase).lerp(
+                *biome.visuals.fog_color.get(sample.next_phase),
+                sample.transition,
+            );
+            Some((color, influence.weight))
+        },
+    ));
     visuals.sky_light_factor = sample.sky_light_factor;
 }
