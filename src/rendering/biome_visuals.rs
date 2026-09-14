@@ -1,7 +1,10 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    content::{biome::{BiomeDefinition, BiomeRegistry}, color::Hsi},
+    content::{
+        biome::{BiomeDefinition, BiomeRegistry},
+        color::Hsi,
+    },
     world::biome::CurrentBiome,
 };
 
@@ -12,6 +15,10 @@ pub(crate) struct CurrentBiomeVisuals<'w> {
 }
 
 impl CurrentBiomeVisuals<'_> {
+    pub(crate) fn inputs_changed(&self) -> bool {
+        self.current.is_changed() || self.biomes.is_changed()
+    }
+
     pub(crate) fn weighted_scalar(
         &self,
         value: impl Fn(&BiomeDefinition) -> f32,
