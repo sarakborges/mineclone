@@ -1,5 +1,5 @@
 {
   "id": "green",
   "name": { "english": "Green" },
-  "color": { "r": 0.368627, "g": 0.486275, "b": 0.086275 }
+  "color": { "hue": 76.627322, "saturation": 0.724999, "intensity": 0.313726 }
 }

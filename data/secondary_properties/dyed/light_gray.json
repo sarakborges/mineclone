@@ -1,5 +1,5 @@
 {
   "id": "light_gray",
   "name": { "english": "Light Gray" },
-  "color": { "r": 0.615686, "g": 0.615686, "b": 0.592157 }
+  "color": { "hue": 60.000000, "saturation": 0.025806, "intensity": 0.607843 }
 }

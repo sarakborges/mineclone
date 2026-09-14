@@ -1,5 +1,5 @@
 {
   "id": "orange",
   "name": { "english": "Orange" },
-  "color": { "r": 0.976471, "g": 0.501961, "b": 0.113725 }
+  "color": { "hue": 26.695718, "saturation": 0.785715, "intensity": 0.530719 }
 }

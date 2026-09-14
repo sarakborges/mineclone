@@ -1,5 +1,5 @@
 {
   "id": "pink",
   "name": { "english": "Pink" },
-  "color": { "r": 0.952941, "g": 0.545098, "b": 0.666667 }
+  "color": { "hue": 343.124577, "saturation": 0.244565, "intensity": 0.721569 }
 }

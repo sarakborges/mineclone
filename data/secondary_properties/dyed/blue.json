@@ -1,5 +1,5 @@
 {
   "id": "blue",
   "name": { "english": "Blue" },
-  "color": { "r": 0.235294, "g": 0.266667, "b": 0.666667 }
+  "color": { "hue": 236.260392, "saturation": 0.395974, "intensity": 0.389543 }
 }

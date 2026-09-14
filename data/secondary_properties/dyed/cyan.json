@@ -1,5 +1,5 @@
 {
   "id": "cyan",
   "name": { "english": "Cyan" },
-  "color": { "r": 0.086275, "g": 0.611765, "b": 0.611765 }
+  "color": { "hue": 180.000000, "saturation": 0.802394, "intensity": 0.436602 }
 }
