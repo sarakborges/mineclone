@@ -21,7 +21,7 @@ use crate::world::{
     dimension::CurrentDimension,
     game_rules::GameRules,
     generation_region::generation_region_coord,
-    hydrology::{HydrologySurfaceSample, HydrologyWaterKind},
+    hydrology::HydrologySurfaceSample,
     render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
     terrain::{surface_height, surface_height_from_sample},
     world_feature_fields::WorldFeatureFields,
@@ -32,7 +32,6 @@ const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 2;
 const DEFAULT_SPAWN_COLUMN: IVec2 = IVec2::new(8, 8);
 const SPAWN_SEARCH_STEP_BLOCKS: i32 = 8;
 const SPAWN_SEARCH_RADIUS_STEPS: i32 = 64;
-const SPAWN_MINIMUM_HEIGHT_ABOVE_SEA: i32 = 2;
 
 #[derive(SystemParam)]
 pub(in crate::world) struct WorldLoadingInputs<'w> {
@@ -213,12 +212,15 @@ fn find_initial_spawn_column(
                         z_step * SPAWN_SEARCH_STEP_BLOCKS,
                     );
 
-                let height = surface_height(candidate, dimension, biomes, biome_field);
-                if height <= dimension.sea_level + SPAWN_MINIMUM_HEIGHT_ABOVE_SEA {
-                    continue;
-                }
-
-                if spawn_column_is_ocean(candidate, dimension, biomes, biome_field, feature_fields) {
+                // Spawn selection must not use altitude as a proxy for safety.
+                // Rolling biomes naturally spend part of their range close to
+                // sea level while mountains are always high, so the old
+                // sea-level + 2 requirement disproportionately rejected plains,
+                // forests and wasteland and made mountains much more likely.
+                // Hydrology already tells us whether the surface is actually
+                // occupied by water, which is the condition that matters here.
+                if spawn_column_has_water(candidate, dimension, biomes, biome_field, feature_fields)
+                {
                     continue;
                 }
 
@@ -228,22 +230,18 @@ fn find_initial_spawn_column(
     }
 
     panic!(
-        "could not find a non-ocean spawn column within {} blocks",
+        "could not find a dry spawn column within {} blocks",
         SPAWN_SEARCH_RADIUS_STEPS * SPAWN_SEARCH_STEP_BLOCKS
     );
 }
 
-fn spawn_column_is_ocean(
+fn spawn_column_has_water(
     column: IVec2,
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     feature_fields: &WorldFeatureFields,
 ) -> bool {
-    if dimension.hydrology.ocean_biome.is_none() {
-        return false;
-    }
-
     let chunk_coord = IVec3::new(
         column.x.div_euclid(CHUNK_SIZE as i32),
         0,
@@ -275,10 +273,7 @@ fn spawn_column_is_ocean(
     });
     let position = column.as_vec2() + Vec2::splat(0.5);
 
-    region
-        .hydrology
-        .water_at(position)
-        .is_some_and(|water| water.kind == HydrologyWaterKind::Ocean)
+    region.hydrology.water_at(position).is_some()
 }
 
 fn average_terrain_material(dimension: &DimensionDefinition, biomes: &BiomeRegistry) -> (f32, f32) {
