@@ -15,6 +15,7 @@ use super::{
 };
 
 const PROXIMITY_SITE_RADIUS: i32 = 1;
+const DOMINANT_NEIGHBOR_LIMIT: usize = 5;
 
 pub(super) fn select_surface_biome_index(
     cell: IVec2,
@@ -57,10 +58,12 @@ pub(super) fn select_surface_biome_index(
         }
     }
 
+    let dominant_neighbor = dominant_neighbor_biome(&nearby_biomes);
     let climate = climate_field.sample(site);
     let hash = cell_hash(cell, seed);
     select_weighted_biome_index(biomes, climate, hash, |candidate| {
         candidate.is_regional()
+            && dominant_neighbor.is_none_or(|index| candidate.id != biomes[index].id)
             && proximity_allows(
                 candidate,
                 &nearby_biomes,
@@ -70,6 +73,24 @@ pub(super) fn select_surface_biome_index(
             )
     })
     .unwrap_or_else(|| raw_surface_biome_index(cell, site, biomes, climate_field, seed))
+}
+
+fn dominant_neighbor_biome(nearby_biomes: &[usize]) -> Option<usize> {
+    let mut dominant = None;
+    let mut dominant_count = 0;
+
+    for &candidate in nearby_biomes {
+        let count = nearby_biomes
+            .iter()
+            .filter(|&&neighbor| neighbor == candidate)
+            .count();
+        if count >= DOMINANT_NEIGHBOR_LIMIT && count > dominant_count {
+            dominant = Some(candidate);
+            dominant_count = count;
+        }
+    }
+
+    dominant
 }
 
 fn raw_surface_biome_index(
@@ -247,5 +268,11 @@ mod tests {
             }),
             -1.0,
         ));
+    }
+
+    #[test]
+    fn dominant_neighbor_detection_requires_a_real_majority() {
+        assert_eq!(dominant_neighbor_biome(&[1, 1, 1, 1, 1, 2, 3, 4]), Some(1));
+        assert_eq!(dominant_neighbor_biome(&[1, 1, 1, 1, 2, 2, 3, 4]), None);
     }
 }
