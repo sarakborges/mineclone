@@ -3,7 +3,8 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     content::{
-        block::BlockRegistry, builtin_ids::BRUSH_TOOL_ID,
+        block::BlockRegistry,
+        builtin_ids::{BRUSH_TOOL_ID, DYED_PROPERTY_ID},
         secondary_property::SecondaryPropertyRegistry,
     },
     gameplay::availability::world_interaction_available,
@@ -13,7 +14,7 @@ use crate::{
         inventory::InventoryState,
     },
     targeting::block::TargetedBlock,
-    tools::{BrushMode, BrushPaletteState, DYED_PROPERTY_ID},
+    tools::{BrushMode, BrushPaletteState},
     ui::{theme, typography, visibility::set_visibility},
 };
 
