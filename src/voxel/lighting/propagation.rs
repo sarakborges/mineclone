@@ -3,8 +3,7 @@ use std::collections::HashSet;
 use bevy::prelude::*;
 
 use crate::content::{
-    block::BlockRegistry, color::Hsi, fluid::FluidRegistry,
-    secondary_property::SecondaryPropertyRegistry,
+    block::BlockRegistry, fluid::FluidRegistry, secondary_property::SecondaryPropertyRegistry,
 };
 use crate::voxel::{
     coordinates::chunk_coord_from_world,
@@ -263,7 +262,10 @@ mod tests {
         let color = mixed.color();
 
         assert_eq!(mixed.intensity(), 15);
-        assert!(color.hue > 270.0 && color.hue < 330.0, "hue should be magenta: {color:?}");
+        assert!(
+            color.hue > 270.0 && color.hue < 330.0,
+            "hue should be magenta: {color:?}"
+        );
     }
 
     #[test]
