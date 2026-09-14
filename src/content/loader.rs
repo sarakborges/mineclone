@@ -16,6 +16,7 @@ use super::{
     sky::{SkyDefinition, SkyRegistry},
     structure::{StructureDefinition, StructureRegistry},
     tool::{ToolDefinition, ToolRegistry},
+    validation::validate_content,
 };
 
 #[derive(Default)]
@@ -61,60 +62,7 @@ pub(crate) fn read_content() -> LoadedContent {
         load_definition(&path, &mut content);
     }
 
-    for category in content.inventory_categories.iter() {
-        category.validate_references(&content.blocks);
-    }
-
-    for block in content.blocks.iter() {
-        assert!(
-            content.inventory_categories.get(&block.category).is_some(),
-            "block {} references missing inventory category {}",
-            block.id,
-            block.category
-        );
-        for property in &block.secondary_properties {
-            assert!(
-                content.secondary_properties.contains_property(property),
-                "block {} references missing secondary property {}",
-                block.id,
-                property
-            );
-        }
-    }
-
-    for tool in content.tools.iter() {
-        assert!(
-            content.blocks.get(&tool.id).is_none(),
-            "content id {} cannot be both a block and a tool",
-            tool.id
-        );
-        assert!(
-            content.inventory_categories.get(&tool.category).is_some(),
-            "tool {} references missing inventory category {}",
-            tool.id,
-            tool.category
-        );
-    }
-
-    for structure in content.structures.iter() {
-        structure.validate_references(&content.blocks);
-    }
-
-    for biome in content.biomes.iter() {
-        biome.validate_material_references(&content.blocks);
-        biome.validate_structure_references(&content.structures);
-    }
-
-    for dimension in content.dimensions.iter() {
-        dimension.validate_biomes(&content.biomes);
-        dimension.hydrology.validate_references(
-            &dimension.id,
-            &content.biomes,
-            &content.blocks,
-            &content.fluids,
-        );
-    }
-
+    validate_content(&content);
     content
 }
 
