@@ -38,23 +38,27 @@ pub struct InventoryCategoryBlockIcon {
 pub struct InventoryCategoryDefinition {
     pub id: String,
     pub display_name: LocalizedText,
-    pub block_icon: InventoryCategoryBlockIcon,
+    pub order: u16,
+    #[serde(default)]
+    pub block_icon: Option<InventoryCategoryBlockIcon>,
 }
 
 impl InventoryCategoryDefinition {
     pub fn validate_references(&self, blocks: &BlockRegistry) {
         self.display_name
             .validate(&format!("inventory category {} display name", self.id));
-        assert!(
-            blocks.get(&self.block_icon.block).is_some(),
-            "inventory category {} references missing block icon {}",
-            self.id,
-            self.block_icon.block
-        );
+        if let Some(block_icon) = &self.block_icon {
+            assert!(
+                blocks.get(&block_icon.block).is_some(),
+                "inventory category {} references missing block icon {}",
+                self.id,
+                block_icon.block
+            );
+        }
     }
 
     pub fn icon_tint(&self, block: &BlockDefinition) -> Color {
-        if let Some(tint) = self.block_icon.tint {
+        if let Some(tint) = self.block_icon.as_ref().and_then(|icon| icon.tint) {
             return tint.to_color();
         }
 

@@ -1,6 +1,6 @@
 {
   "id": "asteria:brush",
   "name": { "english": "Brush" },
-  "category": "crafted_blocks",
+  "category": "tools",
   "icon": ""
 }
