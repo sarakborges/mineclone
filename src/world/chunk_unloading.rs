@@ -36,9 +36,9 @@ pub(super) fn unload_chunk_meshes(
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = chunk_coord_from_position(feet_position);
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
-    let mut pending_unloads = renderer
-        .pool
-        .active_coords()
+    let mut pending_unloads = runtime
+        .world
+        .loaded_chunk_coords()
         .filter(|coord| !streaming.keeps_loaded(*coord))
         .collect::<Vec<_>>();
 
@@ -55,21 +55,19 @@ pub(super) fn unload_chunk_meshes(
             break;
         }
 
-        let Some((entities, mesh_handles)) = renderer.pool.take(coord) else {
-            continue;
-        };
+        if let Some((entities, mesh_handles)) = renderer.pool.take(coord) {
+            for entity in entities {
+                renderer.commands.entity(entity).despawn();
+            }
 
-        for entity in entities {
-            renderer.commands.entity(entity).despawn();
-        }
-
-        if !mesh_handles.is_empty() {
-            renderer.commands.queue(move |world: &mut World| {
-                let mut meshes = world.resource_mut::<Assets<Mesh>>();
-                for mesh_handle in mesh_handles {
-                    let _ = meshes.remove(&mesh_handle);
-                }
-            });
+            if !mesh_handles.is_empty() {
+                renderer.commands.queue(move |world: &mut World| {
+                    let mut meshes = world.resource_mut::<Assets<Mesh>>();
+                    for mesh_handle in mesh_handles {
+                        let _ = meshes.remove(&mesh_handle);
+                    }
+                });
+            }
         }
 
         runtime.world.archive_chunk(coord);
