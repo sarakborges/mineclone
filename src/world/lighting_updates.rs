@@ -7,7 +7,7 @@ use crate::voxel::{
 
 use super::{chunk_remesh::ChunkRemeshQueue, chunk_system_params::ChunkContent};
 
-const MAX_LIGHTING_VOXELS_PER_FRAME: usize = 8_192;
+const MAX_LIGHTING_VOXELS_PER_FRAME: usize = 4_096;
 
 pub(super) fn process_dynamic_lighting(
     content: ChunkContent,
