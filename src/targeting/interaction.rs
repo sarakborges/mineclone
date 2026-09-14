@@ -1,13 +1,9 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    app::{game_state::GameState, pause_state::PauseState},
     content::{block::BlockRegistry, tool::ToolRegistry},
-    player::{
-        camera::GameplayCamera, hotbar::PlayerHotbar, inventory::InventoryState,
-        viewmodel::ViewModelAnimation,
-    },
-    tools::BrushPaletteState,
+    gameplay::availability::world_interaction_available,
+    player::{camera::GameplayCamera, hotbar::PlayerHotbar, viewmodel::ViewModelAnimation},
     voxel::{
         cell::VoxelCell, edit::VoxelTopologyRuntime, raycast::VoxelHit,
         texture_rotation::TextureRotation,
@@ -41,10 +37,7 @@ impl Plugin for BlockInteractionPlugin {
             Update,
             edit_targeted_block
                 .in_set(BlockTargetingSet::Interaction)
-                .run_if(in_state(GameState::Gameplay))
-                .run_if(in_state(PauseState::Running))
-                .run_if(in_state(InventoryState::Closed))
-                .run_if(in_state(BrushPaletteState::Closed)),
+                .run_if(world_interaction_available),
         );
     }
 }
