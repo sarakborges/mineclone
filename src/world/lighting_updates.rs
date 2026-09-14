@@ -5,7 +5,7 @@ use crate::voxel::{
     world::VoxelWorld,
 };
 
-use super::{chunk_remesh::ChunkRemeshQueue, chunk_system_params::ChunkContent};
+use super::{chunk_remesh::ChunkRemeshQueue, chunk_system_params::VoxelContent};
 
 const MAX_LIGHTING_VOXELS_PER_FRAME: usize = 4_096;
 
@@ -17,7 +17,7 @@ struct DynamicLightingRuntime<'w> {
 }
 
 pub(super) fn process_dynamic_lighting(
-    content: ChunkContent,
+    content: VoxelContent,
     mut runtime: DynamicLightingRuntime,
 ) {
     let changed_chunks = process_pending_lighting(
