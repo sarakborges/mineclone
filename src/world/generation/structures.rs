@@ -25,32 +25,14 @@ pub(super) fn rasterize_structures(
     chunk_origin: IVec3,
     context: &ChunkGenerationContext<'_>,
 ) {
-    let mut placements = context
-        .biomes
-        .iter()
-        .flat_map(|biome| {
-            biome
-                .structures
-                .iter()
-                .map(move |biome_structure| (biome, biome_structure))
-        })
-        .collect::<Vec<_>>();
-
-    placements.sort_by(|(left_biome, left_structure), (right_biome, right_structure)| {
-        left_biome
-            .id
-            .cmp(&right_biome.id)
-            .then_with(|| left_structure.id.cmp(&right_structure.id))
-    });
-
-    for (biome, biome_structure) in placements {
+    for biome_structure in context.biomes.structure_placements() {
         let structure = context
             .structures
-            .get(&biome_structure.id)
+            .get(&biome_structure.structure_id)
             .unwrap_or_else(|| {
                 panic!(
                     "biome {} references missing structure: {}",
-                    biome.id, biome_structure.id
+                    biome_structure.biome_id, biome_structure.structure_id
                 )
             });
 
@@ -58,7 +40,7 @@ pub(super) fn rasterize_structures(
             chunk,
             chunk_origin,
             context,
-            &biome.id,
+            &biome_structure.biome_id,
             structure,
             biome_structure.placement,
         );
