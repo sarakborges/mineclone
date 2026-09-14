@@ -20,7 +20,7 @@ const MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK: usize = 8;
 const CHUNK_UNLOAD_BUDGET: Duration = Duration::from_millis(4);
 
 #[derive(SystemParam)]
-struct ChunkUnloadRuntime<'w> {
+pub(super) struct ChunkUnloadRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
     lighting: ResMut<'w, PendingLightingUpdates>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
