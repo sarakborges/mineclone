@@ -9,10 +9,9 @@ use crate::{
     },
     tools::BrushPaletteState,
     voxel::{
-        cell::VoxelCell, lighting::PendingLightingUpdates, raycast::VoxelHit,
-        texture_rotation::TextureRotation, world::VoxelWorld,
+        cell::VoxelCell, edit::VoxelTopologyRuntime, raycast::VoxelHit,
+        texture_rotation::TextureRotation,
     },
-    world::{chunk_remesh::ChunkRemeshQueue, fluid_updates::PendingFluidUpdates},
 };
 
 use super::{
@@ -65,18 +64,10 @@ struct BlockEditDefinitions<'w> {
     tools: Res<'w, ToolRegistry>,
 }
 
-#[derive(SystemParam)]
-struct VoxelEditRuntime<'w> {
-    world: ResMut<'w, VoxelWorld>,
-    lighting: ResMut<'w, PendingLightingUpdates>,
-    fluid_updates: ResMut<'w, PendingFluidUpdates>,
-    remesh_queue: ResMut<'w, ChunkRemeshQueue>,
-}
-
 fn edit_targeted_block(
     mut input: BlockEditInput,
     definitions: BlockEditDefinitions,
-    mut runtime: VoxelEditRuntime,
+    mut runtime: VoxelTopologyRuntime,
     mut tool_uses: MessageWriter<ToolUse>,
     mut viewmodel_animation: ResMut<ViewModelAnimation>,
 ) {
@@ -112,17 +103,13 @@ fn edit_targeted_block(
         return;
     };
 
-    let (edited_chunk, edited_voxel, placed) = if left_pressed {
-        (
-            runtime.world.set_block_at(hit.voxel, None),
-            hit.voxel,
-            false,
-        )
+    let (edited, placed) = if left_pressed {
+        (runtime.set_block(hit.voxel, None), false)
     } else {
         let Some(block_id) = selected_item else {
             return;
         };
-        let Some(voxel) = placement_voxel(hit, &runtime.world, input.player.translation) else {
+        let Some(voxel) = placement_voxel(hit, runtime.world(), input.player.translation) else {
             return;
         };
         let Some(block) = definitions.blocks.get(block_id) else {
@@ -132,25 +119,12 @@ fn edit_targeted_block(
         let orientation = input.placement_orientation.for_block(selected_slot, block);
         let cell = VoxelCell::oriented(block_id, texture_rotation, orientation);
 
-        (
-            runtime.world.set_block_at(voxel, Some(cell)),
-            voxel,
-            true,
-        )
+        (runtime.set_block(voxel, Some(cell)), true)
     };
 
-    let Some(coord) = edited_chunk else {
+    if edited.is_none() {
         return;
-    };
-
-    runtime.lighting.enqueue_voxel_edit(edited_voxel);
-    runtime.fluid_updates.enqueue_voxel_edit(edited_voxel);
-
-    // Geometry, face exposure, shadow casters and baked voxel lighting all
-    // converge through the same post-lighting remesh path. The old transparent
-    // fast-path rebuilt glass before lighting had updated, which could leave the
-    // edited chunk stale until a later neighboring edit.
-    runtime.remesh_queue.enqueue_voxel_edit(coord);
+    }
 
     if placed {
         viewmodel_animation.play_place();
