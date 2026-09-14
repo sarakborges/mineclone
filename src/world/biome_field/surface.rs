@@ -16,46 +16,62 @@ impl BiomeField {
             (warped.x / self.surface_site_spacing.x).round() as i32,
             (warped.y / self.surface_site_spacing.y).round() as i32,
         );
-        let mut sites = Vec::new();
+        let mut sampled_sites = Vec::new();
+
+        {
+            let cache = self
+                .surface_site_biomes
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
+                for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
+                    let cell = center + IVec2::new(x, z);
+                    let site = surface_site_position(cell, self.surface_site_spacing, self.seed);
+                    sampled_sites.push((cell, site, warped.distance(site), cache.get(&cell).copied()));
+                }
+            }
+        }
+
+        let mut cache_updates = Vec::new();
+        for (cell, site, _, candidate_index) in &mut sampled_sites {
+            if candidate_index.is_some() {
+                continue;
+            }
+
+            let selected = select_surface_biome_index(
+                *cell,
+                *site,
+                self.surface_site_spacing,
+                &self.surface_biomes,
+                &self.climate,
+                self.seed,
+                self.ocean_biome_id.as_deref(),
+                self.ocean_weight,
+            );
+            *candidate_index = Some(selected);
+            cache_updates.push((*cell, selected));
+        }
+
+        if !cache_updates.is_empty() {
+            let mut cache = self
+                .surface_site_biomes
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            for (cell, selected) in cache_updates {
+                cache.entry(cell).or_insert(selected);
+            }
+        }
+
         let mut nearest_distance = f32::MAX;
         let mut primary_index = 0;
-
-        for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
-            for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
-                let cell = center + IVec2::new(x, z);
-                let site = surface_site_position(cell, self.surface_site_spacing, self.seed);
-                let distance = warped.distance(site);
-                let cached = self
-                    .surface_site_biomes
-                    .read()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .get(&cell)
-                    .copied();
-                let candidate_index = cached.unwrap_or_else(|| {
-                    let selected = select_surface_biome_index(
-                        cell,
-                        site,
-                        self.surface_site_spacing,
-                        &self.surface_biomes,
-                        &self.climate,
-                        self.seed,
-                        self.ocean_biome_id.as_deref(),
-                        self.ocean_weight,
-                    );
-                    self.surface_site_biomes
-                        .write()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner())
-                        .insert(cell, selected);
-                    selected
-                });
-
-                if distance < nearest_distance {
-                    nearest_distance = distance;
-                    primary_index = candidate_index;
-                }
-
-                sites.push((candidate_index, distance));
+        let mut sites = Vec::with_capacity(sampled_sites.len());
+        for (_, _, distance, candidate_index) in sampled_sites {
+            let candidate_index = candidate_index.expect("surface biome site must be resolved");
+            if distance < nearest_distance {
+                nearest_distance = distance;
+                primary_index = candidate_index;
             }
+            sites.push((candidate_index, distance));
         }
 
         let mut weights = vec![0.0_f32; self.surface_biomes.len()];
