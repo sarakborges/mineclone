@@ -33,6 +33,11 @@ struct HotbarBlockModel {
     orientation: BlockOrientation,
 }
 
+#[derive(Default)]
+struct HotbarVisualCache {
+    tint_cell: Option<IVec2>,
+}
+
 #[derive(SystemParam)]
 struct HotbarHudContent<'w> {
     asset_server: Res<'w, AssetServer>,
@@ -301,6 +306,8 @@ fn update_hotbar_item_visuals(
     biomes: Res<BiomeRegistry>,
     biome_field: Res<BiomeField>,
     placement_orientation: Res<PlacementOrientation>,
+    hotbar: Res<PlayerHotbar>,
+    mut cache: Local<HotbarVisualCache>,
     mut icons: Query<(
         &BlockModel,
         &mut HotbarBlockModel,
@@ -308,7 +315,21 @@ fn update_hotbar_item_visuals(
     )>,
     mut materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
-    let position = Vec2::new(player.translation.x, player.translation.z);
+    let tint_cell = IVec2::new(
+        player.translation.x.floor() as i32,
+        player.translation.z.floor() as i32,
+    );
+    let needs_refresh = cache.tint_cell != Some(tint_cell)
+        || hotbar.is_changed()
+        || placement_orientation.is_changed()
+        || blocks.is_changed()
+        || biomes.is_changed()
+        || biome_field.is_changed();
+    if !needs_refresh {
+        return;
+    }
+    cache.tint_cell = Some(tint_cell);
+    let position = tint_cell.as_vec2() + Vec2::splat(0.5);
 
     for (model, mut icon, material_handle) in &mut icons {
         let Some(block_id) = model.block_id() else {
