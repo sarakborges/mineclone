@@ -1,10 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{
-    app::{game_state::GameState, pause_state::PauseState},
-    player::inventory::InventoryState,
-    tools::BrushPaletteState,
-};
+use crate::gameplay::availability::world_interaction_available;
 use flight::{handle_flight_toggle, move_flying};
 use gravity::apply_gravity;
 use swimming::{swim_vertical, update_swimming_state};
@@ -36,10 +32,7 @@ impl Plugin for PlayerMovementPlugin {
                 enforce_world_floor,
             )
                 .chain()
-                .run_if(in_state(GameState::Gameplay))
-                .run_if(in_state(PauseState::Running))
-                .run_if(in_state(InventoryState::Closed))
-                .run_if(in_state(BrushPaletteState::Closed)),
+                .run_if(world_interaction_available),
         );
     }
 }
