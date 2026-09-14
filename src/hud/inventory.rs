@@ -144,6 +144,7 @@ impl Plugin for InventoryHudPlugin {
             .add_systems(
                 Update,
                 (
+                    remember_creative_scroll_positions,
                     handle_search_focus,
                     handle_search_input,
                     handle_category_clicks,
@@ -152,7 +153,6 @@ impl Plugin for InventoryHudPlugin {
                     handle_slot_clicks,
                     handle_inventory_trash_clicks,
                     handle_empty_inventory_click,
-                    remember_creative_scroll_positions,
                     rebuild_inventory_when_changed,
                     style_category_buttons,
                     style_creative_slots,
@@ -299,14 +299,14 @@ fn handle_creative_scroll(
         .chain(category_scrollbars.iter())
         .any(|interaction| *interaction != Interaction::None);
 
-    let target = if pointer_is_over_categories {
-        &mut category_scroll
+    if pointer_is_over_categories {
+        for mut position in &mut category_scroll {
+            position.0.y = (position.0.y + delta).max(0.0);
+        }
     } else {
-        &mut catalog_scroll
-    };
-
-    for mut position in target.iter_mut() {
-        position.0.y = (position.0.y + delta).max(0.0);
+        for mut position in &mut catalog_scroll {
+            position.0.y = (position.0.y + delta).max(0.0);
+        }
     }
 }
 
