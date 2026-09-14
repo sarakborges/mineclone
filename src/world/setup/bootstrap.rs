@@ -8,7 +8,10 @@ use crate::{
     },
     player::player_id::LOCAL_PLAYER_ID,
     rendering::terrain_material::TerrainMaterial,
-    voxel::{chunk::CHUNK_SIZE, coordinates::chunk_coord_from_position, world::VoxelWorld},
+    voxel::{
+        chunk::CHUNK_SIZE, coordinates::chunk_coord_from_position,
+        spatial_search::find_map_square_rings, world::VoxelWorld,
+    },
 };
 
 use super::{
@@ -188,40 +191,28 @@ fn find_initial_spawn_column(
     biome_field: &BiomeField,
     feature_fields: &WorldFeatureFields,
 ) -> IVec2 {
-    for radius in 0..=SPAWN_SEARCH_RADIUS_STEPS {
-        for z_step in -radius..=radius {
-            for x_step in -radius..=radius {
-                if radius > 0 && x_step.abs() != radius && z_step.abs() != radius {
-                    continue;
-                }
-
-                let candidate = DEFAULT_SPAWN_COLUMN
-                    + IVec2::new(
-                        x_step * SPAWN_SEARCH_STEP_BLOCKS,
-                        z_step * SPAWN_SEARCH_STEP_BLOCKS,
-                    );
-
-                // Spawn selection must not use altitude as a proxy for safety.
-                // Rolling biomes naturally spend part of their range close to
-                // sea level while mountains are always high, so the old
-                // sea-level + 2 requirement disproportionately rejected plains,
-                // forests and wasteland and made mountains much more likely.
-                // Hydrology already tells us whether the surface is actually
-                // occupied by water, which is the condition that matters here.
-                if spawn_column_has_water(candidate, dimension, biomes, biome_field, feature_fields)
-                {
-                    continue;
-                }
-
-                return candidate;
-            }
-        }
-    }
-
-    panic!(
-        "could not find a dry spawn column within {} blocks",
-        SPAWN_SEARCH_RADIUS_STEPS * SPAWN_SEARCH_STEP_BLOCKS
-    );
+    find_map_square_rings(
+        DEFAULT_SPAWN_COLUMN,
+        SPAWN_SEARCH_RADIUS_STEPS,
+        SPAWN_SEARCH_STEP_BLOCKS,
+        |candidate| {
+            // Spawn selection must not use altitude as a proxy for safety.
+            // Rolling biomes naturally spend part of their range close to
+            // sea level while mountains are always high, so the old
+            // sea-level + 2 requirement disproportionately rejected plains,
+            // forests and wasteland and made mountains much more likely.
+            // Hydrology already tells us whether the surface is actually
+            // occupied by water, which is the condition that matters here.
+            (!spawn_column_has_water(candidate, dimension, biomes, biome_field, feature_fields))
+                .then_some(candidate)
+        },
+    )
+    .unwrap_or_else(|| {
+        panic!(
+            "could not find a dry spawn column within {} blocks",
+            SPAWN_SEARCH_RADIUS_STEPS * SPAWN_SEARCH_STEP_BLOCKS
+        )
+    })
 }
 
 fn spawn_column_has_water(
