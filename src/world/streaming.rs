@@ -191,27 +191,32 @@ pub(super) fn stream_chunks(
 fn boundary_has_content(chunk: &VoxelChunk, outward: IVec3) -> bool {
     let last = CHUNK_SIZE as i32 - 1;
 
-    match outward {
-        IVec3::X => (0..CHUNK_SIZE as i32).any(|y| {
-            (0..CHUNK_SIZE as i32).any(|z| voxel_has_content(chunk, last, y, z))
-        }),
-        IVec3::NEG_X => (0..CHUNK_SIZE as i32).any(|y| {
-            (0..CHUNK_SIZE as i32).any(|z| voxel_has_content(chunk, 0, y, z))
-        }),
-        IVec3::Y => (0..CHUNK_SIZE as i32).any(|z| {
-            (0..CHUNK_SIZE as i32).any(|x| voxel_has_content(chunk, x, last, z))
-        }),
-        IVec3::NEG_Y => (0..CHUNK_SIZE as i32).any(|z| {
-            (0..CHUNK_SIZE as i32).any(|x| voxel_has_content(chunk, x, 0, z))
-        }),
-        IVec3::Z => (0..CHUNK_SIZE as i32).any(|y| {
-            (0..CHUNK_SIZE as i32).any(|x| voxel_has_content(chunk, x, y, last))
-        }),
-        IVec3::NEG_Z => (0..CHUNK_SIZE as i32).any(|y| {
-            (0..CHUNK_SIZE as i32).any(|x| voxel_has_content(chunk, x, y, 0))
-        }),
-        _ => false,
+    if outward.x > 0 {
+        return (0..CHUNK_SIZE as i32)
+            .any(|y| (0..CHUNK_SIZE as i32).any(|z| voxel_has_content(chunk, last, y, z)));
     }
+    if outward.x < 0 {
+        return (0..CHUNK_SIZE as i32)
+            .any(|y| (0..CHUNK_SIZE as i32).any(|z| voxel_has_content(chunk, 0, y, z)));
+    }
+    if outward.y > 0 {
+        return (0..CHUNK_SIZE as i32)
+            .any(|z| (0..CHUNK_SIZE as i32).any(|x| voxel_has_content(chunk, x, last, z)));
+    }
+    if outward.y < 0 {
+        return (0..CHUNK_SIZE as i32)
+            .any(|z| (0..CHUNK_SIZE as i32).any(|x| voxel_has_content(chunk, x, 0, z)));
+    }
+    if outward.z > 0 {
+        return (0..CHUNK_SIZE as i32)
+            .any(|y| (0..CHUNK_SIZE as i32).any(|x| voxel_has_content(chunk, x, y, last)));
+    }
+    if outward.z < 0 {
+        return (0..CHUNK_SIZE as i32)
+            .any(|y| (0..CHUNK_SIZE as i32).any(|x| voxel_has_content(chunk, x, y, 0)));
+    }
+
+    false
 }
 
 fn voxel_has_content(chunk: &VoxelChunk, x: i32, y: i32, z: i32) -> bool {
