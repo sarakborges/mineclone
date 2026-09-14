@@ -25,7 +25,9 @@ use crate::{
 use self::selection::rebuild_queue;
 use super::{
     biome_field::BiomeField,
-    chunk_loading::ensure_chunk_loaded,
+    chunk_generation_tasks::{
+        ChunkGenerationTasks, MAX_GENERATION_TASKS_IN_FLIGHT,
+    },
     chunk_remesh::ChunkRemeshQueue,
     chunk_rendering::{ChunkRenderPool, spawn_chunk_mesh},
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
@@ -37,6 +39,8 @@ use super::{
 
 const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 1;
 const MAX_CHUNKS_PER_FRAME: usize = 4;
+const MAX_GENERATION_TASKS_DISPATCHED_PER_FRAME: usize = 4;
+const MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME: usize = 8;
 const STREAMING_BUDGET: Duration = Duration::from_millis(4);
 
 #[derive(Resource, Default)]
@@ -47,12 +51,28 @@ pub(super) struct ChunkStreamingState {
     desired: HashSet<IVec3>,
     retained: HashSet<IVec3>,
     pending: VecDeque<IVec3>,
+    ready: VecDeque<IVec3>,
     surface_ranges: HashMap<IVec2, (i32, i32)>,
 }
 
 impl ChunkStreamingState {
     pub(super) fn keeps_loaded(&self, coord: IVec3) -> bool {
         self.desired.contains(&coord) || self.retained.contains(&coord)
+    }
+
+    fn requeue(&mut self, coord: IVec3) {
+        if self.keeps_loaded(coord)
+            && !self.pending.contains(&coord)
+            && !self.ready.contains(&coord)
+        {
+            self.pending.push_front(coord);
+        }
+    }
+
+    fn mark_ready(&mut self, coord: IVec3) {
+        if self.keeps_loaded(coord) && !self.ready.contains(&coord) {
+            self.ready.push_back(coord);
+        }
     }
 }
 
@@ -71,6 +91,7 @@ pub(super) struct ChunkStreamingRuntime<'w, 's> {
     render_distance: Res<'w, RenderDistanceSettings>,
     world: ResMut<'w, VoxelWorld>,
     state: ResMut<'w, ChunkStreamingState>,
+    generation_tasks: ResMut<'w, ChunkGenerationTasks>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
     fluid_updates: ResMut<'w, PendingFluidUpdates>,
     lighting_updates: ResMut<'w, PendingLightingUpdates>,
@@ -109,7 +130,81 @@ pub(super) fn stream_chunks(
         );
     }
 
-    let generation_context = generation.context(&content);
+    runtime
+        .generation_tasks
+        .sync_snapshot(&generation, &content);
+    collect_generated_chunks(&mut runtime);
+    dispatch_generation_tasks(&renderer.pool, &mut runtime);
+    finalize_ready_chunks(&content, &mut renderer, &mut runtime);
+}
+
+fn collect_generated_chunks(runtime: &mut ChunkStreamingRuntime<'_, '_>) {
+    let current_revision = runtime.generation_tasks.revision();
+    let completed = runtime
+        .generation_tasks
+        .collect_ready(MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME);
+
+    for completed in completed {
+        if completed.revision != current_revision {
+            runtime.state.requeue(completed.coord);
+            continue;
+        }
+        if !runtime.state.keeps_loaded(completed.coord) {
+            continue;
+        }
+        if runtime.world.has_generated_chunk(completed.coord) {
+            runtime.state.mark_ready(completed.coord);
+            continue;
+        }
+
+        runtime.world.insert_chunk(completed.coord, completed.chunk);
+        runtime.state.mark_ready(completed.coord);
+    }
+}
+
+fn dispatch_generation_tasks(
+    render_pool: &ChunkRenderPool,
+    runtime: &mut ChunkStreamingRuntime<'_, '_>,
+) {
+    let mut dispatched = 0;
+
+    while runtime.generation_tasks.pending_count() < MAX_GENERATION_TASKS_IN_FLIGHT
+        && dispatched < MAX_GENERATION_TASKS_DISPATCHED_PER_FRAME
+    {
+        let Some(coord) = runtime.state.pending.pop_front() else {
+            break;
+        };
+
+        if render_pool.contains(coord) || runtime.state.ready.contains(&coord) {
+            continue;
+        }
+        if runtime.generation_tasks.contains(coord) {
+            continue;
+        }
+
+        if runtime.world.has_generated_chunk(coord) {
+            assert!(
+                runtime.world.restore_chunk(coord),
+                "generated chunk must be resident or archived: {coord:?}"
+            );
+            runtime.state.mark_ready(coord);
+            continue;
+        }
+
+        if runtime.generation_tasks.schedule(coord) {
+            dispatched += 1;
+        } else {
+            runtime.state.requeue(coord);
+            break;
+        }
+    }
+}
+
+fn finalize_ready_chunks(
+    content: &ChunkContent<'_>,
+    renderer: &mut ChunkRenderer<'_, '_>,
+    runtime: &mut ChunkStreamingRuntime<'_, '_>,
+) {
     let mut budget = FrameWorkBudget::new(STREAMING_BUDGET, MIN_CHUNKS_BEFORE_BUDGET_CHECK)
         .with_maximum_items(MAX_CHUNKS_PER_FRAME);
 
@@ -118,19 +213,16 @@ pub(super) fn stream_chunks(
             break;
         }
 
-        let Some(coord) = runtime.state.pending.pop_front() else {
+        let Some(coord) = runtime.state.ready.pop_front() else {
             break;
         };
-
-        if renderer.pool.contains(coord) {
+        if !runtime.state.keeps_loaded(coord) || renderer.pool.contains(coord) {
             continue;
         }
 
-        ensure_chunk_loaded(&mut runtime.world, coord, &generation_context);
         runtime
             .fluid_updates
             .enqueue_loaded_fluid_frontier(&runtime.world, coord);
-
         seed_chunk_direct_lighting(
             &mut runtime.world,
             coord,
