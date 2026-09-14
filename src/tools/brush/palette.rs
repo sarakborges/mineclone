@@ -195,16 +195,3 @@ pub(super) fn handle_palette_selection(
         break;
     }
 }
-
-pub(super) fn close_palette_with_escape(
-    keys: Res<ButtonInput<KeyCode>>,
-    mut next_palette: ResMut<NextState<BrushPaletteState>>,
-) {
-    if keys.just_pressed(KeyCode::Escape) {
-        next_palette.set(BrushPaletteState::Closed);
-    }
-}
-
-pub(super) fn close_brush_palette(mut next_palette: ResMut<NextState<BrushPaletteState>>) {
-    next_palette.set(BrushPaletteState::Closed);
-}
