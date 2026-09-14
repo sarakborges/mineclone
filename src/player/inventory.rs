@@ -33,6 +33,10 @@ impl InventoryCursor {
         self.item = Some(item);
     }
 
+    pub(crate) fn discard(&mut self) {
+        self.item = None;
+    }
+
     fn clear(&mut self) {
         self.item = None;
     }
