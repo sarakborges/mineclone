@@ -48,8 +48,6 @@ pub(crate) struct CreativeInventoryView {
     search_focused: bool,
     replace_search_on_next_input: bool,
     selected_category: Option<String>,
-    scroll_row: usize,
-    category_scroll_row: usize,
 }
 
 impl CreativeInventoryView {
@@ -63,14 +61,6 @@ impl CreativeInventoryView {
 
     pub(crate) fn selected_category(&self) -> Option<&str> {
         self.selected_category.as_deref()
-    }
-
-    pub(crate) fn scroll_row(&self) -> usize {
-        self.scroll_row
-    }
-
-    pub(crate) fn category_scroll_row(&self) -> usize {
-        self.category_scroll_row
     }
 
     pub(crate) fn focus_search(&mut self) {
@@ -104,38 +94,23 @@ impl CreativeInventoryView {
         }
 
         self.search_query.push_str(&filtered);
-        self.scroll_row = 0;
     }
 
     pub(crate) fn backspace_search(&mut self) {
         if self.replace_search_on_next_input {
-            if !self.search_query.is_empty() {
-                self.search_query.clear();
-                self.scroll_row = 0;
-            }
+            self.search_query.clear();
             self.replace_search_on_next_input = false;
             return;
         }
 
-        if self.search_query.pop().is_some() {
-            self.scroll_row = 0;
-        }
+        self.search_query.pop();
     }
 
     pub(crate) fn select_category(&mut self, category: Option<&str>) {
         let category = category.map(str::to_owned);
         if self.selected_category != category {
             self.selected_category = category;
-            self.scroll_row = 0;
         }
-    }
-
-    pub(crate) fn set_scroll_row(&mut self, row: usize) {
-        self.scroll_row = row;
-    }
-
-    pub(crate) fn set_category_scroll_row(&mut self, row: usize) {
-        self.category_scroll_row = row;
     }
 
     fn reset(&mut self) {
@@ -143,8 +118,6 @@ impl CreativeInventoryView {
         self.search_focused = false;
         self.replace_search_on_next_input = false;
         self.selected_category = None;
-        self.scroll_row = 0;
-        self.category_scroll_row = 0;
     }
 }
 
