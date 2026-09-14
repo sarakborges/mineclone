@@ -23,7 +23,9 @@ use crate::{
     world::{
         biome_field::BiomeField,
         cave_connectivity::CaveConnectivityRegion,
-        generation_region::{GenerationRegion, generation_region_coord, generation_region_world_bounds},
+        generation_region::{
+            GenerationRegion, generation_region_coord, generation_region_world_bounds,
+        },
         hydrology::HydrologySurfaceSample,
         terrain::{chunk_y_bounds, surface_height_from_sample},
         world_feature_fields::WorldFeatureFields,
@@ -182,6 +184,7 @@ pub(crate) fn generate_chunk(
     rasterize_fluid_pass(
         &mut chunk,
         chunk_origin,
+        columns.as_ref(),
         &density.values,
         context.fluids,
         region.as_ref(),
