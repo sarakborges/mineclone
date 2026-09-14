@@ -1,9 +1,8 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{game_state::GameState, pause_state::PauseState},
-    player::inventory::InventoryState,
-    tools::BrushPaletteState,
+    app::game_state::GameState,
+    gameplay::availability::world_interaction_available,
 };
 
 pub const BACKPACK_SLOT_COUNT: usize = 27;
@@ -88,10 +87,7 @@ impl Plugin for PlayerHotbarPlugin {
                 Update,
                 select_hotbar_slot
                     .in_set(PlayerHotbarSet::Selection)
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running))
-                    .run_if(in_state(InventoryState::Closed))
-                    .run_if(in_state(BrushPaletteState::Closed)),
+                    .run_if(world_interaction_available),
             );
     }
 }
