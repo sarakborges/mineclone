@@ -28,6 +28,12 @@ mod render_distance_logic;
 mod render_distance_section;
 pub(crate) mod world_settings_section;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum SettingsScreenSet {
+    Input,
+    Sync,
+}
+
 pub struct SettingsScreenPlugin;
 
 impl Plugin for SettingsScreenPlugin {
@@ -36,6 +42,12 @@ impl Plugin for SettingsScreenPlugin {
             .init_resource::<SettingsSectionSelection>()
             .init_resource::<TicksPerSecondInputState>()
             .init_resource::<SeedInputState>()
+            .configure_sets(
+                Update,
+                (SettingsScreenSet::Input, SettingsScreenSet::Sync)
+                    .chain()
+                    .run_if(settings_screen_active),
+            )
             .add_systems(
                 OnEnter(SettingsState::Open),
                 (reset_regular_settings_inputs, spawn_settings_screen).chain(),
@@ -58,6 +70,13 @@ impl Plugin for SettingsScreenPlugin {
                     handle_ticks_keyboard,
                     handle_language_buttons,
                     handle_display_tooltips_toggle,
+                )
+                    .chain()
+                    .in_set(SettingsScreenSet::Input),
+            )
+            .add_systems(
+                Update,
+                (
                     sync_section_ui,
                     sync_game_mode_buttons,
                     sync_language_buttons,
@@ -68,11 +87,13 @@ impl Plugin for SettingsScreenPlugin {
                     sync_slider_thumb,
                 )
                     .chain()
-                    .run_if(settings_screen_active),
+                    .in_set(SettingsScreenSet::Sync),
             )
             .add_systems(
                 Update,
-                handle_close_requests.run_if(in_state(SettingsState::Open)),
+                handle_close_requests
+                    .in_set(SettingsScreenSet::Input)
+                    .run_if(in_state(SettingsState::Open)),
             );
     }
 }
