@@ -11,41 +11,16 @@ use crate::{
     world::current_context::DayNightContext,
 };
 
-use super::{deterministic::hash01, state::SkyLayerVisualState};
+use super::{assets::StarAssets, deterministic::hash01, state::SkyLayerVisualState};
 
 const MAX_STARS: usize = 96;
 const STAR_DISTANCE: f32 = 110.0;
 const GOLDEN_ANGLE: f32 = 2.3999631;
 
-#[derive(Resource)]
-pub(super) struct StarAssets {
-    mesh: Handle<Mesh>,
-    material: Handle<StandardMaterial>,
-}
-
 #[derive(Component)]
 pub(super) struct Star {
     index: usize,
     direction: Vec3,
-}
-
-pub(super) fn setup_star_assets(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    let mesh = meshes.add(Rectangle::new(1.0, 1.0));
-    let material = materials.add(StandardMaterial {
-        base_color: Color::WHITE,
-        alpha_mode: AlphaMode::Blend,
-        unlit: true,
-        fog_enabled: false,
-        double_sided: true,
-        cull_mode: None,
-        ..default()
-    });
-
-    commands.insert_resource(StarAssets { mesh, material });
 }
 
 pub(super) fn spawn_stars(mut commands: Commands, assets: Res<StarAssets>) {
