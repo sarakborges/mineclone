@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{
-    content::{biome::BiomeRegistry, color::Hsi},
-    world::biome::CurrentBiome,
-};
+use crate::{content::color::Hsi, rendering::biome_visuals::CurrentBiomeVisuals};
 
 #[derive(Resource)]
 pub(super) struct SkyLayerVisualState {
@@ -25,31 +22,15 @@ impl Default for SkyLayerVisualState {
 }
 
 pub(super) fn update_sky_layer_visuals(
-    current_biome: Res<CurrentBiome>,
-    biomes: Res<BiomeRegistry>,
+    biome_visuals: CurrentBiomeVisuals,
     mut visuals: ResMut<SkyLayerVisualState>,
 ) {
-    let mut star_density = 0.0;
-    let mut cloud_density = 0.0;
-
-    for influence in &current_biome.influences {
-        let Some(biome) = biomes.get(&influence.id) else {
-            continue;
-        };
-        star_density += biome.visuals.stars.density * influence.weight;
-        cloud_density += biome.visuals.clouds.density * influence.weight;
-    }
-
-    visuals.star_density = star_density.clamp(0.0, 1.0);
-    visuals.cloud_density = cloud_density.clamp(0.0, 1.0);
-    visuals.star_color = Hsi::blend_weighted(current_biome.influences.iter().filter_map(|influence| {
-        biomes
-            .get(&influence.id)
-            .map(|biome| (biome.visuals.stars.color, influence.weight))
-    }));
-    visuals.cloud_color = Hsi::blend_weighted(current_biome.influences.iter().filter_map(|influence| {
-        biomes
-            .get(&influence.id)
-            .map(|biome| (biome.visuals.clouds.color, influence.weight))
-    }));
+    visuals.star_density = biome_visuals
+        .weighted_scalar(|biome| biome.visuals.stars.density)
+        .clamp(0.0, 1.0);
+    visuals.cloud_density = biome_visuals
+        .weighted_scalar(|biome| biome.visuals.clouds.density)
+        .clamp(0.0, 1.0);
+    visuals.star_color = biome_visuals.blend_hsi(|biome| biome.visuals.stars.color);
+    visuals.cloud_color = biome_visuals.blend_hsi(|biome| biome.visuals.clouds.color);
 }
