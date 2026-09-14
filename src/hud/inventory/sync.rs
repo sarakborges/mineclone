@@ -20,13 +20,14 @@ use crate::hud::block_icon::BlockIconMaterial;
 
 use super::{
     layout::{
-        InventoryItemView, InventoryLayoutState, spawn_creative_panel, spawn_cursor_icon,
+        InventoryItemView, InventoryLayoutState, spawn_creative_catalog_rows, spawn_cursor_icon,
         spawn_inventory_item, spawn_inventory_root,
     },
     state::{
-        CreativeCategoryButton, CreativeInventoryPanel, CreativeInventorySlot,
+        CreativeCatalogScrollArea, CreativeCategoryButton, CreativeInventorySlot,
         CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState, CreativeSearchBar,
-        InventoryCursorIcon, InventoryHudRoot, InventorySlot, InventoryTrashButton, ITEM_ICON_SIZE,
+        CreativeSearchText, InventoryCursorIcon, InventoryHudRoot, InventorySlot,
+        InventoryTrashButton, ITEM_ICON_SIZE,
     },
 };
 
@@ -175,7 +176,11 @@ pub(super) fn rebuild_inventory_when_changed(
     localization: Res<UiLocalization>,
     state: InventoryPanelState,
     roots: Query<Entity, With<InventoryHudRoot>>,
-    creative_panels: Query<Entity, With<CreativeInventoryPanel>>,
+    mut catalog_scroll: Query<
+        (Entity, &mut ScrollPosition, Option<&Children>),
+        With<CreativeCatalogScrollArea>,
+    >,
+    mut search_text: Query<&mut Text, With<CreativeSearchText>>,
     mut ui_dirty: ResMut<CreativeInventoryUiDirty>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
@@ -210,18 +215,35 @@ pub(super) fn rebuild_inventory_when_changed(
         return;
     }
 
-    let Some(root_entity) = roots.iter().next() else {
-        return;
+    let next_search_text = if state.creative_view.search_query().is_empty() {
+        localization.text(content.language.get(), "inventory.searchPlaceholder")
+    } else {
+        state.creative_view.search_query()
     };
-    for entity in &creative_panels {
-        commands.entity(entity).despawn();
-    }
-    if !game_mode.has_creative_inventory() {
-        return;
+    for mut text in &mut search_text {
+        if text.0 != next_search_text {
+            text.0 = next_search_text.to_owned();
+        }
     }
 
-    commands.entity(root_entity).with_children(|root| {
-        spawn_creative_panel(root, &layout, &mut items);
+    let Some((catalog_entity, mut position, children)) = catalog_scroll.iter_mut().next() else {
+        return;
+    };
+    position.0.y = state.scroll_state.catalog_y;
+    if let Some(children) = children {
+        for &child in children {
+            commands.entity(child).despawn();
+        }
+    }
+
+    commands.entity(catalog_entity).with_children(|scroll| {
+        spawn_creative_catalog_rows(
+            scroll,
+            &categories,
+            &state.creative_view,
+            state.cursor.item(),
+            &mut items,
+        );
     });
 }
 
