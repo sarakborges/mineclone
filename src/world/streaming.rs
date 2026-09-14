@@ -179,46 +179,52 @@ pub(super) fn stream_chunks(
             let Some(neighbor_chunk) = inputs.world.chunk(neighbor) else {
                 continue;
             };
-            if boundary_has_content(chunk, offset)
-                && boundary_has_content(neighbor_chunk, -offset)
-            {
+            let chunk_boundary_has_content = boundary_has_content(chunk, offset);
+            let neighbor_boundary_has_content = boundary_has_content(neighbor_chunk, -offset);
+
+            if chunk_boundary_has_content && neighbor_boundary_has_content {
                 inputs.remesh_queue.enqueue_priority(neighbor);
+            } else if boundary_has_fluid(chunk, offset)
+                || boundary_has_fluid(neighbor_chunk, -offset)
+            {
+                inputs.remesh_queue.enqueue_fluid_priority(neighbor);
             }
         }
     }
 }
 
 fn boundary_has_content(chunk: &VoxelChunk, outward: IVec3) -> bool {
-    let last = CHUNK_SIZE as i32 - 1;
+    boundary_any(chunk, outward, |chunk, x, y, z| {
+        chunk.cell_at(x, y, z).is_some() || chunk.fluid_at(x, y, z).is_some()
+    })
+}
 
-    if outward.x > 0 {
-        return (0..CHUNK_SIZE as i32)
-            .any(|y| (0..CHUNK_SIZE as i32).any(|z| voxel_has_content(chunk, last, y, z)));
+fn boundary_has_fluid(chunk: &VoxelChunk, outward: IVec3) -> bool {
+    boundary_any(chunk, outward, |chunk, x, y, z| {
+        chunk.fluid_at(x, y, z).is_some()
+    })
+}
+
+fn boundary_any(
+    chunk: &VoxelChunk,
+    outward: IVec3,
+    mut predicate: impl FnMut(&VoxelChunk, i32, i32, i32) -> bool,
+) -> bool {
+    let size = CHUNK_SIZE as i32;
+    let last = size - 1;
+
+    if outward.x != 0 {
+        let x = if outward.x > 0 { last } else { 0 };
+        return (0..size).any(|y| (0..size).any(|z| predicate(chunk, x, y, z)));
     }
-    if outward.x < 0 {
-        return (0..CHUNK_SIZE as i32)
-            .any(|y| (0..CHUNK_SIZE as i32).any(|z| voxel_has_content(chunk, 0, y, z)));
+    if outward.y != 0 {
+        let y = if outward.y > 0 { last } else { 0 };
+        return (0..size).any(|z| (0..size).any(|x| predicate(chunk, x, y, z)));
     }
-    if outward.y > 0 {
-        return (0..CHUNK_SIZE as i32)
-            .any(|z| (0..CHUNK_SIZE as i32).any(|x| voxel_has_content(chunk, x, last, z)));
-    }
-    if outward.y < 0 {
-        return (0..CHUNK_SIZE as i32)
-            .any(|z| (0..CHUNK_SIZE as i32).any(|x| voxel_has_content(chunk, x, 0, z)));
-    }
-    if outward.z > 0 {
-        return (0..CHUNK_SIZE as i32)
-            .any(|y| (0..CHUNK_SIZE as i32).any(|x| voxel_has_content(chunk, x, y, last)));
-    }
-    if outward.z < 0 {
-        return (0..CHUNK_SIZE as i32)
-            .any(|y| (0..CHUNK_SIZE as i32).any(|x| voxel_has_content(chunk, x, y, 0)));
+    if outward.z != 0 {
+        let z = if outward.z > 0 { last } else { 0 };
+        return (0..size).any(|y| (0..size).any(|x| predicate(chunk, x, y, z)));
     }
 
     false
-}
-
-fn voxel_has_content(chunk: &VoxelChunk, x: i32, y: i32, z: i32) -> bool {
-    chunk.cell_at(x, y, z).is_some() || chunk.fluid_at(x, y, z).is_some()
 }
