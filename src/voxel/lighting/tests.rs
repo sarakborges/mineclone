@@ -1,10 +1,13 @@
 use super::*;
 use crate::{
     content::{
-        block::{BlockDefinition, BlockRegistry, BlockTextureRotations, BlockTextures},
-        color::Rgb,
+        block::{
+            BlockDefinition, BlockRegistry, BlockTextureRotations, BlockTextures, BlockTint,
+        },
+        color::Hsi,
         fluid::{FluidDefinition, FluidRegistry},
     },
+    localization::LocalizedText,
     voxel::{
         cell::VoxelCell,
         chunk::{CHUNK_SIZE, VoxelChunk},
@@ -291,16 +294,14 @@ fn test_fluids() -> FluidRegistry {
     let mut fluids = FluidRegistry::default();
     fluids.insert(FluidDefinition {
         id: WATER_ID.to_owned(),
-        name: WATER_ID.to_owned(),
-        color: Rgb {
-            r: 0.0,
-            g: 0.0,
-            b: 1.0,
-        },
+        name: localized_text(WATER_ID),
+        color: Hsi::new(240.0, 1.0, 1.0),
         opacity: 0.5,
         roughness: 0.0,
         metallic: 0.0,
         light_dampening: 2,
+        spread_speed: 1.0,
+        max_spread: 8,
     });
     fluids
 }
@@ -308,11 +309,22 @@ fn test_fluids() -> FluidRegistry {
 fn test_block(id: &str, light_emission: u8) -> BlockDefinition {
     BlockDefinition {
         id: id.to_owned(),
-        name: id.to_owned(),
+        name: localized_text(id),
+        category: "test".to_owned(),
+        tint: BlockTint::None,
         textures: BlockTextures::default(),
         rotate_texture: BlockTextureRotations::default(),
+        orientations: Vec::new(),
+        secondary_properties: Vec::new(),
+        alpha_cutoff: None,
+        alpha_blend: false,
         light_emission,
         light_dampening: VoxelLight::MAX_LEVEL,
         casts_shadow: true,
     }
+}
+
+fn localized_text(value: &str) -> LocalizedText {
+    serde_json::from_value(serde_json::json!({ "english": value }))
+        .expect("test localized text should deserialize")
 }

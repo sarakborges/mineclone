@@ -18,9 +18,9 @@ use super::{
 };
 use crate::world::{
     WorldLoadMode,
-    chunk_loading::ensure_chunk_loaded,
     chunk_rendering::spawn_chunk_mesh,
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
+    generation::{ChunkGenerationContext, generate_chunk},
     work_budget::FrameWorkBudget,
 };
 
@@ -48,9 +48,7 @@ pub(in crate::world) fn setup_world(
             generate_initial_chunks(&generation, &content, &mut runtime)
         }
         WorldLoadingPhase::Lighting => light_initial_chunks(&content, &mut runtime),
-        WorldLoadingPhase::Meshing => {
-            mesh_initial_chunks(&content, &mut renderer, &mut runtime)
-        }
+        WorldLoadingPhase::Meshing => mesh_initial_chunks(&content, &mut renderer, &mut runtime),
         WorldLoadingPhase::Spawning => {
             spawn_loaded_world(&mut renderer, &mut runtime, &persistence)
         }
@@ -79,7 +77,7 @@ fn generate_initial_chunks(
             break;
         };
 
-        ensure_chunk_loaded(&mut runtime.world, coord, &generation_context);
+        ensure_bootstrap_chunk_loaded(&mut runtime.world, coord, &generation_context);
         runtime
             .fluid_updates
             .enqueue_loaded_fluid_frontier(&runtime.world, coord);
@@ -90,6 +88,26 @@ fn generate_initial_chunks(
     if runtime.loading_state.generated >= runtime.loading_state.coords.len() {
         runtime.loading_state.phase = WorldLoadingPhase::Lighting;
     }
+}
+
+fn ensure_bootstrap_chunk_loaded(
+    world: &mut crate::voxel::world::VoxelWorld,
+    coord: IVec3,
+    generation_context: &ChunkGenerationContext<'_>,
+) {
+    if world.chunk(coord).is_some() {
+        return;
+    }
+
+    if world.has_generated_chunk(coord) {
+        assert!(
+            world.restore_chunk(coord),
+            "generated bootstrap chunk must be resident or archived: {coord:?}"
+        );
+        return;
+    }
+
+    world.insert_chunk(coord, generate_chunk(coord, generation_context));
 }
 
 fn light_initial_chunks(content: &ChunkContent<'_>, runtime: &mut WorldSetupRuntime<'_>) {
@@ -104,8 +122,7 @@ fn light_initial_chunks(content: &ChunkContent<'_>, runtime: &mut WorldSetupRunt
         if start >= runtime.loading_state.coords.len() {
             break;
         }
-        let end =
-            (start + BOOTSTRAP_LIGHT_BATCH_CHUNKS).min(runtime.loading_state.coords.len());
+        let end = (start + BOOTSTRAP_LIGHT_BATCH_CHUNKS).min(runtime.loading_state.coords.len());
 
         drop(initialize_chunks_lighting(
             &mut runtime.world,

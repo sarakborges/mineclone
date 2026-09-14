@@ -17,8 +17,12 @@ mod ui;
 mod voxel;
 mod world;
 
-#[allow(unused_imports)]
 #[cfg(debug_assertions)]
+#[expect(
+    unused_imports,
+    clippy::single_component_path_imports,
+    reason = "the debug import intentionally enables Bevy dynamic linking"
+)]
 use bevy_dylib;
 
 use app::{

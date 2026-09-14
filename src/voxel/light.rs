@@ -138,7 +138,7 @@ const fn clamp_level(value: u8) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::{BlockLight, VoxelLight};
+    use super::{BlockLight, HUE_STEPS, VoxelLight};
     use crate::content::color::Hsi;
 
     #[test]
