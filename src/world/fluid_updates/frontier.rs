@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 
 use crate::voxel::{
-    chunk::CHUNK_SIZE, neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
+    chunk::{CHUNK_SIZE, VoxelChunk},
+    neighbors::CARDINAL_NEIGHBORS,
+    world::VoxelWorld,
 };
 
 use super::PendingFluidUpdates;
@@ -19,45 +21,13 @@ pub(super) fn enqueue_loaded_fluid_frontier(
     world: &VoxelWorld,
     coord: IVec3,
 ) {
-    enqueue_chunk_spread_targets(pending, world, coord);
-
+    // Natural hydrology is already rasterized at its final water volume during
+    // chunk generation. Re-scanning every generated fluid voxel here used to
+    // turn that finished water back into simulation work on every chunk load.
+    // Only resume fluid that was already dynamically spreading across a loaded
+    // neighbor boundary.
     for offset in CARDINAL_NEIGHBORS {
         enqueue_neighbor_boundary_spread_targets(pending, world, coord + offset, -offset);
-    }
-}
-
-fn enqueue_chunk_spread_targets(
-    pending: &mut PendingFluidUpdates,
-    world: &VoxelWorld,
-    coord: IVec3,
-) {
-    if coord.y < 0 {
-        return;
-    }
-    let Some(chunk) = world.chunk(coord) else {
-        return;
-    };
-    if !chunk.has_fluid() {
-        return;
-    }
-
-    let origin = coord * CHUNK_SIZE as i32;
-
-    for local_y in 0..CHUNK_SIZE {
-        for local_z in 0..CHUNK_SIZE {
-            for local_x in 0..CHUNK_SIZE {
-                if chunk
-                    .fluid_at(local_x as i32, local_y as i32, local_z as i32)
-                    .is_none()
-                {
-                    continue;
-                }
-
-                let position =
-                    origin + IVec3::new(local_x as i32, local_y as i32, local_z as i32);
-                enqueue_spread_targets_from_fluid(pending, world, position);
-            }
-        }
     }
 }
 
@@ -84,7 +54,7 @@ fn enqueue_neighbor_boundary_spread_targets(
         let local_x = if direction.x < 0 { 0 } else { size - 1 };
         for local_y in 0..size {
             for local_z in 0..size {
-                if chunk.fluid_at(local_x, local_y, local_z).is_none() {
+                if !is_dynamic_fluid(chunk, local_x, local_y, local_z) {
                     continue;
                 }
                 enqueue_spread_targets_from_fluid(
@@ -101,7 +71,7 @@ fn enqueue_neighbor_boundary_spread_targets(
         let local_y = if direction.y < 0 { 0 } else { size - 1 };
         for local_z in 0..size {
             for local_x in 0..size {
-                if chunk.fluid_at(local_x, local_y, local_z).is_none() {
+                if !is_dynamic_fluid(chunk, local_x, local_y, local_z) {
                     continue;
                 }
                 enqueue_spread_targets_from_fluid(
@@ -117,7 +87,7 @@ fn enqueue_neighbor_boundary_spread_targets(
     let local_z = if direction.z < 0 { 0 } else { size - 1 };
     for local_y in 0..size {
         for local_x in 0..size {
-            if chunk.fluid_at(local_x, local_y, local_z).is_none() {
+            if !is_dynamic_fluid(chunk, local_x, local_y, local_z) {
                 continue;
             }
             enqueue_spread_targets_from_fluid(
@@ -127,6 +97,12 @@ fn enqueue_neighbor_boundary_spread_targets(
             );
         }
     }
+}
+
+fn is_dynamic_fluid(chunk: &VoxelChunk, x: i32, y: i32, z: i32) -> bool {
+    chunk
+        .fluid_at(x, y, z)
+        .is_some_and(|fluid| !fluid.is_source())
 }
 
 fn enqueue_spread_targets_from_fluid(
