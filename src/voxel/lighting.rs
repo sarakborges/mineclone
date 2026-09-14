@@ -16,10 +16,17 @@ use crate::content::{
 };
 
 use self::{
+    context::LightingContext,
+    medium::block_emission,
     propagation::{relax, relax_budgeted},
     queue::LightingQueue,
 };
-use super::{coordinates::chunk_origin, light::VoxelLight, world::VoxelWorld};
+use super::{
+    chunk::CHUNK_SIZE,
+    coordinates::chunk_origin,
+    light::{BlockLight, VoxelLight},
+    world::VoxelWorld,
+};
 
 #[derive(Resource, Default)]
 pub(crate) struct PendingLightingUpdates {
@@ -39,20 +46,10 @@ impl PendingLightingUpdates {
         }
     }
 
-    pub(crate) fn enqueue_chunks_initialization(
-        &mut self,
-        world: &mut VoxelWorld,
-        coords: &[IVec3],
-    ) {
-        for &coord in coords {
-            if !world.clear_chunk_light(coord) {
-                continue;
-            }
-
-            let origin = chunk_origin(coord);
-            self.queue.enqueue_chunk_voxels(origin);
-            self.queue.enqueue_chunk_boundary_neighbors(origin);
-        }
+    pub(crate) fn enqueue_chunk_relaxation(&mut self, coord: IVec3) {
+        let origin = chunk_origin(coord);
+        self.queue.enqueue_chunk_voxels(origin);
+        self.queue.enqueue_chunk_boundary_neighbors(origin);
     }
 
     fn enqueue_emission_edit_volumes(&mut self, world: &VoxelWorld, blocks: &BlockRegistry) {
@@ -68,8 +65,8 @@ impl PendingLightingUpdates {
                 continue;
             }
 
-            // A source color change can leave stale RGB channels mutually
-            // supporting one another in the incremental field. Re-evaluate the
+            // A source color change can leave stale color information mutually
+            // supporting itself in the incremental field. Re-evaluate the
             // complete maximum Manhattan footprint of the source so recoloring an
             // existing emitter converges immediately instead of waiting for a
             // later geometry edit to disturb the old field.
@@ -95,6 +92,39 @@ impl PendingLightingUpdates {
     pub(crate) fn clear(&mut self) {
         self.queue = LightingQueue::default();
         self.emission_edit_centers.clear();
+    }
+}
+
+pub(crate) fn seed_chunk_direct_lighting(
+    world: &mut VoxelWorld,
+    coord: IVec3,
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+    secondary_properties: &SecondaryPropertyRegistry,
+) {
+    let origin = chunk_origin(coord);
+    let mut context = LightingContext::default();
+
+    for local_z in 0..CHUNK_SIZE as i32 {
+        for local_x in 0..CHUNK_SIZE as i32 {
+            for local_y in 0..CHUNK_SIZE as i32 {
+                let position = origin + IVec3::new(local_x, local_y, local_z);
+                let sky = context.direct_sky_light(
+                    world,
+                    blocks,
+                    fluids,
+                    secondary_properties,
+                    position,
+                );
+                let emitted = BlockLight::from_rgb_levels(block_emission(
+                    world,
+                    blocks,
+                    secondary_properties,
+                    position,
+                ));
+                world.set_light_at(position, VoxelLight::new_hsi(sky, emitted));
+            }
+        }
     }
 }
 
