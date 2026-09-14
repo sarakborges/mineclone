@@ -5,32 +5,20 @@ use crate::localization::LocalizedText;
 
 use super::{
     block::{BlockDefinition, BlockRegistry, BlockTint},
-    color::Rgb,
+    color::Hsi,
     registry::DefinitionMap,
 };
 
-const DEFAULT_GRASS_ICON_TINT: Rgb = Rgb {
-    r: 0.24,
-    g: 0.70,
-    b: 0.16,
-};
-const DEFAULT_LEAF_ICON_TINT: Rgb = Rgb {
-    r: 0.24,
-    g: 0.70,
-    b: 0.16,
-};
-const DEFAULT_FOLIAGE_ICON_TINT: Rgb = Rgb {
-    r: 0.24,
-    g: 0.70,
-    b: 0.16,
-};
+const DEFAULT_GRASS_ICON_TINT: Hsi = Hsi::new(112.1111, 0.56363636, 0.36666667);
+const DEFAULT_LEAF_ICON_TINT: Hsi = Hsi::new(112.1111, 0.56363636, 0.36666667);
+const DEFAULT_FOLIAGE_ICON_TINT: Hsi = Hsi::new(112.1111, 0.56363636, 0.36666667);
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InventoryCategoryBlockIcon {
     pub block: String,
     #[serde(default)]
-    pub tint: Option<Rgb>,
+    pub tint: Option<Hsi>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -63,7 +51,7 @@ impl InventoryCategoryDefinition {
         }
 
         match block.tint {
-            BlockTint::None => Color::srgb(1.0, 1.0, 1.0),
+            BlockTint::None => Color::WHITE,
             BlockTint::Grass => DEFAULT_GRASS_ICON_TINT.to_color(),
             BlockTint::Leaf => DEFAULT_LEAF_ICON_TINT.to_color(),
             BlockTint::Foliage => DEFAULT_FOLIAGE_ICON_TINT.to_color(),

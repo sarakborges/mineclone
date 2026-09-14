@@ -1,10 +1,12 @@
+use std::cmp::Ordering;
+
 use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
     content::{
         block::BlockRegistry, builtin_ids::BRUSH_TOOL_ID,
-        secondary_property::SecondaryPropertyRegistry,
+        secondary_property::{SecondaryPropertyDefinition, SecondaryPropertyRegistry},
     },
     localization::{ActiveLanguage, UiLocalization},
     player::inventory::InventoryState,
@@ -22,6 +24,7 @@ const SWATCH_SIZE: f32 = 30.0;
 const SWATCH_GAP: f32 = 4.0;
 const PALETTE_WIDTH: f32 = PALETTE_COLUMNS as f32 * SWATCH_SIZE
     + (PALETTE_COLUMNS - 1) as f32 * SWATCH_GAP;
+const ACHROMATIC_SATURATION_EPSILON: f32 = 0.001;
 
 #[derive(States, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub(crate) enum BrushPaletteState {
@@ -167,7 +170,7 @@ fn spawn_brush_palette(
 ) {
     let language = language.get();
     let mut colors = properties.iter(DYED_PROPERTY_ID).collect::<Vec<_>>();
-    colors.sort_by(|left, right| left.id.cmp(&right.id));
+    colors.sort_by(compare_palette_colors);
 
     commands
         .spawn((
@@ -286,6 +289,30 @@ fn spawn_brush_palette(
                     });
             });
         });
+}
+
+fn compare_palette_colors(
+    left: &&SecondaryPropertyDefinition,
+    right: &&SecondaryPropertyDefinition,
+) -> Ordering {
+    let left_achromatic = left.color.saturation <= ACHROMATIC_SATURATION_EPSILON;
+    let right_achromatic = right.color.saturation <= ACHROMATIC_SATURATION_EPSILON;
+
+    left_achromatic
+        .cmp(&right_achromatic)
+        .then_with(|| {
+            if left_achromatic && right_achromatic {
+                right.color.intensity.total_cmp(&left.color.intensity)
+            } else {
+                left.color
+                    .hue
+                    .rem_euclid(360.0)
+                    .total_cmp(&right.color.hue.rem_euclid(360.0))
+            }
+        })
+        .then_with(|| right.color.saturation.total_cmp(&left.color.saturation))
+        .then_with(|| right.color.intensity.total_cmp(&left.color.intensity))
+        .then_with(|| left.id.cmp(&right.id))
 }
 
 fn handle_palette_selection(

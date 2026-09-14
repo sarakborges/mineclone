@@ -136,12 +136,8 @@ fn update_highlight(
                 secondary_properties.get(DYED_PROPERTY_ID, dye_id).map_or(
                     Color::srgba(1.0, 1.0, 1.0, BRUSH_GHOST_ALPHA),
                     |definition| {
-                        Color::srgba(
-                            definition.color.r,
-                            definition.color.g,
-                            definition.color.b,
-                            BRUSH_GHOST_ALPHA,
-                        )
+                        let [red, green, blue] = definition.color.to_srgb();
+                        Color::srgba(red, green, blue, BRUSH_GHOST_ALPHA)
                     },
                 )
             },

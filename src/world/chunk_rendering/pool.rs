@@ -74,7 +74,7 @@ impl ChunkRenderPool {
         }
 
         for (handle, replacement) in slot.meshes.iter().zip(replacements) {
-            let Some(existing) = meshes.get_mut(handle) else {
+            let Some(mut existing) = meshes.get_mut(handle) else {
                 return false;
             };
             *existing = replacement;
@@ -110,7 +110,7 @@ impl ChunkRenderPool {
         }
 
         for (handle, (_, replacement)) in fluid_handles.iter().zip(replacements) {
-            let Some(existing) = meshes.get_mut(handle) else {
+            let Some(mut existing) = meshes.get_mut(handle) else {
                 return false;
             };
             *existing = replacement;
