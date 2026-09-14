@@ -1,5 +1,5 @@
 use bevy::{
-    light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap},
+    light::{CascadeShadowConfig, CascadeShadowConfigBuilder, DirectionalLightShadowMap},
     prelude::*,
 };
 
@@ -11,7 +11,7 @@ use crate::{
     voxel::chunk::CHUNK_SIZE,
     world::{
         day_night::DayNightClock, dimension::CurrentDimension,
-        render_distance::MAX_RENDER_DISTANCE_CHUNKS,
+        render_distance::RenderDistanceSettings,
     },
 };
 
@@ -19,8 +19,8 @@ use super::celestial_path::celestial_direction;
 
 const SHADOW_MAP_SIZE: usize = 2048;
 const FIRST_CASCADE_FAR_BOUND: f32 = CHUNK_SIZE as f32;
-const MAXIMUM_SHADOW_DISTANCE: f32 = ((MAX_RENDER_DISTANCE_CHUNKS + 1) * CHUNK_SIZE as i32) as f32;
-const SHADOW_DEPTH_BIAS: f32 = 0.05;
+const SHADOW_DEPTH_BIAS: f32 = 0.02;
+const SHADOW_NORMAL_BIAS: f32 = 0.8;
 const BASE_SUN_ILLUMINANCE: f32 = 10_000.0;
 
 pub struct DirectionalShadowsPlugin;
@@ -41,21 +41,19 @@ impl Plugin for DirectionalShadowsPlugin {
 #[derive(Component)]
 struct SunShadowLight;
 
-fn spawn_sun_shadow_light(mut commands: Commands) {
+fn spawn_sun_shadow_light(
+    mut commands: Commands,
+    render_distance: Res<RenderDistanceSettings>,
+) {
     commands.spawn((
         DirectionalLight {
             illuminance: 0.0,
             shadow_maps_enabled: true,
             shadow_depth_bias: SHADOW_DEPTH_BIAS,
+            shadow_normal_bias: SHADOW_NORMAL_BIAS,
             ..default()
         },
-        CascadeShadowConfigBuilder {
-            num_cascades: 4,
-            first_cascade_far_bound: FIRST_CASCADE_FAR_BOUND,
-            maximum_distance: MAXIMUM_SHADOW_DISTANCE,
-            ..default()
-        }
-        .build(),
+        shadow_config(render_distance.chunks()),
         Transform::default(),
         Visibility::Hidden,
         SunShadowLight,
@@ -69,11 +67,24 @@ fn update_sun_shadow_light(
     skies: Res<SkyRegistry>,
     cycles: Res<DayNightCycleRegistry>,
     clock: Res<DayNightClock>,
+    render_distance: Res<RenderDistanceSettings>,
     mut lights: Query<
-        (&mut DirectionalLight, &mut Transform, &mut Visibility),
+        (
+            &mut DirectionalLight,
+            &mut CascadeShadowConfig,
+            &mut Transform,
+            &mut Visibility,
+        ),
         With<SunShadowLight>,
     >,
 ) {
+    if render_distance.is_changed() {
+        let config = shadow_config(render_distance.chunks());
+        for (_, mut cascades, _, _) in &mut lights {
+            *cascades = config.clone();
+        }
+    }
+
     let Some(dimension) = dimensions.get(&current_dimension.id) else {
         hide_lights(&mut lights);
         return;
@@ -94,7 +105,7 @@ fn update_sun_shadow_light(
     let sample = cycle.sample(clock.normalized_time);
     let rotation = shadow_light_rotation(sun_direction);
 
-    for (mut light, mut transform, mut visibility) in &mut lights {
+    for (mut light, _, mut transform, mut visibility) in &mut lights {
         light.color = sky.sun.tint.to_color();
         light.illuminance = BASE_SUN_ILLUMINANCE * sample.sky_light_factor;
         transform.rotation = rotation;
@@ -104,14 +115,31 @@ fn update_sun_shadow_light(
 
 fn hide_lights(
     lights: &mut Query<
-        (&mut DirectionalLight, &mut Transform, &mut Visibility),
+        (
+            &mut DirectionalLight,
+            &mut CascadeShadowConfig,
+            &mut Transform,
+            &mut Visibility,
+        ),
         With<SunShadowLight>,
     >,
 ) {
-    for (mut light, _, mut visibility) in lights.iter_mut() {
+    for (mut light, _, _, mut visibility) in lights.iter_mut() {
         light.illuminance = 0.0;
         *visibility = Visibility::Hidden;
     }
+}
+
+fn shadow_config(horizontal_chunks: i32) -> CascadeShadowConfig {
+    let maximum_distance = ((horizontal_chunks + 1) * CHUNK_SIZE as i32) as f32;
+
+    CascadeShadowConfigBuilder {
+        num_cascades: 4,
+        first_cascade_far_bound: FIRST_CASCADE_FAR_BOUND,
+        maximum_distance,
+        ..default()
+    }
+    .build()
 }
 
 fn shadow_light_rotation(sun_direction: Vec3) -> Quat {
@@ -129,5 +157,12 @@ mod tests {
         let light_forward = rotation * Vec3::NEG_Z;
 
         assert!((light_forward + sun_direction).length() <= 0.0001);
+    }
+
+    #[test]
+    fn shadow_distance_tracks_render_distance() {
+        let config = shadow_config(12);
+
+        assert_eq!(config.bounds.last().copied(), Some(13.0 * CHUNK_SIZE as f32));
     }
 }
