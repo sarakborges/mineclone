@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{game_state::GameState, settings_state::SettingsState},
+    app::{game_state::GameState, settings_state::SettingsState, version},
     localization::{ActiveLanguage, UiLocalization},
     ui::{
         button::menu_button,
@@ -10,9 +10,7 @@ use crate::{
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
     },
-    world::{
-        InMemoryWorldSave, WorldLoadMode, WorldSeed, dimension::CurrentDimension,
-    },
+    world::{InMemoryWorldSave, WorldLoadMode, WorldSeed, dimension::CurrentDimension},
 };
 
 pub struct StartingScreenPlugin;
@@ -108,7 +106,7 @@ fn setup_starting_screen(
                 });
 
             parent.spawn((
-                typography::caption(format!("v{}", env!("CARGO_PKG_VERSION"))),
+                typography::caption(format!("v{}", version::VERSION.trim())),
                 Node {
                     position_type: PositionType::Absolute,
                     right: px(20),
