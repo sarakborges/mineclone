@@ -18,6 +18,7 @@ const NEAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const FAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS: i32 = 3;
 const IMMEDIATE_PLAYER_PRIORITY_RADIUS_CHUNKS: i32 = 1;
+const SURFACE_SUPPORT_NEIGHBORS: [IVec2; 4] = [IVec2::X, IVec2::NEG_X, IVec2::Y, IVec2::NEG_Y];
 
 pub(super) fn rebuild_queue(
     streaming: &mut ChunkStreamingState,
@@ -149,23 +150,20 @@ fn desired_chunk_coords(
             );
             let mut surrounding_minimum = own_minimum;
 
-            for neighbor_z in -1..=1 {
-                for neighbor_x in -1..=1 {
-                    if neighbor_x == 0 && neighbor_z == 0 {
-                        continue;
-                    }
-
-                    let neighbor = horizontal + IVec2::new(neighbor_x, neighbor_z);
-                    let (neighbor_minimum, _) = cached_surface_range(
-                        surface_ranges,
-                        neighbor,
-                        context.dimension,
-                        context.biomes,
-                        context.biome_field,
-                        context.feature_fields,
-                    );
-                    surrounding_minimum = surrounding_minimum.min(neighbor_minimum);
-                }
+            // Cardinal support is sufficient for the conservative vertical
+            // envelope and avoids probing all eight surrounding chunk columns
+            // whenever the player crosses into a new streaming center.
+            for offset in SURFACE_SUPPORT_NEIGHBORS {
+                let neighbor = horizontal + offset;
+                let (neighbor_minimum, _) = cached_surface_range(
+                    surface_ranges,
+                    neighbor,
+                    context.dimension,
+                    context.biomes,
+                    context.biome_field,
+                    context.feature_fields,
+                );
+                surrounding_minimum = surrounding_minimum.min(neighbor_minimum);
             }
 
             let chunk_size = CHUNK_SIZE as i32;
@@ -173,9 +171,6 @@ fn desired_chunk_coords(
             let padding_below = if near_player {
                 NEAR_SURFACE_PADDING_BELOW_CHUNKS
             } else {
-                // Lakes can carve eighteen blocks below their source surface,
-                // already deeper than one chunk. Two support chunks prevent
-                // distant hydrology cuts from opening directly into unloaded void.
                 FAR_SURFACE_PADDING_BELOW_CHUNKS
             };
             let minimum_y =
