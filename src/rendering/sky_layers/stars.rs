@@ -70,40 +70,45 @@ pub(super) fn spawn_stars(mut commands: Commands, assets: Res<StarAssets>) {
 }
 
 #[derive(SystemParam)]
-pub(super) struct StarUpdateInput<'w, 's> {
+pub(super) struct StarScene<'w> {
     visuals: Res<'w, SkyLayerVisualState>,
     clock: Res<'w, DayNightClock>,
     current_dimension: Res<'w, CurrentDimension>,
     dimensions: Res<'w, DimensionRegistry>,
     cycles: Res<'w, DayNightCycleRegistry>,
+}
+
+#[derive(SystemParam)]
+pub(super) struct StarView<'w, 's> {
     camera: Single<'w, 's, &'static GlobalTransform, With<GameplayCamera>>,
     assets: Res<'w, StarAssets>,
 }
 
 pub(super) fn update_stars(
-    input: StarUpdateInput,
+    scene: StarScene,
+    view: StarView,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut stars: Query<(&Star, &mut Transform, &mut Visibility)>,
 ) {
-    let Some(dimension) = input.dimensions.get(&input.current_dimension.id) else {
+    let Some(dimension) = scene.dimensions.get(&scene.current_dimension.id) else {
         return;
     };
-    let Some(cycle) = input.cycles.get(&dimension.day_night_cycle) else {
+    let Some(cycle) = scene.cycles.get(&dimension.day_night_cycle) else {
         return;
     };
-    let sample = cycle.sample(input.clock.normalized_time);
+    let sample = cycle.sample(scene.clock.normalized_time);
     let time_factor = star_time_factor(sample.phase, sample.next_phase, sample.transition);
     let visible_count =
-        (input.visuals.star_density * time_factor * MAX_STARS as f32).round() as usize;
-    let camera_position = input.camera.translation();
+        (scene.visuals.star_density * time_factor * MAX_STARS as f32).round() as usize;
+    let camera_position = view.camera.translation();
 
-    if let Some(mut material) = materials.get_mut(&input.assets.material) {
-        let [red, green, blue] = input.visuals.star_color.to_srgb();
+    if let Some(mut material) = materials.get_mut(&view.assets.material) {
+        let [red, green, blue] = scene.visuals.star_color.to_srgb();
         material.base_color = Color::srgba(red, green, blue, time_factor);
     }
 
     for (star, mut transform, mut visibility) in &mut stars {
-        if star.index >= visible_count || input.visuals.star_density <= 0.0 || time_factor <= 0.0 {
+        if star.index >= visible_count || scene.visuals.star_density <= 0.0 || time_factor <= 0.0 {
             *visibility = Visibility::Hidden;
             continue;
         }
