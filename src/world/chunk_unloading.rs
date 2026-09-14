@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 
@@ -14,6 +14,7 @@ use super::{
     chunk_remesh::ChunkRemeshQueue,
     chunk_system_params::ChunkRenderer,
     streaming::ChunkStreamingState,
+    work_budget::FrameWorkBudget,
 };
 
 const MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK: usize = 8;
@@ -43,13 +44,14 @@ pub(super) fn unload_chunk_meshes(
 
     pending_unloads.sort_by_key(|coord| -(*coord - center).length_squared());
 
-    let frame_started = Instant::now();
+    let mut budget = FrameWorkBudget::new(
+        CHUNK_UNLOAD_BUDGET,
+        MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK,
+    );
     let mut unloaded = Vec::new();
 
     for coord in pending_unloads {
-        if unloaded.len() >= MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK
-            && frame_started.elapsed() >= CHUNK_UNLOAD_BUDGET
-        {
+        if budget.exhausted() {
             break;
         }
 
@@ -72,6 +74,7 @@ pub(super) fn unload_chunk_meshes(
 
         runtime.world.archive_chunk(coord);
         unloaded.push(coord);
+        budget.record(1);
     }
 
     if unloaded.is_empty() {
