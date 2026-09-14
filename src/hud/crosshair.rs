@@ -170,7 +170,12 @@ fn update_action_hint(
         selected_item
             .and_then(|id| content.blocks.get(id))
             .filter(|block| block.is_rotatable())
-            .map(|_| content.localization.text(language, "hud.rotateBlock").to_owned())
+            .map(|_| {
+                content
+                    .localization
+                    .text(language, "hud.rotateBlock")
+                    .to_owned()
+            })
             .or_else(|| {
                 if selected_item != Some(BRUSH_TOOL_ID) {
                     return None;
@@ -187,7 +192,10 @@ fn update_action_hint(
                 }
 
                 Some(match runtime.brush_mode.dye_id() {
-                    None => content.localization.text(language, "hud.brushClear").to_owned(),
+                    None => content
+                        .localization
+                        .text(language, "hud.brushClear")
+                        .to_owned(),
                     Some(dye_id) => {
                         let color_name = content
                             .secondary_properties
