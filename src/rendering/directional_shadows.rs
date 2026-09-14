@@ -17,7 +17,8 @@ use crate::{
 
 use super::celestial_path::celestial_direction;
 
-const SHADOW_MAP_SIZE: usize = 2048;
+const SHADOW_MAP_SIZE: usize = 1024;
+const SHADOW_CASCADES: usize = 3;
 const FIRST_CASCADE_FAR_BOUND: f32 = CHUNK_SIZE as f32;
 const SHADOW_DEPTH_BIAS: f32 = 0.02;
 const SHADOW_NORMAL_BIAS: f32 = 0.8;
@@ -134,7 +135,7 @@ fn shadow_config(horizontal_chunks: i32) -> CascadeShadowConfig {
     let maximum_distance = ((horizontal_chunks + 1) * CHUNK_SIZE as i32) as f32;
 
     CascadeShadowConfigBuilder {
-        num_cascades: 4,
+        num_cascades: SHADOW_CASCADES,
         first_cascade_far_bound: FIRST_CASCADE_FAR_BOUND,
         maximum_distance,
         ..default()
@@ -160,9 +161,10 @@ mod tests {
     }
 
     #[test]
-    fn shadow_distance_tracks_render_distance() {
+    fn directional_shadow_budget_uses_three_cascades() {
         let config = shadow_config(12);
 
+        assert_eq!(config.bounds.len(), SHADOW_CASCADES);
         assert_eq!(config.bounds.last().copied(), Some(13.0 * CHUNK_SIZE as f32));
     }
 }
