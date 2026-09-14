@@ -5,8 +5,7 @@ use crate::{
     localization::{Language, UiLocalization},
     ui::{
         button::menu_button,
-        text_input::select_all_pressed,
-        theme,
+        numeric_input::{NumericInputEvent, NumericInputState, numeric_input_border},
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
     },
@@ -24,6 +23,7 @@ use super::{
 
 const CONTROL_HEIGHT: f32 = 44.0;
 const RANDOM_SEED_BUTTON_WIDTH: f32 = 190.0;
+const SEED_INPUT_MAX_DIGITS: usize = 20;
 
 #[derive(Component)]
 pub(super) struct SeedInput;
@@ -34,12 +34,8 @@ pub(super) struct SeedValueText;
 #[derive(Component)]
 pub(super) struct RandomSeedButton;
 
-#[derive(Resource, Default)]
-pub(super) struct SeedInputState {
-    editing: bool,
-    replace_on_next_digit: bool,
-    buffer: String,
-}
+pub(super) struct SeedInputKind;
+pub(super) type SeedInputState = NumericInputState<SeedInputKind>;
 
 #[derive(Component, Clone, Copy)]
 pub(super) enum NewWorldFooterAction {
@@ -55,8 +51,8 @@ pub(super) fn reset_new_world_settings(
 ) {
     config.reset();
     selection.selected = SettingsSection::General;
-    *seed_input = SeedInputState::default();
-    *ticks_input = TicksPerSecondInputState::default();
+    seed_input.reset();
+    ticks_input.reset();
 }
 
 pub(super) fn new_world_general_section(
@@ -138,7 +134,7 @@ fn seed_input(seed: u64) -> impl Bundle {
             ..default()
         },
         BackgroundColor(Color::srgba(0.045, 0.035, 0.09, 0.88)),
-        BorderColor::all(input_border(false)),
+        BorderColor::all(numeric_input_border(false)),
         children![(
             typography::button_label(seed.to_string()),
             SeedValueText,
@@ -189,9 +185,7 @@ pub(super) fn handle_seed_focus(
         .iter()
         .any(|interaction| *interaction == Interaction::Pressed)
     {
-        input.editing = true;
-        input.replace_on_next_digit = false;
-        input.buffer = config.seed().0.to_string();
+        input.begin(config.seed().0);
     }
 }
 
@@ -205,7 +199,7 @@ pub(super) fn handle_random_seed(
         .any(|interaction| *interaction == Interaction::Pressed)
     {
         config.set_seed(WorldSeed::fresh().0);
-        *input = SeedInputState::default();
+        input.reset();
     }
 }
 
@@ -214,54 +208,11 @@ pub(super) fn handle_seed_keyboard(
     mut config: ResMut<NewWorldConfig>,
     mut input: ResMut<SeedInputState>,
 ) {
-    if !input.editing {
-        return;
-    }
-
-    if select_all_pressed(&keys) {
-        input.replace_on_next_digit = true;
-        return;
-    }
-
-    if keys.just_pressed(KeyCode::Enter)
-        || keys.just_pressed(KeyCode::NumpadEnter)
-        || keys.just_pressed(KeyCode::Escape)
-    {
-        *input = SeedInputState::default();
-        return;
-    }
-
-    if keys.just_pressed(KeyCode::Backspace) || keys.just_pressed(KeyCode::NumpadBackspace) {
-        if input.replace_on_next_digit {
-            input.buffer.clear();
-            input.replace_on_next_digit = false;
-        } else {
-            input.buffer.pop();
-        }
-        apply_seed_buffer(&input.buffer, &mut config);
-        return;
-    }
-
-    for (key, digit) in digit_keys() {
-        if !keys.just_pressed(key) {
-            continue;
-        }
-
-        let mut next = if input.replace_on_next_digit {
-            String::new()
-        } else {
-            input.buffer.clone()
-        };
-        next.push(digit);
-
-        if next.len() <= 20
-            && let Ok(value) = next.parse::<u64>()
-        {
-            input.buffer = next;
-            input.replace_on_next_digit = false;
-            config.set_seed(value);
-        }
-        break;
+    let event = input.handle_keyboard(&keys, SEED_INPUT_MAX_DIGITS, |next| {
+        next.parse::<u64>().is_ok()
+    });
+    if event == NumericInputEvent::Changed {
+        apply_seed_buffer(input.buffer(), &mut config);
     }
 }
 
@@ -283,7 +234,7 @@ pub(super) fn handle_new_world_footer(
         (*interaction == Interaction::Pressed).then_some(*action)
     });
 
-    let input_editing = seed_input.editing || ticks_input.editing();
+    let input_editing = seed_input.editing() || ticks_input.editing();
     if matches!(action, Some(NewWorldFooterAction::Return))
         || (keys.just_pressed(KeyCode::Escape) && !input_editing)
     {
@@ -295,8 +246,8 @@ pub(super) fn handle_new_world_footer(
         return;
     }
 
-    if seed_input.editing {
-        apply_seed_buffer(&seed_input.buffer, &mut config);
+    if seed_input.editing() {
+        apply_seed_buffer(seed_input.buffer(), &mut config);
     }
 
     commands.insert_resource(CurrentDimension::default());
@@ -313,11 +264,7 @@ pub(super) fn sync_seed_text(
     mut labels: Query<&mut Text, With<SeedValueText>>,
     mut inputs: Query<&mut BorderColor, With<SeedInput>>,
 ) {
-    let value = if input.editing {
-        format!("{}|", input.buffer)
-    } else {
-        config.seed().0.to_string()
-    };
+    let value = input.display(config.seed().0);
 
     for mut label in &mut labels {
         if label.0 != value {
@@ -326,45 +273,12 @@ pub(super) fn sync_seed_text(
     }
 
     for mut border in &mut inputs {
-        *border = BorderColor::all(input_border(input.editing));
+        *border = BorderColor::all(numeric_input_border(input.editing()));
     }
 }
 
 fn apply_seed_buffer(buffer: &str, config: &mut NewWorldConfig) {
     if let Ok(value) = buffer.parse::<u64>() {
         config.set_seed(value);
-    }
-}
-
-fn digit_keys() -> [(KeyCode, char); 20] {
-    [
-        (KeyCode::Digit0, '0'),
-        (KeyCode::Digit1, '1'),
-        (KeyCode::Digit2, '2'),
-        (KeyCode::Digit3, '3'),
-        (KeyCode::Digit4, '4'),
-        (KeyCode::Digit5, '5'),
-        (KeyCode::Digit6, '6'),
-        (KeyCode::Digit7, '7'),
-        (KeyCode::Digit8, '8'),
-        (KeyCode::Digit9, '9'),
-        (KeyCode::Numpad0, '0'),
-        (KeyCode::Numpad1, '1'),
-        (KeyCode::Numpad2, '2'),
-        (KeyCode::Numpad3, '3'),
-        (KeyCode::Numpad4, '4'),
-        (KeyCode::Numpad5, '5'),
-        (KeyCode::Numpad6, '6'),
-        (KeyCode::Numpad7, '7'),
-        (KeyCode::Numpad8, '8'),
-        (KeyCode::Numpad9, '9'),
-    ]
-}
-
-fn input_border(editing: bool) -> Color {
-    if editing {
-        theme::TEXT_PRIMARY.with_alpha(0.92)
-    } else {
-        Color::srgba(0.43, 0.36, 0.68, 0.72)
     }
 }
