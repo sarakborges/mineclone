@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 
-use crate::app::{game_state::GameState, settings_state::SettingsState};
+use crate::app::{
+    game_state::GameState, resource_systems::reset_resource, settings_state::SettingsState,
+};
 use game_rules_section::{
     TicksPerSecondInputState, handle_ticks_input, handle_ticks_keyboard,
     handle_ticks_step_buttons, sync_ticks_per_second_text,
@@ -50,7 +52,11 @@ impl Plugin for SettingsScreenPlugin {
             )
             .add_systems(
                 OnEnter(SettingsState::Open),
-                (reset_regular_settings_inputs, spawn_settings_screen).chain(),
+                (
+                    reset_resource::<TicksPerSecondInputState>,
+                    spawn_settings_screen,
+                )
+                    .chain(),
             )
             .add_systems(
                 OnEnter(GameState::NewWorld),
@@ -96,10 +102,6 @@ impl Plugin for SettingsScreenPlugin {
                     .run_if(in_state(SettingsState::Open)),
             );
     }
-}
-
-fn reset_regular_settings_inputs(mut ticks: ResMut<TicksPerSecondInputState>) {
-    *ticks = TicksPerSecondInputState::default();
 }
 
 fn settings_screen_active(
