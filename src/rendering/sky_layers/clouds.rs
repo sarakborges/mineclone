@@ -88,9 +88,9 @@ pub(super) fn update_clouds(
     let drift = time.elapsed_secs() * CLOUD_SPEED;
     let half_span = CLOUD_SPAN * 0.5;
 
-    if let Some(mut material) = materials.get_mut(&assets.material) {
-        let color = visuals.cloud_color;
-        material.base_color = Color::srgba(color.r, color.g, color.b, 0.78);
+    if let Some(material) = materials.get_mut(&assets.material) {
+        let [red, green, blue] = visuals.cloud_color.to_srgb();
+        material.base_color = Color::srgba(red, green, blue, 0.78);
     }
 
     for (cloud, mut transform, mut visibility) in &mut clouds {
