@@ -52,7 +52,7 @@ pub(super) fn lake_for_local_basin(
         LAKE_MAXIMUM_RADIUS,
         hash_unit(hash.rotate_left(29)),
     );
-    let aspect = lerp(0.86, 1.14, hash_unit(hash.rotate_left(43)));
+    let aspect = lerp(0.68, 1.32, hash_unit(hash.rotate_left(43)));
     let radius = Vec2::new(base_radius * aspect, base_radius * (2.0 - aspect));
     let rotation = hash_unit(hash.rotate_left(11)) * std::f32::consts::TAU;
     let water_level = (source.elevation - 0.65).max(sea_level);
