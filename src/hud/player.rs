@@ -33,115 +33,104 @@ fn spawn_player_hud(mut commands: Commands) {
                 position_type: PositionType::Absolute,
                 left: px(PLAYER_HUD_MARGIN),
                 bottom: px(PLAYER_HUD_MARGIN),
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                column_gap: px(12),
                 ..default()
             },
             GlobalZIndex(10),
             Pickable::IGNORE,
             DespawnOnExit(GameState::Gameplay),
         ))
-        .with_children(|root| {
-            root.spawn(surface::hud_panel()).with_children(|panel| {
-                panel
-                    .spawn((
+        .with_children(|row| {
+            row.spawn((
+                Node {
+                    width: px(AVATAR_SIZE),
+                    height: px(AVATAR_SIZE),
+                    min_width: px(AVATAR_SIZE),
+                    min_height: px(AVATAR_SIZE),
+                    border: UiRect::all(px(2)),
+                    border_radius: BorderRadius::all(px(4)),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                },
+                BackgroundColor(avatar_background),
+                BorderColor::all(avatar_border),
+                Pickable::IGNORE,
+            ))
+            .with_children(|avatar| {
+                avatar.spawn((
+                    typography::hud_subheading("?"),
+                    TextLayout::justify(Justify::Center),
+                    Pickable::IGNORE,
+                ));
+            });
+
+            row.spawn((
+                Node {
+                    width: px(PLAYER_INFO_WIDTH),
+                    flex_direction: FlexDirection::Column,
+                    justify_content: JustifyContent::Center,
+                    row_gap: px(8),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|info| {
+                info.spawn((typography::hud("Yogg'Sara"), Pickable::IGNORE));
+
+                info.spawn((
+                    Node {
+                        position_type: PositionType::Relative,
+                        width: percent(100),
+                        height: px(HEALTH_BAR_HEIGHT),
+                        border: UiRect::all(px(1)),
+                        border_radius: BorderRadius::all(px(4)),
+                        ..default()
+                    },
+                    BackgroundColor(theme::SLIDER_TRACK),
+                    BorderColor::all(surface::HUD_BORDER_COLOR),
+                    Pickable::IGNORE,
+                ))
+                .with_children(|health| {
+                    health.spawn((
                         Node {
-                            flex_direction: FlexDirection::Row,
-                            align_items: AlignItems::Center,
-                            column_gap: px(12),
+                            position_type: PositionType::Absolute,
+                            left: px(0),
+                            top: px(0),
+                            width: percent(PLACEHOLDER_HEALTH_PERCENT),
+                            height: percent(100),
+                            border_radius: BorderRadius::all(px(3)),
                             ..default()
                         },
+                        BackgroundColor(HEALTH_FILL_COLOR),
                         Pickable::IGNORE,
-                    ))
-                    .with_children(|row| {
-                        row.spawn((
+                    ));
+
+                    health
+                        .spawn((
                             Node {
-                                width: px(AVATAR_SIZE),
-                                height: px(AVATAR_SIZE),
-                                min_width: px(AVATAR_SIZE),
-                                min_height: px(AVATAR_SIZE),
-                                border: UiRect::all(px(2)),
-                                border_radius: BorderRadius::all(px(4)),
+                                position_type: PositionType::Absolute,
+                                left: px(0),
+                                top: px(0),
+                                width: percent(100),
+                                height: percent(100),
                                 align_items: AlignItems::Center,
                                 justify_content: JustifyContent::Center,
                                 ..default()
                             },
-                            BackgroundColor(avatar_background),
-                            BorderColor::all(avatar_border),
                             Pickable::IGNORE,
                         ))
-                        .with_children(|avatar| {
-                            avatar.spawn((
-                                typography::hud_subheading("?"),
+                        .with_children(|label| {
+                            label.spawn((
+                                typography::inventory_category("50 / 100"),
+                                typography::tooltip_shadow(),
                                 TextLayout::justify(Justify::Center),
                                 Pickable::IGNORE,
                             ));
                         });
-
-                        row.spawn((
-                            Node {
-                                width: px(PLAYER_INFO_WIDTH),
-                                flex_direction: FlexDirection::Column,
-                                justify_content: JustifyContent::Center,
-                                row_gap: px(8),
-                                ..default()
-                            },
-                            Pickable::IGNORE,
-                        ))
-                        .with_children(|info| {
-                            info.spawn((typography::hud("Yogg'Sara"), Pickable::IGNORE));
-
-                            info.spawn((
-                                Node {
-                                    position_type: PositionType::Relative,
-                                    width: percent(100),
-                                    height: px(HEALTH_BAR_HEIGHT),
-                                    border: UiRect::all(px(1)),
-                                    border_radius: BorderRadius::all(px(4)),
-                                    ..default()
-                                },
-                                BackgroundColor(theme::SLIDER_TRACK),
-                                BorderColor::all(surface::HUD_BORDER_COLOR),
-                                Pickable::IGNORE,
-                            ))
-                            .with_children(|health| {
-                                health.spawn((
-                                    Node {
-                                        position_type: PositionType::Absolute,
-                                        left: px(0),
-                                        top: px(0),
-                                        width: percent(PLACEHOLDER_HEALTH_PERCENT),
-                                        height: percent(100),
-                                        border_radius: BorderRadius::all(px(3)),
-                                        ..default()
-                                    },
-                                    BackgroundColor(HEALTH_FILL_COLOR),
-                                    Pickable::IGNORE,
-                                ));
-
-                                health
-                                    .spawn((
-                                        Node {
-                                            position_type: PositionType::Absolute,
-                                            left: px(0),
-                                            top: px(0),
-                                            width: percent(100),
-                                            height: percent(100),
-                                            align_items: AlignItems::Center,
-                                            justify_content: JustifyContent::Center,
-                                            ..default()
-                                        },
-                                        Pickable::IGNORE,
-                                    ))
-                                    .with_children(|label| {
-                                        label.spawn((
-                                            typography::inventory_category("50 / 100"),
-                                            typography::tooltip_shadow(),
-                                            TextLayout::justify(Justify::Center),
-                                            Pickable::IGNORE,
-                                        ));
-                                    });
-                            });
-                        });
-                    });
+                });
             });
         });
 }
