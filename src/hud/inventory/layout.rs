@@ -27,10 +27,11 @@ use super::state::{
     CATEGORY_GAP, CATEGORY_ICON_SIZE, CATEGORY_ROW_HEIGHT, CATEGORY_WIDTH,
     CREATIVE_COLUMNS, CREATIVE_GRID_HEIGHT, CreativeCatalogScrollArea,
     CreativeCatalogScrollbar, CreativeCategoryButton, CreativeCategoryScrollArea,
-    CreativeCategoryScrollbar, CreativeInventorySlot, CreativeInventoryView, CreativeScrollState,
-    CreativeSearchBar, InventoryCursorIcon, InventoryHudRoot, InventorySlot,
-    InventoryTrashButton, ITEM_ICON_SIZE, PANEL_GAP, PANEL_PADDING, SCROLLBAR_TOTAL_WIDTH,
-    SEARCH_GAP, SEARCH_HEIGHT, SECTION_GAP, SLOT_GAP, SLOT_SIZE, TRASH_GAP,
+    CreativeCategoryScrollbar, CreativeInventoryPanel, CreativeInventorySlot,
+    CreativeInventoryView, CreativeScrollState, CreativeSearchBar, InventoryCursorIcon,
+    InventoryHudRoot, InventorySlot, InventoryTrashButton, ITEM_ICON_SIZE, PANEL_GAP,
+    PANEL_PADDING, SCROLLBAR_TOTAL_WIDTH, SEARCH_GAP, SEARCH_HEIGHT, SECTION_GAP, SLOT_GAP,
+    SLOT_SIZE, TRASH_GAP,
 };
 
 #[derive(Clone, Copy)]
@@ -190,7 +191,7 @@ pub(super) fn spawn_cursor_icon(
     panic!("inventory cursor references missing item: {item_id}");
 }
 
-fn spawn_creative_panel(
+pub(super) fn spawn_creative_panel(
     root: &mut ChildSpawnerCommands,
     state: &InventoryLayoutState<'_>,
     items: &mut InventoryItemView<'_>,
@@ -213,7 +214,7 @@ fn spawn_creative_panel(
         border_radius: BorderRadius::all(px(8)),
         ..default()
     }))
-    .insert(Pickable::IGNORE)
+    .insert((CreativeInventoryPanel, Pickable::IGNORE))
     .with_children(|panel| {
         spawn_search_bar(
             panel,
