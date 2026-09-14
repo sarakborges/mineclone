@@ -25,7 +25,7 @@ use crate::{
         inventory::{CreativeInventoryView, InventoryCursor, InventoryState},
     },
     rendering::{block_model::BlockModel, block_tint::block_tint_at},
-    ui::{theme, typography},
+    ui::{surface, theme, typography},
     world::biome_field::BiomeField,
 };
 
@@ -40,13 +40,14 @@ const PANEL_PADDING: f32 = 18.0;
 const SEARCH_HEIGHT: f32 = 40.0;
 const SEARCH_GAP: f32 = 14.0;
 const CATEGORY_WIDTH: f32 = 172.0;
-const CATEGORY_ROW_HEIGHT: f32 = 38.0;
+const CATEGORY_ROW_HEIGHT: f32 = SLOT_SIZE;
 const CATEGORY_ICON_SIZE: f32 = 28.0;
 const CATEGORY_GAP: f32 = 12.0;
 const CREATIVE_VISIBLE_ROWS: usize = 5;
 const CREATIVE_COLUMNS: usize = 9;
 const SCROLLBAR_WIDTH: f32 = 8.0;
 const SCROLLBAR_GAP: f32 = 8.0;
+const TRASH_GAP: f32 = 10.0;
 const CREATIVE_GRID_HEIGHT: f32 =
     CREATIVE_VISIBLE_ROWS as f32 * SLOT_SIZE + (CREATIVE_VISIBLE_ROWS - 1) as f32 * SLOT_GAP;
 
@@ -57,6 +58,9 @@ struct InventoryHudRoot;
 struct InventorySlot {
     index: usize,
 }
+
+#[derive(Component)]
+struct InventoryTrashButton;
 
 #[derive(Component)]
 struct CreativeInventorySlot {
@@ -127,11 +131,13 @@ impl Plugin for InventoryHudPlugin {
                 handle_creative_scroll,
                 handle_creative_slot_clicks,
                 handle_slot_clicks,
+                handle_inventory_trash_clicks,
                 handle_empty_inventory_click,
                 rebuild_inventory_when_changed,
                 style_category_buttons,
                 style_creative_slots,
                 style_inventory_slots,
+                style_inventory_trash_button,
                 update_cursor_icon_position,
             )
                 .chain()
@@ -241,6 +247,7 @@ fn handle_creative_scroll(
     blocks: Res<BlockRegistry>,
     tools: Res<ToolRegistry>,
     categories: Res<InventoryCategoryRegistry>,
+    category_buttons: Query<&Interaction, With<CreativeCategoryButton>>,
     active_language: Res<ActiveLanguage>,
     mut creative_view: ResMut<CreativeInventoryView>,
 ) {
@@ -253,6 +260,26 @@ fn handle_creative_scroll(
     }
 
     if delta == 0.0 {
+        return;
+    }
+
+    let steps = delta.abs().ceil().max(1.0) as usize;
+    let pointer_is_over_categories = category_buttons
+        .iter()
+        .any(|interaction| *interaction != Interaction::None);
+
+    if pointer_is_over_categories {
+        let total_rows = categories.iter().count() + 1;
+        let max_scroll = total_rows.saturating_sub(CREATIVE_VISIBLE_ROWS);
+        let next = if delta < 0.0 {
+            (creative_view.category_scroll_row() + steps).min(max_scroll)
+        } else {
+            creative_view.category_scroll_row().saturating_sub(steps)
+        };
+
+        if next != creative_view.category_scroll_row() {
+            creative_view.set_category_scroll_row(next);
+        }
         return;
     }
 
@@ -272,7 +299,6 @@ fn handle_creative_scroll(
         return;
     }
 
-    let steps = delta.abs().ceil().max(1.0) as usize;
     let next = if delta < 0.0 {
         (creative_view.scroll_row() + steps).min(max_scroll)
     } else {
@@ -319,12 +345,25 @@ fn handle_slot_clicks(
     }
 }
 
+fn handle_inventory_trash_clicks(
+    mut cursor: ResMut<InventoryCursor>,
+    buttons: Query<&Interaction, (With<InventoryTrashButton>, Changed<Interaction>)>,
+) {
+    for interaction in &buttons {
+        if *interaction == Interaction::Pressed {
+            cursor.discard();
+            break;
+        }
+    }
+}
+
 fn handle_empty_inventory_click(
     mouse: Res<ButtonInput<MouseButton>>,
     categories: Query<&Interaction, With<CreativeCategoryButton>>,
     creative_slots: Query<&Interaction, With<CreativeInventorySlot>>,
     inventory_slots: Query<&Interaction, With<InventorySlot>>,
     search_bars: Query<&Interaction, With<CreativeSearchBar>>,
+    trash_buttons: Query<&Interaction, With<InventoryTrashButton>>,
     mut cursor: ResMut<InventoryCursor>,
 ) {
     if !mouse.just_pressed(MouseButton::Left) || cursor.item().is_none() {
@@ -336,6 +375,7 @@ fn handle_empty_inventory_click(
         .chain(creative_slots.iter())
         .chain(inventory_slots.iter())
         .chain(search_bars.iter())
+        .chain(trash_buttons.iter())
         .any(|interaction| *interaction != Interaction::None);
 
     if !pointer_is_over_control {
@@ -453,35 +493,26 @@ fn style_inventory_slots(
     }
 }
 
+fn style_inventory_trash_button(
+    mut buttons: Query<
+        (&Interaction, &mut BackgroundColor, &mut BorderColor),
+        (With<Button>, With<InventoryTrashButton>),
+    >,
+) {
+    for (interaction, mut background, mut border) in &mut buttons {
+        let (background_color, border_color) = surface::hud_danger_control_colors(*interaction);
+        background.0 = background_color;
+        *border = BorderColor::all(border_color);
+    }
+}
+
 fn apply_button_visual(
     interaction: Interaction,
     selected: bool,
     background: &mut BackgroundColor,
     border: &mut BorderColor,
 ) {
-    let (background_color, border_color) = match (interaction, selected) {
-        (Interaction::Pressed, true) | (Interaction::Hovered, true) => (
-            Color::srgba(0.21, 0.16, 0.38, 0.99),
-            Color::srgb(0.62, 0.88, 1.0),
-        ),
-        (Interaction::None, true) => (
-            Color::srgba(0.16, 0.12, 0.30, 0.98),
-            Color::srgb(0.55, 0.84, 1.0),
-        ),
-        (Interaction::Pressed, false) => (
-            Color::srgba(0.11, 0.085, 0.20, 0.98),
-            Color::srgba(0.45, 0.80, 1.0, 0.72),
-        ),
-        (Interaction::Hovered, false) => (
-            Color::srgba(0.07, 0.055, 0.13, 0.92),
-            Color::srgba(0.45, 0.80, 1.0, 0.62),
-        ),
-        (Interaction::None, false) => (
-            theme::HUD_SURFACE,
-            Color::srgba(0.70, 0.72, 0.82, 0.28),
-        ),
-    };
-
+    let (background_color, border_color) = surface::hud_control_colors(interaction, selected);
     background.0 = background_color;
     *border = BorderColor::all(border_color);
 }
@@ -650,21 +681,15 @@ fn spawn_creative_panel(
     let scroll_row = creative_view.scroll_row().min(max_scroll);
     let first_item = scroll_row * CREATIVE_COLUMNS;
 
-    root.spawn((
-        Node {
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Center,
-            row_gap: px(SEARCH_GAP),
-            padding: UiRect::all(px(PANEL_PADDING)),
-            border: UiRect::all(px(1)),
-            border_radius: BorderRadius::all(px(10)),
-            ..default()
-        },
-        BackgroundColor(theme::FROSTED_SURFACE),
-        theme::frosted_surface_gradient(),
-        BorderColor::all(Color::srgba(0.70, 0.72, 0.92, 0.20)),
-        Pickable::IGNORE,
-    ))
+    root.spawn(surface::hud_container(Node {
+        flex_direction: FlexDirection::Column,
+        align_items: AlignItems::Center,
+        row_gap: px(SEARCH_GAP),
+        padding: UiRect::all(px(PANEL_PADDING)),
+        border: UiRect::all(px(1)),
+        border_radius: BorderRadius::all(px(6)),
+        ..default()
+    }))
     .with_children(|panel| {
         spawn_search_bar(panel, creative_view, localization, language);
 
@@ -713,7 +738,7 @@ fn spawn_creative_panel(
                             language,
                             icon_materials,
                         );
-                        spawn_creative_scrollbar(catalog_content, total_rows, scroll_row);
+                        spawn_scrollbar(catalog_content, total_rows, scroll_row);
                     });
             });
     });
@@ -726,9 +751,9 @@ fn spawn_search_bar(
     language: Language,
 ) {
     let search_border = if creative_view.search_focused() {
-        theme::TEXT_PRIMARY
+        surface::HUD_SELECTED_BORDER_COLOR
     } else {
-        Color::srgba(0.70, 0.72, 0.82, 0.28)
+        surface::HUD_BORDER_COLOR
     };
     let search_text = if creative_view.search_query().is_empty() {
         localization.text(language, "inventory.searchPlaceholder")
@@ -745,11 +770,11 @@ fn spawn_search_bar(
                 height: px(SEARCH_HEIGHT),
                 padding: UiRect::horizontal(px(12)),
                 border: UiRect::all(px(1)),
-                border_radius: BorderRadius::all(px(7)),
+                border_radius: BorderRadius::all(px(6)),
                 align_items: AlignItems::Center,
                 ..default()
             },
-            BackgroundColor(Color::srgba(0.02, 0.018, 0.05, 0.88)),
+            BackgroundColor(theme::HUD_SURFACE),
             BorderColor::all(search_border),
         ))
         .with_children(|search| {
@@ -774,41 +799,68 @@ fn spawn_category_list(
             .then_with(|| left.id.cmp(&right.id))
     });
 
+    let total_rows = ordered.len() + 1;
+    let max_scroll = total_rows.saturating_sub(CREATIVE_VISIBLE_ROWS);
+    let scroll_row = creative_view.category_scroll_row().min(max_scroll);
+
     parent
         .spawn((
             Node {
-                width: px(CATEGORY_WIDTH),
-                flex_direction: FlexDirection::Column,
-                row_gap: px(SLOT_GAP),
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Stretch,
+                column_gap: px(SCROLLBAR_GAP),
+                height: px(CREATIVE_GRID_HEIGHT),
                 ..default()
             },
             Pickable::IGNORE,
         ))
-        .with_children(|list| {
-            spawn_category_button(
-                list,
-                None,
-                creative_view.selected_category().is_none(),
-                asset_server,
-                blocks,
-                localization,
-                language,
-                icon_materials,
-            );
+        .with_children(|category_content| {
+            category_content
+                .spawn((
+                    Node {
+                        width: px(CATEGORY_WIDTH),
+                        height: px(CREATIVE_GRID_HEIGHT),
+                        flex_direction: FlexDirection::Column,
+                        row_gap: px(SLOT_GAP),
+                        overflow: Overflow::clip_y(),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ))
+                .with_children(|list| {
+                    let visible_end = (scroll_row + CREATIVE_VISIBLE_ROWS).min(total_rows);
+                    for index in scroll_row..visible_end {
+                        if index == 0 {
+                            spawn_category_button(
+                                list,
+                                None,
+                                creative_view.selected_category().is_none(),
+                                asset_server,
+                                blocks,
+                                localization,
+                                language,
+                                icon_materials,
+                            );
+                            continue;
+                        }
 
-            for category in ordered {
-                let selected = creative_view.selected_category() == Some(category.id.as_str());
-                spawn_category_button(
-                    list,
-                    Some(category),
-                    selected,
-                    asset_server,
-                    blocks,
-                    localization,
-                    language,
-                    icon_materials,
-                );
-            }
+                        let category = ordered[index - 1];
+                        let selected =
+                            creative_view.selected_category() == Some(category.id.as_str());
+                        spawn_category_button(
+                            list,
+                            Some(category),
+                            selected,
+                            asset_server,
+                            blocks,
+                            localization,
+                            language,
+                            icon_materials,
+                        );
+                    }
+                });
+
+            spawn_scrollbar(category_content, total_rows.max(1), scroll_row);
         });
 }
 
@@ -827,7 +879,7 @@ fn spawn_category_button(
         Some(category) => category.display_name.text(language),
         None => localization.text(language, "inventory.everything"),
     };
-    let (background, border) = static_button_visual(selected);
+    let (background, border) = surface::hud_control_static(selected);
 
     parent
         .spawn((
@@ -836,9 +888,10 @@ fn spawn_category_button(
             Node {
                 width: percent(100),
                 height: px(CATEGORY_ROW_HEIGHT),
+                min_height: px(CATEGORY_ROW_HEIGHT),
                 padding: UiRect::horizontal(px(8)),
-                border: UiRect::all(px(if selected { 2 } else { 1 })),
-                border_radius: BorderRadius::all(px(6)),
+                border: UiRect::all(px(2)),
+                border_radius: BorderRadius::all(px(4)),
                 align_items: AlignItems::Center,
                 column_gap: px(8),
                 ..default()
@@ -847,8 +900,8 @@ fn spawn_category_button(
             BorderColor::all(border),
         ))
         .with_children(|button| {
-            if let Some((category, block_icon)) =
-                category.and_then(|category| category.block_icon.as_ref().map(|icon| (category, icon)))
+            if let Some((category, block_icon)) = category
+                .and_then(|category| category.block_icon.as_ref().map(|icon| (category, icon)))
             {
                 let block = blocks.get(&block_icon.block).unwrap_or_else(|| {
                     panic!(
@@ -945,21 +998,15 @@ fn spawn_player_inventory_panel(
     language: Language,
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
-    root.spawn((
-        Node {
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Center,
-            row_gap: px(SECTION_GAP),
-            padding: UiRect::all(px(PANEL_PADDING)),
-            border: UiRect::all(px(1)),
-            border_radius: BorderRadius::all(px(10)),
-            ..default()
-        },
-        BackgroundColor(theme::FROSTED_SURFACE),
-        theme::frosted_surface_gradient(),
-        BorderColor::all(Color::srgba(0.70, 0.72, 0.92, 0.20)),
-        Pickable::IGNORE,
-    ))
+    root.spawn(surface::hud_container(Node {
+        flex_direction: FlexDirection::Column,
+        align_items: AlignItems::Center,
+        row_gap: px(SECTION_GAP),
+        padding: UiRect::all(px(PANEL_PADDING)),
+        border: UiRect::all(px(1)),
+        border_radius: BorderRadius::all(px(6)),
+        ..default()
+    }))
     .with_children(|panel| {
         panel
             .spawn((
@@ -1007,6 +1054,7 @@ fn spawn_player_inventory_panel(
             .spawn((
                 Node {
                     flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
                     column_gap: px(SLOT_GAP),
                     ..default()
                 },
@@ -1029,15 +1077,84 @@ fn spawn_player_inventory_panel(
                         icon_materials,
                     );
                 }
+
+                spawn_inventory_trash_button(hotbar_row);
             });
     });
 }
 
-fn spawn_creative_scrollbar(
-    parent: &mut ChildSpawnerCommands,
-    total_rows: usize,
-    scroll_row: usize,
-) {
+fn spawn_inventory_trash_button(parent: &mut ChildSpawnerCommands) {
+    let (background, border) = surface::hud_danger_control_colors(Interaction::None);
+    let icon_color = Color::srgb(0.94, 0.40, 0.44);
+
+    parent
+        .spawn((
+            Button,
+            InventoryTrashButton,
+            Node {
+                width: px(SLOT_SIZE),
+                height: px(SLOT_SIZE),
+                margin: UiRect::left(px(TRASH_GAP)),
+                border: UiRect::all(px(2)),
+                border_radius: BorderRadius::all(px(4)),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            BackgroundColor(background),
+            BorderColor::all(border),
+        ))
+        .with_children(|button| {
+            button
+                .spawn((
+                    Node {
+                        width: px(22),
+                        height: px(25),
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        row_gap: px(2),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ))
+                .with_children(|icon| {
+                    icon.spawn((
+                        Node {
+                            width: px(8),
+                            height: px(3),
+                            border_radius: BorderRadius::all(px(2)),
+                            ..default()
+                        },
+                        BackgroundColor(icon_color),
+                        Pickable::IGNORE,
+                    ));
+                    icon.spawn((
+                        Node {
+                            width: px(20),
+                            height: px(3),
+                            border_radius: BorderRadius::all(px(2)),
+                            ..default()
+                        },
+                        BackgroundColor(icon_color),
+                        Pickable::IGNORE,
+                    ));
+                    icon.spawn((
+                        Node {
+                            width: px(16),
+                            height: px(16),
+                            border: UiRect::all(px(2)),
+                            border_radius: BorderRadius::all(px(2)),
+                            ..default()
+                        },
+                        BackgroundColor(Color::NONE),
+                        BorderColor::all(icon_color),
+                        Pickable::IGNORE,
+                    ));
+                });
+        });
+}
+
+fn spawn_scrollbar(parent: &mut ChildSpawnerCommands, total_rows: usize, scroll_row: usize) {
     let visible_ratio = (CREATIVE_VISIBLE_ROWS as f32 / total_rows as f32).min(1.0);
     let thumb_height = CREATIVE_GRID_HEIGHT * visible_ratio;
     let max_scroll = total_rows.saturating_sub(CREATIVE_VISIBLE_ROWS);
@@ -1091,7 +1208,7 @@ fn spawn_creative_slot(
 ) {
     let item_id = item.map(CreativeCatalogItem::interned_id);
     let selected = item_id.is_some() && item_id == selected_item;
-    let (background, border) = static_button_visual(selected);
+    let (background, border) = surface::hud_control_static(selected);
 
     parent
         .spawn((
@@ -1100,7 +1217,8 @@ fn spawn_creative_slot(
             Node {
                 width: px(SLOT_SIZE),
                 height: px(SLOT_SIZE),
-                border: UiRect::all(px(if selected { 3 } else { 2 })),
+                border: UiRect::all(px(2)),
+                border_radius: BorderRadius::all(px(4)),
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
                 ..default()
@@ -1160,7 +1278,7 @@ fn spawn_slot(
     language: Language,
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
-    let (background, border) = static_button_visual(selected);
+    let (background, border) = surface::hud_control_static(selected);
 
     parent
         .spawn((
@@ -1169,7 +1287,8 @@ fn spawn_slot(
             Node {
                 width: px(SLOT_SIZE),
                 height: px(SLOT_SIZE),
-                border: UiRect::all(px(if selected { 3 } else { 2 })),
+                border: UiRect::all(px(2)),
+                border_radius: BorderRadius::all(px(4)),
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
                 ..default()
@@ -1214,20 +1333,6 @@ fn spawn_slot(
 
             panic!("inventory references missing item: {item_id}");
         });
-}
-
-fn static_button_visual(selected: bool) -> (Color, Color) {
-    if selected {
-        (
-            Color::srgba(0.16, 0.12, 0.30, 0.98),
-            Color::srgb(0.55, 0.84, 1.0),
-        )
-    } else {
-        (
-            theme::HUD_SURFACE,
-            Color::srgba(0.70, 0.72, 0.82, 0.28),
-        )
-    }
 }
 
 fn filtered_creative_catalog<'a>(
@@ -1283,5 +1388,11 @@ fn creative_grid_width() -> f32 {
 }
 
 fn creative_content_width() -> f32 {
-    CATEGORY_WIDTH + CATEGORY_GAP + creative_grid_width() + SCROLLBAR_GAP + SCROLLBAR_WIDTH
+    CATEGORY_WIDTH
+        + SCROLLBAR_GAP
+        + SCROLLBAR_WIDTH
+        + CATEGORY_GAP
+        + creative_grid_width()
+        + SCROLLBAR_GAP
+        + SCROLLBAR_WIDTH
 }
