@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::world::noise::fractal_noise_2d;
 
 const CLIMATE_OCTAVES: usize = 4;
-const CONTINENTALNESS_SCALE: f32 = 0.0012;
+const CONTINENTALNESS_SCALE: f32 = 0.0017;
 
 #[derive(Clone, Copy, Debug)]
 pub struct MacroClimateSample {
