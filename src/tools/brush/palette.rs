@@ -4,12 +4,15 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    content::secondary_property::{SecondaryPropertyDefinition, SecondaryPropertyRegistry},
+    content::{
+        builtin_ids::DYED_PROPERTY_ID,
+        secondary_property::{SecondaryPropertyDefinition, SecondaryPropertyRegistry},
+    },
     localization::{ActiveLanguage, UiLocalization},
     ui::{theme, typography},
 };
 
-use super::{BrushMode, BrushPaletteState, BrushSelection, DYED_PROPERTY_ID};
+use super::{BrushMode, BrushPaletteState, BrushSelection};
 
 const PALETTE_COLUMNS: usize = 9;
 const SWATCH_SIZE: f32 = 30.0;
