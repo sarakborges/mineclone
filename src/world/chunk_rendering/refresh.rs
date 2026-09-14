@@ -55,7 +55,8 @@ pub fn refresh_chunk_geometry_mesh(
         return;
     }
 
-    let built_meshes = build_chunk_render_meshes(coord, chunk, context);
+    let build_context = context.mesh_build_context();
+    let built_meshes = build_chunk_render_meshes(coord, chunk, &build_context);
     let replacement_keys = built_meshes
         .iter()
         .map(BuiltChunkMesh::key)
@@ -69,9 +70,6 @@ pub fn refresh_chunk_geometry_mesh(
         .map(BuiltChunkMesh::into_mesh)
         .collect::<Vec<_>>();
 
-    // Most block edits and neighbor arrivals preserve the same material/face
-    // layout. Reuse the existing Mesh handles in that case so the render
-    // entities and shadow casters never disappear for a frame.
     if render_pool.replace_mesh_assets(
         coord,
         meshes,
@@ -106,7 +104,8 @@ pub fn refresh_chunk_fluid_mesh(
         return;
     };
 
-    let fluid_meshes = build_chunk_fluid_render_meshes(coord, chunk, context);
+    let build_context = context.mesh_build_context();
+    let fluid_meshes = build_chunk_fluid_render_meshes(coord, chunk, &build_context);
     let fluid_mesh_bytes = fluid_meshes
         .iter()
         .map(|fluid| mesh_asset_bytes(&fluid.mesh))
