@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
+    gameplay::availability::world_interaction_available,
     player::inventory::InventoryState,
     tools::BrushPaletteState,
 };
@@ -18,9 +19,7 @@ impl Plugin for PlayerCameraPlugin {
         app.init_resource::<MouseLookInputState>()
             .add_systems(
                 OnEnter(GameState::Gameplay),
-                capture_cursor
-                    .run_if(in_state(InventoryState::Closed))
-                    .run_if(in_state(BrushPaletteState::Closed)),
+                capture_cursor.run_if(world_interaction_available),
             )
             .add_systems(OnExit(GameState::Gameplay), release_cursor)
             .add_systems(
@@ -29,10 +28,7 @@ impl Plugin for PlayerCameraPlugin {
             )
             .add_systems(
                 OnEnter(PauseState::Running),
-                capture_cursor
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(InventoryState::Closed))
-                    .run_if(in_state(BrushPaletteState::Closed)),
+                capture_cursor.run_if(world_interaction_available),
             )
             .add_systems(
                 OnEnter(InventoryState::Open),
@@ -40,10 +36,7 @@ impl Plugin for PlayerCameraPlugin {
             )
             .add_systems(
                 OnEnter(InventoryState::Closed),
-                capture_cursor
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running))
-                    .run_if(in_state(BrushPaletteState::Closed)),
+                capture_cursor.run_if(world_interaction_available),
             )
             .add_systems(
                 OnEnter(BrushPaletteState::Open),
@@ -51,10 +44,7 @@ impl Plugin for PlayerCameraPlugin {
             )
             .add_systems(
                 OnEnter(BrushPaletteState::Closed),
-                capture_cursor
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running))
-                    .run_if(in_state(InventoryState::Closed)),
+                capture_cursor.run_if(world_interaction_available),
             )
             .add_systems(
                 Update,
@@ -62,11 +52,7 @@ impl Plugin for PlayerCameraPlugin {
             )
             .add_systems(
                 Update,
-                handle_cursor_grab
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running))
-                    .run_if(in_state(InventoryState::Closed))
-                    .run_if(in_state(BrushPaletteState::Closed)),
+                handle_cursor_grab.run_if(world_interaction_available),
             )
             .add_systems(
                 Update,
