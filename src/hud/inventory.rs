@@ -184,12 +184,7 @@ fn spawn_inventory(
     player: Single<(&Transform, &GameMode), With<GameplayCamera>>,
     window: Single<&Window>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
-    existing: Query<(), With<InventoryHudRoot>>,
 ) {
-    if !existing.is_empty() {
-        return;
-    }
-
     let (player_transform, game_mode) = *player;
     spawn_inventory_root(
         &mut commands,
@@ -419,7 +414,6 @@ fn rebuild_inventory_when_changed(
     localization: Res<UiLocalization>,
     active_language: Res<ActiveLanguage>,
     player: Single<(&Transform, &GameMode), With<GameplayCamera>>,
-    window: Single<&Window>,
     roots: Query<Entity, With<InventoryHudRoot>>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
@@ -452,7 +446,7 @@ fn rebuild_inventory_when_changed(
         &scroll_state,
         &localization,
         active_language.get(),
-        window.cursor_position(),
+        None,
         &mut icon_materials,
     );
 }
