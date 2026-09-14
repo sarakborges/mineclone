@@ -127,7 +127,11 @@ impl Plugin for InventoryHudPlugin {
                 handle_creative_scroll,
                 handle_creative_slot_clicks,
                 handle_slot_clicks,
+                handle_empty_inventory_click,
                 rebuild_inventory_when_changed,
+                style_category_buttons,
+                style_creative_slots,
+                style_inventory_slots,
                 update_cursor_icon_position,
             )
                 .chain()
@@ -236,6 +240,7 @@ fn handle_creative_scroll(
     mut wheel: MessageReader<MouseWheel>,
     blocks: Res<BlockRegistry>,
     tools: Res<ToolRegistry>,
+    categories: Res<InventoryCategoryRegistry>,
     active_language: Res<ActiveLanguage>,
     mut creative_view: ResMut<CreativeInventoryView>,
 ) {
@@ -254,6 +259,7 @@ fn handle_creative_scroll(
     let total_rows = creative_total_rows(
         &blocks,
         &tools,
+        &categories,
         creative_view.search_query(),
         creative_view.selected_category(),
         active_language.get(),
@@ -313,6 +319,30 @@ fn handle_slot_clicks(
     }
 }
 
+fn handle_empty_inventory_click(
+    mouse: Res<ButtonInput<MouseButton>>,
+    categories: Query<&Interaction, With<CreativeCategoryButton>>,
+    creative_slots: Query<&Interaction, With<CreativeInventorySlot>>,
+    inventory_slots: Query<&Interaction, With<InventorySlot>>,
+    search_bars: Query<&Interaction, With<CreativeSearchBar>>,
+    mut cursor: ResMut<InventoryCursor>,
+) {
+    if !mouse.just_pressed(MouseButton::Left) || cursor.item().is_none() {
+        return;
+    }
+
+    let pointer_is_over_control = categories
+        .iter()
+        .chain(creative_slots.iter())
+        .chain(inventory_slots.iter())
+        .chain(search_bars.iter())
+        .any(|interaction| *interaction != Interaction::None);
+
+    if !pointer_is_over_control {
+        cursor.discard();
+    }
+}
+
 fn rebuild_inventory_when_changed(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -362,6 +392,98 @@ fn rebuild_inventory_when_changed(
         window.cursor_position(),
         &mut icon_materials,
     );
+}
+
+fn style_category_buttons(
+    creative_view: Res<CreativeInventoryView>,
+    mut buttons: Query<
+        (
+            &Interaction,
+            &CreativeCategoryButton,
+            &mut BackgroundColor,
+            &mut BorderColor,
+        ),
+        With<Button>,
+    >,
+) {
+    for (interaction, category, mut background, mut border) in &mut buttons {
+        let selected = creative_view.selected_category() == category.id.as_deref();
+        apply_button_visual(*interaction, selected, &mut background, &mut border);
+    }
+}
+
+fn style_creative_slots(
+    cursor: Res<InventoryCursor>,
+    mut slots: Query<
+        (
+            &Interaction,
+            &CreativeInventorySlot,
+            &mut BackgroundColor,
+            &mut BorderColor,
+        ),
+        With<Button>,
+    >,
+) {
+    for (interaction, slot, mut background, mut border) in &mut slots {
+        let selected = slot.item.is_some() && slot.item == cursor.item();
+        apply_button_visual(*interaction, selected, &mut background, &mut border);
+    }
+}
+
+fn style_inventory_slots(
+    hotbar: Res<PlayerHotbar>,
+    mut slots: Query<
+        (
+            &Interaction,
+            &InventorySlot,
+            &mut BackgroundColor,
+            &mut BorderColor,
+        ),
+        With<Button>,
+    >,
+) {
+    let selected_index = HOTBAR_INVENTORY_OFFSET + hotbar.selected_slot();
+    for (interaction, slot, mut background, mut border) in &mut slots {
+        apply_button_visual(
+            *interaction,
+            slot.index == selected_index,
+            &mut background,
+            &mut border,
+        );
+    }
+}
+
+fn apply_button_visual(
+    interaction: Interaction,
+    selected: bool,
+    background: &mut BackgroundColor,
+    border: &mut BorderColor,
+) {
+    let (background_color, border_color) = match (interaction, selected) {
+        (Interaction::Pressed, true) | (Interaction::Hovered, true) => (
+            Color::srgba(0.21, 0.16, 0.38, 0.99),
+            Color::srgb(0.62, 0.88, 1.0),
+        ),
+        (Interaction::None, true) => (
+            Color::srgba(0.16, 0.12, 0.30, 0.98),
+            Color::srgb(0.55, 0.84, 1.0),
+        ),
+        (Interaction::Pressed, false) => (
+            Color::srgba(0.11, 0.085, 0.20, 0.98),
+            Color::srgba(0.45, 0.80, 1.0, 0.72),
+        ),
+        (Interaction::Hovered, false) => (
+            Color::srgba(0.07, 0.055, 0.13, 0.92),
+            Color::srgba(0.45, 0.80, 1.0, 0.62),
+        ),
+        (Interaction::None, false) => (
+            theme::HUD_SURFACE,
+            Color::srgba(0.70, 0.72, 0.82, 0.28),
+        ),
+    };
+
+    background.0 = background_color;
+    *border = BorderColor::all(border_color);
 }
 
 fn update_cursor_icon_position(
@@ -428,6 +550,7 @@ fn spawn_inventory_root(
                     biomes,
                     biome_field,
                     player_position,
+                    cursor,
                     creative_view,
                     localization,
                     language,
@@ -508,6 +631,7 @@ fn spawn_creative_panel(
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     player_position: Vec2,
+    cursor: &InventoryCursor,
     creative_view: &CreativeInventoryView,
     localization: &UiLocalization,
     language: Language,
@@ -516,6 +640,7 @@ fn spawn_creative_panel(
     let catalog = filtered_creative_catalog(
         blocks,
         tools,
+        categories,
         creative_view.search_query(),
         creative_view.selected_category(),
         language,
@@ -580,6 +705,7 @@ fn spawn_creative_panel(
                             catalog_content,
                             &catalog,
                             first_item,
+                            cursor.item(),
                             asset_server,
                             biomes,
                             biome_field,
@@ -643,10 +769,8 @@ fn spawn_category_list(
 ) {
     let mut ordered = categories.iter().collect::<Vec<_>>();
     ordered.sort_by(|left, right| {
-        left.display_name
-            .text(language)
-            .to_lowercase()
-            .cmp(&right.display_name.text(language).to_lowercase())
+        left.order
+            .cmp(&right.order)
             .then_with(|| left.id.cmp(&right.id))
     });
 
@@ -703,16 +827,7 @@ fn spawn_category_button(
         Some(category) => category.display_name.text(language),
         None => localization.text(language, "inventory.everything"),
     };
-    let border = if selected {
-        theme::TEXT_PRIMARY
-    } else {
-        Color::srgba(0.70, 0.72, 0.82, 0.28)
-    };
-    let background = if selected {
-        Color::srgba(0.08, 0.07, 0.16, 0.94)
-    } else {
-        theme::HUD_SURFACE
-    };
+    let (background, border) = static_button_visual(selected);
 
     parent
         .spawn((
@@ -722,7 +837,7 @@ fn spawn_category_button(
                 width: percent(100),
                 height: px(CATEGORY_ROW_HEIGHT),
                 padding: UiRect::horizontal(px(8)),
-                border: UiRect::all(px(1)),
+                border: UiRect::all(px(if selected { 2 } else { 1 })),
                 border_radius: BorderRadius::all(px(6)),
                 align_items: AlignItems::Center,
                 column_gap: px(8),
@@ -732,11 +847,13 @@ fn spawn_category_button(
             BorderColor::all(border),
         ))
         .with_children(|button| {
-            if let Some(category) = category {
-                let block = blocks.get(&category.block_icon.block).unwrap_or_else(|| {
+            if let Some((category, block_icon)) =
+                category.and_then(|category| category.block_icon.as_ref().map(|icon| (category, icon)))
+            {
+                let block = blocks.get(&block_icon.block).unwrap_or_else(|| {
                     panic!(
                         "inventory category {} references missing block icon {}",
-                        category.id, category.block_icon.block
+                        category.id, block_icon.block
                     )
                 });
                 let block_id = intern_block_id(&block.id);
@@ -758,7 +875,7 @@ fn spawn_category_button(
                 ));
             }
 
-            button.spawn((typography::hud(label), Pickable::IGNORE));
+            button.spawn((typography::inventory_category(label), Pickable::IGNORE));
         });
 }
 
@@ -767,6 +884,7 @@ fn spawn_creative_grid(
     parent: &mut ChildSpawnerCommands,
     catalog: &[CreativeCatalogItem<'_>],
     first_item: usize,
+    selected_item: Option<&'static str>,
     asset_server: &AssetServer,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
@@ -800,6 +918,7 @@ fn spawn_creative_grid(
                         spawn_creative_slot(
                             row_node,
                             item,
+                            selected_item,
                             asset_server,
                             biomes,
                             biome_field,
@@ -962,6 +1081,7 @@ fn spawn_creative_scrollbar(
 fn spawn_creative_slot(
     parent: &mut ChildSpawnerCommands,
     item: Option<CreativeCatalogItem<'_>>,
+    selected_item: Option<&'static str>,
     asset_server: &AssetServer,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
@@ -970,6 +1090,8 @@ fn spawn_creative_slot(
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
     let item_id = item.map(CreativeCatalogItem::interned_id);
+    let selected = item_id.is_some() && item_id == selected_item;
+    let (background, border) = static_button_visual(selected);
 
     parent
         .spawn((
@@ -978,13 +1100,13 @@ fn spawn_creative_slot(
             Node {
                 width: px(SLOT_SIZE),
                 height: px(SLOT_SIZE),
-                border: UiRect::all(px(2)),
+                border: UiRect::all(px(if selected { 3 } else { 2 })),
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
                 ..default()
             },
-            BackgroundColor(theme::HUD_SURFACE),
-            BorderColor::all(Color::srgba(0.70, 0.72, 0.82, 0.28)),
+            BackgroundColor(background),
+            BorderColor::all(border),
         ))
         .with_children(|slot| {
             let Some(item) = item else {
@@ -1038,16 +1160,7 @@ fn spawn_slot(
     language: Language,
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
-    let border = if selected {
-        theme::TEXT_PRIMARY
-    } else {
-        Color::srgba(0.70, 0.72, 0.82, 0.28)
-    };
-    let background = if selected {
-        Color::srgba(0.08, 0.07, 0.16, 0.94)
-    } else {
-        theme::HUD_SURFACE
-    };
+    let (background, border) = static_button_visual(selected);
 
     parent
         .spawn((
@@ -1056,7 +1169,7 @@ fn spawn_slot(
             Node {
                 width: px(SLOT_SIZE),
                 height: px(SLOT_SIZE),
-                border: UiRect::all(px(2)),
+                border: UiRect::all(px(if selected { 3 } else { 2 })),
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
                 ..default()
@@ -1103,9 +1216,24 @@ fn spawn_slot(
         });
 }
 
+fn static_button_visual(selected: bool) -> (Color, Color) {
+    if selected {
+        (
+            Color::srgba(0.16, 0.12, 0.30, 0.98),
+            Color::srgb(0.55, 0.84, 1.0),
+        )
+    } else {
+        (
+            theme::HUD_SURFACE,
+            Color::srgba(0.70, 0.72, 0.82, 0.28),
+        )
+    }
+}
+
 fn filtered_creative_catalog<'a>(
     blocks: &'a BlockRegistry,
     tools: &'a ToolRegistry,
+    categories: &InventoryCategoryRegistry,
     query: &str,
     category: Option<&str>,
     language: Language,
@@ -1120,22 +1248,33 @@ fn filtered_creative_catalog<'a>(
         .collect::<Vec<_>>();
 
     catalog.sort_by(|left, right| {
-        left.name(language)
-            .to_lowercase()
-            .cmp(&right.name(language).to_lowercase())
+        category_order(categories, left.category())
+            .cmp(&category_order(categories, right.category()))
+            .then_with(|| {
+                left.name(language)
+                    .to_lowercase()
+                    .cmp(&right.name(language).to_lowercase())
+            })
             .then_with(|| left.id().cmp(right.id()))
     });
     catalog
 }
 
+fn category_order(categories: &InventoryCategoryRegistry, category: &str) -> u16 {
+    categories
+        .get(category)
+        .map_or(u16::MAX, |definition| definition.order)
+}
+
 fn creative_total_rows(
     blocks: &BlockRegistry,
     tools: &ToolRegistry,
+    categories: &InventoryCategoryRegistry,
     query: &str,
     category: Option<&str>,
     language: Language,
 ) -> usize {
-    let count = filtered_creative_catalog(blocks, tools, query, category, language).len();
+    let count = filtered_creative_catalog(blocks, tools, categories, query, category, language).len();
     count.div_ceil(CREATIVE_COLUMNS).max(1)
 }
 
