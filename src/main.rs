@@ -17,6 +17,10 @@ mod ui;
 mod voxel;
 mod world;
 
+#[allow(unused_imports)]
+#[cfg(debug_assertions)]
+use bevy_dylib;
+
 use app::{
     crash_log::{install_crash_logger, mark_clean_shutdown, write_caught_panic},
     game_config::GameConfigPlugin,
