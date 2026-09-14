@@ -107,9 +107,13 @@ impl Plugin for WorldPlugin {
             )
             .add_systems(
                 Update,
-                (stream_chunks, unload_chunk_meshes, track_current_biome)
+                (stream_chunks, unload_chunk_meshes)
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                Update,
+                track_current_biome.run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
                 PostUpdate,
