@@ -6,7 +6,7 @@ pub const CHUNK_SIZE: usize = 16;
 const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
 pub(crate) const CHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_SIZE;
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct VoxelChunk {
     blocks: Box<[Option<VoxelCell>]>,
     fluids: Box<[Option<FluidCell>]>,
