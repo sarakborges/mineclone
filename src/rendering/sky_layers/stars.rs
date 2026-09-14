@@ -11,7 +11,7 @@ use crate::{
     world::current_context::DayNightContext,
 };
 
-use super::state::SkyLayerVisualState;
+use super::{deterministic::hash01, state::SkyLayerVisualState};
 
 const MAX_STARS: usize = 96;
 const STAR_DISTANCE: f32 = 110.0;
@@ -125,13 +125,4 @@ fn star_time_factor(phase: DayNightPhase, next_phase: DayNightPhase, transition:
         (DayNightPhase::Night, _) => 1.0,
         _ => 0.0,
     }
-}
-
-fn hash01(mut value: u32) -> f32 {
-    value ^= value >> 16;
-    value = value.wrapping_mul(0x7feb_352d);
-    value ^= value >> 15;
-    value = value.wrapping_mul(0x846c_a68b);
-    value ^= value >> 16;
-    value as f32 / u32::MAX as f32
 }
