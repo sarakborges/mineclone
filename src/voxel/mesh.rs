@@ -4,7 +4,10 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use crate::content::block::{BlockRegistry, BlockTextureRotations};
+use crate::{
+    content::block::{BlockRegistry, BlockTextureRotations},
+    rendering::block_texture::block_face_material_face,
+};
 
 use self::geometry::{face_geometry, is_face_exposed, orient_face_geometry};
 use super::{
@@ -80,9 +83,10 @@ where
                         face,
                         block.light_emission > 0,
                     );
+                    let material_face = block_face_material_face(block_face, block);
                     push_lit_quad(
                         buffers
-                            .entry((cell.block_id, block_face, block.casts_shadow))
+                            .entry((cell.block_id, material_face, block.casts_shadow))
                             .or_default(),
                         geometry.vertices,
                         geometry.normal,

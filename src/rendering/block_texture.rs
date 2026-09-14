@@ -25,6 +25,15 @@ pub(crate) fn block_face_texture_layers<'a>(
     }
 }
 
+pub(crate) fn block_face_material_face(face: BlockFace, block: &BlockDefinition) -> BlockFace {
+    let layers = block_face_texture_layers(face, block);
+
+    BlockFace::ALL
+        .into_iter()
+        .find(|candidate| same_texture_layers(block_face_texture_layers(*candidate, block), layers))
+        .unwrap_or(face)
+}
+
 pub(crate) fn block_face_texture(face: BlockFace, block: &BlockDefinition) -> Option<&str> {
     block_face_texture_layers(face, block)
         .first()
@@ -44,6 +53,13 @@ pub(crate) fn load_block_texture_layer(
     layer: &BlockTextureLayer,
 ) -> Handle<Image> {
     asset_server.load(layer.texture.clone())
+}
+
+fn same_texture_layers(left: &[BlockTextureLayer], right: &[BlockTextureLayer]) -> bool {
+    left.len() == right.len()
+        && left.iter().zip(right).all(|(left, right)| {
+            left.texture == right.texture && left.dyable == right.dyable
+        })
 }
 
 fn first_block_texture_layers(block: &BlockDefinition) -> &[BlockTextureLayer] {
