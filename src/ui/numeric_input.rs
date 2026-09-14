@@ -2,13 +2,19 @@ use std::{fmt::Display, marker::PhantomData};
 
 use bevy::prelude::*;
 
-use super::{text_input::select_all_pressed, theme};
+use super::{button::COMPACT_CONTROL_HEIGHT, text_input::select_all_pressed, theme, typography};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NumericInputEvent {
     None,
     Changed,
     Finished,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum NumericInputSizing {
+    Fixed(f32),
+    Flexible,
 }
 
 #[derive(Resource)]
@@ -122,6 +128,38 @@ where
         self.replace_on_next_digit = false;
         NumericInputEvent::Changed
     }
+}
+
+pub(crate) fn numeric_input_field<I: Component, L: Component>(
+    value: impl Into<String>,
+    input_marker: I,
+    label_marker: L,
+    sizing: NumericInputSizing,
+) -> impl Bundle {
+    let (width, flex_grow, min_width) = match sizing {
+        NumericInputSizing::Fixed(width) => (px(width), 0.0, Val::Auto),
+        NumericInputSizing::Flexible => (Val::Auto, 1.0, px(0)),
+    };
+
+    (
+        Button,
+        input_marker,
+        Node {
+            width,
+            flex_grow,
+            min_width,
+            height: px(COMPACT_CONTROL_HEIGHT),
+            border: UiRect::all(px(1)),
+            padding: UiRect::axes(px(14), px(0)),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::FlexStart,
+            border_radius: BorderRadius::all(px(7)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.045, 0.035, 0.09, 0.88)),
+        BorderColor::all(numeric_input_border(false)),
+        children![(typography::button_label(value), label_marker)],
+    )
 }
 
 pub(crate) fn numeric_input_border(editing: bool) -> Color {
