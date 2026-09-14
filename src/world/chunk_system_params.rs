@@ -44,6 +44,13 @@ impl ChunkContent<'_> {
         &self.voxel.secondary_properties
     }
 
+    pub(crate) fn generation_inputs_changed(&self) -> bool {
+        self.voxel.blocks.is_changed()
+            || self.voxel.fluids.is_changed()
+            || self.biomes.is_changed()
+            || self.biome_field.is_changed()
+    }
+
     pub(crate) fn render_context<'a>(
         &'a self,
         world: &'a crate::voxel::world::VoxelWorld,
@@ -75,6 +82,12 @@ impl ChunkGeneration<'_> {
         self.dimension
             .definition()
             .unwrap_or_else(|| panic!("missing dimension definition: {}", self.dimension.id()))
+    }
+
+    pub(crate) fn inputs_changed(&self) -> bool {
+        self.dimension.inputs_changed()
+            || self.structures.is_changed()
+            || self.feature_fields.is_changed()
     }
 
     pub(crate) fn context<'a>(&'a self, content: &'a ChunkContent<'_>) -> ChunkGenerationContext<'a> {
