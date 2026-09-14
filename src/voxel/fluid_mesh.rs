@@ -46,8 +46,22 @@ where
                     continue;
                 };
 
-                let fluid = buffers.entry(cell.fluid_id).or_default();
                 let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
+                let exposed = BlockFace::ALL.map(|face| {
+                    if face == BlockFace::Bottom && world_voxel.y <= 0 {
+                        return false;
+                    }
+                    face_is_exposed(
+                        world,
+                        world_voxel + face.offset(),
+                        cell.fluid_id,
+                        face,
+                    )
+                });
+                if !exposed.iter().any(|value| *value) {
+                    continue;
+                }
+
                 let tint = tint_at(world_voxel, cell.fluid_id);
                 let heights = FluidFaceHeights {
                     h00: fluid_corner_height(world, world_voxel, cell.fluid_id, -1, -1),
@@ -55,13 +69,10 @@ where
                     h11: fluid_corner_height(world, world_voxel, cell.fluid_id, 1, 1),
                     h01: fluid_corner_height(world, world_voxel, cell.fluid_id, -1, 1),
                 };
+                let fluid = buffers.entry(cell.fluid_id).or_default();
 
-                for face in BlockFace::ALL {
-                    if face == BlockFace::Bottom && world_voxel.y <= 0 {
-                        continue;
-                    }
-                    let neighbor_position = world_voxel + face.offset();
-                    if !face_is_exposed(world, neighbor_position, cell.fluid_id, face) {
+                for (face, is_exposed) in BlockFace::ALL.into_iter().zip(exposed) {
+                    if !is_exposed {
                         continue;
                     }
 
