@@ -26,14 +26,24 @@ pub(crate) struct VoxelContent<'w> {
 
 #[derive(SystemParam)]
 pub(crate) struct ChunkContent<'w> {
-    pub(crate) blocks: Res<'w, BlockRegistry>,
-    pub(crate) fluids: Res<'w, FluidRegistry>,
+    voxel: VoxelContent<'w>,
     pub(crate) biomes: Res<'w, BiomeRegistry>,
-    pub(crate) secondary_properties: Res<'w, SecondaryPropertyRegistry>,
     pub(crate) biome_field: Res<'w, BiomeField>,
 }
 
-impl<'w> ChunkContent<'w> {
+impl ChunkContent<'_> {
+    pub(crate) fn blocks(&self) -> &BlockRegistry {
+        &self.voxel.blocks
+    }
+
+    pub(crate) fn fluids(&self) -> &FluidRegistry {
+        &self.voxel.fluids
+    }
+
+    pub(crate) fn secondary_properties(&self) -> &SecondaryPropertyRegistry {
+        &self.voxel.secondary_properties
+    }
+
     pub(crate) fn render_context<'a>(
         &'a self,
         world: &'a crate::voxel::world::VoxelWorld,
@@ -42,10 +52,10 @@ impl<'w> ChunkContent<'w> {
     ) -> ChunkRenderContext<'a> {
         ChunkRenderContext {
             world,
-            blocks: &self.blocks,
-            fluids: &self.fluids,
+            blocks: self.blocks(),
+            fluids: self.fluids(),
             biomes: &self.biomes,
-            secondary_properties: &self.secondary_properties,
+            secondary_properties: self.secondary_properties(),
             biome_field: &self.biome_field,
             terrain_materials,
             fluid_materials,
@@ -60,17 +70,17 @@ pub(crate) struct ChunkGeneration<'w> {
     pub(crate) feature_fields: Res<'w, WorldFeatureFields>,
 }
 
-impl<'w> ChunkGeneration<'w> {
+impl ChunkGeneration<'_> {
     pub(crate) fn dimension(&self) -> &DimensionDefinition {
-        self.dimension.definition().unwrap_or_else(|| {
-            panic!("missing dimension definition: {}", self.dimension.id())
-        })
+        self.dimension
+            .definition()
+            .unwrap_or_else(|| panic!("missing dimension definition: {}", self.dimension.id()))
     }
 
     pub(crate) fn context<'a>(&'a self, content: &'a ChunkContent<'_>) -> ChunkGenerationContext<'a> {
         ChunkGenerationContext {
-            blocks: &content.blocks,
-            fluids: &content.fluids,
+            blocks: content.blocks(),
+            fluids: content.fluids(),
             dimension: self.dimension(),
             biomes: &content.biomes,
             structures: &self.structures,
