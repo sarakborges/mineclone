@@ -1,8 +1,11 @@
 use bevy::prelude::*;
 
-use crate::content::biome_hydrology::BiomeHydrology;
+use crate::{
+    content::biome_hydrology::BiomeHydrology,
+    world::deterministic::{avalanche_u64, hash_signed},
+};
 
-use super::math::{hash_unit, smoothstep};
+use super::math::{hash_unit, lerp, smoothstep};
 
 #[derive(Clone, Debug)]
 pub struct WaterBody {
@@ -52,20 +55,36 @@ impl WaterBody {
     }
 
     pub fn maximum_horizontal_extent(&self) -> f32 {
-        self.radius.max_element() * 1.3
+        self.radius.max_element() * 1.42
     }
 }
 
 fn irregular_boundary_scale(normalized: Vec2, seed: u64) -> f32 {
     let angle = normalized.y.atan2(normalized.x);
-    let phase_a = hash_unit(seed) * std::f32::consts::TAU;
-    let phase_b = hash_unit(seed.rotate_left(21)) * std::f32::consts::TAU;
-    let phase_c = hash_unit(seed.rotate_left(43)) * std::f32::consts::TAU;
-    let broad = (angle * 2.0 + phase_a).sin() * 0.14;
-    let medium = (angle * 3.0 + phase_b).sin() * 0.09;
-    let detail = (angle * 5.0 + phase_c).sin() * 0.05;
+    let broad = cyclic_boundary_noise(angle, seed ^ 0x243f_6a88_85a3_08d3, 7);
+    let medium = cyclic_boundary_noise(angle, seed ^ 0x1319_8a2e_0370_7344, 13);
+    let detail = cyclic_boundary_noise(angle, seed ^ 0xa409_3822_299f_31d0, 23);
+    let phase = hash_unit(seed.rotate_left(37)) * std::f32::consts::TAU;
+    let asymmetric_lobe = (angle + phase).sin() * 0.10;
 
-    (1.0 + broad + medium + detail).clamp(0.72, 1.28)
+    (1.0 + broad * 0.23 + medium * 0.13 + detail * 0.07 + asymmetric_lobe)
+        .clamp(0.58, 1.42)
+}
+
+fn cyclic_boundary_noise(angle: f32, seed: u64, segments: u32) -> f32 {
+    let turn = (angle / std::f32::consts::TAU).rem_euclid(1.0);
+    let scaled = turn * segments as f32;
+    let first = scaled.floor() as u32 % segments;
+    let second = (first + 1) % segments;
+    let t = smoothstep(scaled - scaled.floor());
+    let sample = |index: u32| {
+        let mixed = avalanche_u64(
+            seed ^ (index as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15),
+        );
+        hash_signed(mixed)
+    };
+
+    lerp(sample(first), sample(second), t)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -132,6 +151,24 @@ mod tests {
         let diagonal_distance = body.normalized_horizontal_distance(diagonal);
 
         assert_ne!(x_distance, diagonal_distance);
+    }
+
+    #[test]
+    fn lake_boundary_has_asymmetric_large_scale_variation() {
+        let body = WaterBody {
+            center: Vec2::ZERO,
+            radius: Vec2::splat(40.0),
+            rotation: 0.0,
+            shape_seed: 91,
+            water_level: 64.0,
+            carve_depth: 10.0,
+            fluid_id: "asteria:test/water".into(),
+        };
+
+        let east = body.normalized_horizontal_distance(Vec2::new(40.0, 0.0));
+        let west = body.normalized_horizontal_distance(Vec2::new(-40.0, 0.0));
+
+        assert_ne!(east, west);
     }
 
     #[test]
