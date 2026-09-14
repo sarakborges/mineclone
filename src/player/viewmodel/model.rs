@@ -4,9 +4,7 @@ use bevy::{
 };
 
 use crate::{
-    content::{
-        biome::BiomeRegistry, block::BlockRegistry, block_orientation::BlockOrientation,
-    },
+    content::block_orientation::BlockOrientation,
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::{
         block_model::{
@@ -14,11 +12,10 @@ use crate::{
             block_face_material_data, maximum_block_model_layers, set_block_model_tint,
         },
         block_model_material::BlockModelMaterial,
-        block_tint::block_tint_at,
+        block_visual_content::BlockVisualContent,
     },
     targeting::PlacementOrientation,
     voxel::{block_face::BlockFace, orientation::orientation_rotation},
-    world::biome_field::BiomeField,
 };
 
 use super::animation::{PlayerViewModel, ViewModelItemSwitch, base_viewmodel_transform};
@@ -65,14 +62,6 @@ type HeldBlockRootQuery<'w, 's> = Query<
 pub(super) struct ViewModelArmAssets {
     mesh: Handle<Mesh>,
     material: Handle<StandardMaterial>,
-}
-
-#[derive(SystemParam)]
-pub(super) struct ViewModelDefinitions<'w> {
-    asset_server: Res<'w, AssetServer>,
-    blocks: Res<'w, BlockRegistry>,
-    biomes: Res<'w, BiomeRegistry>,
-    biome_field: Res<'w, BiomeField>,
 }
 
 #[derive(SystemParam)]
@@ -124,7 +113,7 @@ pub(super) fn setup_viewmodel_arm_assets(
 pub(super) fn spawn_viewmodel(
     mut commands: Commands,
     cameras: Query<(Entity, &Transform), Added<GameplayCamera>>,
-    definitions: ViewModelDefinitions,
+    definitions: BlockVisualContent,
     selection: ViewModelSelection,
     assets: ViewModelSpawnAssets,
     mut item_switch: ResMut<ViewModelItemSwitch>,
@@ -204,13 +193,8 @@ pub(super) fn spawn_viewmodel(
                                     .get(block_id)
                                     .map(|block| (block_id, block))
                             });
-                            let tint = selected_block.map(|(_, block)| {
-                                block_tint_at(
-                                    block.tint,
-                                    tint_position,
-                                    &definitions.biome_field,
-                                    &definitions.biomes,
-                                )
+                            let tint = selected_block.and_then(|(block_id, _)| {
+                                definitions.tint_at(block_id, tint_position)
                             });
 
                             for &face in block_model.faces() {
@@ -266,7 +250,7 @@ pub(super) fn spawn_viewmodel(
 }
 
 pub(super) fn sync_held_block(
-    definitions: ViewModelDefinitions,
+    definitions: BlockVisualContent,
     selection: ViewModelSelection,
     player: Single<&Transform, With<GameplayCamera>>,
     mut cache: Local<HeldBlockVisualCache>,
@@ -284,9 +268,7 @@ pub(super) fn sync_held_block(
     let needs_refresh = cache.tint_cell != Some(tint_cell)
         || selection.hotbar.is_changed()
         || selection.placement_orientation.is_changed()
-        || definitions.blocks.is_changed()
-        || definitions.biomes.is_changed()
-        || definitions.biome_field.is_changed();
+        || definitions.inputs_changed();
     if !needs_refresh {
         return;
     }
@@ -322,12 +304,7 @@ pub(super) fn sync_held_block(
             .for_block(selected_slot, block);
         held_transform.rotation = held_block_transform(orientation).rotation;
 
-        let tint = block_tint_at(
-            block.tint,
-            tint_position,
-            &definitions.biome_field,
-            &definitions.biomes,
-        );
+        let tint = definitions.tint_at(block_id, tint_position).unwrap_or(Color::WHITE);
 
         for (face, material_handle, mut layer_visibility) in &mut faces {
             let Some(mut material) = materials.get_mut(&material_handle.0) else {
