@@ -2,10 +2,9 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    content::{day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry},
     localization::{ActiveLanguage, UiLocalization},
     ui::typography,
-    world::{day_night::DayNightClock, dimension::CurrentDimension},
+    world::current_context::DayNightContext,
 };
 
 pub struct TimeHudPlugin;
@@ -48,23 +47,16 @@ fn spawn_time_hud(
 }
 
 fn update_time_hud(
-    dimension: Res<CurrentDimension>,
-    clock: Res<DayNightClock>,
-    dimensions: Res<DimensionRegistry>,
-    cycles: Res<DayNightCycleRegistry>,
+    day_night: DayNightContext,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
     mut time_text: Single<&mut Text, With<TimeHudText>>,
 ) {
-    let (hour, minute) = dimensions
-        .get(&dimension.id)
-        .and_then(|definition| cycles.get(&definition.day_night_cycle))
-        .map(|cycle| cycle.world_time(clock.normalized_time))
-        .unwrap_or((0, 0));
+    let (hour, minute) = day_night.world_time().unwrap_or((0, 0));
     let next_text = format!(
         "{} {}\n{:02}:{:02}",
         localization.text(language.get(), "hud.day"),
-        clock.day,
+        day_night.clock().day,
         hour,
         minute
     );
