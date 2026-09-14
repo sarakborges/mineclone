@@ -1,3 +1,5 @@
+use crate::content::color::Hsi;
+
 const BLOCK_INTENSITY_SHIFT: u16 = 4;
 const BLOCK_SATURATION_SHIFT: u16 = 8;
 const BLOCK_HUE_SHIFT: u16 = 11;
@@ -22,31 +24,18 @@ impl BlockLight {
             } else {
                 saturation
             },
-            intensity: clamp_channel(intensity),
+            intensity: clamp_level(intensity),
         }
     }
 
-    pub(crate) const fn from_rgb_levels(rgb: [u8; 3]) -> Self {
-        let red = clamp_channel(rgb[0]);
-        let green = clamp_channel(rgb[1]);
-        let blue = clamp_channel(rgb[2]);
-        let maximum = max_channel([red, green, blue]);
+    pub(crate) fn from_hsi(color: Hsi, intensity: u8) -> Self {
+        let color = color.normalized();
+        let hue = ((color.hue / 360.0) * HUE_STEPS as f32).round() as u8 % HUE_STEPS;
+        let saturation = (color.saturation * Self::MAX_SATURATION as f32)
+            .round()
+            .clamp(0.0, Self::MAX_SATURATION as f32) as u8;
 
-        if maximum == 0 {
-            return Self::DARK;
-        }
-
-        let minimum = min_channel([red, green, blue]);
-        let delta = maximum - minimum;
-        if delta == 0 {
-            return Self::new(0, 0, maximum);
-        }
-
-        let saturation = ((delta as u16 * Self::MAX_SATURATION as u16
-            + maximum as u16 / 2)
-            / maximum as u16) as u8;
-        let hue = quantized_hue(red, green, blue, maximum, delta);
-        Self::new(hue, saturation, maximum)
+        Self::new(hue, saturation, intensity)
     }
 
     pub(crate) const fn hue(self) -> u8 {
@@ -69,34 +58,19 @@ impl BlockLight {
         )
     }
 
-    pub(crate) fn to_rgb_levels(self) -> [u8; 3] {
-        if self.intensity == 0 {
-            return [0; 3];
-        }
-        if self.saturation == 0 {
-            return [self.intensity; 3];
-        }
+    pub(crate) fn color(self) -> Hsi {
+        Hsi::new(
+            self.hue as f32 * 360.0 / HUE_STEPS as f32,
+            self.saturation as f32 / Self::MAX_SATURATION as f32,
+            self.intensity as f32 / VoxelLight::MAX_LEVEL as f32,
+        )
+    }
 
-        let hue_sector = self.hue as f32 * 6.0 / HUE_STEPS as f32;
-        let sector = hue_sector as u32;
-        let fraction = hue_sector - sector as f32;
-        let saturation = self.saturation as f32 / Self::MAX_SATURATION as f32;
-        let value = self.intensity as f32;
-        let low = value * (1.0 - saturation);
-        let falling = value * (1.0 - saturation * fraction);
-        let rising = value * (1.0 - saturation * (1.0 - fraction));
-
-        let rgb = match sector % 6 {
-            0 => [value, rising, low],
-            1 => [falling, value, low],
-            2 => [low, value, rising],
-            3 => [low, falling, value],
-            4 => [rising, low, value],
-            _ => [value, low, falling],
-        };
-
-        rgb.map(|channel| {
-            channel
+    // Mesh vertex attributes are an RGB boundary. Lighting propagation and
+    // mixing stay in HSI until this final conversion for the shader.
+    pub(crate) fn to_srgb_levels(self) -> [u8; 3] {
+        self.color().to_srgb().map(|channel| {
+            (channel * VoxelLight::MAX_LEVEL as f32)
                 .round()
                 .clamp(0.0, VoxelLight::MAX_LEVEL as f32) as u8
         })
@@ -115,13 +89,8 @@ impl VoxelLight {
         Self::new_hsi(sky, BlockLight::new(0, 0, block))
     }
 
-    #[cfg(test)]
-    pub const fn new_colored(sky: [u8; 3], block: [u8; 3]) -> Self {
-        Self::new_hsi(max_channel(sky), BlockLight::from_rgb_levels(block))
-    }
-
     pub(crate) const fn new_hsi(sky: u8, block: BlockLight) -> Self {
-        let sky = clamp_channel(sky) as u16;
+        let sky = clamp_level(sky) as u16;
         let intensity = block.intensity() as u16;
         let saturation = block.saturation() as u16;
         let hue = block.hue() as u16;
@@ -138,7 +107,7 @@ impl VoxelLight {
     }
 
     #[cfg(test)]
-    pub const fn sky_rgb(self) -> [u8; 3] {
+    pub const fn sky_levels(self) -> [u8; 3] {
         [self.sky(); 3]
     }
 
@@ -154,12 +123,12 @@ impl VoxelLight {
         )
     }
 
-    pub fn block_rgb(self) -> [u8; 3] {
-        self.block_hsi().to_rgb_levels()
+    pub fn block_srgb_levels(self) -> [u8; 3] {
+        self.block_hsi().to_srgb_levels()
     }
 }
 
-const fn clamp_channel(value: u8) -> u8 {
+const fn clamp_level(value: u8) -> u8 {
     if value > VoxelLight::MAX_LEVEL {
         VoxelLight::MAX_LEVEL
     } else {
@@ -167,66 +136,30 @@ const fn clamp_channel(value: u8) -> u8 {
     }
 }
 
-const fn max_channel(value: [u8; 3]) -> u8 {
-    let first = if value[0] > value[1] {
-        value[0]
-    } else {
-        value[1]
-    };
-    if first > value[2] { first } else { value[2] }
-}
-
-const fn min_channel(value: [u8; 3]) -> u8 {
-    let first = if value[0] < value[1] {
-        value[0]
-    } else {
-        value[1]
-    };
-    if first < value[2] { first } else { value[2] }
-}
-
-const fn quantized_hue(red: u8, green: u8, blue: u8, maximum: u8, delta: u8) -> u8 {
-    let delta = delta as i32;
-    let mut sector_numerator = if maximum == red {
-        green as i32 - blue as i32
-    } else if maximum == green {
-        blue as i32 - red as i32 + 2 * delta
-    } else {
-        red as i32 - green as i32 + 4 * delta
-    };
-    let full_turn = 6 * delta;
-
-    if sector_numerator < 0 {
-        sector_numerator += full_turn;
-    }
-
-    let scaled = sector_numerator * HUE_STEPS as i32;
-    let quantized = (scaled + full_turn / 2) / full_turn;
-    (quantized as u8) % HUE_STEPS
-}
-
 #[cfg(test)]
 mod tests {
     use super::{BlockLight, VoxelLight};
+    use crate::content::color::Hsi;
 
     #[test]
     fn packs_white_block_light_as_zero_saturation() {
         let light = VoxelLight::new(13, 7);
 
         assert_eq!(light.sky(), 13);
-        assert_eq!(light.sky_rgb(), [13, 13, 13]);
+        assert_eq!(light.sky_levels(), [13, 13, 13]);
         assert_eq!(light.block(), 7);
         assert_eq!(light.block_hsi().saturation(), 0);
-        assert_eq!(light.block_rgb(), [7, 7, 7]);
+        assert_eq!(light.block_srgb_levels(), [7, 7, 7]);
     }
 
     #[test]
-    fn colored_block_light_round_trips_through_hsi_quantization() {
-        let light = VoxelLight::new_colored([15, 6, 1], [2, 9, 14]);
+    fn colored_block_light_preserves_hsi_channels() {
+        let block = BlockLight::from_hsi(Hsi::new(210.0, 0.8, 0.4), 14);
+        let light = VoxelLight::new_hsi(15, block);
 
         assert_eq!(light.sky(), 15);
         assert_eq!(light.block(), 14);
-        assert_eq!(light.block_rgb(), [2, 10, 14]);
+        assert_eq!(light.block_hsi(), block);
     }
 
     #[test]
@@ -239,11 +172,11 @@ mod tests {
     }
 
     #[test]
-    fn clamps_rgb_inputs_before_hsi_encoding() {
-        let light = VoxelLight::new_colored([42, 1, 31], [2, 99, 7]);
+    fn hsi_input_is_clamped_before_quantization() {
+        let block = BlockLight::from_hsi(Hsi::new(725.0, 3.0, 2.0), 99);
 
-        assert_eq!(light.sky(), 15);
-        assert_eq!(light.block(), 15);
-        assert_eq!(light.block_rgb(), [2, 15, 8]);
+        assert_eq!(block.intensity(), 15);
+        assert_eq!(block.saturation(), BlockLight::MAX_SATURATION);
+        assert!(block.hue() < HUE_STEPS);
     }
 }
