@@ -64,7 +64,7 @@ pub(super) struct InventoryPanelState<'w, 's> {
 }
 
 #[derive(SystemParam)]
-struct InventoryCursorSyncContext<'w, 's> {
+pub(super) struct InventoryCursorSyncContext<'w, 's> {
     cursor: Res<'w, InventoryCursor>,
     player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
     window: Single<'w, 's, &'static Window>,
@@ -73,7 +73,7 @@ struct InventoryCursorSyncContext<'w, 's> {
 }
 
 #[derive(SystemParam)]
-struct InventoryRebuildInputs<'w, 's> {
+pub(super) struct InventoryRebuildInputs<'w, 's> {
     categories: Res<'w, InventoryCategoryRegistry>,
     localization: Res<'w, UiLocalization>,
     panel: InventoryPanelState<'w, 's>,
@@ -81,7 +81,7 @@ struct InventoryRebuildInputs<'w, 's> {
 }
 
 #[derive(SystemParam)]
-struct InventoryRebuildView<'w, 's> {
+pub(super) struct InventoryRebuildView<'w, 's> {
     roots: Query<'w, 's, Entity, With<InventoryHudRoot>>,
     catalog_scroll: Query<
         'w,
