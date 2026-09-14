@@ -103,8 +103,7 @@ pub(super) fn sync_language_buttons(
         Has<InteractionDisabled>,
         &mut BackgroundColor,
     )>,
-    mut label_colors: Query<(&LanguageButtonLabel, &mut TextColor)>,
-    mut label_texts: Query<(&LanguageButtonLabel, &mut Text)>,
+    mut labels: Query<(&LanguageButtonLabel, &mut Text, &mut TextColor)>,
 ) {
     let active_language = active_language.get();
 
@@ -119,11 +118,10 @@ pub(super) fn sync_language_buttons(
         );
     }
 
-    for (label, mut color) in &mut label_colors {
-        *color = TextColor(selectable_label_color(label.0 == active_language));
-    }
+    for (label, mut text, mut color) in &mut labels {
+        let active = label.0 == active_language;
+        *color = TextColor(selectable_label_color(active));
 
-    for (label, mut text) in &mut label_texts {
         let next = localization.text(active_language, label.0.localization_key());
         if text.0 != next {
             text.0 = next.to_owned();
