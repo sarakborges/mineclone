@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::world::{
     generation_region::GenerationRegion,
-    hydrology::{HydrologyRiverSurfaceSample, HydrologyWaterSample},
+    hydrology::{HydrologyRiverSurfaceSample, HydrologyWaterKind, HydrologyWaterSample},
     math::{lerp, smoothstep},
     noise::value_noise_2d,
 };
@@ -10,16 +10,21 @@ use crate::world::{
 const CAVE_WATER_PROTECTION_DEPTH: f32 = 14.0;
 const CAVE_WATER_PROTECTION_FADE_DEPTH: f32 = 20.0;
 const CAVE_WATER_HORIZONTAL_CLEARANCE: f32 = 8.0;
-const RIVER_CHANNEL_HEADROOM: f32 = 3.25;
-const RIVER_MINIMUM_SURFACE_HEADROOM: f32 = 2.25;
+const RIVER_CHANNEL_HEADROOM: f32 = 7.0;
+const RIVER_MINIMUM_SURFACE_HEADROOM: f32 = 5.0;
+const LAKE_MINIMUM_SURFACE_HEADROOM: f32 = 5.0;
+const LAKE_MAXIMUM_SURFACE_HEADROOM: f32 = 7.5;
 const RIVER_BANK_NOISE_SCALE: f32 = 0.035;
 const RIVER_BANK_DETAIL_NOISE_SCALE: f32 = 0.11;
+const LAKE_HEADROOM_NOISE_SCALE: f32 = 0.028;
 const WATER_VOLUME_AIR_DENSITY: f32 = -0.001;
 
 #[derive(Clone, Copy, Debug)]
 struct WaterLevels {
     water_level: f32,
     bed_level: f32,
+    strength: f32,
+    kind: HydrologyWaterKind,
 }
 
 impl From<HydrologyWaterSample<'_>> for WaterLevels {
@@ -27,6 +32,8 @@ impl From<HydrologyWaterSample<'_>> for WaterLevels {
         Self {
             water_level: sample.water_level,
             bed_level: sample.bed_level,
+            strength: sample.strength,
+            kind: sample.kind,
         }
     }
 }
@@ -93,11 +100,19 @@ pub(super) fn enforce_hydrology_water_volume(
         return density;
     };
 
-    // Water bodies only carve the actual wet volume here. In particular, lakes
-    // must not turn every solid voxel above their surface into air: that creates
-    // vertical cylinders through hills and perfectly straight retaining walls.
-    // River surface clearance is handled separately by the bounded headroom
-    // profile above, which only removes the stale terrain cap over the channel.
+    if water.kind == HydrologyWaterKind::Lake {
+        let headroom = lake_headroom(water.strength, horizontal, seed);
+        if cell_top > water.water_level
+            && cell_bottom < water.water_level + headroom
+            && base_density > 0.0
+        {
+            return density.min(WATER_VOLUME_AIR_DENSITY);
+        }
+    }
+
+    // Only the actual wet volume is forced open below the surface. Surface
+    // clearance above rivers and lakes is handled by the bounded headroom paths
+    // above so hydrology never excavates an unbounded vertical shaft.
     if cell_top <= water.bed_level || cell_bottom >= water.water_level {
         return density;
     }
@@ -143,15 +158,30 @@ fn river_headroom(strength: f32, horizontal: Vec2, seed: u64) -> f32 {
         seed ^ 0x1319_8a2e_0370_7344,
     ) * 0.5
         + 0.5;
-    let variation = lerp(0.72, 1.28, broad * 0.7 + detail * 0.3);
+    let variation = lerp(0.82, 1.18, broad * 0.7 + detail * 0.3);
     let shaped_strength =
-        (strength * (1.0 + (variation - 1.0) * (1.0 - strength) * 1.5)).clamp(0.0, 1.0);
+        (strength * (1.0 + (variation - 1.0) * (1.0 - strength))).clamp(0.0, 1.0);
 
-    // River water sits about two blocks below the sampled terrain. Keep enough
-    // headroom to remove that immediate cap, but never excavate a tall trench
-    // through surrounding hills. The old eight-block opening was visually much
-    // closer to a rectangular canyon than a river bank.
-    (RIVER_CHANNEL_HEADROOM * smoothstep(shaped_strength)).max(RIVER_MINIMUM_SURFACE_HEADROOM)
+    lerp(
+        RIVER_MINIMUM_SURFACE_HEADROOM,
+        RIVER_CHANNEL_HEADROOM,
+        smoothstep(shaped_strength),
+    )
+}
+
+fn lake_headroom(strength: f32, horizontal: Vec2, seed: u64) -> f32 {
+    let noise = value_noise_2d(
+        horizontal * LAKE_HEADROOM_NOISE_SCALE,
+        seed ^ 0x9e37_79b9_7f4a_7c15,
+    ) * 0.5
+        + 0.5;
+    let variation = smoothstep((strength.clamp(0.0, 1.0) * 0.75 + noise * 0.25).clamp(0.0, 1.0));
+
+    lerp(
+        LAKE_MINIMUM_SURFACE_HEADROOM,
+        LAKE_MAXIMUM_SURFACE_HEADROOM,
+        variation,
+    )
 }
 
 #[cfg(test)]
@@ -159,36 +189,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn river_headroom_tapers_toward_the_bank() {
+    fn river_headroom_tapers_but_never_below_five_blocks() {
         let horizontal = Vec2::new(12.5, -8.5);
         let seed = 42;
 
         assert_eq!(river_headroom(0.0, horizontal, seed), 0.0);
-        assert!(
-            river_headroom(0.25, horizontal, seed) < river_headroom(0.5, horizontal, seed)
-        );
-        assert!(river_headroom(0.5, horizontal, seed) < river_headroom(1.0, horizontal, seed));
-        assert_eq!(
-            river_headroom(1.0, horizontal, seed),
-            RIVER_CHANNEL_HEADROOM
-        );
-    }
-
-    #[test]
-    fn river_headroom_stays_close_to_the_surface() {
-        for strength in [0.0, 0.25, 0.5, 0.75, 1.0] {
-            assert!(
-                river_headroom(strength, Vec2::ZERO, 42) <= RIVER_CHANNEL_HEADROOM
-            );
+        for strength in [0.25, 0.5, 0.75, 1.0] {
+            let headroom = river_headroom(strength, horizontal, seed);
+            assert!(headroom >= RIVER_MINIMUM_SURFACE_HEADROOM);
+            assert!(headroom <= RIVER_CHANNEL_HEADROOM);
         }
     }
 
     #[test]
-    fn river_edge_headroom_clears_the_original_surface_cap() {
-        assert!(
-            river_headroom(0.25, Vec2::new(32.5, -17.5), 42)
-                >= RIVER_MINIMUM_SURFACE_HEADROOM
-        );
+    fn lake_headroom_never_drops_below_five_blocks() {
+        for strength in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            let headroom = lake_headroom(strength, Vec2::new(31.5, -12.5), 42);
+            assert!(headroom >= LAKE_MINIMUM_SURFACE_HEADROOM);
+            assert!(headroom <= LAKE_MAXIMUM_SURFACE_HEADROOM);
+        }
     }
 
     #[test]
