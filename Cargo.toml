@@ -18,12 +18,12 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 winresource = "0.1.31"
 
 # Keep development builds fast to iterate on without making runtime-heavy
-# world generation and rendering effectively unoptimized. Keep only line-level
-# debug info for Asteria and omit dependency debug info to reduce MSVC link/PDB
-# work while preserving useful source locations in development backtraces.
+# world generation and rendering effectively unoptimized. Dependency debug
+# info is also disabled below. The app itself uses no debug info so MSVC does
+# not spend the final link producing a large development PDB on every run.
 [profile.dev]
 opt-level = 1
-debug = "line-tables-only"
+debug = false
 
 [profile.dev.package."*"]
 opt-level = 3
