@@ -3,6 +3,7 @@ mod crosshair;
 mod fps;
 mod hotbar;
 mod inventory;
+mod player;
 mod targeting;
 mod time;
 mod underwater;
@@ -14,6 +15,7 @@ use crosshair::CrosshairPlugin;
 use fps::FpsHudPlugin;
 use hotbar::HotbarHudPlugin;
 use inventory::InventoryHudPlugin;
+use player::PlayerHudPlugin;
 use targeting::TargetHudPlugin;
 use time::TimeHudPlugin;
 use underwater::UnderwaterTintPlugin;
@@ -53,6 +55,7 @@ impl Plugin for HudPlugin {
                 CrosshairPlugin,
                 HotbarHudPlugin,
                 InventoryHudPlugin,
+                PlayerHudPlugin,
                 TimeHudPlugin,
                 FpsHudPlugin,
                 WorldHudPlugin,
