@@ -2,11 +2,8 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::{
-        biome::BiomeRegistry, color::Hsi, day_night_cycle::DayNightCycleRegistry,
-        dimension::DimensionRegistry,
-    },
-    world::{biome::CurrentBiome, day_night::DayNightClock, dimension::CurrentDimension},
+    content::{biome::BiomeRegistry, color::Hsi},
+    world::{biome::CurrentBiome, current_context::DayNightContext},
 };
 
 #[derive(Resource)]
@@ -28,12 +25,9 @@ impl Default for EnvironmentVisualState {
 
 #[derive(SystemParam)]
 struct EnvironmentScene<'w> {
-    current_dimension: Res<'w, CurrentDimension>,
+    day_night: DayNightContext<'w>,
     current_biome: Res<'w, CurrentBiome>,
-    dimensions: Res<'w, DimensionRegistry>,
     biomes: Res<'w, BiomeRegistry>,
-    cycles: Res<'w, DayNightCycleRegistry>,
-    clock: Res<'w, DayNightClock>,
 }
 
 pub struct EnvironmentPlugin;
@@ -51,14 +45,10 @@ fn update_environment_visuals(
     scene: EnvironmentScene,
     mut visuals: ResMut<EnvironmentVisualState>,
 ) {
-    let Some(dimension) = scene.dimensions.get(&scene.current_dimension.id) else {
-        return;
-    };
-    let Some(cycle) = scene.cycles.get(&dimension.day_night_cycle) else {
+    let Some(sample) = scene.day_night.sample() else {
         return;
     };
 
-    let sample = cycle.sample(scene.clock.normalized_time);
     visuals.sky_color = Hsi::blend_weighted(scene.current_biome.influences.iter().filter_map(
         |influence| {
             let biome = scene.biomes.get(&influence.id)?;
