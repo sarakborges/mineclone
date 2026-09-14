@@ -7,15 +7,16 @@ use crate::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         fluid_mesh::{ChunkFluidMesh, build_fluid_meshes},
         mesh::{ChunkFaceMesh, build_chunk_mesh},
+        read::VoxelRead,
     },
 };
 
 use super::{
-    ChunkRenderContext,
+    ChunkMeshBuildContext, ChunkRenderContext,
     pool::{ChunkMeshKey, ChunkRenderPool},
 };
 
-pub(super) enum BuiltChunkMesh {
+pub(crate) enum BuiltChunkMesh {
     Terrain(ChunkFaceMesh),
     Fluid(ChunkFluidMesh),
 }
@@ -47,10 +48,10 @@ impl BuiltChunkMesh {
     }
 }
 
-pub(super) fn build_chunk_render_meshes(
+pub(crate) fn build_chunk_render_meshes<W: VoxelRead + ?Sized>(
     coord: IVec3,
     chunk: &VoxelChunk,
-    context: &ChunkRenderContext<'_>,
+    context: &ChunkMeshBuildContext<'_, W>,
 ) -> Vec<BuiltChunkMesh> {
     let face_meshes = build_chunk_mesh(
         context.world,
@@ -87,10 +88,10 @@ pub(super) fn build_chunk_render_meshes(
         .collect()
 }
 
-pub(super) fn build_chunk_fluid_render_meshes(
+pub(super) fn build_chunk_fluid_render_meshes<W: VoxelRead + ?Sized>(
     coord: IVec3,
     chunk: &VoxelChunk,
-    context: &ChunkRenderContext<'_>,
+    context: &ChunkMeshBuildContext<'_, W>,
 ) -> Vec<ChunkFluidMesh> {
     build_fluid_meshes(context.world, coord, chunk, |voxel, fluid_id| {
         let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
@@ -131,11 +132,12 @@ pub fn spawn_chunk_mesh(
         return;
     }
 
-    let built_meshes = build_chunk_render_meshes(coord, chunk, context);
+    let build_context = context.mesh_build_context();
+    let built_meshes = build_chunk_render_meshes(coord, chunk, &build_context);
     spawn_built_chunk_meshes(commands, meshes, render_pool, coord, built_meshes, context);
 }
 
-pub(super) fn spawn_built_chunk_meshes(
+pub(crate) fn spawn_built_chunk_meshes(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     render_pool: &mut ChunkRenderPool,
@@ -143,6 +145,23 @@ pub(super) fn spawn_built_chunk_meshes(
     built_meshes: Vec<BuiltChunkMesh>,
     context: &ChunkRenderContext<'_>,
 ) {
+    if render_pool.contains(coord) {
+        return;
+    }
+
+    if built_meshes.is_empty() {
+        render_pool.insert(
+            coord,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            0,
+            0,
+        );
+        return;
+    }
+
     let transform = Transform::from_translation(coord.as_vec3() * CHUNK_SIZE as f32);
     let mut entities = Vec::new();
     let mut mesh_handles = Vec::new();
