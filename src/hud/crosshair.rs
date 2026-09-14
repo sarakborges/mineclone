@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
@@ -80,6 +80,22 @@ struct CrosshairRoot;
 #[derive(Component)]
 struct ActionHint;
 
+#[derive(SystemParam)]
+struct ActionHintRuntime<'w> {
+    hotbar: Res<'w, PlayerHotbar>,
+    settings: Res<'w, HudSettings>,
+    targeted: Res<'w, TargetedBlock>,
+    brush_mode: Res<'w, BrushMode>,
+}
+
+#[derive(SystemParam)]
+struct ActionHintContent<'w> {
+    blocks: Res<'w, BlockRegistry>,
+    secondary_properties: Res<'w, SecondaryPropertyRegistry>,
+    localization: Res<'w, UiLocalization>,
+    language: Res<'w, ActiveLanguage>,
+}
+
 fn spawn_crosshair(mut commands: Commands) {
     commands
         .spawn((
@@ -148,35 +164,28 @@ fn spawn_crosshair(mut commands: Commands) {
         });
 }
 
-#[allow(clippy::too_many_arguments)]
 fn update_action_hint(
-    hotbar: Res<PlayerHotbar>,
-    blocks: Res<BlockRegistry>,
-    settings: Res<HudSettings>,
-    targeted: Res<TargetedBlock>,
-    brush_mode: Res<BrushMode>,
-    secondary_properties: Res<SecondaryPropertyRegistry>,
-    localization: Res<UiLocalization>,
-    language: Res<ActiveLanguage>,
+    runtime: ActionHintRuntime,
+    content: ActionHintContent,
     hint: Single<(&mut Text, &mut Visibility), With<ActionHint>>,
 ) {
-    let language = language.get();
-    let selected_item = hotbar.item_at(hotbar.selected_slot());
+    let language = content.language.get();
+    let selected_item = runtime.hotbar.item_at(runtime.hotbar.selected_slot());
 
-    let next_text = if !settings.display_tooltips() {
+    let next_text = if !runtime.settings.display_tooltips() {
         None
     } else {
         selected_item
-            .and_then(|id| blocks.get(id))
+            .and_then(|id| content.blocks.get(id))
             .filter(|block| block.is_rotatable())
-            .map(|_| localization.text(language, "hud.rotateBlock").to_owned())
+            .map(|_| content.localization.text(language, "hud.rotateBlock").to_owned())
             .or_else(|| {
                 if selected_item != Some(BRUSH_TOOL_ID) {
                     return None;
                 }
 
-                let hit = targeted.0?;
-                let block = blocks.get(hit.block_id)?;
+                let hit = runtime.targeted.0?;
+                let block = content.blocks.get(hit.block_id)?;
                 if !block
                     .secondary_properties
                     .iter()
@@ -185,13 +194,15 @@ fn update_action_hint(
                     return None;
                 }
 
-                Some(match brush_mode.dye_id() {
-                    None => localization.text(language, "hud.brushClear").to_owned(),
+                Some(match runtime.brush_mode.dye_id() {
+                    None => content.localization.text(language, "hud.brushClear").to_owned(),
                     Some(dye_id) => {
-                        let color_name = secondary_properties
+                        let color_name = content
+                            .secondary_properties
                             .get(DYED_PROPERTY_ID, dye_id)
                             .map_or(dye_id, |definition| definition.name.text(language));
-                        localization
+                        content
+                            .localization
                             .text(language, "hud.brushPaint")
                             .replace("{color}", color_name)
                     }
