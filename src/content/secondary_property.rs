@@ -15,7 +15,7 @@ pub struct SecondaryPropertyDefinition {
     pub color: Hsi,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 pub struct SecondaryPropertyRegistry {
     definitions: HashMap<String, DefinitionMap<SecondaryPropertyDefinition>>,
 }
