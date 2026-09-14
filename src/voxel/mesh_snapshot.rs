@@ -149,18 +149,33 @@ fn snapshot_index(x: usize, y: usize, z: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::voxel::{cell::VoxelCell, world::VoxelWorld};
+    use crate::voxel::{
+        cell::VoxelCell, texture_rotation::TextureRotation, world::VoxelWorld,
+    };
 
     #[test]
     fn snapshot_preserves_central_chunk_and_one_voxel_halo() {
         let mut world = VoxelWorld::default();
         let coord = IVec3::ZERO;
         let mut center = VoxelChunk::empty();
-        center.set_block(0, 0, 0, Some(VoxelCell::new("asteria:test")));
+        center.set_block(
+            0,
+            0,
+            0,
+            Some(VoxelCell::new("asteria:test", TextureRotation::default())),
+        );
         world.insert_chunk(coord, center);
 
         let mut neighbor = VoxelChunk::empty();
-        neighbor.set_block(0, 0, 0, Some(VoxelCell::new("asteria:neighbor")));
+        neighbor.set_block(
+            0,
+            0,
+            0,
+            Some(VoxelCell::new(
+                "asteria:neighbor",
+                TextureRotation::default(),
+            )),
+        );
         world.insert_chunk(IVec3::X, neighbor);
 
         let snapshot = ChunkMeshSnapshot::capture(&world, coord).expect("chunk should exist");
