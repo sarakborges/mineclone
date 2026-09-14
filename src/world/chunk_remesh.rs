@@ -13,8 +13,8 @@ use super::{
     chunk_system_params::{ChunkContent, ChunkRenderer},
 };
 
-const REMESH_BUDGET: Duration = Duration::from_millis(2);
-const MAX_IMMEDIATE_LIGHTING_REMESHES_PER_FRAME: usize = 6;
+const REMESH_BUDGET: Duration = Duration::from_millis(1);
+const MAX_IMMEDIATE_LIGHTING_REMESHES_PER_FRAME: usize = 2;
 
 #[derive(Resource, Default)]
 pub(crate) struct ChunkRemeshQueue {
