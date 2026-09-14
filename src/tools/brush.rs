@@ -8,7 +8,10 @@ use crate::{
         pause_state::PauseState,
         state_systems::{reset_next_state, reset_next_state_on_escape},
     },
-    content::{block::BlockRegistry, builtin_ids::BRUSH_TOOL_ID},
+    content::{
+        block::BlockRegistry,
+        builtin_ids::{BRUSH_TOOL_ID, DYED_PROPERTY_ID},
+    },
     gameplay::availability::world_interaction_available,
     targeting::{ToolUse, ToolUseButton, block::BlockTargetingSet},
     voxel::edit::VoxelMutationRuntime,
@@ -16,7 +19,6 @@ use crate::{
 
 use self::palette::{handle_palette_selection, spawn_brush_palette};
 
-pub(crate) const DYED_PROPERTY_ID: &str = "dyed";
 const DEFAULT_DYE_ID: &str = "red";
 
 #[derive(States, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
