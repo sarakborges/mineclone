@@ -215,14 +215,22 @@ mod tests {
     }
 
     #[test]
-    fn voxel_edit_avoids_a_third_redundant_rebuild() {
+    fn voxel_edit_drops_redundant_center_from_budgeted_queue() {
         let mut queue = ChunkRemeshQueue::default();
         let coord = IVec3::new(4, 2, -3);
         queue.enqueue_voxel_edit(coord);
 
         assert_eq!(queue.pop_immediate_geometry(), Some(coord));
         assert_eq!(queue.pop_immediate_lighting(), Some(coord));
-        assert_eq!(queue.pop(), None);
+
+        let mut queued = Vec::new();
+        while let Some(value) = queue.pop() {
+            queued.push(value);
+        }
+        assert!(!queued.contains(&coord));
+        for offset in CARDINAL_NEIGHBORS {
+            assert!(queued.contains(&(coord + offset)));
+        }
     }
 
     #[test]
