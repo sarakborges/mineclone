@@ -2,9 +2,11 @@ pub(crate) mod biome;
 pub(crate) mod biome_field;
 pub(crate) mod cave_connectivity;
 mod chunk_generation_tasks;
+mod chunk_mesh_tasks;
 pub(crate) mod chunk_remesh;
 pub(crate) mod chunk_rendering;
 pub(crate) mod chunk_system_params;
+mod chunk_task_snapshots;
 mod chunk_unloading;
 pub(crate) mod current_context;
 pub(crate) mod day_night;
@@ -42,6 +44,7 @@ use crate::{
 };
 use biome::{CurrentBiome, track_current_biome};
 use chunk_generation_tasks::ChunkGenerationTasks;
+use chunk_mesh_tasks::ChunkMeshTasks;
 use chunk_remesh::{
     ChunkRemeshQueue, process_chunk_remesh_queue, process_immediate_geometry_remesh,
     process_immediate_lighting_remesh,
@@ -78,6 +81,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<RenderDistanceSettings>()
             .init_resource::<ChunkStreamingState>()
             .init_resource::<ChunkGenerationTasks>()
+            .init_resource::<ChunkMeshTasks>()
             .init_resource::<ChunkRenderPool>()
             .init_resource::<ChunkRemeshQueue>()
             .init_resource::<PendingLightingUpdates>()
@@ -89,6 +93,7 @@ impl Plugin for WorldPlugin {
                 (
                     reset_resource::<ChunkStreamingState>,
                     reset_resource::<ChunkGenerationTasks>,
+                    reset_resource::<ChunkMeshTasks>,
                     reset_resource::<WorldTickClock>,
                 ),
             )
@@ -97,6 +102,7 @@ impl Plugin for WorldPlugin {
                 (
                     clear_chunk_render_pool,
                     reset_resource::<ChunkGenerationTasks>,
+                    reset_resource::<ChunkMeshTasks>,
                     reset_resource::<ChunkRemeshQueue>,
                     reset_resource::<PendingLightingUpdates>,
                     reset_resource::<PendingFluidUpdates>,
