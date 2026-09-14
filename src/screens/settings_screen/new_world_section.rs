@@ -6,8 +6,8 @@ use crate::{
     ui::{
         button::{compact_control_button, menu_button},
         numeric_input::{
-            NumericInputEvent, NumericInputSizing, NumericInputState, numeric_input_border,
-            numeric_input_field,
+            NumericInputEvent, NumericInputSizing, NumericInputState, numeric_input_field,
+            sync_numeric_input_view,
         },
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
@@ -147,12 +147,7 @@ pub(super) fn handle_seed_focus(
     config: Res<NewWorldConfig>,
     mut input: ResMut<SeedInputState>,
 ) {
-    if interactions
-        .iter()
-        .any(|interaction| *interaction == Interaction::Pressed)
-    {
-        input.begin(config.seed().0);
-    }
+    input.begin_if_pressed(interactions.iter(), config.seed().0);
 }
 
 pub(super) fn handle_random_seed(
@@ -230,17 +225,7 @@ pub(super) fn sync_seed_text(
     mut labels: Query<&mut Text, With<SeedValueText>>,
     mut inputs: Query<&mut BorderColor, With<SeedInput>>,
 ) {
-    let value = input.display(config.seed().0);
-
-    for mut label in &mut labels {
-        if label.0 != value {
-            label.0 = value.clone();
-        }
-    }
-
-    for mut border in &mut inputs {
-        *border = BorderColor::all(numeric_input_border(input.editing()));
-    }
+    sync_numeric_input_view(&input, config.seed().0, &mut labels, &mut inputs);
 }
 
 fn apply_seed_buffer(buffer: &str, config: &mut NewWorldConfig) {
