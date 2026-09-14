@@ -20,8 +20,6 @@ use super::{
     surface_carvers::{resolve_surface_carver_column, surface_carver_density_delta},
 };
 
-const SURFACE_CARVER_WATER_CLEARANCE: f32 = 12.0;
-
 pub(super) struct DensityField {
     pub(super) values: Vec<f32>,
     pub(super) volume: Vec<Option<VolumeBiomeSelection>>,
@@ -57,10 +55,11 @@ pub(super) fn sample_density_field(
                 horizontal,
                 chunk_origin.y as f32 + 0.5,
             );
-            let surface_carver_allowed = region
-                .hydrology
-                .water_near(horizontal, SURFACE_CARVER_WATER_CLEARANCE)
-                .is_none();
+            // Surface tunnels may approach water naturally. Only the columns
+            // that actually contain surface water suppress the tunnel carver;
+            // the old twelve-block binary exclusion produced conspicuously flat
+            // tunnel walls around rivers and lakes.
+            let surface_carver_allowed = region.hydrology.water_at(horizontal).is_none();
             let surface_carvers = surface_carver_allowed.then(|| {
                 resolve_surface_carver_column(
                     horizontal,
