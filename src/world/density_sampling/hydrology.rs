@@ -10,8 +10,8 @@ use crate::world::{
 const CAVE_WATER_PROTECTION_DEPTH: f32 = 14.0;
 const CAVE_WATER_PROTECTION_FADE_DEPTH: f32 = 20.0;
 const CAVE_WATER_HORIZONTAL_CLEARANCE: f32 = 8.0;
-const RIVER_CHANNEL_HEADROOM: f32 = 8.0;
-const RIVER_MINIMUM_SURFACE_HEADROOM: f32 = 2.5;
+const RIVER_CHANNEL_HEADROOM: f32 = 3.25;
+const RIVER_MINIMUM_SURFACE_HEADROOM: f32 = 2.25;
 const RIVER_BANK_NOISE_SCALE: f32 = 0.035;
 const RIVER_BANK_DETAIL_NOISE_SCALE: f32 = 0.11;
 const WATER_VOLUME_AIR_DENSITY: f32 = -0.001;
@@ -95,16 +95,11 @@ pub(super) fn enforce_hydrology_water_volume(
         return density;
     };
 
-    // Lakes are open basins. Rivers are not: their opening is controlled only by
-    // the bounded headroom profile above, so high terrain can close again once it
-    // is more than eight blocks above the water instead of being carved to sky.
-    if base_density > 0.0
-        && matches!(water.kind, HydrologyWaterKind::Lake)
-        && cell_top > water.water_level
-    {
-        return density.min(WATER_VOLUME_AIR_DENSITY);
-    }
-
+    // Water bodies only carve the actual wet volume here. In particular, lakes
+    // must not turn every solid voxel above their surface into air: that creates
+    // vertical cylinders through hills and perfectly straight retaining walls.
+    // River surface clearance is handled separately by the bounded headroom
+    // profile above, which only removes the stale terrain cap over the channel.
     if cell_top <= water.bed_level || cell_bottom >= water.water_level {
         return density;
     }
@@ -154,11 +149,10 @@ fn river_headroom(strength: f32, horizontal: Vec2, seed: u64) -> f32 {
     let shaped_strength =
         (strength * (1.0 + (variation - 1.0) * (1.0 - strength) * 1.5)).clamp(0.0, 1.0);
 
-    // River water is positioned below the sampled terrain surface. Near the
-    // channel edge, the tapered headroom used to become shorter than that
-    // offset and could leave the original top grass voxel suspended over the
-    // carved channel. Every actual river-water column therefore keeps enough
-    // vertical clearance to remove that stale surface cap.
+    // River water sits about two blocks below the sampled terrain. Keep enough
+    // headroom to remove that immediate cap, but never excavate a tall trench
+    // through surrounding hills. The old eight-block opening was visually much
+    // closer to a rectangular canyon than a river bank.
     (RIVER_CHANNEL_HEADROOM * smoothstep(shaped_strength)).max(RIVER_MINIMUM_SURFACE_HEADROOM)
 }
 
@@ -183,9 +177,11 @@ mod tests {
     }
 
     #[test]
-    fn river_headroom_never_exceeds_eight_blocks() {
+    fn river_headroom_stays_close_to_the_surface() {
         for strength in [0.0, 0.25, 0.5, 0.75, 1.0] {
-            assert!(river_headroom(strength, Vec2::ZERO, 42) <= 8.0);
+            assert!(
+                river_headroom(strength, Vec2::ZERO, 42) <= RIVER_CHANNEL_HEADROOM
+            );
         }
     }
 
