@@ -3,7 +3,7 @@ mod surface_cache;
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -31,6 +31,7 @@ use super::{
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
     fluid_updates::PendingFluidUpdates,
     render_distance::RenderDistanceSettings,
+    work_budget::FrameWorkBudget,
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -109,14 +110,11 @@ pub(super) fn stream_chunks(
     }
 
     let generation_context = generation.context(&content);
-    let frame_started = Instant::now();
-    let mut processed = 0;
+    let mut budget = FrameWorkBudget::new(STREAMING_BUDGET, MIN_CHUNKS_BEFORE_BUDGET_CHECK)
+        .with_maximum_items(MAX_CHUNKS_PER_FRAME);
 
     loop {
-        if processed >= MAX_CHUNKS_PER_FRAME
-            || (processed >= MIN_CHUNKS_BEFORE_BUDGET_CHECK
-                && frame_started.elapsed() >= STREAMING_BUDGET)
-        {
+        if budget.exhausted() {
             break;
         }
 
@@ -161,7 +159,7 @@ pub(super) fn stream_chunks(
             chunk,
             &render_context,
         );
-        processed += 1;
+        budget.record(1);
 
         for offset in CARDINAL_NEIGHBORS {
             let neighbor = coord + offset;
