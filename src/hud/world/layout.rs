@@ -8,11 +8,6 @@ use super::{
 };
 
 pub(super) fn spawn_world_hud(mut commands: Commands) {
-    let shadow = TextShadow {
-        offset: Vec2::new(1.5, 1.5),
-        color: Color::srgba(0.0, 0.0, 0.0, 0.92),
-    };
-
     commands
         .spawn((
             Node {
@@ -31,19 +26,19 @@ pub(super) fn spawn_world_hud(mut commands: Commands) {
                 banner.spawn((
                     typography::hud_heading(""),
                     TextLayout::justify(Justify::Center),
-                    shadow,
+                    typography::tooltip_shadow(),
                     DimensionHudText,
                 ));
                 banner.spawn((
                     typography::hud_subheading(""),
                     TextLayout::justify(Justify::Center),
-                    shadow,
+                    typography::tooltip_shadow(),
                     BiomeHudText,
                 ));
                 banner.spawn((
                     typography::hud(""),
                     TextLayout::justify(Justify::Center),
-                    shadow,
+                    typography::tooltip_shadow(),
                     CoordinatesHudText,
                 ));
             });
