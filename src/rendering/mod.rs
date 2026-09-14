@@ -1,10 +1,10 @@
 mod asset_upload;
+pub(crate) mod biome_visuals;
 pub(crate) mod block_display;
 pub(crate) mod block_model;
 pub(crate) mod block_model_material;
 pub(crate) mod block_texture;
 pub(crate) mod block_tint;
-mod biome_visuals;
 mod celestial;
 mod celestial_path;
 pub(crate) mod color;
