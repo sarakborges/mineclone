@@ -14,7 +14,7 @@ use crate::{
     },
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
-        coordinates::chunk_coord_from_position, lighting::initialize_chunks_lighting,
+        coordinates::chunk_coord_from_position, lighting::PendingLightingUpdates,
         neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
     },
 };
@@ -31,9 +31,8 @@ use super::{
     world_feature_fields::WorldFeatureFields,
 };
 
-const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 2;
+const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 1;
 const MAX_CHUNKS_PER_FRAME: usize = 8;
-const STREAMING_LIGHT_BATCH_CHUNKS: usize = 4;
 const STREAMING_BUDGET: Duration = Duration::from_millis(6);
 
 #[derive(Resource, Default)]
@@ -85,6 +84,7 @@ pub(super) fn stream_chunks(
     mut renderer: ChunkRenderer,
     mut inputs: ChunkStreamingInputs,
     mut fluid_updates: ResMut<PendingFluidUpdates>,
+    mut lighting_updates: ResMut<PendingLightingUpdates>,
 ) {
     let feet_position = inputs.player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = chunk_coord_from_position(feet_position);
@@ -125,77 +125,51 @@ pub(super) fn stream_chunks(
             break;
         }
 
-        let mut batch = Vec::with_capacity(STREAMING_LIGHT_BATCH_CHUNKS);
-
-        while batch.len() < STREAMING_LIGHT_BATCH_CHUNKS {
-            let scheduled = processed + batch.len();
-            if scheduled >= MAX_CHUNKS_PER_FRAME
-                || (scheduled >= MIN_CHUNKS_BEFORE_BUDGET_CHECK
-                    && frame_started.elapsed() >= STREAMING_BUDGET)
-            {
-                break;
-            }
-
-            let Some(coord) = inputs.streaming.pending.pop_front() else {
-                break;
-            };
-
-            if renderer.pool.contains(coord) {
-                continue;
-            }
-
-            ensure_chunk_loaded(&mut inputs.world, coord, &generation_context);
-            fluid_updates.enqueue_loaded_fluid_frontier(&inputs.world, coord);
-            batch.push(coord);
-        }
-
-        if batch.is_empty() {
+        let Some(coord) = inputs.streaming.pending.pop_front() else {
             break;
+        };
+
+        if renderer.pool.contains(coord) {
+            continue;
         }
 
-        let lighting_changed = initialize_chunks_lighting(
+        ensure_chunk_loaded(&mut inputs.world, coord, &generation_context);
+        fluid_updates.enqueue_loaded_fluid_frontier(&inputs.world, coord);
+
+        // Streaming used to fully relax lighting here before checking its frame
+        // budget. A single newly generated chunk could therefore spend an
+        // unbounded amount of time propagating light on the main thread. Seed
+        // the existing budgeted lighting queue instead; PostUpdate converges it
+        // incrementally and remeshes affected chunks as lighting changes.
+        lighting_updates.enqueue_chunks_initialization(
             &mut inputs.world,
-            &batch,
-            &content.blocks,
-            &content.fluids,
-            &content.secondary_properties,
+            std::slice::from_ref(&coord),
         );
 
-        for &coord in &batch {
-            let chunk = inputs
-                .world
-                .chunk(coord)
-                .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
-            let render_context = content.render_context(
-                &inputs.world,
-                &renderer.terrain_materials,
-                &renderer.fluid_materials,
-            );
+        let chunk = inputs
+            .world
+            .chunk(coord)
+            .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
+        let render_context = content.render_context(
+            &inputs.world,
+            &renderer.terrain_materials,
+            &renderer.fluid_materials,
+        );
 
-            spawn_chunk_mesh(
-                &mut renderer.commands,
-                &mut renderer.meshes,
-                &mut renderer.pool,
-                coord,
-                chunk,
-                &render_context,
-            );
-        }
+        spawn_chunk_mesh(
+            &mut renderer.commands,
+            &mut renderer.meshes,
+            &mut renderer.pool,
+            coord,
+            chunk,
+            &render_context,
+        );
+        processed += 1;
 
-        processed += batch.len();
-
-        for &coord in &batch {
-            for offset in CARDINAL_NEIGHBORS {
-                let neighbor = coord + offset;
-                if !batch.contains(&neighbor) && renderer.pool.contains(neighbor) {
-                    inputs.remesh_queue.enqueue_priority(neighbor);
-                }
-            }
-        }
-
-        for changed in lighting_changed {
-            if !batch.contains(&changed) && renderer.pool.contains(changed) {
-                inputs.remesh_queue.enqueue_lighting_change(changed);
+        for offset in CARDINAL_NEIGHBORS {
+            let neighbor = coord + offset;
+            if renderer.pool.contains(neighbor) {
+                inputs.remesh_queue.enqueue_priority(neighbor);
             }
         }
     }
