@@ -8,6 +8,13 @@ pub(crate) const BLOCK_DISPLAY_FACES: [BlockFace; 3] = [
     BlockFace::Right,
 ];
 
+const DISPLAY_LEFT: f32 = 0.10;
+const DISPLAY_CENTER_X: f32 = 0.50;
+const DISPLAY_TOP_Y: f32 = 0.27;
+const DISPLAY_HALF_WIDTH: f32 = 0.40;
+const DISPLAY_SLOPE: f32 = 0.20;
+const DISPLAY_SIDE_HEIGHT: f32 = 0.50;
+
 #[derive(Clone, Copy)]
 struct BlockDisplayFaceGeometry {
     origin: Vec2,
@@ -53,21 +60,25 @@ pub(crate) fn block_display_face_shade(face: BlockFace) -> f32 {
 }
 
 fn block_display_face_geometry(face: BlockFace) -> BlockDisplayFaceGeometry {
+    let rising = Vec2::new(DISPLAY_HALF_WIDTH, DISPLAY_SLOPE);
+    let falling = Vec2::new(DISPLAY_HALF_WIDTH, -DISPLAY_SLOPE);
+    let vertical = Vec2::new(0.0, DISPLAY_SIDE_HEIGHT);
+
     match face {
         BlockFace::Top => BlockDisplayFaceGeometry {
-            origin: Vec2::new(0.10, 0.28),
-            axis_u: Vec2::new(0.40, 0.20),
-            axis_v: Vec2::new(0.40, -0.20),
+            origin: Vec2::new(DISPLAY_LEFT, DISPLAY_TOP_Y),
+            axis_u: rising,
+            axis_v: falling,
         },
         BlockFace::Front => BlockDisplayFaceGeometry {
-            origin: Vec2::new(0.10, 0.28),
-            axis_u: Vec2::new(0.40, 0.20),
-            axis_v: Vec2::new(0.00, 0.42),
+            origin: Vec2::new(DISPLAY_LEFT, DISPLAY_TOP_Y),
+            axis_u: rising,
+            axis_v: vertical,
         },
         BlockFace::Right => BlockDisplayFaceGeometry {
-            origin: Vec2::new(0.50, 0.48),
-            axis_u: Vec2::new(0.40, -0.20),
-            axis_v: Vec2::new(0.00, 0.42),
+            origin: Vec2::new(DISPLAY_CENTER_X, DISPLAY_TOP_Y + DISPLAY_SLOPE),
+            axis_u: falling,
+            axis_v: vertical,
         },
         _ => panic!("{face:?} is not part of the display block model"),
     }
