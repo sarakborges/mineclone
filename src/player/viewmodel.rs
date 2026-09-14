@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
     targeting::block::BlockTargetingSet,
+    ui::visibility::set_visibility,
 };
 
 pub(crate) use animation::ViewModelAnimation;
@@ -19,8 +20,14 @@ impl Plugin for PlayerViewModelPlugin {
         app.init_resource::<ViewModelAnimation>()
             .init_resource::<ViewModelItemSwitch>()
             .add_systems(Startup, setup_viewmodel_arm_assets)
-            .add_systems(OnEnter(PauseState::Paused), hide_viewmodel)
-            .add_systems(OnEnter(PauseState::Running), show_viewmodel)
+            .add_systems(
+                OnEnter(PauseState::Paused),
+                set_visibility::<PlayerViewModel, false>,
+            )
+            .add_systems(
+                OnEnter(PauseState::Running),
+                set_visibility::<PlayerViewModel, true>,
+            )
             .add_systems(
                 Update,
                 (
@@ -33,17 +40,5 @@ impl Plugin for PlayerViewModelPlugin {
                     .after(BlockTargetingSet::PlacementState)
                     .run_if(in_state(GameState::Gameplay)),
             );
-    }
-}
-
-fn hide_viewmodel(mut viewmodels: Query<&mut Visibility, With<PlayerViewModel>>) {
-    for mut visibility in &mut viewmodels {
-        *visibility = Visibility::Hidden;
-    }
-}
-
-fn show_viewmodel(mut viewmodels: Query<&mut Visibility, With<PlayerViewModel>>) {
-    for mut visibility in &mut viewmodels {
-        *visibility = Visibility::Visible;
     }
 }
