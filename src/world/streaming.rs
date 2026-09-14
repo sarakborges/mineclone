@@ -31,9 +31,10 @@ use super::{
     world_feature_fields::WorldFeatureFields,
 };
 
-const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 1;
+const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 2;
+const MAX_CHUNKS_PER_FRAME: usize = 8;
 const STREAMING_LIGHT_BATCH_CHUNKS: usize = 4;
-const STREAMING_BUDGET: Duration = Duration::from_millis(3);
+const STREAMING_BUDGET: Duration = Duration::from_millis(6);
 
 #[derive(Resource, Default)]
 pub(super) struct ChunkStreamingState {
@@ -117,8 +118,9 @@ pub(super) fn stream_chunks(
     let mut processed = 0;
 
     loop {
-        if processed >= MIN_CHUNKS_BEFORE_BUDGET_CHECK
-            && frame_started.elapsed() >= STREAMING_BUDGET
+        if processed >= MAX_CHUNKS_PER_FRAME
+            || (processed >= MIN_CHUNKS_BEFORE_BUDGET_CHECK
+                && frame_started.elapsed() >= STREAMING_BUDGET)
         {
             break;
         }
@@ -126,8 +128,10 @@ pub(super) fn stream_chunks(
         let mut batch = Vec::with_capacity(STREAMING_LIGHT_BATCH_CHUNKS);
 
         while batch.len() < STREAMING_LIGHT_BATCH_CHUNKS {
-            if processed + batch.len() >= MIN_CHUNKS_BEFORE_BUDGET_CHECK
-                && frame_started.elapsed() >= STREAMING_BUDGET
+            let scheduled = processed + batch.len();
+            if scheduled >= MAX_CHUNKS_PER_FRAME
+                || (scheduled >= MIN_CHUNKS_BEFORE_BUDGET_CHECK
+                    && frame_started.elapsed() >= STREAMING_BUDGET)
             {
                 break;
             }
@@ -149,9 +153,6 @@ pub(super) fn stream_chunks(
             break;
         }
 
-        // Finish voxel lighting before the first visible mesh is built. Rendering
-        // a freshly generated chunk with cleared/default light values produced
-        // block-sized dark patches until a later remesh happened to catch up.
         let lighting_changed = initialize_chunks_lighting(
             &mut inputs.world,
             &batch,
@@ -194,7 +195,7 @@ pub(super) fn stream_chunks(
 
         for changed in lighting_changed {
             if !batch.contains(&changed) && renderer.pool.contains(changed) {
-                inputs.remesh_queue.enqueue_priority(changed);
+                inputs.remesh_queue.enqueue_lighting_change(changed);
             }
         }
     }
