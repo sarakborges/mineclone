@@ -8,7 +8,7 @@ use crate::voxel::{
 
 use super::{
     chunk_rendering::{
-        refresh_chunk_fluid_mesh, refresh_chunk_lighting_mesh, refresh_chunk_mesh,
+        refresh_chunk_fluid_mesh, refresh_chunk_geometry_mesh, refresh_chunk_lighting_mesh,
     },
     chunk_system_params::{ChunkContent, ChunkRenderer},
 };
@@ -118,7 +118,7 @@ pub(super) fn process_immediate_geometry_remesh(
         &renderer.fluid_materials,
     );
 
-    refresh_chunk_mesh(
+    refresh_chunk_geometry_mesh(
         &mut renderer.commands,
         &mut renderer.meshes,
         &mut renderer.pool,
@@ -174,7 +174,7 @@ pub(super) fn process_chunk_remesh_queue(
         }
 
         if let Some(coord) = queue.pop() {
-            refresh_chunk_mesh(
+            refresh_chunk_geometry_mesh(
                 &mut renderer.commands,
                 &mut renderer.meshes,
                 &mut renderer.pool,
