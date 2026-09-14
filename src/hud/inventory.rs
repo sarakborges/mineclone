@@ -56,6 +56,7 @@ struct InventoryHudRoot;
 #[derive(Component)]
 struct InventorySlot {
     index: usize,
+    item: Option<&'static str>,
 }
 
 #[derive(Component)]
@@ -93,6 +94,19 @@ struct InventoryCursorIcon;
 struct CreativeScrollState {
     category_y: f32,
     catalog_y: f32,
+}
+
+#[derive(Resource, Default)]
+struct CreativeInventoryUiDirty(bool);
+
+impl CreativeInventoryUiDirty {
+    fn mark(&mut self) {
+        self.0 = true;
+    }
+
+    fn take(&mut self) -> bool {
+        std::mem::take(&mut self.0)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -136,11 +150,12 @@ pub(super) struct InventoryHudPlugin;
 impl Plugin for InventoryHudPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CreativeScrollState>()
+            .init_resource::<CreativeInventoryUiDirty>()
             .add_systems(
                 OnEnter(InventoryState::Open),
                 spawn_inventory.run_if(in_state(GameState::Gameplay)),
             )
-            .add_systems(OnExit(InventoryState::Open), reset_creative_scroll_state)
+            .add_systems(OnExit(InventoryState::Open), reset_creative_ui_state)
             .add_systems(
                 Update,
                 (
@@ -154,7 +169,9 @@ impl Plugin for InventoryHudPlugin {
                     handle_inventory_trash_clicks,
                     handle_empty_inventory_click,
                     sync_inventory_cursor_icon,
+                    sync_inventory_slot_contents,
                     rebuild_inventory_when_changed,
+                    style_search_bar,
                     style_category_buttons,
                     style_creative_slots,
                     style_inventory_slots,
@@ -224,6 +241,7 @@ fn handle_search_input(
     mut keyboard_input: MessageReader<KeyboardInput>,
     mut creative_view: ResMut<CreativeInventoryView>,
     mut scroll_state: ResMut<CreativeScrollState>,
+    mut ui_dirty: ResMut<CreativeInventoryUiDirty>,
 ) {
     if !creative_view.search_focused() {
         keyboard_input.clear();
@@ -235,15 +253,18 @@ fn handle_search_input(
             continue;
         }
 
+        let before = creative_view.search_query().to_owned();
         if event.key_code == KeyCode::Backspace {
             creative_view.backspace_search();
-            scroll_state.catalog_y = 0.0;
+        } else if let Some(text) = &event.text {
+            creative_view.push_search_text(text);
+        } else {
             continue;
         }
 
-        if let Some(text) = &event.text {
-            creative_view.push_search_text(text);
+        if creative_view.search_query() != before {
             scroll_state.catalog_y = 0.0;
+            ui_dirty.mark();
         }
     }
 }
@@ -251,6 +272,7 @@ fn handle_search_input(
 fn handle_category_clicks(
     mut creative_view: ResMut<CreativeInventoryView>,
     mut scroll_state: ResMut<CreativeScrollState>,
+    mut ui_dirty: ResMut<CreativeInventoryUiDirty>,
     categories: Query<(&Interaction, &CreativeCategoryButton), Changed<Interaction>>,
 ) {
     for (interaction, category) in &categories {
@@ -258,9 +280,13 @@ fn handle_category_clicks(
             continue;
         }
 
+        let previous_category = creative_view.selected_category().map(str::to_owned);
         creative_view.blur_search();
         creative_view.select_category(category.id.as_deref());
-        scroll_state.catalog_y = 0.0;
+        if creative_view.selected_category() != previous_category.as_deref() {
+            scroll_state.catalog_y = 0.0;
+            ui_dirty.mark();
+        }
         break;
     }
 }
@@ -337,7 +363,9 @@ fn handle_slot_clicks(
             continue;
         }
 
-        creative_view.blur_search();
+        if creative_view.search_focused() {
+            creative_view.blur_search();
+        }
         cursor.click_slot(&mut hotbar, slot.index);
         break;
     }
@@ -398,8 +426,12 @@ fn remember_creative_scroll_positions(
     }
 }
 
-fn reset_creative_scroll_state(mut state: ResMut<CreativeScrollState>) {
-    *state = default();
+fn reset_creative_ui_state(
+    mut scroll_state: ResMut<CreativeScrollState>,
+    mut ui_dirty: ResMut<CreativeInventoryUiDirty>,
+) {
+    *scroll_state = default();
+    ui_dirty.0 = false;
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -452,6 +484,59 @@ fn sync_inventory_cursor_icon(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
+fn sync_inventory_slot_contents(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    blocks: Res<BlockRegistry>,
+    tools: Res<ToolRegistry>,
+    biomes: Res<BiomeRegistry>,
+    biome_field: Res<BiomeField>,
+    hotbar: Res<PlayerHotbar>,
+    active_language: Res<ActiveLanguage>,
+    player: Single<&Transform, With<GameplayCamera>>,
+    mut slots: Query<(Entity, &mut InventorySlot, Option<&Children>)>,
+    mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
+) {
+    if !hotbar.is_changed() {
+        return;
+    }
+
+    let player_position = Vec2::new(player.translation.x, player.translation.z);
+    for (entity, mut slot, children) in &mut slots {
+        let item = hotbar.inventory_item_at(slot.index);
+        if slot.item == item {
+            continue;
+        }
+
+        if let Some(children) = children {
+            for &child in children {
+                commands.entity(child).despawn();
+            }
+        }
+
+        slot.item = item;
+        let Some(item_id) = item else {
+            continue;
+        };
+
+        commands.entity(entity).with_children(|slot_node| {
+            spawn_inventory_item(
+                slot_node,
+                item_id,
+                &asset_server,
+                &blocks,
+                &tools,
+                &biomes,
+                &biome_field,
+                player_position,
+                active_language.get(),
+                &mut icon_materials,
+            );
+        });
+    }
+}
+
 fn rebuild_inventory_when_changed(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -469,8 +554,9 @@ fn rebuild_inventory_when_changed(
     player: Single<(&Transform, &GameMode), With<GameplayCamera>>,
     roots: Query<Entity, With<InventoryHudRoot>>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
+    mut ui_dirty: ResMut<CreativeInventoryUiDirty>,
 ) {
-    if !hotbar.is_changed() && !creative_view.is_changed() && !active_language.is_changed() {
+    if !ui_dirty.take() && !active_language.is_changed() {
         return;
     }
 
@@ -498,6 +584,20 @@ fn rebuild_inventory_when_changed(
         None,
         &mut icon_materials,
     );
+}
+
+fn style_search_bar(
+    creative_view: Res<CreativeInventoryView>,
+    mut search_bars: Query<&mut BorderColor, With<CreativeSearchBar>>,
+) {
+    let color = if creative_view.search_focused() {
+        surface::HUD_SELECTED_BORDER_COLOR
+    } else {
+        surface::HUD_BORDER_COLOR
+    };
+    for mut border in &mut search_bars {
+        *border = BorderColor::all(color);
+    }
 }
 
 fn style_category_buttons(
@@ -1096,7 +1196,7 @@ fn spawn_player_inventory_panel(
 ) {
     root.spawn(surface::hud_container(Node {
         flex_direction: FlexDirection::Column,
-        align_items: AlignItems::Center,
+        align_items: AlignItems::FlexStart,
         row_gap: px(SECTION_GAP),
         padding: UiRect::all(px(PANEL_PADDING)),
         border: UiRect::all(px(1)),
@@ -1105,19 +1205,13 @@ fn spawn_player_inventory_panel(
     }))
     .insert(Pickable::IGNORE)
     .with_children(|panel| {
-        panel.spawn((
-            typography::hud_subheading("Inventory"),
-            Node {
-                align_self: AlignSelf::FlexStart,
-                ..default()
-            },
-            Pickable::IGNORE,
-        ));
+        panel.spawn((typography::hud_subheading("Inventory"), Pickable::IGNORE));
 
         panel
             .spawn((
                 Node {
                     flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::FlexStart,
                     row_gap: px(SLOT_GAP),
                     ..default()
                 },
@@ -1360,11 +1454,12 @@ fn spawn_slot(
     icon_materials: &mut Assets<BlockIconMaterial>,
 ) {
     let (background, border) = surface::hud_control_static(selected);
+    let item = hotbar.inventory_item_at(index);
 
     parent
         .spawn((
             Button,
-            InventorySlot { index },
+            InventorySlot { index, item },
             Node {
                 width: px(SLOT_SIZE),
                 height: px(SLOT_SIZE),
@@ -1378,42 +1473,63 @@ fn spawn_slot(
             BorderColor::all(border),
         ))
         .with_children(|slot| {
-            let Some(item_id) = hotbar.inventory_item_at(index) else {
-                return;
-            };
-
-            if let Some(block) = blocks.get(item_id) {
-                let tint = block_tint_at(block.tint, player_position, biome_field, biomes);
-                let material = icon_materials.add(BlockIconMaterial::from_block(
-                    block,
+            if let Some(item_id) = item {
+                spawn_inventory_item(
+                    slot,
+                    item_id,
                     asset_server,
-                    tint,
-                ));
-
-                slot.spawn((
-                    BlockModel::display(item_id),
-                    MaterialNode(material),
-                    Node {
-                        width: px(ITEM_ICON_SIZE),
-                        height: px(ITEM_ICON_SIZE),
-                        ..default()
-                    },
-                    Pickable::IGNORE,
-                ));
-                return;
+                    blocks,
+                    tools,
+                    biomes,
+                    biome_field,
+                    player_position,
+                    language,
+                    icon_materials,
+                );
             }
-
-            if let Some(tool) = tools.get(item_id) {
-                slot.spawn((
-                    typography::caption(tool.name.text(language)),
-                    TextLayout::justify(Justify::Center),
-                    Pickable::IGNORE,
-                ));
-                return;
-            }
-
-            panic!("inventory references missing item: {item_id}");
         });
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_inventory_item(
+    slot: &mut ChildSpawnerCommands,
+    item_id: &'static str,
+    asset_server: &AssetServer,
+    blocks: &BlockRegistry,
+    tools: &ToolRegistry,
+    biomes: &BiomeRegistry,
+    biome_field: &BiomeField,
+    player_position: Vec2,
+    language: Language,
+    icon_materials: &mut Assets<BlockIconMaterial>,
+) {
+    if let Some(block) = blocks.get(item_id) {
+        let tint = block_tint_at(block.tint, player_position, biome_field, biomes);
+        let material = icon_materials.add(BlockIconMaterial::from_block(block, asset_server, tint));
+
+        slot.spawn((
+            BlockModel::display(item_id),
+            MaterialNode(material),
+            Node {
+                width: px(ITEM_ICON_SIZE),
+                height: px(ITEM_ICON_SIZE),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ));
+        return;
+    }
+
+    if let Some(tool) = tools.get(item_id) {
+        slot.spawn((
+            typography::caption(tool.name.text(language)),
+            TextLayout::justify(Justify::Center),
+            Pickable::IGNORE,
+        ));
+        return;
+    }
+
+    panic!("inventory references missing item: {item_id}");
 }
 
 fn filtered_creative_catalog<'a>(
