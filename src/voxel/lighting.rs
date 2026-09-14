@@ -24,7 +24,7 @@ use self::{
 use super::{
     chunk::CHUNK_SIZE,
     coordinates::chunk_origin,
-    light::{BlockLight, VoxelLight},
+    light::VoxelLight,
     world::VoxelWorld,
 };
 
@@ -65,11 +65,6 @@ impl PendingLightingUpdates {
                 continue;
             }
 
-            // A source color change can leave stale color information mutually
-            // supporting itself in the incremental field. Re-evaluate the
-            // complete maximum Manhattan footprint of the source so recoloring an
-            // existing emitter converges immediately instead of waiting for a
-            // later geometry edit to disturb the old field.
             for y in -radius..=radius {
                 let y_cost = y.abs();
                 for z in -radius..=radius {
@@ -116,12 +111,7 @@ pub(crate) fn seed_chunk_direct_lighting(
                     secondary_properties,
                     position,
                 );
-                let emitted = BlockLight::from_rgb_levels(block_emission(
-                    world,
-                    blocks,
-                    secondary_properties,
-                    position,
-                ));
+                let emitted = block_emission(world, blocks, secondary_properties, position);
                 world.set_light_at(position, VoxelLight::new_hsi(sky, emitted));
             }
         }
