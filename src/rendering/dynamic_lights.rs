@@ -62,10 +62,16 @@ fn sync_held_dynamic_light(
     blocks: Res<BlockRegistry>,
     mut lights: Query<(&mut HeldDynamicLight, &mut PointLight, &mut Visibility)>,
 ) {
+    let selected_item_changed = hotbar.is_changed();
+    let block_definitions_changed = blocks.is_changed();
+    if !selected_item_changed && !block_definitions_changed {
+        return;
+    }
+
     let block_id = hotbar.item_at(hotbar.selected_slot());
 
     for (mut held, mut light, mut visibility) in &mut lights {
-        if held.block_id == block_id {
+        if held.block_id == block_id && !block_definitions_changed {
             continue;
         }
 
