@@ -38,13 +38,8 @@ pub(super) fn river_path(
             .min(start_height - RIVER_MINIMUM_WATER_DROP)
             .max(1.0)
     };
-    let waterfall_profile = waterfall_profile(
-        source_cell,
-        seed,
-        distance,
-        start_height,
-        end_height,
-    );
+    let waterfall_profile =
+        waterfall_profile(source_cell, seed, distance, start_height, end_height);
     let points = (0..=segment_count)
         .map(|index| {
             let t = index as f32 / segment_count as f32;
@@ -83,9 +78,8 @@ fn river_lateral_controls(source_cell: IVec2, seed: u64, distance: f32) -> Vec<f
     controls.push(0.0);
 
     for index in 1..interval_count {
-        let index_seed = seed
-            ^ 0xbb67_ae85_84ca_a73b
-            ^ (index as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        let index_seed =
+            seed ^ 0xbb67_ae85_84ca_a73b ^ (index as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
         let control_hash = cell_hash(source_cell, index_seed ^ base_hash.rotate_left(17));
         let straight_section =
             hash_unit(control_hash.rotate_left(13)) < RIVER_STRAIGHT_SECTION_CHANCE;
@@ -142,16 +136,7 @@ fn river_path_points(
     seed: u64,
     sea_level: f32,
 ) -> Vec<Vec3> {
-    river_path(
-        source_cell,
-        source,
-        downstream,
-        seed,
-        sea_level,
-        None,
-        None,
-    )
-    .points
+    river_path(source_cell, source, downstream, seed, sea_level, None, None).points
 }
 
 #[cfg(test)]
