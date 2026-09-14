@@ -18,12 +18,18 @@ use super::{
 };
 
 #[derive(SystemParam)]
+pub(crate) struct VoxelContent<'w> {
+    pub(crate) blocks: Res<'w, BlockRegistry>,
+    pub(crate) fluids: Res<'w, FluidRegistry>,
+    pub(crate) secondary_properties: Res<'w, SecondaryPropertyRegistry>,
+}
+
+#[derive(SystemParam)]
 pub(crate) struct ChunkContent<'w> {
     pub(crate) blocks: Res<'w, BlockRegistry>,
     pub(crate) fluids: Res<'w, FluidRegistry>,
     pub(crate) biomes: Res<'w, BiomeRegistry>,
     pub(crate) secondary_properties: Res<'w, SecondaryPropertyRegistry>,
-    pub(crate) structures: Res<'w, StructureRegistry>,
     pub(crate) biome_field: Res<'w, BiomeField>,
 }
 
@@ -51,6 +57,7 @@ impl<'w> ChunkContent<'w> {
 pub(crate) struct ChunkGeneration<'w> {
     pub(crate) current_dimension: Res<'w, CurrentDimension>,
     pub(crate) dimensions: Res<'w, DimensionRegistry>,
+    pub(crate) structures: Res<'w, StructureRegistry>,
     pub(crate) feature_fields: Res<'w, WorldFeatureFields>,
 }
 
@@ -72,7 +79,7 @@ impl<'w> ChunkGeneration<'w> {
             fluids: &content.fluids,
             dimension: self.dimension(),
             biomes: &content.biomes,
-            structures: &content.structures,
+            structures: &self.structures,
             biome_field: &content.biome_field,
             feature_fields: &self.feature_fields,
         }
