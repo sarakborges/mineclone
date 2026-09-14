@@ -75,10 +75,6 @@ pub(super) struct ChunkStreamingRuntime<'w, 's> {
     lighting_updates: ResMut<'w, PendingLightingUpdates>,
 }
 
-pub(super) fn reset_chunk_streaming(mut state: ResMut<ChunkStreamingState>) {
-    *state = ChunkStreamingState::default();
-}
-
 pub(super) fn stream_chunks(
     generation: ChunkGeneration,
     content: ChunkContent,
