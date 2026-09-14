@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use bevy::prelude::*;
 
@@ -11,6 +11,7 @@ use super::{
         refresh_chunk_fluid_mesh, refresh_chunk_geometry_mesh, refresh_chunk_lighting_mesh,
     },
     chunk_system_params::{ChunkContent, ChunkRenderer},
+    work_budget::FrameWorkBudget,
 };
 
 const REMESH_BUDGET: Duration = Duration::from_millis(1);
@@ -154,11 +155,10 @@ pub(super) fn process_chunk_remesh_queue(
         &renderer.terrain_materials,
         &renderer.fluid_materials,
     );
-    let frame_started = Instant::now();
-    let mut processed = 0;
+    let mut budget = FrameWorkBudget::new(REMESH_BUDGET, 1);
 
     loop {
-        if processed > 0 && frame_started.elapsed() >= REMESH_BUDGET {
+        if budget.exhausted() {
             break;
         }
 
@@ -170,7 +170,7 @@ pub(super) fn process_chunk_remesh_queue(
                 coord,
                 &render_context,
             );
-            processed += 1;
+            budget.record(1);
             continue;
         }
 
@@ -185,7 +185,7 @@ pub(super) fn process_chunk_remesh_queue(
             coord,
             &render_context,
         );
-        processed += 1;
+        budget.record(1);
     }
 }
 
