@@ -11,8 +11,8 @@ use crate::world::feature_graph::FeatureGraph;
 use self::{
     path::{RiverEdgeSpec, add_curved_river_edge},
     selection::{
-        RiverSelection, build_flow_cache, connected_lake_cells,
-        drainage_reaches_water_destination, selected_river_sources,
+        RiverSelection, build_flow_cache, connected_lake_cells, drainage_reaches_water_destination,
+        selected_river_sources,
     },
     water_bodies::{confluence_lake, mountain_spring_body, plunge_pool_for_waterfall},
 };
@@ -121,9 +121,10 @@ where
                 continue;
             }
 
-            let spring = selection.springs.contains(&cell).then(|| {
-                mountain_spring_body(cell, source, seed, sea_level, water_fluid)
-            });
+            let spring = selection
+                .springs
+                .contains(&cell)
+                .then(|| mountain_spring_body(cell, source, seed, sea_level, water_fluid));
             let lake = selection
                 .lakes
                 .get(&cell)
@@ -190,9 +191,7 @@ where
             );
 
             if let Some(pool) = waterfall
-                .and_then(|waterfall| {
-                    plunge_pool_for_waterfall(cell, waterfall, seed, water_fluid)
-                })
+                .and_then(|waterfall| plunge_pool_for_waterfall(cell, waterfall, seed, water_fluid))
                 .filter(|body| water_body_intersects_region(coord, body))
             {
                 water_bodies.push(pool);
@@ -281,18 +280,13 @@ where
         .unwrap_or(0);
     let slot = (rank + 1) as f32 / (tributaries.len() + 1) as f32;
     let hash = cell_hash(source_cell, seed ^ 0x3c6e_f372_fe94_f82b);
-    let jitter = (hash_unit(hash.rotate_left(31)) - 0.5)
-        * (0.16 / tributaries.len().max(1) as f32);
+    let jitter = (hash_unit(hash.rotate_left(31)) - 0.5) * (0.16 / tributaries.len().max(1) as f32);
     let progress = lerp(0.16, 0.84, (slot + jitter).clamp(0.0, 1.0));
     let next = network.node(next_cell);
     let target = DrainageNode {
         position: downstream.position.lerp(next.position, progress),
         elevation: lerp(downstream.elevation, next.elevation, progress),
-        continentalness: lerp(
-            downstream.continentalness,
-            next.continentalness,
-            progress,
-        ),
+        continentalness: lerp(downstream.continentalness, next.continentalness, progress),
         biome_hydrology: downstream.biome_hydrology,
     };
     let target_flow = flow_cache

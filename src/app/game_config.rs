@@ -87,9 +87,7 @@ impl GameConfig {
             }
         };
 
-        if fs::read_to_string(&path)
-            .is_ok_and(|current| current == source)
-        {
+        if fs::read_to_string(&path).is_ok_and(|current| current == source) {
             return;
         }
 

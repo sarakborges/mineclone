@@ -66,12 +66,14 @@ pub(super) fn build_connector_graph(
         }
     }
 
-    candidates.sort_by(|(left_a, right_a, distance_a), (left_b, right_b, distance_b)| {
-        distance_a
-            .total_cmp(distance_b)
-            .then_with(|| compare_vec3(&anchors[*left_a], &anchors[*left_b]))
-            .then_with(|| compare_vec3(&anchors[*right_a], &anchors[*right_b]))
-    });
+    candidates.sort_by(
+        |(left_a, right_a, distance_a), (left_b, right_b, distance_b)| {
+            distance_a
+                .total_cmp(distance_b)
+                .then_with(|| compare_vec3(&anchors[*left_a], &anchors[*left_b]))
+                .then_with(|| compare_vec3(&anchors[*right_a], &anchors[*right_b]))
+        },
+    );
 
     let mut parents = (0..anchors.len()).collect::<Vec<_>>();
     let mut extra_degree = vec![0_usize; anchors.len()];
@@ -200,12 +202,7 @@ fn add_connector(
 }
 
 fn normalized_anchors(anchors: &[Vec3]) -> Vec<Vec3> {
-    sorted_unique_vec3s(
-        anchors
-            .iter()
-            .copied()
-            .filter(|position| position.y >= 0.0),
-    )
+    sorted_unique_vec3s(anchors.iter().copied().filter(|position| position.y >= 0.0))
 }
 
 fn contains_anchor(anchors: &[Vec3], position: Vec3) -> bool {
@@ -322,15 +319,7 @@ mod tests {
             Vec3::new(360.0, 30.0, 0.0),
         ];
         let mut water = UndergroundWaterRegion::default();
-        let graph = build_connector_graph(
-            IVec3::ZERO,
-            &anchors,
-            &anchors,
-            &[],
-            42,
-            84,
-            &mut water,
-        );
+        let graph = build_connector_graph(IVec3::ZERO, &anchors, &anchors, &[], 42, 84, &mut water);
 
         assert!(graph.edge_count() > 2);
     }

@@ -14,8 +14,11 @@ use crate::{
 };
 
 use super::super::{
-    ChunkGenerationContext, caves::anchored_cave_region,
-    surface_carvers::{SurfaceCarverResolveContext, resolve_surface_carver_column, surface_carver_density_delta},
+    ChunkGenerationContext,
+    caves::anchored_cave_region,
+    surface_carvers::{
+        SurfaceCarverResolveContext, resolve_surface_carver_column, surface_carver_density_delta,
+    },
 };
 
 const MAX_STRUCTURE_GROUND_VARIATION: i32 = 1;
@@ -73,8 +76,7 @@ fn structure_support_context(
         context.biomes,
         context.biome_field,
     );
-    let mut anchor_chunk =
-        chunk_coord_from_world(IVec3::new(anchor.x, surface_y - 1, anchor.y));
+    let mut anchor_chunk = chunk_coord_from_world(IVec3::new(anchor.x, surface_y - 1, anchor.y));
     anchor_chunk.y = anchor_chunk.y.max(0);
     let region = context.region(generation_region_coord(anchor_chunk));
     let anchored_caves = anchored_cave_region(
@@ -104,8 +106,7 @@ fn supported_surface_ground_y(
     );
     let raw_ground_y = raw_surface_height - 1;
     let surface_carver_minimum_y = raw_ground_y as f32 + 0.5;
-    let surface_carver_maximum_y =
-        (raw_ground_y + MAX_STRUCTURE_GROUND_RISE) as f32 + 0.5;
+    let surface_carver_maximum_y = (raw_ground_y + MAX_STRUCTURE_GROUND_RISE) as f32 + 0.5;
     let influences = surface
         .influences
         .iter()

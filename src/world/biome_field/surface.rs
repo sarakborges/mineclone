@@ -26,7 +26,12 @@ impl BiomeField {
                 for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
                     let cell = center + IVec2::new(x, z);
                     let site = surface_site_position(cell, self.surface_site_spacing, self.seed);
-                    sampled_sites.push((cell, site, warped.distance(site), cache.get(&cell).copied()));
+                    sampled_sites.push((
+                        cell,
+                        site,
+                        warped.distance(site),
+                        cache.get(&cell).copied(),
+                    ));
                 }
             }
         }
@@ -89,18 +94,13 @@ impl BiomeField {
                     .iter()
                     .copied()
                     .map(|distribution| {
-                        mountain_belt_strength(
-                            distribution,
-                            position,
-                            self.seed,
-                            biome.id.as_str(),
-                        )
-                        .max(mountain_peak_strength(
-                            distribution,
-                            position,
-                            self.seed,
-                            biome.id.as_str(),
-                        ))
+                        mountain_belt_strength(distribution, position, self.seed, biome.id.as_str())
+                            .max(mountain_peak_strength(
+                                distribution,
+                                position,
+                                self.seed,
+                                biome.id.as_str(),
+                            ))
                     })
                     .fold(0.0_f32, f32::max)
                     * biome.weight;

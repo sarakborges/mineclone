@@ -13,8 +13,7 @@ use crate::{
         typography,
     },
     world::{
-        NewWorldConfig, WorldLoadMode, WorldSeed, biome::CurrentBiome,
-        dimension::CurrentDimension,
+        NewWorldConfig, WorldLoadMode, WorldSeed, biome::CurrentBiome, dimension::CurrentDimension,
     },
 };
 
@@ -100,11 +99,7 @@ pub(super) fn new_world_general_section(
     )
 }
 
-fn seed_setting(
-    seed: u64,
-    localization: &UiLocalization,
-    language: Language,
-) -> impl Bundle {
+fn seed_setting(seed: u64, localization: &UiLocalization, language: Language) -> impl Bundle {
     (
         Node {
             width: percent(100),

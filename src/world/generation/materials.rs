@@ -44,10 +44,7 @@ pub(super) fn rasterize_material_pass(
             let hydrology_blocks = context
                 .region
                 .hydrology
-                .solid_blocks_for_column::<CHUNK_SIZE>(
-                    horizontal,
-                    chunk_origin.y as f32 + 0.5,
-                );
+                .solid_blocks_for_column::<CHUNK_SIZE>(horizontal, chunk_origin.y as f32 + 0.5);
             let surface_materials = resolve_surface_material_column(
                 &column.surface_influences,
                 context.biome_field,

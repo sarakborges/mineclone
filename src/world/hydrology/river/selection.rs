@@ -201,15 +201,7 @@ where
             continue;
         }
 
-        if is_mountain_spring(
-            cell,
-            source,
-            flow,
-            seed,
-            sea_level,
-            river_weight,
-            network,
-        ) {
+        if is_mountain_spring(cell, source, flow, seed, sea_level, river_weight, network) {
             channels.insert(cell);
             springs.insert(cell);
         }

@@ -64,19 +64,10 @@ pub(crate) fn build_chunk_render_meshes<W: VoxelRead + ?Sized>(
                 .blocks
                 .get(cell.block_id)
                 .unwrap_or_else(|| panic!("missing block definition: {}", cell.block_id));
-            let base_tint = block_tint_at(
-                block.tint,
-                position,
-                context.biome_field,
-                context.biomes,
-            );
+            let base_tint =
+                block_tint_at(block.tint, position, context.biome_field, context.biomes);
 
-            block_vertex_tint(
-                base_tint,
-                block,
-                cell,
-                context.secondary_properties,
-            )
+            block_vertex_tint(base_tint, block, cell, context.secondary_properties)
         },
     );
     let fluid_meshes = build_chunk_fluid_render_meshes(coord, chunk, context);

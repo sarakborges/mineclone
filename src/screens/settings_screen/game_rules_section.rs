@@ -134,22 +134,14 @@ pub(super) fn game_rules_section(
                     ..default()
                 },
                 children![
-                    compact_control_button(
-                        "−",
-                        TicksPerSecondStep::Decrement,
-                        STEP_BUTTON_SIZE,
-                    ),
+                    compact_control_button("−", TicksPerSecondStep::Decrement, STEP_BUTTON_SIZE,),
                     numeric_input_field(
                         ticks_per_second.to_string(),
                         TicksPerSecondInput,
                         TicksPerSecondValueText,
                         NumericInputSizing::Fixed(INPUT_WIDTH),
                     ),
-                    compact_control_button(
-                        "+",
-                        TicksPerSecondStep::Increment,
-                        STEP_BUTTON_SIZE,
-                    ),
+                    compact_control_button("+", TicksPerSecondStep::Increment, STEP_BUTTON_SIZE,),
                 ],
             ),
         ],

@@ -198,7 +198,8 @@ pub(super) fn spawn_viewmodel(
                             });
 
                             for &face in block_model.faces() {
-                                let layer_count = maximum_block_model_layers(&definitions.blocks, face);
+                                let layer_count =
+                                    maximum_block_model_layers(&definitions.blocks, face);
                                 let layer_materials = block_materials.held_for_face(
                                     face,
                                     layer_count,
@@ -218,7 +219,8 @@ pub(super) fn spawn_viewmodel(
                                             &definitions.asset_server,
                                             block_model.opacity(),
                                         )
-                                        && let Some(mut material_asset) = materials.get_mut(&material)
+                                        && let Some(mut material_asset) =
+                                            materials.get_mut(&material)
                                     {
                                         *material_asset = face_material;
                                         apply_block_display_shading(
@@ -304,7 +306,9 @@ pub(super) fn sync_held_block(
             .for_block(selected_slot, block);
         held_transform.rotation = held_block_transform(orientation).rotation;
 
-        let tint = definitions.tint_at(block_id, tint_position).unwrap_or(Color::WHITE);
+        let tint = definitions
+            .tint_at(block_id, tint_position)
+            .unwrap_or(Color::WHITE);
 
         for (face, material_handle, mut layer_visibility) in &mut faces {
             let Some(mut material) = materials.get_mut(&material_handle.0) else {

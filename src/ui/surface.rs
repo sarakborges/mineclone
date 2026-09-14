@@ -77,10 +77,7 @@ pub fn hud_danger_control_colors(interaction: Interaction) -> (Color, Color) {
             Color::srgba(0.22, 0.045, 0.065, 0.94),
             Color::srgba(1.0, 0.32, 0.38, 0.82),
         ),
-        Interaction::None => (
-            theme::HUD_SURFACE,
-            HUD_DANGER_BORDER_COLOR,
-        ),
+        Interaction::None => (theme::HUD_SURFACE, HUD_DANGER_BORDER_COLOR),
     }
 }
 

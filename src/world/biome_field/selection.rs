@@ -2,10 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     content::biome::{BiomeClimate, BiomeClimateRange, BiomeVerticalRange},
-    world::{
-        hydrology::ocean_strength,
-        macro_climate::MacroClimateSample,
-    },
+    world::{hydrology::ocean_strength, macro_climate::MacroClimateSample},
 };
 
 use super::{
@@ -21,10 +18,8 @@ impl BiomeField {
     pub(super) fn select_surface_biome_index(&self, cell: IVec2, site: Vec2) -> usize {
         let mut nearby_biomes = Vec::new();
         let mut near_ocean = self.ocean_biome_id.is_some()
-            && ocean_strength(
-                self.climate.sample(site).continentalness,
-                self.ocean_weight,
-            ) > f32::EPSILON;
+            && ocean_strength(self.climate.sample(site).continentalness, self.ocean_weight)
+                > f32::EPSILON;
 
         for z in -PROXIMITY_SITE_RADIUS..=PROXIMITY_SITE_RADIUS {
             for x in -PROXIMITY_SITE_RADIUS..=PROXIMITY_SITE_RADIUS {
@@ -136,13 +131,8 @@ fn proximity_allows(
 }
 
 fn biomes_conflict(left: &BiomeFieldEntry, right: &BiomeFieldEntry) -> bool {
-    left.avoid_near
-        .iter()
-        .any(|avoided| avoided == &right.id)
-        || right
-            .avoid_near
-            .iter()
-            .any(|avoided| avoided == &left.id)
+    left.avoid_near.iter().any(|avoided| avoided == &right.id)
+        || right.avoid_near.iter().any(|avoided| avoided == &left.id)
 }
 
 pub(super) fn select_volume_biome_index(

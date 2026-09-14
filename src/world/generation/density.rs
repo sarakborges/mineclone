@@ -68,10 +68,7 @@ pub(super) fn sample_density_field(
             let hydrology_deltas = pass
                 .region
                 .hydrology
-                .density_deltas_for_column::<CHUNK_SIZE>(
-                    horizontal,
-                    chunk_origin.y as f32 + 0.5,
-                );
+                .density_deltas_for_column::<CHUNK_SIZE>(horizontal, chunk_origin.y as f32 + 0.5);
             // Surface tunnels may approach water naturally. Only the columns
             // that actually contain surface water suppress the tunnel carver;
             // the old twelve-block binary exclusion produced conspicuously flat

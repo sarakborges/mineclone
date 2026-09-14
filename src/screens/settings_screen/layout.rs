@@ -46,10 +46,8 @@ const IN_WORLD_SECTIONS: &[SettingsSection] = &[
     SettingsSection::Languages,
     SettingsSection::Miscellaneous,
 ];
-const CREATE_WORLD_SECTIONS: &[SettingsSection] = &[
-    SettingsSection::General,
-    SettingsSection::GameRules,
-];
+const CREATE_WORLD_SECTIONS: &[SettingsSection] =
+    &[SettingsSection::General, SettingsSection::GameRules];
 
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SettingsScreenContext {
@@ -384,7 +382,9 @@ fn spawn_content(columns: &mut ChildSpawnerCommands, view: SettingsContentView<'
                                 panels
                                     .spawn((
                                         SettingsSectionPanel(SettingsSection::General),
-                                        section_panel_node(view.selected == SettingsSection::General),
+                                        section_panel_node(
+                                            view.selected == SettingsSection::General,
+                                        ),
                                     ))
                                     .with_child(new_world_general_section(
                                         view.new_world,

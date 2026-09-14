@@ -99,13 +99,9 @@ pub(super) fn push_lit_quad(
     });
 }
 
-fn should_flip_diagonal(
-    ambient_occlusion: [f32; 4],
-    block_srgb: [[f32; 3]; 4],
-) -> bool {
-    let ao_balance = ambient_occlusion[0] + ambient_occlusion[2]
-        - ambient_occlusion[1]
-        - ambient_occlusion[3];
+fn should_flip_diagonal(ambient_occlusion: [f32; 4], block_srgb: [[f32; 3]; 4]) -> bool {
+    let ao_balance =
+        ambient_occlusion[0] + ambient_occlusion[2] - ambient_occlusion[1] - ambient_occlusion[3];
 
     if ao_balance.abs() > AO_DIAGONAL_EPSILON {
         return ao_balance > 0.0;
@@ -225,14 +221,8 @@ mod tests {
 
     #[test]
     fn chooses_the_lower_error_ao_diagonal() {
-        assert!(should_flip_diagonal(
-            [1.0, 0.6, 1.0, 0.6],
-            [DARK; 4],
-        ));
-        assert!(!should_flip_diagonal(
-            [0.6, 1.0, 0.6, 1.0],
-            [DARK; 4],
-        ));
+        assert!(should_flip_diagonal([1.0, 0.6, 1.0, 0.6], [DARK; 4],));
+        assert!(!should_flip_diagonal([0.6, 1.0, 0.6, 1.0], [DARK; 4],));
     }
 
     #[test]
@@ -241,13 +231,7 @@ mod tests {
         let blue = [0.0, 0.0, 1.0];
         let purple = [0.5, 0.0, 0.5];
 
-        assert!(should_flip_diagonal(
-            [1.0; 4],
-            [red, purple, blue, purple],
-        ));
-        assert!(!should_flip_diagonal(
-            [1.0; 4],
-            [purple, red, purple, blue],
-        ));
+        assert!(should_flip_diagonal([1.0; 4], [red, purple, blue, purple],));
+        assert!(!should_flip_diagonal([1.0; 4], [purple, red, purple, blue],));
     }
 }

@@ -32,6 +32,7 @@ use crate::{
     },
 };
 
+pub(crate) use self::columns::{GenerationColumnSample, sample_generation_columns};
 use self::{
     caves::anchored_cave_region,
     density::{DensityPassContext, sample_density_field},
@@ -39,7 +40,6 @@ use self::{
     materials::{MaterialPassContext, rasterize_material_pass},
     structures::rasterize_structures,
 };
-pub(crate) use self::columns::{GenerationColumnSample, sample_generation_columns};
 
 const LOCAL_EMPTY_HEADROOM_CHUNKS: i32 = 2;
 
@@ -70,10 +70,9 @@ impl ChunkGenerationContext<'_> {
                         &surface,
                     ) as f32;
                     let continentalness = self.biome_field.climate_at(position).continentalness;
-                    let primary = self
-                        .biomes
-                        .get(surface.primary_id)
-                        .unwrap_or_else(|| panic!("missing biome definition: {}", surface.primary_id));
+                    let primary = self.biomes.get(surface.primary_id).unwrap_or_else(|| {
+                        panic!("missing biome definition: {}", surface.primary_id)
+                    });
 
                     HydrologySurfaceSample {
                         elevation,
@@ -84,10 +83,7 @@ impl ChunkGenerationContext<'_> {
             })
     }
 
-    fn anchored_caves(
-        &self,
-        region: &GenerationRegion,
-    ) -> Option<Arc<CaveConnectivityRegion>> {
+    fn anchored_caves(&self, region: &GenerationRegion) -> Option<Arc<CaveConnectivityRegion>> {
         anchored_cave_region(
             region,
             self.biome_field,
@@ -116,14 +112,16 @@ pub(crate) fn generate_chunk(
 
     let chunk_origin = chunk_origin(chunk_coord);
     let horizontal_chunk = chunk_coord.xz();
-    let columns = context.feature_fields.generation_columns(horizontal_chunk, || {
-        sample_generation_columns(
-            horizontal_chunk,
-            context.dimension,
-            context.biomes,
-            context.biome_field,
-        )
-    });
+    let columns = context
+        .feature_fields
+        .generation_columns(horizontal_chunk, || {
+            sample_generation_columns(
+                horizontal_chunk,
+                context.dimension,
+                context.biomes,
+                context.biome_field,
+            )
+        });
     let local_surface_chunk = columns
         .iter()
         .map(|column| column.surface_height)
@@ -199,8 +197,6 @@ pub(crate) fn generate_chunk(
     chunk
 }
 
-pub(crate) fn maximum_structure_vertical_chunk_allowance(
-    structures: &StructureRegistry,
-) -> i32 {
+pub(crate) fn maximum_structure_vertical_chunk_allowance(structures: &StructureRegistry) -> i32 {
     chunks_for_block_extent(structures.max_height_above_anchor())
 }

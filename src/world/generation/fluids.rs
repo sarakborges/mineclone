@@ -7,10 +7,8 @@ use crate::{
         fluid::{FluidCell, MAX_FLUID_LEVEL},
     },
     world::{
-        cave_connectivity::CaveConnectivityRegion,
-        generation::GenerationColumnSample,
-        generation_region::GenerationRegion,
-        hydrology::HydrologyWaterSample,
+        cave_connectivity::CaveConnectivityRegion, generation::GenerationColumnSample,
+        generation_region::GenerationRegion, hydrology::HydrologyWaterSample,
     },
 };
 

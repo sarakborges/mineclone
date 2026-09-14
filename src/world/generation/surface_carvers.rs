@@ -130,10 +130,8 @@ fn carver_intersects_vertical_range(
         ..
     } = carver;
     let maximum_vertical_half_span = length.max * 0.5 * MAXIMUM_TUNNEL_SLOPE;
-    let carver_minimum =
-        sea_level + elevation.min - radius.max - maximum_vertical_half_span;
-    let carver_maximum =
-        sea_level + elevation.max + radius.max + maximum_vertical_half_span;
+    let carver_minimum = sea_level + elevation.min - radius.max - maximum_vertical_half_span;
+    let carver_maximum = sea_level + elevation.max + radius.max + maximum_vertical_half_span;
 
     carver_maximum >= minimum_y && carver_minimum <= maximum_y
 }
@@ -194,9 +192,8 @@ fn resolve_tunnel_candidates(
                 signed_unit(hash.rotate_left(59)) * half_length * MAXIMUM_TUNNEL_SLOPE;
             let start_horizontal = anchor - direction * half_length;
             let end_horizontal = anchor + direction * half_length;
-            let curve_offset = signed_unit(hash.rotate_left(17))
-                * half_length
-                * TUNNEL_CURVE_STRENGTH;
+            let curve_offset =
+                signed_unit(hash.rotate_left(17)) * half_length * TUNNEL_CURVE_STRENGTH;
             let control_horizontal = anchor + perpendicular * curve_offset;
             let control_y = center_y + signed_unit(hash.rotate_left(37)) * tunnel_radius * 0.8;
             let start = Vec3::new(
@@ -290,9 +287,18 @@ mod tests {
         let carver = BiomeSurfaceCarver::Tunnel {
             spacing: 100.0,
             chance: 1.0,
-            length: SurfaceCarverRange { min: 80.0, max: 120.0 },
-            radius: SurfaceCarverRange { min: 6.0, max: 10.0 },
-            elevation: SurfaceCarverRange { min: 10.0, max: 30.0 },
+            length: SurfaceCarverRange {
+                min: 80.0,
+                max: 120.0,
+            },
+            radius: SurfaceCarverRange {
+                min: 6.0,
+                max: 10.0,
+            },
+            elevation: SurfaceCarverRange {
+                min: 10.0,
+                max: 30.0,
+            },
             jitter: 20.0,
         };
 

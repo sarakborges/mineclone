@@ -2,11 +2,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::{
-        block::BlockRegistry,
-        block_orientation::BlockOrientation,
-        tool::ToolRegistry,
-    },
+    content::{block::BlockRegistry, block_orientation::BlockOrientation, tool::ToolRegistry},
     hud::block_icon::BlockIconMaterial,
     localization::{ActiveLanguage, Language},
     player::{
@@ -201,15 +197,13 @@ fn sync_hotbar(
     mut commands: Commands,
     content: HotbarHudContent,
     mut selected_name: Single<&mut Text, With<HotbarSelectedName>>,
-    mut slots: Query<
-        (
-            Entity,
-            &mut HotbarSlot,
-            &mut BackgroundColor,
-            &mut BorderColor,
-            Option<&Children>,
-        ),
-    >,
+    mut slots: Query<(
+        Entity,
+        &mut HotbarSlot,
+        &mut BackgroundColor,
+        &mut BorderColor,
+        Option<&Children>,
+    )>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
     if !content.hotbar.is_changed() && !content.language.is_changed() {
@@ -318,10 +312,7 @@ fn item_name<'a>(
 
 fn slot_colors(selected: bool) -> (Color, Color) {
     if selected {
-        (
-            Color::srgba(0.08, 0.07, 0.16, 0.94),
-            theme::TEXT_PRIMARY,
-        )
+        (Color::srgba(0.08, 0.07, 0.16, 0.94), theme::TEXT_PRIMARY)
     } else {
         (theme::HUD_SURFACE, Color::srgba(0.70, 0.72, 0.82, 0.28))
     }

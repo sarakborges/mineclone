@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::player::game_mode::GameMode;
 
-use super::{game_rules::GameRules, WorldSeed};
+use super::{WorldSeed, game_rules::GameRules};
 
 #[derive(Resource, Debug, Clone, Copy, Default)]
 pub(crate) struct NewWorldConfig {
