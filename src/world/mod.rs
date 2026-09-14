@@ -1,7 +1,7 @@
 pub(crate) mod biome;
 pub(crate) mod biome_field;
 pub(crate) mod cave_connectivity;
-mod chunk_loading;
+mod chunk_generation_tasks;
 pub(crate) mod chunk_remesh;
 pub(crate) mod chunk_rendering;
 pub(crate) mod chunk_system_params;
@@ -41,6 +41,7 @@ use crate::{
     voxel::lighting::PendingLightingUpdates,
 };
 use biome::{CurrentBiome, track_current_biome};
+use chunk_generation_tasks::ChunkGenerationTasks;
 use chunk_remesh::{
     ChunkRemeshQueue, process_chunk_remesh_queue, process_immediate_geometry_remesh,
     process_immediate_lighting_remesh,
@@ -76,6 +77,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<WorldTickClock>()
             .init_resource::<RenderDistanceSettings>()
             .init_resource::<ChunkStreamingState>()
+            .init_resource::<ChunkGenerationTasks>()
             .init_resource::<ChunkRenderPool>()
             .init_resource::<ChunkRemeshQueue>()
             .init_resource::<PendingLightingUpdates>()
@@ -86,6 +88,7 @@ impl Plugin for WorldPlugin {
                 OnEnter(GameState::Gameplay),
                 (
                     reset_resource::<ChunkStreamingState>,
+                    reset_resource::<ChunkGenerationTasks>,
                     reset_resource::<WorldTickClock>,
                 ),
             )
@@ -93,6 +96,7 @@ impl Plugin for WorldPlugin {
                 OnExit(GameState::Gameplay),
                 (
                     clear_chunk_render_pool,
+                    reset_resource::<ChunkGenerationTasks>,
                     reset_resource::<ChunkRemeshQueue>,
                     reset_resource::<PendingLightingUpdates>,
                     reset_resource::<PendingFluidUpdates>,
