@@ -110,9 +110,9 @@ fn light_initial_chunks(content: &ChunkContent<'_>, runtime: &mut WorldSetupRunt
         drop(initialize_chunks_lighting(
             &mut runtime.world,
             &runtime.loading_state.coords[start..end],
-            &content.blocks,
-            &content.fluids,
-            &content.secondary_properties,
+            content.blocks(),
+            content.fluids(),
+            content.secondary_properties(),
         ));
         runtime.loading_state.lit = end;
         budget.record(end - start);
