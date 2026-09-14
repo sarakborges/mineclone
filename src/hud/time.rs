@@ -34,10 +34,7 @@ fn spawn_time_hud(
             localization.text(language.get(), "hud.day")
         )),
         TextLayout::justify(Justify::Center),
-        TextShadow {
-            offset: Vec2::new(1.5, 1.5),
-            color: Color::srgba(0.0, 0.0, 0.0, 0.92),
-        },
+        typography::tooltip_shadow(),
         TimeHudText,
         Node {
             position_type: PositionType::Absolute,
