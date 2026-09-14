@@ -6,13 +6,9 @@ use bevy::{
 
 use crate::{
     app::game_state::GameState,
-    content::{
-        day_night_cycle::DayNightCycleRegistry,
-        dimension::DimensionRegistry,
-        sky::{CelestialBodyDefinition, SkyRegistry},
-    },
+    content::sky::CelestialBodyDefinition,
     player::camera::GameplayCamera,
-    world::{day_night::DayNightClock, dimension::CurrentDimension},
+    world::current_context::{DayNightContext, SkyContext},
 };
 
 use super::celestial_path::celestial_offset;
@@ -33,13 +29,6 @@ impl Plugin for CelestialPlugin {
 struct CelestialBody(CelestialBodyDefinition);
 
 #[derive(SystemParam)]
-struct CelestialDefinitionScene<'w> {
-    current_dimension: Res<'w, CurrentDimension>,
-    dimensions: Res<'w, DimensionRegistry>,
-    skies: Res<'w, SkyRegistry>,
-}
-
-#[derive(SystemParam)]
 struct CelestialSpawnAssets<'w> {
     meshes: ResMut<'w, Assets<Mesh>>,
     materials: ResMut<'w, Assets<StandardMaterial>>,
@@ -48,16 +37,13 @@ struct CelestialSpawnAssets<'w> {
 
 #[derive(SystemParam)]
 struct CelestialRuntimeScene<'w, 's> {
-    clock: Res<'w, DayNightClock>,
-    current_dimension: Res<'w, CurrentDimension>,
-    dimensions: Res<'w, DimensionRegistry>,
-    cycles: Res<'w, DayNightCycleRegistry>,
+    day_night: DayNightContext<'w>,
     camera: Single<'w, 's, &'static GlobalTransform, With<GameplayCamera>>,
 }
 
 fn spawn_celestial_bodies(
     mut commands: Commands,
-    scene: CelestialDefinitionScene,
+    scene: SkyContext,
     assets: CelestialSpawnAssets,
 ) {
     let CelestialSpawnAssets {
@@ -65,19 +51,9 @@ fn spawn_celestial_bodies(
         mut materials,
         asset_server,
     } = assets;
-    let dimension = scene
-        .dimensions
-        .get(&scene.current_dimension.id)
-        .unwrap_or_else(|| {
-            panic!(
-                "missing dimension definition: {}",
-                scene.current_dimension.id
-            )
-        });
     let sky = scene
-        .skies
-        .get(&dimension.sky)
-        .unwrap_or_else(|| panic!("missing sky definition: {}", dimension.sky));
+        .sky()
+        .expect("current dimension must reference a loaded sky definition");
 
     spawn_body(
         &mut commands,
@@ -133,16 +109,14 @@ fn update_celestial_bodies(
     scene: CelestialRuntimeScene,
     mut bodies: Query<(&CelestialBody, &mut Transform, &mut Visibility)>,
 ) {
-    let Some(dimension) = scene.dimensions.get(&scene.current_dimension.id) else {
-        return;
-    };
-    let Some(cycle) = scene.cycles.get(&dimension.day_night_cycle) else {
+    let Some(cycle) = scene.day_night.cycle() else {
         return;
     };
     let camera_position = scene.camera.translation();
+    let normalized_time = scene.day_night.clock().normalized_time;
 
     for (body, mut transform, mut visibility) in &mut bodies {
-        let Some(offset) = celestial_offset(&body.0, cycle, scene.clock.normalized_time) else {
+        let Some(offset) = celestial_offset(&body.0, cycle, normalized_time) else {
             *visibility = Visibility::Hidden;
             continue;
         };
