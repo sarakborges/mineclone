@@ -33,7 +33,3 @@ pub(super) fn process_dynamic_lighting(
         runtime.remesh_queue.enqueue_lighting_change(coord);
     }
 }
-
-pub(super) fn clear_dynamic_lighting(mut lighting: ResMut<PendingLightingUpdates>) {
-    lighting.clear();
-}
