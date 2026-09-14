@@ -17,8 +17,8 @@ use super::{BrushMode, BrushPaletteState, BrushSelection};
 const PALETTE_COLUMNS: usize = 9;
 const SWATCH_SIZE: f32 = 30.0;
 const SWATCH_GAP: f32 = 4.0;
-const PALETTE_WIDTH: f32 = PALETTE_COLUMNS as f32 * SWATCH_SIZE
-    + (PALETTE_COLUMNS - 1) as f32 * SWATCH_GAP;
+const PALETTE_WIDTH: f32 =
+    PALETTE_COLUMNS as f32 * SWATCH_SIZE + (PALETTE_COLUMNS - 1) as f32 * SWATCH_GAP;
 const ACHROMATIC_SATURATION_EPSILON: f32 = 0.001;
 
 #[derive(Component)]
