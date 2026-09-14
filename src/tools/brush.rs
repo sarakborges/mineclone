@@ -9,7 +9,7 @@ use crate::{
         state_systems::{reset_next_state, reset_next_state_on_escape},
     },
     content::{block::BlockRegistry, builtin_ids::BRUSH_TOOL_ID},
-    player::inventory::InventoryState,
+    gameplay::availability::world_interaction_available,
     targeting::{ToolUse, ToolUseButton, block::BlockTargetingSet},
     voxel::edit::VoxelMutationRuntime,
 };
@@ -64,10 +64,7 @@ impl Plugin for BrushPlugin {
                 Update,
                 handle_brush_use
                     .after(BlockTargetingSet::Interaction)
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running))
-                    .run_if(in_state(InventoryState::Closed))
-                    .run_if(in_state(BrushPaletteState::Closed)),
+                    .run_if(world_interaction_available),
             )
             .add_systems(
                 OnEnter(BrushPaletteState::Open),
