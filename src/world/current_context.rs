@@ -22,6 +22,10 @@ impl CurrentDimensionContext<'_> {
     pub(crate) fn definition(&self) -> Option<&DimensionDefinition> {
         self.dimensions.get(&self.current.id)
     }
+
+    pub(crate) fn inputs_changed(&self) -> bool {
+        self.current.is_changed() || self.dimensions.is_changed()
+    }
 }
 
 #[derive(SystemParam)]
