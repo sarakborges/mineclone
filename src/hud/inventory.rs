@@ -7,13 +7,14 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
-    player::inventory::InventoryState,
+    player::inventory::{CreativeInventoryView, InventoryState},
 };
 
 use interaction::{
     handle_category_clicks, handle_creative_scroll, handle_creative_slot_clicks,
-    handle_empty_inventory_click, handle_inventory_trash_clicks, handle_search_focus,
-    handle_search_input, handle_slot_clicks, remember_creative_scroll_positions,
+    handle_empty_inventory_click, handle_inventory_close_shortcut, handle_inventory_trash_clicks,
+    handle_search_focus, handle_search_input, handle_search_select_all, handle_slot_clicks,
+    remember_creative_scroll_positions,
 };
 use state::{CreativeInventoryUiDirty, CreativeScrollState};
 use sync::{
@@ -34,7 +35,8 @@ pub(super) struct InventoryHudPlugin;
 
 impl Plugin for InventoryHudPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<CreativeScrollState>()
+        app.init_resource::<CreativeInventoryView>()
+            .init_resource::<CreativeScrollState>()
             .init_resource::<CreativeInventoryUiDirty>()
             .configure_sets(
                 Update,
@@ -52,6 +54,7 @@ impl Plugin for InventoryHudPlugin {
             .add_systems(
                 OnExit(InventoryState::Open),
                 (
+                    reset_resource::<CreativeInventoryView>,
                     reset_resource::<CreativeScrollState>,
                     reset_resource::<CreativeInventoryUiDirty>,
                 ),
@@ -61,6 +64,8 @@ impl Plugin for InventoryHudPlugin {
                 (
                     remember_creative_scroll_positions,
                     handle_search_focus,
+                    handle_search_select_all,
+                    handle_inventory_close_shortcut,
                     handle_search_input,
                     handle_category_clicks,
                     handle_creative_scroll,
