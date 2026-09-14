@@ -14,7 +14,7 @@ use self::{
         RiverSelection, build_flow_cache, connected_lake_cells,
         drainage_reaches_water_destination, selected_river_sources,
     },
-    water_bodies::{mountain_spring_body, plunge_pool_for_waterfall},
+    water_bodies::{confluence_lake, mountain_spring_body, plunge_pool_for_waterfall},
 };
 use super::{
     constants::{RIVER_BASIN_ESCAPE_RADIUS_CELLS, RIVER_EDGE_MARGIN_CELLS},
@@ -23,6 +23,8 @@ use super::{
     spatial::water_body_intersects_region,
     types::{HydrologySurfaceSample, WaterBody},
 };
+
+const CONFLUENCE_LAKE_MINIMUM_INCOMING_RIVERS: usize = 3;
 
 pub(super) struct RiverSystem {
     pub graph: FeatureGraph,
@@ -53,9 +55,36 @@ where
         lake_weight,
         network,
     );
+    let confluences = direct_confluence_counts(&selection, network);
     let connected_lakes = connected_lake_cells(&selection.lakes, network);
     let ocean_threshold = network.ocean_threshold();
     let mut destination_cache = HashMap::new();
+
+    for (&cell, &incoming_rivers) in &confluences {
+        if incoming_rivers < CONFLUENCE_LAKE_MINIMUM_INCOMING_RIVERS
+            || selection.lakes.contains_key(&cell)
+        {
+            continue;
+        }
+
+        let source = network.node(cell);
+        if source.continentalness <= ocean_threshold {
+            continue;
+        }
+        let flow = flow_cache.get(&cell).copied().unwrap_or(incoming_rivers as u32);
+        let body = confluence_lake(
+            cell,
+            source,
+            incoming_rivers,
+            flow,
+            seed,
+            sea_level,
+            water_fluid,
+        );
+        if water_body_intersects_region(coord, &body) {
+            water_bodies.push(body);
+        }
+    }
 
     for dz in -RIVER_EDGE_MARGIN_CELLS..=RIVER_EDGE_MARGIN_CELLS {
         for dx in -RIVER_EDGE_MARGIN_CELLS..=RIVER_EDGE_MARGIN_CELLS {
@@ -107,12 +136,35 @@ where
                 .lakes
                 .get(&cell)
                 .filter(|_| connected_lakes.contains(&cell))
-                .map(|lake| lake.water_level);
+                .map(|lake| lake.water_level)
+                .or_else(|| {
+                    confluences
+                        .get(&cell)
+                        .filter(|&&incoming| incoming >= CONFLUENCE_LAKE_MINIMUM_INCOMING_RIVERS)
+                        .map(|_| river_height_for_confluence(cell, source, seed, sea_level, water_fluid))
+                });
             let downstream_water_level = selection
                 .lakes
                 .get(&downstream_cell)
                 .filter(|_| connected_lakes.contains(&downstream_cell))
-                .map(|lake| lake.water_level);
+                .map(|lake| lake.water_level)
+                .or_else(|| {
+                    confluences
+                        .get(&downstream_cell)
+                        .filter(|&&incoming| incoming >= CONFLUENCE_LAKE_MINIMUM_INCOMING_RIVERS)
+                        .map(|&incoming| {
+                            confluence_lake(
+                                downstream_cell,
+                                downstream,
+                                incoming,
+                                downstream_flow,
+                                seed,
+                                sea_level,
+                                water_fluid,
+                            )
+                            .water_level
+                        })
+                });
             let (downstream, downstream_water_level, downstream_flow) = confluence_target(
                 cell,
                 downstream_cell,
@@ -156,6 +208,37 @@ where
         graph,
         water_bodies,
     }
+}
+
+fn river_height_for_confluence(
+    cell: IVec2,
+    source: DrainageNode,
+    seed: u64,
+    sea_level: f32,
+    water_fluid: &str,
+) -> f32 {
+    confluence_lake(cell, source, 3, 4, seed, sea_level, water_fluid).water_level
+}
+
+fn direct_confluence_counts<F>(
+    selection: &RiverSelection,
+    network: &mut DrainageNetwork<'_, F>,
+) -> HashMap<IVec2, usize>
+where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    let mut incoming = HashMap::new();
+
+    for &source in &selection.channels {
+        let Some(target) = network.downstream_cell(source) else {
+            continue;
+        };
+        if selection.channels.contains(&target) {
+            *incoming.entry(target).or_insert(0) += 1;
+        }
+    }
+
+    incoming
 }
 
 #[allow(clippy::too_many_arguments)]
