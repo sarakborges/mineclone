@@ -176,6 +176,12 @@ fn fragment(
     let tint = vec3<f32>(1.0);
 #endif
     let tint_enabled = terrain_material_extension.tint_enabled > 0.5;
+    let fluid_animation = clamp(
+        terrain_material_extension.fluid_animation_factor,
+        0.0,
+        1.0,
+    );
+    let is_fluid = fluid_animation > 0.5;
     let ambient_occlusion = clamp(in.color.a, 0.0, 1.0);
     let sky_level = clamp(in.uv_b.x, 0.0, 1.0);
     let sky_light = pow(sky_level, SKY_LIGHT_GAMMA) * terrain_material_extension.sky_light_factor;
@@ -192,13 +198,22 @@ fn fragment(
     let sun_visibility = 1.0;
     let dynamic_light = vec3<f32>(0.0);
 #else
-    let surface_normal = normalize(pbr_input.world_normal);
-    let sun_visibility = directional_sun_visibility(in);
-    let dynamic_light = dynamic_point_lighting(
-        in,
-        surface_normal,
-        pbr_input.is_orthographic,
-    );
+    var sun_visibility = 1.0;
+    var dynamic_light = vec3<f32>(0.0);
+
+    // Fluids are large blended surfaces and already receive propagated voxel
+    // lighting. Sampling directional shadow maps and clustered point lights for
+    // every transparent water fragment is disproportionately expensive and also
+    // introduces unstable shadow artifacts on moving/translucent surfaces.
+    if !is_fluid {
+        let surface_normal = normalize(pbr_input.world_normal);
+        sun_visibility = directional_sun_visibility(in);
+        dynamic_light = dynamic_point_lighting(
+            in,
+            surface_normal,
+            pbr_input.is_orthographic,
+        );
+    }
 #endif
 
     let shadowed_sky_light = clamp(sky_light * sun_visibility, 0.0, 1.0);
@@ -222,48 +237,32 @@ fn fragment(
     var material_rgb = base_rgb * pbr_bindings::material.base_color.rgb;
 
 #ifndef PREPASS_PIPELINE
-    let fluid_animation = clamp(
-        terrain_material_extension.fluid_animation_factor,
-        0.0,
-        1.0,
-    );
-    let time = view_bindings::globals.time;
-    let wave_a = sin(
-        in.world_position.x * 0.34
-            + in.world_position.z * 0.22
-            + time * 1.35
-    );
-    let wave_b = cos(
-        in.world_position.z * 0.41
-            - in.world_position.x * 0.17
-            + time * 0.92
-    );
-    let moving_wave = (wave_a * 0.65 + wave_b * 0.35) * fluid_animation;
-    let ripple_a = sin(
-        (in.world_position.x + in.world_position.z) * 0.86
-            + time * 1.72
-    );
-    let ripple_b = cos(
-        (in.world_position.x - in.world_position.z) * 1.18
-            - time * 1.06
-    );
-    let fine_wave = sin(
-        in.world_position.x * 2.08
-            + in.world_position.z * 1.71
-            + time * 0.58
-    );
-    let interference = abs(ripple_a * 0.58 + ripple_b * 0.42);
-    let ripple_ridge = smoothstep(0.48, 0.92, interference) * fluid_animation;
-    let fluid_variation =
-        moving_wave * 0.050
-        + (ripple_a * 0.018 + ripple_b * 0.014 + fine_wave * 0.010) * fluid_animation;
+    if is_fluid {
+        let time = view_bindings::globals.time;
+        let wave_a = sin(
+            in.world_position.x * 0.34
+                + in.world_position.z * 0.22
+                + time * 1.35
+        );
+        let wave_b = sin(
+            (in.world_position.x - in.world_position.z) * 0.72
+                - time * 0.96
+        );
+        let moving_wave = wave_a * 0.68 + wave_b * 0.32;
+        let ripple_ridge = smoothstep(
+            0.52,
+            0.94,
+            abs(wave_a - wave_b) * 0.5,
+        );
+        let fluid_variation = moving_wave * 0.045;
 
-    material_rgb = clamp(
-        material_rgb * (1.0 + fluid_variation)
-            + vec3<f32>(0.018, 0.028, 0.042) * ripple_ridge,
-        vec3<f32>(0.0),
-        vec3<f32>(1.0),
-    );
+        material_rgb = clamp(
+            material_rgb * (1.0 + fluid_variation)
+                + vec3<f32>(0.018, 0.028, 0.042) * ripple_ridge,
+            vec3<f32>(0.0),
+            vec3<f32>(1.0),
+        );
+    }
 #endif
 
     // Dynamic held-item light is useful in darkness, but white point light must

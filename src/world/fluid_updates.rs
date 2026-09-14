@@ -151,11 +151,20 @@ pub(super) fn process_fluid_updates(
                 continue;
             }
 
+            let lighting_medium_changed = current.map(|fluid| fluid.fluid_id)
+                != desired.map(|fluid| fluid.fluid_id);
+
             if world.set_fluid_at(position, desired).is_none() {
                 continue;
             }
 
-            lighting.enqueue_voxel_edit(position);
+            // Fluid level/spread changes alter the rendered surface, but voxel
+            // light dampening depends only on whether a fluid is present and on
+            // its fluid id. Avoid flooding the lighting queue for every flowing
+            // water height update when the lighting medium itself did not change.
+            if lighting_medium_changed {
+                lighting.enqueue_voxel_edit(position);
+            }
             enqueue_remesh(position, &mut remesh_queue);
             pending.enqueue_voxel_edit(position);
         }
