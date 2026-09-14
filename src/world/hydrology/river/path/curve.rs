@@ -48,8 +48,14 @@ pub(super) fn river_path(
     let points = (0..=segment_count)
         .map(|index| {
             let t = index as f32 / segment_count as f32;
-            let lateral = sample_lateral_controls(&lateral_controls, t);
-            let horizontal = source.position.lerp(downstream.position, t) + perpendicular * lateral;
+            let horizontal = if index == 0 {
+                source.position
+            } else if index == segment_count {
+                downstream.position
+            } else {
+                let lateral = sample_lateral_controls(&lateral_controls, t);
+                source.position.lerp(downstream.position, t) + perpendicular * lateral
+            };
             let height = river_path_height(t, start_height, end_height, waterfall_profile);
 
             Vec3::new(horizontal.x, height, horizontal.y)

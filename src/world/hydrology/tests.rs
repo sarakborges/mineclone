@@ -78,7 +78,7 @@ fn low_continentalness_produces_ocean_water_and_carving() {
 fn hydrology_biome_overlay_transitions_surface_to_coast_to_ocean() {
     let field = field();
     let land = field.biome_overlay(0.5);
-    let coast_fringe = field.biome_overlay(0.415);
+    let coast_fringe = field.biome_overlay(0.44);
     let coast = field.biome_overlay(0.375);
     let ocean = field.biome_overlay(0.1);
 
