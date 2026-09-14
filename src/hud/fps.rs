@@ -25,10 +25,7 @@ struct FpsHud {
 fn spawn_fps_hud(mut commands: Commands) {
     commands.spawn((
         typography::hud("0 FPS"),
-        TextShadow {
-            offset: Vec2::new(1.5, 1.5),
-            color: Color::srgba(0.0, 0.0, 0.0, 0.92),
-        },
+        typography::tooltip_shadow(),
         FpsHud::default(),
         Node {
             position_type: PositionType::Absolute,
