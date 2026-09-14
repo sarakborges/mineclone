@@ -16,8 +16,12 @@ pub(crate) struct BlockVisualContent<'w> {
 }
 
 impl BlockVisualContent<'_> {
+    pub(crate) fn block_definitions_changed(&self) -> bool {
+        self.blocks.is_changed()
+    }
+
     pub(crate) fn inputs_changed(&self) -> bool {
-        self.blocks.is_changed() || self.biomes.is_changed() || self.biome_field.is_changed()
+        self.block_definitions_changed() || self.biomes.is_changed() || self.biome_field.is_changed()
     }
 
     pub(crate) fn tint_at(&self, block_id: &str, position: Vec2) -> Option<Color> {
