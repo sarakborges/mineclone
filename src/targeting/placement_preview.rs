@@ -2,7 +2,7 @@ use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::{biome::BiomeRegistry, block::BlockRegistry},
+    content::block::BlockRegistry,
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::{
         block_model::{
@@ -10,10 +10,9 @@ use crate::{
             maximum_block_model_layers, set_block_model_tint,
         },
         block_model_material::BlockModelMaterial,
-        block_tint::block_tint_at,
+        block_visual_content::BlockVisualContent,
     },
     voxel::{block_face::BlockFace, orientation::orientation_rotation},
-    world::biome_field::BiomeField,
 };
 
 use super::{
@@ -153,14 +152,6 @@ struct PlacementPreviewSelection<'w, 's> {
 }
 
 #[derive(SystemParam)]
-struct PlacementPreviewContent<'w> {
-    blocks: Res<'w, BlockRegistry>,
-    biomes: Res<'w, BiomeRegistry>,
-    biome_field: Res<'w, BiomeField>,
-    asset_server: Res<'w, AssetServer>,
-}
-
-#[derive(SystemParam)]
 struct PlacementPreviewView<'w, 's> {
     materials: ResMut<'w, Assets<BlockModelMaterial>>,
     root: PreviewRoot<'w, 's>,
@@ -177,7 +168,7 @@ struct PlacementPreviewView<'w, 's> {
 
 fn update_placement_preview(
     selection: PlacementPreviewSelection,
-    content: PlacementPreviewContent,
+    content: BlockVisualContent,
     view: PlacementPreviewView,
 ) {
     let PlacementPreviewView {
@@ -249,12 +240,7 @@ fn update_placement_preview(
     };
 
     let tint_position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-    let tint = block_tint_at(
-        block.tint,
-        tint_position,
-        &content.biome_field,
-        &content.biomes,
-    );
+    let tint = content.tint_at(block_id, tint_position).unwrap_or(Color::WHITE);
 
     for (_, material_handle, _) in &mut faces {
         let Some(mut material) = materials.get_mut(&material_handle.0) else {
