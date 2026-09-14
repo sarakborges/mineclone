@@ -30,7 +30,7 @@ pub(crate) struct PendingFluidUpdates {
 
 impl PendingFluidUpdates {
     pub(crate) fn enqueue_voxel_edit(&mut self, position: IVec3) {
-        self.queue.enqueue_with_neighbors(position);
+        self.queue.enqueue_with_neighbors_priority(position);
     }
 
     pub(crate) fn enqueue_loaded_fluid_frontier(&mut self, world: &VoxelWorld, coord: IVec3) {
@@ -39,6 +39,10 @@ impl PendingFluidUpdates {
 
     fn enqueue(&mut self, position: IVec3) {
         self.queue.enqueue(position);
+    }
+
+    fn enqueue_priority(&mut self, position: IVec3) {
+        self.queue.enqueue_priority(position);
     }
 
     fn pop(&mut self) -> Option<IVec3> {
