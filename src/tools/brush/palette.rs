@@ -25,7 +25,7 @@ const ACHROMATIC_SATURATION_EPSILON: f32 = 0.001;
 struct BrushPaletteRoot;
 
 #[derive(Component, Clone)]
-struct BrushPaletteChoice {
+pub(super) struct BrushPaletteChoice {
     selection: BrushSelection,
 }
 

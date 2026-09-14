@@ -19,16 +19,16 @@ const INPUT_WIDTH: f32 = 180.0;
 const TICKS_INPUT_MAX_DIGITS: usize = 10;
 
 #[derive(Component, Clone, Copy)]
-enum TicksPerSecondStep {
+pub(super) enum TicksPerSecondStep {
     Decrement,
     Increment,
 }
 
 #[derive(Component)]
-struct TicksPerSecondInput;
+pub(super) struct TicksPerSecondInput;
 
 #[derive(Component)]
-struct TicksPerSecondValueText;
+pub(super) struct TicksPerSecondValueText;
 
 pub(super) struct TicksPerSecondInputKind;
 pub(super) type TicksPerSecondInputState = NumericInputState<TicksPerSecondInputKind>;

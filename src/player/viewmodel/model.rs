@@ -37,7 +37,7 @@ pub(super) struct HeldBlockFace {
 }
 
 #[derive(Default)]
-struct HeldBlockVisualCache {
+pub(super) struct HeldBlockVisualCache {
     tint_cell: Option<IVec2>,
 }
 
