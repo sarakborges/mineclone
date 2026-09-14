@@ -1,7 +1,8 @@
 use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use super::{
-    block::{BlockTargetingSet, TargetedBlock},
+    BlockTargetingScene,
+    block::BlockTargetingSet,
     placement::placement_voxel,
 };
 use crate::{
@@ -10,9 +11,7 @@ use crate::{
         block::BlockRegistry, builtin_ids::BRUSH_TOOL_ID,
         secondary_property::SecondaryPropertyRegistry,
     },
-    player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     tools::{BrushMode, DYED_PROPERTY_ID},
-    voxel::world::VoxelWorld,
 };
 
 const HIGHLIGHT_SCALE: f32 = 1.01;
@@ -24,7 +23,7 @@ type HighlightTarget<'w, 's> = Single<
     'w,
     's,
     (&'static mut Transform, &'static mut Visibility),
-    (With<TargetHighlight>, Without<BrushGhost>, Without<GameplayCamera>),
+    (With<TargetHighlight>, Without<BrushGhost>),
 >;
 
 type BrushGhostTarget<'w, 's> = Single<
@@ -35,7 +34,7 @@ type BrushGhostTarget<'w, 's> = Single<
         &'static mut Visibility,
         &'static MeshMaterial3d<StandardMaterial>,
     ),
-    (With<BrushGhost>, Without<TargetHighlight>, Without<GameplayCamera>),
+    (With<BrushGhost>, Without<TargetHighlight>),
 >;
 
 pub struct TargetHighlightPlugin;
@@ -60,11 +59,8 @@ struct BrushGhost;
 
 #[derive(SystemParam)]
 struct TargetHighlightInput<'w, 's> {
-    targeted: Res<'w, TargetedBlock>,
-    hotbar: Res<'w, PlayerHotbar>,
+    scene: BlockTargetingScene<'w, 's>,
     brush_mode: Res<'w, BrushMode>,
-    world: Res<'w, VoxelWorld>,
-    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
 }
 
 #[derive(SystemParam)]
@@ -121,13 +117,13 @@ fn update_highlight(
     content: TargetHighlightContent,
     mut view: TargetHighlightView,
 ) {
-    let Some(hit) = input.targeted.0 else {
+    let Some(hit) = input.scene.hit() else {
         *view.highlight.1 = Visibility::Hidden;
         *view.brush_ghost.1 = Visibility::Hidden;
         return;
     };
 
-    let selected_item = input.hotbar.item_at(input.hotbar.selected_slot());
+    let selected_item = input.scene.selected_item();
     if selected_item == Some(BRUSH_TOOL_ID) {
         *view.highlight.1 = Visibility::Hidden;
 
@@ -172,7 +168,7 @@ fn update_highlight(
 
     let selected_block = selected_item.filter(|item_id| content.blocks.get(item_id).is_some());
     let placement_preview_visible = selected_block.is_some()
-        && placement_voxel(hit, &input.world, input.player.translation).is_some();
+        && placement_voxel(hit, input.scene.world(), input.scene.player_translation()).is_some();
 
     if placement_preview_visible {
         *view.highlight.1 = Visibility::Hidden;
