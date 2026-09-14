@@ -7,14 +7,14 @@ use crate::{
         secondary_property::SecondaryPropertyRegistry,
     },
     hud::block_icon::BlockIconMaterial,
-    localization::{ActiveLanguage, UiLocalization},
+    localization::{ActiveLanguage, Language, UiLocalization},
     rendering::{
         block_model::BlockModel,
         block_tint::{apply_secondary_property_tint, block_tint_at},
     },
     targeting::block::TargetedBlock,
     ui::{surface, typography},
-    voxel::world::VoxelWorld,
+    voxel::{secondary_properties::SecondaryProperties, world::VoxelWorld},
     world::biome_field::BiomeField,
 };
 
@@ -42,6 +42,16 @@ struct TargetBlockText;
 
 #[derive(Component)]
 struct TargetBlockModel;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct TargetHudSnapshot {
+    voxel: IVec3,
+    block_id: &'static str,
+    normal: IVec3,
+    properties: SecondaryProperties,
+    light_level: u8,
+    language: Language,
+}
 
 #[derive(SystemParam)]
 struct TargetHudContent<'w> {
@@ -139,24 +149,23 @@ fn update_target_hud(
         With<TargetBlockModel>,
     >,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
+    mut cached: Local<Option<TargetHudSnapshot>>,
 ) {
     let mut root_visibility = root_visibility.into_inner();
 
     let Some(hit) = targeted.0 else {
+        *cached = None;
         if *root_visibility != Visibility::Hidden {
             *root_visibility = Visibility::Hidden;
         }
         return;
     };
 
-    if *root_visibility != Visibility::Visible {
-        *root_visibility = Visibility::Visible;
-    }
-
     let language = content.language.get();
-    let block = content.blocks.get(hit.block_id);
-    let block_name = block.map_or(hit.block_id, |block| block.name.text(language));
     let cell = content.world.cell_at(hit.voxel);
+    let properties = cell
+        .map(|cell| cell.secondary_properties())
+        .unwrap_or_default();
     let light_position = if hit.normal == IVec3::ZERO {
         hit.voxel + IVec3::Y
     } else {
@@ -164,39 +173,61 @@ fn update_target_hud(
     };
     let light = content.world.light_at(light_position);
     let light_level = light.sky().max(light.block());
+    let snapshot = TargetHudSnapshot {
+        voxel: hit.voxel,
+        block_id: hit.block_id,
+        normal: hit.normal,
+        properties,
+        light_level,
+        language,
+    };
+    let definitions_changed = content.blocks.is_changed()
+        || content.secondary_properties.is_changed()
+        || content.biomes.is_changed()
+        || content.biome_field.is_changed()
+        || content.language.is_changed();
+
+    if cached.as_ref() == Some(&snapshot)
+        && !definitions_changed
+        && *root_visibility == Visibility::Visible
+    {
+        return;
+    }
+    *cached = Some(snapshot);
+
+    if *root_visibility != Visibility::Visible {
+        *root_visibility = Visibility::Visible;
+    }
+
+    let block = content.blocks.get(hit.block_id);
+    let block_name = block.map_or(hit.block_id, |block| block.name.text(language));
     let coordinates = content
         .localization
         .text(language, "hud.coordinates")
         .replace("{x}", &hit.voxel.x.to_string())
         .replace("{z}", &hit.voxel.z.to_string())
         .replace("{y}", &hit.voxel.y.to_string());
-    let properties = cell
-        .map(|cell| {
-            let mut properties = cell
-                .secondary_properties()
-                .iter()
-                .map(|(property, value)| {
-                    let property_name = match property {
-                        "dyed" => content
-                            .localization
-                            .text(language, "secondaryProperty.dyed"),
-                        _ => property,
-                    };
-                    let value_name = content
-                        .secondary_properties
-                        .get(property, value)
-                        .map_or(value, |definition| definition.name.text(language));
-                    format!("{property_name}: {value_name}")
-                })
-                .collect::<Vec<_>>();
-            properties.sort();
-            properties
+    let mut property_labels = properties
+        .iter()
+        .map(|(property, value)| {
+            let property_name = match property {
+                "dyed" => content
+                    .localization
+                    .text(language, "secondaryProperty.dyed"),
+                _ => property,
+            };
+            let value_name = content
+                .secondary_properties
+                .get(property, value)
+                .map_or(value, |definition| definition.name.text(language));
+            format!("{property_name}: {value_name}")
         })
-        .unwrap_or_default();
-    let properties_text = if properties.is_empty() {
+        .collect::<Vec<_>>();
+    property_labels.sort();
+    let properties_text = if property_labels.is_empty() {
         String::new()
     } else {
-        format!("\n{}", properties.join("\n"))
+        format!("\n{}", property_labels.join("\n"))
     };
     let next_text = format!(
         "{block_name}{properties_text}\n{}: {light_level}\n{coordinates}",
