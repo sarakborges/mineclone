@@ -14,18 +14,19 @@ pub(super) enum ChunkMeshKey {
     Fluid(FluidId),
 }
 
-struct ChunkRenderSlot {
-    entities: Vec<Entity>,
-    meshes: Vec<Handle<Mesh>>,
-    mesh_keys: Vec<ChunkMeshKey>,
-    fluid_ids: Vec<FluidId>,
-    mesh_bytes: usize,
-    fluid_mesh_bytes: usize,
+#[derive(Default)]
+pub(super) struct ChunkRenderAllocation {
+    pub(super) entities: Vec<Entity>,
+    pub(super) meshes: Vec<Handle<Mesh>>,
+    pub(super) mesh_keys: Vec<ChunkMeshKey>,
+    pub(super) fluid_ids: Vec<FluidId>,
+    pub(super) mesh_bytes: usize,
+    pub(super) fluid_mesh_bytes: usize,
 }
 
 #[derive(Resource, Default)]
 pub struct ChunkRenderPool {
-    active: HashMap<IVec3, ChunkRenderSlot>,
+    active: HashMap<IVec3, ChunkRenderAllocation>,
 }
 
 impl ChunkRenderPool {
@@ -124,27 +125,8 @@ impl ChunkRenderPool {
         true
     }
 
-    pub(super) fn insert(
-        &mut self,
-        coord: IVec3,
-        entities: Vec<Entity>,
-        meshes: Vec<Handle<Mesh>>,
-        mesh_keys: Vec<ChunkMeshKey>,
-        fluid_ids: Vec<FluidId>,
-        mesh_bytes: usize,
-        fluid_mesh_bytes: usize,
-    ) {
-        self.active.insert(
-            coord,
-            ChunkRenderSlot {
-                entities,
-                meshes,
-                mesh_keys,
-                fluid_ids,
-                mesh_bytes,
-                fluid_mesh_bytes,
-            },
-        );
+    pub(super) fn insert(&mut self, coord: IVec3, allocation: ChunkRenderAllocation) {
+        self.active.insert(coord, allocation);
     }
 
     fn clear(&mut self, meshes: &mut Assets<Mesh>) {

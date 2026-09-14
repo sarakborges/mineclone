@@ -13,7 +13,7 @@ use crate::{
 
 use super::{
     ChunkMeshBuildContext, ChunkRenderContext,
-    pool::{ChunkMeshKey, ChunkRenderPool},
+    pool::{ChunkMeshKey, ChunkRenderAllocation, ChunkRenderPool},
 };
 
 pub(crate) enum BuiltChunkMesh {
@@ -120,15 +120,7 @@ pub fn spawn_chunk_mesh(
     }
 
     if chunk.is_empty() {
-        render_pool.insert(
-            coord,
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            0,
-            0,
-        );
+        render_pool.insert(coord, ChunkRenderAllocation::default());
         return;
     }
 
@@ -150,15 +142,7 @@ pub(crate) fn spawn_built_chunk_meshes(
     }
 
     if built_meshes.is_empty() {
-        render_pool.insert(
-            coord,
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            0,
-            0,
-        );
+        render_pool.insert(coord, ChunkRenderAllocation::default());
         return;
     }
 
@@ -222,12 +206,14 @@ pub(crate) fn spawn_built_chunk_meshes(
 
     render_pool.insert(
         coord,
-        entities,
-        mesh_handles,
-        mesh_keys,
-        fluid_ids,
-        pooled_mesh_bytes,
-        fluid_mesh_bytes,
+        ChunkRenderAllocation {
+            entities,
+            meshes: mesh_handles,
+            mesh_keys,
+            fluid_ids,
+            mesh_bytes: pooled_mesh_bytes,
+            fluid_mesh_bytes,
+        },
     );
 }
 
