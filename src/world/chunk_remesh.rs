@@ -8,7 +8,8 @@ use crate::voxel::{
 
 use super::{
     chunk_rendering::{
-        refresh_chunk_fluid_mesh, refresh_chunk_geometry_mesh, refresh_chunk_lighting_mesh,
+        ChunkRenderPool, refresh_chunk_fluid_mesh, refresh_chunk_geometry_mesh,
+        refresh_chunk_lighting_mesh,
     },
     chunk_system_params::{ChunkContent, ChunkRenderer},
     work_budget::FrameWorkBudget,
@@ -71,16 +72,49 @@ impl ChunkRemeshQueue {
         }
     }
 
+    fn pop_renderable(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
+        let coord = self.queue.pop_where(|coord| render_pool.contains(coord))?;
+        self.fluid.remove(coord);
+        Some(coord)
+    }
+
+    fn pop_renderable_fluid(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
+        self.fluid.pop_where(|coord| render_pool.contains(coord))
+    }
+
+    fn pop_renderable_immediate_geometry(
+        &mut self,
+        render_pool: &ChunkRenderPool,
+    ) -> Option<IVec3> {
+        let coord = self
+            .immediate_geometry
+            .pop_where(|coord| render_pool.contains(coord))?;
+        self.queue.remove(coord);
+        self.fluid.remove(coord);
+        Some(coord)
+    }
+
+    fn pop_renderable_immediate_lighting(
+        &mut self,
+        render_pool: &ChunkRenderPool,
+    ) -> Option<IVec3> {
+        self.immediate_lighting
+            .pop_where(|coord| render_pool.contains(coord))
+    }
+
+    #[cfg(test)]
     fn pop(&mut self) -> Option<IVec3> {
         let coord = self.queue.pop()?;
         self.fluid.remove(coord);
         Some(coord)
     }
 
+    #[cfg(test)]
     fn pop_fluid(&mut self) -> Option<IVec3> {
         self.fluid.pop()
     }
 
+    #[cfg(test)]
     fn pop_immediate_geometry(&mut self) -> Option<IVec3> {
         let coord = self.immediate_geometry.pop()?;
         self.queue.remove(coord);
@@ -88,6 +122,7 @@ impl ChunkRemeshQueue {
         Some(coord)
     }
 
+    #[cfg(test)]
     fn pop_immediate_lighting(&mut self) -> Option<IVec3> {
         self.immediate_lighting.pop()
     }
@@ -99,7 +134,7 @@ pub(super) fn process_immediate_geometry_remesh(
     world: Res<VoxelWorld>,
     mut queue: ResMut<ChunkRemeshQueue>,
 ) {
-    let Some(coord) = queue.pop_immediate_geometry() else {
+    let Some(coord) = queue.pop_renderable_immediate_geometry(&renderer.pool) else {
         return;
     };
     let render_context = content.render_context(
@@ -130,7 +165,7 @@ pub(super) fn process_immediate_lighting_remesh(
     );
 
     for _ in 0..MAX_IMMEDIATE_LIGHTING_REMESHES_PER_FRAME {
-        let Some(coord) = queue.pop_immediate_lighting() else {
+        let Some(coord) = queue.pop_renderable_immediate_lighting(&renderer.pool) else {
             break;
         };
 
@@ -162,7 +197,7 @@ pub(super) fn process_chunk_remesh_queue(
             break;
         }
 
-        if let Some(coord) = queue.pop() {
+        if let Some(coord) = queue.pop_renderable(&renderer.pool) {
             refresh_chunk_geometry_mesh(
                 &mut renderer.commands,
                 &mut renderer.meshes,
@@ -174,7 +209,7 @@ pub(super) fn process_chunk_remesh_queue(
             continue;
         }
 
-        let Some(coord) = queue.pop_fluid() else {
+        let Some(coord) = queue.pop_renderable_fluid(&renderer.pool) else {
             break;
         };
 
@@ -257,7 +292,7 @@ mod tests {
 
         assert!(lighting.contains(&coord));
         for offset in CARDINAL_NEIGHBORS {
-            assert!(lighting.contains(&(coord + offset)));
+            assert!(lighting.contains(&(coord + offset));
         }
         assert_eq!(queue.pop(), None);
     }
