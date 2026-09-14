@@ -12,7 +12,7 @@ use super::{
 };
 
 const REMESH_BUDGET: Duration = Duration::from_millis(2);
-const MAX_IMMEDIATE_LIGHTING_REMESHES_PER_FRAME: usize = 4;
+const MAX_IMMEDIATE_LIGHTING_REMESHES_PER_FRAME: usize = 6;
 
 #[derive(Resource, Default)]
 pub(crate) struct ChunkRemeshQueue {
@@ -62,11 +62,6 @@ impl ChunkRemeshQueue {
             self.immediate_lighting.enqueue_front(coord);
         }
 
-        // Neighbor meshes can sample light across a chunk boundary, but forcing
-        // every neighbor through the unbounded immediate path multiplies one
-        // lighting edit into dozens of full chunk rebuilds. Keep neighbors at
-        // priority in the budgeted queue; chunks whose own light changed will be
-        // promoted independently by process_dynamic_lighting.
         self.enqueue_voxel_edit_neighbors(coord);
     }
 
@@ -87,11 +82,15 @@ impl ChunkRemeshQueue {
     }
 
     fn pop_immediate_geometry(&mut self) -> Option<IVec3> {
-        self.immediate_geometry.pop()
+        let coord = self.immediate_geometry.pop()?;
+        self.queue.remove(coord);
+        Some(coord)
     }
 
     fn pop_immediate_lighting(&mut self) -> Option<IVec3> {
-        self.immediate_lighting.pop()
+        let coord = self.immediate_lighting.pop()?;
+        self.queue.remove(coord);
+        Some(coord)
     }
 
     fn clear(&mut self) {
@@ -216,14 +215,14 @@ mod tests {
     }
 
     #[test]
-    fn voxel_edit_runs_before_and_after_lighting() {
+    fn voxel_edit_avoids_a_third_redundant_rebuild() {
         let mut queue = ChunkRemeshQueue::default();
         let coord = IVec3::new(4, 2, -3);
         queue.enqueue_voxel_edit(coord);
 
         assert_eq!(queue.pop_immediate_geometry(), Some(coord));
         assert_eq!(queue.pop_immediate_lighting(), Some(coord));
-        assert_eq!(queue.pop(), Some(coord));
+        assert_eq!(queue.pop(), None);
     }
 
     #[test]
@@ -240,7 +239,7 @@ mod tests {
             queued.push(value);
         }
 
-        assert!(queued.contains(&coord));
+        assert!(!queued.contains(&coord));
         for offset in CARDINAL_NEIGHBORS {
             assert!(queued.contains(&(coord + offset)));
         }
