@@ -24,13 +24,13 @@ use crate::{
 use crate::hud::block_icon::BlockIconMaterial;
 
 use super::state::{
-    CATEGORY_GAP, CATEGORY_ICON_SIZE, CATEGORY_ROW_HEIGHT, CATEGORY_WIDTH, CREATIVE_COLUMNS,
-    CREATIVE_GRID_HEIGHT, CreativeCatalogScrollArea, CreativeCatalogScrollbar,
-    CreativeCategoryButton, CreativeCategoryScrollArea, CreativeCategoryScrollbar,
-    CreativeInventorySlot, CreativeInventoryView, CreativeScrollState, CreativeSearchBar,
-    CreativeSearchText, ITEM_ICON_SIZE, InventoryCursorIcon, InventoryHudRoot, InventorySlot,
-    InventoryTrashButton, PANEL_GAP, PANEL_PADDING, SCROLLBAR_TOTAL_WIDTH, SEARCH_GAP,
-    SEARCH_HEIGHT, SECTION_GAP, SLOT_GAP, SLOT_SIZE, TRASH_GAP,
+    CATEGORY_GAP, CATEGORY_ICON_SIZE, CATEGORY_ROW_HEIGHT, CATEGORY_WIDTH,
+    CREATIVE_COLUMNS, CREATIVE_GRID_HEIGHT, CreativeCatalogScrollArea,
+    CreativeCatalogScrollbar, CreativeCategoryButton, CreativeCategoryScrollArea,
+    CreativeCategoryScrollbar, CreativeInventorySlot, CreativeInventoryView, CreativeScrollState,
+    CreativeSearchBar, CreativeSearchText, InventoryCursorIcon, InventoryHudRoot, InventorySlot,
+    InventoryTrashButton, ITEM_ICON_SIZE, PANEL_GAP, PANEL_PADDING, SCROLLBAR_TOTAL_WIDTH,
+    SEARCH_GAP, SEARCH_HEIGHT, SECTION_GAP, SLOT_GAP, SLOT_SIZE, TRASH_GAP,
 };
 
 #[derive(Clone, Copy)]
@@ -272,7 +272,6 @@ fn spawn_creative_panel(
                         catalog_content
                             .spawn(scrollbar::vertical_scrollbar(scroll_area))
                             .insert(CreativeCatalogScrollbar);
-                        });
                     });
             });
     });
@@ -310,7 +309,7 @@ fn spawn_search_bar(
             },
             BackgroundColor(theme::HUD_SURFACE),
             BorderColor::all(search_border),
-         ))
+        ))
         .with_children(|search| {
             search.spawn((
                 CreativeSearchText,
@@ -420,7 +419,7 @@ fn spawn_category_button(
             },
             BackgroundColor(background),
             BorderColor::all(border),
-         ))
+        ))
         .with_children(|button| {
             if let Some((category, block_icon)) = category
                 .and_then(|category| category.block_icon.as_ref().map(|icon| (category, icon)))
@@ -519,93 +518,151 @@ fn spawn_player_inventory_panel(
     }))
     .insert(Pickable::IGNORE)
     .with_children(|panel| {
-        spawn_hotbar_row(panel, hotbar, items);
-        spawn_inventory_rows(panel, hotbar, items);
+        panel.spawn((typography::hud_subheading("Inventory"), Pickable::IGNORE));
 
-        let (trash_background, trash_border) = surface::hud_control_static(false);
         panel
             .spawn((
-                Button,
-                InventoryTrashButton,
                 Node {
-                    width: pex(inventory_row_width()),
-                    height: px(SLOT_SIZE),
-                    margin: UiRect::top(px(TRASH_GAP)),
-                    border: UiRect::all(px(2)),
-                    border_radius: BorderRadius::all(px(4)),
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::Center,
-                    ..default()
-                },
-                BackgroundColor(trash_background),
-                BorderColor::all(trash_border),
-            ))
-            .with_children(|trash| {
-                trash.spawn((
-                    typography::button_label("TRASH"),
-                    Pickable::IGNORE,
-                ));
-            });
-    });
-}
-
-fn spawn_hotbar_row(
-    parent: &mut ChildSpawnerCommands,
-    hotbar: &PlayerHotbar,
-    items: &mut InventoryItemView<'_>,
-) {
-    parent
-        .spawn((
-            Node {
-                flex_direction: FlexDirection::Row,
-                column_gap: px(SLOT_GAP),
-                ..default()
-            },
-            Pickable::IGNORE,
-        ))
-        .with_children(|row| {
-            for local_index in 0..HOTBAR_SLOT_COUNT {
-                let index = HOTBAR_INVENTORY_OFFSET + local_index;
-                spawn_slot(
-                    row,
-                    index,
-                    hotbar.selected_slot() == local_index,
-                    hotbar,
-                    items,
-                );
-            }
-        });
-}
-
-fn spawn_inventory_rows(
-    parent: &mut ChildSpawnerCommands,
-    hotbar: &PlayerHotbar,
-    items: &mut InventoryItemView<'_>,
-) {
-    let start = HOTBAR_INVENTORY_OFFSET + HOTBAR_SLOT_COUNT;
-
-    for row in 0..3 {
-        parent
-            .spawn((
-                Node {
-                    flex_direction: FlexDirection::Row,
-                    column_gap: px(SLOT_GAP),
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::FlexStart,
+                    row_gap: px(SLOT_GAP),
                     ..default()
                 },
                 Pickable::IGNORE,
             ))
-            .with_children(|row_node| {
-                for column in 0..HOTBAR_SLOT_COUNT {
-                    let index = start + row * HOTBAR_SLOT_COUNT + column;
-                    spawn_slot(row_node, index, false, hotbar, items);
+            .with_children(|backpack| {
+                for row in 0..3 {
+                    backpack
+                        .spawn((
+                            Node {
+                                flex_direction: FlexDirection::Row,
+                                column_gap: px(SLOT_GAP),
+                                ..default()
+                            },
+                            Pickable::IGNORE,
+                        ))
+                        .with_children(|row_node| {
+                            for column in 0..HOTBAR_SLOT_COUNT {
+                                let index = row * HOTBAR_SLOT_COUNT + column;
+                                spawn_slot(row_node, index, false, hotbar, items);
+                            }
+                        });
                 }
             });
-    }
+
+        panel
+            .spawn((
+                Node {
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    column_gap: px(TRASH_GAP),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|footer| {
+                footer
+                    .spawn((
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            column_gap: px(SLOT_GAP),
+                            ..default()
+                        },
+                        Pickable::IGNORE,
+                    ))
+                    .with_children(|hotbar_row| {
+                        for hotbar_index in 0..HOTBAR_SLOT_COUNT {
+                            spawn_slot(
+                                hotbar_row,
+                                HOTBAR_INVENTORY_OFFSET + hotbar_index,
+                                hotbar_index == hotbar.selected_slot(),
+                                hotbar,
+                                items,
+                            );
+                        }
+                    });
+
+                spawn_inventory_trash_button(footer);
+            });
+    });
+}
+
+fn spawn_inventory_trash_button(parent: &mut ChildSpawnerCommands) {
+    let (background, border) = surface::hud_danger_control_colors(Interaction::None);
+    let icon_color = Color::srgb(0.94, 0.40, 0.44);
+
+    parent
+        .spawn((
+            Button,
+            InventoryTrashButton,
+            Node {
+                width: px(SLOT_SIZE),
+                height: px(SLOT_SIZE),
+                min_width: px(SLOT_SIZE),
+                min_height: px(SLOT_SIZE),
+                border: UiRect::all(px(2)),
+                border_radius: BorderRadius::all(px(4)),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            BackgroundColor(background),
+            BorderColor::all(border),
+        ))
+        .with_children(|button| {
+            button
+                .spawn((
+                    Node {
+                        width: px(22),
+                        height: px(25),
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        row_gap: px(2),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ))
+                .with_children(|icon| {
+                    icon.spawn((
+                        Node {
+                            width: px(8),
+                            height: px(3),
+                            border_radius: BorderRadius::all(px(2)),
+                            ..default()
+                        },
+                        BackgroundColor(icon_color),
+                        Pickable::IGNORE,
+                    ));
+                    icon.spawn((
+                        Node {
+                            width: px(20),
+                            height: px(3),
+                            border_radius: BorderRadius::all(px(2)),
+                            ..default()
+                        },
+                        BackgroundColor(icon_color),
+                        Pickable::IGNORE,
+                    ));
+                    icon.spawn((
+                        Node {
+                            width: px(16),
+                            height: px(16),
+                            border: UiRect::all(px(2)),
+                            border_radius: BorderRadius::all(px(2)),
+                            ..default()
+                        },
+                        BackgroundColor(Color::NONE),
+                        BorderColor::all(icon_color),
+                        Pickable::IGNORE,
+                    ));
+                });
+        });
 }
 
 fn spawn_creative_slot(
     parent: &mut ChildSpawnerCommands,
-    item: Option<CreativeCatalogItem<'_>,
+    item: Option<CreativeCatalogItem<'_>>,
     selected_item: Option<&'static str>,
     items: &mut InventoryItemView<'_>,
 ) {
