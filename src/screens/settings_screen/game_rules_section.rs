@@ -3,13 +3,17 @@ use bevy::prelude::*;
 use crate::{
     app::game_state::GameState,
     localization::{Language, UiLocalization},
-    ui::{text_input::select_all_pressed, theme, typography},
+    ui::{
+        numeric_input::{NumericInputEvent, NumericInputState, numeric_input_border},
+        typography,
+    },
     world::{InMemoryWorldSave, NewWorldConfig, game_rules::GameRules},
 };
 
 const CONTROL_HEIGHT: f32 = 44.0;
 const STEP_BUTTON_SIZE: f32 = 44.0;
 const INPUT_WIDTH: f32 = 180.0;
+const TICKS_INPUT_MAX_DIGITS: usize = 10;
 
 #[derive(Component, Clone, Copy)]
 pub(crate) enum TicksPerSecondStep {
@@ -23,18 +27,8 @@ pub(crate) struct TicksPerSecondInput;
 #[derive(Component)]
 pub(crate) struct TicksPerSecondValueText;
 
-#[derive(Resource, Default)]
-pub(crate) struct TicksPerSecondInputState {
-    editing: bool,
-    replace_on_next_digit: bool,
-    buffer: String,
-}
-
-impl TicksPerSecondInputState {
-    pub(crate) fn editing(&self) -> bool {
-        self.editing
-    }
-}
+pub(crate) struct TicksPerSecondInputKind;
+pub(crate) type TicksPerSecondInputState = NumericInputState<TicksPerSecondInputKind>;
 
 pub(crate) fn game_rules_section(
     ticks_per_second: u32,
@@ -122,7 +116,7 @@ fn ticks_input(value: u32) -> impl Bundle {
             ..default()
         },
         BackgroundColor(Color::srgba(0.045, 0.035, 0.09, 0.88)),
-        BorderColor::all(input_border(false)),
+        BorderColor::all(numeric_input_border(false)),
         children![(
             typography::button_label(value.to_string()),
             TicksPerSecondValueText,
@@ -156,7 +150,7 @@ pub(crate) fn handle_ticks_step_buttons(
             &mut new_world,
             &mut save,
         );
-        *input_state = TicksPerSecondInputState::default();
+        input_state.reset();
     }
 }
 
@@ -171,10 +165,11 @@ pub(crate) fn handle_ticks_input(
         .iter()
         .any(|interaction| *interaction == Interaction::Pressed)
     {
-        input_state.editing = true;
-        input_state.replace_on_next_digit = false;
-        input_state.buffer =
-            current_ticks_per_second(*game_state.get(), &game_rules, &new_world).to_string();
+        input_state.begin(current_ticks_per_second(
+            *game_state.get(),
+            &game_rules,
+            &new_world,
+        ));
     }
 }
 
@@ -186,62 +181,18 @@ pub(crate) fn handle_ticks_keyboard(
     mut save: ResMut<InMemoryWorldSave>,
     mut input_state: ResMut<TicksPerSecondInputState>,
 ) {
-    if !input_state.editing {
+    let event = input_state.handle_keyboard(&keys, TICKS_INPUT_MAX_DIGITS, |_| true);
+    if event != NumericInputEvent::Changed {
         return;
     }
 
-    if select_all_pressed(&keys) {
-        input_state.replace_on_next_digit = true;
-        return;
-    }
-
-    if keys.just_pressed(KeyCode::Enter)
-        || keys.just_pressed(KeyCode::NumpadEnter)
-        || keys.just_pressed(KeyCode::Escape)
-    {
-        *input_state = TicksPerSecondInputState::default();
-        return;
-    }
-
-    if keys.just_pressed(KeyCode::Backspace) || keys.just_pressed(KeyCode::NumpadBackspace) {
-        if input_state.replace_on_next_digit {
-            input_state.buffer.clear();
-            input_state.replace_on_next_digit = false;
-        } else {
-            input_state.buffer.pop();
-        }
-        apply_input_buffer(
-            &input_state.buffer,
-            *game_state.get(),
-            &mut game_rules,
-            &mut new_world,
-            &mut save,
-        );
-        return;
-    }
-
-    for (key, digit) in digit_keys() {
-        if !keys.just_pressed(key) {
-            continue;
-        }
-
-        if input_state.replace_on_next_digit {
-            input_state.buffer.clear();
-            input_state.replace_on_next_digit = false;
-        }
-
-        if input_state.buffer.len() < 10 {
-            input_state.buffer.push(digit);
-            apply_input_buffer(
-                &input_state.buffer,
-                *game_state.get(),
-                &mut game_rules,
-                &mut new_world,
-                &mut save,
-            );
-        }
-        break;
-    }
+    apply_input_buffer(
+        input_state.buffer(),
+        *game_state.get(),
+        &mut game_rules,
+        &mut new_world,
+        &mut save,
+    );
 }
 
 pub(crate) fn sync_ticks_per_second_text(
@@ -252,11 +203,11 @@ pub(crate) fn sync_ticks_per_second_text(
     mut labels: Query<&mut Text, With<TicksPerSecondValueText>>,
     mut inputs: Query<&mut BorderColor, With<TicksPerSecondInput>>,
 ) {
-    let value = if input_state.editing {
-        format!("{}|", input_state.buffer)
-    } else {
-        current_ticks_per_second(*game_state.get(), &game_rules, &new_world).to_string()
-    };
+    let value = input_state.display(current_ticks_per_second(
+        *game_state.get(),
+        &game_rules,
+        &new_world,
+    ));
 
     for mut label in &mut labels {
         if label.0 != value {
@@ -265,7 +216,7 @@ pub(crate) fn sync_ticks_per_second_text(
     }
 
     for mut border in &mut inputs {
-        *border = BorderColor::all(input_border(input_state.editing));
+        *border = BorderColor::all(numeric_input_border(input_state.editing()));
     }
 }
 
@@ -279,31 +230,6 @@ fn current_ticks_per_second(
     } else {
         game_rules.ticks_per_second()
     }
-}
-
-fn digit_keys() -> [(KeyCode, char); 20] {
-    [
-        (KeyCode::Digit0, '0'),
-        (KeyCode::Digit1, '1'),
-        (KeyCode::Digit2, '2'),
-        (KeyCode::Digit3, '3'),
-        (KeyCode::Digit4, '4'),
-        (KeyCode::Digit5, '5'),
-        (KeyCode::Digit6, '6'),
-        (KeyCode::Digit7, '7'),
-        (KeyCode::Digit8, '8'),
-        (KeyCode::Digit9, '9'),
-        (KeyCode::Numpad0, '0'),
-        (KeyCode::Numpad1, '1'),
-        (KeyCode::Numpad2, '2'),
-        (KeyCode::Numpad3, '3'),
-        (KeyCode::Numpad4, '4'),
-        (KeyCode::Numpad5, '5'),
-        (KeyCode::Numpad6, '6'),
-        (KeyCode::Numpad7, '7'),
-        (KeyCode::Numpad8, '8'),
-        (KeyCode::Numpad9, '9'),
-    ]
 }
 
 fn apply_input_buffer(
@@ -337,12 +263,4 @@ fn set_ticks_per_second(
 
     game_rules.set_ticks_per_second(value);
     save.save_game_rules(*game_rules);
-}
-
-fn input_border(editing: bool) -> Color {
-    if editing {
-        theme::TEXT_PRIMARY.with_alpha(0.92)
-    } else {
-        Color::srgba(0.43, 0.36, 0.68, 0.72)
-    }
 }
