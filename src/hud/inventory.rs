@@ -553,9 +553,12 @@ fn rebuild_inventory_when_changed(
     active_language: Res<ActiveLanguage>,
     player: Single<(&Transform, &GameMode), With<GameplayCamera>>,
     roots: Query<Entity, With<InventoryHudRoot>>,
-    mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
-    mut ui_dirty: ResMut<CreativeInventoryUiDirty>,
+    inventory_ui: (
+        ResMut<Assets<BlockIconMaterial>>,
+        ResMut<CreativeInventoryUiDirty>,
+    ),
 ) {
+    let (mut icon_materials, mut ui_dirty) = inventory_ui;
     if !ui_dirty.take() && !active_language.is_changed() {
         return;
     }
