@@ -4,6 +4,7 @@ use crate::{
     content::{
         biome::BiomeRegistry,
         block::{BlockDefinition, BlockTint},
+        builtin_ids::DYED_PROPERTY_ID,
         color::Hsi,
         secondary_property::SecondaryPropertyRegistry,
     },
@@ -11,7 +12,6 @@ use crate::{
     world::biome_field::BiomeField,
 };
 
-const DYED_PROPERTY_ID: &str = "dyed";
 const DYE_SATURATION_GAMMA: f32 = 1.85;
 
 pub(crate) fn block_tint_at(
