@@ -77,28 +77,28 @@
   ],
   "visuals": {
     "skyColor": {
-      "dawn": { "r": 0.48, "g": 0.61, "b": 0.78 },
-      "day": { "r": 0.36, "g": 0.62, "b": 0.86 },
-      "dusk": { "r": 0.52, "g": 0.49, "b": 0.62 },
-      "night": { "r": 0.025, "g": 0.04, "b": 0.09 }
+      "dawn": { "hue": 214.4019, "saturation": 0.2299, "intensity": 0.6233 },
+      "day": { "hue": 208.6770, "saturation": 0.4130, "intensity": 0.6133 },
+      "dusk": { "hue": 252.7305, "saturation": 0.0982, "intensity": 0.5433 },
+      "night": { "hue": 227.2695, "saturation": 0.5161, "intensity": 0.0517 }
     },
     "fogColor": {
-      "dawn": { "r": 0.57, "g": 0.66, "b": 0.74 },
-      "day": { "r": 0.63, "g": 0.73, "b": 0.80 },
-      "dusk": { "r": 0.58, "g": 0.55, "b": 0.61 },
-      "night": { "r": 0.04, "g": 0.055, "b": 0.09 }
+      "dawn": { "hue": 208.0549, "saturation": 0.1320, "intensity": 0.6567 },
+      "day": { "hue": 204.1825, "saturation": 0.1250, "intensity": 0.7200 },
+      "dusk": { "hue": 270.0000, "saturation": 0.0517, "intensity": 0.5800 },
+      "night": { "hue": 223.0039, "saturation": 0.3514, "intensity": 0.0617 }
     },
     "underwaterTint": {
-      "color": { "r": 0.10, "g": 0.38, "b": 0.60 },
+      "color": { "hue": 206.0368, "saturation": 0.7222, "intensity": 0.3600 },
       "opacity": 0.22
     },
     "stars": {
       "density": 0.76,
-      "color": { "r": 0.90, "g": 0.94, "b": 1.0 }
+      "color": { "hue": 216.5868, "saturation": 0.0493, "intensity": 0.9467 }
     },
     "clouds": {
       "density": 0.62,
-      "color": { "r": 0.86, "g": 0.89, "b": 0.92 }
+      "color": { "hue": 210.0000, "saturation": 0.0337, "intensity": 0.8900 }
     },
     "terrainRoughness": 1.0,
     "terrainMetallic": 0.0
