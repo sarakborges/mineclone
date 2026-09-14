@@ -48,6 +48,35 @@ struct HotbarHudContent<'w> {
     language: Res<'w, ActiveLanguage>,
 }
 
+#[derive(SystemParam)]
+struct HotbarVisualState<'w, 's> {
+    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
+    placement_orientation: Res<'w, PlacementOrientation>,
+    hotbar: Res<'w, PlayerHotbar>,
+}
+
+#[derive(SystemParam)]
+struct HotbarVisualContent<'w> {
+    asset_server: Res<'w, AssetServer>,
+    blocks: Res<'w, BlockRegistry>,
+    biomes: Res<'w, BiomeRegistry>,
+    biome_field: Res<'w, BiomeField>,
+}
+
+#[derive(SystemParam)]
+struct HotbarVisualView<'w, 's> {
+    icons: Query<
+        'w,
+        's,
+        (
+            &'static BlockModel,
+            &'static mut HotbarBlockModel,
+            &'static MaterialNode<BlockIconMaterial>,
+        ),
+    >,
+    materials: ResMut<'w, Assets<BlockIconMaterial>>,
+}
+
 pub struct HotbarHudPlugin;
 
 impl Plugin for HotbarHudPlugin {
@@ -300,31 +329,25 @@ fn show_hotbar(mut roots: Query<&mut Visibility, With<HotbarHudRoot>>) {
 }
 
 fn update_hotbar_item_visuals(
-    player: Single<&Transform, With<GameplayCamera>>,
-    asset_server: Res<AssetServer>,
-    blocks: Res<BlockRegistry>,
-    biomes: Res<BiomeRegistry>,
-    biome_field: Res<BiomeField>,
-    placement_orientation: Res<PlacementOrientation>,
-    hotbar: Res<PlayerHotbar>,
+    state: HotbarVisualState,
+    content: HotbarVisualContent,
     mut cache: Local<HotbarVisualCache>,
-    mut icons: Query<(
-        &BlockModel,
-        &mut HotbarBlockModel,
-        &MaterialNode<BlockIconMaterial>,
-    )>,
-    mut materials: ResMut<Assets<BlockIconMaterial>>,
+    view: HotbarVisualView,
 ) {
+    let HotbarVisualView {
+        mut icons,
+        mut materials,
+    } = view;
     let tint_cell = IVec2::new(
-        player.translation.x.floor() as i32,
-        player.translation.z.floor() as i32,
+        state.player.translation.x.floor() as i32,
+        state.player.translation.z.floor() as i32,
     );
     let global_refresh = cache.tint_cell != Some(tint_cell)
-        || hotbar.is_changed()
-        || placement_orientation.is_changed()
-        || blocks.is_changed()
-        || biomes.is_changed()
-        || biome_field.is_changed();
+        || state.hotbar.is_changed()
+        || state.placement_orientation.is_changed()
+        || content.blocks.is_changed()
+        || content.biomes.is_changed()
+        || content.biome_field.is_changed();
     cache.tint_cell = Some(tint_cell);
     let position = tint_cell.as_vec2() + Vec2::splat(0.5);
 
@@ -336,17 +359,23 @@ fn update_hotbar_item_visuals(
         let Some(block_id) = model.block_id() else {
             continue;
         };
-        let block = blocks
+        let block = content
+            .blocks
             .get(block_id)
             .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
-        let orientation = placement_orientation.for_block(icon.index, block);
-        let tint = block_tint_at(block.tint, position, &biome_field, &biomes);
+        let orientation = state.placement_orientation.for_block(icon.index, block);
+        let tint = block_tint_at(
+            block.tint,
+            position,
+            &content.biome_field,
+            &content.biomes,
+        );
         let Some(mut material) = materials.get_mut(&material_handle.0) else {
             continue;
         };
 
         if icon.orientation != orientation {
-            material.set_block_orientation(block, orientation, &asset_server);
+            material.set_block_orientation(block, orientation, &content.asset_server);
             icon.orientation = orientation;
         }
         material.set_tint(tint);
