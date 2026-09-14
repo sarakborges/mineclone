@@ -6,7 +6,6 @@ use crate::{
         state_systems::reset_next_state,
     },
     tools::BrushPaletteState,
-    ui::text_input::select_all_pressed,
 };
 
 use super::hotbar::PlayerHotbar;
@@ -72,7 +71,7 @@ impl CreativeInventoryView {
         self.replace_search_on_next_input = false;
     }
 
-    fn select_all_search(&mut self) {
+    pub(crate) fn select_all_search(&mut self) {
         if self.search_focused {
             self.replace_search_on_next_input = true;
         }
@@ -119,20 +118,16 @@ impl Plugin for PlayerInventoryPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<InventoryState>()
             .init_resource::<InventoryCursor>()
-            .init_resource::<CreativeInventoryView>()
             .add_systems(
                 Update,
-                (toggle_inventory, handle_search_select_all)
+                toggle_inventory
                     .run_if(in_state(GameState::Gameplay))
                     .run_if(in_state(PauseState::Running))
                     .run_if(in_state(BrushPaletteState::Closed)),
             )
             .add_systems(
                 OnExit(InventoryState::Open),
-                (
-                    reset_resource::<InventoryCursor>,
-                    reset_resource::<CreativeInventoryView>,
-                ),
+                reset_resource::<InventoryCursor>,
             )
             .add_systems(
                 OnEnter(PauseState::Paused),
@@ -148,7 +143,6 @@ impl Plugin for PlayerInventoryPlugin {
 fn toggle_inventory(
     keys: Res<ButtonInput<KeyCode>>,
     inventory_state: Res<State<InventoryState>>,
-    creative_view: Res<CreativeInventoryView>,
     mut next_inventory_state: ResMut<NextState<InventoryState>>,
 ) {
     match inventory_state.get() {
@@ -158,21 +152,6 @@ fn toggle_inventory(
         InventoryState::Open if keys.just_pressed(KeyCode::Escape) => {
             next_inventory_state.set(InventoryState::Closed);
         }
-        InventoryState::Open
-            if keys.just_pressed(KeyCode::KeyE) && !creative_view.search_focused() =>
-        {
-            next_inventory_state.set(InventoryState::Closed);
-        }
         _ => {}
-    }
-}
-
-fn handle_search_select_all(
-    keys: Res<ButtonInput<KeyCode>>,
-    inventory_state: Res<State<InventoryState>>,
-    mut creative_view: ResMut<CreativeInventoryView>,
-) {
-    if *inventory_state.get() == InventoryState::Open && select_all_pressed(&keys) {
-        creative_view.select_all_search();
     }
 }
