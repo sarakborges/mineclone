@@ -1,17 +1,17 @@
 use bevy::prelude::*;
 
-use super::{RiverPath, river_height};
-use super::waterfall::{WaterfallLanding, river_path_height, waterfall_profile};
 use super::super::super::{
     constants::RIVER_MINIMUM_WATER_DROP,
     drainage::DrainageNode,
     math::{cell_hash, hash_signed, hash_unit, lerp},
 };
+use super::waterfall::{WaterfallLanding, river_path_height, waterfall_profile};
+use super::{RiverPath, river_height};
 
-const RIVER_MEANDER_CONTROL_SPACING: f32 = 34.0;
-const RIVER_MEANDER_MIN_INTERVALS: usize = 3;
-const RIVER_MEANDER_MAX_INTERVALS: usize = 8;
-const RIVER_STRAIGHT_SECTION_CHANCE: f32 = 0.28;
+const RIVER_MEANDER_CONTROL_SPACING: f32 = 24.0;
+const RIVER_MEANDER_MIN_INTERVALS: usize = 4;
+const RIVER_MEANDER_MAX_INTERVALS: usize = 12;
+const RIVER_STRAIGHT_SECTION_CHANCE: f32 = 0.08;
 
 pub(super) fn river_path(
     source_cell: IVec2,
@@ -24,7 +24,7 @@ pub(super) fn river_path(
 ) -> RiverPath {
     let delta = downstream.position - source.position;
     let distance = delta.length();
-    let segment_count = ((distance / 10.0).ceil() as usize).clamp(7, 26);
+    let segment_count = ((distance / 7.0).ceil() as usize).clamp(9, 36);
     let direction = delta.normalize_or_zero();
     let perpendicular = Vec2::new(-direction.y, direction.x);
     let lateral_controls = river_lateral_controls(source_cell, seed, distance);
@@ -71,7 +71,7 @@ fn river_lateral_controls(source_cell: IVec2, seed: u64, distance: f32) -> Vec<f
     let interval_count = ((distance / RIVER_MEANDER_CONTROL_SPACING).ceil() as usize)
         .clamp(RIVER_MEANDER_MIN_INTERVALS, RIVER_MEANDER_MAX_INTERVALS);
     let base_hash = cell_hash(source_cell, seed ^ 0x6a09_e667_f3bc_c909);
-    let amplitude = (distance * lerp(0.10, 0.28, hash_unit(base_hash))).clamp(7.0, 40.0);
+    let amplitude = (distance * lerp(0.14, 0.36, hash_unit(base_hash))).clamp(9.0, 54.0);
     let mut controls = Vec::with_capacity(interval_count + 1);
 
     controls.push(0.0);
@@ -84,13 +84,17 @@ fn river_lateral_controls(source_cell: IVec2, seed: u64, distance: f32) -> Vec<f
         let straight_section =
             hash_unit(control_hash.rotate_left(13)) < RIVER_STRAIGHT_SECTION_CHANCE;
         let strength = if straight_section {
-            lerp(0.05, 0.22, hash_unit(control_hash.rotate_left(29)))
+            lerp(0.12, 0.30, hash_unit(control_hash.rotate_left(29)))
         } else {
-            lerp(0.55, 1.0, hash_unit(control_hash.rotate_left(43)))
+            lerp(0.62, 1.0, hash_unit(control_hash.rotate_left(43)))
         };
-        let lateral = hash_signed(control_hash.rotate_left(7)) * amplitude * strength;
+        let primary = hash_signed(control_hash.rotate_left(7)) * amplitude * strength;
+        let secondary = hash_signed(control_hash.rotate_left(23))
+            * amplitude
+            * 0.22
+            * if index % 2 == 0 { 1.0 } else { -1.0 };
 
-        controls.push(lateral);
+        controls.push(primary + secondary);
     }
 
     controls.push(0.0);
