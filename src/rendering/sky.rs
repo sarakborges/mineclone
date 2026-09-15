@@ -20,5 +20,8 @@ fn update_sky_color(visuals: Res<EnvironmentVisualState>, mut clear_color: ResMu
         return;
     }
 
-    clear_color.0 = visuals.sky_color.to_color();
+    let color = visuals.sky_color.to_color();
+    if clear_color.0 != color {
+        clear_color.0 = color;
+    }
 }

@@ -23,15 +23,27 @@ pub(super) struct Star {
     direction: Vec3,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct StarVisualSnapshot {
+    visible_count: usize,
+    color: Color,
+}
+
 pub(super) fn spawn_stars(mut commands: Commands, assets: Res<StarAssets>) {
     for index in 0..MAX_STARS {
         let direction = star_direction(index);
         let size = 0.7 + hash01(index as u32) * 0.8;
+        let mut transform = Transform {
+            translation: direction * STAR_DISTANCE,
+            scale: Vec3::splat(size),
+            ..default()
+        };
+        transform.look_at(Vec3::ZERO, Vec3::Y);
 
         commands.spawn((
             Mesh3d(assets.mesh.clone()),
             MeshMaterial3d(assets.material.clone()),
-            Transform::from_scale(Vec3::splat(size)),
+            transform,
             Visibility::Hidden,
             NotShadowCaster,
             NotShadowReceiver,
@@ -49,7 +61,7 @@ pub(super) struct StarScene<'w> {
 
 #[derive(SystemParam)]
 pub(super) struct StarView<'w, 's> {
-    camera: Single<'w, 's, &'static GlobalTransform, With<GameplayCamera>>,
+    camera: Single<'w, 's, (Entity, &'static GlobalTransform), With<GameplayCamera>>,
     assets: Res<'w, StarAssets>,
 }
 
@@ -58,16 +70,19 @@ pub(super) fn update_stars(
     view: StarView,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut stars: Query<(&Star, &mut Transform, &mut Visibility)>,
-    mut last_camera_position: Local<Option<Vec3>>,
+    mut last_camera: Local<Option<(Entity, Vec3)>>,
+    mut cached_visual: Local<Option<StarVisualSnapshot>>,
 ) {
-    let camera_position = view.camera.translation();
-    let camera_changed = last_camera_position.is_none_or(|previous| previous != camera_position);
-    let visuals_changed = scene.visuals.is_changed();
-    let day_night_changed = scene.day_night.inputs_changed();
-    if !camera_changed && !visuals_changed && !day_night_changed {
+    let StarView { camera, assets } = view;
+    let (camera_entity, camera_transform) = camera.into_inner();
+    let camera_position = camera_transform.translation();
+    let camera_changed = last_camera.as_ref().is_none_or(|(entity, previous)| {
+        *entity != camera_entity || *previous != camera_position
+    });
+
+    if !camera_changed && !scene.visuals.is_changed() && !scene.day_night.inputs_changed() {
         return;
     }
-    *last_camera_position = Some(camera_position);
 
     let Some(sample) = scene.day_night.sample() else {
         return;
@@ -75,27 +90,53 @@ pub(super) fn update_stars(
     let time_factor = star_time_factor(sample.phase, sample.next_phase, sample.transition);
     let visible_count =
         (scene.visuals.star_density * time_factor * MAX_STARS as f32).round() as usize;
+    let [red, green, blue] = scene.visuals.star_color.to_srgb();
+    let color = Color::srgba(red, green, blue, time_factor);
+    let visual_snapshot = StarVisualSnapshot {
+        visible_count,
+        color,
+    };
+    let visual_changed = cached_visual.as_ref() != Some(&visual_snapshot);
 
-    if (visuals_changed || day_night_changed)
-        && let Some(mut material) = materials.get_mut(&view.assets.material)
-    {
-        let [red, green, blue] = scene.visuals.star_color.to_srgb();
-        material.base_color = Color::srgba(red, green, blue, time_factor);
+    if !camera_changed && !visual_changed {
+        return;
+    }
+
+    if camera_changed {
+        *last_camera = Some((camera_entity, camera_position));
+    }
+
+    if visual_changed {
+        let material_color_changed = materials
+            .get(&assets.material)
+            .is_some_and(|material| material.base_color != visual_snapshot.color);
+        if material_color_changed
+            && let Some(mut material) = materials.get_mut(&assets.material)
+        {
+            material.base_color = visual_snapshot.color;
+        }
     }
 
     for (star, mut transform, mut visibility) in &mut stars {
-        if star.index >= visible_count || scene.visuals.star_density <= 0.0 || time_factor <= 0.0 {
-            if *visibility != Visibility::Hidden {
-                *visibility = Visibility::Hidden;
+        if camera_changed {
+            let translation = camera_position + star.direction * STAR_DISTANCE;
+            if transform.translation != translation {
+                transform.translation = translation;
             }
-            continue;
         }
 
-        transform.translation = camera_position + star.direction * STAR_DISTANCE;
-        transform.look_at(camera_position, Vec3::Y);
-        if *visibility != Visibility::Visible {
-            *visibility = Visibility::Visible;
+        let next_visibility = if star.index < visible_count {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+        if *visibility != next_visibility {
+            *visibility = next_visibility;
         }
+    }
+
+    if visual_changed {
+        *cached_visual = Some(visual_snapshot);
     }
 }
 

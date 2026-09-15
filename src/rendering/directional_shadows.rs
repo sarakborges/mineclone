@@ -6,9 +6,7 @@ use bevy::{
 use crate::{
     app::game_state::GameState,
     voxel::chunk::CHUNK_SIZE,
-    world::{
-        current_context::SkyDayNightContext, render_distance::RenderDistanceSettings,
-    },
+    world::{current_context::SkyDayNightContext, render_distance::RenderDistanceSettings},
 };
 
 use super::celestial_path::celestial_direction;
@@ -92,29 +90,40 @@ fn update_sun_shadow_light(
         hide_lights(&mut lights);
         return;
     };
-    let Some(sun_direction) = celestial_direction(
-        &sky.sun,
-        cycle,
-        scene.clock().normalized_time,
-    ) else {
+    let Some(sun_direction) = celestial_direction(&sky.sun, cycle, scene.clock().normalized_time)
+    else {
         hide_lights(&mut lights);
         return;
     };
 
     let rotation = shadow_light_rotation(sun_direction);
+    let color = sky.sun.tint.to_color();
+    let illuminance = BASE_SUN_ILLUMINANCE * sample.sky_light_factor;
 
     for (mut light, _, mut transform, mut visibility) in &mut lights {
-        light.color = sky.sun.tint.to_color();
-        light.illuminance = BASE_SUN_ILLUMINANCE * sample.sky_light_factor;
-        transform.rotation = rotation;
-        *visibility = Visibility::Visible;
+        if light.color != color {
+            light.color = color;
+        }
+        if light.illuminance != illuminance {
+            light.illuminance = illuminance;
+        }
+        if transform.rotation != rotation {
+            transform.rotation = rotation;
+        }
+        if *visibility != Visibility::Visible {
+            *visibility = Visibility::Visible;
+        }
     }
 }
 
 fn hide_lights(lights: &mut SunShadowLights) {
     for (mut light, _, _, mut visibility) in lights.iter_mut() {
-        light.illuminance = 0.0;
-        *visibility = Visibility::Hidden;
+        if light.illuminance != 0.0 {
+            light.illuminance = 0.0;
+        }
+        if *visibility != Visibility::Hidden {
+            *visibility = Visibility::Hidden;
+        }
     }
 }
 

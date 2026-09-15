@@ -38,7 +38,7 @@ struct CelestialSpawnAssets<'w> {
 #[derive(SystemParam)]
 struct CelestialRuntimeScene<'w, 's> {
     day_night: DayNightContext<'w>,
-    camera: Single<'w, 's, &'static GlobalTransform, With<GameplayCamera>>,
+    camera: Single<'w, 's, (Entity, &'static GlobalTransform), With<GameplayCamera>>,
 }
 
 fn spawn_celestial_bodies(
@@ -108,19 +108,25 @@ fn spawn_body(
 fn update_celestial_bodies(
     scene: CelestialRuntimeScene,
     mut bodies: Query<(&CelestialBody, &mut Transform, &mut Visibility)>,
-    mut last_camera_position: Local<Option<Vec3>>,
+    mut last_camera: Local<Option<(Entity, Vec3)>>,
 ) {
-    let camera_position = scene.camera.translation();
-    let camera_changed = last_camera_position.is_none_or(|previous| previous != camera_position);
-    if !camera_changed && !scene.day_night.inputs_changed() {
+    let CelestialRuntimeScene { day_night, camera } = scene;
+    let (camera_entity, camera_transform) = camera.into_inner();
+    let camera_position = camera_transform.translation();
+    let camera_changed = last_camera.as_ref().is_none_or(|(entity, previous)| {
+        *entity != camera_entity || *previous != camera_position
+    });
+    if !camera_changed && !day_night.inputs_changed() {
         return;
     }
-    *last_camera_position = Some(camera_position);
+    if camera_changed {
+        *last_camera = Some((camera_entity, camera_position));
+    }
 
-    let Some(cycle) = scene.day_night.cycle() else {
+    let Some(cycle) = day_night.cycle() else {
         return;
     };
-    let normalized_time = scene.day_night.clock().normalized_time;
+    let normalized_time = day_night.clock().normalized_time;
 
     for (body, mut transform, mut visibility) in &mut bodies {
         let Some(offset) = celestial_offset(&body.0, cycle, normalized_time) else {
@@ -130,8 +136,15 @@ fn update_celestial_bodies(
             continue;
         };
 
-        transform.translation = camera_position + offset;
-        transform.look_at(camera_position, Vec3::Y);
+        let translation = camera_position + offset;
+        let mut next_transform = Transform::from_translation(translation);
+        next_transform.look_at(camera_position, Vec3::Y);
+        if transform.translation != translation {
+            transform.translation = translation;
+        }
+        if transform.rotation != next_transform.rotation {
+            transform.rotation = next_transform.rotation;
+        }
         if *visibility != Visibility::Visible {
             *visibility = Visibility::Visible;
         }

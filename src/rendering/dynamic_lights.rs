@@ -69,16 +69,18 @@ fn sync_held_dynamic_light(
     }
 
     let block_id = hotbar.item_at(hotbar.selected_slot());
+    let (intensity, next_visibility) = held_light_state(block_id, &blocks);
 
     for (mut held, mut light, mut visibility) in &mut lights {
-        if held.block_id == block_id && !block_definitions_changed {
-            continue;
+        if held.block_id != block_id {
+            held.block_id = block_id;
         }
-
-        held.block_id = block_id;
-        let (intensity, next_visibility) = held_light_state(block_id, &blocks);
-        light.intensity = intensity;
-        *visibility = next_visibility;
+        if light.intensity != intensity {
+            light.intensity = intensity;
+        }
+        if *visibility != next_visibility {
+            *visibility = next_visibility;
+        }
     }
 }
 

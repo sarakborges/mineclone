@@ -10,7 +10,10 @@ pub(super) fn update_fog_color(
         return;
     }
 
+    let color = visuals.fog_color.to_color();
     for mut fog in &mut fogs {
-        fog.color = visuals.fog_color.to_color();
+        if fog.color != color {
+            fog.color = color;
+        }
     }
 }
