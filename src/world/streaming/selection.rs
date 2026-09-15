@@ -1,6 +1,7 @@
-use std::collections::{HashMap, HashSet};
-
-use bevy::prelude::*;
+use bevy::{
+    platform::collections::{HashMap, HashSet},
+    prelude::*,
+};
 
 use crate::{
     voxel::{chunk::CHUNK_SIZE, coordinates::chunks_for_block_extent},

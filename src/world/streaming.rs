@@ -1,12 +1,13 @@
 mod selection;
 mod surface_cache;
 
-use std::{
-    collections::{HashMap, HashSet},
-    time::Duration,
-};
+use std::time::Duration;
 
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{
+    ecs::system::SystemParam,
+    platform::collections::{HashMap, HashSet},
+    prelude::*,
+};
 
 use crate::{
     content::{

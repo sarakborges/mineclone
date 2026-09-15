@@ -236,7 +236,10 @@ impl FeatureCaches {
             .get_or_insert_with(coord, || Arc::new(factory()))
     }
 
-    pub(super) fn retain_for_chunks(&self, desired: &HashSet<IVec3>) {
+    pub(super) fn retain_for_chunks<'a>(
+        &self,
+        desired: impl IntoIterator<Item = &'a IVec3>,
+    ) {
         let mut scratch = self
             .retention_scratch
             .lock()
@@ -249,10 +252,11 @@ impl FeatureCaches {
         } = &mut *scratch;
 
         horizontal_chunks.clear();
-        horizontal_chunks.extend(desired.iter().map(|coord| coord.xz()));
-
         generation_regions.clear();
-        generation_regions.extend(desired.iter().copied().map(generation_region_coord));
+        for &coord in desired {
+            horizontal_chunks.insert(coord.xz());
+            generation_regions.insert(generation_region_coord(coord));
+        }
 
         retained_regions.clear();
         // Many desired chunks share one 8x8x8 generation region. Expand the

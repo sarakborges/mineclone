@@ -1,6 +1,9 @@
 mod cache;
 
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
+
+#[cfg(test)]
+use std::collections::HashSet;
 
 use bevy::prelude::*;
 
@@ -100,7 +103,10 @@ impl WorldFeatureFields {
         })
     }
 
-    pub(crate) fn retain_for_chunks(&self, desired: &HashSet<IVec3>) {
+    pub(crate) fn retain_for_chunks<'a>(
+        &self,
+        desired: impl IntoIterator<Item = &'a IVec3>,
+    ) {
         self.caches.retain_for_chunks(desired);
     }
 
