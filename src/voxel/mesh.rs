@@ -13,7 +13,7 @@ use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, VoxelChunk},
     mesh_buffer::VoxelMeshBuffer,
-    mesh_lighting::{face_lighting, push_lit_quad},
+    mesh_lighting::{face_lighting, push_lit_quad, surface_block_srgb},
     orientation::orient_face,
     quad::VOXEL_FACE_UVS,
     read::VoxelRead,
@@ -54,6 +54,7 @@ where
                     .unwrap_or_else(|| panic!("missing block definition: {}", cell.block_id));
                 let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
                 let mut tint = None;
+                let mut source_block_srgb = None;
 
                 for block_face in BlockFace::ALL {
                     let face = orient_face(block_face, cell.orientation);
@@ -68,6 +69,12 @@ where
                             tint_at(world_voxel, cell)
                         }
                     });
+                    let source_block_srgb = *source_block_srgb.get_or_insert_with(|| {
+                        surface_block_srgb(
+                            chunk.light_at(x as i32, y as i32, z as i32),
+                            block.light_emission > 0,
+                        )
+                    });
                     let texture_rotation =
                         if face_uses_texture_rotation(block.rotate_texture, block_face) {
                             cell.texture_rotation
@@ -81,12 +88,7 @@ where
                         y,
                         z,
                     );
-                    let lighting = face_lighting(
-                        world,
-                        world_voxel,
-                        face,
-                        block.light_emission > 0,
-                    );
+                    let lighting = face_lighting(world, world_voxel, face, source_block_srgb);
                     let material_face = block_face_material_face(block_face, block);
                     push_lit_quad(
                         buffers

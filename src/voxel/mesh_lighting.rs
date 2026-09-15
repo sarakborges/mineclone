@@ -20,11 +20,23 @@ pub(super) struct FaceLighting {
     pub(super) ambient_occlusion: [f32; 4],
 }
 
+pub(super) fn surface_block_srgb(
+    light: VoxelLight,
+    neutralize_emissive_surface_light: bool,
+) -> [f32; 3] {
+    let block_srgb = light.block_srgb_levels().map(|level| level as f32);
+    if neutralize_emissive_surface_light {
+        [max_component(block_srgb); 3]
+    } else {
+        block_srgb
+    }
+}
+
 pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
     world: &W,
     voxel: IVec3,
     face: BlockFace,
-    neutralize_emissive_surface_light: bool,
+    surface_block_srgb: [f32; 3],
 ) -> FaceLighting {
     let (normal, tangent_a, tangent_b, signs) = face_basis(face);
     let base = voxel + normal;
@@ -47,15 +59,6 @@ pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
             world.sample_at(base + tangent_a + tangent_b),
         ],
     ];
-    let emitted_block_srgb = world
-        .light_at(voxel)
-        .block_srgb_levels()
-        .map(|level| level as f32);
-    let emitted_block_srgb = if neutralize_emissive_surface_light {
-        [max_component(emitted_block_srgb); 3]
-    } else {
-        emitted_block_srgb
-    };
     let mut channels = [[0.0; 2]; 4];
     let mut block_srgb = [[0.0; 3]; 4];
     let mut ambient_occlusion = [1.0; 4];
@@ -80,7 +83,7 @@ pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
             side_b_sample,
             corner_sample,
         ]);
-        let sampled_block_srgb = component_max(sampled_block_srgb, emitted_block_srgb);
+        let sampled_block_srgb = component_max(sampled_block_srgb, surface_block_srgb);
 
         channels[index] = [
             normalize_level(sky_level),

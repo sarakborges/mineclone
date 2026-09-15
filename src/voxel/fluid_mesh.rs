@@ -9,7 +9,7 @@ use super::{
     chunk::{CHUNK_SIZE, VoxelChunk},
     fluid::FluidCell,
     mesh_buffer::VoxelMeshBuffer,
-    mesh_lighting::{face_lighting, push_lit_quad},
+    mesh_lighting::{face_lighting, push_lit_quad, surface_block_srgb},
     quad::VOXEL_FACE_UVS,
     read::VoxelRead,
 };
@@ -66,6 +66,10 @@ where
 
                 let tint = tint_at(world_voxel, cell.fluid_id);
                 let heights = fluid_face_heights(world, world_voxel, cell.fluid_id);
+                let source_block_srgb = surface_block_srgb(
+                    chunk.light_at(x as i32, y as i32, z as i32),
+                    false,
+                );
                 let fluid = buffers.entry(cell.fluid_id).or_default();
 
                 for (face, is_exposed) in BlockFace::ALL.into_iter().zip(exposed) {
@@ -79,7 +83,7 @@ where
                         face.normal(),
                         VOXEL_FACE_UVS,
                         tint,
-                        face_lighting(world, world_voxel, face, false),
+                        face_lighting(world, world_voxel, face, source_block_srgb),
                     );
                 }
             }
