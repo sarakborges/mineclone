@@ -18,9 +18,12 @@ use crate::{
     voxel::{secondary_properties::SecondaryProperties, world::VoxelWorld},
 };
 
+use super::{HudSettings, TargetBlockPosition};
+
 const TARGET_SLOT_SIZE: f32 = 44.0;
 const TARGET_ICON_SIZE: f32 = 34.0;
 const TARGET_CROSSHAIR_OFFSET: f32 = 62.0;
+const TARGET_CORNER_MARGIN: f32 = 18.0;
 
 pub struct TargetHudPlugin;
 
@@ -29,13 +32,18 @@ impl Plugin for TargetHudPlugin {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_target_hud)
             .add_systems(
                 Update,
-                update_target_hud.run_if(in_state(GameState::Gameplay)),
+                (sync_target_hud_layout, update_target_hud)
+                    .chain()
+                    .run_if(in_state(GameState::Gameplay)),
             );
     }
 }
 
 #[derive(Component)]
 struct TargetHudRoot;
+
+#[derive(Component)]
+struct TargetHudRow;
 
 #[derive(Component)]
 struct TargetBlockText;
@@ -59,6 +67,7 @@ struct TargetHudState<'w> {
     world: Res<'w, VoxelWorld>,
     localization: Res<'w, UiLocalization>,
     language: Res<'w, ActiveLanguage>,
+    settings: Res<'w, HudSettings>,
 }
 
 #[derive(SystemParam)]
@@ -80,37 +89,28 @@ struct TargetHudView<'w, 's> {
     icon_materials: ResMut<'w, Assets<BlockIconMaterial>>,
 }
 
-fn spawn_target_hud(mut commands: Commands, mut icon_materials: ResMut<Assets<BlockIconMaterial>>) {
+fn spawn_target_hud(
+    mut commands: Commands,
+    settings: Res<HudSettings>,
+    mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
+) {
     let icon_material = icon_materials.add(BlockIconMaterial::empty());
     let (slot_background, slot_border) = surface::hud_control_static(false);
+    let position = settings.target_block_position();
 
     commands
         .spawn((
             TargetHudRoot,
             Visibility::Hidden,
-            Node {
-                position_type: PositionType::Absolute,
-                left: px(0),
-                top: px(0),
-                width: percent(100),
-                height: percent(100),
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                ..default()
-            },
+            target_hud_root_node(position),
             GlobalZIndex(10),
             Pickable::IGNORE,
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|root| {
             root.spawn((
-                Node {
-                    position_type: PositionType::Relative,
-                    bottom: px(TARGET_CROSSHAIR_OFFSET),
-                    align_items: AlignItems::Center,
-                    column_gap: px(10),
-                    ..default()
-                },
+                TargetHudRow,
+                target_hud_row_node(position),
                 Pickable::IGNORE,
             ))
             .with_children(|row| {
@@ -154,6 +154,56 @@ fn spawn_target_hud(mut commands: Commands, mut icon_materials: ResMut<Assets<Bl
         });
 }
 
+fn sync_target_hud_layout(
+    settings: Res<HudSettings>,
+    mut root: Single<&mut Node, (With<TargetHudRoot>, Without<TargetHudRow>)>,
+    mut row: Single<&mut Node, (With<TargetHudRow>, Without<TargetHudRoot>)>,
+    mut cached_position: Local<Option<TargetBlockPosition>>,
+) {
+    let position = settings.target_block_position();
+    if *cached_position == Some(position) {
+        return;
+    }
+    *cached_position = Some(position);
+    **root = target_hud_root_node(position);
+    **row = target_hud_row_node(position);
+}
+
+fn target_hud_root_node(position: TargetBlockPosition) -> Node {
+    match position {
+        TargetBlockPosition::Center | TargetBlockPosition::Hidden => Node {
+            position_type: PositionType::Absolute,
+            left: px(0),
+            top: px(0),
+            width: percent(100),
+            height: percent(100),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            ..default()
+        },
+        TargetBlockPosition::TopRight => Node {
+            position_type: PositionType::Absolute,
+            right: px(TARGET_CORNER_MARGIN),
+            top: px(TARGET_CORNER_MARGIN),
+            ..default()
+        },
+    }
+}
+
+fn target_hud_row_node(position: TargetBlockPosition) -> Node {
+    Node {
+        position_type: PositionType::Relative,
+        bottom: if position == TargetBlockPosition::Center {
+            px(TARGET_CROSSHAIR_OFFSET)
+        } else {
+            Val::Auto
+        },
+        align_items: AlignItems::Center,
+        column_gap: px(10),
+        ..default()
+    }
+}
+
 fn update_target_hud(
     state: TargetHudState,
     content: TargetHudContent,
@@ -167,8 +217,13 @@ fn update_target_hud(
         mut icon_materials,
     } = view;
     let mut root_visibility = root_visibility.into_inner();
-    let mut target_text = target_text.into_inner();
-    let (mut model, material_handle) = icon.into_inner();
+
+    if state.settings.target_block_position() == TargetBlockPosition::Hidden {
+        if *root_visibility != Visibility::Hidden {
+            *root_visibility = Visibility::Hidden;
+        }
+        return;
+    }
 
     let Some(hit) = state.targeted.0 else {
         *cached = None;
@@ -215,6 +270,8 @@ fn update_target_hud(
         *root_visibility = Visibility::Visible;
     }
 
+    let mut target_text = target_text.into_inner();
+    let (mut model, material_handle) = icon.into_inner();
     let block = content.visual.blocks.get(hit.block_id);
     let block_name = block.map_or(hit.block_id, |block| block.name.text(language));
     let coordinates = state
