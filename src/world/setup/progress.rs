@@ -91,6 +91,7 @@ fn integrate_generated_chunks(
         let Some(completed) = runtime.generation_tasks.poll_ready() else {
             break;
         };
+        budget.record(1);
 
         if completed.revision != current_revision {
             assert!(
@@ -108,7 +109,6 @@ fn integrate_generated_chunks(
             .fluid_updates
             .enqueue_loaded_fluid_frontier(&runtime.world, completed.coord);
         runtime.loading_state.generated += 1;
-        budget.record(1);
     }
 }
 
@@ -226,6 +226,7 @@ fn integrate_built_chunk_meshes(
         let Some(completed) = runtime.mesh_tasks.poll_ready() else {
             break;
         };
+        budget.record(1);
 
         if completed.revision != current_revision {
             let snapshot = ChunkMeshSnapshot::capture(&runtime.world, completed.coord)
@@ -252,7 +253,6 @@ fn integrate_built_chunk_meshes(
             &render_context,
         );
         runtime.loading_state.meshed += 1;
-        budget.record(1);
     }
 }
 
