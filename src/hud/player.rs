@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::game_state::GameState,
+    app::{game_state::GameState, pause_state::PauseState},
     localization::{ActiveLanguage, UiLocalization},
     player::inventory::InventoryState,
-    ui::{surface, theme, typography},
+    ui::{surface, theme, typography, visibility::set_visibility},
 };
 
 use super::HudSettings;
@@ -21,6 +21,14 @@ pub struct PlayerHudPlugin;
 impl Plugin for PlayerHudPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_player_hud)
+            .add_systems(
+                OnEnter(PauseState::Paused),
+                set_visibility::<PlayerHudRoot, false>.run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                OnEnter(PauseState::Running),
+                set_visibility::<PlayerHudRoot, true>.run_if(in_state(GameState::Gameplay)),
+            )
             .add_systems(
                 Update,
                 sync_inventory_hint.run_if(in_state(GameState::Gameplay)),
@@ -42,13 +50,12 @@ fn spawn_player_hud(
     inventory_state: Res<State<InventoryState>>,
 ) {
     let (avatar_background, avatar_border) = surface::hud_control_static(false);
-    let hint_visibility = if settings.display_tooltips()
-        && *inventory_state.get() == InventoryState::Closed
-    {
+    let hint_visibility = if settings.display_tooltips() {
         Visibility::Visible
     } else {
         Visibility::Hidden
     };
+    let hint_key = inventory_hint_key(*inventory_state.get());
 
     commands
         .spawn((
@@ -170,11 +177,7 @@ fn spawn_player_hud(
 
             root.spawn((
                 InventoryHint,
-                typography::crosshair_hint(
-                    localization
-                        .text(language.get(), "hud.openInventory")
-                        .to_owned(),
-                ),
+                typography::crosshair_hint(localization.text(language.get(), hint_key).to_owned()),
                 hint_visibility,
                 Pickable::IGNORE,
             ));
@@ -198,20 +201,25 @@ fn sync_inventory_hint(
 
     let (mut text, mut visibility) = hint.into_inner();
     let next_text = localization
-        .text(language.get(), "hud.openInventory")
+        .text(language.get(), inventory_hint_key(*inventory_state.get()))
         .to_owned();
     if text.0 != next_text {
         text.0 = next_text;
     }
 
-    let next_visibility = if settings.display_tooltips()
-        && *inventory_state.get() == InventoryState::Closed
-    {
+    let next_visibility = if settings.display_tooltips() {
         Visibility::Visible
     } else {
         Visibility::Hidden
     };
     if *visibility != next_visibility {
         *visibility = next_visibility;
+    }
+}
+
+const fn inventory_hint_key(state: InventoryState) -> &'static str {
+    match state {
+        InventoryState::Closed => "hud.openInventory",
+        InventoryState::Open => "hud.closeInventory",
     }
 }
