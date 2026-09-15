@@ -34,6 +34,7 @@ const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 2;
 const DEFAULT_SPAWN_COLUMN: IVec2 = IVec2::new(8, 8);
 const SPAWN_SEARCH_STEP_BLOCKS: i32 = 8;
 const SPAWN_SEARCH_RADIUS_STEPS: i32 = 64;
+const FORCED_SPAWN_SEARCH_RADIUS_STEPS: i32 = 256;
 
 pub(in crate::world) fn begin_world_loading(
     mut commands: Commands,
@@ -73,6 +74,13 @@ pub(in crate::world) fn begin_world_loading(
         .hydrology
         .validate_references(&dimension.id, biomes, blocks, fluids);
 
+    let forced_spawn_biome = (*persistence.load_mode == WorldLoadMode::New)
+        .then(|| persistence.new_world_config.spawn_biome().map(str::to_owned))
+        .flatten();
+    if let Some(biome_id) = forced_spawn_biome.as_deref() {
+        validate_forced_spawn_biome(dimension, biomes, biome_id);
+    }
+
     let biome_field = BiomeField::from_dimension(dimension, biomes, config.seed.0);
     let coast_weight = dimension
         .hydrology
@@ -107,7 +115,13 @@ pub(in crate::world) fn begin_world_loading(
             .map(|position| IVec2::new(position.x.floor() as i32, position.z.floor() as i32))
             .unwrap_or(DEFAULT_SPAWN_COLUMN)
     } else {
-        find_initial_spawn_column(dimension, biomes, &biome_field, &feature_fields)
+        find_initial_spawn_column(
+            dimension,
+            biomes,
+            &biome_field,
+            &feature_fields,
+            forced_spawn_biome.as_deref(),
+        )
     };
     let initial_center = if *persistence.load_mode == WorldLoadMode::Load {
         persistence
@@ -187,17 +201,51 @@ fn bootstrap_chunk_coords(center: IVec3, render_distance: &RenderDistanceSetting
     )
 }
 
+fn validate_forced_spawn_biome(
+    dimension: &DimensionDefinition,
+    biomes: &BiomeRegistry,
+    biome_id: &str,
+) {
+    let biome = biomes
+        .get(biome_id)
+        .unwrap_or_else(|| panic!("requested spawn biome is missing: {biome_id}"));
+    assert!(
+        biome.kind == BiomeKind::Surface,
+        "requested spawn biome must be a surface biome: {biome_id}"
+    );
+    assert!(
+        dimension.biomes.iter().any(|entry| entry.id == biome_id),
+        "requested spawn biome is not part of dimension {}: {biome_id}",
+        dimension.id
+    );
+}
+
 fn find_initial_spawn_column(
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     feature_fields: &WorldFeatureFields,
+    forced_spawn_biome: Option<&str>,
 ) -> IVec2 {
+    let search_radius_steps = if forced_spawn_biome.is_some() {
+        FORCED_SPAWN_SEARCH_RADIUS_STEPS
+    } else {
+        SPAWN_SEARCH_RADIUS_STEPS
+    };
+
     find_map_square_rings(
         DEFAULT_SPAWN_COLUMN,
-        SPAWN_SEARCH_RADIUS_STEPS,
+        search_radius_steps,
         SPAWN_SEARCH_STEP_BLOCKS,
         |candidate| {
+            if let Some(biome_id) = forced_spawn_biome {
+                let surface = biome_field
+                    .sample_surface(candidate.as_vec2() + Vec2::splat(0.5));
+                if surface.primary_id != biome_id {
+                    return None;
+                }
+            }
+
             // Spawn selection must not use altitude as a proxy for safety.
             // Rolling biomes naturally spend part of their range close to
             // sea level while mountains are always high, so the old
@@ -209,11 +257,15 @@ fn find_initial_spawn_column(
                 .then_some(candidate)
         },
     )
-    .unwrap_or_else(|| {
-        panic!(
+    .unwrap_or_else(|| match forced_spawn_biome {
+        Some(biome_id) => panic!(
+            "could not find a dry spawn column in biome {biome_id} within {} blocks",
+            search_radius_steps * SPAWN_SEARCH_STEP_BLOCKS
+        ),
+        None => panic!(
             "could not find a dry spawn column within {} blocks",
-            SPAWN_SEARCH_RADIUS_STEPS * SPAWN_SEARCH_STEP_BLOCKS
-        )
+            search_radius_steps * SPAWN_SEARCH_STEP_BLOCKS
+        ),
     })
 }
 

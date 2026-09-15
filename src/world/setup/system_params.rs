@@ -36,6 +36,7 @@ pub(in crate::world) struct WorldBootstrapConfig<'w> {
 #[derive(SystemParam)]
 pub(in crate::world) struct WorldBootstrapPersistence<'w> {
     pub(super) load_mode: Res<'w, WorldLoadMode>,
+    pub(super) new_world_config: Res<'w, NewWorldConfig>,
     pub(super) save: ResMut<'w, InMemoryWorldSave>,
     pub(super) existing_world: Option<Res<'w, VoxelWorld>>,
 }

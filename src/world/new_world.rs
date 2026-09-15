@@ -4,11 +4,12 @@ use crate::player::game_mode::GameMode;
 
 use super::{WorldSeed, game_rules::GameRules};
 
-#[derive(Resource, Debug, Clone, Copy, Default)]
+#[derive(Resource, Debug, Clone, Default)]
 pub(crate) struct NewWorldConfig {
     seed: WorldSeed,
     game_mode: GameMode,
     game_rules: GameRules,
+    spawn_biome: Option<String>,
 }
 
 impl NewWorldConfig {
@@ -38,5 +39,15 @@ impl NewWorldConfig {
 
     pub(crate) fn set_ticks_per_second(&mut self, ticks_per_second: u32) {
         self.game_rules.set_ticks_per_second(ticks_per_second);
+    }
+
+    pub(crate) fn spawn_biome(&self) -> Option<&str> {
+        self.spawn_biome.as_deref()
+    }
+
+    pub(crate) fn set_spawn_biome(&mut self, spawn_biome: Option<String>) {
+        if self.spawn_biome != spawn_biome {
+            self.spawn_biome = spawn_biome;
+        }
     }
 }

@@ -2,8 +2,12 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
+    localization::{ActiveLanguage, UiLocalization},
+    player::inventory::InventoryState,
     ui::{surface, theme, typography},
 };
+
+use super::HudSettings;
 
 const PLAYER_HUD_MARGIN: f32 = 18.0;
 const AVATAR_SIZE: f32 = 64.0;
@@ -16,15 +20,35 @@ pub struct PlayerHudPlugin;
 
 impl Plugin for PlayerHudPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Gameplay), spawn_player_hud);
+        app.add_systems(OnEnter(GameState::Gameplay), spawn_player_hud)
+            .add_systems(
+                Update,
+                sync_inventory_hint.run_if(in_state(GameState::Gameplay)),
+            );
     }
 }
 
 #[derive(Component)]
 struct PlayerHudRoot;
 
-fn spawn_player_hud(mut commands: Commands) {
+#[derive(Component)]
+struct InventoryHint;
+
+fn spawn_player_hud(
+    mut commands: Commands,
+    settings: Res<HudSettings>,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
+    inventory_state: Res<State<InventoryState>>,
+) {
     let (avatar_background, avatar_border) = surface::hud_control_static(false);
+    let hint_visibility = if settings.display_tooltips()
+        && *inventory_state.get() == InventoryState::Closed
+    {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
 
     commands
         .spawn((
@@ -33,104 +57,161 @@ fn spawn_player_hud(mut commands: Commands) {
                 position_type: PositionType::Absolute,
                 left: px(PLAYER_HUD_MARGIN),
                 bottom: px(PLAYER_HUD_MARGIN),
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
-                column_gap: px(12),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::FlexStart,
+                row_gap: px(8),
                 ..default()
             },
             GlobalZIndex(10),
             Pickable::IGNORE,
             DespawnOnExit(GameState::Gameplay),
         ))
-        .with_children(|row| {
-            row.spawn((
+        .with_children(|root| {
+            root.spawn((
                 Node {
-                    width: px(AVATAR_SIZE),
-                    height: px(AVATAR_SIZE),
-                    min_width: px(AVATAR_SIZE),
-                    min_height: px(AVATAR_SIZE),
-                    border: UiRect::all(px(2)),
-                    border_radius: BorderRadius::all(px(4)),
+                    flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
-                    justify_content: JustifyContent::Center,
-                    ..default()
-                },
-                BackgroundColor(avatar_background),
-                BorderColor::all(avatar_border),
-                Pickable::IGNORE,
-            ))
-            .with_children(|avatar| {
-                avatar.spawn((
-                    typography::hud_subheading("?"),
-                    TextLayout::justify(Justify::Center),
-                    Pickable::IGNORE,
-                ));
-            });
-
-            row.spawn((
-                Node {
-                    width: px(PLAYER_INFO_WIDTH),
-                    flex_direction: FlexDirection::Column,
-                    justify_content: JustifyContent::Center,
-                    row_gap: px(8),
+                    column_gap: px(12),
                     ..default()
                 },
                 Pickable::IGNORE,
             ))
-            .with_children(|info| {
-                info.spawn((typography::hud("Yogg'Sara"), Pickable::IGNORE));
-
-                info.spawn((
+            .with_children(|row| {
+                row.spawn((
                     Node {
-                        position_type: PositionType::Relative,
-                        width: percent(100),
-                        height: px(HEALTH_BAR_HEIGHT),
-                        border: UiRect::all(px(1)),
+                        width: px(AVATAR_SIZE),
+                        height: px(AVATAR_SIZE),
+                        min_width: px(AVATAR_SIZE),
+                        min_height: px(AVATAR_SIZE),
+                        border: UiRect::all(px(2)),
                         border_radius: BorderRadius::all(px(4)),
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::Center,
                         ..default()
                     },
-                    BackgroundColor(theme::SLIDER_TRACK),
-                    BorderColor::all(surface::HUD_BORDER_COLOR),
+                    BackgroundColor(avatar_background),
+                    BorderColor::all(avatar_border),
                     Pickable::IGNORE,
                 ))
-                .with_children(|health| {
-                    health.spawn((
-                        Node {
-                            position_type: PositionType::Absolute,
-                            left: px(0),
-                            top: px(0),
-                            width: percent(PLACEHOLDER_HEALTH_PERCENT),
-                            height: percent(100),
-                            border_radius: BorderRadius::all(px(3)),
-                            ..default()
-                        },
-                        BackgroundColor(HEALTH_FILL_COLOR),
+                .with_children(|avatar| {
+                    avatar.spawn((
+                        typography::hud_subheading("?"),
+                        TextLayout::justify(Justify::Center),
                         Pickable::IGNORE,
                     ));
+                });
 
-                    health
-                        .spawn((
+                row.spawn((
+                    Node {
+                        width: px(PLAYER_INFO_WIDTH),
+                        flex_direction: FlexDirection::Column,
+                        justify_content: JustifyContent::Center,
+                        row_gap: px(8),
+                        ..default()
+                    },
+                    Pickable::IGNORE,
+                ))
+                .with_children(|info| {
+                    info.spawn((typography::hud("Yogg'Sara"), Pickable::IGNORE));
+
+                    info.spawn((
+                        Node {
+                            position_type: PositionType::Relative,
+                            width: percent(100),
+                            height: px(HEALTH_BAR_HEIGHT),
+                            border: UiRect::all(px(1)),
+                            border_radius: BorderRadius::all(px(4)),
+                            ..default()
+                        },
+                        BackgroundColor(theme::SLIDER_TRACK),
+                        BorderColor::all(surface::HUD_BORDER_COLOR),
+                        Pickable::IGNORE,
+                    ))
+                    .with_children(|health| {
+                        health.spawn((
                             Node {
                                 position_type: PositionType::Absolute,
                                 left: px(0),
                                 top: px(0),
-                                width: percent(100),
+                                width: percent(PLACEHOLDER_HEALTH_PERCENT),
                                 height: percent(100),
-                                align_items: AlignItems::Center,
-                                justify_content: JustifyContent::Center,
+                                border_radius: BorderRadius::all(px(3)),
                                 ..default()
                             },
+                            BackgroundColor(HEALTH_FILL_COLOR),
                             Pickable::IGNORE,
-                        ))
-                        .with_children(|label| {
-                            label.spawn((
-                                typography::inventory_category("50 / 100"),
-                                typography::tooltip_shadow(),
-                                TextLayout::justify(Justify::Center),
+                        ));
+
+                        health
+                            .spawn((
+                                Node {
+                                    position_type: PositionType::Absolute,
+                                    left: px(0),
+                                    top: px(0),
+                                    width: percent(100),
+                                    height: percent(100),
+                                    align_items: AlignItems::Center,
+                                    justify_content: JustifyContent::Center,
+                                    ..default()
+                                },
                                 Pickable::IGNORE,
-                            ));
-                        });
+                            ))
+                            .with_children(|label| {
+                                label.spawn((
+                                    typography::inventory_category("50 / 100"),
+                                    typography::tooltip_shadow(),
+                                    TextLayout::justify(Justify::Center),
+                                    Pickable::IGNORE,
+                                ));
+                            });
+                    });
                 });
             });
+
+            root.spawn((
+                InventoryHint,
+                typography::crosshair_hint(
+                    localization
+                        .text(language.get(), "hud.openInventory")
+                        .to_owned(),
+                ),
+                hint_visibility,
+                Pickable::IGNORE,
+            ));
         });
+}
+
+fn sync_inventory_hint(
+    settings: Res<HudSettings>,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
+    inventory_state: Res<State<InventoryState>>,
+    hint: Single<(&mut Text, &mut Visibility), With<InventoryHint>>,
+) {
+    if !settings.is_changed()
+        && !localization.is_changed()
+        && !language.is_changed()
+        && !inventory_state.is_changed()
+    {
+        return;
+    }
+
+    let (mut text, mut visibility) = hint.into_inner();
+    let next_text = localization
+        .text(language.get(), "hud.openInventory")
+        .to_owned();
+    if text.0 != next_text {
+        text.0 = next_text;
+    }
+
+    let next_visibility = if settings.display_tooltips()
+        && *inventory_state.get() == InventoryState::Closed
+    {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
+    if *visibility != next_visibility {
+        *visibility = next_visibility;
+    }
 }

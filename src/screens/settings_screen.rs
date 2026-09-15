@@ -18,6 +18,12 @@ use new_world_section::{
     handle_seed_keyboard, reset_new_world_settings, sync_seed_text,
 };
 use render_distance_logic::{sync_render_distance_text, sync_slider_thumb};
+use spawn_biome_section::{
+    SpawnBiomeDropdownState, handle_spawn_biome_dropdown_button,
+    handle_spawn_biome_option_buttons, handle_spawn_biome_search_focus,
+    handle_spawn_biome_search_keyboard, populate_spawn_biome_options,
+    sync_spawn_biome_dropdown_view,
+};
 use world_settings_section::{handle_game_mode_buttons, sync_game_mode_buttons};
 
 pub(crate) mod game_rules_section;
@@ -28,6 +34,7 @@ mod navigation;
 mod new_world_section;
 mod render_distance_logic;
 mod render_distance_section;
+mod spawn_biome_section;
 pub(crate) mod world_settings_section;
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -44,6 +51,7 @@ impl Plugin for SettingsScreenPlugin {
             .init_resource::<SettingsSectionSelection>()
             .init_resource::<TicksPerSecondInputState>()
             .init_resource::<SeedInputState>()
+            .init_resource::<SpawnBiomeDropdownState>()
             .configure_sets(
                 Update,
                 (SettingsScreenSet::Input, SettingsScreenSet::Sync)
@@ -68,10 +76,14 @@ impl Plugin for SettingsScreenPlugin {
                     handle_section_buttons,
                     handle_seed_focus,
                     handle_random_seed,
+                    handle_spawn_biome_dropdown_button,
+                    handle_spawn_biome_search_focus,
+                    handle_spawn_biome_option_buttons,
                     handle_game_mode_buttons,
                     handle_ticks_step_buttons,
                     handle_ticks_input,
                     handle_new_world_footer,
+                    handle_spawn_biome_search_keyboard,
                     handle_seed_keyboard,
                     handle_ticks_keyboard,
                     handle_language_buttons,
@@ -83,10 +95,12 @@ impl Plugin for SettingsScreenPlugin {
             .add_systems(
                 Update,
                 (
+                    populate_spawn_biome_options,
                     sync_section_ui,
                     sync_game_mode_buttons,
                     sync_language_buttons,
                     sync_display_tooltips_toggle,
+                    sync_spawn_biome_dropdown_view,
                     sync_seed_text,
                     sync_ticks_per_second_text,
                     sync_render_distance_text,

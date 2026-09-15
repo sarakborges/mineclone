@@ -20,6 +20,7 @@ use crate::{
 use super::{
     game_rules_section::TicksPerSecondInputState,
     navigation::{SettingsSection, SettingsSectionSelection},
+    spawn_biome_section::{SpawnBiomeDropdownState, spawn_biome_setting},
     world_settings_section::world_settings_section,
 };
 
@@ -49,11 +50,14 @@ pub(super) struct NewWorldDraft<'w> {
     config: ResMut<'w, NewWorldConfig>,
     seed_input: Res<'w, SeedInputState>,
     ticks_input: Res<'w, TicksPerSecondInputState>,
+    spawn_biome_dropdown: Res<'w, SpawnBiomeDropdownState>,
 }
 
 impl NewWorldDraft<'_> {
     fn input_editing(&self) -> bool {
-        self.seed_input.editing() || self.ticks_input.editing()
+        self.seed_input.editing()
+            || self.ticks_input.editing()
+            || self.spawn_biome_dropdown.input_editing()
     }
 
     fn commit_seed_input(&mut self) {
@@ -72,11 +76,13 @@ pub(super) fn reset_new_world_settings(
     mut selection: ResMut<SettingsSectionSelection>,
     mut seed_input: ResMut<SeedInputState>,
     mut ticks_input: ResMut<TicksPerSecondInputState>,
+    mut spawn_biome_dropdown: ResMut<SpawnBiomeDropdownState>,
 ) {
     config.reset();
     selection.selected = SettingsSection::General;
     seed_input.reset();
     ticks_input.reset();
+    spawn_biome_dropdown.reset();
 }
 
 pub(super) fn new_world_general_section(
@@ -94,6 +100,7 @@ pub(super) fn new_world_general_section(
         },
         children![
             seed_setting(config.seed().0, localization, language),
+            spawn_biome_setting(localization, language),
             world_settings_section(config.game_mode(), localization, language),
         ],
     )

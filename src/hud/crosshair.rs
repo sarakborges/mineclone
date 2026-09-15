@@ -175,34 +175,19 @@ fn update_action_hint(
 
     let language = content.language.get();
     let selected_item = runtime.hotbar.item_at(runtime.hotbar.selected_slot());
+    let selected_block = selected_item.and_then(|id| content.blocks.get(id));
 
     let next_text = if !runtime.settings.display_tooltips() {
         None
-    } else {
-        selected_item
-            .and_then(|id| content.blocks.get(id))
-            .filter(|block| block.is_rotatable())
-            .map(|_| {
-                content
-                    .localization
-                    .text(language, "hud.rotateBlock")
-                    .to_owned()
-            })
-            .or_else(|| {
-                if selected_item != Some(BRUSH_TOOL_ID) {
-                    return None;
-                }
-
-                let hit = runtime.targeted.0?;
-                let block = content.blocks.get(hit.block_id)?;
-                if !block
+    } else if let Some(hit) = runtime.targeted.0 {
+        if selected_item == Some(BRUSH_TOOL_ID) {
+            let can_dye = content.blocks.get(hit.block_id).is_some_and(|block| {
+                block
                     .secondary_properties
                     .iter()
                     .any(|property| property == DYED_PROPERTY_ID)
-                {
-                    return None;
-                }
-
+            });
+            if can_dye {
                 Some(match runtime.brush_mode.dye_id() {
                     None => content
                         .localization
@@ -219,6 +204,37 @@ fn update_action_hint(
                             .replace("{color}", color_name)
                     }
                 })
+            } else {
+                Some(
+                    content
+                        .localization
+                        .text(language, "hud.breakBlock")
+                        .to_owned(),
+                )
+            }
+        } else if selected_block.is_some() {
+            Some(
+                content
+                    .localization
+                    .text(language, "hud.breakOrPlaceBlock")
+                    .to_owned(),
+            )
+        } else {
+            Some(
+                content
+                    .localization
+                    .text(language, "hud.breakBlock")
+                    .to_owned(),
+            )
+        }
+    } else {
+        selected_block
+            .filter(|block| block.is_rotatable())
+            .map(|_| {
+                content
+                    .localization
+                    .text(language, "hud.rotateBlock")
+                    .to_owned()
             })
     };
 
