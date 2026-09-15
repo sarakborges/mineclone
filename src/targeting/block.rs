@@ -63,15 +63,18 @@ fn update_targeted_block(
     interaction: WorldInteractionState,
     mut targeted: ResMut<TargetedBlock>,
 ) {
-    if !interaction.available() {
-        targeted.0 = None;
-        return;
-    }
+    let next = if interaction.available() {
+        raycast_voxels(
+            &world,
+            camera.translation(),
+            camera.forward().as_vec3(),
+            TARGET_RANGE,
+        )
+    } else {
+        None
+    };
 
-    targeted.0 = raycast_voxels(
-        &world,
-        camera.translation(),
-        camera.forward().as_vec3(),
-        TARGET_RANGE,
-    );
+    if targeted.0 != next {
+        targeted.0 = next;
+    }
 }
