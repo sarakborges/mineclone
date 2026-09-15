@@ -163,6 +163,30 @@ impl VoxelChunk {
         true
     }
 
+    pub(crate) fn rebuild_light(
+        &mut self,
+        mut light_at: impl FnMut(
+            usize,
+            usize,
+            usize,
+            Option<VoxelCell>,
+            Option<FluidCell>,
+        ) -> VoxelLight,
+    ) {
+        let blocks = &self.blocks;
+        let fluids = &self.fluids;
+        let lights = Arc::make_mut(&mut self.light);
+
+        for y in (0..CHUNK_SIZE).rev() {
+            for z in 0..CHUNK_SIZE {
+                for x in 0..CHUNK_SIZE {
+                    let index = index(x, y, z);
+                    lights[index] = light_at(x, y, z, blocks[index], fluids[index]);
+                }
+            }
+        }
+    }
+
     pub(crate) fn clear_light(&mut self) {
         Arc::make_mut(&mut self.light).fill(VoxelLight::DARK);
     }
