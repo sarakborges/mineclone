@@ -5,8 +5,8 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
-        coordinates::chunk_coord_from_position, lighting::PendingLightingUpdates,
-        neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
+        coordinates::chunk_coord_from_position, deduplicated_queue::DeduplicatedQueue,
+        lighting::PendingLightingUpdates, neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
     },
 };
 
@@ -20,9 +20,39 @@ use super::{
 const MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK: usize = 8;
 const CHUNK_UNLOAD_BUDGET: Duration = Duration::from_millis(4);
 
+#[derive(Resource, Default)]
+pub(super) struct ChunkUnloadState {
+    selection_key: Option<(IVec3, i32, i32)>,
+    pending: DeduplicatedQueue<IVec3>,
+}
+
+impl ChunkUnloadState {
+    fn sync_plan(
+        &mut self,
+        streaming: &ChunkStreamingState,
+        world: &VoxelWorld,
+        center: IVec3,
+    ) {
+        let selection_key = streaming.selection_key();
+        if self.selection_key == selection_key {
+            return;
+        }
+
+        let mut pending = world
+            .loaded_chunk_coords()
+            .filter(|coord| !streaming.keeps_loaded(*coord))
+            .collect::<Vec<_>>();
+        pending.sort_by_key(|coord| -(*coord - center).length_squared());
+
+        self.selection_key = selection_key;
+        self.pending = pending.into_iter().collect();
+    }
+}
+
 #[derive(SystemParam)]
 pub(super) struct ChunkUnloadRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
+    state: ResMut<'w, ChunkUnloadState>,
     lighting: ResMut<'w, PendingLightingUpdates>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
 }
@@ -36,13 +66,9 @@ pub(super) fn unload_chunk_meshes(
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = chunk_coord_from_position(feet_position);
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
-    let mut pending_unloads = runtime
-        .world
-        .loaded_chunk_coords()
-        .filter(|coord| !streaming.keeps_loaded(*coord))
-        .collect::<Vec<_>>();
-
-    pending_unloads.sort_by_key(|coord| -(*coord - center).length_squared());
+    runtime
+        .state
+        .sync_plan(&streaming, &runtime.world, center);
 
     let mut budget = FrameWorkBudget::new(
         CHUNK_UNLOAD_BUDGET,
@@ -50,9 +76,16 @@ pub(super) fn unload_chunk_meshes(
     );
     let mut unloaded = Vec::new();
 
-    for coord in pending_unloads {
+    loop {
         if budget.exhausted() {
             break;
+        }
+
+        let Some(coord) = runtime.state.pending.pop() else {
+            break;
+        };
+        if streaming.keeps_loaded(coord) || runtime.world.chunk(coord).is_none() {
+            continue;
         }
 
         if let Some((entities, mesh_handles)) = renderer.pool.take(coord) {
