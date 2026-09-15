@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use bevy::prelude::*;
 
@@ -14,6 +14,7 @@ use super::{
 #[derive(Resource, Default)]
 pub struct VoxelWorld {
     chunks: HashMap<IVec3, VoxelChunk>,
+    loaded_chunk_columns: HashMap<IVec2, BTreeSet<i32>>,
     archived_chunks: HashMap<IVec3, ArchivedChunk>,
     generated_chunks: HashSet<IVec3>,
     dirty_chunks: HashSet<IVec3>,
@@ -29,6 +30,7 @@ impl VoxelWorld {
 
         self.generated_chunks.insert(coord);
         self.chunks.insert(coord, chunk);
+        self.track_loaded_chunk(coord);
     }
 
     pub fn chunk(&self, coord: IVec3) -> Option<&VoxelChunk> {
@@ -47,6 +49,7 @@ impl VoxelWorld {
         let Some(chunk) = self.chunks.remove(&coord) else {
             return;
         };
+        self.untrack_loaded_chunk(coord);
 
         if self.dirty_chunks.contains(&coord) {
             self.archived_chunks
@@ -66,6 +69,7 @@ impl VoxelWorld {
         };
 
         self.chunks.insert(coord, archived.restore());
+        self.track_loaded_chunk(coord);
         true
     }
 
@@ -153,14 +157,14 @@ impl VoxelWorld {
         world_x: i32,
         world_z: i32,
     ) -> Option<i32> {
-        let chunk_size = CHUNK_SIZE as i32;
-        let horizontal_chunk = chunk_coord_from_world(IVec3::new(world_x, 0, world_z));
+        let horizontal_chunk = chunk_coord_from_world(IVec3::new(world_x, 0, world_z)).xz();
+        let highest_chunk_y = self
+            .loaded_chunk_columns
+            .get(&horizontal_chunk)?
+            .last()
+            .copied()?;
 
-        self.chunks
-            .keys()
-            .filter(|coord| coord.x == horizontal_chunk.x && coord.z == horizontal_chunk.z)
-            .map(|coord| (coord.y + 1) * chunk_size - 1)
-            .max()
+        Some((highest_chunk_y + 1) * CHUNK_SIZE as i32 - 1)
     }
 
     pub fn set_block_at(
@@ -228,5 +232,54 @@ impl VoxelWorld {
 
     pub fn block_id_at(&self, world_position: IVec3) -> Option<&'static str> {
         self.cell_at(world_position).map(|cell| cell.block_id)
+    }
+
+    fn track_loaded_chunk(&mut self, coord: IVec3) {
+        self.loaded_chunk_columns
+            .entry(coord.xz())
+            .or_default()
+            .insert(coord.y);
+    }
+
+    fn untrack_loaded_chunk(&mut self, coord: IVec3) {
+        let horizontal = coord.xz();
+        let Some(ys) = self.loaded_chunk_columns.get_mut(&horizontal) else {
+            return;
+        };
+
+        ys.remove(&coord.y);
+        if ys.is_empty() {
+            self.loaded_chunk_columns.remove(&horizontal);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn loaded_column_height_tracks_insert_and_archive() {
+        let mut world = VoxelWorld::default();
+        let low = IVec3::new(2, 1, -3);
+        let high = IVec3::new(2, 4, -3);
+        let world_x = low.x * CHUNK_SIZE as i32;
+        let world_z = low.z * CHUNK_SIZE as i32;
+
+        world.insert_chunk(low, VoxelChunk::empty());
+        world.insert_chunk(high, VoxelChunk::empty());
+        assert_eq!(
+            world.highest_loaded_world_y_in_column(world_x, world_z),
+            Some((high.y + 1) * CHUNK_SIZE as i32 - 1),
+        );
+
+        world.archive_chunk(high);
+        assert_eq!(
+            world.highest_loaded_world_y_in_column(world_x, world_z),
+            Some((low.y + 1) * CHUNK_SIZE as i32 - 1),
+        );
+
+        world.archive_chunk(low);
+        assert_eq!(world.highest_loaded_world_y_in_column(world_x, world_z), None);
     }
 }
