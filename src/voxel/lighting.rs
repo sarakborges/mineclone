@@ -17,7 +17,7 @@ use crate::content::{
 use self::{
     context::LightingContext,
     medium::{block_emission_for_cell, medium_dampening_for_cells},
-    propagation::{relax, relax_budgeted},
+    propagation::{LightingRegistries, relax, relax_budgeted},
     queue::LightingQueue,
 };
 use super::{
@@ -190,9 +190,7 @@ pub(crate) fn process_pending_lighting(
     let PendingLightingUpdates { queue, context, .. } = pending;
     relax_budgeted(
         world,
-        blocks,
-        fluids,
-        secondary_properties,
+        LightingRegistries::new(blocks, fluids, secondary_properties),
         queue,
         context,
         changed_chunks,

@@ -31,6 +31,27 @@ const HUE_VECTOR_Y: [i32; 32] = [
     -569, -724, -851, -946, -1004, -1024, -1004, -946, -851, -724, -569, -392, -200,
 ];
 
+#[derive(Clone, Copy)]
+pub(super) struct LightingRegistries<'a> {
+    blocks: &'a BlockRegistry,
+    fluids: &'a FluidRegistry,
+    secondary_properties: &'a SecondaryPropertyRegistry,
+}
+
+impl<'a> LightingRegistries<'a> {
+    pub(super) fn new(
+        blocks: &'a BlockRegistry,
+        fluids: &'a FluidRegistry,
+        secondary_properties: &'a SecondaryPropertyRegistry,
+    ) -> Self {
+        Self {
+            blocks,
+            fluids,
+            secondary_properties,
+        }
+    }
+}
+
 pub(super) fn relax(
     world: &mut VoxelWorld,
     blocks: &BlockRegistry,
@@ -42,9 +63,7 @@ pub(super) fn relax(
     let mut context = LightingContext::default();
     relax_budgeted(
         world,
-        blocks,
-        fluids,
-        secondary_properties,
+        LightingRegistries::new(blocks, fluids, secondary_properties),
         queue,
         &mut context,
         &mut changed_chunks,
@@ -55,9 +74,7 @@ pub(super) fn relax(
 
 pub(super) fn relax_budgeted(
     world: &mut VoxelWorld,
-    blocks: &BlockRegistry,
-    fluids: &FluidRegistry,
-    secondary_properties: &SecondaryPropertyRegistry,
+    registries: LightingRegistries<'_>,
     queue: &mut LightingQueue,
     context: &mut LightingContext,
     changed_chunks: &mut HashSet<IVec3>,
@@ -85,9 +102,7 @@ pub(super) fn relax_budgeted(
         };
         let desired = desired_light(
             world,
-            blocks,
-            fluids,
-            secondary_properties,
+            registries,
             position,
             (cell, fluid),
             context,
@@ -105,19 +120,26 @@ pub(super) fn relax_budgeted(
 
 fn desired_light(
     world: &VoxelWorld,
-    blocks: &BlockRegistry,
-    fluids: &FluidRegistry,
-    secondary_properties: &SecondaryPropertyRegistry,
+    registries: LightingRegistries<'_>,
     position: IVec3,
     medium: (Option<VoxelCell>, Option<FluidCell>),
     context: &mut LightingContext,
 ) -> VoxelLight {
     let (cell, fluid) = medium;
-    let dampening = medium_dampening_for_cells(cell, fluid, blocks, fluids);
+    let dampening = medium_dampening_for_cells(cell, fluid, registries.blocks, registries.fluids);
     let blocks_light = dampening >= VoxelLight::MAX_LEVEL;
     let attenuation = dampening.max(1);
-    let transmission = light_transmission(world, blocks, secondary_properties, position);
-    let emitted = block_emission_for_cell(cell, blocks, secondary_properties);
+    let transmission = light_transmission(
+        world,
+        registries.blocks,
+        registries.secondary_properties,
+        position,
+    );
+    let emitted = block_emission_for_cell(
+        cell,
+        registries.blocks,
+        registries.secondary_properties,
+    );
 
     if blocks_light {
         return VoxelLight::new_hsi(0, emitted);
@@ -125,7 +147,13 @@ fn desired_light(
 
     let neighbor_lights = CARDINAL_NEIGHBORS.map(|direction| world.light_at(position + direction));
     let sky = context
-        .direct_sky_light(world, blocks, fluids, secondary_properties, position)
+        .direct_sky_light(
+            world,
+            registries.blocks,
+            registries.fluids,
+            registries.secondary_properties,
+            position,
+        )
         .max(filtered_level(
             propagated_neighbor_sky(&neighbor_lights, attenuation),
             transmission,
