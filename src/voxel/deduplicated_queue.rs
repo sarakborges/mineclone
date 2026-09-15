@@ -46,7 +46,8 @@ where
 
     pub(crate) fn enqueue_front(&mut self, value: T) {
         if !self.queued.insert(value) {
-            self.pending.retain(|pending| *pending != value);
+            let removed = self.remove_pending(value);
+            debug_assert!(removed, "queued value must exist in the pending queue");
         }
 
         self.pending.push_front(value);
@@ -61,7 +62,8 @@ where
             return false;
         }
 
-        self.pending.retain(|pending| *pending != value);
+        let removed = self.remove_pending(value);
+        debug_assert!(removed, "queued value must exist in the pending queue");
         true
     }
 
@@ -83,6 +85,14 @@ where
 
     pub(crate) fn len(&self) -> usize {
         self.pending.len()
+    }
+
+    fn remove_pending(&mut self, value: T) -> bool {
+        let Some(index) = self.pending.iter().position(|pending| *pending == value) else {
+            return false;
+        };
+        self.pending.remove(index);
+        true
     }
 }
 
