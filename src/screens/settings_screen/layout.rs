@@ -8,7 +8,7 @@ use crate::{
     ui::{
         button::menu_button,
         cosmic_background::{self, STAR_FIELD},
-        scrollbar::vertical_scrollbar,
+        scrollbar::persistent_vertical_scrollbar,
         surface, theme, typography,
     },
     world::{NewWorldConfig, game_rules::GameRules, render_distance::RenderDistanceSettings},
@@ -16,8 +16,8 @@ use crate::{
 
 use super::{
     game_rules_section::game_rules_section,
+    hud_section::hud_section,
     languages_section::languages_section,
-    miscellaneous_section::miscellaneous_section,
     navigation::{
         SettingsBackButton, SettingsSection, SettingsSectionPanel, SettingsSectionSelection,
         section_button,
@@ -37,14 +37,14 @@ const SIDEBAR_BUTTON_GAP: f32 = 11.0;
 const START_SECTIONS: &[SettingsSection] = &[
     SettingsSection::Graphics,
     SettingsSection::Languages,
-    SettingsSection::Miscellaneous,
+    SettingsSection::Hud,
 ];
 const IN_WORLD_SECTIONS: &[SettingsSection] = &[
     SettingsSection::WorldSettings,
     SettingsSection::GameRules,
     SettingsSection::Graphics,
     SettingsSection::Languages,
-    SettingsSection::Miscellaneous,
+    SettingsSection::Hud,
 ];
 const CREATE_WORLD_SECTIONS: &[SettingsSection] =
     &[SettingsSection::General, SettingsSection::GameRules];
@@ -340,7 +340,7 @@ fn spawn_sidebar(
                         })
                         .id();
 
-                    frame.spawn(vertical_scrollbar(scroll_area_id));
+                    frame.spawn(persistent_vertical_scrollbar(scroll_area_id));
                 });
         });
 }
@@ -454,7 +454,7 @@ fn spawn_content(columns: &mut ChildSpawnerCommands, view: SettingsContentView<'
                         })
                         .id();
 
-                    frame.spawn(vertical_scrollbar(scroll_area_id));
+                    frame.spawn(persistent_vertical_scrollbar(scroll_area_id));
                 });
         });
 }
@@ -487,14 +487,10 @@ fn spawn_global_settings_panels(
 
     panels
         .spawn((
-            SettingsSectionPanel(SettingsSection::Miscellaneous),
-            section_panel_node(selected == SettingsSection::Miscellaneous),
+            SettingsSectionPanel(SettingsSection::Hud),
+            section_panel_node(selected == SettingsSection::Hud),
         ))
-        .with_child(miscellaneous_section(
-            hud_settings.display_tooltips(),
-            localization,
-            language,
-        ));
+        .with_child(hud_section(hud_settings, localization, language));
 }
 
 fn spawn_section_button(
