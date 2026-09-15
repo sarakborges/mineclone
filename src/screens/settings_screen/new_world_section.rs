@@ -21,7 +21,7 @@ use super::{
     game_rules_section::TicksPerSecondInputState,
     navigation::{SettingsSection, SettingsSectionSelection},
     spawn_biome_section::{SpawnBiomeDropdownState, spawn_biome_setting},
-    world_settings_section::world_settings_section,
+    world_settings_section::{GameModeButton, world_settings_section},
 };
 
 const RANDOM_SEED_BUTTON_WIDTH: f32 = 190.0;
@@ -165,6 +165,52 @@ pub(super) fn spawn_new_world_footer(
             .to_owned(),
         NewWorldFooterAction::CreateWorld,
     ));
+}
+
+pub(super) fn sync_new_world_input_focus_to_section(
+    selection: Res<SettingsSectionSelection>,
+    mut seed_input: ResMut<SeedInputState>,
+    mut ticks_input: ResMut<TicksPerSecondInputState>,
+    mut spawn_biome_dropdown: ResMut<SpawnBiomeDropdownState>,
+) {
+    if !selection.is_changed() {
+        return;
+    }
+
+    match selection.selected {
+        SettingsSection::General => ticks_input.reset(),
+        SettingsSection::GameRules => {
+            seed_input.reset();
+            spawn_biome_dropdown.close();
+        }
+        _ => {
+            seed_input.reset();
+            ticks_input.reset();
+            spawn_biome_dropdown.close();
+        }
+    }
+}
+
+pub(super) fn handle_new_world_general_control_focus(
+    interactions: Query<
+        &Interaction,
+        (
+            Changed<Interaction>,
+            Or<(With<RandomSeedButton>, With<GameModeButton>)>,
+        ),
+    >,
+    mut seed_input: ResMut<SeedInputState>,
+    mut spawn_biome_dropdown: ResMut<SpawnBiomeDropdownState>,
+) {
+    if !interactions
+        .iter()
+        .any(|interaction| *interaction == Interaction::Pressed)
+    {
+        return;
+    }
+
+    seed_input.reset();
+    spawn_biome_dropdown.close();
 }
 
 pub(super) fn handle_seed_focus(
