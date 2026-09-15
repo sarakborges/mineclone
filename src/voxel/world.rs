@@ -233,8 +233,9 @@ impl VoxelWorld {
             let x = local_position.x as usize;
             let y = local_position.y as usize;
             let z = local_position.z as usize;
-            let current_block = chunk.cell_at(local_position.x, local_position.y, local_position.z);
-            let current_fluid = chunk.fluid_at(local_position.x, local_position.y, local_position.z);
+            let (current_block, current_fluid, _) = chunk
+                .sample_local(local_position.x, local_position.y, local_position.z)
+                .expect("split local block coordinates must stay inside the chunk");
 
             if current_block == block && (block.is_none() || current_fluid.is_none()) {
                 return None;
@@ -266,15 +267,14 @@ impl VoxelWorld {
         let x = local_position.x as usize;
         let y = local_position.y as usize;
         let z = local_position.z as usize;
+        let (current_block, current_fluid, _) = chunk
+            .sample_local(local_position.x, local_position.y, local_position.z)
+            .expect("split local fluid coordinates must stay inside the chunk");
 
-        if fluid.is_some()
-            && chunk
-                .cell_at(local_position.x, local_position.y, local_position.z)
-                .is_some()
-        {
+        if fluid.is_some() && current_block.is_some() {
             return None;
         }
-        if chunk.fluid_at(local_position.x, local_position.y, local_position.z) == fluid {
+        if current_fluid == fluid {
             return None;
         }
 
