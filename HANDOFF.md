@@ -35,12 +35,12 @@ O bump faz parte do bloco; não considerar o bloco fechado antes de atualizar `V
 
 O CI de Rust é parte obrigatória do fechamento de qualquer bloco de código.
 
-- O workflow `.github/workflows/ci.yml` roda em `push` para `develop` e `main`, além de `pull_request`.
-- O CI valida `cargo clippy --all-targets --all-features -- -D warnings`, `cargo check` e `cargo test`.
-- Não considerar um bloco de código encerrado enquanto esses checks não estiverem verdes para o HEAD correspondente.
+- `.github/workflows/ci.yml` roda em `push` para `develop` e `main`, além de `pull_request`.
+- Gates autoritativos: `cargo clippy --all-targets --all-features -- -D warnings`, `cargo check` e `cargo test`.
+- Não considerar bloco de código encerrado enquanto esses checks não estiverem verdes para o HEAD correspondente.
 - Se o usuário enviar output de compilação/runtime, corrigir todos os errors e warnings relacionados antes de continuar refactors maiores.
-- `cargo fmt`/`rustfmt` não é gate de CI e formatação não deve quebrar build/validation.
-- Não ficar em polling repetitivo de CI: consultar o run quando necessário e agir sobre resultado concreto.
+- `cargo fmt`/`rustfmt` não é gate de CI.
+- Não ficar em polling repetitivo de CI; consultar runs quando houver resultado concreto para agir.
 - Comunicação direta: menos narração, mais mudança concreta.
 
 ## Handoff — obrigatório
@@ -76,6 +76,8 @@ Princípios principais:
 15. Não criar abstração genérica acima de generation/mesh tasks quando o lifecycle comum já está em `ChunkTaskQueue`.
 16. Terrain/fluid/lighting remesh de background usa pipeline async; apenas remesh de geometry imediato de edição do jogador permanece síncrono.
 17. Solvers dinâmicos caros devem ter teto temporal e de quantidade quando o trabalho puder variar muito por frame.
+18. Sistemas visuais devem evitar reescrever `Transform`, `Visibility` ou assets com o mesmo valor; `Assets::get_mut` só deve ser usado quando o conteúdo do asset realmente precisa mudar.
+19. Quando invariants permitirem, separar refresh estrutural de material/textura de refresh leve de tint/orientação/posição.
 
 ---
 
@@ -83,28 +85,34 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`5ced8cda257b88cea3a485b1ffc4a4a4256e77b8`
+`4a3220d443f6af296fc62d2a99ee6382c1790e21`
 
-Commit: `Bump version to 0.12.98`
+Commit: `Bump version to 0.12.102`
 
-Código/configuração do bloco 0.12.98:
+Blocos recentes:
 
-- `694f6df2a4aba668db698cfb92b4d3bd6af715eb` — `Run Rust validation on develop`
-- `5ced8cda257b88cea3a485b1ffc4a4a4256e77b8` — `Bump version to 0.12.98`
+- `3415295b19698c2acada803f36d16a65166ada62` — `Avoid redundant underwater HUD updates`
+- `547ddf62879370fa8dc067e82f66d5cdc067cb23` — `Bump version to 0.12.99`
+- `6d078797d8c5b566e2b013c9d0163de4d8088181` — `Avoid redundant targeting visual updates`
+- `bf6cdf044f1327f259a874400f6637e763412013` — `Bump version to 0.12.100`
+- `262bec7cf2fe5441e7659d002eb8b343f4e4e324` — `Make placement preview updates change driven`
+- `4702a9d4b0e6ce09e6f45f7c629ff3d1966411f3` — `Bump version to 0.12.101`
+- `c95975361b01c11f462298a7b89e48d2e6f24bbc` — `Separate held block material and tint refresh`
+- `4a3220d443f6af296fc62d2a99ee6382c1790e21` — `Bump version to 0.12.102`
 
-`VERSION`: `0.12.98`
+`VERSION`: `0.12.102`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever código.
 
 ## CI atual
 
-O workflow de validação:
+Estado observado durante esta gravação:
 
-- roda em push para `develop` e `main`;
-- roda em pull requests;
-- instala `clippy`, mas não `rustfmt`;
-- executa Clippy com warnings como erro, `cargo check` e `cargo test`;
-- não executa `cargo fmt`, não altera fontes e não falha por diferença de formatação.
+- 0.12.100 / run `34990511864`: Clippy **success**, `cargo check` **success**, testes ainda em execução na última consulta.
+- 0.12.101 / run `34990749459`: Clippy ainda em execução na última consulta; check/test pendentes.
+- 0.12.102 / run `34990965664`: enfileirado na última consulta.
+
+O bloco 0.12.102 ainda não está encerrado enquanto Clippy/check/test do HEAD correspondente não estiverem verdes.
 
 ---
 
@@ -156,27 +164,42 @@ A auditoria arquitetural/performance segue ativa. O roadmap vem do canon + inspe
 - Frontier de fluid reserva capacidade a partir de boundary dynamic-fluid metadata.
 - Lighting changed-chunk scratch e emission-edit maps preservam capacidade entre frames sem manter caches derivados stale.
 
-## 0.12.96 — build validation regressions
+## 0.12.96–0.12.98 — validation/CI
 
-- Corrigidas regressões de build detectadas pelo CI após refactors anteriores.
-- Bootstrap meshing passou a consumir `ChunkMeshTaskOutput.meshes` preservando validação de dependencies.
-- Tipos usados por assertions/testes receberam `Debug` onde necessário e imports mortos foram removidos.
-- Formatação foi aplicada naquele momento porque o workflow antigo ainda a exigia.
+- Bootstrap meshing foi corrigido para consumir `ChunkMeshTaskOutput.meshes` preservando dependencies.
+- Strict Clippy ficou limpo de warnings estruturais; helpers mortos foram removidos/limitados a `cfg(test)`.
+- CI passou a rodar em push para `develop`; formatação deixou de ser gate.
+- Gates autoritativos são Clippy com warnings como erro, `cargo check` e `cargo test`.
 
-## 0.12.97 — strict Clippy cleanup
+## 0.12.99 — underwater HUD sem dirtying contínuo
 
-- `cargo clippy --all-targets --all-features -- -D warnings` foi limpo de warnings estruturais.
-- Queries/caches complexos receberam aliases onde isso reduz complexidade real.
-- APIs/test helpers mortos foram removidos ou limitados a `cfg(test)`.
-- Exceções `too_many_arguments` ficaram explícitas apenas onde a assinatura preserva atomicidade/ownership de invariants.
-- O run correspondente passou Clippy, `cargo check` e 174 testes; a única falha restante naquele workflow era o gate de formatação.
+- Consulta do voxel do olho continua por frame porque acompanha a câmera e é O(1).
+- `Visibility` só muda ao entrar/sair da água.
+- Blend HSI/opacity e `BackgroundColor` só são recalculados ao entrar submerso ou quando os inputs de biome visuals mudam.
+- Permanecer parado/submerso não marca UI como alterada a cada frame.
 
-## 0.12.98 — CI no develop sem format gate
+## 0.12.100 — targeting highlight idempotente
 
-- CI passa a rodar diretamente em push para `develop`, eliminando a necessidade de merge em `main` só para validar.
-- `cargo fmt --all`, artifact de fontes formatadas e `git diff --exit-code -- '*.rs'` foram removidos do workflow.
-- `rustfmt` saiu dos components instalados; `clippy` permanece.
-- Gates autoritativos do CI agora são Clippy/warnings, `cargo check` e `cargo test`.
+- Highlight e brush ghost só escrevem `Transform`/`Visibility` quando o valor mudou.
+- Brush ghost compara `base_color` antes de pedir `Assets<StandardMaterial>::get_mut`.
+- Uso contínuo do brush não marca o mesmo material como modificado em todo frame.
+
+## 0.12.101 — placement preview change-driven
+
+- `BlockModel::set_block_id` só é chamado quando o ID realmente muda.
+- Face materials são reconstruídos apenas em troca de bloco ou mudança das definições de bloco.
+- Tint usa cache de `(block_id, xz)` e só é reaplicado quando bloco/bioma/biome field/posição horizontal relevante mudam.
+- Transform/rotation/visibility do root só são escritos quando necessário.
+- Preview sem seleção não revarre faces a cada frame depois de já estar vazio.
+
+## 0.12.102 — held block separa material, orientação e tint
+
+- `HeldBlockVisualCache` mantém célula horizontal e tint aplicado.
+- Troca de bloco ou mudança de `BlockRegistry` reconstrói materiais/layers.
+- Mudança de orientação apenas atualiza a rotação do held root.
+- Movimento entre células recalcula tint sem reconstruir textura/layers.
+- Assets de materiais só recebem novo tint quando a cor efetivamente mudou ou o material acabou de ser reconstruído.
+- Held root/face visibility e block ID deixam de ser reescritos sem mudança real.
 
 ---
 
@@ -205,6 +228,8 @@ Não desfazer sem evidência nova:
 - Pedidos `Geometry` e `Lighting` do mesmo coord podem ser coalescidos porque produzem o mesmo terrain mesh; `Fluid` continua independente salvo quando full geometry já o supersede.
 - `FluidId` pode ser usado como índice denso enquanto `FluidRegistry` mantiver IDs por posição em `definitions`; crescer o registry deve redimensionar scratch/state, não voltar a hashing por frame.
 - Scratch containers podem preservar capacidade entre frames, mas caches derivados do conteúdo do mundo não devem sobreviver sem invalidation autoritativa.
+- Componentes/Assets não devem ser mutavelmente acessados só para regravar o mesmo valor; isso pode propagar change detection ou asset upload desnecessário.
+- Block model material/topology refresh deve ficar separado de tint/orientation refresh quando os inputs autoritativos permitem essa divisão.
 - Solvers dinâmicos devem preservar a semântica da frontier ao ganhar budgets temporais.
 - Archive compactado permanece preferível a guardar buffers COW brutos; restore caro é controlado por scheduling budget.
 - Formatação de Rust não é requisito de CI; não reintroduzir format gate sem pedido explícito.
@@ -216,12 +241,13 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Confirmar o CI do HEAD de 0.12.98 no próprio `develop`; Clippy/check/test são os gates autoritativos.
-2. Continuar inspeção objetiva de `Update`/`PostUpdate` por scans globais ou builds síncronos; os principais builds de chunk/remesh, lighting e fluid já estão async/budgetados.
-3. Revisar integração/spawn de mesh apenas se houver ganho estrutural sem introduzir lifecycle parcial por submesh.
-4. Revisar custo do rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para eliminar o pequeno sort do raio local 3.
-5. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel.
-6. Continuar procurando allocations/scratch descartados em hot paths quando a capacidade puder ser reutilizada sem manter dados derivados stale.
+1. Fechar o gate de CI do HEAD 0.12.102; corrigir qualquer falha de Clippy/check/test antes de novo bloco de código.
+2. `animate_viewmodel` ainda reescreve o transform base em todo frame ocioso. Aplicar early-out com restauração única ao terminar interaction/item-switch, preservando animação e estado base.
+3. Continuar inspeção objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos e escritas redundantes em Components/Assets.
+4. Revisar integração/spawn de mesh apenas se houver ganho estrutural sem introduzir lifecycle parcial por submesh.
+5. Revisar custo do rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para eliminar o pequeno sort do raio local 3.
+6. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel.
+7. Continuar procurando allocations/scratch descartados em hot paths quando a capacidade puder ser reutilizada sem manter dados derivados stale.
 
 ---
 
@@ -233,7 +259,7 @@ Meta: ~60 FPS estáveis.
 - integração, restore, unload, lighting e fluid work budgetados;
 - revision tracking para stale async work;
 - caches/metadata no owner correto;
-- evitar scans globais por frame e allocations temporárias em hot paths;
+- evitar scans globais por frame, allocations temporárias e mutações idempotentes em hot paths;
 - não trocar corretude por performance aparente;
 - natural hydrology continua generation-authoritative.
 
