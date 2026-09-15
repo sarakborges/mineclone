@@ -90,7 +90,7 @@ Commits recentes relevantes:
 - `0.14.4` / run `35011640625`: Clippy **success**, `cargo check` **success**.
 - `0.14.5` / run `35012542969`: Clippy **success**, `cargo check` **success**.
 - `0.14.12` / run `35018588468`: workflow **success** no HEAD conferido na retomada.
-- `0.14.13`: revisão estática e `git diff --check` concluídos; CI aguardando push e resultado.
+- `0.14.13` / [run `35019877410`](https://github.com/sarakborges/mineclone/actions/runs/35019877410), commit `f692534`: Clippy **success**, `cargo check` **success**. Revisão estática e `git diff --check` também concluídos. O commit seguinte apenas registra este resultado no handoff.
 - `cargo test` somente sob pedido explícito.
 
 ---
@@ -201,13 +201,12 @@ O hint já era filho do Player HUD, mas `Visibility::Visible` sobrescrevia a her
 
 Se nenhum runtime error/warning tiver prioridade:
 
-1. Conferir o resultado do CI da `0.14.13` e priorizar qualquer erro/warning real antes do próximo refactor.
-2. Próximo ponto concreto de auditoria: `src/hud/inventory/sync.rs`, onde posição do cursor e estilos ainda escrevem `Node`, `BackgroundColor` e `BorderColor` sem comparar o resultado. Preservar change detection até a mutação real e reutilizar os primitives de `src/ui` quando houver invariant compartilhado.
-3. Continuar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes. Targeting consumers, estrelas e o bloco da hotbar acima já foram tratados; não repetir esses refactors sem evidência nova.
-4. Revisar integração/spawn de mesh apenas se houver ganho estrutural real sem lifecycle parcial por submesh.
-5. Revisar rebuild de seleção somente com ganho claro; não duplicar geração de volume para eliminar sort pequeno.
-6. Manter `notify_loaded_chunk_neighbors` conservador até existir metadata suficiente para provar otimização segura.
-7. Quando o usuário solicitar, rodar `cargo test` manualmente.
+1. Próximo ponto concreto de auditoria: `src/hud/inventory/sync.rs`, onde posição do cursor e estilos ainda escrevem `Node`, `BackgroundColor` e `BorderColor` sem comparar o resultado. Preservar change detection até a mutação real e reutilizar os primitives de `src/ui` quando houver invariant compartilhado.
+2. Continuar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes. Targeting consumers, estrelas e o bloco da hotbar acima já foram tratados; não repetir esses refactors sem evidência nova.
+3. Revisar integração/spawn de mesh apenas se houver ganho estrutural real sem lifecycle parcial por submesh.
+4. Revisar rebuild de seleção somente com ganho claro; não duplicar geração de volume para eliminar sort pequeno.
+5. Manter `notify_loaded_chunk_neighbors` conservador até existir metadata suficiente para provar otimização segura.
+6. Quando o usuário solicitar, rodar `cargo test` manualmente.
 
 # Performance direction
 
