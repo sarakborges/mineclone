@@ -21,15 +21,25 @@ use time::TimeHudPlugin;
 use underwater::UnderwaterTintPlugin;
 use world::WorldHudPlugin;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum TargetBlockPosition {
+    #[default]
+    Center,
+    TopRight,
+    Hidden,
+}
+
 #[derive(Resource, Clone, Copy, Debug)]
 pub(crate) struct HudSettings {
     display_tooltips: bool,
+    target_block_position: TargetBlockPosition,
 }
 
 impl Default for HudSettings {
     fn default() -> Self {
         Self {
             display_tooltips: true,
+            target_block_position: TargetBlockPosition::Center,
         }
     }
 }
@@ -41,6 +51,14 @@ impl HudSettings {
 
     pub(crate) fn set_display_tooltips(&mut self, display_tooltips: bool) {
         self.display_tooltips = display_tooltips;
+    }
+
+    pub(crate) const fn target_block_position(&self) -> TargetBlockPosition {
+        self.target_block_position
+    }
+
+    pub(crate) fn set_target_block_position(&mut self, position: TargetBlockPosition) {
+        self.target_block_position = position;
     }
 }
 
