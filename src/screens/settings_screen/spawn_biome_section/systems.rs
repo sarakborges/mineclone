@@ -29,7 +29,7 @@ use crate::screens::settings_screen::{
 };
 
 #[derive(SystemParam)]
-pub(super) struct SpawnBiomeUiContent<'w> {
+pub(in crate::screens::settings_screen) struct SpawnBiomeUiContent<'w> {
     biomes: Res<'w, BiomeRegistry>,
     localization: Res<'w, UiLocalization>,
     language: Res<'w, ActiveLanguage>,
@@ -58,7 +58,7 @@ impl SpawnBiomeUiContent<'_> {
     }
 }
 
-pub(super) fn populate_spawn_biome_options(
+pub(in crate::screens::settings_screen) fn populate_spawn_biome_options(
     mut commands: Commands,
     frames: Query<Entity, Added<SpawnBiomeOptionsFrame>>,
     lists: Query<Entity, Added<SpawnBiomeOptionsList>>,
@@ -155,7 +155,7 @@ fn spawn_option(
     ));
 }
 
-pub(super) fn handle_spawn_biome_dropdown_button(
+pub(in crate::screens::settings_screen) fn handle_spawn_biome_dropdown_button(
     buttons: Query<&Interaction, (Changed<Interaction>, With<SpawnBiomeDropdownButton>)>,
     mut state: ResMut<SpawnBiomeDropdownState>,
     mut seed_input: ResMut<SeedInputState>,
@@ -177,7 +177,7 @@ pub(super) fn handle_spawn_biome_dropdown_button(
     }
 }
 
-pub(super) fn close_spawn_biome_dropdown_outside_general(
+pub(in crate::screens::settings_screen) fn close_spawn_biome_dropdown_outside_general(
     selection: Res<SettingsSectionSelection>,
     mut state: ResMut<SpawnBiomeDropdownState>,
 ) {
@@ -186,7 +186,7 @@ pub(super) fn close_spawn_biome_dropdown_outside_general(
     }
 }
 
-pub(super) fn handle_spawn_biome_search_focus(
+pub(in crate::screens::settings_screen) fn handle_spawn_biome_search_focus(
     search_bars: Query<&Interaction, (Changed<Interaction>, With<SpawnBiomeSearchBar>)>,
     mut state: ResMut<SpawnBiomeDropdownState>,
 ) {
@@ -198,7 +198,7 @@ pub(super) fn handle_spawn_biome_search_focus(
     }
 }
 
-pub(super) fn handle_spawn_biome_option_buttons(
+pub(in crate::screens::settings_screen) fn handle_spawn_biome_option_buttons(
     options: Query<(&Interaction, &SpawnBiomeOption), Changed<Interaction>>,
     mut config: ResMut<NewWorldConfig>,
     mut state: ResMut<SpawnBiomeDropdownState>,
@@ -216,7 +216,7 @@ pub(super) fn handle_spawn_biome_option_buttons(
     }
 }
 
-pub(super) fn handle_spawn_biome_search_keyboard(
+pub(in crate::screens::settings_screen) fn handle_spawn_biome_search_keyboard(
     keys: Res<ButtonInput<KeyCode>>,
     mut keyboard_input: MessageReader<KeyboardInput>,
     mut state: ResMut<SpawnBiomeDropdownState>,
@@ -252,7 +252,7 @@ pub(super) fn handle_spawn_biome_search_keyboard(
     }
 }
 
-pub(super) fn sync_spawn_biome_dropdown_state(
+pub(in crate::screens::settings_screen) fn sync_spawn_biome_dropdown_state(
     state: Res<SpawnBiomeDropdownState>,
     content: SpawnBiomeUiContent,
     mut search_texts: Query<&mut Text, With<SpawnBiomeSearchText>>,
@@ -300,7 +300,7 @@ pub(super) fn sync_spawn_biome_dropdown_state(
     }
 }
 
-pub(super) fn sync_spawn_biome_selected_label(
+pub(in crate::screens::settings_screen) fn sync_spawn_biome_selected_label(
     config: Res<NewWorldConfig>,
     content: SpawnBiomeUiContent,
     mut labels: Query<&mut Text, With<SpawnBiomeDropdownLabel>>,
@@ -317,7 +317,7 @@ pub(super) fn sync_spawn_biome_selected_label(
     }
 }
 
-pub(super) fn sync_spawn_biome_option_labels(
+pub(in crate::screens::settings_screen) fn sync_spawn_biome_option_labels(
     content: SpawnBiomeUiContent,
     mut labels: Query<(&SpawnBiomeOptionLabel, &mut Text)>,
 ) {
@@ -333,7 +333,7 @@ pub(super) fn sync_spawn_biome_option_labels(
     }
 }
 
-pub(super) fn sync_spawn_biome_options(
+pub(in crate::screens::settings_screen) fn sync_spawn_biome_options(
     state: Res<SpawnBiomeDropdownState>,
     config: Res<NewWorldConfig>,
     content: SpawnBiomeUiContent,
