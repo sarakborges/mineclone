@@ -121,10 +121,14 @@ pub(super) fn relax_budgeted(
             continue;
         }
 
-        world.set_light_at(position, desired);
+        if !world.set_light_at_deferred_mesh_revision(chunk_coord, local_position, desired) {
+            continue;
+        }
         changed_chunks.insert(chunk_coord);
         queue.enqueue_with_neighbors(position);
     }
+
+    world.commit_deferred_light_mesh_revisions(changed_chunks.iter().copied());
 }
 
 fn desired_light(

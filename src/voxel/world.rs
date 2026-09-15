@@ -170,22 +170,42 @@ impl VoxelWorld {
         }
 
         let (chunk_coord, local_position) = split_world_position(world_position);
-        let changed = {
-            let Some(chunk) = self.chunks.get_mut(&chunk_coord) else {
-                return false;
-            };
-
-            chunk.set_light(
-                local_position.x as usize,
-                local_position.y as usize,
-                local_position.z as usize,
-                light,
-            )
-        };
+        let changed = self.set_light_at_deferred_mesh_revision(chunk_coord, local_position, light);
         if changed {
             self.bump_chunk_mesh_revision(chunk_coord);
         }
         changed
+    }
+
+    pub(in crate::voxel) fn set_light_at_deferred_mesh_revision(
+        &mut self,
+        chunk_coord: IVec3,
+        local_position: IVec3,
+        light: VoxelLight,
+    ) -> bool {
+        debug_assert!(local_position.x >= 0 && local_position.x < CHUNK_SIZE as i32);
+        debug_assert!(local_position.y >= 0 && local_position.y < CHUNK_SIZE as i32);
+        debug_assert!(local_position.z >= 0 && local_position.z < CHUNK_SIZE as i32);
+
+        let Some(chunk) = self.chunks.get_mut(&chunk_coord) else {
+            return false;
+        };
+
+        chunk.set_light(
+            local_position.x as usize,
+            local_position.y as usize,
+            local_position.z as usize,
+            light,
+        )
+    }
+
+    pub(in crate::voxel) fn commit_deferred_light_mesh_revisions(
+        &mut self,
+        coords: impl IntoIterator<Item = IVec3>,
+    ) {
+        for coord in coords {
+            self.bump_chunk_mesh_revision(coord);
+        }
     }
 
     pub(crate) fn rebuild_chunk_light(
