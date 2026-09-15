@@ -43,6 +43,8 @@ const MAX_CHUNKS_PER_FRAME: usize = 4;
 const MAX_GENERATION_TASKS_DISPATCHED_PER_FRAME: usize = 4;
 const MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME: usize = 8;
 const MAX_MESH_RESULTS_COLLECTED_PER_FRAME: usize = 4;
+const GENERATION_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
+const MESH_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(2);
 const STREAMING_BUDGET: Duration = Duration::from_millis(4);
 
 #[derive(Resource, Default)]
@@ -149,11 +151,19 @@ pub(super) fn stream_chunks(
 
 fn collect_generated_chunks(runtime: &mut ChunkStreamingRuntime<'_, '_>) {
     let current_revision = runtime.generation_tasks.revision();
-    let completed = runtime
-        .generation_tasks
-        .collect_ready(MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME);
+    let mut budget = FrameWorkBudget::new(GENERATION_RESULT_INTEGRATION_BUDGET, 1)
+        .with_maximum_items(MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME);
 
-    for completed in completed {
+    loop {
+        if budget.exhausted() {
+            break;
+        }
+
+        let Some(completed) = runtime.generation_tasks.poll_ready() else {
+            break;
+        };
+        budget.record(1);
+
         if completed.revision != current_revision {
             runtime.state.requeue(completed.coord);
             continue;
@@ -272,11 +282,19 @@ fn collect_built_chunk_meshes(
     runtime: &mut ChunkStreamingRuntime<'_, '_>,
 ) {
     let current_revision = runtime.mesh_tasks.revision();
-    let completed = runtime
-        .mesh_tasks
-        .collect_ready(MAX_MESH_RESULTS_COLLECTED_PER_FRAME);
+    let mut budget = FrameWorkBudget::new(MESH_RESULT_INTEGRATION_BUDGET, 1)
+        .with_maximum_items(MAX_MESH_RESULTS_COLLECTED_PER_FRAME);
 
-    for completed in completed {
+    loop {
+        if budget.exhausted() {
+            break;
+        }
+
+        let Some(completed) = runtime.mesh_tasks.poll_ready() else {
+            break;
+        };
+        budget.record(1);
+
         if completed.revision != current_revision {
             runtime.state.mark_ready(completed.coord);
             continue;
