@@ -12,8 +12,6 @@ const SITE_SEARCH_DIAMETER: usize = (SITE_SEARCH_RADIUS * 2 + 1) as usize;
 const SITE_SAMPLE_COUNT: usize = SITE_SEARCH_DIAMETER * SITE_SEARCH_DIAMETER;
 const MAX_WEIGHT_ENTRIES: usize = SITE_SAMPLE_COUNT + 1;
 
-type SampledSite = (IVec2, Vec2, f32, Option<usize>);
-
 impl BiomeField {
     pub fn sample_surface(&self, position: Vec2) -> BiomeFieldSample<'_> {
         let warped = warp_surface_position(position, self.seed);
