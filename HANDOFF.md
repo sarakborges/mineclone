@@ -84,11 +84,11 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`198c6c2b0197914365e6e4427c13124c041c90d3`
+`f82800ba70a3b7071e272b773bea66017c05de51`
 
-Commit: `Rebuild only terrain render allocation`
+Commit: `Seed chunk light through local storage`
 
-`VERSION`: `0.12.57`
+`VERSION`: `0.12.58`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever, porque podem ter avançado.
 
@@ -243,6 +243,12 @@ A auditoria arquitetural foi reiniciada a partir de `0.12.5`/`0.12.8` e segue at
 - Mudanças de `ChunkMeshKey`, quantidade de terrain meshes ou handles faltantes não recriam mais a allocation fluida.
 - Chunk totalmente vazio continua usando refresh completo para garantir remoção de todo conteúdo renderizado.
 
+### 0.12.58 — seed direto de lighting usa storage local do chunk
+- O scan acima do chunk continua lendo o `VoxelWorld` autoritativo e produz apenas 256 níveis iniciais de skylight, um por coluna local.
+- `VoxelWorld::rebuild_chunk_light` restringe a mutação ao canal de light do chunk e entrega à política apenas coordenadas locais + cópias de `cell/fluid`; não expõe `&mut VoxelChunk`.
+- Os 4.096 voxels internos deixam de fazer `sample_at(position)` + `set_light_at(position)`, eliminando 8.192 resoluções de posição/chunk por seed.
+- A regra de dampening, emissão e ordem top-down permanece igual e não foi criado buffer temporário de 4.096 luzes.
+
 ---
 
 # Decisões explícitas da auditoria
@@ -253,6 +259,7 @@ Não desfazer sem evidência nova:
 - Não transformar unload em pipeline incremental com snapshot temporal de streaming sem evidência de hotspot real; isso adicionaria ownership cruzado/estado persistente para evitar scan ocasional.
 - `ChunkContent`, `ChunkGeneration`, `CurrentDimensionContext`, `ChunkRenderer` e `ChunkUnloadRuntime` continuam coerentes enquanto representarem os concerns atuais.
 - Não separar lighting remesh em simples atualização de atributos mantendo índices fixos: `should_flip_diagonal` também depende da block light e pode mudar a topologia indexada quando AO empata.
+- Não expor `VoxelWorld::chunk_mut` genericamente só para otimizar lighting; mutações bulk devem permanecer estreitas e ownership-aware.
 - Não reabrir bugs antigos automaticamente; só se permanecerem ativos ou houver regressão reportada.
 
 ---
@@ -261,10 +268,10 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Revisar o seed direto de lighting: dentro do próprio chunk ele ainda resolve `sample_at` e `set_light_at` por posição; procurar uma forma estreita de operar no `VoxelChunk` local sem abrir ownership mutável amplo no `VoxelWorld`.
-2. Continuar procurando chamadas repetidas de `VoxelWorld`/`VoxelRead` para a mesma posição nos hot paths restantes e usar `sample_at` apenas quando múltiplos aspectos do mesmo voxel forem necessários.
-3. Só reabrir uma separação específica de lighting/topology se existir representação que preserve também mudanças de diagonal/índices sem duplicar ownership da geometria.
-4. Manter `DeduplicatedQueue` como owner de deduplicação/priority e atacar somente operações O(n) concretas em hot paths.
+1. Continuar procurando chamadas repetidas de `VoxelWorld`/`VoxelRead` para a mesma posição nos hot paths restantes e usar `sample_at` apenas quando múltiplos aspectos do mesmo voxel forem necessários.
+2. Revisar operações O(n) concretas restantes em `DeduplicatedQueue`/filas derivadas antes de alterar sua estrutura; prioridade e deduplicação continuam pertencendo ao primitive canônico.
+3. Revisar o custo de `enqueue_emission_edit_volumes`: expansão Manhattan de emissores pode inserir milhares de posições e deve continuar deduplicada, mas só otimizar se houver invariant que reduza trabalho sem perder relight em remoção/oclusão.
+4. Só reabrir uma separação específica de lighting/topology se existir representação que preserve também mudanças de diagonal/índices sem duplicar ownership da geometria.
 5. Só voltar a unload incremental, worldgen/cache ou task lifecycle se surgir evidência objetiva nova.
 6. Rendering/HUD continuam change-driven; evitar micro-otimização por estética.
 
