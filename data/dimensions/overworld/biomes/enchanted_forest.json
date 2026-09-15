@@ -23,7 +23,7 @@
   "structures": [
     {
       "id": "asteria:oak_tree",
-      "placement": { "spacing": 12, "chance": 0.62, "jitter": 3 }
+      "placement": { "spacing": 12, "chance": 0.66, "jitter": 3 }
     },
     {
       "id": "asteria:small_boulder",
