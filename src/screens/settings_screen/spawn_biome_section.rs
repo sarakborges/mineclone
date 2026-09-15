@@ -59,22 +59,22 @@ impl SpawnBiomeDropdownState {
 pub(super) struct SpawnBiomeDropdownButton;
 
 #[derive(Component)]
-struct SpawnBiomeDropdownLabel;
+pub(super) struct SpawnBiomeDropdownLabel;
 
 #[derive(Component)]
-struct SpawnBiomeDropdownPanel;
+pub(super) struct SpawnBiomeDropdownPanel;
 
 #[derive(Component)]
-struct SpawnBiomeSearchBar;
+pub(super) struct SpawnBiomeSearchBar;
 
 #[derive(Component)]
-struct SpawnBiomeSearchText;
+pub(super) struct SpawnBiomeSearchText;
 
 #[derive(Component)]
-struct SpawnBiomeOptionsList;
+pub(super) struct SpawnBiomeOptionsList;
 
 #[derive(Component)]
-struct SpawnBiomeOption {
+pub(super) struct SpawnBiomeOption {
     biome_id: Option<String>,
     search_label: String,
 }
@@ -394,6 +394,11 @@ pub(super) fn handle_spawn_biome_search_keyboard(
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    clippy::type_complexity,
+    reason = "spawn biome dropdown synchronizes one compact settings control from shared UI state"
+)]
 pub(super) fn sync_spawn_biome_dropdown_view(
     state: Res<SpawnBiomeDropdownState>,
     config: Res<NewWorldConfig>,
