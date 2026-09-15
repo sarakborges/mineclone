@@ -80,11 +80,13 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`3e934035d550fa4be24f7afdcac6750b08f1afd9`
+`ebebf75b361a3f0dfd84cba19d54e36f23c4057e`
 
-Commit: `Check unload budget after each chunk`
+Commit: `Bump version to 0.12.93`
 
-`VERSION`: `0.12.91`
+Código do bloco 0.12.93: `6af2ab58d6d7b802d61b984a7c8e5d17a97f7a64`
+
+`VERSION`: `0.12.93`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever código.
 
@@ -189,6 +191,19 @@ A auditoria arquitetural/performance segue ativa. O roadmap vem do canon + inspe
 - Chunks sujos que exigem archive encoding não podem mais obrigar oito operações antes de observar o budget.
 - Ordem farthest-first e backlog do streaming permanecem inalterados.
 
+### 0.12.92 — preallocation de filas voxel em bulk
+- `DeduplicatedQueue` ganhou `reserve` e construção via `From<Vec<T>>` já nasce com capacidade compatível com o input.
+- `VoxelUpdateQueue` expõe `reserve` para os owners de domínio.
+- Bulk enqueue de lighting reserva previamente o volume completo, boundary voxels ou boundary neighbors conforme o caso.
+- Evita crescimento incremental de `VecDeque`/`HashMap` durante seeds/relaxations grandes sem mudar a semântica deduplicada.
+
+### 0.12.93 — coalescência de terrain remesh Geometry/Lighting
+- `Geometry` e `Lighting` constroem o mesmo terrain mesh a partir do mesmo `ChunkMeshSnapshot`.
+- Quando ambos estão pendentes para o mesmo coord, o dispatch de `Lighting` agora consome o pedido `Geometry` redundante.
+- Se o pedido `Geometry` existia, mantém-se a regra anterior de que full terrain remesh supersede fluid-only remesh pendente.
+- Um pedido puramente `Lighting` não cancela trabalho `Fluid` independente.
+- Stale result continua re-enfileirado pelo kind da task; novas mudanças continuam entrando nas filas normais.
+
 ---
 
 # Decisões explícitas da auditoria
@@ -213,6 +228,7 @@ Não desfazer sem evidência nova:
 - Cache pruning não precisa acompanhar cada chunk do player; manter granularidade coerente com generation regions.
 - Qualquer mesh/remesh async deve validar presença/revisão de todo o halo antes de aplicar resultado.
 - Lighting remesh pertence ao background async; immediate geometry permanece síncrono enquanto feedback do edit justificar.
+- Pedidos `Geometry` e `Lighting` do mesmo coord podem ser coalescidos porque produzem o mesmo terrain mesh; `Fluid` continua independente salvo quando a regra de full geometry já o supersede.
 - Solvers dinâmicos devem preservar a semântica da frontier ao ganhar budgets temporais.
 - Archive compactado permanece preferível a guardar buffers COW brutos; restore caro é controlado por scheduling budget.
 - Não reabrir bugs antigos automaticamente; só se ativos/regredidos.
@@ -224,10 +240,10 @@ Não desfazer sem evidência nova:
 Se nenhum error/warning/runtime report tiver prioridade:
 
 1. Continuar inspeção objetiva de `Update`/`PostUpdate` por scans globais ou builds síncronos; os principais builds de chunk/remesh, lighting e fluid já estão async/budgetados.
-2. Auditar coalescência de pedidos `Geometry`/`Lighting` do mesmo coord no `ChunkRemeshTasks` somente se puder evitar trabalho duplicado sem perder invalidation/requeue correta.
+2. Revisar integração/spawn de mesh por custo main-thread unitário; budgets limitam quantidade, mas uma única integração ainda é indivisível.
 3. Revisar custo do rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para eliminar o pequeno sort do raio local 3.
-4. Revisar integração/spawn de mesh por custo main-thread unitário; budgets limitam quantidade, mas uma única integração ainda é indivisível.
-5. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel.
+4. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel.
+5. Continuar procurando allocations em bulk/hot paths onde o cardinal do batch já é conhecido e a reserva pode pertencer ao owner correto.
 6. Só voltar a collision/raycast, UI ou task lifecycle se surgir evidência objetiva nova.
 
 ---
