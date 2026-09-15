@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use super::{
     ChunkRenderContext,
-    pool::ChunkRenderPool,
+    pool::{ChunkRenderPool, retire_chunk_render_allocation},
     spawn::{
         BuiltChunkMesh, build_chunk_fluid_render_meshes, build_chunk_render_meshes,
         mesh_asset_bytes, spawn_chunk_mesh,
@@ -20,21 +20,7 @@ pub fn refresh_chunk_mesh(
         return;
     };
 
-    if let Some((entities, mesh_handles)) = render_pool.take(coord) {
-        for entity in entities {
-            commands.entity(entity).despawn();
-        }
-
-        if !mesh_handles.is_empty() {
-            commands.queue(move |world: &mut World| {
-                let mut meshes = world.resource_mut::<Assets<Mesh>>();
-                for handle in mesh_handles {
-                    let _ = meshes.remove(&handle);
-                }
-            });
-        }
-    }
-
+    retire_chunk_render_allocation(commands, render_pool, coord);
     spawn_chunk_mesh(commands, meshes, render_pool, coord, chunk, context);
 }
 
