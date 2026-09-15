@@ -13,6 +13,12 @@ use crate::{
     world::{NewWorldConfig, dimension::DEFAULT_DIMENSION_ID},
 };
 
+use super::{
+    game_rules_section::TicksPerSecondInputState,
+    navigation::{SettingsSection, SettingsSectionSelection},
+    new_world_section::SeedInputState,
+};
+
 const CONTROL_HEIGHT: f32 = 44.0;
 const SEARCH_HEIGHT: f32 = 40.0;
 const OPTION_HEIGHT: f32 = 40.0;
@@ -41,7 +47,7 @@ impl SpawnBiomeDropdownState {
         self.replace_search_on_next_input = false;
     }
 
-    fn close(&mut self) {
+    pub(super) fn close(&mut self) {
         self.open = false;
         self.search_query.clear();
         self.search_focused = false;
@@ -275,6 +281,8 @@ fn spawn_option(
 pub(super) fn handle_spawn_biome_dropdown_button(
     buttons: Query<&Interaction, (Changed<Interaction>, With<SpawnBiomeDropdownButton>)>,
     mut state: ResMut<SpawnBiomeDropdownState>,
+    mut seed_input: ResMut<SeedInputState>,
+    mut ticks_input: ResMut<TicksPerSecondInputState>,
 ) {
     if !buttons
         .iter()
@@ -286,7 +294,18 @@ pub(super) fn handle_spawn_biome_dropdown_button(
     if state.open {
         state.close();
     } else {
+        seed_input.reset();
+        ticks_input.reset();
         state.open();
+    }
+}
+
+pub(super) fn close_spawn_biome_dropdown_outside_general(
+    selection: Res<SettingsSectionSelection>,
+    mut state: ResMut<SpawnBiomeDropdownState>,
+) {
+    if selection.is_changed() && selection.selected != SettingsSection::General && state.open {
+        state.close();
     }
 }
 
@@ -313,7 +332,9 @@ pub(super) fn handle_spawn_biome_option_buttons(
             continue;
         }
 
-        config.set_spawn_biome(option.biome_id.clone());
+        if config.spawn_biome() != option.biome_id.as_deref() {
+            config.set_spawn_biome(option.biome_id.clone());
+        }
         state.close();
         break;
     }
@@ -391,7 +412,8 @@ pub(super) fn sync_spawn_biome_dropdown_view(
         &mut BorderColor,
     )>,
 ) {
-    let inputs_changed = state.is_changed()
+    let state_changed = state.is_changed();
+    let inputs_changed = state_changed
         || config.is_changed()
         || biomes.is_changed()
         || localization.is_changed()
@@ -447,16 +469,18 @@ pub(super) fn sync_spawn_biome_dropdown_view(
         }
     }
 
-    let normalized_query = state.search_query.to_lowercase();
+    let normalized_query = state_changed.then(|| state.search_query.to_lowercase());
     for (option, interaction, mut node, mut background, mut border) in &mut options {
-        if state.is_changed() || option.is_added() {
+        if let Some(normalized_query) = normalized_query.as_deref() {
             node.display = if normalized_query.is_empty()
-                || option.search_label.contains(normalized_query.as_str())
+                || option.search_label.contains(normalized_query)
             {
                 Display::Flex
             } else {
                 Display::None
             };
+        } else if option.is_added() {
+            node.display = Display::Flex;
         }
 
         if !config.is_changed() && !interaction.is_changed() && !option.is_added() {

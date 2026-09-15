@@ -19,10 +19,10 @@ use new_world_section::{
 };
 use render_distance_logic::{sync_render_distance_text, sync_slider_thumb};
 use spawn_biome_section::{
-    SpawnBiomeDropdownState, handle_spawn_biome_dropdown_button,
-    handle_spawn_biome_option_buttons, handle_spawn_biome_search_focus,
-    handle_spawn_biome_search_keyboard, populate_spawn_biome_options,
-    sync_spawn_biome_dropdown_view,
+    SpawnBiomeDropdownState, close_spawn_biome_dropdown_outside_general,
+    handle_spawn_biome_dropdown_button, handle_spawn_biome_option_buttons,
+    handle_spawn_biome_search_focus, handle_spawn_biome_search_keyboard,
+    populate_spawn_biome_options, sync_spawn_biome_dropdown_view,
 };
 use world_settings_section::{handle_game_mode_buttons, sync_game_mode_buttons};
 
@@ -74,6 +74,7 @@ impl Plugin for SettingsScreenPlugin {
                 Update,
                 (
                     handle_section_buttons,
+                    close_spawn_biome_dropdown_outside_general,
                     handle_seed_focus,
                     handle_random_seed,
                     handle_spawn_biome_dropdown_button,

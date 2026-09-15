@@ -171,8 +171,15 @@ pub(super) fn handle_seed_focus(
     interactions: Query<&Interaction, (Changed<Interaction>, With<SeedInput>)>,
     config: Res<NewWorldConfig>,
     mut input: ResMut<SeedInputState>,
+    mut spawn_biome_dropdown: ResMut<SpawnBiomeDropdownState>,
 ) {
+    let pressed = interactions
+        .iter()
+        .any(|interaction| *interaction == Interaction::Pressed);
     input.begin_if_pressed(interactions.iter(), config.seed().0);
+    if pressed {
+        spawn_biome_dropdown.close();
+    }
 }
 
 pub(super) fn handle_random_seed(
