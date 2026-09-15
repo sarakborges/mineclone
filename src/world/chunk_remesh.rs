@@ -108,6 +108,10 @@ impl ChunkRemeshQueue {
         self.lighting.remove(coord);
     }
 
+    fn has_background_work(&self) -> bool {
+        self.queue.len() > 0 || self.fluid.len() > 0 || self.lighting.len() > 0
+    }
+
     fn pop_renderable(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
         let coord = pop_renderable_from(
             &mut self.queue,
@@ -237,13 +241,21 @@ pub(super) fn process_chunk_remesh_queue(
     mut deferred: Local<Vec<(IVec3, ChunkRemeshTaskKind)>>,
 ) {
     tasks.sync_snapshot(&content);
-    collect_completed_remesh_tasks(
-        &content,
-        &mut renderer,
-        &world,
-        &mut queue,
-        &mut tasks,
-    );
+
+    if tasks.pending_count() > 0 {
+        collect_completed_remesh_tasks(
+            &content,
+            &mut renderer,
+            &world,
+            &mut queue,
+            &mut tasks,
+        );
+    }
+
+    if tasks.pending_count() >= MAX_REMESH_TASKS_IN_FLIGHT || !queue.has_background_work() {
+        return;
+    }
+
     dispatch_remesh_tasks(
         &world,
         &renderer.pool,
