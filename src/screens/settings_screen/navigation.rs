@@ -83,12 +83,18 @@ pub(super) fn sync_section_ui(
     mut panels: Query<(&SettingsSectionPanel, &mut Node)>,
     mut labels: Query<(&SettingsSectionButtonLabel, &mut Text)>,
 ) {
-    for (panel, mut node) in &mut panels {
-        node.display = if panel.0 == selection.selected {
-            Display::Flex
-        } else {
-            Display::None
-        };
+    if selection.is_changed() {
+        for (panel, mut node) in &mut panels {
+            node.display = if panel.0 == selection.selected {
+                Display::Flex
+            } else {
+                Display::None
+            };
+        }
+    }
+
+    if !language.is_changed() && !localization.is_changed() {
+        return;
     }
 
     for (label, mut text) in &mut labels {
