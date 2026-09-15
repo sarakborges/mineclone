@@ -24,7 +24,7 @@ pub(super) struct ChunkRenderAllocation {
     pub(super) fluid_mesh_bytes: usize,
 }
 
-pub(super) struct DetachedFluidRenderAllocation {
+pub(super) struct DetachedRenderAllocationParts {
     pub(super) entities: Vec<Entity>,
     pub(super) meshes: Vec<Handle<Mesh>>,
 }
@@ -62,7 +62,7 @@ impl ChunkRenderPool {
         coord: IVec3,
         meshes: &mut Assets<Mesh>,
         replacement_keys: &[ChunkMeshKey],
-        replacements: Vec<Mesh>,
+        replacements: &mut Vec<Mesh>,
         terrain_mesh_bytes: usize,
     ) -> bool {
         let Some(slot) = self.active.get_mut(&coord) else {
@@ -82,11 +82,11 @@ impl ChunkRenderPool {
 
         for (handle, replacement) in slot.meshes[..terrain_mesh_count]
             .iter()
-            .zip(replacements)
+            .zip(replacements.drain(..))
         {
-            let Some(mut existing) = meshes.get_mut(handle) else {
-                return false;
-            };
+            let mut existing = meshes
+                .get_mut(handle)
+                .expect("terrain mesh handle was checked before replacement");
             *existing = replacement;
         }
         slot.mesh_bytes = terrain_mesh_bytes.saturating_add(slot.fluid_mesh_bytes);
@@ -122,9 +122,9 @@ impl ChunkRenderPool {
         }
 
         for (handle, (_, replacement)) in fluid_handles.iter().zip(replacements.drain(..)) {
-            let Some(mut existing) = meshes.get_mut(handle) else {
-                return false;
-            };
+            let mut existing = meshes
+                .get_mut(handle)
+                .expect("fluid mesh handle was checked before replacement");
             *existing = replacement;
         }
 
@@ -136,10 +136,63 @@ impl ChunkRenderPool {
         true
     }
 
+    pub(super) fn detach_terrain_render_allocation(
+        &mut self,
+        coord: IVec3,
+    ) -> Option<DetachedRenderAllocationParts> {
+        let slot = self.active.get_mut(&coord)?;
+        let terrain_mesh_count = fluid_mesh_start(slot)?;
+        let terrain_entity_count = slot.entities.len().checked_sub(slot.fluid_ids.len())?;
+
+        let entities = slot.entities.drain(..terrain_entity_count).collect();
+        let meshes = slot.meshes.drain(..terrain_mesh_count).collect();
+        slot.mesh_keys
+            .drain(..terrain_mesh_count)
+            .for_each(drop);
+        slot.mesh_bytes = slot.fluid_mesh_bytes;
+
+        Some(DetachedRenderAllocationParts { entities, meshes })
+    }
+
+    pub(super) fn append_terrain_render_allocation(
+        &mut self,
+        coord: IVec3,
+        entities: Vec<Entity>,
+        mesh_handles: Vec<Handle<Mesh>>,
+        mesh_keys: Vec<ChunkMeshKey>,
+        terrain_mesh_bytes: usize,
+    ) {
+        debug_assert_eq!(mesh_handles.len(), mesh_keys.len());
+        debug_assert!(
+            mesh_keys
+                .iter()
+                .all(|key| matches!(key, ChunkMeshKey::Terrain { .. }))
+        );
+
+        let slot = self
+            .active
+            .get_mut(&coord)
+            .expect("terrain allocation append requires an active chunk render allocation");
+
+        let mut combined_entities = entities;
+        combined_entities.append(&mut slot.entities);
+        slot.entities = combined_entities;
+
+        let mut combined_meshes = mesh_handles;
+        combined_meshes.append(&mut slot.meshes);
+        slot.meshes = combined_meshes;
+
+        let mut combined_keys = mesh_keys;
+        combined_keys.append(&mut slot.mesh_keys);
+        slot.mesh_keys = combined_keys;
+
+        slot.mesh_bytes = terrain_mesh_bytes.saturating_add(slot.fluid_mesh_bytes);
+    }
+
     pub(super) fn detach_fluid_render_allocation(
         &mut self,
         coord: IVec3,
-    ) -> Option<DetachedFluidRenderAllocation> {
+    ) -> Option<DetachedRenderAllocationParts> {
         let slot = self.active.get_mut(&coord)?;
         let terrain_mesh_count = fluid_mesh_start(slot)?;
         let fluid_entity_count = slot.fluid_ids.len();
@@ -152,7 +205,7 @@ impl ChunkRenderPool {
         slot.fluid_mesh_bytes = 0;
         slot.fluid_ids.clear();
 
-        Some(DetachedFluidRenderAllocation { entities, meshes })
+        Some(DetachedRenderAllocationParts { entities, meshes })
     }
 
     pub(super) fn append_fluid_render_allocation(

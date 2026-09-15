@@ -8,6 +8,7 @@ use super::{
     spawn::{
         BuiltChunkMesh, build_chunk_fluid_render_meshes, build_chunk_terrain_render_meshes,
         mesh_asset_bytes, spawn_chunk_mesh, spawn_fluid_meshes_into_existing_allocation,
+        spawn_terrain_meshes_into_existing_allocation,
     },
 };
 
@@ -53,7 +54,7 @@ pub fn refresh_chunk_geometry_mesh(
         .iter()
         .map(|built| mesh_asset_bytes(built.mesh()))
         .sum();
-    let replacements = built_meshes
+    let mut replacements = built_meshes
         .into_iter()
         .map(BuiltChunkMesh::into_mesh)
         .collect::<Vec<_>>();
@@ -62,13 +63,27 @@ pub fn refresh_chunk_geometry_mesh(
         coord,
         meshes,
         &replacement_keys,
-        replacements,
+        &mut replacements,
         terrain_mesh_bytes,
     ) {
         return;
     }
 
-    refresh_chunk_mesh(commands, meshes, render_pool, coord, context);
+    let Some(detached) = render_pool.detach_terrain_render_allocation(coord) else {
+        refresh_chunk_mesh(commands, meshes, render_pool, coord, context);
+        return;
+    };
+    retire_render_allocation_parts(commands, detached.entities, detached.meshes);
+    spawn_terrain_meshes_into_existing_allocation(
+        commands,
+        meshes,
+        render_pool,
+        coord,
+        replacement_keys,
+        replacements,
+        terrain_mesh_bytes,
+        context,
+    );
 }
 
 pub fn refresh_chunk_fluid_mesh(

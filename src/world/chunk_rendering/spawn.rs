@@ -157,31 +157,21 @@ pub(crate) fn spawn_built_chunk_meshes(
     let mut fluid_mesh_bytes = 0;
 
     for built_mesh in built_meshes {
-        mesh_keys.push(built_mesh.key());
+        let key = built_mesh.key();
+        mesh_keys.push(key);
 
         match built_mesh {
             BuiltChunkMesh::Terrain(face_mesh) => {
                 pooled_mesh_bytes += mesh_asset_bytes(&face_mesh.mesh);
-                let mesh_handle = meshes.add(face_mesh.mesh);
-                let layer_materials = context
-                    .terrain_materials
-                    .for_face(face_mesh.block_id, face_mesh.face);
-
-                for (layer_index, material) in layer_materials.iter().enumerate() {
-                    let mut entity_commands = commands.spawn((
-                        Mesh3d(mesh_handle.clone()),
-                        MeshMaterial3d(material.clone()),
-                        transform,
-                        DespawnOnExit(GameState::Gameplay),
-                    ));
-
-                    if !face_mesh.casts_shadow || layer_index > 0 {
-                        entity_commands.insert(NotShadowCaster);
-                    }
-
-                    entities.push(entity_commands.id());
-                }
-
+                let (spawned_entities, mesh_handle) = spawn_terrain_mesh(
+                    commands,
+                    meshes,
+                    transform,
+                    key,
+                    face_mesh.mesh,
+                    context,
+                );
+                entities.extend(spawned_entities);
                 mesh_handles.push(mesh_handle);
             }
             BuiltChunkMesh::Fluid(fluid_mesh) => {
@@ -217,6 +207,38 @@ pub(crate) fn spawn_built_chunk_meshes(
     );
 }
 
+pub(super) fn spawn_terrain_meshes_into_existing_allocation(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    render_pool: &mut ChunkRenderPool,
+    coord: IVec3,
+    replacement_keys: Vec<ChunkMeshKey>,
+    replacements: Vec<Mesh>,
+    terrain_mesh_bytes: usize,
+    context: &ChunkRenderContext<'_>,
+) {
+    debug_assert_eq!(replacement_keys.len(), replacements.len());
+
+    let transform = Transform::from_translation(coord.as_vec3() * CHUNK_SIZE as f32);
+    let mut entities = Vec::new();
+    let mut mesh_handles = Vec::with_capacity(replacements.len());
+
+    for (key, mesh) in replacement_keys.iter().copied().zip(replacements) {
+        let (spawned_entities, mesh_handle) =
+            spawn_terrain_mesh(commands, meshes, transform, key, mesh, context);
+        entities.extend(spawned_entities);
+        mesh_handles.push(mesh_handle);
+    }
+
+    render_pool.append_terrain_render_allocation(
+        coord,
+        entities,
+        mesh_handles,
+        replacement_keys,
+        terrain_mesh_bytes,
+    );
+}
+
 pub(super) fn spawn_fluid_meshes_into_existing_allocation(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
@@ -246,6 +268,45 @@ pub(super) fn spawn_fluid_meshes_into_existing_allocation(
         fluid_ids,
         fluid_mesh_bytes,
     );
+}
+
+fn spawn_terrain_mesh(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    transform: Transform,
+    key: ChunkMeshKey,
+    mesh: Mesh,
+    context: &ChunkRenderContext<'_>,
+) -> (Vec<Entity>, Handle<Mesh>) {
+    let ChunkMeshKey::Terrain {
+        block_id,
+        face,
+        casts_shadow,
+    } = key
+    else {
+        panic!("terrain mesh spawn requires a terrain mesh key");
+    };
+
+    let mesh_handle = meshes.add(mesh);
+    let layer_materials = context.terrain_materials.for_face(block_id, face);
+    let mut entities = Vec::with_capacity(layer_materials.len());
+
+    for (layer_index, material) in layer_materials.iter().enumerate() {
+        let mut entity_commands = commands.spawn((
+            Mesh3d(mesh_handle.clone()),
+            MeshMaterial3d(material.clone()),
+            transform,
+            DespawnOnExit(GameState::Gameplay),
+        ));
+
+        if !casts_shadow || layer_index > 0 {
+            entity_commands.insert(NotShadowCaster);
+        }
+
+        entities.push(entity_commands.id());
+    }
+
+    (entities, mesh_handle)
 }
 
 fn spawn_fluid_mesh(
