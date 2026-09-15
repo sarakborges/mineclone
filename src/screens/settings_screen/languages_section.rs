@@ -103,15 +103,20 @@ pub(super) fn sync_language_buttons(
     mut buttons: Query<(
         Entity,
         &LanguageButton,
-        &Interaction,
+        Ref<Interaction>,
         Has<InteractionDisabled>,
         &mut BackgroundColor,
     )>,
     mut labels: Query<(&LanguageButtonLabel, &mut Text, &mut TextColor)>,
 ) {
+    let language_changed = active_language.is_changed() || localization.is_changed();
     let active_language = active_language.get();
 
     for (entity, button, interaction, disabled, mut background) in &mut buttons {
+        if !language_changed && !interaction.is_changed() {
+            continue;
+        }
+
         sync_selectable_button(
             &mut commands,
             entity,
@@ -120,6 +125,10 @@ pub(super) fn sync_language_buttons(
             *interaction,
             &mut background,
         );
+    }
+
+    if !language_changed {
+        return;
     }
 
     for (label, mut text, mut color) in &mut labels {
