@@ -122,7 +122,7 @@ pub(crate) struct BiomeStructurePlacement {
     pub(crate) placement: StructurePlacementRules,
 }
 
-#[derive(Resource, Default)]
+#[derive(Clone, Resource, Default)]
 pub struct BiomeRegistry {
     definitions: DefinitionMap<BiomeDefinition>,
     has_volume_density_modifiers: bool,
