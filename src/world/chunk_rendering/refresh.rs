@@ -83,16 +83,6 @@ pub fn refresh_chunk_geometry_mesh(
     refresh_chunk_mesh(commands, meshes, render_pool, coord, context);
 }
 
-pub fn refresh_chunk_lighting_mesh(
-    commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    render_pool: &mut ChunkRenderPool,
-    coord: IVec3,
-    context: &ChunkRenderContext<'_>,
-) {
-    refresh_chunk_geometry_mesh(commands, meshes, render_pool, coord, context);
-}
-
 pub fn refresh_chunk_fluid_mesh(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
