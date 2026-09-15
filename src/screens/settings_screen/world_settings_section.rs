@@ -131,26 +131,36 @@ pub(crate) fn sync_game_mode_buttons(
     mut commands: Commands,
     game_state: Res<State<GameState>>,
     new_world: Res<NewWorldConfig>,
-    player: Query<&GameMode, With<GameplayCamera>>,
+    player: Query<Ref<GameMode>, With<GameplayCamera>>,
     mut buttons: Query<(
         Entity,
         &GameModeButton,
-        &Interaction,
+        Ref<Interaction>,
         Has<InteractionDisabled>,
         &mut BackgroundColor,
     )>,
     mut labels: Query<(&GameModeButtonLabel, &mut TextColor)>,
 ) {
-    let current_game_mode = if *game_state.get() == GameState::NewWorld {
-        new_world.game_mode()
+    let (current_game_mode, mode_changed) = if *game_state.get() == GameState::NewWorld {
+        (
+            new_world.game_mode(),
+            game_state.is_changed() || new_world.is_changed(),
+        )
     } else {
         let Ok(current_game_mode) = player.single() else {
             return;
         };
-        *current_game_mode
+        (
+            *current_game_mode,
+            game_state.is_changed() || current_game_mode.is_changed(),
+        )
     };
 
     for (entity, button, interaction, disabled, mut background) in &mut buttons {
+        if !mode_changed && !interaction.is_changed() {
+            continue;
+        }
+
         sync_selectable_button(
             &mut commands,
             entity,
@@ -159,6 +169,10 @@ pub(crate) fn sync_game_mode_buttons(
             *interaction,
             &mut background,
         );
+    }
+
+    if !mode_changed {
+        return;
     }
 
     for (label, mut color) in &mut labels {
