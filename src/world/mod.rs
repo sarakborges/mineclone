@@ -55,7 +55,7 @@ use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
 use fluid_updates::{PendingFluidUpdates, process_fluid_updates};
 use game_rules::GameRules;
-use lighting_updates::{has_pending_lighting_updates, process_dynamic_lighting};
+use lighting_updates::process_dynamic_lighting;
 pub(crate) use new_world::NewWorldConfig;
 use render_diagnostics::log_render_asset_pressure;
 use render_distance::RenderDistanceSettings;
@@ -141,7 +141,7 @@ impl Plugin for WorldPlugin {
                 (
                     process_immediate_geometry_remesh,
                     process_fluid_updates.run_if(world_ticks_advanced),
-                    process_dynamic_lighting.run_if(has_pending_lighting_updates),
+                    process_dynamic_lighting,
                     process_immediate_lighting_remesh,
                     process_chunk_remesh_queue,
                 )
