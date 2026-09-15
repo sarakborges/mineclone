@@ -39,9 +39,10 @@ use super::{
 
 const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 1;
 const MAX_CHUNKS_PER_FRAME: usize = 4;
-const MAX_GENERATION_TASKS_DISPATCHED_PER_FRAME: usize = 4;
+const MAX_GENERATION_DISPATCH_WORK_PER_FRAME: usize = 4;
 const MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME: usize = 8;
 const MAX_MESH_RESULTS_COLLECTED_PER_FRAME: usize = 4;
+const GENERATION_DISPATCH_BUDGET: Duration = Duration::from_millis(1);
 const GENERATION_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
 const MESH_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(2);
 const STREAMING_BUDGET: Duration = Duration::from_millis(4);
@@ -195,11 +196,14 @@ fn collect_generated_chunks(work: &mut ChunkStreamingWork<'_>) {
 }
 
 fn dispatch_generation_tasks(render_pool: &ChunkRenderPool, work: &mut ChunkStreamingWork<'_>) {
-    let mut dispatched = 0;
+    let mut budget = FrameWorkBudget::new(GENERATION_DISPATCH_BUDGET, 1)
+        .with_maximum_items(MAX_GENERATION_DISPATCH_WORK_PER_FRAME);
 
-    while work.generation_tasks.pending_count() < MAX_GENERATION_TASKS_IN_FLIGHT
-        && dispatched < MAX_GENERATION_TASKS_DISPATCHED_PER_FRAME
-    {
+    while work.generation_tasks.pending_count() < MAX_GENERATION_TASKS_IN_FLIGHT {
+        if budget.exhausted() {
+            break;
+        }
+
         let Some(coord) = work.state.pending.pop() else {
             break;
         };
@@ -220,11 +224,12 @@ fn dispatch_generation_tasks(render_pool: &ChunkRenderPool, work: &mut ChunkStre
                 "generated chunk must be resident or archived: {coord:?}"
             );
             work.state.mark_ready(coord);
+            budget.record(1);
             continue;
         }
 
         if work.generation_tasks.schedule(coord) {
-            dispatched += 1;
+            budget.record(1);
         } else {
             work.state.requeue(coord);
             break;
