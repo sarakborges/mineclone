@@ -8,7 +8,9 @@ use assets::setup_sky_layer_assets;
 use bevy::prelude::*;
 
 use crate::app::game_state::GameState;
-use clouds::{spawn_clouds, update_clouds};
+use clouds::{
+    cloud_visuals_changed, spawn_clouds, sync_cloud_presentation, update_cloud_positions,
+};
 use stars::{spawn_stars, update_stars};
 use state::{SkyLayerVisualState, update_sky_layer_visuals};
 
@@ -25,7 +27,12 @@ impl Plugin for SkyLayersPlugin {
             )
             .add_systems(
                 PostUpdate,
-                (update_stars, update_clouds).run_if(in_state(GameState::Gameplay)),
+                (
+                    update_stars,
+                    sync_cloud_presentation.run_if(cloud_visuals_changed),
+                    update_cloud_positions,
+                )
+                    .run_if(in_state(GameState::Gameplay)),
             );
     }
 }

@@ -54,23 +54,48 @@ pub(super) fn spawn_clouds(mut commands: Commands, assets: Res<CloudAssets>) {
     }
 }
 
-pub(super) fn update_clouds(
+pub(super) fn cloud_visuals_changed(visuals: Res<SkyLayerVisualState>) -> bool {
+    visuals.is_changed()
+}
+
+pub(super) fn sync_cloud_presentation(
+    visuals: Res<SkyLayerVisualState>,
+    assets: Res<CloudAssets>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut clouds: Query<(&CloudPart, &mut Visibility)>,
+) {
+    let visible_count = (visuals.cloud_density * MAX_CLOUDS as f32).round() as usize;
+    let [red, green, blue] = visuals.cloud_color.to_srgb();
+    let color = Color::srgba(red, green, blue, 0.78);
+
+    let color_changed = materials
+        .get(&assets.material)
+        .is_some_and(|material| material.base_color != color);
+    if color_changed
+        && let Some(mut material) = materials.get_mut(&assets.material)
+    {
+        material.base_color = color;
+    }
+
+    for (cloud, mut visibility) in &mut clouds {
+        let next_visibility = if cloud.cloud_index < visible_count {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+        if *visibility != next_visibility {
+            *visibility = next_visibility;
+        }
+    }
+}
+
+pub(super) fn update_cloud_positions(
     time: Res<Time>,
     visuals: Res<SkyLayerVisualState>,
     camera: Single<&GlobalTransform, With<GameplayCamera>>,
-    assets: Res<CloudAssets>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut clouds: Query<(&CloudPart, &mut Transform, &mut Visibility)>,
+    mut clouds: Query<(&CloudPart, &mut Transform)>,
 ) {
-    let visuals_changed = visuals.is_changed();
     if visuals.cloud_density <= 0.0 {
-        if visuals_changed {
-            for (_, _, mut visibility) in &mut clouds {
-                if *visibility != Visibility::Hidden {
-                    *visibility = Visibility::Hidden;
-                }
-            }
-        }
         return;
     }
 
@@ -79,30 +104,20 @@ pub(super) fn update_clouds(
     let drift = time.elapsed_secs() * CLOUD_SPEED;
     let half_span = CLOUD_SPAN * 0.5;
 
-    if visuals_changed
-        && let Some(mut material) = materials.get_mut(&assets.material)
-    {
-        let [red, green, blue] = visuals.cloud_color.to_srgb();
-        material.base_color = Color::srgba(red, green, blue, 0.78);
-    }
-
-    for (cloud, mut transform, mut visibility) in &mut clouds {
+    for (cloud, mut transform) in &mut clouds {
         if cloud.cloud_index >= visible_count {
-            if *visibility != Visibility::Hidden {
-                *visibility = Visibility::Hidden;
-            }
             continue;
         }
 
         let local_x = (cloud.base.x + drift + half_span).rem_euclid(CLOUD_SPAN) - half_span;
         let local_z = cloud.base.y;
-        transform.translation = Vec3::new(
+        let translation = Vec3::new(
             camera_position.x + local_x,
             cloud.altitude,
             camera_position.z + local_z,
         ) + cloud.offset;
-        if *visibility != Visibility::Visible {
-            *visibility = Visibility::Visible;
+        if transform.translation != translation {
+            transform.translation = translation;
         }
     }
 }

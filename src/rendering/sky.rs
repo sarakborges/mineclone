@@ -10,9 +10,15 @@ impl Plugin for SkyPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             PostUpdate,
-            update_sky_color.run_if(in_state(GameState::Gameplay)),
+            update_sky_color
+                .run_if(in_state(GameState::Gameplay))
+                .run_if(sky_visuals_changed),
         );
     }
+}
+
+fn sky_visuals_changed(visuals: Res<EnvironmentVisualState>) -> bool {
+    visuals.is_changed()
 }
 
 fn update_sky_color(visuals: Res<EnvironmentVisualState>, mut clear_color: ResMut<ClearColor>) {
