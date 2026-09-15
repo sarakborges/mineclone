@@ -15,6 +15,7 @@ use crate::content::{
 };
 
 use self::{
+    context::LightingContext,
     medium::{block_emission_for_cell, medium_dampening_for_cells},
     propagation::{relax, relax_budgeted},
     queue::LightingQueue,
@@ -31,6 +32,7 @@ use super::{
 pub(crate) struct PendingLightingUpdates {
     queue: LightingQueue,
     emission_edit_previous_cells: HashMap<IVec3, Option<VoxelCell>>,
+    context: LightingContext,
 }
 
 impl PendingLightingUpdates {
@@ -185,12 +187,14 @@ pub(crate) fn process_pending_lighting(
     budget_exhausted: impl FnMut(usize) -> bool,
 ) {
     pending.enqueue_emission_edit_volumes(world, blocks, secondary_properties);
+    let PendingLightingUpdates { queue, context, .. } = pending;
     relax_budgeted(
         world,
         blocks,
         fluids,
         secondary_properties,
-        &mut pending.queue,
+        queue,
+        context,
         changed_chunks,
         budget_exhausted,
     );

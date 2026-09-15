@@ -39,12 +39,14 @@ pub(super) fn relax(
     queue: &mut LightingQueue,
 ) -> HashSet<IVec3> {
     let mut changed_chunks = HashSet::new();
+    let mut context = LightingContext::default();
     relax_budgeted(
         world,
         blocks,
         fluids,
         secondary_properties,
         queue,
+        &mut context,
         &mut changed_chunks,
         |_| false,
     );
@@ -57,11 +59,12 @@ pub(super) fn relax_budgeted(
     fluids: &FluidRegistry,
     secondary_properties: &SecondaryPropertyRegistry,
     queue: &mut LightingQueue,
+    context: &mut LightingContext,
     changed_chunks: &mut HashSet<IVec3>,
     mut budget_exhausted: impl FnMut(usize) -> bool,
 ) {
     changed_chunks.clear();
-    let mut context = LightingContext::default();
+    context.clear();
     let mut processed = 0;
 
     loop {
@@ -87,7 +90,7 @@ pub(super) fn relax_budgeted(
             secondary_properties,
             position,
             (cell, fluid),
-            &mut context,
+            context,
         );
 
         if current == desired {

@@ -14,6 +14,7 @@ use super::medium::medium_dampening_for_cells;
 pub(super) struct LightingContext {
     direct_sky_columns: HashMap<IVec2, DirectSkyColumn>,
     highest_loaded_y_by_chunk_column: HashMap<IVec2, Option<i32>>,
+    recycled_direct_sky_columns: Vec<DirectSkyColumn>,
 }
 
 struct DirectSkyColumn {
@@ -27,6 +28,11 @@ impl DirectSkyColumn {
             highest_y,
             levels_from_top: Vec::new(),
         }
+    }
+
+    fn reset(&mut self, highest_y: i32) {
+        self.highest_y = highest_y;
+        self.levels_from_top.clear();
     }
 
     fn level_at(
@@ -43,6 +49,9 @@ impl DirectSkyColumn {
 
         let target_index = (self.highest_y - y) as usize;
         if target_index >= self.levels_from_top.len() {
+            let missing_levels = target_index + 1 - self.levels_from_top.len();
+            self.levels_from_top.reserve(missing_levels);
+
             let mut level = self
                 .levels_from_top
                 .last()
@@ -86,6 +95,12 @@ impl DirectSkyColumn {
 }
 
 impl LightingContext {
+    pub(super) fn clear(&mut self) {
+        self.recycled_direct_sky_columns
+            .extend(self.direct_sky_columns.drain().map(|(_, column)| column));
+        self.highest_loaded_y_by_chunk_column.clear();
+    }
+
     pub fn direct_sky_light(
         &mut self,
         world: &VoxelWorld,
@@ -106,7 +121,13 @@ impl LightingContext {
         let Some(highest_y) = self.highest_loaded_y(world, position) else {
             return VoxelLight::MAX_LEVEL;
         };
-        let mut direct_sky = DirectSkyColumn::new(highest_y);
+        let mut direct_sky = self.recycled_direct_sky_columns.pop().map_or_else(
+            || DirectSkyColumn::new(highest_y),
+            |mut direct_sky| {
+                direct_sky.reset(highest_y);
+                direct_sky
+            },
+        );
         let level = direct_sky.level_at(world, blocks, fluids, column, position.y);
         self.direct_sky_columns.insert(column, direct_sky);
         level
