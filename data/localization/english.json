@@ -46,6 +46,7 @@
   "hud.breakBlock": "Left click to break block.",
   "hud.breakOrPlaceBlock": "Left click to break block, or right click to place.",
   "hud.openInventory": "Press E to open inventory.",
+  "hud.closeInventory": "Press E to close inventory.",
   "hud.brushPaint": "Left click to paint {color}. Right click to choose color.",
   "hud.brushClear": "Left click to clear. Right click to choose color.",
   "hud.light": "Light",
