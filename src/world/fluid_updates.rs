@@ -99,8 +99,13 @@ pub(super) fn process_fluid_updates(
     fluids: Res<FluidRegistry>,
     mut runtime: FluidSimulationRuntime,
 ) {
+    let elapsed_ticks = world_ticks.ticks_this_frame();
+    if elapsed_ticks == 0 {
+        return;
+    }
+
     let ready_steps = runtime.pending.ready_steps(
-        world_ticks.ticks_this_frame(),
+        elapsed_ticks,
         game_rules.ticks_per_second(),
         &fluids,
     );
