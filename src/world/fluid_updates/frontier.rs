@@ -43,7 +43,7 @@ fn enqueue_neighbor_boundary_spread_targets(
     let Some(chunk) = world.chunk(coord) else {
         return;
     };
-    if !chunk.has_fluid() {
+    if !chunk.boundary_has_fluid(direction) {
         return;
     }
 
