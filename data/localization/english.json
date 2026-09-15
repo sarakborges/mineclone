@@ -38,7 +38,7 @@
   "settings.language": "Language",
   "settings.language.description": "Controls the language used by menus and interface text.",
   "settings.displayTooltips": "Display Tooltips",
-  "settings.displayTooltips.description": "Enables or disables hints displayed under crosshair.",
+  "settings.displayTooltips.description": "Enables or disables contextual gameplay hints displayed on the HUD.",
   "language.english": "English",
   "inventory.searchPlaceholder": "Search items...",
   "inventory.everything": "Everything",
