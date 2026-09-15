@@ -87,7 +87,15 @@ impl Plugin for WorldPlugin {
             .init_resource::<PendingLightingUpdates>()
             .init_resource::<PendingFluidUpdates>()
             .add_plugins(DayNightPlugin)
-            .add_systems(OnEnter(GameState::Loading), begin_world_loading)
+            .add_systems(
+                OnEnter(GameState::Loading),
+                (
+                    reset_resource::<ChunkGenerationTasks>,
+                    reset_resource::<ChunkMeshTasks>,
+                    begin_world_loading,
+                )
+                    .chain(),
+            )
             .add_systems(
                 OnEnter(GameState::Gameplay),
                 (
