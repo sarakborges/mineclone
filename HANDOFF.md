@@ -6,20 +6,18 @@ Stack: Rust + Bevy 0.19.0-dev
 
 ## Fonte canônica
 
-Este arquivo, `HANDOFF.md` na raiz de `develop`, é a fonte canônica e persistente do handoff do projeto.
-
-Atualizar o handoff significa atualizar **este arquivo**. Cópias `.txt`, exports ou anexos são apenas artefatos derivados e não substituem esta fonte.
+Este arquivo, `HANDOFF.md` na raiz de `develop`, é a fonte canônica e persistente do projeto. Cópias `.txt`, exports e anexos são derivados e não substituem este arquivo.
 
 ## Regras de trabalho
 
 - Trabalhar diretamente em `develop`.
 - Não criar feature branch sem pedido explícito.
 - Antes de alterar código, buscar o HEAD atual de `develop` e abrir os arquivos reais envolvidos.
-- Fazer commits pequenos e coerentes.
-- Não fazer mudanças arquiteturais não relacionadas ao bloco atual.
+- Fazer commits pequenos e coerentes; não misturar mudanças arquiteturais sem relação com o bloco atual.
 - Não declarar bug visual/gameplay resolvido sem evidência de runtime quando a correção depender desse comportamento.
 - Não gerar imagens a menos que o usuário peça explicitamente.
 - Para assets binários enviados pelo usuário, usar exatamente os arquivos fornecidos.
+- Depois de mudança material, atualizar este handoff.
 
 ## Versionamento — obrigatório
 
@@ -33,6 +31,18 @@ Todo bloco coerente deve subir versão:
 
 O bump faz parte do bloco; não considerar o bloco fechado antes de atualizar `VERSION`.
 
+## Validação — obrigatória
+
+O CI de Rust é parte obrigatória do fechamento de qualquer bloco de código.
+
+- O workflow `.github/workflows/ci.yml` roda em `push` para `develop` e `main`, além de `pull_request`.
+- O CI valida `cargo clippy --all-targets --all-features -- -D warnings`, `cargo check` e `cargo test`.
+- Não considerar um bloco de código encerrado enquanto esses checks não estiverem verdes para o HEAD correspondente.
+- Se o usuário enviar output de compilação/runtime, corrigir todos os errors e warnings relacionados antes de continuar refactors maiores.
+- `cargo fmt`/`rustfmt` não é gate de CI e formatação não deve quebrar build/validation.
+- Não ficar em polling repetitivo de CI: consultar o run quando necessário e agir sobre resultado concreto.
+- Comunicação direta: menos narração, mais mudança concreta.
+
 ## Handoff — obrigatório
 
 Atualizar `HANDOFF.md` sempre que houver mudança material em estado, arquitetura, roadmap, versão, HEAD relevante, regras ou próximos passos.
@@ -40,13 +50,6 @@ Atualizar `HANDOFF.md` sempre que houver mudança material em estado, arquitetur
 Não acumular backlog histórico obsoleto. Bugs antigos só permanecem se ainda estiverem ativos ou se houver regressão reportada.
 
 O HEAD registrado aqui deve apontar para o último commit de **código/version**, não para o commit do próprio handoff.
-
-## Validação / comunicação
-
-- Não rodar `cargo check` como rotina do projeto.
-- Se o usuário enviar output de compilação/runtime, corrigir todos os errors e warnings relacionados antes de continuar refactors maiores.
-- Não repetir em toda resposta que `cargo check` não foi executado ou que estamos esperando `cargo run`.
-- Comunicação direta: menos narração, mais mudança concreta.
 
 ---
 
@@ -71,7 +74,7 @@ Princípios principais:
 13. Resultados async são revisionados; stale results são descartados/rescheduled; integração main-thread é budgetada.
 14. Não trocar corretude do mundo por performance aparente; mover/stagear custo.
 15. Não criar abstração genérica acima de generation/mesh tasks quando o lifecycle comum já está em `ChunkTaskQueue`.
-16. Terrain/fluid/lighting remesh de background usa o pipeline async; apenas o remesh de geometry imediato de edição do jogador permanece síncrono.
+16. Terrain/fluid/lighting remesh de background usa pipeline async; apenas remesh de geometry imediato de edição do jogador permanece síncrono.
 17. Solvers dinâmicos caros devem ter teto temporal e de quantidade quando o trabalho puder variar muito por frame.
 
 ---
@@ -80,19 +83,28 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`88d00f0330e450813d5034be19760860571b9a99`
+`5ced8cda257b88cea3a485b1ffc4a4a4256e77b8`
 
-Commit: `Bump version to 0.12.95`
+Commit: `Bump version to 0.12.98`
 
-Código do bloco 0.12.95:
+Código/configuração do bloco 0.12.98:
 
-- `25ca0c730a378379a2706ca509fc0ca8bf59fa21` — `Reuse lighting changed-chunk scratch storage`
-- `2384a0aa2530df6b291e4e9fee585009ece12855` — `Retain lighting edit map capacity`
-- `eddeace278a346e41fdadc9508fe643dc31b0a62` — `Reuse dynamic lighting chunk set`
+- `694f6df2a4aba668db698cfb92b4d3bd6af715eb` — `Run Rust validation on develop`
+- `5ced8cda257b88cea3a485b1ffc4a4a4256e77b8` — `Bump version to 0.12.98`
 
-`VERSION`: `0.12.95`
+`VERSION`: `0.12.98`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever código.
+
+## CI atual
+
+O workflow de validação:
+
+- roda em push para `develop` e `main`;
+- roda em pull requests;
+- instala `clippy`, mas não `rustfmt`;
+- executa Clippy com warnings como erro, `cargo check` e `cargo test`;
+- não executa `cargo fmt`, não altera fontes e não falha por diferença de formatação.
 
 ---
 
@@ -100,127 +112,71 @@ Sempre buscar HEAD/VERSION novamente antes de escrever código.
 
 A auditoria arquitetural/performance segue ativa. O roadmap vem do canon + inspeção real do código, não de backlog antigo seguido cegamente.
 
-## Resumo histórico
+## Base consolidada até 0.12.79
 
-### 0.12.6–0.12.24
 - Filas deduplicadas, snapshots clonáveis e lifecycle async de generation/mesh.
-- Integração main-thread budgetada.
-- UI/HUD/targeting/environment passaram a ser change-driven.
-- Lighting/fluid idle paths e unload/remesh foram reduzidos/budgetados.
-
-### 0.12.25–0.12.52
+- Integração main-thread budgetada; UI/HUD/targeting/environment change-driven.
 - Metadata de occupancy/boundaries no `VoxelChunk`; índice vertical no `VoxelWorld`.
 - Halo de mesh reduzido à shell real; skylight vertical lazy.
-- Chunk buffers COW com `Arc<[...]>`.
-- Chunks vazios pulam mesh task; fluid solver gated por tick.
-- Contexts de setup/streaming estreitados; caches concorrentes deduplicados.
-- Leituras block/fluid/light consolidadas em `sample_at`.
-- `HANDOFF.md` virou fonte persistente canônica.
+- Chunk buffers COW com `Arc<[...]>`; chunks vazios pulam mesh task.
+- Fluid solver gated por tick; contexts de setup/streaming estreitados; caches concorrentes deduplicados.
+- Leituras block/fluid/light consolidadas em `sample_at`/`sample_local`.
+- `VoxelChunkContentMut` faz edits batch usando os mesmos invariants dos setters.
+- Worldgen, structures e archive restore usam batch mutation; archive encode/restore percorrem 4.096 slots uma vez.
 
-### 0.12.53–0.12.72 — meshing/render/lighting hot paths
-- Surface block light reaproveitada por voxel-fonte no meshing.
-- Lighting propagation reutiliza sample atual e seis luzes vizinhas.
-- Terrain/fluid topology refresh preserva a metade não afetada da render allocation.
-- Direct seed usa storage local do chunk e upper chunks resolvidos uma vez.
-- `DeduplicatedQueue` usa generations/tombstones; miss de remesh é revision-cached.
-- Full footprint Manhattan de emissão fica reservado a recoloração/intensidade não-zero -> não-zero.
-- Empty chunk lighting usa shell + vizinhos externos.
-- Fluid frontier usa metadata de dynamic fluid por boundary.
-- `VoxelChunk::rebuild_light` faz um único COW do buffer.
-- `ChunkMeshSnapshot::capture` resolve no máximo os 26 chunks vizinhos e mantém shell compacta de 1.736 samples.
+## 0.12.80–0.12.82 — streaming deltas e cache pruning
 
-### 0.12.73–0.12.79 — COW/batch/archive/samples locais
-- `VoxelChunkContentMut` faz edits batch usando os mesmos helpers de metadata dos setters normais.
-- Worldgen, structures e archive restore usam batch mutation.
-- Archive encode/restore percorrem 4.096 slots uma vez, não block/fluid em passagens separadas.
-- Halo usa um único `Box<[ShellSample]>`.
-- Chunk vazio recebe direct seed por 256 colunas + cópia de layers.
-- Direct skylight e mutações usam `sample_local` para leituras coesas block/fluid/light.
-
-### 0.12.80–0.12.82 — streaming deltas e cache pruning
 - Unload backlog vem do delta de `desired`/`retained`; scan global de chunks carregados fica só no bootstrap.
 - Feature caches e `surface_ranges` são podados no bootstrap, mudança de render distance ou cruzamento de generation region, não em todo chunk atravessado.
 - `GENERATION_REGION_SIZE_CHUNKS = 8`; retenção extra entre podas é apenas política de memória.
 
-### 0.12.83 — revision tracking autoritativo para mesh snapshots
+## 0.12.83–0.12.86 — revision tracking e remesh async
+
 - `VoxelWorld` mantém revisão de mesh por chunk residente.
-- Insert/restore/content edit/fluid edit/light edit/rebuild de light atualizam a revisão; unload remove a revisão residente.
 - `ChunkMeshSnapshot` captura presença + revisão dos 27 chunks do cubo 3×3×3.
-- `ChunkMeshDependencies::is_current` detecta mutação e aparecimento/desaparecimento de vizinho.
-- Initial mesh async descarta resultado stale e recaptura halo atual.
+- Initial mesh/remesh async descarta resultado stale e recaptura halo atual.
+- Background terrain/fluid/lighting remesh usa `ChunkRemeshTasks`/`ChunkTaskQueue` no `AsyncComputeTaskPool`.
+- Terrain/fluid partial refresh preserva a outra metade da render allocation.
+- Coord já em voo não causa head-of-line blocking; outros chunks continuam ocupando slots livres.
+- Apenas immediate geometry de edição/topologia continua síncrono para feedback do jogador.
 
-### 0.12.84 — background remesh fora da main thread
-- `ChunkRemeshTasks` reutiliza `ChunkTaskQueue` e `MeshContentSnapshot`.
-- No máximo 4 remesh tasks ficam em voo; dispatch e integração são budgetados e limitados por frame.
-- Terrain/fluid remesh usa `ChunkMeshSnapshot` + `ChunkMeshDependencies` no `AsyncComputeTaskPool`.
-- Resultado stale por content revision ou qualquer dependência do halo é re-enfileirado no mesmo tipo.
-- Resultado de chunk descarregado ou sem render allocation é descartado.
-- Aplicação preserva partial refresh: terrain mantém fluid allocation; fluid mantém terrain allocation.
+## 0.12.87–0.12.92 — budgets e alocação de hot paths
 
-### 0.12.85 — async remesh sem head-of-line blocking
-- Coord com task já em voo é deferido localmente em vez de causar `break` no dispatcher.
-- Outros chunks continuam preenchendo slots async livres.
-- Deferidos retornam à frente preservando a ordem relativa.
+- Dynamic lighting: máximo 4.096 voxels/frame, budget 2 ms, mínimo 256, checagem a cada 64.
+- Fluid solver: máximo 512 updates/4 steps, budget 1 ms, mínimo 64; frontier congelada preservada.
+- Restore de chunks arquivados divide budget de dispatch da geração: 1 ms / até 4 trabalhos por frame.
+- Streaming `pending` usa `sort_by_cached_key`.
+- Unload observa budget de 4 ms desde o primeiro chunk.
+- `DeduplicatedQueue`/`VoxelUpdateQueue` suportam reserve; lighting bulk enqueue pré-aloca capacidade.
 
-### 0.12.86 — lighting remesh também async
-- `ChunkRemeshTaskKind` possui `Geometry`, `Lighting` e `Fluid`.
-- Lighting remesh usa terrain build async e a mesma validação stale dos 27 chunks.
-- Fila de lighting mantém prioridade própria; dispatcher atende Lighting -> Geometry -> Fluid.
-- `process_immediate_lighting_remesh` foi removido.
-- Apenas `process_immediate_geometry_remesh` continua síncrono para feedback imediato de edição/topologia.
+## 0.12.93–0.12.95 — coalescência e scratch reuse
 
-### 0.12.87 — dynamic lighting com orçamento temporal
-- Mantém teto de 4.096 voxels/frame.
-- Orçamento temporal de 2 ms, mínimo 256 voxels e checagem a cada 64.
-- `LightingContext` permanece vivo durante toda a chamada, preservando cache de direct-sky.
-- O layer voxel recebe um predicate de orçamento; `FrameWorkBudget` continua no owner de world scheduling.
+- Geometry/Lighting do mesmo coord são coalescidos quando produzem o mesmo terrain mesh; `Fluid` segue independente salvo full geometry supersedence.
+- Fluid scheduling usa `Vec<f32>` indexado por `FluidId` em vez de HashMap por tick.
+- Frontier de fluid reserva capacidade a partir de boundary dynamic-fluid metadata.
+- Lighting changed-chunk scratch e emission-edit maps preservam capacidade entre frames sem manter caches derivados stale.
 
-### 0.12.88 — fluid solver com orçamento temporal
-- Mantém teto de 512 updates e 4 fluid steps/frame.
-- Orçamento temporal de 1 ms, mínimo 64 updates.
-- A fronteira do fluid step continua congelada no início do batch; voxels recém-enfileirados não são processados no mesmo step.
+## 0.12.96 — build validation regressions
 
-### 0.12.89 — restore de chunks arquivados budgetado
-- Restore síncrono de chunk arquivado passa a contar junto com dispatch de nova generation task.
-- `GENERATION_DISPATCH_BUDGET = 1 ms`; máximo de 4 trabalhos/frame.
-- Backtracking não pode mais restaurar uma quantidade ilimitada de chunks de 4.096 slots no mesmo frame.
+- Corrigidas regressões de build detectadas pelo CI após refactors anteriores.
+- Bootstrap meshing passou a consumir `ChunkMeshTaskOutput.meshes` preservando validação de dependencies.
+- Tipos usados por assertions/testes receberam `Debug` onde necessário e imports mortos foram removidos.
+- Formatação foi aplicada naquele momento porque o workflow antigo ainda a exigia.
 
-### 0.12.90 — prioridade de streaming calculada uma vez
-- `pending.sort_by_cached_key` substitui `sort_by_key`.
-- A chave com lookup em `surface_ranges` + sete campos é calculada uma vez por pending chunk, não repetidamente durante comparações.
+## 0.12.97 — strict Clippy cleanup
 
-### 0.12.91 — unload respeita orçamento desde o primeiro chunk
-- `CHUNK_UNLOAD_BUDGET` continua 4 ms.
-- O mínimo antes da checagem caiu de 8 chunks para 1.
-- Chunks sujos que exigem archive encoding não podem mais obrigar oito operações antes de observar o budget.
-- Ordem farthest-first e backlog do streaming permanecem inalterados.
+- `cargo clippy --all-targets --all-features -- -D warnings` foi limpo de warnings estruturais.
+- Queries/caches complexos receberam aliases onde isso reduz complexidade real.
+- APIs/test helpers mortos foram removidos ou limitados a `cfg(test)`.
+- Exceções `too_many_arguments` ficaram explícitas apenas onde a assinatura preserva atomicidade/ownership de invariants.
+- O run correspondente passou Clippy, `cargo check` e 174 testes; a única falha restante naquele workflow era o gate de formatação.
 
-### 0.12.92 — preallocation de filas voxel em bulk
-- `DeduplicatedQueue` ganhou `reserve` e construção via `From<Vec<T>>` já nasce com capacidade compatível com o input.
-- `VoxelUpdateQueue` expõe `reserve` para os owners de domínio.
-- Bulk enqueue de lighting reserva previamente o volume completo, boundary voxels ou boundary neighbors conforme o caso.
-- Evita crescimento incremental de `VecDeque`/`HashMap` durante seeds/relaxations grandes sem mudar a semântica deduplicada.
+## 0.12.98 — CI no develop sem format gate
 
-### 0.12.93 — coalescência de terrain remesh Geometry/Lighting
-- `Geometry` e `Lighting` constroem o mesmo terrain mesh a partir do mesmo `ChunkMeshSnapshot`.
-- Quando ambos estão pendentes para o mesmo coord, o dispatch de `Lighting` agora consome o pedido `Geometry` redundante.
-- Se o pedido `Geometry` existia, mantém-se a regra anterior de que full terrain remesh supersede fluid-only remesh pendente.
-- Um pedido puramente `Lighting` não cancela trabalho `Fluid` independente.
-- Stale result continua re-enfileirado pelo kind da task; novas mudanças continuam entrando nas filas normais.
-
-### 0.12.94 — scheduling de fluid sem HashMap por tick + frontier preallocation
-- `FluidId` é índice contíguo no `FluidRegistry`; `PendingFluidUpdates::accumulated_steps` agora usa `Vec<f32>` indexado diretamente em vez de `HashMap<FluidId, f32>`.
-- O mapa temporário de ready steps por tick foi substituído por `Local<Vec<usize>>`, reutilizado entre frames e indexado por `FluidId`.
-- A semântica de `MAX_FLUID_STEPS_PER_FRAME`, descarte do excesso acumulado e frontier congelada permanece a mesma.
-- Resume de fluid frontier usa `boundary_dynamic_fluid_count` para reservar previamente até 5 spread targets por fluido dinâmico antes de varrer a face.
-- O solver continua deduplicando targets; a reserva só reduz crescimento incremental das estruturas internas.
-
-### 0.12.95 — scratch de lighting reutilizado sem cache stale
-- `relax_budgeted` recebe um `HashSet<IVec3>` externo para chunks alterados e limpa o conteúdo sem descartar a capacidade.
-- `process_dynamic_lighting` mantém esse set como `Local<HashSet<IVec3>>` e usa `drain()` ao encaminhar remeshes, reutilizando os buckets entre frames com backlog.
-- `emission_edit_previous_cells` usa `drain()` em vez de `mem::take`, preservando a capacidade do `HashMap` entre batches de edits.
-- `LightingContext` continua sendo recriado por chamada; caches de direct-sky e highest-loaded-y não sobrevivem a mutações do mundo.
-- A semântica de propagação, budget temporal/quantitativo e coalescência de remesh permanece inalterada.
+- CI passa a rodar diretamente em push para `develop`, eliminando a necessidade de merge em `main` só para validar.
+- `cargo fmt --all`, artifact de fontes formatadas e `git diff --exit-code -- '*.rs'` foram removidos do workflow.
+- `rustfmt` saiu dos components instalados; `clippy` permanece.
+- Gates autoritativos do CI agora são Clippy/warnings, `cargo check` e `cargo test`.
 
 ---
 
@@ -246,11 +202,12 @@ Não desfazer sem evidência nova:
 - Cache pruning não precisa acompanhar cada chunk do player; manter granularidade coerente com generation regions.
 - Qualquer mesh/remesh async deve validar presença/revisão de todo o halo antes de aplicar resultado.
 - Lighting remesh pertence ao background async; immediate geometry permanece síncrono enquanto feedback do edit justificar.
-- Pedidos `Geometry` e `Lighting` do mesmo coord podem ser coalescidos porque produzem o mesmo terrain mesh; `Fluid` continua independente salvo quando a regra de full geometry já o supersede.
+- Pedidos `Geometry` e `Lighting` do mesmo coord podem ser coalescidos porque produzem o mesmo terrain mesh; `Fluid` continua independente salvo quando full geometry já o supersede.
 - `FluidId` pode ser usado como índice denso enquanto `FluidRegistry` mantiver IDs por posição em `definitions`; crescer o registry deve redimensionar scratch/state, não voltar a hashing por frame.
 - Scratch containers podem preservar capacidade entre frames, mas caches derivados do conteúdo do mundo não devem sobreviver sem invalidation autoritativa.
 - Solvers dinâmicos devem preservar a semântica da frontier ao ganhar budgets temporais.
 - Archive compactado permanece preferível a guardar buffers COW brutos; restore caro é controlado por scheduling budget.
+- Formatação de Rust não é requisito de CI; não reintroduzir format gate sem pedido explícito.
 - Não reabrir bugs antigos automaticamente; só se ativos/regredidos.
 
 ---
@@ -259,12 +216,12 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Continuar inspeção objetiva de `Update`/`PostUpdate` por scans globais ou builds síncronos; os principais builds de chunk/remesh, lighting e fluid já estão async/budgetados.
-2. Revisar integração/spawn de mesh apenas se houver ganho estrutural sem introduzir lifecycle parcial por submesh; o caminho atual já substitui `Assets<Mesh>` in-place quando keys/topologia permanecem estáveis.
-3. Revisar custo do rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para eliminar o pequeno sort do raio local 3.
-4. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel.
-5. Continuar procurando allocations/scratch descartados em hot paths quando a capacidade puder ser reutilizada sem manter dados derivados stale.
-6. Só voltar a collision/raycast, UI ou task lifecycle se surgir evidência objetiva nova.
+1. Confirmar o CI do HEAD de 0.12.98 no próprio `develop`; Clippy/check/test são os gates autoritativos.
+2. Continuar inspeção objetiva de `Update`/`PostUpdate` por scans globais ou builds síncronos; os principais builds de chunk/remesh, lighting e fluid já estão async/budgetados.
+3. Revisar integração/spawn de mesh apenas se houver ganho estrutural sem introduzir lifecycle parcial por submesh.
+4. Revisar custo do rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para eliminar o pequeno sort do raio local 3.
+5. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel.
+6. Continuar procurando allocations/scratch descartados em hot paths quando a capacidade puder ser reutilizada sem manter dados derivados stale.
 
 ---
 
