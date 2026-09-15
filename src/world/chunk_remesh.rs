@@ -24,7 +24,6 @@ const REMESH_TASK_DISPATCH_BUDGET: Duration = Duration::from_millis(1);
 const REMESH_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
 const MAX_REMESH_TASKS_DISPATCHED_PER_FRAME: usize = 2;
 const MAX_REMESH_RESULTS_COLLECTED_PER_FRAME: usize = 2;
-const MAX_IMMEDIATE_LIGHTING_REMESHES_PER_FRAME: usize = 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct RenderableScanKey {
@@ -37,11 +36,11 @@ pub(crate) struct ChunkRemeshQueue {
     queue: DeduplicatedQueue<IVec3>,
     fluid: DeduplicatedQueue<IVec3>,
     immediate_geometry: DeduplicatedQueue<IVec3>,
-    immediate_lighting: DeduplicatedQueue<IVec3>,
+    lighting: DeduplicatedQueue<IVec3>,
     geometry_scan_miss: Option<RenderableScanKey>,
     fluid_scan_miss: Option<RenderableScanKey>,
     immediate_geometry_scan_miss: Option<RenderableScanKey>,
-    immediate_lighting_scan_miss: Option<RenderableScanKey>,
+    lighting_scan_miss: Option<RenderableScanKey>,
 }
 
 impl ChunkRemeshQueue {
@@ -66,9 +65,16 @@ impl ChunkRemeshQueue {
         }
     }
 
+    fn enqueue_lighting_priority(&mut self, coord: IVec3) {
+        if coord.y >= 0 {
+            self.lighting.enqueue_front(coord);
+        }
+    }
+
     fn enqueue_task_priority(&mut self, coord: IVec3, kind: ChunkRemeshTaskKind) {
         match kind {
             ChunkRemeshTaskKind::Geometry => self.enqueue_priority(coord),
+            ChunkRemeshTaskKind::Lighting => self.enqueue_lighting_priority(coord),
             ChunkRemeshTaskKind::Fluid => self.enqueue_fluid_priority(coord),
         }
     }
@@ -85,14 +91,12 @@ impl ChunkRemeshQueue {
     }
 
     pub(crate) fn enqueue_lighting_change(&mut self, coord: IVec3) {
-        if coord.y >= 0 {
-            self.immediate_lighting.enqueue_front(coord);
-        }
+        self.enqueue_lighting_priority(coord);
 
         for offset in CARDINAL_NEIGHBORS {
             let neighbor = coord + offset;
             if neighbor.y >= 0 {
-                self.immediate_lighting.enqueue(neighbor);
+                self.lighting.enqueue(neighbor);
             }
         }
     }
@@ -101,7 +105,7 @@ impl ChunkRemeshQueue {
         self.queue.remove(coord);
         self.fluid.remove(coord);
         self.immediate_geometry.remove(coord);
-        self.immediate_lighting.remove(coord);
+        self.lighting.remove(coord);
     }
 
     fn pop_renderable(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
@@ -132,15 +136,8 @@ impl ChunkRemeshQueue {
         Some(coord)
     }
 
-    fn pop_renderable_immediate_lighting(
-        &mut self,
-        render_pool: &ChunkRenderPool,
-    ) -> Option<IVec3> {
-        pop_renderable_from(
-            &mut self.immediate_lighting,
-            &mut self.immediate_lighting_scan_miss,
-            render_pool,
-        )
+    fn pop_renderable_lighting(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
+        pop_renderable_from(&mut self.lighting, &mut self.lighting_scan_miss, render_pool)
     }
 
     #[cfg(test)]
@@ -164,8 +161,8 @@ impl ChunkRemeshQueue {
     }
 
     #[cfg(test)]
-    fn pop_immediate_lighting(&mut self) -> Option<IVec3> {
-        self.immediate_lighting.pop()
+    fn pop_lighting(&mut self) -> Option<IVec3> {
+        self.lighting.pop()
     }
 }
 
@@ -213,44 +210,6 @@ pub(super) fn process_immediate_geometry_remesh(
         coord,
         &render_context,
     );
-}
-
-pub(super) fn process_immediate_lighting_remesh(
-    content: ChunkContent,
-    mut renderer: ChunkRenderer,
-    world: Res<VoxelWorld>,
-    mut queue: ResMut<ChunkRemeshQueue>,
-) {
-    let Some(first_coord) = queue.pop_renderable_immediate_lighting(&renderer.pool) else {
-        return;
-    };
-    let render_context = content.render_context(
-        &world,
-        &renderer.terrain_materials,
-        &renderer.fluid_materials,
-    );
-
-    refresh_chunk_geometry_mesh(
-        &mut renderer.commands,
-        &mut renderer.meshes,
-        &mut renderer.pool,
-        first_coord,
-        &render_context,
-    );
-
-    for _ in 1..MAX_IMMEDIATE_LIGHTING_REMESHES_PER_FRAME {
-        let Some(coord) = queue.pop_renderable_immediate_lighting(&renderer.pool) else {
-            break;
-        };
-
-        refresh_chunk_geometry_mesh(
-            &mut renderer.commands,
-            &mut renderer.meshes,
-            &mut renderer.pool,
-            coord,
-            &render_context,
-        );
-    }
 }
 
 pub(super) fn process_chunk_remesh_queue(
@@ -343,7 +302,9 @@ fn dispatch_remesh_tasks(
             break;
         }
 
-        let next = if let Some(coord) = queue.pop_renderable(render_pool) {
+        let next = if let Some(coord) = queue.pop_renderable_lighting(render_pool) {
+            Some((coord, ChunkRemeshTaskKind::Lighting))
+        } else if let Some(coord) = queue.pop_renderable(render_pool) {
             Some((coord, ChunkRemeshTaskKind::Geometry))
         } else {
             queue
@@ -416,7 +377,7 @@ mod tests {
         queue.enqueue_voxel_edit(coord);
 
         assert_eq!(queue.pop_immediate_geometry(), Some(coord));
-        assert_eq!(queue.pop_immediate_lighting(), None);
+        assert_eq!(queue.pop_lighting(), None);
 
         let mut queued = Vec::new();
         while let Some(value) = queue.pop() {
@@ -429,13 +390,13 @@ mod tests {
     }
 
     #[test]
-    fn lighting_change_uses_only_stable_lighting_remesh_queue() {
+    fn lighting_change_uses_background_lighting_remesh_queue() {
         let mut queue = ChunkRemeshQueue::default();
         let coord = IVec3::new(4, 2, -3);
         queue.enqueue_lighting_change(coord);
 
         let mut lighting = Vec::new();
-        while let Some(value) = queue.pop_immediate_lighting() {
+        while let Some(value) = queue.pop_lighting() {
             lighting.push(value);
         }
 
@@ -453,14 +414,14 @@ mod tests {
         queue.enqueue_priority(coord);
         queue.enqueue_fluid_priority(coord);
         queue.immediate_geometry.enqueue(coord);
-        queue.immediate_lighting.enqueue(coord);
+        queue.lighting.enqueue(coord);
 
         queue.remove(coord);
 
         assert_eq!(queue.pop(), None);
         assert_eq!(queue.pop_fluid(), None);
         assert_eq!(queue.pop_immediate_geometry(), None);
-        assert_eq!(queue.pop_immediate_lighting(), None);
+        assert_eq!(queue.pop_lighting(), None);
     }
 
     #[test]

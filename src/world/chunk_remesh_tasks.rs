@@ -19,6 +19,7 @@ pub(crate) const MAX_REMESH_TASKS_IN_FLIGHT: usize = 4;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ChunkRemeshTaskKind {
     Geometry,
+    Lighting,
     Fluid,
 }
 
@@ -82,9 +83,13 @@ impl ChunkRemeshTasks {
         let task = AsyncComputeTaskPool::get().spawn(async move {
             let context = snapshot.context(&world);
             let meshes = match kind {
-                ChunkRemeshTaskKind::Geometry => ChunkRemeshTaskMeshes::Geometry(
-                    build_chunk_terrain_remeshes(coord, world.chunk(), &context),
-                ),
+                ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
+                    ChunkRemeshTaskMeshes::Geometry(build_chunk_terrain_remeshes(
+                        coord,
+                        world.chunk(),
+                        &context,
+                    ))
+                }
                 ChunkRemeshTaskKind::Fluid => ChunkRemeshTaskMeshes::Fluid(
                     build_chunk_fluid_remeshes(coord, world.chunk(), &context),
                 ),

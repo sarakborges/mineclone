@@ -48,7 +48,6 @@ use chunk_generation_tasks::ChunkGenerationTasks;
 use chunk_mesh_tasks::ChunkMeshTasks;
 use chunk_remesh::{
     ChunkRemeshQueue, process_chunk_remesh_queue, process_immediate_geometry_remesh,
-    process_immediate_lighting_remesh,
 };
 use chunk_remesh_tasks::ChunkRemeshTasks;
 use chunk_rendering::{ChunkRenderPool, clear_chunk_render_pool};
@@ -148,7 +147,6 @@ impl Plugin for WorldPlugin {
                     process_immediate_geometry_remesh,
                     process_fluid_updates.run_if(world_ticks_advanced),
                     process_dynamic_lighting,
-                    process_immediate_lighting_remesh,
                     process_chunk_remesh_queue,
                 )
                     .chain()
