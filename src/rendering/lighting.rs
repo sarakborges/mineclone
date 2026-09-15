@@ -19,6 +19,10 @@ fn sync_sky_light_factor(
     visuals: Res<EnvironmentVisualState>,
     mut materials: ResMut<Assets<TerrainMaterial>>,
 ) {
+    if !visuals.is_changed() {
+        return;
+    }
+
     let sky_light_factor = visuals.sky_light_factor.clamp(0.0, 1.0);
 
     for (_, material) in materials.iter_mut() {
