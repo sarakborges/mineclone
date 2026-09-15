@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{hash_map::Entry, HashMap, VecDeque},
     hash::Hash,
 };
 
@@ -62,14 +62,25 @@ where
     }
 
     pub(crate) fn enqueue(&mut self, value: T) -> bool {
-        if self.queued.contains_key(&value) {
+        let Self {
+            pending,
+            queued,
+            next_generation,
+            revision,
+        } = self;
+        let Entry::Vacant(entry) = queued.entry(value) else {
             return false;
-        }
+        };
 
-        let generation = self.next_generation();
-        self.queued.insert(value, generation);
-        self.pending.push_back((value, generation));
-        self.bump_revision();
+        let generation = *next_generation;
+        *next_generation = generation
+            .checked_add(1)
+            .expect("deduplicated queue generation exhausted");
+        entry.insert(generation);
+        pending.push_back((value, generation));
+        *revision = (*revision)
+            .checked_add(1)
+            .expect("deduplicated queue revision exhausted");
         true
     }
 
@@ -100,20 +111,32 @@ where
     }
 
     pub(crate) fn pop(&mut self) -> Option<T> {
-        while let Some((value, generation)) = self.pending.pop_front() {
-            if self.queued.get(&value).copied() != Some(generation) {
+        let Self {
+            pending,
+            queued,
+            revision,
+            ..
+        } = self;
+
+        while let Some((value, generation)) = pending.pop_front() {
+            let Entry::Occupied(entry) = queued.entry(value) else {
+                continue;
+            };
+            if *entry.get() != generation {
                 continue;
             }
 
-            self.queued.remove(&value);
-            if self.queued.is_empty() {
-                self.pending.clear();
+            entry.remove();
+            if queued.is_empty() {
+                pending.clear();
             }
-            self.bump_revision();
+            *revision = (*revision)
+                .checked_add(1)
+                .expect("deduplicated queue revision exhausted");
             return Some(value);
         }
 
-        debug_assert!(self.queued.is_empty(), "active queue entries must have pending records");
+        debug_assert!(queued.is_empty(), "active queue entries must have pending records");
         None
     }
 
