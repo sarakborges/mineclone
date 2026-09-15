@@ -8,7 +8,7 @@ use crate::content::{
 };
 use crate::voxel::{chunk::CHUNK_SIZE, light::VoxelLight, world::VoxelWorld};
 
-use super::medium::medium_dampening;
+use super::medium::medium_dampening_for_cells;
 
 #[derive(Default)]
 pub(super) struct LightingContext {
@@ -48,17 +48,35 @@ impl DirectSkyColumn {
                 .last()
                 .copied()
                 .unwrap_or(VoxelLight::MAX_LEVEL);
+            let size = CHUNK_SIZE as i32;
+            let chunk_x = column.x.div_euclid(size);
+            let chunk_z = column.y.div_euclid(size);
+            let local_x = column.x.rem_euclid(size);
+            let local_z = column.y.rem_euclid(size);
             let mut next_y = self.highest_y - self.levels_from_top.len() as i32;
 
             while next_y >= y {
-                level = level.saturating_sub(medium_dampening(
-                    world,
-                    blocks,
-                    fluids,
-                    IVec3::new(column.x, next_y, column.y),
-                ));
-                self.levels_from_top.push(level);
-                next_y -= 1;
+                let chunk_y = next_y.div_euclid(size);
+                let segment_bottom = (chunk_y * size).max(y);
+                let chunk_coord = IVec3::new(chunk_x, chunk_y, chunk_z);
+
+                if let Some(chunk) = world.chunk(chunk_coord) {
+                    for world_y in (segment_bottom..=next_y).rev() {
+                        let local_y = world_y.rem_euclid(size);
+                        let cell = chunk.cell_at(local_x, local_y, local_z);
+                        let fluid = chunk.fluid_at(local_x, local_y, local_z);
+                        level = level.saturating_sub(medium_dampening_for_cells(
+                            cell, fluid, blocks, fluids,
+                        ));
+                        self.levels_from_top.push(level);
+                    }
+                } else {
+                    for _ in segment_bottom..=next_y {
+                        self.levels_from_top.push(level);
+                    }
+                }
+
+                next_y = segment_bottom - 1;
             }
         }
 
