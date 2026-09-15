@@ -84,11 +84,11 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`234adae1e0084b6416fc1fd978b588f59dc689f9`
+`5e483fabb6f854728efad1c61ad8ea2699f4ed83`
 
-Commit: `Separate fluid lighting invalidation from block edits`
+Commit: `Batch chunk light rebuilds`
 
-`VERSION`: `0.12.69`
+`VERSION`: `0.12.71`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever, porque podem ter avançado.
 
@@ -138,19 +138,17 @@ A auditoria arquitetural segue ativa; o roadmap vem do canon + inspeção real d
 - `DirectSkyColumn` expande o cache lazy por segmentos de chunk mantendo um valor por world-Y inclusive em gaps.
 - Wrappers world-position de dampening/emissão que ficaram obsoletos foram removidos.
 
-### 0.12.67 — metadata de fluido dinâmico por boundary
-- `VoxelChunk` mantém `boundary_dynamic_fluid_counts` no owner de occupancy/boundary metadata.
-- `set_fluid` acompanha transições source ↔ dynamic mesmo sem mudança de occupancy.
-- Fluid frontier rejeita em O(1) faces sem fluido dinâmico; margens contendo apenas água natural/source deixam de escanear até 256 voxels.
+### 0.12.67–0.12.70 — fluid frontier e integração
+- `VoxelChunk` mantém contador de fluido dinâmico por boundary face, distinguindo água source/natural de spread dinâmico.
+- Faces sem fluido dinâmico são rejeitadas em O(1) na fluid frontier.
+- Loading de chunk vazio só dispara fluid remesh em vizinho cuja face compartilhada contém fluido.
+- Fluid lighting invalidation foi separada de block-emission edit tracking via `enqueue_medium_edit`.
+- O contador exato de dinâmicos encerra o scan da face assim que todos foram encontrados; não há bitset/estado extra.
 
-### 0.12.68 — empty-neighbor fluid remesh filtrado por boundary
-- Quando um chunk vazio carrega, fluid remesh do vizinho só é enfileirado se a face compartilhada do vizinho realmente contém fluido.
-- A invalidação necessária de `halo ausente -> ar carregado` é preservada, mas vizinhos sem água deixam de sofrer remesh inútil.
-
-### 0.12.69 — invalidação de lighting por fluido separada de block edit
-- Corrigida chamada stale do fluid solver à assinatura antiga de `PendingLightingUpdates::enqueue_voxel_edit`.
-- `enqueue_medium_edit` invalida apenas a lighting frontier para mudança de meio/fluid.
-- Tracking de `previous_cell` e full emission footprint permanecem exclusivos de edits de bloco, evitando misturar mudança de fluido com recoloração/emissão.
+### 0.12.71 — rebuild de light em lote no owner do chunk
+- `VoxelChunk::rebuild_light` obtém `Arc::make_mut` do buffer de lighting uma única vez e preenche o chunk diretamente.
+- `VoxelWorld::rebuild_chunk_light` apenas resolve o chunk e delega o batch rebuild.
+- Initial direct seed deixa de fazer 4.096 chamadas a `set_light`, evitando 4.096 checks COW e acessos/bounds redundantes por chunk.
 
 ---
 
@@ -170,6 +168,8 @@ Não desfazer sem evidência nova:
 - Natural hydrology continua source/static; metadata de boundary deve distinguir source de fluido dinâmico para não reativar água natural no solver.
 - Loading de chunk vazio só exige neighbor fluid remesh quando a face compartilhada possui fluido; halo ausente e ar carregado diferem no fluid mesher.
 - Edits de meio/fluid não pertencem ao tracking de mudança de emissão de bloco.
+- Não criar bitset de boundary enquanto contadores existentes + early exit resolverem o hotspot de forma suficiente.
+- Rebuilds integrais de um buffer COW devem obter mutable storage uma vez no owner, não repetir `Arc::make_mut` por elemento.
 - Não reabrir bugs antigos automaticamente; só se ativos/regredidos.
 
 ---
@@ -178,9 +178,9 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Continuar a auditoria de `enqueue_loaded_fluid_frontier`: após a rejeição O(1) por face, verificar se o scan de 256 voxels quando há fluido dinâmico pode usar metadata mais precisa sem inflar estado por chunk.
-2. Revisar `notify_loaded_chunk_neighbors` do caminho não-vazio para invalidações conservadoras que possam ser filtradas com metadata existente, sem criar bitsets/caches externos sem evidência.
-3. Procurar usos restantes de `cell_at`/`fluid_at`/`light_at` repetidos para a mesma posição em loops onde um chunk/sample já pode ser reutilizado.
+1. Procurar outros loops de rebuild/mutação em `VoxelChunk`/`VoxelWorld` que chamem setters COW por elemento quando um batch owner-local pode obter o buffer uma vez.
+2. Revisar initial chunk integration para custos síncronos restantes além de lighting seed/halo capture, priorizando operações 4.096× por chunk ou scans repetidos de boundaries.
+3. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel; não adicionar bitset sem evidência.
 4. Manter full relaxation em chunks com conteúdo até existir frontier interna correta para direct sky/emitter propagation.
 5. Streaming selection/snapshots/task polling já estão bounded/change-driven; collision/raycast/targeting não mostraram lookup duplicado seguro.
 6. Só voltar a unload incremental, worldgen/cache ou task lifecycle se surgir evidência objetiva nova.
