@@ -45,7 +45,7 @@ impl ChunkUnloadState {
         pending.sort_by_key(|coord| -(*coord - center).length_squared());
 
         self.selection_key = selection_key;
-        self.pending = pending.into_iter().collect();
+        self.pending = pending.into();
     }
 }
 
@@ -103,6 +103,7 @@ pub(super) fn unload_chunk_meshes(
             }
         }
 
+        runtime.remesh_queue.remove(coord);
         runtime.world.archive_chunk(coord);
         unloaded.push(coord);
         budget.record(1);
