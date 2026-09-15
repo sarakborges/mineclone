@@ -149,9 +149,10 @@ pub(crate) fn spawn_built_chunk_meshes(
     }
 
     let transform = Transform::from_translation(coord.as_vec3() * CHUNK_SIZE as f32);
-    let mut entities = Vec::new();
-    let mut mesh_handles = Vec::new();
-    let mut mesh_keys = Vec::new();
+    let mesh_count = built_meshes.len();
+    let mut entities = Vec::with_capacity(mesh_count);
+    let mut mesh_handles = Vec::with_capacity(mesh_count);
+    let mut mesh_keys = Vec::with_capacity(mesh_count);
     let mut fluid_ids = Vec::new();
     let mut pooled_mesh_bytes = 0;
     let mut fluid_mesh_bytes = 0;
@@ -224,7 +225,7 @@ pub(super) fn spawn_terrain_meshes_into_existing_allocation(
     debug_assert_eq!(replacement_keys.len(), replacements.len());
 
     let transform = Transform::from_translation(coord.as_vec3() * CHUNK_SIZE as f32);
-    let mut entities = Vec::new();
+    let mut entities = Vec::with_capacity(replacements.len());
     let mut mesh_handles = Vec::with_capacity(replacements.len());
 
     for (key, mesh) in replacement_keys.iter().copied().zip(replacements) {

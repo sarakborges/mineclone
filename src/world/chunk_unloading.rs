@@ -63,7 +63,10 @@ pub(super) fn unload_chunk_meshes(
     mut streaming: ResMut<ChunkStreamingState>,
     mut renderer: ChunkRenderer,
     mut runtime: ChunkUnloadRuntime,
+    mut unloaded: Local<Vec<IVec3>>,
 ) {
+    unloaded.clear();
+
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = chunk_coord_from_position(feet_position);
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
@@ -75,7 +78,6 @@ pub(super) fn unload_chunk_meshes(
         CHUNK_UNLOAD_BUDGET,
         MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK,
     );
-    let mut unloaded = Vec::new();
 
     loop {
         if budget.exhausted() {
@@ -100,9 +102,11 @@ pub(super) fn unload_chunk_meshes(
         return;
     }
 
-    runtime.lighting.enqueue_chunk_unloads(&unloaded);
+    runtime
+        .lighting
+        .enqueue_chunk_unloads(unloaded.as_slice());
 
-    for coord in unloaded {
+    for coord in unloaded.drain(..) {
         for offset in CARDINAL_NEIGHBORS {
             runtime.remesh_queue.enqueue_priority(coord + offset);
         }
