@@ -1,5 +1,6 @@
 pub(crate) mod button;
 pub(crate) mod cosmic_background;
+pub(crate) mod dropdown;
 pub(crate) mod numeric_input;
 pub(crate) mod scrollbar;
 pub(crate) mod selectable;
