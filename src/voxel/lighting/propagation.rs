@@ -6,7 +6,9 @@ use crate::content::{
     block::BlockRegistry, fluid::FluidRegistry, secondary_property::SecondaryPropertyRegistry,
 };
 use crate::voxel::{
+    cell::VoxelCell,
     coordinates::chunk_coord_from_world,
+    fluid::FluidCell,
     light::{BlockLight, VoxelLight},
     neighbors::CARDINAL_NEIGHBORS,
     world::VoxelWorld,
@@ -14,7 +16,7 @@ use crate::voxel::{
 
 use super::{
     context::LightingContext,
-    medium::{block_emission, light_transmission, medium_dampening},
+    medium::{block_emission_for_cell, light_transmission, medium_dampening_for_cells},
     queue::LightingQueue,
 };
 
@@ -63,17 +65,17 @@ pub(super) fn relax_budgeted(
             break;
         };
 
-        if !world.is_loaded_at(position) {
+        let Some((cell, fluid, current)) = world.sample_at(position) else {
             continue;
-        }
-
-        let current = world.light_at(position);
+        };
         let desired = desired_light(
             world,
             blocks,
             fluids,
             secondary_properties,
             position,
+            cell,
+            fluid,
             &mut context,
         );
 
@@ -95,69 +97,57 @@ fn desired_light(
     fluids: &FluidRegistry,
     secondary_properties: &SecondaryPropertyRegistry,
     position: IVec3,
+    cell: Option<VoxelCell>,
+    fluid: Option<FluidCell>,
     context: &mut LightingContext,
 ) -> VoxelLight {
-    let dampening = medium_dampening(world, blocks, fluids, position);
+    let dampening = medium_dampening_for_cells(cell, fluid, blocks, fluids);
     let blocks_light = dampening >= VoxelLight::MAX_LEVEL;
     let attenuation = dampening.max(1);
     let transmission = light_transmission(world, blocks, secondary_properties, position);
+    let emitted = block_emission_for_cell(cell, blocks, secondary_properties);
 
-    let sky = if blocks_light {
-        0
-    } else {
-        context
-            .direct_sky_light(
-                world,
-                blocks,
-                fluids,
-                secondary_properties,
-                position,
-            )
-            .max(filtered_level(
-                propagated_neighbor_sky(world, position, attenuation),
-                transmission,
-            ))
-    };
+    if blocks_light {
+        return VoxelLight::new_hsi(0, emitted);
+    }
 
-    let emitted = block_emission(world, blocks, secondary_properties, position);
-    let block = if blocks_light {
-        emitted
-    } else {
-        mix_strongest_block_lights([
-            emitted,
-            propagated_neighbor_block(world, position, attenuation),
-        ])
-    };
+    let neighbor_lights =
+        CARDINAL_NEIGHBORS.map(|direction| world.light_at(position + direction));
+    let sky = context
+        .direct_sky_light(
+            world,
+            blocks,
+            fluids,
+            secondary_properties,
+            position,
+        )
+        .max(filtered_level(
+            propagated_neighbor_sky(&neighbor_lights, attenuation),
+            transmission,
+        ));
+    let block = mix_strongest_block_lights([
+        emitted,
+        propagated_neighbor_block(&neighbor_lights, attenuation),
+    ]);
 
     VoxelLight::new_hsi(sky, block)
 }
 
-fn propagated_neighbor_sky(world: &VoxelWorld, position: IVec3, attenuation: u8) -> u8 {
+fn propagated_neighbor_sky(neighbor_lights: &[VoxelLight], attenuation: u8) -> u8 {
     let mut result = 0;
 
-    for direction in CARDINAL_NEIGHBORS {
-        let incoming = world
-            .light_at(position + direction)
-            .sky()
-            .saturating_sub(attenuation);
-        result = result.max(incoming);
+    for light in neighbor_lights {
+        result = result.max(light.sky().saturating_sub(attenuation));
     }
 
     result
 }
 
-fn propagated_neighbor_block(
-    world: &VoxelWorld,
-    position: IVec3,
-    attenuation: u8,
-) -> BlockLight {
+fn propagated_neighbor_block(neighbor_lights: &[VoxelLight], attenuation: u8) -> BlockLight {
     let mut incoming = [BlockLight::DARK; CARDINAL_NEIGHBORS.len()];
 
-    for (index, direction) in CARDINAL_NEIGHBORS.into_iter().enumerate() {
-        incoming[index] = world
-            .light_at(position + direction)
-            .block_hsi()
-            .attenuated(attenuation);
+    for (index, light) in neighbor_lights.iter().enumerate() {
+        incoming[index] = light.block_hsi().attenuated(attenuation);
     }
 
     mix_strongest_block_lights(incoming)
