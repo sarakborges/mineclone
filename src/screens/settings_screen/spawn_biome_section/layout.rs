@@ -45,7 +45,7 @@ pub(super) struct SpawnBiomeOptionLabel {
     pub(super) biome_id: Option<String>,
 }
 
-pub(super) fn spawn_biome_setting(
+pub(in crate::screens::settings_screen) fn spawn_biome_setting(
     localization: &UiLocalization,
     language: Language,
 ) -> impl Bundle {
