@@ -58,29 +58,44 @@ pub(super) fn update_stars(
     view: StarView,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut stars: Query<(&Star, &mut Transform, &mut Visibility)>,
+    mut last_camera_position: Local<Option<Vec3>>,
 ) {
+    let camera_position = view.camera.translation();
+    let camera_changed = last_camera_position.map_or(true, |previous| previous != camera_position);
+    let visuals_changed = scene.visuals.is_changed();
+    let day_night_changed = scene.day_night.inputs_changed();
+    if !camera_changed && !visuals_changed && !day_night_changed {
+        return;
+    }
+    *last_camera_position = Some(camera_position);
+
     let Some(sample) = scene.day_night.sample() else {
         return;
     };
     let time_factor = star_time_factor(sample.phase, sample.next_phase, sample.transition);
     let visible_count =
         (scene.visuals.star_density * time_factor * MAX_STARS as f32).round() as usize;
-    let camera_position = view.camera.translation();
 
-    if let Some(mut material) = materials.get_mut(&view.assets.material) {
+    if (visuals_changed || day_night_changed)
+        && let Some(mut material) = materials.get_mut(&view.assets.material)
+    {
         let [red, green, blue] = scene.visuals.star_color.to_srgb();
         material.base_color = Color::srgba(red, green, blue, time_factor);
     }
 
     for (star, mut transform, mut visibility) in &mut stars {
         if star.index >= visible_count || scene.visuals.star_density <= 0.0 || time_factor <= 0.0 {
-            *visibility = Visibility::Hidden;
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
             continue;
         }
 
         transform.translation = camera_position + star.direction * STAR_DISTANCE;
         transform.look_at(camera_position, Vec3::Y);
-        *visibility = Visibility::Visible;
+        if *visibility != Visibility::Visible {
+            *visibility = Visibility::Visible;
+        }
     }
 }
 
