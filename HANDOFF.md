@@ -84,11 +84,11 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`5e483fabb6f854728efad1c61ad8ea2699f4ed83`
+`b03a8878307058665cf279ed125e03b7cd7dcbde`
 
-Commit: `Batch chunk light rebuilds`
+Commit: `Resolve mesh halo chunks once`
 
-`VERSION`: `0.12.71`
+`VERSION`: `0.12.72`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever, porque podem ter avançado.
 
@@ -150,6 +150,12 @@ A auditoria arquitetural segue ativa; o roadmap vem do canon + inspeção real d
 - `VoxelWorld::rebuild_chunk_light` apenas resolve o chunk e delega o batch rebuild.
 - Initial direct seed deixa de fazer 4.096 chamadas a `set_light`, evitando 4.096 checks COW e acessos/bounds redundantes por chunk.
 
+### 0.12.72 — halo de mesh resolve chunks vizinhos uma vez
+- `VoxelChunk::sample_local` resolve block/fluid/light com um único bounds check e índice local; `VoxelWorld::sample_at` reutiliza esse primitive.
+- `ChunkMeshSnapshot::capture` pré-resolve os 26 chunks vizinhos da shell e copia voxels localmente, em vez de fazer `world.sample_at` para cada entrada.
+- A shell compacta continua com 1.736 posições e preserva faces, arestas e cantos; teste explícito cobre vizinho diagonal 3D.
+- Captura de halo cai de até 1.736 lookups no `VoxelWorld` para no máximo 26 lookups de chunks por snapshot não-vazio.
+
 ---
 
 # Decisões explícitas da auditoria
@@ -170,6 +176,7 @@ Não desfazer sem evidência nova:
 - Edits de meio/fluid não pertencem ao tracking de mudança de emissão de bloco.
 - Não criar bitset de boundary enquanto contadores existentes + early exit resolverem o hotspot de forma suficiente.
 - Rebuilds integrais de um buffer COW devem obter mutable storage uma vez no owner, não repetir `Arc::make_mut` por elemento.
+- Halo de mesh deve resolver chunks vizinhos por shell, não voltar a lookup de world-position por voxel.
 - Não reabrir bugs antigos automaticamente; só se ativos/regredidos.
 
 ---
@@ -178,12 +185,12 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Procurar outros loops de rebuild/mutação em `VoxelChunk`/`VoxelWorld` que chamem setters COW por elemento quando um batch owner-local pode obter o buffer uma vez.
-2. Revisar initial chunk integration para custos síncronos restantes além de lighting seed/halo capture, priorizando operações 4.096× por chunk ou scans repetidos de boundaries.
+1. Auditar loops de worldgen/restore que chamam `set_block`/`set_fluid` milhares de vezes; só criar batch builder/mutator se conseguir centralizar metadata sem duplicar invariants.
+2. Revisar initial chunk integration para custos síncronos restantes além de lighting seed e halo capture, priorizando operações 4.096× por chunk ou scans repetidos de boundaries.
 3. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel; não adicionar bitset sem evidência.
 4. Manter full relaxation em chunks com conteúdo até existir frontier interna correta para direct sky/emitter propagation.
 5. Streaming selection/snapshots/task polling já estão bounded/change-driven; collision/raycast/targeting não mostraram lookup duplicado seguro.
-6. Só voltar a unload incremental, worldgen/cache ou task lifecycle se surgir evidência objetiva nova.
+6. Só voltar a unload incremental ou task lifecycle se surgir evidência objetiva nova.
 
 ---
 
