@@ -78,10 +78,10 @@ impl PendingLightingUpdates {
         blocks: &BlockRegistry,
         secondary_properties: &SecondaryPropertyRegistry,
     ) {
-        let edits = std::mem::take(&mut self.emission_edit_previous_cells);
         let radius = VoxelLight::MAX_LEVEL as i32;
+        let queue = &mut self.queue;
 
-        for (center, previous_cell) in edits {
+        for (center, previous_cell) in self.emission_edit_previous_cells.drain() {
             let previous_emission =
                 block_emission_for_cell(previous_cell, blocks, secondary_properties);
             let current_emission =
@@ -105,12 +105,12 @@ impl PendingLightingUpdates {
 
                     let x_span = radius - yz_cost;
                     for x in -x_span..=x_span {
-                        self.queue.enqueue(center + IVec3::new(x, y, z));
+                        queue.enqueue(center + IVec3::new(x, y, z));
                     }
                 }
             }
 
-            self.queue.enqueue_with_neighbors_priority(center);
+            queue.enqueue_with_neighbors_priority(center);
         }
     }
 }
@@ -188,8 +188,9 @@ pub(crate) fn process_pending_lighting(
     blocks: &BlockRegistry,
     fluids: &FluidRegistry,
     secondary_properties: &SecondaryPropertyRegistry,
+    changed_chunks: &mut HashSet<IVec3>,
     budget_exhausted: impl FnMut(usize) -> bool,
-) -> HashSet<IVec3> {
+) {
     pending.enqueue_emission_edit_volumes(world, blocks, secondary_properties);
     relax_budgeted(
         world,
@@ -197,8 +198,9 @@ pub(crate) fn process_pending_lighting(
         fluids,
         secondary_properties,
         &mut pending.queue,
+        changed_chunks,
         budget_exhausted,
-    )
+    );
 }
 
 pub(crate) fn initialize_chunks_lighting(
