@@ -60,4 +60,8 @@ impl LightingQueue {
     pub fn pop(&mut self) -> Option<IVec3> {
         self.queue.pop()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.queue.len() == 0
+    }
 }
