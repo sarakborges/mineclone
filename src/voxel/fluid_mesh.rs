@@ -7,6 +7,7 @@ use crate::content::fluid::FluidId;
 use super::{
     block_face::BlockFace,
     chunk::{CHUNK_SIZE, VoxelChunk},
+    fluid::FluidCell,
     mesh_buffer::VoxelMeshBuffer,
     mesh_lighting::{face_lighting, push_lit_quad},
     quad::VOXEL_FACE_UVS,
@@ -64,12 +65,7 @@ where
                 }
 
                 let tint = tint_at(world_voxel, cell.fluid_id);
-                let heights = FluidFaceHeights {
-                    h00: fluid_corner_height(world, world_voxel, cell.fluid_id, -1, -1),
-                    h10: fluid_corner_height(world, world_voxel, cell.fluid_id, 1, -1),
-                    h11: fluid_corner_height(world, world_voxel, cell.fluid_id, 1, 1),
-                    h01: fluid_corner_height(world, world_voxel, cell.fluid_id, -1, 1),
-                };
+                let heights = fluid_face_heights(world, world_voxel, cell.fluid_id);
                 let fluid = buffers.entry(cell.fluid_id).or_default();
 
                 for (face, is_exposed) in BlockFace::ALL.into_iter().zip(exposed) {
@@ -147,35 +143,51 @@ fn fluid_face_vertices(
     }
 }
 
-fn fluid_corner_height<W: VoxelRead + ?Sized>(
+fn fluid_face_heights<W: VoxelRead + ?Sized>(
     world: &W,
     position: IVec3,
     fluid_id: FluidId,
-    x_sign: i32,
-    z_sign: i32,
+) -> FluidFaceHeights {
+    let mut current = [[None; 3]; 3];
+    let mut above = [[None; 3]; 3];
+
+    for z in -1..=1 {
+        for x in -1..=1 {
+            let x_index = (x + 1) as usize;
+            let z_index = (z + 1) as usize;
+            let sample_position = position + IVec3::new(x, 0, z);
+            current[z_index][x_index] = world.fluid_at(sample_position);
+            above[z_index][x_index] = world.fluid_at(sample_position + IVec3::Y);
+        }
+    }
+
+    FluidFaceHeights {
+        h00: fluid_corner_height(&current, &above, fluid_id, 0, 0),
+        h10: fluid_corner_height(&current, &above, fluid_id, 2, 0),
+        h11: fluid_corner_height(&current, &above, fluid_id, 2, 2),
+        h01: fluid_corner_height(&current, &above, fluid_id, 0, 2),
+    }
+}
+
+fn fluid_corner_height(
+    current: &[[Option<FluidCell>; 3]; 3],
+    above: &[[Option<FluidCell>; 3]; 3],
+    fluid_id: FluidId,
+    x_index: usize,
+    z_index: usize,
 ) -> f32 {
-    let offsets = [
-        IVec3::ZERO,
-        IVec3::new(x_sign, 0, 0),
-        IVec3::new(0, 0, z_sign),
-        IVec3::new(x_sign, 0, z_sign),
-    ];
+    let positions = [(1, 1), (x_index, 1), (1, z_index), (x_index, z_index)];
+
+    if positions.iter().any(|&(x, z)| {
+        above[z][x].is_some_and(|cell| cell.fluid_id == fluid_id)
+    }) {
+        return 1.0;
+    }
+
     let mut total = 0.0;
     let mut count = 0.0;
-
-    for offset in offsets {
-        let sample_position = position + offset;
-        if world
-            .fluid_at(sample_position + IVec3::Y)
-            .is_some_and(|cell| cell.fluid_id == fluid_id)
-        {
-            return 1.0;
-        }
-
-        if let Some(cell) = world
-            .fluid_at(sample_position)
-            .filter(|cell| cell.fluid_id == fluid_id)
-        {
+    for (x, z) in positions {
+        if let Some(cell) = current[z][x].filter(|cell| cell.fluid_id == fluid_id) {
             total += cell.height();
             count += 1.0;
         }
