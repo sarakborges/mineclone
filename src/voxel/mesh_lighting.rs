@@ -2,6 +2,8 @@ use bevy::prelude::*;
 
 use super::{
     block_face::BlockFace,
+    cell::VoxelCell,
+    fluid::FluidCell,
     light::VoxelLight,
     mesh_buffer::{VoxelMeshBuffer, VoxelMeshQuad},
     read::VoxelRead,
@@ -9,6 +11,8 @@ use super::{
 
 const AO_BRIGHTNESS: [f32; 4] = [1.0, 0.86, 0.72, 0.58];
 const AO_DIAGONAL_EPSILON: f32 = 0.001;
+
+type VoxelSample = Option<(Option<VoxelCell>, Option<FluidCell>, VoxelLight)>;
 
 pub(super) struct FaceLighting {
     pub(super) channels: [[f32; 2]; 4],
@@ -24,6 +28,7 @@ pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
 ) -> FaceLighting {
     let (normal, tangent_a, tangent_b, signs) = face_basis(face);
     let base = voxel + normal;
+    let base_sample = world.sample_at(base);
     let emitted_block_srgb = world
         .light_at(voxel)
         .block_srgb_levels()
@@ -43,16 +48,23 @@ pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
         let side_a = base + offset_a;
         let side_b = base + offset_b;
         let corner = base + offset_a + offset_b;
-        let side_a_solid = world.is_solid(side_a);
-        let side_b_solid = world.is_solid(side_b);
-        let corner_solid = world.is_solid(corner);
+        let side_a_sample = world.sample_at(side_a);
+        let side_b_sample = world.sample_at(side_b);
+        let corner_sample = world.sample_at(corner);
+        let side_a_solid = sample_is_solid(side_a_sample);
+        let side_b_solid = sample_is_solid(side_b_sample);
+        let corner_solid = sample_is_solid(corner_sample);
         let occlusion = if side_a_solid && side_b_solid {
             3
         } else {
             side_a_solid as usize + side_b_solid as usize + corner_solid as usize
         };
-        let (sky_level, sampled_block_srgb) =
-            average_shader_light_levels(world, [base, side_a, side_b, corner]);
+        let (sky_level, sampled_block_srgb) = average_shader_light_levels([
+            base_sample,
+            side_a_sample,
+            side_b_sample,
+            corner_sample,
+        ]);
         let sampled_block_srgb = component_max(sampled_block_srgb, emitted_block_srgb);
 
         channels[index] = [
@@ -119,20 +131,23 @@ fn srgb_distance_squared(left: [f32; 3], right: [f32; 3]) -> f32 {
     red * red + green * green + blue * blue
 }
 
-fn average_shader_light_levels<W: VoxelRead + ?Sized>(
-    world: &W,
-    samples: [IVec3; 4],
-) -> (f32, [f32; 3]) {
+fn sample_is_solid(sample: VoxelSample) -> bool {
+    sample.is_some_and(|(cell, _, _)| cell.is_some())
+}
+
+fn average_shader_light_levels(samples: [VoxelSample; 4]) -> (f32, [f32; 3]) {
     let mut sky_total = 0.0;
     let mut block_total = [0.0; 3];
     let mut count = 0_u32;
 
-    for position in samples {
-        if !world.is_loaded_at(position) || world.is_solid(position) {
+    for sample in samples {
+        let Some((cell, _, light)) = sample else {
+            continue;
+        };
+        if cell.is_some() {
             continue;
         }
 
-        let light = world.light_at(position);
         sky_total += light.sky() as f32;
         let block = light.block_srgb_levels();
         block_total[0] += block[0] as f32;
