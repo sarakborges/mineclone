@@ -59,9 +59,10 @@ impl VoxelChunk {
             .is_some_and(|face| self.boundary_fluid_counts[face] > 0)
     }
 
-    pub(crate) fn boundary_has_dynamic_fluid(&self, outward: IVec3) -> bool {
+    pub(crate) fn boundary_dynamic_fluid_count(&self, outward: IVec3) -> usize {
         boundary_face_index(outward)
-            .is_some_and(|face| self.boundary_dynamic_fluid_counts[face] > 0)
+            .map(|face| self.boundary_dynamic_fluid_counts[face] as usize)
+            .unwrap_or(0)
     }
 
     pub fn cell_at(&self, x: i32, y: i32, z: i32) -> Option<VoxelCell> {
@@ -299,16 +300,16 @@ mod tests {
 
         chunk.set_fluid(0, last, 3, Some(FluidCell::source(0, 8)));
         assert!(chunk.boundary_has_fluid(IVec3::NEG_X));
-        assert!(!chunk.boundary_has_dynamic_fluid(IVec3::NEG_X));
-        assert!(!chunk.boundary_has_dynamic_fluid(IVec3::Y));
+        assert_eq!(chunk.boundary_dynamic_fluid_count(IVec3::NEG_X), 0);
+        assert_eq!(chunk.boundary_dynamic_fluid_count(IVec3::Y), 0);
 
         chunk.set_fluid(0, last, 3, Some(FluidCell::spreading(0, 7, 1)));
-        assert!(chunk.boundary_has_dynamic_fluid(IVec3::NEG_X));
-        assert!(chunk.boundary_has_dynamic_fluid(IVec3::Y));
+        assert_eq!(chunk.boundary_dynamic_fluid_count(IVec3::NEG_X), 1);
+        assert_eq!(chunk.boundary_dynamic_fluid_count(IVec3::Y), 1);
 
         chunk.set_fluid(0, last, 3, Some(FluidCell::source(0, 8)));
-        assert!(!chunk.boundary_has_dynamic_fluid(IVec3::NEG_X));
-        assert!(!chunk.boundary_has_dynamic_fluid(IVec3::Y));
+        assert_eq!(chunk.boundary_dynamic_fluid_count(IVec3::NEG_X), 0);
+        assert_eq!(chunk.boundary_dynamic_fluid_count(IVec3::Y), 0);
     }
 
     #[test]

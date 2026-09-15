@@ -43,7 +43,8 @@ fn enqueue_neighbor_boundary_spread_targets(
     let Some(chunk) = world.chunk(coord) else {
         return;
     };
-    if !chunk.boundary_has_dynamic_fluid(direction) {
+    let mut remaining_dynamic = chunk.boundary_dynamic_fluid_count(direction);
+    if remaining_dynamic == 0 {
         return;
     }
 
@@ -62,6 +63,10 @@ fn enqueue_neighbor_boundary_spread_targets(
                     world,
                     origin + IVec3::new(local_x, local_y, local_z),
                 );
+                remaining_dynamic -= 1;
+                if remaining_dynamic == 0 {
+                    return;
+                }
             }
         }
         return;
@@ -79,6 +84,10 @@ fn enqueue_neighbor_boundary_spread_targets(
                     world,
                     origin + IVec3::new(local_x, local_y, local_z),
                 );
+                remaining_dynamic -= 1;
+                if remaining_dynamic == 0 {
+                    return;
+                }
             }
         }
         return;
@@ -95,6 +104,10 @@ fn enqueue_neighbor_boundary_spread_targets(
                 world,
                 origin + IVec3::new(local_x, local_y, local_z),
             );
+            remaining_dynamic -= 1;
+            if remaining_dynamic == 0 {
+                return;
+            }
         }
     }
 }
