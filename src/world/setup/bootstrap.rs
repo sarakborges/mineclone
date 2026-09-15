@@ -198,6 +198,13 @@ fn find_initial_spawn_column(
         SPAWN_SEARCH_RADIUS_STEPS,
         SPAWN_SEARCH_STEP_BLOCKS,
         |candidate| {
+            // Spawn selection must not use altitude as a proxy for safety.
+            // Rolling biomes naturally spend part of their range close to
+            // sea level while mountains are always high, so the old
+            // sea-level + 2 requirement disproportionately rejected plains,
+            // forests and wasteland and made mountains much more likely.
+            // Hydrology already tells us whether the surface is actually
+            // occupied by water, which is the condition that matters here.
             (!spawn_column_has_water(candidate, dimension, biomes, biome_field, feature_fields))
                 .then_some(candidate)
         },
