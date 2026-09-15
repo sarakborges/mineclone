@@ -138,6 +138,9 @@ pub(crate) fn seed_chunk_direct_lighting(
         let Some(upper_chunk) = world.chunk(IVec3::new(coord.x, upper_y, coord.z)) else {
             continue;
         };
+        if upper_chunk.is_empty() {
+            continue;
+        }
 
         for local_z in 0..CHUNK_SIZE {
             for local_x in 0..CHUNK_SIZE {
