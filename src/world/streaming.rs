@@ -164,10 +164,20 @@ pub(super) fn stream_chunks(
     work.generation_tasks.sync_snapshot(&generation, &content);
     work.mesh_tasks.sync_snapshot(&content);
 
-    collect_generated_chunks(&mut work);
-    collect_built_chunk_meshes(&content, &mut renderer, &mut work, &mut queues.remesh);
-    dispatch_generation_tasks(&renderer.pool, &mut work);
-    dispatch_initial_mesh_tasks(&content, &mut renderer, &mut work, &mut queues);
+    if work.generation_tasks.pending_count() > 0 {
+        collect_generated_chunks(&mut work);
+    }
+    if work.mesh_tasks.pending_count() > 0 {
+        collect_built_chunk_meshes(&content, &mut renderer, &mut work, &mut queues.remesh);
+    }
+    if work.generation_tasks.pending_count() < MAX_GENERATION_TASKS_IN_FLIGHT
+        && work.state.pending.len() > 0
+    {
+        dispatch_generation_tasks(&renderer.pool, &mut work);
+    }
+    if work.state.ready.len() > 0 {
+        dispatch_initial_mesh_tasks(&content, &mut renderer, &mut work, &mut queues);
+    }
 }
 
 fn collect_generated_chunks(work: &mut ChunkStreamingWork<'_>) {
