@@ -12,6 +12,7 @@ use crate::{
 
 use super::{
     chunk_remesh::ChunkRemeshQueue,
+    chunk_rendering::retire_chunk_render_allocation,
     chunk_system_params::ChunkRenderer,
     streaming::ChunkStreamingState,
     work_budget::FrameWorkBudget,
@@ -88,21 +89,7 @@ pub(super) fn unload_chunk_meshes(
             continue;
         }
 
-        if let Some((entities, mesh_handles)) = renderer.pool.take(coord) {
-            for entity in entities {
-                renderer.commands.entity(entity).despawn();
-            }
-
-            if !mesh_handles.is_empty() {
-                renderer.commands.queue(move |world: &mut World| {
-                    let mut meshes = world.resource_mut::<Assets<Mesh>>();
-                    for mesh_handle in mesh_handles {
-                        let _ = meshes.remove(&mesh_handle);
-                    }
-                });
-            }
-        }
-
+        retire_chunk_render_allocation(&mut renderer.commands, &mut renderer.pool, coord);
         runtime.remesh_queue.remove(coord);
         runtime.world.archive_chunk(coord);
         unloaded.push(coord);
