@@ -104,7 +104,7 @@ pub(super) type InventoryTrashButtonQuery<'w, 's> = Query<
         &'static mut BackgroundColor,
         &'static mut BorderColor,
     ),
-    (With<Button>, With<InventoryTrashButton>),
+    (With<Button>, With<InventoryTrashButton>, Changed<Interaction>),
 >;
 
 pub(super) fn spawn_inventory(
@@ -280,6 +280,10 @@ pub(super) fn style_search_bar(
     creative_view: Res<CreativeInventoryView>,
     mut search_bars: Query<&mut BorderColor, With<CreativeSearchBar>>,
 ) {
+    if !creative_view.is_changed() {
+        return;
+    }
+
     let color = if creative_view.search_focused() {
         surface::HUD_SELECTED_BORDER_COLOR
     } else {
@@ -294,7 +298,7 @@ pub(super) fn style_category_buttons(
     creative_view: Res<CreativeInventoryView>,
     mut buttons: Query<
         (
-            &Interaction,
+            Ref<Interaction>,
             &CreativeCategoryButton,
             &mut BackgroundColor,
             &mut BorderColor,
@@ -302,7 +306,13 @@ pub(super) fn style_category_buttons(
         With<Button>,
     >,
 ) {
+    let selection_changed = creative_view.is_changed();
+
     for (interaction, category, mut background, mut border) in &mut buttons {
+        if !selection_changed && !interaction.is_changed() {
+            continue;
+        }
+
         let selected = creative_view.selected_category() == category.id.as_deref();
         apply_button_visual(*interaction, selected, &mut background, &mut border);
     }
@@ -312,7 +322,7 @@ pub(super) fn style_creative_slots(
     cursor: Res<InventoryCursor>,
     mut slots: Query<
         (
-            &Interaction,
+            Ref<Interaction>,
             &CreativeInventorySlot,
             &mut BackgroundColor,
             &mut BorderColor,
@@ -320,7 +330,13 @@ pub(super) fn style_creative_slots(
         With<Button>,
     >,
 ) {
+    let selection_changed = cursor.is_changed();
+
     for (interaction, slot, mut background, mut border) in &mut slots {
+        if !selection_changed && !interaction.is_changed() {
+            continue;
+        }
+
         let selected = slot.item.is_some() && slot.item == cursor.item();
         apply_button_visual(*interaction, selected, &mut background, &mut border);
     }
@@ -330,7 +346,7 @@ pub(super) fn style_inventory_slots(
     hotbar: Res<PlayerHotbar>,
     mut slots: Query<
         (
-            &Interaction,
+            Ref<Interaction>,
             &InventorySlot,
             &mut BackgroundColor,
             &mut BorderColor,
@@ -338,8 +354,14 @@ pub(super) fn style_inventory_slots(
         With<Button>,
     >,
 ) {
+    let selection_changed = hotbar.is_changed();
     let selected_index = HOTBAR_INVENTORY_OFFSET + hotbar.selected_slot();
+
     for (interaction, slot, mut background, mut border) in &mut slots {
+        if !selection_changed && !interaction.is_changed() {
+            continue;
+        }
+
         apply_button_visual(
             *interaction,
             slot.index == selected_index,
