@@ -27,6 +27,58 @@ pub struct VoxelChunk {
     boundary_dynamic_fluid_counts: [u16; BOUNDARY_FACE_COUNT],
 }
 
+pub(crate) struct VoxelChunkContentMut<'a> {
+    blocks: &'a mut [Option<VoxelCell>],
+    fluids: &'a mut [Option<FluidCell>],
+    block_count: &'a mut usize,
+    fluid_count: &'a mut usize,
+    boundary_content_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
+    boundary_fluid_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
+    boundary_dynamic_fluid_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
+}
+
+impl VoxelChunkContentMut<'_> {
+    pub(crate) fn set_block(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        block: Option<VoxelCell>,
+    ) {
+        set_block_in_storage(
+            &mut *self.blocks,
+            &*self.fluids,
+            &mut *self.block_count,
+            &mut *self.boundary_content_counts,
+            x,
+            y,
+            z,
+            block,
+        );
+    }
+
+    pub(crate) fn set_fluid(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        fluid: Option<FluidCell>,
+    ) {
+        set_fluid_in_storage(
+            &*self.blocks,
+            &mut *self.fluids,
+            &mut *self.fluid_count,
+            &mut *self.boundary_content_counts,
+            &mut *self.boundary_fluid_counts,
+            &mut *self.boundary_dynamic_fluid_counts,
+            x,
+            y,
+            z,
+            fluid,
+        );
+    }
+}
+
 impl VoxelChunk {
     pub fn empty() -> Self {
         Self {
@@ -103,69 +155,52 @@ impl VoxelChunk {
         Some((self.blocks[index], self.fluids[index], self.light[index]))
     }
 
+    pub(crate) fn edit_content<R>(
+        &mut self,
+        edit: impl FnOnce(&mut VoxelChunkContentMut<'_>) -> R,
+    ) -> R {
+        let blocks = Arc::make_mut(&mut self.blocks);
+        let fluids = Arc::make_mut(&mut self.fluids);
+        let mut content = VoxelChunkContentMut {
+            blocks,
+            fluids,
+            block_count: &mut self.block_count,
+            fluid_count: &mut self.fluid_count,
+            boundary_content_counts: &mut self.boundary_content_counts,
+            boundary_fluid_counts: &mut self.boundary_fluid_counts,
+            boundary_dynamic_fluid_counts: &mut self.boundary_dynamic_fluid_counts,
+        };
+        edit(&mut content)
+    }
+
     pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: Option<VoxelCell>) {
-        let index = index(x, y, z);
-        let had_block = self.blocks[index].is_some();
-        let had_content = had_block || self.fluids[index].is_some();
-        let has_block = block.is_some();
-        let has_content = has_block || self.fluids[index].is_some();
-
-        if had_block != has_block {
-            adjust_total_count(&mut self.block_count, has_block);
-        }
-        if had_content != has_content {
-            adjust_boundary_counts(
-                &mut self.boundary_content_counts,
-                x,
-                y,
-                z,
-                has_content,
-            );
-        }
-
-        Arc::make_mut(&mut self.blocks)[index] = block;
+        let blocks = Arc::make_mut(&mut self.blocks);
+        set_block_in_storage(
+            blocks,
+            self.fluids.as_ref(),
+            &mut self.block_count,
+            &mut self.boundary_content_counts,
+            x,
+            y,
+            z,
+            block,
+        );
     }
 
     pub(crate) fn set_fluid(&mut self, x: usize, y: usize, z: usize, fluid: Option<FluidCell>) {
-        let index = index(x, y, z);
-        let previous_fluid = self.fluids[index];
-        let had_fluid = previous_fluid.is_some();
-        let had_dynamic_fluid = previous_fluid.is_some_and(|cell| !cell.is_source());
-        let had_content = had_fluid || self.blocks[index].is_some();
-        let has_fluid = fluid.is_some();
-        let has_dynamic_fluid = fluid.is_some_and(|cell| !cell.is_source());
-        let has_content = has_fluid || self.blocks[index].is_some();
-
-        if had_fluid != has_fluid {
-            adjust_total_count(&mut self.fluid_count, has_fluid);
-            adjust_boundary_counts(
-                &mut self.boundary_fluid_counts,
-                x,
-                y,
-                z,
-                has_fluid,
-            );
-        }
-        if had_dynamic_fluid != has_dynamic_fluid {
-            adjust_boundary_counts(
-                &mut self.boundary_dynamic_fluid_counts,
-                x,
-                y,
-                z,
-                has_dynamic_fluid,
-            );
-        }
-        if had_content != has_content {
-            adjust_boundary_counts(
-                &mut self.boundary_content_counts,
-                x,
-                y,
-                z,
-                has_content,
-            );
-        }
-
-        Arc::make_mut(&mut self.fluids)[index] = fluid;
+        let fluids = Arc::make_mut(&mut self.fluids);
+        set_fluid_in_storage(
+            self.blocks.as_ref(),
+            fluids,
+            &mut self.fluid_count,
+            &mut self.boundary_content_counts,
+            &mut self.boundary_fluid_counts,
+            &mut self.boundary_dynamic_fluid_counts,
+            x,
+            y,
+            z,
+            fluid,
+        );
     }
 
     pub(crate) fn set_light(&mut self, x: usize, y: usize, z: usize, light: VoxelLight) -> bool {
@@ -204,6 +239,73 @@ impl VoxelChunk {
     pub(crate) fn clear_light(&mut self) {
         Arc::make_mut(&mut self.light).fill(VoxelLight::DARK);
     }
+}
+
+fn set_block_in_storage(
+    blocks: &mut [Option<VoxelCell>],
+    fluids: &[Option<FluidCell>],
+    block_count: &mut usize,
+    boundary_content_counts: &mut [u16; BOUNDARY_FACE_COUNT],
+    x: usize,
+    y: usize,
+    z: usize,
+    block: Option<VoxelCell>,
+) {
+    let index = index(x, y, z);
+    let had_block = blocks[index].is_some();
+    let had_content = had_block || fluids[index].is_some();
+    let has_block = block.is_some();
+    let has_content = has_block || fluids[index].is_some();
+
+    if had_block != has_block {
+        adjust_total_count(block_count, has_block);
+    }
+    if had_content != has_content {
+        adjust_boundary_counts(boundary_content_counts, x, y, z, has_content);
+    }
+
+    blocks[index] = block;
+}
+
+fn set_fluid_in_storage(
+    blocks: &[Option<VoxelCell>],
+    fluids: &mut [Option<FluidCell>],
+    fluid_count: &mut usize,
+    boundary_content_counts: &mut [u16; BOUNDARY_FACE_COUNT],
+    boundary_fluid_counts: &mut [u16; BOUNDARY_FACE_COUNT],
+    boundary_dynamic_fluid_counts: &mut [u16; BOUNDARY_FACE_COUNT],
+    x: usize,
+    y: usize,
+    z: usize,
+    fluid: Option<FluidCell>,
+) {
+    let index = index(x, y, z);
+    let previous_fluid = fluids[index];
+    let had_fluid = previous_fluid.is_some();
+    let had_dynamic_fluid = previous_fluid.is_some_and(|cell| !cell.is_source());
+    let had_content = had_fluid || blocks[index].is_some();
+    let has_fluid = fluid.is_some();
+    let has_dynamic_fluid = fluid.is_some_and(|cell| !cell.is_source());
+    let has_content = has_fluid || blocks[index].is_some();
+
+    if had_fluid != has_fluid {
+        adjust_total_count(fluid_count, has_fluid);
+        adjust_boundary_counts(boundary_fluid_counts, x, y, z, has_fluid);
+    }
+    if had_dynamic_fluid != has_dynamic_fluid {
+        adjust_boundary_counts(
+            boundary_dynamic_fluid_counts,
+            x,
+            y,
+            z,
+            has_dynamic_fluid,
+        );
+    }
+    if had_content != has_content {
+        adjust_boundary_counts(boundary_content_counts, x, y, z, has_content);
+    }
+
+    fluids[index] = fluid;
 }
 
 fn adjust_total_count(count: &mut usize, added: bool) {
@@ -364,6 +466,26 @@ mod tests {
         assert_eq!(chunk.sample_local(4, 5, 6).unwrap().1, Some(fluid));
         assert_eq!(chunk.sample_local(7, 8, 9).unwrap().2, light);
         assert!(chunk.sample_local(-1, 0, 0).is_none());
+    }
+
+    #[test]
+    fn batched_content_edits_preserve_metadata() {
+        let mut chunk = VoxelChunk::empty();
+        let last = CHUNK_SIZE - 1;
+        let block = VoxelCell::new("stone", Default::default());
+        let fluid = FluidCell::spreading(0, 7, 1);
+
+        chunk.edit_content(|content| {
+            content.set_block(0, 0, 0, Some(block));
+            content.set_fluid(last, last, last, Some(fluid));
+        });
+
+        assert_eq!(chunk.cell_at(0, 0, 0), Some(block));
+        assert_eq!(chunk.fluid_at(last as i32, last as i32, last as i32), Some(fluid));
+        assert!(chunk.boundary_has_content(IVec3::NEG_X));
+        assert!(chunk.boundary_has_content(IVec3::X));
+        assert!(chunk.boundary_has_fluid(IVec3::X));
+        assert_eq!(chunk.boundary_dynamic_fluid_count(IVec3::X), 1);
     }
 
     #[test]

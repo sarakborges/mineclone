@@ -34,58 +34,60 @@ pub(super) fn rasterize_material_pass(
     density: &DensityField,
     context: &MaterialPassContext<'_>,
 ) {
-    for local_z in 0..CHUNK_SIZE {
-        for local_x in 0..CHUNK_SIZE {
-            let column = &columns[column_index(local_x, local_z)];
-            let horizontal = Vec2::new(
-                chunk_origin.x as f32 + local_x as f32 + 0.5,
-                chunk_origin.z as f32 + local_z as f32 + 0.5,
-            );
-            let hydrology_blocks = context
-                .region
-                .hydrology
-                .solid_blocks_for_column::<CHUNK_SIZE>(horizontal, chunk_origin.y as f32 + 0.5);
-            let surface_materials = resolve_surface_material_column(
-                &column.surface_influences,
-                context.biome_field,
-                context.biomes,
-            );
-
-            for (local_y, hydrology_block) in hydrology_blocks.iter().copied().enumerate() {
-                let index = voxel_index(local_x, local_y, local_z);
-                if density.values[index] <= 0.0 {
-                    continue;
-                }
-
-                let world_position = IVec3::new(
-                    chunk_origin.x + local_x as i32,
-                    chunk_origin.y + local_y as i32,
-                    chunk_origin.z + local_z as i32,
+    chunk.edit_content(|chunk| {
+        for local_z in 0..CHUNK_SIZE {
+            for local_x in 0..CHUNK_SIZE {
+                let column = &columns[column_index(local_x, local_z)];
+                let horizontal = Vec2::new(
+                    chunk_origin.x as f32 + local_x as f32 + 0.5,
+                    chunk_origin.z as f32 + local_z as f32 + 0.5,
                 );
-                let sample_position = world_position.as_vec3() + Vec3::splat(0.5);
-                let surface_depth = (column.surface_height - world_position.y - 1).max(0) as u32;
-                let block_id = solid_block_id(
-                    sample_position,
-                    surface_depth,
-                    density.volume[index],
-                    hydrology_block,
-                    &surface_materials,
+                let hydrology_blocks = context.region.hydrology.solid_blocks_for_column::<CHUNK_SIZE>(
+                    horizontal,
+                    chunk_origin.y as f32 + 0.5,
+                );
+                let surface_materials = resolve_surface_material_column(
+                    &column.surface_influences,
                     context.biome_field,
+                    context.biomes,
                 );
-                let block = context
-                    .blocks
-                    .get(block_id)
-                    .unwrap_or_else(|| panic!("missing block definition: {block_id}"));
-                let rotation =
-                    TextureRotation::for_position(world_position, block.rotate_texture.any());
 
-                chunk.set_block(
-                    local_x,
-                    local_y,
-                    local_z,
-                    Some(VoxelCell::new(block_id, rotation)),
-                );
+                for (local_y, hydrology_block) in hydrology_blocks.iter().copied().enumerate() {
+                    let index = voxel_index(local_x, local_y, local_z);
+                    if density.values[index] <= 0.0 {
+                        continue;
+                    }
+
+                    let world_position = IVec3::new(
+                        chunk_origin.x + local_x as i32,
+                        chunk_origin.y + local_y as i32,
+                        chunk_origin.z + local_z as i32,
+                    );
+                    let sample_position = world_position.as_vec3() + Vec3::splat(0.5);
+                    let surface_depth = (column.surface_height - world_position.y - 1).max(0) as u32;
+                    let block_id = solid_block_id(
+                        sample_position,
+                        surface_depth,
+                        density.volume[index],
+                        hydrology_block,
+                        &surface_materials,
+                        context.biome_field,
+                    );
+                    let block = context
+                        .blocks
+                        .get(block_id)
+                        .unwrap_or_else(|| panic!("missing block definition: {block_id}"));
+                    let rotation =
+                        TextureRotation::for_position(world_position, block.rotate_texture.any());
+
+                    chunk.set_block(
+                        local_x,
+                        local_y,
+                        local_z,
+                        Some(VoxelCell::new(block_id, rotation)),
+                    );
+                }
             }
         }
-    }
+    });
 }
