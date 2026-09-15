@@ -108,21 +108,32 @@ fn spawn_body(
 fn update_celestial_bodies(
     scene: CelestialRuntimeScene,
     mut bodies: Query<(&CelestialBody, &mut Transform, &mut Visibility)>,
+    mut last_camera_position: Local<Option<Vec3>>,
 ) {
+    let camera_position = scene.camera.translation();
+    let camera_changed = last_camera_position.map_or(true, |previous| previous != camera_position);
+    if !camera_changed && !scene.day_night.inputs_changed() {
+        return;
+    }
+    *last_camera_position = Some(camera_position);
+
     let Some(cycle) = scene.day_night.cycle() else {
         return;
     };
-    let camera_position = scene.camera.translation();
     let normalized_time = scene.day_night.clock().normalized_time;
 
     for (body, mut transform, mut visibility) in &mut bodies {
         let Some(offset) = celestial_offset(&body.0, cycle, normalized_time) else {
-            *visibility = Visibility::Hidden;
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
             continue;
         };
 
         transform.translation = camera_position + offset;
         transform.look_at(camera_position, Vec3::Y);
-        *visibility = Visibility::Visible;
+        if *visibility != Visibility::Visible {
+            *visibility = Visibility::Visible;
+        }
     }
 }
