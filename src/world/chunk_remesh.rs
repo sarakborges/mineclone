@@ -7,10 +7,7 @@ use crate::voxel::{
 };
 
 use super::{
-    chunk_rendering::{
-        ChunkRenderPool, refresh_chunk_fluid_mesh, refresh_chunk_geometry_mesh,
-        refresh_chunk_lighting_mesh,
-    },
+    chunk_rendering::{ChunkRenderPool, refresh_chunk_fluid_mesh, refresh_chunk_geometry_mesh},
     chunk_system_params::{ChunkContent, ChunkRenderer},
     work_budget::FrameWorkBudget,
 };
@@ -174,7 +171,7 @@ pub(super) fn process_immediate_lighting_remesh(
         &renderer.fluid_materials,
     );
 
-    refresh_chunk_lighting_mesh(
+    refresh_chunk_geometry_mesh(
         &mut renderer.commands,
         &mut renderer.meshes,
         &mut renderer.pool,
@@ -187,7 +184,7 @@ pub(super) fn process_immediate_lighting_remesh(
             break;
         };
 
-        refresh_chunk_lighting_mesh(
+        refresh_chunk_geometry_mesh(
             &mut renderer.commands,
             &mut renderer.meshes,
             &mut renderer.pool,
