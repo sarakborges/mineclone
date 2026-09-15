@@ -20,6 +20,7 @@ impl Plugin for FpsHudPlugin {
 struct FpsHud {
     elapsed_seconds: f32,
     frame_count: u32,
+    displayed_fps: Option<u32>,
 }
 
 fn spawn_fps_hud(mut commands: Commands) {
@@ -48,7 +49,11 @@ fn update_fps_hud(time: Res<Time>, fps_hud: Single<(&mut Text, &mut FpsHud)>) {
     }
 
     let frames_per_second = fps.frame_count as f32 / fps.elapsed_seconds.max(f32::EPSILON);
-    text.0 = format!("{frames_per_second:.0} FPS");
+    let displayed_fps = frames_per_second.round() as u32;
+    if fps.displayed_fps != Some(displayed_fps) {
+        text.0 = format!("{displayed_fps} FPS");
+        fps.displayed_fps = Some(displayed_fps);
+    }
     fps.elapsed_seconds = 0.0;
     fps.frame_count = 0;
 }

@@ -24,7 +24,8 @@ impl Plugin for UiDesignSystemPlugin {
                 (
                     button::animate_buttons,
                     cosmic_background::animate_stars,
-                    transition::animate_screen_transition,
+                    transition::animate_screen_transition
+                        .run_if(transition::screen_transition_active),
                 ),
             )
             .add_systems(Last, scrollbar::sync_auto_scrollbars);

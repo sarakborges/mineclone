@@ -95,6 +95,10 @@ pub fn spawn_transition_overlay(mut commands: Commands) {
     ));
 }
 
+pub fn screen_transition_active(transition: Res<ScreenTransition>) -> bool {
+    transition.is_active()
+}
+
 pub fn animate_screen_transition(
     time: Res<Time<Real>>,
     mut transition: ResMut<ScreenTransition>,
@@ -107,13 +111,9 @@ pub fn animate_screen_transition(
         return;
     };
 
-    if transition.phase == ScreenTransitionPhase::Idle {
-        *visibility = Visibility::Hidden;
-        *background = theme::SCREEN_BACKGROUND.with_alpha(0.0).into();
-        return;
+    if *visibility != Visibility::Visible {
+        *visibility = Visibility::Visible;
     }
-
-    *visibility = Visibility::Visible;
     let step = time.delta_secs() / TRANSITION_HALF_SECONDS;
 
     match transition.phase {
@@ -121,7 +121,10 @@ pub fn animate_screen_transition(
         ScreenTransitionPhase::FadingOut => {
             transition.progress = (transition.progress + step).min(1.0);
             let alpha = ease_in_out_cubic(transition.progress);
-            *background = theme::SCREEN_BACKGROUND.with_alpha(alpha).into();
+            let next_background = BackgroundColor(theme::SCREEN_BACKGROUND.with_alpha(alpha));
+            if *background != next_background {
+                *background = next_background;
+            }
 
             if transition.progress >= 1.0 {
                 if let Some(target) = transition.target {
@@ -142,12 +145,17 @@ pub fn animate_screen_transition(
         ScreenTransitionPhase::FadingIn => {
             transition.progress = (transition.progress - step).max(0.0);
             let alpha = ease_in_out_cubic(transition.progress);
-            *background = theme::SCREEN_BACKGROUND.with_alpha(alpha).into();
+            let next_background = BackgroundColor(theme::SCREEN_BACKGROUND.with_alpha(alpha));
+            if *background != next_background {
+                *background = next_background;
+            }
 
             if transition.progress <= 0.0 {
                 transition.phase = ScreenTransitionPhase::Idle;
                 transition.target = None;
-                *visibility = Visibility::Hidden;
+                if *visibility != Visibility::Hidden {
+                    *visibility = Visibility::Hidden;
+                }
             }
         }
     }

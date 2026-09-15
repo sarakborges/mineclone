@@ -63,11 +63,11 @@ Roda em push para `develop`/`main` e em pull requests.
 
 Base do bloco atual:
 
-`547172973b3e12b6143489ea64f9418821fe145d`
+`868098e3d0ee3aacd922cad7701d6d1ab02a28fb`
 
-Bloco: `Keep idle settings controls unchanged`
+Bloco: `Keep idle HUD visuals unchanged`
 
-`VERSION`: `0.14.15`
+`VERSION`: `0.14.16`
 
 Na retomada, `develop` já estava em `183bcab1be268bcc9511e7e06d9406ade8b63bf0` / `0.14.12`, embora este handoff ainda descrevesse `0.14.5`. Os blocos abaixo foram conferidos no código e no histórico antes de continuar.
 
@@ -94,7 +94,8 @@ Commits recentes relevantes:
 - `0.14.13` / [run `35019877410`](https://github.com/sarakborges/mineclone/actions/runs/35019877410), commit `f692534`: Clippy **success**, `cargo check` **success**. Revisão estática e `git diff --check` também concluídos. O commit seguinte apenas registra este resultado no handoff.
 - `cargo test` somente sob pedido explícito.
 - `0.14.14` / [run `35021097252`](https://github.com/sarakborges/mineclone/actions/runs/35021097252), commit `5471729`: Clippy **success**, `cargo check` **success**.
-- `0.14.15`: revisão estática e `git diff --check` concluídos; CI pendente para o bloco de Settings.
+- `0.14.15` / [run `35021896289`](https://github.com/sarakborges/mineclone/actions/runs/35021896289), commit `868098e`: Clippy **success**, `cargo check` **success**.
+- `0.14.16`: CI pendente para o bloco de HUD/transição.
 
 ---
 
@@ -220,16 +221,25 @@ O hint já era filho do Player HUD, mas `Visibility::Visible` sobrescrevia a her
 
 ---
 
+## 0.14.16 — HUD e transição ociosos
+
+- `animate_screen_transition` só é agendado enquanto `ScreenTransition` está ativo; o overlay não é consultado nem reescrito durante `Idle`.
+- Durante a animação, `Visibility` só muda na entrada/saída e `BackgroundColor` só é marcado alterado quando o alpha realmente muda; easing, duração e targets permanecem iguais.
+- O relógio guarda o último `(dia, hora, minuto)` apresentado e não aloca/formata nova string em ticks que continuam no mesmo minuto; mudanças de idioma/localização continuam invalidando a apresentação.
+- O FPS mantém a janela de 0,25 s, mas arredonda primeiro e só formata/escreve o label quando o inteiro apresentado muda.
+- Validação de ganho de FPS continua dependente de runtime; este bloco não altera gameplay.
+
+---
+
 # Próximos passos
 
 Se nenhum runtime error/warning tiver prioridade:
 
-1. Concluir a auditoria de UI/HUD em execução contínua: overlay de transição reescreve cor/visibilidade enquanto idle, relógio formata texto a cada tick mesmo com minuto igual e FPS reescreve o mesmo label.
-2. Continuar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes. Targeting consumers, estrelas e o bloco da hotbar acima já foram tratados; não repetir esses refactors sem evidência nova.
-3. Integração de meshes: eliminar arrays intermediários de keys/meshes antes do caminho de substituição em assets existentes. Manter preflight completo e lifecycle atômico por chunk.
-4. Seleção: reaproveitar buffers de desired/pending/retired e da fila sem repetir geração de volume nem mudar prioridades; `dispatch_remesh_tasks` também tem scratch temporário reaproveitável.
-5. Manter `notify_loaded_chunk_neighbors` conservador até existir metadata suficiente para provar otimização segura.
-6. Quando o usuário solicitar, rodar `cargo test` manualmente.
+1. Continuar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes. Targeting consumers, estrelas, hotbar e o bloco de HUD/UI acima já foram tratados; não repetir esses refactors sem evidência nova.
+2. Integração de meshes: eliminar arrays intermediários de keys/meshes antes do caminho de substituição em assets existentes. Manter preflight completo e lifecycle atômico por chunk.
+3. Seleção: reaproveitar buffers de desired/pending/retired e da fila sem repetir geração de volume nem mudar prioridades; `dispatch_remesh_tasks` também tem scratch temporário reaproveitável.
+4. Manter `notify_loaded_chunk_neighbors` conservador até existir metadata suficiente para provar otimização segura.
+5. Quando o usuário solicitar, rodar `cargo test` manualmente.
 
 # Performance direction
 
