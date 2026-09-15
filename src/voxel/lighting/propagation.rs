@@ -7,7 +7,8 @@ use crate::content::{
 };
 use crate::voxel::{
     cell::VoxelCell,
-    coordinates::chunk_coord_from_world,
+    chunk::{CHUNK_SIZE, VoxelChunk},
+    coordinates::split_world_position,
     fluid::FluidCell,
     light::{BlockLight, VoxelLight},
     neighbors::CARDINAL_NEIGHBORS,
@@ -97,7 +98,13 @@ pub(super) fn relax_budgeted(
         };
         processed += 1;
 
-        let Some((cell, fluid, current)) = world.sample_at(position) else {
+        let (chunk_coord, local_position) = split_world_position(position);
+        let Some(chunk) = world.chunk(chunk_coord) else {
+            continue;
+        };
+        let Some((cell, fluid, current)) =
+            chunk.sample_local(local_position.x, local_position.y, local_position.z)
+        else {
             continue;
         };
         let desired = desired_light(
@@ -105,6 +112,8 @@ pub(super) fn relax_budgeted(
             registries,
             position,
             (cell, fluid),
+            chunk,
+            local_position,
             context,
         );
 
@@ -113,7 +122,7 @@ pub(super) fn relax_budgeted(
         }
 
         world.set_light_at(position, desired);
-        changed_chunks.insert(chunk_coord_from_world(position));
+        changed_chunks.insert(chunk_coord);
         queue.enqueue_with_neighbors(position);
     }
 }
@@ -123,6 +132,8 @@ fn desired_light(
     registries: LightingRegistries<'_>,
     position: IVec3,
     medium: (Option<VoxelCell>, Option<FluidCell>),
+    chunk: &VoxelChunk,
+    local_position: IVec3,
     context: &mut LightingContext,
 ) -> VoxelLight {
     let (cell, fluid) = medium;
@@ -145,7 +156,7 @@ fn desired_light(
         return VoxelLight::new_hsi(0, emitted);
     }
 
-    let neighbor_lights = CARDINAL_NEIGHBORS.map(|direction| world.light_at(position + direction));
+    let neighbor_lights = cardinal_neighbor_lights(world, position, chunk, local_position);
     let sky = context
         .direct_sky_light(
             world,
@@ -164,6 +175,28 @@ fn desired_light(
     ]);
 
     VoxelLight::new_hsi(sky, block)
+}
+
+fn cardinal_neighbor_lights(
+    world: &VoxelWorld,
+    position: IVec3,
+    chunk: &VoxelChunk,
+    local_position: IVec3,
+) -> [VoxelLight; CARDINAL_NEIGHBORS.len()] {
+    CARDINAL_NEIGHBORS.map(|direction| {
+        let local_neighbor = local_position + direction;
+        if local_neighbor.x >= 0
+            && local_neighbor.y >= 0
+            && local_neighbor.z >= 0
+            && local_neighbor.x < CHUNK_SIZE as i32
+            && local_neighbor.y < CHUNK_SIZE as i32
+            && local_neighbor.z < CHUNK_SIZE as i32
+        {
+            chunk.light_at(local_neighbor.x, local_neighbor.y, local_neighbor.z)
+        } else {
+            world.light_at(position + direction)
+        }
+    })
 }
 
 fn propagated_neighbor_sky(neighbor_lights: &[VoxelLight], attenuation: u8) -> u8 {
