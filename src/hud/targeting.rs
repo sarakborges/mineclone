@@ -48,6 +48,13 @@ struct TargetHudRow;
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 struct AppliedTargetHudPosition(TargetBlockPosition);
 
+type TargetHudRootLayout<'w, 's> = Single<
+    'w,
+    's,
+    (&'static mut Node, &'static mut AppliedTargetHudPosition),
+    (With<TargetHudRoot>, Without<TargetHudRow>),
+>;
+
 #[derive(Component)]
 struct TargetBlockText;
 
@@ -166,10 +173,7 @@ fn spawn_target_hud(
 
 fn sync_target_hud_layout(
     settings: Res<HudSettings>,
-    root: Single<
-        (&mut Node, &mut AppliedTargetHudPosition),
-        (With<TargetHudRoot>, Without<TargetHudRow>),
-    >,
+    root: TargetHudRootLayout,
     mut row: Single<&mut Node, (With<TargetHudRow>, Without<TargetHudRoot>)>,
 ) {
     let position = settings.target_block_position();
