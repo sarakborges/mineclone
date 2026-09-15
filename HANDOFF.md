@@ -17,7 +17,8 @@ Este arquivo, `HANDOFF.md` na raiz de `develop`, é a fonte canônica e persiste
 - Não declarar bug visual/gameplay resolvido sem evidência de runtime quando a correção depender desse comportamento.
 - Não gerar imagens a menos que o usuário peça explicitamente.
 - Para assets binários enviados pelo usuário, usar exatamente os arquivos fornecidos.
-- Depois de mudança material, atualizar este handoff.
+- Depois de mudança material em código, versão, arquitetura, roadmap ou processo, atualizar este handoff.
+- Comunicação direta: menos narração, mais mudança concreta.
 
 ## Versionamento — obrigatório
 
@@ -25,23 +26,28 @@ O arquivo raiz `VERSION` é a fonte autoritativa.
 
 Todo bloco coerente deve subir versão:
 
-- `patch`: fixes/refactors/otimizações internas compatíveis;
+- `patch`: fixes/refactors/otimizações internas/tooling compatíveis;
 - `minor`: nova feature compatível;
 - `major`: mudança incompatível/breaking.
 
-O bump faz parte do bloco; não considerar o bloco fechado antes de atualizar `VERSION`.
+O bump faz parte do bloco.
 
 ## Validação — obrigatória
 
-O CI de Rust é parte obrigatória do fechamento de qualquer bloco de código.
+O CI de Rust valida automaticamente apenas:
 
-- `.github/workflows/ci.yml` roda em `push` para `develop` e `main`, além de `pull_request`.
-- Gates autoritativos: `cargo clippy --all-targets --all-features -- -D warnings`, `cargo check` e `cargo test`.
-- Não considerar bloco de código encerrado enquanto esses checks não estiverem verdes para o HEAD correspondente.
-- Se o usuário enviar output de compilação/runtime, corrigir todos os errors e warnings relacionados antes de continuar refactors maiores.
-- `cargo fmt`/`rustfmt` não é gate de CI.
-- Não ficar em polling repetitivo de CI; consultar runs quando houver resultado concreto para agir.
-- Comunicação direta: menos narração, mais mudança concreta.
+- `cargo clippy --all-targets --all-features -- -D warnings`;
+- `cargo check`.
+
+`.github/workflows/ci.yml` roda em `push` para `develop` e `main`, além de `pull_request`.
+
+`cargo test` **não faz mais parte do CI** e **não é gate automático de fechamento**. Testes devem ser executados manualmente somente quando o usuário solicitar explicitamente. Não reintroduzir testes no workflow nem rodá-los por rotina sem pedido.
+
+Se o usuário enviar output de compilação/runtime, corrigir todos os errors e warnings relacionados antes de continuar refactors maiores.
+
+`cargo fmt`/`rustfmt` não é gate de CI.
+
+Não ficar em polling repetitivo de CI; consultar quando houver resultado concreto para agir.
 
 ## Handoff — obrigatório
 
@@ -80,8 +86,11 @@ Princípios principais:
 19. Quando invariants permitirem, separar refresh estrutural de material/textura de refresh leve de tint/orientação/posição.
 20. Movimento com delta zero não deve adquirir mutação de `Transform` nem executar collision stepping; estado ocioso deve permanecer realmente ocioso.
 21. Scratch de cardinalidade estruturalmente limitada deve preferir stack/reuse a heap allocation por amostra, sem impor limites artificiais a conteúdo data-driven.
-22. Escolhas de criação de mundo devem pertencer a `NewWorldConfig`; bootstrap consome essa configuração, não cria um segundo owner paralelo.
-23. Spawn forçado por biome deve escolher a coluna inicial pelo biome autoritativo do surface field antes da geração, em vez de teletransportar o jogador para um segundo local depois do bootstrap.
+22. Escolhas de criação de mundo pertencem a `NewWorldConfig`; bootstrap consome essa configuração, não cria owner paralelo.
+23. Spawn forçado por biome deve escolher coluna e posição segura final pelo biome autoritativo do surface field; não corrigir por teleporte pós-bootstrap.
+24. Search/text-input state machine compartilhado pertence a `src/ui`; telas continuam owners de suas opções/regras específicas.
+25. Preferências de HUD pertencem a `HudSettings`; `TargetedBlock` continua sendo o único owner do target.
+26. Layout/visibilidade e conteúdo/material de HUD devem ser atualizados separadamente quando seus inputs autoritativos diferirem.
 
 ---
 
@@ -89,115 +98,114 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`f63062814eab6ccb17fc14d2477132bb158bc932`
+`50bb5cd2fdd9353cf9f8c9e88ecce786e8892d79`
 
-Commit: `Fix spawn biome dropdown validation`
+Commit: `Bump version to 0.14.1`
 
-`VERSION`: `0.13.0`
+`VERSION`: `0.14.1`
 
-Blocos/commits recentes relevantes:
+Commits imediatamente relevantes:
 
-- `c00effb1bcbff96d504365e269f79e90e989c8f4` — `Reduce surface biome sampling allocations` + `0.12.104`
-- `7bbee70089fca506c545f1758dc064fc9cd8b17e` — `Reuse current biome identity buffers` + `0.12.105`
-- `f0ee1c48beede24fde6a3a95483de5706a2db1a9` — `Fix surface biome sampling warning` + `0.12.106`
-- `5a021f333ad756ae6fa89dad8682045aa15da504` — `Add gameplay hints and spawn biome selection` + bump `0.13.0`
-- `e81e1803bbc212dd27e93986de1255ab41560ef2` — `Keep spawn biome search focus isolated`
-- `f63062814eab6ccb17fc14d2477132bb158bc932` — `Fix spawn biome dropdown validation`
+- `bb3b1347c69162739a1e58dc0b01780531d14d86` — último HEAD consolidado do pacote funcional `0.14.0`; Clippy/check/test ficaram verdes antes da mudança de política de CI.
+- `845f9b544de6a77771a8e5ae19a6b2e4f7c2600a` — bump para `0.14.0`.
+- `88abc44f20695c2fd1889f83b17a3e657a425dd4` — remove `cargo test` do CI; testes passam a ser manuais sob pedido.
+- `50bb5cd2fdd9353cf9f8c9e88ecce786e8892d79` — bump para `0.14.1`.
 
 Sempre buscar HEAD/VERSION novamente antes de escrever código.
 
 ## CI atual
 
-- `0.12.106` / run `34993918732`: **success**.
-- `0.13.0` / HEAD `f63062814eab6ccb17fc14d2477132bb158bc932` / run `34996626194`: Clippy **success**, `cargo check` **success**, `cargo test` ainda em execução na última consulta antes desta gravação.
-
-O bloco `0.13.0` só é considerado formalmente fechado quando `cargo test` desse HEAD também ficar verde.
+- O antigo HEAD `bb3b1347...` passou Clippy, `cargo check` e `cargo test`.
+- A partir de `0.14.1`, o CI autoritativo contém somente Clippy + `cargo check`.
+- `cargo test` só deve ser rodado quando o usuário pedir.
 
 ---
 
 # Estado consolidado do refactor/performance
 
-A auditoria arquitetural/performance segue ativa. O roadmap vem do canon + inspeção real do código, não de backlog antigo seguido cegamente.
-
-## Base consolidada até 0.12.79
+## Base até 0.12.103
 
 - Filas deduplicadas, snapshots clonáveis e lifecycle async de generation/mesh.
-- Integração main-thread budgetada; UI/HUD/targeting/environment change-driven.
+- Integração main-thread budgetada; remesh background async com revisions/halo validation.
 - Metadata de occupancy/boundaries no `VoxelChunk`; índice vertical no `VoxelWorld`.
 - Halo de mesh reduzido à shell real; skylight vertical lazy.
 - Chunk buffers COW com `Arc<[...]>`; chunks vazios pulam mesh task.
-- Fluid solver gated por tick; contexts de setup/streaming estreitados; caches concorrentes deduplicados.
-- Leituras block/fluid/light consolidadas em `sample_at`/`sample_local`.
-- `VoxelChunkContentMut` faz edits batch usando os mesmos invariants dos setters.
-- Worldgen, structures e archive restore usam batch mutation; archive encode/restore percorrem 4.096 slots uma vez.
-
-## 0.12.80–0.12.86 — streaming/revisions/remesh async
-
-- Unload backlog vem do delta de `desired`/`retained`; scan global de chunks carregados fica só no bootstrap.
-- Feature caches e `surface_ranges` são podados por bootstrap/render-distance/generation-region, não por todo chunk atravessado.
-- `VoxelWorld` mantém revisão de mesh por chunk residente.
-- `ChunkMeshSnapshot` captura presença + revisão dos 27 chunks do cubo 3×3×3.
-- Initial mesh/remesh async descarta resultado stale e recaptura halo atual.
-- Background terrain/fluid/lighting remesh usa `ChunkRemeshTasks`/`ChunkTaskQueue` no `AsyncComputeTaskPool`.
-- Apenas immediate geometry de edição/topologia continua síncrono para feedback do jogador.
-
-## 0.12.87–0.12.95 — budgets/coalescência/scratch
-
-- Dynamic lighting: máximo 4.096 voxels/frame, budget 2 ms, mínimo 256, checagem a cada 64.
-- Fluid solver: máximo 512 updates/4 steps, budget 1 ms, mínimo 64; frontier congelada preservada.
-- Restore de chunks arquivados: 1 ms / até 4 trabalhos por frame.
-- Unload observa budget de 4 ms desde o primeiro chunk.
-- `DeduplicatedQueue`/`VoxelUpdateQueue` suportam reserve; lighting bulk enqueue pré-aloca capacidade.
-- Geometry/Lighting do mesmo coord são coalescidos quando produzem o mesmo terrain mesh; `Fluid` segue independente salvo full geometry supersedence.
-- Fluid scheduling usa `Vec<f32>` indexado por `FluidId` em vez de HashMap por tick.
-- Lighting changed-chunk scratch e emission-edit maps preservam capacidade entre frames sem manter caches derivados stale.
-
-## 0.12.96–0.12.103 — CI e hot paths change-driven
-
-- Bootstrap meshing consome `ChunkMeshTaskOutput.meshes` preservando dependencies.
-- Strict Clippy ficou limpo de warnings estruturais; CI em push para `develop` virou gate obrigatório.
-- Underwater HUD, target highlight, brush ghost e placement preview evitam mutações idempotentes.
+- Dynamic lighting, fluid, archive restore e unload possuem budgets de quantidade/tempo.
+- Geometry/Lighting do mesmo coord coalescem quando produzem o mesmo terrain mesh; Fluid permanece independente salvo supersedence por geometry completa.
+- UI/HUD/targeting/environment foram progressivamente convertidos para change-driven/idempotent writes.
 - Held block separa rebuild estrutural/material de tint/orientation.
 - Player idle evita reescritas de transform/state e collision stepping com delta zero.
 
-## 0.12.104 — surface biome sampling com scratch fixo
+## 0.12.104–0.12.106 — biome sampling/identity
 
-- Neighborhood de 25 sites usa array em stack em vez de `Vec` temporário.
-- Cache misses usam scratch fixo; pass intermediário de sites foi removido.
-- Pesos regionais usam scratch compacto, preservando tie-breaking e ordem de influences.
-- A alocação obrigatória restante no caminho é o `Vec<BiomeInfluence>` retornado por `BiomeFieldSample`.
-
-## 0.12.105–0.12.106 — identidade de biome sem buffers descartáveis
-
-- `track_current_biome`/identity path passou a reutilizar buffers do estado corrente em vez de reconstruir `String`/`Vec` temporários a cada atualização de posição.
-- A implementação preserva blend contínuo e change detection: reuse de storage não transforma dado derivado em cache autoritativo.
-- O warning restante do surface-biome sampling foi corrigido em `0.12.106`; o gate correspondente ficou verde.
+- Surface neighborhood fixo de 25 sites usa scratch em stack em vez de múltiplos `Vec` temporários.
+- Pesos regionais usam scratch compacto preservando ordem/tie-breaking.
+- `track_current_biome` reutiliza buffers de identidade/influences em vez de reconstruir `String`/`Vec` descartáveis.
+- Reuse de buffers não cria cache autoritativo stale; change detection continua comparando o estado final.
 
 ---
 
-# 0.13.0 — gameplay hints + Spawn Biome
+# 0.13.x–0.14.0 — pacote de gameplay/UI/world creation
 
-## HUD/tooltips
+## Gameplay hints / Player HUD
 
-- Crosshair mostra hint contextual para quebrar bloco e, quando há bloco selecionado para placement, o hint inclui quebrar/colocar.
-- Player HUD mostra `Press E to open inventory.` abaixo do painel principal.
-- Os novos hints respeitam `HudSettings` / `Display Tooltips` e reutilizam os owners visuais/textuais existentes em vez de criar estado paralelo.
+- Crosshair mostra hint contextual quando existe target:
+  - sem bloco selecionado: `Left click to break block.`
+  - com bloco selecionado: `Left click to break block, or right click to place.`
+- Tooltip abaixo da crosshair não aparece com inventory ou pause abertos e respeita `Display Tooltips`.
+- Player HUD permanece visível com Inventory aberto e some no pause.
+- Hint do Player HUD respeita `Display Tooltips`:
+  - inventário fechado: `Press E to open inventory, or ESC to pause game.`
+  - inventário aberto: `Press E or ESC to close inventory.`
+- `E` abre e fecha Inventory; `ESC` preserva a semântica existente de fechar Inventory quando ele está aberto.
+
+## Settings → HUD
+
+- A antiga seção `Miscellaneous` foi renomeada para `HUD`.
+- `Display Tooltips` permanece owner de hints de gameplay no HUD; descrição foi generalizada para não falar apenas de crosshair.
+- Nova preferência `Target Block Position` em `HudSettings`, com:
+  - `Center`;
+  - `Top-right`;
+  - `Hidden`.
+- Target HUD altera somente layout/visibilidade segundo `HudSettings`; `TargetedBlock` continua owner do target.
+- Layout e conteúdo do Target HUD são sincronizados separadamente.
+- Snapshot textual e snapshot visual do Target HUD são separados; mudança apenas de luz/idioma/face não marca `BlockIconMaterial` como modificado.
+
+## Shared UI
+
+- State machine de text search/input foi extraído para `src/ui` e reutilizado pelo Creative Inventory e Spawn Biome.
+- Dropdowns usam chevron desenhado por UI em vez de glyph dependente de fonte.
+- Settings e World Settings usam primitive compartilhado de scrollbar persistente em sidebar e conteúdo/section.
 
 ## New World / Spawn Biome
 
-- `NewWorldConfig` agora possui seleção opcional de spawn biome; `None` representa `Random` e preserva o comportamento anterior.
-- New World → General ganhou `Spawn Biome` com dropdown pesquisável.
-- A lista vem dos surface biomes registrados na dimensão default; nomes exibidos vêm da localização/definição do biome, enquanto a configuração armazena o biome ID.
-- O dropdown isola foco de keyboard input de Seed/Ticks; abrir a busca reseta os outros inputs ativos.
-- O filtro reutiliza labels normalizados armazenados nas opções; não cria a normalização de cada opção a cada frame.
+- `NewWorldConfig` é o único owner da seleção; `None` representa `Random`.
+- New World → General possui `Spawn Biome` pesquisável.
+- Opções são data-driven a partir dos `BiomeKind::Surface` da dimensão; labels vêm das definições/localização e o valor salvo é biome ID.
+- Options/search labels reagem a troca de idioma enquanto a tela está viva.
+- Search bar é visualmente distinta das opções.
+- Dropdown é overlay absoluto e não empurra Seed/Game Mode/outros controles.
+- Viewport exibe até 5 opções e usa scroll quando necessário; filtro reseta posição de scroll.
+- Foco entre Seed/Ticks/search e outros controles foi coordenado para evitar input oculto ainda capturando teclado.
 
-## Bootstrap de spawn
+## Spawn forçado
 
-- Para `Random`, a coluna inicial continua seguindo o comportamento normal.
-- Para biome selecionado, o bootstrap procura uma coluna seca cujo `BiomeFieldSample.primary_id` seja exatamente o ID escolhido.
-- A coluna encontrada passa a ser a `spawn_column` usada pelo mesmo pipeline de geração/carregamento existente.
-- `safe_spawn_position` continua sendo o único owner do posicionamento físico final sobre a coluna gerada; não foi criado um segundo mecanismo de teleporte pós-bootstrap.
-- Não houve alteração nas regras gerais de terrain generation; a feature só condiciona a escolha da coluna inicial.
+- Busca inicial é coarse-first e procura coluna seca cujo `BiomeFieldSample.primary_id` seja o biome selecionado.
+- `Random` preserva o fluxo anterior.
+- A posição física final usa a mesma lógica de safe spawn com predicate de biome; estruturas/árvores podem deslocar a posição apenas para outra coluna ainda no biome escolhido.
+- Não existe segundo teleporte corretivo pós-bootstrap.
+- Caches pesados usados durante a procura são podados para a região de bootstrap antes da geração inicial.
+
+## Worldgen balance
+
+Ajustes deliberadamente pequenos e data-driven:
+
+- Plains tree chance: `0.45 -> 0.48`.
+- Witchwood tree chance: `0.62 -> 0.66`.
+- Enchanted Forest tree chance: `0.62 -> 0.66`.
+- Mountains weight: `0.90 -> 0.85`.
+
+Nenhuma regra especial em código foi criada para esse balanceamento.
 
 ---
 
@@ -209,33 +217,19 @@ Não desfazer sem evidência nova:
 - Não separar lighting remesh em atributos com índices fixos: block light participa de `should_flip_diagonal` e pode mudar topologia indexada.
 - Não expor `VoxelWorld::chunk_mut` genericamente; mutações devem permanecer estreitas e ownership-aware.
 - `DeduplicatedQueue` mantém FIFO/prioridade via generations/tombstones.
-- Miss caching de remesh depende das revisions dos owners reais.
-- Não remover full emission footprint de recoloração sem invalidation equivalente dos canais antigos.
-- Empty-chunk lighting pode usar shell + vizinhos externos; chunks com conteúdo não podem ser reduzidos à shell sem frontier interna provada.
 - Natural hydrology continua source/static; não reenfileirar água natural no solver dinâmico.
-- Loading de chunk vazio só exige neighbor fluid remesh quando a face compartilhada possui fluido.
-- Edits de medium/fluid não pertencem ao tracking de emissão de bloco.
-- Não criar bitset de boundary enquanto contadores + early exit resolverem o hotspot.
-- Rebuilds integrais de buffers COW devem obter mutable storage uma vez no owner.
 - Batch content edit pertence a `VoxelChunk`; não criar builder externo com invariants duplicados.
-- Halo de mesh deve resolver chunks vizinhos por shell, não voltar a lookup world-position por voxel.
-- Unload backlog deve vir do delta do owner de seleção, não de scan global duplicado.
-- Cache pruning não precisa acompanhar cada chunk do player; manter granularidade coerente com generation regions.
 - Qualquer mesh/remesh async deve validar presença/revisão de todo o halo antes de aplicar resultado.
 - Lighting remesh pertence ao background async; immediate geometry permanece síncrono enquanto feedback do edit justificar.
-- Pedidos `Geometry` e `Lighting` do mesmo coord podem ser coalescidos porque produzem o mesmo terrain mesh; `Fluid` continua independente salvo quando full geometry já o supersede.
-- `FluidId` pode ser usado como índice denso enquanto `FluidRegistry` mantiver IDs por posição em `definitions`; crescer o registry deve redimensionar scratch/state, não voltar a hashing por frame.
 - Scratch containers podem preservar capacidade entre frames, mas caches derivados do conteúdo do mundo não devem sobreviver sem invalidation autoritativa.
-- Componentes/Assets não devem ser mutavelmente acessados só para regravar o mesmo valor; isso pode propagar change detection ou asset upload desnecessário.
-- Block model material/topology refresh deve ficar separado de tint/orientation refresh quando os inputs autoritativos permitem essa divisão.
-- Grounded estável com suporte não precisa integrar gravidade só para colidir e zerar a mesma velocidade no mesmo tick; o probe de suporte é o invariant necessário nesse estado.
-- Surface sampling pode usar scratch fixo para o neighborhood de sites porque a cardinalidade é definida por `SITE_SEARCH_RADIUS`; isso não limita a quantidade data-driven de biomes no registry.
-- Reuse de buffers de identidade de biome é scratch/state reuse, não autorização para persistir amostras derivadas stale do worldgen.
+- Componentes/Assets não devem ser mutavelmente acessados só para regravar o mesmo valor.
+- Block model material/topology refresh deve ficar separado de tint/orientation refresh quando inputs autoritativos permitirem.
 - `Spawn Biome` pertence a `NewWorldConfig`; não criar outro resource autoritativo para a mesma escolha.
-- Spawn forçado deve permanecer integrado ao bootstrap via `spawn_column`; não adicionar teleporte corretivo posterior sem evidência de que o invariant atual falha.
-- Solvers dinâmicos devem preservar a semântica da frontier ao ganhar budgets temporais.
-- Archive compactado permanece preferível a guardar buffers COW brutos; restore caro é controlado por scheduling budget.
-- Formatação de Rust não é requisito de CI; não reintroduzir format gate sem pedido explícito.
+- Safe spawn forçado deve continuar no mesmo owner de segurança física, usando predicate de biome, sem duplicar collision/surface logic.
+- Search compartilhado deve abstrair apenas o invariant de edição de texto; inventory/dropdown continuam owners de suas regras de filtro/opções.
+- Preferência de posição do Target HUD pertence a `HudSettings`; targeting não deve conhecer layout.
+- Formatação de Rust não é requisito de CI.
+- `cargo test` não é requisito de CI; executar manualmente somente sob pedido explícito do usuário.
 - Não reabrir bugs antigos automaticamente; só se ativos/regredidos.
 
 ---
@@ -244,15 +238,13 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Fechar o `cargo test` do HEAD `f63062814eab6ccb17fc14d2477132bb158bc932`; se falhar, corrigir todos os failures antes de continuar.
-2. Fazer validação runtime da UI de `0.13.0`: posicionamento dos hints, toggle `Display Tooltips`, foco/keyboard do dropdown, busca/seleção e retorno a `Random`.
-3. Validar runtime de `Spawn Biome` em seeds diferentes, confirmando que o player nasce no biome selecionado e que `Random` preserva o fluxo anterior.
-4. Retomar inspeção objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e escritas redundantes em Components/Assets.
-5. Revisar integração/spawn de mesh apenas se houver ganho estrutural sem introduzir lifecycle parcial por submesh; o caminho atual já substitui assets in-place quando topology/keys permitem.
-6. Revisar custo do rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para eliminar o pequeno sort do raio local 3.
-7. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel.
-
----
+1. Confirmar Clippy + `cargo check` do HEAD `50bb5cd2...` no novo CI sem testes; corrigir qualquer failure antes de novo código.
+2. Fazer validação runtime das mudanças de UI quando houver output/relato do usuário: Player HUD no inventory/pause, Target Block Position, scrollbars e Spawn Biome overlay/search.
+3. Quando o usuário solicitar testes manuais, rodar `cargo test` e corrigir todos os failures antes de continuar.
+4. Retomar inspeção objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes.
+5. Revisar integração/spawn de mesh apenas se houver ganho estrutural sem lifecycle parcial por submesh.
+6. Revisar rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para remover pequeno sort local.
+7. Manter `notify_loaded_chunk_neighbors` conservador enquanto metadata atual não provar overlap voxel-a-voxel.
 
 # Performance direction
 
@@ -269,7 +261,7 @@ Meta: ~60 FPS estáveis.
 # Comunicação
 
 - direta e focada em ação;
-- não repetir caveats de `cargo check`/`cargo run`;
+- não repetir caveats de validação de rotina;
 - não dizer “achamos a causa” sem evidência;
 - durante sequências longas, atualizar apenas findings/blocos concluídos;
 - atualizar `HANDOFF.md` depois de mudanças materiais.
