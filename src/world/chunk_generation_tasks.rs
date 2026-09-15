@@ -1,9 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
-use bevy::{
-    prelude::*,
-    tasks::{AsyncComputeTaskPool, Task, futures::check_ready},
-};
+use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
 use crate::{
     content::{
@@ -16,6 +13,7 @@ use crate::{
 use super::{
     biome_field::BiomeField,
     chunk_system_params::{ChunkContent, ChunkGeneration},
+    chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
     generation::{ChunkGenerationContext, generate_chunk},
     world_feature_fields::WorldFeatureFields,
 };
@@ -58,22 +56,11 @@ impl GenerationSnapshot {
     }
 }
 
-struct PendingGeneration {
-    revision: u64,
-    task: Task<VoxelChunk>,
-}
-
-pub(crate) struct CompletedChunkGeneration {
-    pub(crate) coord: IVec3,
-    pub(crate) revision: u64,
-    pub(crate) chunk: VoxelChunk,
-}
-
 #[derive(Resource, Default)]
 pub(crate) struct ChunkGenerationTasks {
     revision: u64,
     snapshot: Option<Arc<GenerationSnapshot>>,
-    pending: HashMap<IVec3, PendingGeneration>,
+    pending: ChunkTaskQueue<VoxelChunk>,
 }
 
 impl ChunkGenerationTasks {
@@ -102,11 +89,11 @@ impl ChunkGenerationTasks {
     }
 
     pub(crate) fn contains(&self, coord: IVec3) -> bool {
-        self.pending.contains_key(&coord)
+        self.pending.contains(coord)
     }
 
     pub(crate) fn schedule(&mut self, coord: IVec3) -> bool {
-        if self.pending.len() >= MAX_GENERATION_TASKS_IN_FLIGHT || self.pending.contains_key(&coord) {
+        if self.pending.len() >= MAX_GENERATION_TASKS_IN_FLIGHT || self.pending.contains(coord) {
             return false;
         }
 
@@ -121,42 +108,13 @@ impl ChunkGenerationTasks {
             generate_chunk(coord, &context)
         });
 
-        self.pending.insert(coord, PendingGeneration { revision, task });
-        true
+        self.pending.insert(coord, revision, task)
     }
 
-    pub(crate) fn collect_ready(&mut self, maximum: usize) -> Vec<CompletedChunkGeneration> {
-        if maximum == 0 || self.pending.is_empty() {
-            return Vec::new();
-        }
-
-        let coords = self.pending.keys().copied().collect::<Vec<_>>();
-        let mut completed = Vec::new();
-
-        for coord in coords {
-            if completed.len() >= maximum {
-                break;
-            }
-
-            let ready = {
-                let pending = self
-                    .pending
-                    .get_mut(&coord)
-                    .unwrap_or_else(|| panic!("pending generation disappeared for {coord:?}"));
-                check_ready(&mut pending.task).map(|chunk| (pending.revision, chunk))
-            };
-
-            let Some((revision, chunk)) = ready else {
-                continue;
-            };
-            self.pending.remove(&coord);
-            completed.push(CompletedChunkGeneration {
-                coord,
-                revision,
-                chunk,
-            });
-        }
-
-        completed
+    pub(crate) fn collect_ready(
+        &mut self,
+        maximum: usize,
+    ) -> Vec<CompletedChunkTask<VoxelChunk>> {
+        self.pending.collect_ready(maximum)
     }
 }
