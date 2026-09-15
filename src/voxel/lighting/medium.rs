@@ -14,19 +14,6 @@ use crate::voxel::{
 const DYED_PROPERTY_ID: &str = "dyed";
 const DYE_LIGHT_SATURATION_GAMMA: f32 = 1.85;
 
-pub(super) fn medium_dampening(
-    world: &VoxelWorld,
-    blocks: &BlockRegistry,
-    fluids: &FluidRegistry,
-    position: IVec3,
-) -> u8 {
-    let Some((cell, fluid, _)) = world.sample_at(position) else {
-        return 0;
-    };
-
-    medium_dampening_for_cells(cell, fluid, blocks, fluids)
-}
-
 pub(super) fn medium_dampening_for_cells(
     cell: Option<VoxelCell>,
     fluid: Option<FluidCell>,
@@ -34,15 +21,6 @@ pub(super) fn medium_dampening_for_cells(
     fluids: &FluidRegistry,
 ) -> u8 {
     block_dampening(cell, blocks).max(fluid_dampening(fluid, fluids))
-}
-
-pub(super) fn block_emission(
-    world: &VoxelWorld,
-    blocks: &BlockRegistry,
-    secondary_properties: &SecondaryPropertyRegistry,
-    position: IVec3,
-) -> BlockLight {
-    block_emission_for_cell(world.cell_at(position), blocks, secondary_properties)
 }
 
 pub(super) fn block_emission_for_cell(
