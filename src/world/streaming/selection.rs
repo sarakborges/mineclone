@@ -4,7 +4,10 @@ use bevy::prelude::*;
 
 use crate::{
     voxel::{chunk::CHUNK_SIZE, coordinates::chunks_for_block_extent},
-    world::render_distance::chunk_coords_in_volume,
+    world::{
+        generation_region::generation_region_coord,
+        render_distance::chunk_coords_in_volume,
+    },
 };
 
 use super::{
@@ -27,6 +30,14 @@ pub(super) fn rebuild_queue(
     vertical_radius: i32,
     context: &QueueRebuildContext<'_>,
 ) {
+    let prune_feature_caches = should_prune_feature_caches(
+        streaming.center,
+        streaming.horizontal_radius,
+        streaming.vertical_radius,
+        center,
+        horizontal_radius,
+        vertical_radius,
+    );
     let horizontal_structure_allowance = chunks_for_block_extent(
         context.structures.max_horizontal_extent_from_anchor(),
     );
@@ -43,7 +54,9 @@ pub(super) fn rebuild_queue(
         context,
         &mut streaming.surface_ranges,
     );
-    context.feature_fields.retain_for_chunks(&desired);
+    if prune_feature_caches {
+        context.feature_fields.retain_for_chunks(&desired);
+    }
     let mut pending = desired
         .iter()
         .copied()
@@ -74,6 +87,19 @@ pub(super) fn rebuild_queue(
     ) {
         streaming.enqueue_retired(coord);
     }
+}
+
+fn should_prune_feature_caches(
+    previous_center: Option<IVec3>,
+    previous_horizontal_radius: i32,
+    previous_vertical_radius: i32,
+    center: IVec3,
+    horizontal_radius: i32,
+    vertical_radius: i32,
+) -> bool {
+    previous_center.map(generation_region_coord) != Some(generation_region_coord(center))
+        || previous_horizontal_radius != horizontal_radius
+        || previous_vertical_radius != vertical_radius
 }
 
 fn retired_chunk_coords(
@@ -229,5 +255,44 @@ mod tests {
             retired_chunk_coords(previous_retained, &desired, &retained, IVec3::ZERO),
             vec![far, nearer]
         );
+    }
+
+    #[test]
+    fn feature_cache_pruning_follows_generation_region_boundaries() {
+        let radius = 12;
+        let vertical_radius = 4;
+
+        assert!(should_prune_feature_caches(
+            None,
+            radius,
+            vertical_radius,
+            IVec3::ZERO,
+            radius,
+            vertical_radius,
+        ));
+        assert!(!should_prune_feature_caches(
+            Some(IVec3::ZERO),
+            radius,
+            vertical_radius,
+            IVec3::new(7, 0, 7),
+            radius,
+            vertical_radius,
+        ));
+        assert!(should_prune_feature_caches(
+            Some(IVec3::new(7, 0, 7)),
+            radius,
+            vertical_radius,
+            IVec3::new(8, 0, 7),
+            radius,
+            vertical_radius,
+        ));
+        assert!(should_prune_feature_caches(
+            Some(IVec3::ZERO),
+            radius,
+            vertical_radius,
+            IVec3::ZERO,
+            radius + 1,
+            vertical_radius,
+        ));
     }
 }
