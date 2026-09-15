@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
-    sync::{Arc, OnceLock, RwLock},
+    sync::{Arc, Mutex, OnceLock, RwLock},
 };
 
 use bevy::prelude::*;
@@ -150,6 +150,14 @@ impl StructureOriginCache {
     }
 }
 
+#[derive(Default)]
+struct RetentionScratch {
+    horizontal_chunks: HashSet<IVec2>,
+    generation_regions: HashSet<IVec3>,
+    retained_regions: HashSet<IVec3>,
+    retained_hydrology: HashSet<IVec2>,
+}
+
 pub(super) struct FeatureCaches {
     hydrology: ConcurrentCache<IVec2, Arc<HydrologyRegion>>,
     generation_columns: ConcurrentCache<IVec2, Arc<Vec<GenerationColumnSample>>>,
@@ -157,6 +165,7 @@ pub(super) struct FeatureCaches {
     caves: ConcurrentCache<IVec3, Option<Arc<CaveConnectivityRegion>>>,
     regions: ConcurrentCache<IVec3, Arc<GenerationRegion>>,
     structure_origins: StructureOriginCache,
+    retention_scratch: Mutex<RetentionScratch>,
 }
 
 impl FeatureCaches {
@@ -168,6 +177,7 @@ impl FeatureCaches {
             caves: ConcurrentCache::new("cave region cache"),
             regions: ConcurrentCache::new("generation region cache"),
             structure_origins: StructureOriginCache::new(),
+            retention_scratch: Mutex::new(RetentionScratch::default()),
         }
     }
 
@@ -227,17 +237,27 @@ impl FeatureCaches {
     }
 
     pub(super) fn retain_for_chunks(&self, desired: &HashSet<IVec3>) {
-        let horizontal_chunks = desired.iter().map(|coord| coord.xz()).collect::<HashSet<_>>();
-        let generation_regions = desired
-            .iter()
-            .copied()
-            .map(generation_region_coord)
-            .collect::<HashSet<_>>();
-        let mut retained_regions = HashSet::new();
+        let mut scratch = self
+            .retention_scratch
+            .lock()
+            .expect("feature cache retention scratch lock was poisoned");
+        let RetentionScratch {
+            horizontal_chunks,
+            generation_regions,
+            retained_regions,
+            retained_hydrology,
+        } = &mut *scratch;
 
+        horizontal_chunks.clear();
+        horizontal_chunks.extend(desired.iter().map(|coord| coord.xz()));
+
+        generation_regions.clear();
+        generation_regions.extend(desired.iter().copied().map(generation_region_coord));
+
+        retained_regions.clear();
         // Many desired chunks share one 8x8x8 generation region. Expand the
         // cache margin once per unique region rather than once per chunk.
-        for region in generation_regions {
+        for region in generation_regions.drain() {
             for y in (region.y - CACHE_REGION_MARGIN).max(0)..=(region.y + CACHE_REGION_MARGIN) {
                 for z in (region.z - CACHE_REGION_MARGIN)..=(region.z + CACHE_REGION_MARGIN) {
                     for x in (region.x - CACHE_REGION_MARGIN)..=(region.x + CACHE_REGION_MARGIN) {
@@ -247,10 +267,8 @@ impl FeatureCaches {
             }
         }
 
-        let retained_hydrology = retained_regions
-            .iter()
-            .map(|coord| coord.xz())
-            .collect::<HashSet<_>>();
+        retained_hydrology.clear();
+        retained_hydrology.extend(retained_regions.iter().map(|coord| coord.xz()));
 
         self.generation_columns
             .retain(|coord| horizontal_chunks.contains(coord));
