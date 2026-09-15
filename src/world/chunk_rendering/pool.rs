@@ -46,7 +46,7 @@ impl ChunkRenderPool {
         self.active.values().map(|slot| slot.mesh_bytes).sum()
     }
 
-    pub(crate) fn take(&mut self, coord: IVec3) -> Option<(Vec<Entity>, Vec<Handle<Mesh>>)> {
+    fn take(&mut self, coord: IVec3) -> Option<(Vec<Entity>, Vec<Handle<Mesh>>)> {
         self.active
             .remove(&coord)
             .map(|slot| (slot.entities, slot.meshes))
@@ -132,6 +132,31 @@ impl ChunkRenderPool {
             }
         }
     }
+}
+
+pub(crate) fn retire_chunk_render_allocation(
+    commands: &mut Commands,
+    render_pool: &mut ChunkRenderPool,
+    coord: IVec3,
+) {
+    let Some((entities, mesh_handles)) = render_pool.take(coord) else {
+        return;
+    };
+
+    for entity in entities {
+        commands.entity(entity).despawn();
+    }
+
+    if mesh_handles.is_empty() {
+        return;
+    }
+
+    commands.queue(move |world: &mut World| {
+        let mut meshes = world.resource_mut::<Assets<Mesh>>();
+        for mesh_handle in mesh_handles {
+            let _ = meshes.remove(&mesh_handle);
+        }
+    });
 }
 
 pub(crate) fn clear_chunk_render_pool(
