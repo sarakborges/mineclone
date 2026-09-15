@@ -1,7 +1,7 @@
 mod frontier;
 mod solver;
 
-use std::{collections::HashMap, time::Duration};
+use std::time::Duration;
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 
@@ -28,7 +28,7 @@ const MAX_FLUID_STEPS_PER_FRAME: usize = 4;
 #[derive(Resource, Default)]
 pub(crate) struct PendingFluidUpdates {
     queue: VoxelUpdateQueue,
-    accumulated_steps: HashMap<FluidId, f32>,
+    accumulated_steps: Vec<f32>,
 }
 
 impl PendingFluidUpdates {
@@ -38,6 +38,10 @@ impl PendingFluidUpdates {
 
     pub(crate) fn enqueue_loaded_fluid_frontier(&mut self, world: &VoxelWorld, coord: IVec3) {
         frontier::enqueue_loaded_fluid_frontier(self, world, coord);
+    }
+
+    fn reserve(&mut self, additional: usize) {
+        self.queue.reserve(additional);
     }
 
     fn enqueue(&mut self, position: IVec3) {
@@ -52,22 +56,30 @@ impl PendingFluidUpdates {
         self.queue.pop()
     }
 
-    fn ready_steps(
+    fn update_ready_steps(
         &mut self,
         elapsed_ticks: u32,
         ticks_per_second: u32,
         fluids: &FluidRegistry,
-    ) -> HashMap<FluidId, usize> {
-        let mut ready = HashMap::new();
+        ready_steps: &mut Vec<usize>,
+    ) -> usize {
+        ready_steps.clear();
 
         if elapsed_ticks == 0 {
-            return ready;
+            return 0;
         }
 
+        let mut max_steps = 0;
         for (fluid_id, definition) in fluids.iter() {
-            let accumulator = self.accumulated_steps.entry(fluid_id).or_default();
+            let index = fluid_id as usize;
+            if self.accumulated_steps.len() <= index {
+                self.accumulated_steps.resize(index + 1, 0.0);
+            }
+
+            let accumulator = &mut self.accumulated_steps[index];
             if definition.spread_speed <= f32::EPSILON {
                 *accumulator = 0.0;
+                ready_steps.push(0);
                 continue;
             }
 
@@ -79,12 +91,12 @@ impl PendingFluidUpdates {
             if elapsed_steps > 0 {
                 *accumulator -= elapsed_steps as f32;
             }
-            if steps > 0 {
-                ready.insert(fluid_id, steps);
-            }
+
+            ready_steps.push(steps);
+            max_steps = max_steps.max(steps);
         }
 
-        ready
+        max_steps
     }
 }
 
@@ -100,6 +112,7 @@ pub(super) fn process_fluid_updates(
     world_ticks: Res<WorldTickClock>,
     game_rules: Res<GameRules>,
     fluids: Res<FluidRegistry>,
+    mut ready_steps: Local<Vec<usize>>,
     mut runtime: FluidSimulationRuntime,
 ) {
     let elapsed_ticks = world_ticks.ticks_this_frame();
@@ -107,12 +120,12 @@ pub(super) fn process_fluid_updates(
         return;
     }
 
-    let ready_steps = runtime.pending.ready_steps(
+    let max_steps = runtime.pending.update_ready_steps(
         elapsed_ticks,
         game_rules.ticks_per_second(),
         &fluids,
+        &mut ready_steps,
     );
-    let max_steps = ready_steps.values().copied().max().unwrap_or(0);
     if max_steps == 0 {
         return;
     }
@@ -153,7 +166,7 @@ pub(super) fn process_fluid_updates(
             let definition = fluids
                 .get(fluid_id)
                 .unwrap_or_else(|| panic!("missing fluid definition for id {fluid_id}"));
-            let fluid_ready_steps = ready_steps.get(&fluid_id).copied().unwrap_or(0);
+            let fluid_ready_steps = ready_steps.get(fluid_id as usize).copied().unwrap_or(0);
 
             if fluid_ready_steps <= step_index {
                 if definition.spread_speed > f32::EPSILON {
