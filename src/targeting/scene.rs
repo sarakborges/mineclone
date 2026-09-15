@@ -7,6 +7,15 @@ use crate::{
 
 use super::block::TargetedBlock;
 
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct BlockTargetingVisualSnapshot {
+    hit: Option<VoxelHit>,
+    selected_slot: usize,
+    selected_item: Option<&'static str>,
+    player_translation: Vec3,
+    block_content_revision: u64,
+}
+
 #[derive(SystemParam)]
 pub(crate) struct BlockTargetingScene<'w, 's> {
     targeted: Res<'w, TargetedBlock>,
@@ -34,5 +43,16 @@ impl BlockTargetingScene<'_, '_> {
 
     pub(crate) fn player_translation(&self) -> Vec3 {
         self.player.translation
+    }
+
+    pub(crate) fn visual_snapshot(&self) -> BlockTargetingVisualSnapshot {
+        let selected_slot = self.selected_slot();
+        BlockTargetingVisualSnapshot {
+            hit: self.hit(),
+            selected_slot,
+            selected_item: self.hotbar.item_at(selected_slot),
+            player_translation: self.player_translation(),
+            block_content_revision: self.world.block_content_revision(),
+        }
     }
 }

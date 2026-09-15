@@ -1,7 +1,7 @@
 use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use super::{
-    BlockTargetingScene,
+    BlockTargetingScene, BlockTargetingVisualSnapshot,
     block::BlockTargetingSet,
     placement::placement_voxel,
 };
@@ -126,7 +126,19 @@ fn update_highlight(
     input: TargetHighlightInput,
     content: TargetHighlightContent,
     mut view: TargetHighlightView,
+    mut last_scene: Local<Option<BlockTargetingVisualSnapshot>>,
 ) {
+    let scene_snapshot = input.scene.visual_snapshot();
+    let scene_changed = last_scene.as_ref() != Some(&scene_snapshot);
+    if !scene_changed
+        && !input.brush_mode.is_changed()
+        && !content.blocks.is_changed()
+        && !content.secondary_properties.is_changed()
+    {
+        return;
+    }
+    *last_scene = Some(scene_snapshot);
+
     let Some(hit) = input.scene.hit() else {
         hide_if_visible(&mut view.highlight.1);
         hide_if_visible(&mut view.brush_ghost.1);

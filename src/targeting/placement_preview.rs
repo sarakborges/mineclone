@@ -16,7 +16,7 @@ use crate::{
 };
 
 use super::{
-    BlockTargetingScene,
+    BlockTargetingScene, BlockTargetingVisualSnapshot,
     block::BlockTargetingSet,
     placement::placement_voxel,
     placement_orientation::PlacementOrientation,
@@ -171,7 +171,16 @@ fn update_placement_preview(
     content: BlockVisualContent,
     view: PlacementPreviewView,
     mut tint_target: Local<Option<(&'static str, IVec2)>>,
+    mut last_scene: Local<Option<BlockTargetingVisualSnapshot>>,
 ) {
+    let scene_snapshot = selection.scene.visual_snapshot();
+    let scene_changed = last_scene.as_ref() != Some(&scene_snapshot);
+    let content_changed = content.inputs_changed();
+    if !scene_changed && !selection.placement_orientation.is_changed() && !content_changed {
+        return;
+    }
+    *last_scene = Some(scene_snapshot);
+
     let PlacementPreviewView {
         mut materials,
         mut root,
@@ -268,7 +277,7 @@ fn update_placement_preview(
         .is_none_or(|(cached_block_id, cached_horizontal)| {
             *cached_block_id != block_id || *cached_horizontal != horizontal
         });
-    if block_changed || content.inputs_changed() || tint_target_changed {
+    if block_changed || content_changed || tint_target_changed {
         let tint_position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
         let tint = content.tint_at(block_id, tint_position).unwrap_or(Color::WHITE);
 
