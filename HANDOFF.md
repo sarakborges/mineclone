@@ -84,11 +84,11 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`cdaccb8a5273d1feb1ecae50d9ee8e184cd1d391`
+`c29f6ee8e6ebcd605a4c7fbf447ad12cf078c504`
 
-Commit: `Make queue promotions amortized O(1)`
+Commit: `Skip unchanged remesh renderability scans`
 
-`VERSION`: `0.12.59`
+`VERSION`: `0.12.60`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever, porque podem ter avançado.
 
@@ -169,12 +169,17 @@ A auditoria arquitetural foi reiniciada a partir de `0.12.5`/`0.12.8` e segue at
 - Dampening, emissão e ordem top-down permanecem iguais, sem buffer temporário de 4.096 luzes.
 
 ### 0.12.59 — promoção/remoção de fila amortizada O(1)
-- `DeduplicatedQueue` troca `HashSet<T>` por `HashMap<T, generation>` e armazena `(value, generation)` no `VecDeque`.
-- `enqueue_front` não procura/remove mais a ocorrência antiga: publica uma nova geração na frente e a anterior vira tombstone.
-- `remove` invalida membership em O(1), sem `VecDeque::position + remove`.
-- `pop` ignora tombstones; `len` representa apenas entradas ativas.
-- Compactação periódica limita tombstones sem voltar ao full scan a cada promoção/remoção.
-- `pop_where` preserva a ordem observável dos itens adiados e continua sendo O(n) por necessidade de predicate arbitrário; esse é o próximo ponto a investigar no domínio de remesh.
+- `DeduplicatedQueue` usa `HashMap<T, generation>` e armazena `(value, generation)` no `VecDeque`.
+- `enqueue_front` publica uma nova geração na frente; ocorrência anterior vira tombstone em vez de ser procurada/removida linearmente.
+- `remove` invalida membership em O(1); `pop` ignora tombstones e `len` conta apenas entradas ativas.
+- Compactação periódica limita tombstones sem full scan a cada promoção/remoção.
+
+### 0.12.60 — misses de renderabilidade não reescaneiam fila estável
+- `DeduplicatedQueue` expõe `revision` que avança apenas quando o conteúdo/ordem lógica muda.
+- `ChunkRenderPool` mantém `membership_revision`, avançando quando uma allocation entra ou sai do conjunto ativo.
+- Cada `pop_renderable*` memoriza o par `(queue_revision, pool_membership_revision)` quando `pop_where` não encontra nenhum chunk renderizável.
+- Enquanto nenhum dos owners muda, frames seguintes retornam o miss em O(1) sem varrer novamente a fila inteira.
+- Enqueue/promotion/remove/pop ou insert/take/clear do render pool invalidam naturalmente o miss; nenhum trabalho adiado é descartado.
 
 ---
 
@@ -188,6 +193,7 @@ Não desfazer sem evidência nova:
 - Não separar lighting remesh em simples atualização de atributos mantendo índices fixos: `should_flip_diagonal` também depende da block light.
 - Não expor `VoxelWorld::chunk_mut` genericamente para otimizações bulk; mutações devem permanecer estreitas e ownership-aware.
 - `DeduplicatedQueue` mantém FIFO/prioridade lógica através de generations/tombstones; não voltar a remoção linear por promoção sem benchmark/evidência.
+- Miss caching de remesh deve depender somente de revisions dos owners reais: fila lógica + membership do render pool; não criar mirrors booleanos de “renderable”.
 - Não reabrir bugs antigos automaticamente; só se permanecerem ativos ou houver regressão reportada.
 
 ---
@@ -196,9 +202,9 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Auditar `ChunkRemeshQueue::pop_renderable*`: `pop_where` pode reescanear em frames sucessivos filas compostas apenas por chunks ainda não presentes no `ChunkRenderPool`; buscar um sinal/revision que evite re-scan sem descartar trabalho adiado.
+1. Revisar o custo de `enqueue_emission_edit_volumes`: expansão Manhattan de emissores pode inserir milhares de posições e deve continuar deduplicada; procurar invariant que reduza trabalho sem perder relight em remoção/oclusão.
 2. Continuar procurando chamadas repetidas de `VoxelWorld`/`VoxelRead` para a mesma posição nos hot paths restantes e usar `sample_at` apenas quando múltiplos aspectos do mesmo voxel forem necessários.
-3. Revisar o custo de `enqueue_emission_edit_volumes`: expansão Manhattan de emissores pode inserir milhares de posições e deve continuar deduplicada; só otimizar se houver invariant que reduza trabalho sem perder relight em remoção/oclusão.
+3. Revisar outros `pop_where`/predicate scans somente se ocorrerem em caminho recorrente; não trocar estrutura por preferência.
 4. Só reabrir separação específica de lighting/topology se existir representação que preserve mudanças de diagonal/índices sem duplicar ownership da geometria.
 5. Só voltar a unload incremental, worldgen/cache ou task lifecycle se surgir evidência objetiva nova.
 6. Rendering/HUD continuam change-driven; evitar micro-otimização por estética.
