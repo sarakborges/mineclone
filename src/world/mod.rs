@@ -55,7 +55,7 @@ use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
 use fluid_updates::{PendingFluidUpdates, process_fluid_updates};
 use game_rules::GameRules;
-use lighting_updates::process_dynamic_lighting;
+use lighting_updates::{has_pending_lighting_updates, process_dynamic_lighting};
 pub(crate) use new_world::NewWorldConfig;
 use render_diagnostics::log_render_asset_pressure;
 use render_distance::RenderDistanceSettings;
@@ -64,7 +64,7 @@ pub(crate) use seed::WorldSeed;
 pub(crate) use setup::WorldLoadingState;
 use setup::{begin_world_loading, setup_world};
 use streaming::{ChunkStreamingState, stream_chunks};
-use tick::{WorldTickClock, WorldTickSet, advance_world_ticks};
+use tick::{WorldTickClock, WorldTickSet, advance_world_ticks, world_ticks_advanced};
 
 pub(crate) struct WorldPlugin;
 
@@ -140,8 +140,8 @@ impl Plugin for WorldPlugin {
                 PostUpdate,
                 (
                     process_immediate_geometry_remesh,
-                    process_fluid_updates,
-                    process_dynamic_lighting,
+                    process_fluid_updates.run_if(world_ticks_advanced),
+                    process_dynamic_lighting.run_if(has_pending_lighting_updates),
                     process_immediate_lighting_remesh,
                     process_chunk_remesh_queue,
                 )
