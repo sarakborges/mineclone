@@ -6,6 +6,7 @@ pub const MENU_BUTTON_WIDTH: f32 = 470.0;
 pub const MENU_BUTTON_HEIGHT: f32 = 54.0;
 pub const SIDEBAR_MENU_BUTTON_HEIGHT: f32 = 54.0;
 pub const COMPACT_CONTROL_HEIGHT: f32 = 44.0;
+const BUTTON_VISUAL_SETTLE_EPSILON: f32 = 0.001;
 
 #[derive(Component, Default)]
 pub struct AsteriaButtonVisual {
@@ -98,8 +99,18 @@ pub fn animate_buttons(
             Interaction::Hovered => 1.0,
             Interaction::Pressed => 1.25,
         };
+        let delta = target - visual.level;
 
-        visual.level += (target - visual.level) * smoothing;
+        if delta.abs() <= BUTTON_VISUAL_SETTLE_EPSILON {
+            if visual.level != target {
+                visual.level = target;
+                *gradient = button_gradient(target);
+                *shadow = button_shadow(target);
+            }
+            continue;
+        }
+
+        visual.level += delta * smoothing;
         *gradient = button_gradient(visual.level);
         *shadow = button_shadow(visual.level);
     }
