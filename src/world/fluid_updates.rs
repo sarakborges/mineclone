@@ -128,12 +128,11 @@ pub(super) fn process_fluid_updates(
             let Some(position) = runtime.pending.pop() else {
                 break;
             };
-            if !runtime.world.is_loaded_at(position) {
+            let Some((cell, current, _)) = runtime.world.sample_at(position) else {
                 continue;
-            }
+            };
 
-            let current = runtime.world.fluid_at(position);
-            let desired = desired_fluid(&runtime.world, position, current, &fluids);
+            let desired = desired_fluid(&runtime.world, position, cell, current, &fluids);
             let Some(fluid_id) = current.or(desired).map(|fluid| fluid.fluid_id) else {
                 continue;
             };
