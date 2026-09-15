@@ -8,50 +8,44 @@ Stack: Rust + Bevy 0.19.0-dev
 
 Este arquivo, `HANDOFF.md` na raiz de `develop`, é a fonte canônica e persistente do handoff do projeto.
 
-Atualizar o handoff significa atualizar **este arquivo**. Gerar, anexar ou enviar uma cópia `.txt`, markdown exportado ou download sem atualizar `HANDOFF.md` **não conta** como atualização do handoff. Cópias fora do repositório são apenas artefatos derivados para leitura/transferência e nunca substituem a fonte canônica.
-
-Sempre que uma conversa produzir uma versão consolidada mais nova do handoff, consolidar primeiro aqui. Qualquer arquivo entregue ao usuário deve ser exportado a partir do conteúdo já consolidado nesta fonte.
+Atualizar o handoff significa atualizar **este arquivo**. Cópias `.txt`, exports ou anexos são apenas artefatos derivados e não substituem esta fonte.
 
 ## Regras de trabalho
 
 - Trabalhar diretamente em `develop`.
 - Não criar feature branch sem pedido explícito.
-- Antes de alterar qualquer coisa, buscar o HEAD atual de `develop` e abrir os arquivos reais envolvidos.
+- Antes de alterar código, buscar o HEAD atual de `develop` e abrir os arquivos reais envolvidos.
 - Fazer commits pequenos e coerentes.
-- Não fazer mudanças arquiteturais não relacionadas ao problema/bloco atual.
-- Não declarar bug como resolvido antes de confirmação em runtime quando a correção depender de comportamento visual/gameplay.
+- Não fazer mudanças arquiteturais não relacionadas ao bloco atual.
+- Não declarar bug visual/gameplay resolvido sem evidência de runtime quando a correção depender desse comportamento.
 - Não gerar imagens a menos que o usuário peça explicitamente.
-- Para assets binários enviados pelo usuário, usar exatamente os arquivos fornecidos; não recriar ou estilizar.
+- Para assets binários enviados pelo usuário, usar exatamente os arquivos fornecidos.
 
 ## Versionamento — obrigatório
 
-O arquivo raiz `VERSION` é a fonte autoritativa da versão do projeto.
+O arquivo raiz `VERSION` é a fonte autoritativa.
 
-Todo bloco coerente deve subir a versão:
+Todo bloco coerente deve subir versão:
 
-- `patch`: correções, refactors, otimizações internas e mudanças compatíveis sem nova feature relevante;
+- `patch`: fixes/refactors/otimizações internas compatíveis;
 - `minor`: nova feature compatível;
-- `major`: mudança incompatível/quebra deliberada de contrato.
+- `major`: mudança incompatível/breaking.
 
-O bump faz parte do próprio bloco. Não considerar um bloco fechado enquanto `VERSION` não tiver sido atualizado.
+O bump faz parte do bloco; não considerar o bloco fechado antes de atualizar `VERSION`.
 
 ## Handoff — obrigatório
 
-Atualizar `HANDOFF.md` sempre que houver mudança material no estado do projeto, arquitetura, roadmap, versão, HEAD relevante, regras de trabalho ou próximos passos.
+Atualizar `HANDOFF.md` sempre que houver mudança material em estado, arquitetura, roadmap, versão, HEAD relevante, regras ou próximos passos.
 
-Não acumular backlog histórico obsoleto. Bugs antigos só permanecem se ainda estiverem ativos ou se o usuário reportar regressão.
+Não acumular backlog histórico obsoleto. Bugs antigos só permanecem se ainda estiverem ativos ou se houver regressão reportada.
 
-Antes de encerrar uma sequência longa, conferir se o handoff representa corretamente versão/HEAD de código, blocos concluídos, bloco atual, riscos conhecidos e próximo passo recomendado.
-
-O campo de HEAD deste handoff deve rastrear o último commit de **código/version** relevante, não o commit do próprio `HANDOFF.md`, evitando autorreferência infinita.
+O HEAD registrado aqui deve apontar para o último commit de **código/version**, não para o commit do próprio handoff.
 
 ## Validação / comunicação
 
 - Não rodar `cargo check` como rotina do projeto.
-- A validação prática é feita pelo usuário com `cargo run` quando necessário.
 - Se o usuário enviar output de compilação/runtime, corrigir todos os errors e warnings relacionados antes de continuar refactors maiores.
-- Não repetir em toda resposta que `cargo check` não foi executado ou que estamos “aguardando cargo run”.
-- Só mencionar validação quando necessária para interpretar error/warning, confirmar comportamento de runtime ou decidir próximo passo.
+- Não repetir em toda resposta que `cargo check` não foi executado ou que estamos esperando `cargo run`.
 - Comunicação direta: menos narração, mais mudança concreta.
 
 ---
@@ -64,19 +58,20 @@ Princípios principais:
 
 1. Cada fato de gameplay tem um owner autoritativo.
 2. Reutilizar invariants/state machines reais; não abstrair por semelhança superficial.
-3. Preferir `SystemParam`s coerentes a bags gigantes de resources; manter contextos mutáveis estreitos.
+3. Preferir `SystemParam`s coerentes a bags gigantes; manter contextos mutáveis estreitos.
 4. Usar availability/run conditions canônicas.
 5. UI compartilhada pertence a `src/ui`.
 6. Targeting tem um target autoritativo e consumidores change-driven.
 7. Filas deduplicadas usam `DeduplicatedQueue<T>`; regras de voxel ficam em `VoxelUpdateQueue`.
 8. `FrameWorkBudget` é o primitive canônico para orçamento por tempo/quantidade.
-9. Cores internas usam HSI-first; biome visuals ponderados usam `CurrentBiomeVisuals`.
-10. Remover módulos/helpers que só encaminham chamadas sem possuir invariant real.
-11. Evitar rebuilds/scans globais por frame quando existe sinal de mudança ou metadata derivada no owner correto.
-12. Pipeline assíncrono canônico: `generation task -> integrate chunk -> initial lighting seed -> halo snapshot -> mesh task -> spawn render entities`.
+9. Cores internas são HSI-first; biome visuals ponderados usam `CurrentBiomeVisuals`.
+10. Remover helpers/módulos que só encaminham chamadas e não possuem invariant.
+11. Evitar scans/rebuilds globais por frame quando existe sinal de mudança ou metadata no owner correto.
+12. Pipeline async inicial canônico: generation task -> integrate chunk -> initial lighting seed -> halo snapshot -> mesh task -> spawn render entities.
 13. Resultados async são revisionados; stale results são descartados/rescheduled; integração main-thread é budgetada.
-14. Não trocar corretude de world data por performance aparente; mover/stagear custo em vez disso.
-15. Não criar nova abstração genérica acima de generation/mesh tasks quando o lifecycle comum já está em `ChunkTaskQueue` e os snapshots têm semânticas distintas.
+14. Não trocar corretude do mundo por performance aparente; mover/stagear custo.
+15. Não criar abstração genérica acima de generation/mesh tasks quando o lifecycle comum já está em `ChunkTaskQueue`.
+16. Background remesh também é async; feedback imediato de edits/lighting pode continuar síncrono quando necessário.
 
 ---
 
@@ -84,19 +79,19 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`ee3527f67d3eecb50a4461c47078f465102c6cb0`
+`74df7605481473f76fbe54aa4c970c4cc18a7e81`
 
-Commit: `Reuse local samples for voxel mutations`
+Commit: `Move background chunk remesh off main thread`
 
-`VERSION`: `0.12.79`
+`VERSION`: `0.12.84`
 
-Sempre buscar HEAD/VERSION novamente antes de escrever, porque podem ter avançado.
+Sempre buscar HEAD/VERSION novamente antes de escrever código.
 
 ---
 
 # Estado do refactor
 
-A auditoria arquitetural segue ativa; o roadmap vem do canon + inspeção real do código, não de backlog antigo seguido cegamente.
+A auditoria arquitetural/performance segue ativa. O roadmap vem do canon + inspeção real do código, não de backlog antigo seguido cegamente.
 
 ## Resumo histórico
 
@@ -112,63 +107,56 @@ A auditoria arquitetural segue ativa; o roadmap vem do canon + inspeção real d
 - Chunk buffers COW com `Arc<[...]>`.
 - Chunks vazios pulam mesh task; fluid solver gated por tick.
 - Contexts de setup/streaming estreitados; caches concorrentes deduplicados.
-- Leituras block/fluid/light consolidadas em `sample_at`; AO/fluid neighborhoods compartilhados.
+- Leituras block/fluid/light consolidadas em `sample_at`.
 - `HANDOFF.md` virou fonte persistente canônica.
 
-## Blocos recentes detalhados
-
-### 0.12.53–0.12.58 — meshing/render/lighting hot paths
-- Surface block light é lida uma vez por voxel-fonte no meshing.
-- Propagação reutiliza sample atual e seis luzes vizinhas entre sky/block.
+### 0.12.53–0.12.72 — meshing/render/lighting hot paths
+- Surface block light reaproveitada por voxel-fonte no meshing.
+- Lighting propagation reutiliza sample atual e seis luzes vizinhas.
 - Terrain/fluid topology refresh preserva a metade não afetada da render allocation.
-- Direct seed usa storage local do chunk e elimina 8.192 resoluções de posição/chunk por seed.
-- Lighting-only attribute split continua rejeitado porque block light pode alterar diagonal/índices.
+- Direct seed usa storage local do chunk e upper chunks resolvidos uma vez.
+- `DeduplicatedQueue` usa generations/tombstones; miss de remesh é revision-cached.
+- Full footprint Manhattan de emissão fica reservado a recoloração/intensidade não-zero -> não-zero.
+- Empty chunk lighting usa shell + vizinhos externos.
+- Fluid frontier usa metadata de dynamic fluid por boundary.
+- `VoxelChunk::rebuild_light` faz um único COW do buffer.
+- `ChunkMeshSnapshot::capture` resolve no máximo os 26 chunks vizinhos e mantém shell compacta de 1.736 samples.
 
-### 0.12.59–0.12.60 — filas/remesh
-- `DeduplicatedQueue` usa generations/tombstones; promotion/remove deixam de remover linearmente no deque.
-- Revisions lógicas da fila + membership revision do render pool cacheiam misses de `pop_renderable*`, evitando re-scan por frame sem mudança.
+### 0.12.73–0.12.79 — COW/batch/archive/samples locais
+- `VoxelChunkContentMut` faz edits batch usando os mesmos helpers de metadata dos setters normais.
+- Worldgen, structures e archive restore usam batch mutation.
+- Archive encode/restore percorrem 4.096 slots uma vez, não block/fluid em passagens separadas.
+- Halo usa um único `Box<[ShellSample]>`.
+- Chunk vazio recebe direct seed por 256 colunas + cópia de layers.
+- Direct skylight e mutações usam `sample_local` para leituras coesas block/fluid/light.
 
-### 0.12.61–0.12.63 — edits/lighting incremental
-- Full footprint Manhattan de emissão fica reservado a mudança HSI não-zero -> não-zero.
-- `VoxelWorld::set_block_at_with_previous` reaproveita a leitura anterior do voxel.
-- Chunks vazios relaxam lighting pela shell interna + vizinhos externos, reduzindo a fila potencial de 5.632 para 2.888 posições.
+### 0.12.80 — unload dirigido pelo delta do streaming
+- `ChunkUnloadState` não reconstrói mais uma lista global de chunks carregados a cada mudança de seleção.
+- `ChunkStreamingState` mantém uma fila `retired` deduplicada.
+- Cada rebuild promove para `retired` apenas a geração antiga que saiu tanto de `desired` quanto de `retained`.
+- O scan global existe apenas no bootstrap para compatibilidade com chunks já residentes.
 
-### 0.12.64–0.12.66 — skylight chunk-local
-- Direct seed resolve upper chunks uma vez e lê storage local top-down.
-- `DirectSkyColumn` expande o cache lazy por segmentos de chunk mantendo um valor por world-Y inclusive em gaps.
-- Wrappers world-position de dampening/emissão que ficaram obsoletos foram removidos.
+### 0.12.81–0.12.82 — poda de caches fora do passo de 1 chunk
+- `WorldFeatureFields::retain_for_chunks` deixa de varrer seis caches em toda travessia de chunk.
+- Feature caches são podados no bootstrap, mudança de render distance ou cruzamento de generation region.
+- `surface_ranges.retain` segue a mesma cadência.
+- `GENERATION_REGION_SIZE_CHUNKS = 8`; entre podas, retenção extra é apenas política de memória e não altera conteúdo gerado.
 
-### 0.12.67–0.12.70 — fluid frontier e integração
-- `VoxelChunk` mantém contador de fluido dinâmico por boundary face, distinguindo água source/natural de spread dinâmico.
-- Faces sem fluido dinâmico são rejeitadas em O(1) na fluid frontier.
-- Loading de chunk vazio só dispara fluid remesh em vizinho cuja face compartilhada contém fluido.
-- Fluid lighting invalidation foi separada de block-emission edit tracking via `enqueue_medium_edit`.
-- O contador exato de dinâmicos encerra o scan da face assim que todos foram encontrados; não há bitset/estado extra.
+### 0.12.83 — revision tracking autoritativo para mesh snapshots
+- `VoxelWorld` mantém revisão de mesh por chunk residente.
+- Insert/restore/content edit/fluid edit/light edit/rebuild de light atualizam a revisão; unload remove a revisão residente.
+- `ChunkMeshSnapshot` captura presença + revisão dos 27 chunks do cubo 3×3×3.
+- `ChunkMeshDependencies::is_current` detecta tanto mutação de chunk existente quanto aparecimento/desaparecimento de vizinho.
+- Initial mesh async descarta resultado stale e retorna o coord para `ready` para recapturar halo atual.
 
-### 0.12.71–0.12.72 — light rebuild e halo chunk-local
-- `VoxelChunk::rebuild_light` obtém `Arc::make_mut` do buffer de lighting uma única vez e preenche o chunk diretamente.
-- `VoxelChunk::sample_local` resolve block/fluid/light com um único bounds check e índice local; `VoxelWorld::sample_at` reutiliza esse primitive.
-- `ChunkMeshSnapshot::capture` pré-resolve os 26 chunks vizinhos da shell; a captura cai de até 1.736 lookups no `VoxelWorld` para no máximo 26 lookups de chunks por snapshot.
-- A shell compacta continua com 1.736 posições e preserva faces, arestas e cantos.
-
-### 0.12.73–0.12.75 — mutação batch e archive
-- `VoxelChunkContentMut` é um mutator escopado do próprio owner; obtém storage COW de blocks/fluids uma vez e reutiliza os mesmos helpers de occupancy/boundary dos setters normais.
-- Passes densos de material/fluido do worldgen e rasterização de structures usam o mutator batch sem duplicar invariants.
-- Restore de `ArchivedChunk` também usa o batch mutator, evitando `Arc::make_mut` por voxel na main thread.
-- Archive encode/restore fundiram as passagens separadas block/fluid em uma única passagem de 4.096 slots; encode usa `sample_local` coeso.
-
-### 0.12.76 — halo empacotado em um buffer
-- `ChunkMeshSnapshot` substitui quatro allocations paralelas (`cells`, `fluids`, `light`, `loaded`) por um único `Box<[ShellSample]>`.
-- Cada sample mantém exatamente o mesmo estado necessário de halo, reduzindo allocation churn e mantendo o contrato de loaded/unloaded.
-
-### 0.12.77 — seed de chunk vazio por coluna
-- Depois do scan dos chunks acima, chunk vazio recebe direct light a partir das 256 colunas.
-- Uma layer é escrita e copiada para as outras 15, eliminando 4.096 chamadas de dampening/emission que sempre recebiam `None`.
-- Chunks com conteúdo continuam usando o rebuild voxel-a-voxel normal.
-
-### 0.12.78–0.12.79 — samples locais coesos restantes
-- Direct seed e `DirectSkyColumn` usam `sample_local` para block+fluid em um único índice por voxel.
-- `VoxelWorld::set_block_at_with_previous` e `set_fluid_at` também consolidam a validação do estado atual em um sample local; o fluid solver evita dupla resolução block/fluid nas mutações efetivas.
+### 0.12.84 — background remesh fora da main thread
+- Novo `ChunkRemeshTasks` reutiliza `ChunkTaskQueue` e `MeshContentSnapshot`.
+- No máximo 4 remesh tasks ficam em voo; dispatch e integração são budgetados e limitados por frame.
+- Background terrain/fluid remesh usa `ChunkMeshSnapshot` + `ChunkMeshDependencies` e roda no `AsyncComputeTaskPool`.
+- Resultado stale por content revision ou por qualquer dependência do halo é re-enfileirado no mesmo tipo.
+- Resultado de chunk descarregado ou sem render allocation é descartado.
+- Aplicação de resultado continua usando partial refresh: terrain preserva fluid allocation; fluid preserva terrain allocation.
+- `process_immediate_geometry_remesh` e `process_immediate_lighting_remesh` continuam síncronos para feedback imediato de gameplay.
 
 ---
 
@@ -176,39 +164,38 @@ A auditoria arquitetural segue ativa; o roadmap vem do canon + inspeção real d
 
 Não desfazer sem evidência nova:
 
-- Não criar abstraction genérica acima de `ChunkGenerationTasks` e `ChunkMeshTasks`; lifecycle comum já pertence a `ChunkTaskQueue`.
-- Não transformar unload em pipeline incremental sem evidência de hotspot real.
-- Não separar lighting remesh em atributos com índices fixos: block light também participa de `should_flip_diagonal`.
-- Não expor `VoxelWorld::chunk_mut` genericamente; mutações devem permanecer estreitas.
+- Não criar abstraction genérica acima de `ChunkGenerationTasks` / `ChunkMeshTasks`; lifecycle comum já pertence a `ChunkTaskQueue`.
+- Não separar lighting remesh em atributos com índices fixos: block light participa de `should_flip_diagonal` e pode mudar topologia indexada.
+- Não expor `VoxelWorld::chunk_mut` genericamente; mutações devem permanecer estreitas e ownership-aware.
 - `DeduplicatedQueue` mantém FIFO/prioridade via generations/tombstones.
-- Miss caching de remesh depende apenas de revisions dos owners reais.
-- Não remover full emission footprint de recoloração sem invalidation equivalente de canais antigos.
+- Miss caching de remesh depende das revisions dos owners reais.
+- Não remover full emission footprint de recoloração sem invalidation equivalente dos canais antigos.
 - Empty-chunk lighting pode usar shell + vizinhos externos; chunks com conteúdo não podem ser reduzidos à shell sem frontier interna provada.
-- Direct skylight caches devem preservar um valor por world-Y, mesmo em gaps verticais sem chunk carregado.
-- Natural hydrology continua source/static; metadata de boundary deve distinguir source de fluido dinâmico para não reativar água natural no solver.
-- Loading de chunk vazio só exige neighbor fluid remesh quando a face compartilhada possui fluido; halo ausente e ar carregado diferem no fluid mesher.
-- Edits de meio/fluid não pertencem ao tracking de mudança de emissão de bloco.
-- Não criar bitset de boundary enquanto contadores existentes + early exit resolverem o hotspot de forma suficiente.
-- Rebuilds integrais de buffers COW devem obter mutable storage uma vez no owner, não repetir `Arc::make_mut` por elemento.
-- Batch content edit pertence a `VoxelChunk` e deve reutilizar os mesmos helpers de metadata; não criar builder externo com invariants duplicados.
-- Halo de mesh deve resolver chunks vizinhos por shell, não voltar a lookup de world-position por voxel.
-- Chunks vazios podem repetir a mesma direct-light column por todas as layers porque não contêm medium/emitter interno; lateral propagation continua na etapa de relaxation.
+- Natural hydrology continua source/static; não reenfileirar água natural no solver dinâmico.
+- Loading de chunk vazio só exige neighbor fluid remesh quando a face compartilhada possui fluido.
+- Edits de medium/fluid não pertencem ao tracking de emissão de bloco.
+- Não criar bitset de boundary enquanto contadores + early exit resolverem o hotspot.
+- Rebuilds integrais de buffers COW devem obter mutable storage uma vez no owner.
+- Batch content edit pertence a `VoxelChunk`; não criar builder externo com invariants duplicados.
+- Halo de mesh deve resolver chunks vizinhos por shell, não voltar a lookup world-position por voxel.
+- Unload backlog deve vir do delta do owner de seleção, não de scan global duplicado.
+- Cache pruning não precisa acompanhar cada chunk do player; manter granularidade coerente com generation regions.
+- Qualquer remesh async deve validar presença/revisão de todo o halo antes de aplicar resultado.
+- Background remesh é async; caminhos immediate só devem ser movidos se houver evidência de que latência extra é aceitável.
 - Não reabrir bugs antigos automaticamente; só se ativos/regredidos.
 
 ---
 
 # Próximos passos da auditoria
 
-Os hotspots evidentes do roadmap anterior (lighting seed, halo capture, archive restore, fluid frontier e COW por voxel no worldgen) já foram tratados. A partir daqui, não continuar micro-otimização por inércia.
-
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Fazer nova inspeção objetiva dos caminhos de frame/streaming e só abrir patch onde houver custo recorrente demonstrável.
-2. Revisar geração de mesh assíncrona apenas por operações repetidas claramente evitáveis; não mover trabalho de volta para main thread.
-3. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel; não adicionar bitset sem evidência.
-4. Manter full relaxation em chunks com conteúdo até existir frontier interna correta para direct sky/emitter propagation.
-5. Streaming selection/snapshots/task polling já estão bounded/change-driven; collision/raycast/targeting não mostraram lookup duplicado seguro.
-6. Só voltar a unload incremental ou task lifecycle se surgir evidência objetiva nova.
+1. Auditar o novo `ChunkRemeshTasks` por oportunidades de coalescer geometry/fluid work enquanto uma task do mesmo coord já está em voo, sem perder a regra de supersedência de geometry.
+2. Revisar se `process_immediate_lighting_remesh` pode gerar bursts síncronos durante streaming/lighting; só mover ou reduzir se houver forma de preservar feedback e convergência visual.
+3. Revisar `ChunkMeshDependencies`/revisions para garantir que bumps em operações batch reflitam mudança real quando isso for relevante; não adicionar hashing ou scans de 4.096 voxels para evitar um bump barato.
+4. Continuar inspeção objetiva de sistemas `Update`/`PostUpdate` por scans globais ou builds síncronos; não voltar a micro-otimização de helpers já enxutos.
+5. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel.
+6. Só voltar a unload incremental, collision/raycast ou task lifecycle se surgir evidência objetiva nova.
 
 ---
 
@@ -216,18 +203,18 @@ Se nenhum error/warning/runtime report tiver prioridade:
 
 Meta: ~60 FPS estáveis.
 
-- heavy generation/mesh off main thread;
+- heavy generation/mesh/remesh background fora da main thread;
 - integração budgetada;
 - revision tracking para stale async work;
 - caches/metadata no owner correto;
-- evitar global per-frame scans e temporários/alocações em hot paths;
+- evitar scans globais por frame e allocations temporárias em hot paths;
 - não trocar corretude por performance aparente;
-- natural hydrology continua generation-authoritative, não reenfileirada no fluid solver dinâmico.
+- natural hydrology continua generation-authoritative.
 
 # Comunicação
 
 - direta e focada em ação;
 - não repetir caveats de `cargo check`/`cargo run`;
 - não dizer “achamos a causa” sem evidência;
-- durante sequências longas, atualizar o usuário apenas em findings/blocos concluídos;
+- durante sequências longas, atualizar apenas findings/blocos concluídos;
 - atualizar `HANDOFF.md` depois de mudanças materiais.
