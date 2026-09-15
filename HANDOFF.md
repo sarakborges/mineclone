@@ -13,6 +13,8 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 - Commits pequenos/coerentes; não misturar mudanças arquiteturais sem relação.
 - Todo bloco coerente sobe `VERSION`: patch para fix/refactor/tooling compatível; minor para feature compatível; major para breaking.
 - Depois de mudança material em código, versão, arquitetura, roadmap ou processo, atualizar este handoff.
+- **A atualização do handoff faz parte do próprio bloco de trabalho. Não encerrar um bloco material nem responder como concluído deixando o `HANDOFF.md` desatualizado.**
+- Se o último bloco ainda estiver aguardando CI, registrar isso no handoff como pending; quando o CI fechar ou houver fix subsequente, atualizar o handoff novamente.
 - Runtime error/warning enviado pelo usuário tem prioridade sobre roadmap/refactor.
 - Corrigir todos os warnings de Rust encontrados nos blocos tocados.
 - Não declarar bug visual/gameplay resolvido sem evidência runtime quando o comportamento depender disso.
@@ -21,11 +23,12 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 - Não ficar repetindo que `cargo check` não foi rodado, que está esperando `cargo run` ou equivalente. O CI canônico já valida Clippy + check; runtime do usuário só é citado quando realmente necessário para comportamento visual/gameplay.
 - `cargo test` só é rodado manualmente sob pedido explícito do usuário.
 - `cargo fmt`/`rustfmt` não é gate do projeto.
+- Commit exclusivamente documental de `HANDOFF.md` não sobe `VERSION`.
 
 ## Versionamento
 
 - Fonte operacional acordada para os blocos do projeto: arquivo raiz `VERSION`.
-- Estado atual: `VERSION = 0.14.30`.
+- Estado atual: `VERSION = 0.14.39`.
 - `Cargo.toml` ainda declara `[package].version = 0.10.16`; essa divergência foi detectada em 2026-09-15 e deve ser tratada como bloco explícito, não silenciosamente dentro de outro refactor.
 - Até essa decisão, não inferir a versão do projeto pelo `Cargo.toml`.
 
@@ -69,44 +72,55 @@ Roda em push para `develop`/`main` e em pull requests.
 
 # Estado atual
 
-HEAD de código validado antes deste handoff:
+Último HEAD de **código** validado antes deste handoff documental:
 
-`85e00af33e5b4547f55e9cc7dc089ebe9ff77ab1`
+`e54afd6e4e9e7eb11d8e73c37adae2526947273b`
 
-Bloco: `Skip empty chunks in direct lighting seed`
+Bloco: `Remove unused direct light setter`
 
-`VERSION`: `0.14.30`
+`VERSION`: `0.14.39`
+
+Observação operacional: houve commits documentais acidentais criando/removendo arquivos temporários vazios durante esta atualização; o estado final não mantém `noop` nem `HANDOFF.md.tmp`. Eles não alteram código nem `VERSION`.
 
 Commits recentes relevantes:
 
-- `d6552a1` — `0.14.21`, encapsula render distance + scratch de seleção em `SystemParam`; corrige lints de `0.14.19`.
-- `87bde0b` — `0.14.22`, evita coleta/dispatch do remesh background quando não há trabalho.
-- `42730ae` — `0.14.23`, evita coleta/dispatch vazio no streaming quando generation/mesh queues estão ociosas.
-- `420420d` — `0.14.24`, reutiliza HashSets de retention dos feature caches.
-- `75c8000` — `0.14.25`, reutiliza buffers por coluna de surface carvers e surface materials; revelou call site antigo em structure support.
-- `8c1915d` — `0.14.26`, corrige structure support para a nova API reutilizável de carvers.
-- `1cee3d6` — `0.14.27`, `BiomeField::sample_surface` passa a usar `ArrayVec` stack-backed em vez de `Vec` por amostragem; structure support também usa scratch stack-backed.
-- `2925a9a` — `0.14.28`, structure support reutiliza a amostra de biome já calculada para a altura de superfície.
-- `5f6722a` — `0.14.29`, `GenerationColumnSample.surface_influences` usa `SmallVec<[(usize, f32); 4]>`, mantendo spill para heap sem limite artificial.
-- `85e00af` — `0.14.30`, direct lighting seed ignora upper chunks vazios antes do scan de voxels.
+- `e22c888` — `0.14.31`, `VoxelChunk::empty()` compartilha buffers vazios de blocks/fluids via `OnceLock<Arc<_>>`; light permanece exclusivo.
+- `ba23847` — `0.14.32`, `DeduplicatedQueue` usa `HashMap::entry` para evitar lookups duplicados em enqueue/pop.
+- `0aaefe8` — `0.14.33`, `DeduplicatedQueue` troca o `std::HashMap` por `bevy::platform::collections::HashMap`.
+- `7b64f5b` — `0.14.34`, `VoxelWorld` usa `bevy::platform` para os `HashMap/HashSet` quentes; `BTreeSet` de colunas permanece `std` porque ordenação é semântica.
+- `383ae33` — `0.14.35`, `LightingContext` usa `bevy::platform::collections::HashMap`.
+- `e4ebe14` — `0.14.36`, propagation reutiliza o chunk central para ler vizinhos cardinais locais; só cruza de volta para `VoxelWorld` quando o vizinho sai do chunk.
+- `ed45170` — `0.14.37`, `ChunkMeshSnapshot::capture` constrói o shell de 1736 samples diretamente com `Vec::with_capacity`, sem zerar/prefill o buffer inteiro antes de preenchê-lo.
+- `d5915fa` — `0.14.38`, solver de lighting escreve luz imediatamente mas posterga o bump de `chunk_mesh_revision`, fazendo um bump por chunk alterado no fim do batch.
+- `e54afd6` — `0.14.39`, remove `set_light_at` direto que ficou sem caller após o batching de revisions; mantém apenas a rota interna deferida usada pelo solver.
 
 ## CI recente
 
-- `0.14.21` / run `35026065652`: Clippy **success**, `cargo check` **success**.
-- `0.14.22` / run `35027171366`: Clippy **success**, `cargo check` **success**.
-- `0.14.23` / run `35027716003`: Clippy **success**, `cargo check` **success**.
-- `0.14.24` / run `35028227550`: Clippy **success**, `cargo check` **success**.
-- `0.14.25` / run `35028710877`: **failure** de compilação porque `structures/support.rs` ainda chamava a assinatura antiga de `resolve_surface_carver_column`.
-- `0.14.26`: correção desse call site; CI verde antes do próximo bloco.
-- `0.14.27` / run `35029822534`: Clippy **success**, `cargo check` **success**.
-- `0.14.28` / run `35030176206`: Clippy **success**, `cargo check` **success**.
-- `0.14.29` / run `35030633441`: Clippy **success**, `cargo check` **success**.
 - `0.14.30` / run `35031098600`: Clippy **success**, `cargo check` **success**.
+- `0.14.34` / run `35033347328`: Clippy **success**, `cargo check` **success**.
+- `0.14.35` / run `35034048076`: Clippy **success**, `cargo check` **success**.
+- `0.14.36` / run `35034426624`: Clippy **success**, `cargo check` **success**.
+- `0.14.37` / run `35034814641`: Clippy **success**, `cargo check` **success**.
+- `0.14.38` / run `35035219346`: **failure** de Clippy porque `set_light_at` ficou `dead_code` depois que o solver passou a usar a rota deferida.
+- `0.14.39` / run `35035772978`: Clippy **success**, `cargo check` **success**; corrige a única falha de `0.14.38` sem `allow(dead_code)`.
 
 Falhas históricas que não devem ser reintroduzidas:
 
 - `0.14.16/17`: `TimeHudText.presented_time` usava `u32` para dia; `WorldClock.day` é `u64`.
 - `0.14.19/20`: `QueueRebuildScratch` privado apareceu na assinatura pública(super) de `stream_chunks` e elevou a função a 8 argumentos; resolvido com `ChunkStreamingSelection` SystemParam em `0.14.21`.
+- `0.14.25`: structure support ainda chamava assinatura antiga de surface carver; corrigido em `0.14.26`.
+- `0.14.38`: não manter API pública/interna órfã só para preservar shape anterior; remover ou ter caller real.
+
+---
+
+# Drafts preparados, mas NÃO publicados
+
+Estes commits foram montados fora de `develop` antes desta atualização de handoff. Como o branch avançou com commits documentais, **não fazer fast-forward direto neles**; reconstruir/reencadear sobre o HEAD atual antes de publicar.
+
+- draft `dd1ad2b` — planejado como próximo `0.14.40`: troca as hash collections quentes restantes do subsistema de lighting para `bevy::platform`.
+- draft `bd19088` — planejado como `0.14.41`: troca `desired/retained/surface_ranges` do streaming para `bevy::platform` e desacopla `WorldFeatureFields::retain_for_chunks` do tipo concreto de `HashSet`, aceitando iterador de coords.
+- draft antigo `9c1a0e7` da seleção de streaming está descartado porque tinha incompatibilidade de tipo com `FeatureCaches::retain_for_chunks`.
+- drafts anteriores de `0.14.36/37` que precederam a reconstrução corrigida também estão descartados; os commits canônicos são `e4ebe14` e `ed45170`.
 
 ---
 
@@ -163,6 +177,9 @@ Falhas históricas que não devem ser reintroduzidas:
 - `ChunkStreamingSelection` encapsula settings + scratch sem poluir assinatura do sistema.
 - `stream_chunks` sincroniza snapshots de generation/mesh, mas só coleta quando há tasks pending e só despacha quando há capacidade/trabalho.
 - `ChunkRemeshQueue` evita polling/dispatch vazio do background remesh; immediate geometry permanece separado e síncrono.
+- `VoxelChunk::empty()` compartilha storage vazio de blocks/fluids entre chunks com COW natural de `Arc::make_mut`; light continua storage próprio.
+- `DeduplicatedQueue` evita hash lookup duplicado nos caminhos de enqueue/pop e usa o hasher do Bevy.
+- `VoxelWorld` usa hash collections do Bevy para mapas/sets sem requisito de ordenação.
 
 ## Worldgen allocations
 
@@ -172,11 +189,14 @@ Falhas históricas que não devem ser reintroduzidas:
 - `GenerationColumnSample` não usa array fixa de 26 porque isso inflaria os 256 samples persistentes; usa `SmallVec` inline para o caso comum e spill quando necessário.
 - Structure support reutiliza a própria amostra de biome para `surface_height_from_sample`, removendo uma segunda amostragem completa.
 
-## Initial lighting / streaming main-thread
+## Lighting / mesh snapshot
 
-- `seed_chunk_direct_lighting` precisa considerar chunks superiores para skylight.
-- Antes de `0.14.30`, mesmo upper chunk completamente vazio fazia scan de até 4096 voxels; agora `VoxelChunk::is_empty()` O(1) pula esse scan.
-- Chunks não vazios continuam com a mesma semântica de dampening/skylight.
+- `seed_chunk_direct_lighting` pula upper chunks vazios antes do scan voxel a voxel; chunks não vazios mantêm a mesma semântica de skylight/dampening.
+- `LightingContext` usa o hasher do Bevy.
+- Propagation usa o próprio `VoxelChunk` para os vizinhos cardinais que permanecem dentro do chunk; lookup global só acontece quando cruza a borda.
+- O early-return de medium opaco permanece antes das leituras cardinais, então a otimização não adiciona trabalho a voxel opaco.
+- Mudanças de luz do solver continuam sendo aplicadas imediatamente; só o `chunk_mesh_revision` é consolidado por chunk ao fim do batch.
+- `ChunkMeshSnapshot::capture` ainda materializa `SHELL_VOLUME = 1736` samples, mas não faz mais prefill + overwrite; cada slot é produzido uma vez em ordem compacta.
 - `enqueue_loaded_fluid_frontier` já usa `boundary_dynamic_fluid_count` O(1), escaneia no máximo a face necessária e para ao localizar todos os fluids dinâmicos; não refatorar sem nova evidência.
 
 ---
@@ -199,6 +219,8 @@ Não repetir estes alvos sem profiling/evidência nova:
 - Structure rasterization revisada não mostrou temp Vec hot evidente.
 - Limites de tasks `generation/initial mesh/remesh` não equivalem a 20 threads concorrentes; reduzir os limites arbitrariamente tende a reduzir throughput sem provar ganho de FPS.
 - Surface-range cache já aquece os quatro vizinhos cardinais usados pela seleção, então um warmup cardinal adicional seria redundante.
+- `ChunkTaskQueue` tem poucos entries por design; trocar hasher ali não é prioridade sem profiling.
+- A expansão inicial de 4096 seeds de lighting por chunk é um alvo real, mas mexe na ordem/latência de propagação. Não transformar em incremental sem preservar explicitamente a ordem de trabalho e a percepção de chunk pronto.
 
 ---
 
@@ -206,11 +228,14 @@ Não repetir estes alvos sem profiling/evidência nova:
 
 Prioridade ligada ao relato de FPS caindo ao andar/carregar chunks:
 
-1. **Main thread entre generation e mesh:** `initial lighting -> fluid frontier -> ChunkMeshSnapshot::capture` ainda acontece antes de cada initial mesh task.
-2. `ChunkMeshSnapshot::capture` clona o center chunk via Arc/COW, mas materializa um shell compacto de 1736 `ShellSample`s por task; investigar reuse/layout/metadata sem mover incorretamente leitura mutável para worker.
-3. `VoxelChunk::empty()` ainda aloca blocks, fluids e light. Candidato seguro: compartilhar apenas buffers vazios de blocks/fluids via `OnceLock<Arc<[...]>>` + COW; manter light exclusivo porque initial lighting o reescreve.
-4. `BiomeInfluence` nasce de um índice de surface biome, mas generation columns/structure support convertem ID de volta para índice; carregar o índice junto pode remover buscas lineares por string. Auditar todos os consumers antes para não criar API desnecessária/dead code.
-5. Rebuild completo da seleção ao cruzar chunk ainda reconstrói/prioriza o conjunto desejado; só atacar com profiling/invariant melhor, pois o cache de `surface_range` já evita recomputações óbvias.
+1. **Reencadear e validar o draft de lighting hash collections** sobre o HEAD atual como próximo patch (`0.14.40`).
+2. **Reencadear e validar o draft de streaming selection hash collections** como bloco seguinte (`0.14.41`), mantendo `retain_for_chunks` desacoplado do tipo concreto de set.
+3. `ChunkRenderPool.active` ainda usa `std::HashMap`; é mapa grande e recebe `contains/get_mut/remove/insert` durante streaming/remesh. Candidato seguro seguinte se o diff ficar apenas em hasher.
+4. `ChunkMeshSnapshot::capture` ainda faz 1736 amostragens síncronas por task inicial; o prefill já foi removido. Próximo ganho precisa reduzir lookups/amostragens ou mudar ownership com cuidado, não apenas trocar a forma de alocar.
+5. Integração de chunk ainda expande 4096 posições para lighting no caminho main-thread. Investigar uma representação de seed por chunk/coluna ou expansão incremental que preserve semântica e prioridade.
+6. Rebuild completo da seleção ao cruzar chunk ainda reconstrói/prioriza desired/pending; depois do hasher, só atacar algoritmo com profiling/invariant melhor.
+7. `BiomeInfluence` nasce de índice de surface biome, mas alguns consumers ainda convertem ID de volta para índice; carregar o índice junto é otimização menor e só deve entrar depois dos hot paths de streaming.
+8. Tratar `VERSION 0.14.x` vs `Cargo.toml 0.10.16` em bloco explícito separado; não misturar com runtime performance.
 
 ---
 
@@ -230,12 +255,12 @@ Itens históricos conhecidos, só retomar quando o usuário priorizar ou quando 
 
 Se nenhum runtime error/warning tiver prioridade:
 
-1. Partir do HEAD real após este handoff e manter `VERSION = 0.14.30` até o próximo bloco de código.
-2. Investigar e, se seguro, implementar shared COW de blocks/fluids vazios em `VoxelChunk::empty()` como próximo patch de performance; light permanece exclusivo.
-3. Em seguida, medir estaticamente opções para reduzir custo de `ChunkMeshSnapshot::capture` sem quebrar revision/dependency semantics.
-4. Auditar a possibilidade de carregar `surface_biome_index` junto de `BiomeInfluence` e eliminar ID->index lookups apenas se todos os consumers continuarem coerentes.
-5. Tratar a divergência `VERSION 0.14.x` vs `Cargo.toml 0.10.16` em bloco explícito separado; não misturar com refactor de runtime.
-6. Continuar atualizando este handoff após cada bloco material.
+1. Partir do HEAD real após este handoff; `VERSION` continua `0.14.39` até o próximo bloco de código.
+2. Recriar/reencadear `dd1ad2b` sobre o HEAD atual e publicar como `0.14.40` somente após revisar o diff.
+3. Validar `0.14.40` no CI antes de promover o bloco seguinte.
+4. Recriar/reencadear `bd19088` como `0.14.41`, incluindo a API genérica de retention para não acoplar `WorldFeatureFields` a um hasher específico.
+5. Depois da cadeia verde, auditar `ChunkRenderPool.active` para Bevy hash map e então voltar aos custos estruturais maiores: snapshot shell e seed expansion de lighting.
+6. Atualizar este handoff ao final de cada bloco material, sem postergar para uma conversa futura.
 
 # Performance direction
 
