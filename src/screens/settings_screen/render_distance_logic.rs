@@ -54,7 +54,10 @@ pub(super) fn sync_slider_thumb(
     };
 
     for value in &sliders {
-        thumb.left = percent(slider_position(value.0) * 100.0);
+        let next_left = percent(slider_position(value.0) * 100.0);
+        if thumb.left != next_left {
+            thumb.left = next_left;
+        }
     }
 }
 

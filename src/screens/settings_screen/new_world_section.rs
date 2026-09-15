@@ -226,7 +226,7 @@ pub(super) fn handle_seed_focus(
     let pressed = interactions
         .iter()
         .any(|interaction| *interaction == Interaction::Pressed);
-    input.begin_if_pressed(interactions.iter(), config.seed().0);
+    SeedInputState::begin_if_pressed(&mut input, interactions.iter(), config.seed().0);
     if pressed {
         spawn_biome_dropdown.close();
     }
@@ -251,7 +251,7 @@ pub(super) fn handle_seed_keyboard(
     mut config: ResMut<NewWorldConfig>,
     mut input: ResMut<SeedInputState>,
 ) {
-    let event = input.handle_keyboard(&keys, SEED_INPUT_MAX_DIGITS, |next| {
+    let event = SeedInputState::handle_keyboard(&mut input, &keys, SEED_INPUT_MAX_DIGITS, |next| {
         next.parse::<u64>().is_ok()
     });
     if event == NumericInputEvent::Changed {
@@ -309,8 +309,10 @@ pub(super) fn sync_seed_text(
     sync_numeric_input_view(&input, config.seed().0, &mut labels, &mut inputs);
 }
 
-fn apply_seed_buffer(buffer: &str, config: &mut NewWorldConfig) {
-    if let Ok(value) = buffer.parse::<u64>() {
+fn apply_seed_buffer(buffer: &str, config: &mut ResMut<'_, NewWorldConfig>) {
+    if let Ok(value) = buffer.parse::<u64>()
+        && config.seed().0 != value
+    {
         config.set_seed(value);
     }
 }

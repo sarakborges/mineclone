@@ -72,6 +72,9 @@ impl TicksPerSecondEditor<'_> {
     }
 
     fn set(&mut self, value: u32) {
+        if self.current() == value {
+            return;
+        }
         if *self.game_state.get() == GameState::NewWorld {
             self.new_world.set_ticks_per_second(value);
             return;
@@ -178,7 +181,11 @@ pub(super) fn handle_ticks_input(
     settings: TicksPerSecondSettings,
     mut input_state: ResMut<TicksPerSecondInputState>,
 ) {
-    input_state.begin_if_pressed(interactions.iter(), settings.current());
+    TicksPerSecondInputState::begin_if_pressed(
+        &mut input_state,
+        interactions.iter(),
+        settings.current(),
+    );
 }
 
 pub(super) fn handle_ticks_keyboard(
@@ -186,7 +193,12 @@ pub(super) fn handle_ticks_keyboard(
     mut settings: TicksPerSecondEditor,
     mut input_state: ResMut<TicksPerSecondInputState>,
 ) {
-    let event = input_state.handle_keyboard(&keys, TICKS_INPUT_MAX_DIGITS, |_| true);
+    let event = TicksPerSecondInputState::handle_keyboard(
+        &mut input_state,
+        &keys,
+        TICKS_INPUT_MAX_DIGITS,
+        |_| true,
+    );
     if event != NumericInputEvent::Changed {
         return;
     }

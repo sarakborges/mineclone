@@ -60,13 +60,14 @@ where
         self.buffer = value.to_string();
     }
 
+    // Preserve ResMut until an input event actually changes the editor state.
     pub(crate) fn begin_if_pressed<'a>(
-        &mut self,
+        state: &mut ResMut<'_, Self>,
         mut interactions: impl Iterator<Item = &'a Interaction>,
         value: impl Display,
     ) {
         if interactions.any(|interaction| *interaction == Interaction::Pressed) {
-            self.begin(value);
+            state.begin(value);
         }
     }
 
@@ -85,7 +86,7 @@ where
     }
 
     pub(crate) fn handle_keyboard<F>(
-        &mut self,
+        state: &mut ResMut<'_, Self>,
         keys: &ButtonInput<KeyCode>,
         max_digits: usize,
         accept_next: F,
@@ -93,12 +94,12 @@ where
     where
         F: FnOnce(&str) -> bool,
     {
-        if !self.editing {
+        if !state.editing {
             return NumericInputEvent::None;
         }
 
         if select_all_pressed(keys) {
-            self.replace_on_next_digit = true;
+            state.replace_on_next_digit = true;
             return NumericInputEvent::None;
         }
 
@@ -106,16 +107,16 @@ where
             || keys.just_pressed(KeyCode::NumpadEnter)
             || keys.just_pressed(KeyCode::Escape)
         {
-            self.reset();
+            state.reset();
             return NumericInputEvent::Finished;
         }
 
         if keys.just_pressed(KeyCode::Backspace) || keys.just_pressed(KeyCode::NumpadBackspace) {
-            if self.replace_on_next_digit {
-                self.buffer.clear();
-                self.replace_on_next_digit = false;
+            if state.replace_on_next_digit {
+                state.buffer.clear();
+                state.replace_on_next_digit = false;
             } else {
-                self.buffer.pop();
+                state.buffer.pop();
             }
             return NumericInputEvent::Changed;
         }
@@ -123,10 +124,10 @@ where
         let Some(digit) = pressed_digit(keys) else {
             return NumericInputEvent::None;
         };
-        let mut next = if self.replace_on_next_digit {
+        let mut next = if state.replace_on_next_digit {
             String::new()
         } else {
-            self.buffer.clone()
+            state.buffer.clone()
         };
         next.push(digit);
 
@@ -134,8 +135,8 @@ where
             return NumericInputEvent::None;
         }
 
-        self.buffer = next;
-        self.replace_on_next_digit = false;
+        state.buffer = next;
+        state.replace_on_next_digit = false;
         NumericInputEvent::Changed
     }
 }
@@ -190,8 +191,11 @@ pub(crate) fn sync_numeric_input_view<M, I, L>(
         }
     }
 
+    let next_border = BorderColor::all(numeric_input_border(state.editing()));
     for mut border in inputs {
-        *border = BorderColor::all(numeric_input_border(state.editing()));
+        if *border != next_border {
+            *border = next_border;
+        }
     }
 }
 

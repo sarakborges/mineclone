@@ -118,7 +118,7 @@ pub(super) fn sync_language_buttons(
     let language_changed = active_language.is_changed() || localization.is_changed();
     let active_language = active_language.get();
 
-    for (entity, button, interaction, disabled, mut background) in &mut buttons {
+    for (entity, button, interaction, disabled, background) in &mut buttons {
         if !language_changed && !interaction.is_changed() {
             continue;
         }
@@ -129,7 +129,7 @@ pub(super) fn sync_language_buttons(
             button.0 == active_language,
             disabled,
             *interaction,
-            &mut background,
+            background,
         );
     }
 
@@ -139,7 +139,10 @@ pub(super) fn sync_language_buttons(
 
     for (label, mut text, mut color) in &mut labels {
         let active = label.0 == active_language;
-        *color = TextColor(selectable_label_color(active));
+        let next_color = TextColor(selectable_label_color(active));
+        if *color != next_color {
+            *color = next_color;
+        }
 
         let next = localization.text(active_language, label.0.localization_key());
         if text.0 != next {

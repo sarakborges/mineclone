@@ -8,7 +8,7 @@ pub(crate) fn sync_selectable_button(
     active: bool,
     disabled: bool,
     interaction: Interaction,
-    background: &mut BackgroundColor,
+    mut background: Mut<'_, BackgroundColor>,
 ) {
     if active && !disabled {
         commands.entity(entity).insert(InteractionDisabled);
@@ -16,7 +16,10 @@ pub(crate) fn sync_selectable_button(
         commands.entity(entity).remove::<InteractionDisabled>();
     }
 
-    *background = BackgroundColor(selectable_button_background(active, interaction));
+    let next_background = BackgroundColor(selectable_button_background(active, interaction));
+    if *background != next_background {
+        *background = next_background;
+    }
 }
 
 pub(crate) fn selectable_button_background(active: bool, interaction: Interaction) -> Color {

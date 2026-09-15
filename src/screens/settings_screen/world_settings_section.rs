@@ -162,7 +162,7 @@ pub(crate) fn sync_game_mode_buttons(
         )
     };
 
-    for (entity, button, interaction, disabled, mut background) in &mut buttons {
+    for (entity, button, interaction, disabled, background) in &mut buttons {
         if !mode_changed && !interaction.is_changed() {
             continue;
         }
@@ -173,7 +173,7 @@ pub(crate) fn sync_game_mode_buttons(
             button.0 == current_game_mode,
             disabled,
             *interaction,
-            &mut background,
+            background,
         );
     }
 
@@ -182,6 +182,9 @@ pub(crate) fn sync_game_mode_buttons(
     }
 
     for (label, mut color) in &mut labels {
-        *color = TextColor(selectable_label_color(label.0 == current_game_mode));
+        let next_color = TextColor(selectable_label_color(label.0 == current_game_mode));
+        if *color != next_color {
+            *color = next_color;
+        }
     }
 }

@@ -63,11 +63,11 @@ Roda em push para `develop`/`main` e em pull requests.
 
 Base do bloco atual:
 
-`df5f26176106abf6c573020224d60e67c4c5977b`
+`547172973b3e12b6143489ea64f9418821fe145d`
 
-Bloco: `Avoid redundant inventory and shared control writes`
+Bloco: `Keep idle settings controls unchanged`
 
-`VERSION`: `0.14.14`
+`VERSION`: `0.14.15`
 
 Na retomada, `develop` já estava em `183bcab1be268bcc9511e7e06d9406ade8b63bf0` / `0.14.12`, embora este handoff ainda descrevesse `0.14.5`. Os blocos abaixo foram conferidos no código e no histórico antes de continuar.
 
@@ -93,7 +93,8 @@ Commits recentes relevantes:
 - `0.14.12` / run `35018588468`: workflow **success** no HEAD conferido na retomada.
 - `0.14.13` / [run `35019877410`](https://github.com/sarakborges/mineclone/actions/runs/35019877410), commit `f692534`: Clippy **success**, `cargo check` **success**. Revisão estática e `git diff --check` também concluídos. O commit seguinte apenas registra este resultado no handoff.
 - `cargo test` somente sob pedido explícito.
-- `0.14.14`: revisão estática e `git diff --check` concluídos; CI pendente para o bloco de inventário/UI.
+- `0.14.14` / [run `35021097252`](https://github.com/sarakborges/mineclone/actions/runs/35021097252), commit `5471729`: Clippy **success**, `cargo check` **success**.
+- `0.14.15`: revisão estática e `git diff --check` concluídos; CI pendente para o bloco de Settings.
 
 ---
 
@@ -210,14 +211,23 @@ O hint já era filho do Player HUD, mas `Visibility::Visible` sobrescrevia a her
 
 ---
 
+## 0.14.15 — controles de Settings ociosos
+
+- Os helpers de foco/teclado de `NumericInputState` mantêm `ResMut` até detectar e aplicar input; frames sem clique/tecla não invalidam o editor nem disparam formatação do label.
+- Seed e ticks preservam seleção de texto, limites numéricos, Enter/Escape e Backspace; valores já aplicados não reescrevem `NewWorldConfig`/`GameRules`/save.
+- `sync_selectable_button` recebe `Mut<BackgroundColor>` e compara antes de escrever, preservando o lifecycle de `InteractionDisabled`.
+- Labels de idioma/game mode, bordas numéricas e thumb do slider só mudam com o valor apresentado.
+
+---
+
 # Próximos passos
 
 Se nenhum runtime error/warning tiver prioridade:
 
-1. Continuar nos controles de Settings/UI: `sync_selectable_button` ainda recebe `&mut BackgroundColor` (perde change detection antes da comparação), inputs numéricos reescrevem bordas e o slider reescreve a posição sem comparar.
+1. Concluir a auditoria de UI/HUD em execução contínua: overlay de transição reescreve cor/visibilidade enquanto idle, relógio formata texto a cada tick mesmo com minuto igual e FPS reescreve o mesmo label.
 2. Continuar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes. Targeting consumers, estrelas e o bloco da hotbar acima já foram tratados; não repetir esses refactors sem evidência nova.
-3. Revisar integração/spawn de mesh apenas se houver ganho estrutural real sem lifecycle parcial por submesh.
-4. Revisar rebuild de seleção somente com ganho claro; não duplicar geração de volume para eliminar sort pequeno.
+3. Integração de meshes: eliminar arrays intermediários de keys/meshes antes do caminho de substituição em assets existentes. Manter preflight completo e lifecycle atômico por chunk.
+4. Seleção: reaproveitar buffers de desired/pending/retired e da fila sem repetir geração de volume nem mudar prioridades; `dispatch_remesh_tasks` também tem scratch temporário reaproveitável.
 5. Manter `notify_loaded_chunk_neighbors` conservador até existir metadata suficiente para provar otimização segura.
 6. Quando o usuário solicitar, rodar `cargo test` manualmente.
 
