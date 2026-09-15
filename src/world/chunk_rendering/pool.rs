@@ -2,7 +2,12 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use crate::{content::fluid::FluidId, voxel::block_face::BlockFace};
+use crate::{
+    content::fluid::FluidId,
+    voxel::{block_face::BlockFace, fluid_mesh::ChunkFluidMesh},
+};
+
+use super::spawn::BuiltChunkMesh;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ChunkMeshKey {
@@ -66,8 +71,7 @@ impl ChunkRenderPool {
         &mut self,
         coord: IVec3,
         meshes: &mut Assets<Mesh>,
-        replacement_keys: &[ChunkMeshKey],
-        replacements: &mut Vec<Mesh>,
+        replacements: &mut Vec<BuiltChunkMesh>,
         terrain_mesh_bytes: usize,
     ) -> bool {
         let Some(slot) = self.active.get_mut(&coord) else {
@@ -76,8 +80,11 @@ impl ChunkRenderPool {
         let Some(terrain_mesh_count) = fluid_mesh_start(slot) else {
             return false;
         };
-        if &slot.mesh_keys[..terrain_mesh_count] != replacement_keys
-            || terrain_mesh_count != replacements.len()
+        if terrain_mesh_count != replacements.len()
+            || !slot.mesh_keys[..terrain_mesh_count]
+                .iter()
+                .copied()
+                .eq(replacements.iter().map(BuiltChunkMesh::key))
             || slot.meshes[..terrain_mesh_count]
                 .iter()
                 .any(|handle| !meshes.contains(handle))
@@ -92,7 +99,7 @@ impl ChunkRenderPool {
             let mut existing = meshes
                 .get_mut(handle)
                 .expect("terrain mesh handle was checked before replacement");
-            *existing = replacement;
+            *existing = replacement.into_mesh();
         }
         slot.mesh_bytes = terrain_mesh_bytes.saturating_add(slot.fluid_mesh_bytes);
         true
@@ -102,7 +109,7 @@ impl ChunkRenderPool {
         &mut self,
         coord: IVec3,
         meshes: &mut Assets<Mesh>,
-        replacements: &mut Vec<(FluidId, Mesh)>,
+        replacements: &mut Vec<ChunkFluidMesh>,
         fluid_mesh_bytes: usize,
     ) -> bool {
         let Some(slot) = self.active.get_mut(&coord) else {
@@ -111,12 +118,11 @@ impl ChunkRenderPool {
         let Some(terrain_mesh_count) = fluid_mesh_start(slot) else {
             return false;
         };
-        if slot.fluid_ids.len() != replacements.len()
-            || slot
-                .fluid_ids
-                .iter()
-                .zip(replacements.iter())
-                .any(|(existing, (replacement, _))| existing != replacement)
+        if !slot
+            .fluid_ids
+            .iter()
+            .copied()
+            .eq(replacements.iter().map(|replacement| replacement.fluid_id))
         {
             return false;
         }
@@ -126,11 +132,11 @@ impl ChunkRenderPool {
             return false;
         }
 
-        for (handle, (_, replacement)) in fluid_handles.iter().zip(replacements.drain(..)) {
+        for (handle, replacement) in fluid_handles.iter().zip(replacements.drain(..)) {
             let mut existing = meshes
                 .get_mut(handle)
                 .expect("fluid mesh handle was checked before replacement");
-            *existing = replacement;
+            *existing = replacement.mesh;
         }
 
         slot.mesh_bytes = slot

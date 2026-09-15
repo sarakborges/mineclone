@@ -62,7 +62,7 @@ pub(crate) fn apply_built_chunk_geometry_meshes(
     meshes: &mut Assets<Mesh>,
     render_pool: &mut ChunkRenderPool,
     coord: IVec3,
-    built_meshes: Vec<BuiltChunkMesh>,
+    mut built_meshes: Vec<BuiltChunkMesh>,
     context: &ChunkRenderContext<'_>,
 ) {
     let Some(chunk) = context.world.chunk(coord) else {
@@ -75,28 +75,28 @@ pub(crate) fn apply_built_chunk_geometry_meshes(
         return;
     }
 
-    let replacement_keys = built_meshes
-        .iter()
-        .map(BuiltChunkMesh::key)
-        .collect::<Vec<_>>();
     let terrain_mesh_bytes = built_meshes
         .iter()
         .map(|built| mesh_asset_bytes(built.mesh()))
         .sum();
-    let mut replacements = built_meshes
-        .into_iter()
-        .map(BuiltChunkMesh::into_mesh)
-        .collect::<Vec<_>>();
 
     if render_pool.replace_terrain_mesh_assets(
         coord,
         meshes,
-        &replacement_keys,
-        &mut replacements,
+        &mut built_meshes,
         terrain_mesh_bytes,
     ) {
         return;
     }
+
+    let replacement_keys = built_meshes
+        .iter()
+        .map(BuiltChunkMesh::key)
+        .collect::<Vec<_>>();
+    let replacements = built_meshes
+        .into_iter()
+        .map(BuiltChunkMesh::into_mesh)
+        .collect::<Vec<_>>();
 
     let Some(detached) = render_pool.detach_terrain_render_allocation(coord) else {
         refresh_chunk_mesh(commands, meshes, render_pool, coord, context);
@@ -120,7 +120,7 @@ pub(crate) fn apply_built_chunk_fluid_meshes(
     meshes: &mut Assets<Mesh>,
     render_pool: &mut ChunkRenderPool,
     coord: IVec3,
-    fluid_meshes: Vec<ChunkFluidMesh>,
+    mut fluid_meshes: Vec<ChunkFluidMesh>,
     context: &ChunkRenderContext<'_>,
 ) {
     if context.world.chunk(coord).is_none() {
@@ -131,19 +131,20 @@ pub(crate) fn apply_built_chunk_fluid_meshes(
         .iter()
         .map(|fluid| mesh_asset_bytes(&fluid.mesh))
         .sum();
-    let mut replacements = fluid_meshes
-        .into_iter()
-        .map(|fluid| (fluid.fluid_id, fluid.mesh))
-        .collect::<Vec<_>>();
 
     if render_pool.replace_fluid_mesh_assets(
         coord,
         meshes,
-        &mut replacements,
+        &mut fluid_meshes,
         fluid_mesh_bytes,
     ) {
         return;
     }
+
+    let replacements = fluid_meshes
+        .into_iter()
+        .map(|fluid| (fluid.fluid_id, fluid.mesh))
+        .collect::<Vec<_>>();
 
     let Some(detached) = render_pool.detach_fluid_render_allocation(coord) else {
         refresh_chunk_mesh(commands, meshes, render_pool, coord, context);
