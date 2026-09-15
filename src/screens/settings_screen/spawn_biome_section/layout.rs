@@ -15,33 +15,33 @@ const OPTIONS_VIEWPORT_HEIGHT: f32 =
     OPTION_HEIGHT * VISIBLE_OPTION_COUNT + OPTION_GAP * (VISIBLE_OPTION_COUNT - 1.0);
 
 #[derive(Component)]
-pub(super) struct SpawnBiomeDropdownButton;
+pub(in crate::screens::settings_screen) struct SpawnBiomeDropdownButton;
 
 #[derive(Component)]
-pub(super) struct SpawnBiomeDropdownLabel;
+pub(in crate::screens::settings_screen) struct SpawnBiomeDropdownLabel;
 
 #[derive(Component)]
-pub(super) struct SpawnBiomeDropdownPanel;
+pub(in crate::screens::settings_screen) struct SpawnBiomeDropdownPanel;
 
 #[derive(Component)]
-pub(super) struct SpawnBiomeSearchBar;
+pub(in crate::screens::settings_screen) struct SpawnBiomeSearchBar;
 
 #[derive(Component)]
-pub(super) struct SpawnBiomeSearchText;
+pub(in crate::screens::settings_screen) struct SpawnBiomeSearchText;
 
 #[derive(Component)]
-pub(super) struct SpawnBiomeOptionsFrame;
+pub(in crate::screens::settings_screen) struct SpawnBiomeOptionsFrame;
 
 #[derive(Component)]
-pub(super) struct SpawnBiomeOptionsList;
+pub(in crate::screens::settings_screen) struct SpawnBiomeOptionsList;
 
 #[derive(Component)]
-pub(super) struct SpawnBiomeOption {
+pub(in crate::screens::settings_screen) struct SpawnBiomeOption {
     pub(super) biome_id: Option<String>,
 }
 
 #[derive(Component)]
-pub(super) struct SpawnBiomeOptionLabel {
+pub(in crate::screens::settings_screen) struct SpawnBiomeOptionLabel {
     pub(super) biome_id: Option<String>,
 }
 
