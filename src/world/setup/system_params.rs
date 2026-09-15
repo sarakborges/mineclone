@@ -5,17 +5,13 @@ use crate::{
         biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionRegistry,
         fluid::FluidRegistry,
     },
-    ui::transition::ScreenTransition,
     voxel::world::VoxelWorld,
 };
 
 use super::WorldLoadingState;
 use crate::world::{
     InMemoryWorldSave, NewWorldConfig, WorldLoadMode, WorldSeed,
-    chunk_generation_tasks::ChunkGenerationTasks,
-    chunk_mesh_tasks::ChunkMeshTasks,
     dimension::CurrentDimension,
-    fluid_updates::PendingFluidUpdates,
     game_rules::GameRules,
     render_distance::RenderDistanceSettings,
 };
@@ -45,13 +41,9 @@ pub(in crate::world) struct WorldBootstrapPersistence<'w> {
 }
 
 #[derive(SystemParam)]
-pub(in crate::world) struct WorldSetupRuntime<'w> {
+pub(in crate::world) struct WorldSetupProgress<'w> {
     pub(super) world: ResMut<'w, VoxelWorld>,
     pub(super) loading_state: ResMut<'w, WorldLoadingState>,
-    pub(super) transition: ResMut<'w, ScreenTransition>,
-    pub(super) fluid_updates: ResMut<'w, PendingFluidUpdates>,
-    pub(super) generation_tasks: ResMut<'w, ChunkGenerationTasks>,
-    pub(super) mesh_tasks: ResMut<'w, ChunkMeshTasks>,
 }
 
 #[derive(SystemParam)]
