@@ -12,272 +12,180 @@ Este arquivo, `HANDOFF.md` na raiz de `develop`, é a fonte canônica e persiste
 
 - Trabalhar diretamente em `develop`.
 - Não criar feature branch sem pedido explícito.
-- Antes de alterar código, buscar o HEAD atual de `develop` e abrir os arquivos reais envolvidos.
-- Fazer commits pequenos e coerentes; não misturar mudanças arquiteturais sem relação com o bloco atual.
-- Não declarar bug visual/gameplay resolvido sem evidência de runtime quando a correção depender desse comportamento.
-- Não gerar imagens a menos que o usuário peça explicitamente.
-- Para assets binários enviados pelo usuário, usar exatamente os arquivos fornecidos.
+- Antes de alterar código, buscar HEAD/VERSION atuais e abrir os arquivos reais envolvidos.
+- Fazer commits pequenos e coerentes; não misturar mudanças arquiteturais sem relação.
+- Todo bloco coerente sobe `VERSION`: patch para fix/refactor/tooling compatível, minor para feature compatível, major para breaking change.
 - Depois de mudança material em código, versão, arquitetura, roadmap ou processo, atualizar este handoff.
+- Se o usuário enviar erro/warning/runtime report, isso tem prioridade sobre roadmap/refactor.
+- Não declarar bug visual/gameplay resolvido sem evidência de runtime quando a correção depender desse comportamento.
+- Não gerar imagens sem pedido explícito.
 - Comunicação direta: menos narração, mais mudança concreta.
 
-## Versionamento — obrigatório
+## Validação
 
-O arquivo raiz `VERSION` é a fonte autoritativa.
+CI automático em `.github/workflows/ci.yml`:
 
-Todo bloco coerente deve subir versão:
+- `cargo clippy --all-targets --all-features -- -D warnings`
+- `cargo check`
 
-- `patch`: fixes/refactors/otimizações internas/tooling compatíveis;
-- `minor`: nova feature compatível;
-- `major`: mudança incompatível/breaking.
+O workflow roda em push para `develop`/`main` e em pull requests.
 
-O bump faz parte do bloco.
+`cargo test` não faz parte do CI e só deve ser rodado manualmente quando o usuário solicitar explicitamente. Não reintroduzir tests no workflow nem rodá-los por rotina sem pedido.
 
-## Validação — obrigatória
+`cargo fmt`/`rustfmt` não é gate.
 
-O CI de Rust valida automaticamente apenas:
+## Canon arquitetural
 
-- `cargo clippy --all-targets --all-features -- -D warnings`;
-- `cargo check`.
-
-`.github/workflows/ci.yml` roda em `push` para `develop` e `main`, além de `pull_request`.
-
-`cargo test` **não faz mais parte do CI** e **não é gate automático de fechamento**. Testes devem ser executados manualmente somente quando o usuário solicitar explicitamente. Não reintroduzir testes no workflow nem rodá-los por rotina sem pedido.
-
-Se o usuário enviar output de compilação/runtime, corrigir todos os errors e warnings relacionados antes de continuar refactors maiores.
-
-`cargo fmt`/`rustfmt` não é gate de CI.
-
-Não ficar em polling repetitivo de CI; consultar quando houver resultado concreto para agir.
-
-## Handoff — obrigatório
-
-Atualizar `HANDOFF.md` sempre que houver mudança material em estado, arquitetura, roadmap, versão, HEAD relevante, regras ou próximos passos.
-
-Não acumular backlog histórico obsoleto. Bugs antigos só permanecem se ainda estiverem ativos ou se houver regressão reportada.
-
-O HEAD registrado aqui deve apontar para o último commit de **código/version**, não para o commit do próprio handoff.
-
----
-
-# Canon arquitetural
-
-`ARCHITECTURE.md` é o canon arquitetural atual.
-
-Princípios principais:
+`ARCHITECTURE.md` continua sendo o canon principal. Regras relevantes:
 
 1. Cada fato de gameplay tem um owner autoritativo.
-2. Reutilizar invariants/state machines reais; não abstrair por semelhança superficial.
-3. Preferir `SystemParam`s coerentes a bags gigantes; manter contextos mutáveis estreitos.
+2. Reutilizar invariants/state machines reais; não abstrair semelhanças superficiais.
+3. Preferir SystemParams estreitos/coerentes.
 4. Usar availability/run conditions canônicas.
 5. UI compartilhada pertence a `src/ui`.
-6. Targeting tem um target autoritativo e consumidores change-driven.
-7. Filas deduplicadas usam `DeduplicatedQueue<T>`; regras de voxel ficam em `VoxelUpdateQueue`.
-8. `FrameWorkBudget` é o primitive canônico para orçamento por tempo/quantidade.
+6. Targeting tem um único target autoritativo e consumidores change-driven.
+7. `DeduplicatedQueue<T>` / `VoxelUpdateQueue` são os primitives de fila deduplicada.
+8. `FrameWorkBudget` é o primitive canônico de budget por tempo/quantidade.
 9. Cores internas são HSI-first; biome visuals ponderados usam `CurrentBiomeVisuals`.
-10. Remover helpers/módulos que só encaminham chamadas e não possuem invariant.
-11. Evitar scans/rebuilds globais por frame quando existe sinal de mudança ou metadata no owner correto.
-12. Pipeline async inicial canônico: generation task -> integrate chunk -> initial lighting seed -> halo snapshot -> mesh task -> spawn render entities.
-13. Resultados async são revisionados; stale results são descartados/rescheduled; integração main-thread é budgetada.
-14. Não trocar corretude do mundo por performance aparente; mover/stagear custo.
-15. Não criar abstração genérica acima de generation/mesh tasks quando o lifecycle comum já está em `ChunkTaskQueue`.
-16. Terrain/fluid/lighting remesh de background usa pipeline async; apenas remesh de geometry imediato de edição do jogador permanece síncrono.
-17. Solvers dinâmicos caros devem ter teto temporal e de quantidade quando o trabalho puder variar muito por frame.
-18. Sistemas visuais e gameplay devem evitar reescrever Components/Assets com o mesmo valor; acesso mutável pode propagar change detection ou upload desnecessário.
-19. Quando invariants permitirem, separar refresh estrutural de material/textura de refresh leve de tint/orientação/posição.
-20. Movimento com delta zero não deve adquirir mutação de `Transform` nem executar collision stepping; estado ocioso deve permanecer realmente ocioso.
-21. Scratch de cardinalidade estruturalmente limitada deve preferir stack/reuse a heap allocation por amostra, sem impor limites artificiais a conteúdo data-driven.
-22. Escolhas de criação de mundo pertencem a `NewWorldConfig`; bootstrap consome essa configuração, não cria owner paralelo.
-23. Spawn forçado por biome deve escolher coluna e posição segura final pelo biome autoritativo do surface field; não corrigir por teleporte pós-bootstrap.
-24. Search/text-input state machine compartilhado pertence a `src/ui`; telas continuam owners de suas opções/regras específicas.
-25. Preferências de HUD pertencem a `HudSettings`; `TargetedBlock` continua sendo o único owner do target.
-26. Layout/visibilidade e conteúdo/material de HUD devem ser atualizados separadamente quando seus inputs autoritativos diferirem.
-27. Queries mutáveis múltiplas sobre o mesmo Component em um system devem ser provadamente disjuntas via `Without<T>` ou agrupadas em `ParamSet`; não depender da composição atual dos bundles para evitar B0001.
+10. Evitar scans globais, allocations temporárias e dirty writes quando existe sinal de mudança/metadata.
+11. Pipeline inicial: generation task -> integrate -> initial lighting -> halo snapshot -> mesh task -> spawn.
+12. Resultados async são revisionados; stale results são descartados/rescheduled.
+13. Terrain/fluid/lighting background remesh é async; immediate geometry de edit do player permanece síncrono para feedback.
+14. Não trocar corretude por performance aparente.
+15. Não criar abstração genérica acima de generation/mesh task queues.
+16. Sistemas visuais não devem reescrever Components/Assets com o mesmo valor.
+17. Separar refresh estrutural de material/textura de refresh leve de tint/orientação/layout quando os inputs diferirem.
+18. Movimento com delta zero deve permanecer ocioso.
+19. Scratch de cardinalidade fixa prefere stack/reuse a heap por amostra.
+20. `NewWorldConfig` é owner de escolhas de criação de mundo.
+21. Spawn forçado por biome deve validar tanto a coluna inicial quanto o safe-spawn final no mesmo biome.
+22. Search/text-input compartilhado pertence a `src/ui`; telas continuam owners de suas opções/filtros.
+23. Preferências de HUD pertencem a `HudSettings`; targeting não conhece layout.
+24. Queries mutáveis múltiplas sobre o mesmo Component em um system precisam ser provadamente disjuntas via `Without<T>` ou `ParamSet`.
+25. Child UI que deve obedecer o hide do parent deve usar `Visibility::Inherited`; usar `Visible` só quando realmente quiser sobrescrever a herança.
 
 ---
 
-# Estado atual do branch
+# Estado atual
 
-Último HEAD de código/version confirmado antes desta gravação do handoff:
+Último HEAD de código/version:
 
-`24501774a428a1d5f7640f61f8d0a7cb8c679d6d`
+`fc983fbefe3077bfec77c5223cb39322e5f70fb1`
 
-Commit: `Bump version to 0.14.2`
+Commit: `Bump version to 0.14.3`
 
-`VERSION`: `0.14.2`
+`VERSION`: `0.14.3`
 
-Commits imediatamente relevantes:
+Commits recentes relevantes:
 
-- `bb3b1347c69162739a1e58dc0b01780531d14d86` — último HEAD consolidado do pacote funcional `0.14.0`; Clippy/check/test ficaram verdes antes da mudança de política de CI.
-- `845f9b544de6a77771a8e5ae19a6b2e4f7c2600a` — bump para `0.14.0`.
-- `88abc44f20695c2fd1889f83b17a3e657a425dd4` — remove `cargo test` do CI; testes passam a ser manuais sob pedido.
-- `50bb5cd2fdd9353cf9f8c9e88ecce786e8892d79` — bump para `0.14.1`.
-- `d020a14c8db9c287c1a54f19caa013d890a27102` — corrige B0001 no sync do dropdown de Target Block Position tornando as duas queries mutáveis de `Text` explicitamente disjuntas.
-- `24501774a428a1d5f7640f61f8d0a7cb8c679d6d` — bump para `0.14.2`.
-
-Sempre buscar HEAD/VERSION novamente antes de escrever código.
+- `bb3b1347c69162739a1e58dc0b01780531d14d86` — último HEAD consolidado antes do bump 0.14.0; Clippy/check/test verdes sob a política antiga.
+- `845f9b544de6a77771a8e5ae19a6b2e4f7c2600a` — bump `0.14.0`.
+- `88abc44f20695c2fd1889f83b17a3e657a425dd4` — remove `cargo test` do CI.
+- `50bb5cd2fdd9353cf9f8c9e88ecce786e8892d79` — bump `0.14.1`.
+- `d020a14c8db9c287c1a54f19caa013d890a27102` — corrige Bevy B0001 no dropdown de Target Block Position com queries de `Text` explicitamente disjuntas.
+- `24501774a428a1d5f7640f61f8d0a7cb8c679d6d` — bump `0.14.2`; CI Clippy/check verde.
+- `e6c082e8c475e1e46ff00c29ea71d125593c8493` — faz o inventory hint herdar a visibilidade do Player HUD.
+- `fc983fbefe3077bfec77c5223cb39322e5f70fb1` — bump `0.14.3`.
 
 ## CI atual
 
-- O antigo HEAD `bb3b1347...` passou Clippy, `cargo check` e `cargo test`.
-- A partir de `0.14.1`, o CI autoritativo contém somente Clippy + `cargo check`.
-- `cargo test` só deve ser rodado quando o usuário pedir.
-- `0.14.2` / HEAD `24501774...` / run `35009719739`: em execução na última consulta; Clippy estava em andamento e `cargo check` pendente.
+- `0.14.2` / HEAD `24501774...` / run `35009719739`: Clippy **success**, `cargo check` **success**.
+- `0.14.3` / HEAD `fc983fbe...` / run `35010612188`: em execução na última consulta.
 
 ---
 
-# Estado consolidado do refactor/performance
+# Estado consolidado das features recentes
 
-## Base até 0.12.103
+## Player HUD / hints
 
-- Filas deduplicadas, snapshots clonáveis e lifecycle async de generation/mesh.
-- Integração main-thread budgetada; remesh background async com revisions/halo validation.
-- Metadata de occupancy/boundaries no `VoxelChunk`; índice vertical no `VoxelWorld`.
-- Halo de mesh reduzido à shell real; skylight vertical lazy.
-- Chunk buffers COW com `Arc<[...]>`; chunks vazios pulam mesh task.
-- Dynamic lighting, fluid, archive restore e unload possuem budgets de quantidade/tempo.
-- Geometry/Lighting do mesmo coord coalescem quando produzem o mesmo terrain mesh; Fluid permanece independente salvo supersedence por geometry completa.
-- UI/HUD/targeting/environment foram progressivamente convertidos para change-driven/idempotent writes.
-- Held block separa rebuild estrutural/material de tint/orientation.
-- Player idle evita reescritas de transform/state e collision stepping com delta zero.
-
-## 0.12.104–0.12.106 — biome sampling/identity
-
-- Surface neighborhood fixo de 25 sites usa scratch em stack em vez de múltiplos `Vec` temporários.
-- Pesos regionais usam scratch compacto preservando ordem/tie-breaking.
-- `track_current_biome` reutiliza buffers de identidade/influences em vez de reconstruir `String`/`Vec` descartáveis.
-- Reuse de buffers não cria cache autoritativo stale; change detection continua comparando o estado final.
-
----
-
-# 0.13.x–0.14.0 — pacote de gameplay/UI/world creation
-
-## Gameplay hints / Player HUD
-
-- Crosshair mostra hint contextual quando existe target:
+- Crosshair target hint:
   - sem bloco selecionado: `Left click to break block.`
   - com bloco selecionado: `Left click to break block, or right click to place.`
-- Tooltip abaixo da crosshair não aparece com inventory ou pause abertos e respeita `Display Tooltips`.
-- Player HUD permanece visível com Inventory aberto e some no pause.
-- Hint do Player HUD respeita `Display Tooltips`:
-  - inventário fechado: `Press E to open inventory, or ESC to pause game.`
-  - inventário aberto: `Press E or ESC to close inventory.`
-- `E` abre e fecha Inventory; `ESC` preserva a semântica existente de fechar Inventory quando ele está aberto.
+- Crosshair hint não aparece com inventory ou pause abertos e respeita `Display Tooltips`.
+- Player HUD permanece visível com Inventory aberto e deve desaparecer inteiro no pause.
+- Inventory hint:
+  - fechado: `Press E to open inventory, or ESC to pause game.`
+  - aberto: `Press E or ESC to close inventory.`
+- `E` abre/fecha Inventory; `ESC` preserva a semântica de fechar Inventory quando ele está aberto.
+- O inventory hint é filho do `PlayerHudRoot`.
+- Em `0.14.3`, quando tooltips estão habilitados ele usa `Visibility::Inherited` em vez de `Visible`, para herdar corretamente o hide do parent no pause; `Hidden` continua sendo usado quando `Display Tooltips` está desligado.
 
 ## Settings → HUD
 
-- A antiga seção `Miscellaneous` foi renomeada para `HUD`.
-- `Display Tooltips` permanece owner de hints de gameplay no HUD; descrição foi generalizada para não falar apenas de crosshair.
-- Nova preferência `Target Block Position` em `HudSettings`, com:
-  - `Center`;
-  - `Top-right`;
-  - `Hidden`.
-- Target HUD altera somente layout/visibilidade segundo `HudSettings`; `TargetedBlock` continua owner do target.
-- Layout e conteúdo do Target HUD são sincronizados separadamente.
-- Snapshot textual e snapshot visual do Target HUD são separados; mudança apenas de luz/idioma/face não marca `BlockIconMaterial` como modificado.
+- `Miscellaneous` foi substituído por seção `HUD`.
+- `Display Tooltips` continua em `HudSettings`.
+- `Target Block Position` em `HudSettings` com `Center`, `Top-right`, `Hidden`.
+- Target HUD altera apenas layout/visibilidade segundo essa preferência; `TargetedBlock` continua owner do target.
+- Layout e conteúdo/material do Target HUD são sincronizados separadamente.
+- Snapshot textual e visual do Target HUD são separados para evitar dirty asset writes.
 
-## Shared UI
+## Shared UI / Settings
 
-- State machine de text search/input foi extraído para `src/ui` e reutilizado pelo Creative Inventory e Spawn Biome.
-- Dropdowns usam chevron desenhado por UI em vez de glyph dependente de fonte.
-- Settings e World Settings usam primitive compartilhado de scrollbar persistente em sidebar e conteúdo/section.
+- State machine de text input/search foi extraído para `src/ui` e reutilizado pelo Creative Inventory e Spawn Biome.
+- Dropdowns usam chevron desenhado por UI, não glyph dependente de fonte.
+- Settings/World Settings usam scrollbar compartilhado em sidebar e conteúdo.
+- Spawn Biome dropdown é overlay absoluto, não empurra os controles seguintes, tem search visualmente distinta e viewport de até 5 opções com scroll.
 
 ## New World / Spawn Biome
 
-- `NewWorldConfig` é o único owner da seleção; `None` representa `Random`.
-- New World → General possui `Spawn Biome` pesquisável.
-- Opções são data-driven a partir dos `BiomeKind::Surface` da dimensão; labels vêm das definições/localização e o valor salvo é biome ID.
-- Options/search labels reagem a troca de idioma enquanto a tela está viva.
-- Search bar é visualmente distinta das opções.
-- Dropdown é overlay absoluto e não empurra Seed/Game Mode/outros controles.
-- Viewport exibe até 5 opções e usa scroll quando necessário; filtro reseta posição de scroll.
-- Foco entre Seed/Ticks/search e outros controles foi coordenado para evitar input oculto ainda capturando teclado.
-
-## Spawn forçado
-
-- Busca inicial é coarse-first e procura coluna seca cujo `BiomeFieldSample.primary_id` seja o biome selecionado.
-- `Random` preserva o fluxo anterior.
-- A posição física final usa a mesma lógica de safe spawn com predicate de biome; estruturas/árvores podem deslocar a posição apenas para outra coluna ainda no biome escolhido.
-- Não existe segundo teleporte corretivo pós-bootstrap.
-- Caches pesados usados durante a procura são podados para a região de bootstrap antes da geração inicial.
+- `NewWorldConfig` é owner único; `None` = Random.
+- Opções são data-driven dos `BiomeKind::Surface` da dimensão e armazenam biome ID.
+- Labels/search reagem a idioma.
+- Foco entre Seed/Ticks/search/outros controles é coordenado.
+- Forced spawn usa busca coarse-first por coluna seca do biome escolhido.
+- Safe spawn final recebe predicate do mesmo biome; árvore/estrutura pode deslocar o player apenas dentro dele.
+- Não existe teleporte corretivo pós-bootstrap.
+- Caches pesados usados só na procura são podados antes da geração inicial.
 
 ## Worldgen balance
 
-Ajustes deliberadamente pequenos e data-driven:
+Ajustes leves e data-driven:
 
-- Plains tree chance: `0.45 -> 0.48`.
-- Witchwood tree chance: `0.62 -> 0.66`.
-- Enchanted Forest tree chance: `0.62 -> 0.66`.
-- Mountains weight: `0.90 -> 0.85`.
-
-Nenhuma regra especial em código foi criada para esse balanceamento.
+- Plains tree chance `0.45 -> 0.48`.
+- Witchwood tree chance `0.62 -> 0.66`.
+- Enchanted Forest tree chance `0.62 -> 0.66`.
+- Mountains weight `0.90 -> 0.85`.
 
 ---
 
-# 0.14.2 — runtime ECS query fix
+# Runtime fixes recentes
 
-- Runtime report: Bevy `B0001` em `QueryState`, causado por acesso conflitante ao mesmo Component dentro de um system.
-- Causa identificada em `sync_target_block_position_dropdown`: havia uma `Query<&mut Text, With<TargetBlockPositionDropdownLabel>>` e outra `Query<(&TargetBlockPositionOptionLabel, &mut Text)>` sem filtro que provasse disjunção ao ECS.
-- A query das option labels agora inclui `Without<TargetBlockPositionDropdownLabel>`, tornando os conjuntos explicitamente disjuntos sem duplicar system/state e sem recorrer a `allow`.
-- A revisão dirigida dos systems novos de Player HUD, Spawn Biome, Target HUD layout e scrollbar não encontrou outro par equivalente de queries mutáveis sobrepostas.
-- Clippy/check não provam esse tipo de conflito de runtime; a confirmação definitiva é o próximo runtime do usuário.
+## 0.14.2 — Bevy B0001
 
----
+Runtime panic em `QueryState`: `sync_target_block_position_dropdown` tinha duas queries mutáveis de `Text` sem prova de disjunção. A query das option labels agora inclui `Without<TargetBlockPositionDropdownLabel>`.
 
-# Decisões explícitas da auditoria
+## 0.14.3 — inventory hint vazando no pause
 
-Não desfazer sem evidência nova:
+Runtime report: `Press E to open inventory...` permanecia visível no pause enquanto o resto do Player HUD sumia.
 
-- Não criar abstraction genérica acima de `ChunkGenerationTasks` / `ChunkMeshTasks`; lifecycle comum já pertence a `ChunkTaskQueue`.
-- Não separar lighting remesh em atributos com índices fixos: block light participa de `should_flip_diagonal` e pode mudar topologia indexada.
-- Não expor `VoxelWorld::chunk_mut` genericamente; mutações devem permanecer estreitas e ownership-aware.
-- `DeduplicatedQueue` mantém FIFO/prioridade via generations/tombstones.
-- Natural hydrology continua source/static; não reenfileirar água natural no solver dinâmico.
-- Batch content edit pertence a `VoxelChunk`; não criar builder externo com invariants duplicados.
-- Qualquer mesh/remesh async deve validar presença/revisão de todo o halo antes de aplicar resultado.
-- Lighting remesh pertence ao background async; immediate geometry permanece síncrono enquanto feedback do edit justificar.
-- Scratch containers podem preservar capacidade entre frames, mas caches derivados do conteúdo do mundo não devem sobreviver sem invalidation autoritativa.
-- Componentes/Assets não devem ser mutavelmente acessados só para regravar o mesmo valor.
-- Block model material/topology refresh deve ficar separado de tint/orientation refresh quando inputs autoritativos permitirem.
-- `Spawn Biome` pertence a `NewWorldConfig`; não criar outro resource autoritativo para a mesma escolha.
-- Safe spawn forçado deve continuar no mesmo owner de segurança física, usando predicate de biome, sem duplicar collision/surface logic.
-- Search compartilhado deve abstrair apenas o invariant de edição de texto; inventory/dropdown continuam owners de suas regras de filtro/opções.
-- Preferência de posição do Target HUD pertence a `HudSettings`; targeting não deve conhecer layout.
-- Queries mutáveis múltiplas do mesmo Component devem ter disjunção explícita (`Without`) ou usar `ParamSet` quando a sobreposição for intencional.
-- Formatação de Rust não é requisito de CI.
-- `cargo test` não é requisito de CI; executar manualmente somente sob pedido explícito do usuário.
-- Não reabrir bugs antigos automaticamente; só se ativos/regredidos.
+Causa: o hint já era filho do `PlayerHudRoot`, mas usava `Visibility::Visible`, sobrescrevendo a herança visual do parent.
+
+Fix: usar `Visibility::Inherited` quando tooltips estão habilitados e `Visibility::Hidden` quando desabilitados. Isso mantém o owner local do toggle sem furar o lifecycle/visibilidade do Player HUD.
+
+A confirmação definitiva desse comportamento é o próximo runtime do usuário.
 
 ---
 
 # Próximos passos
 
-Se nenhum error/warning/runtime report tiver prioridade:
+Se nenhum runtime error/warning tiver prioridade:
 
-1. Confirmar Clippy + `cargo check` do HEAD `24501774...`; corrigir qualquer failure antes de novo código.
-2. No próximo runtime do usuário, confirmar que o panic Bevy `B0001` não reaparece. Se reaparecer, usar o novo stack/output como prioridade absoluta e localizar qualquer segundo system conflitante.
-3. Fazer validação runtime das mudanças de UI quando houver output/relato do usuário: Player HUD no inventory/pause, Target Block Position, scrollbars e Spawn Biome overlay/search.
-4. Quando o usuário solicitar testes manuais, rodar `cargo test` e corrigir todos os failures antes de continuar.
-5. Retomar inspeção objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes.
-6. Revisar integração/spawn de mesh apenas se houver ganho estrutural sem lifecycle parcial por submesh.
-7. Revisar rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para remover pequeno sort local.
-8. Manter `notify_loaded_chunk_neighbors` conservador enquanto metadata atual não provar overlap voxel-a-voxel.
+1. Confirmar Clippy + `cargo check` do HEAD `fc983fbe...`.
+2. Aguardar runtime do usuário para confirmar os fixes B0001 e Player HUD/pause.
+3. Quando o usuário solicitar, rodar `cargo test` manualmente.
+4. Retomar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes.
+5. Revisar integração/spawn de mesh apenas se houver ganho estrutural real sem lifecycle parcial por submesh.
+6. Revisar rebuild de seleção somente com ganho claro; não duplicar geração de volume para eliminar sort pequeno.
+7. Manter `notify_loaded_chunk_neighbors` conservador até existir metadata suficiente para provar otimização segura.
 
 # Performance direction
 
 Meta: ~60 FPS estáveis.
 
 - heavy generation/mesh/remesh background fora da main thread;
-- integração, restore, unload, lighting e fluid work budgetados;
+- integração/restore/unload/lighting/fluid budgetados;
 - revision tracking para stale async work;
 - caches/metadata no owner correto;
-- evitar scans globais por frame, allocations temporárias e mutações idempotentes em hot paths;
+- evitar scans globais, allocations temporárias e mutações idempotentes;
 - não trocar corretude por performance aparente;
-- natural hydrology continua generation-authoritative.
-
-# Comunicação
-
-- direta e focada em ação;
-- não repetir caveats de validação de rotina;
-- não dizer “achamos a causa” sem evidência;
-- durante sequências longas, atualizar apenas findings/blocos concluídos;
-- atualizar `HANDOFF.md` depois de mudanças materiais.
+- natural hydrology permanece generation-authoritative.
