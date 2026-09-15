@@ -71,7 +71,8 @@ Princípios principais:
 13. Resultados async são revisionados; stale results são descartados/rescheduled; integração main-thread é budgetada.
 14. Não trocar corretude do mundo por performance aparente; mover/stagear custo.
 15. Não criar abstração genérica acima de generation/mesh tasks quando o lifecycle comum já está em `ChunkTaskQueue`.
-16. Background remesh também é async; feedback imediato de edits/lighting pode continuar síncrono quando necessário.
+16. Terrain/fluid/lighting remesh de background usa o pipeline async; apenas o remesh de geometry imediato de edição do jogador permanece síncrono.
+17. Solvers dinâmicos caros devem ter teto temporal e de quantidade quando o trabalho puder variar muito por frame.
 
 ---
 
@@ -79,11 +80,11 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`74df7605481473f76fbe54aa4c970c4cc18a7e81`
+`3e934035d550fa4be24f7afdcac6750b08f1afd9`
 
-Commit: `Move background chunk remesh off main thread`
+Commit: `Check unload budget after each chunk`
 
-`VERSION`: `0.12.84`
+`VERSION`: `0.12.91`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever código.
 
@@ -130,33 +131,63 @@ A auditoria arquitetural/performance segue ativa. O roadmap vem do canon + inspe
 - Chunk vazio recebe direct seed por 256 colunas + cópia de layers.
 - Direct skylight e mutações usam `sample_local` para leituras coesas block/fluid/light.
 
-### 0.12.80 — unload dirigido pelo delta do streaming
-- `ChunkUnloadState` não reconstrói mais uma lista global de chunks carregados a cada mudança de seleção.
-- `ChunkStreamingState` mantém uma fila `retired` deduplicada.
-- Cada rebuild promove para `retired` apenas a geração antiga que saiu tanto de `desired` quanto de `retained`.
-- O scan global existe apenas no bootstrap para compatibilidade com chunks já residentes.
-
-### 0.12.81–0.12.82 — poda de caches fora do passo de 1 chunk
-- `WorldFeatureFields::retain_for_chunks` deixa de varrer seis caches em toda travessia de chunk.
-- Feature caches são podados no bootstrap, mudança de render distance ou cruzamento de generation region.
-- `surface_ranges.retain` segue a mesma cadência.
-- `GENERATION_REGION_SIZE_CHUNKS = 8`; entre podas, retenção extra é apenas política de memória e não altera conteúdo gerado.
+### 0.12.80–0.12.82 — streaming deltas e cache pruning
+- Unload backlog vem do delta de `desired`/`retained`; scan global de chunks carregados fica só no bootstrap.
+- Feature caches e `surface_ranges` são podados no bootstrap, mudança de render distance ou cruzamento de generation region, não em todo chunk atravessado.
+- `GENERATION_REGION_SIZE_CHUNKS = 8`; retenção extra entre podas é apenas política de memória.
 
 ### 0.12.83 — revision tracking autoritativo para mesh snapshots
 - `VoxelWorld` mantém revisão de mesh por chunk residente.
 - Insert/restore/content edit/fluid edit/light edit/rebuild de light atualizam a revisão; unload remove a revisão residente.
 - `ChunkMeshSnapshot` captura presença + revisão dos 27 chunks do cubo 3×3×3.
-- `ChunkMeshDependencies::is_current` detecta tanto mutação de chunk existente quanto aparecimento/desaparecimento de vizinho.
-- Initial mesh async descarta resultado stale e retorna o coord para `ready` para recapturar halo atual.
+- `ChunkMeshDependencies::is_current` detecta mutação e aparecimento/desaparecimento de vizinho.
+- Initial mesh async descarta resultado stale e recaptura halo atual.
 
 ### 0.12.84 — background remesh fora da main thread
-- Novo `ChunkRemeshTasks` reutiliza `ChunkTaskQueue` e `MeshContentSnapshot`.
+- `ChunkRemeshTasks` reutiliza `ChunkTaskQueue` e `MeshContentSnapshot`.
 - No máximo 4 remesh tasks ficam em voo; dispatch e integração são budgetados e limitados por frame.
-- Background terrain/fluid remesh usa `ChunkMeshSnapshot` + `ChunkMeshDependencies` e roda no `AsyncComputeTaskPool`.
-- Resultado stale por content revision ou por qualquer dependência do halo é re-enfileirado no mesmo tipo.
+- Terrain/fluid remesh usa `ChunkMeshSnapshot` + `ChunkMeshDependencies` no `AsyncComputeTaskPool`.
+- Resultado stale por content revision ou qualquer dependência do halo é re-enfileirado no mesmo tipo.
 - Resultado de chunk descarregado ou sem render allocation é descartado.
-- Aplicação de resultado continua usando partial refresh: terrain preserva fluid allocation; fluid preserva terrain allocation.
-- `process_immediate_geometry_remesh` e `process_immediate_lighting_remesh` continuam síncronos para feedback imediato de gameplay.
+- Aplicação preserva partial refresh: terrain mantém fluid allocation; fluid mantém terrain allocation.
+
+### 0.12.85 — async remesh sem head-of-line blocking
+- Coord com task já em voo é deferido localmente em vez de causar `break` no dispatcher.
+- Outros chunks continuam preenchendo slots async livres.
+- Deferidos retornam à frente preservando a ordem relativa.
+
+### 0.12.86 — lighting remesh também async
+- `ChunkRemeshTaskKind` possui `Geometry`, `Lighting` e `Fluid`.
+- Lighting remesh usa terrain build async e a mesma validação stale dos 27 chunks.
+- Fila de lighting mantém prioridade própria; dispatcher atende Lighting -> Geometry -> Fluid.
+- `process_immediate_lighting_remesh` foi removido.
+- Apenas `process_immediate_geometry_remesh` continua síncrono para feedback imediato de edição/topologia.
+
+### 0.12.87 — dynamic lighting com orçamento temporal
+- Mantém teto de 4.096 voxels/frame.
+- Orçamento temporal de 2 ms, mínimo 256 voxels e checagem a cada 64.
+- `LightingContext` permanece vivo durante toda a chamada, preservando cache de direct-sky.
+- O layer voxel recebe um predicate de orçamento; `FrameWorkBudget` continua no owner de world scheduling.
+
+### 0.12.88 — fluid solver com orçamento temporal
+- Mantém teto de 512 updates e 4 fluid steps/frame.
+- Orçamento temporal de 1 ms, mínimo 64 updates.
+- A fronteira do fluid step continua congelada no início do batch; voxels recém-enfileirados não são processados no mesmo step.
+
+### 0.12.89 — restore de chunks arquivados budgetado
+- Restore síncrono de chunk arquivado passa a contar junto com dispatch de nova generation task.
+- `GENERATION_DISPATCH_BUDGET = 1 ms`; máximo de 4 trabalhos/frame.
+- Backtracking não pode mais restaurar uma quantidade ilimitada de chunks de 4.096 slots no mesmo frame.
+
+### 0.12.90 — prioridade de streaming calculada uma vez
+- `pending.sort_by_cached_key` substitui `sort_by_key`.
+- A chave com lookup em `surface_ranges` + sete campos é calculada uma vez por pending chunk, não repetidamente durante comparações.
+
+### 0.12.91 — unload respeita orçamento desde o primeiro chunk
+- `CHUNK_UNLOAD_BUDGET` continua 4 ms.
+- O mínimo antes da checagem caiu de 8 chunks para 1.
+- Chunks sujos que exigem archive encoding não podem mais obrigar oito operações antes de observar o budget.
+- Ordem farthest-first e backlog do streaming permanecem inalterados.
 
 ---
 
@@ -180,8 +211,10 @@ Não desfazer sem evidência nova:
 - Halo de mesh deve resolver chunks vizinhos por shell, não voltar a lookup world-position por voxel.
 - Unload backlog deve vir do delta do owner de seleção, não de scan global duplicado.
 - Cache pruning não precisa acompanhar cada chunk do player; manter granularidade coerente com generation regions.
-- Qualquer remesh async deve validar presença/revisão de todo o halo antes de aplicar resultado.
-- Background remesh é async; caminhos immediate só devem ser movidos se houver evidência de que latência extra é aceitável.
+- Qualquer mesh/remesh async deve validar presença/revisão de todo o halo antes de aplicar resultado.
+- Lighting remesh pertence ao background async; immediate geometry permanece síncrono enquanto feedback do edit justificar.
+- Solvers dinâmicos devem preservar a semântica da frontier ao ganhar budgets temporais.
+- Archive compactado permanece preferível a guardar buffers COW brutos; restore caro é controlado por scheduling budget.
 - Não reabrir bugs antigos automaticamente; só se ativos/regredidos.
 
 ---
@@ -190,12 +223,12 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Auditar o novo `ChunkRemeshTasks` por oportunidades de coalescer geometry/fluid work enquanto uma task do mesmo coord já está em voo, sem perder a regra de supersedência de geometry.
-2. Revisar se `process_immediate_lighting_remesh` pode gerar bursts síncronos durante streaming/lighting; só mover ou reduzir se houver forma de preservar feedback e convergência visual.
-3. Revisar `ChunkMeshDependencies`/revisions para garantir que bumps em operações batch reflitam mudança real quando isso for relevante; não adicionar hashing ou scans de 4.096 voxels para evitar um bump barato.
-4. Continuar inspeção objetiva de sistemas `Update`/`PostUpdate` por scans globais ou builds síncronos; não voltar a micro-otimização de helpers já enxutos.
+1. Continuar inspeção objetiva de `Update`/`PostUpdate` por scans globais ou builds síncronos; os principais builds de chunk/remesh, lighting e fluid já estão async/budgetados.
+2. Auditar coalescência de pedidos `Geometry`/`Lighting` do mesmo coord no `ChunkRemeshTasks` somente se puder evitar trabalho duplicado sem perder invalidation/requeue correta.
+3. Revisar custo do rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para eliminar o pequeno sort do raio local 3.
+4. Revisar integração/spawn de mesh por custo main-thread unitário; budgets limitam quantidade, mas uma única integração ainda é indivisível.
 5. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel.
-6. Só voltar a unload incremental, collision/raycast ou task lifecycle se surgir evidência objetiva nova.
+6. Só voltar a collision/raycast, UI ou task lifecycle se surgir evidência objetiva nova.
 
 ---
 
@@ -204,7 +237,7 @@ Se nenhum error/warning/runtime report tiver prioridade:
 Meta: ~60 FPS estáveis.
 
 - heavy generation/mesh/remesh background fora da main thread;
-- integração budgetada;
+- integração, restore, unload, lighting e fluid work budgetados;
 - revision tracking para stale async work;
 - caches/metadata no owner correto;
 - evitar scans globais por frame e allocations temporárias em hot paths;
