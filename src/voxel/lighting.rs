@@ -46,6 +46,10 @@ impl PendingLightingUpdates {
             .or_insert(previous_cell);
     }
 
+    pub(crate) fn enqueue_medium_edit(&mut self, position: IVec3) {
+        self.queue.enqueue_with_neighbors_priority(position);
+    }
+
     pub(crate) fn enqueue_chunk_unloads(&mut self, unloaded: &[IVec3]) {
         for coord in unloaded {
             self.queue.enqueue_chunk_boundary_neighbors(chunk_origin(*coord));

@@ -159,7 +159,7 @@ pub(super) fn process_fluid_updates(
             }
 
             if lighting_medium_changed {
-                runtime.lighting.enqueue_voxel_edit(position);
+                runtime.lighting.enqueue_medium_edit(position);
             }
             enqueue_remesh(position, &mut runtime.remesh_queue);
             runtime.pending.enqueue_voxel_edit(position);
