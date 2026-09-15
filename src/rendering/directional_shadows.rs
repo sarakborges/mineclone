@@ -76,7 +76,12 @@ fn update_sun_shadow_light(
     render_distance: Res<RenderDistanceSettings>,
     mut lights: SunShadowLights,
 ) {
-    if render_distance.is_changed() {
+    let render_distance_changed = render_distance.is_changed();
+    if !scene.inputs_changed() && !render_distance_changed {
+        return;
+    }
+
+    if render_distance_changed {
         let config = shadow_config(render_distance.chunks());
         for (_, mut cascades, _, _) in &mut lights {
             *cascades = config.clone();
