@@ -24,7 +24,7 @@ pub(super) struct Star {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-struct StarVisualSnapshot {
+pub(super) struct StarVisualSnapshot {
     visible_count: usize,
     color: Color,
 }
