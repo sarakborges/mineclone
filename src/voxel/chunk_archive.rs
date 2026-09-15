@@ -45,45 +45,44 @@ impl ArchivedChunk {
 
         for index in 0..CHUNK_VOLUME {
             let (x, y, z) = coordinates(index);
-            let Some(cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
-                continue;
-            };
-            let palette_index = palette
-                .iter()
-                .position(|block_id| *block_id == cell.block_id)
-                .unwrap_or_else(|| {
-                    palette.push(cell.block_id);
-                    palette.len() - 1
+            let (cell, fluid, _) = chunk
+                .sample_local(x as i32, y as i32, z as i32)
+                .expect("archive coordinates must stay inside the chunk");
+
+            if let Some(cell) = cell {
+                let palette_index = palette
+                    .iter()
+                    .position(|block_id| *block_id == cell.block_id)
+                    .unwrap_or_else(|| {
+                        palette.push(cell.block_id);
+                        palette.len() - 1
+                    });
+
+                assert!(
+                    palette_index <= u16::MAX as usize,
+                    "chunk block palette cannot exceed {} entries",
+                    u16::MAX
+                );
+
+                occupancy[index / u64::BITS as usize] |= 1_u64 << (index % u64::BITS as usize);
+                cells.push(ArchivedCell {
+                    palette_index: palette_index as u16,
+                    rotation: rotation_index(cell.texture_rotation),
+                    orientation: cell.orientation.index(),
+                    secondary_properties: cell.secondary_properties(),
                 });
+            }
 
-            assert!(
-                palette_index <= u16::MAX as usize,
-                "chunk block palette cannot exceed {} entries",
-                u16::MAX
-            );
-
-            occupancy[index / u64::BITS as usize] |= 1_u64 << (index % u64::BITS as usize);
-            cells.push(ArchivedCell {
-                palette_index: palette_index as u16,
-                rotation: rotation_index(cell.texture_rotation),
-                orientation: cell.orientation.index(),
-                secondary_properties: cell.secondary_properties(),
-            });
-        }
-
-        for index in 0..CHUNK_VOLUME {
-            let (x, y, z) = coordinates(index);
-            let Some(fluid) = chunk.fluid_at(x as i32, y as i32, z as i32) else {
-                continue;
-            };
-
-            fluid_occupancy[index / u64::BITS as usize] |= 1_u64 << (index % u64::BITS as usize);
-            fluid_cells.push(ArchivedFluidCell {
-                fluid_id: fluid.fluid_id,
-                level: fluid.level,
-                source: fluid.is_source(),
-                spread_distance: fluid.spread_distance(),
-            });
+            if let Some(fluid) = fluid {
+                fluid_occupancy[index / u64::BITS as usize] |=
+                    1_u64 << (index % u64::BITS as usize);
+                fluid_cells.push(ArchivedFluidCell {
+                    fluid_id: fluid.fluid_id,
+                    level: fluid.level,
+                    source: fluid.is_source(),
+                    spread_distance: fluid.spread_distance(),
+                });
+            }
         }
 
         Self {
@@ -100,60 +99,56 @@ impl ArchivedChunk {
 
         chunk.edit_content(|chunk| {
             let mut archived_cells = self.cells.iter();
-
-            for index in 0..CHUNK_VOLUME {
-                let occupied = self.occupancy[index / u64::BITS as usize]
-                    & (1_u64 << (index % u64::BITS as usize))
-                    != 0;
-                if !occupied {
-                    continue;
-                }
-
-                let archived = archived_cells
-                    .next()
-                    .expect("archived chunk occupancy should match archived cells");
-                let block_id = self.palette[archived.palette_index as usize];
-                let (x, y, z) = coordinates(index);
-                chunk.set_block(
-                    x,
-                    y,
-                    z,
-                    Some(
-                        VoxelCell::oriented(
-                            block_id,
-                            TextureRotation::from_quarter_turn(archived.rotation),
-                            BlockOrientation::from_index(archived.orientation),
-                        )
-                        .with_secondary_properties(archived.secondary_properties),
-                    ),
-                );
-            }
-
             let mut archived_fluids = self.fluid_cells.iter();
 
             for index in 0..CHUNK_VOLUME {
-                let occupied = self.fluid_occupancy[index / u64::BITS as usize]
+                let block_occupied = self.occupancy[index / u64::BITS as usize]
                     & (1_u64 << (index % u64::BITS as usize))
                     != 0;
-                if !occupied {
+                let fluid_occupied = self.fluid_occupancy[index / u64::BITS as usize]
+                    & (1_u64 << (index % u64::BITS as usize))
+                    != 0;
+                if !block_occupied && !fluid_occupied {
                     continue;
                 }
 
-                let archived = archived_fluids
-                    .next()
-                    .expect("archived chunk fluid occupancy should match archived fluid cells");
                 let (x, y, z) = coordinates(index);
-                chunk.set_fluid(
-                    x,
-                    y,
-                    z,
-                    Some(FluidCell::with_state(
-                        archived.fluid_id,
-                        archived.level,
-                        archived.source,
-                        archived.spread_distance,
-                    )),
-                );
+                if block_occupied {
+                    let archived = archived_cells
+                        .next()
+                        .expect("archived chunk occupancy should match archived cells");
+                    let block_id = self.palette[archived.palette_index as usize];
+                    chunk.set_block(
+                        x,
+                        y,
+                        z,
+                        Some(
+                            VoxelCell::oriented(
+                                block_id,
+                                TextureRotation::from_quarter_turn(archived.rotation),
+                                BlockOrientation::from_index(archived.orientation),
+                            )
+                            .with_secondary_properties(archived.secondary_properties),
+                        ),
+                    );
+                }
+
+                if fluid_occupied {
+                    let archived = archived_fluids
+                        .next()
+                        .expect("archived chunk fluid occupancy should match archived fluid cells");
+                    chunk.set_fluid(
+                        x,
+                        y,
+                        z,
+                        Some(FluidCell::with_state(
+                            archived.fluid_id,
+                            archived.level,
+                            archived.source,
+                            archived.spread_distance,
+                        )),
+                    );
+                }
             }
         });
 
