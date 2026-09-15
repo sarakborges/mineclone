@@ -61,17 +61,4 @@ impl<T> ChunkTaskQueue<T> {
             output,
         })
     }
-
-    pub(crate) fn collect_ready(&mut self, maximum: usize) -> Vec<CompletedChunkTask<T>> {
-        let mut completed = Vec::new();
-
-        while completed.len() < maximum {
-            let Some(ready) = self.poll_ready() else {
-                break;
-            };
-            completed.push(ready);
-        }
-
-        completed
-    }
 }
