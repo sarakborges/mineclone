@@ -104,6 +104,7 @@ pub(super) fn animate_viewmodel(
     mut animation: ResMut<ViewModelAnimation>,
     item_switch: Res<ViewModelItemSwitch>,
     mut viewmodels: Query<&mut Transform, With<PlayerViewModel>>,
+    mut was_animating: Local<bool>,
 ) {
     let interaction = animation.action.and_then(|action| {
         animation.elapsed_ticks = animation
@@ -124,7 +125,8 @@ pub(super) fn animate_viewmodel(
         }
     });
 
-    let switch_wave = if item_switch.is_active() {
+    let switch_active = item_switch.is_active();
+    let switch_wave = if switch_active {
         let progress = (item_switch.elapsed_ticks() as f32
             / ITEM_SWITCH_ANIMATION_DURATION_TICKS as f32)
             .clamp(0.0, 1.0);
@@ -132,6 +134,12 @@ pub(super) fn animate_viewmodel(
     } else {
         0.0
     };
+    let is_animating = interaction.is_some() || switch_active;
+
+    if !is_animating && !*was_animating {
+        return;
+    }
+    *was_animating = is_animating;
 
     for mut transform in &mut viewmodels {
         let mut animated = base_viewmodel_transform();
@@ -161,7 +169,9 @@ pub(super) fn animate_viewmodel(
             );
         }
 
-        *transform = animated;
+        if *transform != animated {
+            *transform = animated;
+        }
     }
 }
 

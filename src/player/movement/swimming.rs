@@ -26,7 +26,10 @@ pub(super) fn update_swimming_state(
     player: Single<(&Transform, &mut SwimmingState), With<GameplayCamera>>,
 ) {
     let (transform, mut swimming) = player.into_inner();
-    swimming.active = player_in_fluid(transform.translation, &world);
+    let active = player_in_fluid(transform.translation, &world);
+    if swimming.active != active {
+        swimming.active = active;
+    }
 }
 
 pub(super) fn swim_vertical(
@@ -40,7 +43,9 @@ pub(super) fn swim_vertical(
         return;
     }
 
-    gravity.grounded = false;
+    if gravity.grounded {
+        gravity.grounded = false;
+    }
 
     let target_velocity = if context.keys.pressed(KeyCode::Space) {
         if player_near_fluid_surface(transform.translation, &context.world) {
@@ -61,19 +66,24 @@ pub(super) fn swim_vertical(
         return;
     }
 
-    gravity.vertical_velocity = approach(
+    let next_velocity = approach(
         gravity.vertical_velocity,
         target_velocity,
         SWIM_VERTICAL_ACCELERATION * delta_seconds,
     );
+    if gravity.vertical_velocity != next_velocity {
+        gravity.vertical_velocity = next_velocity;
+    }
 
     let vertical_delta = gravity.vertical_velocity * delta_seconds;
-    if move_axis(
-        &mut transform,
-        &context.world,
-        vertical_delta,
-        Axis::Y,
-    ) {
+    if vertical_delta != 0.0
+        && move_axis(
+            &mut transform,
+            &context.world,
+            vertical_delta,
+            Axis::Y,
+        )
+    {
         gravity.vertical_velocity = 0.0;
     }
 }

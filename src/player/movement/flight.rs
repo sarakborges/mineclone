@@ -41,11 +41,15 @@ pub(super) fn handle_flight_toggle(
     mut gravity: Single<&mut GravityState>,
 ) {
     if !game_mode.allows_flight() {
-        flight.toggle_deadline_tick = None;
+        if flight.toggle_deadline_tick.is_some() {
+            flight.toggle_deadline_tick = None;
+        }
+        if flight.velocity != Vec3::ZERO {
+            flight.velocity = Vec3::ZERO;
+        }
 
         if flight.active {
             flight.active = false;
-            flight.velocity = Vec3::ZERO;
             gravity.vertical_velocity = 0.0;
             gravity.grounded = false;
         }
@@ -82,7 +86,9 @@ pub(super) fn move_flying(
     let (mut transform, camera, mut flight) = player.into_inner();
 
     if !flight.active {
-        flight.velocity = Vec3::ZERO;
+        if flight.velocity != Vec3::ZERO {
+            flight.velocity = Vec3::ZERO;
+        }
         return;
     }
 
@@ -128,37 +134,45 @@ pub(super) fn move_flying(
     } else {
         FLY_ACCELERATION
     };
-
-    flight.velocity = approach_velocity(
+    let next_velocity = approach_velocity(
         flight.velocity,
         target_velocity,
         acceleration * delta_seconds,
     );
 
-    let velocity = flight.velocity;
+    if flight.velocity != next_velocity {
+        flight.velocity = next_velocity;
+    }
 
-    if move_axis(
-        &mut transform,
-        &world,
-        velocity.x * delta_seconds,
-        Axis::X,
-    ) {
+    let velocity = flight.velocity;
+    if velocity.x != 0.0
+        && move_axis(
+            &mut transform,
+            &world,
+            velocity.x * delta_seconds,
+            Axis::X,
+        )
+    {
         flight.velocity.x = 0.0;
     }
-    if move_axis(
-        &mut transform,
-        &world,
-        velocity.z * delta_seconds,
-        Axis::Z,
-    ) {
+    if velocity.z != 0.0
+        && move_axis(
+            &mut transform,
+            &world,
+            velocity.z * delta_seconds,
+            Axis::Z,
+        )
+    {
         flight.velocity.z = 0.0;
     }
-    if move_axis(
-        &mut transform,
-        &world,
-        velocity.y * delta_seconds,
-        Axis::Y,
-    ) {
+    if velocity.y != 0.0
+        && move_axis(
+            &mut transform,
+            &world,
+            velocity.y * delta_seconds,
+            Axis::Y,
+        )
+    {
         flight.velocity.y = 0.0;
     }
 }

@@ -39,13 +39,15 @@ pub(super) fn apply_gravity(
         return;
     }
 
-    if gravity.grounded && !has_ground_support(&transform, &context.world) {
-        gravity.grounded = false;
-    }
-
-    if context.keys.just_pressed(KeyCode::Space) && gravity.grounded {
-        gravity.vertical_velocity = JUMP_SPEED;
-        gravity.grounded = false;
+    if gravity.grounded {
+        if !has_ground_support(&transform, &context.world) {
+            gravity.grounded = false;
+        } else if context.keys.just_pressed(KeyCode::Space) {
+            gravity.vertical_velocity = JUMP_SPEED;
+            gravity.grounded = false;
+        } else {
+            return;
+        }
     }
 
     let delta_seconds = context.delta_seconds();

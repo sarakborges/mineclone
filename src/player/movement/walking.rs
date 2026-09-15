@@ -33,7 +33,9 @@ pub(super) fn walk(
     let (mut transform, camera, flight, mut walking) = player.into_inner();
 
     if flight.active {
-        walking.velocity = Vec3::ZERO;
+        if walking.velocity != Vec3::ZERO {
+            walking.velocity = Vec3::ZERO;
+        }
         return;
     }
 
@@ -70,28 +72,35 @@ pub(super) fn walk(
     } else {
         WALK_ACCELERATION
     };
-
-    walking.velocity = approach_velocity(
+    let next_velocity = approach_velocity(
         walking.velocity,
         target_velocity,
         acceleration * delta_seconds,
     );
 
+    if walking.velocity != next_velocity {
+        walking.velocity = next_velocity;
+    }
+
     let velocity = walking.velocity;
-    if move_axis(
-        &mut transform,
-        &world,
-        velocity.x * delta_seconds,
-        Axis::X,
-    ) {
+    if velocity.x != 0.0
+        && move_axis(
+            &mut transform,
+            &world,
+            velocity.x * delta_seconds,
+            Axis::X,
+        )
+    {
         walking.velocity.x = 0.0;
     }
-    if move_axis(
-        &mut transform,
-        &world,
-        velocity.z * delta_seconds,
-        Axis::Z,
-    ) {
+    if velocity.z != 0.0
+        && move_axis(
+            &mut transform,
+            &world,
+            velocity.z * delta_seconds,
+            Axis::Z,
+        )
+    {
         walking.velocity.z = 0.0;
     }
 }
