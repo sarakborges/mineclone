@@ -13,6 +13,7 @@ struct ResolvedSurfaceInfluence<'a> {
     weight: f32,
 }
 
+#[derive(Default)]
 pub(crate) struct SurfaceMaterialColumn<'a> {
     influences: Vec<ResolvedSurfaceInfluence<'a>>,
 }
@@ -21,10 +22,12 @@ pub(crate) fn resolve_surface_material_column<'a>(
     surface_influences: &[(usize, f32)],
     biome_field: &BiomeField,
     biomes: &'a BiomeRegistry,
-) -> SurfaceMaterialColumn<'a> {
-    let influences = surface_influences
-        .iter()
-        .map(|(biome_index, weight)| {
+    column: &mut SurfaceMaterialColumn<'a>,
+) {
+    column.influences.clear();
+    column
+        .influences
+        .extend(surface_influences.iter().map(|(biome_index, weight)| {
             let biome_id = biome_field.surface_biome_id(*biome_index);
             let biome = biomes
                 .get(biome_id)
@@ -34,10 +37,7 @@ pub(crate) fn resolve_surface_material_column<'a>(
                 biome,
                 weight: *weight,
             }
-        })
-        .collect();
-
-    SurfaceMaterialColumn { influences }
+        }));
 }
 
 pub(crate) fn solid_block_id(

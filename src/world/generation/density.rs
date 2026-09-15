@@ -18,7 +18,8 @@ use super::{
     columns::GenerationColumnSample,
     index::{column_index, voxel_index},
     surface_carvers::{
-        SurfaceCarverResolveContext, resolve_surface_carver_column, surface_carver_density_delta,
+        SurfaceCarverColumn, SurfaceCarverResolveContext, resolve_surface_carver_column,
+        surface_carver_density_delta,
     },
 };
 
@@ -56,6 +57,7 @@ pub(super) fn sample_density_field(
         minimum_y: chunk_minimum_y,
         maximum_y: chunk_maximum_y,
     };
+    let mut surface_carvers = SurfaceCarverColumn::default();
 
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
@@ -74,13 +76,14 @@ pub(super) fn sample_density_field(
             // the old twelve-block binary exclusion produced conspicuously flat
             // tunnel walls around rivers and lakes.
             let surface_carver_allowed = pass.region.hydrology.water_at(horizontal).is_none();
-            let surface_carvers = surface_carver_allowed.then(|| {
+            if surface_carver_allowed {
                 resolve_surface_carver_column(
+                    &mut surface_carvers,
                     horizontal,
                     &column.surface_influences,
                     &surface_carver_context,
-                )
-            });
+                );
+            }
 
             for (local_y, hydrology_delta) in hydrology_deltas.iter().copied().enumerate() {
                 let world_position = IVec3::new(
@@ -102,9 +105,11 @@ pub(super) fn sample_density_field(
                     hydrology_delta,
                     &context,
                 );
-                let carver_delta = surface_carvers.as_ref().map_or(0.0, |carvers| {
-                    surface_carver_density_delta(sampled_density, sample_position, carvers)
-                });
+                let carver_delta = if surface_carver_allowed {
+                    surface_carver_density_delta(sampled_density, sample_position, &surface_carvers)
+                } else {
+                    0.0
+                };
 
                 field.values[index] = sampled_density + carver_delta;
                 field.volume[index] = volume;

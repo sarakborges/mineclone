@@ -41,11 +41,12 @@ struct SurfaceTunnelCandidate<'a> {
 }
 
 pub(super) fn resolve_surface_carver_column(
+    column: &mut SurfaceCarverColumn,
     horizontal: Vec2,
     surface_influences: &[(usize, f32)],
     context: &SurfaceCarverResolveContext<'_>,
-) -> SurfaceCarverColumn {
-    let mut tunnels = Vec::new();
+) {
+    column.tunnels.clear();
 
     for &(biome_index, weight) in surface_influences {
         if weight <= 0.0 {
@@ -69,7 +70,7 @@ pub(super) fn resolve_surface_carver_column(
             }
 
             resolve_tunnel_candidates(
-                &mut tunnels,
+                &mut column.tunnels,
                 horizontal,
                 context,
                 SurfaceTunnelCandidate {
@@ -81,8 +82,6 @@ pub(super) fn resolve_surface_carver_column(
             );
         }
     }
-
-    SurfaceCarverColumn { tunnels }
 }
 
 pub(super) fn surface_carver_density_delta(

@@ -10,7 +10,7 @@ use crate::{
     world::{
         biome_field::BiomeField,
         generation_region::GenerationRegion,
-        material_field::{resolve_surface_material_column, solid_block_id},
+        material_field::{SurfaceMaterialColumn, resolve_surface_material_column, solid_block_id},
     },
 };
 
@@ -34,6 +34,8 @@ pub(super) fn rasterize_material_pass(
     density: &DensityField,
     context: &MaterialPassContext<'_>,
 ) {
+    let mut surface_materials = SurfaceMaterialColumn::default();
+
     chunk.edit_content(|chunk| {
         for local_z in 0..CHUNK_SIZE {
             for local_x in 0..CHUNK_SIZE {
@@ -46,10 +48,11 @@ pub(super) fn rasterize_material_pass(
                     horizontal,
                     chunk_origin.y as f32 + 0.5,
                 );
-                let surface_materials = resolve_surface_material_column(
+                resolve_surface_material_column(
                     &column.surface_influences,
                     context.biome_field,
                     context.biomes,
+                    &mut surface_materials,
                 );
 
                 for (local_y, hydrology_block) in hydrology_blocks.iter().copied().enumerate() {
