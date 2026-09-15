@@ -52,31 +52,42 @@ impl ChunkRenderPool {
             .map(|slot| (slot.entities, slot.meshes))
     }
 
-    pub(super) fn replace_mesh_assets(
+    pub(super) fn replace_terrain_mesh_assets(
         &mut self,
         coord: IVec3,
         meshes: &mut Assets<Mesh>,
         replacement_keys: &[ChunkMeshKey],
         replacements: Vec<Mesh>,
-        mesh_bytes: usize,
+        terrain_mesh_bytes: usize,
     ) -> bool {
         let Some(slot) = self.active.get_mut(&coord) else {
             return false;
         };
-        if slot.mesh_keys.as_slice() != replacement_keys
-            || slot.meshes.len() != replacements.len()
-            || slot.meshes.iter().any(|handle| !meshes.contains(handle))
+        if slot.mesh_keys.len() != slot.meshes.len() {
+            return false;
+        }
+        let Some(terrain_mesh_count) = slot.meshes.len().checked_sub(slot.fluid_ids.len()) else {
+            return false;
+        };
+        if &slot.mesh_keys[..terrain_mesh_count] != replacement_keys
+            || terrain_mesh_count != replacements.len()
+            || slot.meshes[..terrain_mesh_count]
+                .iter()
+                .any(|handle| !meshes.contains(handle))
         {
             return false;
         }
 
-        for (handle, replacement) in slot.meshes.iter().zip(replacements) {
+        for (handle, replacement) in slot.meshes[..terrain_mesh_count]
+            .iter()
+            .zip(replacements)
+        {
             let Some(mut existing) = meshes.get_mut(handle) else {
                 return false;
             };
             *existing = replacement;
         }
-        slot.mesh_bytes = mesh_bytes;
+        slot.mesh_bytes = terrain_mesh_bytes.saturating_add(slot.fluid_mesh_bytes);
         true
     }
 

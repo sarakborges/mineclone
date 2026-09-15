@@ -53,7 +53,21 @@ pub(crate) fn build_chunk_render_meshes<W: VoxelRead + ?Sized>(
     chunk: &VoxelChunk,
     context: &ChunkMeshBuildContext<'_, W>,
 ) -> Vec<BuiltChunkMesh> {
-    let face_meshes = build_chunk_mesh(
+    let terrain_meshes = build_chunk_terrain_render_meshes(coord, chunk, context);
+    let fluid_meshes = build_chunk_fluid_render_meshes(coord, chunk, context);
+
+    terrain_meshes
+        .into_iter()
+        .chain(fluid_meshes.into_iter().map(BuiltChunkMesh::Fluid))
+        .collect()
+}
+
+pub(super) fn build_chunk_terrain_render_meshes<W: VoxelRead + ?Sized>(
+    coord: IVec3,
+    chunk: &VoxelChunk,
+    context: &ChunkMeshBuildContext<'_, W>,
+) -> Vec<BuiltChunkMesh> {
+    build_chunk_mesh(
         context.world,
         coord,
         chunk,
@@ -69,14 +83,10 @@ pub(crate) fn build_chunk_render_meshes<W: VoxelRead + ?Sized>(
 
             block_vertex_tint(base_tint, block, cell, context.secondary_properties)
         },
-    );
-    let fluid_meshes = build_chunk_fluid_render_meshes(coord, chunk, context);
-
-    face_meshes
-        .into_iter()
-        .map(BuiltChunkMesh::Terrain)
-        .chain(fluid_meshes.into_iter().map(BuiltChunkMesh::Fluid))
-        .collect()
+    )
+    .into_iter()
+    .map(BuiltChunkMesh::Terrain)
+    .collect()
 }
 
 pub(super) fn build_chunk_fluid_render_meshes<W: VoxelRead + ?Sized>(

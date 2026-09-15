@@ -4,7 +4,7 @@ use super::{
     ChunkRenderContext,
     pool::{ChunkRenderPool, retire_chunk_render_allocation},
     spawn::{
-        BuiltChunkMesh, build_chunk_fluid_render_meshes, build_chunk_render_meshes,
+        BuiltChunkMesh, build_chunk_fluid_render_meshes, build_chunk_terrain_render_meshes,
         mesh_asset_bytes, spawn_chunk_mesh,
     },
 };
@@ -42,12 +42,12 @@ pub fn refresh_chunk_geometry_mesh(
     }
 
     let build_context = context.mesh_build_context();
-    let built_meshes = build_chunk_render_meshes(coord, chunk, &build_context);
+    let built_meshes = build_chunk_terrain_render_meshes(coord, chunk, &build_context);
     let replacement_keys = built_meshes
         .iter()
         .map(BuiltChunkMesh::key)
         .collect::<Vec<_>>();
-    let mesh_bytes = built_meshes
+    let terrain_mesh_bytes = built_meshes
         .iter()
         .map(|built| mesh_asset_bytes(built.mesh()))
         .sum();
@@ -56,12 +56,12 @@ pub fn refresh_chunk_geometry_mesh(
         .map(BuiltChunkMesh::into_mesh)
         .collect::<Vec<_>>();
 
-    if render_pool.replace_mesh_assets(
+    if render_pool.replace_terrain_mesh_assets(
         coord,
         meshes,
         &replacement_keys,
         replacements,
-        mesh_bytes,
+        terrain_mesh_bytes,
     ) {
         return;
     }
