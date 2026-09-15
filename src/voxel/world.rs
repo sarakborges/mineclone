@@ -103,6 +103,24 @@ impl VoxelWorld {
         )
     }
 
+    pub(crate) fn sample_at(
+        &self,
+        world_position: IVec3,
+    ) -> Option<(Option<VoxelCell>, Option<FluidCell>, VoxelLight)> {
+        if world_position.y < 0 {
+            return None;
+        }
+
+        let (chunk_coord, local_position) = split_world_position(world_position);
+        let chunk = self.chunks.get(&chunk_coord)?;
+
+        Some((
+            chunk.cell_at(local_position.x, local_position.y, local_position.z),
+            chunk.fluid_at(local_position.x, local_position.y, local_position.z),
+            chunk.light_at(local_position.x, local_position.y, local_position.z),
+        ))
+    }
+
     pub(crate) fn light_at(&self, world_position: IVec3) -> VoxelLight {
         if world_position.y < 0 {
             return VoxelLight::DARK;
