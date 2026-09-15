@@ -30,7 +30,7 @@ pub(super) fn rebuild_queue(
     vertical_radius: i32,
     context: &QueueRebuildContext<'_>,
 ) {
-    let prune_feature_caches = should_prune_feature_caches(
+    let prune_caches = should_prune_streaming_caches(
         streaming.center,
         streaming.horizontal_radius,
         streaming.vertical_radius,
@@ -45,7 +45,9 @@ pub(super) fn rebuild_queue(
         horizontal_radius + HORIZONTAL_PRELOAD_CHUNKS.max(horizontal_structure_allowance);
     let vertical_structure_allowance =
         chunks_for_block_extent(context.structures.max_height_above_anchor());
-    prune_surface_cache(&mut streaming.surface_ranges, center.xz(), preload_radius);
+    if prune_caches {
+        prune_surface_cache(&mut streaming.surface_ranges, center.xz(), preload_radius);
+    }
     let desired = desired_chunk_coords(
         center,
         preload_radius,
@@ -54,7 +56,7 @@ pub(super) fn rebuild_queue(
         context,
         &mut streaming.surface_ranges,
     );
-    if prune_feature_caches {
+    if prune_caches {
         context.feature_fields.retain_for_chunks(&desired);
     }
     let mut pending = desired
@@ -89,7 +91,7 @@ pub(super) fn rebuild_queue(
     }
 }
 
-fn should_prune_feature_caches(
+fn should_prune_streaming_caches(
     previous_center: Option<IVec3>,
     previous_horizontal_radius: i32,
     previous_vertical_radius: i32,
@@ -258,11 +260,11 @@ mod tests {
     }
 
     #[test]
-    fn feature_cache_pruning_follows_generation_region_boundaries() {
+    fn streaming_cache_pruning_follows_generation_region_boundaries() {
         let radius = 12;
         let vertical_radius = 4;
 
-        assert!(should_prune_feature_caches(
+        assert!(should_prune_streaming_caches(
             None,
             radius,
             vertical_radius,
@@ -270,7 +272,7 @@ mod tests {
             radius,
             vertical_radius,
         ));
-        assert!(!should_prune_feature_caches(
+        assert!(!should_prune_streaming_caches(
             Some(IVec3::ZERO),
             radius,
             vertical_radius,
@@ -278,7 +280,7 @@ mod tests {
             radius,
             vertical_radius,
         ));
-        assert!(should_prune_feature_caches(
+        assert!(should_prune_streaming_caches(
             Some(IVec3::new(7, 0, 7)),
             radius,
             vertical_radius,
@@ -286,7 +288,7 @@ mod tests {
             radius,
             vertical_radius,
         ));
-        assert!(should_prune_feature_caches(
+        assert!(should_prune_streaming_caches(
             Some(IVec3::ZERO),
             radius,
             vertical_radius,
