@@ -112,6 +112,12 @@ pub(super) struct ChunkStreamingWork<'w> {
 }
 
 #[derive(SystemParam)]
+pub(super) struct ChunkStreamingSelection<'w, 's> {
+    render_distance: Res<'w, RenderDistanceSettings>,
+    scratch: Local<'s, selection::QueueRebuildScratch>,
+}
+
+#[derive(SystemParam)]
 pub(super) struct ChunkStreamingQueues<'w> {
     remesh: ResMut<'w, ChunkRemeshQueue>,
     fluid: ResMut<'w, PendingFluidUpdates>,
@@ -123,16 +129,15 @@ pub(super) fn stream_chunks(
     content: ChunkContent,
     mut renderer: ChunkRenderer,
     player: Single<&Transform, With<GameplayCamera>>,
-    render_distance: Res<RenderDistanceSettings>,
+    mut selection: ChunkStreamingSelection,
     mut work: ChunkStreamingWork,
     mut queues: ChunkStreamingQueues,
-    mut selection_scratch: Local<selection::QueueRebuildScratch>,
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = chunk_coord_from_position(feet_position);
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
-    let horizontal_radius = render_distance.chunks();
-    let vertical_radius = render_distance.vertical_chunks();
+    let horizontal_radius = selection.render_distance.chunks();
+    let vertical_radius = selection.render_distance.vertical_chunks();
 
     if work.state.center != Some(center)
         || work.state.horizontal_radius != horizontal_radius
@@ -151,7 +156,7 @@ pub(super) fn stream_chunks(
             center,
             horizontal_radius,
             vertical_radius,
-            &mut selection_scratch,
+            &mut selection.scratch,
             &rebuild_context,
         );
     }
