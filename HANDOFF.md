@@ -2,7 +2,7 @@
 
 Repo: `sarakborges/mineclone`  
 Branch de trabalho: `develop`  
-Stack: Rust + Bevy 0.19.0-dev
+Stack: Rust + Bevy 0.19.1 (conforme `Cargo.toml`)
 
 ## Fonte canônica e regras de trabalho
 
@@ -60,24 +60,37 @@ Roda em push para `develop`/`main` e em pull requests.
 
 # Estado atual
 
-Último HEAD de código/version:
+Último commit de código/version (commits posteriores podem atualizar apenas este handoff):
 
-`8791150de82518bc32a3b66efb06c78a97d0c90b`
+`d2311164a9421c2841c44873fa3769dc2d3e6f48`
 
-Commit: `Make block targeting change driven`  
-`VERSION`: `0.14.5`
+Commit: `Avoid redundant hotbar visual writes`
+
+`VERSION`: `0.14.13`
+
+Na retomada, `develop` já estava em `183bcab1be268bcc9511e7e06d9406ade8b63bf0` / `0.14.12`, embora este handoff ainda descrevesse `0.14.5`. Os blocos abaixo foram conferidos no código e no histórico antes de continuar.
 
 Commits recentes relevantes:
 
 - `fc983fbefe3077bfec77c5223cb39322e5f70fb1` — `0.14.3`, inventory hint passa a herdar visibilidade do Player HUD; CI verde.
 - `b8159597991911bf5bc2587deb4597ece217fd0b` — `0.14.4`, reutiliza scratch do unload e pré-aloca buffers de integração/spawn de mesh; CI verde.
 - `8791150de82518bc32a3b66efb06c78a97d0c90b` — `0.14.5`, targeting de bloco passa a ser change-driven; CI verde.
+- `fefe47d` + `cab6ae5` — `0.14.6`, consumers de targeting usam snapshot derivado; ajuste de visibilidade interna do tipo.
+- `74893d1` + `7336ff9` — `0.14.7`, evita escritas redundantes no ambiente/estrelas; ajuste de visibilidade interna do snapshot.
+- `c74fdf4` — `0.14.8`, reutiliza scratch do solver de iluminação dinâmica.
+- `5d61e01` — `0.14.9`, corrige a validação do solver de iluminação.
+- `a33f409` — `0.14.10`, scheduling do ambiente passa a usar run conditions específicas.
+- `695de53` — `0.14.11`, sincroniza apresentação de nuvens também quando novas entidades entram em Gameplay.
+- `183bcab` — `0.14.12`, iluminação ociosa e diagnósticos ficam atrás de run conditions; CI verde.
+- `d231116` — `0.14.13`, evita dirty writes de materiais e bordas/fundos da hotbar.
 
 ## CI atual
 
 - `0.14.3` / run `35010612188`: Clippy **success**, `cargo check` **success**.
 - `0.14.4` / run `35011640625`: Clippy **success**, `cargo check` **success**.
 - `0.14.5` / run `35012542969`: Clippy **success**, `cargo check` **success**.
+- `0.14.12` / run `35018588468`: workflow **success** no HEAD conferido na retomada.
+- `0.14.13`: revisão estática e `git diff --check` concluídos; CI aguardando push e resultado.
 - `cargo test` somente sob pedido explícito.
 
 ---
@@ -153,15 +166,44 @@ O hint já era filho do Player HUD, mas `Visibility::Visible` sobrescrevia a her
 - O cache é resetado em cada `OnEnter(GameState::Gameplay)`; não atravessa mundos semanticamente.
 - `TargetedBlock` continua sendo o único owner autoritativo do hit.
 
+## 0.14.6 — consumers de targeting
+
+- Highlight e placement preview usam `BlockTargetingVisualSnapshot`, derivado de hit, item/slot, posição do player e revisão de blocos.
+- Mudanças de definições e de orientação continuam invalidando os consumers apropriados.
+- `TargetedBlock` continua como único owner do hit; o snapshot não é estado autoritativo paralelo.
+
+## 0.14.7 / 0.14.10 / 0.14.11 — ambiente e sky layers
+
+- Estrelas guardam snapshot visual e identidade/posição da câmera; posição só é reescrita quando muda, e a orientação é definida no spawn.
+- Cor/alpha de materiais, iluminação, céu, fog, cascades e celestial bodies evitam escritas idempotentes nos caminhos revisados.
+- Run conditions específicas evitam executar sistemas de ambiente sem inputs relevantes alterados.
+- Nuvens separam apresentação (cor/visibilidade) de posição animada; `Added<CloudPart>` garante sincronização da apresentação ao entrar em Gameplay.
+
+## 0.14.8 / 0.14.9 / 0.14.12 — iluminação e diagnósticos
+
+- `LightingContext` recicla colunas e buffers entre batches; cada batch limpa os dados derivados antes de reutilizar a capacidade.
+- `LightingRegistries` agrupa as definições do solver sem ampliar seu domínio.
+- `process_dynamic_lighting` só roda quando `PendingLightingUpdates` tem trabalho.
+- Diagnósticos de assets e de mesh allocator só executam seus scans nos intervalos já definidos.
+
+## 0.14.13 — hotbar sem dirty writes redundantes
+
+- `BlockIconMaterial::has_tint` compara a cor já aplicada no formato linear usado pelo material.
+- A hotbar compara tint e orientação antes de pedir acesso mutável ao asset; andar ou trocar seleção com resultado visual igual não emite atualização de material nesse caminho.
+- Mudanças de orientação ou definição de bloco continuam atualizando texturas; uma tint realmente diferente continua sendo aplicada.
+- Ícones recém-criados continuam passando pelo refresh via `is_added()`; nenhum novo cache persistente foi criado.
+- Fundos/bordas de slots só são escritos quando a cor resultante muda, e o snapshot de orientação só muda com a orientação.
+- Sem medição de FPS ou validação visual/runtime nesta sessão; não interpretar a revisão estática ou o CI como confirmação de ganho de FPS.
+
 ---
 
 # Próximos passos
 
 Se nenhum runtime error/warning tiver prioridade:
 
-1. Tornar consumers de targeting (`highlight` e placement preview) change-driven usando snapshot derivado de hit/item/slot/player/block revision, sem criar segundo owner.
-2. Revisar estrelas: posição das 96 estrelas depende da câmera, mas hoje os `Transform`s são reescritos em todo tick do day/night; material também pode ser marcado mutável com cor/alpha idênticos em fases estáveis.
-3. Continuar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes.
+1. Conferir o resultado do CI da `0.14.13` e priorizar qualquer erro/warning real antes do próximo refactor.
+2. Próximo ponto concreto de auditoria: `src/hud/inventory/sync.rs`, onde posição do cursor e estilos ainda escrevem `Node`, `BackgroundColor` e `BorderColor` sem comparar o resultado. Preservar change detection até a mutação real e reutilizar os primitives de `src/ui` quando houver invariant compartilhado.
+3. Continuar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes. Targeting consumers, estrelas e o bloco da hotbar acima já foram tratados; não repetir esses refactors sem evidência nova.
 4. Revisar integração/spawn de mesh apenas se houver ganho estrutural real sem lifecycle parcial por submesh.
 5. Revisar rebuild de seleção somente com ganho claro; não duplicar geração de volume para eliminar sort pequeno.
 6. Manter `notify_loaded_chunk_neighbors` conservador até existir metadata suficiente para provar otimização segura.
