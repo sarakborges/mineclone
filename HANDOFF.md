@@ -84,11 +84,11 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`64f5bd60559f5f335241a6e8b5204b98d387ac30`
+`c8ba65e16910174ebefc16ce5ffe358adfa3bc4f`
 
-Commit: `Reuse surface light across mesh faces`
+Commit: `Reuse voxel samples in lighting propagation`
 
-`VERSION`: `0.12.53`
+`VERSION`: `0.12.54`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever, porque podem ter avançado.
 
@@ -216,6 +216,12 @@ A auditoria arquitetural foi reiniciada a partir de `0.12.5`/`0.12.8` e segue at
 - A block light do voxel-fonte é lida uma vez do `VoxelChunk` já disponível e reutilizada por todas as faces daquele voxel.
 - AO, amostras do neighborhood, block-light interpolation e escolha de diagonal continuam com a mesma semântica.
 - A auditoria confirmou que um split ingênuo de “lighting-only attributes” não é seguro: block light participa de `should_flip_diagonal` quando AO empata, então mudança de iluminação pode alterar os índices da malha.
+
+### 0.12.54 — samples reutilizados na propagação de iluminação
+- Cada voxel retirado da `LightingQueue` resolve posição/chunk uma vez via `VoxelWorld::sample_at`, reutilizando `cell`, `fluid` e luz atual para loaded-state, dampening, emissão e comparação.
+- `medium_dampening_for_cells` e `block_emission_for_cell` recebem o sample já existente em vez de reler a mesma posição.
+- Em voxels não-opacos, as seis luzes cardinais são lidas uma vez e compartilhadas entre propagação de skylight e block light: 12 leituras vizinhas -> 6.
+- Voxels que bloqueiam luz continuam retornando antes de qualquer leitura de luz vizinha.
 
 ---
 
