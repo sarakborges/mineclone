@@ -63,11 +63,11 @@ Roda em push para `develop`/`main` e em pull requests.
 
 Base do bloco atual:
 
-`6ce857b67b18434c3c991c5c5ea9384917e92b39`
+`e5e537fa4310ce5fbbf5b05f055ac9dd85497ece`
 
-Bloco: `Reuse built mesh buffers during integration`
+Bloco: `Reuse remesh dispatch scratch buffer`
 
-`VERSION`: `0.14.17`
+`VERSION`: `0.14.20`
 
 Na retomada, `develop` já estava em `183bcab1be268bcc9511e7e06d9406ade8b63bf0` / `0.14.12`, embora este handoff ainda descrevesse `0.14.5`. Os blocos abaixo foram conferidos no código e no histórico antes de continuar.
 
@@ -84,6 +84,11 @@ Commits recentes relevantes:
 - `695de53` — `0.14.11`, sincroniza apresentação de nuvens também quando novas entidades entram em Gameplay.
 - `183bcab` — `0.14.12`, iluminação ociosa e diagnósticos ficam atrás de run conditions; CI verde.
 - `d231116` — `0.14.13`, evita dirty writes de materiais e bordas/fundos da hotbar.
+- `6ce857b` — `0.14.16`, HUD/transição ociosos; revelou mismatch de tipo no cache do relógio.
+- `52463eb` — `0.14.17`, integração in-place de meshes consome buffers originais no caminho comum.
+- `88dc6a6` — `0.14.18`, corrige o tipo do cache de dia; CI verde.
+- `e5e537f` — `0.14.19`, recicla scratch da seleção/streaming.
+- `127b5df` — `0.14.20`, recicla scratch do dispatcher de remesh.
 
 ## CI atual
 
@@ -91,12 +96,15 @@ Commits recentes relevantes:
 - `0.14.4` / run `35011640625`: Clippy **success**, `cargo check` **success**.
 - `0.14.5` / run `35012542969`: Clippy **success**, `cargo check` **success**.
 - `0.14.12` / run `35018588468`: workflow **success** no HEAD conferido na retomada.
-- `0.14.13` / [run `35019877410`](https://github.com/sarakborges/mineclone/actions/runs/35019877410), commit `f692534`: Clippy **success**, `cargo check` **success**. Revisão estática e `git diff --check` também concluídos. O commit seguinte apenas registra este resultado no handoff.
+- `0.14.13` / run `35019877410`, commit `f692534`: Clippy **success**, `cargo check` **success**.
 - `cargo test` somente sob pedido explícito.
-- `0.14.14` / [run `35021097252`](https://github.com/sarakborges/mineclone/actions/runs/35021097252), commit `5471729`: Clippy **success**, `cargo check` **success**.
-- `0.14.15` / [run `35021896289`](https://github.com/sarakborges/mineclone/actions/runs/35021896289), commit `868098e`: Clippy **success**, `cargo check` **success**.
-- `0.14.16` / run `35024201403`: em execução na última consulta; Clippy em andamento.
-- `0.14.17`: CI pendente para o bloco de integração de meshes.
+- `0.14.14` / run `35021097252`, commit `5471729`: Clippy **success**, `cargo check` **success**.
+- `0.14.15` / run `35021896289`, commit `868098e`: Clippy **success**, `cargo check` **success**.
+- `0.14.16` / run `35024201403`: **failure** no Clippy porque `TimeHudText.presented_time` declarou o dia como `u32`, enquanto `WorldClock.day` é `u64`; `cargo check` foi pulado após a falha.
+- `0.14.17` / run `35024560448`: **failure** pelo mesmo erro de tipo herdado de `0.14.16`; o log não revelou erro independente no refactor de mesh, mas esse run não conta como validação do bloco.
+- `0.14.18` / run `35024824691`, commit `88dc6a6`: Clippy **success**, `cargo check` **success**.
+- `0.14.19` / run `35025400000`: em execução na última consulta.
+- `0.14.20` / run `35025581954`: em execução na última consulta.
 
 ---
 
@@ -149,6 +157,12 @@ Commits recentes relevantes:
 ## 0.14.3 — inventory hint vazando no pause
 
 O hint já era filho do Player HUD, mas `Visibility::Visible` sobrescrevia a herança do parent. Agora usa `Inherited` quando habilitado e `Hidden` quando desabilitado. A confirmação visual definitiva depende do runtime do usuário.
+
+## 0.14.18 — tipo do cache do relógio
+
+- O CI de `0.14.16` revelou que `WorldClock.day` é `u64`, mas `TimeHudText.presented_time` havia sido declarado como `(u32, u32, u32)`.
+- O snapshot agora usa `(u64, u32, u32)`, alinhado ao owner real do relógio e sem cast/truncamento.
+- Não há mudança de semântica visual; é correção de compilação do cache introduzido em `0.14.16`.
 
 ---
 
@@ -242,14 +256,34 @@ O hint já era filho do Player HUD, mas `Visibility::Visible` sobrescrevia a her
 
 ---
 
+## 0.14.19 — scratch de seleção/streaming reutilizado
+
+- `QueueRebuildScratch` mantém `desired`, `pending` e `retired` entre rebuilds do streaming em `Local`, sem transformar estado derivado em resource autoritativo.
+- O volume local é inserido diretamente no `HashSet`; o `Vec` previamente criado e ordenado por distância antes de virar set foi removido porque essa ordem era descartada.
+- Os dois conjuntos geracionais são rotacionados por `swap`, preservando a mesma semântica: novo desired, desired anterior retido por uma geração e retained anterior elegível para retirement.
+- `pending` mantém a mesma chave de prioridade, mas sua capacidade é reaproveitada; `DeduplicatedQueue::clear` permite reutilizar a fila sem descartar alocações internas.
+- A coleta de retired reutiliza `Vec` e mantém a ordenação far-to-near existente.
+- Membership, envelope vertical/surface, preload, cache pruning e prioridades não foram alterados.
+
+---
+
+## 0.14.20 — scratch do dispatcher de remesh reutilizado
+
+- `process_chunk_remesh_queue` mantém o buffer `deferred` como `Local<Vec<(IVec3, ChunkRemeshTaskKind)>>`.
+- `dispatch_remesh_tasks` limpa o buffer antes do uso e o drena no final, preservando sua capacidade entre frames.
+- A requeue continua em ordem reversa exatamente como antes; prioridade Lighting -> Geometry -> Fluid, budgets, limite de tasks e comportamento quando scheduling falha permanecem iguais.
+
+---
+
 # Próximos passos
 
 Se nenhum runtime error/warning tiver prioridade:
 
-1. Continuar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes. Targeting consumers, estrelas, hotbar, HUD/UI e integração in-place de meshes já foram tratados; não repetir esses refactors sem evidência nova.
-2. Seleção: reaproveitar buffers de desired/pending/retired e da fila sem repetir geração de volume nem mudar prioridades; `dispatch_remesh_tasks` também tem scratch temporário reaproveitável.
+1. Confirmar os CIs de `0.14.19` e `0.14.20`; qualquer erro/warning novo interrompe o roadmap até ser corrigido.
+2. Continuar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes. Targeting consumers, estrelas, hotbar, HUD/UI, integração in-place de meshes, seleção e scratch de remesh já foram tratados; não repetir esses refactors sem evidência nova.
 3. Manter `notify_loaded_chunk_neighbors` conservador até existir metadata suficiente para provar otimização segura.
-4. Quando o usuário solicitar, rodar `cargo test` manualmente.
+4. Procurar próximos hot paths com evidência no código antes de introduzir caches novos; preferir reuse/run conditions sobre estado derivado persistente.
+5. Quando o usuário solicitar, rodar `cargo test` manualmente.
 
 # Performance direction
 
