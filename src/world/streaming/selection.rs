@@ -6,7 +6,7 @@ use crate::{
     voxel::{chunk::CHUNK_SIZE, coordinates::chunks_for_block_extent},
     world::{
         generation_region::generation_region_coord,
-        render_distance::chunk_coords_in_volume,
+        render_distance::chunk_is_in_volume,
     },
 };
 
@@ -23,11 +23,19 @@ const PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS: i32 = 3;
 const IMMEDIATE_PLAYER_PRIORITY_RADIUS_CHUNKS: i32 = 1;
 const SURFACE_SUPPORT_NEIGHBORS: [IVec2; 4] = [IVec2::X, IVec2::NEG_X, IVec2::Y, IVec2::NEG_Y];
 
+#[derive(Default)]
+pub(super) struct QueueRebuildScratch {
+    desired: HashSet<IVec3>,
+    pending: Vec<IVec3>,
+    retired: Vec<IVec3>,
+}
+
 pub(super) fn rebuild_queue(
     streaming: &mut ChunkStreamingState,
     center: IVec3,
     horizontal_radius: i32,
     vertical_radius: i32,
+    scratch: &mut QueueRebuildScratch,
     context: &QueueRebuildContext<'_>,
 ) {
     let prune_caches = should_prune_streaming_caches(
@@ -48,7 +56,9 @@ pub(super) fn rebuild_queue(
     if prune_caches {
         prune_surface_cache(&mut streaming.surface_ranges, center.xz(), preload_radius);
     }
-    let desired = desired_chunk_coords(
+
+    rebuild_desired_chunk_coords(
+        &mut scratch.desired,
         center,
         preload_radius,
         vertical_radius,
@@ -57,15 +67,18 @@ pub(super) fn rebuild_queue(
         &mut streaming.surface_ranges,
     );
     if prune_caches {
-        context.feature_fields.retain_for_chunks(&desired);
+        context.feature_fields.retain_for_chunks(&scratch.desired);
     }
-    let mut pending = desired
-        .iter()
-        .copied()
-        .filter(|coord| !context.render_pool.contains(*coord))
-        .collect::<Vec<_>>();
 
-    pending.sort_by_cached_key(|coord| {
+    scratch.pending.clear();
+    scratch.pending.extend(
+        scratch
+            .desired
+            .iter()
+            .copied()
+            .filter(|coord| !context.render_pool.contains(*coord)),
+    );
+    scratch.pending.sort_by_cached_key(|coord| {
         pending_priority(
             *coord,
             center,
@@ -74,19 +87,27 @@ pub(super) fn rebuild_queue(
         )
     });
 
-    let previous_desired = std::mem::replace(&mut streaming.desired, desired);
-    let previous_retained = std::mem::replace(&mut streaming.retained, previous_desired);
+    collect_retired_chunk_coords(
+        &streaming.retained,
+        &scratch.desired,
+        &streaming.desired,
+        center,
+        &mut scratch.retired,
+    );
+
+    std::mem::swap(&mut streaming.retained, &mut scratch.desired);
+    std::mem::swap(&mut streaming.desired, &mut streaming.retained);
     streaming.center = Some(center);
     streaming.horizontal_radius = horizontal_radius;
     streaming.vertical_radius = vertical_radius;
-    streaming.pending = pending.into();
 
-    for coord in retired_chunk_coords(
-        previous_retained,
-        &streaming.desired,
-        &streaming.retained,
-        center,
-    ) {
+    streaming.pending.clear();
+    streaming.pending.reserve(scratch.pending.len());
+    for coord in scratch.pending.drain(..) {
+        streaming.pending.enqueue(coord);
+    }
+
+    for coord in scratch.retired.drain(..) {
         streaming.enqueue_retired(coord);
     }
 }
@@ -104,18 +125,21 @@ fn should_prune_streaming_caches(
         || previous_vertical_radius != vertical_radius
 }
 
-fn retired_chunk_coords(
-    previous_retained: HashSet<IVec3>,
+fn collect_retired_chunk_coords(
+    previous_retained: &HashSet<IVec3>,
     desired: &HashSet<IVec3>,
     retained: &HashSet<IVec3>,
     center: IVec3,
-) -> Vec<IVec3> {
-    let mut retired = previous_retained
-        .into_iter()
-        .filter(|coord| !desired.contains(coord) && !retained.contains(coord))
-        .collect::<Vec<_>>();
+    retired: &mut Vec<IVec3>,
+) {
+    retired.clear();
+    retired.extend(
+        previous_retained
+            .iter()
+            .copied()
+            .filter(|coord| !desired.contains(coord) && !retained.contains(coord)),
+    );
     retired.sort_by_key(|coord| -(*coord - center).length_squared());
-    retired
 }
 
 fn pending_priority(
@@ -170,18 +194,40 @@ fn pending_priority(
     )
 }
 
-fn desired_chunk_coords(
+fn rebuild_desired_chunk_coords(
+    desired: &mut HashSet<IVec3>,
     center: IVec3,
     horizontal_radius: i32,
     vertical_radius: i32,
     structure_chunk_allowance: i32,
     context: &QueueRebuildContext<'_>,
     surface_ranges: &mut HashMap<IVec2, (i32, i32)>,
-) -> HashSet<IVec3> {
+) {
+    desired.clear();
+
     let local_radius = horizontal_radius.min(PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS);
-    let mut desired = chunk_coords_in_volume(center, local_radius, vertical_radius)
-        .into_iter()
-        .collect::<HashSet<_>>();
+    assert!(center.y >= 0, "streaming center Y cannot be negative");
+    assert!(
+        local_radius >= 0,
+        "horizontal streaming radius cannot be negative"
+    );
+    assert!(
+        vertical_radius >= 0,
+        "vertical streaming radius cannot be negative"
+    );
+
+    let minimum_local_y = (center.y - vertical_radius).max(0);
+    let maximum_local_y = center.y + vertical_radius;
+    for y in minimum_local_y..=maximum_local_y {
+        for z in -local_radius..=local_radius {
+            for x in -local_radius..=local_radius {
+                let coord = IVec3::new(center.x + x, y, center.z + z);
+                if chunk_is_in_volume(center, coord, local_radius, vertical_radius) {
+                    desired.insert(coord);
+                }
+            }
+        }
+    }
 
     for z in -horizontal_radius..=horizontal_radius {
         for x in -horizontal_radius..=horizontal_radius {
@@ -235,8 +281,6 @@ fn desired_chunk_coords(
             }
         }
     }
-
-    desired
 }
 
 #[cfg(test)]
@@ -252,11 +296,17 @@ mod tests {
         let previous_retained = HashSet::from([far, nearer, still_desired, still_retained]);
         let desired = HashSet::from([still_desired]);
         let retained = HashSet::from([still_retained]);
+        let mut retired = Vec::new();
 
-        assert_eq!(
-            retired_chunk_coords(previous_retained, &desired, &retained, IVec3::ZERO),
-            vec![far, nearer]
+        collect_retired_chunk_coords(
+            &previous_retained,
+            &desired,
+            &retained,
+            IVec3::ZERO,
+            &mut retired,
         );
+
+        assert_eq!(retired, vec![far, nearer]);
     }
 
     #[test]

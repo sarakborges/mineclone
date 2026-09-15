@@ -126,6 +126,7 @@ pub(super) fn stream_chunks(
     render_distance: Res<RenderDistanceSettings>,
     mut work: ChunkStreamingWork,
     mut queues: ChunkStreamingQueues,
+    mut selection_scratch: Local<selection::QueueRebuildScratch>,
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let player_chunk = chunk_coord_from_position(feet_position);
@@ -150,6 +151,7 @@ pub(super) fn stream_chunks(
             center,
             horizontal_radius,
             vertical_radius,
+            &mut selection_scratch,
             &rebuild_context,
         );
     }

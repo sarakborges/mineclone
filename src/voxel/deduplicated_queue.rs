@@ -52,6 +52,15 @@ where
         self.queued.reserve(additional);
     }
 
+    pub(crate) fn clear(&mut self) {
+        let had_queued_values = !self.queued.is_empty();
+        self.pending.clear();
+        self.queued.clear();
+        if had_queued_values {
+            self.bump_revision();
+        }
+    }
+
     pub(crate) fn enqueue(&mut self, value: T) -> bool {
         if self.queued.contains_key(&value) {
             return false;
@@ -214,6 +223,7 @@ mod tests {
 
         assert!(!queue.contains(1));
         queue.enqueue(1);
+        assert_eq!(queue.len(), 1);
         assert!(queue.contains(1));
         assert_eq!(queue.pop(), Some(1));
         assert!(!queue.contains(1));
@@ -272,5 +282,19 @@ mod tests {
 
         assert_eq!(queue.pop(), Some(1));
         assert_ne!(queue.revision(), after_promotion);
+    }
+
+    #[test]
+    fn clear_reuses_queue_for_new_values() {
+        let mut queue = DeduplicatedQueue::from(vec![1, 2]);
+        let before_clear = queue.revision();
+
+        queue.clear();
+
+        assert_eq!(queue.len(), 0);
+        assert_ne!(queue.revision(), before_clear);
+        queue.enqueue(3);
+        assert_eq!(queue.pop(), Some(3));
+        assert_eq!(queue.pop(), None);
     }
 }
