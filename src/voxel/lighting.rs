@@ -103,40 +103,38 @@ pub(crate) fn seed_chunk_direct_lighting(
         .unwrap_or(chunk_top);
     debug_assert!(highest_loaded_y >= chunk_top);
 
-    for local_z in 0..size {
-        for local_x in 0..size {
-            let world_x = origin.x + local_x;
-            let world_z = origin.z + local_z;
-            let mut sky = VoxelLight::MAX_LEVEL;
+    let mut sky_by_column = [VoxelLight::MAX_LEVEL; CHUNK_SIZE * CHUNK_SIZE];
+    for local_z in 0..CHUNK_SIZE {
+        for local_x in 0..CHUNK_SIZE {
+            let world_x = origin.x + local_x as i32;
+            let world_z = origin.z + local_z as i32;
+            let sky = &mut sky_by_column[local_x + local_z * CHUNK_SIZE];
 
             for y in ((chunk_top + 1)..=highest_loaded_y).rev() {
-                if sky == 0 {
+                if *sky == 0 {
                     break;
                 }
-                sky = sky.saturating_sub(medium_dampening(
+                *sky = sky.saturating_sub(medium_dampening(
                     world,
                     blocks,
                     fluids,
                     IVec3::new(world_x, y, world_z),
                 ));
             }
-
-            for local_y in (0..size).rev() {
-                let position = IVec3::new(world_x, origin.y + local_y, world_z);
-                let (cell, fluid, _) = world
-                    .sample_at(position)
-                    .expect("seeded chunk voxels must be loaded");
-
-                if sky > 0 {
-                    sky = sky.saturating_sub(medium_dampening_for_cells(
-                        cell, fluid, blocks, fluids,
-                    ));
-                }
-                let emitted = block_emission_for_cell(cell, blocks, secondary_properties);
-                world.set_light_at(position, VoxelLight::new_hsi(sky, emitted));
-            }
         }
     }
+
+    let seeded = world.rebuild_chunk_light(coord, |x, _, z, cell, fluid| {
+        let sky = &mut sky_by_column[x + z * CHUNK_SIZE];
+        if *sky > 0 {
+            *sky = sky.saturating_sub(medium_dampening_for_cells(
+                cell, fluid, blocks, fluids,
+            ));
+        }
+        let emitted = block_emission_for_cell(cell, blocks, secondary_properties);
+        VoxelLight::new_hsi(*sky, emitted)
+    });
+    debug_assert!(seeded, "seeded chunk must be loaded: {coord:?}");
 }
 
 pub(crate) fn process_pending_lighting(

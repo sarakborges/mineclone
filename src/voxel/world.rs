@@ -152,6 +152,28 @@ impl VoxelWorld {
         )
     }
 
+    pub(crate) fn rebuild_chunk_light(
+        &mut self,
+        coord: IVec3,
+        mut light_at: impl FnMut(usize, usize, usize, Option<VoxelCell>, Option<FluidCell>) -> VoxelLight,
+    ) -> bool {
+        let Some(chunk) = self.chunks.get_mut(&coord) else {
+            return false;
+        };
+
+        for y in (0..CHUNK_SIZE).rev() {
+            for z in 0..CHUNK_SIZE {
+                for x in 0..CHUNK_SIZE {
+                    let cell = chunk.cell_at(x as i32, y as i32, z as i32);
+                    let fluid = chunk.fluid_at(x as i32, y as i32, z as i32);
+                    let light = light_at(x, y, z, cell, fluid);
+                    chunk.set_light(x, y, z, light);
+                }
+            }
+        }
+        true
+    }
+
     pub(crate) fn clear_chunk_light(&mut self, coord: IVec3) -> bool {
         let Some(chunk) = self.chunks.get_mut(&coord) else {
             return false;
