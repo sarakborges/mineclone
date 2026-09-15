@@ -11,7 +11,7 @@ use crate::{
     },
     voxel::{
         cell::VoxelCell,
-        chunk::{CHUNK_SIZE, VoxelChunk},
+        chunk::{CHUNK_SIZE, VoxelChunk, VoxelChunkContentMut},
         texture_rotation::TextureRotation,
     },
 };
@@ -24,30 +24,32 @@ pub(super) fn rasterize_structures(
     chunk_origin: IVec3,
     context: &ChunkGenerationContext<'_>,
 ) {
-    for biome_structure in context.biomes.structure_placements() {
-        let structure = context
-            .structures
-            .get(&biome_structure.structure_id)
-            .unwrap_or_else(|| {
-                panic!(
-                    "biome {} references missing structure: {}",
-                    biome_structure.biome_id, biome_structure.structure_id
-                )
-            });
+    chunk.edit_content(|chunk| {
+        for biome_structure in context.biomes.structure_placements() {
+            let structure = context
+                .structures
+                .get(&biome_structure.structure_id)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "biome {} references missing structure: {}",
+                        biome_structure.biome_id, biome_structure.structure_id
+                    )
+                });
 
-        rasterize_structure_candidates(
-            chunk,
-            chunk_origin,
-            context,
-            &biome_structure.biome_id,
-            structure,
-            biome_structure.placement,
-        );
-    }
+            rasterize_structure_candidates(
+                chunk,
+                chunk_origin,
+                context,
+                &biome_structure.biome_id,
+                structure,
+                biome_structure.placement,
+            );
+        }
+    });
 }
 
 fn rasterize_structure_candidates(
-    chunk: &mut VoxelChunk,
+    chunk: &mut VoxelChunkContentMut<'_>,
     chunk_origin: IVec3,
     context: &ChunkGenerationContext<'_>,
     biome_id: &str,
@@ -113,7 +115,7 @@ fn rasterize_structure_candidates(
 }
 
 fn rasterize_structure(
-    chunk: &mut VoxelChunk,
+    chunk: &mut VoxelChunkContentMut<'_>,
     chunk_origin: IVec3,
     blocks: &BlockRegistry,
     structure: &StructureDefinition,

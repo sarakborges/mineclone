@@ -97,62 +97,65 @@ impl ArchivedChunk {
 
     pub fn restore(&self) -> VoxelChunk {
         let mut chunk = VoxelChunk::empty();
-        let mut archived_cells = self.cells.iter();
 
-        for index in 0..CHUNK_VOLUME {
-            let occupied = self.occupancy[index / u64::BITS as usize]
-                & (1_u64 << (index % u64::BITS as usize))
-                != 0;
-            if !occupied {
-                continue;
+        chunk.edit_content(|chunk| {
+            let mut archived_cells = self.cells.iter();
+
+            for index in 0..CHUNK_VOLUME {
+                let occupied = self.occupancy[index / u64::BITS as usize]
+                    & (1_u64 << (index % u64::BITS as usize))
+                    != 0;
+                if !occupied {
+                    continue;
+                }
+
+                let archived = archived_cells
+                    .next()
+                    .expect("archived chunk occupancy should match archived cells");
+                let block_id = self.palette[archived.palette_index as usize];
+                let (x, y, z) = coordinates(index);
+                chunk.set_block(
+                    x,
+                    y,
+                    z,
+                    Some(
+                        VoxelCell::oriented(
+                            block_id,
+                            TextureRotation::from_quarter_turn(archived.rotation),
+                            BlockOrientation::from_index(archived.orientation),
+                        )
+                        .with_secondary_properties(archived.secondary_properties),
+                    ),
+                );
             }
 
-            let archived = archived_cells
-                .next()
-                .expect("archived chunk occupancy should match archived cells");
-            let block_id = self.palette[archived.palette_index as usize];
-            let (x, y, z) = coordinates(index);
-            chunk.set_block(
-                x,
-                y,
-                z,
-                Some(
-                    VoxelCell::oriented(
-                        block_id,
-                        TextureRotation::from_quarter_turn(archived.rotation),
-                        BlockOrientation::from_index(archived.orientation),
-                    )
-                    .with_secondary_properties(archived.secondary_properties),
-                ),
-            );
-        }
+            let mut archived_fluids = self.fluid_cells.iter();
 
-        let mut archived_fluids = self.fluid_cells.iter();
+            for index in 0..CHUNK_VOLUME {
+                let occupied = self.fluid_occupancy[index / u64::BITS as usize]
+                    & (1_u64 << (index % u64::BITS as usize))
+                    != 0;
+                if !occupied {
+                    continue;
+                }
 
-        for index in 0..CHUNK_VOLUME {
-            let occupied = self.fluid_occupancy[index / u64::BITS as usize]
-                & (1_u64 << (index % u64::BITS as usize))
-                != 0;
-            if !occupied {
-                continue;
+                let archived = archived_fluids
+                    .next()
+                    .expect("archived chunk fluid occupancy should match archived fluid cells");
+                let (x, y, z) = coordinates(index);
+                chunk.set_fluid(
+                    x,
+                    y,
+                    z,
+                    Some(FluidCell::with_state(
+                        archived.fluid_id,
+                        archived.level,
+                        archived.source,
+                        archived.spread_distance,
+                    )),
+                );
             }
-
-            let archived = archived_fluids
-                .next()
-                .expect("archived chunk fluid occupancy should match archived fluid cells");
-            let (x, y, z) = coordinates(index);
-            chunk.set_fluid(
-                x,
-                y,
-                z,
-                Some(FluidCell::with_state(
-                    archived.fluid_id,
-                    archived.level,
-                    archived.source,
-                    archived.spread_distance,
-                )),
-            );
-        }
+        });
 
         chunk
     }
