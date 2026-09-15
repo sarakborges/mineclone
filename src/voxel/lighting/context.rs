@@ -12,8 +12,58 @@ use super::medium::medium_dampening;
 
 #[derive(Default)]
 pub(super) struct LightingContext {
-    direct_sky_levels_by_column: HashMap<IVec2, Vec<u8>>,
+    direct_sky_columns: HashMap<IVec2, DirectSkyColumn>,
     highest_loaded_y_by_chunk_column: HashMap<IVec2, Option<i32>>,
+}
+
+struct DirectSkyColumn {
+    highest_y: i32,
+    levels_from_top: Vec<u8>,
+}
+
+impl DirectSkyColumn {
+    fn new(highest_y: i32) -> Self {
+        Self {
+            highest_y,
+            levels_from_top: Vec::new(),
+        }
+    }
+
+    fn level_at(
+        &mut self,
+        world: &VoxelWorld,
+        blocks: &BlockRegistry,
+        fluids: &FluidRegistry,
+        column: IVec2,
+        y: i32,
+    ) -> u8 {
+        if y > self.highest_y {
+            return VoxelLight::MAX_LEVEL;
+        }
+
+        let target_index = (self.highest_y - y) as usize;
+        if target_index >= self.levels_from_top.len() {
+            let mut level = self
+                .levels_from_top
+                .last()
+                .copied()
+                .unwrap_or(VoxelLight::MAX_LEVEL);
+            let mut next_y = self.highest_y - self.levels_from_top.len() as i32;
+
+            while next_y >= y {
+                level = level.saturating_sub(medium_dampening(
+                    world,
+                    blocks,
+                    fluids,
+                    IVec3::new(column.x, next_y, column.y),
+                ));
+                self.levels_from_top.push(level);
+                next_y -= 1;
+            }
+        }
+
+        self.levels_from_top[target_index]
+    }
 }
 
 impl LightingContext {
@@ -22,7 +72,7 @@ impl LightingContext {
         world: &VoxelWorld,
         blocks: &BlockRegistry,
         fluids: &FluidRegistry,
-        secondary_properties: &SecondaryPropertyRegistry,
+        _secondary_properties: &SecondaryPropertyRegistry,
         position: IVec3,
     ) -> u8 {
         if position.y < 0 {
@@ -30,24 +80,17 @@ impl LightingContext {
         }
 
         let column = IVec2::new(position.x, position.z);
-        if !self.direct_sky_levels_by_column.contains_key(&column) {
-            let highest_loaded_y = self.highest_loaded_y(world, position);
-            let levels = build_direct_sky_column(
-                world,
-                blocks,
-                fluids,
-                secondary_properties,
-                column,
-                highest_loaded_y,
-            );
-            self.direct_sky_levels_by_column.insert(column, levels);
+        if let Some(direct_sky) = self.direct_sky_columns.get_mut(&column) {
+            return direct_sky.level_at(world, blocks, fluids, column, position.y);
         }
 
-        self.direct_sky_levels_by_column
-            .get(&column)
-            .and_then(|levels| levels.get(position.y as usize))
-            .copied()
-            .unwrap_or(VoxelLight::MAX_LEVEL)
+        let Some(highest_y) = self.highest_loaded_y(world, position) else {
+            return VoxelLight::MAX_LEVEL;
+        };
+        let mut direct_sky = DirectSkyColumn::new(highest_y);
+        let level = direct_sky.level_at(world, blocks, fluids, column, position.y);
+        self.direct_sky_columns.insert(column, direct_sky);
+        level
     }
 
     fn highest_loaded_y(&mut self, world: &VoxelWorld, position: IVec3) -> Option<i32> {
@@ -63,27 +106,4 @@ impl LightingContext {
             .insert(chunk_column, highest);
         highest
     }
-}
-
-fn build_direct_sky_column(
-    world: &VoxelWorld,
-    blocks: &BlockRegistry,
-    fluids: &FluidRegistry,
-    _secondary_properties: &SecondaryPropertyRegistry,
-    column: IVec2,
-    highest_y: Option<i32>,
-) -> Vec<u8> {
-    let Some(highest_y) = highest_y else {
-        return Vec::new();
-    };
-    let mut levels = vec![0; highest_y as usize + 1];
-    let mut level = VoxelLight::MAX_LEVEL;
-
-    for y in (0..=highest_y).rev() {
-        let position = IVec3::new(column.x, y, column.y);
-        level = level.saturating_sub(medium_dampening(world, blocks, fluids, position));
-        levels[y as usize] = level;
-    }
-
-    levels
 }
