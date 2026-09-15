@@ -76,8 +76,9 @@ Princípios principais:
 15. Não criar abstração genérica acima de generation/mesh tasks quando o lifecycle comum já está em `ChunkTaskQueue`.
 16. Terrain/fluid/lighting remesh de background usa pipeline async; apenas remesh de geometry imediato de edição do jogador permanece síncrono.
 17. Solvers dinâmicos caros devem ter teto temporal e de quantidade quando o trabalho puder variar muito por frame.
-18. Sistemas visuais devem evitar reescrever `Transform`, `Visibility` ou assets com o mesmo valor; `Assets::get_mut` só deve ser usado quando o conteúdo do asset realmente precisa mudar.
+18. Sistemas visuais e gameplay devem evitar reescrever Components/Assets com o mesmo valor; acesso mutável pode propagar change detection ou upload desnecessário.
 19. Quando invariants permitirem, separar refresh estrutural de material/textura de refresh leve de tint/orientação/posição.
+20. Movimento com delta zero não deve adquirir mutação de `Transform` nem executar collision stepping; estado ocioso deve permanecer realmente ocioso.
 
 ---
 
@@ -85,22 +86,23 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`4a3220d443f6af296fc62d2a99ee6382c1790e21`
+`2cf90dd7f6286900a623ea29498637e754828503`
 
-Commit: `Bump version to 0.12.102`
+Commit: `Avoid idle player state mutations`
 
 Blocos recentes:
 
 - `3415295b19698c2acada803f36d16a65166ada62` — `Avoid redundant underwater HUD updates`
-- `547ddf62879370fa8dc067e82f66d5cdc067cb23` — `Bump version to 0.12.99`
+- `547ddf62879370fa8dc067e82f66d5cdc067cb23` — bump `0.12.99`
 - `6d078797d8c5b566e2b013c9d0163de4d8088181` — `Avoid redundant targeting visual updates`
-- `bf6cdf044f1327f259a874400f6637e763412013` — `Bump version to 0.12.100`
+- `bf6cdf044f1327f259a874400f6637e763412013` — bump `0.12.100`
 - `262bec7cf2fe5441e7659d002eb8b343f4e4e324` — `Make placement preview updates change driven`
-- `4702a9d4b0e6ce09e6f45f7c629ff3d1966411f3` — `Bump version to 0.12.101`
+- `4702a9d4b0e6ce09e6f45f7c629ff3d1966411f3` — bump `0.12.101`
 - `c95975361b01c11f462298a7b89e48d2e6f24bbc` — `Separate held block material and tint refresh`
-- `4a3220d443f6af296fc62d2a99ee6382c1790e21` — `Bump version to 0.12.102`
+- `4a3220d443f6af296fc62d2a99ee6382c1790e21` — bump `0.12.102`
+- `2cf90dd7f6286900a623ea29498637e754828503` — `Avoid idle player state mutations` + bump `0.12.103`
 
-`VERSION`: `0.12.102`
+`VERSION`: `0.12.103`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever código.
 
@@ -108,11 +110,10 @@ Sempre buscar HEAD/VERSION novamente antes de escrever código.
 
 Estado observado durante esta gravação:
 
-- 0.12.100 / run `34990511864`: Clippy **success**, `cargo check` **success**, testes ainda em execução na última consulta.
-- 0.12.101 / run `34990749459`: Clippy ainda em execução na última consulta; check/test pendentes.
-- 0.12.102 / run `34990965664`: enfileirado na última consulta.
+- `0.12.102` / run `34990965664`: Clippy **success**, `cargo check` **success**, `cargo test` ainda em execução na última consulta.
+- `0.12.103` / run `34992166745`: iniciado; preparação/dependências do runner em andamento na última consulta.
 
-O bloco 0.12.102 ainda não está encerrado enquanto Clippy/check/test do HEAD correspondente não estiverem verdes.
+O bloco `0.12.103` ainda não está encerrado enquanto Clippy/check/test do HEAD correspondente não estiverem verdes.
 
 ---
 
@@ -171,35 +172,22 @@ A auditoria arquitetural/performance segue ativa. O roadmap vem do canon + inspe
 - CI passou a rodar em push para `develop`; formatação deixou de ser gate.
 - Gates autoritativos são Clippy com warnings como erro, `cargo check` e `cargo test`.
 
-## 0.12.99 — underwater HUD sem dirtying contínuo
+## 0.12.99–0.12.102 — visual hot paths change-driven
 
-- Consulta do voxel do olho continua por frame porque acompanha a câmera e é O(1).
-- `Visibility` só muda ao entrar/sair da água.
-- Blend HSI/opacity e `BackgroundColor` só são recalculados ao entrar submerso ou quando os inputs de biome visuals mudam.
-- Permanecer parado/submerso não marca UI como alterada a cada frame.
+- Underwater HUD mantém a consulta O(1) do voxel do olho, mas só altera visibility/tint quando necessário.
+- Target highlight/brush ghost não reescrevem transform/visibility/material idênticos.
+- Placement preview separa material estrutural de tint/posição e usa cache de target relevante.
+- Held block separa rebuild de material/layers de orientação e tint; caminhar não reconstrói texturas da mão.
 
-## 0.12.100 — targeting highlight idempotente
+## 0.12.103 — player idle realmente ocioso
 
-- Highlight e brush ghost só escrevem `Transform`/`Visibility` quando o valor mudou.
-- Brush ghost compara `base_color` antes de pedir `Assets<StandardMaterial>::get_mut`.
-- Uso contínuo do brush não marca o mesmo material como modificado em todo frame.
-
-## 0.12.101 — placement preview change-driven
-
-- `BlockModel::set_block_id` só é chamado quando o ID realmente muda.
-- Face materials são reconstruídos apenas em troca de bloco ou mudança das definições de bloco.
-- Tint usa cache de `(block_id, xz)` e só é reaplicado quando bloco/bioma/biome field/posição horizontal relevante mudam.
-- Transform/rotation/visibility do root só são escritos quando necessário.
-- Preview sem seleção não revarre faces a cada frame depois de já estar vazio.
-
-## 0.12.102 — held block separa material, orientação e tint
-
-- `HeldBlockVisualCache` mantém célula horizontal e tint aplicado.
-- Troca de bloco ou mudança de `BlockRegistry` reconstrói materiais/layers.
-- Mudança de orientação apenas atualiza a rotação do held root.
-- Movimento entre células recalcula tint sem reconstruir textura/layers.
-- Assets de materiais só recebem novo tint quando a cor efetivamente mudou ou o material acabou de ser reconstruído.
-- Held root/face visibility e block ID deixam de ser reescritos sem mudança real.
+- `animate_viewmodel` usa estado local para não reescrever o transform base em todo frame ocioso; ao fim de uma animação/item-switch, o base é restaurado uma única vez.
+- `walk` e `move_flying` só chamam `move_axis` para eixos com velocidade diferente de zero.
+- Walking/flight velocity só são zeradas/escritas quando o valor realmente muda.
+- `update_swimming_state` só altera `SwimmingState.active` quando o estado de submersão muda.
+- Swimming só altera grounded/vertical velocity quando necessário e não chama collision stepping para delta vertical zero.
+- Gravity, quando grounded com suporte e sem jump, retorna antes de integrar gravidade e antes do `move_axis`; deixa de simular uma microqueda+colisão a cada tick parado no chão.
+- O ground support probe permanece por frame enquanto grounded para detectar remoção do suporte sem depender de cache derivado.
 
 ---
 
@@ -230,6 +218,7 @@ Não desfazer sem evidência nova:
 - Scratch containers podem preservar capacidade entre frames, mas caches derivados do conteúdo do mundo não devem sobreviver sem invalidation autoritativa.
 - Componentes/Assets não devem ser mutavelmente acessados só para regravar o mesmo valor; isso pode propagar change detection ou asset upload desnecessário.
 - Block model material/topology refresh deve ficar separado de tint/orientation refresh quando os inputs autoritativos permitem essa divisão.
+- Grounded estável com suporte não precisa integrar gravidade só para colidir e zerar a mesma velocidade no mesmo tick; o probe de suporte é o invariant necessário nesse estado.
 - Solvers dinâmicos devem preservar a semântica da frontier ao ganhar budgets temporais.
 - Archive compactado permanece preferível a guardar buffers COW brutos; restore caro é controlado por scheduling budget.
 - Formatação de Rust não é requisito de CI; não reintroduzir format gate sem pedido explícito.
@@ -241,9 +230,9 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Fechar o gate de CI do HEAD 0.12.102; corrigir qualquer falha de Clippy/check/test antes de novo bloco de código.
-2. `animate_viewmodel` ainda reescreve o transform base em todo frame ocioso. Aplicar early-out com restauração única ao terminar interaction/item-switch, preservando animação e estado base.
-3. Continuar inspeção objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos e escritas redundantes em Components/Assets.
+1. Fechar o gate de CI do HEAD `0.12.103`; corrigir qualquer falha de Clippy/check/test antes de considerar o bloco encerrado.
+2. Continuar inspeção objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos e escritas redundantes em Components/Assets.
+3. Auditar camera/cursor/interaction e demais systems do player por change detection inútil, sem eliminar polling que seja necessário para input/foco.
 4. Revisar integração/spawn de mesh apenas se houver ganho estrutural sem introduzir lifecycle parcial por submesh.
 5. Revisar custo do rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para eliminar o pequeno sort do raio local 3.
 6. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel.
