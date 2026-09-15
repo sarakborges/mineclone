@@ -17,7 +17,6 @@ use super::{
     biome_field::BiomeField,
     chunk_rendering::{BuiltChunkMesh, ChunkMeshBuildContext, build_chunk_render_meshes},
     chunk_system_params::ChunkContent,
-    chunk_task_snapshots::clone_biome_registry,
 };
 
 pub(crate) const MAX_MESH_TASKS_IN_FLIGHT: usize = 8;
@@ -35,7 +34,7 @@ impl MeshContentSnapshot {
         Self {
             blocks: content.blocks().clone(),
             fluids: content.fluids().clone(),
-            biomes: clone_biome_registry(&content.biomes),
+            biomes: BiomeRegistry::clone(&content.biomes),
             secondary_properties: content.secondary_properties().clone(),
             biome_field: content.biome_field.as_ref().clone(),
         }
