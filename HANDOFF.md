@@ -80,13 +80,16 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`ebebf75b361a3f0dfd84cba19d54e36f23c4057e`
+`a451a393143da74f7312daedf2d6676550f9a225`
 
-Commit: `Bump version to 0.12.93`
+Commit: `Bump version to 0.12.94`
 
-Código do bloco 0.12.93: `6af2ab58d6d7b802d61b984a7c8e5d17a97f7a64`
+Código do bloco 0.12.94:
 
-`VERSION`: `0.12.93`
+- `37e1dbce6039b8e2bad50779b684b6261f223d2a` — `Reuse dense fluid step scheduling storage`
+- `46196b9bef3d775366819d70f1a10fa46536994b` — `Preallocate resumed fluid frontiers`
+
+`VERSION`: `0.12.94`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever código.
 
@@ -204,6 +207,13 @@ A auditoria arquitetural/performance segue ativa. O roadmap vem do canon + inspe
 - Um pedido puramente `Lighting` não cancela trabalho `Fluid` independente.
 - Stale result continua re-enfileirado pelo kind da task; novas mudanças continuam entrando nas filas normais.
 
+### 0.12.94 — scheduling de fluid sem HashMap por tick + frontier preallocation
+- `FluidId` é índice contíguo no `FluidRegistry`; `PendingFluidUpdates::accumulated_steps` agora usa `Vec<f32>` indexado diretamente em vez de `HashMap<FluidId, f32>`.
+- O mapa temporário de ready steps por tick foi substituído por `Local<Vec<usize>>`, reutilizado entre frames e indexado por `FluidId`.
+- A semântica de `MAX_FLUID_STEPS_PER_FRAME`, descarte do excesso acumulado e frontier congelada permanece a mesma.
+- Resume de fluid frontier usa `boundary_dynamic_fluid_count` para reservar previamente até 5 spread targets por fluido dinâmico antes de varrer a face.
+- O solver continua deduplicando targets; a reserva só reduz crescimento incremental das estruturas internas.
+
 ---
 
 # Decisões explícitas da auditoria
@@ -229,6 +239,7 @@ Não desfazer sem evidência nova:
 - Qualquer mesh/remesh async deve validar presença/revisão de todo o halo antes de aplicar resultado.
 - Lighting remesh pertence ao background async; immediate geometry permanece síncrono enquanto feedback do edit justificar.
 - Pedidos `Geometry` e `Lighting` do mesmo coord podem ser coalescidos porque produzem o mesmo terrain mesh; `Fluid` continua independente salvo quando a regra de full geometry já o supersede.
+- `FluidId` pode ser usado como índice denso enquanto `FluidRegistry` mantiver IDs por posição em `definitions`; crescer o registry deve redimensionar scratch/state, não voltar a hashing por frame.
 - Solvers dinâmicos devem preservar a semântica da frontier ao ganhar budgets temporais.
 - Archive compactado permanece preferível a guardar buffers COW brutos; restore caro é controlado por scheduling budget.
 - Não reabrir bugs antigos automaticamente; só se ativos/regredidos.
@@ -240,7 +251,7 @@ Não desfazer sem evidência nova:
 Se nenhum error/warning/runtime report tiver prioridade:
 
 1. Continuar inspeção objetiva de `Update`/`PostUpdate` por scans globais ou builds síncronos; os principais builds de chunk/remesh, lighting e fluid já estão async/budgetados.
-2. Revisar integração/spawn de mesh por custo main-thread unitário; budgets limitam quantidade, mas uma única integração ainda é indivisível.
+2. Revisar integração/spawn de mesh apenas se houver ganho estrutural sem introduzir lifecycle parcial por submesh; o caminho atual já substitui `Assets<Mesh>` in-place quando keys/topologia permanecem estáveis.
 3. Revisar custo do rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para eliminar o pequeno sort do raio local 3.
 4. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel.
 5. Continuar procurando allocations em bulk/hot paths onde o cardinal do batch já é conhecido e a reserva pode pertencer ao owner correto.
