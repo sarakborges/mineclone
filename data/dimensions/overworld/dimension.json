@@ -44,7 +44,7 @@
     },
     {
       "id": "asteria:overworld/mountains",
-      "weight": 0.9,
+      "weight": 0.85,
       "size": {
         "x": { "min": 90.0, "max": 260.0 },
         "z": { "min": 90.0, "max": 260.0 },
