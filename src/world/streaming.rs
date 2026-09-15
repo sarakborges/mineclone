@@ -381,15 +381,17 @@ fn notify_loaded_chunk_neighbors(
         if !render_pool.contains(neighbor) {
             continue;
         }
-
-        if chunk_is_empty {
-            remesh_queue.enqueue_fluid_priority(neighbor);
-            continue;
-        }
-
         let Some(neighbor_chunk) = world.chunk(neighbor) else {
             continue;
         };
+
+        if chunk_is_empty {
+            if neighbor_chunk.boundary_has_fluid(-offset) {
+                remesh_queue.enqueue_fluid_priority(neighbor);
+            }
+            continue;
+        }
+
         let chunk_boundary_has_content = chunk.boundary_has_content(offset);
         let neighbor_boundary_has_content = neighbor_chunk.boundary_has_content(-offset);
 
