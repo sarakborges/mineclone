@@ -231,8 +231,13 @@ fn sync_hotbar(
     for (entity, mut slot, mut background, mut border, children) in &mut slots {
         let selected = slot.index == content.hotbar.selected_slot();
         let (next_background, next_border) = slot_colors(selected);
-        background.0 = next_background;
-        *border = BorderColor::all(next_border);
+        if background.0 != next_background {
+            background.0 = next_background;
+        }
+        let next_border = BorderColor::all(next_border);
+        if *border != next_border {
+            *border = next_border;
+        }
 
         let next_item = content.hotbar.item_at(slot.index);
         if slot.item == next_item && !language_changed {
@@ -354,14 +359,29 @@ fn update_hotbar_item_visuals(
             .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
         let orientation = state.placement_orientation.for_block(icon.index, block);
         let tint = content.tint_at(block_id, position).unwrap_or(Color::WHITE);
+        let orientation_changed = icon.orientation != orientation;
+        let textures_changed = orientation_changed || block_definitions_changed;
+        let tint_changed = materials
+            .get(&material_handle.0)
+            .is_some_and(|material| !material.has_tint(tint));
+
+        // Acquiring mutable asset access emits a modification event, even if the
+        // value written is identical. Compare the rendered inputs first.
+        if !textures_changed && !tint_changed {
+            continue;
+        }
         let Some(mut material) = materials.get_mut(&material_handle.0) else {
             continue;
         };
 
-        if icon.orientation != orientation || block_definitions_changed {
+        if textures_changed {
             material.set_block_orientation(block, orientation, &content.asset_server);
+        }
+        if orientation_changed {
             icon.orientation = orientation;
         }
-        material.set_tint(tint);
+        if tint_changed {
+            material.set_tint(tint);
+        }
     }
 }

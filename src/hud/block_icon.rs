@@ -140,6 +140,10 @@ impl BlockIconMaterial {
         );
     }
 
+    pub(crate) fn has_tint(&self, tint: Color) -> bool {
+        self.tint == color_to_linear_vec4(tint)
+    }
+
     pub(crate) fn set_tint(&mut self, tint: Color) {
         self.tint = color_to_linear_vec4(tint);
     }
