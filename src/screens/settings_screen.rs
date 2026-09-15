@@ -7,9 +7,14 @@ use game_rules_section::{
     TicksPerSecondInputState, handle_ticks_input, handle_ticks_keyboard,
     handle_ticks_step_buttons, sync_ticks_per_second_text,
 };
+use hud_section::{
+    TargetBlockPositionDropdownState, close_target_block_position_dropdown_outside_hud,
+    handle_display_tooltips_toggle, handle_target_block_position_dropdown_button,
+    handle_target_block_position_options, sync_display_tooltips_toggle,
+    sync_target_block_position_dropdown, sync_target_block_position_options,
+};
 use languages_section::{handle_language_buttons, sync_language_buttons};
 use layout::spawn_settings_screen;
-use miscellaneous_section::{handle_display_tooltips_toggle, sync_display_tooltips_toggle};
 use navigation::{
     SettingsSectionSelection, handle_close_requests, handle_section_buttons, sync_section_ui,
 };
@@ -29,9 +34,9 @@ use spawn_biome_section::{
 use world_settings_section::{handle_game_mode_buttons, sync_game_mode_buttons};
 
 pub(crate) mod game_rules_section;
+mod hud_section;
 mod languages_section;
 mod layout;
-mod miscellaneous_section;
 mod navigation;
 mod new_world_section;
 mod render_distance_logic;
@@ -54,6 +59,7 @@ impl Plugin for SettingsScreenPlugin {
             .init_resource::<TicksPerSecondInputState>()
             .init_resource::<SeedInputState>()
             .init_resource::<SpawnBiomeDropdownState>()
+            .init_resource::<TargetBlockPositionDropdownState>()
             .configure_sets(
                 Update,
                 (SettingsScreenSet::Input, SettingsScreenSet::Sync)
@@ -64,6 +70,7 @@ impl Plugin for SettingsScreenPlugin {
                 OnEnter(SettingsState::Open),
                 (
                     reset_resource::<TicksPerSecondInputState>,
+                    reset_resource::<TargetBlockPositionDropdownState>,
                     spawn_settings_screen,
                 )
                     .chain(),
@@ -78,6 +85,7 @@ impl Plugin for SettingsScreenPlugin {
                     handle_section_buttons,
                     sync_new_world_input_focus_to_section.run_if(in_state(GameState::NewWorld)),
                     close_spawn_biome_dropdown_outside_general,
+                    close_target_block_position_dropdown_outside_hud,
                     handle_seed_focus,
                     handle_new_world_general_control_focus.run_if(in_state(GameState::NewWorld)),
                     handle_random_seed,
@@ -93,6 +101,8 @@ impl Plugin for SettingsScreenPlugin {
                     handle_ticks_keyboard,
                     handle_language_buttons,
                     handle_display_tooltips_toggle,
+                    handle_target_block_position_dropdown_button,
+                    handle_target_block_position_options,
                 )
                     .chain()
                     .in_set(SettingsScreenSet::Input),
@@ -105,6 +115,8 @@ impl Plugin for SettingsScreenPlugin {
                     sync_game_mode_buttons,
                     sync_language_buttons,
                     sync_display_tooltips_toggle,
+                    sync_target_block_position_dropdown,
+                    sync_target_block_position_options,
                     sync_spawn_biome_dropdown_state,
                     sync_spawn_biome_selected_label,
                     sync_spawn_biome_option_labels,
