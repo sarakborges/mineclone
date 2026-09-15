@@ -238,7 +238,7 @@ mod tests {
         assert!(chunk.is_empty());
         assert!(!chunk.has_fluid());
 
-        chunk.set_block(1, 1, 1, Some(VoxelCell::new("stone")));
+        chunk.set_block(1, 1, 1, Some(VoxelCell::new("stone", Default::default())));
         assert!(!chunk.is_empty());
 
         chunk.set_block(1, 1, 1, None);
@@ -249,14 +249,19 @@ mod tests {
     fn boundary_content_tracks_union_of_blocks_and_fluids() {
         let mut chunk = VoxelChunk::empty();
         let last = CHUNK_SIZE - 1;
-        let fluid = FluidCell::source(0);
+        let fluid = FluidCell::source(0, 8);
 
         chunk.set_fluid(0, last, 3, Some(fluid));
         assert!(chunk.boundary_has_content(IVec3::NEG_X));
         assert!(chunk.boundary_has_content(IVec3::Y));
         assert!(chunk.boundary_has_fluid(IVec3::NEG_X));
 
-        chunk.set_block(0, last, 3, Some(VoxelCell::new("stone")));
+        chunk.set_block(
+            0,
+            last,
+            3,
+            Some(VoxelCell::new("stone", Default::default())),
+        );
         chunk.set_fluid(0, last, 3, None);
         assert!(chunk.boundary_has_content(IVec3::NEG_X));
         assert!(!chunk.boundary_has_fluid(IVec3::NEG_X));
