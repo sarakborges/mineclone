@@ -170,6 +170,7 @@ fn update_placement_preview(
     selection: PlacementPreviewSelection,
     content: BlockVisualContent,
     view: PlacementPreviewView,
+    mut tint_target: Local<Option<(&'static str, IVec2)>>,
 ) {
     let PlacementPreviewView {
         mut materials,
@@ -184,21 +185,33 @@ fn update_placement_preview(
             .map(|block| (block_id, block))
     });
     let Some((block_id, block)) = selected else {
-        root.0.set_block_id(None);
-        root.1.translation = Vec3::ZERO;
-        root.1.rotation = Quat::IDENTITY;
-        for (_, _, mut visibility) in &mut faces {
-            *visibility = Visibility::Hidden;
+        let block_changed = if root.0.block_id().is_some() {
+            root.0.set_block_id(None)
+        } else {
+            false
+        };
+        reset_transform_if_needed(&mut root.1);
+        hide_if_visible(&mut root.2);
+        if block_changed {
+            for (_, _, mut visibility) in &mut faces {
+                hide_if_visible(&mut visibility);
+            }
         }
-        *root.2 = Visibility::Hidden;
+        *tint_target = None;
         return;
     };
 
-    let block_changed = root.0.set_block_id(Some(block_id));
+    let block_changed = if root.0.block_id() != Some(block_id) {
+        root.0.set_block_id(Some(block_id))
+    } else {
+        false
+    };
     let block_definitions_changed = content.block_definitions_changed();
     if block_changed || block_definitions_changed {
-        root.1.translation = Vec3::ZERO;
-        *root.2 = Visibility::Hidden;
+        if root.1.translation != Vec3::ZERO {
+            root.1.translation = Vec3::ZERO;
+        }
+        hide_if_visible(&mut root.2);
 
         for (face, material_handle, mut visibility) in &mut faces {
             let Some(mut material) = materials.get_mut(&material_handle.0) else {
@@ -213,9 +226,9 @@ fn update_placement_preview(
                 root.0.opacity(),
             ) {
                 *material = face_material;
-                *visibility = Visibility::Visible;
+                show_if_hidden(&mut visibility);
             } else {
-                *visibility = Visibility::Hidden;
+                hide_if_visible(&mut visibility);
             }
         }
     }
@@ -223,11 +236,17 @@ fn update_placement_preview(
     let orientation = selection
         .placement_orientation
         .for_block(selected_slot, block);
-    root.1.rotation = orientation_rotation(orientation);
+    let rotation = orientation_rotation(orientation);
+    if root.1.rotation != rotation {
+        root.1.rotation = rotation;
+    }
 
     let Some(hit) = selection.scene.hit() else {
-        root.1.translation = Vec3::ZERO;
-        *root.2 = Visibility::Hidden;
+        if root.1.translation != Vec3::ZERO {
+            root.1.translation = Vec3::ZERO;
+        }
+        hide_if_visible(&mut root.2);
+        *tint_target = None;
         return;
     };
     let Some(voxel) = placement_voxel(
@@ -235,22 +254,58 @@ fn update_placement_preview(
         selection.scene.world(),
         selection.scene.player_translation(),
     ) else {
-        root.1.translation = Vec3::ZERO;
-        *root.2 = Visibility::Hidden;
+        if root.1.translation != Vec3::ZERO {
+            root.1.translation = Vec3::ZERO;
+        }
+        hide_if_visible(&mut root.2);
+        *tint_target = None;
         return;
     };
 
-    let tint_position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-    let tint = content.tint_at(block_id, tint_position).unwrap_or(Color::WHITE);
+    let horizontal = IVec2::new(voxel.x, voxel.z);
+    let tint_target_changed = tint_target
+        .as_ref()
+        .is_none_or(|(cached_block_id, cached_horizontal)| {
+            *cached_block_id != block_id || *cached_horizontal != horizontal
+        });
+    if block_changed || content.inputs_changed() || tint_target_changed {
+        let tint_position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
+        let tint = content.tint_at(block_id, tint_position).unwrap_or(Color::WHITE);
 
-    for (_, material_handle, _) in &mut faces {
-        let Some(mut material) = materials.get_mut(&material_handle.0) else {
-            continue;
-        };
+        for (_, material_handle, _) in &mut faces {
+            let Some(mut material) = materials.get_mut(&material_handle.0) else {
+                continue;
+            };
 
-        set_block_model_tint(&mut material, tint);
+            set_block_model_tint(&mut material, tint);
+        }
+        *tint_target = Some((block_id, horizontal));
     }
 
-    root.1.translation = voxel.as_vec3() + Vec3::splat(0.5);
-    *root.2 = Visibility::Visible;
+    let translation = voxel.as_vec3() + Vec3::splat(0.5);
+    if root.1.translation != translation {
+        root.1.translation = translation;
+    }
+    show_if_hidden(&mut root.2);
+}
+
+fn reset_transform_if_needed(transform: &mut Transform) {
+    if transform.translation != Vec3::ZERO {
+        transform.translation = Vec3::ZERO;
+    }
+    if transform.rotation != Quat::IDENTITY {
+        transform.rotation = Quat::IDENTITY;
+    }
+}
+
+fn hide_if_visible(visibility: &mut Visibility) {
+    if *visibility != Visibility::Hidden {
+        *visibility = Visibility::Hidden;
+    }
+}
+
+fn show_if_hidden(visibility: &mut Visibility) {
+    if *visibility != Visibility::Visible {
+        *visibility = Visibility::Visible;
+    }
 }
