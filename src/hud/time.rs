@@ -21,7 +21,7 @@ impl Plugin for TimeHudPlugin {
 
 #[derive(Component, Default)]
 struct TimeHudText {
-    presented_time: Option<(u32, u32, u32)>,
+    presented_time: Option<(u64, u32, u32)>,
 }
 
 fn spawn_time_hud(
