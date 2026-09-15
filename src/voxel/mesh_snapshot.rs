@@ -16,13 +16,18 @@ const SNAPSHOT_FACE_AREA: usize = SNAPSHOT_SIDE * SNAPSHOT_SIDE;
 const INTERIOR_SHELL_LAYER: usize = SNAPSHOT_SIDE * 2 + CHUNK_SIZE * 2;
 const SHELL_VOLUME: usize = SNAPSHOT_FACE_AREA * 2 + INTERIOR_SHELL_LAYER * CHUNK_SIZE;
 
+#[derive(Clone, Copy, Default)]
+struct ShellSample {
+    cell: Option<VoxelCell>,
+    fluid: Option<FluidCell>,
+    light: VoxelLight,
+    loaded: bool,
+}
+
 pub(crate) struct ChunkMeshSnapshot {
     chunk_origin: IVec3,
     chunk: VoxelChunk,
-    shell_cells: Box<[Option<VoxelCell>]>,
-    shell_fluids: Box<[Option<FluidCell>]>,
-    shell_light: Box<[VoxelLight]>,
-    shell_loaded: Box<[bool]>,
+    shell: Box<[ShellSample]>,
 }
 
 impl ChunkMeshSnapshot {
@@ -45,10 +50,7 @@ impl ChunkMeshSnapshot {
             }
         }
 
-        let mut shell_cells = vec![None; SHELL_VOLUME].into_boxed_slice();
-        let mut shell_fluids = vec![None; SHELL_VOLUME].into_boxed_slice();
-        let mut shell_light = vec![VoxelLight::DARK; SHELL_VOLUME].into_boxed_slice();
-        let mut shell_loaded = vec![false; SHELL_VOLUME].into_boxed_slice();
+        let mut shell = vec![ShellSample::default(); SHELL_VOLUME].into_boxed_slice();
         let last = SNAPSHOT_SIDE - 1;
         let mut capture_shell_voxel = |x: usize, y: usize, z: usize| {
             let index = shell_index_from_snapshot_coords(x, y, z)
@@ -64,10 +66,12 @@ impl ChunkMeshSnapshot {
                 return;
             };
 
-            shell_loaded[index] = true;
-            shell_cells[index] = cell;
-            shell_fluids[index] = fluid;
-            shell_light[index] = light;
+            shell[index] = ShellSample {
+                cell,
+                fluid,
+                light,
+                loaded: true,
+            };
         };
 
         for z in 0..SNAPSHOT_SIDE {
@@ -91,10 +95,7 @@ impl ChunkMeshSnapshot {
         Some(Self {
             chunk_origin,
             chunk,
-            shell_cells,
-            shell_fluids,
-            shell_light,
-            shell_loaded,
+            shell,
         })
     }
 
@@ -133,12 +134,10 @@ impl VoxelRead for ChunkMeshSnapshot {
             return self.chunk.sample_local(local.x, local.y, local.z);
         }
 
-        let index = self.shell_index(world_position)?;
-        self.shell_loaded[index].then_some((
-            self.shell_cells[index],
-            self.shell_fluids[index],
-            self.shell_light[index],
-        ))
+        let sample = self.shell[self.shell_index(world_position)?];
+        sample
+            .loaded
+            .then_some((sample.cell, sample.fluid, sample.light))
     }
 }
 
