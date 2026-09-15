@@ -14,8 +14,9 @@ use navigation::{
     SettingsSectionSelection, handle_close_requests, handle_section_buttons, sync_section_ui,
 };
 use new_world_section::{
-    SeedInputState, handle_new_world_footer, handle_random_seed, handle_seed_focus,
-    handle_seed_keyboard, reset_new_world_settings, sync_seed_text,
+    SeedInputState, handle_new_world_footer, handle_new_world_general_control_focus,
+    handle_random_seed, handle_seed_focus, handle_seed_keyboard, reset_new_world_settings,
+    sync_new_world_input_focus_to_section, sync_seed_text,
 };
 use render_distance_logic::{sync_render_distance_text, sync_slider_thumb};
 use spawn_biome_section::{
@@ -76,8 +77,10 @@ impl Plugin for SettingsScreenPlugin {
                 Update,
                 (
                     handle_section_buttons,
+                    sync_new_world_input_focus_to_section.run_if(in_state(GameState::NewWorld)),
                     close_spawn_biome_dropdown_outside_general,
                     handle_seed_focus,
+                    handle_new_world_general_control_focus.run_if(in_state(GameState::NewWorld)),
                     handle_random_seed,
                     handle_spawn_biome_dropdown_button,
                     handle_spawn_biome_search_focus,
