@@ -80,6 +80,8 @@ Princípios principais:
 19. Quando invariants permitirem, separar refresh estrutural de material/textura de refresh leve de tint/orientação/posição.
 20. Movimento com delta zero não deve adquirir mutação de `Transform` nem executar collision stepping; estado ocioso deve permanecer realmente ocioso.
 21. Scratch de cardinalidade estruturalmente limitada deve preferir stack/reuse a heap allocation por amostra, sem impor limites artificiais a conteúdo data-driven.
+22. Escolhas de criação de mundo devem pertencer a `NewWorldConfig`; bootstrap consome essa configuração, não cria um segundo owner paralelo.
+23. Spawn forçado por biome deve escolher a coluna inicial pelo biome autoritativo do surface field antes da geração, em vez de teletransportar o jogador para um segundo local depois do bootstrap.
 
 ---
 
@@ -87,39 +89,33 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`c00effb1bcbff96d504365e269f79e90e989c8f4`
+`f63062814eab6ccb17fc14d2477132bb158bc932`
 
-Commit: `Reduce surface biome sampling allocations`
+Commit: `Fix spawn biome dropdown validation`
 
-Blocos recentes:
+`VERSION`: `0.13.0`
 
-- `3415295b19698c2acada803f36d16a65166ada62` — `Avoid redundant underwater HUD updates`
-- `547ddf62879370fa8dc067e82f66d5cdc067cb23` — bump `0.12.99`
-- `6d078797d8c5b566e2b013c9d0163de4d8088181` — `Avoid redundant targeting visual updates`
-- `bf6cdf044f1327f259a874400f6637e763412013` — bump `0.12.100`
-- `262bec7cf2fe5441e7659d002eb8b343f4e4e324` — `Make placement preview updates change driven`
-- `4702a9d4b0e6ce09e6f45f7c629ff3d1966411f3` — bump `0.12.101`
-- `c95975361b01c11f462298a7b89e48d2e6f24bbc` — `Separate held block material and tint refresh`
-- `4a3220d443f6af296fc62d2a99ee6382c1790e21` — bump `0.12.102`
-- `2cf90dd7f6286900a623ea29498637e754828503` — `Avoid idle player state mutations` + bump `0.12.103`
-- `c00effb1bcbff96d504365e269f79e90e989c8f4` — `Reduce surface biome sampling allocations` + bump `0.12.104`
+Blocos/commits recentes relevantes:
 
-`VERSION`: `0.12.104`
+- `c00effb1bcbff96d504365e269f79e90e989c8f4` — `Reduce surface biome sampling allocations` + `0.12.104`
+- `7bbee70089fca506c545f1758dc064fc9cd8b17e` — `Reuse current biome identity buffers` + `0.12.105`
+- `f0ee1c48beede24fde6a3a95483de5706a2db1a9` — `Fix surface biome sampling warning` + `0.12.106`
+- `5a021f333ad756ae6fa89dad8682045aa15da504` — `Add gameplay hints and spawn biome selection` + bump `0.13.0`
+- `e81e1803bbc212dd27e93986de1255ab41560ef2` — `Keep spawn biome search focus isolated`
+- `f63062814eab6ccb17fc14d2477132bb158bc932` — `Fix spawn biome dropdown validation`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever código.
 
 ## CI atual
 
-Estado observado durante esta gravação:
+- `0.12.106` / run `34993918732`: **success**.
+- `0.13.0` / HEAD `f63062814eab6ccb17fc14d2477132bb158bc932` / run `34996626194`: Clippy **success**, `cargo check` **success**, `cargo test` ainda em execução na última consulta antes desta gravação.
 
-- `0.12.103` / run `34992166745`: Clippy **success**, `cargo check` **success**, `cargo test` ainda em execução na última consulta.
-- `0.12.104` / run `34992749054`: Clippy em execução; check/test pendentes na última consulta.
-
-O bloco `0.12.104` ainda não está encerrado enquanto Clippy/check/test do HEAD correspondente não estiverem verdes.
+O bloco `0.13.0` só é considerado formalmente fechado quando `cargo test` desse HEAD também ficar verde.
 
 ---
 
-# Estado do refactor
+# Estado consolidado do refactor/performance
 
 A auditoria arquitetural/performance segue ativa. O roadmap vem do canon + inspeção real do código, não de backlog antigo seguido cegamente.
 
@@ -135,70 +131,73 @@ A auditoria arquitetural/performance segue ativa. O roadmap vem do canon + inspe
 - `VoxelChunkContentMut` faz edits batch usando os mesmos invariants dos setters.
 - Worldgen, structures e archive restore usam batch mutation; archive encode/restore percorrem 4.096 slots uma vez.
 
-## 0.12.80–0.12.82 — streaming deltas e cache pruning
+## 0.12.80–0.12.86 — streaming/revisions/remesh async
 
 - Unload backlog vem do delta de `desired`/`retained`; scan global de chunks carregados fica só no bootstrap.
-- Feature caches e `surface_ranges` são podados no bootstrap, mudança de render distance ou cruzamento de generation region, não em todo chunk atravessado.
-- `GENERATION_REGION_SIZE_CHUNKS = 8`; retenção extra entre podas é apenas política de memória.
-
-## 0.12.83–0.12.86 — revision tracking e remesh async
-
+- Feature caches e `surface_ranges` são podados por bootstrap/render-distance/generation-region, não por todo chunk atravessado.
 - `VoxelWorld` mantém revisão de mesh por chunk residente.
 - `ChunkMeshSnapshot` captura presença + revisão dos 27 chunks do cubo 3×3×3.
 - Initial mesh/remesh async descarta resultado stale e recaptura halo atual.
 - Background terrain/fluid/lighting remesh usa `ChunkRemeshTasks`/`ChunkTaskQueue` no `AsyncComputeTaskPool`.
-- Terrain/fluid partial refresh preserva a outra metade da render allocation.
-- Coord já em voo não causa head-of-line blocking; outros chunks continuam ocupando slots livres.
 - Apenas immediate geometry de edição/topologia continua síncrono para feedback do jogador.
 
-## 0.12.87–0.12.92 — budgets e alocação de hot paths
+## 0.12.87–0.12.95 — budgets/coalescência/scratch
 
 - Dynamic lighting: máximo 4.096 voxels/frame, budget 2 ms, mínimo 256, checagem a cada 64.
 - Fluid solver: máximo 512 updates/4 steps, budget 1 ms, mínimo 64; frontier congelada preservada.
-- Restore de chunks arquivados divide budget de dispatch da geração: 1 ms / até 4 trabalhos por frame.
-- Streaming `pending` usa `sort_by_cached_key`.
+- Restore de chunks arquivados: 1 ms / até 4 trabalhos por frame.
 - Unload observa budget de 4 ms desde o primeiro chunk.
 - `DeduplicatedQueue`/`VoxelUpdateQueue` suportam reserve; lighting bulk enqueue pré-aloca capacidade.
-
-## 0.12.93–0.12.95 — coalescência e scratch reuse
-
 - Geometry/Lighting do mesmo coord são coalescidos quando produzem o mesmo terrain mesh; `Fluid` segue independente salvo full geometry supersedence.
 - Fluid scheduling usa `Vec<f32>` indexado por `FluidId` em vez de HashMap por tick.
-- Frontier de fluid reserva capacidade a partir de boundary dynamic-fluid metadata.
 - Lighting changed-chunk scratch e emission-edit maps preservam capacidade entre frames sem manter caches derivados stale.
 
-## 0.12.96–0.12.98 — validation/CI
+## 0.12.96–0.12.103 — CI e hot paths change-driven
 
-- Bootstrap meshing foi corrigido para consumir `ChunkMeshTaskOutput.meshes` preservando dependencies.
-- Strict Clippy ficou limpo de warnings estruturais; helpers mortos foram removidos/limitados a `cfg(test)`.
-- CI passou a rodar em push para `develop`; formatação deixou de ser gate.
-- Gates autoritativos são Clippy com warnings como erro, `cargo check` e `cargo test`.
-
-## 0.12.99–0.12.102 — visual hot paths change-driven
-
-- Underwater HUD mantém a consulta O(1) do voxel do olho, mas só altera visibility/tint quando necessário.
-- Target highlight/brush ghost não reescrevem transform/visibility/material idênticos.
-- Placement preview separa material estrutural de tint/posição e usa cache de target relevante.
-- Held block separa rebuild de material/layers de orientação e tint; caminhar não reconstrói texturas da mão.
-
-## 0.12.103 — player idle realmente ocioso
-
-- `animate_viewmodel` não reescreve o transform base em todo frame ocioso; restaura uma vez ao terminar interaction/item-switch.
-- `walk` e `move_flying` só chamam `move_axis` para eixos com velocidade diferente de zero.
-- Walking/flight/swimming state só recebe escrita quando valores efetivamente mudam.
-- Gravity grounded com suporte e sem jump retorna antes de integrar gravidade e antes do collision stepping.
-- O ground support probe permanece por frame enquanto grounded para detectar remoção do suporte sem cache derivado.
+- Bootstrap meshing consome `ChunkMeshTaskOutput.meshes` preservando dependencies.
+- Strict Clippy ficou limpo de warnings estruturais; CI em push para `develop` virou gate obrigatório.
+- Underwater HUD, target highlight, brush ghost e placement preview evitam mutações idempotentes.
+- Held block separa rebuild estrutural/material de tint/orientation.
+- Player idle evita reescritas de transform/state e collision stepping com delta zero.
 
 ## 0.12.104 — surface biome sampling com scratch fixo
 
-- `SITE_SEARCH_RADIUS = 2` implica exatamente 25 sites por amostra; esse neighborhood agora usa array em stack em vez de `Vec`.
-- Cache misses dos sites usam scratch fixo de até 25 updates; não há `Vec` temporário para cache updates.
-- O pass intermediário `sites` foi removido; nearest distance e weights leem diretamente o scratch de sites.
-- Pesos regionais usam até 25 entradas compactas + 1 macro biome em array de stack, sem criar `vec![0.0; surface_biomes.len()]` por amostra.
-- Tie-breaking do primary biome preserva a semântica do dense vector: em pesos iguais, o maior biome index vence.
-- Influences são ordenadas por biome index antes do retorno, preservando a ordem anterior.
-- A única alocação obrigatória restante no caminho é o `Vec<BiomeInfluence>` retornado por `BiomeFieldSample`.
-- Testes cobrem max/add do scratch compacto e tie-breaking por índice.
+- Neighborhood de 25 sites usa array em stack em vez de `Vec` temporário.
+- Cache misses usam scratch fixo; pass intermediário de sites foi removido.
+- Pesos regionais usam scratch compacto, preservando tie-breaking e ordem de influences.
+- A alocação obrigatória restante no caminho é o `Vec<BiomeInfluence>` retornado por `BiomeFieldSample`.
+
+## 0.12.105–0.12.106 — identidade de biome sem buffers descartáveis
+
+- `track_current_biome`/identity path passou a reutilizar buffers do estado corrente em vez de reconstruir `String`/`Vec` temporários a cada atualização de posição.
+- A implementação preserva blend contínuo e change detection: reuse de storage não transforma dado derivado em cache autoritativo.
+- O warning restante do surface-biome sampling foi corrigido em `0.12.106`; o gate correspondente ficou verde.
+
+---
+
+# 0.13.0 — gameplay hints + Spawn Biome
+
+## HUD/tooltips
+
+- Crosshair mostra hint contextual para quebrar bloco e, quando há bloco selecionado para placement, o hint inclui quebrar/colocar.
+- Player HUD mostra `Press E to open inventory.` abaixo do painel principal.
+- Os novos hints respeitam `HudSettings` / `Display Tooltips` e reutilizam os owners visuais/textuais existentes em vez de criar estado paralelo.
+
+## New World / Spawn Biome
+
+- `NewWorldConfig` agora possui seleção opcional de spawn biome; `None` representa `Random` e preserva o comportamento anterior.
+- New World → General ganhou `Spawn Biome` com dropdown pesquisável.
+- A lista vem dos surface biomes registrados na dimensão default; nomes exibidos vêm da localização/definição do biome, enquanto a configuração armazena o biome ID.
+- O dropdown isola foco de keyboard input de Seed/Ticks; abrir a busca reseta os outros inputs ativos.
+- O filtro reutiliza labels normalizados armazenados nas opções; não cria a normalização de cada opção a cada frame.
+
+## Bootstrap de spawn
+
+- Para `Random`, a coluna inicial continua seguindo o comportamento normal.
+- Para biome selecionado, o bootstrap procura uma coluna seca cujo `BiomeFieldSample.primary_id` seja exatamente o ID escolhido.
+- A coluna encontrada passa a ser a `spawn_column` usada pelo mesmo pipeline de geração/carregamento existente.
+- `safe_spawn_position` continua sendo o único owner do posicionamento físico final sobre a coluna gerada; não foi criado um segundo mecanismo de teleporte pós-bootstrap.
+- Não houve alteração nas regras gerais de terrain generation; a feature só condiciona a escolha da coluna inicial.
 
 ---
 
@@ -231,6 +230,9 @@ Não desfazer sem evidência nova:
 - Block model material/topology refresh deve ficar separado de tint/orientation refresh quando os inputs autoritativos permitem essa divisão.
 - Grounded estável com suporte não precisa integrar gravidade só para colidir e zerar a mesma velocidade no mesmo tick; o probe de suporte é o invariant necessário nesse estado.
 - Surface sampling pode usar scratch fixo para o neighborhood de sites porque a cardinalidade é definida por `SITE_SEARCH_RADIUS`; isso não limita a quantidade data-driven de biomes no registry.
+- Reuse de buffers de identidade de biome é scratch/state reuse, não autorização para persistir amostras derivadas stale do worldgen.
+- `Spawn Biome` pertence a `NewWorldConfig`; não criar outro resource autoritativo para a mesma escolha.
+- Spawn forçado deve permanecer integrado ao bootstrap via `spawn_column`; não adicionar teleporte corretivo posterior sem evidência de que o invariant atual falha.
 - Solvers dinâmicos devem preservar a semântica da frontier ao ganhar budgets temporais.
 - Archive compactado permanece preferível a guardar buffers COW brutos; restore caro é controlado por scheduling budget.
 - Formatação de Rust não é requisito de CI; não reintroduzir format gate sem pedido explícito.
@@ -238,17 +240,17 @@ Não desfazer sem evidência nova:
 
 ---
 
-# Próximos passos da auditoria
+# Próximos passos
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Fechar o gate de CI do HEAD `0.12.104`; corrigir qualquer falha de Clippy/check/test antes de considerar o bloco encerrado.
-2. Revisar `track_current_biome`/identity ownership: ainda há `String`/`Vec` temporários acima do `sample_surface()` em cada mudança de posição; buscar reuse sem impedir blend contínuo nem falsificar change detection.
-3. Continuar inspeção objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos e escritas redundantes em Components/Assets.
-4. Revisar integração/spawn de mesh apenas se houver ganho estrutural sem introduzir lifecycle parcial por submesh.
-5. Revisar custo do rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para eliminar o pequeno sort do raio local 3.
-6. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel.
-7. Continuar procurando allocations/scratch descartados em hot paths quando a capacidade puder ser reutilizada sem manter dados derivados stale.
+1. Fechar o `cargo test` do HEAD `f63062814eab6ccb17fc14d2477132bb158bc932`; se falhar, corrigir todos os failures antes de continuar.
+2. Fazer validação runtime da UI de `0.13.0`: posicionamento dos hints, toggle `Display Tooltips`, foco/keyboard do dropdown, busca/seleção e retorno a `Random`.
+3. Validar runtime de `Spawn Biome` em seeds diferentes, confirmando que o player nasce no biome selecionado e que `Random` preserva o fluxo anterior.
+4. Retomar inspeção objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e escritas redundantes em Components/Assets.
+5. Revisar integração/spawn de mesh apenas se houver ganho estrutural sem introduzir lifecycle parcial por submesh; o caminho atual já substitui assets in-place quando topology/keys permitem.
+6. Revisar custo do rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para eliminar o pequeno sort do raio local 3.
+7. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel.
 
 ---
 
