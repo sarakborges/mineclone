@@ -145,7 +145,7 @@ pub(super) fn stream_chunks(
     collect_generated_chunks(&mut runtime);
     collect_built_chunk_meshes(&content, &mut renderer, &mut runtime);
     dispatch_generation_tasks(&renderer.pool, &mut runtime);
-    dispatch_initial_mesh_tasks(&content, &renderer.pool, &mut runtime);
+    dispatch_initial_mesh_tasks(&content, &mut renderer, &mut runtime);
 }
 
 fn collect_generated_chunks(runtime: &mut ChunkStreamingRuntime<'_, '_>) {
@@ -223,7 +223,7 @@ fn dispatch_generation_tasks(
 
 fn dispatch_initial_mesh_tasks(
     content: &ChunkContent<'_>,
-    render_pool: &ChunkRenderPool,
+    renderer: &mut ChunkRenderer<'_, '_>,
     runtime: &mut ChunkStreamingRuntime<'_, '_>,
 ) {
     let mut budget = FrameWorkBudget::new(STREAMING_BUDGET, MIN_CHUNKS_BEFORE_BUDGET_CHECK)
@@ -237,19 +237,19 @@ fn dispatch_initial_mesh_tasks(
         let Some(coord) = runtime.state.ready.pop() else {
             break;
         };
-        if !runtime.state.keeps_loaded(coord) || render_pool.contains(coord) {
+        if !runtime.state.keeps_loaded(coord) || renderer.pool.contains(coord) {
             continue;
         }
         if runtime.mesh_tasks.contains(coord) {
             continue;
         }
-        if runtime.mesh_tasks.pending_count() >= MAX_MESH_TASKS_IN_FLIGHT {
-            runtime.state.defer_ready(coord);
-            break;
-        }
-        if runtime.world.chunk(coord).is_none() {
+        let Some(chunk_is_empty) = runtime.world.chunk(coord).map(|chunk| chunk.is_empty()) else {
             runtime.state.requeue(coord);
             continue;
+        };
+        if !chunk_is_empty && runtime.mesh_tasks.pending_count() >= MAX_MESH_TASKS_IN_FLIGHT {
+            runtime.state.defer_ready(coord);
+            break;
         }
 
         runtime
@@ -264,6 +264,12 @@ fn dispatch_initial_mesh_tasks(
         );
         runtime.lighting_updates.enqueue_chunk_relaxation(coord);
 
+        if chunk_is_empty {
+            integrate_empty_chunk(content, renderer, runtime, coord);
+            budget.record(1);
+            continue;
+        }
+
         let snapshot = ChunkMeshSnapshot::capture(&runtime.world, coord)
             .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
         if !runtime.mesh_tasks.schedule(coord, snapshot) {
@@ -273,6 +279,34 @@ fn dispatch_initial_mesh_tasks(
 
         budget.record(1);
     }
+}
+
+fn integrate_empty_chunk(
+    content: &ChunkContent<'_>,
+    renderer: &mut ChunkRenderer<'_, '_>,
+    runtime: &mut ChunkStreamingRuntime<'_, '_>,
+    coord: IVec3,
+) {
+    let render_context = content.render_context(
+        &runtime.world,
+        &renderer.terrain_materials,
+        &renderer.fluid_materials,
+    );
+    spawn_built_chunk_meshes(
+        &mut renderer.commands,
+        &mut renderer.meshes,
+        &mut renderer.pool,
+        coord,
+        Vec::new(),
+        &render_context,
+    );
+    notify_loaded_chunk_neighbors(
+        coord,
+        true,
+        &runtime.world,
+        &renderer.pool,
+        &mut runtime.remesh_queue,
+    );
 }
 
 fn collect_built_chunk_meshes(
