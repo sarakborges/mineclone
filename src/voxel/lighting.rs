@@ -16,9 +16,7 @@ use crate::content::{
 };
 
 use self::{
-    medium::{
-        block_emission, block_emission_for_cell, medium_dampening, medium_dampening_for_cells,
-    },
+    medium::{block_emission_for_cell, medium_dampening, medium_dampening_for_cells},
     propagation::{relax, relax_budgeted},
     queue::LightingQueue,
 };
@@ -134,8 +132,7 @@ pub(crate) fn seed_chunk_direct_lighting(
                         cell, fluid, blocks, fluids,
                     ));
                 }
-                let emitted =
-                    block_emission_for_cell(cell, blocks, secondary_properties);
+                let emitted = block_emission_for_cell(cell, blocks, secondary_properties);
                 world.set_light_at(position, VoxelLight::new_hsi(sky, emitted));
             }
         }
