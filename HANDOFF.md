@@ -91,6 +91,7 @@ Princípios principais:
 24. Search/text-input state machine compartilhado pertence a `src/ui`; telas continuam owners de suas opções/regras específicas.
 25. Preferências de HUD pertencem a `HudSettings`; `TargetedBlock` continua sendo o único owner do target.
 26. Layout/visibilidade e conteúdo/material de HUD devem ser atualizados separadamente quando seus inputs autoritativos diferirem.
+27. Queries mutáveis múltiplas sobre o mesmo Component em um system devem ser provadamente disjuntas via `Without<T>` ou agrupadas em `ParamSet`; não depender da composição atual dos bundles para evitar B0001.
 
 ---
 
@@ -98,11 +99,11 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`50bb5cd2fdd9353cf9f8c9e88ecce786e8892d79`
+`24501774a428a1d5f7640f61f8d0a7cb8c679d6d`
 
-Commit: `Bump version to 0.14.1`
+Commit: `Bump version to 0.14.2`
 
-`VERSION`: `0.14.1`
+`VERSION`: `0.14.2`
 
 Commits imediatamente relevantes:
 
@@ -110,6 +111,8 @@ Commits imediatamente relevantes:
 - `845f9b544de6a77771a8e5ae19a6b2e4f7c2600a` — bump para `0.14.0`.
 - `88abc44f20695c2fd1889f83b17a3e657a425dd4` — remove `cargo test` do CI; testes passam a ser manuais sob pedido.
 - `50bb5cd2fdd9353cf9f8c9e88ecce786e8892d79` — bump para `0.14.1`.
+- `d020a14c8db9c287c1a54f19caa013d890a27102` — corrige B0001 no sync do dropdown de Target Block Position tornando as duas queries mutáveis de `Text` explicitamente disjuntas.
+- `24501774a428a1d5f7640f61f8d0a7cb8c679d6d` — bump para `0.14.2`.
 
 Sempre buscar HEAD/VERSION novamente antes de escrever código.
 
@@ -118,6 +121,7 @@ Sempre buscar HEAD/VERSION novamente antes de escrever código.
 - O antigo HEAD `bb3b1347...` passou Clippy, `cargo check` e `cargo test`.
 - A partir de `0.14.1`, o CI autoritativo contém somente Clippy + `cargo check`.
 - `cargo test` só deve ser rodado quando o usuário pedir.
+- `0.14.2` / HEAD `24501774...` / run `35009719739`: em execução na última consulta; Clippy estava em andamento e `cargo check` pendente.
 
 ---
 
@@ -209,6 +213,16 @@ Nenhuma regra especial em código foi criada para esse balanceamento.
 
 ---
 
+# 0.14.2 — runtime ECS query fix
+
+- Runtime report: Bevy `B0001` em `QueryState`, causado por acesso conflitante ao mesmo Component dentro de um system.
+- Causa identificada em `sync_target_block_position_dropdown`: havia uma `Query<&mut Text, With<TargetBlockPositionDropdownLabel>>` e outra `Query<(&TargetBlockPositionOptionLabel, &mut Text)>` sem filtro que provasse disjunção ao ECS.
+- A query das option labels agora inclui `Without<TargetBlockPositionDropdownLabel>`, tornando os conjuntos explicitamente disjuntos sem duplicar system/state e sem recorrer a `allow`.
+- A revisão dirigida dos systems novos de Player HUD, Spawn Biome, Target HUD layout e scrollbar não encontrou outro par equivalente de queries mutáveis sobrepostas.
+- Clippy/check não provam esse tipo de conflito de runtime; a confirmação definitiva é o próximo runtime do usuário.
+
+---
+
 # Decisões explícitas da auditoria
 
 Não desfazer sem evidência nova:
@@ -228,6 +242,7 @@ Não desfazer sem evidência nova:
 - Safe spawn forçado deve continuar no mesmo owner de segurança física, usando predicate de biome, sem duplicar collision/surface logic.
 - Search compartilhado deve abstrair apenas o invariant de edição de texto; inventory/dropdown continuam owners de suas regras de filtro/opções.
 - Preferência de posição do Target HUD pertence a `HudSettings`; targeting não deve conhecer layout.
+- Queries mutáveis múltiplas do mesmo Component devem ter disjunção explícita (`Without`) ou usar `ParamSet` quando a sobreposição for intencional.
 - Formatação de Rust não é requisito de CI.
 - `cargo test` não é requisito de CI; executar manualmente somente sob pedido explícito do usuário.
 - Não reabrir bugs antigos automaticamente; só se ativos/regredidos.
@@ -238,13 +253,14 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Confirmar Clippy + `cargo check` do HEAD `50bb5cd2...` no novo CI sem testes; corrigir qualquer failure antes de novo código.
-2. Fazer validação runtime das mudanças de UI quando houver output/relato do usuário: Player HUD no inventory/pause, Target Block Position, scrollbars e Spawn Biome overlay/search.
-3. Quando o usuário solicitar testes manuais, rodar `cargo test` e corrigir todos os failures antes de continuar.
-4. Retomar inspeção objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes.
-5. Revisar integração/spawn de mesh apenas se houver ganho estrutural sem lifecycle parcial por submesh.
-6. Revisar rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para remover pequeno sort local.
-7. Manter `notify_loaded_chunk_neighbors` conservador enquanto metadata atual não provar overlap voxel-a-voxel.
+1. Confirmar Clippy + `cargo check` do HEAD `24501774...`; corrigir qualquer failure antes de novo código.
+2. No próximo runtime do usuário, confirmar que o panic Bevy `B0001` não reaparece. Se reaparecer, usar o novo stack/output como prioridade absoluta e localizar qualquer segundo system conflitante.
+3. Fazer validação runtime das mudanças de UI quando houver output/relato do usuário: Player HUD no inventory/pause, Target Block Position, scrollbars e Spawn Biome overlay/search.
+4. Quando o usuário solicitar testes manuais, rodar `cargo test` e corrigir todos os failures antes de continuar.
+5. Retomar inspeção objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes.
+6. Revisar integração/spawn de mesh apenas se houver ganho estrutural sem lifecycle parcial por submesh.
+7. Revisar rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para remover pequeno sort local.
+8. Manter `notify_loaded_chunk_neighbors` conservador enquanto metadata atual não provar overlap voxel-a-voxel.
 
 # Performance direction
 
