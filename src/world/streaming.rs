@@ -2,7 +2,7 @@ mod selection;
 mod surface_cache;
 
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     time::Duration,
 };
 
@@ -16,6 +16,7 @@ use crate::{
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         coordinates::chunk_coord_from_position,
+        deduplicated_queue::DeduplicatedQueue,
         lighting::{PendingLightingUpdates, seed_chunk_direct_lighting},
         mesh_snapshot::ChunkMeshSnapshot,
         neighbors::CARDINAL_NEIGHBORS,
@@ -51,8 +52,8 @@ pub(super) struct ChunkStreamingState {
     vertical_radius: i32,
     desired: HashSet<IVec3>,
     retained: HashSet<IVec3>,
-    pending: VecDeque<IVec3>,
-    ready: VecDeque<IVec3>,
+    pending: DeduplicatedQueue<IVec3>,
+    ready: DeduplicatedQueue<IVec3>,
     surface_ranges: HashMap<IVec2, (i32, i32)>,
 }
 
@@ -62,23 +63,20 @@ impl ChunkStreamingState {
     }
 
     fn requeue(&mut self, coord: IVec3) {
-        if self.keeps_loaded(coord)
-            && !self.pending.contains(&coord)
-            && !self.ready.contains(&coord)
-        {
-            self.pending.push_front(coord);
+        if self.keeps_loaded(coord) && !self.pending.contains(coord) && !self.ready.contains(coord) {
+            self.pending.enqueue_front(coord);
         }
     }
 
     fn mark_ready(&mut self, coord: IVec3) {
-        if self.keeps_loaded(coord) && !self.ready.contains(&coord) {
-            self.ready.push_back(coord);
+        if self.keeps_loaded(coord) && !self.ready.contains(coord) {
+            self.ready.enqueue(coord);
         }
     }
 
     fn defer_ready(&mut self, coord: IVec3) {
-        if self.keeps_loaded(coord) && !self.ready.contains(&coord) {
-            self.ready.push_front(coord);
+        if self.keeps_loaded(coord) && !self.ready.contains(coord) {
+            self.ready.enqueue_front(coord);
         }
     }
 }
@@ -182,12 +180,12 @@ fn dispatch_generation_tasks(
     while runtime.generation_tasks.pending_count() < MAX_GENERATION_TASKS_IN_FLIGHT
         && dispatched < MAX_GENERATION_TASKS_DISPATCHED_PER_FRAME
     {
-        let Some(coord) = runtime.state.pending.pop_front() else {
+        let Some(coord) = runtime.state.pending.pop() else {
             break;
         };
 
         if render_pool.contains(coord)
-            || runtime.state.ready.contains(&coord)
+            || runtime.state.ready.contains(coord)
             || runtime.mesh_tasks.contains(coord)
         {
             continue;
@@ -227,7 +225,7 @@ fn dispatch_initial_mesh_tasks(
             break;
         }
 
-        let Some(coord) = runtime.state.ready.pop_front() else {
+        let Some(coord) = runtime.state.ready.pop() else {
             break;
         };
         if !runtime.state.keeps_loaded(coord) || render_pool.contains(coord) {
