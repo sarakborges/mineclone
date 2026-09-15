@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{content::color::Hsi, rendering::biome_visuals::CurrentBiomeVisuals};
 
-#[derive(Resource)]
+#[derive(Resource, PartialEq)]
 pub(super) struct SkyLayerVisualState {
     pub star_density: f32,
     pub star_color: Hsi,
@@ -29,12 +29,18 @@ pub(super) fn update_sky_layer_visuals(
         return;
     }
 
-    visuals.star_density = biome_visuals
-        .weighted_scalar(|biome| biome.visuals.stars.density)
-        .clamp(0.0, 1.0);
-    visuals.cloud_density = biome_visuals
-        .weighted_scalar(|biome| biome.visuals.clouds.density)
-        .clamp(0.0, 1.0);
-    visuals.star_color = biome_visuals.blend_hsi(|biome| biome.visuals.stars.color);
-    visuals.cloud_color = biome_visuals.blend_hsi(|biome| biome.visuals.clouds.color);
+    let next = SkyLayerVisualState {
+        star_density: biome_visuals
+            .weighted_scalar(|biome| biome.visuals.stars.density)
+            .clamp(0.0, 1.0),
+        cloud_density: biome_visuals
+            .weighted_scalar(|biome| biome.visuals.clouds.density)
+            .clamp(0.0, 1.0),
+        star_color: biome_visuals.blend_hsi(|biome| biome.visuals.stars.color),
+        cloud_color: biome_visuals.blend_hsi(|biome| biome.visuals.clouds.color),
+    };
+
+    if *visuals != next {
+        *visuals = next;
+    }
 }
