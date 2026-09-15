@@ -36,6 +36,16 @@ pub(super) struct SeedValueText;
 #[derive(Component)]
 pub(super) struct RandomSeedButton;
 
+type NewWorldGeneralControlInteractions<'w, 's> = Query<
+    'w,
+    's,
+    &'static Interaction,
+    (
+        Changed<Interaction>,
+        Or<(With<RandomSeedButton>, With<GameModeButton>)>,
+    ),
+>;
+
 pub(super) struct SeedInputKind;
 pub(super) type SeedInputState = NumericInputState<SeedInputKind>;
 
@@ -192,13 +202,7 @@ pub(super) fn sync_new_world_input_focus_to_section(
 }
 
 pub(super) fn handle_new_world_general_control_focus(
-    interactions: Query<
-        &Interaction,
-        (
-            Changed<Interaction>,
-            Or<(With<RandomSeedButton>, With<GameModeButton>)>,
-        ),
-    >,
+    interactions: NewWorldGeneralControlInteractions,
     mut seed_input: ResMut<SeedInputState>,
     mut spawn_biome_dropdown: ResMut<SpawnBiomeDropdownState>,
 ) {
