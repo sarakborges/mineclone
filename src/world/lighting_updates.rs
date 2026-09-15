@@ -20,6 +20,10 @@ pub(super) fn process_dynamic_lighting(
     content: VoxelContent,
     mut runtime: DynamicLightingRuntime,
 ) {
+    if runtime.lighting.is_empty() {
+        return;
+    }
+
     let changed_chunks = process_pending_lighting(
         &mut runtime.world,
         &mut runtime.lighting,
