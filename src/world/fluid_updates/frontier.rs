@@ -112,7 +112,10 @@ fn enqueue_spread_targets_from_fluid(
 ) {
     for offset in FLUID_SPREAD_TARGETS {
         let target = position + offset;
-        if !world.is_loaded_at(target) || world.is_solid(target) || world.fluid_at(target).is_some() {
+        let Some((cell, fluid, _)) = world.sample_at(target) else {
+            continue;
+        };
+        if cell.is_some() || fluid.is_some() {
             continue;
         }
 
