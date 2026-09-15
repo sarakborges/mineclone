@@ -77,7 +77,9 @@ fn toggle_inventory(
         InventoryState::Closed if keys.just_pressed(KeyCode::KeyE) => {
             next_inventory_state.set(InventoryState::Open);
         }
-        InventoryState::Open if keys.just_pressed(KeyCode::Escape) => {
+        InventoryState::Open
+            if keys.just_pressed(KeyCode::KeyE) || keys.just_pressed(KeyCode::Escape) =>
+        {
             next_inventory_state.set(InventoryState::Closed);
         }
         _ => {}
