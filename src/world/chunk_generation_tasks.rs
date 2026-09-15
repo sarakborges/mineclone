@@ -16,7 +16,6 @@ use crate::{
 use super::{
     biome_field::BiomeField,
     chunk_system_params::{ChunkContent, ChunkGeneration},
-    chunk_task_snapshots::{clone_biome_registry, clone_structure_registry},
     generation::{ChunkGenerationContext, generate_chunk},
     world_feature_fields::WorldFeatureFields,
 };
@@ -39,8 +38,8 @@ impl GenerationSnapshot {
             blocks: content.blocks().clone(),
             fluids: content.fluids().clone(),
             dimension: generation.dimension().clone(),
-            biomes: clone_biome_registry(&content.biomes),
-            structures: clone_structure_registry(&generation.structures),
+            biomes: BiomeRegistry::clone(&content.biomes),
+            structures: StructureRegistry::clone(&generation.structures),
             biome_field: content.biome_field.as_ref().clone(),
             feature_fields: generation.feature_fields.as_ref().clone(),
         }
