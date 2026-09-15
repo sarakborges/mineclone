@@ -13,7 +13,6 @@ use super::{
     biome_field::BiomeField,
     chunk_rendering::{ChunkRenderContext, ChunkRenderPool, FluidMaterials, TerrainMaterials},
     current_context::CurrentDimensionContext,
-    generation::ChunkGenerationContext,
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -96,18 +95,6 @@ impl ChunkGeneration<'_> {
         self.dimension.inputs_changed()
             || self.structures.is_changed()
             || self.feature_fields.is_changed()
-    }
-
-    pub(crate) fn context<'a>(&'a self, content: &'a ChunkContent<'_>) -> ChunkGenerationContext<'a> {
-        ChunkGenerationContext {
-            blocks: content.blocks(),
-            fluids: content.fluids(),
-            dimension: self.dimension(),
-            biomes: &content.biomes,
-            structures: &self.structures,
-            biome_field: &content.biome_field,
-            feature_fields: &self.feature_fields,
-        }
     }
 }
 
