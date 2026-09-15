@@ -45,6 +45,9 @@ struct TargetHudRoot;
 #[derive(Component)]
 struct TargetHudRow;
 
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+struct AppliedTargetHudPosition(TargetBlockPosition);
+
 #[derive(Component)]
 struct TargetBlockText;
 
@@ -101,6 +104,7 @@ fn spawn_target_hud(
     commands
         .spawn((
             TargetHudRoot,
+            AppliedTargetHudPosition(position),
             Visibility::Hidden,
             target_hud_root_node(position),
             GlobalZIndex(10),
@@ -156,17 +160,21 @@ fn spawn_target_hud(
 
 fn sync_target_hud_layout(
     settings: Res<HudSettings>,
-    mut root: Single<&mut Node, (With<TargetHudRoot>, Without<TargetHudRow>)>,
+    mut root: Single<
+        (&mut Node, &mut AppliedTargetHudPosition),
+        (With<TargetHudRoot>, Without<TargetHudRow>),
+    >,
     mut row: Single<&mut Node, (With<TargetHudRow>, Without<TargetHudRoot>)>,
-    mut cached_position: Local<Option<TargetBlockPosition>>,
 ) {
     let position = settings.target_block_position();
-    if *cached_position == Some(position) {
+    let (root_node, applied_position) = root.into_inner();
+    if applied_position.0 == position {
         return;
     }
-    *cached_position = Some(position);
-    **root = target_hud_root_node(position);
+
+    *root_node = target_hud_root_node(position);
     **row = target_hud_row_node(position);
+    applied_position.0 = position;
 }
 
 fn target_hud_root_node(position: TargetBlockPosition) -> Node {
