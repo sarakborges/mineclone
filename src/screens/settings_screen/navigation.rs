@@ -29,7 +29,7 @@ pub(super) enum SettingsSection {
     GameRules,
     Graphics,
     Languages,
-    Miscellaneous,
+    Hud,
 }
 
 impl SettingsSection {
@@ -40,7 +40,7 @@ impl SettingsSection {
             Self::GameRules => "settings.section.gameRules",
             Self::Graphics => "settings.section.graphics",
             Self::Languages => "settings.section.languages",
-            Self::Miscellaneous => "settings.section.miscellaneous",
+            Self::Hud => "settings.section.hud",
         }
     }
 }
@@ -85,11 +85,14 @@ pub(super) fn sync_section_ui(
 ) {
     if selection.is_changed() {
         for (panel, mut node) in &mut panels {
-            node.display = if panel.0 == selection.selected {
+            let next_display = if panel.0 == selection.selected {
                 Display::Flex
             } else {
                 Display::None
             };
+            if node.display != next_display {
+                node.display = next_display;
+            }
         }
     }
 
