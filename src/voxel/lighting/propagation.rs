@@ -1,6 +1,4 @@
-use std::collections::HashSet;
-
-use bevy::prelude::*;
+use bevy::{platform::collections::HashSet, prelude::*};
 
 use crate::content::{
     block::BlockRegistry, fluid::FluidRegistry, secondary_property::SecondaryPropertyRegistry,

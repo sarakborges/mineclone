@@ -6,9 +6,10 @@ mod queue;
 #[cfg(test)]
 mod tests;
 
-use std::collections::{HashMap, HashSet};
-
-use bevy::prelude::*;
+use bevy::{
+    platform::collections::{HashMap, HashSet},
+    prelude::*,
+};
 
 use crate::content::{
     block::BlockRegistry, fluid::FluidRegistry, secondary_property::SecondaryPropertyRegistry,

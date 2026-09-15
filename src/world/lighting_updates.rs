@@ -1,6 +1,10 @@
-use std::{collections::HashSet, time::Duration};
+use std::time::Duration;
 
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{
+    ecs::system::SystemParam,
+    platform::collections::HashSet,
+    prelude::*,
+};
 
 use crate::voxel::{
     lighting::{PendingLightingUpdates, process_pending_lighting},
