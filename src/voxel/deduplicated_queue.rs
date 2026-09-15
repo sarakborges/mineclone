@@ -10,6 +10,7 @@ pub(crate) struct DeduplicatedQueue<T> {
     pending: VecDeque<(T, u64)>,
     queued: HashMap<T, u64>,
     next_generation: u64,
+    revision: u64,
 }
 
 impl<T> Default for DeduplicatedQueue<T> {
@@ -18,6 +19,7 @@ impl<T> Default for DeduplicatedQueue<T> {
             pending: VecDeque::new(),
             queued: HashMap::new(),
             next_generation: 0,
+            revision: 0,
         }
     }
 }
@@ -47,6 +49,7 @@ where
         let generation = self.next_generation();
         self.queued.insert(value, generation);
         self.pending.push_back((value, generation));
+        self.bump_revision();
         true
     }
 
@@ -54,6 +57,7 @@ where
         let generation = self.next_generation();
         self.queued.insert(value, generation);
         self.pending.push_front((value, generation));
+        self.bump_revision();
         self.compact_if_sparse();
     }
 
@@ -71,6 +75,7 @@ where
         } else {
             self.compact_if_sparse();
         }
+        self.bump_revision();
         true
     }
 
@@ -84,6 +89,7 @@ where
             if self.queued.is_empty() {
                 self.pending.clear();
             }
+            self.bump_revision();
             return Some(value);
         }
 
@@ -106,11 +112,16 @@ where
         if self.queued.is_empty() {
             self.pending.clear();
         }
+        self.bump_revision();
         Some(value)
     }
 
     pub(crate) fn len(&self) -> usize {
         self.queued.len()
+    }
+
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision
     }
 
     fn next_generation(&mut self) -> u64 {
@@ -120,6 +131,13 @@ where
             .checked_add(1)
             .expect("deduplicated queue generation exhausted");
         generation
+    }
+
+    fn bump_revision(&mut self) {
+        self.revision = self
+            .revision
+            .checked_add(1)
+            .expect("deduplicated queue revision exhausted");
     }
 
     fn compact_if_sparse(&mut self) {
@@ -222,5 +240,26 @@ mod tests {
         assert_eq!(queue.pop_where(|value| value % 2 == 0), Some(2));
         assert_eq!(queue.pop(), Some(1));
         assert_eq!(queue.pop(), Some(3));
+    }
+
+    #[test]
+    fn revision_changes_only_with_logical_queue_mutation() {
+        let mut queue = DeduplicatedQueue::default();
+        let initial = queue.revision();
+
+        assert!(queue.enqueue(1));
+        let after_enqueue = queue.revision();
+        assert_ne!(after_enqueue, initial);
+        assert!(!queue.enqueue(1));
+        assert_eq!(queue.revision(), after_enqueue);
+
+        queue.enqueue_front(1);
+        let after_promotion = queue.revision();
+        assert_ne!(after_promotion, after_enqueue);
+        assert!(!queue.remove(2));
+        assert_eq!(queue.revision(), after_promotion);
+
+        assert_eq!(queue.pop(), Some(1));
+        assert_ne!(queue.revision(), after_promotion);
     }
 }

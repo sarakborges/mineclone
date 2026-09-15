@@ -32,11 +32,16 @@ pub(super) struct DetachedRenderAllocationParts {
 #[derive(Resource, Default)]
 pub struct ChunkRenderPool {
     active: HashMap<IVec3, ChunkRenderAllocation>,
+    membership_revision: u64,
 }
 
 impl ChunkRenderPool {
     pub(crate) fn contains(&self, coord: IVec3) -> bool {
         self.active.contains_key(&coord)
+    }
+
+    pub(crate) fn membership_revision(&self) -> u64 {
+        self.membership_revision
     }
 
     pub(crate) fn active_count(&self) -> usize {
@@ -52,9 +57,9 @@ impl ChunkRenderPool {
     }
 
     fn take(&mut self, coord: IVec3) -> Option<(Vec<Entity>, Vec<Handle<Mesh>>)> {
-        self.active
-            .remove(&coord)
-            .map(|slot| (slot.entities, slot.meshes))
+        let slot = self.active.remove(&coord)?;
+        self.bump_membership_revision();
+        Some((slot.entities, slot.meshes))
     }
 
     pub(super) fn replace_terrain_mesh_assets(
@@ -233,15 +238,29 @@ impl ChunkRenderPool {
     }
 
     pub(super) fn insert(&mut self, coord: IVec3, allocation: ChunkRenderAllocation) {
-        self.active.insert(coord, allocation);
+        if self.active.insert(coord, allocation).is_none() {
+            self.bump_membership_revision();
+        }
     }
 
     fn clear(&mut self, meshes: &mut Assets<Mesh>) {
+        let had_active_allocations = !self.active.is_empty();
         for (_, slot) in self.active.drain() {
             for handle in slot.meshes {
                 let _ = meshes.remove(&handle);
             }
         }
+
+        if had_active_allocations {
+            self.bump_membership_revision();
+        }
+    }
+
+    fn bump_membership_revision(&mut self) {
+        self.membership_revision = self
+            .membership_revision
+            .checked_add(1)
+            .expect("chunk render pool membership revision exhausted");
     }
 }
 
