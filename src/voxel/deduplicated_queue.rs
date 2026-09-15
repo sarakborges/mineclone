@@ -1,7 +1,6 @@
-use std::{
-    collections::{hash_map::Entry, HashMap, VecDeque},
-    hash::Hash,
-};
+use std::{collections::VecDeque, hash::Hash};
+
+use bevy::platform::collections::{HashMap, hash_map::Entry};
 
 const MIN_PENDING_BEFORE_COMPACTION: usize = 64;
 
