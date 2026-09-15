@@ -166,7 +166,7 @@ fn collect_generated_chunks(runtime: &mut ChunkStreamingRuntime<'_, '_>) {
             continue;
         }
 
-        runtime.world.insert_chunk(completed.coord, completed.chunk);
+        runtime.world.insert_chunk(completed.coord, completed.output);
         runtime.state.mark_ready(completed.coord);
     }
 }
@@ -300,7 +300,7 @@ fn collect_built_chunk_meshes(
             &mut renderer.meshes,
             &mut renderer.pool,
             completed.coord,
-            completed.meshes,
+            completed.output,
             &render_context,
         );
         notify_loaded_chunk_neighbors(
