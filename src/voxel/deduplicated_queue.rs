@@ -18,6 +18,19 @@ impl<T> Default for DeduplicatedQueue<T> {
     }
 }
 
+impl<T> From<Vec<T>> for DeduplicatedQueue<T>
+where
+    T: Copy + Eq + Hash,
+{
+    fn from(values: Vec<T>) -> Self {
+        let mut queue = Self::default();
+        for value in values {
+            queue.enqueue(value);
+        }
+        queue
+    }
+}
+
 impl<T> DeduplicatedQueue<T>
 where
     T: Copy + Eq + Hash,
@@ -37,6 +50,10 @@ where
         }
 
         self.pending.push_front(value);
+    }
+
+    pub(crate) fn contains(&self, value: T) -> bool {
+        self.queued.contains(&value)
     }
 
     pub(crate) fn remove(&mut self, value: T) -> bool {
@@ -93,6 +110,27 @@ mod tests {
 
         assert_eq!(queue.pop(), Some(2));
         assert_eq!(queue.pop(), Some(1));
+    }
+
+    #[test]
+    fn contains_tracks_queue_membership() {
+        let mut queue = DeduplicatedQueue::default();
+
+        assert!(!queue.contains(1));
+        queue.enqueue(1);
+        assert!(queue.contains(1));
+        assert_eq!(queue.pop(), Some(1));
+        assert!(!queue.contains(1));
+    }
+
+    #[test]
+    fn vector_conversion_preserves_order_and_deduplicates() {
+        let mut queue = DeduplicatedQueue::from(vec![2, 1, 2, 3]);
+
+        assert_eq!(queue.pop(), Some(2));
+        assert_eq!(queue.pop(), Some(1));
+        assert_eq!(queue.pop(), Some(3));
+        assert_eq!(queue.pop(), None);
     }
 
     #[test]
