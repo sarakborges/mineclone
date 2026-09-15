@@ -5,6 +5,8 @@ use crate::content::{
     secondary_property::SecondaryPropertyRegistry,
 };
 use crate::voxel::{
+    cell::VoxelCell,
+    fluid::FluidCell,
     light::{BlockLight, VoxelLight},
     world::VoxelWorld,
 };
@@ -18,7 +20,20 @@ pub(super) fn medium_dampening(
     fluids: &FluidRegistry,
     position: IVec3,
 ) -> u8 {
-    block_dampening(world, blocks, position).max(fluid_dampening(world, fluids, position))
+    let Some((cell, fluid, _)) = world.sample_at(position) else {
+        return 0;
+    };
+
+    medium_dampening_for_cells(cell, fluid, blocks, fluids)
+}
+
+pub(super) fn medium_dampening_for_cells(
+    cell: Option<VoxelCell>,
+    fluid: Option<FluidCell>,
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+) -> u8 {
+    block_dampening(cell, blocks).max(fluid_dampening(fluid, fluids))
 }
 
 pub(super) fn block_emission(
@@ -27,7 +42,15 @@ pub(super) fn block_emission(
     secondary_properties: &SecondaryPropertyRegistry,
     position: IVec3,
 ) -> BlockLight {
-    let Some(cell) = world.cell_at(position) else {
+    block_emission_for_cell(world.cell_at(position), blocks, secondary_properties)
+}
+
+pub(super) fn block_emission_for_cell(
+    cell: Option<VoxelCell>,
+    blocks: &BlockRegistry,
+    secondary_properties: &SecondaryPropertyRegistry,
+) -> BlockLight {
+    let Some(cell) = cell else {
         return BlockLight::DARK;
     };
     let Some(block) = blocks.get(cell.block_id) else {
@@ -74,19 +97,19 @@ pub(super) fn light_transmission(
     1.0
 }
 
-fn block_dampening(world: &VoxelWorld, blocks: &BlockRegistry, position: IVec3) -> u8 {
-    let Some(block_id) = world.block_id_at(position) else {
+fn block_dampening(cell: Option<VoxelCell>, blocks: &BlockRegistry) -> u8 {
+    let Some(cell) = cell else {
         return 0;
     };
 
     blocks
-        .get(block_id)
+        .get(cell.block_id)
         .map(|block| block.light_dampening.min(VoxelLight::MAX_LEVEL))
         .unwrap_or(VoxelLight::MAX_LEVEL)
 }
 
-fn fluid_dampening(world: &VoxelWorld, fluids: &FluidRegistry, position: IVec3) -> u8 {
-    let Some(cell) = world.fluid_at(position) else {
+fn fluid_dampening(cell: Option<FluidCell>, fluids: &FluidRegistry) -> u8 {
+    let Some(cell) = cell else {
         return 0;
     };
 
