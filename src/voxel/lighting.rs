@@ -16,7 +16,7 @@ use crate::content::{
 };
 
 use self::{
-    medium::{block_emission_for_cell, medium_dampening, medium_dampening_for_cells},
+    medium::{block_emission_for_cell, medium_dampening_for_cells},
     propagation::{relax, relax_budgeted},
     queue::LightingQueue,
 };
@@ -122,31 +122,46 @@ pub(crate) fn seed_chunk_direct_lighting(
     fluids: &FluidRegistry,
     secondary_properties: &SecondaryPropertyRegistry,
 ) {
-    let origin = chunk_origin(coord);
     let size = CHUNK_SIZE as i32;
-    let chunk_top = origin.y + size - 1;
-    let highest_loaded_y = world
-        .highest_loaded_world_y_in_column(origin.x, origin.z)
-        .unwrap_or(chunk_top);
-    debug_assert!(highest_loaded_y >= chunk_top);
+    let world_x = coord.x * size;
+    let world_z = coord.z * size;
+    let highest_loaded_chunk_y = world
+        .highest_loaded_world_y_in_column(world_x, world_z)
+        .map(|highest_y| highest_y.div_euclid(size))
+        .unwrap_or(coord.y);
+    debug_assert!(highest_loaded_chunk_y >= coord.y);
 
     let mut sky_by_column = [VoxelLight::MAX_LEVEL; CHUNK_SIZE * CHUNK_SIZE];
-    for local_z in 0..CHUNK_SIZE {
-        for local_x in 0..CHUNK_SIZE {
-            let world_x = origin.x + local_x as i32;
-            let world_z = origin.z + local_z as i32;
-            let sky = &mut sky_by_column[local_x + local_z * CHUNK_SIZE];
+    for upper_y in ((coord.y + 1)..=highest_loaded_chunk_y).rev() {
+        let Some(upper_chunk) = world.chunk(IVec3::new(coord.x, upper_y, coord.z)) else {
+            continue;
+        };
 
-            for y in ((chunk_top + 1)..=highest_loaded_y).rev() {
+        for local_z in 0..CHUNK_SIZE {
+            for local_x in 0..CHUNK_SIZE {
+                let sky = &mut sky_by_column[local_x + local_z * CHUNK_SIZE];
                 if *sky == 0 {
-                    break;
+                    continue;
                 }
-                *sky = sky.saturating_sub(medium_dampening(
-                    world,
-                    blocks,
-                    fluids,
-                    IVec3::new(world_x, y, world_z),
-                ));
+
+                for local_y in (0..CHUNK_SIZE).rev() {
+                    if *sky == 0 {
+                        break;
+                    }
+                    let cell = upper_chunk.cell_at(
+                        local_x as i32,
+                        local_y as i32,
+                        local_z as i32,
+                    );
+                    let fluid = upper_chunk.fluid_at(
+                        local_x as i32,
+                        local_y as i32,
+                        local_z as i32,
+                    );
+                    *sky = sky.saturating_sub(medium_dampening_for_cells(
+                        cell, fluid, blocks, fluids,
+                    ));
+                }
             }
         }
     }
