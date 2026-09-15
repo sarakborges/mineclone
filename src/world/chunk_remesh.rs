@@ -165,13 +165,24 @@ pub(super) fn process_immediate_lighting_remesh(
     world: Res<VoxelWorld>,
     mut queue: ResMut<ChunkRemeshQueue>,
 ) {
+    let Some(first_coord) = queue.pop_renderable_immediate_lighting(&renderer.pool) else {
+        return;
+    };
     let render_context = content.render_context(
         &world,
         &renderer.terrain_materials,
         &renderer.fluid_materials,
     );
 
-    for _ in 0..MAX_IMMEDIATE_LIGHTING_REMESHES_PER_FRAME {
+    refresh_chunk_lighting_mesh(
+        &mut renderer.commands,
+        &mut renderer.meshes,
+        &mut renderer.pool,
+        first_coord,
+        &render_context,
+    );
+
+    for _ in 1..MAX_IMMEDIATE_LIGHTING_REMESHES_PER_FRAME {
         let Some(coord) = queue.pop_renderable_immediate_lighting(&renderer.pool) else {
             break;
         };
@@ -192,12 +203,42 @@ pub(super) fn process_chunk_remesh_queue(
     world: Res<VoxelWorld>,
     mut queue: ResMut<ChunkRemeshQueue>,
 ) {
+    let first = if let Some(coord) = queue.pop_renderable(&renderer.pool) {
+        Some((coord, true))
+    } else {
+        queue
+            .pop_renderable_fluid(&renderer.pool)
+            .map(|coord| (coord, false))
+    };
+    let Some((first_coord, first_is_geometry)) = first else {
+        return;
+    };
+
     let render_context = content.render_context(
         &world,
         &renderer.terrain_materials,
         &renderer.fluid_materials,
     );
     let mut budget = FrameWorkBudget::new(REMESH_BUDGET, 1);
+
+    if first_is_geometry {
+        refresh_chunk_geometry_mesh(
+            &mut renderer.commands,
+            &mut renderer.meshes,
+            &mut renderer.pool,
+            first_coord,
+            &render_context,
+        );
+    } else {
+        refresh_chunk_fluid_mesh(
+            &mut renderer.commands,
+            &mut renderer.meshes,
+            &mut renderer.pool,
+            first_coord,
+            &render_context,
+        );
+    }
+    budget.record(1);
 
     loop {
         if budget.exhausted() {
@@ -299,7 +340,7 @@ mod tests {
 
         assert!(lighting.contains(&coord));
         for offset in CARDINAL_NEIGHBORS {
-            assert!(lighting.contains(&(coord + offset));
+            assert!(lighting.contains(&(coord + offset)));
         }
         assert_eq!(queue.pop(), None);
     }
