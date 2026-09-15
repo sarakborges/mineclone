@@ -63,11 +63,11 @@ Roda em push para `develop`/`main` e em pull requests.
 
 Base do bloco atual:
 
-`868098e3d0ee3aacd922cad7701d6d1ab02a28fb`
+`6ce857b67b18434c3c991c5c5ea9384917e92b39`
 
-Bloco: `Keep idle HUD visuals unchanged`
+Bloco: `Reuse built mesh buffers during integration`
 
-`VERSION`: `0.14.16`
+`VERSION`: `0.14.17`
 
 Na retomada, `develop` já estava em `183bcab1be268bcc9511e7e06d9406ade8b63bf0` / `0.14.12`, embora este handoff ainda descrevesse `0.14.5`. Os blocos abaixo foram conferidos no código e no histórico antes de continuar.
 
@@ -95,7 +95,8 @@ Commits recentes relevantes:
 - `cargo test` somente sob pedido explícito.
 - `0.14.14` / [run `35021097252`](https://github.com/sarakborges/mineclone/actions/runs/35021097252), commit `5471729`: Clippy **success**, `cargo check` **success**.
 - `0.14.15` / [run `35021896289`](https://github.com/sarakborges/mineclone/actions/runs/35021896289), commit `868098e`: Clippy **success**, `cargo check` **success**.
-- `0.14.16`: CI pendente para o bloco de HUD/transição.
+- `0.14.16` / run `35024201403`: em execução na última consulta; Clippy em andamento.
+- `0.14.17`: CI pendente para o bloco de integração de meshes.
 
 ---
 
@@ -231,15 +232,24 @@ O hint já era filho do Player HUD, mas `Visibility::Visible` sobrescrevia a her
 
 ---
 
+## 0.14.17 — integração de meshes sem buffers intermediários no caminho comum
+
+- `apply_built_chunk_geometry_meshes` e `apply_built_chunk_fluid_meshes` mantêm os vetores produzidos pelo build intactos até o preflight do `ChunkRenderPool`.
+- O pool valida toda a topologia antes de tocar em assets: contagem/keys de terrain ou IDs de fluid e existência de todos os `Handle<Mesh>` necessários.
+- Quando a substituição in-place é possível, o próprio vetor de `BuiltChunkMesh`/`ChunkFluidMesh` é drenado diretamente nos assets existentes; não são criados `replacement_keys`, `Vec<Mesh>` ou `Vec<(FluidId, Mesh)>` nesse caminho.
+- Quando o preflight falha, os vetores permanecem intactos e só então o fallback materializa os buffers já exigidos por detach/spawn.
+- O lifecycle atômico por chunk, a ordem terrain/fluid, o accounting de bytes e as regras de fallback foram preservados.
+
+---
+
 # Próximos passos
 
 Se nenhum runtime error/warning tiver prioridade:
 
-1. Continuar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes. Targeting consumers, estrelas, hotbar e o bloco de HUD/UI acima já foram tratados; não repetir esses refactors sem evidência nova.
-2. Integração de meshes: eliminar arrays intermediários de keys/meshes antes do caminho de substituição em assets existentes. Manter preflight completo e lifecycle atômico por chunk.
-3. Seleção: reaproveitar buffers de desired/pending/retired e da fila sem repetir geração de volume nem mudar prioridades; `dispatch_remesh_tasks` também tem scratch temporário reaproveitável.
-4. Manter `notify_loaded_chunk_neighbors` conservador até existir metadata suficiente para provar otimização segura.
-5. Quando o usuário solicitar, rodar `cargo test` manualmente.
+1. Continuar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes. Targeting consumers, estrelas, hotbar, HUD/UI e integração in-place de meshes já foram tratados; não repetir esses refactors sem evidência nova.
+2. Seleção: reaproveitar buffers de desired/pending/retired e da fila sem repetir geração de volume nem mudar prioridades; `dispatch_remesh_tasks` também tem scratch temporário reaproveitável.
+3. Manter `notify_loaded_chunk_neighbors` conservador até existir metadata suficiente para provar otimização segura.
+4. Quando o usuário solicitar, rodar `cargo test` manualmente.
 
 # Performance direction
 
