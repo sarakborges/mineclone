@@ -79,6 +79,7 @@ Princípios principais:
 18. Sistemas visuais e gameplay devem evitar reescrever Components/Assets com o mesmo valor; acesso mutável pode propagar change detection ou upload desnecessário.
 19. Quando invariants permitirem, separar refresh estrutural de material/textura de refresh leve de tint/orientação/posição.
 20. Movimento com delta zero não deve adquirir mutação de `Transform` nem executar collision stepping; estado ocioso deve permanecer realmente ocioso.
+21. Scratch de cardinalidade estruturalmente limitada deve preferir stack/reuse a heap allocation por amostra, sem impor limites artificiais a conteúdo data-driven.
 
 ---
 
@@ -86,9 +87,9 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`2cf90dd7f6286900a623ea29498637e754828503`
+`c00effb1bcbff96d504365e269f79e90e989c8f4`
 
-Commit: `Avoid idle player state mutations`
+Commit: `Reduce surface biome sampling allocations`
 
 Blocos recentes:
 
@@ -101,8 +102,9 @@ Blocos recentes:
 - `c95975361b01c11f462298a7b89e48d2e6f24bbc` — `Separate held block material and tint refresh`
 - `4a3220d443f6af296fc62d2a99ee6382c1790e21` — bump `0.12.102`
 - `2cf90dd7f6286900a623ea29498637e754828503` — `Avoid idle player state mutations` + bump `0.12.103`
+- `c00effb1bcbff96d504365e269f79e90e989c8f4` — `Reduce surface biome sampling allocations` + bump `0.12.104`
 
-`VERSION`: `0.12.103`
+`VERSION`: `0.12.104`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever código.
 
@@ -110,10 +112,10 @@ Sempre buscar HEAD/VERSION novamente antes de escrever código.
 
 Estado observado durante esta gravação:
 
-- `0.12.102` / run `34990965664`: Clippy **success**, `cargo check` **success**, `cargo test` ainda em execução na última consulta.
-- `0.12.103` / run `34992166745`: iniciado; preparação/dependências do runner em andamento na última consulta.
+- `0.12.103` / run `34992166745`: Clippy **success**, `cargo check` **success**, `cargo test` ainda em execução na última consulta.
+- `0.12.104` / run `34992749054`: Clippy em execução; check/test pendentes na última consulta.
 
-O bloco `0.12.103` ainda não está encerrado enquanto Clippy/check/test do HEAD correspondente não estiverem verdes.
+O bloco `0.12.104` ainda não está encerrado enquanto Clippy/check/test do HEAD correspondente não estiverem verdes.
 
 ---
 
@@ -181,13 +183,22 @@ A auditoria arquitetural/performance segue ativa. O roadmap vem do canon + inspe
 
 ## 0.12.103 — player idle realmente ocioso
 
-- `animate_viewmodel` usa estado local para não reescrever o transform base em todo frame ocioso; ao fim de uma animação/item-switch, o base é restaurado uma única vez.
+- `animate_viewmodel` não reescreve o transform base em todo frame ocioso; restaura uma vez ao terminar interaction/item-switch.
 - `walk` e `move_flying` só chamam `move_axis` para eixos com velocidade diferente de zero.
-- Walking/flight velocity só são zeradas/escritas quando o valor realmente muda.
-- `update_swimming_state` só altera `SwimmingState.active` quando o estado de submersão muda.
-- Swimming só altera grounded/vertical velocity quando necessário e não chama collision stepping para delta vertical zero.
-- Gravity, quando grounded com suporte e sem jump, retorna antes de integrar gravidade e antes do `move_axis`; deixa de simular uma microqueda+colisão a cada tick parado no chão.
-- O ground support probe permanece por frame enquanto grounded para detectar remoção do suporte sem depender de cache derivado.
+- Walking/flight/swimming state só recebe escrita quando valores efetivamente mudam.
+- Gravity grounded com suporte e sem jump retorna antes de integrar gravidade e antes do collision stepping.
+- O ground support probe permanece por frame enquanto grounded para detectar remoção do suporte sem cache derivado.
+
+## 0.12.104 — surface biome sampling com scratch fixo
+
+- `SITE_SEARCH_RADIUS = 2` implica exatamente 25 sites por amostra; esse neighborhood agora usa array em stack em vez de `Vec`.
+- Cache misses dos sites usam scratch fixo de até 25 updates; não há `Vec` temporário para cache updates.
+- O pass intermediário `sites` foi removido; nearest distance e weights leem diretamente o scratch de sites.
+- Pesos regionais usam até 25 entradas compactas + 1 macro biome em array de stack, sem criar `vec![0.0; surface_biomes.len()]` por amostra.
+- Tie-breaking do primary biome preserva a semântica do dense vector: em pesos iguais, o maior biome index vence.
+- Influences são ordenadas por biome index antes do retorno, preservando a ordem anterior.
+- A única alocação obrigatória restante no caminho é o `Vec<BiomeInfluence>` retornado por `BiomeFieldSample`.
+- Testes cobrem max/add do scratch compacto e tie-breaking por índice.
 
 ---
 
@@ -219,6 +230,7 @@ Não desfazer sem evidência nova:
 - Componentes/Assets não devem ser mutavelmente acessados só para regravar o mesmo valor; isso pode propagar change detection ou asset upload desnecessário.
 - Block model material/topology refresh deve ficar separado de tint/orientation refresh quando os inputs autoritativos permitem essa divisão.
 - Grounded estável com suporte não precisa integrar gravidade só para colidir e zerar a mesma velocidade no mesmo tick; o probe de suporte é o invariant necessário nesse estado.
+- Surface sampling pode usar scratch fixo para o neighborhood de sites porque a cardinalidade é definida por `SITE_SEARCH_RADIUS`; isso não limita a quantidade data-driven de biomes no registry.
 - Solvers dinâmicos devem preservar a semântica da frontier ao ganhar budgets temporais.
 - Archive compactado permanece preferível a guardar buffers COW brutos; restore caro é controlado por scheduling budget.
 - Formatação de Rust não é requisito de CI; não reintroduzir format gate sem pedido explícito.
@@ -230,9 +242,9 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Fechar o gate de CI do HEAD `0.12.103`; corrigir qualquer falha de Clippy/check/test antes de considerar o bloco encerrado.
-2. Continuar inspeção objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos e escritas redundantes em Components/Assets.
-3. Auditar camera/cursor/interaction e demais systems do player por change detection inútil, sem eliminar polling que seja necessário para input/foco.
+1. Fechar o gate de CI do HEAD `0.12.104`; corrigir qualquer falha de Clippy/check/test antes de considerar o bloco encerrado.
+2. Revisar `track_current_biome`/identity ownership: ainda há `String`/`Vec` temporários acima do `sample_surface()` em cada mudança de posição; buscar reuse sem impedir blend contínuo nem falsificar change detection.
+3. Continuar inspeção objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos e escritas redundantes em Components/Assets.
 4. Revisar integração/spawn de mesh apenas se houver ganho estrutural sem introduzir lifecycle parcial por submesh.
 5. Revisar custo do rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para eliminar o pequeno sort do raio local 3.
 6. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel.
