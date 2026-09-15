@@ -23,14 +23,12 @@ use super::{
 const HUE_VECTOR_SCALE: i32 = 1024;
 const BUDGET_CHECK_INTERVAL_VOXELS: usize = 64;
 const HUE_VECTOR_X: [i32; 32] = [
-    1024, 1004, 946, 851, 724, 569, 392, 200, 0, -200, -392, -569, -724, -851, -946,
-    -1004, -1024, -1004, -946, -851, -724, -569, -392, -200, 0, 200, 392, 569, 724, 851,
-    946, 1004,
+    1024, 1004, 946, 851, 724, 569, 392, 200, 0, -200, -392, -569, -724, -851, -946, -1004, -1024,
+    -1004, -946, -851, -724, -569, -392, -200, 0, 200, 392, 569, 724, 851, 946, 1004,
 ];
 const HUE_VECTOR_Y: [i32; 32] = [
-    0, 200, 392, 569, 724, 851, 946, 1004, 1024, 1004, 946, 851, 724, 569, 392, 200, 0,
-    -200, -392, -569, -724, -851, -946, -1004, -1024, -1004, -946, -851, -724, -569,
-    -392, -200,
+    0, 200, 392, 569, 724, 851, 946, 1004, 1024, 1004, 946, 851, 724, 569, 392, 200, 0, -200, -392,
+    -569, -724, -851, -946, -1004, -1024, -1004, -946, -851, -724, -569, -392, -200,
 ];
 
 pub(super) fn relax(
@@ -123,16 +121,9 @@ fn desired_light(
         return VoxelLight::new_hsi(0, emitted);
     }
 
-    let neighbor_lights =
-        CARDINAL_NEIGHBORS.map(|direction| world.light_at(position + direction));
+    let neighbor_lights = CARDINAL_NEIGHBORS.map(|direction| world.light_at(position + direction));
     let sky = context
-        .direct_sky_light(
-            world,
-            blocks,
-            fluids,
-            secondary_properties,
-            position,
-        )
+        .direct_sky_light(world, blocks, fluids, secondary_properties, position)
         .max(filtered_level(
             propagated_neighbor_sky(&neighbor_lights, attenuation),
             transmission,
@@ -201,9 +192,8 @@ fn mix_strongest_block_lights<const N: usize>(lights: [BlockLight; N]) -> BlockL
         return BlockLight::new(0, 0, strongest_intensity);
     }
 
-    let vector_length = ((vector_x as f32 * vector_x as f32)
-        + (vector_y as f32 * vector_y as f32))
-        .sqrt();
+    let vector_length =
+        ((vector_x as f32 * vector_x as f32) + (vector_y as f32 * vector_y as f32)).sqrt();
     let maximum_length = HUE_VECTOR_SCALE as f32 * saturation_sum as f32;
     let coherence = (vector_length / maximum_length).clamp(0.0, 1.0);
     let average_saturation = saturation_sum as f32 / strongest_count as f32;
@@ -224,8 +214,8 @@ fn nearest_hue(vector_x: i32, vector_y: i32) -> u8 {
     let mut best_dot = i64::MIN;
 
     for hue in 0..32_usize {
-        let dot = vector_x as i64 * HUE_VECTOR_X[hue] as i64
-            + vector_y as i64 * HUE_VECTOR_Y[hue] as i64;
+        let dot =
+            vector_x as i64 * HUE_VECTOR_X[hue] as i64 + vector_y as i64 * HUE_VECTOR_Y[hue] as i64;
         if dot > best_dot {
             best_dot = dot;
             best_hue = hue as u8;

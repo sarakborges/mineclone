@@ -1,9 +1,6 @@
 use crate::content::block_orientation::BlockOrientation;
 
-use super::{
-    secondary_properties::SecondaryProperties,
-    texture_rotation::TextureRotation,
-};
+use super::{secondary_properties::SecondaryProperties, texture_rotation::TextureRotation};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct VoxelCell {

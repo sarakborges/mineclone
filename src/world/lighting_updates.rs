@@ -8,9 +8,7 @@ use crate::voxel::{
 };
 
 use super::{
-    chunk_remesh::ChunkRemeshQueue,
-    chunk_system_params::VoxelContent,
-    work_budget::FrameWorkBudget,
+    chunk_remesh::ChunkRemeshQueue, chunk_system_params::VoxelContent, work_budget::FrameWorkBudget,
 };
 
 const LIGHTING_BUDGET: Duration = Duration::from_millis(2);
@@ -33,11 +31,8 @@ pub(super) fn process_dynamic_lighting(
         return;
     }
 
-    let mut budget = FrameWorkBudget::new(
-        LIGHTING_BUDGET,
-        MIN_LIGHTING_VOXELS_BEFORE_BUDGET_CHECK,
-    )
-    .with_maximum_items(MAX_LIGHTING_VOXELS_PER_FRAME);
+    let mut budget = FrameWorkBudget::new(LIGHTING_BUDGET, MIN_LIGHTING_VOXELS_BEFORE_BUDGET_CHECK)
+        .with_maximum_items(MAX_LIGHTING_VOXELS_PER_FRAME);
     let mut recorded_voxels = 0;
     process_pending_lighting(
         &mut runtime.world,

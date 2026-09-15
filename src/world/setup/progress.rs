@@ -58,12 +58,9 @@ pub(in crate::world) fn setup_world(
             &mut generation_tasks,
         ),
         WorldLoadingPhase::Lighting => light_initial_chunks(&content, &mut progress),
-        WorldLoadingPhase::Meshing => mesh_initial_chunks(
-            &content,
-            &mut renderer,
-            &mut progress,
-            &mut mesh_tasks,
-        ),
+        WorldLoadingPhase::Meshing => {
+            mesh_initial_chunks(&content, &mut renderer, &mut progress, &mut mesh_tasks)
+        }
         WorldLoadingPhase::Spawning => {
             spawn_loaded_world(&mut renderer, &mut progress, &mut transition, &persistence)
         }
@@ -119,7 +116,9 @@ fn integrate_generated_chunks(
         }
 
         if progress.world.chunk(completed.coord).is_none() {
-            progress.world.insert_chunk(completed.coord, completed.output);
+            progress
+                .world
+                .insert_chunk(completed.coord, completed.output);
         }
         fluid_updates.enqueue_loaded_fluid_frontier(&progress.world, completed.coord);
         progress.loading_state.generated += 1;
@@ -244,7 +243,8 @@ fn integrate_built_chunk_meshes(
 
         let coord = completed.coord;
         let output = completed.output;
-        if completed.revision != current_revision || !output.dependencies.is_current(&progress.world)
+        if completed.revision != current_revision
+            || !output.dependencies.is_current(&progress.world)
         {
             let snapshot = ChunkMeshSnapshot::capture(&progress.world, coord)
                 .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));

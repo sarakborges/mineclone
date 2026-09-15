@@ -11,8 +11,7 @@ use std::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 
 use crate::content::{
-    block::BlockRegistry, fluid::FluidRegistry,
-    secondary_property::SecondaryPropertyRegistry,
+    block::BlockRegistry, fluid::FluidRegistry, secondary_property::SecondaryPropertyRegistry,
 };
 
 use self::{
@@ -35,11 +34,7 @@ pub(crate) struct PendingLightingUpdates {
 }
 
 impl PendingLightingUpdates {
-    pub(crate) fn enqueue_voxel_edit(
-        &mut self,
-        position: IVec3,
-        previous_cell: Option<VoxelCell>,
-    ) {
+    pub(crate) fn enqueue_voxel_edit(&mut self, position: IVec3, previous_cell: Option<VoxelCell>) {
         self.queue.enqueue_with_neighbors_priority(position);
         self.emission_edit_previous_cells
             .entry(position)
@@ -52,7 +47,8 @@ impl PendingLightingUpdates {
 
     pub(crate) fn enqueue_chunk_unloads(&mut self, unloaded: &[IVec3]) {
         for coord in unloaded {
-            self.queue.enqueue_chunk_boundary_neighbors(chunk_origin(*coord));
+            self.queue
+                .enqueue_chunk_boundary_neighbors(chunk_origin(*coord));
         }
     }
 
@@ -155,9 +151,8 @@ pub(crate) fn seed_chunk_direct_lighting(
                     let (cell, fluid, _) = upper_chunk
                         .sample_local(local_x as i32, local_y as i32, local_z as i32)
                         .expect("direct seed local coordinates must stay inside the chunk");
-                    *sky = sky.saturating_sub(medium_dampening_for_cells(
-                        cell, fluid, blocks, fluids,
-                    ));
+                    *sky =
+                        sky.saturating_sub(medium_dampening_for_cells(cell, fluid, blocks, fluids));
                 }
             }
         }
@@ -172,9 +167,7 @@ pub(crate) fn seed_chunk_direct_lighting(
     let seeded = world.rebuild_chunk_light(coord, |x, _, z, cell, fluid| {
         let sky = &mut sky_by_column[x + z * CHUNK_SIZE];
         if *sky > 0 {
-            *sky = sky.saturating_sub(medium_dampening_for_cells(
-                cell, fluid, blocks, fluids,
-            ));
+            *sky = sky.saturating_sub(medium_dampening_for_cells(cell, fluid, blocks, fluids));
         }
         let emitted = block_emission_for_cell(cell, blocks, secondary_properties);
         VoxelLight::new_hsi(*sky, emitted)
