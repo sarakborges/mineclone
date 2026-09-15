@@ -50,7 +50,7 @@ use chunk_remesh::{
     process_immediate_lighting_remesh,
 };
 use chunk_rendering::{ChunkRenderPool, clear_chunk_render_pool};
-use chunk_unloading::unload_chunk_meshes;
+use chunk_unloading::{ChunkUnloadState, unload_chunk_meshes};
 use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
 use fluid_updates::{PendingFluidUpdates, process_fluid_updates};
@@ -82,6 +82,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<ChunkStreamingState>()
             .init_resource::<ChunkGenerationTasks>()
             .init_resource::<ChunkMeshTasks>()
+            .init_resource::<ChunkUnloadState>()
             .init_resource::<ChunkRenderPool>()
             .init_resource::<ChunkRemeshQueue>()
             .init_resource::<PendingLightingUpdates>()
@@ -102,6 +103,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<ChunkStreamingState>,
                     reset_resource::<ChunkGenerationTasks>,
                     reset_resource::<ChunkMeshTasks>,
+                    reset_resource::<ChunkUnloadState>,
                     reset_resource::<WorldTickClock>,
                 ),
             )
@@ -111,6 +113,7 @@ impl Plugin for WorldPlugin {
                     clear_chunk_render_pool,
                     reset_resource::<ChunkGenerationTasks>,
                     reset_resource::<ChunkMeshTasks>,
+                    reset_resource::<ChunkUnloadState>,
                     reset_resource::<ChunkRemeshQueue>,
                     reset_resource::<PendingLightingUpdates>,
                     reset_resource::<PendingFluidUpdates>,
