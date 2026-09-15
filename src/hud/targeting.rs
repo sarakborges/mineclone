@@ -64,6 +64,12 @@ struct TargetHudSnapshot {
     language: Language,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct TargetHudIconSnapshot {
+    block_id: &'static str,
+    tint: Color,
+}
+
 #[derive(SystemParam)]
 struct TargetHudState<'w> {
     targeted: Res<'w, TargetedBlock>,
@@ -217,6 +223,7 @@ fn update_target_hud(
     content: TargetHudContent,
     view: TargetHudView,
     mut cached: Local<Option<TargetHudSnapshot>>,
+    mut cached_icon: Local<Option<TargetHudIconSnapshot>>,
 ) {
     let TargetHudView {
         root_visibility,
@@ -227,6 +234,7 @@ fn update_target_hud(
     let mut root_visibility = root_visibility.into_inner();
 
     if state.settings.target_block_position() == TargetBlockPosition::Hidden {
+        *cached_icon = None;
         if *root_visibility != Visibility::Hidden {
             *root_visibility = Visibility::Hidden;
         }
@@ -235,6 +243,7 @@ fn update_target_hud(
 
     let Some(hit) = state.targeted.0 else {
         *cached = None;
+        *cached_icon = None;
         if *root_visibility != Visibility::Hidden {
             *root_visibility = Visibility::Hidden;
         }
@@ -279,7 +288,6 @@ fn update_target_hud(
     }
 
     let mut target_text = target_text.into_inner();
-    let (mut model, material_handle) = icon.into_inner();
     let block = content.visual.blocks.get(hit.block_id);
     let block_name = block.map_or(hit.block_id, |block| block.name.text(language));
     let coordinates = state
@@ -317,16 +325,6 @@ fn update_target_hud(
         target_text.0 = next_text;
     }
 
-    let Some(mut material) = icon_materials.get_mut(&material_handle.0) else {
-        return;
-    };
-
-    if (model.set_block_id(Some(hit.block_id)) || block_definitions_changed)
-        && let Some(block) = block
-    {
-        material.set_block(block, &content.visual.asset_server);
-    }
-
     let tint_position = Vec2::new(hit.voxel.x as f32 + 0.5, hit.voxel.z as f32 + 0.5);
     let base_tint = content
         .visual
@@ -341,5 +339,33 @@ fn update_target_hud(
         ),
         _ => base_tint,
     };
-    material.set_tint(tint);
+    let icon_snapshot = TargetHudIconSnapshot {
+        block_id: hit.block_id,
+        tint,
+    };
+    let block_changed = cached_icon
+        .as_ref()
+        .is_none_or(|previous| previous.block_id != icon_snapshot.block_id);
+    let tint_changed = cached_icon
+        .as_ref()
+        .is_none_or(|previous| previous.tint != icon_snapshot.tint);
+
+    if !block_changed && !block_definitions_changed && !tint_changed {
+        return;
+    }
+
+    let (mut model, material_handle) = icon.into_inner();
+    let Some(mut material) = icon_materials.get_mut(&material_handle.0) else {
+        return;
+    };
+
+    if (model.set_block_id(Some(hit.block_id)) || block_definitions_changed)
+        && let Some(block) = block
+    {
+        material.set_block(block, &content.visual.asset_server);
+    }
+    if tint_changed {
+        material.set_tint(tint);
+    }
+    *cached_icon = Some(icon_snapshot);
 }
