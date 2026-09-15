@@ -84,11 +84,11 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`fe8c9aaaca5d5522a01ae02d1dc870f7f08c8219`
+`5e3b8455b9e574e5b2de8698c5b92fe7564d544e`
 
-Commit: `Limit full relight volumes to source changes`
+Commit: `Return prior cell from block mutation`
 
-`VERSION`: `0.12.61`
+`VERSION`: `0.12.62`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever, porque podem ter avançado.
 
@@ -136,25 +136,12 @@ A auditoria arquitetural foi reiniciada a partir de `0.12.5`/`0.12.8` e segue at
 
 ## Blocos recentes detalhados
 
-### 0.12.53 — surface light reutilizada no meshing
-- Terrain e fluid meshing leem a block light do voxel-fonte uma vez e reutilizam em todas as faces.
-- AO, neighborhood, interpolation e escolha de diagonal mantêm a mesma semântica.
-- Não separar lighting remesh em simples atualização de atributos: block light participa de `should_flip_diagonal` quando AO empata.
-
-### 0.12.54 — samples reutilizados na propagação de iluminação
-- Cada voxel da `LightingQueue` resolve posição/chunk uma vez via `VoxelWorld::sample_at`.
-- Seis luzes cardinais são lidas uma vez e compartilhadas entre skylight e block light: 12 leituras vizinhas -> 6.
-
-### 0.12.55–0.12.57 — refresh parcial do render pool
-- Geometry refresh constrói somente terrain e preserva fluido.
-- Mudança de topology fluida recria somente sufixo fluid.
-- Mudança de topology/material layers de terrain recria somente prefixo terrain.
-- Full chunk refresh ficou restrito a estados realmente incompatíveis/ausentes.
-
-### 0.12.58 — seed direto de lighting usa storage local do chunk
-- O scan acima do chunk produz 256 níveis iniciais de skylight, um por coluna local.
-- `VoxelWorld::rebuild_chunk_light` restringe a mutação ao canal de light e não expõe `&mut VoxelChunk`.
-- Os 4.096 voxels internos deixam de fazer `sample_at + set_light_at`: 8.192 resoluções de posição/chunk eliminadas por seed.
+### 0.12.53–0.12.58 — meshing, render refresh e lighting hot paths
+- Surface block light é lida uma vez por voxel-fonte no meshing.
+- Propagação de iluminação reutiliza sample atual e seis luzes vizinhas entre sky/block.
+- Terrain/fluid topology refresh preserva a metade não afetada da render allocation.
+- Direct seed usa storage local do chunk e elimina 8.192 resoluções de posição/chunk por seed.
+- Lighting-only attribute split continua rejeitado porque block light pode alterar a diagonal/índices.
 
 ### 0.12.59 — promoção/remoção de fila amortizada O(1)
 - `DeduplicatedQueue` usa `HashMap<T, generation>` e `(value, generation)` no `VecDeque`.
@@ -169,12 +156,18 @@ A auditoria arquitetural foi reiniciada a partir de `0.12.5`/`0.12.8` e segue at
 - Qualquer mudança real nos owners invalida naturalmente o miss, sem descartar trabalho adiado.
 
 ### 0.12.61 — full relight volume somente para mudança real de fonte
-- O histórico confirmou que o Manhattan footprint de raio 15 foi introduzido para corrigir recoloração de fontes: canais RGB/HSI antigos podem se sustentar mutuamente no campo incremental.
-- `VoxelMutationRuntime` captura o `VoxelCell` anterior antes da mutação e `PendingLightingUpdates` preserva o primeiro estado anterior por posição até o processamento.
-- O sistema compara `BlockLight` HSI autoritativa anterior e atual usando `block_emission_for_cell`.
-- O footprint de até 4.991 posições agora só é enfileirado quando a emissão muda de um valor não-zero para outro valor não-zero.
-- Placement de nova fonte (`dark -> emission`), remoção (`emission -> dark`) e edits que não alteram emissão usam somente a fronteira incremental normal.
-- Mantido explicitamente o comportamento de recoloração que motivou o fix histórico; teste cobre o critério de invalidation.
+- O histórico confirmou que o Manhattan footprint de raio 15 foi introduzido para corrigir recoloração de fontes: canais antigos podem se sustentar mutuamente no campo incremental.
+- `PendingLightingUpdates` preserva o primeiro `VoxelCell` anterior por posição até processar os edits.
+- A emissão HSI anterior/atual é comparada via `block_emission_for_cell`.
+- O footprint de até 4.991 posições só é enfileirado em mudança não-zero -> não-zero da emissão.
+- Placement, remoção e edits que não alteram emissão usam somente a fronteira incremental normal.
+- O fix histórico de recoloração permanece preservado.
+
+### 0.12.62 — mutação de bloco reaproveita a leitura anterior
+- `VoxelWorld::set_block_at_with_previous` devolve `(chunk_coord, previous_cell)` usando a leitura que a própria mutação já precisa fazer.
+- `VoxelMutationRuntime` deixa de fazer `cell_at(world_position)` antes de `set_block_at`, removendo uma segunda resolução de posição/chunk por edit.
+- `set_block_at` público preserva seu contrato existente e delega à operação detalhada.
+- Teste cobre retorno correto do voxel anterior.
 
 ---
 
@@ -198,9 +191,9 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Eliminar a leitura duplicada introduzida para capturar o `VoxelCell` anterior em `VoxelMutationRuntime`: o owner `VoxelWorld::set_block_at` já lê o valor anterior internamente; retornar essa informação por uma operação estreita evita um segundo lookup sem expor mutação ampla.
-2. Continuar procurando chamadas repetidas de `VoxelWorld`/`VoxelRead` para a mesma posição nos hot paths restantes e usar `sample_at` apenas quando múltiplos aspectos do mesmo voxel forem necessários.
-3. Revisar outros `pop_where`/predicate scans somente se ocorrerem em caminho recorrente; não trocar estrutura por preferência.
+1. Continuar procurando chamadas repetidas de `VoxelWorld`/`VoxelRead` para a mesma posição nos hot paths restantes; priorizar raycast/collision/targeting e solver paths recorrentes, mas só consolidar quando múltiplos aspectos do mesmo voxel são realmente usados.
+2. Revisar outros `pop_where`/predicate scans somente se ocorrerem em caminho recorrente; não trocar estrutura por preferência.
+3. Inspecionar hot paths de player/world collision para scans ou lookups repetidos por frame antes de voltar a worldgen/cache.
 4. Só reabrir separação específica de lighting/topology se existir representação que preserve mudanças de diagonal/índices sem duplicar ownership da geometria.
 5. Só voltar a unload incremental, worldgen/cache ou task lifecycle se surgir evidência objetiva nova.
 6. Rendering/HUD continuam change-driven; evitar micro-otimização por estética.
