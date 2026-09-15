@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use smallvec::SmallVec;
 
 use crate::{
     content::{biome::BiomeRegistry, dimension::DimensionDefinition},
@@ -8,7 +9,7 @@ use crate::{
 
 pub(crate) struct GenerationColumnSample {
     pub(crate) surface_height: i32,
-    pub(super) surface_influences: Vec<(usize, f32)>,
+    pub(super) surface_influences: SmallVec<[(usize, f32); 4]>,
 }
 
 pub(crate) fn sample_generation_columns(
