@@ -85,47 +85,52 @@ impl ChunkMeshSnapshot {
             }
         }
 
-        let mut shell = vec![ShellSample::default(); SHELL_VOLUME].into_boxed_slice();
         let last = SNAPSHOT_SIDE - 1;
-        let mut capture_shell_voxel = |x: usize, y: usize, z: usize| {
-            let index = shell_index_from_snapshot_coords(x, y, z)
-                .expect("mesh snapshot shell coordinates must have a compact index");
+        let capture_shell_voxel = |x: usize, y: usize, z: usize| {
             let (chunk_x, local_x) = shell_axis(x);
             let (chunk_y, local_y) = shell_axis(y);
             let (chunk_z, local_z) = shell_axis(z);
             let Some(neighbor_chunk) = neighbor_chunks[chunk_y][chunk_z][chunk_x] else {
-                return;
+                return ShellSample::default();
             };
             let Some((cell, fluid, light)) = neighbor_chunk.sample_local(local_x, local_y, local_z)
             else {
-                return;
+                return ShellSample::default();
             };
 
-            shell[index] = ShellSample {
+            ShellSample {
                 cell,
                 fluid,
                 light,
                 loaded: true,
-            };
+            }
         };
+        let mut shell = Vec::with_capacity(SHELL_VOLUME);
 
         for z in 0..SNAPSHOT_SIDE {
             for x in 0..SNAPSHOT_SIDE {
-                capture_shell_voxel(x, 0, z);
-                capture_shell_voxel(x, last, z);
+                shell.push(capture_shell_voxel(x, 0, z));
             }
         }
-
+        for z in 0..SNAPSHOT_SIDE {
+            for x in 0..SNAPSHOT_SIDE {
+                shell.push(capture_shell_voxel(x, last, z));
+            }
+        }
         for y in 1..last {
             for x in 0..SNAPSHOT_SIDE {
-                capture_shell_voxel(x, y, 0);
-                capture_shell_voxel(x, y, last);
+                shell.push(capture_shell_voxel(x, y, 0));
+            }
+            for x in 0..SNAPSHOT_SIDE {
+                shell.push(capture_shell_voxel(x, y, last));
             }
             for z in 1..last {
-                capture_shell_voxel(0, y, z);
-                capture_shell_voxel(last, y, z);
+                shell.push(capture_shell_voxel(0, y, z));
+                shell.push(capture_shell_voxel(last, y, z));
             }
         }
+        debug_assert_eq!(shell.len(), SHELL_VOLUME);
+        let shell = shell.into_boxed_slice();
 
         Some(Self {
             chunk_origin,
