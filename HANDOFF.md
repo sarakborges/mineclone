@@ -63,11 +63,11 @@ Roda em push para `develop`/`main` e em pull requests.
 
 Base do bloco atual:
 
-`e5e537fa4310ce5fbbf5b05f055ac9dd85497ece`
+`87bde0b5c8be1606d116870a8fa54d25ae52b443`
 
-Bloco: `Reuse remesh dispatch scratch buffer`
+Bloco: `Skip idle remesh queue work`
 
-`VERSION`: `0.14.20`
+`VERSION`: `0.14.22`
 
 Na retomada, `develop` já estava em `183bcab1be268bcc9511e7e06d9406ade8b63bf0` / `0.14.12`, embora este handoff ainda descrevesse `0.14.5`. Os blocos abaixo foram conferidos no código e no histórico antes de continuar.
 
@@ -89,6 +89,8 @@ Commits recentes relevantes:
 - `88dc6a6` — `0.14.18`, corrige o tipo do cache de dia; CI verde.
 - `e5e537f` — `0.14.19`, recicla scratch da seleção/streaming.
 - `127b5df` — `0.14.20`, recicla scratch do dispatcher de remesh.
+- `d6552a1` — `0.14.21`, encapsula render distance + scratch de seleção em `SystemParam` coerente e corrige os lints de `0.14.19`; CI verde.
+- `87bde0b` — `0.14.22`, evita coleta/dispatch do remesh background quando não há trabalho aplicável.
 
 ## CI atual
 
@@ -103,8 +105,10 @@ Commits recentes relevantes:
 - `0.14.16` / run `35024201403`: **failure** no Clippy porque `TimeHudText.presented_time` declarou o dia como `u32`, enquanto `WorldClock.day` é `u64`; `cargo check` foi pulado após a falha.
 - `0.14.17` / run `35024560448`: **failure** pelo mesmo erro de tipo herdado de `0.14.16`; o log não revelou erro independente no refactor de mesh, mas esse run não conta como validação do bloco.
 - `0.14.18` / run `35024824691`, commit `88dc6a6`: Clippy **success**, `cargo check` **success**.
-- `0.14.19` / run `35025400000`: em execução na última consulta.
-- `0.14.20` / run `35025581954`: em execução na última consulta.
+- `0.14.19` / run `35025400000`: **failure** no Clippy porque `QueueRebuildScratch` privado apareceu na assinatura de `stream_chunks` e elevou a função a 8 parâmetros; o refactor de seleção foi mantido e a estrutura corrigida em `0.14.21`.
+- `0.14.20` / run `35025581954`: **failure** pelo mesmo erro estrutural herdado de `0.14.19`; não revelou erro independente no reuse do buffer de remesh.
+- `0.14.21` / run `35026065652`, commit `d6552a1`: Clippy **success**, `cargo check` **success**; valida também os blocos `0.14.19`/`0.14.20` depois da correção estrutural.
+- `0.14.22` / commit `87bde0b`: workflow ainda não havia aparecido na última consulta.
 
 ---
 
@@ -163,6 +167,13 @@ O hint já era filho do Player HUD, mas `Visibility::Visible` sobrescrevia a her
 - O CI de `0.14.16` revelou que `WorldClock.day` é `u64`, mas `TimeHudText.presented_time` havia sido declarado como `(u32, u32, u32)`.
 - O snapshot agora usa `(u64, u32, u32)`, alinhado ao owner real do relógio e sem cast/truncamento.
 - Não há mudança de semântica visual; é correção de compilação do cache introduzido em `0.14.16`.
+
+## 0.14.21 — assinatura segura do scratch de seleção
+
+- `0.14.19` adicionou `Local<QueueRebuildScratch>` diretamente a `stream_chunks`; Clippy apontou interface privada e `too_many_arguments`.
+- O scratch continua local ao sistema, mas agora é encapsulado junto de `RenderDistanceSettings` em um `SystemParam` coerente de seleção/streaming.
+- `stream_chunks` volta ao limite anterior de parâmetros e não expõe `QueueRebuildScratch` fora do módulo que o possui.
+- Membership, prioridades, cache pruning, lifecycle e política de seleção de chunks não mudaram.
 
 ---
 
@@ -275,12 +286,32 @@ O hint já era filho do Player HUD, mas `Visibility::Visible` sobrescrevia a her
 
 ---
 
+## 0.14.22 — remesh background ocioso evita trabalho vazio
+
+- `ChunkRemeshQueue::has_background_work` consulta apenas as filas geometry/fluid/lighting; immediate geometry mantém o caminho síncrono separado.
+- `ChunkRemeshTasks::sync_snapshot` continua sendo chamado antes dos guards para não perder invalidação de conteúdo baseada em change detection durante períodos ociosos.
+- A coleta de resultados só é tentada quando existe task pendente; tasks já concluídas mas ainda não coletadas continuam contando como pending no `ChunkTaskQueue` e portanto não são perdidas.
+- Dispatch só é tentado quando há capacidade abaixo de `MAX_REMESH_TASKS_IN_FLIGHT` e alguma fila background possui trabalho.
+- Prioridade Lighting -> Geometry -> Fluid, budgets, stale-result requeue, coalescing e integração de meshes permanecem inalterados.
+
+## Auditoria sem mudança publicada
+
+- Movimento: `walk`/flight já retornam com delta zero, evitam `move_axis` quando a componente de velocidade é zero e não reescrevem velocidade idêntica.
+- Câmera: mouse look drena input mas retorna sem delta, em pause, sem foco ou sem grab.
+- Viewmodel: animação retorna quando inativa; held block já é invalidado por seleção/orientação/célula de tint/inputs visuais.
+- Dynamic held light e directional shadows já possuem guards de change detection e evitam writes idempotentes nos campos revisados.
+- HUD de coordenadas e nomes já possui cache do valor apresentado; underwater tint só recalcula cor ao entrar em fluido ou quando biome visuals mudam, embora ainda consulte o voxel do olho por frame.
+- `track_current_biome` evita recomputar com posição e sources idênticos; durante movimento a amostragem contínua é semanticamente relevante para blends, portanto não foi quantizada.
+- Não repetir esses alvos sem nova evidência de custo ou um invariant mais forte.
+
+---
+
 # Próximos passos
 
 Se nenhum runtime error/warning tiver prioridade:
 
-1. Confirmar os CIs de `0.14.19` e `0.14.20`; qualquer erro/warning novo interrompe o roadmap até ser corrigido.
-2. Continuar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes. Targeting consumers, estrelas, hotbar, HUD/UI, integração in-place de meshes, seleção e scratch de remesh já foram tratados; não repetir esses refactors sem evidência nova.
+1. Confirmar o CI de `0.14.22`; qualquer erro/warning novo interrompe o roadmap até ser corrigido.
+2. Continuar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes, priorizando owners ainda não revisados.
 3. Manter `notify_loaded_chunk_neighbors` conservador até existir metadata suficiente para provar otimização segura.
 4. Procurar próximos hot paths com evidência no código antes de introduzir caches novos; preferir reuse/run conditions sobre estado derivado persistente.
 5. Quando o usuário solicitar, rodar `cargo test` manualmente.
