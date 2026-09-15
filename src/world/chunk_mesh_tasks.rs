@@ -104,11 +104,4 @@ impl ChunkMeshTasks {
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<Vec<BuiltChunkMesh>>> {
         self.pending.poll_ready()
     }
-
-    pub(crate) fn collect_ready(
-        &mut self,
-        maximum: usize,
-    ) -> Vec<CompletedChunkTask<Vec<BuiltChunkMesh>>> {
-        self.pending.collect_ready(maximum)
-    }
 }
