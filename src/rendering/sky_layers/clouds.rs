@@ -22,7 +22,6 @@ pub(super) struct CloudPart {
     base: Vec2,
     altitude: f32,
     offset: Vec3,
-    scale: Vec3,
 }
 
 pub(super) fn spawn_clouds(mut commands: Commands, assets: Res<CloudAssets>) {
@@ -39,7 +38,7 @@ pub(super) fn spawn_clouds(mut commands: Commands, assets: Res<CloudAssets>) {
             commands.spawn((
                 Mesh3d(assets.mesh.clone()),
                 MeshMaterial3d(assets.material.clone()),
-                Transform::default(),
+                Transform::from_scale(scale),
                 Visibility::Hidden,
                 NotShadowCaster,
                 NotShadowReceiver,
@@ -48,7 +47,6 @@ pub(super) fn spawn_clouds(mut commands: Commands, assets: Res<CloudAssets>) {
                     base,
                     altitude,
                     offset,
-                    scale,
                 },
                 DespawnOnExit(GameState::Gameplay),
             ));
@@ -64,19 +62,35 @@ pub(super) fn update_clouds(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut clouds: Query<(&CloudPart, &mut Transform, &mut Visibility)>,
 ) {
+    let visuals_changed = visuals.is_changed();
+    if visuals.cloud_density <= 0.0 {
+        if visuals_changed {
+            for (_, _, mut visibility) in &mut clouds {
+                if *visibility != Visibility::Hidden {
+                    *visibility = Visibility::Hidden;
+                }
+            }
+        }
+        return;
+    }
+
     let visible_count = (visuals.cloud_density * MAX_CLOUDS as f32).round() as usize;
     let camera_position = camera.translation();
     let drift = time.elapsed_secs() * CLOUD_SPEED;
     let half_span = CLOUD_SPAN * 0.5;
 
-    if let Some(mut material) = materials.get_mut(&assets.material) {
+    if visuals_changed
+        && let Some(mut material) = materials.get_mut(&assets.material)
+    {
         let [red, green, blue] = visuals.cloud_color.to_srgb();
         material.base_color = Color::srgba(red, green, blue, 0.78);
     }
 
     for (cloud, mut transform, mut visibility) in &mut clouds {
-        if cloud.cloud_index >= visible_count || visuals.cloud_density <= 0.0 {
-            *visibility = Visibility::Hidden;
+        if cloud.cloud_index >= visible_count {
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
             continue;
         }
 
@@ -87,8 +101,9 @@ pub(super) fn update_clouds(
             cloud.altitude,
             camera_position.z + local_z,
         ) + cloud.offset;
-        transform.scale = cloud.scale;
-        *visibility = Visibility::Visible;
+        if *visibility != Visibility::Visible {
+            *visibility = Visibility::Visible;
+        }
     }
 }
 
