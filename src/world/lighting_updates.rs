@@ -22,6 +22,10 @@ pub(super) struct DynamicLightingRuntime<'w> {
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
 }
 
+pub(super) fn pending_lighting_work(lighting: Res<PendingLightingUpdates>) -> bool {
+    !lighting.is_empty()
+}
+
 pub(super) fn process_dynamic_lighting(
     content: VoxelContent,
     mut changed_chunks: Local<HashSet<IVec3>>,

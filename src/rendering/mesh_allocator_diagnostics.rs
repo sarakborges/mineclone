@@ -15,17 +15,19 @@ impl Plugin for MeshAllocatorDiagnosticsPlugin {
             return;
         };
 
-        render_app.add_systems(Render, log_mesh_allocator_pressure);
+        render_app.add_systems(
+            Render,
+            log_mesh_allocator_pressure.run_if(mesh_allocator_diagnostics_due),
+        );
     }
 }
 
-fn log_mesh_allocator_pressure(allocator: Res<MeshAllocator>, mut frames: Local<u32>) {
+fn mesh_allocator_diagnostics_due(mut frames: Local<u32>) -> bool {
     *frames = frames.wrapping_add(1);
+    (*frames).is_multiple_of(LOG_INTERVAL_FRAMES)
+}
 
-    if !(*frames).is_multiple_of(LOG_INTERVAL_FRAMES) {
-        return;
-    }
-
+fn log_mesh_allocator_pressure(allocator: Res<MeshAllocator>) {
     info!(
         "render mesh allocator: slabs={} slab_bytes={} index_allocations={}",
         allocator.slab_count(),

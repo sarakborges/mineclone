@@ -21,7 +21,6 @@ pub(super) struct RenderDiagnosticSnapshot {
 #[derive(SystemParam)]
 pub(super) struct RenderDiagnosticAssets<'w> {
     state: Res<'w, State<GameState>>,
-    time: Res<'w, Time<Real>>,
     asset_server: Res<'w, AssetServer>,
     pool: Res<'w, ChunkRenderPool>,
     meshes: Res<'w, Assets<Mesh>>,
@@ -31,23 +30,25 @@ pub(super) struct RenderDiagnosticAssets<'w> {
     terrain_materials: Res<'w, Assets<TerrainMaterial>>,
 }
 
-pub(super) fn log_render_asset_pressure(
-    assets: RenderDiagnosticAssets,
+pub(super) fn render_diagnostics_due(
+    state: Res<State<GameState>>,
+    time: Res<Time<Real>>,
     mut timer: Local<Option<Timer>>,
-    mut previous: Local<Option<RenderDiagnosticSnapshot>>,
-) {
-    if !matches!(assets.state.get(), GameState::Loading | GameState::Gameplay) {
-        return;
+) -> bool {
+    if !matches!(state.get(), GameState::Loading | GameState::Gameplay) {
+        return false;
     }
 
     let timer = timer.get_or_insert_with(|| {
         Timer::from_seconds(RENDER_DIAGNOSTIC_INTERVAL_SECONDS, TimerMode::Repeating)
     });
+    timer.tick(time.delta()).just_finished()
+}
 
-    if !timer.tick(assets.time.delta()).just_finished() {
-        return;
-    }
-
+pub(super) fn log_render_asset_pressure(
+    assets: RenderDiagnosticAssets,
+    mut previous: Local<Option<RenderDiagnosticSnapshot>>,
+) {
     let active_chunks = assets.pool.active_count();
     let pooled_meshes = assets.pool.mesh_count();
     let pooled_mesh_bytes = assets.pool.mesh_bytes();
