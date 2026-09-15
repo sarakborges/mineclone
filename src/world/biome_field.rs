@@ -12,6 +12,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use arrayvec::ArrayVec;
 use bevy::prelude::*;
 
 use crate::content::{
@@ -21,8 +22,15 @@ use crate::content::{
 };
 
 pub(crate) use self::volume::{VolumeBiomeRegion, VolumeBiomeSelection};
-use self::{constants::VOLUME_SITE_GAP, spatial::surface_minimum_spacing};
+use self::{
+    constants::{SITE_SEARCH_RADIUS, VOLUME_SITE_GAP},
+    spatial::surface_minimum_spacing,
+};
 use super::macro_climate::{MacroClimateField, MacroClimateSample};
+
+const SURFACE_SITE_SEARCH_DIAMETER: usize = (SITE_SEARCH_RADIUS * 2 + 1) as usize;
+pub(crate) const MAX_SURFACE_INFLUENCES: usize =
+    SURFACE_SITE_SEARCH_DIAMETER * SURFACE_SITE_SEARCH_DIAMETER + 1;
 
 #[derive(Clone)]
 pub(super) struct BiomeFieldEntry {
@@ -66,7 +74,7 @@ pub struct BiomeInfluence<'a> {
 
 pub struct BiomeFieldSample<'a> {
     pub primary_id: &'a str,
-    pub influences: Vec<BiomeInfluence<'a>>,
+    pub influences: ArrayVec<BiomeInfluence<'a>, MAX_SURFACE_INFLUENCES>,
 }
 
 #[derive(Clone, Copy, Debug)]

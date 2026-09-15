@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
+use arrayvec::ArrayVec;
 use bevy::prelude::*;
 
 use crate::{
     content::structure::StructureVoxel,
     voxel::coordinates::chunk_coord_from_world,
     world::{
+        biome_field::MAX_SURFACE_INFLUENCES,
         cave_connectivity::CaveConnectivityRegion,
         density_sampling::{DensitySampleContext, sample_density},
         generation_region::{GenerationRegion, generation_region_coord},
@@ -117,7 +119,7 @@ fn supported_surface_ground_y(
                 influence.weight,
             )
         })
-        .collect::<Vec<_>>();
+        .collect::<ArrayVec<_, MAX_SURFACE_INFLUENCES>>();
     let surface_carver_allowed = region
         .hydrology
         .water_near(horizontal, SURFACE_CARVER_WATER_CLEARANCE)

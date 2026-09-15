@@ -1,7 +1,8 @@
+use arrayvec::ArrayVec;
 use bevy::prelude::*;
 
 use super::{
-    BiomeField, BiomeFieldSample, BiomeInfluence,
+    BiomeField, BiomeFieldSample, BiomeInfluence, MAX_SURFACE_INFLUENCES,
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS},
     mountain_belt::mountain_belt_strength,
     mountain_peak::mountain_peak_strength,
@@ -10,7 +11,7 @@ use super::{
 
 const SITE_SEARCH_DIAMETER: usize = (SITE_SEARCH_RADIUS * 2 + 1) as usize;
 const SITE_SAMPLE_COUNT: usize = SITE_SEARCH_DIAMETER * SITE_SEARCH_DIAMETER;
-const MAX_WEIGHT_ENTRIES: usize = SITE_SAMPLE_COUNT + 1;
+const MAX_WEIGHT_ENTRIES: usize = MAX_SURFACE_INFLUENCES;
 
 impl BiomeField {
     pub fn sample_surface(&self, position: Vec2) -> BiomeFieldSample<'_> {
@@ -161,16 +162,14 @@ impl BiomeField {
             .iter()
             .map(|(_, weight)| *weight)
             .sum();
-        let mut influences = Vec::with_capacity(weight_count);
-        for (index, weight) in &weights[..weight_count] {
-            if *weight <= 0.0 {
-                continue;
-            }
-            influences.push(BiomeInfluence {
+        let influences = weights[..weight_count]
+            .iter()
+            .filter(|(_, weight)| *weight > 0.0)
+            .map(|(index, weight)| BiomeInfluence {
                 id: self.surface_biomes[*index].id.as_str(),
                 weight: *weight / total_weight,
-            });
-        }
+            })
+            .collect::<ArrayVec<_, MAX_SURFACE_INFLUENCES>>();
 
         BiomeFieldSample {
             primary_id: self.surface_biomes[primary_index].id.as_str(),

@@ -224,10 +224,12 @@ mod tests {
     fn hydrology_overlay_keeps_surface_and_hydrology_layers_separate() {
         let surface = BiomeFieldSample {
             primary_id: "surface",
-            influences: vec![BiomeInfluence {
+            influences: [BiomeInfluence {
                 id: "surface",
                 weight: 1.0,
-            }],
+            }]
+            .into_iter()
+            .collect(),
         };
         let mut influences = Vec::new();
         let mut hydrology_influences = Vec::new();
