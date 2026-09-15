@@ -24,7 +24,7 @@ pub struct CurrentBiomeInfluence {
     pub weight: f32,
 }
 
-#[derive(Clone, Resource, PartialEq)]
+#[derive(Resource, PartialEq)]
 pub struct CurrentBiome {
     pub id: String,
     pub influences: Vec<CurrentBiomeInfluence>,
@@ -101,32 +101,36 @@ pub fn track_current_biome(
         fields.hydrology_biome_overlay(continentalness)
     });
     let resolved_surface = resolve_surface_identity(&surface, hydrology);
-    let mut next_biome = (*current_biome).clone();
-
-    next_biome.surface_id = surface.primary_id.to_owned();
-    replace_influences(&mut next_biome.surface_influences, &surface.influences);
-    next_biome.hydrology_id = resolved_surface.hydrology_id;
-    next_biome.hydrology_influences = resolved_surface.hydrology_influences;
-
-    if let Some(volume) = volume {
-        next_biome.volume_id = Some(volume.id.to_owned());
-        next_biome.volume_strength = volume.strength;
-        next_biome.volume_influences.clear();
-        next_biome.volume_influences.push(CurrentBiomeInfluence {
-            id: volume.id.to_owned(),
-            weight: 1.0,
-        });
-        resolve_final_identity(
-            &mut next_biome,
-            resolved_surface.influences,
-            Some(volume),
-        );
+    let final_identity = resolve_final_identity(
+        resolved_surface.influences,
+        volume,
+        &current_biome.id,
+    );
+    let mut surface_influences = Vec::new();
+    replace_influences(&mut surface_influences, &surface.influences);
+    let (volume_id, volume_influences, volume_strength) = if let Some(volume) = volume {
+        (
+            Some(volume.id.to_owned()),
+            vec![CurrentBiomeInfluence {
+                id: volume.id.to_owned(),
+                weight: 1.0,
+            }],
+            volume.strength,
+        )
     } else {
-        next_biome.volume_id = None;
-        next_biome.volume_strength = 0.0;
-        next_biome.volume_influences.clear();
-        resolve_final_identity(&mut next_biome, resolved_surface.influences, None);
-    }
+        (None, Vec::new(), 0.0)
+    };
+    let next_biome = CurrentBiome {
+        id: final_identity.id,
+        influences: final_identity.influences,
+        surface_id: surface.primary_id.to_owned(),
+        surface_influences,
+        hydrology_id: resolved_surface.hydrology_id,
+        hydrology_influences: resolved_surface.hydrology_influences,
+        volume_id,
+        volume_influences,
+        volume_strength,
+    };
 
     if *current_biome != next_biome {
         *current_biome = next_biome;
