@@ -53,6 +53,7 @@ pub(super) struct ChunkStreamingState {
     vertical_radius: i32,
     desired: HashSet<IVec3>,
     retained: HashSet<IVec3>,
+    retired: DeduplicatedQueue<IVec3>,
     pending: DeduplicatedQueue<IVec3>,
     ready: DeduplicatedQueue<IVec3>,
     surface_ranges: HashMap<IVec2, (i32, i32)>,
@@ -61,6 +62,16 @@ pub(super) struct ChunkStreamingState {
 impl ChunkStreamingState {
     pub(super) fn keeps_loaded(&self, coord: IVec3) -> bool {
         self.desired.contains(&coord) || self.retained.contains(&coord)
+    }
+
+    pub(super) fn enqueue_retired(&mut self, coord: IVec3) {
+        if coord.y >= 0 {
+            self.retired.enqueue(coord);
+        }
+    }
+
+    pub(super) fn pop_retired(&mut self) -> Option<IVec3> {
+        self.retired.pop()
     }
 
     fn requeue(&mut self, coord: IVec3) {

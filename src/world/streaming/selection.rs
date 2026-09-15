@@ -20,13 +20,6 @@ const PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS: i32 = 3;
 const IMMEDIATE_PLAYER_PRIORITY_RADIUS_CHUNKS: i32 = 1;
 const SURFACE_SUPPORT_NEIGHBORS: [IVec2; 4] = [IVec2::X, IVec2::NEG_X, IVec2::Y, IVec2::NEG_Y];
 
-impl ChunkStreamingState {
-    pub(in crate::world) fn selection_key(&self) -> Option<(IVec3, i32, i32)> {
-        self.center
-            .map(|center| (center, self.horizontal_radius, self.vertical_radius))
-    }
-}
-
 pub(super) fn rebuild_queue(
     streaming: &mut ChunkStreamingState,
     center: IVec3,
@@ -67,11 +60,34 @@ pub(super) fn rebuild_queue(
     });
 
     let previous_desired = std::mem::replace(&mut streaming.desired, desired);
+    let previous_retained = std::mem::replace(&mut streaming.retained, previous_desired);
     streaming.center = Some(center);
     streaming.horizontal_radius = horizontal_radius;
     streaming.vertical_radius = vertical_radius;
-    streaming.retained = previous_desired;
     streaming.pending = pending.into();
+
+    for coord in retired_chunk_coords(
+        previous_retained,
+        &streaming.desired,
+        &streaming.retained,
+        center,
+    ) {
+        streaming.enqueue_retired(coord);
+    }
+}
+
+fn retired_chunk_coords(
+    previous_retained: HashSet<IVec3>,
+    desired: &HashSet<IVec3>,
+    retained: &HashSet<IVec3>,
+    center: IVec3,
+) -> Vec<IVec3> {
+    let mut retired = previous_retained
+        .into_iter()
+        .filter(|coord| !desired.contains(coord) && !retained.contains(coord))
+        .collect::<Vec<_>>();
+    retired.sort_by_key(|coord| -(*coord - center).length_squared());
+    retired
 }
 
 fn pending_priority(
@@ -193,4 +209,25 @@ fn desired_chunk_coords(
     }
 
     desired
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retired_chunks_exclude_both_live_selection_generations() {
+        let far = IVec3::new(4, 0, 0);
+        let nearer = IVec3::new(3, 0, 0);
+        let still_desired = IVec3::new(2, 0, 0);
+        let still_retained = IVec3::new(1, 0, 0);
+        let previous_retained = HashSet::from([far, nearer, still_desired, still_retained]);
+        let desired = HashSet::from([still_desired]);
+        let retained = HashSet::from([still_retained]);
+
+        assert_eq!(
+            retired_chunk_coords(previous_retained, &desired, &retained, IVec3::ZERO),
+            vec![far, nearer]
+        );
+    }
 }

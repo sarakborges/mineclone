@@ -5,8 +5,8 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
-        coordinates::chunk_coord_from_position, deduplicated_queue::DeduplicatedQueue,
-        lighting::PendingLightingUpdates, neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
+        coordinates::chunk_coord_from_position, lighting::PendingLightingUpdates,
+        neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
     },
 };
 
@@ -23,19 +23,17 @@ const CHUNK_UNLOAD_BUDGET: Duration = Duration::from_millis(4);
 
 #[derive(Resource, Default)]
 pub(super) struct ChunkUnloadState {
-    selection_key: Option<(IVec3, i32, i32)>,
-    pending: DeduplicatedQueue<IVec3>,
+    bootstrapped: bool,
 }
 
 impl ChunkUnloadState {
-    fn sync_plan(
+    fn bootstrap(
         &mut self,
-        streaming: &ChunkStreamingState,
+        streaming: &mut ChunkStreamingState,
         world: &VoxelWorld,
         center: IVec3,
     ) {
-        let selection_key = streaming.selection_key();
-        if self.selection_key == selection_key {
+        if self.bootstrapped {
             return;
         }
 
@@ -44,9 +42,11 @@ impl ChunkUnloadState {
             .filter(|coord| !streaming.keeps_loaded(*coord))
             .collect::<Vec<_>>();
         pending.sort_by_key(|coord| -(*coord - center).length_squared());
+        for coord in pending {
+            streaming.enqueue_retired(coord);
+        }
 
-        self.selection_key = selection_key;
-        self.pending = pending.into();
+        self.bootstrapped = true;
     }
 }
 
@@ -60,7 +60,7 @@ pub(super) struct ChunkUnloadRuntime<'w> {
 
 pub(super) fn unload_chunk_meshes(
     player: Single<&Transform, With<GameplayCamera>>,
-    streaming: Res<ChunkStreamingState>,
+    mut streaming: ResMut<ChunkStreamingState>,
     mut renderer: ChunkRenderer,
     mut runtime: ChunkUnloadRuntime,
 ) {
@@ -69,7 +69,7 @@ pub(super) fn unload_chunk_meshes(
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
     runtime
         .state
-        .sync_plan(&streaming, &runtime.world, center);
+        .bootstrap(&mut streaming, &runtime.world, center);
 
     let mut budget = FrameWorkBudget::new(
         CHUNK_UNLOAD_BUDGET,
@@ -82,7 +82,7 @@ pub(super) fn unload_chunk_meshes(
             break;
         }
 
-        let Some(coord) = runtime.state.pending.pop() else {
+        let Some(coord) = streaming.pop_retired() else {
             break;
         };
         if streaming.keeps_loaded(coord) || runtime.world.chunk(coord).is_none() {
