@@ -44,14 +44,14 @@ impl ChunkMeshSnapshot {
 
                     let position = snapshot_origin + IVec3::new(x as i32, y as i32, z as i32);
                     let index = snapshot_index(x, y, z);
-                    if !world.is_loaded_at(position) {
+                    let Some((cell, fluid, light)) = world.sample_at(position) else {
                         continue;
-                    }
+                    };
 
                     shell_loaded[index] = true;
-                    shell_cells[index] = world.cell_at(position);
-                    shell_fluids[index] = world.fluid_at(position);
-                    shell_light[index] = world.light_at(position);
+                    shell_cells[index] = cell;
+                    shell_fluids[index] = fluid;
+                    shell_light[index] = light;
                 }
             }
         }
