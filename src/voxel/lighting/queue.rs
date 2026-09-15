@@ -32,6 +32,31 @@ impl LightingQueue {
         }
     }
 
+    pub fn enqueue_chunk_boundary_voxels(&mut self, origin: IVec3) {
+        let last = CHUNK_SIZE as i32 - 1;
+
+        for y in 0..=last {
+            for z in 0..=last {
+                self.enqueue(origin + IVec3::new(0, y, z));
+                self.enqueue(origin + IVec3::new(last, y, z));
+            }
+        }
+
+        for y in 0..=last {
+            for x in 1..last {
+                self.enqueue(origin + IVec3::new(x, y, 0));
+                self.enqueue(origin + IVec3::new(x, y, last));
+            }
+        }
+
+        for z in 1..last {
+            for x in 1..last {
+                self.enqueue(origin + IVec3::new(x, 0, z));
+                self.enqueue(origin + IVec3::new(x, last, z));
+            }
+        }
+    }
+
     pub fn enqueue_chunk_boundary_neighbors(&mut self, origin: IVec3) {
         let size = CHUNK_SIZE as i32;
 
@@ -63,5 +88,24 @@ impl LightingQueue {
 
     pub fn is_empty(&self) -> bool {
         self.queue.len() == 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn boundary_voxels_enqueue_only_chunk_shell() {
+        let mut queue = LightingQueue::default();
+        queue.enqueue_chunk_boundary_voxels(IVec3::ZERO);
+
+        let mut count = 0;
+        while queue.pop().is_some() {
+            count += 1;
+        }
+
+        let inner = (CHUNK_SIZE - 2).pow(3);
+        assert_eq!(count, CHUNK_SIZE.pow(3) - inner);
     }
 }

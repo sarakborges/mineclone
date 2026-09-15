@@ -58,6 +58,12 @@ impl PendingLightingUpdates {
         self.queue.enqueue_chunk_boundary_neighbors(origin);
     }
 
+    pub(crate) fn enqueue_empty_chunk_relaxation(&mut self, coord: IVec3) {
+        let origin = chunk_origin(coord);
+        self.queue.enqueue_chunk_boundary_voxels(origin);
+        self.queue.enqueue_chunk_boundary_neighbors(origin);
+    }
+
     pub(crate) fn is_empty(&self) -> bool {
         self.queue.is_empty() && self.emission_edit_previous_cells.is_empty()
     }

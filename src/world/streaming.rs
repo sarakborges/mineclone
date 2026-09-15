@@ -263,7 +263,11 @@ fn dispatch_initial_mesh_tasks(
             content.fluids(),
             content.secondary_properties(),
         );
-        queues.lighting.enqueue_chunk_relaxation(coord);
+        if chunk_is_empty {
+            queues.lighting.enqueue_empty_chunk_relaxation(coord);
+        } else {
+            queues.lighting.enqueue_chunk_relaxation(coord);
+        }
 
         if chunk_is_empty {
             integrate_empty_chunk(content, renderer, &work.world, &mut queues.remesh, coord);
