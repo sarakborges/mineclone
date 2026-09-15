@@ -24,17 +24,45 @@ struct ShellSample {
     loaded: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ChunkMeshDependencies {
+    center: IVec3,
+    revisions: [[[Option<u64>; 3]; 3]; 3],
+}
+
+impl ChunkMeshDependencies {
+    pub(crate) fn is_current(&self, world: &VoxelWorld) -> bool {
+        for offset_y in -1..=1 {
+            for offset_z in -1..=1 {
+                for offset_x in -1..=1 {
+                    let expected = self.revisions[(offset_y + 1) as usize][(offset_z + 1) as usize]
+                        [(offset_x + 1) as usize];
+                    let coord = self.center + IVec3::new(offset_x, offset_y, offset_z);
+                    if world.chunk_mesh_revision(coord) != expected {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+}
+
 pub(crate) struct ChunkMeshSnapshot {
     chunk_origin: IVec3,
     chunk: VoxelChunk,
     shell: Box<[ShellSample]>,
+    dependencies: ChunkMeshDependencies,
 }
 
 impl ChunkMeshSnapshot {
     pub(crate) fn capture(world: &VoxelWorld, coord: IVec3) -> Option<Self> {
-        let chunk = world.chunk(coord)?.clone();
+        let (center_chunk, center_revision) = world.chunk_with_mesh_revision(coord)?;
+        let chunk = center_chunk.clone();
         let chunk_origin = chunk_origin(coord);
         let mut neighbor_chunks: [[[Option<&VoxelChunk>; 3]; 3]; 3] = [[[None; 3]; 3]; 3];
+        let mut revisions = [[[None; 3]; 3]; 3];
+        revisions[1][1][1] = Some(center_revision);
 
         for offset_y in -1..=1 {
             for offset_z in -1..=1 {
@@ -43,9 +71,16 @@ impl ChunkMeshSnapshot {
                         continue;
                     }
 
-                    neighbor_chunks[(offset_y + 1) as usize][(offset_z + 1) as usize]
-                        [(offset_x + 1) as usize] =
-                        world.chunk(coord + IVec3::new(offset_x, offset_y, offset_z));
+                    let coord = coord + IVec3::new(offset_x, offset_y, offset_z);
+                    let Some((neighbor_chunk, revision)) = world.chunk_with_mesh_revision(coord)
+                    else {
+                        continue;
+                    };
+                    let y = (offset_y + 1) as usize;
+                    let z = (offset_z + 1) as usize;
+                    let x = (offset_x + 1) as usize;
+                    neighbor_chunks[y][z][x] = Some(neighbor_chunk);
+                    revisions[y][z][x] = Some(revision);
                 }
             }
         }
@@ -96,11 +131,19 @@ impl ChunkMeshSnapshot {
             chunk_origin,
             chunk,
             shell,
+            dependencies: ChunkMeshDependencies {
+                center: coord,
+                revisions,
+            },
         })
     }
 
     pub(crate) fn chunk(&self) -> &VoxelChunk {
         &self.chunk
+    }
+
+    pub(crate) fn dependencies(&self) -> ChunkMeshDependencies {
+        self.dependencies
     }
 
     fn central_local(&self, position: IVec3) -> Option<IVec3> {
@@ -228,6 +271,7 @@ mod tests {
             Some("asteria:neighbor")
         );
         assert!(!snapshot.is_loaded_at(IVec3::new(CHUNK_SIZE as i32 + 1, 0, 0)));
+        assert!(snapshot.dependencies().is_current(&world));
     }
 
     #[test]
@@ -254,6 +298,29 @@ mod tests {
             snapshot.block_id_at(IVec3::new(edge, edge, edge)),
             Some("asteria:diagonal")
         );
+    }
+
+    #[test]
+    fn snapshot_dependencies_detect_mutated_or_new_neighbors() {
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
+        let snapshot =
+            ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
+        assert!(snapshot.dependencies().is_current(&world));
+
+        world.insert_chunk(IVec3::X, VoxelChunk::empty());
+        assert!(!snapshot.dependencies().is_current(&world));
+
+        let refreshed =
+            ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
+        world.set_block_at(
+            IVec3::new(CHUNK_SIZE as i32, 0, 0),
+            Some(VoxelCell::new(
+                "asteria:changed",
+                TextureRotation::default(),
+            )),
+        );
+        assert!(!refreshed.dependencies().is_current(&world));
     }
 
     #[test]

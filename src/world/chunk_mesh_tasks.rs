@@ -7,7 +7,7 @@ use crate::{
         biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry,
         secondary_property::SecondaryPropertyRegistry,
     },
-    voxel::mesh_snapshot::ChunkMeshSnapshot,
+    voxel::mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot},
 };
 
 use super::{
@@ -53,11 +53,16 @@ impl MeshContentSnapshot {
     }
 }
 
+pub(crate) struct ChunkMeshTaskOutput {
+    pub(crate) meshes: Vec<BuiltChunkMesh>,
+    pub(crate) dependencies: ChunkMeshDependencies,
+}
+
 #[derive(Resource, Default)]
 pub(crate) struct ChunkMeshTasks {
     revision: u64,
     snapshot: Option<Arc<MeshContentSnapshot>>,
-    pending: ChunkTaskQueue<Vec<BuiltChunkMesh>>,
+    pending: ChunkTaskQueue<ChunkMeshTaskOutput>,
 }
 
 impl ChunkMeshTasks {
@@ -93,15 +98,19 @@ impl ChunkMeshTasks {
             .unwrap_or_else(|| panic!("chunk mesh snapshot must be prepared before scheduling"))
             .clone();
         let revision = self.revision;
+        let dependencies = world.dependencies();
         let task = AsyncComputeTaskPool::get().spawn(async move {
             let context = snapshot.context(&world);
-            build_chunk_render_meshes(coord, world.chunk(), &context)
+            ChunkMeshTaskOutput {
+                meshes: build_chunk_render_meshes(coord, world.chunk(), &context),
+                dependencies,
+            }
         });
 
         self.pending.insert(coord, revision, task)
     }
 
-    pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<Vec<BuiltChunkMesh>>> {
+    pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<ChunkMeshTaskOutput>> {
         self.pending.poll_ready()
     }
 }

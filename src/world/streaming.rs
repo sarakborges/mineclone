@@ -347,6 +347,10 @@ fn collect_built_chunk_meshes(
         if !work.state.keeps_loaded(completed.coord) || renderer.pool.contains(completed.coord) {
             continue;
         }
+        if !completed.output.dependencies.is_current(&work.world) {
+            work.state.mark_ready(completed.coord);
+            continue;
+        }
         let Some(chunk) = work.world.chunk(completed.coord) else {
             work.state.requeue(completed.coord);
             continue;
@@ -363,7 +367,7 @@ fn collect_built_chunk_meshes(
             &mut renderer.meshes,
             &mut renderer.pool,
             completed.coord,
-            completed.output,
+            completed.output.meshes,
             &render_context,
         );
         notify_loaded_chunk_neighbors(
