@@ -160,14 +160,14 @@ fn spawn_target_hud(
 
 fn sync_target_hud_layout(
     settings: Res<HudSettings>,
-    mut root: Single<
+    root: Single<
         (&mut Node, &mut AppliedTargetHudPosition),
         (With<TargetHudRoot>, Without<TargetHudRow>),
     >,
     mut row: Single<&mut Node, (With<TargetHudRow>, Without<TargetHudRoot>)>,
 ) {
     let position = settings.target_block_position();
-    let (root_node, applied_position) = root.into_inner();
+    let (mut root_node, mut applied_position) = root.into_inner();
     if applied_position.0 == position {
         return;
     }
