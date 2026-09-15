@@ -161,6 +161,18 @@ fn update_action_hint(
     content: ActionHintContent,
     hint: Single<(&mut Text, &mut Visibility), With<ActionHint>>,
 ) {
+    if !runtime.hotbar.is_changed()
+        && !runtime.settings.is_changed()
+        && !runtime.targeted.is_changed()
+        && !runtime.brush_mode.is_changed()
+        && !content.blocks.is_changed()
+        && !content.secondary_properties.is_changed()
+        && !content.localization.is_changed()
+        && !content.language.is_changed()
+    {
+        return;
+    }
+
     let language = content.language.get();
     let selected_item = runtime.hotbar.item_at(runtime.hotbar.selected_slot());
 
