@@ -18,7 +18,7 @@ use super::{
     work_budget::FrameWorkBudget,
 };
 
-const MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK: usize = 8;
+const MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK: usize = 1;
 const CHUNK_UNLOAD_BUDGET: Duration = Duration::from_millis(4);
 
 #[derive(Resource, Default)]
