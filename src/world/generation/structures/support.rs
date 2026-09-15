@@ -11,7 +11,7 @@ use crate::{
         cave_connectivity::CaveConnectivityRegion,
         density_sampling::{DensitySampleContext, sample_density},
         generation_region::{GenerationRegion, generation_region_coord},
-        terrain::{surface_height, terrain_density},
+        terrain::{surface_height, surface_height_from_sample, terrain_density},
     },
 };
 
@@ -101,11 +101,12 @@ fn supported_surface_ground_y(
 ) -> Option<i32> {
     let horizontal = position.as_vec2() + Vec2::splat(0.5);
     let surface = context.biome_field.sample_surface(horizontal);
-    let raw_surface_height = surface_height(
+    let raw_surface_height = surface_height_from_sample(
         position,
         context.dimension,
         context.biomes,
-        context.biome_field,
+        context.biome_field.seed(),
+        &surface,
     );
     let raw_ground_y = raw_surface_height - 1;
     let surface_carver_minimum_y = raw_ground_y as f32 + 0.5;
