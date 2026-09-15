@@ -8,20 +8,21 @@ use crate::{
         player_id::LOCAL_PLAYER_ID, player_position_is_clear, safe_spawn_position,
         spawn_player_entity,
     },
-    ui::transition::ScreenTransitionTarget,
+    ui::transition::{ScreenTransition, ScreenTransitionTarget},
     voxel::{lighting::initialize_chunks_lighting, mesh_snapshot::ChunkMeshSnapshot},
 };
 
 use super::{
     WorldLoadingPhase,
-    system_params::{WorldSetupPersistence, WorldSetupRuntime},
+    system_params::{WorldSetupPersistence, WorldSetupProgress},
 };
 use crate::world::{
     WorldLoadMode,
-    chunk_generation_tasks::MAX_GENERATION_TASKS_IN_FLIGHT,
-    chunk_mesh_tasks::MAX_MESH_TASKS_IN_FLIGHT,
+    chunk_generation_tasks::{ChunkGenerationTasks, MAX_GENERATION_TASKS_IN_FLIGHT},
+    chunk_mesh_tasks::{ChunkMeshTasks, MAX_MESH_TASKS_IN_FLIGHT},
     chunk_rendering::spawn_built_chunk_meshes,
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
+    fluid_updates::PendingFluidUpdates,
     work_budget::FrameWorkBudget,
 };
 
@@ -32,26 +33,36 @@ pub(in crate::world) fn setup_world(
     generation: ChunkGeneration,
     content: ChunkContent,
     mut renderer: ChunkRenderer,
-    mut runtime: WorldSetupRuntime,
+    mut progress: WorldSetupProgress,
+    mut transition: ResMut<ScreenTransition>,
+    mut fluid_updates: ResMut<PendingFluidUpdates>,
+    mut generation_tasks: ResMut<ChunkGenerationTasks>,
+    mut mesh_tasks: ResMut<ChunkMeshTasks>,
     persistence: WorldSetupPersistence,
 ) {
-    if runtime.transition.is_active() {
+    if transition.is_active() {
         return;
     }
 
-    if !runtime.loading_state.screen_rendered {
-        runtime.loading_state.screen_rendered = true;
+    if !progress.loading_state.screen_rendered {
+        progress.loading_state.screen_rendered = true;
         return;
     }
 
-    match runtime.loading_state.phase {
-        WorldLoadingPhase::Generating => {
-            generate_initial_chunks(&generation, &content, &mut runtime)
+    match progress.loading_state.phase {
+        WorldLoadingPhase::Generating => generate_initial_chunks(
+            &generation,
+            &content,
+            &mut progress,
+            &mut fluid_updates,
+            &mut generation_tasks,
+        ),
+        WorldLoadingPhase::Lighting => light_initial_chunks(&content, &mut progress),
+        WorldLoadingPhase::Meshing => {
+            mesh_initial_chunks(&content, &mut renderer, &mut progress, &mut mesh_tasks)
         }
-        WorldLoadingPhase::Lighting => light_initial_chunks(&content, &mut runtime),
-        WorldLoadingPhase::Meshing => mesh_initial_chunks(&content, &mut renderer, &mut runtime),
         WorldLoadingPhase::Spawning => {
-            spawn_loaded_world(&mut renderer, &mut runtime, &persistence)
+            spawn_loaded_world(&mut renderer, &mut progress, &mut transition, &persistence)
         }
     }
 }
@@ -59,109 +70,107 @@ pub(in crate::world) fn setup_world(
 fn generate_initial_chunks(
     generation: &ChunkGeneration<'_>,
     content: &ChunkContent<'_>,
-    runtime: &mut WorldSetupRuntime<'_>,
+    progress: &mut WorldSetupProgress<'_>,
+    fluid_updates: &mut PendingFluidUpdates,
+    generation_tasks: &mut ChunkGenerationTasks,
 ) {
-    runtime
-        .generation_tasks
-        .sync_snapshot(generation, content);
+    generation_tasks.sync_snapshot(generation, content);
     let mut budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 1);
 
-    integrate_generated_chunks(&mut budget, runtime);
-    dispatch_generation_tasks(&mut budget, runtime);
+    integrate_generated_chunks(&mut budget, progress, fluid_updates, generation_tasks);
+    dispatch_generation_tasks(&mut budget, progress, fluid_updates, generation_tasks);
 
-    if runtime.loading_state.generation_cursor >= runtime.loading_state.coords.len()
-        && runtime.loading_state.generated >= runtime.loading_state.coords.len()
-        && runtime.generation_tasks.pending_count() == 0
+    if progress.loading_state.generation_cursor >= progress.loading_state.coords.len()
+        && progress.loading_state.generated >= progress.loading_state.coords.len()
+        && generation_tasks.pending_count() == 0
     {
-        runtime.loading_state.phase = WorldLoadingPhase::Lighting;
+        progress.loading_state.phase = WorldLoadingPhase::Lighting;
     }
 }
 
 fn integrate_generated_chunks(
     budget: &mut FrameWorkBudget,
-    runtime: &mut WorldSetupRuntime<'_>,
+    progress: &mut WorldSetupProgress<'_>,
+    fluid_updates: &mut PendingFluidUpdates,
+    generation_tasks: &mut ChunkGenerationTasks,
 ) {
-    let current_revision = runtime.generation_tasks.revision();
+    let current_revision = generation_tasks.revision();
 
     loop {
         if budget.exhausted() {
             break;
         }
 
-        let Some(completed) = runtime.generation_tasks.poll_ready() else {
+        let Some(completed) = generation_tasks.poll_ready() else {
             break;
         };
         budget.record(1);
 
         if completed.revision != current_revision {
             assert!(
-                runtime.generation_tasks.schedule(completed.coord),
+                generation_tasks.schedule(completed.coord),
                 "stale bootstrap generation must be rescheduled for {:?}",
                 completed.coord
             );
             continue;
         }
 
-        if runtime.world.chunk(completed.coord).is_none() {
-            runtime.world.insert_chunk(completed.coord, completed.output);
+        if progress.world.chunk(completed.coord).is_none() {
+            progress.world.insert_chunk(completed.coord, completed.output);
         }
-        runtime
-            .fluid_updates
-            .enqueue_loaded_fluid_frontier(&runtime.world, completed.coord);
-        runtime.loading_state.generated += 1;
+        fluid_updates.enqueue_loaded_fluid_frontier(&progress.world, completed.coord);
+        progress.loading_state.generated += 1;
     }
 }
 
 fn dispatch_generation_tasks(
     budget: &mut FrameWorkBudget,
-    runtime: &mut WorldSetupRuntime<'_>,
+    progress: &mut WorldSetupProgress<'_>,
+    fluid_updates: &mut PendingFluidUpdates,
+    generation_tasks: &mut ChunkGenerationTasks,
 ) {
-    while runtime.generation_tasks.pending_count() < MAX_GENERATION_TASKS_IN_FLIGHT {
+    while generation_tasks.pending_count() < MAX_GENERATION_TASKS_IN_FLIGHT {
         if budget.exhausted() {
             break;
         }
 
-        let Some(coord) = runtime
+        let Some(coord) = progress
             .loading_state
             .coords
-            .get(runtime.loading_state.generation_cursor)
+            .get(progress.loading_state.generation_cursor)
             .copied()
         else {
             break;
         };
 
-        if runtime.world.chunk(coord).is_some() {
-            runtime
-                .fluid_updates
-                .enqueue_loaded_fluid_frontier(&runtime.world, coord);
-            runtime.loading_state.generation_cursor += 1;
-            runtime.loading_state.generated += 1;
+        if progress.world.chunk(coord).is_some() {
+            fluid_updates.enqueue_loaded_fluid_frontier(&progress.world, coord);
+            progress.loading_state.generation_cursor += 1;
+            progress.loading_state.generated += 1;
             budget.record(1);
             continue;
         }
 
-        if runtime.world.has_generated_chunk(coord) {
+        if progress.world.has_generated_chunk(coord) {
             assert!(
-                runtime.world.restore_chunk(coord),
+                progress.world.restore_chunk(coord),
                 "generated bootstrap chunk must be resident or archived: {coord:?}"
             );
-            runtime
-                .fluid_updates
-                .enqueue_loaded_fluid_frontier(&runtime.world, coord);
-            runtime.loading_state.generation_cursor += 1;
-            runtime.loading_state.generated += 1;
+            fluid_updates.enqueue_loaded_fluid_frontier(&progress.world, coord);
+            progress.loading_state.generation_cursor += 1;
+            progress.loading_state.generated += 1;
             budget.record(1);
             continue;
         }
 
-        if !runtime.generation_tasks.schedule(coord) {
+        if !generation_tasks.schedule(coord) {
             break;
         }
-        runtime.loading_state.generation_cursor += 1;
+        progress.loading_state.generation_cursor += 1;
     }
 }
 
-fn light_initial_chunks(content: &ChunkContent<'_>, runtime: &mut WorldSetupRuntime<'_>) {
+fn light_initial_chunks(content: &ChunkContent<'_>, progress: &mut WorldSetupProgress<'_>) {
     let mut budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 1);
 
     loop {
@@ -169,44 +178,45 @@ fn light_initial_chunks(content: &ChunkContent<'_>, runtime: &mut WorldSetupRunt
             break;
         }
 
-        let start = runtime.loading_state.lit;
-        if start >= runtime.loading_state.coords.len() {
+        let start = progress.loading_state.lit;
+        if start >= progress.loading_state.coords.len() {
             break;
         }
-        let end = (start + BOOTSTRAP_LIGHT_BATCH_CHUNKS).min(runtime.loading_state.coords.len());
+        let end = (start + BOOTSTRAP_LIGHT_BATCH_CHUNKS).min(progress.loading_state.coords.len());
 
         drop(initialize_chunks_lighting(
-            &mut runtime.world,
-            &runtime.loading_state.coords[start..end],
+            &mut progress.world,
+            &progress.loading_state.coords[start..end],
             content.blocks(),
             content.fluids(),
             content.secondary_properties(),
         ));
-        runtime.loading_state.lit = end;
+        progress.loading_state.lit = end;
         budget.record(end - start);
     }
 
-    if runtime.loading_state.lit >= runtime.loading_state.coords.len() {
-        runtime.loading_state.phase = WorldLoadingPhase::Meshing;
+    if progress.loading_state.lit >= progress.loading_state.coords.len() {
+        progress.loading_state.phase = WorldLoadingPhase::Meshing;
     }
 }
 
 fn mesh_initial_chunks(
     content: &ChunkContent<'_>,
     renderer: &mut ChunkRenderer<'_, '_>,
-    runtime: &mut WorldSetupRuntime<'_>,
+    progress: &mut WorldSetupProgress<'_>,
+    mesh_tasks: &mut ChunkMeshTasks,
 ) {
-    runtime.mesh_tasks.sync_snapshot(content);
+    mesh_tasks.sync_snapshot(content);
     let mut budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 1);
 
-    integrate_built_chunk_meshes(content, renderer, &mut budget, runtime);
-    dispatch_mesh_tasks(&mut budget, runtime);
+    integrate_built_chunk_meshes(content, renderer, &mut budget, progress, mesh_tasks);
+    dispatch_mesh_tasks(&mut budget, progress, mesh_tasks);
 
-    if runtime.loading_state.mesh_cursor >= runtime.loading_state.coords.len()
-        && runtime.loading_state.meshed >= runtime.loading_state.coords.len()
-        && runtime.mesh_tasks.pending_count() == 0
+    if progress.loading_state.mesh_cursor >= progress.loading_state.coords.len()
+        && progress.loading_state.meshed >= progress.loading_state.coords.len()
+        && mesh_tasks.pending_count() == 0
     {
-        runtime.loading_state.phase = WorldLoadingPhase::Spawning;
+        progress.loading_state.phase = WorldLoadingPhase::Spawning;
     }
 }
 
@@ -214,25 +224,26 @@ fn integrate_built_chunk_meshes(
     content: &ChunkContent<'_>,
     renderer: &mut ChunkRenderer<'_, '_>,
     budget: &mut FrameWorkBudget,
-    runtime: &mut WorldSetupRuntime<'_>,
+    progress: &mut WorldSetupProgress<'_>,
+    mesh_tasks: &mut ChunkMeshTasks,
 ) {
-    let current_revision = runtime.mesh_tasks.revision();
+    let current_revision = mesh_tasks.revision();
 
     loop {
         if budget.exhausted() {
             break;
         }
 
-        let Some(completed) = runtime.mesh_tasks.poll_ready() else {
+        let Some(completed) = mesh_tasks.poll_ready() else {
             break;
         };
         budget.record(1);
 
         if completed.revision != current_revision {
-            let snapshot = ChunkMeshSnapshot::capture(&runtime.world, completed.coord)
+            let snapshot = ChunkMeshSnapshot::capture(&progress.world, completed.coord)
                 .unwrap_or_else(|| panic!("generated chunk data should exist at {:?}", completed.coord));
             assert!(
-                runtime.mesh_tasks.schedule(completed.coord, snapshot),
+                mesh_tasks.schedule(completed.coord, snapshot),
                 "stale bootstrap mesh must be rescheduled for {:?}",
                 completed.coord
             );
@@ -240,7 +251,7 @@ fn integrate_built_chunk_meshes(
         }
 
         let render_context = content.render_context(
-            &runtime.world,
+            &progress.world,
             &renderer.terrain_materials,
             &renderer.fluid_materials,
         );
@@ -252,45 +263,47 @@ fn integrate_built_chunk_meshes(
             completed.output,
             &render_context,
         );
-        runtime.loading_state.meshed += 1;
+        progress.loading_state.meshed += 1;
     }
 }
 
 fn dispatch_mesh_tasks(
     budget: &mut FrameWorkBudget,
-    runtime: &mut WorldSetupRuntime<'_>,
+    progress: &mut WorldSetupProgress<'_>,
+    mesh_tasks: &mut ChunkMeshTasks,
 ) {
-    while runtime.mesh_tasks.pending_count() < MAX_MESH_TASKS_IN_FLIGHT {
+    while mesh_tasks.pending_count() < MAX_MESH_TASKS_IN_FLIGHT {
         if budget.exhausted() {
             break;
         }
 
-        let Some(coord) = runtime
+        let Some(coord) = progress
             .loading_state
             .coords
-            .get(runtime.loading_state.mesh_cursor)
+            .get(progress.loading_state.mesh_cursor)
             .copied()
         else {
             break;
         };
 
-        let snapshot = ChunkMeshSnapshot::capture(&runtime.world, coord)
+        let snapshot = ChunkMeshSnapshot::capture(&progress.world, coord)
             .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
-        if !runtime.mesh_tasks.schedule(coord, snapshot) {
+        if !mesh_tasks.schedule(coord, snapshot) {
             break;
         }
 
-        runtime.loading_state.mesh_cursor += 1;
+        progress.loading_state.mesh_cursor += 1;
         budget.record(1);
     }
 }
 
 fn spawn_loaded_world(
     renderer: &mut ChunkRenderer<'_, '_>,
-    runtime: &mut WorldSetupRuntime<'_>,
+    progress: &mut WorldSetupProgress<'_>,
+    transition: &mut ScreenTransition,
     persistence: &WorldSetupPersistence<'_>,
 ) {
-    if runtime.loading_state.transition_requested {
+    if progress.loading_state.transition_requested {
         return;
     }
 
@@ -298,8 +311,8 @@ fn spawn_loaded_world(
         .then(|| persistence.save.player_position(LOCAL_PLAYER_ID))
         .flatten();
     let translation = saved_position
-        .filter(|position| player_position_is_clear(&runtime.world, *position))
-        .unwrap_or_else(|| safe_spawn_position(&runtime.world, runtime.loading_state.spawn_column));
+        .filter(|position| player_position_is_clear(&progress.world, *position))
+        .unwrap_or_else(|| safe_spawn_position(&progress.world, progress.loading_state.spawn_column));
     let game_mode = if *persistence.load_mode == WorldLoadMode::Load {
         persistence.save.player_game_mode(LOCAL_PLAYER_ID)
     } else {
@@ -307,8 +320,6 @@ fn spawn_loaded_world(
     };
 
     spawn_player_entity(&mut renderer.commands, translation, game_mode);
-    runtime.loading_state.transition_requested = true;
-    runtime
-        .transition
-        .request(ScreenTransitionTarget::game(GameState::Gameplay));
+    progress.loading_state.transition_requested = true;
+    transition.request(ScreenTransitionTarget::game(GameState::Gameplay));
 }
