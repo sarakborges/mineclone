@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::HashSet, time::Duration};
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 
@@ -26,6 +26,7 @@ pub(super) struct DynamicLightingRuntime<'w> {
 
 pub(super) fn process_dynamic_lighting(
     content: VoxelContent,
+    mut changed_chunks: Local<HashSet<IVec3>>,
     mut runtime: DynamicLightingRuntime,
 ) {
     if runtime.lighting.is_empty() {
@@ -38,12 +39,13 @@ pub(super) fn process_dynamic_lighting(
     )
     .with_maximum_items(MAX_LIGHTING_VOXELS_PER_FRAME);
     let mut recorded_voxels = 0;
-    let changed_chunks = process_pending_lighting(
+    process_pending_lighting(
         &mut runtime.world,
         &mut runtime.lighting,
         &content.blocks,
         &content.fluids,
         &content.secondary_properties,
+        &mut changed_chunks,
         |processed_voxels| {
             budget.record(processed_voxels.saturating_sub(recorded_voxels));
             recorded_voxels = processed_voxels;
@@ -51,7 +53,7 @@ pub(super) fn process_dynamic_lighting(
         },
     );
 
-    for coord in changed_chunks {
+    for coord in changed_chunks.drain() {
         runtime.remesh_queue.enqueue_lighting_change(coord);
     }
 }
