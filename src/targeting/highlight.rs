@@ -128,17 +128,17 @@ fn update_highlight(
     mut view: TargetHighlightView,
 ) {
     let Some(hit) = input.scene.hit() else {
-        *view.highlight.1 = Visibility::Hidden;
-        *view.brush_ghost.1 = Visibility::Hidden;
+        hide_if_visible(&mut view.highlight.1);
+        hide_if_visible(&mut view.brush_ghost.1);
         return;
     };
 
     let selected_item = input.scene.selected_item();
     if selected_item == Some(BRUSH_TOOL_ID) {
-        *view.highlight.1 = Visibility::Hidden;
+        hide_if_visible(&mut view.highlight.1);
 
         let Some(block) = content.blocks.get(hit.block_id) else {
-            *view.brush_ghost.1 = Visibility::Hidden;
+            hide_if_visible(&mut view.brush_ghost.1);
             return;
         };
         if !block
@@ -146,7 +146,7 @@ fn update_highlight(
             .iter()
             .any(|property| property == DYED_PROPERTY_ID)
         {
-            *view.brush_ghost.1 = Visibility::Hidden;
+            hide_if_visible(&mut view.brush_ghost.1);
             return;
         }
 
@@ -165,26 +165,51 @@ fn update_highlight(
                     )
             },
         );
-        if let Some(mut material) = view.materials.get_mut(&view.brush_ghost.2.0) {
+        let material_handle = &view.brush_ghost.2.0;
+        let material_color_changed = view
+            .materials
+            .get(material_handle)
+            .is_some_and(|material| material.base_color != color);
+        if material_color_changed
+            && let Some(mut material) = view.materials.get_mut(material_handle)
+        {
             material.base_color = color;
         }
 
-        view.brush_ghost.0.translation = hit.voxel.as_vec3() + Vec3::splat(0.5);
-        *view.brush_ghost.1 = Visibility::Visible;
+        let translation = hit.voxel.as_vec3() + Vec3::splat(0.5);
+        if view.brush_ghost.0.translation != translation {
+            view.brush_ghost.0.translation = translation;
+        }
+        show_if_hidden(&mut view.brush_ghost.1);
         return;
     }
 
-    *view.brush_ghost.1 = Visibility::Hidden;
+    hide_if_visible(&mut view.brush_ghost.1);
 
     let selected_block = selected_item.filter(|item_id| content.blocks.get(item_id).is_some());
     let placement_preview_visible = selected_block.is_some()
         && placement_voxel(hit, input.scene.world(), input.scene.player_translation()).is_some();
 
     if placement_preview_visible {
-        *view.highlight.1 = Visibility::Hidden;
+        hide_if_visible(&mut view.highlight.1);
         return;
     }
 
-    view.highlight.0.translation = hit.voxel.as_vec3() + Vec3::splat(0.5);
-    *view.highlight.1 = Visibility::Visible;
+    let translation = hit.voxel.as_vec3() + Vec3::splat(0.5);
+    if view.highlight.0.translation != translation {
+        view.highlight.0.translation = translation;
+    }
+    show_if_hidden(&mut view.highlight.1);
+}
+
+fn hide_if_visible(visibility: &mut Visibility) {
+    if *visibility != Visibility::Hidden {
+        *visibility = Visibility::Hidden;
+    }
+}
+
+fn show_if_hidden(visibility: &mut Visibility) {
+    if *visibility != Visibility::Visible {
+        *visibility = Visibility::Visible;
+    }
 }
