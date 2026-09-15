@@ -57,16 +57,25 @@ pub(super) fn update_localized_name_hud<S, R, M>(
     registry: Res<R>,
     language: Res<ActiveLanguage>,
     mut text: Single<&mut Text, With<M>>,
+    mut cached: Local<Option<(String, Language)>>,
 ) where
     S: LocalizedHudSource<R>,
     R: Resource,
     M: Component,
 {
     let id = source.id();
-    let next = source
-        .localized_name(&registry, language.get())
-        .unwrap_or(id);
+    let language = language.get();
+    let cache_matches = cached
+        .as_ref()
+        .is_some_and(|(cached_id, cached_language)| {
+            cached_id == id && *cached_language == language
+        });
+    if cache_matches && !registry.is_changed() {
+        return;
+    }
+    *cached = Some((id.to_owned(), language));
 
+    let next = source.localized_name(&registry, language).unwrap_or(id);
     if text.0 != next {
         text.0 = next.to_owned();
     }
