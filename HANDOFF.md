@@ -84,11 +84,11 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`f52196be54d0126f92c02a98e09a2691941e1e21`
+`b528e866906e1d4fad16a0f02a78e4ca58b56032`
 
-Commit: `Scan direct skylight cache by chunk`
+Commit: `Remove obsolete lighting world wrappers`
 
-`VERSION`: `0.12.65`
+`VERSION`: `0.12.66`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever, porque podem ter avançado.
 
@@ -124,13 +124,9 @@ A auditoria arquitetural segue ativa; o roadmap vem do canon + inspeção real d
 - Direct seed usa storage local do chunk e elimina 8.192 resoluções de posição/chunk por seed.
 - Lighting-only attribute split continua rejeitado porque block light pode alterar diagonal/índices.
 
-### 0.12.59 — promoção/remoção de fila amortizada O(1)
-- `DeduplicatedQueue` usa generations/tombstones; promotion/remove deixam de procurar/remover linearmente no deque.
-- Compactação periódica limita stale records.
-
-### 0.12.60 — misses de renderabilidade não reescaneiam fila estável
-- Revisions lógicas da fila + membership revision do render pool cacheiam misses de `pop_renderable*`.
-- Sem mudança nos owners, frames seguintes não revarrem filas sem item renderizável.
+### 0.12.59–0.12.60 — filas/remesh
+- `DeduplicatedQueue` usa generations/tombstones; promotion/remove deixam de remover linearmente no deque.
+- Revisions lógicas da fila + membership revision do render pool cacheiam misses de `pop_renderable*`, evitando re-scan por frame sem mudança.
 
 ### 0.12.61 — full relight volume somente para mudança real de fonte
 - Footprint Manhattan de raio 15 fica reservado a mudança HSI não-zero -> não-zero, preservando fix histórico de recoloração.
@@ -141,20 +137,23 @@ A auditoria arquitetural segue ativa; o roadmap vem do canon + inspeção real d
 - `VoxelMutationRuntime` elimina um segundo lookup do mesmo voxel por edit.
 
 ### 0.12.63 — chunks vazios relaxam lighting pela shell
-- Empty chunk (`block_count == 0 && fluid_count == 0`) usa shell interna de 1.352 voxels + 1.536 vizinhos externos.
+- Empty chunk usa shell interna de 1.352 voxels + 1.536 vizinhos externos.
 - Relax queue potencial cai de 5.632 para 2.888 posições por empty chunk antes da deduplicação.
 - Chunks com conteúdo continuam com full relaxation para preservar caves, emitters, fluid dampening e lateral skylight internos.
 
 ### 0.12.64 — direct seed resolve upper chunks uma vez
 - O scan de skylight acima do chunk resolve cada upper chunk carregado uma vez, pula gaps verticais inteiros e lê `cell/fluid` diretamente do `VoxelChunk` local.
-- Dentro de cada coluna, a ordem continua top-down e `medium_dampening_for_cells` mantém a mesma attenuação.
 - Para cada upper chunk completo, até 4.096 lookups de mundo viram um lookup de chunk + leituras locais.
 
 ### 0.12.65 — direct skylight cache expande por chunk
-- `LightingContext::DirectSkyColumn` deixa de chamar `medium_dampening(world, position)` uma vez por world-Y durante expansão lazy.
-- A coluna calcula uma vez seu chunk/local XZ e percorre segmentos verticais por `VoxelChunk`, resolvendo cada chunk uma vez por expansão.
-- Chunks ausentes continuam produzindo um nível por world-Y com skylight inalterado, preservando os índices de `levels_from_top` e a semântica de gaps.
-- Em um segmento vertical completo, até 16 lookups de mundo por coluna viram um lookup de chunk + leituras locais de cell/fluid.
+- `LightingContext::DirectSkyColumn` passa a percorrer segmentos verticais por `VoxelChunk` em vez de resolver o mundo a cada Y.
+- Chunks ausentes continuam produzindo um nível por world-Y com skylight inalterado, preservando `levels_from_top` e gaps.
+- Em segmento vertical completo, até 16 lookups de mundo por coluna viram um lookup de chunk + leituras locais.
+
+### 0.12.66 — wrappers world-position de lighting removidos
+- `medium_dampening(world, position)` ficou obsoleto após os scans chunk-local de 0.12.64/65 e foi removido.
+- `block_emission(world, position)` também não tinha mais consumidor após a migração para `block_emission_for_cell`.
+- Permanecem apenas os primitives cell/sample-based realmente usados, evitando forwarding morto/dead code.
 
 ---
 
@@ -169,7 +168,7 @@ Não desfazer sem evidência nova:
 - `DeduplicatedQueue` mantém FIFO/prioridade via generations/tombstones.
 - Miss caching de remesh depende apenas de revisions dos owners reais.
 - Não remover full emission footprint de recoloração sem invalidation equivalente de canais antigos.
-- Empty-chunk lighting pode usar shell + vizinhos externos; chunks com conteúdo não podem ser reduzidos à shell sem uma frontier interna provada.
+- Empty-chunk lighting pode usar shell + vizinhos externos; chunks com conteúdo não podem ser reduzidos à shell sem frontier interna provada.
 - Direct skylight caches devem preservar um valor por world-Y, mesmo em gaps verticais sem chunk carregado.
 - Não reabrir bugs antigos automaticamente; só se ativos/regredidos.
 
@@ -179,10 +178,10 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Procurar os usos restantes de helpers world-position-based (`medium_dampening`, `cell_at` + `fluid_at`, `light_at` etc.) dentro de loops onde um `VoxelChunk` já pode ser resolvido uma vez.
-2. Manter full relaxation em chunks com conteúdo até existir uma frontier interna correta para direct sky/emitter propagation.
-3. Streaming selection já só rebuilda ao mudar chunk/render distance; `sync_snapshot` é change-driven e task polling é bounded a 8, então não micro-otimizar esses pontos.
-4. Collision/raycast/targeting atuais não mostraram lookup duplicado seguro; swimming não pode reutilizar sample anterior porque há movimento horizontal entre sistemas.
+1. Auditar integração de chunks além de meshing/lighting, especialmente fluid frontier e neighbor notifications, procurando trabalho feito mesmo quando metadata já prova que não há conteúdo relevante.
+2. Procurar usos restantes de `cell_at`/`fluid_at`/`light_at` repetidos para a mesma posição em loops onde um chunk/sample já pode ser reutilizado.
+3. Manter full relaxation em chunks com conteúdo até existir frontier interna correta para direct sky/emitter propagation.
+4. Streaming selection/snapshots/task polling já estão bounded/change-driven; collision/raycast/targeting não mostraram lookup duplicado seguro.
 5. Só voltar a unload incremental, worldgen/cache ou task lifecycle se surgir evidência objetiva nova.
 
 ---
