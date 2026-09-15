@@ -238,6 +238,10 @@ pub(super) fn sync_seed_text(
     mut labels: Query<&mut Text, With<SeedValueText>>,
     mut inputs: Query<&mut BorderColor, With<SeedInput>>,
 ) {
+    if !config.is_changed() && !input.is_changed() {
+        return;
+    }
+
     sync_numeric_input_view(&input, config.seed().0, &mut labels, &mut inputs);
 }
 
