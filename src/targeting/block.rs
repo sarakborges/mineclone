@@ -5,7 +5,7 @@ use super::{
     placement_orientation::PlacementOrientationPlugin, placement_preview::PlacementPreviewPlugin,
 };
 use crate::{
-    app::game_state::GameState,
+    app::{game_state::GameState, resource_systems::reset_resource},
     gameplay::availability::WorldInteractionState,
     player::camera::GameplayCamera,
     voxel::{
@@ -29,6 +29,7 @@ pub struct BlockTargetingPlugin;
 impl Plugin for BlockTargetingPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<TargetedBlock>()
+            .init_resource::<TargetingRaycastCache>()
             .configure_sets(
                 Update,
                 (
@@ -46,6 +47,10 @@ impl Plugin for BlockTargetingPlugin {
                 PlacementPreviewPlugin,
             ))
             .add_systems(
+                OnEnter(GameState::Gameplay),
+                reset_resource::<TargetingRaycastCache>,
+            )
+            .add_systems(
                 Update,
                 update_targeted_block
                     .in_set(BlockTargetingSet::Raycast)
@@ -57,17 +62,43 @@ impl Plugin for BlockTargetingPlugin {
 #[derive(Resource, Default)]
 pub struct TargetedBlock(pub Option<VoxelHit>);
 
+#[derive(Resource, Default)]
+struct TargetingRaycastCache {
+    last_inputs: Option<TargetingRaycastInputs>,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct TargetingRaycastInputs {
+    origin: Vec3,
+    direction: Vec3,
+    block_content_revision: u64,
+    interaction_available: bool,
+}
+
 fn update_targeted_block(
     camera: Single<&GlobalTransform, With<GameplayCamera>>,
     world: Res<VoxelWorld>,
     interaction: WorldInteractionState,
+    mut cache: ResMut<TargetingRaycastCache>,
     mut targeted: ResMut<TargetedBlock>,
 ) {
-    let next = if interaction.available() {
+    let interaction_available = interaction.available();
+    let inputs = TargetingRaycastInputs {
+        origin: camera.translation(),
+        direction: camera.forward().as_vec3(),
+        block_content_revision: world.block_content_revision(),
+        interaction_available,
+    };
+    if cache.last_inputs == Some(inputs) {
+        return;
+    }
+    cache.last_inputs = Some(inputs);
+
+    let next = if interaction_available {
         raycast_voxels(
             &world,
-            camera.translation(),
-            camera.forward().as_vec3(),
+            inputs.origin,
+            inputs.direction,
             TARGET_RANGE,
         )
     } else {

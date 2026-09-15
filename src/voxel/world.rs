@@ -20,6 +20,7 @@ pub struct VoxelWorld {
     dirty_chunks: HashSet<IVec3>,
     chunk_mesh_revisions: HashMap<IVec3, u64>,
     next_chunk_mesh_revision: u64,
+    block_content_revision: u64,
 }
 
 impl VoxelWorld {
@@ -33,6 +34,7 @@ impl VoxelWorld {
         self.generated_chunks.insert(coord);
         self.chunks.insert(coord, chunk);
         self.track_loaded_chunk(coord);
+        self.bump_block_content_revision();
         self.bump_chunk_mesh_revision(coord);
     }
 
@@ -58,6 +60,10 @@ impl VoxelWorld {
             .map(|(_, revision)| revision)
     }
 
+    pub(crate) fn block_content_revision(&self) -> u64 {
+        self.block_content_revision
+    }
+
     pub(crate) fn loaded_chunk_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
         self.chunks.keys().copied()
     }
@@ -72,6 +78,7 @@ impl VoxelWorld {
             removed_revision.is_some(),
             "archived loaded chunk should have a mesh revision: {coord:?}"
         );
+        self.bump_block_content_revision();
 
         if self.dirty_chunks.contains(&coord) {
             self.archived_chunks
@@ -92,6 +99,7 @@ impl VoxelWorld {
 
         self.chunks.insert(coord, archived.restore());
         self.track_loaded_chunk(coord);
+        self.bump_block_content_revision();
         self.bump_chunk_mesh_revision(coord);
         true
     }
@@ -263,6 +271,7 @@ impl VoxelWorld {
 
         let (chunk_coord, local_position) = split_world_position(world_position);
         let previous_block;
+        let block_changed;
 
         {
             let chunk = self.chunks.get_mut(&chunk_coord)?;
@@ -278,6 +287,7 @@ impl VoxelWorld {
             }
 
             previous_block = current_block;
+            block_changed = current_block != block;
             chunk.set_block(x, y, z, block);
 
             if block.is_some() {
@@ -286,6 +296,9 @@ impl VoxelWorld {
         }
 
         self.dirty_chunks.insert(chunk_coord);
+        if block_changed {
+            self.bump_block_content_revision();
+        }
         self.bump_chunk_mesh_revision(chunk_coord);
         Some((chunk_coord, previous_block))
     }
@@ -329,6 +342,13 @@ impl VoxelWorld {
 
     pub fn block_id_at(&self, world_position: IVec3) -> Option<&'static str> {
         self.cell_at(world_position).map(|cell| cell.block_id)
+    }
+
+    fn bump_block_content_revision(&mut self) {
+        self.block_content_revision = self
+            .block_content_revision
+            .checked_add(1)
+            .expect("block content revision counter exhausted");
     }
 
     fn bump_chunk_mesh_revision(&mut self, coord: IVec3) {
