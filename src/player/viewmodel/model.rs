@@ -39,6 +39,7 @@ pub(super) struct HeldBlockFace {
 #[derive(Default)]
 pub(super) struct HeldBlockVisualCache {
     tint_cell: Option<IVec2>,
+    tint: Option<Color>,
 }
 
 type HeldBlockRootQuery<'w, 's> = Query<
@@ -267,11 +268,16 @@ pub(super) fn sync_held_block(
         player.translation.x.floor() as i32,
         player.translation.z.floor() as i32,
     );
-    let needs_refresh = cache.tint_cell != Some(tint_cell)
-        || selection.hotbar.is_changed()
-        || selection.placement_orientation.is_changed()
-        || definitions.inputs_changed();
-    if !needs_refresh {
+    let tint_cell_changed = cache.tint_cell != Some(tint_cell);
+    let block_definitions_changed = definitions.block_definitions_changed();
+    let selection_changed = selection.hotbar.is_changed();
+    let orientation_changed = selection.placement_orientation.is_changed();
+    let visual_inputs_changed = definitions.inputs_changed();
+    if !tint_cell_changed
+        && !selection_changed
+        && !orientation_changed
+        && !visual_inputs_changed
+    {
         return;
     }
     cache.tint_cell = Some(tint_cell);
@@ -285,16 +291,24 @@ pub(super) fn sync_held_block(
     let tint_position = tint_cell.as_vec2() + Vec2::splat(0.5);
 
     for (mut held, mut held_transform, mut held_visibility) in &mut roots {
-        held.set_block_id(selected_block_id);
+        let block_changed = held.block_id() != selected_block_id;
+        if block_changed {
+            held.set_block_id(selected_block_id);
+        }
 
         if *held_visibility != visibility {
             *held_visibility = visibility;
         }
 
         let Some(block_id) = selected_block_id else {
-            for (_, _, mut layer_visibility) in &mut faces {
-                *layer_visibility = Visibility::Hidden;
+            if block_changed {
+                for (_, _, mut layer_visibility) in &mut faces {
+                    if *layer_visibility != Visibility::Hidden {
+                        *layer_visibility = Visibility::Hidden;
+                    }
+                }
             }
+            cache.tint = None;
             continue;
         };
         let block = definitions
@@ -304,32 +318,53 @@ pub(super) fn sync_held_block(
         let orientation = selection
             .placement_orientation
             .for_block(selected_slot, block);
-        held_transform.rotation = held_block_transform(orientation).rotation;
+        let rotation = held_block_transform(orientation).rotation;
+        if held_transform.rotation != rotation {
+            held_transform.rotation = rotation;
+        }
 
-        let tint = definitions
-            .tint_at(block_id, tint_position)
-            .unwrap_or(Color::WHITE);
+        let materials_changed = block_changed || block_definitions_changed;
+        if materials_changed {
+            for (face, material_handle, mut layer_visibility) in &mut faces {
+                let Some(mut material) = materials.get_mut(&material_handle.0) else {
+                    continue;
+                };
 
-        for (face, material_handle, mut layer_visibility) in &mut faces {
-            let Some(mut material) = materials.get_mut(&material_handle.0) else {
-                continue;
-            };
+                let Some(face_material) = block_face_material_data(
+                    face.face,
+                    face.layer_index,
+                    block,
+                    &definitions.asset_server,
+                    held.opacity(),
+                ) else {
+                    if *layer_visibility != Visibility::Hidden {
+                        *layer_visibility = Visibility::Hidden;
+                    }
+                    continue;
+                };
 
-            let Some(face_material) = block_face_material_data(
-                face.face,
-                face.layer_index,
-                block,
-                &definitions.asset_server,
-                held.opacity(),
-            ) else {
-                *layer_visibility = Visibility::Hidden;
-                continue;
-            };
+                *material = face_material;
+                apply_block_display_shading(&mut material, face.face, held.opacity());
+                if *layer_visibility != Visibility::Visible {
+                    *layer_visibility = Visibility::Visible;
+                }
+            }
+        }
 
-            *material = face_material;
-            apply_block_display_shading(&mut material, face.face, held.opacity());
-            set_block_model_tint(&mut material, tint);
-            *layer_visibility = Visibility::Visible;
+        if materials_changed || tint_cell_changed || visual_inputs_changed {
+            let tint = definitions
+                .tint_at(block_id, tint_position)
+                .unwrap_or(Color::WHITE);
+            if materials_changed || cache.tint != Some(tint) {
+                for (_, material_handle, _) in &mut faces {
+                    let Some(mut material) = materials.get_mut(&material_handle.0) else {
+                        continue;
+                    };
+
+                    set_block_model_tint(&mut material, tint);
+                }
+            }
+            cache.tint = Some(tint);
         }
     }
 }
