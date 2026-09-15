@@ -1,6 +1,9 @@
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::BTreeSet;
 
-use bevy::prelude::*;
+use bevy::{
+    platform::collections::{HashMap, HashSet},
+    prelude::*,
+};
 
 use super::{
     cell::VoxelCell,
