@@ -48,6 +48,10 @@ impl TicksPerSecondSettings<'_> {
             self.game_rules.ticks_per_second()
         }
     }
+
+    fn inputs_changed(&self) -> bool {
+        self.game_state.is_changed() || self.game_rules.is_changed() || self.new_world.is_changed()
+    }
 }
 
 #[derive(SystemParam)]
@@ -196,5 +200,9 @@ pub(super) fn sync_ticks_per_second_text(
     mut labels: Query<&mut Text, With<TicksPerSecondValueText>>,
     mut inputs: Query<&mut BorderColor, With<TicksPerSecondInput>>,
 ) {
+    if !settings.inputs_changed() && !input_state.is_changed() {
+        return;
+    }
+
     sync_numeric_input_view(&input_state, settings.current(), &mut labels, &mut inputs);
 }
