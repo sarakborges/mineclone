@@ -58,9 +58,12 @@ pub(in crate::world) fn setup_world(
             &mut generation_tasks,
         ),
         WorldLoadingPhase::Lighting => light_initial_chunks(&content, &mut progress),
-        WorldLoadingPhase::Meshing => {
-            mesh_initial_chunks(&content, &mut renderer, &mut progress, &mut mesh_tasks)
-        }
+        WorldLoadingPhase::Meshing => mesh_initial_chunks(
+            &content,
+            &mut renderer,
+            &mut progress,
+            &mut mesh_tasks,
+        ),
         WorldLoadingPhase::Spawning => {
             spawn_loaded_world(&mut renderer, &mut progress, &mut transition, &persistence)
         }
@@ -210,7 +213,7 @@ fn mesh_initial_chunks(
     let mut budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 1);
 
     integrate_built_chunk_meshes(content, renderer, &mut budget, progress, mesh_tasks);
-    dispatch_mesh_tasks(&mut budget, progress, mesh_tasks);
+    dispatch_mesh_tasks(content, renderer, &mut budget, progress, mesh_tasks);
 
     if progress.loading_state.mesh_cursor >= progress.loading_state.coords.len()
         && progress.loading_state.meshed >= progress.loading_state.coords.len()
@@ -268,11 +271,13 @@ fn integrate_built_chunk_meshes(
 }
 
 fn dispatch_mesh_tasks(
+    content: &ChunkContent<'_>,
+    renderer: &mut ChunkRenderer<'_, '_>,
     budget: &mut FrameWorkBudget,
     progress: &mut WorldSetupProgress<'_>,
     mesh_tasks: &mut ChunkMeshTasks,
 ) {
-    while mesh_tasks.pending_count() < MAX_MESH_TASKS_IN_FLIGHT {
+    loop {
         if budget.exhausted() {
             break;
         }
@@ -285,6 +290,35 @@ fn dispatch_mesh_tasks(
         else {
             break;
         };
+        let chunk_is_empty = progress
+            .world
+            .chunk(coord)
+            .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"))
+            .is_empty();
+
+        if chunk_is_empty {
+            let render_context = content.render_context(
+                &progress.world,
+                &renderer.terrain_materials,
+                &renderer.fluid_materials,
+            );
+            spawn_built_chunk_meshes(
+                &mut renderer.commands,
+                &mut renderer.meshes,
+                &mut renderer.pool,
+                coord,
+                Vec::new(),
+                &render_context,
+            );
+            progress.loading_state.mesh_cursor += 1;
+            progress.loading_state.meshed += 1;
+            budget.record(1);
+            continue;
+        }
+
+        if mesh_tasks.pending_count() >= MAX_MESH_TASKS_IN_FLIGHT {
+            break;
+        }
 
         let snapshot = ChunkMeshSnapshot::capture(&progress.world, coord)
             .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
