@@ -65,7 +65,7 @@ pub(super) fn rebuild_queue(
         .filter(|coord| !context.render_pool.contains(*coord))
         .collect::<Vec<_>>();
 
-    pending.sort_by_key(|coord| {
+    pending.sort_by_cached_key(|coord| {
         pending_priority(
             *coord,
             center,
