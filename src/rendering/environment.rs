@@ -8,7 +8,7 @@ use crate::{
 
 use super::biome_visuals::CurrentBiomeVisuals;
 
-#[derive(Resource)]
+#[derive(Resource, PartialEq)]
 pub struct EnvironmentVisualState {
     pub sky_color: Hsi,
     pub fog_color: Hsi,
@@ -46,21 +46,31 @@ fn update_environment_visuals(
     scene: EnvironmentScene,
     mut visuals: ResMut<EnvironmentVisualState>,
 ) {
+    if !scene.day_night.inputs_changed() && !scene.biome_visuals.inputs_changed() {
+        return;
+    }
+
     let Some(sample) = scene.day_night.sample() else {
         return;
     };
 
-    visuals.sky_color = scene.biome_visuals.blend_hsi(|biome| {
-        biome.visuals.sky_color.get(sample.phase).lerp(
-            *biome.visuals.sky_color.get(sample.next_phase),
-            sample.transition,
-        )
-    });
-    visuals.fog_color = scene.biome_visuals.blend_hsi(|biome| {
-        biome.visuals.fog_color.get(sample.phase).lerp(
-            *biome.visuals.fog_color.get(sample.next_phase),
-            sample.transition,
-        )
-    });
-    visuals.sky_light_factor = sample.sky_light_factor;
+    let next = EnvironmentVisualState {
+        sky_color: scene.biome_visuals.blend_hsi(|biome| {
+            biome.visuals.sky_color.get(sample.phase).lerp(
+                *biome.visuals.sky_color.get(sample.next_phase),
+                sample.transition,
+            )
+        }),
+        fog_color: scene.biome_visuals.blend_hsi(|biome| {
+            biome.visuals.fog_color.get(sample.phase).lerp(
+                *biome.visuals.fog_color.get(sample.next_phase),
+                sample.transition,
+            )
+        }),
+        sky_light_factor: sample.sky_light_factor,
+    };
+
+    if *visuals != next {
+        *visuals = next;
+    }
 }
