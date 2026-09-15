@@ -1,6 +1,6 @@
 use bevy::prelude::IVec3;
 
-#[derive(Clone, Copy, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum TextureRotation {
     #[default]
     Degrees0,

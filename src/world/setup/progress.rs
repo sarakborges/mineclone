@@ -242,13 +242,15 @@ fn integrate_built_chunk_meshes(
         };
         budget.record(1);
 
-        if completed.revision != current_revision {
-            let snapshot = ChunkMeshSnapshot::capture(&progress.world, completed.coord)
-                .unwrap_or_else(|| panic!("generated chunk data should exist at {:?}", completed.coord));
+        let coord = completed.coord;
+        let output = completed.output;
+        if completed.revision != current_revision || !output.dependencies.is_current(&progress.world)
+        {
+            let snapshot = ChunkMeshSnapshot::capture(&progress.world, coord)
+                .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
             assert!(
-                mesh_tasks.schedule(completed.coord, snapshot),
-                "stale bootstrap mesh must be rescheduled for {:?}",
-                completed.coord
+                mesh_tasks.schedule(coord, snapshot),
+                "stale bootstrap mesh must be rescheduled for {coord:?}"
             );
             continue;
         }
@@ -262,8 +264,8 @@ fn integrate_built_chunk_meshes(
             &mut renderer.commands,
             &mut renderer.meshes,
             &mut renderer.pool,
-            completed.coord,
-            completed.output,
+            coord,
+            output.meshes,
             &render_context,
         );
         progress.loading_state.meshed += 1;
@@ -346,7 +348,9 @@ fn spawn_loaded_world(
         .flatten();
     let translation = saved_position
         .filter(|position| player_position_is_clear(&progress.world, *position))
-        .unwrap_or_else(|| safe_spawn_position(&progress.world, progress.loading_state.spawn_column));
+        .unwrap_or_else(|| {
+            safe_spawn_position(&progress.world, progress.loading_state.spawn_column)
+        });
     let game_mode = if *persistence.load_mode == WorldLoadMode::Load {
         persistence.save.player_game_mode(LOCAL_PLAYER_ID)
     } else {

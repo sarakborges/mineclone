@@ -5,7 +5,7 @@ use super::{
     texture_rotation::TextureRotation,
 };
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct VoxelCell {
     pub block_id: &'static str,
     pub texture_rotation: TextureRotation,
