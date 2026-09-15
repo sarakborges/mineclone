@@ -11,11 +11,17 @@ pub(crate) struct AutoScrollbar {
 }
 
 pub(crate) fn vertical_scrollbar(target: Entity) -> impl Bundle {
+    (AutoScrollbar { target }, scrollbar(target))
+}
+
+pub(crate) fn persistent_vertical_scrollbar(target: Entity) -> impl Bundle {
+    scrollbar(target)
+}
+
+fn scrollbar(target: Entity) -> impl Bundle {
     (
-        AutoScrollbar { target },
         Interaction::default(),
         Node {
-            display: Display::None,
             min_width: px(8),
             margin: UiRect::left(px(6)),
             grid_column: GridPlacement::start(2),
