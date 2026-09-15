@@ -234,6 +234,7 @@ pub(super) fn process_chunk_remesh_queue(
     world: Res<VoxelWorld>,
     mut queue: ResMut<ChunkRemeshQueue>,
     mut tasks: ResMut<ChunkRemeshTasks>,
+    mut deferred: Local<Vec<(IVec3, ChunkRemeshTaskKind)>>,
 ) {
     tasks.sync_snapshot(&content);
     collect_completed_remesh_tasks(
@@ -243,7 +244,13 @@ pub(super) fn process_chunk_remesh_queue(
         &mut queue,
         &mut tasks,
     );
-    dispatch_remesh_tasks(&world, &renderer.pool, &mut queue, &mut tasks);
+    dispatch_remesh_tasks(
+        &world,
+        &renderer.pool,
+        &mut queue,
+        &mut tasks,
+        &mut deferred,
+    );
 }
 
 fn collect_completed_remesh_tasks(
@@ -308,10 +315,11 @@ fn dispatch_remesh_tasks(
     render_pool: &ChunkRenderPool,
     queue: &mut ChunkRemeshQueue,
     tasks: &mut ChunkRemeshTasks,
+    deferred: &mut Vec<(IVec3, ChunkRemeshTaskKind)>,
 ) {
     let mut budget = FrameWorkBudget::new(REMESH_TASK_DISPATCH_BUDGET, 1)
         .with_maximum_items(MAX_REMESH_TASKS_DISPATCHED_PER_FRAME);
-    let mut deferred = Vec::new();
+    deferred.clear();
 
     while tasks.pending_count() < MAX_REMESH_TASKS_IN_FLIGHT {
         if budget.exhausted() {
@@ -345,7 +353,7 @@ fn dispatch_remesh_tasks(
         budget.record(1);
     }
 
-    for (coord, kind) in deferred.into_iter().rev() {
+    for (coord, kind) in deferred.drain(..).rev() {
         queue.enqueue_task_priority(coord, kind);
     }
 }
