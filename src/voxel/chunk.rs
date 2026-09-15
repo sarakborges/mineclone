@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bevy::prelude::*;
 
 use super::{cell::VoxelCell, fluid::FluidCell, light::VoxelLight};
@@ -15,9 +17,9 @@ const POSITIVE_Z_FACE: usize = 5;
 
 #[derive(Component, Clone)]
 pub struct VoxelChunk {
-    blocks: Box<[Option<VoxelCell>]>,
-    fluids: Box<[Option<FluidCell>]>,
-    light: Box<[VoxelLight]>,
+    blocks: Arc<[Option<VoxelCell>]>,
+    fluids: Arc<[Option<FluidCell>]>,
+    light: Arc<[VoxelLight]>,
     block_count: usize,
     fluid_count: usize,
     boundary_content_counts: [u16; BOUNDARY_FACE_COUNT],
@@ -27,9 +29,9 @@ pub struct VoxelChunk {
 impl VoxelChunk {
     pub fn empty() -> Self {
         Self {
-            blocks: vec![None; CHUNK_VOLUME].into_boxed_slice(),
-            fluids: vec![None; CHUNK_VOLUME].into_boxed_slice(),
-            light: vec![VoxelLight::DARK; CHUNK_VOLUME].into_boxed_slice(),
+            blocks: Arc::from(vec![None; CHUNK_VOLUME]),
+            fluids: Arc::from(vec![None; CHUNK_VOLUME]),
+            light: Arc::from(vec![VoxelLight::DARK; CHUNK_VOLUME]),
             block_count: 0,
             fluid_count: 0,
             boundary_content_counts: [0; BOUNDARY_FACE_COUNT],
@@ -99,7 +101,7 @@ impl VoxelChunk {
             );
         }
 
-        self.blocks[index] = block;
+        Arc::make_mut(&mut self.blocks)[index] = block;
     }
 
     pub(crate) fn set_fluid(&mut self, x: usize, y: usize, z: usize, fluid: Option<FluidCell>) {
@@ -129,7 +131,7 @@ impl VoxelChunk {
             );
         }
 
-        self.fluids[index] = fluid;
+        Arc::make_mut(&mut self.fluids)[index] = fluid;
     }
 
     pub(crate) fn set_light(&mut self, x: usize, y: usize, z: usize, light: VoxelLight) -> bool {
@@ -137,12 +139,12 @@ impl VoxelChunk {
         if self.light[index] == light {
             return false;
         }
-        self.light[index] = light;
+        Arc::make_mut(&mut self.light)[index] = light;
         true
     }
 
     pub(crate) fn clear_light(&mut self) {
-        self.light.fill(VoxelLight::DARK);
+        Arc::make_mut(&mut self.light).fill(VoxelLight::DARK);
     }
 }
 
@@ -269,5 +271,29 @@ mod tests {
         chunk.set_block(0, last, 3, None);
         assert!(!chunk.boundary_has_content(IVec3::NEG_X));
         assert!(!chunk.boundary_has_content(IVec3::Y));
+    }
+
+    #[test]
+    fn chunk_clone_shares_storage_until_mutated() {
+        let mut chunk = VoxelChunk::empty();
+        chunk.set_block(1, 2, 3, Some(VoxelCell::new("stone", Default::default())));
+        chunk.set_fluid(4, 5, 6, Some(FluidCell::source(0, 8)));
+        chunk.set_light(7, 8, 9, VoxelLight::new_hsi(12, Default::default()));
+
+        let mut clone = chunk.clone();
+        assert!(Arc::ptr_eq(&chunk.blocks, &clone.blocks));
+        assert!(Arc::ptr_eq(&chunk.fluids, &clone.fluids));
+        assert!(Arc::ptr_eq(&chunk.light, &clone.light));
+
+        clone.set_block(1, 2, 3, None);
+        clone.set_fluid(4, 5, 6, None);
+        clone.set_light(7, 8, 9, VoxelLight::DARK);
+
+        assert!(!Arc::ptr_eq(&chunk.blocks, &clone.blocks));
+        assert!(!Arc::ptr_eq(&chunk.fluids, &clone.fluids));
+        assert!(!Arc::ptr_eq(&chunk.light, &clone.light));
+        assert!(chunk.cell_at(1, 2, 3).is_some());
+        assert!(chunk.fluid_at(4, 5, 6).is_some());
+        assert_ne!(chunk.light_at(7, 8, 9), VoxelLight::DARK);
     }
 }
