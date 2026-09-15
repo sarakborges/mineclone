@@ -54,8 +54,11 @@ pub(super) fn spawn_clouds(mut commands: Commands, assets: Res<CloudAssets>) {
     }
 }
 
-pub(super) fn cloud_visuals_changed(visuals: Res<SkyLayerVisualState>) -> bool {
-    visuals.is_changed()
+pub(super) fn cloud_presentation_needs_sync(
+    visuals: Res<SkyLayerVisualState>,
+    added_clouds: Query<(), Added<CloudPart>>,
+) -> bool {
+    visuals.is_changed() || !added_clouds.is_empty()
 }
 
 pub(super) fn sync_cloud_presentation(
