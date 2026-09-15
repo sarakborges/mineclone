@@ -14,7 +14,9 @@ use crate::{
 use super::biome_field::BiomeField;
 
 pub(crate) use materials::{FluidMaterials, TerrainMaterials};
-pub(crate) use pool::{ChunkRenderPool, clear_chunk_render_pool};
+pub(crate) use pool::{
+    ChunkRenderPool, clear_chunk_render_pool, retire_chunk_render_allocation,
+};
 pub(crate) use refresh::{refresh_chunk_fluid_mesh, refresh_chunk_geometry_mesh};
 pub(crate) use spawn::{
     BuiltChunkMesh, build_chunk_render_meshes, spawn_built_chunk_meshes, spawn_chunk_mesh,
