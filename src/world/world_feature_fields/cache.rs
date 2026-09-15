@@ -74,13 +74,87 @@ where
     }
 }
 
+struct StructureOriginCache {
+    entries: RwLock<HashMap<String, HashMap<IVec2, Option<i32>>>>,
+}
+
+impl StructureOriginCache {
+    fn new() -> Self {
+        Self {
+            entries: RwLock::new(HashMap::new()),
+        }
+    }
+
+    fn get_or_insert_with(
+        &self,
+        structure_id: &str,
+        anchor: IVec2,
+        factory: impl FnOnce() -> Option<i32>,
+    ) -> Option<i32> {
+        if let Some(cached) = self
+            .entries
+            .read()
+            .expect("structure origin cache read lock was poisoned")
+            .get(structure_id)
+            .and_then(|anchors| anchors.get(&anchor))
+            .copied()
+        {
+            return cached;
+        }
+
+        let value = factory();
+        let mut entries = self
+            .entries
+            .write()
+            .expect("structure origin cache write lock was poisoned");
+
+        if let Some(cached) = entries
+            .get(structure_id)
+            .and_then(|anchors| anchors.get(&anchor))
+            .copied()
+        {
+            return cached;
+        }
+
+        if let Some(anchors) = entries.get_mut(structure_id) {
+            anchors.insert(anchor, value);
+        } else {
+            entries.insert(structure_id.to_owned(), HashMap::from([(anchor, value)]));
+        }
+
+        value
+    }
+
+    fn retain(&self, mut predicate: impl FnMut(IVec2) -> bool) {
+        let mut entries = self
+            .entries
+            .write()
+            .expect("structure origin cache write lock was poisoned");
+
+        for anchors in entries.values_mut() {
+            anchors.retain(|anchor, _| predicate(*anchor));
+        }
+        entries.retain(|_, anchors| !anchors.is_empty());
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.entries
+            .read()
+            .expect("structure origin cache read lock was poisoned")
+            .values()
+            .map(HashMap::len)
+            .sum()
+    }
+}
+
 pub(super) struct FeatureCaches {
     hydrology: ConcurrentCache<IVec2, Arc<HydrologyRegion>>,
     generation_columns: ConcurrentCache<IVec2, Arc<Vec<GenerationColumnSample>>>,
     volume_biomes: ConcurrentCache<IVec3, Arc<VolumeBiomeRegion>>,
     caves: ConcurrentCache<IVec3, Option<Arc<CaveConnectivityRegion>>>,
     regions: ConcurrentCache<IVec3, Arc<GenerationRegion>>,
-    structure_origins: ConcurrentCache<(String, IVec2), Option<i32>>,
+    structure_origins: StructureOriginCache,
 }
 
 impl FeatureCaches {
@@ -91,7 +165,7 @@ impl FeatureCaches {
             volume_biomes: ConcurrentCache::new("volume biome cache"),
             caves: ConcurrentCache::new("cave region cache"),
             regions: ConcurrentCache::new("generation region cache"),
-            structure_origins: ConcurrentCache::new("structure origin cache"),
+            structure_origins: StructureOriginCache::new(),
         }
     }
 
@@ -129,7 +203,7 @@ impl FeatureCaches {
         factory: impl FnOnce() -> Option<i32>,
     ) -> Option<i32> {
         self.structure_origins
-            .get_or_insert_with((structure_id.to_owned(), anchor), factory)
+            .get_or_insert_with(structure_id, anchor, factory)
     }
 
     pub(super) fn hydrology_region(
@@ -186,7 +260,7 @@ impl FeatureCaches {
             .retain(|coord, _| retained_regions.contains(coord));
         self.hydrology
             .retain(|coord, _| retained_hydrology.contains(coord));
-        self.structure_origins.retain(|(_, anchor), _| {
+        self.structure_origins.retain(|anchor| {
             let chunk_size = CHUNK_SIZE as i32;
             let chunk = IVec2::new(
                 anchor.x.div_euclid(chunk_size),
