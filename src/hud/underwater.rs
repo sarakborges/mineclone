@@ -45,7 +45,7 @@ fn update_underwater_tint(
     camera: Single<&Transform, With<GameplayCamera>>,
     world: Res<VoxelWorld>,
     biome_visuals: CurrentBiomeVisuals,
-    mut tint: Single<(&mut BackgroundColor, &mut Visibility), With<UnderwaterTint>>,
+    tint: Single<(&mut BackgroundColor, &mut Visibility), With<UnderwaterTint>>,
 ) {
     let eye = camera.translation;
     let voxel = IVec3::new(
@@ -54,23 +54,33 @@ fn update_underwater_tint(
         eye.z.floor() as i32,
     );
     let local_height = eye.y - voxel.y as f32;
+    let (mut background, mut visibility) = tint.into_inner();
 
     let Some(cell) = world.fluid_at(voxel) else {
-        *tint.1 = Visibility::Hidden;
+        if *visibility != Visibility::Hidden {
+            *visibility = Visibility::Hidden;
+        }
         return;
     };
 
     if local_height >= cell.height() {
-        *tint.1 = Visibility::Hidden;
+        if *visibility != Visibility::Hidden {
+            *visibility = Visibility::Hidden;
+        }
         return;
     }
 
-    let color = biome_visuals.blend_hsi(|biome| biome.visuals.underwater_tint.color);
-    let opacity = biome_visuals
-        .weighted_scalar(|biome| biome.visuals.underwater_tint.opacity)
-        .clamp(0.0, 1.0);
-    let [red, green, blue] = color.to_srgb();
+    let entering_underwater = *visibility != Visibility::Visible;
+    if entering_underwater || biome_visuals.inputs_changed() {
+        let color = biome_visuals.blend_hsi(|biome| biome.visuals.underwater_tint.color);
+        let opacity = biome_visuals
+            .weighted_scalar(|biome| biome.visuals.underwater_tint.opacity)
+            .clamp(0.0, 1.0);
+        let [red, green, blue] = color.to_srgb();
+        background.0 = Color::srgba(red, green, blue, opacity);
+    }
 
-    tint.0.0 = Color::srgba(red, green, blue, opacity);
-    *tint.1 = Visibility::Visible;
+    if entering_underwater {
+        *visibility = Visibility::Visible;
+    }
 }
