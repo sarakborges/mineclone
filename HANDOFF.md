@@ -84,11 +84,11 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`b03a8878307058665cf279ed125e03b7cd7dcbde`
+`ee3527f67d3eecb50a4461c47078f465102c6cb0`
 
-Commit: `Resolve mesh halo chunks once`
+Commit: `Reuse local samples for voxel mutations`
 
-`VERSION`: `0.12.72`
+`VERSION`: `0.12.79`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever, porque podem ter avançado.
 
@@ -145,16 +145,30 @@ A auditoria arquitetural segue ativa; o roadmap vem do canon + inspeção real d
 - Fluid lighting invalidation foi separada de block-emission edit tracking via `enqueue_medium_edit`.
 - O contador exato de dinâmicos encerra o scan da face assim que todos foram encontrados; não há bitset/estado extra.
 
-### 0.12.71 — rebuild de light em lote no owner do chunk
+### 0.12.71–0.12.72 — light rebuild e halo chunk-local
 - `VoxelChunk::rebuild_light` obtém `Arc::make_mut` do buffer de lighting uma única vez e preenche o chunk diretamente.
-- `VoxelWorld::rebuild_chunk_light` apenas resolve o chunk e delega o batch rebuild.
-- Initial direct seed deixa de fazer 4.096 chamadas a `set_light`, evitando 4.096 checks COW e acessos/bounds redundantes por chunk.
-
-### 0.12.72 — halo de mesh resolve chunks vizinhos uma vez
 - `VoxelChunk::sample_local` resolve block/fluid/light com um único bounds check e índice local; `VoxelWorld::sample_at` reutiliza esse primitive.
-- `ChunkMeshSnapshot::capture` pré-resolve os 26 chunks vizinhos da shell e copia voxels localmente, em vez de fazer `world.sample_at` para cada entrada.
-- A shell compacta continua com 1.736 posições e preserva faces, arestas e cantos; teste explícito cobre vizinho diagonal 3D.
-- Captura de halo cai de até 1.736 lookups no `VoxelWorld` para no máximo 26 lookups de chunks por snapshot não-vazio.
+- `ChunkMeshSnapshot::capture` pré-resolve os 26 chunks vizinhos da shell; a captura cai de até 1.736 lookups no `VoxelWorld` para no máximo 26 lookups de chunks por snapshot.
+- A shell compacta continua com 1.736 posições e preserva faces, arestas e cantos.
+
+### 0.12.73–0.12.75 — mutação batch e archive
+- `VoxelChunkContentMut` é um mutator escopado do próprio owner; obtém storage COW de blocks/fluids uma vez e reutiliza os mesmos helpers de occupancy/boundary dos setters normais.
+- Passes densos de material/fluido do worldgen e rasterização de structures usam o mutator batch sem duplicar invariants.
+- Restore de `ArchivedChunk` também usa o batch mutator, evitando `Arc::make_mut` por voxel na main thread.
+- Archive encode/restore fundiram as passagens separadas block/fluid em uma única passagem de 4.096 slots; encode usa `sample_local` coeso.
+
+### 0.12.76 — halo empacotado em um buffer
+- `ChunkMeshSnapshot` substitui quatro allocations paralelas (`cells`, `fluids`, `light`, `loaded`) por um único `Box<[ShellSample]>`.
+- Cada sample mantém exatamente o mesmo estado necessário de halo, reduzindo allocation churn e mantendo o contrato de loaded/unloaded.
+
+### 0.12.77 — seed de chunk vazio por coluna
+- Depois do scan dos chunks acima, chunk vazio recebe direct light a partir das 256 colunas.
+- Uma layer é escrita e copiada para as outras 15, eliminando 4.096 chamadas de dampening/emission que sempre recebiam `None`.
+- Chunks com conteúdo continuam usando o rebuild voxel-a-voxel normal.
+
+### 0.12.78–0.12.79 — samples locais coesos restantes
+- Direct seed e `DirectSkyColumn` usam `sample_local` para block+fluid em um único índice por voxel.
+- `VoxelWorld::set_block_at_with_previous` e `set_fluid_at` também consolidam a validação do estado atual em um sample local; o fluid solver evita dupla resolução block/fluid nas mutações efetivas.
 
 ---
 
@@ -175,18 +189,22 @@ Não desfazer sem evidência nova:
 - Loading de chunk vazio só exige neighbor fluid remesh quando a face compartilhada possui fluido; halo ausente e ar carregado diferem no fluid mesher.
 - Edits de meio/fluid não pertencem ao tracking de mudança de emissão de bloco.
 - Não criar bitset de boundary enquanto contadores existentes + early exit resolverem o hotspot de forma suficiente.
-- Rebuilds integrais de um buffer COW devem obter mutable storage uma vez no owner, não repetir `Arc::make_mut` por elemento.
+- Rebuilds integrais de buffers COW devem obter mutable storage uma vez no owner, não repetir `Arc::make_mut` por elemento.
+- Batch content edit pertence a `VoxelChunk` e deve reutilizar os mesmos helpers de metadata; não criar builder externo com invariants duplicados.
 - Halo de mesh deve resolver chunks vizinhos por shell, não voltar a lookup de world-position por voxel.
+- Chunks vazios podem repetir a mesma direct-light column por todas as layers porque não contêm medium/emitter interno; lateral propagation continua na etapa de relaxation.
 - Não reabrir bugs antigos automaticamente; só se ativos/regredidos.
 
 ---
 
 # Próximos passos da auditoria
 
+Os hotspots evidentes do roadmap anterior (lighting seed, halo capture, archive restore, fluid frontier e COW por voxel no worldgen) já foram tratados. A partir daqui, não continuar micro-otimização por inércia.
+
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Auditar loops de worldgen/restore que chamam `set_block`/`set_fluid` milhares de vezes; só criar batch builder/mutator se conseguir centralizar metadata sem duplicar invariants.
-2. Revisar initial chunk integration para custos síncronos restantes além de lighting seed e halo capture, priorizando operações 4.096× por chunk ou scans repetidos de boundaries.
+1. Fazer nova inspeção objetiva dos caminhos de frame/streaming e só abrir patch onde houver custo recorrente demonstrável.
+2. Revisar geração de mesh assíncrona apenas por operações repetidas claramente evitáveis; não mover trabalho de volta para main thread.
 3. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel; não adicionar bitset sem evidência.
 4. Manter full relaxation em chunks com conteúdo até existir frontier interna correta para direct sky/emitter propagation.
 5. Streaming selection/snapshots/task polling já estão bounded/change-driven; collision/raycast/targeting não mostraram lookup duplicado seguro.
