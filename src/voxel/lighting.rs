@@ -170,6 +170,12 @@ pub(crate) fn seed_chunk_direct_lighting(
         }
     }
 
+    if world.chunk(coord).is_some_and(|chunk| chunk.is_empty()) {
+        let seeded = world.rebuild_empty_chunk_light_columns(coord, &sky_by_column);
+        debug_assert!(seeded, "seeded chunk must be loaded: {coord:?}");
+        return;
+    }
+
     let seeded = world.rebuild_chunk_light(coord, |x, _, z, cell, fluid| {
         let sky = &mut sky_by_column[x + z * CHUNK_SIZE];
         if *sky > 0 {

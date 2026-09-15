@@ -161,6 +161,19 @@ impl VoxelWorld {
         true
     }
 
+    pub(crate) fn rebuild_empty_chunk_light_columns(
+        &mut self,
+        coord: IVec3,
+        sky_by_column: &[u8; CHUNK_SIZE * CHUNK_SIZE],
+    ) -> bool {
+        let Some(chunk) = self.chunks.get_mut(&coord) else {
+            return false;
+        };
+
+        chunk.rebuild_empty_light_columns(sky_by_column);
+        true
+    }
+
     pub(crate) fn clear_chunk_light(&mut self, coord: IVec3) -> bool {
         let Some(chunk) = self.chunks.get_mut(&coord) else {
             return false;

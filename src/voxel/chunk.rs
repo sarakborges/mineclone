@@ -2,7 +2,11 @@ use std::sync::Arc;
 
 use bevy::prelude::*;
 
-use super::{cell::VoxelCell, fluid::FluidCell, light::VoxelLight};
+use super::{
+    cell::VoxelCell,
+    fluid::FluidCell,
+    light::{BlockLight, VoxelLight},
+};
 
 pub const CHUNK_SIZE: usize = 16;
 const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
@@ -233,6 +237,18 @@ impl VoxelChunk {
                     lights[index] = light_at(x, y, z, blocks[index], fluids[index]);
                 }
             }
+        }
+    }
+
+    pub(crate) fn rebuild_empty_light_columns(&mut self, sky_by_column: &[u8; CHUNK_AREA]) {
+        debug_assert!(self.is_empty(), "empty light rebuild requires an empty chunk");
+        let lights = Arc::make_mut(&mut self.light);
+
+        for (light, &sky) in lights[..CHUNK_AREA].iter_mut().zip(sky_by_column) {
+            *light = VoxelLight::new_hsi(sky, BlockLight::DARK);
+        }
+        for y in 1..CHUNK_SIZE {
+            lights.copy_within(0..CHUNK_AREA, y * CHUNK_AREA);
         }
     }
 
@@ -481,11 +497,28 @@ mod tests {
         });
 
         assert_eq!(chunk.cell_at(0, 0, 0), Some(block));
-        assert_eq!(chunk.fluid_at(last as i32, last as i32, last as i32), Some(fluid));
+        assert_eq!(
+            chunk.fluid_at(last as i32, last as i32, last as i32),
+            Some(fluid)
+        );
         assert!(chunk.boundary_has_content(IVec3::NEG_X));
         assert!(chunk.boundary_has_content(IVec3::X));
         assert!(chunk.boundary_has_fluid(IVec3::X));
         assert_eq!(chunk.boundary_dynamic_fluid_count(IVec3::X), 1);
+    }
+
+    #[test]
+    fn empty_light_columns_repeat_across_all_layers() {
+        let mut chunk = VoxelChunk::empty();
+        let mut sky = [VoxelLight::MAX_LEVEL; CHUNK_AREA];
+        sky[3 + 5 * CHUNK_SIZE] = 7;
+
+        chunk.rebuild_empty_light_columns(&sky);
+
+        for y in 0..CHUNK_SIZE {
+            assert_eq!(chunk.light_at(3, y as i32, 5).sky(), 7);
+            assert_eq!(chunk.light_at(3, y as i32, 5).block(), 0);
+        }
     }
 
     #[test]
