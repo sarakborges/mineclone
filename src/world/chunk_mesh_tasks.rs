@@ -100,6 +100,7 @@ impl ChunkMeshTasks {
         let revision = self.revision;
         let dependencies = world.dependencies();
         let task = AsyncComputeTaskPool::get().spawn(async move {
+            let world = world.materialize_shell();
             let context = snapshot.context(&world);
             ChunkMeshTaskOutput {
                 meshes: build_chunk_render_meshes(coord, world.chunk(), &context),

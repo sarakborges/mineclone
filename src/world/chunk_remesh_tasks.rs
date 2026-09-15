@@ -81,6 +81,7 @@ impl ChunkRemeshTasks {
         let revision = self.revision;
         let dependencies = world.dependencies();
         let task = AsyncComputeTaskPool::get().spawn(async move {
+            let world = world.materialize_shell();
             let context = snapshot.context(&world);
             let meshes = match kind {
                 ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {

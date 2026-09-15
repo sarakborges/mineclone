@@ -16,6 +16,8 @@ const SNAPSHOT_FACE_AREA: usize = SNAPSHOT_SIDE * SNAPSHOT_SIDE;
 const INTERIOR_SHELL_LAYER: usize = SNAPSHOT_SIDE * 2 + CHUNK_SIZE * 2;
 const SHELL_VOLUME: usize = SNAPSHOT_FACE_AREA * 2 + INTERIOR_SHELL_LAYER * CHUNK_SIZE;
 
+type NeighborChunks = [[[Option<VoxelChunk>; 3]; 3]; 3];
+
 #[derive(Clone, Copy, Default)]
 struct ShellSample {
     cell: Option<VoxelCell>,
@@ -51,7 +53,8 @@ impl ChunkMeshDependencies {
 pub(crate) struct ChunkMeshSnapshot {
     chunk_origin: IVec3,
     chunk: VoxelChunk,
-    shell: Box<[ShellSample]>,
+    neighbor_chunks: Option<Box<NeighborChunks>>,
+    shell: Option<Box<[ShellSample]>>,
     dependencies: ChunkMeshDependencies,
 }
 
@@ -60,7 +63,9 @@ impl ChunkMeshSnapshot {
         let (center_chunk, center_revision) = world.chunk_with_mesh_revision(coord)?;
         let chunk = center_chunk.clone();
         let chunk_origin = chunk_origin(coord);
-        let mut neighbor_chunks: [[[Option<&VoxelChunk>; 3]; 3]; 3] = [[[None; 3]; 3]; 3];
+        let mut neighbor_chunks: NeighborChunks = std::array::from_fn(|_| {
+            std::array::from_fn(|_| std::array::from_fn(|_| None))
+        });
         let mut revisions = [[[None; 3]; 3]; 3];
         revisions[1][1][1] = Some(center_revision);
 
@@ -79,68 +84,35 @@ impl ChunkMeshSnapshot {
                     let y = (offset_y + 1) as usize;
                     let z = (offset_z + 1) as usize;
                     let x = (offset_x + 1) as usize;
-                    neighbor_chunks[y][z][x] = Some(neighbor_chunk);
+                    neighbor_chunks[y][z][x] = Some(neighbor_chunk.clone());
                     revisions[y][z][x] = Some(revision);
                 }
             }
         }
 
-        let last = SNAPSHOT_SIDE - 1;
-        let capture_shell_voxel = |x: usize, y: usize, z: usize| {
-            let (chunk_x, local_x) = shell_axis(x);
-            let (chunk_y, local_y) = shell_axis(y);
-            let (chunk_z, local_z) = shell_axis(z);
-            let Some(neighbor_chunk) = neighbor_chunks[chunk_y][chunk_z][chunk_x] else {
-                return ShellSample::default();
-            };
-            let Some((cell, fluid, light)) = neighbor_chunk.sample_local(local_x, local_y, local_z)
-            else {
-                return ShellSample::default();
-            };
-
-            ShellSample {
-                cell,
-                fluid,
-                light,
-                loaded: true,
-            }
-        };
-        let mut shell = Vec::with_capacity(SHELL_VOLUME);
-
-        for z in 0..SNAPSHOT_SIDE {
-            for x in 0..SNAPSHOT_SIDE {
-                shell.push(capture_shell_voxel(x, 0, z));
-            }
-        }
-        for z in 0..SNAPSHOT_SIDE {
-            for x in 0..SNAPSHOT_SIDE {
-                shell.push(capture_shell_voxel(x, last, z));
-            }
-        }
-        for y in 1..last {
-            for x in 0..SNAPSHOT_SIDE {
-                shell.push(capture_shell_voxel(x, y, 0));
-            }
-            for x in 0..SNAPSHOT_SIDE {
-                shell.push(capture_shell_voxel(x, y, last));
-            }
-            for z in 1..last {
-                shell.push(capture_shell_voxel(0, y, z));
-                shell.push(capture_shell_voxel(last, y, z));
-            }
-        }
-        debug_assert_eq!(shell.len(), SHELL_VOLUME);
-        let shell = shell.into_boxed_slice();
-
         Some(Self {
             chunk_origin,
             chunk,
-            shell,
+            neighbor_chunks: Some(Box::new(neighbor_chunks)),
+            shell: None,
             dependencies: ChunkMeshDependencies {
                 center: coord,
                 revisions,
             },
         })
+    }
+
+    pub(crate) fn materialize_shell(mut self) -> Self {
+        if self.shell.is_some() {
+            return self;
+        }
+
+        let neighbor_chunks = self
+            .neighbor_chunks
+            .take()
+            .expect("unmaterialized chunk mesh snapshot must retain neighbor chunks");
+        self.shell = Some(capture_shell(&neighbor_chunks));
+        self
     }
 
     pub(crate) fn chunk(&self) -> &VoxelChunk {
@@ -156,7 +128,7 @@ impl ChunkMeshSnapshot {
         inside_chunk(local).then_some(local)
     }
 
-    fn shell_index(&self, position: IVec3) -> Option<usize> {
+    fn snapshot_local(&self, position: IVec3) -> Option<IVec3> {
         let snapshot_origin = self.chunk_origin - IVec3::splat(HALO);
         let local = position - snapshot_origin;
         if local.x < 0
@@ -168,8 +140,27 @@ impl ChunkMeshSnapshot {
         {
             return None;
         }
+        Some(local)
+    }
 
+    fn shell_index(&self, position: IVec3) -> Option<usize> {
+        let local = self.snapshot_local(position)?;
         shell_index_from_snapshot_coords(local.x as usize, local.y as usize, local.z as usize)
+    }
+
+    fn neighbor_sample(
+        &self,
+        position: IVec3,
+    ) -> Option<(Option<VoxelCell>, Option<FluidCell>, VoxelLight)> {
+        let local = self.snapshot_local(position)?;
+        shell_index_from_snapshot_coords(local.x as usize, local.y as usize, local.z as usize)?;
+        let neighbor_chunks = self.neighbor_chunks.as_ref()?;
+        let (chunk_x, local_x) = shell_axis(local.x as usize);
+        let (chunk_y, local_y) = shell_axis(local.y as usize);
+        let (chunk_z, local_z) = shell_axis(local.z as usize);
+        neighbor_chunks[chunk_y][chunk_z][chunk_x]
+            .as_ref()?
+            .sample_local(local_x, local_y, local_z)
     }
 }
 
@@ -182,11 +173,64 @@ impl VoxelRead for ChunkMeshSnapshot {
             return self.chunk.sample_local(local.x, local.y, local.z);
         }
 
-        let sample = self.shell[self.shell_index(world_position)?];
-        sample
-            .loaded
-            .then_some((sample.cell, sample.fluid, sample.light))
+        if let Some(shell) = &self.shell {
+            let sample = shell[self.shell_index(world_position)?];
+            return sample
+                .loaded
+                .then_some((sample.cell, sample.fluid, sample.light));
+        }
+
+        self.neighbor_sample(world_position)
     }
+}
+
+fn capture_shell(neighbor_chunks: &NeighborChunks) -> Box<[ShellSample]> {
+    let last = SNAPSHOT_SIDE - 1;
+    let capture_shell_voxel = |x: usize, y: usize, z: usize| {
+        let (chunk_x, local_x) = shell_axis(x);
+        let (chunk_y, local_y) = shell_axis(y);
+        let (chunk_z, local_z) = shell_axis(z);
+        let Some(neighbor_chunk) = neighbor_chunks[chunk_y][chunk_z][chunk_x].as_ref() else {
+            return ShellSample::default();
+        };
+        let Some((cell, fluid, light)) = neighbor_chunk.sample_local(local_x, local_y, local_z)
+        else {
+            return ShellSample::default();
+        };
+
+        ShellSample {
+            cell,
+            fluid,
+            light,
+            loaded: true,
+        }
+    };
+    let mut shell = Vec::with_capacity(SHELL_VOLUME);
+
+    for z in 0..SNAPSHOT_SIDE {
+        for x in 0..SNAPSHOT_SIDE {
+            shell.push(capture_shell_voxel(x, 0, z));
+        }
+    }
+    for z in 0..SNAPSHOT_SIDE {
+        for x in 0..SNAPSHOT_SIDE {
+            shell.push(capture_shell_voxel(x, last, z));
+        }
+    }
+    for y in 1..last {
+        for x in 0..SNAPSHOT_SIDE {
+            shell.push(capture_shell_voxel(x, y, 0));
+        }
+        for x in 0..SNAPSHOT_SIDE {
+            shell.push(capture_shell_voxel(x, y, last));
+        }
+        for z in 1..last {
+            shell.push(capture_shell_voxel(0, y, z));
+            shell.push(capture_shell_voxel(last, y, z));
+        }
+    }
+    debug_assert_eq!(shell.len(), SHELL_VOLUME);
+    shell.into_boxed_slice()
 }
 
 fn shell_axis(coordinate: usize) -> (usize, i32) {
@@ -303,6 +347,36 @@ mod tests {
             snapshot.block_id_at(IVec3::new(edge, edge, edge)),
             Some("asteria:diagonal")
         );
+    }
+
+    #[test]
+    fn materialized_snapshot_preserves_captured_neighbor_state() {
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
+
+        let edge = CHUNK_SIZE as i32;
+        let mut neighbor = VoxelChunk::empty();
+        neighbor.set_block(
+            0,
+            0,
+            0,
+            Some(VoxelCell::new("asteria:before", TextureRotation::default())),
+        );
+        world.insert_chunk(IVec3::X, neighbor);
+
+        let snapshot =
+            ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
+        world.set_block_at(
+            IVec3::new(edge, 0, 0),
+            Some(VoxelCell::new("asteria:after", TextureRotation::default())),
+        );
+        let snapshot = snapshot.materialize_shell();
+
+        assert_eq!(
+            snapshot.block_id_at(IVec3::new(edge, 0, 0)),
+            Some("asteria:before")
+        );
+        assert!(!snapshot.dependencies().is_current(&world));
     }
 
     #[test]
