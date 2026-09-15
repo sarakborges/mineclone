@@ -106,16 +106,25 @@ pub(super) fn handle_display_tooltips_toggle(
 pub(super) fn sync_display_tooltips_toggle(
     settings: Res<HudSettings>,
     mut toggles: Query<
-        (&Interaction, &mut BackgroundColor, &mut BorderColor),
+        (Ref<Interaction>, &mut BackgroundColor, &mut BorderColor),
         With<DisplayTooltipsToggle>,
     >,
     mut thumbs: Query<&mut Node, With<DisplayTooltipsToggleThumb>>,
 ) {
+    let settings_changed = settings.is_changed();
     let enabled = settings.display_tooltips();
 
     for (interaction, mut background, mut border) in &mut toggles {
+        if !settings_changed && !interaction.is_changed() {
+            continue;
+        }
+
         *background = BackgroundColor(toggle_background(enabled, *interaction));
         *border = BorderColor::all(toggle_border(enabled));
+    }
+
+    if !settings_changed {
+        return;
     }
 
     for mut thumb in &mut thumbs {
