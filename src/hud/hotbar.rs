@@ -12,7 +12,7 @@ use crate::{
     },
     rendering::{block_model::BlockModel, block_visual_content::BlockVisualContent},
     targeting::{PlacementOrientation, block::BlockTargetingSet},
-    ui::{theme, typography, visibility::set_visibility},
+    ui::{surface, typography, visibility::set_visibility},
 };
 
 const SLOT_SIZE: f32 = 44.0;
@@ -166,7 +166,7 @@ fn spawn_hotbar(
             .with_children(|row| {
                 for index in 0..HOTBAR_SLOT_COUNT {
                     let selected = index == content.hotbar.selected_slot();
-                    let (background, border) = slot_colors(selected);
+                    let (background, border) = surface::hud_control_static(selected);
                     let item = content.hotbar.item_at(index);
 
                     row.spawn((
@@ -228,16 +228,9 @@ fn sync_hotbar(
         language,
         icon_materials: &mut icon_materials,
     };
-    for (entity, mut slot, mut background, mut border, children) in &mut slots {
+    for (entity, mut slot, background, border, children) in &mut slots {
         let selected = slot.index == content.hotbar.selected_slot();
-        let (next_background, next_border) = slot_colors(selected);
-        if background.0 != next_background {
-            background.0 = next_background;
-        }
-        let next_border = BorderColor::all(next_border);
-        if *border != next_border {
-            *border = next_border;
-        }
+        surface::apply_control_colors(surface::hud_control_static(selected), background, border);
 
         let next_item = content.hotbar.item_at(slot.index);
         if slot.item == next_item && !language_changed {
@@ -313,14 +306,6 @@ fn item_name<'a>(
         return tool.name.text(language);
     }
     item_id
-}
-
-fn slot_colors(selected: bool) -> (Color, Color) {
-    if selected {
-        (Color::srgba(0.08, 0.07, 0.16, 0.94), theme::TEXT_PRIMARY)
-    } else {
-        (theme::HUD_SURFACE, Color::srgba(0.70, 0.72, 0.82, 0.28))
-    }
 }
 
 fn update_hotbar_item_visuals(

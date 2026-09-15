@@ -81,6 +81,21 @@ pub fn hud_danger_control_colors(interaction: Interaction) -> (Color, Color) {
     }
 }
 
+pub(crate) fn apply_control_colors(
+    (background_color, border_color): (Color, Color),
+    mut background: Mut<'_, BackgroundColor>,
+    mut border: Mut<'_, BorderColor>,
+) {
+    // Keep the change-detection wrappers until a component actually changes.
+    if background.0 != background_color {
+        background.0 = background_color;
+    }
+    let next_border = BorderColor::all(border_color);
+    if *border != next_border {
+        *border = next_border;
+    }
+}
+
 fn hud_surface(node: Node) -> impl Bundle {
     (
         node,

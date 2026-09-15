@@ -258,7 +258,10 @@ pub(super) fn rebuild_inventory_when_changed(
     else {
         return;
     };
-    position.0.y = inputs.panel.scroll_state.catalog_y;
+    let next_scroll_y = inputs.panel.scroll_state.catalog_y;
+    if position.0.y != next_scroll_y {
+        position.0.y = next_scroll_y;
+    }
     if let Some(children) = children {
         for &child in children {
             commands.entity(child).despawn();
@@ -289,8 +292,11 @@ pub(super) fn style_search_bar(
     } else {
         surface::HUD_BORDER_COLOR
     };
+    let next_border = BorderColor::all(color);
     for mut border in &mut search_bars {
-        *border = BorderColor::all(color);
+        if *border != next_border {
+            *border = next_border;
+        }
     }
 }
 
@@ -308,13 +314,17 @@ pub(super) fn style_category_buttons(
 ) {
     let selection_changed = creative_view.is_changed();
 
-    for (interaction, category, mut background, mut border) in &mut buttons {
+    for (interaction, category, background, border) in &mut buttons {
         if !selection_changed && !interaction.is_changed() {
             continue;
         }
 
         let selected = creative_view.selected_category() == category.id.as_deref();
-        apply_button_visual(*interaction, selected, &mut background, &mut border);
+        surface::apply_control_colors(
+            surface::hud_control_colors(*interaction, selected),
+            background,
+            border,
+        );
     }
 }
 
@@ -332,13 +342,17 @@ pub(super) fn style_creative_slots(
 ) {
     let selection_changed = cursor.is_changed();
 
-    for (interaction, slot, mut background, mut border) in &mut slots {
+    for (interaction, slot, background, border) in &mut slots {
         if !selection_changed && !interaction.is_changed() {
             continue;
         }
 
         let selected = slot.item.is_some() && slot.item == cursor.item();
-        apply_button_visual(*interaction, selected, &mut background, &mut border);
+        surface::apply_control_colors(
+            surface::hud_control_colors(*interaction, selected),
+            background,
+            border,
+        );
     }
 }
 
@@ -357,37 +371,27 @@ pub(super) fn style_inventory_slots(
     let selection_changed = hotbar.is_changed();
     let selected_index = HOTBAR_INVENTORY_OFFSET + hotbar.selected_slot();
 
-    for (interaction, slot, mut background, mut border) in &mut slots {
+    for (interaction, slot, background, border) in &mut slots {
         if !selection_changed && !interaction.is_changed() {
             continue;
         }
 
-        apply_button_visual(
-            *interaction,
-            slot.index == selected_index,
-            &mut background,
-            &mut border,
+        surface::apply_control_colors(
+            surface::hud_control_colors(*interaction, slot.index == selected_index),
+            background,
+            border,
         );
     }
 }
 
 pub(super) fn style_inventory_trash_button(mut buttons: InventoryTrashButtonQuery) {
-    for (interaction, mut background, mut border) in &mut buttons {
-        let (background_color, border_color) = surface::hud_danger_control_colors(*interaction);
-        background.0 = background_color;
-        *border = BorderColor::all(border_color);
+    for (interaction, background, border) in &mut buttons {
+        surface::apply_control_colors(
+            surface::hud_danger_control_colors(*interaction),
+            background,
+            border,
+        );
     }
-}
-
-fn apply_button_visual(
-    interaction: Interaction,
-    selected: bool,
-    background: &mut BackgroundColor,
-    border: &mut BorderColor,
-) {
-    let (background_color, border_color) = surface::hud_control_colors(interaction, selected);
-    background.0 = background_color;
-    *border = BorderColor::all(border_color);
 }
 
 pub(super) fn update_cursor_icon_position(
@@ -398,8 +402,14 @@ pub(super) fn update_cursor_icon_position(
         return;
     };
 
+    let left = px(position.x - ITEM_ICON_SIZE * 0.5);
+    let top = px(position.y - ITEM_ICON_SIZE * 0.5);
     for mut node in &mut icons {
-        node.left = px(position.x - ITEM_ICON_SIZE * 0.5);
-        node.top = px(position.y - ITEM_ICON_SIZE * 0.5);
+        if node.left != left {
+            node.left = left;
+        }
+        if node.top != top {
+            node.top = top;
+        }
     }
 }

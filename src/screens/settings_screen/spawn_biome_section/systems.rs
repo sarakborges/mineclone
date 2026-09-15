@@ -365,7 +365,7 @@ pub(in crate::screens::settings_screen) fn sync_spawn_biome_options(
         }
     }
 
-    for (option, interaction, mut node, mut background, mut border) in &mut options {
+    for (option, interaction, mut node, background, border) in &mut options {
         if let Some(normalized_query) = normalized_query.as_deref() {
             let option_label = content.option_label(option.biome_id.as_deref());
             let visible = normalized_query.is_empty()
@@ -384,13 +384,10 @@ pub(in crate::screens::settings_screen) fn sync_spawn_biome_options(
             continue;
         }
         let selected = config.spawn_biome() == option.biome_id.as_deref();
-        let (next_background, next_border) = surface::hud_control_colors(*interaction, selected);
-        if background.0 != next_background {
-            background.0 = next_background;
-        }
-        let next_border = BorderColor::all(next_border);
-        if *border != next_border {
-            *border = next_border;
-        }
+        surface::apply_control_colors(
+            surface::hud_control_colors(*interaction, selected),
+            background,
+            border,
+        );
     }
 }

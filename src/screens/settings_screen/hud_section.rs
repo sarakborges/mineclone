@@ -365,19 +365,16 @@ pub(super) fn sync_display_tooltips_toggle(
     let settings_changed = settings.is_changed();
     let enabled = settings.display_tooltips();
 
-    for (interaction, mut background, mut border) in &mut toggles {
+    for (interaction, background, border) in &mut toggles {
         if !settings_changed && !interaction.is_changed() {
             continue;
         }
 
-        let next_background = BackgroundColor(toggle_background(enabled, *interaction));
-        if *background != next_background {
-            *background = next_background;
-        }
-        let next_border = BorderColor::all(toggle_border(enabled));
-        if *border != next_border {
-            *border = next_border;
-        }
+        surface::apply_control_colors(
+            (toggle_background(enabled, *interaction), toggle_border(enabled)),
+            background,
+            border,
+        );
     }
 
     if !settings_changed {
@@ -455,16 +452,13 @@ pub(super) fn sync_target_block_position_options(
         return;
     }
 
-    for (option, interaction, mut background, mut border) in &mut options {
+    for (option, interaction, background, border) in &mut options {
         let selected = option.0 == settings.target_block_position();
-        let (next_background, next_border) = surface::hud_control_colors(*interaction, selected);
-        if background.0 != next_background {
-            background.0 = next_background;
-        }
-        let next_border = BorderColor::all(next_border);
-        if *border != next_border {
-            *border = next_border;
-        }
+        surface::apply_control_colors(
+            surface::hud_control_colors(*interaction, selected),
+            background,
+            border,
+        );
     }
 }
 

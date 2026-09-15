@@ -17,6 +17,7 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 - Não declarar bug visual/gameplay resolvido sem evidência runtime quando o comportamento depender disso.
 - Não gerar imagens sem pedido explícito.
 - Comunicação direta: menos narração, mais mudança concreta.
+- Pedido ativo: continuar os blocos do roadmap até esgotar os itens aplicáveis ou os usos disponíveis do Work, atualizando este handoff em cada bloco.
 
 ## Validação
 
@@ -60,13 +61,13 @@ Roda em push para `develop`/`main` e em pull requests.
 
 # Estado atual
 
-Último commit de código/version (commits posteriores podem atualizar apenas este handoff):
+Base do bloco atual:
 
-`d2311164a9421c2841c44873fa3769dc2d3e6f48`
+`df5f26176106abf6c573020224d60e67c4c5977b`
 
-Commit: `Avoid redundant hotbar visual writes`
+Bloco: `Avoid redundant inventory and shared control writes`
 
-`VERSION`: `0.14.13`
+`VERSION`: `0.14.14`
 
 Na retomada, `develop` já estava em `183bcab1be268bcc9511e7e06d9406ade8b63bf0` / `0.14.12`, embora este handoff ainda descrevesse `0.14.5`. Os blocos abaixo foram conferidos no código e no histórico antes de continuar.
 
@@ -92,6 +93,7 @@ Commits recentes relevantes:
 - `0.14.12` / run `35018588468`: workflow **success** no HEAD conferido na retomada.
 - `0.14.13` / [run `35019877410`](https://github.com/sarakborges/mineclone/actions/runs/35019877410), commit `f692534`: Clippy **success**, `cargo check` **success**. Revisão estática e `git diff --check` também concluídos. O commit seguinte apenas registra este resultado no handoff.
 - `cargo test` somente sob pedido explícito.
+- `0.14.14`: revisão estática e `git diff --check` concluídos; CI pendente para o bloco de inventário/UI.
 
 ---
 
@@ -197,11 +199,22 @@ O hint já era filho do Player HUD, mas `Visibility::Visible` sobrescrevia a her
 
 ---
 
+## 0.14.14 — inventário e estilos compartilhados
+
+- `src/ui/surface.rs` possui `apply_control_colors`, que recebe os wrappers `Mut` do Bevy e só marca fundo/borda alterados após comparar o resultado.
+- Inventário, hotbar, dropdown de posição do target, toggle de tooltips e opções de Spawn Biome reutilizam esse invariant.
+- A hotbar usa as cores estáticas canônicas de `surface`; a cópia local idêntica foi removida.
+- Cursor do inventário, borda de search e posição de scroll não reescrevem Components quando os valores continuam iguais.
+- Criação de entidades, hover, seleção e arraste mantêm seus gatilhos; sem cache de cursor que possa perder um ícone recém-criado.
+- Validação visual/FPS continua dependente de runtime.
+
+---
+
 # Próximos passos
 
 Se nenhum runtime error/warning tiver prioridade:
 
-1. Próximo ponto concreto de auditoria: `src/hud/inventory/sync.rs`, onde posição do cursor e estilos ainda escrevem `Node`, `BackgroundColor` e `BorderColor` sem comparar o resultado. Preservar change detection até a mutação real e reutilizar os primitives de `src/ui` quando houver invariant compartilhado.
+1. Continuar nos controles de Settings/UI: `sync_selectable_button` ainda recebe `&mut BackgroundColor` (perde change detection antes da comparação), inputs numéricos reescrevem bordas e o slider reescreve a posição sem comparar.
 2. Continuar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes. Targeting consumers, estrelas e o bloco da hotbar acima já foram tratados; não repetir esses refactors sem evidência nova.
 3. Revisar integração/spawn de mesh apenas se houver ganho estrutural real sem lifecycle parcial por submesh.
 4. Revisar rebuild de seleção somente com ganho claro; não duplicar geração de volume para eliminar sort pequeno.
