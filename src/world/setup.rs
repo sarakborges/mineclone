@@ -18,8 +18,10 @@ enum WorldLoadingPhase {
 #[derive(Resource)]
 pub(crate) struct WorldLoadingState {
     coords: Vec<IVec3>,
+    generation_cursor: usize,
     generated: usize,
     lit: usize,
+    mesh_cursor: usize,
     meshed: usize,
     spawn_column: IVec2,
     phase: WorldLoadingPhase,
