@@ -29,7 +29,13 @@ where
     T: Copy + Eq + Hash,
 {
     fn from(values: Vec<T>) -> Self {
-        let mut queue = Self::default();
+        let capacity = values.len();
+        let mut queue = Self {
+            pending: VecDeque::with_capacity(capacity),
+            queued: HashMap::with_capacity(capacity),
+            next_generation: 0,
+            revision: 0,
+        };
         for value in values {
             queue.enqueue(value);
         }
@@ -41,6 +47,11 @@ impl<T> DeduplicatedQueue<T>
 where
     T: Copy + Eq + Hash,
 {
+    pub(crate) fn reserve(&mut self, additional: usize) {
+        self.pending.reserve(additional);
+        self.queued.reserve(additional);
+    }
+
     pub(crate) fn enqueue(&mut self, value: T) -> bool {
         if self.queued.contains_key(&value) {
             return false;

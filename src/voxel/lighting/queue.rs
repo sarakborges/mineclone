@@ -1,6 +1,14 @@
 use bevy::prelude::*;
 
-use crate::voxel::{chunk::CHUNK_SIZE, update_queue::VoxelUpdateQueue};
+use crate::voxel::{
+    chunk::{CHUNK_SIZE, CHUNK_VOLUME},
+    update_queue::VoxelUpdateQueue,
+};
+
+const CHUNK_INTERIOR_VOLUME: usize =
+    (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2);
+const CHUNK_BOUNDARY_VOXEL_COUNT: usize = CHUNK_VOLUME - CHUNK_INTERIOR_VOLUME;
+const CHUNK_BOUNDARY_NEIGHBOR_COUNT: usize = 6 * CHUNK_SIZE * CHUNK_SIZE;
 
 #[derive(Default)]
 pub(super) struct LightingQueue {
@@ -21,6 +29,7 @@ impl LightingQueue {
     }
 
     pub fn enqueue_chunk_voxels(&mut self, origin: IVec3) {
+        self.queue.reserve(CHUNK_VOLUME);
         let size = CHUNK_SIZE as i32;
 
         for y in 0..size {
@@ -33,6 +42,7 @@ impl LightingQueue {
     }
 
     pub fn enqueue_chunk_boundary_voxels(&mut self, origin: IVec3) {
+        self.queue.reserve(CHUNK_BOUNDARY_VOXEL_COUNT);
         let last = CHUNK_SIZE as i32 - 1;
 
         for y in 0..=last {
@@ -58,6 +68,7 @@ impl LightingQueue {
     }
 
     pub fn enqueue_chunk_boundary_neighbors(&mut self, origin: IVec3) {
+        self.queue.reserve(CHUNK_BOUNDARY_NEIGHBOR_COUNT);
         let size = CHUNK_SIZE as i32;
 
         for y in 0..size {

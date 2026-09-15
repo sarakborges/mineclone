@@ -8,6 +8,10 @@ pub(crate) struct VoxelUpdateQueue {
 }
 
 impl VoxelUpdateQueue {
+    pub(crate) fn reserve(&mut self, additional: usize) {
+        self.queue.reserve(additional);
+    }
+
     pub(crate) fn enqueue(&mut self, position: IVec3) -> bool {
         if position.y < 0 {
             return false;
