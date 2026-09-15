@@ -29,6 +29,18 @@ pub(crate) type GameModeButtonInteractions<'w, 's> = Query<
     (Changed<Interaction>, Without<InteractionDisabled>),
 >;
 
+type GameModeButtonSyncQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static GameModeButton,
+        Ref<'static, Interaction>,
+        Has<InteractionDisabled>,
+        &'static mut BackgroundColor,
+    ),
+>;
+
 pub(crate) fn world_settings_section(
     game_mode: GameMode,
     localization: &UiLocalization,
@@ -132,13 +144,7 @@ pub(crate) fn sync_game_mode_buttons(
     game_state: Res<State<GameState>>,
     new_world: Res<NewWorldConfig>,
     player: Query<Ref<GameMode>, With<GameplayCamera>>,
-    mut buttons: Query<(
-        Entity,
-        &GameModeButton,
-        Ref<Interaction>,
-        Has<InteractionDisabled>,
-        &mut BackgroundColor,
-    )>,
+    mut buttons: GameModeButtonSyncQuery,
     mut labels: Query<(&GameModeButtonLabel, &mut TextColor)>,
 ) {
     let (current_game_mode, mode_changed) = if *game_state.get() == GameState::NewWorld {

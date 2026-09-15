@@ -25,6 +25,18 @@ pub(super) type LanguageButtonInteractions<'w, 's> = Query<
     (Changed<Interaction>, Without<InteractionDisabled>),
 >;
 
+type LanguageButtonSyncQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static LanguageButton,
+        Ref<'static, Interaction>,
+        Has<InteractionDisabled>,
+        &'static mut BackgroundColor,
+    ),
+>;
+
 pub(super) fn languages_section(
     localization: &UiLocalization,
     active_language: Language,
@@ -100,13 +112,7 @@ pub(super) fn sync_language_buttons(
     mut commands: Commands,
     localization: Res<UiLocalization>,
     active_language: Res<ActiveLanguage>,
-    mut buttons: Query<(
-        Entity,
-        &LanguageButton,
-        Ref<Interaction>,
-        Has<InteractionDisabled>,
-        &mut BackgroundColor,
-    )>,
+    mut buttons: LanguageButtonSyncQuery,
     mut labels: Query<(&LanguageButtonLabel, &mut Text, &mut TextColor)>,
 ) {
     let language_changed = active_language.is_changed() || localization.is_changed();

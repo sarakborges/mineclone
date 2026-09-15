@@ -29,6 +29,10 @@ use crate::world::{
 const BOOTSTRAP_LIGHT_BATCH_CHUNKS: usize = 2;
 const INITIAL_LOADING_BUDGET: Duration = Duration::from_millis(12);
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "world bootstrap system keeps independently borrowed Bevy resources explicit"
+)]
 pub(in crate::world) fn setup_world(
     generation: ChunkGeneration,
     content: ChunkContent,

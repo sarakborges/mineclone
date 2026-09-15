@@ -242,6 +242,7 @@ impl VoxelWorld {
         Some((highest_chunk_y + 1) * CHUNK_SIZE as i32 - 1)
     }
 
+    #[cfg(test)]
     pub fn set_block_at(
         &mut self,
         world_position: IVec3,

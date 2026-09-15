@@ -18,17 +18,9 @@ pub(crate) trait VoxelRead: Send + Sync {
             .and_then(|(_, fluid, _)| fluid)
     }
 
-    fn light_at(&self, world_position: IVec3) -> VoxelLight {
-        self.sample_at(world_position)
-            .map_or(VoxelLight::DARK, |(_, _, light)| light)
-    }
-
+    #[cfg(test)]
     fn is_loaded_at(&self, world_position: IVec3) -> bool {
         self.sample_at(world_position).is_some()
-    }
-
-    fn is_solid(&self, world_position: IVec3) -> bool {
-        self.cell_at(world_position).is_some()
     }
 
     fn block_id_at(&self, world_position: IVec3) -> Option<&'static str> {

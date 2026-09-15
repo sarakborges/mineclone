@@ -101,6 +101,7 @@ impl VoxelChunk {
         self.block_count == 0 && self.fluid_count == 0
     }
 
+    #[cfg(test)]
     pub(crate) fn has_fluid(&self) -> bool {
         self.fluid_count > 0
     }
@@ -257,6 +258,10 @@ impl VoxelChunk {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "block mutation keeps chunk occupancy metadata updates atomic"
+)]
 fn set_block_in_storage(
     blocks: &mut [Option<VoxelCell>],
     fluids: &[Option<FluidCell>],
@@ -283,6 +288,10 @@ fn set_block_in_storage(
     blocks[index] = block;
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "fluid mutation keeps occupancy and boundary metadata updates atomic"
+)]
 fn set_fluid_in_storage(
     blocks: &[Option<VoxelCell>],
     fluids: &mut [Option<FluidCell>],

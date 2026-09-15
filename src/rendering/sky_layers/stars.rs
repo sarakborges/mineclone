@@ -61,7 +61,7 @@ pub(super) fn update_stars(
     mut last_camera_position: Local<Option<Vec3>>,
 ) {
     let camera_position = view.camera.translation();
-    let camera_changed = last_camera_position.map_or(true, |previous| previous != camera_position);
+    let camera_changed = last_camera_position.is_none_or(|previous| previous != camera_position);
     let visuals_changed = scene.visuals.is_changed();
     let day_night_changed = scene.day_night.inputs_changed();
     if !camera_changed && !visuals_changed && !day_night_changed {

@@ -207,6 +207,10 @@ pub(crate) fn spawn_built_chunk_meshes(
     );
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "terrain replacement keeps render allocation state explicit and atomic"
+)]
 pub(super) fn spawn_terrain_meshes_into_existing_allocation(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,

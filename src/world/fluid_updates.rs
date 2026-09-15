@@ -6,7 +6,7 @@ use std::time::Duration;
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    content::fluid::{FluidId, FluidRegistry},
+    content::fluid::FluidRegistry,
     voxel::{
         lighting::PendingLightingUpdates, update_queue::VoxelUpdateQueue, world::VoxelWorld,
     },

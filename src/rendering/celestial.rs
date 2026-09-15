@@ -111,7 +111,7 @@ fn update_celestial_bodies(
     mut last_camera_position: Local<Option<Vec3>>,
 ) {
     let camera_position = scene.camera.translation();
-    let camera_changed = last_camera_position.map_or(true, |previous| previous != camera_position);
+    let camera_changed = last_camera_position.is_none_or(|previous| previous != camera_position);
     if !camera_changed && !scene.day_night.inputs_changed() {
         return;
     }

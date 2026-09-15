@@ -18,6 +18,10 @@ use super::super::{
 
 const CACHE_REGION_MARGIN: i32 = 1;
 
+type StructureOriginEntry = Arc<OnceLock<Option<i32>>>;
+type StructureOriginAnchors = HashMap<IVec2, StructureOriginEntry>;
+type StructureOriginEntries = HashMap<String, StructureOriginAnchors>;
+
 struct ConcurrentCache<K, V> {
     name: &'static str,
     entries: RwLock<HashMap<K, Arc<OnceLock<V>>>>,
@@ -74,7 +78,7 @@ where
 }
 
 struct StructureOriginCache {
-    entries: RwLock<HashMap<String, HashMap<IVec2, Arc<OnceLock<Option<i32>>>>>>,
+    entries: RwLock<StructureOriginEntries>,
 }
 
 impl StructureOriginCache {

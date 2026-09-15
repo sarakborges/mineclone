@@ -86,8 +86,7 @@ pub(super) fn relax_budgeted(
             fluids,
             secondary_properties,
             position,
-            cell,
-            fluid,
+            (cell, fluid),
             &mut context,
         );
 
@@ -107,10 +106,10 @@ fn desired_light(
     fluids: &FluidRegistry,
     secondary_properties: &SecondaryPropertyRegistry,
     position: IVec3,
-    cell: Option<VoxelCell>,
-    fluid: Option<FluidCell>,
+    medium: (Option<VoxelCell>, Option<FluidCell>),
     context: &mut LightingContext,
 ) -> VoxelLight {
+    let (cell, fluid) = medium;
     let dampening = medium_dampening_for_cells(cell, fluid, blocks, fluids);
     let blocks_light = dampening >= VoxelLight::MAX_LEVEL;
     let attenuation = dampening.max(1);
