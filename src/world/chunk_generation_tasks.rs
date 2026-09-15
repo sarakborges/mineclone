@@ -114,11 +114,4 @@ impl ChunkGenerationTasks {
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<VoxelChunk>> {
         self.pending.poll_ready()
     }
-
-    pub(crate) fn collect_ready(
-        &mut self,
-        maximum: usize,
-    ) -> Vec<CompletedChunkTask<VoxelChunk>> {
-        self.pending.collect_ready(maximum)
-    }
 }
