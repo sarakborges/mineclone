@@ -14,7 +14,6 @@ use crate::{
     },
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
-        chunk::{CHUNK_SIZE, VoxelChunk},
         coordinates::chunk_coord_from_position,
         deduplicated_queue::DeduplicatedQueue,
         lighting::{PendingLightingUpdates, seed_chunk_direct_lighting},
@@ -356,49 +355,13 @@ fn notify_loaded_chunk_neighbors(
         let Some(neighbor_chunk) = world.chunk(neighbor) else {
             continue;
         };
-        let chunk_boundary_has_content = boundary_has_content(chunk, offset);
-        let neighbor_boundary_has_content = boundary_has_content(neighbor_chunk, -offset);
+        let chunk_boundary_has_content = chunk.boundary_has_content(offset);
+        let neighbor_boundary_has_content = neighbor_chunk.boundary_has_content(-offset);
 
         if chunk_boundary_has_content && neighbor_boundary_has_content {
             remesh_queue.enqueue_priority(neighbor);
-        } else if boundary_has_fluid(chunk, offset) || boundary_has_fluid(neighbor_chunk, -offset) {
+        } else if chunk.boundary_has_fluid(offset) || neighbor_chunk.boundary_has_fluid(-offset) {
             remesh_queue.enqueue_fluid_priority(neighbor);
         }
     }
-}
-
-fn boundary_has_content(chunk: &VoxelChunk, outward: IVec3) -> bool {
-    boundary_any(chunk, outward, |chunk, x, y, z| {
-        chunk.cell_at(x, y, z).is_some() || chunk.fluid_at(x, y, z).is_some()
-    })
-}
-
-fn boundary_has_fluid(chunk: &VoxelChunk, outward: IVec3) -> bool {
-    boundary_any(chunk, outward, |chunk, x, y, z| {
-        chunk.fluid_at(x, y, z).is_some()
-    })
-}
-
-fn boundary_any(
-    chunk: &VoxelChunk,
-    outward: IVec3,
-    mut predicate: impl FnMut(&VoxelChunk, i32, i32, i32) -> bool,
-) -> bool {
-    let size = CHUNK_SIZE as i32;
-    let last = size - 1;
-
-    if outward.x != 0 {
-        let x = if outward.x > 0 { last } else { 0 };
-        return (0..size).any(|y| (0..size).any(|z| predicate(chunk, x, y, z)));
-    }
-    if outward.y != 0 {
-        let y = if outward.y > 0 { last } else { 0 };
-        return (0..size).any(|z| (0..size).any(|x| predicate(chunk, x, y, z)));
-    }
-    if outward.z != 0 {
-        let z = if outward.z > 0 { last } else { 0 };
-        return (0..size).any(|y| (0..size).any(|x| predicate(chunk, x, y, z)));
-    }
-
-    false
 }
