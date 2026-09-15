@@ -36,7 +36,6 @@ mod navigation;
 mod new_world_section;
 mod render_distance_logic;
 mod render_distance_section;
-mod scroll_area;
 mod spawn_biome_section;
 pub(crate) mod world_settings_section;
 
