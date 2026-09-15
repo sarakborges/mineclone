@@ -48,10 +48,13 @@ pub(crate) fn sync_auto_scrollbars(
         };
 
         let overflowing = computed.content_size().y > computed.size().y + 0.5;
-        node.display = if overflowing {
+        let next_display = if overflowing {
             Display::Flex
         } else {
             Display::None
         };
+        if node.display != next_display {
+            node.display = next_display;
+        }
     }
 }
