@@ -48,6 +48,11 @@ fn enqueue_neighbor_boundary_spread_targets(
         return;
     }
 
+    // Every dynamic boundary fluid can contribute at most the five solver
+    // spread targets below. Reserve once from metadata before scanning the face
+    // so a resumed frontier does not repeatedly grow the deduplicated queue.
+    pending.reserve(remaining_dynamic.saturating_mul(FLUID_SPREAD_TARGETS.len()));
+
     let size = CHUNK_SIZE as i32;
     let origin = coord * size;
 
