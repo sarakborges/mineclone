@@ -114,11 +114,7 @@ impl VoxelWorld {
         let (chunk_coord, local_position) = split_world_position(world_position);
         let chunk = self.chunks.get(&chunk_coord)?;
 
-        Some((
-            chunk.cell_at(local_position.x, local_position.y, local_position.z),
-            chunk.fluid_at(local_position.x, local_position.y, local_position.z),
-            chunk.light_at(local_position.x, local_position.y, local_position.z),
-        ))
+        chunk.sample_local(local_position.x, local_position.y, local_position.z)
     }
 
     pub(crate) fn light_at(&self, world_position: IVec3) -> VoxelLight {

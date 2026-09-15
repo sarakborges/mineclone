@@ -89,6 +89,20 @@ impl VoxelChunk {
         self.light[index(x as usize, y as usize, z as usize)]
     }
 
+    pub(crate) fn sample_local(
+        &self,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> Option<(Option<VoxelCell>, Option<FluidCell>, VoxelLight)> {
+        if !in_bounds(x, y, z) {
+            return None;
+        }
+
+        let index = index(x as usize, y as usize, z as usize);
+        Some((self.blocks[index], self.fluids[index], self.light[index]))
+    }
+
     pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: Option<VoxelCell>) {
         let index = index(x, y, z);
         let had_block = self.blocks[index].is_some();
@@ -334,6 +348,22 @@ mod tests {
         chunk.set_fluid(0, last, 3, Some(FluidCell::source(0, 8)));
         assert_eq!(chunk.boundary_dynamic_fluid_count(IVec3::NEG_X), 0);
         assert_eq!(chunk.boundary_dynamic_fluid_count(IVec3::Y), 0);
+    }
+
+    #[test]
+    fn local_sample_resolves_all_voxel_channels_once() {
+        let mut chunk = VoxelChunk::empty();
+        let cell = VoxelCell::new("stone", Default::default());
+        let fluid = FluidCell::source(0, 8);
+        let light = VoxelLight::new_hsi(12, Default::default());
+        chunk.set_block(1, 2, 3, Some(cell));
+        chunk.set_fluid(4, 5, 6, Some(fluid));
+        chunk.set_light(7, 8, 9, light);
+
+        assert_eq!(chunk.sample_local(1, 2, 3).unwrap().0, Some(cell));
+        assert_eq!(chunk.sample_local(4, 5, 6).unwrap().1, Some(fluid));
+        assert_eq!(chunk.sample_local(7, 8, 9).unwrap().2, light);
+        assert!(chunk.sample_local(-1, 0, 0).is_none());
     }
 
     #[test]
