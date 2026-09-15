@@ -47,36 +47,29 @@ impl<T> ChunkTaskQueue<T> {
         true
     }
 
-    pub(crate) fn collect_ready(&mut self, maximum: usize) -> Vec<CompletedChunkTask<T>> {
-        if maximum == 0 || self.pending.is_empty() {
-            return Vec::new();
-        }
+    pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<T>> {
+        let ready = self.pending.iter_mut().find_map(|(coord, pending)| {
+            check_ready(&mut pending.task)
+                .map(|output| (*coord, pending.revision, output))
+        })?;
+        let (coord, revision, output) = ready;
+        self.pending.remove(&coord);
 
-        let coords = self.pending.keys().copied().collect::<Vec<_>>();
+        Some(CompletedChunkTask {
+            coord,
+            revision,
+            output,
+        })
+    }
+
+    pub(crate) fn collect_ready(&mut self, maximum: usize) -> Vec<CompletedChunkTask<T>> {
         let mut completed = Vec::new();
 
-        for coord in coords {
-            if completed.len() >= maximum {
+        while completed.len() < maximum {
+            let Some(ready) = self.poll_ready() else {
                 break;
-            }
-
-            let ready = {
-                let pending = self
-                    .pending
-                    .get_mut(&coord)
-                    .unwrap_or_else(|| panic!("pending chunk task disappeared for {coord:?}"));
-                check_ready(&mut pending.task).map(|output| (pending.revision, output))
             };
-
-            let Some((revision, output)) = ready else {
-                continue;
-            };
-            self.pending.remove(&coord);
-            completed.push(CompletedChunkTask {
-                coord,
-                revision,
-                output,
-            });
+            completed.push(ready);
         }
 
         completed
