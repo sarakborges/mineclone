@@ -28,7 +28,7 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 ## Versionamento
 
 - Fonte operacional acordada para os blocos do projeto: arquivo raiz `VERSION`.
-- Estado atual: `VERSION = 0.14.39`.
+- Estado atual: `VERSION = 0.14.40`.
 - `Cargo.toml` ainda declara `[package].version = 0.10.16`; essa divergência foi detectada em 2026-09-15 e deve ser tratada como bloco explícito, não silenciosamente dentro de outro refactor.
 - Até essa decisão, não inferir a versão do projeto pelo `Cargo.toml`.
 
@@ -72,15 +72,15 @@ Roda em push para `develop`/`main` e em pull requests.
 
 # Estado atual
 
-Último HEAD de **código** validado antes deste handoff documental:
+Último HEAD de **código** publicado neste bloco:
 
-`e54afd6e4e9e7eb11d8e73c37adae2526947273b`
+`da309b3a0bfa385afc2b15900358c46a301b456c`
 
-Bloco: `Remove unused direct light setter`
+Bloco: `Use Bevy hash collections in lighting`
 
-`VERSION`: `0.14.39`
+`VERSION`: `0.14.40`
 
-Observação operacional: houve commits documentais acidentais criando/removendo arquivos temporários vazios durante esta atualização; o estado final não mantém `noop` nem `HANDOFF.md.tmp`. Eles não alteram código nem `VERSION`.
+Observação operacional: houve commits documentais acidentais criando/removendo arquivos temporários vazios durante a atualização anterior; o estado final não mantém `noop` nem `HANDOFF.md.tmp`. Eles não alteram código nem `VERSION`.
 
 Commits recentes relevantes:
 
@@ -93,6 +93,7 @@ Commits recentes relevantes:
 - `ed45170` — `0.14.37`, `ChunkMeshSnapshot::capture` constrói o shell de 1736 samples diretamente com `Vec::with_capacity`, sem zerar/prefill o buffer inteiro antes de preenchê-lo.
 - `d5915fa` — `0.14.38`, solver de lighting escreve luz imediatamente mas posterga o bump de `chunk_mesh_revision`, fazendo um bump por chunk alterado no fim do batch.
 - `e54afd6` — `0.14.39`, remove `set_light_at` direto que ficou sem caller após o batching de revisions; mantém apenas a rota interna deferida usada pelo solver.
+- `da309b3` — `0.14.40`, troca as hash collections quentes restantes de lighting para `bevy::platform`, incluindo pending emission edits, changed chunks da propagation e scratch local do dynamic lighting.
 
 ## CI recente
 
@@ -103,6 +104,7 @@ Commits recentes relevantes:
 - `0.14.37` / run `35034814641`: Clippy **success**, `cargo check` **success**.
 - `0.14.38` / run `35035219346`: **failure** de Clippy porque `set_light_at` ficou `dead_code` depois que o solver passou a usar a rota deferida.
 - `0.14.39` / run `35035772978`: Clippy **success**, `cargo check` **success**; corrige a única falha de `0.14.38` sem `allow(dead_code)`.
+- `0.14.40` / run `35036777258`: **pending/in progress** no momento desta atualização do handoff.
 
 Falhas históricas que não devem ser reintroduzidas:
 
@@ -115,9 +117,8 @@ Falhas históricas que não devem ser reintroduzidas:
 
 # Drafts preparados, mas NÃO publicados
 
-Estes commits foram montados fora de `develop` antes desta atualização de handoff. Como o branch avançou com commits documentais, **não fazer fast-forward direto neles**; reconstruir/reencadear sobre o HEAD atual antes de publicar.
+Estes commits foram montados fora de `develop` antes desta atualização de handoff. Como o branch avançou, **não fazer fast-forward direto neles**; reconstruir/reencadear sobre o HEAD atual antes de publicar.
 
-- draft `dd1ad2b` — planejado como próximo `0.14.40`: troca as hash collections quentes restantes do subsistema de lighting para `bevy::platform`.
 - draft `bd19088` — planejado como `0.14.41`: troca `desired/retained/surface_ranges` do streaming para `bevy::platform` e desacopla `WorldFeatureFields::retain_for_chunks` do tipo concreto de `HashSet`, aceitando iterador de coords.
 - draft antigo `9c1a0e7` da seleção de streaming está descartado porque tinha incompatibilidade de tipo com `FeatureCaches::retain_for_chunks`.
 - drafts anteriores de `0.14.36/37` que precederam a reconstrução corrigida também estão descartados; os commits canônicos são `e4ebe14` e `ed45170`.
@@ -193,6 +194,7 @@ Estes commits foram montados fora de `develop` antes desta atualização de hand
 
 - `seed_chunk_direct_lighting` pula upper chunks vazios antes do scan voxel a voxel; chunks não vazios mantêm a mesma semântica de skylight/dampening.
 - `LightingContext` usa o hasher do Bevy.
+- Pending emission edits, changed chunks da propagation e o scratch local de dynamic lighting usam `bevy::platform` hash collections.
 - Propagation usa o próprio `VoxelChunk` para os vizinhos cardinais que permanecem dentro do chunk; lookup global só acontece quando cruza a borda.
 - O early-return de medium opaco permanece antes das leituras cardinais, então a otimização não adiciona trabalho a voxel opaco.
 - Mudanças de luz do solver continuam sendo aplicadas imediatamente; só o `chunk_mesh_revision` é consolidado por chunk ao fim do batch.
@@ -228,14 +230,13 @@ Não repetir estes alvos sem profiling/evidência nova:
 
 Prioridade ligada ao relato de FPS caindo ao andar/carregar chunks:
 
-1. **Reencadear e validar o draft de lighting hash collections** sobre o HEAD atual como próximo patch (`0.14.40`).
-2. **Reencadear e validar o draft de streaming selection hash collections** como bloco seguinte (`0.14.41`), mantendo `retain_for_chunks` desacoplado do tipo concreto de set.
-3. `ChunkRenderPool.active` ainda usa `std::HashMap`; é mapa grande e recebe `contains/get_mut/remove/insert` durante streaming/remesh. Candidato seguro seguinte se o diff ficar apenas em hasher.
-4. `ChunkMeshSnapshot::capture` ainda faz 1736 amostragens síncronas por task inicial; o prefill já foi removido. Próximo ganho precisa reduzir lookups/amostragens ou mudar ownership com cuidado, não apenas trocar a forma de alocar.
-5. Integração de chunk ainda expande 4096 posições para lighting no caminho main-thread. Investigar uma representação de seed por chunk/coluna ou expansão incremental que preserve semântica e prioridade.
-6. Rebuild completo da seleção ao cruzar chunk ainda reconstrói/prioriza desired/pending; depois do hasher, só atacar algoritmo com profiling/invariant melhor.
-7. `BiomeInfluence` nasce de índice de surface biome, mas alguns consumers ainda convertem ID de volta para índice; carregar o índice junto é otimização menor e só deve entrar depois dos hot paths de streaming.
-8. Tratar `VERSION 0.14.x` vs `Cargo.toml 0.10.16` em bloco explícito separado; não misturar com runtime performance.
+1. **Após `0.14.40` ficar verde, reencadear e validar o draft de streaming selection hash collections** como próximo bloco (`0.14.41`), mantendo `retain_for_chunks` desacoplado do tipo concreto de set.
+2. `ChunkRenderPool.active` ainda usa `std::HashMap`; é mapa grande e recebe `contains/get_mut/remove/insert` durante streaming/remesh. Candidato seguro seguinte se o diff ficar apenas em hasher.
+3. `ChunkMeshSnapshot::capture` ainda faz 1736 amostragens síncronas por task inicial; o prefill já foi removido. Próximo ganho precisa reduzir lookups/amostragens ou mudar ownership com cuidado, não apenas trocar a forma de alocar.
+4. Integração de chunk ainda expande 4096 posições para lighting no caminho main-thread. Investigar uma representação de seed por chunk/coluna ou expansão incremental que preserve semântica e prioridade.
+5. Rebuild completo da seleção ao cruzar chunk ainda reconstrói/prioriza desired/pending; depois do hasher, só atacar algoritmo com profiling/invariant melhor.
+6. `BiomeInfluence` nasce de índice de surface biome, mas alguns consumers ainda convertem ID de volta para índice; carregar o índice junto é otimização menor e só deve entrar depois dos hot paths de streaming.
+7. Tratar `VERSION 0.14.x` vs `Cargo.toml 0.10.16` em bloco explícito separado; não misturar com runtime performance.
 
 ---
 
@@ -255,12 +256,11 @@ Itens históricos conhecidos, só retomar quando o usuário priorizar ou quando 
 
 Se nenhum runtime error/warning tiver prioridade:
 
-1. Partir do HEAD real após este handoff; `VERSION` continua `0.14.39` até o próximo bloco de código.
-2. Recriar/reencadear `dd1ad2b` sobre o HEAD atual e publicar como `0.14.40` somente após revisar o diff.
-3. Validar `0.14.40` no CI antes de promover o bloco seguinte.
-4. Recriar/reencadear `bd19088` como `0.14.41`, incluindo a API genérica de retention para não acoplar `WorldFeatureFields` a um hasher específico.
-5. Depois da cadeia verde, auditar `ChunkRenderPool.active` para Bevy hash map e então voltar aos custos estruturais maiores: snapshot shell e seed expansion de lighting.
-6. Atualizar este handoff ao final de cada bloco material, sem postergar para uma conversa futura.
+1. `0.14.40` está publicado em `develop`; CI run `35036777258` está pending/in progress nesta atualização.
+2. Quando `0.14.40` ficar verde, recriar/reencadear `bd19088` sobre o HEAD real e publicar como `0.14.41`, incluindo a API genérica de retention para não acoplar `WorldFeatureFields` a um hasher específico.
+3. Validar `0.14.41` no CI antes do bloco seguinte.
+4. Depois da cadeia verde, auditar `ChunkRenderPool.active` para Bevy hash map e então voltar aos custos estruturais maiores: snapshot shell e seed expansion de lighting.
+5. Atualizar este handoff ao final de cada bloco material, sem postergar para uma conversa futura.
 
 # Performance direction
 
