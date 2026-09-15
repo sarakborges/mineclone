@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::{
     content::fluid::{FluidId, FluidRegistry},
     voxel::{
+        cell::VoxelCell,
         coordinates::chunk_coord_from_world,
         fluid::{FluidCell, MAX_FLUID_LEVEL},
         neighbors::{CARDINAL_NEIGHBORS, HORIZONTAL_NEIGHBORS},
@@ -15,10 +16,11 @@ use crate::world::chunk_remesh::ChunkRemeshQueue;
 pub(super) fn desired_fluid(
     world: &VoxelWorld,
     position: IVec3,
+    target_cell: Option<VoxelCell>,
     current: Option<FluidCell>,
     fluids: &FluidRegistry,
 ) -> Option<FluidCell> {
-    if world.is_solid(position) {
+    if target_cell.is_some() {
         return None;
     }
 
@@ -77,8 +79,9 @@ fn fluid_has_support(world: &VoxelWorld, position: IVec3) -> bool {
         return true;
     }
 
-    let below = position - IVec3::Y;
-    world.is_solid(below) || world.fluid_at(below).is_some()
+    world
+        .sample_at(position - IVec3::Y)
+        .is_some_and(|(cell, fluid, _)| cell.is_some() || fluid.is_some())
 }
 
 fn can_spill_over_edge(world: &VoxelWorld, position: IVec3, fluid: FluidCell) -> bool {
