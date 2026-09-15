@@ -29,6 +29,24 @@ pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
     let (normal, tangent_a, tangent_b, signs) = face_basis(face);
     let base = voxel + normal;
     let base_sample = world.sample_at(base);
+    let side_a_samples = [
+        world.sample_at(base - tangent_a),
+        world.sample_at(base + tangent_a),
+    ];
+    let side_b_samples = [
+        world.sample_at(base - tangent_b),
+        world.sample_at(base + tangent_b),
+    ];
+    let corner_samples = [
+        [
+            world.sample_at(base - tangent_a - tangent_b),
+            world.sample_at(base - tangent_a + tangent_b),
+        ],
+        [
+            world.sample_at(base + tangent_a - tangent_b),
+            world.sample_at(base + tangent_a + tangent_b),
+        ],
+    ];
     let emitted_block_srgb = world
         .light_at(voxel)
         .block_srgb_levels()
@@ -43,14 +61,11 @@ pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
     let mut ambient_occlusion = [1.0; 4];
 
     for (index, (sign_a, sign_b)) in signs.into_iter().enumerate() {
-        let offset_a = tangent_a * sign_a;
-        let offset_b = tangent_b * sign_b;
-        let side_a = base + offset_a;
-        let side_b = base + offset_b;
-        let corner = base + offset_a + offset_b;
-        let side_a_sample = world.sample_at(side_a);
-        let side_b_sample = world.sample_at(side_b);
-        let corner_sample = world.sample_at(corner);
+        let side_a_index = sign_index(sign_a);
+        let side_b_index = sign_index(sign_b);
+        let side_a_sample = side_a_samples[side_a_index];
+        let side_b_sample = side_b_samples[side_b_index];
+        let corner_sample = corner_samples[side_a_index][side_b_index];
         let side_a_solid = sample_is_solid(side_a_sample);
         let side_b_solid = sample_is_solid(side_b_sample);
         let corner_solid = sample_is_solid(corner_sample);
@@ -129,6 +144,10 @@ fn srgb_distance_squared(left: [f32; 3], right: [f32; 3]) -> f32 {
     let green = left[1] - right[1];
     let blue = left[2] - right[2];
     red * red + green * green + blue * blue
+}
+
+fn sign_index(sign: i32) -> usize {
+    if sign < 0 { 0 } else { 1 }
 }
 
 fn sample_is_solid(sample: VoxelSample) -> bool {
