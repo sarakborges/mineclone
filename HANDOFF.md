@@ -84,11 +84,11 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`0424e9a2dbe2f805092afac31c2544d6def86d8f`
+`64f5bd60559f5f335241a6e8b5204b98d387ac30`
 
-Commit: `Bump version to 0.12.52`
+Commit: `Reuse surface light across mesh faces`
 
-`VERSION`: `0.12.52`
+`VERSION`: `0.12.53`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever, porque podem ter avançado.
 
@@ -211,6 +211,12 @@ A auditoria arquitetural foi reiniciada a partir de `0.12.5`/`0.12.8` e segue at
 - Toda consolidação futura deve ser gravada aqui primeiro.
 - HEAD do handoff rastreia último commit de código/version para evitar autorreferência.
 
+### 0.12.53 — surface light reutilizada no meshing
+- Terrain e fluid meshing deixam de consultar `VoxelRead::light_at` para o mesmo voxel-fonte a cada face exposta.
+- A block light do voxel-fonte é lida uma vez do `VoxelChunk` já disponível e reutilizada por todas as faces daquele voxel.
+- AO, amostras do neighborhood, block-light interpolation e escolha de diagonal continuam com a mesma semântica.
+- A auditoria confirmou que um split ingênuo de “lighting-only attributes” não é seguro: block light participa de `should_flip_diagonal` quando AO empata, então mudança de iluminação pode alterar os índices da malha.
+
 ---
 
 # Decisões explícitas da auditoria
@@ -220,6 +226,7 @@ Não desfazer sem evidência nova:
 - Não criar abstraction genérica acima de `ChunkGenerationTasks` e `ChunkMeshTasks` só porque ambos têm snapshot/revision; lifecycle comum já pertence a `ChunkTaskQueue`.
 - Não transformar unload em pipeline incremental com snapshot temporal de streaming sem evidência de hotspot real; isso adicionaria ownership cruzado/estado persistente para evitar scan ocasional.
 - `ChunkContent`, `ChunkGeneration`, `CurrentDimensionContext`, `ChunkRenderer` e `ChunkUnloadRuntime` continuam coerentes enquanto representarem os concerns atuais.
+- Não separar lighting remesh em simples atualização de atributos mantendo índices fixos: `should_flip_diagonal` também depende da block light e pode mudar a topologia indexada quando AO empata.
 - Não reabrir bugs antigos automaticamente; só se permanecerem ativos ou houver regressão reportada.
 
 ---
@@ -228,9 +235,9 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Revisar custo de full geometry/lighting remesh. Hoje lighting/geometry rebuildam meshes completos; só separar topology de atributos de lighting se a inspeção provar que é seguro sem duplicar ownership.
-2. Continuar procurando chamadas repetidas de `VoxelWorld`/`VoxelRead` para a mesma posição nos hot paths restantes e usar `sample_at` apenas quando múltiplos aspectos do mesmo voxel forem necessários.
-3. Revisar `ChunkRenderPool::replace_*` e fallback para full refresh, procurando asset churn/rebuild evitável com invariant concreto.
+1. Continuar procurando chamadas repetidas de `VoxelWorld`/`VoxelRead` para a mesma posição nos hot paths restantes e usar `sample_at` apenas quando múltiplos aspectos do mesmo voxel forem necessários.
+2. Revisar `ChunkRenderPool::replace_*` e fallback para full refresh, procurando asset churn/rebuild evitável com invariant concreto.
+3. Só reabrir uma separação específica de lighting/topology se existir representação que preserve também mudanças de diagonal/índices sem duplicar ownership da geometria.
 4. Manter `DeduplicatedQueue` como owner de deduplicação/priority e atacar somente operações O(n) concretas em hot paths.
 5. Só voltar a unload incremental, worldgen/cache ou task lifecycle se surgir evidência objetiva nova.
 6. Rendering/HUD continuam change-driven; evitar micro-otimização por estética.
