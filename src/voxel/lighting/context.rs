@@ -63,8 +63,9 @@ impl DirectSkyColumn {
                 if let Some(chunk) = world.chunk(chunk_coord) {
                     for world_y in (segment_bottom..=next_y).rev() {
                         let local_y = world_y.rem_euclid(size);
-                        let cell = chunk.cell_at(local_x, local_y, local_z);
-                        let fluid = chunk.fluid_at(local_x, local_y, local_z);
+                        let (cell, fluid, _) = chunk
+                            .sample_local(local_x, local_y, local_z)
+                            .expect("direct sky local coordinates must stay inside the chunk");
                         level = level.saturating_sub(medium_dampening_for_cells(
                             cell, fluid, blocks, fluids,
                         ));

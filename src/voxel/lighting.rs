@@ -152,16 +152,9 @@ pub(crate) fn seed_chunk_direct_lighting(
                     if *sky == 0 {
                         break;
                     }
-                    let cell = upper_chunk.cell_at(
-                        local_x as i32,
-                        local_y as i32,
-                        local_z as i32,
-                    );
-                    let fluid = upper_chunk.fluid_at(
-                        local_x as i32,
-                        local_y as i32,
-                        local_z as i32,
-                    );
+                    let (cell, fluid, _) = upper_chunk
+                        .sample_local(local_x as i32, local_y as i32, local_z as i32)
+                        .expect("direct seed local coordinates must stay inside the chunk");
                     *sky = sky.saturating_sub(medium_dampening_for_cells(
                         cell, fluid, blocks, fluids,
                     ));
