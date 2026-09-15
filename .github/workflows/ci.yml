@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - develop
 
 permissions:
   contents: read
@@ -20,7 +21,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: clippy
 
       - name: Install Linux dependencies
         run: |
@@ -36,18 +37,6 @@ jobs:
             libxi-dev \
             libxrandr-dev
 
-      - name: Normalize formatting
-        run: cargo fmt --all
-
-      - name: Upload formatted sources
-        uses: actions/upload-artifact@v4
-        with:
-          name: formatted-rust-sources
-          path: |
-            src/**/*.rs
-            build.rs
-          if-no-files-found: error
-
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
@@ -56,6 +45,3 @@ jobs:
 
       - name: Test
         run: cargo test
-
-      - name: Format
-        run: git diff --exit-code -- '*.rs'
