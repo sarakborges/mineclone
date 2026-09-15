@@ -52,6 +52,10 @@ fn update_time_hud(
     language: Res<ActiveLanguage>,
     mut time_text: Single<&mut Text, With<TimeHudText>>,
 ) {
+    if !day_night.inputs_changed() && !language.is_changed() && !localization.is_changed() {
+        return;
+    }
+
     let (hour, minute) = day_night.world_time().unwrap_or((0, 0));
     let next_text = format!(
         "{} {}\n{:02}:{:02}",
