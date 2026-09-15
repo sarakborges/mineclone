@@ -2,6 +2,7 @@ use bevy::{light::NotShadowCaster, prelude::*};
 
 use crate::{
     app::game_state::GameState,
+    content::fluid::FluidId,
     rendering::block_tint::{block_tint_at, block_vertex_tint},
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
@@ -189,16 +190,14 @@ pub(crate) fn spawn_built_chunk_meshes(
                 fluid_mesh_bytes += bytes;
                 fluid_ids.push(fluid_mesh.fluid_id);
 
-                let mesh_handle = meshes.add(fluid_mesh.mesh);
-                let entity = commands
-                    .spawn((
-                        Mesh3d(mesh_handle.clone()),
-                        MeshMaterial3d(context.fluid_materials.get(fluid_mesh.fluid_id).clone()),
-                        transform,
-                        NotShadowCaster,
-                        DespawnOnExit(GameState::Gameplay),
-                    ))
-                    .id();
+                let (entity, mesh_handle) = spawn_fluid_mesh(
+                    commands,
+                    meshes,
+                    transform,
+                    fluid_mesh.fluid_id,
+                    fluid_mesh.mesh,
+                    context,
+                );
                 entities.push(entity);
                 mesh_handles.push(mesh_handle);
             }
@@ -216,6 +215,58 @@ pub(crate) fn spawn_built_chunk_meshes(
             fluid_mesh_bytes,
         },
     );
+}
+
+pub(super) fn spawn_fluid_meshes_into_existing_allocation(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    render_pool: &mut ChunkRenderPool,
+    coord: IVec3,
+    replacements: Vec<(FluidId, Mesh)>,
+    fluid_mesh_bytes: usize,
+    context: &ChunkRenderContext<'_>,
+) {
+    let transform = Transform::from_translation(coord.as_vec3() * CHUNK_SIZE as f32);
+    let mut entities = Vec::with_capacity(replacements.len());
+    let mut mesh_handles = Vec::with_capacity(replacements.len());
+    let mut fluid_ids = Vec::with_capacity(replacements.len());
+
+    for (fluid_id, mesh) in replacements {
+        let (entity, mesh_handle) =
+            spawn_fluid_mesh(commands, meshes, transform, fluid_id, mesh, context);
+        entities.push(entity);
+        mesh_handles.push(mesh_handle);
+        fluid_ids.push(fluid_id);
+    }
+
+    render_pool.append_fluid_render_allocation(
+        coord,
+        entities,
+        mesh_handles,
+        fluid_ids,
+        fluid_mesh_bytes,
+    );
+}
+
+fn spawn_fluid_mesh(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    transform: Transform,
+    fluid_id: FluidId,
+    mesh: Mesh,
+    context: &ChunkRenderContext<'_>,
+) -> (Entity, Handle<Mesh>) {
+    let mesh_handle = meshes.add(mesh);
+    let entity = commands
+        .spawn((
+            Mesh3d(mesh_handle.clone()),
+            MeshMaterial3d(context.fluid_materials.get(fluid_id).clone()),
+            transform,
+            NotShadowCaster,
+            DespawnOnExit(GameState::Gameplay),
+        ))
+        .id();
+    (entity, mesh_handle)
 }
 
 pub(super) fn mesh_asset_bytes(mesh: &Mesh) -> usize {

@@ -2,10 +2,12 @@ use bevy::prelude::*;
 
 use super::{
     ChunkRenderContext,
-    pool::{ChunkRenderPool, retire_chunk_render_allocation},
+    pool::{
+        ChunkRenderPool, retire_chunk_render_allocation, retire_render_allocation_parts,
+    },
     spawn::{
         BuiltChunkMesh, build_chunk_fluid_render_meshes, build_chunk_terrain_render_meshes,
-        mesh_asset_bytes, spawn_chunk_mesh,
+        mesh_asset_bytes, spawn_chunk_mesh, spawn_fluid_meshes_into_existing_allocation,
     },
 };
 
@@ -86,7 +88,7 @@ pub fn refresh_chunk_fluid_mesh(
         .iter()
         .map(|fluid| mesh_asset_bytes(&fluid.mesh))
         .sum();
-    let replacements = fluid_meshes
+    let mut replacements = fluid_meshes
         .into_iter()
         .map(|fluid| (fluid.fluid_id, fluid.mesh))
         .collect::<Vec<_>>();
@@ -94,11 +96,24 @@ pub fn refresh_chunk_fluid_mesh(
     if render_pool.replace_fluid_mesh_assets(
         coord,
         meshes,
-        replacements,
+        &mut replacements,
         fluid_mesh_bytes,
     ) {
         return;
     }
 
-    refresh_chunk_mesh(commands, meshes, render_pool, coord, context);
+    let Some(detached) = render_pool.detach_fluid_render_allocation(coord) else {
+        refresh_chunk_mesh(commands, meshes, render_pool, coord, context);
+        return;
+    };
+    retire_render_allocation_parts(commands, detached.entities, detached.meshes);
+    spawn_fluid_meshes_into_existing_allocation(
+        commands,
+        meshes,
+        render_pool,
+        coord,
+        replacements,
+        fluid_mesh_bytes,
+        context,
+    );
 }
