@@ -84,11 +84,11 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`afbd034d70a4514b663f52fb25ac094da21c85aa`
+`bb86cec91b835d407bdd880dc0b203f403e9913a`
 
-Commit: `Keep fluid meshes out of terrain refresh`
+Commit: `Rebuild only fluid render allocation`
 
-`VERSION`: `0.12.55`
+`VERSION`: `0.12.56`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever, porque podem ter avançado.
 
@@ -229,6 +229,13 @@ A auditoria arquitetural foi reiniciada a partir de `0.12.5`/`0.12.8` e segue at
 - `mesh_bytes` recompõe bytes novos de terrain + `fluid_mesh_bytes` preservados.
 - Full spawn continua construindo terrain + fluid; fallback completo permanece quando a estrutura/chaves de terrain muda ou algum asset esperado não existe.
 
+### 0.12.56 — fluid topology refresh preserva terrain
+- `ChunkRenderPool` centraliza o invariant do sufixo fluido em `fluid_mesh_start` e consegue destacar somente fluid entities/handles.
+- `refresh_chunk_fluid_mesh` mantém replace in-place quando `FluidId`s/handles coincidem; quando mudam, destaca e recria apenas a allocation fluida.
+- O spawn de uma mesh fluida foi fatorado e é compartilhado entre full spawn e rebuild parcial.
+- Terrain entities, handles, keys e bytes permanecem intactos quando um chunk ganha/perde tipos de fluido ou precisa reparar handles fluidos.
+- Full chunk refresh resta apenas como fallback para allocation ausente ou metadata inconsistente.
+
 ---
 
 # Decisões explícitas da auditoria
@@ -247,7 +254,7 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Revisar o fallback de `refresh_chunk_fluid_mesh` quando o conjunto de `FluidId`s muda; hoje ele ainda cai em full chunk refresh e pode recriar terrain desnecessariamente.
+1. Revisar o fallback de terrain quando `ChunkMeshKey`s mudam; hoje ele ainda cai em full chunk refresh e pode recriar fluidos apesar de 0.12.55/0.12.56 separarem os domínios.
 2. Continuar procurando chamadas repetidas de `VoxelWorld`/`VoxelRead` para a mesma posição nos hot paths restantes e usar `sample_at` apenas quando múltiplos aspectos do mesmo voxel forem necessários.
 3. Só reabrir uma separação específica de lighting/topology se existir representação que preserve também mudanças de diagonal/índices sem duplicar ownership da geometria.
 4. Manter `DeduplicatedQueue` como owner de deduplicação/priority e atacar somente operações O(n) concretas em hot paths.
