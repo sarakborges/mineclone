@@ -24,6 +24,7 @@ pub struct VoxelChunk {
     fluid_count: usize,
     boundary_content_counts: [u16; BOUNDARY_FACE_COUNT],
     boundary_fluid_counts: [u16; BOUNDARY_FACE_COUNT],
+    boundary_dynamic_fluid_counts: [u16; BOUNDARY_FACE_COUNT],
 }
 
 impl VoxelChunk {
@@ -36,6 +37,7 @@ impl VoxelChunk {
             fluid_count: 0,
             boundary_content_counts: [0; BOUNDARY_FACE_COUNT],
             boundary_fluid_counts: [0; BOUNDARY_FACE_COUNT],
+            boundary_dynamic_fluid_counts: [0; BOUNDARY_FACE_COUNT],
         }
     }
 
@@ -55,6 +57,11 @@ impl VoxelChunk {
     pub(crate) fn boundary_has_fluid(&self, outward: IVec3) -> bool {
         boundary_face_index(outward)
             .is_some_and(|face| self.boundary_fluid_counts[face] > 0)
+    }
+
+    pub(crate) fn boundary_has_dynamic_fluid(&self, outward: IVec3) -> bool {
+        boundary_face_index(outward)
+            .is_some_and(|face| self.boundary_dynamic_fluid_counts[face] > 0)
     }
 
     pub fn cell_at(&self, x: i32, y: i32, z: i32) -> Option<VoxelCell> {
@@ -106,9 +113,12 @@ impl VoxelChunk {
 
     pub(crate) fn set_fluid(&mut self, x: usize, y: usize, z: usize, fluid: Option<FluidCell>) {
         let index = index(x, y, z);
-        let had_fluid = self.fluids[index].is_some();
+        let previous_fluid = self.fluids[index];
+        let had_fluid = previous_fluid.is_some();
+        let had_dynamic_fluid = previous_fluid.is_some_and(|cell| !cell.is_source());
         let had_content = had_fluid || self.blocks[index].is_some();
         let has_fluid = fluid.is_some();
+        let has_dynamic_fluid = fluid.is_some_and(|cell| !cell.is_source());
         let has_content = has_fluid || self.blocks[index].is_some();
 
         if had_fluid != has_fluid {
@@ -119,6 +129,15 @@ impl VoxelChunk {
                 y,
                 z,
                 has_fluid,
+            );
+        }
+        if had_dynamic_fluid != has_dynamic_fluid {
+            adjust_boundary_counts(
+                &mut self.boundary_dynamic_fluid_counts,
+                x,
+                y,
+                z,
+                has_dynamic_fluid,
             );
         }
         if had_content != has_content {
@@ -271,6 +290,25 @@ mod tests {
         chunk.set_block(0, last, 3, None);
         assert!(!chunk.boundary_has_content(IVec3::NEG_X));
         assert!(!chunk.boundary_has_content(IVec3::Y));
+    }
+
+    #[test]
+    fn boundary_dynamic_fluid_tracks_source_transitions() {
+        let mut chunk = VoxelChunk::empty();
+        let last = CHUNK_SIZE - 1;
+
+        chunk.set_fluid(0, last, 3, Some(FluidCell::source(0, 8)));
+        assert!(chunk.boundary_has_fluid(IVec3::NEG_X));
+        assert!(!chunk.boundary_has_dynamic_fluid(IVec3::NEG_X));
+        assert!(!chunk.boundary_has_dynamic_fluid(IVec3::Y));
+
+        chunk.set_fluid(0, last, 3, Some(FluidCell::spreading(0, 7, 1)));
+        assert!(chunk.boundary_has_dynamic_fluid(IVec3::NEG_X));
+        assert!(chunk.boundary_has_dynamic_fluid(IVec3::Y));
+
+        chunk.set_fluid(0, last, 3, Some(FluidCell::source(0, 8)));
+        assert!(!chunk.boundary_has_dynamic_fluid(IVec3::NEG_X));
+        assert!(!chunk.boundary_has_dynamic_fluid(IVec3::Y));
     }
 
     #[test]
