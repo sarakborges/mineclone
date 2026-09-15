@@ -190,15 +190,15 @@ fn face_is_exposed<W: VoxelRead + ?Sized>(
     fluid_id: FluidId,
     face: BlockFace,
 ) -> bool {
-    if !world.is_loaded_at(position) {
+    let Some((cell, fluid, _)) = world.sample_at(position) else {
         return face == BlockFace::Top;
-    }
+    };
 
-    if world.is_solid(position) {
+    if cell.is_some() {
         return false;
     }
 
-    match world.fluid_at(position) {
+    match fluid {
         Some(neighbor) => neighbor.fluid_id != fluid_id,
         None => true,
     }
