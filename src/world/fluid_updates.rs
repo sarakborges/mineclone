@@ -1,7 +1,7 @@
 mod frontier;
 mod solver;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 
@@ -17,8 +17,11 @@ use super::{
     chunk_remesh::ChunkRemeshQueue,
     game_rules::GameRules,
     tick::WorldTickClock,
+    work_budget::FrameWorkBudget,
 };
 
+const FLUID_UPDATE_BUDGET: Duration = Duration::from_millis(1);
+const MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK: usize = 64;
 const MAX_FLUID_UPDATES_PER_FRAME: usize = 512;
 const MAX_FLUID_STEPS_PER_FRAME: usize = 4;
 
@@ -114,20 +117,31 @@ pub(super) fn process_fluid_updates(
         return;
     }
 
-    let mut remaining_budget = MAX_FLUID_UPDATES_PER_FRAME;
+    let mut budget = FrameWorkBudget::new(
+        FLUID_UPDATE_BUDGET,
+        MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK,
+    )
+    .with_maximum_items(MAX_FLUID_UPDATES_PER_FRAME);
 
-    for step_index in 0..max_steps {
-        if remaining_budget == 0 {
+    'steps: for step_index in 0..max_steps {
+        if budget.exhausted() {
             break;
         }
 
-        let batch_len = runtime.pending.queue.len().min(remaining_budget);
+        // Freeze the current frontier for this fluid step. Positions enqueued while
+        // processing this batch belong to the next step, matching the previous solver
+        // semantics even when the temporal budget ends the frame early.
+        let batch_len = runtime.pending.queue.len();
         for _ in 0..batch_len {
-            remaining_budget -= 1;
+            if budget.exhausted() {
+                break 'steps;
+            }
 
             let Some(position) = runtime.pending.pop() else {
                 break;
             };
+            budget.record(1);
+
             let Some((cell, current, _)) = runtime.world.sample_at(position) else {
                 continue;
             };
