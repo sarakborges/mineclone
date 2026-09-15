@@ -56,7 +56,7 @@ O workflow roda em push para `develop`/`main` e em pull requests.
 16. Sistemas visuais não devem reescrever Components/Assets com o mesmo valor.
 17. Separar refresh estrutural de material/textura de refresh leve de tint/orientação/layout quando os inputs diferirem.
 18. Movimento com delta zero deve permanecer ocioso.
-19. Scratch de cardinalidade fixa prefere stack/reuse a heap por amostra.
+19. Scratch de cardinalidade fixa ou recorrente deve preferir stack/reuse a heap repetida quando isso não impuser limite artificial ao conteúdo.
 20. `NewWorldConfig` é owner de escolhas de criação de mundo.
 21. Spawn forçado por biome deve validar tanto a coluna inicial quanto o safe-spawn final no mesmo biome.
 22. Search/text-input compartilhado pertence a `src/ui`; telas continuam owners de suas opções/filtros.
@@ -70,11 +70,11 @@ O workflow roda em push para `develop`/`main` e em pull requests.
 
 Último HEAD de código/version:
 
-`fc983fbefe3077bfec77c5223cb39322e5f70fb1`
+`b8159597991911bf5bc2587deb4597ece217fd0b`
 
-Commit: `Bump version to 0.14.3`
+Commit: `Reuse chunk streaming integration buffers`
 
-`VERSION`: `0.14.3`
+`VERSION`: `0.14.4`
 
 Commits recentes relevantes:
 
@@ -85,12 +85,14 @@ Commits recentes relevantes:
 - `d020a14c8db9c287c1a54f19caa013d890a27102` — corrige Bevy B0001 no dropdown de Target Block Position com queries de `Text` explicitamente disjuntas.
 - `24501774a428a1d5f7640f61f8d0a7cb8c679d6d` — bump `0.14.2`; CI Clippy/check verde.
 - `e6c082e8c475e1e46ff00c29ea71d125593c8493` — faz o inventory hint herdar a visibilidade do Player HUD.
-- `fc983fbefe3077bfec77c5223cb39322e5f70fb1` — bump `0.14.3`.
+- `fc983fbefe3077bfec77c5223cb39322e5f70fb1` — bump `0.14.3`; CI Clippy/check verde.
+- `b8159597991911bf5bc2587deb4597ece217fd0b` — `0.14.4`, reutiliza scratch do unload e pré-aloca buffers de integração/spawn de mesh; CI Clippy/check verde.
 
 ## CI atual
 
-- `0.14.2` / HEAD `24501774...` / run `35009719739`: Clippy **success**, `cargo check` **success**.
-- `0.14.3` / HEAD `fc983fbe...` / run `35010612188`: em execução na última consulta.
+- `0.14.3` / HEAD `fc983fbe...` / run `35010612188`: Clippy **success**, `cargo check` **success**.
+- `0.14.4` / HEAD `b8159597...` / run `35011640625`: Clippy **success**, `cargo check` **success**.
+- `cargo test` só quando o usuário pedir.
 
 ---
 
@@ -162,7 +164,18 @@ Causa: o hint já era filho do `PlayerHudRoot`, mas usava `Visibility::Visible`,
 
 Fix: usar `Visibility::Inherited` quando tooltips estão habilitados e `Visibility::Hidden` quando desabilitados. Isso mantém o owner local do toggle sem furar o lifecycle/visibilidade do Player HUD.
 
-A confirmação definitiva desse comportamento é o próximo runtime do usuário.
+A confirmação definitiva desse comportamento depende do próximo runtime do usuário.
+
+---
+
+# Refactor/performance recente
+
+## 0.14.4 — buffers de streaming/render integration
+
+- `unload_chunk_meshes` reutiliza `Local<Vec<IVec3>>` para o batch de chunks descarregados, preservando capacidade entre frames em vez de recriar scratch variável no hot path.
+- `spawn_built_chunk_meshes` pré-aloca `entities`, `mesh_handles` e `mesh_keys` pelo número conhecido de meshes produzidas para o chunk.
+- `spawn_terrain_meshes_into_existing_allocation` pré-aloca entities pelo número de replacements, reduzindo reallocs durante remesh/integration.
+- Nenhum lifecycle, prioridade, budget ou regra de seleção foi alterado.
 
 ---
 
@@ -170,13 +183,14 @@ A confirmação definitiva desse comportamento é o próximo runtime do usuário
 
 Se nenhum runtime error/warning tiver prioridade:
 
-1. Confirmar Clippy + `cargo check` do HEAD `fc983fbe...`.
-2. Aguardar runtime do usuário para confirmar os fixes B0001 e Player HUD/pause.
-3. Quando o usuário solicitar, rodar `cargo test` manualmente.
-4. Retomar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes.
+1. Tornar `TargetedBlock` change-driven: hoje o raycast roda todo frame. Introduzir metadata autoritativa no `VoxelWorld` para mudanças de conteúdo de blocos e recalcular somente quando câmera, disponibilidade de interação ou conteúdo relevante mudar; não reagir a lighting-only/fluid-only mutations.
+2. Depois revisar consumers de targeting (`highlight`/placement preview) para aproveitar sinais reais de mudança sem duplicar owner/cache.
+3. Revisar estrelas: posições dependem da câmera, mas hoje `Transform` das 96 estrelas é reescrito em todo tick do day/night; material também pode ser marcado mutável com cor/alpha idênticos durante fases estáveis.
+4. Continuar auditoria objetiva de `Update`/`PostUpdate` por scans globais, builds síncronos, allocations temporárias e dirty writes.
 5. Revisar integração/spawn de mesh apenas se houver ganho estrutural real sem lifecycle parcial por submesh.
 6. Revisar rebuild de seleção somente com ganho claro; não duplicar geração de volume para eliminar sort pequeno.
 7. Manter `notify_loaded_chunk_neighbors` conservador até existir metadata suficiente para provar otimização segura.
+8. Quando o usuário solicitar, rodar `cargo test` manualmente.
 
 # Performance direction
 
