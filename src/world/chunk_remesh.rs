@@ -136,13 +136,7 @@ impl ChunkRemeshQueue {
         Some(coord)
     }
 
-    fn pop_renderable_lighting(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
-        let coord = pop_renderable_from(
-            &mut self.lighting,
-            &mut self.lighting_scan_miss,
-            render_pool,
-        )?;
-
+    fn coalesce_geometry_into_lighting(&mut self, coord: IVec3) {
         // Geometry and lighting tasks build the same terrain mesh from the same
         // current snapshot. If both kinds are pending for this chunk, one terrain
         // task satisfies both requests. Preserve geometry's existing rule that a
@@ -150,7 +144,15 @@ impl ChunkRemeshQueue {
         if self.queue.remove(coord) {
             self.fluid.remove(coord);
         }
+    }
 
+    fn pop_renderable_lighting(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
+        let coord = pop_renderable_from(
+            &mut self.lighting,
+            &mut self.lighting_scan_miss,
+            render_pool,
+        )?;
+        self.coalesce_geometry_into_lighting(coord);
         Some(coord)
     }
 
@@ -351,7 +353,6 @@ fn dispatch_remesh_tasks(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::chunk_rendering::pool::ChunkRenderAllocation;
 
     #[test]
     fn queue_deduplicates_chunks() {
@@ -388,26 +389,26 @@ mod tests {
     #[test]
     fn lighting_remesh_coalesces_pending_geometry_for_same_chunk() {
         let mut queue = ChunkRemeshQueue::default();
-        let mut render_pool = ChunkRenderPool::default();
         let coord = IVec3::new(2, 1, 3);
-        render_pool.insert(coord, ChunkRenderAllocation::default());
         queue.enqueue_priority(coord);
         queue.enqueue_lighting_priority(coord);
 
-        assert_eq!(queue.pop_renderable_lighting(&render_pool), Some(coord));
+        queue.coalesce_geometry_into_lighting(coord);
+
         assert_eq!(queue.pop(), None);
+        assert_eq!(queue.pop_lighting(), Some(coord));
     }
 
     #[test]
     fn pure_lighting_remesh_preserves_pending_fluid_work() {
         let mut queue = ChunkRemeshQueue::default();
-        let mut render_pool = ChunkRenderPool::default();
         let coord = IVec3::new(2, 1, 3);
-        render_pool.insert(coord, ChunkRenderAllocation::default());
         queue.enqueue_fluid_priority(coord);
         queue.enqueue_lighting_priority(coord);
 
-        assert_eq!(queue.pop_renderable_lighting(&render_pool), Some(coord));
+        queue.coalesce_geometry_into_lighting(coord);
+
+        assert_eq!(queue.pop_lighting(), Some(coord));
         assert_eq!(queue.pop_fluid(), Some(coord));
     }
 
