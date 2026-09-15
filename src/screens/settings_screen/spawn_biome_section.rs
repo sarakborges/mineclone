@@ -1,4 +1,5 @@
 use bevy::{
+    ecs::system::SystemParam,
     input::{ButtonState, keyboard::KeyboardInput},
     prelude::*,
 };
@@ -82,6 +83,36 @@ pub(super) struct SpawnBiomeOptionLabel {
     biome_id: Option<String>,
 }
 
+#[derive(SystemParam)]
+pub(super) struct SpawnBiomeUiContent<'w> {
+    biomes: Res<'w, BiomeRegistry>,
+    localization: Res<'w, UiLocalization>,
+    language: Res<'w, ActiveLanguage>,
+}
+
+impl SpawnBiomeUiContent<'_> {
+    fn inputs_changed(&self) -> bool {
+        self.biomes.is_changed() || self.localization.is_changed() || self.language.is_changed()
+    }
+
+    fn option_label(&self, biome_id: Option<&str>) -> String {
+        let language = self.language.get();
+        biome_id.map_or_else(
+            || {
+                self.localization
+                    .text(language, "newWorld.spawnBiome.random")
+                    .to_owned()
+            },
+            |biome_id| {
+                self.biomes.get(biome_id).map_or_else(
+                    || biome_id.to_owned(),
+                    |biome| biome.name.text(language).to_owned(),
+                )
+            },
+        )
+    }
+}
+
 pub(super) fn spawn_biome_setting(
     localization: &UiLocalization,
     language: Language,
@@ -122,16 +153,14 @@ pub(super) fn spawn_biome_setting(
                 },
                 BackgroundColor(control_background),
                 BorderColor::all(control_border),
-                children![
-                    (
-                        SpawnBiomeDropdownLabel,
-                        typography::hud(format!(
-                            "{}   ▾",
-                            localization.text(language, "newWorld.spawnBiome.random")
-                        )),
-                        Pickable::IGNORE,
-                    ),
-                ],
+                children![((
+                    SpawnBiomeDropdownLabel,
+                    typography::hud(format!(
+                        "{}   ▾",
+                        localization.text(language, "newWorld.spawnBiome.random")
+                    )),
+                    Pickable::IGNORE,
+                ))],
             ),
             (
                 SpawnBiomeDropdownPanel,
@@ -383,19 +412,20 @@ pub(super) fn handle_spawn_biome_search_keyboard(
 
 pub(super) fn sync_spawn_biome_dropdown_state(
     state: Res<SpawnBiomeDropdownState>,
-    localization: Res<UiLocalization>,
-    language: Res<ActiveLanguage>,
+    content: SpawnBiomeUiContent,
     mut search_texts: Query<&mut Text, With<SpawnBiomeSearchText>>,
     mut panels: Query<&mut Node, With<SpawnBiomeDropdownPanel>>,
     mut search_borders: Query<&mut BorderColor, With<SpawnBiomeSearchBar>>,
 ) {
-    if !state.is_changed() && !localization.is_changed() && !language.is_changed() {
+    if !state.is_changed() && !content.localization.is_changed() && !content.language.is_changed() {
         return;
     }
 
-    let language = language.get();
+    let language = content.language.get();
     let next_search_text = if state.search.text().is_empty() {
-        localization.text(language, "newWorld.spawnBiome.search")
+        content
+            .localization
+            .text(language, "newWorld.spawnBiome.search")
     } else {
         state.search.text()
     };
@@ -430,26 +460,14 @@ pub(super) fn sync_spawn_biome_dropdown_state(
 
 pub(super) fn sync_spawn_biome_selected_label(
     config: Res<NewWorldConfig>,
-    biomes: Res<BiomeRegistry>,
-    localization: Res<UiLocalization>,
-    language: Res<ActiveLanguage>,
+    content: SpawnBiomeUiContent,
     mut labels: Query<&mut Text, With<SpawnBiomeDropdownLabel>>,
 ) {
-    if !config.is_changed()
-        && !biomes.is_changed()
-        && !localization.is_changed()
-        && !language.is_changed()
-    {
+    if !config.is_changed() && !content.inputs_changed() {
         return;
     }
 
-    let language = language.get();
-    let selected_label = spawn_biome_option_label(
-        config.spawn_biome(),
-        &biomes,
-        &localization,
-        language,
-    );
+    let selected_label = content.option_label(config.spawn_biome());
     let next = format!("{selected_label}   ▾");
     for mut text in &mut labels {
         if text.0 != next {
@@ -459,23 +477,15 @@ pub(super) fn sync_spawn_biome_selected_label(
 }
 
 pub(super) fn sync_spawn_biome_option_labels(
-    biomes: Res<BiomeRegistry>,
-    localization: Res<UiLocalization>,
-    language: Res<ActiveLanguage>,
+    content: SpawnBiomeUiContent,
     mut labels: Query<(&SpawnBiomeOptionLabel, &mut Text)>,
 ) {
-    if !biomes.is_changed() && !localization.is_changed() && !language.is_changed() {
+    if !content.inputs_changed() {
         return;
     }
 
-    let language = language.get();
     for (option, mut text) in &mut labels {
-        let next = spawn_biome_option_label(
-            option.biome_id.as_deref(),
-            &biomes,
-            &localization,
-            language,
-        );
+        let next = content.option_label(option.biome_id.as_deref());
         if text.0 != next {
             text.0 = next;
         }
@@ -485,9 +495,7 @@ pub(super) fn sync_spawn_biome_option_labels(
 pub(super) fn sync_spawn_biome_options(
     state: Res<SpawnBiomeDropdownState>,
     config: Res<NewWorldConfig>,
-    biomes: Res<BiomeRegistry>,
-    localization: Res<UiLocalization>,
-    language: Res<ActiveLanguage>,
+    content: SpawnBiomeUiContent,
     changed_interactions: Query<(), (With<SpawnBiomeOption>, Changed<Interaction>)>,
     mut options: Query<(
         &SpawnBiomeOption,
@@ -499,16 +507,12 @@ pub(super) fn sync_spawn_biome_options(
     mut previous_query: Local<String>,
 ) {
     let query_changed = previous_query.as_str() != state.search.text();
-    let filter_changed = query_changed
-        || biomes.is_changed()
-        || localization.is_changed()
-        || language.is_changed();
+    let filter_changed = query_changed || content.inputs_changed();
     let style_changed = config.is_changed() || !changed_interactions.is_empty();
     if !filter_changed && !style_changed {
         return;
     }
 
-    let language = language.get();
     let normalized_query = filter_changed.then(|| state.search.text().to_lowercase());
     if query_changed {
         *previous_query = state.search.text().to_owned();
@@ -516,12 +520,7 @@ pub(super) fn sync_spawn_biome_options(
 
     for (option, interaction, mut node, mut background, mut border) in &mut options {
         if let Some(normalized_query) = normalized_query.as_deref() {
-            let option_label = spawn_biome_option_label(
-                option.biome_id.as_deref(),
-                &biomes,
-                &localization,
-                language,
-            );
+            let option_label = content.option_label(option.biome_id.as_deref());
             let visible = normalized_query.is_empty()
                 || option_label.to_lowercase().contains(normalized_query);
             let next_display = if visible {
@@ -547,20 +546,4 @@ pub(super) fn sync_spawn_biome_options(
             *border = next_border;
         }
     }
-}
-
-fn spawn_biome_option_label(
-    biome_id: Option<&str>,
-    biomes: &BiomeRegistry,
-    localization: &UiLocalization,
-    language: Language,
-) -> String {
-    biome_id.map_or_else(
-        || localization.text(language, "newWorld.spawnBiome.random").to_owned(),
-        |biome_id| {
-            biomes
-                .get(biome_id)
-                .map_or_else(|| biome_id.to_owned(), |biome| biome.name.text(language).to_owned())
-        },
-    )
 }
