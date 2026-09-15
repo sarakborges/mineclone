@@ -101,6 +101,10 @@ impl ChunkMeshTasks {
         self.pending.insert(coord, revision, task)
     }
 
+    pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<Vec<BuiltChunkMesh>>> {
+        self.pending.poll_ready()
+    }
+
     pub(crate) fn collect_ready(
         &mut self,
         maximum: usize,
