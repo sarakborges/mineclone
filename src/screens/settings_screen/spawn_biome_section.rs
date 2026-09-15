@@ -9,7 +9,11 @@ use crate::{
         dimension::DimensionRegistry,
     },
     localization::{ActiveLanguage, Language, UiLocalization},
-    ui::{surface, theme, typography, text_input::select_all_pressed},
+    ui::{
+        surface, theme,
+        text_input::{TextInputState, select_all_pressed},
+        typography,
+    },
     world::{NewWorldConfig, dimension::DEFAULT_DIMENSION_ID},
 };
 
@@ -26,14 +30,12 @@ const OPTION_HEIGHT: f32 = 40.0;
 #[derive(Resource, Default)]
 pub(super) struct SpawnBiomeDropdownState {
     open: bool,
-    search_query: String,
-    search_focused: bool,
-    replace_search_on_next_input: bool,
+    search: TextInputState,
 }
 
 impl SpawnBiomeDropdownState {
     pub(super) fn input_editing(&self) -> bool {
-        self.open || self.search_focused
+        self.open || self.search.focused()
     }
 
     pub(super) fn reset(&mut self) {
@@ -42,16 +44,13 @@ impl SpawnBiomeDropdownState {
 
     fn open(&mut self) {
         self.open = true;
-        self.search_query.clear();
-        self.search_focused = true;
-        self.replace_search_on_next_input = false;
+        self.search.reset();
+        self.search.focus();
     }
 
     pub(super) fn close(&mut self) {
         self.open = false;
-        self.search_query.clear();
-        self.search_focused = false;
-        self.replace_search_on_next_input = false;
+        self.search.reset();
     }
 }
 
@@ -76,7 +75,11 @@ pub(super) struct SpawnBiomeOptionsList;
 #[derive(Component)]
 pub(super) struct SpawnBiomeOption {
     biome_id: Option<String>,
-    search_label: String,
+}
+
+#[derive(Component)]
+pub(super) struct SpawnBiomeOptionLabel {
+    biome_id: Option<String>,
 }
 
 pub(super) fn spawn_biome_setting(
@@ -254,14 +257,11 @@ fn spawn_option(
     selected: bool,
 ) {
     let (background, border) = surface::hud_control_static(selected);
-    let search_label = label.to_lowercase();
+    let label_biome_id = biome_id.clone();
 
     list.spawn((
         Button,
-        SpawnBiomeOption {
-            biome_id,
-            search_label,
-        },
+        SpawnBiomeOption { biome_id },
         Node {
             width: percent(100),
             height: px(OPTION_HEIGHT),
@@ -274,7 +274,13 @@ fn spawn_option(
         },
         BackgroundColor(background),
         BorderColor::all(border),
-        children![(typography::hud(label), Pickable::IGNORE)],
+        children![(
+            SpawnBiomeOptionLabel {
+                biome_id: label_biome_id,
+            },
+            typography::hud(label),
+            Pickable::IGNORE,
+        )],
     ));
 }
 
@@ -317,8 +323,7 @@ pub(super) fn handle_spawn_biome_search_focus(
         .iter()
         .any(|interaction| *interaction == Interaction::Pressed)
     {
-        state.search_focused = true;
-        state.replace_search_on_next_input = false;
+        state.search.focus();
     }
 }
 
@@ -345,7 +350,7 @@ pub(super) fn handle_spawn_biome_search_keyboard(
     mut keyboard_input: MessageReader<KeyboardInput>,
     mut state: ResMut<SpawnBiomeDropdownState>,
 ) {
-    if !state.open || !state.search_focused {
+    if !state.open || !state.search.focused() {
         keyboard_input.clear();
         return;
     }
@@ -357,7 +362,7 @@ pub(super) fn handle_spawn_biome_search_keyboard(
     }
 
     if select_all_pressed(&keys) {
-        state.replace_search_on_next_input = true;
+        state.search.select_all();
     }
 
     for event in keyboard_input.read() {
@@ -366,135 +371,196 @@ pub(super) fn handle_spawn_biome_search_keyboard(
         }
 
         if event.key_code == KeyCode::Backspace {
-            if state.replace_search_on_next_input {
-                state.search_query.clear();
-                state.replace_search_on_next_input = false;
-            } else {
-                state.search_query.pop();
-            }
+            state.search.backspace();
             continue;
         }
 
-        let Some(text) = &event.text else {
-            continue;
-        };
-        let filtered = text
-            .chars()
-            .filter(|character| !character.is_control())
-            .collect::<String>();
-        if filtered.is_empty() {
-            continue;
+        if let Some(text) = &event.text {
+            state.search.push_text(text);
         }
-
-        if state.replace_search_on_next_input {
-            state.search_query.clear();
-            state.replace_search_on_next_input = false;
-        }
-        state.search_query.push_str(&filtered);
     }
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    clippy::type_complexity,
-    reason = "spawn biome dropdown synchronizes one compact settings control from shared UI state"
-)]
-pub(super) fn sync_spawn_biome_dropdown_view(
+pub(super) fn sync_spawn_biome_dropdown_state(
     state: Res<SpawnBiomeDropdownState>,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
+    mut search_texts: Query<&mut Text, With<SpawnBiomeSearchText>>,
+    mut panels: Query<&mut Node, With<SpawnBiomeDropdownPanel>>,
+    mut search_borders: Query<&mut BorderColor, With<SpawnBiomeSearchBar>>,
+) {
+    if !state.is_changed() && !localization.is_changed() && !language.is_changed() {
+        return;
+    }
+
+    let language = language.get();
+    let next_search_text = if state.search.text().is_empty() {
+        localization.text(language, "newWorld.spawnBiome.search")
+    } else {
+        state.search.text()
+    };
+    for mut text in &mut search_texts {
+        if text.0 != next_search_text {
+            text.0 = next_search_text.to_owned();
+        }
+    }
+
+    let next_display = if state.open {
+        Display::Flex
+    } else {
+        Display::None
+    };
+    for mut panel in &mut panels {
+        if panel.display != next_display {
+            panel.display = next_display;
+        }
+    }
+
+    let next_border = BorderColor::all(if state.search.focused() {
+        surface::HUD_SELECTED_BORDER_COLOR
+    } else {
+        surface::HUD_BORDER_COLOR
+    });
+    for mut border in &mut search_borders {
+        if *border != next_border {
+            *border = next_border.clone();
+        }
+    }
+}
+
+pub(super) fn sync_spawn_biome_selected_label(
     config: Res<NewWorldConfig>,
     biomes: Res<BiomeRegistry>,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
     mut labels: Query<&mut Text, With<SpawnBiomeDropdownLabel>>,
-    mut search_texts: Query<&mut Text, (With<SpawnBiomeSearchText>, Without<SpawnBiomeDropdownLabel>)>,
-    mut panels: Query<&mut Node, With<SpawnBiomeDropdownPanel>>,
-    mut search_borders: Query<&mut BorderColor, With<SpawnBiomeSearchBar>>,
+) {
+    if !config.is_changed()
+        && !biomes.is_changed()
+        && !localization.is_changed()
+        && !language.is_changed()
+    {
+        return;
+    }
+
+    let language = language.get();
+    let selected_label = spawn_biome_option_label(
+        config.spawn_biome(),
+        &biomes,
+        &localization,
+        language,
+    );
+    let next = format!("{selected_label}   ▾");
+    for mut text in &mut labels {
+        if text.0 != next {
+            text.0 = next.clone();
+        }
+    }
+}
+
+pub(super) fn sync_spawn_biome_option_labels(
+    biomes: Res<BiomeRegistry>,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
+    mut labels: Query<(&SpawnBiomeOptionLabel, &mut Text)>,
+) {
+    if !biomes.is_changed() && !localization.is_changed() && !language.is_changed() {
+        return;
+    }
+
+    let language = language.get();
+    for (option, mut text) in &mut labels {
+        let next = spawn_biome_option_label(
+            option.biome_id.as_deref(),
+            &biomes,
+            &localization,
+            language,
+        );
+        if text.0 != next {
+            text.0 = next;
+        }
+    }
+}
+
+pub(super) fn sync_spawn_biome_options(
+    state: Res<SpawnBiomeDropdownState>,
+    config: Res<NewWorldConfig>,
+    biomes: Res<BiomeRegistry>,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
+    changed_interactions: Query<(), (With<SpawnBiomeOption>, Changed<Interaction>)>,
     mut options: Query<(
-        Ref<SpawnBiomeOption>,
-        Ref<Interaction>,
+        &SpawnBiomeOption,
+        &Interaction,
         &mut Node,
         &mut BackgroundColor,
         &mut BorderColor,
     )>,
+    mut previous_query: Local<String>,
 ) {
-    let state_changed = state.is_changed();
-    let inputs_changed = state_changed
-        || config.is_changed()
+    let query_changed = previous_query.as_str() != state.search.text();
+    let filter_changed = query_changed
         || biomes.is_changed()
         || localization.is_changed()
         || language.is_changed();
-    let language = language.get();
-
-    if inputs_changed {
-        let selected_label = config.spawn_biome().map_or_else(
-            || {
-                localization
-                    .text(language, "newWorld.spawnBiome.random")
-                    .to_owned()
-            },
-            |biome_id| {
-                biomes
-                    .get(biome_id)
-                    .map_or_else(|| biome_id.to_owned(), |biome| biome.name.text(language).to_owned())
-            },
-        );
-        for mut text in &mut labels {
-            let next = format!("{selected_label}   ▾");
-            if text.0 != next {
-                text.0 = next;
-            }
-        }
-
-        let next_search_text = if state.search_query.is_empty() {
-            localization
-                .text(language, "newWorld.spawnBiome.search")
-                .to_owned()
-        } else {
-            state.search_query.clone()
-        };
-        for mut text in &mut search_texts {
-            if text.0 != next_search_text {
-                text.0 = next_search_text.clone();
-            }
-        }
-
-        for mut panel in &mut panels {
-            panel.display = if state.open {
-                Display::Flex
-            } else {
-                Display::None
-            };
-        }
-        for mut border in &mut search_borders {
-            *border = BorderColor::all(if state.search_focused {
-                surface::HUD_SELECTED_BORDER_COLOR
-            } else {
-                surface::HUD_BORDER_COLOR
-            });
-        }
+    let style_changed = config.is_changed() || !changed_interactions.is_empty();
+    if !filter_changed && !style_changed {
+        return;
     }
 
-    let normalized_query = state_changed.then(|| state.search_query.to_lowercase());
+    let language = language.get();
+    let normalized_query = filter_changed.then(|| state.search.text().to_lowercase());
+    if query_changed {
+        *previous_query = state.search.text().to_owned();
+    }
+
     for (option, interaction, mut node, mut background, mut border) in &mut options {
         if let Some(normalized_query) = normalized_query.as_deref() {
-            node.display = if normalized_query.is_empty()
-                || option.search_label.contains(normalized_query)
-            {
+            let option_label = spawn_biome_option_label(
+                option.biome_id.as_deref(),
+                &biomes,
+                &localization,
+                language,
+            );
+            let visible = normalized_query.is_empty()
+                || option_label.to_lowercase().contains(normalized_query);
+            let next_display = if visible {
                 Display::Flex
             } else {
                 Display::None
             };
-        } else if option.is_added() {
-            node.display = Display::Flex;
+            if node.display != next_display {
+                node.display = next_display;
+            }
         }
 
-        if !config.is_changed() && !interaction.is_changed() && !option.is_added() {
+        if !style_changed {
             continue;
         }
         let selected = config.spawn_biome() == option.biome_id.as_deref();
-        let (next_background, next_border) =
-            surface::hud_control_colors(*interaction, selected);
-        *background = BackgroundColor(next_background);
-        *border = BorderColor::all(next_border);
+        let (next_background, next_border) = surface::hud_control_colors(*interaction, selected);
+        if background.0 != next_background {
+            background.0 = next_background;
+        }
+        let next_border = BorderColor::all(next_border);
+        if *border != next_border {
+            *border = next_border;
+        }
     }
+}
+
+fn spawn_biome_option_label(
+    biome_id: Option<&str>,
+    biomes: &BiomeRegistry,
+    localization: &UiLocalization,
+    language: Language,
+) -> String {
+    biome_id.map_or_else(
+        || localization.text(language, "newWorld.spawnBiome.random").to_owned(),
+        |biome_id| {
+            biomes
+                .get(biome_id)
+                .map_or_else(|| biome_id.to_owned(), |biome| biome.name.text(language).to_owned())
+        },
+    )
 }
