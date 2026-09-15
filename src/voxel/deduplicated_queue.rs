@@ -1,19 +1,23 @@
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     hash::Hash,
 };
 
+const MIN_PENDING_BEFORE_COMPACTION: usize = 64;
+
 #[derive(Debug)]
 pub(crate) struct DeduplicatedQueue<T> {
-    pending: VecDeque<T>,
-    queued: HashSet<T>,
+    pending: VecDeque<(T, u64)>,
+    queued: HashMap<T, u64>,
+    next_generation: u64,
 }
 
 impl<T> Default for DeduplicatedQueue<T> {
     fn default() -> Self {
         Self {
             pending: VecDeque::new(),
-            queued: HashSet::new(),
+            queued: HashMap::new(),
+            next_generation: 0,
         }
     }
 }
@@ -36,63 +40,100 @@ where
     T: Copy + Eq + Hash,
 {
     pub(crate) fn enqueue(&mut self, value: T) -> bool {
-        if !self.queued.insert(value) {
+        if self.queued.contains_key(&value) {
             return false;
         }
 
-        self.pending.push_back(value);
+        let generation = self.next_generation();
+        self.queued.insert(value, generation);
+        self.pending.push_back((value, generation));
         true
     }
 
     pub(crate) fn enqueue_front(&mut self, value: T) {
-        if !self.queued.insert(value) {
-            let removed = self.remove_pending(value);
-            debug_assert!(removed, "queued value must exist in the pending queue");
-        }
-
-        self.pending.push_front(value);
+        let generation = self.next_generation();
+        self.queued.insert(value, generation);
+        self.pending.push_front((value, generation));
+        self.compact_if_sparse();
     }
 
     pub(crate) fn contains(&self, value: T) -> bool {
-        self.queued.contains(&value)
+        self.queued.contains_key(&value)
     }
 
     pub(crate) fn remove(&mut self, value: T) -> bool {
-        if !self.queued.remove(&value) {
+        if self.queued.remove(&value).is_none() {
             return false;
         }
 
-        let removed = self.remove_pending(value);
-        debug_assert!(removed, "queued value must exist in the pending queue");
+        if self.queued.is_empty() {
+            self.pending.clear();
+        } else {
+            self.compact_if_sparse();
+        }
         true
     }
 
     pub(crate) fn pop(&mut self) -> Option<T> {
-        let value = self.pending.pop_front()?;
-        self.queued.remove(&value);
-        Some(value)
+        while let Some((value, generation)) = self.pending.pop_front() {
+            if self.queued.get(&value).copied() != Some(generation) {
+                continue;
+            }
+
+            self.queued.remove(&value);
+            if self.queued.is_empty() {
+                self.pending.clear();
+            }
+            return Some(value);
+        }
+
+        debug_assert!(self.queued.is_empty(), "active queue entries must have pending records");
+        None
     }
 
     pub(crate) fn pop_where(&mut self, mut predicate: impl FnMut(T) -> bool) -> Option<T> {
-        let index = self.pending.iter().position(|value| predicate(*value))?;
-        let value = self
+        self.compact_if_sparse();
+        let index = self.pending.iter().position(|(value, generation)| {
+            self.queued.get(value).copied() == Some(*generation) && predicate(*value)
+        })?;
+        let (value, generation) = self
             .pending
             .remove(index)
             .expect("located queue index must remain valid");
+        debug_assert_eq!(self.queued.get(&value).copied(), Some(generation));
         self.queued.remove(&value);
+
+        if self.queued.is_empty() {
+            self.pending.clear();
+        }
         Some(value)
     }
 
     pub(crate) fn len(&self) -> usize {
-        self.pending.len()
+        self.queued.len()
     }
 
-    fn remove_pending(&mut self, value: T) -> bool {
-        let Some(index) = self.pending.iter().position(|pending| *pending == value) else {
-            return false;
-        };
-        self.pending.remove(index);
-        true
+    fn next_generation(&mut self) -> u64 {
+        let generation = self.next_generation;
+        self.next_generation = self
+            .next_generation
+            .checked_add(1)
+            .expect("deduplicated queue generation exhausted");
+        generation
+    }
+
+    fn compact_if_sparse(&mut self) {
+        let active = self.queued.len();
+        let compact_threshold = active
+            .saturating_mul(2)
+            .saturating_add(MIN_PENDING_BEFORE_COMPACTION);
+        if self.pending.len() <= compact_threshold {
+            return;
+        }
+
+        self.pending.retain(|(value, generation)| {
+            self.queued.get(value).copied() == Some(*generation)
+        });
     }
 }
 
@@ -120,6 +161,22 @@ mod tests {
 
         assert_eq!(queue.pop(), Some(2));
         assert_eq!(queue.pop(), Some(1));
+    }
+
+    #[test]
+    fn repeated_priority_promotions_keep_one_active_value() {
+        let mut queue = DeduplicatedQueue::default();
+        queue.enqueue(1);
+        queue.enqueue(2);
+
+        for _ in 0..100 {
+            queue.enqueue_front(2);
+        }
+
+        assert_eq!(queue.len(), 2);
+        assert_eq!(queue.pop(), Some(2));
+        assert_eq!(queue.pop(), Some(1));
+        assert_eq!(queue.pop(), None);
     }
 
     #[test]
