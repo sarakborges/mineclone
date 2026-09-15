@@ -1,9 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
-use bevy::{
-    prelude::*,
-    tasks::{AsyncComputeTaskPool, Task, futures::check_ready},
-};
+use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
 use crate::{
     content::{
@@ -17,6 +14,7 @@ use super::{
     biome_field::BiomeField,
     chunk_rendering::{BuiltChunkMesh, ChunkMeshBuildContext, build_chunk_render_meshes},
     chunk_system_params::ChunkContent,
+    chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
 };
 
 pub(crate) const MAX_MESH_TASKS_IN_FLIGHT: usize = 8;
@@ -55,22 +53,11 @@ impl MeshContentSnapshot {
     }
 }
 
-struct PendingMesh {
-    revision: u64,
-    task: Task<Vec<BuiltChunkMesh>>,
-}
-
-pub(crate) struct CompletedChunkMesh {
-    pub(crate) coord: IVec3,
-    pub(crate) revision: u64,
-    pub(crate) meshes: Vec<BuiltChunkMesh>,
-}
-
 #[derive(Resource, Default)]
 pub(crate) struct ChunkMeshTasks {
     revision: u64,
     snapshot: Option<Arc<MeshContentSnapshot>>,
-    pending: HashMap<IVec3, PendingMesh>,
+    pending: ChunkTaskQueue<Vec<BuiltChunkMesh>>,
 }
 
 impl ChunkMeshTasks {
@@ -92,11 +79,11 @@ impl ChunkMeshTasks {
     }
 
     pub(crate) fn contains(&self, coord: IVec3) -> bool {
-        self.pending.contains_key(&coord)
+        self.pending.contains(coord)
     }
 
     pub(crate) fn schedule(&mut self, coord: IVec3, world: ChunkMeshSnapshot) -> bool {
-        if self.pending.len() >= MAX_MESH_TASKS_IN_FLIGHT || self.pending.contains_key(&coord) {
+        if self.pending.len() >= MAX_MESH_TASKS_IN_FLIGHT || self.pending.contains(coord) {
             return false;
         }
 
@@ -111,42 +98,13 @@ impl ChunkMeshTasks {
             build_chunk_render_meshes(coord, world.chunk(), &context)
         });
 
-        self.pending.insert(coord, PendingMesh { revision, task });
-        true
+        self.pending.insert(coord, revision, task)
     }
 
-    pub(crate) fn collect_ready(&mut self, maximum: usize) -> Vec<CompletedChunkMesh> {
-        if maximum == 0 || self.pending.is_empty() {
-            return Vec::new();
-        }
-
-        let coords = self.pending.keys().copied().collect::<Vec<_>>();
-        let mut completed = Vec::new();
-
-        for coord in coords {
-            if completed.len() >= maximum {
-                break;
-            }
-
-            let ready = {
-                let pending = self
-                    .pending
-                    .get_mut(&coord)
-                    .unwrap_or_else(|| panic!("pending mesh disappeared for {coord:?}"));
-                check_ready(&mut pending.task).map(|meshes| (pending.revision, meshes))
-            };
-
-            let Some((revision, meshes)) = ready else {
-                continue;
-            };
-            self.pending.remove(&coord);
-            completed.push(CompletedChunkMesh {
-                coord,
-                revision,
-                meshes,
-            });
-        }
-
-        completed
+    pub(crate) fn collect_ready(
+        &mut self,
+        maximum: usize,
+    ) -> Vec<CompletedChunkTask<Vec<BuiltChunkMesh>>> {
+        self.pending.collect_ready(maximum)
     }
 }
