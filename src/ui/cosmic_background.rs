@@ -133,13 +133,12 @@ pub fn animate_stars(
         node.width = px(star.base_size * pulse);
         node.height = px(star.base_size * pulse);
 
-        *background = Color::srgba(star.red, star.green, star.blue, alpha).into();
-        *shadow = BoxShadow(vec![ShadowStyle {
-            color: Color::srgba(star.red, star.green, star.blue, alpha * 0.62),
-            x_offset: px(0),
-            y_offset: px(0),
-            spread_radius: px(0.5),
-            blur_radius: px(6.0 + 3.0 * wave),
-        }]);
+        background.0 = Color::srgba(star.red, star.green, star.blue, alpha);
+        let shadow_style = shadow
+            .0
+            .first_mut()
+            .expect("cosmic background stars must keep one shadow style");
+        shadow_style.color = Color::srgba(star.red, star.green, star.blue, alpha * 0.62);
+        shadow_style.blur_radius = px(6.0 + 3.0 * wave);
     }
 }
