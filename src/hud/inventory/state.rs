@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::ui::text_input::TextInputState;
+
 pub(super) const SLOT_SIZE: f32 = 44.0;
 pub(super) const ITEM_ICON_SIZE: f32 = 34.0;
 pub(super) const SLOT_GAP: f32 = 4.0;
@@ -64,19 +66,17 @@ pub(super) struct InventoryCursorIcon;
 
 #[derive(Resource, Default)]
 pub(super) struct CreativeInventoryView {
-    search_query: String,
-    search_focused: bool,
-    replace_search_on_next_input: bool,
+    search: TextInputState,
     selected_category: Option<String>,
 }
 
 impl CreativeInventoryView {
     pub(super) fn search_query(&self) -> &str {
-        &self.search_query
+        self.search.text()
     }
 
     pub(super) fn search_focused(&self) -> bool {
-        self.search_focused
+        self.search.focused()
     }
 
     pub(super) fn selected_category(&self) -> Option<&str> {
@@ -84,46 +84,23 @@ impl CreativeInventoryView {
     }
 
     pub(super) fn focus_search(&mut self) {
-        self.search_focused = true;
-        self.replace_search_on_next_input = false;
+        self.search.focus();
     }
 
     pub(super) fn blur_search(&mut self) {
-        self.search_focused = false;
-        self.replace_search_on_next_input = false;
+        self.search.blur();
     }
 
     pub(super) fn select_all_search(&mut self) {
-        if self.search_focused {
-            self.replace_search_on_next_input = true;
-        }
+        self.search.select_all();
     }
 
     pub(super) fn push_search_text(&mut self, text: &str) {
-        let filtered = text
-            .chars()
-            .filter(|character| !character.is_control())
-            .collect::<String>();
-        if filtered.is_empty() {
-            return;
-        }
-
-        if self.replace_search_on_next_input {
-            self.search_query.clear();
-            self.replace_search_on_next_input = false;
-        }
-
-        self.search_query.push_str(&filtered);
+        self.search.push_text(text);
     }
 
     pub(super) fn backspace_search(&mut self) {
-        if self.replace_search_on_next_input {
-            self.search_query.clear();
-            self.replace_search_on_next_input = false;
-            return;
-        }
-
-        self.search_query.pop();
+        self.search.backspace();
     }
 
     pub(super) fn select_category(&mut self, category: Option<&str>) {
