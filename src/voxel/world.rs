@@ -164,19 +164,6 @@ impl VoxelWorld {
         chunk.light_at(local_position.x, local_position.y, local_position.z)
     }
 
-    pub(crate) fn set_light_at(&mut self, world_position: IVec3, light: VoxelLight) -> bool {
-        if world_position.y < 0 {
-            return false;
-        }
-
-        let (chunk_coord, local_position) = split_world_position(world_position);
-        let changed = self.set_light_at_deferred_mesh_revision(chunk_coord, local_position, light);
-        if changed {
-            self.bump_chunk_mesh_revision(chunk_coord);
-        }
-        changed
-    }
-
     pub(in crate::voxel) fn set_light_at_deferred_mesh_revision(
         &mut self,
         chunk_coord: IVec3,
