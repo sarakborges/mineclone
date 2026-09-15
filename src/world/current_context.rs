@@ -58,6 +58,10 @@ impl DayNightContext<'_> {
         self.cycle()
             .map(|cycle| cycle.world_time(self.clock.normalized_time))
     }
+
+    pub(crate) fn inputs_changed(&self) -> bool {
+        self.dimension.inputs_changed() || self.cycles.is_changed() || self.clock.is_changed()
+    }
 }
 
 #[derive(SystemParam)]
@@ -95,5 +99,9 @@ impl SkyDayNightContext<'_> {
     pub(crate) fn sky(&self) -> Option<&SkyDefinition> {
         let dimension = self.day_night.dimension()?;
         self.skies.get(&dimension.sky)
+    }
+
+    pub(crate) fn inputs_changed(&self) -> bool {
+        self.day_night.inputs_changed() || self.skies.is_changed()
     }
 }
