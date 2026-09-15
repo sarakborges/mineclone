@@ -52,6 +52,10 @@ impl PendingLightingUpdates {
         self.queue.enqueue_chunk_boundary_neighbors(origin);
     }
 
+    pub(crate) fn is_empty(&self) -> bool {
+        self.queue.is_empty() && self.emission_edit_centers.is_empty()
+    }
+
     fn enqueue_emission_edit_volumes(&mut self, world: &VoxelWorld, blocks: &BlockRegistry) {
         let centers = std::mem::take(&mut self.emission_edit_centers);
         let radius = VoxelLight::MAX_LEVEL as i32;
