@@ -84,11 +84,11 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`5e3b8455b9e574e5b2de8698c5b92fe7564d544e`
+`a19b8583a16d58422341ea5cea376790c98560ce`
 
-Commit: `Return prior cell from block mutation`
+Commit: `Relax empty chunks from lighting shell`
 
-`VERSION`: `0.12.62`
+`VERSION`: `0.12.63`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever, porque podem ter avançado.
 
@@ -117,22 +117,14 @@ A auditoria arquitetural foi reiniciada a partir de `0.12.5`/`0.12.8` e segue at
 - Halo de mesh passou a capturar somente shell real de 1.736 posições.
 - Skylight seed e direct skylight cache passaram a trabalhar apenas no range vertical necessário.
 
-### 0.12.36–0.12.43 — snapshots COW, fluid tick e contexts estreitos
+### 0.12.36–0.12.52 — COW, async hygiene e leituras coesas
 - Buffers de chunk usam `Arc<[...]>` com copy-on-write.
-- Chunks vazios não ocupam mesh task.
-- Fluid simulation é gated por world tick.
-- Concurrent caches deduplicam factories por key.
-- Setup/streaming `SystemParam`s foram estreitados.
-- Fluid frontier usa metadata de face para evitar scans de boundary desnecessários.
-
-### 0.12.44–0.12.52 — owners compartilhados e leituras coesas
-- Lighting remesh reutiliza geometry refresh diretamente.
-- Teardown de render allocation foi centralizado.
-- `DeduplicatedQueue` deixou de usar full `retain` para remoção/promoção.
-- `VoxelRead::sample_at` virou primitive coesa block/fluid/light.
-- AO/lighting passou de 13 para 9 amostras únicas por face.
-- Fluid surface height compartilha neighborhood; solver/frontier usam leituras coesas.
-- `HANDOFF.md` tornou-se a fonte persistente canônica do estado do projeto.
+- Chunks vazios não ocupam mesh task; fluid simulation é gated por world tick.
+- Concurrent caches deduplicam factories; setup/streaming contexts foram estreitados.
+- Fluid frontier usa metadata de face.
+- Lighting/remesh owners foram compartilhados e `VoxelRead::sample_at` virou primitive coesa.
+- AO/lighting e fluid surface passaram a compartilhar neighborhoods.
+- `HANDOFF.md` tornou-se fonte persistente canônica.
 
 ## Blocos recentes detalhados
 
@@ -141,33 +133,34 @@ A auditoria arquitetural foi reiniciada a partir de `0.12.5`/`0.12.8` e segue at
 - Propagação de iluminação reutiliza sample atual e seis luzes vizinhas entre sky/block.
 - Terrain/fluid topology refresh preserva a metade não afetada da render allocation.
 - Direct seed usa storage local do chunk e elimina 8.192 resoluções de posição/chunk por seed.
-- Lighting-only attribute split continua rejeitado porque block light pode alterar a diagonal/índices.
+- Lighting-only attribute split continua rejeitado porque block light pode alterar diagonal/índices.
 
 ### 0.12.59 — promoção/remoção de fila amortizada O(1)
-- `DeduplicatedQueue` usa `HashMap<T, generation>` e `(value, generation)` no `VecDeque`.
-- Promoção publica nova geração; ocorrência anterior vira tombstone.
-- `remove` invalida membership em O(1); `pop` ignora tombstones.
-- Compactação periódica limita lixo sem full scan por operação.
+- `DeduplicatedQueue` usa generations/tombstones em vez de `VecDeque::position + remove` em cada promoção.
+- `remove` invalida membership em O(1); `pop` ignora tombstones; compactação periódica limita lixo.
 
 ### 0.12.60 — misses de renderabilidade não reescaneiam fila estável
-- `DeduplicatedQueue` expõe revision lógica; `ChunkRenderPool` mantém `membership_revision`.
-- `pop_renderable*` memoriza `(queue_revision, pool_membership_revision)` após miss completo.
-- Enquanto fila e membership não mudarem, frames seguintes não revarrem a fila.
-- Qualquer mudança real nos owners invalida naturalmente o miss, sem descartar trabalho adiado.
+- `DeduplicatedQueue` expõe revision lógica e `ChunkRenderPool` mantém `membership_revision`.
+- `pop_renderable*` memoriza o par de revisions após um miss completo.
+- Sem mudança nos owners, frames seguintes retornam em O(1) em vez de revarrer a fila inteira.
 
 ### 0.12.61 — full relight volume somente para mudança real de fonte
-- O histórico confirmou que o Manhattan footprint de raio 15 foi introduzido para corrigir recoloração de fontes: canais antigos podem se sustentar mutuamente no campo incremental.
-- `PendingLightingUpdates` preserva o primeiro `VoxelCell` anterior por posição até processar os edits.
-- A emissão HSI anterior/atual é comparada via `block_emission_for_cell`.
-- O footprint de até 4.991 posições só é enfileirado em mudança não-zero -> não-zero da emissão.
-- Placement, remoção e edits que não alteram emissão usam somente a fronteira incremental normal.
-- O fix histórico de recoloração permanece preservado.
+- O Manhattan footprint de raio 15 é mantido apenas para mudança de emissão HSI não-zero -> não-zero, preservando o fix histórico de recoloração/stale colored light.
+- Placement, remoção e edits que não alteram emissão usam a fronteira incremental normal.
+- `PendingLightingUpdates` preserva o primeiro estado anterior por posição para comparar emissão autoritativa antes/depois.
 
 ### 0.12.62 — mutação de bloco reaproveita a leitura anterior
-- `VoxelWorld::set_block_at_with_previous` devolve `(chunk_coord, previous_cell)` usando a leitura que a própria mutação já precisa fazer.
-- `VoxelMutationRuntime` deixa de fazer `cell_at(world_position)` antes de `set_block_at`, removendo uma segunda resolução de posição/chunk por edit.
-- `set_block_at` público preserva seu contrato existente e delega à operação detalhada.
-- Teste cobre retorno correto do voxel anterior.
+- `VoxelWorld::set_block_at_with_previous` devolve `(chunk_coord, previous_cell)` da mesma leitura usada pela mutação.
+- `VoxelMutationRuntime` deixa de fazer `cell_at` + `set_block_at` como duas resoluções separadas.
+- O contrato público de `set_block_at` permanece intacto.
+
+### 0.12.63 — chunks vazios relaxam lighting pela shell
+- `VoxelChunk::is_empty()` confirma ausência tanto de blocks quanto de fluids.
+- Depois do direct seed, um chunk vazio não precisa enfileirar seus 4.096 voxels internos: apenas a shell pode receber luz lateral/block light diretamente do exterior; mudanças na shell propagam para dentro.
+- `LightingQueue::enqueue_chunk_boundary_voxels` enfileira os 1.352 voxels únicos da shell.
+- Os 1.536 vizinhos externos continuam explicitamente enfileirados para que chunks já carregados possam receber skylight/block light do novo espaço mesmo se a shell interna não mudar.
+- Por chunk vazio integrado: 5.632 posições potenciais -> 2.888, evitando 2.744 inserts antes da deduplicação.
+- Chunks com conteúdo continuam usando relaxação completa.
 
 ---
 
@@ -180,9 +173,10 @@ Não desfazer sem evidência nova:
 - `ChunkContent`, `ChunkGeneration`, `CurrentDimensionContext`, `ChunkRenderer` e `ChunkUnloadRuntime` continuam coerentes enquanto representarem os concerns atuais.
 - Não separar lighting remesh em simples atualização de atributos mantendo índices fixos: `should_flip_diagonal` também depende da block light.
 - Não expor `VoxelWorld::chunk_mut` genericamente para otimizações bulk; mutações devem permanecer estreitas e ownership-aware.
-- `DeduplicatedQueue` mantém FIFO/prioridade lógica através de generations/tombstones; não voltar a remoção linear por promoção sem benchmark/evidência.
-- Miss caching de remesh depende somente de revisions dos owners reais: fila lógica + membership do render pool; não criar mirrors booleanos de “renderable”.
-- Não remover o full emission footprint de recoloração sem substituir o mecanismo de invalidation de canais antigos; ele corrige stale colored light real.
+- `DeduplicatedQueue` mantém FIFO/prioridade lógica via generations/tombstones.
+- Miss caching de remesh depende apenas de revisions dos owners reais: fila lógica + membership do render pool.
+- Não remover o full emission footprint de recoloração sem mecanismo equivalente de invalidation de canais antigos.
+- Empty-chunk lighting pode usar shell + vizinhos externos porque direct seed já cobre todo o interior e o chunk não possui medium/emitter interno.
 - Não reabrir bugs antigos automaticamente; só se permanecerem ativos ou houver regressão reportada.
 
 ---
@@ -191,10 +185,10 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Continuar procurando chamadas repetidas de `VoxelWorld`/`VoxelRead` para a mesma posição nos hot paths restantes; priorizar raycast/collision/targeting e solver paths recorrentes, mas só consolidar quando múltiplos aspectos do mesmo voxel são realmente usados.
-2. Revisar outros `pop_where`/predicate scans somente se ocorrerem em caminho recorrente; não trocar estrutura por preferência.
-3. Inspecionar hot paths de player/world collision para scans ou lookups repetidos por frame antes de voltar a worldgen/cache.
-4. Só reabrir separação específica de lighting/topology se existir representação que preserve mudanças de diagonal/índices sem duplicar ownership da geometria.
+1. Auditar se a relaxação inicial de chunks **não vazios** pode usar metadata/invariants para evitar sempre enfileirar os 4.096 voxels, sem perder caves, emitters, fluid dampening ou lateral skylight. Não reduzir sem prova de corretude.
+2. Continuar hot-path audit do streaming/integration: `sync_snapshot` já é change-driven e task polling é bounded a 8, então procurar custos maiores antes de micro-otimizar.
+3. Collision/raycast/targeting atuais não mostraram lookup duplicado seguro: raycast faz uma leitura por voxel; swimming não pode reutilizar sample anterior porque há movimento horizontal entre sistemas.
+4. Revisar outros predicate scans somente se recorrentes; não trocar estrutura por preferência.
 5. Só voltar a unload incremental, worldgen/cache ou task lifecycle se surgir evidência objetiva nova.
 6. Rendering/HUD continuam change-driven; evitar micro-otimização por estética.
 
