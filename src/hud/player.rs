@@ -51,7 +51,7 @@ fn spawn_player_hud(
 ) {
     let (avatar_background, avatar_border) = surface::hud_control_static(false);
     let hint_visibility = if settings.display_tooltips() {
-        Visibility::Visible
+        Visibility::Inherited
     } else {
         Visibility::Hidden
     };
@@ -208,7 +208,7 @@ fn sync_inventory_hint(
     }
 
     let next_visibility = if settings.display_tooltips() {
-        Visibility::Visible
+        Visibility::Inherited
     } else {
         Visibility::Hidden
     };
