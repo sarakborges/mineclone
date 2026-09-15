@@ -104,39 +104,24 @@ impl ChunkMeshSnapshot {
 }
 
 impl VoxelRead for ChunkMeshSnapshot {
-    fn cell_at(&self, world_position: IVec3) -> Option<VoxelCell> {
+    fn sample_at(
+        &self,
+        world_position: IVec3,
+    ) -> Option<(Option<VoxelCell>, Option<FluidCell>, VoxelLight)> {
         if let Some(local) = self.central_local(world_position) {
-            return self.chunk.cell_at(local.x, local.y, local.z);
+            return Some((
+                self.chunk.cell_at(local.x, local.y, local.z),
+                self.chunk.fluid_at(local.x, local.y, local.z),
+                self.chunk.light_at(local.x, local.y, local.z),
+            ));
         }
-        self.shell_index(world_position)
-            .and_then(|index| self.shell_loaded[index].then_some(self.shell_cells[index]))
-            .flatten()
-    }
 
-    fn fluid_at(&self, world_position: IVec3) -> Option<FluidCell> {
-        if let Some(local) = self.central_local(world_position) {
-            return self.chunk.fluid_at(local.x, local.y, local.z);
-        }
-        self.shell_index(world_position)
-            .and_then(|index| self.shell_loaded[index].then_some(self.shell_fluids[index]))
-            .flatten()
-    }
-
-    fn light_at(&self, world_position: IVec3) -> VoxelLight {
-        if let Some(local) = self.central_local(world_position) {
-            return self.chunk.light_at(local.x, local.y, local.z);
-        }
-        self.shell_index(world_position)
-            .filter(|index| self.shell_loaded[*index])
-            .map_or(VoxelLight::DARK, |index| self.shell_light[index])
-    }
-
-    fn is_loaded_at(&self, world_position: IVec3) -> bool {
-        if self.central_local(world_position).is_some() {
-            return true;
-        }
-        self.shell_index(world_position)
-            .is_some_and(|index| self.shell_loaded[index])
+        let index = self.shell_index(world_position)?;
+        self.shell_loaded[index].then_some((
+            self.shell_cells[index],
+            self.shell_fluids[index],
+            self.shell_light[index],
+        ))
     }
 }
 
