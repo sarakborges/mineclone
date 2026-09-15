@@ -80,16 +80,17 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`a451a393143da74f7312daedf2d6676550f9a225`
+`88d00f0330e450813d5034be19760860571b9a99`
 
-Commit: `Bump version to 0.12.94`
+Commit: `Bump version to 0.12.95`
 
-Código do bloco 0.12.94:
+Código do bloco 0.12.95:
 
-- `37e1dbce6039b8e2bad50779b684b6261f223d2a` — `Reuse dense fluid step scheduling storage`
-- `46196b9bef3d775366819d70f1a10fa46536994b` — `Preallocate resumed fluid frontiers`
+- `25ca0c730a378379a2706ca509fc0ca8bf59fa21` — `Reuse lighting changed-chunk scratch storage`
+- `2384a0aa2530df6b291e4e9fee585009ece12855` — `Retain lighting edit map capacity`
+- `eddeace278a346e41fdadc9508fe643dc31b0a62` — `Reuse dynamic lighting chunk set`
 
-`VERSION`: `0.12.94`
+`VERSION`: `0.12.95`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever código.
 
@@ -214,6 +215,13 @@ A auditoria arquitetural/performance segue ativa. O roadmap vem do canon + inspe
 - Resume de fluid frontier usa `boundary_dynamic_fluid_count` para reservar previamente até 5 spread targets por fluido dinâmico antes de varrer a face.
 - O solver continua deduplicando targets; a reserva só reduz crescimento incremental das estruturas internas.
 
+### 0.12.95 — scratch de lighting reutilizado sem cache stale
+- `relax_budgeted` recebe um `HashSet<IVec3>` externo para chunks alterados e limpa o conteúdo sem descartar a capacidade.
+- `process_dynamic_lighting` mantém esse set como `Local<HashSet<IVec3>>` e usa `drain()` ao encaminhar remeshes, reutilizando os buckets entre frames com backlog.
+- `emission_edit_previous_cells` usa `drain()` em vez de `mem::take`, preservando a capacidade do `HashMap` entre batches de edits.
+- `LightingContext` continua sendo recriado por chamada; caches de direct-sky e highest-loaded-y não sobrevivem a mutações do mundo.
+- A semântica de propagação, budget temporal/quantitativo e coalescência de remesh permanece inalterada.
+
 ---
 
 # Decisões explícitas da auditoria
@@ -240,6 +248,7 @@ Não desfazer sem evidência nova:
 - Lighting remesh pertence ao background async; immediate geometry permanece síncrono enquanto feedback do edit justificar.
 - Pedidos `Geometry` e `Lighting` do mesmo coord podem ser coalescidos porque produzem o mesmo terrain mesh; `Fluid` continua independente salvo quando a regra de full geometry já o supersede.
 - `FluidId` pode ser usado como índice denso enquanto `FluidRegistry` mantiver IDs por posição em `definitions`; crescer o registry deve redimensionar scratch/state, não voltar a hashing por frame.
+- Scratch containers podem preservar capacidade entre frames, mas caches derivados do conteúdo do mundo não devem sobreviver sem invalidation autoritativa.
 - Solvers dinâmicos devem preservar a semântica da frontier ao ganhar budgets temporais.
 - Archive compactado permanece preferível a guardar buffers COW brutos; restore caro é controlado por scheduling budget.
 - Não reabrir bugs antigos automaticamente; só se ativos/regredidos.
@@ -254,7 +263,7 @@ Se nenhum error/warning/runtime report tiver prioridade:
 2. Revisar integração/spawn de mesh apenas se houver ganho estrutural sem introduzir lifecycle parcial por submesh; o caminho atual já substitui `Assets<Mesh>` in-place quando keys/topologia permanecem estáveis.
 3. Revisar custo do rebuild de seleção somente com ganho estrutural claro; não duplicar geração de volume só para eliminar o pequeno sort do raio local 3.
 4. Manter `notify_loaded_chunk_neighbors` não-vazio conservador enquanto metadata atual não provar sobreposição voxel-a-voxel.
-5. Continuar procurando allocations em bulk/hot paths onde o cardinal do batch já é conhecido e a reserva pode pertencer ao owner correto.
+5. Continuar procurando allocations/scratch descartados em hot paths quando a capacidade puder ser reutilizada sem manter dados derivados stale.
 6. Só voltar a collision/raycast, UI ou task lifecycle se surgir evidência objetiva nova.
 
 ---
