@@ -8,4 +8,4 @@ mod scene;
 
 pub(crate) use interaction::{ToolUse, ToolUseButton};
 pub(crate) use placement_orientation::PlacementOrientation;
-pub(crate) use scene::BlockTargetingScene;
+pub(crate) use scene::{BlockTargetingScene, BlockTargetingVisualSnapshot};
