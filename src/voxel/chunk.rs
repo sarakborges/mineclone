@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use bevy::prelude::*;
 
@@ -18,6 +18,16 @@ const NEGATIVE_Y_FACE: usize = 2;
 const POSITIVE_Y_FACE: usize = 3;
 const NEGATIVE_Z_FACE: usize = 4;
 const POSITIVE_Z_FACE: usize = 5;
+
+fn shared_empty_blocks() -> Arc<[Option<VoxelCell>]> {
+    static EMPTY_BLOCKS: OnceLock<Arc<[Option<VoxelCell>]>> = OnceLock::new();
+    Arc::clone(EMPTY_BLOCKS.get_or_init(|| Arc::from(vec![None; CHUNK_VOLUME])))
+}
+
+fn shared_empty_fluids() -> Arc<[Option<FluidCell>]> {
+    static EMPTY_FLUIDS: OnceLock<Arc<[Option<FluidCell>]>> = OnceLock::new();
+    Arc::clone(EMPTY_FLUIDS.get_or_init(|| Arc::from(vec![None; CHUNK_VOLUME])))
+}
 
 #[derive(Component, Clone)]
 pub struct VoxelChunk {
@@ -86,8 +96,8 @@ impl VoxelChunkContentMut<'_> {
 impl VoxelChunk {
     pub fn empty() -> Self {
         Self {
-            blocks: Arc::from(vec![None; CHUNK_VOLUME]),
-            fluids: Arc::from(vec![None; CHUNK_VOLUME]),
+            blocks: shared_empty_blocks(),
+            fluids: shared_empty_fluids(),
             light: Arc::from(vec![VoxelLight::DARK; CHUNK_VOLUME]),
             block_count: 0,
             fluid_count: 0,
@@ -430,6 +440,16 @@ mod tests {
 
         chunk.set_block(1, 1, 1, None);
         assert!(chunk.is_empty());
+    }
+
+    #[test]
+    fn empty_chunks_share_content_storage_but_not_light() {
+        let first = VoxelChunk::empty();
+        let second = VoxelChunk::empty();
+
+        assert!(Arc::ptr_eq(&first.blocks, &second.blocks));
+        assert!(Arc::ptr_eq(&first.fluids, &second.fluids));
+        assert!(!Arc::ptr_eq(&first.light, &second.light));
     }
 
     #[test]
