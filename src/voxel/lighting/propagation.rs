@@ -40,14 +40,17 @@ pub(super) fn relax(
     secondary_properties: &SecondaryPropertyRegistry,
     queue: &mut LightingQueue,
 ) -> HashSet<IVec3> {
+    let mut changed_chunks = HashSet::new();
     relax_budgeted(
         world,
         blocks,
         fluids,
         secondary_properties,
         queue,
+        &mut changed_chunks,
         |_| false,
-    )
+    );
+    changed_chunks
 }
 
 pub(super) fn relax_budgeted(
@@ -56,9 +59,10 @@ pub(super) fn relax_budgeted(
     fluids: &FluidRegistry,
     secondary_properties: &SecondaryPropertyRegistry,
     queue: &mut LightingQueue,
+    changed_chunks: &mut HashSet<IVec3>,
     mut budget_exhausted: impl FnMut(usize) -> bool,
-) -> HashSet<IVec3> {
-    let mut changed_chunks = HashSet::new();
+) {
+    changed_chunks.clear();
     let mut context = LightingContext::default();
     let mut processed = 0;
 
@@ -97,8 +101,6 @@ pub(super) fn relax_budgeted(
         changed_chunks.insert(chunk_coord_from_world(position));
         queue.enqueue_with_neighbors(position);
     }
-
-    changed_chunks
 }
 
 fn desired_light(
