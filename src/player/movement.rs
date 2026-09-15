@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::app::{game_state::GameState, pause_state::PauseState};
+use crate::gameplay::availability::world_interaction_available;
 use flight::{handle_flight_toggle, move_flying};
 use gravity::apply_gravity;
 use swimming::{swim_vertical, update_swimming_state};
@@ -13,6 +13,7 @@ pub(crate) mod flight;
 pub(crate) mod gravity;
 mod smoothing;
 pub(crate) mod swimming;
+mod vertical;
 pub(crate) mod walking;
 mod world_bounds;
 
@@ -32,8 +33,7 @@ impl Plugin for PlayerMovementPlugin {
                 enforce_world_floor,
             )
                 .chain()
-                .run_if(in_state(GameState::Gameplay))
-                .run_if(in_state(PauseState::Running)),
+                .run_if(world_interaction_available),
         );
     }
 }

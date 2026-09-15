@@ -1,13 +1,40 @@
 {
-  "id": "mineclone:grass",
-  "name": "Grass Block",
+  "id": "asteria:grass",
+  "name": { "english": "Grass Block" },
+  "category": "natural_blocks",
+  "tint": "grass",
   "textures": {
-    "top": "textures/blocks/grass/top.png",
-    "bottom": "textures/blocks/grass/bottom.png",
-    "left": "textures/blocks/grass/left.png",
-    "right": "textures/blocks/grass/right.png",
-    "front": "textures/blocks/grass/front.png",
-    "back": "textures/blocks/grass/back.png"
+    "top": [
+      { "texture": "textures/blocks/grass/top.png", "dyable": true }
+    ],
+    "bottom": [
+      { "texture": "textures/blocks/dirt.png", "dyable": false }
+    ],
+    "left": [
+      { "texture": "textures/blocks/grass/side.png", "dyable": false },
+      { "texture": "textures/blocks/grass/side_overlay.png", "dyable": true }
+    ],
+    "right": [
+      { "texture": "textures/blocks/grass/side.png", "dyable": false },
+      { "texture": "textures/blocks/grass/side_overlay.png", "dyable": true }
+    ],
+    "front": [
+      { "texture": "textures/blocks/grass/side.png", "dyable": false },
+      { "texture": "textures/blocks/grass/side_overlay.png", "dyable": true }
+    ],
+    "back": [
+      { "texture": "textures/blocks/grass/side.png", "dyable": false },
+      { "texture": "textures/blocks/grass/side_overlay.png", "dyable": true }
+    ]
   },
-  "rotate_texture": true
+  "rotateTexture": {
+    "top": true,
+    "bottom": true,
+    "left": false,
+    "right": false,
+    "front": false,
+    "back": false
+  },
+  "lightDampening": 15,
+  "castsShadow": true
 }

@@ -1,9 +1,13 @@
 use bevy::prelude::*;
 
-use crate::{player::camera::GameplayCamera, voxel::world::VoxelWorld};
+use crate::{
+    player::camera::GameplayCamera,
+    voxel::world::VoxelWorld,
+    world::{game_rules::GameRules, tick::WorldTickClock},
+};
 
 use super::{
-    collision::{move_axis, Axis},
+    collision::{Axis, move_axis},
     config::{WALK_ACCELERATION, WALK_DECELERATION, WALK_SPEED},
     flight::FlightState,
     smoothing::approach_velocity,
@@ -15,15 +19,28 @@ pub struct WalkingState {
 }
 
 pub(super) fn walk(
-    time: Res<Time>,
+    game_rules: Res<GameRules>,
+    world_ticks: Res<WorldTickClock>,
     keys: Res<ButtonInput<KeyCode>>,
     world: Res<VoxelWorld>,
-    player: Single<(&mut Transform, &GameplayCamera, &FlightState, &mut WalkingState)>,
+    player: Single<(
+        &mut Transform,
+        &GameplayCamera,
+        &FlightState,
+        &mut WalkingState,
+    )>,
 ) {
     let (mut transform, camera, flight, mut walking) = player.into_inner();
 
     if flight.active {
-        walking.velocity = Vec3::ZERO;
+        if walking.velocity != Vec3::ZERO {
+            walking.velocity = Vec3::ZERO;
+        }
+        return;
+    }
+
+    let delta_seconds = world_ticks.delta_seconds(&game_rules);
+    if delta_seconds <= 0.0 {
         return;
     }
 
@@ -55,18 +72,35 @@ pub(super) fn walk(
     } else {
         WALK_ACCELERATION
     };
-
-    walking.velocity = approach_velocity(
+    let next_velocity = approach_velocity(
         walking.velocity,
         target_velocity,
-        acceleration * time.delta_secs(),
+        acceleration * delta_seconds,
     );
 
+    if walking.velocity != next_velocity {
+        walking.velocity = next_velocity;
+    }
+
     let velocity = walking.velocity;
-    if move_axis(&mut transform, &world, velocity.x * time.delta_secs(), Axis::X) {
+    if velocity.x != 0.0
+        && move_axis(
+            &mut transform,
+            &world,
+            velocity.x * delta_seconds,
+            Axis::X,
+        )
+    {
         walking.velocity.x = 0.0;
     }
-    if move_axis(&mut transform, &world, velocity.z * time.delta_secs(), Axis::Z) {
+    if velocity.z != 0.0
+        && move_axis(
+            &mut transform,
+            &world,
+            velocity.z * delta_seconds,
+            Axis::Z,
+        )
+    {
         walking.velocity.z = 0.0;
     }
 }

@@ -11,7 +11,7 @@ pub fn build_release(project_root: &Path) -> Result<PathBuf, Box<dyn Error>> {
         .arg("build")
         .arg("--release")
         .arg("--bin")
-        .arg("mineclone")
+        .arg("asteria")
         .arg("--target-dir")
         .arg(&target_directory)
         .current_dir(project_root)
@@ -38,8 +38,8 @@ pub fn build_release(project_root: &Path) -> Result<PathBuf, Box<dyn Error>> {
 
 fn executable_name() -> &'static str {
     if cfg!(target_os = "windows") {
-        "mineclone.exe"
+        "asteria.exe"
     } else {
-        "mineclone"
+        "asteria"
     }
 }

@@ -1,0 +1,348 @@
+use bevy::prelude::*;
+
+use super::{
+    cell::VoxelCell,
+    chunk::{CHUNK_SIZE, VoxelChunk},
+    coordinates::chunk_origin,
+    fluid::FluidCell,
+    light::VoxelLight,
+    read::VoxelRead,
+    world::VoxelWorld,
+};
+
+const HALO: i32 = 1;
+const SNAPSHOT_SIDE: usize = CHUNK_SIZE + 2;
+const SNAPSHOT_FACE_AREA: usize = SNAPSHOT_SIDE * SNAPSHOT_SIDE;
+const INTERIOR_SHELL_LAYER: usize = SNAPSHOT_SIDE * 2 + CHUNK_SIZE * 2;
+const SHELL_VOLUME: usize = SNAPSHOT_FACE_AREA * 2 + INTERIOR_SHELL_LAYER * CHUNK_SIZE;
+
+#[derive(Clone, Copy, Default)]
+struct ShellSample {
+    cell: Option<VoxelCell>,
+    fluid: Option<FluidCell>,
+    light: VoxelLight,
+    loaded: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ChunkMeshDependencies {
+    center: IVec3,
+    revisions: [[[Option<u64>; 3]; 3]; 3],
+}
+
+impl ChunkMeshDependencies {
+    pub(crate) fn is_current(&self, world: &VoxelWorld) -> bool {
+        for offset_y in -1..=1 {
+            for offset_z in -1..=1 {
+                for offset_x in -1..=1 {
+                    let expected = self.revisions[(offset_y + 1) as usize][(offset_z + 1) as usize]
+                        [(offset_x + 1) as usize];
+                    let coord = self.center + IVec3::new(offset_x, offset_y, offset_z);
+                    if world.chunk_mesh_revision(coord) != expected {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+}
+
+pub(crate) struct ChunkMeshSnapshot {
+    chunk_origin: IVec3,
+    chunk: VoxelChunk,
+    shell: Box<[ShellSample]>,
+    dependencies: ChunkMeshDependencies,
+}
+
+impl ChunkMeshSnapshot {
+    pub(crate) fn capture(world: &VoxelWorld, coord: IVec3) -> Option<Self> {
+        let (center_chunk, center_revision) = world.chunk_with_mesh_revision(coord)?;
+        let chunk = center_chunk.clone();
+        let chunk_origin = chunk_origin(coord);
+        let mut neighbor_chunks: [[[Option<&VoxelChunk>; 3]; 3]; 3] = [[[None; 3]; 3]; 3];
+        let mut revisions = [[[None; 3]; 3]; 3];
+        revisions[1][1][1] = Some(center_revision);
+
+        for offset_y in -1..=1 {
+            for offset_z in -1..=1 {
+                for offset_x in -1..=1 {
+                    if offset_x == 0 && offset_y == 0 && offset_z == 0 {
+                        continue;
+                    }
+
+                    let coord = coord + IVec3::new(offset_x, offset_y, offset_z);
+                    let Some((neighbor_chunk, revision)) = world.chunk_with_mesh_revision(coord)
+                    else {
+                        continue;
+                    };
+                    let y = (offset_y + 1) as usize;
+                    let z = (offset_z + 1) as usize;
+                    let x = (offset_x + 1) as usize;
+                    neighbor_chunks[y][z][x] = Some(neighbor_chunk);
+                    revisions[y][z][x] = Some(revision);
+                }
+            }
+        }
+
+        let mut shell = vec![ShellSample::default(); SHELL_VOLUME].into_boxed_slice();
+        let last = SNAPSHOT_SIDE - 1;
+        let mut capture_shell_voxel = |x: usize, y: usize, z: usize| {
+            let index = shell_index_from_snapshot_coords(x, y, z)
+                .expect("mesh snapshot shell coordinates must have a compact index");
+            let (chunk_x, local_x) = shell_axis(x);
+            let (chunk_y, local_y) = shell_axis(y);
+            let (chunk_z, local_z) = shell_axis(z);
+            let Some(neighbor_chunk) = neighbor_chunks[chunk_y][chunk_z][chunk_x] else {
+                return;
+            };
+            let Some((cell, fluid, light)) = neighbor_chunk.sample_local(local_x, local_y, local_z)
+            else {
+                return;
+            };
+
+            shell[index] = ShellSample {
+                cell,
+                fluid,
+                light,
+                loaded: true,
+            };
+        };
+
+        for z in 0..SNAPSHOT_SIDE {
+            for x in 0..SNAPSHOT_SIDE {
+                capture_shell_voxel(x, 0, z);
+                capture_shell_voxel(x, last, z);
+            }
+        }
+
+        for y in 1..last {
+            for x in 0..SNAPSHOT_SIDE {
+                capture_shell_voxel(x, y, 0);
+                capture_shell_voxel(x, y, last);
+            }
+            for z in 1..last {
+                capture_shell_voxel(0, y, z);
+                capture_shell_voxel(last, y, z);
+            }
+        }
+
+        Some(Self {
+            chunk_origin,
+            chunk,
+            shell,
+            dependencies: ChunkMeshDependencies {
+                center: coord,
+                revisions,
+            },
+        })
+    }
+
+    pub(crate) fn chunk(&self) -> &VoxelChunk {
+        &self.chunk
+    }
+
+    pub(crate) fn dependencies(&self) -> ChunkMeshDependencies {
+        self.dependencies
+    }
+
+    fn central_local(&self, position: IVec3) -> Option<IVec3> {
+        let local = position - self.chunk_origin;
+        inside_chunk(local).then_some(local)
+    }
+
+    fn shell_index(&self, position: IVec3) -> Option<usize> {
+        let snapshot_origin = self.chunk_origin - IVec3::splat(HALO);
+        let local = position - snapshot_origin;
+        if local.x < 0
+            || local.y < 0
+            || local.z < 0
+            || local.x >= SNAPSHOT_SIDE as i32
+            || local.y >= SNAPSHOT_SIDE as i32
+            || local.z >= SNAPSHOT_SIDE as i32
+        {
+            return None;
+        }
+
+        shell_index_from_snapshot_coords(local.x as usize, local.y as usize, local.z as usize)
+    }
+}
+
+impl VoxelRead for ChunkMeshSnapshot {
+    fn sample_at(
+        &self,
+        world_position: IVec3,
+    ) -> Option<(Option<VoxelCell>, Option<FluidCell>, VoxelLight)> {
+        if let Some(local) = self.central_local(world_position) {
+            return self.chunk.sample_local(local.x, local.y, local.z);
+        }
+
+        let sample = self.shell[self.shell_index(world_position)?];
+        sample
+            .loaded
+            .then_some((sample.cell, sample.fluid, sample.light))
+    }
+}
+
+fn shell_axis(coordinate: usize) -> (usize, i32) {
+    let last = SNAPSHOT_SIDE - 1;
+
+    if coordinate == 0 {
+        (0, CHUNK_SIZE as i32 - 1)
+    } else if coordinate == last {
+        (2, 0)
+    } else {
+        (1, coordinate as i32 - 1)
+    }
+}
+
+fn inside_chunk(local: IVec3) -> bool {
+    local.x >= 0
+        && local.y >= 0
+        && local.z >= 0
+        && local.x < CHUNK_SIZE as i32
+        && local.y < CHUNK_SIZE as i32
+        && local.z < CHUNK_SIZE as i32
+}
+
+fn shell_index_from_snapshot_coords(x: usize, y: usize, z: usize) -> Option<usize> {
+    let last = SNAPSHOT_SIDE - 1;
+
+    if y == 0 {
+        return Some(x + z * SNAPSHOT_SIDE);
+    }
+    if y == last {
+        return Some(SNAPSHOT_FACE_AREA + x + z * SNAPSHOT_SIDE);
+    }
+
+    let layer = SNAPSHOT_FACE_AREA * 2 + (y - 1) * INTERIOR_SHELL_LAYER;
+    if z == 0 {
+        return Some(layer + x);
+    }
+    if z == last {
+        return Some(layer + SNAPSHOT_SIDE + x);
+    }
+    if x == 0 {
+        return Some(layer + SNAPSHOT_SIDE * 2 + (z - 1) * 2);
+    }
+    if x == last {
+        return Some(layer + SNAPSHOT_SIDE * 2 + (z - 1) * 2 + 1);
+    }
+
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::voxel::{
+        cell::VoxelCell, texture_rotation::TextureRotation, world::VoxelWorld,
+    };
+
+    #[test]
+    fn snapshot_preserves_central_chunk_and_one_voxel_halo() {
+        let mut world = VoxelWorld::default();
+        let coord = IVec3::ZERO;
+        let mut center = VoxelChunk::empty();
+        center.set_block(
+            0,
+            0,
+            0,
+            Some(VoxelCell::new("asteria:test", TextureRotation::default())),
+        );
+        world.insert_chunk(coord, center);
+
+        let mut neighbor = VoxelChunk::empty();
+        neighbor.set_block(
+            0,
+            0,
+            0,
+            Some(VoxelCell::new(
+                "asteria:neighbor",
+                TextureRotation::default(),
+            )),
+        );
+        world.insert_chunk(IVec3::X, neighbor);
+
+        let snapshot = ChunkMeshSnapshot::capture(&world, coord).expect("chunk should exist");
+        assert_eq!(snapshot.block_id_at(IVec3::ZERO), Some("asteria:test"));
+        assert_eq!(
+            snapshot.block_id_at(IVec3::new(CHUNK_SIZE as i32, 0, 0)),
+            Some("asteria:neighbor")
+        );
+        assert!(!snapshot.is_loaded_at(IVec3::new(CHUNK_SIZE as i32 + 1, 0, 0)));
+        assert!(snapshot.dependencies().is_current(&world));
+    }
+
+    #[test]
+    fn snapshot_reads_diagonal_neighbor_shell() {
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
+
+        let mut diagonal = VoxelChunk::empty();
+        diagonal.set_block(
+            0,
+            0,
+            0,
+            Some(VoxelCell::new(
+                "asteria:diagonal",
+                TextureRotation::default(),
+            )),
+        );
+        world.insert_chunk(IVec3::new(1, 1, 1), diagonal);
+
+        let snapshot =
+            ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
+        let edge = CHUNK_SIZE as i32;
+        assert_eq!(
+            snapshot.block_id_at(IVec3::new(edge, edge, edge)),
+            Some("asteria:diagonal")
+        );
+    }
+
+    #[test]
+    fn snapshot_dependencies_detect_mutated_or_new_neighbors() {
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
+        let snapshot =
+            ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
+        assert!(snapshot.dependencies().is_current(&world));
+
+        world.insert_chunk(IVec3::X, VoxelChunk::empty());
+        assert!(!snapshot.dependencies().is_current(&world));
+
+        let refreshed =
+            ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
+        world.set_block_at(
+            IVec3::new(CHUNK_SIZE as i32, 0, 0),
+            Some(VoxelCell::new(
+                "asteria:changed",
+                TextureRotation::default(),
+            )),
+        );
+        assert!(!refreshed.dependencies().is_current(&world));
+    }
+
+    #[test]
+    fn compact_shell_index_covers_each_shell_voxel_once() {
+        let mut seen = vec![false; SHELL_VOLUME];
+        let mut count = 0;
+
+        for y in 0..SNAPSHOT_SIDE {
+            for z in 0..SNAPSHOT_SIDE {
+                for x in 0..SNAPSHOT_SIDE {
+                    let Some(index) = shell_index_from_snapshot_coords(x, y, z) else {
+                        continue;
+                    };
+                    assert!(index < SHELL_VOLUME);
+                    assert!(!seen[index]);
+                    seen[index] = true;
+                    count += 1;
+                }
+            }
+        }
+
+        assert_eq!(count, SHELL_VOLUME);
+        assert!(seen.into_iter().all(|value| value));
+    }
+}

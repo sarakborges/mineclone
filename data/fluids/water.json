@@ -1,8 +1,11 @@
 {
-  "id": "mineclone:water",
-  "name": "Water",
-  "color": { "r": 0.08, "g": 0.38, "b": 0.78 },
+  "id": "asteria:water",
+  "name": { "english": "Water" },
+  "color": { "hue": 214.7150, "saturation": 0.8065, "intensity": 0.4133 },
   "opacity": 0.32,
   "roughness": 0.18,
-  "metallic": 0.0
+  "metallic": 0.0,
+  "lightDampening": 2,
+  "spreadSpeed": 12.0,
+  "maxSpread": 7
 }

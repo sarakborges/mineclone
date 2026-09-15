@@ -1,49 +1,114 @@
-use bevy::prelude::*;
+use std::time::Duration;
+
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    player::{camera::GameplayCamera, PLAYER_EYE_HEIGHT},
-    voxel::{coordinates::split_dimension_position, world::VoxelWorld},
+    player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
+    voxel::{
+        coordinates::chunk_coord_from_position, lighting::PendingLightingUpdates,
+        neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
+    },
 };
 
 use super::{
-    chunk_rendering::ChunkRenderPool,
-    render_distance::RenderDistanceSettings,
+    chunk_remesh::ChunkRemeshQueue,
+    chunk_rendering::retire_chunk_render_allocation,
+    chunk_system_params::ChunkRenderer,
+    streaming::ChunkStreamingState,
+    work_budget::FrameWorkBudget,
 };
 
-pub fn unload_chunk_meshes(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
+const MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK: usize = 1;
+const CHUNK_UNLOAD_BUDGET: Duration = Duration::from_millis(4);
+
+#[derive(Resource, Default)]
+pub(super) struct ChunkUnloadState {
+    bootstrapped: bool,
+}
+
+impl ChunkUnloadState {
+    fn bootstrap(
+        &mut self,
+        streaming: &mut ChunkStreamingState,
+        world: &VoxelWorld,
+        center: IVec3,
+    ) {
+        if self.bootstrapped {
+            return;
+        }
+
+        let mut pending = world
+            .loaded_chunk_coords()
+            .filter(|coord| !streaming.keeps_loaded(*coord))
+            .collect::<Vec<_>>();
+        pending.sort_by_key(|coord| -(*coord - center).length_squared());
+        for coord in pending {
+            streaming.enqueue_retired(coord);
+        }
+
+        self.bootstrapped = true;
+    }
+}
+
+#[derive(SystemParam)]
+pub(super) struct ChunkUnloadRuntime<'w> {
+    world: ResMut<'w, VoxelWorld>,
+    state: ResMut<'w, ChunkUnloadState>,
+    lighting: ResMut<'w, PendingLightingUpdates>,
+    remesh_queue: ResMut<'w, ChunkRemeshQueue>,
+}
+
+pub(super) fn unload_chunk_meshes(
     player: Single<&Transform, With<GameplayCamera>>,
-    render_distance: Res<RenderDistanceSettings>,
-    mut world: ResMut<VoxelWorld>,
-    mut render_pool: ResMut<ChunkRenderPool>,
+    mut streaming: ResMut<ChunkStreamingState>,
+    mut renderer: ChunkRenderer,
+    mut runtime: ChunkUnloadRuntime,
+    mut unloaded: Local<Vec<IVec3>>,
 ) {
+    unloaded.clear();
+
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
-    let player_chunk = split_dimension_position(feet_position).chunk;
-    let radius = render_distance.chunks();
-    let radius_squared = radius * radius;
-    let to_unload = render_pool
-        .active_coords()
-        .filter(|coord| {
-            let dx = coord.x - player_chunk.x;
-            let dz = coord.z - player_chunk.z;
-            dx * dx + dz * dz > radius_squared
-        })
-        .collect::<Vec<_>>();
+    let player_chunk = chunk_coord_from_position(feet_position);
+    let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
+    runtime
+        .state
+        .bootstrap(&mut streaming, &runtime.world, center);
 
-    for coord in to_unload {
-        let Some((entities, mesh_handles)) = render_pool.take(coord) else {
-            continue;
+    let mut budget = FrameWorkBudget::new(
+        CHUNK_UNLOAD_BUDGET,
+        MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK,
+    );
+
+    loop {
+        if budget.exhausted() {
+            break;
+        }
+
+        let Some(coord) = streaming.pop_retired() else {
+            break;
         };
-
-        for mesh_handle in mesh_handles {
-            let _ = meshes.remove(&mesh_handle);
+        if streaming.keeps_loaded(coord) || runtime.world.chunk(coord).is_none() {
+            continue;
         }
 
-        for entity in entities {
-            commands.entity(entity).despawn();
-        }
+        retire_chunk_render_allocation(&mut renderer.commands, &mut renderer.pool, coord);
+        runtime.remesh_queue.remove(coord);
+        runtime.world.archive_chunk(coord);
+        unloaded.push(coord);
+        budget.record(1);
+    }
 
-        world.archive_chunk(coord);
+    if unloaded.is_empty() {
+        return;
+    }
+
+    runtime
+        .lighting
+        .enqueue_chunk_unloads(unloaded.as_slice());
+
+    for coord in unloaded.drain(..) {
+        for offset in CARDINAL_NEIGHBORS {
+            runtime.remesh_queue.enqueue_priority(coord + offset);
+        }
     }
 }

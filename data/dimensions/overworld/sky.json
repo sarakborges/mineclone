@@ -1,25 +1,25 @@
 {
-  "id": "mineclone:overworld/sky",
+  "id": "asteria:overworld/sky",
   "sun": {
     "texture": null,
     "size": 93.0,
-    "orbit_radius": 600.0,
-    "rise_phase": "Dawn",
-    "set_phase": "Dusk",
-    "rise_azimuth_degrees": 90.0,
-    "set_azimuth_degrees": 270.0,
-    "max_altitude_degrees": 72.0,
-    "tint": { "r": 1.0, "g": 0.96, "b": 0.72 }
+    "orbitRadius": 600.0,
+    "risePhase": "Dawn",
+    "setPhase": "Dusk",
+    "riseAzimuthDegrees": 90.0,
+    "setAzimuthDegrees": 270.0,
+    "maxAltitudeDegrees": 72.0,
+    "tint": { "hue": 52.4109, "saturation": 0.1940, "intensity": 0.8933 }
   },
   "moon": {
     "texture": null,
     "size": 73.0,
-    "orbit_radius": 600.0,
-    "rise_phase": "Dusk",
-    "set_phase": "Dawn",
-    "rise_azimuth_degrees": 90.0,
-    "set_azimuth_degrees": 270.0,
-    "max_altitude_degrees": 64.0,
-    "tint": { "r": 0.78, "g": 0.84, "b": 1.0 }
+    "orbitRadius": 600.0,
+    "risePhase": "Dusk",
+    "setPhase": "Dawn",
+    "riseAzimuthDegrees": 90.0,
+    "setAzimuthDegrees": 270.0,
+    "maxAltitudeDegrees": 64.0,
+    "tint": { "hue": 224.7047, "saturation": 0.1069, "intensity": 0.8733 }
   }
 }

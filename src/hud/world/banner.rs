@@ -12,7 +12,7 @@ pub(super) fn world_banner() -> impl Bundle {
             ..default()
         },
         BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
-        BackgroundGradient::from(LinearGradient::to_right(vec![
+        BackgroundGradient::from(LinearGradient::to_bottom_right(vec![
             ColorStop::percent(Color::srgba(0.16, 0.17, 0.20, 0.0), 0.0),
             ColorStop::percent(Color::srgba(0.16, 0.17, 0.20, 0.10), 16.0),
             ColorStop::percent(Color::srgba(0.15, 0.16, 0.19, 0.22), 36.0),

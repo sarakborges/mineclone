@@ -1,0 +1,65 @@
+{
+  "id": "asteria:overworld/enchanted_forest",
+  "name": { "english": "Enchanted Forest" },
+  "terrain": {
+    "type": "rolling",
+    "baseHeight": 4.0,
+    "amplitude": 3.0,
+    "scale": 0.012,
+    "detailAmplitude": 1.0,
+    "detailScale": 0.045
+  },
+  "surfaceLayers": [
+    { "block": "asteria:grass", "depth": 1 },
+    { "block": "asteria:dirt", "depth": 4 },
+    { "block": "asteria:stone" }
+  ],
+  "hydrology": {
+    "canGenerateLake": true,
+    "canGenerateRiver": true,
+    "lakeChanceMultiplier": 1.0,
+    "riverWidthMultiplier": 1.0
+  },
+  "structures": [
+    {
+      "id": "asteria:oak_tree",
+      "placement": { "spacing": 12, "chance": 0.66, "jitter": 3 }
+    },
+    {
+      "id": "asteria:small_boulder",
+      "placement": { "spacing": 48, "chance": 0.20, "jitter": 14 }
+    }
+  ],
+  "visuals": {
+    "skyColor": {
+      "dawn": { "hue": 285.6649, "saturation": 0.5755, "intensity": 0.7067 },
+      "day": { "hue": 198.6129, "saturation": 0.7742, "intensity": 0.6200 },
+      "dusk": { "hue": 315.0212, "saturation": 0.7245, "intensity": 0.6533 },
+      "night": { "hue": 247.8889, "saturation": 0.7750, "intensity": 0.1333 }
+    },
+    "fogColor": {
+      "dawn": { "hue": 271.1405, "saturation": 0.4112, "intensity": 0.7133 },
+      "day": { "hue": 190.8934, "saturation": 0.5833, "intensity": 0.7200 },
+      "dusk": { "hue": 306.3761, "saturation": 0.5794, "intensity": 0.7133 },
+      "night": { "hue": 250.1583, "saturation": 0.6129, "intensity": 0.2067 }
+    },
+    "grassColor": { "hue": 152.8741, "saturation": 0.8554, "intensity": 0.5533 },
+    "leafColor": { "hue": 182.0244, "saturation": 1.0000, "intensity": 0.6533 },
+    "foliageColor": { "hue": 288.2585, "saturation": 0.7576, "intensity": 0.6600 },
+    "waterColor": { "hue": 276.3088, "saturation": 0.8929, "intensity": 0.5600 },
+    "underwaterTint": {
+      "color": { "hue": 265.0006, "saturation": 0.9400, "intensity": 0.3333 },
+      "opacity": 0.34
+    },
+    "stars": {
+      "density": 0.96,
+      "color": { "hue": 180.0000, "saturation": 0.2388, "intensity": 0.8933 }
+    },
+    "clouds": {
+      "density": 0.46,
+      "color": { "hue": 304.7150, "saturation": 0.5526, "intensity": 0.7600 }
+    },
+    "terrainRoughness": 0.90,
+    "terrainMetallic": 0.0
+  }
+}

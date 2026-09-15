@@ -1,46 +1,76 @@
 {
-  "id": "mineclone:overworld/plains",
-  "name": "Plains",
-  "size": {
-    "x": { "min": 50.0, "max": 250.0 },
-    "z": { "min": 50.0, "max": 250.0 },
-    "y": null
-  },
+  "id": "asteria:overworld/plains",
+  "name": { "english": "Plains" },
   "terrain": {
     "type": "rolling",
-    "base_height": 4.0,
+    "baseHeight": 4.0,
     "amplitude": 3.0,
     "scale": 0.012,
-    "detail_amplitude": 1.0,
-    "detail_scale": 0.045
+    "detailAmplitude": 1.0,
+    "detailScale": 0.045
   },
+  "surfaceLayers": [
+    { "block": "asteria:grass", "depth": 1 },
+    { "block": "asteria:dirt", "depth": 4 },
+    { "block": "asteria:stone" }
+  ],
+  "hydrology": {
+    "canGenerateLake": true,
+    "canGenerateRiver": true,
+    "lakeChanceMultiplier": 1.0,
+    "riverWidthMultiplier": 1.0
+  },
+  "structures": [
+    {
+      "id": "asteria:oak_tree",
+      "placement": { "spacing": 80, "chance": 0.48, "jitter": 24 }
+    },
+    {
+      "id": "asteria:small_boulder",
+      "placement": { "spacing": 36, "chance": 0.28, "jitter": 11 }
+    },
+    {
+      "id": "asteria:medium_boulder",
+      "placement": { "spacing": 58, "chance": 0.20, "jitter": 18 }
+    },
+    {
+      "id": "asteria:big_boulder",
+      "placement": { "spacing": 88, "chance": 0.13, "jitter": 27 }
+    },
+    {
+      "id": "asteria:huge_boulder",
+      "placement": { "spacing": 140, "chance": 0.07, "jitter": 43 }
+    }
+  ],
   "visuals": {
-    "sky_color": {
-      "dawn": { "r": 0.50, "g": 0.69, "b": 0.94 },
-      "day": { "r": 0.22, "g": 0.60, "b": 1.00 },
-      "dusk": { "r": 0.62, "g": 0.50, "b": 0.72 },
-      "night": { "r": 0.025, "g": 0.045, "b": 0.12 }
+    "skyColor": {
+      "dawn": { "hue": 214.5016, "saturation": 0.2958, "intensity": 0.7100 },
+      "day": { "hue": 210.8481, "saturation": 0.6374, "intensity": 0.6067 },
+      "dusk": { "hue": 273.0045, "saturation": 0.1848, "intensity": 0.6133 },
+      "night": { "hue": 228.4825, "saturation": 0.6053, "intensity": 0.0633 }
     },
-    "fog_color": {
-      "dawn": { "r": 0.62, "g": 0.76, "b": 0.90 },
-      "day": { "r": 0.65, "g": 0.83, "b": 0.98 },
-      "dusk": { "r": 0.66, "g": 0.58, "b": 0.68 },
-      "night": { "r": 0.04, "g": 0.06, "b": 0.11 }
+    "fogColor": {
+      "dawn": { "hue": 210.0000, "saturation": 0.1842, "intensity": 0.7600 },
+      "day": { "hue": 206.9955, "saturation": 0.2073, "intensity": 0.8200 },
+      "dusk": { "hue": 289.1066, "saturation": 0.0938, "intensity": 0.6400 },
+      "night": { "hue": 223.8979, "saturation": 0.4286, "intensity": 0.0700 }
     },
-    "grass_color": { "r": 0.24, "g": 0.70, "b": 0.16 },
-    "underwater_tint": {
-      "color": { "r": 0.12, "g": 0.44, "b": 0.72 },
+    "grassColor": { "hue": 112.1111, "saturation": 0.5636, "intensity": 0.3667 },
+    "leafColor": { "hue": 112.1111, "saturation": 0.5636, "intensity": 0.3667 },
+    "foliageColor": { "hue": 112.1111, "saturation": 0.5636, "intensity": 0.3667 },
+    "underwaterTint": {
+      "color": { "hue": 207.7958, "saturation": 0.7188, "intensity": 0.4267 },
       "opacity": 0.20
     },
     "stars": {
       "density": 0.65,
-      "color": { "r": 0.88, "g": 0.93, "b": 1.0 }
+      "color": { "hue": 215.4964, "saturation": 0.0605, "intensity": 0.9367 }
     },
     "clouds": {
       "density": 0.45,
-      "color": { "r": 0.92, "g": 0.94, "b": 0.98 }
+      "color": { "hue": 220.8934, "saturation": 0.0282, "intensity": 0.9467 }
     },
-    "terrain_roughness": 0.98,
-    "terrain_metallic": 0.0
+    "terrainRoughness": 0.98,
+    "terrainMetallic": 0.0
   }
 }

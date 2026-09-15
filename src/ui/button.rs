@@ -4,13 +4,16 @@ use super::typography;
 
 pub const MENU_BUTTON_WIDTH: f32 = 470.0;
 pub const MENU_BUTTON_HEIGHT: f32 = 54.0;
+pub const SIDEBAR_MENU_BUTTON_HEIGHT: f32 = 54.0;
+pub const COMPACT_CONTROL_HEIGHT: f32 = 44.0;
+const BUTTON_VISUAL_SETTLE_EPSILON: f32 = 0.001;
 
 #[derive(Component, Default)]
 pub struct AsteriaButtonVisual {
     level: f32,
 }
 
-pub fn menu_button<A: Component>(label: &'static str, action: A) -> impl Bundle {
+pub fn menu_button<A: Component>(label: impl Into<String>, action: A) -> impl Bundle {
     (
         Button,
         action,
@@ -26,6 +29,52 @@ pub fn menu_button<A: Component>(label: &'static str, action: A) -> impl Bundle 
         BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
         button_gradient(0.0),
         button_shadow(0.0),
+        children![typography::button_label(label)],
+    )
+}
+
+pub fn sidebar_menu_button<A: Component, L: Component>(
+    label: impl Into<String>,
+    action: A,
+    label_marker: L,
+) -> impl Bundle {
+    (
+        Button,
+        action,
+        AsteriaButtonVisual::default(),
+        Node {
+            width: percent(100),
+            height: px(SIDEBAR_MENU_BUTTON_HEIGHT),
+            padding: UiRect::axes(px(14), px(0)),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            border_radius: BorderRadius::all(px(8)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+        button_gradient(0.0),
+        button_shadow(0.0),
+        children![(typography::button_label(label), label_marker)],
+    )
+}
+
+pub(crate) fn compact_control_button<A: Component>(
+    label: impl Into<String>,
+    action: A,
+    width: f32,
+) -> impl Bundle {
+    (
+        Button,
+        action,
+        Node {
+            width: px(width),
+            height: px(COMPACT_CONTROL_HEIGHT),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            border_radius: BorderRadius::all(px(7)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.20, 0.14, 0.38, 0.72)),
         children![typography::button_label(label)],
     )
 }
@@ -50,8 +99,18 @@ pub fn animate_buttons(
             Interaction::Hovered => 1.0,
             Interaction::Pressed => 1.25,
         };
+        let delta = target - visual.level;
 
-        visual.level += (target - visual.level) * smoothing;
+        if delta.abs() <= BUTTON_VISUAL_SETTLE_EPSILON {
+            if visual.level != target {
+                visual.level = target;
+                *gradient = button_gradient(target);
+                *shadow = button_shadow(target);
+            }
+            continue;
+        }
+
+        visual.level += delta * smoothing;
         *gradient = button_gradient(visual.level);
         *shadow = button_shadow(visual.level);
     }
@@ -97,10 +156,7 @@ fn button_gradient(level: f32) -> BackgroundGradient {
             ),
             76.0,
         ),
-        ColorStop::percent(
-            Color::srgba(0.14, 0.35, 0.62, 0.06 + 0.04 * lift),
-            90.0,
-        ),
+        ColorStop::percent(Color::srgba(0.14, 0.35, 0.62, 0.06 + 0.04 * lift), 90.0),
         ColorStop::percent(Color::srgba(0.14, 0.35, 0.62, 0.0), 100.0),
     ]))
 }

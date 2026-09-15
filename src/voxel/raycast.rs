@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use super::world::VoxelWorld;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VoxelHit {
     pub voxel: IVec3,
     pub block_id: &'static str,

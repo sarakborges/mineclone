@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{game_state::GameState, settings_state::SettingsState},
+    app::{game_state::GameState, settings_state::SettingsState, version},
+    localization::{ActiveLanguage, UiLocalization},
     ui::{
         button::menu_button,
         cosmic_background::{self, STAR_FIELD},
@@ -9,13 +10,7 @@ use crate::{
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
     },
-    world::{
-        biome::CurrentBiome,
-        dimension::CurrentDimension,
-        InMemoryWorldSave,
-        WorldLoadMode,
-        WorldSeed,
-    },
+    world::{InMemoryWorldSave, WorldLoadMode, WorldSeed, dimension::CurrentDimension},
 };
 
 pub struct StartingScreenPlugin;
@@ -40,7 +35,12 @@ enum StartingScreenAction {
     ExitGame,
 }
 
-fn setup_starting_screen(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup_starting_screen(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
+) {
     commands.spawn((
         Camera2d,
         BoxShadowSamples(8),
@@ -48,6 +48,7 @@ fn setup_starting_screen(mut commands: Commands, asset_server: Res<AssetServer>)
     ));
 
     let logo = asset_server.load("branding/asteria_logo.png");
+    let language = language.get();
 
     commands
         .spawn((
@@ -61,10 +62,8 @@ fn setup_starting_screen(mut commands: Commands, asset_server: Res<AssetServer>)
             theme::cosmic_background_gradient(),
         ))
         .with_children(|parent| {
-            for &(left, top, size, phase, speed, red, green, blue, base_alpha) in STAR_FIELD {
-                parent.spawn(cosmic_background::star(
-                    left, top, size, phase, speed, red, green, blue, base_alpha,
-                ));
+            for &spec in STAR_FIELD {
+                parent.spawn(cosmic_background::star(spec));
             }
 
             parent
@@ -88,17 +87,26 @@ fn setup_starting_screen(mut commands: Commands, asset_server: Res<AssetServer>)
                         },
                     ));
 
-                    content.spawn(menu_button("New World", StartingScreenAction::NewWorld));
                     content.spawn(menu_button(
-                        "Load Worlds",
+                        localization.text(language, "starting.newWorld").to_owned(),
+                        StartingScreenAction::NewWorld,
+                    ));
+                    content.spawn(menu_button(
+                        localization.text(language, "starting.loadWorlds").to_owned(),
                         StartingScreenAction::LoadWorlds,
                     ));
-                    content.spawn(menu_button("Settings", StartingScreenAction::Settings));
-                    content.spawn(menu_button("Exit Game", StartingScreenAction::ExitGame));
+                    content.spawn(menu_button(
+                        localization.text(language, "common.settings").to_owned(),
+                        StartingScreenAction::Settings,
+                    ));
+                    content.spawn(menu_button(
+                        localization.text(language, "common.exitGame").to_owned(),
+                        StartingScreenAction::ExitGame,
+                    ));
                 });
 
             parent.spawn((
-                typography::caption(format!("v{}", env!("CARGO_PKG_VERSION"))),
+                typography::caption(format!("v{}", version::VERSION.trim())),
                 Node {
                     position_type: PositionType::Absolute,
                     right: px(20),
@@ -123,11 +131,7 @@ fn handle_menu_buttons(
 
         match action {
             StartingScreenAction::NewWorld => {
-                commands.insert_resource(CurrentDimension::default());
-                commands.insert_resource(CurrentBiome::default());
-                commands.insert_resource(WorldSeed::fresh());
-                commands.insert_resource(WorldLoadMode::New);
-                transition.request(ScreenTransitionTarget::game(GameState::Loading));
+                transition.request(ScreenTransitionTarget::game(GameState::NewWorld));
             }
             StartingScreenAction::LoadWorlds => {
                 let (Some(seed), Some(dimension_id)) = (save.seed(), save.dimension_id()) else {

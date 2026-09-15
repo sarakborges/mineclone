@@ -1,17 +1,14 @@
 use bevy::{
+    ecs::system::SystemParam,
     light::{NotShadowCaster, NotShadowReceiver},
     prelude::*,
 };
 
 use crate::{
     app::game_state::GameState,
-    content::{
-        day_night_cycle::DayNightCycleRegistry,
-        dimension::DimensionRegistry,
-        sky::{CelestialBodyDefinition, SkyRegistry},
-    },
+    content::sky::CelestialBodyDefinition,
     player::camera::GameplayCamera,
-    world::{day_night::DayNightClock, dimension::CurrentDimension},
+    world::current_context::{DayNightContext, SkyContext},
 };
 
 use super::celestial_path::celestial_offset;
@@ -31,21 +28,32 @@ impl Plugin for CelestialPlugin {
 #[derive(Component)]
 struct CelestialBody(CelestialBodyDefinition);
 
+#[derive(SystemParam)]
+struct CelestialSpawnAssets<'w> {
+    meshes: ResMut<'w, Assets<Mesh>>,
+    materials: ResMut<'w, Assets<StandardMaterial>>,
+    asset_server: Res<'w, AssetServer>,
+}
+
+#[derive(SystemParam)]
+struct CelestialRuntimeScene<'w, 's> {
+    day_night: DayNightContext<'w>,
+    camera: Single<'w, 's, (Entity, &'static GlobalTransform), With<GameplayCamera>>,
+}
+
 fn spawn_celestial_bodies(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
-    current_dimension: Res<CurrentDimension>,
-    dimensions: Res<DimensionRegistry>,
-    skies: Res<SkyRegistry>,
+    scene: SkyContext,
+    assets: CelestialSpawnAssets,
 ) {
-    let dimension = dimensions
-        .get(&current_dimension.id)
-        .unwrap_or_else(|| panic!("missing dimension definition: {}", current_dimension.id));
-    let sky = skies
-        .get(&dimension.sky)
-        .unwrap_or_else(|| panic!("missing sky definition: {}", dimension.sky));
+    let CelestialSpawnAssets {
+        mut meshes,
+        mut materials,
+        asset_server,
+    } = assets;
+    let sky = scene
+        .sky()
+        .expect("current dimension must reference a loaded sky definition");
 
     spawn_body(
         &mut commands,
@@ -70,7 +78,7 @@ fn spawn_body(
     asset_server: &AssetServer,
     definition: &CelestialBodyDefinition,
 ) {
-    let mesh = meshes.add(Circle::new(definition.size * 0.5));
+    let mesh = meshes.add(Rectangle::new(definition.size, definition.size));
     let material = materials.add(StandardMaterial {
         base_color: definition.tint.to_color(),
         base_color_texture: definition
@@ -98,29 +106,47 @@ fn spawn_body(
 }
 
 fn update_celestial_bodies(
-    clock: Res<DayNightClock>,
-    current_dimension: Res<CurrentDimension>,
-    dimensions: Res<DimensionRegistry>,
-    cycles: Res<DayNightCycleRegistry>,
-    camera: Single<&GlobalTransform, With<GameplayCamera>>,
+    scene: CelestialRuntimeScene,
     mut bodies: Query<(&CelestialBody, &mut Transform, &mut Visibility)>,
+    mut last_camera: Local<Option<(Entity, Vec3)>>,
 ) {
-    let Some(dimension) = dimensions.get(&current_dimension.id) else {
+    let CelestialRuntimeScene { day_night, camera } = scene;
+    let (camera_entity, camera_transform) = camera.into_inner();
+    let camera_position = camera_transform.translation();
+    let camera_changed = last_camera.as_ref().is_none_or(|(entity, previous)| {
+        *entity != camera_entity || *previous != camera_position
+    });
+    if !camera_changed && !day_night.inputs_changed() {
+        return;
+    }
+    if camera_changed {
+        *last_camera = Some((camera_entity, camera_position));
+    }
+
+    let Some(cycle) = day_night.cycle() else {
         return;
     };
-    let Some(cycle) = cycles.get(&dimension.day_night_cycle) else {
-        return;
-    };
-    let camera_position = camera.translation();
+    let normalized_time = day_night.clock().normalized_time;
 
     for (body, mut transform, mut visibility) in &mut bodies {
-        let Some(offset) = celestial_offset(&body.0, cycle, clock.normalized_time) else {
-            *visibility = Visibility::Hidden;
+        let Some(offset) = celestial_offset(&body.0, cycle, normalized_time) else {
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
             continue;
         };
 
-        transform.translation = camera_position + offset;
-        transform.look_at(camera_position, Vec3::Y);
-        *visibility = Visibility::Visible;
+        let translation = camera_position + offset;
+        let mut next_transform = Transform::from_translation(translation);
+        next_transform.look_at(camera_position, Vec3::Y);
+        if transform.translation != translation {
+            transform.translation = translation;
+        }
+        if transform.rotation != next_transform.rotation {
+            transform.rotation = next_transform.rotation;
+        }
+        if *visibility != Visibility::Visible {
+            *visibility = Visibility::Visible;
+        }
     }
 }

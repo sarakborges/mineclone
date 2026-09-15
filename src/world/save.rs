@@ -1,6 +1,10 @@
+use std::collections::HashMap;
+
 use bevy::prelude::*;
 
-use super::seed::WorldSeed;
+use crate::player::{game_mode::GameMode, player_id::PlayerId, save::PlayerSaveData};
+
+use super::{game_rules::GameRules, seed::WorldSeed};
 
 #[derive(Resource, Clone, Copy, Default, PartialEq, Eq)]
 pub enum WorldLoadMode {
@@ -13,7 +17,8 @@ pub enum WorldLoadMode {
 pub struct InMemoryWorldSave {
     seed: Option<u64>,
     dimension_id: Option<String>,
-    player_position: Option<Vec3>,
+    game_rules: GameRules,
+    players: HashMap<PlayerId, PlayerSaveData>,
 }
 
 impl InMemoryWorldSave {
@@ -29,19 +34,50 @@ impl InMemoryWorldSave {
         self.dimension_id.as_deref()
     }
 
-    pub fn player_position(&self) -> Option<Vec3> {
-        self.player_position
+    pub(crate) fn game_rules(&self) -> GameRules {
+        self.game_rules
     }
 
-    pub fn begin_new_world(&mut self, seed: WorldSeed, dimension_id: &str) {
+    pub fn player_position(&self, player_id: PlayerId) -> Option<Vec3> {
+        self.players.get(&player_id).and_then(PlayerSaveData::position)
+    }
+
+    pub fn player_game_mode(&self, player_id: PlayerId) -> GameMode {
+        self.players
+            .get(&player_id)
+            .map(PlayerSaveData::game_mode)
+            .unwrap_or_default()
+    }
+
+    pub fn begin_new_world(
+        &mut self,
+        seed: WorldSeed,
+        dimension_id: &str,
+        game_rules: GameRules,
+    ) {
         self.seed = Some(seed.0);
         self.dimension_id = Some(dimension_id.to_owned());
-        self.player_position = None;
+        self.game_rules = game_rules;
+        self.players.clear();
     }
 
-    pub fn save_player_position(&mut self, position: Vec3) {
+    pub(crate) fn save_game_rules(&mut self, game_rules: GameRules) {
         if self.has_world() {
-            self.player_position = Some(position);
+            self.game_rules = game_rules;
+        }
+    }
+
+    pub fn save_player_state(
+        &mut self,
+        player_id: PlayerId,
+        position: Vec3,
+        game_mode: GameMode,
+    ) {
+        if self.has_world() {
+            self.players
+                .entry(player_id)
+                .or_default()
+                .save(position, game_mode);
         }
     }
 }
