@@ -72,6 +72,13 @@ impl ChunkRemeshQueue {
         }
     }
 
+    pub(crate) fn remove(&mut self, coord: IVec3) {
+        self.queue.remove(coord);
+        self.fluid.remove(coord);
+        self.immediate_geometry.remove(coord);
+        self.immediate_lighting.remove(coord);
+    }
+
     fn pop_renderable(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
         let coord = self.queue.pop_where(|coord| render_pool.contains(coord))?;
         self.fluid.remove(coord);
@@ -292,8 +299,25 @@ mod tests {
 
         assert!(lighting.contains(&coord));
         for offset in CARDINAL_NEIGHBORS {
-            assert!(lighting.contains(&(coord + offset)));
+            assert!(lighting.contains(&(coord + offset));
         }
         assert_eq!(queue.pop(), None);
+    }
+
+    #[test]
+    fn removal_clears_all_pending_remesh_kinds() {
+        let mut queue = ChunkRemeshQueue::default();
+        let coord = IVec3::new(2, 1, 3);
+        queue.enqueue_priority(coord);
+        queue.enqueue_fluid_priority(coord);
+        queue.immediate_geometry.enqueue(coord);
+        queue.immediate_lighting.enqueue(coord);
+
+        queue.remove(coord);
+
+        assert_eq!(queue.pop(), None);
+        assert_eq!(queue.pop_fluid(), None);
+        assert_eq!(queue.pop_immediate_geometry(), None);
+        assert_eq!(queue.pop_immediate_lighting(), None);
     }
 }
