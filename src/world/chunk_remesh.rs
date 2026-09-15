@@ -3,16 +3,27 @@ use std::time::Duration;
 use bevy::prelude::*;
 
 use crate::voxel::{
-    deduplicated_queue::DeduplicatedQueue, neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
+    deduplicated_queue::DeduplicatedQueue, mesh_snapshot::ChunkMeshSnapshot,
+    neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
 };
 
 use super::{
-    chunk_rendering::{ChunkRenderPool, refresh_chunk_fluid_mesh, refresh_chunk_geometry_mesh},
+    chunk_remesh_tasks::{
+        ChunkRemeshTaskKind, ChunkRemeshTaskMeshes, ChunkRemeshTasks,
+        MAX_REMESH_TASKS_IN_FLIGHT,
+    },
+    chunk_rendering::{
+        ChunkRenderPool, apply_built_chunk_fluid_meshes, apply_built_chunk_geometry_meshes,
+        refresh_chunk_geometry_mesh,
+    },
     chunk_system_params::{ChunkContent, ChunkRenderer},
     work_budget::FrameWorkBudget,
 };
 
-const REMESH_BUDGET: Duration = Duration::from_millis(1);
+const REMESH_TASK_DISPATCH_BUDGET: Duration = Duration::from_millis(1);
+const REMESH_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
+const MAX_REMESH_TASKS_DISPATCHED_PER_FRAME: usize = 2;
+const MAX_REMESH_RESULTS_COLLECTED_PER_FRAME: usize = 2;
 const MAX_IMMEDIATE_LIGHTING_REMESHES_PER_FRAME: usize = 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -52,6 +63,13 @@ impl ChunkRemeshQueue {
     pub(crate) fn enqueue_fluid_priority(&mut self, coord: IVec3) {
         if coord.y >= 0 {
             self.fluid.enqueue_front(coord);
+        }
+    }
+
+    fn enqueue_task_priority(&mut self, coord: IVec3, kind: ChunkRemeshTaskKind) {
+        match kind {
+            ChunkRemeshTaskKind::Geometry => self.enqueue_priority(coord),
+            ChunkRemeshTaskKind::Fluid => self.enqueue_fluid_priority(coord),
         }
     }
 
@@ -240,72 +258,112 @@ pub(super) fn process_chunk_remesh_queue(
     mut renderer: ChunkRenderer,
     world: Res<VoxelWorld>,
     mut queue: ResMut<ChunkRemeshQueue>,
+    mut tasks: ResMut<ChunkRemeshTasks>,
 ) {
-    let first = if let Some(coord) = queue.pop_renderable(&renderer.pool) {
-        Some((coord, true))
-    } else {
-        queue
-            .pop_renderable_fluid(&renderer.pool)
-            .map(|coord| (coord, false))
-    };
-    let Some((first_coord, first_is_geometry)) = first else {
-        return;
-    };
-
-    let render_context = content.render_context(
+    tasks.sync_snapshot(&content);
+    collect_completed_remesh_tasks(
+        &content,
+        &mut renderer,
         &world,
-        &renderer.terrain_materials,
-        &renderer.fluid_materials,
+        &mut queue,
+        &mut tasks,
     );
-    let mut budget = FrameWorkBudget::new(REMESH_BUDGET, 1);
+    dispatch_remesh_tasks(&world, &renderer.pool, &mut queue, &mut tasks);
+}
 
-    if first_is_geometry {
-        refresh_chunk_geometry_mesh(
-            &mut renderer.commands,
-            &mut renderer.meshes,
-            &mut renderer.pool,
-            first_coord,
-            &render_context,
-        );
-    } else {
-        refresh_chunk_fluid_mesh(
-            &mut renderer.commands,
-            &mut renderer.meshes,
-            &mut renderer.pool,
-            first_coord,
-            &render_context,
-        );
-    }
-    budget.record(1);
+fn collect_completed_remesh_tasks(
+    content: &ChunkContent<'_>,
+    renderer: &mut ChunkRenderer<'_, '_>,
+    world: &VoxelWorld,
+    queue: &mut ChunkRemeshQueue,
+    tasks: &mut ChunkRemeshTasks,
+) {
+    let current_revision = tasks.revision();
+    let mut budget = FrameWorkBudget::new(REMESH_RESULT_INTEGRATION_BUDGET, 1)
+        .with_maximum_items(MAX_REMESH_RESULTS_COLLECTED_PER_FRAME);
 
     loop {
         if budget.exhausted() {
             break;
         }
 
-        if let Some(coord) = queue.pop_renderable(&renderer.pool) {
-            refresh_chunk_geometry_mesh(
+        let Some(completed) = tasks.poll_ready() else {
+            break;
+        };
+        budget.record(1);
+
+        let coord = completed.coord;
+        let output = completed.output;
+        if !renderer.pool.contains(coord) || world.chunk(coord).is_none() {
+            continue;
+        }
+        if completed.revision != current_revision || !output.dependencies.is_current(world) {
+            queue.enqueue_task_priority(coord, output.kind);
+            continue;
+        }
+
+        let render_context = content.render_context(
+            world,
+            &renderer.terrain_materials,
+            &renderer.fluid_materials,
+        );
+        match output.meshes {
+            ChunkRemeshTaskMeshes::Geometry(meshes) => apply_built_chunk_geometry_meshes(
                 &mut renderer.commands,
                 &mut renderer.meshes,
                 &mut renderer.pool,
                 coord,
+                meshes,
                 &render_context,
-            );
-            budget.record(1);
-            continue;
+            ),
+            ChunkRemeshTaskMeshes::Fluid(meshes) => apply_built_chunk_fluid_meshes(
+                &mut renderer.commands,
+                &mut renderer.meshes,
+                &mut renderer.pool,
+                coord,
+                meshes,
+                &render_context,
+            ),
+        }
+    }
+}
+
+fn dispatch_remesh_tasks(
+    world: &VoxelWorld,
+    render_pool: &ChunkRenderPool,
+    queue: &mut ChunkRemeshQueue,
+    tasks: &mut ChunkRemeshTasks,
+) {
+    let mut budget = FrameWorkBudget::new(REMESH_TASK_DISPATCH_BUDGET, 1)
+        .with_maximum_items(MAX_REMESH_TASKS_DISPATCHED_PER_FRAME);
+
+    while tasks.pending_count() < MAX_REMESH_TASKS_IN_FLIGHT {
+        if budget.exhausted() {
+            break;
         }
 
-        let Some(coord) = queue.pop_renderable_fluid(&renderer.pool) else {
+        let next = if let Some(coord) = queue.pop_renderable(render_pool) {
+            Some((coord, ChunkRemeshTaskKind::Geometry))
+        } else {
+            queue
+                .pop_renderable_fluid(render_pool)
+                .map(|coord| (coord, ChunkRemeshTaskKind::Fluid))
+        };
+        let Some((coord, kind)) = next else {
             break;
         };
 
-        refresh_chunk_fluid_mesh(
-            &mut renderer.commands,
-            &mut renderer.meshes,
-            &mut renderer.pool,
-            coord,
-            &render_context,
-        );
+        if tasks.contains(coord) {
+            queue.enqueue_task_priority(coord, kind);
+            break;
+        }
+        let Some(snapshot) = ChunkMeshSnapshot::capture(world, coord) else {
+            continue;
+        };
+        if !tasks.schedule(coord, kind, snapshot) {
+            queue.enqueue_task_priority(coord, kind);
+            break;
+        }
         budget.record(1);
     }
 }

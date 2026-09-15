@@ -4,6 +4,7 @@ pub(crate) mod cave_connectivity;
 mod chunk_generation_tasks;
 mod chunk_mesh_tasks;
 pub(crate) mod chunk_remesh;
+mod chunk_remesh_tasks;
 pub(crate) mod chunk_rendering;
 pub(crate) mod chunk_system_params;
 mod chunk_task_queue;
@@ -49,6 +50,7 @@ use chunk_remesh::{
     ChunkRemeshQueue, process_chunk_remesh_queue, process_immediate_geometry_remesh,
     process_immediate_lighting_remesh,
 };
+use chunk_remesh_tasks::ChunkRemeshTasks;
 use chunk_rendering::{ChunkRenderPool, clear_chunk_render_pool};
 use chunk_unloading::{ChunkUnloadState, unload_chunk_meshes};
 use day_night::DayNightPlugin;
@@ -82,6 +84,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<ChunkStreamingState>()
             .init_resource::<ChunkGenerationTasks>()
             .init_resource::<ChunkMeshTasks>()
+            .init_resource::<ChunkRemeshTasks>()
             .init_resource::<ChunkUnloadState>()
             .init_resource::<ChunkRenderPool>()
             .init_resource::<ChunkRemeshQueue>()
@@ -93,6 +96,7 @@ impl Plugin for WorldPlugin {
                 (
                     reset_resource::<ChunkGenerationTasks>,
                     reset_resource::<ChunkMeshTasks>,
+                    reset_resource::<ChunkRemeshTasks>,
                     begin_world_loading,
                 )
                     .chain(),
@@ -103,6 +107,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<ChunkStreamingState>,
                     reset_resource::<ChunkGenerationTasks>,
                     reset_resource::<ChunkMeshTasks>,
+                    reset_resource::<ChunkRemeshTasks>,
                     reset_resource::<ChunkUnloadState>,
                     reset_resource::<WorldTickClock>,
                 ),
@@ -113,6 +118,7 @@ impl Plugin for WorldPlugin {
                     clear_chunk_render_pool,
                     reset_resource::<ChunkGenerationTasks>,
                     reset_resource::<ChunkMeshTasks>,
+                    reset_resource::<ChunkRemeshTasks>,
                     reset_resource::<ChunkUnloadState>,
                     reset_resource::<ChunkRemeshQueue>,
                     reset_resource::<PendingLightingUpdates>,

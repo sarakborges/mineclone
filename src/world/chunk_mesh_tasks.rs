@@ -19,7 +19,7 @@ use super::{
 
 pub(crate) const MAX_MESH_TASKS_IN_FLIGHT: usize = 8;
 
-struct MeshContentSnapshot {
+pub(crate) struct MeshContentSnapshot {
     blocks: BlockRegistry,
     fluids: FluidRegistry,
     biomes: BiomeRegistry,
@@ -28,7 +28,7 @@ struct MeshContentSnapshot {
 }
 
 impl MeshContentSnapshot {
-    fn from_content(content: &ChunkContent<'_>) -> Self {
+    pub(crate) fn from_content(content: &ChunkContent<'_>) -> Self {
         Self {
             blocks: content.blocks().clone(),
             fluids: content.fluids().clone(),
@@ -38,7 +38,7 @@ impl MeshContentSnapshot {
         }
     }
 
-    fn context<'a>(
+    pub(crate) fn context<'a>(
         &'a self,
         world: &'a ChunkMeshSnapshot,
     ) -> ChunkMeshBuildContext<'a, ChunkMeshSnapshot> {

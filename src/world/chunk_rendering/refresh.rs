@@ -1,18 +1,19 @@
 use bevy::prelude::*;
 
+use crate::voxel::fluid_mesh::ChunkFluidMesh;
+
 use super::{
     ChunkRenderContext,
     pool::{
         ChunkRenderPool, retire_chunk_render_allocation, retire_render_allocation_parts,
     },
     spawn::{
-        BuiltChunkMesh, build_chunk_fluid_render_meshes, build_chunk_terrain_render_meshes,
-        mesh_asset_bytes, spawn_chunk_mesh, spawn_fluid_meshes_into_existing_allocation,
-        spawn_terrain_meshes_into_existing_allocation,
+        BuiltChunkMesh, build_chunk_terrain_render_meshes, mesh_asset_bytes, spawn_chunk_mesh,
+        spawn_fluid_meshes_into_existing_allocation, spawn_terrain_meshes_into_existing_allocation,
     },
 };
 
-pub fn refresh_chunk_mesh(
+fn refresh_chunk_mesh(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     render_pool: &mut ChunkRenderPool,
@@ -46,6 +47,34 @@ pub fn refresh_chunk_geometry_mesh(
 
     let build_context = context.mesh_build_context();
     let built_meshes = build_chunk_terrain_render_meshes(coord, chunk, &build_context);
+    apply_built_chunk_geometry_meshes(
+        commands,
+        meshes,
+        render_pool,
+        coord,
+        built_meshes,
+        context,
+    );
+}
+
+pub(crate) fn apply_built_chunk_geometry_meshes(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    render_pool: &mut ChunkRenderPool,
+    coord: IVec3,
+    built_meshes: Vec<BuiltChunkMesh>,
+    context: &ChunkRenderContext<'_>,
+) {
+    let Some(chunk) = context.world.chunk(coord) else {
+        return;
+    };
+    if chunk.is_empty() {
+        if render_pool.contains(coord) {
+            refresh_chunk_mesh(commands, meshes, render_pool, coord, context);
+        }
+        return;
+    }
+
     let replacement_keys = built_meshes
         .iter()
         .map(BuiltChunkMesh::key)
@@ -86,19 +115,18 @@ pub fn refresh_chunk_geometry_mesh(
     );
 }
 
-pub fn refresh_chunk_fluid_mesh(
+pub(crate) fn apply_built_chunk_fluid_meshes(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     render_pool: &mut ChunkRenderPool,
     coord: IVec3,
+    fluid_meshes: Vec<ChunkFluidMesh>,
     context: &ChunkRenderContext<'_>,
 ) {
-    let Some(chunk) = context.world.chunk(coord) else {
+    if context.world.chunk(coord).is_none() {
         return;
-    };
+    }
 
-    let build_context = context.mesh_build_context();
-    let fluid_meshes = build_chunk_fluid_render_meshes(coord, chunk, &build_context);
     let fluid_mesh_bytes = fluid_meshes
         .iter()
         .map(|fluid| mesh_asset_bytes(&fluid.mesh))
