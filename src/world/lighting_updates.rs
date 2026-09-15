@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::voxel::{
@@ -5,8 +7,14 @@ use crate::voxel::{
     world::VoxelWorld,
 };
 
-use super::{chunk_remesh::ChunkRemeshQueue, chunk_system_params::VoxelContent};
+use super::{
+    chunk_remesh::ChunkRemeshQueue,
+    chunk_system_params::VoxelContent,
+    work_budget::FrameWorkBudget,
+};
 
+const LIGHTING_BUDGET: Duration = Duration::from_millis(2);
+const MIN_LIGHTING_VOXELS_BEFORE_BUDGET_CHECK: usize = 256;
 const MAX_LIGHTING_VOXELS_PER_FRAME: usize = 4_096;
 
 #[derive(SystemParam)]
@@ -24,13 +32,23 @@ pub(super) fn process_dynamic_lighting(
         return;
     }
 
+    let mut budget = FrameWorkBudget::new(
+        LIGHTING_BUDGET,
+        MIN_LIGHTING_VOXELS_BEFORE_BUDGET_CHECK,
+    )
+    .with_maximum_items(MAX_LIGHTING_VOXELS_PER_FRAME);
+    let mut recorded_voxels = 0;
     let changed_chunks = process_pending_lighting(
         &mut runtime.world,
         &mut runtime.lighting,
         &content.blocks,
         &content.fluids,
         &content.secondary_properties,
-        MAX_LIGHTING_VOXELS_PER_FRAME,
+        |processed_voxels| {
+            budget.record(processed_voxels.saturating_sub(recorded_voxels));
+            recorded_voxels = processed_voxels;
+            budget.exhausted()
+        },
     );
 
     for coord in changed_chunks {

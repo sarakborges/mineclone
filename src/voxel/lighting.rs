@@ -188,7 +188,7 @@ pub(crate) fn process_pending_lighting(
     blocks: &BlockRegistry,
     fluids: &FluidRegistry,
     secondary_properties: &SecondaryPropertyRegistry,
-    max_voxels: usize,
+    budget_exhausted: impl FnMut(usize) -> bool,
 ) -> HashSet<IVec3> {
     pending.enqueue_emission_edit_volumes(world, blocks, secondary_properties);
     relax_budgeted(
@@ -197,7 +197,7 @@ pub(crate) fn process_pending_lighting(
         fluids,
         secondary_properties,
         &mut pending.queue,
-        max_voxels,
+        budget_exhausted,
     )
 }
 

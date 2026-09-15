@@ -21,6 +21,7 @@ use super::{
 };
 
 const HUE_VECTOR_SCALE: i32 = 1024;
+const BUDGET_CHECK_INTERVAL_VOXELS: usize = 64;
 const HUE_VECTOR_X: [i32; 32] = [
     1024, 1004, 946, 851, 724, 569, 392, 200, 0, -200, -392, -569, -724, -851, -946,
     -1004, -1024, -1004, -946, -851, -724, -569, -392, -200, 0, 200, 392, 569, 724, 851,
@@ -45,7 +46,7 @@ pub(super) fn relax(
         fluids,
         secondary_properties,
         queue,
-        usize::MAX,
+        |_| false,
     )
 }
 
@@ -55,15 +56,24 @@ pub(super) fn relax_budgeted(
     fluids: &FluidRegistry,
     secondary_properties: &SecondaryPropertyRegistry,
     queue: &mut LightingQueue,
-    max_voxels: usize,
+    mut budget_exhausted: impl FnMut(usize) -> bool,
 ) -> HashSet<IVec3> {
     let mut changed_chunks = HashSet::new();
     let mut context = LightingContext::default();
+    let mut processed = 0;
 
-    for _ in 0..max_voxels {
+    loop {
+        if processed > 0
+            && processed % BUDGET_CHECK_INTERVAL_VOXELS == 0
+            && budget_exhausted(processed)
+        {
+            break;
+        }
+
         let Some(position) = queue.pop() else {
             break;
         };
+        processed += 1;
 
         let Some((cell, fluid, current)) = world.sample_at(position) else {
             continue;
