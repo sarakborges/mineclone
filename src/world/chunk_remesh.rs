@@ -336,6 +336,7 @@ fn dispatch_remesh_tasks(
 ) {
     let mut budget = FrameWorkBudget::new(REMESH_TASK_DISPATCH_BUDGET, 1)
         .with_maximum_items(MAX_REMESH_TASKS_DISPATCHED_PER_FRAME);
+    let mut deferred = Vec::new();
 
     while tasks.pending_count() < MAX_REMESH_TASKS_IN_FLIGHT {
         if budget.exhausted() {
@@ -354,17 +355,21 @@ fn dispatch_remesh_tasks(
         };
 
         if tasks.contains(coord) {
-            queue.enqueue_task_priority(coord, kind);
-            break;
+            deferred.push((coord, kind));
+            continue;
         }
         let Some(snapshot) = ChunkMeshSnapshot::capture(world, coord) else {
             continue;
         };
         if !tasks.schedule(coord, kind, snapshot) {
-            queue.enqueue_task_priority(coord, kind);
+            deferred.push((coord, kind));
             break;
         }
         budget.record(1);
+    }
+
+    for (coord, kind) in deferred.into_iter().rev() {
+        queue.enqueue_task_priority(coord, kind);
     }
 }
 
