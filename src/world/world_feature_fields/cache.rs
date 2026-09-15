@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
-    sync::{Arc, RwLock},
+    sync::{Arc, OnceLock, RwLock},
 };
 
 use bevy::prelude::*;
@@ -20,7 +20,7 @@ const CACHE_REGION_MARGIN: i32 = 1;
 
 struct ConcurrentCache<K, V> {
     name: &'static str,
-    entries: RwLock<HashMap<K, V>>,
+    entries: RwLock<HashMap<K, Arc<OnceLock<V>>>>,
 }
 
 impl<K, V> ConcurrentCache<K, V>
@@ -36,33 +36,32 @@ where
     }
 
     fn get_or_insert_with(&self, key: K, factory: impl FnOnce() -> V) -> V {
-        if let Some(cached) = self
+        let cached = self
             .entries
             .read()
             .unwrap_or_else(|_| panic!("{} read lock was poisoned", self.name))
             .get(&key)
-            .cloned()
-        {
-            return cached;
-        }
+            .cloned();
+        let entry = cached.unwrap_or_else(|| {
+            let mut entries = self
+                .entries
+                .write()
+                .unwrap_or_else(|_| panic!("{} write lock was poisoned", self.name));
 
-        let value = factory();
-        let mut entries = self
-            .entries
-            .write()
-            .unwrap_or_else(|_| panic!("{} write lock was poisoned", self.name));
+            entries
+                .entry(key)
+                .or_insert_with(|| Arc::new(OnceLock::new()))
+                .clone()
+        });
 
-        entries
-            .entry(key)
-            .or_insert_with(|| value.clone())
-            .clone()
+        entry.get_or_init(factory).clone()
     }
 
-    fn retain(&self, mut predicate: impl FnMut(&K, &V) -> bool) {
+    fn retain(&self, mut predicate: impl FnMut(&K) -> bool) {
         self.entries
             .write()
             .unwrap_or_else(|_| panic!("{} write lock was poisoned", self.name))
-            .retain(|key, value| predicate(key, value));
+            .retain(|key, _| predicate(key));
     }
 
     #[cfg(test)]
@@ -75,7 +74,7 @@ where
 }
 
 struct StructureOriginCache {
-    entries: RwLock<HashMap<String, HashMap<IVec2, Option<i32>>>>,
+    entries: RwLock<HashMap<String, HashMap<IVec2, Arc<OnceLock<Option<i32>>>>>>,
 }
 
 impl StructureOriginCache {
@@ -91,38 +90,37 @@ impl StructureOriginCache {
         anchor: IVec2,
         factory: impl FnOnce() -> Option<i32>,
     ) -> Option<i32> {
-        if let Some(cached) = self
+        let cached = self
             .entries
             .read()
             .expect("structure origin cache read lock was poisoned")
             .get(structure_id)
             .and_then(|anchors| anchors.get(&anchor))
-            .copied()
-        {
-            return cached;
-        }
+            .cloned();
+        let entry = cached.unwrap_or_else(|| {
+            let mut entries = self
+                .entries
+                .write()
+                .expect("structure origin cache write lock was poisoned");
 
-        let value = factory();
-        let mut entries = self
-            .entries
-            .write()
-            .expect("structure origin cache write lock was poisoned");
+            if let Some(cached) = entries
+                .get(structure_id)
+                .and_then(|anchors| anchors.get(&anchor))
+                .cloned()
+            {
+                return cached;
+            }
 
-        if let Some(cached) = entries
-            .get(structure_id)
-            .and_then(|anchors| anchors.get(&anchor))
-            .copied()
-        {
-            return cached;
-        }
+            let entry = Arc::new(OnceLock::new());
+            if let Some(anchors) = entries.get_mut(structure_id) {
+                anchors.insert(anchor, entry.clone());
+            } else {
+                entries.insert(structure_id.to_owned(), HashMap::from([(anchor, entry.clone())]));
+            }
+            entry
+        });
 
-        if let Some(anchors) = entries.get_mut(structure_id) {
-            anchors.insert(anchor, value);
-        } else {
-            entries.insert(structure_id.to_owned(), HashMap::from([(anchor, value)]));
-        }
-
-        value
+        *entry.get_or_init(factory)
     }
 
     fn retain(&self, mut predicate: impl FnMut(IVec2) -> bool) {
@@ -251,15 +249,15 @@ impl FeatureCaches {
             .collect::<HashSet<_>>();
 
         self.generation_columns
-            .retain(|coord, _| horizontal_chunks.contains(coord));
+            .retain(|coord| horizontal_chunks.contains(coord));
         self.volume_biomes
-            .retain(|coord, _| retained_regions.contains(coord));
+            .retain(|coord| retained_regions.contains(coord));
         self.caves
-            .retain(|coord, _| retained_regions.contains(coord));
+            .retain(|coord| retained_regions.contains(coord));
         self.regions
-            .retain(|coord, _| retained_regions.contains(coord));
+            .retain(|coord| retained_regions.contains(coord));
         self.hydrology
-            .retain(|coord, _| retained_hydrology.contains(coord));
+            .retain(|coord| retained_hydrology.contains(coord));
         self.structure_origins.retain(|anchor| {
             let chunk_size = CHUNK_SIZE as i32;
             let chunk = IVec2::new(
@@ -298,5 +296,51 @@ impl FeatureCaches {
     #[cfg(test)]
     pub(super) fn structure_origin_count(&self) -> usize {
         self.structure_origins.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::{
+            Arc, Barrier,
+            atomic::{AtomicUsize, Ordering},
+        },
+        thread,
+        time::Duration,
+    };
+
+    use super::ConcurrentCache;
+
+    #[test]
+    fn concurrent_cache_runs_factory_once_per_key() {
+        const WORKERS: usize = 8;
+
+        let cache = Arc::new(ConcurrentCache::<u32, u32>::new("test cache"));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let start = Arc::new(Barrier::new(WORKERS));
+        let mut handles = Vec::with_capacity(WORKERS);
+
+        for _ in 0..WORKERS {
+            let cache = cache.clone();
+            let calls = calls.clone();
+            let start = start.clone();
+            handles.push(thread::spawn(move || {
+                start.wait();
+                let value = cache.get_or_insert_with(7, || {
+                    calls.fetch_add(1, Ordering::SeqCst);
+                    thread::sleep(Duration::from_millis(10));
+                    42
+                });
+                assert_eq!(value, 42);
+            }));
+        }
+
+        for handle in handles {
+            handle.join().expect("cache worker should finish");
+        }
+
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(cache.len(), 1);
     }
 }
