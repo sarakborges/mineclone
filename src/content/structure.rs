@@ -235,7 +235,7 @@ impl StructureDefinition {
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(Clone, Resource, Default)]
 pub struct StructureRegistry {
     definitions: DefinitionMap<StructureDefinition>,
     max_height_above_anchor: i32,
