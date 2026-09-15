@@ -84,11 +84,11 @@ Princípios principais:
 
 Último HEAD de código/version confirmado antes desta gravação do handoff:
 
-`b528e866906e1d4fad16a0f02a78e4ca58b56032`
+`16b0fd8c468e34ba58f3714ca24629854baa7271`
 
-Commit: `Remove obsolete lighting world wrappers`
+Commit: `Track dynamic fluid on chunk boundaries`
 
-`VERSION`: `0.12.66`
+`VERSION`: `0.12.67`
 
 Sempre buscar HEAD/VERSION novamente antes de escrever, porque podem ter avançado.
 
@@ -155,6 +155,11 @@ A auditoria arquitetural segue ativa; o roadmap vem do canon + inspeção real d
 - `block_emission(world, position)` também não tinha mais consumidor após a migração para `block_emission_for_cell`.
 - Permanecem apenas os primitives cell/sample-based realmente usados, evitando forwarding morto/dead code.
 
+### 0.12.67 — metadata de fluido dinâmico por boundary
+- `VoxelChunk` agora mantém `boundary_dynamic_fluid_counts` junto ao owner que já atualiza occupancy/boundary metadata.
+- `set_fluid` acompanha corretamente transições source ↔ dynamic mesmo sem mudança de occupancy.
+- Fluid frontier rejeita em O(1) faces sem fluido dinâmico; margens contendo apenas água natural/source deixam de escanear até 256 voxels para concluir que não há spread a retomar.
+
 ---
 
 # Decisões explícitas da auditoria
@@ -170,6 +175,7 @@ Não desfazer sem evidência nova:
 - Não remover full emission footprint de recoloração sem invalidation equivalente de canais antigos.
 - Empty-chunk lighting pode usar shell + vizinhos externos; chunks com conteúdo não podem ser reduzidos à shell sem frontier interna provada.
 - Direct skylight caches devem preservar um valor por world-Y, mesmo em gaps verticais sem chunk carregado.
+- Natural hydrology continua source/static; metadata de boundary deve distinguir source de fluido dinâmico para não reativar água natural no solver.
 - Não reabrir bugs antigos automaticamente; só se ativos/regredidos.
 
 ---
@@ -178,7 +184,7 @@ Não desfazer sem evidência nova:
 
 Se nenhum error/warning/runtime report tiver prioridade:
 
-1. Auditar integração de chunks além de meshing/lighting, especialmente fluid frontier e neighbor notifications, procurando trabalho feito mesmo quando metadata já prova que não há conteúdo relevante.
+1. Continuar a auditoria de integração de chunks, especialmente `enqueue_loaded_fluid_frontier` e `notify_loaded_chunk_neighbors`, procurando scans/notifications que metadata de `VoxelChunk` possa rejeitar antes.
 2. Procurar usos restantes de `cell_at`/`fluid_at`/`light_at` repetidos para a mesma posição em loops onde um chunk/sample já pode ser reutilizado.
 3. Manter full relaxation em chunks com conteúdo até existir frontier interna correta para direct sky/emitter propagation.
 4. Streaming selection/snapshots/task polling já estão bounded/change-driven; collision/raycast/targeting não mostraram lookup duplicado seguro.
