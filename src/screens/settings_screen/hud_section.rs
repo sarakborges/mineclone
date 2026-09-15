@@ -399,7 +399,10 @@ pub(super) fn sync_target_block_position_dropdown(
     language: Res<ActiveLanguage>,
     mut panels: Query<&mut Node, With<TargetBlockPositionDropdownPanel>>,
     mut selected_labels: Query<&mut Text, With<TargetBlockPositionDropdownLabel>>,
-    mut option_labels: Query<(&TargetBlockPositionOptionLabel, &mut Text)>,
+    mut option_labels: Query<
+        (&TargetBlockPositionOptionLabel, &mut Text),
+        Without<TargetBlockPositionDropdownLabel>,
+    >,
 ) {
     let localization_changed = localization.is_changed() || language.is_changed();
     if state.is_changed() {
