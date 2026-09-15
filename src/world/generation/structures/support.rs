@@ -17,7 +17,8 @@ use super::super::{
     ChunkGenerationContext,
     caves::anchored_cave_region,
     surface_carvers::{
-        SurfaceCarverResolveContext, resolve_surface_carver_column, surface_carver_density_delta,
+        SurfaceCarverColumn, SurfaceCarverResolveContext, resolve_surface_carver_column,
+        surface_carver_density_delta,
     },
 };
 
@@ -117,33 +118,37 @@ fn supported_surface_ground_y(
             )
         })
         .collect::<Vec<_>>();
-    let surface_carvers = region
+    let surface_carver_allowed = region
         .hydrology
         .water_near(horizontal, SURFACE_CARVER_WATER_CLEARANCE)
-        .is_none()
-        .then(|| {
-            resolve_surface_carver_column(
-                horizontal,
-                &influences,
-                &SurfaceCarverResolveContext {
-                    biomes: context.biomes,
-                    biome_field: context.biome_field,
-                    world_seed: context.biome_field.seed(),
-                    sea_level: context.dimension.sea_level as f32,
-                    minimum_y: surface_carver_minimum_y,
-                    maximum_y: surface_carver_maximum_y,
-                },
-            )
-        });
+        .is_none();
+    let mut surface_carvers = SurfaceCarverColumn::default();
+    if surface_carver_allowed {
+        resolve_surface_carver_column(
+            &mut surface_carvers,
+            horizontal,
+            &influences,
+            &SurfaceCarverResolveContext {
+                biomes: context.biomes,
+                biome_field: context.biome_field,
+                world_seed: context.biome_field.seed(),
+                sea_level: context.dimension.sea_level as f32,
+                minimum_y: surface_carver_minimum_y,
+                maximum_y: surface_carver_maximum_y,
+            },
+        );
+    }
     let density_context = DensitySampleContext::new(region, anchored_caves, context.biome_field);
 
     let density_at = |world_y: i32| {
         let sample_position = Vec3::new(horizontal.x, world_y as f32 + 0.5, horizontal.y);
         let base_density = terrain_density(raw_surface_height, world_y);
         let sampled_density = sample_density(base_density, sample_position, None, &density_context);
-        let carver_delta = surface_carvers.as_ref().map_or(0.0, |carvers| {
-            surface_carver_density_delta(sampled_density, sample_position, carvers)
-        });
+        let carver_delta = if surface_carver_allowed {
+            surface_carver_density_delta(sampled_density, sample_position, &surface_carvers)
+        } else {
+            0.0
+        };
 
         sampled_density + carver_delta
     };
