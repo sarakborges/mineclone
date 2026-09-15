@@ -34,23 +34,36 @@ impl ChunkMeshSnapshot {
         let mut shell_fluids = vec![None; SHELL_VOLUME].into_boxed_slice();
         let mut shell_light = vec![VoxelLight::DARK; SHELL_VOLUME].into_boxed_slice();
         let mut shell_loaded = vec![false; SHELL_VOLUME].into_boxed_slice();
+        let last = SNAPSHOT_SIDE - 1;
+        let mut capture_shell_voxel = |x: usize, y: usize, z: usize| {
+            let index = shell_index_from_snapshot_coords(x, y, z)
+                .expect("mesh snapshot shell coordinates must have a compact index");
+            let position = snapshot_origin + IVec3::new(x as i32, y as i32, z as i32);
+            let Some((cell, fluid, light)) = world.sample_at(position) else {
+                return;
+            };
 
-        for y in 0..SNAPSHOT_SIDE {
-            for z in 0..SNAPSHOT_SIDE {
-                for x in 0..SNAPSHOT_SIDE {
-                    let Some(index) = shell_index_from_snapshot_coords(x, y, z) else {
-                        continue;
-                    };
-                    let position = snapshot_origin + IVec3::new(x as i32, y as i32, z as i32);
-                    let Some((cell, fluid, light)) = world.sample_at(position) else {
-                        continue;
-                    };
+            shell_loaded[index] = true;
+            shell_cells[index] = cell;
+            shell_fluids[index] = fluid;
+            shell_light[index] = light;
+        };
 
-                    shell_loaded[index] = true;
-                    shell_cells[index] = cell;
-                    shell_fluids[index] = fluid;
-                    shell_light[index] = light;
-                }
+        for z in 0..SNAPSHOT_SIDE {
+            for x in 0..SNAPSHOT_SIDE {
+                capture_shell_voxel(x, 0, z);
+                capture_shell_voxel(x, last, z);
+            }
+        }
+
+        for y in 1..last {
+            for x in 0..SNAPSHOT_SIDE {
+                capture_shell_voxel(x, y, 0);
+                capture_shell_voxel(x, y, last);
+            }
+            for z in 1..last {
+                capture_shell_voxel(0, y, z);
+                capture_shell_voxel(last, y, z);
             }
         }
 
