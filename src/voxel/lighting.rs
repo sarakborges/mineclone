@@ -6,7 +6,7 @@ mod queue;
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
@@ -21,22 +21,29 @@ use self::{
     queue::LightingQueue,
 };
 use super::{
+    cell::VoxelCell,
     chunk::CHUNK_SIZE,
     coordinates::chunk_origin,
-    light::VoxelLight,
+    light::{BlockLight, VoxelLight},
     world::VoxelWorld,
 };
 
 #[derive(Resource, Default)]
 pub(crate) struct PendingLightingUpdates {
     queue: LightingQueue,
-    emission_edit_centers: HashSet<IVec3>,
+    emission_edit_previous_cells: HashMap<IVec3, Option<VoxelCell>>,
 }
 
 impl PendingLightingUpdates {
-    pub(crate) fn enqueue_voxel_edit(&mut self, position: IVec3) {
+    pub(crate) fn enqueue_voxel_edit(
+        &mut self,
+        position: IVec3,
+        previous_cell: Option<VoxelCell>,
+    ) {
         self.queue.enqueue_with_neighbors_priority(position);
-        self.emission_edit_centers.insert(position);
+        self.emission_edit_previous_cells
+            .entry(position)
+            .or_insert(previous_cell);
     }
 
     pub(crate) fn enqueue_chunk_unloads(&mut self, unloaded: &[IVec3]) {
@@ -52,22 +59,32 @@ impl PendingLightingUpdates {
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.queue.is_empty() && self.emission_edit_centers.is_empty()
+        self.queue.is_empty() && self.emission_edit_previous_cells.is_empty()
     }
 
-    fn enqueue_emission_edit_volumes(&mut self, world: &VoxelWorld, blocks: &BlockRegistry) {
-        let centers = std::mem::take(&mut self.emission_edit_centers);
+    fn enqueue_emission_edit_volumes(
+        &mut self,
+        world: &VoxelWorld,
+        blocks: &BlockRegistry,
+        secondary_properties: &SecondaryPropertyRegistry,
+    ) {
+        let edits = std::mem::take(&mut self.emission_edit_previous_cells);
         let radius = VoxelLight::MAX_LEVEL as i32;
 
-        for center in centers {
-            let is_emitter = world
-                .block_id_at(center)
-                .and_then(|block_id| blocks.get(block_id))
-                .is_some_and(|block| block.light_emission > 0);
-            if !is_emitter {
+        for (center, previous_cell) in edits {
+            let previous_emission =
+                block_emission_for_cell(previous_cell, blocks, secondary_properties);
+            let current_emission =
+                block_emission_for_cell(world.cell_at(center), blocks, secondary_properties);
+            if !emission_change_requires_full_volume(previous_emission, current_emission) {
                 continue;
             }
 
+            // Changing an existing source's HSI emission can leave stale color channels
+            // mutually supporting one another in the incremental field. Re-evaluate the
+            // complete maximum Manhattan footprint only for that nonzero -> nonzero
+            // emission change. New sources propagate outward from the priority seed, while
+            // removed sources already converge through the normal invalidation frontier.
             for y in -radius..=radius {
                 let y_cost = y.abs();
                 for z in -radius..=radius {
@@ -86,6 +103,10 @@ impl PendingLightingUpdates {
             self.queue.enqueue_with_neighbors_priority(center);
         }
     }
+}
+
+fn emission_change_requires_full_volume(previous: BlockLight, current: BlockLight) -> bool {
+    previous != current && previous.intensity() > 0 && current.intensity() > 0
 }
 
 pub(crate) fn seed_chunk_direct_lighting(
@@ -145,7 +166,7 @@ pub(crate) fn process_pending_lighting(
     secondary_properties: &SecondaryPropertyRegistry,
     max_voxels: usize,
 ) -> HashSet<IVec3> {
-    pending.enqueue_emission_edit_volumes(world, blocks);
+    pending.enqueue_emission_edit_volumes(world, blocks, secondary_properties);
     relax_budgeted(
         world,
         blocks,
@@ -204,8 +225,8 @@ fn relight_after_voxel_edit(
 ) {
     let secondary_properties = SecondaryPropertyRegistry::default();
     let mut pending = PendingLightingUpdates::default();
-    pending.enqueue_voxel_edit(position);
-    pending.enqueue_emission_edit_volumes(world, blocks);
+    pending.enqueue_voxel_edit(position, None);
+    pending.enqueue_emission_edit_volumes(world, blocks, &secondary_properties);
     drop(relax(
         world,
         blocks,

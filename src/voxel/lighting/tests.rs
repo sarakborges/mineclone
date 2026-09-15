@@ -12,7 +12,7 @@ use crate::{
         cell::VoxelCell,
         chunk::{CHUNK_SIZE, VoxelChunk},
         fluid::{FluidCell, MAX_FLUID_LEVEL},
-        light::VoxelLight,
+        light::{BlockLight, VoxelLight},
         texture_rotation::TextureRotation,
         world::VoxelWorld,
     },
@@ -21,6 +21,17 @@ use crate::{
 const OPAQUE_BLOCK_ID: &str = "asteria:test/opaque";
 const LAMP_BLOCK_ID: &str = "asteria:test/lamp";
 const WATER_ID: &str = "asteria:test/water";
+
+#[test]
+fn full_emission_volume_is_reserved_for_nonzero_source_changes() {
+    let red = BlockLight::new(0, BlockLight::MAX_SATURATION, VoxelLight::MAX_LEVEL);
+    let blue = BlockLight::new(21, BlockLight::MAX_SATURATION, VoxelLight::MAX_LEVEL);
+
+    assert!(!emission_change_requires_full_volume(BlockLight::DARK, red));
+    assert!(!emission_change_requires_full_volume(red, BlockLight::DARK));
+    assert!(!emission_change_requires_full_volume(red, red));
+    assert!(emission_change_requires_full_volume(red, blue));
+}
 
 #[test]
 fn direct_skylight_is_restored_after_removing_a_blocker() {
