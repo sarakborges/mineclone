@@ -23,12 +23,6 @@ pub(super) struct TargetBlockPositionDropdownState {
     open: bool,
 }
 
-impl TargetBlockPositionDropdownState {
-    pub(super) fn reset(&mut self) {
-        self.open = false;
-    }
-}
-
 #[derive(Component)]
 pub(super) struct DisplayTooltipsToggle;
 
