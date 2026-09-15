@@ -183,6 +183,12 @@ impl VoxelWorld {
             let x = local_position.x as usize;
             let y = local_position.y as usize;
             let z = local_position.z as usize;
+            let current_block = chunk.cell_at(local_position.x, local_position.y, local_position.z);
+            let current_fluid = chunk.fluid_at(local_position.x, local_position.y, local_position.z);
+
+            if current_block == block && (block.is_none() || current_fluid.is_none()) {
+                return None;
+            }
 
             chunk.set_block(x, y, z, block);
 
@@ -281,5 +287,17 @@ mod tests {
 
         world.archive_chunk(low);
         assert_eq!(world.highest_loaded_world_y_in_column(world_x, world_z), None);
+    }
+
+    #[test]
+    fn identical_block_mutation_is_ignored() {
+        let mut world = VoxelWorld::default();
+        let coord = IVec3::ZERO;
+        let position = IVec3::new(1, 2, 3);
+        let cell = VoxelCell::new("stone", Default::default());
+        world.insert_chunk(coord, VoxelChunk::empty());
+
+        assert_eq!(world.set_block_at(position, Some(cell)), Some(coord));
+        assert_eq!(world.set_block_at(position, Some(cell)), None);
     }
 }
