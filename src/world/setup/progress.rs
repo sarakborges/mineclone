@@ -88,7 +88,7 @@ fn integrate_generated_chunks(
             break;
         }
 
-        let Some(completed) = runtime.generation_tasks.collect_ready(1).pop() else {
+        let Some(completed) = runtime.generation_tasks.poll_ready() else {
             break;
         };
 
@@ -223,7 +223,7 @@ fn integrate_built_chunk_meshes(
             break;
         }
 
-        let Some(completed) = runtime.mesh_tasks.collect_ready(1).pop() else {
+        let Some(completed) = runtime.mesh_tasks.poll_ready() else {
             break;
         };
 
