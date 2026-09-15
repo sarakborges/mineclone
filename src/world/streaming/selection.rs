@@ -20,6 +20,13 @@ const PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS: i32 = 3;
 const IMMEDIATE_PLAYER_PRIORITY_RADIUS_CHUNKS: i32 = 1;
 const SURFACE_SUPPORT_NEIGHBORS: [IVec2; 4] = [IVec2::X, IVec2::NEG_X, IVec2::Y, IVec2::NEG_Y];
 
+impl ChunkStreamingState {
+    pub(in crate::world) fn selection_key(&self) -> Option<(IVec3, i32, i32)> {
+        self.center
+            .map(|center| (center, self.horizontal_radius, self.vertical_radius))
+    }
+}
+
 pub(super) fn rebuild_queue(
     streaming: &mut ChunkStreamingState,
     center: IVec3,
