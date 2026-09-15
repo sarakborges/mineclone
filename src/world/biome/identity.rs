@@ -1,4 +1,4 @@
-use super::{CurrentBiome, CurrentBiomeInfluence};
+use super::CurrentBiomeInfluence;
 use crate::world::{
     biome_field::{BiomeFieldSample, BiomeInfluence},
     hydrology::HydrologyBiomeOverlay,
@@ -13,6 +13,11 @@ pub(super) struct VolumeBiomeIdentity<'a> {
 pub(super) struct ResolvedSurfaceIdentity {
     pub hydrology_id: Option<String>,
     pub hydrology_influences: Vec<CurrentBiomeInfluence>,
+    pub influences: Vec<CurrentBiomeInfluence>,
+}
+
+pub(super) struct ResolvedFinalIdentity {
+    pub id: String,
     pub influences: Vec<CurrentBiomeInfluence>,
 }
 
@@ -62,10 +67,10 @@ pub(super) fn resolve_surface_identity(
 }
 
 pub(super) fn resolve_final_identity(
-    current_biome: &mut CurrentBiome,
     surface: Vec<CurrentBiomeInfluence>,
     volume: Option<VolumeBiomeIdentity<'_>>,
-) {
+    fallback_id: &str,
+) -> ResolvedFinalIdentity {
     let volume_strength = volume.map_or(0.0, |identity| identity.strength.clamp(0.0, 1.0));
     let surface_strength = 1.0 - volume_strength;
     let mut influences = Vec::new();
@@ -83,11 +88,9 @@ pub(super) fn resolve_final_identity(
     }
 
     normalize_influences(&mut influences);
+    let id = primary_influence(&influences).unwrap_or(fallback_id).to_owned();
 
-    if let Some(primary) = primary_influence(&influences) {
-        current_biome.id = primary.to_owned();
-    }
-    current_biome.influences = influences;
+    ResolvedFinalIdentity { id, influences }
 }
 
 pub(super) fn replace_influences(
@@ -170,5 +173,13 @@ mod tests {
         assert_eq!(resolved.hydrology_id.as_deref(), Some("coast"));
         assert_eq!(resolved.hydrology_influences.len(), 1);
         assert_eq!(resolved.influences.len(), 2);
+    }
+
+    #[test]
+    fn final_identity_preserves_fallback_when_no_influences_exist() {
+        let resolved = resolve_final_identity(Vec::new(), None, "fallback");
+
+        assert_eq!(resolved.id, "fallback");
+        assert!(resolved.influences.is_empty());
     }
 }
