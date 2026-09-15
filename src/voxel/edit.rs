@@ -25,8 +25,9 @@ impl VoxelMutationRuntime<'_> {
         world_position: IVec3,
         block: Option<VoxelCell>,
     ) -> Option<IVec3> {
-        let previous_cell = self.world.cell_at(world_position);
-        let chunk = self.world.set_block_at(world_position, block)?;
+        let (chunk, previous_cell) = self
+            .world
+            .set_block_at_with_previous(world_position, block)?;
         self.lighting
             .enqueue_voxel_edit(world_position, previous_cell);
         self.remesh_queue.enqueue_voxel_edit(chunk);

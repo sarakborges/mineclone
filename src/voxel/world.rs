@@ -212,11 +212,21 @@ impl VoxelWorld {
         world_position: IVec3,
         block: Option<VoxelCell>,
     ) -> Option<IVec3> {
+        self.set_block_at_with_previous(world_position, block)
+            .map(|(chunk_coord, _)| chunk_coord)
+    }
+
+    pub(crate) fn set_block_at_with_previous(
+        &mut self,
+        world_position: IVec3,
+        block: Option<VoxelCell>,
+    ) -> Option<(IVec3, Option<VoxelCell>)> {
         if world_position.y < 0 {
             return None;
         }
 
         let (chunk_coord, local_position) = split_world_position(world_position);
+        let previous_block;
 
         {
             let chunk = self.chunks.get_mut(&chunk_coord)?;
@@ -230,6 +240,7 @@ impl VoxelWorld {
                 return None;
             }
 
+            previous_block = current_block;
             chunk.set_block(x, y, z, block);
 
             if block.is_some() {
@@ -238,7 +249,7 @@ impl VoxelWorld {
         }
 
         self.dirty_chunks.insert(chunk_coord);
-        Some(chunk_coord)
+        Some((chunk_coord, previous_block))
     }
 
     pub(crate) fn set_fluid_at(
@@ -339,5 +350,21 @@ mod tests {
 
         assert_eq!(world.set_block_at(position, Some(cell)), Some(coord));
         assert_eq!(world.set_block_at(position, Some(cell)), None);
+    }
+
+    #[test]
+    fn detailed_block_mutation_returns_previous_cell() {
+        let mut world = VoxelWorld::default();
+        let coord = IVec3::ZERO;
+        let position = IVec3::new(1, 2, 3);
+        let first = VoxelCell::new("stone", Default::default());
+        let second = VoxelCell::new("dirt", Default::default());
+        world.insert_chunk(coord, VoxelChunk::empty());
+        world.set_block_at(position, Some(first));
+
+        assert_eq!(
+            world.set_block_at_with_previous(position, Some(second)),
+            Some((coord, Some(first))),
+        );
     }
 }
