@@ -8,7 +8,8 @@ use crate::{
 };
 
 use self::identity::{
-    VolumeBiomeIdentity, replace_influences, resolve_final_identity, resolve_surface_identity,
+    VolumeBiomeIdentity, apply_volume_identity, replace_influences, replace_optional_string,
+    replace_single_influence, replace_string, resolve_surface_identity,
 };
 use super::{
     biome_field::BiomeField,
@@ -63,6 +64,7 @@ pub fn track_current_biome(
     biome_field: Option<Res<BiomeField>>,
     feature_fields: Option<Res<WorldFeatureFields>>,
     mut current_biome: ResMut<CurrentBiome>,
+    mut next_biome: Local<CurrentBiome>,
     mut last_position: Local<Option<Vec3>>,
 ) {
     let Some(biome_field) = biome_field else {
@@ -100,39 +102,37 @@ pub fn track_current_biome(
         let continentalness = biome_field.climate_at(horizontal).continentalness;
         fields.hydrology_biome_overlay(continentalness)
     });
-    let resolved_surface = resolve_surface_identity(&surface, hydrology);
-    let final_identity = resolve_final_identity(
-        resolved_surface.influences,
+
+    let next = &mut *next_biome;
+    replace_string(&mut next.surface_id, surface.primary_id);
+    replace_influences(&mut next.surface_influences, &surface.influences);
+
+    let resolved_surface_count = resolve_surface_identity(
+        &surface,
+        hydrology,
+        &mut next.influences,
+        &mut next.hydrology_influences,
+        &mut next.hydrology_id,
+    );
+    apply_volume_identity(
+        &mut next.influences,
+        resolved_surface_count,
         volume,
         &current_biome.id,
+        &mut next.id,
     );
-    let mut surface_influences = Vec::new();
-    replace_influences(&mut surface_influences, &surface.influences);
-    let (volume_id, volume_influences, volume_strength) = if let Some(volume) = volume {
-        (
-            Some(volume.id.to_owned()),
-            vec![CurrentBiomeInfluence {
-                id: volume.id.to_owned(),
-                weight: 1.0,
-            }],
-            volume.strength,
-        )
-    } else {
-        (None, Vec::new(), 0.0)
-    };
-    let next_biome = CurrentBiome {
-        id: final_identity.id,
-        influences: final_identity.influences,
-        surface_id: surface.primary_id.to_owned(),
-        surface_influences,
-        hydrology_id: resolved_surface.hydrology_id,
-        hydrology_influences: resolved_surface.hydrology_influences,
-        volume_id,
-        volume_influences,
-        volume_strength,
-    };
 
-    if *current_biome != next_biome {
-        *current_biome = next_biome;
+    if let Some(volume) = volume {
+        replace_optional_string(&mut next.volume_id, Some(volume.id));
+        replace_single_influence(&mut next.volume_influences, volume.id, 1.0);
+        next.volume_strength = volume.strength;
+    } else {
+        replace_optional_string(&mut next.volume_id, None);
+        next.volume_influences.clear();
+        next.volume_strength = 0.0;
+    }
+
+    if *current_biome != *next {
+        std::mem::swap(&mut *current_biome, next);
     }
 }
