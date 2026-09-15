@@ -153,14 +153,14 @@ pub(super) fn spawn_biome_setting(
                 },
                 BackgroundColor(control_background),
                 BorderColor::all(control_border),
-                children![((
+                children![(
                     SpawnBiomeDropdownLabel,
                     typography::hud(format!(
                         "{}   ▾",
                         localization.text(language, "newWorld.spawnBiome.random")
                     )),
                     Pickable::IGNORE,
-                ))],
+                )],
             ),
             (
                 SpawnBiomeDropdownPanel,
@@ -453,7 +453,7 @@ pub(super) fn sync_spawn_biome_dropdown_state(
     });
     for mut border in &mut search_borders {
         if *border != next_border {
-            *border = next_border.clone();
+            *border = next_border;
         }
     }
 }
