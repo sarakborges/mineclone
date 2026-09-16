@@ -34,6 +34,15 @@ struct PendingEntry {
     ordinal: usize,
 }
 
+#[derive(Clone, Copy)]
+struct DesiredChunkSelection {
+    center: IVec3,
+    horizontal_radius: i32,
+    vertical_radius: i32,
+    structure_chunk_allowance: i32,
+    movement_direction: IVec2,
+}
+
 #[derive(Default)]
 pub(super) struct QueueRebuildScratch {
     desired: HashSet<IVec3>,
@@ -78,11 +87,13 @@ pub(super) fn rebuild_queue(
 
     rebuild_desired_chunk_coords(
         &mut scratch.desired,
-        center,
-        preload_radius,
-        vertical_radius,
-        vertical_structure_allowance,
-        movement_direction,
+        DesiredChunkSelection {
+            center,
+            horizontal_radius: preload_radius,
+            vertical_radius,
+            structure_chunk_allowance: vertical_structure_allowance,
+            movement_direction,
+        },
         context,
         &mut streaming.surface_ranges,
     );
@@ -273,15 +284,18 @@ fn pending_priority(
 
 fn rebuild_desired_chunk_coords(
     desired: &mut HashSet<IVec3>,
-    center: IVec3,
-    horizontal_radius: i32,
-    vertical_radius: i32,
-    structure_chunk_allowance: i32,
-    movement_direction: IVec2,
+    selection: DesiredChunkSelection,
     context: &QueueRebuildContext<'_>,
     surface_ranges: &mut HashMap<IVec2, (i32, i32)>,
 ) {
     desired.clear();
+    let DesiredChunkSelection {
+        center,
+        horizontal_radius,
+        vertical_radius,
+        structure_chunk_allowance,
+        movement_direction,
+    } = selection;
 
     let local_radius = horizontal_radius.min(PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS);
     assert!(center.y >= 0, "streaming center Y cannot be negative");
