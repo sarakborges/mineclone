@@ -28,7 +28,7 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 ## Versionamento
 
 - Fonte operacional acordada: arquivo raiz `VERSION`.
-- Estado atual: `VERSION = 0.14.42`.
+- Estado atual: `VERSION = 0.14.43`.
 - `Cargo.toml` ainda declara `[package].version = 0.10.16`; essa divergência deve ser tratada em bloco explícito separado, não silenciosamente dentro de outro refactor.
 - Até essa decisão, não inferir a versão do projeto pelo `Cargo.toml`.
 
@@ -74,11 +74,11 @@ Roda em push para `develop`/`main` e em pull requests.
 
 Último HEAD de código publicado:
 
-`a6fc5c3e75ab2d028ef61cb80cf44332fd0c54e0`
+`8a961469cfc27d6aa4beb5070bcb07126b9988f4`
 
-Bloco: `Use Bevy hash map in chunk render pool`
+Bloco: `Move chunk mesh shell capture off main thread`
 
-`VERSION`: `0.14.42`
+`VERSION`: `0.14.43`
 
 Commits recentes relevantes:
 
@@ -92,25 +92,22 @@ Commits recentes relevantes:
 - `d5915fa` — `0.14.38`, solver de lighting consolida `chunk_mesh_revision` por chunk ao fim do batch.
 - `e54afd6` — `0.14.39`, remove `set_light_at` órfão.
 - `da309b3` — `0.14.40`, hash collections quentes restantes de lighting usam `bevy::platform`.
-- `30c54ce` — `0.14.41`, `desired/retained/surface_ranges` do streaming usam `bevy::platform`; retention de feature caches aceita iterador de coords e fica desacoplada do tipo concreto de set.
-- `a6fc5c3` — `0.14.42`, `ChunkRenderPool.active` troca `std::HashMap` por `bevy::platform::collections::HashMap` sem mudança semântica.
+- `30c54ce` — `0.14.41`, `desired/retained/surface_ranges` do streaming usam `bevy::platform`; retention de feature caches aceita iterador de coords.
+- `a6fc5c3` — `0.14.42`, `ChunkRenderPool.active` usa `bevy::platform::collections::HashMap`.
+- `8a96146` — `0.14.43`, `ChunkMeshSnapshot::capture` passa a clonar os 26 vizinhos por `Arc`/COW e materializa os 1736 samples do shell dentro das tasks async de initial mesh/remesh; revisions continuam capturadas no main thread. Inclui teste de snapshot congelado após mutação posterior do world.
 
 ## CI recente
 
-- `0.14.34` / run `35033347328`: Clippy **success**, `cargo check` **success**.
-- `0.14.35` / run `35034048076`: Clippy **success**, `cargo check` **success**.
-- `0.14.36` / run `35034426624`: Clippy **success**, `cargo check` **success**.
-- `0.14.37` / run `35034814641`: Clippy **success**, `cargo check` **success**.
-- `0.14.38` / run `35035219346`: failure de Clippy porque `set_light_at` ficou `dead_code`.
-- `0.14.39` / run `35035772978`: Clippy **success**, `cargo check` **success**; remove a API órfã sem `allow(dead_code)`.
+- `0.14.39` / run `35035772978`: Clippy **success**, `cargo check` **success**.
 - `0.14.40` / run `35036777258`: Clippy **success**, `cargo check` **success**.
 - `0.14.41` / run `35037142837`: Clippy **success**, `cargo check` **success**.
-- `0.14.42` / run `35037660941`: **pending/in progress** nesta atualização.
+- `0.14.42` / run `35037660941`: Clippy **success**, `cargo check` **success**.
+- `0.14.43` / run `35038065308`: **pending/in progress** nesta atualização.
 
 Falhas históricas que não devem ser reintroduzidas:
 
 - `0.14.16/17`: `TimeHudText.presented_time` usava `u32` para dia; `WorldClock.day` é `u64`.
-- `0.14.19/20`: `QueueRebuildScratch` privado apareceu na assinatura pública(super) de `stream_chunks`; resolvido com `ChunkStreamingSelection` em `0.14.21`.
+- `0.14.19/20`: `QueueRebuildScratch` privado apareceu na assinatura pública(super) de `stream_chunks`; resolvido com `ChunkStreamingSelection`.
 - `0.14.25`: structure support ainda chamava assinatura antiga de surface carver; corrigido em `0.14.26`.
 - `0.14.38`: não manter API órfã só para preservar shape anterior.
 - Draft `9c1a0e7`: não acoplar `retain_for_chunks` a `HashSet` com hasher específico; `0.14.41` resolve via iterador.
@@ -165,8 +162,8 @@ Falhas históricas que não devem ser reintroduzidas:
 
 ## Streaming / render integration
 
-- Unload recicla scratch; mesh integration evita buffers intermediários no caminho de replacement in-place.
-- `QueueRebuildScratch` recicla `desired`, `pending`, `retired`; o desired set não cria Vec ordenado descartável.
+- Unload recicla scratch; mesh integration evita buffers intermediários no replacement in-place.
+- `QueueRebuildScratch` recicla `desired`, `pending`, `retired`; desired não cria Vec ordenado descartável.
 - `ChunkStreamingSelection` encapsula settings + scratch.
 - `stream_chunks` só coleta tasks quando existem pending e só despacha quando há capacidade/trabalho.
 - `ChunkRemeshQueue` evita polling/dispatch vazio; immediate geometry permanece separado e síncrono.
@@ -189,12 +186,12 @@ Falhas históricas que não devem ser reintroduzidas:
 - Propagation usa o próprio `VoxelChunk` para vizinhos cardinais locais e volta ao world lookup só ao cruzar borda.
 - O early-return de medium opaco ocorre antes das leituras cardinais.
 - Mudanças de luz são aplicadas imediatamente; `chunk_mesh_revision` é consolidado por chunk ao fim do batch.
-- `ChunkMeshSnapshot::capture` ainda materializa `SHELL_VOLUME = 1736` samples no main thread, embora sem prefill; este é o próximo alvo.
+- `ChunkMeshSnapshot::capture` não expande mais 1736 shell samples no main thread: captura clones COW dos vizinhos + revisions; shell é materializado no worker e os clones vizinhos são soltos em seguida.
 - `enqueue_loaded_fluid_frontier` usa metadata O(1), escaneia só a face necessária e para ao localizar todos os fluids dinâmicos.
 
 ---
 
-# Auditoria atual: alvos já descartados sem nova evidência
+# Auditoria atual: alvos descartados sem nova evidência
 
 - `walk`/flight já tratam delta zero como idle; camera look retorna sem delta/focus/grab.
 - Viewmodel animation/held block já são guarded/cached.
@@ -210,6 +207,7 @@ Falhas históricas que não devem ser reintroduzidas:
 - Limites de tasks não equivalem a 20 threads concorrentes; reduzir arbitrariamente tende a reduzir throughput.
 - Surface-range cache já aquece os quatro vizinhos cardinais usados pela seleção.
 - `ChunkTaskQueue` tem poucos entries por design; trocar hasher ali não é prioridade.
+- A expansão eager de 4096 lighting seeds continua um custo real, mas uma fila lazy precisa preservar FIFO, dedup global e priority promotion. Não criar uma segunda semântica de fila sem um invariant/projeto que preserve isso explicitamente.
 
 ---
 
@@ -217,11 +215,11 @@ Falhas históricas que não devem ser reintroduzidas:
 
 Prioridade ligada ao relato de FPS caindo ao andar/carregar chunks:
 
-1. **Próximo patch planejado (`0.14.43`)**: `ChunkMeshSnapshot::capture` deve clonar os 26 `VoxelChunk`s vizinhos (storages `Arc`/COW, clone barato) e mover a materialização dos 1736 shell samples para dentro das tasks async de initial mesh/remesh. Preservar revisions e snapshot congelado; não trocar por leitura viva do `VoxelWorld`.
-2. Integração de chunk ainda expande 4096 posições para lighting no caminho main-thread. Investigar representação de seed por chunk/coluna ou expansão dentro do solver preservando ordem/prioridade e percepção de chunk pronto.
-3. Rebuild completo da seleção ao cruzar chunk ainda reconstrói/prioriza desired/pending. Só atacar algoritmo com invariant melhor/profiling; não fazer micro-refactor cosmético.
-4. `BiomeInfluence` nasce de índice de surface biome, mas alguns consumers convertem ID de volta para índice. Carregar índice junto é otimização menor e fica depois dos hot paths acima.
-5. Tratar `VERSION 0.14.x` vs `Cargo.toml 0.10.16` em bloco explícito separado quando os hot paths de runtime estiverem esgotados.
+1. **Próximo patch seguro (`0.14.44`)**: remover a alocação temporária escondida de `sort_by_cached_key` no rebuild da streaming selection. `QueueRebuildScratch.pending` deve armazenar `(coord, priority)` e ordenar in-place com chave já calculada, preservando exatamente o mesmo ordering tuple e a mesma seleção.
+2. Reavaliar a expansão de 4096 lighting seeds apenas se for possível representar o trabalho incremental preservando FIFO + dedup + priority promotion do `DeduplicatedQueue`; não publicar uma versão semanticamente diferente apenas para espalhar custo.
+3. `BiomeInfluence` nasce de índice de surface biome, mas alguns consumers convertem ID de volta para índice. Auditar todos os consumers e, se o shape puder ser estendido sem acoplamento ruim, carregar o índice junto para remover scans lineares repetidos.
+4. Tratar `VERSION 0.14.x` vs `Cargo.toml 0.10.16` em bloco explícito separado quando os hot paths de runtime estiverem esgotados.
+5. Fazer uma nova auditoria global do projeto depois desses itens. Se nenhum alvo sustentado por evidência/invariant restar, encerrar o roadmap em vez de inventar micro-otimizações.
 
 ---
 
@@ -239,15 +237,13 @@ Só retomar quando o usuário priorizar ou quando runtime indicar regressão rel
 
 # Próximos passos
 
-Se nenhum runtime error/warning tiver prioridade:
-
-1. Aguardar CI de `0.14.42` (`35037660941`).
-2. Se verde, publicar `0.14.43` movendo a materialização do halo para as tasks async, atualizar handoff e validar CI.
-3. Em seguida investigar e, se houver invariance segura, reduzir o custo main-thread da expansão inicial de 4096 lighting seeds.
-4. Depois revisar o rebuild completo de streaming selection ao cruzar chunk.
-5. Depois considerar carregar índice em `BiomeInfluence` para remover conversões ID -> índice.
-6. Por fim tratar explicitamente a divergência `VERSION` / `Cargo.toml`.
-7. Quando não houver mais alvo sustentado por evidência/invariant, encerrar o roadmap em vez de inventar micro-otimizações.
+1. Aguardar CI de `0.14.43` (`35038065308`).
+2. Se verde, publicar `0.14.44` removendo a allocation de `sort_by_cached_key` via scratch reutilizável de `(coord, priority)`.
+3. Atualizar handoff e validar CI.
+4. Auditar todos os consumers de `BiomeInfluence` e só então decidir se o índice deve virar dado carregado.
+5. Reavaliar lighting seed expansion; se não houver desenho que preserve a fila canônica, registrar como alvo bloqueado por corretude.
+6. Resolver explicitamente a divergência `VERSION` / `Cargo.toml` em bloco separado.
+7. Fazer auditoria global final. Sem evidência nova, encerrar roadmap.
 
 # Performance direction
 
