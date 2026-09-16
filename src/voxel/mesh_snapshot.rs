@@ -29,7 +29,7 @@ struct ShellSample {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ChunkMeshDependencies {
     center: IVec3,
-    revisions: [[[Option<u64>; 3]; 3]; 3],
+    content_revisions: [[[Option<u64>; 3]; 3]; 3],
 }
 
 impl ChunkMeshDependencies {
@@ -37,10 +37,17 @@ impl ChunkMeshDependencies {
         for offset_y in -1..=1 {
             for offset_z in -1..=1 {
                 for offset_x in -1..=1 {
-                    let expected = self.revisions[(offset_y + 1) as usize][(offset_z + 1) as usize]
-                        [(offset_x + 1) as usize];
+                    let expected = self.content_revisions[(offset_y + 1) as usize]
+                        [(offset_z + 1) as usize][(offset_x + 1) as usize];
+                    let Some(expected) = expected else {
+                        // A neighbor absent when this snapshot was captured may load while the
+                        // async mesh is building. Its later visibility notification queues the
+                        // boundary remesh, so discarding otherwise valid first-visible work here
+                        // only increases time-to-visible at the streaming frontier.
+                        continue;
+                    };
                     let coord = self.center + IVec3::new(offset_x, offset_y, offset_z);
-                    if world.chunk_mesh_revision(coord) != expected {
+                    if world.chunk_content_revision(coord) != Some(expected) {
                         return false;
                     }
                 }
@@ -60,14 +67,17 @@ pub(crate) struct ChunkMeshSnapshot {
 
 impl ChunkMeshSnapshot {
     pub(crate) fn capture(world: &VoxelWorld, coord: IVec3) -> Option<Self> {
-        let (center_chunk, center_revision) = world.chunk_with_mesh_revision(coord)?;
+        let center_chunk = world.chunk(coord)?;
+        let center_revision = world
+            .chunk_content_revision(coord)
+            .expect("loaded center chunk should have a content revision");
         let chunk = center_chunk.clone();
         let chunk_origin = chunk_origin(coord);
         let mut neighbor_chunks: NeighborChunks = std::array::from_fn(|_| {
             std::array::from_fn(|_| std::array::from_fn(|_| None))
         });
-        let mut revisions = [[[None; 3]; 3]; 3];
-        revisions[1][1][1] = Some(center_revision);
+        let mut content_revisions = [[[None; 3]; 3]; 3];
+        content_revisions[1][1][1] = Some(center_revision);
 
         for offset_y in -1..=1 {
             for offset_z in -1..=1 {
@@ -76,16 +86,18 @@ impl ChunkMeshSnapshot {
                         continue;
                     }
 
-                    let coord = coord + IVec3::new(offset_x, offset_y, offset_z);
-                    let Some((neighbor_chunk, revision)) = world.chunk_with_mesh_revision(coord)
-                    else {
+                    let neighbor_coord = coord + IVec3::new(offset_x, offset_y, offset_z);
+                    let Some(neighbor_chunk) = world.chunk(neighbor_coord) else {
                         continue;
                     };
+                    let revision = world
+                        .chunk_content_revision(neighbor_coord)
+                        .expect("loaded neighbor chunk should have a content revision");
                     let y = (offset_y + 1) as usize;
                     let z = (offset_z + 1) as usize;
                     let x = (offset_x + 1) as usize;
                     neighbor_chunks[y][z][x] = Some(neighbor_chunk.clone());
-                    revisions[y][z][x] = Some(revision);
+                    content_revisions[y][z][x] = Some(revision);
                 }
             }
         }
@@ -97,7 +109,7 @@ impl ChunkMeshSnapshot {
             shell: None,
             dependencies: ChunkMeshDependencies {
                 center: coord,
-                revisions,
+                content_revisions,
             },
         })
     }
@@ -380,7 +392,7 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_dependencies_detect_mutated_or_new_neighbors() {
+    fn snapshot_dependencies_allow_new_neighbors_but_detect_content_changes() {
         let mut world = VoxelWorld::default();
         world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
         let snapshot =
@@ -388,7 +400,7 @@ mod tests {
         assert!(snapshot.dependencies().is_current(&world));
 
         world.insert_chunk(IVec3::X, VoxelChunk::empty());
-        assert!(!snapshot.dependencies().is_current(&world));
+        assert!(snapshot.dependencies().is_current(&world));
 
         let refreshed =
             ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
@@ -400,6 +412,26 @@ mod tests {
             )),
         );
         assert!(!refreshed.dependencies().is_current(&world));
+    }
+
+    #[test]
+    fn snapshot_dependencies_ignore_lighting_revision_churn() {
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
+        let snapshot =
+            ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
+        let mesh_revision = world
+            .chunk_mesh_revision(IVec3::ZERO)
+            .expect("chunk should have a mesh revision");
+
+        assert!(world.clear_chunk_light(IVec3::ZERO));
+        assert!(
+            world
+                .chunk_mesh_revision(IVec3::ZERO)
+                .expect("chunk should have a mesh revision")
+                > mesh_revision
+        );
+        assert!(snapshot.dependencies().is_current(&world));
     }
 
     #[test]
