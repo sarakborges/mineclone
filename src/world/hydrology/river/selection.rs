@@ -100,7 +100,6 @@ where
     };
 
     cache_reachability(
-        start,
         &path,
         reaches_destination,
         trace_limit_exhausted,
@@ -110,17 +109,15 @@ where
 }
 
 fn cache_reachability(
-    start: IVec2,
     path: &[IVec2],
     reaches_destination: bool,
     trace_limit_exhausted: bool,
     cache: &mut HashMap<IVec2, bool>,
 ) {
     if trace_limit_exhausted {
-        // A capped search proves nothing about the remaining distance from
-        // later path cells. Marking all of them false caused shorter searches
-        // near the real outlet to inherit a false dead-end result.
-        cache.insert(start, false);
+        // An exhausted trace is inconclusive, including for its starting cell.
+        // Caching false there would override a later proven destination from
+        // a downstream trace within the same region build.
         return;
     }
 
@@ -326,18 +323,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn exhausted_trace_does_not_cache_downstream_cells_as_dead_ends() {
-        let start = IVec2::ZERO;
+    fn exhausted_trace_does_not_cache_an_unproven_dead_end() {
         let path = (0..RIVER_FLOW_TRACE_STEPS)
             .map(|index| IVec2::new(index as i32, 0))
             .collect::<Vec<_>>();
         let mut cache = HashMap::new();
 
-        cache_reachability(start, &path, false, true, &mut cache);
+        cache_reachability(&path, false, true, &mut cache);
 
-        assert_eq!(cache.len(), 1);
-        assert_eq!(cache.get(&start), Some(&false));
-        assert!(!cache.contains_key(path.last().unwrap()));
+        assert!(cache.is_empty());
+
+        // A subsequent shorter trace may prove that the outlet is reachable.
+        // No stale negative entry may mask that later result.
+        cache_reachability(&path[1..], true, false, &mut cache);
+        assert_eq!(cache.get(&path[0]), None);
+        assert!(path[1..].iter().all(|cell| cache.get(cell) == Some(&true)));
     }
 
     #[test]
@@ -346,11 +346,11 @@ mod tests {
         let path = [start, IVec2::X, IVec2::new(2, 0)];
         let mut cache = HashMap::new();
 
-        cache_reachability(start, &path, true, false, &mut cache);
+        cache_reachability(&path, true, false, &mut cache);
         assert!(path.iter().all(|cell| cache.get(cell) == Some(&true)));
 
         cache.clear();
-        cache_reachability(start, &path, false, false, &mut cache);
+        cache_reachability(&path, false, false, &mut cache);
         assert!(path.iter().all(|cell| cache.get(cell) == Some(&false)));
     }
 }
