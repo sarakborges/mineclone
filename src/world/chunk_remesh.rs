@@ -47,14 +47,13 @@ impl ChunkRemeshQueue {
     #[cfg(test)]
     pub(crate) fn enqueue(&mut self, coord: IVec3) {
         if coord.y >= 0 {
-            self.fluid.remove(coord);
             self.queue.enqueue(coord);
         }
     }
 
     pub(crate) fn enqueue_priority(&mut self, coord: IVec3) {
         if coord.y >= 0 {
-            self.fluid.remove(coord);
+            // Terrain-only remesh cannot satisfy an independent fluid remesh.
             self.queue.enqueue_front(coord);
         }
     }
@@ -90,13 +89,21 @@ impl ChunkRemeshQueue {
         }
     }
 
-    pub(crate) fn enqueue_lighting_change(&mut self, coord: IVec3) {
+    pub(crate) fn enqueue_lighting_change(&mut self, coord: IVec3, world: &VoxelWorld) {
         self.enqueue_lighting_priority(coord);
+        if world.chunk(coord).is_some_and(|chunk| chunk.has_fluid()) {
+            self.enqueue_fluid_priority(coord);
+        }
 
         for offset in CARDINAL_NEIGHBORS {
             let neighbor = coord + offset;
             if neighbor.y >= 0 {
                 self.lighting.enqueue(neighbor);
+                // Fluid vertices bake face lighting from the one-voxel halo too.
+                // Rebuild only chunks with actual fluid, using occupancy metadata.
+                if world.chunk(neighbor).is_some_and(|chunk| chunk.has_fluid()) {
+                    self.fluid.enqueue(neighbor);
+                }
             }
         }
     }
@@ -113,13 +120,7 @@ impl ChunkRemeshQueue {
     }
 
     fn pop_renderable(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
-        let coord = pop_renderable_from(
-            &mut self.queue,
-            &mut self.geometry_scan_miss,
-            render_pool,
-        )?;
-        self.fluid.remove(coord);
-        Some(coord)
+        pop_renderable_from(&mut self.queue, &mut self.geometry_scan_miss, render_pool)
     }
 
     fn pop_renderable_fluid(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
@@ -136,18 +137,13 @@ impl ChunkRemeshQueue {
             render_pool,
         )?;
         self.queue.remove(coord);
-        self.fluid.remove(coord);
         Some(coord)
     }
 
     fn coalesce_geometry_into_lighting(&mut self, coord: IVec3) {
-        // Geometry and lighting tasks build the same terrain mesh from the same
-        // current snapshot. If both kinds are pending for this chunk, one terrain
-        // task satisfies both requests. Preserve geometry's existing rule that a
-        // full terrain remesh supersedes a pending fluid-only remesh.
-        if self.queue.remove(coord) {
-            self.fluid.remove(coord);
-        }
+        // Geometry and Lighting rebuild the same terrain mesh, but neither
+        // rebuilds fluid meshes. Keep the fluid request independent.
+        self.queue.remove(coord);
     }
 
     fn pop_renderable_lighting(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
@@ -162,9 +158,7 @@ impl ChunkRemeshQueue {
 
     #[cfg(test)]
     fn pop(&mut self) -> Option<IVec3> {
-        let coord = self.queue.pop()?;
-        self.fluid.remove(coord);
-        Some(coord)
+        self.queue.pop()
     }
 
     #[cfg(test)]
@@ -176,7 +170,6 @@ impl ChunkRemeshQueue {
     fn pop_immediate_geometry(&mut self) -> Option<IVec3> {
         let coord = self.immediate_geometry.pop()?;
         self.queue.remove(coord);
-        self.fluid.remove(coord);
         Some(coord)
     }
 
@@ -373,6 +366,7 @@ fn dispatch_remesh_tasks(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::voxel::{chunk::VoxelChunk, fluid::FluidCell};
 
     #[test]
     fn queue_deduplicates_chunks() {
@@ -396,40 +390,58 @@ mod tests {
     }
 
     #[test]
-    fn full_remesh_supersedes_pending_fluid_remesh() {
+    fn terrain_remesh_never_discards_pending_fluid_remesh() {
         let mut queue = ChunkRemeshQueue::default();
         let coord = IVec3::new(2, 1, 3);
         queue.enqueue_fluid_priority(coord);
         queue.enqueue_priority(coord);
 
         assert_eq!(queue.pop(), Some(coord));
-        assert_eq!(queue.pop_fluid(), None);
+        assert_eq!(queue.pop_fluid(), Some(coord));
     }
 
     #[test]
-    fn lighting_remesh_coalesces_pending_geometry_for_same_chunk() {
+    fn lighting_remesh_coalesces_terrain_but_preserves_fluid() {
         let mut queue = ChunkRemeshQueue::default();
         let coord = IVec3::new(2, 1, 3);
         queue.enqueue_priority(coord);
+        queue.enqueue_fluid_priority(coord);
         queue.enqueue_lighting_priority(coord);
 
         queue.coalesce_geometry_into_lighting(coord);
 
         assert_eq!(queue.pop(), None);
         assert_eq!(queue.pop_lighting(), Some(coord));
+        assert_eq!(queue.pop_fluid(), Some(coord));
     }
 
     #[test]
-    fn pure_lighting_remesh_preserves_pending_fluid_work() {
+    fn immediate_geometry_remesh_preserves_pending_fluid_work() {
         let mut queue = ChunkRemeshQueue::default();
         let coord = IVec3::new(2, 1, 3);
         queue.enqueue_fluid_priority(coord);
-        queue.enqueue_lighting_priority(coord);
+        queue.enqueue_voxel_edit(coord);
 
-        queue.coalesce_geometry_into_lighting(coord);
-
-        assert_eq!(queue.pop_lighting(), Some(coord));
+        assert_eq!(queue.pop_immediate_geometry(), Some(coord));
         assert_eq!(queue.pop_fluid(), Some(coord));
+    }
+
+    #[test]
+    fn lighting_change_refreshes_only_chunks_containing_fluid() {
+        let coord = IVec3::new(2, 1, 3);
+        let neighbor = coord + IVec3::X;
+        let mut world = VoxelWorld::default();
+        let mut fluid_chunk = VoxelChunk::empty();
+        fluid_chunk.set_fluid(8, 8, 8, Some(FluidCell::source(0, 8)));
+        world.insert_chunk(coord, fluid_chunk);
+        world.insert_chunk(neighbor, VoxelChunk::empty());
+        let mut queue = ChunkRemeshQueue::default();
+
+        queue.enqueue_lighting_change(neighbor, &world);
+
+        assert_eq!(queue.pop_fluid(), Some(coord));
+        assert_eq!(queue.pop_fluid(), None);
+        assert_eq!(queue.pop_lighting(), Some(neighbor));
     }
 
     #[test]
@@ -454,8 +466,9 @@ mod tests {
     #[test]
     fn lighting_change_uses_background_lighting_remesh_queue() {
         let mut queue = ChunkRemeshQueue::default();
+        let world = VoxelWorld::default();
         let coord = IVec3::new(4, 2, -3);
-        queue.enqueue_lighting_change(coord);
+        queue.enqueue_lighting_change(coord, &world);
 
         let mut lighting = Vec::new();
         while let Some(value) = queue.pop_lighting() {
@@ -467,6 +480,7 @@ mod tests {
             assert!(lighting.contains(&(coord + offset)));
         }
         assert_eq!(queue.pop(), None);
+        assert_eq!(queue.pop_fluid(), None);
     }
 
     #[test]
