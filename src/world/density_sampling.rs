@@ -48,9 +48,12 @@ pub(crate) fn sample_density(
     volume: Option<VolumeBiomeSelection>,
     context: &DensitySampleContext<'_>,
 ) -> f32 {
+    // Generic point samples do not carry the generation column's original
+    // surface height; preserve their existing unfiltered hydrology contract.
     let column_hydrology = sample_density_column_hydrology(
         Vec2::new(position.x, position.z),
         context.region,
+        None,
     );
     let hydrology_delta = context.region.hydrology.density_delta(position);
 
@@ -172,7 +175,7 @@ mod tests {
         );
         assert_eq!(
             depth_strength(
-                CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
+                CAVERN_FULL_STRENGTH_DEPTH,
                 CAVERN_MINIMUM_SURFACE_DEPTH,
                 CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
             ),
