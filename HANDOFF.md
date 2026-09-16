@@ -57,14 +57,15 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 20. Queries mutáveis múltiplas sobre o mesmo Component precisam ser disjuntas via `Without<T>` ou `ParamSet`.
 21. Child UI que obedece ao hide do parent usa `Visibility::Inherited`.
 22. Revisions derivadas são separadas por domínio quando consumers têm dependências diferentes.
+23. Prioridade de streaming deve sobreviver às fronteiras async; quando generation/mesh saturarem, o raio imediato do jogador pode preemptar apenas trabalho não imediato, que precisa voltar para a fila em vez de ser perdido.
 
 ---
 
 # Estado atual
 
-Último HEAD de código publicado: `ee806d06f4f2eb476b027fdb2106f00ba06b1dee`  
-Bloco: `Fix biome field sample test index`  
-`VERSION = 0.14.55`
+Último HEAD de código publicado: `37959acf5ff9f0997b3817dc09d8970348a47861`  
+Bloco: `Prioritize critical chunks through async streaming`  
+`VERSION = 0.14.56`
 
 ## Histórico recente relevante
 
@@ -74,6 +75,7 @@ Bloco: `Fix biome field sample test index`
 - `b28b3c2` / 0.14.53: corrige call site esquecido da nova assinatura no bootstrap.
 - `7a0283d` / 0.14.54: `BiomeFieldSample.primary_surface_index` + hydrology metadata por índice.
 - `ee806d0` / 0.14.55: corrige initializer de teste; CI verde.
+- `37959ac` / 0.14.56: preserva prioridade do raio imediato do jogador depois do dispatch async; generation/mesh distante podem ser preemptados quando saturam os 8 slots, trabalho preemptado é refileirado e a fila `ready` deixa de bloquear chunks imediatos pela ordem FIFO de conclusão.
 
 ## CI recente
 
@@ -82,6 +84,7 @@ Bloco: `Fix biome field sample test index`
 - 0.14.53 / run `35042627256`: success.
 - 0.14.54 / run `35042991888`: failure; teste sem `primary_surface_index`.
 - 0.14.55 / run `35043364577`: Clippy + `cargo check` success.
+- 0.14.56 / run `35045326563`: em andamento no momento deste handoff.
 - Commits handoff-only não abrem Rust CI.
 
 ---
@@ -97,7 +100,8 @@ Bloco: `Fix biome field sample test index`
 - pending sort reutiliza scratch e preserva empate via ordinal;
 - halo de mesh materializa async a partir de clones COW + revisions;
 - mesh output mantém sort explícito;
-- hot maps/sets sem semântica de ordem usam Bevy collections.
+- hot maps/sets sem semântica de ordem usam Bevy collections;
+- quando generation/mesh estão saturados, chunks no raio imediato do jogador podem preemptar apenas tarefas não imediatas; vítimas retornam às filas e `ready` procura primeiro trabalho imediato.
 
 ## Worldgen/biome
 
@@ -129,21 +133,40 @@ Sintoma confirmado:
 - o jogador consegue atravessar **diversos chunks vazios** antes de terrain/mesh aparecer;
 - o problema é portanto throughput/latência do pipeline, não apenas FPS.
 
-Pipeline a auditar:
+Pipeline auditado:
 
 `stream selection -> generation dispatch/task -> generation integration -> initial lighting -> halo snapshot -> mesh dispatch/task -> mesh integration -> spawn/visibility`
 
-Próximo trabalho:
+### Achado concreto em 0.14.56
 
-1. identificar em qual estágio chunks próximos ficam represados;
-2. verificar se prioridade por proximidade/direção de movimento se mantém depois da seleção inicial;
-3. inspecionar generation/mesh in-flight, completed-awaiting-integration e budgets de integração;
-4. verificar starvation por trabalho distante/antigo;
-5. conferir se initial lighting é o bloqueio principal entre generation pronta e mesh dispatch;
-6. só alterar limits/budgets com base no gargalo encontrado;
-7. objetivo runtime: em velocidade normal, o jogador não deve alcançar área sem terrain visível.
+A seleção inicial já ordenava chunks por proximidade, mas essa prioridade não sobrevivia integralmente às etapas seguintes:
 
-Essa evidência invalida qualquer conclusão anterior de que streaming não tinha mais alvo relevante.
+- `ChunkGenerationTasks` e `ChunkMeshTasks` mantêm até 8 tarefas in-flight; com todos os slots ocupados, um chunk que se tornou imediato ao jogador não tinha mecanismo para tomar o lugar de trabalho distante;
+- `ready` era consumida em FIFO pela ordem em que generation results eram integrados, então um chunk distante na frente da fila podia causar head-of-line blocking antes do mesh dispatch;
+- isso permite starvation perceptível mesmo com a seleção `pending` corretamente ordenada.
+
+Mudança de 0.14.56:
+
+- raio crítico = 1 chunk em X/Y/Z ao redor do player chunk, alinhado com a prioridade imediata já usada pela seleção;
+- se generation estiver saturada e existir trabalho crítico ainda não despachado, a tarefa in-flight não crítica mais distante pode ser cancelada e refileirada no fim de `pending`;
+- se mesh estiver saturada e um chunk crítico estiver `ready`, uma mesh task não crítica distante pode ser cancelada e o chunk vítima volta para `ready`;
+- `ready` agora procura chunks críticos antes de cair no FIFO normal;
+- nenhum limite, budget ou número máximo de tasks foi aumentado.
+
+Estado:
+
+- o gargalo de **prioridade perdida após o dispatch** recebeu correção estrutural;
+- ainda não declarar P0.1 resolvido sem runtime em movimento normal;
+- a seleção ainda não possui viés explícito por vetor de movimento; ela é proximity-first, e 0.14.56 garante prioridade forte somente quando o chunk entra no raio crítico;
+- `seed_chunk_direct_lighting` continua síncrono entre generation pronta e mesh dispatch e permanece candidato caso ainda exista backlog visual após 0.14.56.
+
+Próximo trabalho, se o runtime ainda deixar o jogador alcançar vazio:
+
+1. medir/logar `pending`, `ready`, generation in-flight e mesh in-flight durante movimento;
+2. identificar se o backlog restante está antes de generation completion, no direct-light seed, mesh task ou mesh integration;
+3. adicionar viés de direção somente se chunks à frente continuarem perdendo para chunks de distância equivalente;
+4. não aumentar limits/budgets sem evidência do estágio saturado;
+5. objetivo runtime continua: em velocidade normal, o jogador não deve alcançar área sem terrain visível.
 
 ## P0.2 — Lighting/shadows: lamp latency + seam entre chunks
 
@@ -327,7 +350,7 @@ Lighting lazy expansion só é aceitável se preservar exatamente FIFO + dedup g
 
 # Ordem de execução no próximo `go`
 
-1. **P0.1 streaming/time-to-visible** — localizar o estágio que deixa o jogador ultrapassar chunks ainda vazios e corrigir throughput/prioridade.
+1. **P0.1 streaming/time-to-visible** — validar 0.14.56; se ainda houver vazio à frente, instrumentar backlog por estágio e atacar o estágio comprovadamente saturado, incluindo direction tie-break/direct-light seed se a evidência apontar para eles.
 2. **P0.2 lighting/shadows** — lamp latency e seam entre chunks; coordenar com initial lighting se for o mesmo gargalo.
 3. **P0.3 hydrology continuity** — primeiro river/tunnel gate binário; depois endpoints e margens/topo.
 4. **P1.1 biome distribution** — reduzir mountains de forma material, tornar regionais perceptíveis e aumentar levemente árvores de Plains.
