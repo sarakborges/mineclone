@@ -2,10 +2,14 @@ name: Rust validation
 
 on:
   pull_request:
+    paths-ignore:
+      - HANDOFF.md
   push:
     branches:
       - main
       - develop
+    paths-ignore:
+      - HANDOFF.md
 
 permissions:
   contents: read
