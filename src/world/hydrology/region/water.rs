@@ -125,11 +125,14 @@ impl HydrologyRegion {
         if ocean_strength > 0.0 {
             let target_floor =
                 self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * ocean_strength;
-            let bed_level = self
-                .macro_sample_at(position)
-                .map_or(target_floor, |sample| {
-                    lerp(sample.elevation, target_floor, ocean_strength)
-                });
+            // Density uses the original terrain column as the starting height
+            // whenever it is known. Using the interpolated macro elevation
+            // here instead could classify that same carved column as dry and
+            // leave an ocean-sized hole with no physical water source.
+            let base = surface_height
+                .or_else(|| self.macro_sample_at(position).map(|sample| sample.elevation))
+                .unwrap_or(target_floor);
+            let bed_level = lerp(base, target_floor, ocean_strength);
 
             // The first continentalness threshold can still leave terrain above
             // sea level. Such a dry ocean sample must not supersede an actual
@@ -178,6 +181,10 @@ fn choose_water<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::world::{
+        feature_graph::FeatureGraph,
+        hydrology::{constants::MACRO_SAMPLE_GRID, types::HydrologyMacroSample},
+    };
 
     fn sample(
         kind: HydrologyWaterKind,
@@ -232,5 +239,38 @@ mod tests {
         assert!(bed_has_support(Some(79.5), 80.0));
         assert!(!bed_has_support(Some(79.0), 80.0));
         assert!(bed_has_support(None, 100.0));
+    }
+
+    #[test]
+    fn physical_ocean_uses_the_same_original_column_floor_as_density() {
+        let region = HydrologyRegion {
+            coord: IVec2::ZERO,
+            river_graph: FeatureGraph::default(),
+            river_carve_depth: 7.0,
+            water_bodies: Vec::new(),
+            sea_level: 90.0,
+            settings: Default::default(),
+            ocean_weight: 1.0,
+            macro_samples: vec![
+                HydrologyMacroSample {
+                    elevation: 120.0,
+                    continentalness: 0.39,
+                };
+                MACRO_SAMPLE_GRID * MACRO_SAMPLE_GRID
+            ],
+        };
+        let position = Vec2::splat(64.0);
+        let original_surface = 80.0;
+
+        // The macro-only lookup is dry, but the actual terrain column is
+        // submerged after carving. Both physical water and density must use
+        // that column's original height when generating it.
+        assert!(region.water_at(position).is_none());
+        let water = region.supported_water_at(position, original_surface).unwrap();
+        assert_eq!(water.kind, HydrologyWaterKind::Ocean);
+        let density_delta =
+            region.density_deltas_for_column::<1>(position, 40.0, original_surface)[0];
+        assert!((water.bed_level - (original_surface + density_delta)).abs() < 0.001);
+        assert!(water.bed_level < region.sea_level - 0.5);
     }
 }
