@@ -46,3 +46,9 @@ jobs:
 
       - name: Check
         run: cargo check
+
+      # Clippy compiles test targets but does not execute their assertions.
+      # Run the binary's test harness so hydrology seams and other regressions
+      # are actually exercised on every develop push and pull request.
+      - name: Tests
+        run: cargo test --bin asteria -- --test-threads=2
