@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
     content::creature::{CreatureCollider, CreatureRegistry},
+    localization::{ActiveLanguage, Language},
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera, find_safe_spawn_position},
     voxel::world::VoxelWorld,
 };
@@ -50,6 +51,7 @@ fn spawn_preview_creatures(
     players: Query<&Transform, With<GameplayCamera>>,
     world: Res<VoxelWorld>,
     asset_server: Res<AssetServer>,
+    active_language: Res<ActiveLanguage>,
 ) {
     let Some(player) = players.iter().next() else {
         warn!("creature previews skipped: player not spawned");
@@ -74,8 +76,9 @@ fn spawn_preview_creatures(
             continue;
         }
 
+        let language: Language = active_language.get();
         commands.spawn((
-            Name::new(format!("Creature: {}", definition.id)),
+            Name::new(definition.name.text(language).to_owned()),
             CreatureInstance { definition_id: definition.id.clone() },
             CreatureModel(asset_server.load(definition.model.clone())),
             CreatureMotion::default(),
