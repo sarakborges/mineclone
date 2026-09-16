@@ -12,11 +12,16 @@ use super::{
 };
 
 const PROXIMITY_SITE_RADIUS: i32 = 1;
+const PROXIMITY_NEIGHBOR_COUNT: usize =
+    ((PROXIMITY_SITE_RADIUS * 2 + 1) * (PROXIMITY_SITE_RADIUS * 2 + 1) - 1) as usize;
 const DOMINANT_NEIGHBOR_LIMIT: usize = 5;
 
 impl BiomeField {
     pub(super) fn select_surface_biome_index(&self, cell: IVec2, site: Vec2) -> usize {
-        let mut nearby_biomes = Vec::new();
+        // The neighborhood is fixed at eight sites. A stack array avoids a
+        // heap allocation whenever an uncached biome site is first resolved.
+        let mut nearby_biomes = [0; PROXIMITY_NEIGHBOR_COUNT];
+        let mut nearby_count = 0;
         let mut near_ocean = self.ocean_biome_id.is_some()
             && ocean_strength(self.climate.sample(site).continentalness, self.ocean_weight)
                 > f32::EPSILON;
@@ -30,7 +35,9 @@ impl BiomeField {
                 let neighbor_cell = cell + IVec2::new(x, z);
                 let neighbor_site =
                     surface_site_position(neighbor_cell, self.surface_site_spacing, self.seed);
-                nearby_biomes.push(self.raw_surface_biome_index(neighbor_cell, neighbor_site));
+                nearby_biomes[nearby_count] =
+                    self.raw_surface_biome_index(neighbor_cell, neighbor_site);
+                nearby_count += 1;
 
                 if self.ocean_biome_id.is_some()
                     && ocean_strength(
@@ -42,6 +49,7 @@ impl BiomeField {
                 }
             }
         }
+        debug_assert_eq!(nearby_count, nearby_biomes.len());
 
         let dominant_neighbor = dominant_neighbor_biome(&nearby_biomes);
         let climate = self.climate.sample(site);
@@ -62,16 +70,13 @@ impl BiomeField {
     }
 
     fn raw_surface_biome_index(&self, cell: IVec2, site: Vec2) -> usize {
-        let regional = self
+        let regional_count = self
             .surface_biomes
             .iter()
-            .enumerate()
-            .filter_map(|(index, biome)| {
-                (biome.is_regional() && biome.weight > f32::EPSILON).then_some(index)
-            })
-            .collect::<Vec<_>>();
+            .filter(|biome| biome.is_regional() && biome.weight > f32::EPSILON)
+            .count();
         assert!(
-            !regional.is_empty(),
+            regional_count > 0,
             "surface biome field has no active regional biomes"
         );
 
@@ -84,7 +89,15 @@ impl BiomeField {
             hash,
             BiomeFieldEntry::is_regional,
         )
-        .unwrap_or_else(|| regional[hash as usize % regional.len()])
+        .unwrap_or_else(|| {
+            self.surface_biomes
+                .iter()
+                .enumerate()
+                .filter(|(_, biome)| biome.is_regional() && biome.weight > f32::EPSILON)
+                .nth(hash as usize % regional_count)
+                .expect("active regional biome fallback must exist")
+                .0
+        })
     }
 }
 
@@ -152,38 +165,27 @@ fn select_weighted_biome_index(
     hash: u64,
     predicate: impl Fn(&BiomeFieldEntry) -> bool,
 ) -> Option<usize> {
-    let eligible = biomes
-        .iter()
-        .enumerate()
-        .filter_map(|(index, biome)| {
-            (predicate(biome) && biome.weight > f32::EPSILON).then_some(index)
-        })
-        .collect::<Vec<_>>();
-
-    if eligible.is_empty() {
-        return None;
+    // Reuse one allocation for the climate-weighted draw and the raw-weight
+    // fallback. The prior pipeline collected eligible indices, climate pairs,
+    // and fallback pairs into three separate vectors per selection.
+    let mut weighted = Vec::with_capacity(biomes.len());
+    for (index, biome) in biomes.iter().enumerate() {
+        if predicate(biome) && biome.weight > f32::EPSILON {
+            weighted.push((index, biome.weight * climate_suitability(biome.climate, climate)));
+        }
     }
 
-    let climate_weighted = eligible
-        .iter()
-        .map(|index| {
-            (
-                *index,
-                biomes[*index].weight * climate_suitability(biomes[*index].climate, climate),
-            )
-        })
-        .collect::<Vec<_>>();
-
-    if let Some(index) = pick_weighted(&climate_weighted, hash.rotate_left(17)) {
+    if weighted.is_empty() {
+        return None;
+    }
+    if let Some(index) = pick_weighted(&weighted, hash.rotate_left(17)) {
         return Some(index);
     }
 
-    let fallback = eligible
-        .iter()
-        .map(|index| (*index, biomes[*index].weight))
-        .collect::<Vec<_>>();
-
-    pick_weighted(&fallback, hash.rotate_left(29))
+    for (index, weight) in &mut weighted {
+        *weight = biomes[*index].weight;
+    }
+    pick_weighted(&weighted, hash.rotate_left(29))
 }
 
 fn pick_weighted(weighted: &[(usize, f32)], hash: u64) -> Option<usize> {
@@ -256,5 +258,21 @@ mod tests {
     fn dominant_neighbor_detection_requires_a_real_majority() {
         assert_eq!(dominant_neighbor_biome(&[1, 1, 1, 1, 1, 2, 3, 4]), Some(1));
         assert_eq!(dominant_neighbor_biome(&[1, 1, 1, 1, 2, 2, 3, 4]), None);
+    }
+
+    #[test]
+    fn weighted_fallback_keeps_input_order_after_reusing_climate_storage() {
+        let mut weighted = vec![(4, 0.0), (2, 0.0), (7, 0.0)];
+        assert_eq!(pick_weighted(&weighted, 42), None);
+        for (index, weight) in &mut weighted {
+            *weight = match *index {
+                4 => 1.0,
+                2 => 2.0,
+                7 => 3.0,
+                _ => unreachable!(),
+            };
+        }
+        assert_eq!(weighted, vec![(4, 1.0), (2, 2.0), (7, 3.0)]);
+        assert!(matches!(pick_weighted(&weighted, 42), Some(4 | 2 | 7)));
     }
 }
