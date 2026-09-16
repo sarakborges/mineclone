@@ -6,7 +6,6 @@ use bevy::{
 };
 
 use crate::{
-    content::block_orientation::BlockOrientation,
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
     rendering::{
         block_model::{
@@ -17,8 +16,7 @@ use crate::{
         block_visual_content::BlockVisualContent,
         camera_stack::VIEW_MODEL_CAMERA_ORDER,
     },
-    targeting::PlacementOrientation,
-    voxel::{block_face::BlockFace, orientation::orientation_rotation},
+    voxel::block_face::BlockFace,
 };
 
 use super::animation::{PlayerViewModel, ViewModelItemSwitch, base_viewmodel_transform};
@@ -48,11 +46,7 @@ pub(super) struct HeldBlockVisualCache {
 type HeldBlockRootQuery<'w, 's> = Query<
     'w,
     's,
-    (
-        &'static mut BlockModel,
-        &'static mut Transform,
-        &'static mut Visibility,
-    ),
+    (&'static mut BlockModel, &'static mut Visibility),
     (
         With<HeldBlockRoot>,
         Without<HeldBlockFace>,
@@ -71,7 +65,6 @@ pub(super) struct ViewModelArmAssets {
 #[derive(SystemParam)]
 pub(super) struct ViewModelSelection<'w> {
     hotbar: Res<'w, PlayerHotbar>,
-    placement_orientation: Res<'w, PlacementOrientation>,
 }
 
 #[derive(SystemParam)]
@@ -145,13 +138,6 @@ pub(super) fn spawn_viewmodel(
         let block_model = selected_block_id
             .map(BlockModel::display)
             .unwrap_or_else(BlockModel::empty_display);
-        let held_orientation = selected_block_id
-            .and_then(|block_id| definitions.blocks.get(block_id))
-            .map_or(BlockOrientation::default(), |block| {
-                selection
-                    .placement_orientation
-                    .for_block(selected_slot, block)
-            });
 
         commands.entity(camera).with_children(|camera| {
             camera.spawn((
@@ -187,7 +173,7 @@ pub(super) fn spawn_viewmodel(
                         .spawn((
                             HeldBlockRoot,
                             block_model,
-                            held_block_transform(held_orientation),
+                            held_block_transform(),
                             item_visibility,
                         ))
                         .with_children(|held| {
@@ -274,13 +260,8 @@ pub(super) fn sync_held_block(
     let tint_cell_changed = cache.tint_cell != Some(tint_cell);
     let block_definitions_changed = definitions.block_definitions_changed();
     let selection_changed = selection.hotbar.is_changed();
-    let orientation_changed = selection.placement_orientation.is_changed();
     let visual_inputs_changed = definitions.inputs_changed();
-    if !tint_cell_changed
-        && !selection_changed
-        && !orientation_changed
-        && !visual_inputs_changed
-    {
+    if !tint_cell_changed && !selection_changed && !visual_inputs_changed {
         return;
     }
     cache.tint_cell = Some(tint_cell);
@@ -293,7 +274,7 @@ pub(super) fn sync_held_block(
     let visibility = item_visibility(selected_block_id);
     let tint_position = tint_cell.as_vec2() + Vec2::splat(0.5);
 
-    for (mut held, mut held_transform, mut held_visibility) in &mut roots {
+    for (mut held, mut held_visibility) in &mut roots {
         let block_changed = held.block_id() != selected_block_id;
         if block_changed {
             held.set_block_id(selected_block_id);
@@ -318,13 +299,6 @@ pub(super) fn sync_held_block(
             .blocks
             .get(block_id)
             .unwrap_or_else(|| panic!("hotbar references missing block: {block_id}"));
-        let orientation = selection
-            .placement_orientation
-            .for_block(selected_slot, block);
-        let rotation = held_block_transform(orientation).rotation;
-        if held_transform.rotation != rotation {
-            held_transform.rotation = rotation;
-        }
 
         let materials_changed = block_changed || block_definitions_changed;
         if materials_changed {
@@ -380,9 +354,26 @@ fn item_visibility(block_id: Option<&'static str>) -> Visibility {
     }
 }
 
-fn held_block_transform(orientation: BlockOrientation) -> Transform {
+fn held_block_transform() -> Transform {
+    // Presentation is independent of the placement orientation selected by R.
+    // Keep the held cube upright in camera space without mutating its geometry.
     let viewmodel_rotation = base_viewmodel_transform().rotation;
     Transform::from_translation(Vec3::new(-0.02, ARM_SIZE.y + 0.04, 0.20))
-        .with_rotation(viewmodel_rotation.inverse() * orientation_rotation(orientation))
+        .with_rotation(viewmodel_rotation.inverse())
         .with_scale(Vec3::splat(HELD_BLOCK_SCALE))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn held_block_geometry_has_fixed_display_scale_and_rotation() {
+        let first = held_block_transform();
+        let second = held_block_transform();
+
+        assert_eq!(first.rotation, second.rotation);
+        assert_eq!(first.scale, Vec3::splat(HELD_BLOCK_SCALE));
+        assert_eq!(first.translation, second.translation);
+    }
 }
