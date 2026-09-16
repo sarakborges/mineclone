@@ -82,22 +82,27 @@ impl HydrologyRegion {
         // The graph scan must use the same radius-relative outer bank as
         // region culling. A fixed world-space margin truncated wide rivers.
         // Carve only inside the actual water footprint, not the full bank.
-        // The physical pass rejects channels without a supporting bed: its
-        // density pass must not carve that rejected channel or its inner bank.
-        let river_graph_sample = self
-            .river_graph
-            .sample_horizontal_with_radius_multiplier(
+        // Filter unsupported physical channels PER EDGE before selecting the
+        // strongest: a suspended edge must not hide a supported crossing.
+        let river_graph_sample = match actual_surface_height {
+            Some(surface) => self.river_graph.sample_horizontal_filtered(
+                horizontal,
+                0.0,
+                RIVER_BANK_OUTER_NORMALIZED_DISTANCE,
+                |sample| {
+                    let profile = river_channel_profile(sample.normalized_distance);
+                    profile <= 0.0
+                        || bed_has_support(
+                            Some(surface),
+                            sample.height - self.river_carve_depth * profile,
+                        )
+                },
+            ),
+            None => self.river_graph.sample_horizontal_with_radius_multiplier(
                 horizontal,
                 RIVER_BANK_OUTER_NORMALIZED_DISTANCE,
-            )
-            .filter(|sample| {
-                let profile = river_channel_profile(sample.normalized_distance);
-                profile <= 0.0
-                    || bed_has_support(
-                        actual_surface_height,
-                        sample.height - self.river_carve_depth * profile,
-                    )
-            });
+            ),
+        };
         let river_core = river_graph_sample.filter(|sample| {
             sample.normalized_distance < RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE
         });
