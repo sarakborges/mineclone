@@ -44,13 +44,14 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 16. UI gameplay é SDR e entra depois do 3D via alpha blend; HUD não pertence à câmera 3D da mão.
 17. Invariant de produto: em velocidade normal configurada, inclusive flight máximo, o jogador não deve enxergar void/chunks ausentes ou silhuetas de chunks brotando no fundo.
 18. Mudanças de camera/render pipeline têm blast radius global. Qualquer alteração de HDR/tonemapping exige validar mundo + viewmodel + HUD + overlays, não apenas fog.
+19. A fog de streaming é limitada pelo frontier real de render readiness: um chunk/coluna não pode estrear numa região ainda perceptível. O limite deve reagir à readiness mesmo com o player parado e não depender de movimento para recalcular.
 
 ---
 
 # Estado atual
 
-Último HEAD de código publicado: `1b16bee81ff609b7c4bc7e4667dd4a2e37831fff`  
-`VERSION = 0.15.0`
+Último HEAD de código publicado: `7b16f8f72ea2c8837e63972a7cde8ae771ccc894`  
+`VERSION = 0.15.2`
 
 Blocos mais recentes:
 
@@ -65,8 +66,10 @@ Blocos mais recentes:
   - `IsDefaultUiCamera` saiu da câmera viewmodel e passou para a câmera UI dedicada;
   - ordens canônicas em `src/rendering/camera_stack.rs`;
   - CI run `35052641180`: Clippy + `cargo check` success.
+- `4aeb119` / 0.15.1 — fog passa a ser limitada pelo primeiro column frontier sem `ChunkRenderPool` allocation dentro do raio nominal. O limite usa distância horizontal até a AABB física do chunk faltante, com guarda de 1 chunk. Feedback runtime: **funcionou; chunks deixaram de brotar dentro da fog**.
+- `7b16f8f` / 0.15.2 — remove recuperação temporal (`current_end` + delta time). `DistanceFog.start/end` agora são função direta do frontier de readiness em todo frame; readiness nova deve abrir a fog mesmo com câmera parada.
 
-## Arquitetura de câmera gameplay — 0.15.0
+## Arquitetura de câmera gameplay — 0.15.x
 
 Stack:
 
@@ -89,17 +92,10 @@ Regras da stack nova:
 5. world/viewmodel continuam `Msaa::Off`, evitando incompatibilidade de intermediate targets;
 6. não alterar exposure/tonemapper artístico sem evidência runtime; 0.15.0 preserva o tonemapper default no estágio final da viewmodel.
 
-Validação runtime obrigatória de 0.15.0:
+Feedback runtime da migração:
 
-1. mundo não pode ficar preto;
-2. viewmodel/mão aparece uma única vez e com composição correta;
-3. HUD/textos aparecem uma única vez, sem duplicação/sobreposição;
-4. pause, inventory e settings in-world devem compor corretamente sobre gameplay;
-5. underwater tint deve continuar funcionando como UI overlay;
-6. sol/lua texturizados devem continuar visíveis;
-7. só depois verificar se a silhueta de chunks brotando no fundo da fog foi eliminada/reduzida pelo caminho HDR coerente.
-
-Não declarar a migração visualmente concluída até esse runtime.
+- 0.15.0 renderizou normalmente: mundo, viewmodel e UI sem a regressão preta/sobreposta de 0.14.71.
+- Porém chunks continuavam surgindo dentro da fog, provando que compositing HDR coerente era necessário mas não suficiente para resolver P0.1.
 
 ## Diagnóstico atual de fog / streaming
 
@@ -110,25 +106,36 @@ Feedback runtime acumulado:
 - 0.14.68: corrigiu unload prematuro observado ao andar em círculos; chunks aposentados próximos deixaram de ser descartados imediatamente.
 - 0.14.69: adicionou histerese de `Visibility`; ainda houve flicker.
 - 0.14.70: `DistanceFog.color` foi alinhado a `sky_color`; runtime ainda mostrou chunks brotando como silhueta no fundo.
-- Observação decisiva do usuário: **o que flicka aparece atrás da fog; parece silhueta de chunks surgindo no fundo**, e não mais simples toggle de rendering na borda.
 - 0.14.71 tentou HDR de forma incompleta e quebrou o pipeline visual/UI.
-- 0.15.0 substitui o workaround por uma composição HDR explícita de múltiplas câmeras.
+- 0.15.0 estabilizou a composição HDR, mas chunks ainda surgiam dentro da fog.
+- Causa estrutural identificada: visibilidade permitia show além do raio nominal, porém isso não garantia que generation+mesh terminassem antes de o chunk entrar na faixa perceptível da fog. Um `Added<ChunkRenderCoord>` atrasado era promovido assim que finalmente existia, mesmo já estando dentro da faixa de fog.
+- O scheduler dá prioridade a missing work dentro do raio nominal antes do preload, portanto backlog ainda pode fazer um chunk frontal concluir tarde.
+- 0.15.1 mudou a solução de “fog fixa tentando esconder streaming” para “fog limitada pelo frontier real de render readiness”.
+- Feedback runtime da 0.15.1: **funcionou** para impedir chunks brotando dentro da fog.
+- Novo feedback: com player parado, a fog podia permanecer fechada até haver movimento.
+- 0.15.2 remove o estado temporal de recovery; fog passa a ser recalculada diretamente do `ChunkRenderPool` a cada frame.
 
-Investigação concreta em Bevy 0.19.1:
+### Frontier adaptativo da fog
 
-- `DistanceFog` linear chega a opacidade total em `end` quando alpha=1.
-- O terrain shader usa `main_pass_post_lighting_processing`, portanto a fog é aplicada pelo pipeline PBR.
-- Em câmera não-HDR, o shader pode aplicar tonemapping/color processing no caminho do material enquanto `ClearColor` não atravessa necessariamente o mesmo caminho.
-- Isso pode tornar fragmento 100% fogged diferente do fundo mesmo com a mesma cor numérica.
-- Em 0.15.0 world + viewmodel permanecem no mesmo HDR intermediate e o tonemap é postergado até a composição 3D final; esse é agora o teste correto da hipótese de compositing.
+`src/rendering/fog/distance.rs` agora:
+
+1. coleta as colunas presentes em `ChunkRenderPool::active_coords()`;
+2. procura a coluna faltante mais próxima dentro do render distance nominal;
+3. mede distância horizontal do player até a AABB real desse chunk, não até seu centro;
+4. coloca `fog end` antes dessa borda com guarda de 1 chunk;
+5. preserva aproximadamente a largura original da faixa linear ao recuar `start/end`;
+6. nunca ultrapassa o target normal de ~98% do render radius;
+7. em 0.15.2 não existe `current_end` nem recovery baseado em `Time`: readiness mudou => fog muda no mesmo frame.
+
+Isso é fallback visual de backlog, não substituto para throughput. O objetivo continua sendo manter o frontier pronto suficientemente longe para a fog ficar normalmente próxima do render radius configurado.
 
 Próxima validação runtime de P0.1:
 
-1. validar primeiro a stack 0.15.0 inteira sem regressão visual/UI;
-2. verificar a silhueta de chunks no fundo da fog em linha reta e movimento circular;
-3. se persistir, não aumentar raios cegamente;
-4. investigar fragment depth/far-background e, se necessário, uma cobertura de horizonte/far background no mesmo domínio HDR do terrain/fog;
-5. confirmar se remesh/spawn substitui geometria atrás da fog e produz silhueta antes/depois de `fog end`.
+1. confirmar que 0.15.2 abre/reajusta a fog enquanto o player está completamente parado conforme chunks terminam;
+2. repetir flight máximo e movimento circular;
+3. confirmar que não voltam void, flicker ou silhuetas nascendo dentro da fog;
+4. observar se a fog “respira” demais sob backlog. Se sim, melhorar throughput/priorização do frontier, não maquiar com raio fixo maior;
+5. se estável, P0.1 pode finalmente sair de investigação de compositing para otimização de streaming frontier.
 
 Não marcar P0.1 resolvido sem runtime contínuo em flight máximo e movimento circular sem void/flicker/silhueta visível.
 
@@ -143,7 +150,8 @@ Horizontes atuais:
 - render distance nominal = banda de prioridade/visibilidade útil;
 - base preload all-direction = +2 chunks;
 - corredor frontal = até +8 além da base quando há movimento horizontal;
-- fog linear = start ~78%, end ~98% do raio nominal;
+- target fog linear = start ~78%, end ~98% do raio nominal;
+- fog real pode recuar dinamicamente antes do primeiro column frontier sem allocation render pronta;
 - visibilidade 0.14.69: show/hide derivados da render distance; exemplos RD 4 => 5/6, RD 12 => 14/16, RD 24 => 26/30;
 - retention 0.14.68 = `R + max(ceil(R/2), 10)`; exemplos RD 4 => 14, RD 12 => 22, RD 24 => 36;
 - retention e visibility são horizontal-only para não destruir superfície por mudança de altitude.
@@ -164,7 +172,9 @@ Gargalos tratados desde 0.14.56:
 12. unload precoce em revisita/círculos;
 13. visibility ping-pong na borda;
 14. fog/background passando por color-processing diferente;
-15. composição world/viewmodel/UI implícita e incompatível com HDR.
+15. composição world/viewmodel/UI implícita e incompatível com HDR;
+16. fog fixa não refletia atraso real do render frontier;
+17. recovery temporal da fog podia parecer dependente de movimento; removido em 0.15.2.
 
 ---
 
@@ -189,9 +199,9 @@ Validar runtime se textura aparece e alpha/orientação permanecem corretos.
 
 # Próximas prioridades
 
-## P0.1 — Streaming/fog seamless + validação HDR
+## P0.1 — Streaming/fog seamless
 
-Prioridade máxima: validar 0.15.0 e eliminar silhueta/void/flicker sem regredir world/viewmodel/UI.
+Prioridade máxima: validar a 0.15.2 parada + flight máximo + círculos. O comportamento correto agora é readiness-driven: a fog cobre backlog real e reage sem movimento do player.
 
 ## P0.2 — Lighting/shadows
 
