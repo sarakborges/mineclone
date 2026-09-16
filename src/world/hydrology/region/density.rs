@@ -5,7 +5,7 @@ use super::HydrologyRegion;
 use crate::world::hydrology::{
     constants::{
         LAKE_SHORE_OUTER_DISTANCE, LAKE_SHORE_SURFACE_OFFSET, OCEAN_EXTRA_DEPTH,
-        OCEAN_MINIMUM_DEPTH, RIVER_CARVE_STRENGTH, RIVER_MAXIMUM_RADIUS,
+        OCEAN_MINIMUM_DEPTH, RIVER_BANK_OUTER_NORMALIZED_DISTANCE, RIVER_CARVE_STRENGTH,
     },
     math::{
         lerp, ocean_strength, river_channel_profile, smoothstep,
@@ -14,8 +14,6 @@ use crate::world::hydrology::{
     types::WaterBody,
 };
 
-const RIVER_BANK_OUTER_NORMALIZED_DISTANCE: f32 = 2.5;
-const RIVER_BANK_MARGIN: f32 = RIVER_MAXIMUM_RADIUS * 1.5;
 const INLINE_WATER_BODY_DELTAS: usize = 4;
 
 #[derive(Clone, Copy, Debug)]
@@ -81,12 +79,13 @@ impl HydrologyRegion {
         horizontal: Vec2,
         actual_surface_height: Option<f32>,
     ) -> DensityColumnProfile {
-        // Include the shore outside the channel in the same graph scan. Carve
-        // only inside the actual water footprint, not the graph's full radius:
-        // the latter left a dry, sunken ring between water and the bank.
-        let river_graph_sample = self
-            .river_graph
-            .sample_horizontal_with_margin(horizontal, RIVER_BANK_MARGIN);
+        // The graph scan must use the same radius-relative outer bank as
+        // region culling. A fixed world-space margin truncated wide rivers.
+        // Carve only inside the actual water footprint, not the full bank.
+        let river_graph_sample = self.river_graph.sample_horizontal_with_radius_multiplier(
+            horizontal,
+            RIVER_BANK_OUTER_NORMALIZED_DISTANCE,
+        );
         let river_core = river_graph_sample.filter(|sample| {
             sample.normalized_distance < RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE
         });
