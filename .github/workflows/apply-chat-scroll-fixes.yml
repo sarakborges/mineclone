@@ -1,0 +1,147 @@
+name: Apply scoped chat and settings scroll fixes
+
+on:
+  push:
+    branches:
+      - feature/game-chat-creature-command
+    paths:
+      - .github/workflows/apply-chat-scroll-fixes.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/game-chat-creature-command
+          persist-credentials: true
+      - name: Apply validated, targeted source changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          layout = Path('src/screens/settings_screen/layout.rs')
+          src = layout.read_text()
+          assert src.count('persistent_vertical_scrollbar') == 3, 'Settings layout changed; abort'
+          layout.write_text(src.replace('persistent_vertical_scrollbar', 'vertical_scrollbar'))
+
+          creature = Path('src/creatures/visual.rs')
+          src = creature.read_text()
+          assert src.count('    prelude::*,') == 1
+          src = src.replace('    prelude::*,', '    ecs::system::SystemParam,\n    prelude::*,', 1)
+          for name in ('VisualAttached', 'CreatureAnimationLink'):
+              old = f'struct {name}'
+              assert src.count(old) == 1
+              src = src.replace(old, f'pub(super) struct {name}', 1)
+          anchor = 'fn configure_loaded_scene('
+          assert src.count(anchor) == 1
+          src = src.replace(anchor, '''#[derive(SystemParam)]
+          struct CreatureTintAssets<'w> {
+              materials: ResMut<'w, Assets<StandardMaterial>>,
+              cache: ResMut<'w, TintedCreatureMaterials>,
+          }
+
+          ''' + anchor, 1)
+          old = '    mut materials: ResMut<Assets<StandardMaterial>>,\n    mut tint_cache: ResMut<TintedCreatureMaterials>,'
+          assert src.count(old) == 1
+          src = src.replace(old, '    mut tint_assets: CreatureTintAssets,', 1)
+          prefix, body = src.split(anchor, 1)
+          section, tail = body.split('pub(super) fn sync_creature_animations(', 1)
+          assert section.count('tint_cache.0') == 2
+          section = section.replace('tint_cache.0', 'tint_assets.cache.0')
+          assert section.count('materials.get(') == 1 and section.count('materials.add(') == 1
+          section = section.replace('materials.get(', 'tint_assets.materials.get(')
+          section = section.replace('materials.add(', 'tint_assets.materials.add(')
+          creature.write_text(prefix + anchor + section + 'pub(super) fn sync_creature_animations(' + tail)
+
+          chat = Path('src/hud/chat.rs')
+          src = chat.read_text()
+          assert src.count('    input::{ButtonState, keyboard::KeyboardInput},') == 1
+          src = src.replace('    input::{ButtonState, keyboard::KeyboardInput},', '    ecs::system::SystemParam,\n    input::{ButtonState, keyboard::KeyboardInput},', 1)
+          anchor = 'fn handle_chat_input('
+          assert src.count(anchor) == 1
+          src = src.replace(anchor, '''#[derive(SystemParam)]
+          struct ChatInputStates<'w> {
+              keys: Res<'w, ButtonInput<KeyCode>>,
+              pause: Res<'w, State<PauseState>>,
+              settings: Res<'w, State<SettingsState>>,
+              inventory: Res<'w, State<InventoryState>>,
+              brush_palette: Res<'w, State<BrushPaletteState>>,
+          }
+
+          ''' + anchor, 1)
+          old = '''    keys: Res<ButtonInput<KeyCode>>,
+              mut keyboard: MessageReader<KeyboardInput>,
+              mut submissions: MessageWriter<ChatSubmission>,
+              mut chat: ResMut<ChatState>,
+              pause: Res<State<PauseState>>,
+              settings: Res<State<SettingsState>>,
+              inventory: Res<State<InventoryState>>,
+              brush_palette: Res<State<BrushPaletteState>>,'''
+          assert src.count(old) == 1, 'Chat input params changed; abort'
+          src = src.replace(old, '''    input: ChatInputStates,
+              mut keyboard: MessageReader<KeyboardInput>,
+              mut submissions: MessageWriter<ChatSubmission>,
+              mut chat: ResMut<ChatState>,''', 1)
+          prefix, body = src.split(anchor, 1)
+          section, tail = body.split('fn restore_game_cursor(', 1)
+          section = section.replace('keys.just_pressed(', 'input.keys.just_pressed(')
+          section = section.replace('select_all_pressed(&keys)', 'select_all_pressed(&input.keys)')
+          for name in ('pause', 'settings', 'inventory', 'brush_palette'):
+              section = section.replace(f'*{name}.get()', f'*input.{name}.get()')
+          src = prefix + anchor + section + 'fn restore_game_cursor(' + tail
+          anchor = 'fn interpret_chat_submissions('
+          assert src.count(anchor) == 1
+          src = src.replace(anchor, '''#[derive(SystemParam)]
+          struct ChatCreatureContext<'w> {
+              definitions: Res<'w, CreatureRegistry>,
+              assets: Res<'w, AssetServer>,
+              world: Res<'w, VoxelWorld>,
+              language: Res<'w, ActiveLanguage>,
+          }
+
+          ''' + anchor, 1)
+          old = '''    definitions: Res<CreatureRegistry>,
+              assets: Res<AssetServer>,
+              world: Res<VoxelWorld>,
+              language: Res<ActiveLanguage>,'''
+          assert src.count(old) == 1
+          src = src.replace(old, '    creature_context: ChatCreatureContext,', 1)
+          prefix, body = src.split(anchor, 1)
+          section, tail = body.split('#[cfg(test)]', 1)
+          for name in ('definitions', 'assets', 'world'):
+              section = section.replace(f'&{name}', f'&creature_context.{name}')
+          section = section.replace('language.get()', 'creature_context.language.get()')
+          chat.write_text(prefix + anchor + section + '#[cfg(test)]' + tail)
+
+          visual = Path('src/hud/chat/visual.rs')
+          src = visual.read_text()
+          for name in ('ChatRoot', 'ChatHistory', 'ChatInputRoot', 'ChatDraft'):
+              old = f'struct {name};'
+              assert src.count(old) == 1
+              src = src.replace(old, f'pub(super) struct {name};', 1)
+          visual.write_text(src)
+
+          version = Path('VERSION')
+          assert version.read_text().strip() == '0.17.0'
+          version.write_text('0.17.1\n')
+
+          handoff = Path('HANDOFF.md')
+          with handoff.open('a') as output:
+              output.write('''\n\n## Feature branches — 16/09/2026 (stacked, not merged)
+\n`develop` was independently advanced to 0.15.41 (interactive lighting publication). PR #9 `feature/slime-creature-integration` introduces generic data-driven creature definitions and committed original Slime GLB, branch VERSION 0.16.0; CI/gameplay not yet confirmed and branch needs develop lighting fix before merging. PR #10 `feature/game-chat-creature-command` targets PR #9, branch VERSION **0.17.1** after follow-up patch. Implements chat T/Enter/Escape with slash command `/spawn_creature <id>`, chronological messages with newest BELOW, 10-second closed timeout, max FIFTEEN WRAPPED VISUAL TEXT LINES with scroll only on overflow; in-game visuals unverified. User explicitly requested branch-only changes; do NOT modify develop.\n\nScroll audit: inventory category/catalog already use automatic measured-overflow scrollbars. Settings and New World use shared `src/screens/settings_screen/layout.rs`; its sidebar and main content formerly used `persistent_vertical_scrollbar` and now both use `vertical_scrollbar` so bars start hidden, appear only for measured overflow and hide again when changing section or resizing. Biome dropdown scroll viewport has no always-on bar. Shared threshold in `src/ui/scrollbar.rs` has a unit test, but CI does not run tests.\n\nCI PR #10 initial run 35148336319 FAILED Clippy: private-interface types leaked from exported systems in `src/creatures/visual.rs` and `src/hud/chat/visual.rs`, plus too-many-arguments for `configure_loaded_scene`, chat input and chat interpreter. Patch makes visual marker component visibility match parent system signatures and combines cohesive resource inputs into `SystemParam` structs instead of suppressing lints. Re-run canonical Clippy and cargo check and fix any remaining errors. Gameplay still unverified. Next: confirm PR #9 + #10 CI; visually check conditional scrolling on small/large window and section switches, wrapped chat messages, chat input/camera and spawn collision; maintain nine original world bugs OPEN until user confirms.\n''')
+          PY
+      - name: Commit patch and remove one-shot helper
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -- .github/workflows/apply-chat-scroll-fixes.yml
+          git add -- src/screens/settings_screen/layout.rs src/creatures/visual.rs src/hud/chat.rs src/hud/chat/visual.rs VERSION HANDOFF.md
+          git diff --cached --check
+          git commit -m 'fix(ui): conditional settings and world scrollbars; resolve chat and creature Clippy diagnostics'
+          git push origin HEAD:feature/game-chat-creature-command
