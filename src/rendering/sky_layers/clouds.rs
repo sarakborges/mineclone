@@ -145,6 +145,7 @@ fn cloud_part_shape(seed: u32, part_index: usize) -> (Vec3, Vec3) {
         ),
         _ => (
             Vec3::new(-width * 0.32, -0.05, -depth * 0.28),
-            Vec3::new(width * 0.42, 0.7, depth * 0.62)),
+            Vec3::new(width * 0.42, 0.7, depth * 0.62),
+        ),
     }
 }
