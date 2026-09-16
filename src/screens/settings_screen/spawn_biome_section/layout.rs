@@ -1,4 +1,8 @@
-use bevy::{prelude::*, text::{EditableText, TextCursorStyle}, ui_widgets::{ScrollArea, TextInput}};
+use bevy::{
+    prelude::*,
+    text::{EditableText, TextCursorStyle},
+    ui_widgets::ScrollArea,
+};
 
 use crate::{
     localization::{Language, UiLocalization},
@@ -128,10 +132,15 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                         children![
                             (
                                 Button,
-                                TextInput,
                                 SpawnBiomeSearchBar,
-                                EditableText { max_characters: Some(128), ..default() },
-                                TextCursorStyle { color: Color::WHITE, ..default() },
+                                EditableText {
+                                    max_characters: Some(128),
+                                    ..default()
+                                },
+                                TextCursorStyle {
+                                    color: Color::WHITE,
+                                    ..default()
+                                },
                                 TextFont {
                                     font: FontSource::SystemUi,
                                     font_size: FontSize::Px(14.0),

@@ -47,11 +47,7 @@ pub(super) fn graphics_section(
                     .to_owned(),
             ),
             (
-                typography::muted(render_distance_label(
-                    chunks,
-                    localization,
-                    language,
-                )),
+                typography::muted(render_distance_label(chunks, localization, language,)),
                 RenderDistanceValueText,
             ),
             render_distance_slider(chunks),

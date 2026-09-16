@@ -73,11 +73,14 @@ pub(super) fn sample_density_field(
                 chunk_origin.z as f32 + local_z as f32 + 0.5,
             );
             let column_hydrology = sample_density_column_hydrology(horizontal, pass.region);
-            let hydrology_deltas = pass.region.hydrology.density_deltas_for_column::<CHUNK_SIZE>(
-                horizontal,
-                chunk_origin.y as f32 + 0.5,
-                column.surface_height as f32,
-            );
+            let hydrology_deltas = pass
+                .region
+                .hydrology
+                .density_deltas_for_column::<CHUNK_SIZE>(
+                    horizontal,
+                    chunk_origin.y as f32 + 0.5,
+                    column.surface_height as f32,
+                );
 
             // Resolve carvers first. Water protection is only needed if a voxel
             // is actually carved: a water_near scan on every column duplicated
@@ -149,10 +152,7 @@ fn apply_carver_water_protection<'a>(
     carver_delta * surface_carver_water_factor(sample_y, water)
 }
 
-fn surface_carver_water_factor(
-    sample_y: f32,
-    water: Option<HydrologyWaterSample<'_>>,
-) -> f32 {
+fn surface_carver_water_factor(sample_y: f32, water: Option<HydrologyWaterSample<'_>>) -> f32 {
     let Some(water) = water else {
         return 1.0;
     };
@@ -161,12 +161,12 @@ fn surface_carver_water_factor(
     // column above a nearby river or lake. Both ends fade back into the tunnel
     // so protection does not create a hard vertical wall at either boundary.
     let lower_protection_y = water.bed_level - SURFACE_CARVER_WATER_ROOF;
-    let deep_progress = ((lower_protection_y - sample_y) / SURFACE_CARVER_WATER_FADE_DEPTH)
-        .clamp(0.0, 1.0);
+    let deep_progress =
+        ((lower_protection_y - sample_y) / SURFACE_CARVER_WATER_FADE_DEPTH).clamp(0.0, 1.0);
     let deep_factor = deep_progress * deep_progress * (3.0 - 2.0 * deep_progress);
     let upper_protection_y = water.water_level + SURFACE_CARVER_WATER_ROOF;
-    let high_progress = ((sample_y - upper_protection_y) / SURFACE_CARVER_WATER_FADE_HEIGHT)
-        .clamp(0.0, 1.0);
+    let high_progress =
+        ((sample_y - upper_protection_y) / SURFACE_CARVER_WATER_FADE_HEIGHT).clamp(0.0, 1.0);
     let high_factor = high_progress * high_progress * (3.0 - 2.0 * high_progress);
     let water_strength = water.strength.clamp(0.0, 1.0);
 

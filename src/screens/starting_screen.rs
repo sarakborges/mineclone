@@ -92,7 +92,9 @@ fn setup_starting_screen(
                         StartingScreenAction::NewWorld,
                     ));
                     content.spawn(menu_button(
-                        localization.text(language, "starting.loadWorlds").to_owned(),
+                        localization
+                            .text(language, "starting.loadWorlds")
+                            .to_owned(),
                         StartingScreenAction::LoadWorlds,
                     ));
                     content.spawn(menu_button(

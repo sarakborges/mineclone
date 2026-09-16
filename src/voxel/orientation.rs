@@ -44,9 +44,18 @@ mod tests {
 
     #[test]
     fn orientation_maps_top_face_to_selected_axis() {
-        assert_eq!(orient_face(BlockFace::Top, BlockOrientation::Y), BlockFace::Top);
-        assert_eq!(orient_face(BlockFace::Top, BlockOrientation::Z), BlockFace::Front);
-        assert_eq!(orient_face(BlockFace::Top, BlockOrientation::X), BlockFace::Right);
+        assert_eq!(
+            orient_face(BlockFace::Top, BlockOrientation::Y),
+            BlockFace::Top
+        );
+        assert_eq!(
+            orient_face(BlockFace::Top, BlockOrientation::Z),
+            BlockFace::Front
+        );
+        assert_eq!(
+            orient_face(BlockFace::Top, BlockOrientation::X),
+            BlockFace::Right
+        );
     }
 
     #[test]

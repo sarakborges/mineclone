@@ -8,12 +8,7 @@ use super::{
 // The caller supplies the full footprint of this particular edge, including
 // its biome-scaled radius and outer bank. A global maximum river radius would
 // discard shore segments before their density contribution reaches a region.
-pub(super) fn edge_intersects_region(
-    coord: IVec2,
-    from: Vec2,
-    to: Vec2,
-    margin: f32,
-) -> bool {
+pub(super) fn edge_intersects_region(coord: IVec2, from: Vec2, to: Vec2, margin: f32) -> bool {
     let (minimum, maximum) = region_bounds(coord);
     let margin = margin.max(0.0);
     let edge_minimum = from.min(to) - Vec2::splat(margin);

@@ -154,11 +154,9 @@ impl DayNightCycleRegistry {
             + definition.phases.night.duration_ticks;
 
         assert_eq!(
-            phase_duration,
-            definition.day_duration_ticks,
+            phase_duration, definition.day_duration_ticks,
             "day-night cycle {} phase durations ({phase_duration}) must equal day duration ({})",
-            definition.id,
-            definition.day_duration_ticks
+            definition.id, definition.day_duration_ticks
         );
 
         for phase in [

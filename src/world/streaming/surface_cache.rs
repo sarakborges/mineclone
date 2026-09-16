@@ -4,8 +4,7 @@ use crate::{
     content::{biome::BiomeRegistry, dimension::DimensionDefinition},
     voxel::chunk::CHUNK_SIZE,
     world::{
-        biome_field::BiomeField, terrain::surface_height,
-        world_feature_fields::WorldFeatureFields,
+        biome_field::BiomeField, terrain::surface_height, world_feature_fields::WorldFeatureFields,
     },
 };
 
@@ -20,9 +19,9 @@ pub(super) fn cached_surface_range(
     biome_field: &BiomeField,
     _feature_fields: &WorldFeatureFields,
 ) -> (i32, i32) {
-    *cache.entry(horizontal_chunk).or_insert_with(|| {
-        chunk_surface_range(horizontal_chunk, dimension, biomes, biome_field)
-    })
+    *cache
+        .entry(horizontal_chunk)
+        .or_insert_with(|| chunk_surface_range(horizontal_chunk, dimension, biomes, biome_field))
 }
 
 pub(super) fn prune_surface_cache(

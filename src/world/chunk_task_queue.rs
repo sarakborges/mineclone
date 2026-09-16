@@ -71,8 +71,7 @@ impl<T> ChunkTaskQueue<T> {
 
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<T>> {
         let ready = self.pending.iter_mut().find_map(|(coord, pending)| {
-            check_ready(&mut pending.task)
-                .map(|output| (*coord, pending.revision, output))
+            check_ready(&mut pending.task).map(|output| (*coord, pending.revision, output))
         })?;
         let (coord, revision, output) = ready;
         self.pending.remove(&coord);

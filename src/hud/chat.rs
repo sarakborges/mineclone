@@ -5,8 +5,8 @@ use std::collections::VecDeque;
 use bevy::{
     ecs::system::SystemParam,
     input_focus::{FocusCause, InputFocus},
-    text::EditableText,
     prelude::*,
+    text::EditableText,
     window::{CursorGrabMode, CursorOptions},
 };
 
@@ -126,16 +126,16 @@ struct ChatInputContext<'w> {
     settings: Res<'w, State<SettingsState>>,
     inventory: Res<'w, State<InventoryState>>,
     brush_palette: Res<'w, State<BrushPaletteState>>,
+    focus: ResMut<'w, InputFocus>,
 }
 
 fn handle_chat_input(
-    input: ChatInputContext,
+    mut input: ChatInputContext,
     mut submissions: MessageWriter<ChatSubmission>,
     mut chat: ResMut<ChatState>,
     window: Single<&Window>,
     mut cursor: Single<&mut CursorOptions>,
     mut mouse_look: ResMut<MouseLookInputState>,
-    mut focus: ResMut<InputFocus>,
     mut draft: Single<(Entity, &mut EditableText), With<visual::ChatDraft>>,
 ) {
     if !input.keys.just_pressed(KeyCode::Escape) {
@@ -147,14 +147,14 @@ fn handle_chat_input(
     if chat.open {
         if *input.pause.get() != PauseState::Running {
             chat.close();
-            focus.clear();
+            input.focus.clear();
             return;
         }
         if input.keys.just_pressed(KeyCode::Escape) && !editor.is_composing() {
             chat.close();
             chat.escape_consumed = true;
             editor.clear();
-            focus.clear();
+            input.focus.clear();
             restore_game_cursor(window.focused, &mut cursor, &mut mouse_look);
             return;
         }
@@ -165,15 +165,15 @@ fn handle_chat_input(
             let line = editable_value(editor).trim().to_owned();
             chat.close();
             editor.clear();
-            focus.clear();
+            input.focus.clear();
             restore_game_cursor(window.focused, &mut cursor, &mut mouse_look);
             if !line.is_empty() {
                 submissions.write(ChatSubmission(line));
             }
             return;
         }
-        if focus.get() != Some(entity) {
-            focus.set(entity, FocusCause::Navigated);
+        if input.focus.get() != Some(entity) {
+            input.focus.set(entity, FocusCause::Navigated);
         }
         return;
     }
@@ -183,9 +183,12 @@ fn handle_chat_input(
         && *input.inventory.get() == InventoryState::Closed
         && *input.brush_palette.get() == BrushPaletteState::Closed;
     let has_command_modifier = [
-        KeyCode::ControlLeft, KeyCode::ControlRight,
-        KeyCode::SuperLeft, KeyCode::SuperRight,
-        KeyCode::AltLeft, KeyCode::AltRight,
+        KeyCode::ControlLeft,
+        KeyCode::ControlRight,
+        KeyCode::SuperLeft,
+        KeyCode::SuperRight,
+        KeyCode::AltLeft,
+        KeyCode::AltRight,
     ]
     .iter()
     .any(|key| input.keys.pressed(*key));
@@ -195,7 +198,7 @@ fn handle_chat_input(
 
     editor.clear();
     chat.open = true;
-    focus.set(entity, FocusCause::Navigated);
+    input.focus.set(entity, FocusCause::Navigated);
     cursor.grab_mode = CursorGrabMode::None;
     cursor.visible = true;
     mouse_look.ignore_next_delta = true;

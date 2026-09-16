@@ -69,7 +69,10 @@ pub(crate) fn sample_density_column_hydrology(
             .hydrology
             .water_near(horizontal, CAVE_WATER_HORIZONTAL_CLEARANCE)
             .map(Into::into),
-        river_surface: region.hydrology.river_surface_at(horizontal).map(Into::into),
+        river_surface: region
+            .hydrology
+            .river_surface_at(horizontal)
+            .map(Into::into),
         water: region.hydrology.water_at(horizontal).map(Into::into),
     }
 }
@@ -159,8 +162,7 @@ fn river_headroom(strength: f32, horizontal: Vec2, seed: u64) -> f32 {
     ) * 0.5
         + 0.5;
     let variation = lerp(0.82, 1.18, broad * 0.7 + detail * 0.3);
-    let shaped_strength =
-        (strength * (1.0 + (variation - 1.0) * (1.0 - strength))).clamp(0.0, 1.0);
+    let shaped_strength = (strength * (1.0 + (variation - 1.0) * (1.0 - strength))).clamp(0.0, 1.0);
 
     lerp(
         RIVER_MINIMUM_SURFACE_HEADROOM,

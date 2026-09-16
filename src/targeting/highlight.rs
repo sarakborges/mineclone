@@ -1,8 +1,7 @@
 use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
 
 use super::{
-    BlockTargetingScene, BlockTargetingVisualSnapshot,
-    block::BlockTargetingSet,
+    BlockTargetingScene, BlockTargetingVisualSnapshot, block::BlockTargetingSet,
     placement::placement_voxel,
 };
 use crate::{

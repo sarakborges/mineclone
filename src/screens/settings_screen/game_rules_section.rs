@@ -197,7 +197,11 @@ pub(super) fn handle_ticks_keyboard(
 ) {
     let (entity, editable) = &mut *editor;
     let event = TicksPerSecondInputState::handle_keyboard(
-        &mut input_state, &keys, &mut focus, *entity, editable,
+        &mut input_state,
+        &keys,
+        &mut focus,
+        *entity,
+        editable,
         TICKS_INPUT_MAX_DIGITS,
         |next| next.is_empty() || next.parse::<u32>().is_ok(),
     );

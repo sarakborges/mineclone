@@ -31,11 +31,7 @@ pub(crate) const PLAYER_HALF_WIDTH: f32 = 0.3;
 
 const SPAWN_SEARCH_RADIUS_BLOCKS: i32 = 64;
 
-pub(crate) fn spawn_player_entity(
-    commands: &mut Commands,
-    translation: Vec3,
-    game_mode: GameMode,
-) {
+pub(crate) fn spawn_player_entity(commands: &mut Commands, translation: Vec3, game_mode: GameMode) {
     commands.spawn((
         Camera3d::default(),
         Camera {
@@ -76,23 +72,18 @@ pub(crate) fn find_safe_spawn_position(
     preferred_column: IVec2,
     mut accepts_column: impl FnMut(IVec2) -> bool,
 ) -> Option<Vec3> {
-    find_map_square_rings(
-        preferred_column,
-        SPAWN_SEARCH_RADIUS_BLOCKS,
-        1,
-        |column| {
-            if !accepts_column(column) {
-                return None;
-            }
+    find_map_square_rings(preferred_column, SPAWN_SEARCH_RADIUS_BLOCKS, 1, |column| {
+        if !accepts_column(column) {
+            return None;
+        }
 
-            let feet_y = safe_surface_feet_y(world, column)?;
-            Some(Vec3::new(
-                column.x as f32 + 0.5,
-                feet_y as f32 + PLAYER_EYE_HEIGHT,
-                column.y as f32 + 0.5,
-            ))
-        },
-    )
+        let feet_y = safe_surface_feet_y(world, column)?;
+        Some(Vec3::new(
+            column.x as f32 + 0.5,
+            feet_y as f32 + PLAYER_EYE_HEIGHT,
+            column.y as f32 + 0.5,
+        ))
+    })
 }
 
 pub(crate) fn safe_spawn_position(world: &VoxelWorld, preferred_column: IVec2) -> Vec3 {

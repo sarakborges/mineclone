@@ -36,8 +36,7 @@ pub(crate) fn advance_world_ticks(
     mut clock: ResMut<WorldTickClock>,
 ) {
     clock.ticks_this_frame = 0;
-    clock.accumulated_ticks +=
-        time.delta().as_secs_f64() * game_rules.ticks_per_second() as f64;
+    clock.accumulated_ticks += time.delta().as_secs_f64() * game_rules.ticks_per_second() as f64;
 
     let elapsed_ticks = clock.accumulated_ticks.floor().min(u32::MAX as f64) as u32;
     if elapsed_ticks == 0 {

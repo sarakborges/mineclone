@@ -4,7 +4,6 @@ use bevy::{
     input_focus::InputFocus,
     prelude::*,
     text::{EditableText, EditableTextFilter, FontWeight, TextCursorStyle},
-    ui_widgets::TextInput,
 };
 
 use super::{button::COMPACT_CONTROL_HEIGHT, text_input::editable_value, theme};
@@ -129,7 +128,6 @@ pub(crate) fn numeric_input_field<I: Component, L: Component>(
     };
     (
         Button,
-        TextInput,
         input_marker,
         label_marker,
         EditableText {
@@ -145,7 +143,10 @@ pub(crate) fn numeric_input_field<I: Component, L: Component>(
             ..default()
         },
         TextColor(theme::TEXT_PRIMARY),
-        TextCursorStyle { color: theme::TEXT_PRIMARY, ..default() },
+        TextCursorStyle {
+            color: theme::TEXT_PRIMARY,
+            ..default()
+        },
         Node {
             width,
             flex_grow,

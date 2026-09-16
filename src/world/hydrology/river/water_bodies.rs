@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 
-use super::path::{WATERFALL_MINIMUM_DROP, WaterfallLanding, river_height};
 use super::super::{
     drainage::DrainageNode,
     math::{cell_hash, hash_unit, lerp},
     types::WaterBody,
 };
+use super::path::{WATERFALL_MINIMUM_DROP, WaterfallLanding, river_height};
 
 const PLUNGE_POOL_CHANCE: f32 = 0.84;
 
@@ -43,10 +43,9 @@ pub(super) fn confluence_lake(
     let hash = cell_hash(cell, seed ^ 0x7137_4491_23ef_65cd);
     let incoming_strength = ((incoming_rivers.saturating_sub(3)) as f32 / 3.0).clamp(0.0, 1.0);
     let flow_strength = ((flow as f32 - 4.0) / 20.0).clamp(0.0, 1.0);
-    let size_strength = (incoming_strength * 0.55
-        + flow_strength * 0.30
-        + hash_unit(hash.rotate_left(19)) * 0.15)
-        .clamp(0.0, 1.0);
+    let size_strength =
+        (incoming_strength * 0.55 + flow_strength * 0.30 + hash_unit(hash.rotate_left(19)) * 0.15)
+            .clamp(0.0, 1.0);
     let base_radius = lerp(18.0, 38.0, size_strength);
     let aspect = lerp(0.72, 1.28, hash_unit(hash.rotate_left(37)));
 
@@ -72,8 +71,7 @@ pub(super) fn plunge_pool_for_waterfall(
         return None;
     }
 
-    let drop_strength =
-        ((waterfall.drop - WATERFALL_MINIMUM_DROP) / 24.0).clamp(0.0, 1.0);
+    let drop_strength = ((waterfall.drop - WATERFALL_MINIMUM_DROP) / 24.0).clamp(0.0, 1.0);
     let base_radius = lerp(
         6.0,
         13.0,

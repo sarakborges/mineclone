@@ -10,10 +10,8 @@ use crate::{
 
 use super::WorldLoadingState;
 use crate::world::{
-    InMemoryWorldSave, NewWorldConfig, WorldLoadMode, WorldSeed,
-    dimension::CurrentDimension,
-    game_rules::GameRules,
-    render_distance::RenderDistanceSettings,
+    InMemoryWorldSave, NewWorldConfig, WorldLoadMode, WorldSeed, dimension::CurrentDimension,
+    game_rules::GameRules, render_distance::RenderDistanceSettings,
 };
 
 #[derive(SystemParam)]

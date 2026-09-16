@@ -129,7 +129,10 @@ impl StructureOriginCache {
             if let Some(anchors) = entries.get_mut(structure_id) {
                 anchors.insert(anchor, entry.clone());
             } else {
-                entries.insert(structure_id.to_owned(), HashMap::from([(anchor, entry.clone())]));
+                entries.insert(
+                    structure_id.to_owned(),
+                    HashMap::from([(anchor, entry.clone())]),
+                );
             }
             entry
         });
@@ -256,10 +259,7 @@ impl FeatureCaches {
             && self.caves.is_initialized(&coord)
     }
 
-    pub(super) fn retain_for_chunks<'a>(
-        &self,
-        desired: impl IntoIterator<Item = &'a IVec3>,
-    ) {
+    pub(super) fn retain_for_chunks<'a>(&self, desired: impl IntoIterator<Item = &'a IVec3>) {
         let mut scratch = self
             .retention_scratch
             .lock()
@@ -298,8 +298,7 @@ impl FeatureCaches {
             .retain(|coord| horizontal_chunks.contains(coord));
         self.volume_biomes
             .retain(|coord| retained_regions.contains(coord));
-        self.caves
-            .retain(|coord| retained_regions.contains(coord));
+        self.caves.retain(|coord| retained_regions.contains(coord));
         self.regions
             .retain(|coord| retained_regions.contains(coord));
         self.hydrology

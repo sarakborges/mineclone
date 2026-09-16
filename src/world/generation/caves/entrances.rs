@@ -3,11 +3,8 @@ use bevy::prelude::*;
 use crate::{
     content::{biome::BiomeRegistry, dimension::DimensionDefinition},
     world::{
-        biome_field::BiomeField,
-        generation_region::GenerationRegion,
-        hydrology::HydrologyWaterKind,
-        math::lerp,
-        terrain::surface_height,
+        biome_field::BiomeField, generation_region::GenerationRegion,
+        hydrology::HydrologyWaterKind, math::lerp, terrain::surface_height,
     },
 };
 

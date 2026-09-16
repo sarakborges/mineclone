@@ -53,12 +53,7 @@ where
                     if face == BlockFace::Bottom && world_voxel.y <= 0 {
                         return false;
                     }
-                    face_is_exposed(
-                        world,
-                        world_voxel + face.offset(),
-                        cell.fluid_id,
-                        face,
-                    )
+                    face_is_exposed(world, world_voxel + face.offset(), cell.fluid_id, face)
                 });
                 if !exposed.iter().any(|value| *value) {
                     continue;
@@ -66,10 +61,8 @@ where
 
                 let tint = tint_at(world_voxel, cell.fluid_id);
                 let heights = fluid_face_heights(world, world_voxel, cell.fluid_id);
-                let source_block_srgb = surface_block_srgb(
-                    chunk.light_at(x as i32, y as i32, z as i32),
-                    false,
-                );
+                let source_block_srgb =
+                    surface_block_srgb(chunk.light_at(x as i32, y as i32, z as i32), false);
                 let fluid = buffers.entry(cell.fluid_id).or_default();
 
                 for (face, is_exposed) in BlockFace::ALL.into_iter().zip(exposed) {
@@ -182,9 +175,10 @@ fn fluid_corner_height(
 ) -> f32 {
     let positions = [(1, 1), (x_index, 1), (1, z_index), (x_index, z_index)];
 
-    if positions.iter().any(|&(x, z)| {
-        above[z][x].is_some_and(|cell| cell.fluid_id == fluid_id)
-    }) {
+    if positions
+        .iter()
+        .any(|&(x, z)| above[z][x].is_some_and(|cell| cell.fluid_id == fluid_id))
+    {
         return 1.0;
     }
 

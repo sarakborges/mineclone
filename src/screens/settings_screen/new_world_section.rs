@@ -255,7 +255,11 @@ pub(super) fn handle_seed_keyboard(
 ) {
     let (entity, editable) = &mut *editor;
     let event = SeedInputState::handle_keyboard(
-        &mut input, &keys, &mut focus, *entity, editable,
+        &mut input,
+        &keys,
+        &mut focus,
+        *entity,
+        editable,
         SEED_INPUT_MAX_DIGITS,
         |next| next.is_empty() || next.parse::<u64>().is_ok(),
     );

@@ -2,12 +2,10 @@ use bevy::prelude::*;
 
 use crate::world::feature_graph::FeatureGraph;
 
-use super::RiverPath;
 use super::super::super::{
-    constants::RIVER_BANK_OUTER_NORMALIZED_DISTANCE,
-    math::lerp,
-    spatial::edge_intersects_region,
+    constants::RIVER_BANK_OUTER_NORMALIZED_DISTANCE, math::lerp, spatial::edge_intersects_region,
 };
+use super::RiverPath;
 
 pub(super) fn add_path_to_graph(
     graph: &mut FeatureGraph,

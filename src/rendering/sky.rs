@@ -54,12 +54,18 @@ mod tests {
             visuals.fog_color = Hsi::new(45.0, 1.0, 0.9);
         }
         app.update();
-        assert_eq!(app.world().resource::<ClearColor>().0, authored_sky.to_color());
+        assert_eq!(
+            app.world().resource::<ClearColor>().0,
+            authored_sky.to_color()
+        );
 
         app.world_mut()
             .resource_mut::<EnvironmentVisualState>()
             .fog_color = Hsi::new(180.0, 1.0, 0.2);
         app.update();
-        assert_eq!(app.world().resource::<ClearColor>().0, authored_sky.to_color());
+        assert_eq!(
+            app.world().resource::<ClearColor>().0,
+            authored_sky.to_color()
+        );
     }
 }
