@@ -15,11 +15,11 @@ use crate::{
     },
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
+        chunk::VoxelChunk,
         coordinates::chunk_coord_from_position,
         deduplicated_queue::DeduplicatedQueue,
         lighting::{PendingLightingUpdates, seed_chunk_direct_lighting},
         mesh_snapshot::ChunkMeshSnapshot,
-        neighbors::CARDINAL_NEIGHBORS,
         world::VoxelWorld,
     },
 };
@@ -63,6 +63,7 @@ pub(super) struct ChunkStreamingState {
     ready: DeduplicatedQueue<IVec3>,
     surface_ranges: HashMap<IVec2, (i32, i32)>,
     initial_lighting_seeded: HashSet<IVec3>,
+    initial_mesh_seed_catchup: HashSet<IVec3>,
 }
 
 impl ChunkStreamingState {
@@ -149,6 +150,7 @@ impl ChunkStreamingState {
 
     pub(super) fn forget_initial_lighting_seeded(&mut self, coord: IVec3) {
         self.initial_lighting_seeded.remove(&coord);
+        self.initial_mesh_seed_catchup.remove(&coord);
     }
 }
 
@@ -406,6 +408,25 @@ fn dispatch_initial_mesh_tasks(
                 content.fluids(),
                 content.secondary_properties(),
             );
+
+            // A neighbor's first mesh may already be building from this chunk's
+            // pre-seed DARK light. Mark the in-flight mesh for post-publication
+            // reconciliation instead of cancelling it and delaying visibility.
+            for y in -1..=1 {
+                for z in -1..=1 {
+                    for x in -1..=1 {
+                        let offset = IVec3::new(x, y, z);
+                        if offset == IVec3::ZERO {
+                            continue;
+                        }
+                        let neighbor = coord + offset;
+                        if work.mesh_tasks.contains(neighbor) {
+                            work.state.initial_mesh_seed_catchup.insert(neighbor);
+                        }
+                    }
+                }
+            }
+
             if chunk_is_empty {
                 queues.lighting.enqueue_empty_chunk_relaxation(coord);
             } else {
@@ -450,7 +471,7 @@ fn integrate_empty_chunk(
         Vec::new(),
         &render_context,
     );
-    notify_loaded_chunk_neighbors(coord, true, world, &renderer.pool, remesh_queue);
+    notify_loaded_chunk_neighbors(coord, world, &renderer.pool, remesh_queue);
 }
 
 fn collect_built_chunk_meshes(
@@ -488,7 +509,9 @@ fn collect_built_chunk_meshes(
             work.state.requeue(completed.coord);
             continue;
         };
-        let chunk_is_empty = chunk.is_empty();
+        let chunk_has_fluid = chunk.has_fluid();
+        let catchup = completed.output.dependencies.needs_initial_catchup(&work.world)
+            || work.state.initial_mesh_seed_catchup.contains(&completed.coord);
         let render_context = content.render_context(
             &work.world,
             &renderer.terrain_materials,
@@ -503,9 +526,15 @@ fn collect_built_chunk_meshes(
             completed.output.meshes,
             &render_context,
         );
+        work.state.initial_mesh_seed_catchup.remove(&completed.coord);
+        if catchup {
+            remesh_queue.enqueue_priority(completed.coord);
+            if chunk_has_fluid {
+                remesh_queue.enqueue_fluid_priority(completed.coord);
+            }
+        }
         notify_loaded_chunk_neighbors(
             completed.coord,
-            chunk_is_empty,
             &work.world,
             &renderer.pool,
             remesh_queue,
@@ -513,9 +542,14 @@ fn collect_built_chunk_meshes(
     }
 }
 
+fn boundary_faces_toward(offset: IVec3, mut has_face: impl FnMut(IVec3) -> bool) -> bool {
+    (offset.x == 0 || has_face(IVec3::new(-offset.x, 0, 0)))
+        && (offset.y == 0 || has_face(IVec3::new(0, -offset.y, 0)))
+        && (offset.z == 0 || has_face(IVec3::new(0, 0, -offset.z)))
+}
+
 fn notify_loaded_chunk_neighbors(
     coord: IVec3,
-    _chunk_is_empty: bool,
     world: &VoxelWorld,
     render_pool: &ChunkRenderPool,
     remesh_queue: &mut ChunkRemeshQueue,
@@ -524,29 +558,38 @@ fn notify_loaded_chunk_neighbors(
         .chunk(coord)
         .unwrap_or_else(|| panic!("rendered chunk data should exist at {coord:?}"));
 
-    for offset in CARDINAL_NEIGHBORS {
-        let neighbor = coord + offset;
-        if !render_pool.contains(neighbor) {
-            continue;
-        }
-        let Some(neighbor_chunk) = world.chunk(neighbor) else {
-            continue;
-        };
+    // Face lighting, AO and fluid corner heights sample edge/corner neighbors
+    // as well as cardinals. A chunk that arrives already seeded can change
+    // the halo without causing any later relaxation changes. Notify only
+    // already-rendered neighbors whose toward-source boundary has content.
+    for y in -1..=1 {
+        for z in -1..=1 {
+            for x in -1..=1 {
+                let offset = IVec3::new(x, y, z);
+                if offset == IVec3::ZERO {
+                    continue;
+                }
+                let neighbor = coord + offset;
+                if !render_pool.contains(neighbor) {
+                    continue;
+                }
+                let Some(neighbor_chunk) = world.chunk(neighbor) else {
+                    continue;
+                };
 
-        // Geometry uses both neighbor occupancy and halo voxel lighting.
-        // A newly rendered empty or air-boundary chunk can supply direct sky
-        // light even when its relaxation makes no further voxel changes.
-        // Refresh only rendered neighbors that actually have border content;
-        // don't remesh every empty neighbor on each chunk integration.
-        if neighbor_chunk.boundary_has_content(-offset) {
-            remesh_queue.enqueue_priority(neighbor);
-        }
+                if boundary_faces_toward(offset, |face| neighbor_chunk.boundary_has_content(face)) {
+                    remesh_queue.enqueue_priority(neighbor);
+                }
 
-        // Fluid surfaces are separate meshes and need their own refresh when
-        // either side contributes boundary water. Geometry must not consume
-        // their independent queued work.
-        if chunk.boundary_has_fluid(offset) || neighbor_chunk.boundary_has_fluid(-offset) {
-            remesh_queue.enqueue_fluid_priority(neighbor);
+                let has_fluid_border = boundary_faces_toward(offset, |face| {
+                    neighbor_chunk.boundary_has_fluid(face)
+                });
+                let new_cardinal_fluid = offset.x.abs() + offset.y.abs() + offset.z.abs() == 1
+                    && chunk.boundary_has_fluid(offset);
+                if has_fluid_border || new_cardinal_fluid {
+                    remesh_queue.enqueue_fluid_priority(neighbor);
+                }
+            }
         }
     }
 }
@@ -554,6 +597,7 @@ fn notify_loaded_chunk_neighbors(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::voxel::{cell::VoxelCell, texture_rotation::TextureRotation};
 
     #[test]
     fn retired_chunks_wait_inside_horizontal_retention_radius() {
@@ -604,7 +648,26 @@ mod tests {
 
         assert!(state.mark_initial_lighting_seeded(coord));
         assert!(!state.mark_initial_lighting_seeded(coord));
+        state.initial_mesh_seed_catchup.insert(coord);
         state.forget_initial_lighting_seeded(coord);
         assert!(state.mark_initial_lighting_seeded(coord));
+        assert!(!state.initial_mesh_seed_catchup.contains(&coord));
+    }
+
+    #[test]
+    fn diagonal_boundary_reconciliation_is_restricted_to_relevant_faces() {
+        let mut chunk = VoxelChunk::empty();
+        chunk.set_block(
+            0,
+            0,
+            7,
+            Some(VoxelCell::new("asteria:test", TextureRotation::default())),
+        );
+        assert!(boundary_faces_toward(IVec3::new(1, 1, 0), |face| {
+            chunk.boundary_has_content(face)
+        }));
+        assert!(!boundary_faces_toward(IVec3::new(-1, 1, 0), |face| {
+            chunk.boundary_has_content(face)
+        }));
     }
 }
