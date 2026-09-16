@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 
 use super::super::super::{
-    constants::RIVER_MINIMUM_WATER_DROP,
     drainage::DrainageNode,
     math::{cell_hash, hash_signed, hash_unit, lerp},
 };
@@ -29,15 +28,10 @@ pub(super) fn river_path(
     let perpendicular = Vec2::new(-direction.y, direction.x);
     let lateral_controls = river_lateral_controls(source_cell, seed, distance);
     let start_height = source_water_level.unwrap_or_else(|| river_height(source, sea_level));
-    let raw_end_height =
-        downstream_water_level.unwrap_or_else(|| river_height(downstream, sea_level));
-    let end_height = if downstream_water_level.is_some() {
-        raw_end_height.min(start_height).max(1.0)
-    } else {
-        raw_end_height
-            .min(start_height - RIVER_MINIMUM_WATER_DROP)
-            .max(1.0)
-    };
+    // Adjacent edges must use the exact same authoritative node elevation.
+    // Applying an independent minimum drop here made the incoming edge end
+    // below the outgoing edge's start whenever local relief was small.
+    let end_height = downstream_water_level.unwrap_or_else(|| river_height(downstream, sea_level));
     let waterfall_profile =
         waterfall_profile(source_cell, seed, distance, start_height, end_height);
     let points = (0..=segment_count)
@@ -182,14 +176,24 @@ mod tests {
     }
 
     #[test]
-    fn river_surface_drops_downstream() {
+    fn river_surface_uses_real_node_relief_without_artificial_junction_drop() {
         let source = node(Vec2::ZERO, 80.0);
         let downstream = node(Vec2::new(128.0, 0.0), 79.9);
         let points = river_path_points(IVec2::ZERO, source, downstream, 42, 64.0);
-        let start = points.first().unwrap().y;
-        let end = points.last().unwrap().y;
 
-        assert!(start - end >= RIVER_MINIMUM_WATER_DROP);
+        assert_eq!(points.first().unwrap().y, 78.0);
+        assert_eq!(points.last().unwrap().y, 77.9);
+    }
+
+    #[test]
+    fn consecutive_river_edges_share_exact_horizontal_and_vertical_junction() {
+        let upstream = node(Vec2::ZERO, 100.0);
+        let junction = node(Vec2::new(128.0, 0.0), 99.9);
+        let downstream = node(Vec2::new(256.0, 0.0), 99.8);
+        let incoming = river_path_points(IVec2::ZERO, upstream, junction, 42, 64.0);
+        let outgoing = river_path_points(IVec2::X, junction, downstream, 42, 64.0);
+
+        assert_eq!(incoming.last(), outgoing.first());
     }
 
     #[test]
@@ -210,5 +214,18 @@ mod tests {
 
         assert_eq!(path.points.first().unwrap().y, source_lake_level);
         assert_eq!(path.points.last().unwrap().y, downstream_lake_level);
+    }
+
+    #[test]
+    fn entering_and_leaving_a_lake_use_the_same_surface() {
+        let upstream = node(Vec2::ZERO, 102.0);
+        let lake = node(Vec2::new(128.0, 0.0), 96.0);
+        let downstream = node(Vec2::new(256.0, 0.0), 85.0);
+        let lake_level = 95.35;
+        let incoming = river_path(IVec2::ZERO, upstream, lake, 42, 64.0, None, Some(lake_level));
+        let outgoing = river_path(IVec2::X, lake, downstream, 42, 64.0, Some(lake_level), None);
+
+        assert_eq!(incoming.points.last(), outgoing.points.first());
+        assert_eq!(incoming.points.last().unwrap().y, lake_level);
     }
 }
