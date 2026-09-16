@@ -40,7 +40,7 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 3. Preferir `SystemParam`s estreitos/coerentes e availability/run conditions canônicas.
 4. UI compartilhada pertence a `src/ui`.
 5. Targeting tem um único target autoritativo e consumers change-driven.
-6. `DeduplicatedQueue<T>` / `VoxelUpdateQueue` são os primitives canônicos de fila deduplicada.
+6. `DeduplicatedQueue<T>` / `VoxelUpdateQueue` são primitives canônicos de fila deduplicada.
 7. `FrameWorkBudget` é o primitive canônico de budget por tempo/quantidade.
 8. Cores internas são HSI-first; visuals ponderados usam `CurrentBiomeVisuals`.
 9. Evitar scans globais, allocations temporárias e dirty writes quando o owner já tem sinal/metadata.
@@ -60,20 +60,21 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 23. Prioridade de streaming deve sobreviver às fronteiras async; trabalho imediato pode preemptar apenas trabalho não imediato e a vítima volta à fila.
 24. Worldgen/initial mesh/background remesh compartilham `AsyncComputeTaskPool`; quantidade de tasks in-flight não equivale a workers executando.
 25. **Invariant de produto para streaming:** em velocidade normal configurada, inclusive flight, o jogador não deve enxergar void/chunks ainda ausentes. Throughput deve ser antecipado e priorizado para tornar o streaming visualmente seamless; não aceitar “60 FPS com mundo atrasado” como sucesso.
-26. Anti-convoy de worldgen deve observar readiness real dos caches compartilhados; não manter shadow state de “cache aquecido” quando o próprio `OnceLock` já é a fonte autoritativa.
-27. Validade de mesh async usa revision de **conteúdo por chunk** (blocks + fluids), separada de `chunk_mesh_revision`; mudanças de lighting não devem descartar geometria já construída e ficam responsáveis por seu próprio background remesh.
-28. Neighbor ausente no snapshot inicial pode aparecer enquanto o mesh está em flight; isso não invalida a primeira aparição, porque o carregamento/visibilidade do neighbor já agenda a correção de fronteira por remesh.
+26. Anti-convoy de worldgen deve observar readiness real dos caches compartilhados; não manter shadow state quando o próprio `OnceLock` já é a fonte autoritativa.
+27. Validade de mesh async usa revision de **conteúdo por chunk** (blocks + fluids), separada de `chunk_mesh_revision`; mudanças de lighting não devem descartar geometria já construída.
+28. Neighbor ausente no snapshot inicial pode aparecer enquanto o mesh está em flight; isso não invalida a primeira aparição, porque a correção de fronteira vem por remesh.
 29. Streaming distingue **raio visível obrigatório**, **faixa warm/preload** e **raio de retenção/unload**. Trabalho faltando no raio visível sempre vence preload; preload compra antecedência; retenção evita destruir trabalho pronto cedo demais.
 30. A zona preditiva distante não deve ficar visualmente exposta. Uma shell já pronta pode renderizar atrás da parte opaca da fog, mas chunks ainda em preparação permanecem ocultos.
-31. **Retirement != unload imediato:** chunks aposentados permanecem elegíveis para reuso enquanto ainda estiverem dentro do raio de retenção. Reentrada no campo útil não deve exigir reconstruir mesh que acabou de ser descartado.
+31. **Retirement != unload imediato:** chunks aposentados permanecem elegíveis para reuso enquanto ainda estiverem dentro do raio de retenção. Reentrada no campo útil não deve exigir reconstruir mesh recém-descartado.
+32. **Visibilidade usa histerese:** um chunk oculto entra apenas no raio de `show`; um chunk já visível só sai no raio maior de `hide`. Nunca usar o mesmo limiar para `Visible <-> Hidden`, pois movimento junto à fronteira causa flicker.
 
 ---
 
 # Estado atual
 
-Último HEAD de código publicado: `f5cb883765ad7bb0a63118f30a8289a9386197c5`  
-Bloco: `Retain nearby chunks across movement`  
-`VERSION = 0.14.68`
+Último HEAD de código publicado: `5701f00f27682d2ab4ea97c9dae2b5196f858b05`  
+Bloco: `Add visibility hysteresis at render boundary`  
+`VERSION = 0.14.69`
 
 ## Histórico recente relevante
 
@@ -89,28 +90,32 @@ Bloco: `Retain nearby chunks across movement`
 - `b1061f8` / 0.14.64: render entities warm nascem ocultos fora do raio nominal.
 - `5a58d04` / 0.14.65: `Added<ChunkRenderCoord>` promove imediatamente meshes que terminam já dentro do raio.
 - `eadc7f5` / 0.14.66: corrige `private_interfaces` de `ChunkVisibilityState`; CI verde.
-- `bccddfb` / 0.14.67: cria shell visual de +2 chunks além do raio nominal, mantendo a fog baseada no raio configurado, para que a promoção aconteça atrás da fog opaca; CI verde. Feedback runtime: **nenhuma diferença perceptível; chunks ainda aparecem renderizando atrás da fog**.
+- `bccddfb` / 0.14.67: shell visual +2 além do nominal; fog continua baseada no raio configurado. Feedback runtime: nenhuma melhora perceptível; chunks ainda apareciam renderizando atrás da fog.
 - `f5cb883` / 0.14.68: corrige churn de unload observado ao andar em círculos:
-  - o usuário confirmou que chunks já vistos descarregavam e depois voltavam como buracos quando reentravam no raio de visão;
-  - a fila `retired` deixa de significar “descarregar assim que possível” e passa a respeitar uma histerese horizontal de retenção;
-  - `ChunkStreamingState::pop_retired_outside_horizontal_radius` só libera um retired para archive quando ele não está mais em `desired/retained` **e** já está fora do raio de retenção;
-  - reentrada em `desired` mantém o retired na fila, mas impede unload; se sair novamente no futuro, o mesmo marcador pode voltar a ser elegível;
-  - raio de retenção deriva da render distance: `R + max(ceil(R/2), 10)` chunks; exemplos: RD 4 -> 14, RD 12 -> 22, RD 24 -> 36;
-  - decisão é horizontal-only para não destruir superfície/terreno útil só porque o jogador mudou altitude;
-  - testes cobrem retenção dentro do raio, unload ao cruzar a borda e reentrada em selection.
+  - retired chunks só podem ser arquivados fora de um raio horizontal de retenção;
+  - reentrada em `desired/retained` bloqueia unload e preserva render allocation/mesh;
+  - retenção deriva da render distance: `R + max(ceil(R/2), 10)`; exemplos RD 4 -> 14, RD 12 -> 22, RD 24 -> 36;
+  - decisão horizontal-only para não destruir superfície por mudança de altitude.
+- `5701f00` / 0.14.69: corrige flicker visual de chunks distantes:
+  - remove o único limiar binário de visibilidade;
+  - `chunk_visibility_radii(render_distance)` calcula `show` e `hide` a partir da render distance;
+  - a shell de entrada permanece limitada pela garantia atual de preload all-direction (+2), enquanto a banda de saída/histerese escala com a render distance;
+  - exemplos: RD 4 => show 5/hide 6; RD 12 => show 14/hide 16; RD 24 => show 26/hide 30;
+  - chunk `Hidden` só vira `Visible` dentro de `show`; chunk `Visible` permanece visível até ultrapassar `hide`;
+  - isso impede `Visible -> Hidden -> Visible` ao orbitar ou cruzar repetidamente a borda do círculo.
 
 ## CI recente
 
 - 0.14.61 / run `35047030986`: Clippy + `cargo check` success.
-- 0.14.62 / run `35047686262`: Clippy failure apenas por getters runtime-dead; corrigido em 0.14.63.
 - 0.14.66 / run `35049199522`: Clippy + `cargo check` success.
 - 0.14.67 / run `35049716939`: Clippy + `cargo check` success.
-- 0.14.68 / run `35050184571`: em validação no momento deste handoff.
+- 0.14.68 / run `35050184571`: superseded por 0.14.69 durante validação.
+- 0.14.69 / run `35050560818`: em validação no momento deste handoff.
 - Commits handoff-only não abrem Rust CI.
 
 ---
 
-# Refactor/performance já consolidado
+# Refactor/performance consolidado
 
 ## Streaming/render
 
@@ -120,18 +125,17 @@ Bloco: `Retain nearby chunks across movement`
 - empty chunks compartilham buffers por `Arc`/COW;
 - pending sort reutiliza scratch e preserva empate via ordinal;
 - halo de mesh materializa async a partir de clones COW + revisions;
-- mesh output mantém sort explícito;
 - hot maps/sets sem semântica de ordem usam Bevy collections;
 - chunks imediatos podem preemptar trabalho distante sem perder a vítima;
-- Bevy task pools são dimensionados explicitamente para favorecer trabalho voxel async;
-- streaming carrega direção horizontal recente, prefetch à frente e prioridade distinta para superfície quando o jogador está voando acima dela;
-- generation fria evita worker convoy em dependências compartilhadas e consulta readiness diretamente no cache autoritativo;
-- quando há mesh backlog, generation não monopoliza todo o pool async;
-- mesh async valida content revision por chunk em vez de ser invalidado por churn de lighting;
-- raio nominal tem precedência de fila; capacidade restante aquece a margem/previsão;
-- shell visual pode existir atrás da fog; zona preditiva distante permanece oculta;
-- entities recém-criados dentro da shell elegível recebem visibilidade no próprio frame;
-- retired chunks próximos não são mais arquivados imediatamente; unload possui histerese baseada em render distance.
+- task pools são dimensionados explicitamente para favorecer trabalho voxel async;
+- streaming mantém direção horizontal recente, prefetch à frente e prioridade de superfície em flight;
+- generation fria evita worker convoy em dependências compartilhadas;
+- generation não monopoliza o pool quando há mesh backlog;
+- mesh async valida content revision por chunk em vez de lighting churn;
+- raio nominal tem precedência de fila; capacidade restante aquece margem/previsão;
+- shell visual pronta pode existir atrás da fog; zona preditiva distante permanece oculta;
+- retired chunks próximos não são arquivados imediatamente;
+- visibility e unload possuem histerese separada para evitar churn visual e de recursos.
 
 ## Worldgen/biome
 
@@ -154,58 +158,46 @@ Bloco: `Retain nearby chunks across movement`
 
 # Ciclo ativo — prioridades runtime
 
-## P0.1 — Chunk streaming: seamless time-to-visible + no unload churn
+## P0.1 — Chunk streaming: seamless time-to-visible, sem unload churn e sem flicker
 
-Sintomas/evidências confirmadas:
+Evidência confirmada:
 
 - FPS pode permanecer ~60 enquanto generation/rendering ficam atrás do movimento;
-- 0.14.56–0.14.62 melhoraram throughput/prioridade, mas buracos continuaram;
-- 0.14.63 fez a fronteira ficar fisicamente inalcançável em flight máximo, indicando throughput de antecipação suficiente para acompanhar o jogador;
-- 0.14.64–0.14.67 tentaram separar warm/visible e esconder promoção atrás da fog, mas o usuário não percebeu melhora visual;
-- nova evidência decisiva: **andar em círculos descarregava chunks já prontos; ao retornar, eles reapareciam como buracos vazios dentro do raio de visão**;
-- isso identifica churn de unload/rebuild como gargalo concreto adicional, não apenas fog/promoção;
-- requisito permanece: nenhum void/chunk ausente visível em movimento normal ou flight configurado.
+- 0.14.63 tornou a fronteira fisicamente inalcançável em flight máximo, indicando antecipação suficiente para acompanhar o jogador;
+- 0.14.64–0.14.67 não removeram o artefato visual da borda;
+- 0.14.68 identificou e corrigiu unload/rebuild prematuro ao andar em círculos;
+- feedback seguinte: chunks ainda faziam **flicker a distância**;
+- 0.14.69 trata o flicker como alternância binária de `Visibility` na borda e adiciona histerese `show/hide`.
 
 Pipeline:
 
-`selection/prefetch -> generation task -> integrate -> initial lighting -> halo snapshot -> mesh task -> integrate -> render allocation -> visibility -> retention -> archive/unload`
+`selection/prefetch -> generation task -> integrate -> initial lighting -> halo snapshot -> mesh task -> integrate -> render allocation -> visibility hysteresis -> retention -> archive/unload`
 
-### Gargalos tratados
+Horizontes atuais:
 
-1. prioridade perdida após seleção: 0.14.56;
-2. pool async subdimensionado: 0.14.57;
-3. worker convoy em caches frios: 0.14.58/0.14.60;
-4. flight priorizando ar local em vez de superfície: 0.14.58;
-5. lookahead direcional insuficiente: 0.14.58/0.14.63;
-6. generation antes de mesh pronta: 0.14.59;
-7. generation monopolizando pool com mesh backlog: 0.14.59;
-8. lighting invalidando mesh inicial: 0.14.62;
-9. preload curto/direção vencendo missing visible: 0.14.63;
-10. warm parcialmente exposto: 0.14.64;
-11. novo mesh dentro do raio esperando movimento para promoção: 0.14.65;
-12. shell de promoção ainda perceptível atrás da fog: 0.14.67, sem melhora runtime confirmada;
-13. **unload precoce destruindo chunks prontos durante trajetórias circulares/revisita**: 0.14.68.
+- render distance nominal = prioridade/visibilidade útil;
+- base preload all-direction = +2 chunks;
+- corredor frontal = até +8 além da base quando existe movimento horizontal;
+- fog linear = início ~78% e fim ~98% do raio nominal;
+- show/hide visual derivado da render distance (0.14.69);
+- unload retention (0.14.68) é maior que a banda de visibilidade, preservando meshes já vistos para revisitas curtas.
 
-### Horizontes atuais
+Próxima validação runtime:
 
-- render distance nominal = banda de prioridade/visibilidade útil;
-- base preload de selection continua +2 chunks;
-- corredor frontal continua até +8 além da base quando existe movimento horizontal;
-- shell visual 0.14.67 permite render até +2 além do nominal, atrás da fog calculada sobre o nominal;
-- fog linear: início ~78% e fim ~98% do raio nominal;
-- unload retention 0.14.68: `R + max(ceil(R/2), 10)`; default RD 12 -> 22 chunks;
-- a pergunta do usuário sobre derivar **todos** os horizontes da render distance permanece válida: fog e retention já escalam; base preload/shell visual ainda têm offsets fixos. Não refatorar isso cegamente antes do runtime da 0.14.68, porque a evidência mais forte atual é churn de unload.
+1. andar em linha reta e observar a fronteira distante;
+2. andar/voar em círculos na mesma área e observar se chunks continuam piscando;
+3. revisitar rapidamente uma região já carregada e verificar se não volta a existir buraco vazio;
+4. testar RD baixo/default/alto para verificar se a histerese continua natural.
 
-### Próximo diagnóstico após 0.14.68
+Se o flicker persistir depois de 0.14.69, investigar antes de aumentar qualquer raio:
 
-1. repetir trajeto circular e revisitar exatamente a mesma área; chunks ainda dentro da retenção não devem perder render allocation;
-2. testar flight máximo em linha reta e curvas longas;
-3. se os buracos de revisita sumirem mas ainda houver pop-in frontal, medir first-missing coord por estágio (`pending -> generation -> ready -> mesh -> pool`) e distância ao jogador;
-4. se ainda houver chunk pronto sendo destruído dentro da retenção, auditar `retire_chunk_render_allocation` e qualquer caminho alternativo de despawn;
-5. depois, centralizar horizons de render/fog/preload/retention num modelo derivado de render distance + velocidade/backlog, separando distância estética de lead time preditivo;
-6. só se a fronteira nominal ainda contiver gaps reais, implementar frontier readiness/contiguous promotion.
+1. se o entity realmente alterna `Visibility` ou se o mesh está sendo substituído por remesh;
+2. se a fog/material possui alpha/estado que torna a shell perceptível mesmo além do `fog end`;
+3. se algum sistema de culling/despawn fora de `chunk_visibility` e `chunk_unloading` participa;
+4. se boundary remesh recria entities e reseta `Visibility::Hidden`, causando flash apesar da histerese;
+5. instrumentar `ChunkRenderCoord` com motivo de spawn/hide/show/retire por alguns frames se necessário.
 
-Não marcar P0.1 resolvido até runtime contínuo em flight máximo e revisita/círculos sem buracos visíveis.
+Não marcar P0.1 resolvido até runtime contínuo em flight máximo e movimento circular sem buracos/flicker visíveis.
 
 ## P0.2 — Lighting/shadows: lamp latency + seam entre chunks
 
@@ -215,37 +207,27 @@ Sintomas confirmados:
 - `lamp` evidencia a latência;
 - durante convergência/carregamento aparece linha/sombra falsa na fronteira entre chunks.
 
-Estado:
-
-- dynamic lighting: budget de 2 ms / até 4096 voxels por frame;
-- voxel edits entram com voxel + vizinhos prioritários;
-- changed chunks entram em remesh conforme propagação altera o campo;
-- initial/direct lighting seed continua síncrono entre generation integrada e mesh dispatch;
-- desde 0.14.62 lighting pode convergir e solicitar remesh sem invalidar o primeiro mesh apenas por revision de luz.
-
 Próximo trabalho:
 
 1. seguir `lamp placement -> lighting queue -> changed_chunks -> remesh -> mesh visível`;
-2. separar latência de propagação vs remesh vs mesh integration;
+2. separar latência de propagação vs remesh vs integration;
 3. impedir lighting parcial de aparecer como seam;
-4. adicionar readiness explícita de lighting apenas se a evidência runtime exigir.
-
-Não marcar resolvido sem runtime com lamp junto e longe de fronteiras.
+4. readiness explícita de lighting apenas se evidência exigir.
 
 ## P0.3 — Hydrology: continuidade de rivers/lakes/tunnels
 
 Sintomas confirmados:
 
-- rivers/lakes ainda podem produzir paredes/cortes retos;
-- rivers podem nascer ou morrer sem origem/destino visualmente válidos;
-- river/tunnel pode terminar abruptamente na interseção.
+- rivers/lakes podem produzir paredes/cortes retos;
+- rivers podem nascer/morrer sem origem/destino visualmente válidos;
+- tunnel pode terminar abruptamente ao cruzar água.
 
-Causa concreta em `src/world/generation/density.rs`:
+Causa concreta conhecida em `src/world/generation/density.rs`:
 
 - `surface_carver_allowed = pass.region.hydrology.water_at(horizontal).is_none()` desliga o surface tunnel carver inteiro por coluna ao entrar em água;
-- próximo fix deve compor/blendar o carver com hydrology, sem shaft/água quebrada.
+- corrigir por composição/blend com hydrology, sem shaft/água quebrada.
 
-Investigar também origem/destino, continuidade entre regiões, margens/topo, confluences e waterfall outlets.
+Também investigar endpoints, continuidade entre regions, margens/topo, confluences e waterfall outlets.
 
 ## P1.1 — Mountains dominantes + regionais raros
 
@@ -255,23 +237,19 @@ Feedback confirmado:
 - Witchwood, Enchanted Forest e Wasteland raros;
 - Plains precisa de leve aumento de oak trees.
 
-Valores relevantes atuais:
+Valores conhecidos:
 
-- Plains/Wasteland regional weight: 1.0;
-- Witchwood/Enchanted Forest regional weight: 1.0;
-- Mountains dimension weight: 0.85;
-- Plains/Wasteland size: 120–420;
-- Witchwood/Enchanted Forest size: 140–460;
-- Mountains metadata size: 90–260;
-- Plains oak: spacing 80, chance 0.48, jitter 24;
-- `mountain_belt`: scale 0.0017, threshold 0.86, width 0.22, warpStrength 85;
-- `mountain_peak`: spacing 760, chance 0.48, radius 120–230, warpStrength 42.
+- regional weights: Plains/Wasteland 1.0; Witchwood/Enchanted 1.0; Mountains dimension weight 0.85;
+- Plains/Wasteland size 120–420; Witchwood/Enchanted 140–460; Mountains metadata 90–260;
+- Plains oak spacing 80, chance 0.48, jitter 24;
+- mountain belt scale 0.0017, threshold 0.86, width 0.22, warpStrength 85;
+- mountain peak spacing 760, chance 0.48, radius 120–230, warpStrength 42.
 
-Montanhas usam distributions especiais; corrigir cobertura belt+peak, não só `weight`.
+Montanhas usam distributions especiais; corrigir cobertura belt+peak, não apenas `weight`.
 
 ## P1.2 — Coast isolada no interior
 
-- `coast.json` e `ocean.json` são `kind: hydrology` e não entram no selector regional comum;
+- `coast.json` e `ocean.json` são hydrology e não entram no selector regional comum;
 - investigar hydrology overlay/identity, `ocean_strength`, coast blend thresholds e continentalness residual.
 
 ## P1.3 — Clouds não renderizam
@@ -280,9 +258,7 @@ Causa provável forte:
 
 - `src/rendering/sky_layers/clouds.rs` usa altitude absoluta ~34–48;
 - Overworld `seaLevel = 90`;
-- X/Z seguem câmera, Y permanece absoluto, então clouds ficam abaixo do terreno/jogador.
-
-Próximo fix: altitude coerente com dimensão/mundo, preservando density/color data-driven.
+- X/Z seguem câmera e Y permanece absoluto, então clouds ficam abaixo do terreno/jogador.
 
 ## P2 — Ghost/held block e outros
 
@@ -291,59 +267,35 @@ Próximo fix: altitude coerente com dimensão/mundo, preservando density/color d
 - placement preview deve limpar id/transform/visibility sem item;
 - transparência do ghost deve ser percebida no bloco inteiro;
 - dye foi reportado como fraco;
-- Player HUD / target HUD permanecem fora deste ciclo até repriorização explícita.
-
----
-
-# Refactor estrutural ainda relevante
-
-## Per-chunk content revision implementada; lighting readiness continua condicional
-
-Implementado em 0.14.62:
-
-- `VoxelWorld` possui revision autoritativa por chunk para conteúdo voxel (blocks + fluids);
-- insert/restore/block/fluid bumpam content revision;
-- lighting não bumpa content revision;
-- async mesh dependencies usam content revision e deixam lighting churn para background remesh;
-- `chunk_mesh_revision` permanece separada para estado visual que inclui lighting.
-
-Ainda pode servir ao P0.2, se evidência exigir:
-
-- readiness explícita de lighting por chunk;
-- direct-light seed async stale-safe;
-- impedir shadow seam com lighting parcial sem bloquear primeira visibilidade.
+- Player HUD / target HUD fora do ciclo atual salvo repriorização explícita.
 
 ---
 
 # Ordem de execução no próximo `go`
 
-1. **P0.1 seamless streaming** — validar 0.14.68 com círculos/revisita e flight máximo; confirmar que chunks próximos não são mais descarregados/reconstruídos.
-2. Se revisita estiver resolvida mas houver pop-in frontal, instrumentar first-missing stage/distance e então centralizar horizons por render distance + lead time real.
-3. **P0.2 lighting/shadows** — lamp latency + seam.
-4. **P0.3 hydrology continuity** — river/tunnel gate binário, endpoints e margens/topo.
-5. **P1.1 biome distribution** — reduzir Mountains, aumentar regionais e oak de Plains.
-6. **P1.2 coast isolada** — corrigir overlay/identity hidrológico.
-7. **P1.3 clouds** — corrigir altitude absoluta.
-8. Retomar refactor estrutural conforme evidência dos P0.
+1. **P0.1 streaming** — validar 0.14.69; se flicker persistir, instrumentar motivo de visibility/remesh antes de alterar mais raios.
+2. **P0.2 lighting/shadows** — lamp latency + seam.
+3. **P0.3 hydrology continuity** — primeiro river/tunnel gate binário, depois endpoints/margens.
+4. **P1.1 biome distribution** — reduzir Mountains, aumentar regionais e oak de Plains.
+5. **P1.2 coast isolada**.
+6. **P1.3 clouds**.
 
 ---
 
 # Performance direction
 
-Meta não é apenas ~60 FPS; é mundo visualmente pronto antes de o jogador alcançá-lo e estável durante revisita.
+Meta não é apenas ~60 FPS; é mundo visualmente pronto antes de o jogador alcançá-lo.
 
 - heavy generation/mesh/remesh fora da main thread;
 - integração/restore/unload/lighting/fluid budgetados sem backlog visível;
-- prioridade por visibilidade + direção, não só distância euclidiana;
-- preencher primeiro banda útil e usar capacidade restante para prewarm;
-- predictive lead deve depender de velocidade/latência; render/fog/retention devem respeitar render distance;
-- não destruir render allocations recém-prontas enquanto ainda estão na vizinhança de retenção;
-- reservar throughput para finalizar chunks já gerados antes de criar backlog novo;
+- prioridade baseada em visibilidade e direção;
+- preencher primeiro a banda visível e usar capacidade restante para prewarm;
+- preload adaptativo/preditivo em vez de raio gigante indiscriminado;
+- evitar tanto churn de unload quanto churn de `Visibility`;
+- reservar throughput para finalizar chunks gerados antes de criar backlog novo;
 - revision tracking por domínio;
-- caches/metadata no owner correto;
-- evitar worker convoy;
-- stack/reuse para scratch limitado;
+- evitar worker convoy em caches compartilhados;
 - evitar scans globais, allocations temporárias e writes idempotentes;
 - não trocar corretude por performance aparente;
 - natural hydrology permanece generation-authoritative;
-- **void cru nunca é fallback visual aceitável para streaming normal.**
+- **void cru e flicker de chunk nunca são fallback visual aceitável para streaming normal.**
