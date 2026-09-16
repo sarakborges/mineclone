@@ -1,0 +1,45 @@
+name: Publish validated native text inputs
+on:
+  push:
+    branches:
+      - feature/game-chat-creature-command
+    paths:
+      - .github/workflows/release-native-input.yml
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pinned diagnostic patch
+        uses: actions/checkout@v4
+        with:
+          ref: 5e863ea6f342f85bb1edded49fe0e7878f9969ea
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Apply fixes already checked by Clippy and cargo check
+        run: |
+          python scripts/repair_native_input_followup.py
+          python scripts/repair_native_input_diagnostics.py
+      - name: Install rustfmt
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Format
+        run: cargo fmt --all
+      - name: Publish a single feature commit, omitting diagnostic scaffolding
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin feature/game-chat-creature-command
+          test "$(git rev-parse origin/feature/game-chat-creature-command)" = "$GITHUB_SHA"
+          test "$(cat VERSION)" = '0.17.3'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git reset --soft origin/feature/game-chat-creature-command
+          git rm -f --ignore-unmatch -- .github/workflows/inspect-native-input.yml .github/workflows/validate-native-input.yml .github/workflows/native-input-repair.yml .github/workflows/release-native-input.yml scripts_native_input_snapshot.py scripts/repair_native_input_followup.py scripts/repair_native_input_diagnostics.py
+          git add -A
+          git diff --cached --check
+          git diff --cached --stat
+          git commit -m 'fix(ui): native text selection clipboard and keyboard editing (v0.17.3)'
+          git push origin HEAD:feature/game-chat-creature-command
