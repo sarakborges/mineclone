@@ -3,7 +3,10 @@ use bevy::{
     prelude::*,
 };
 
-use crate::{app::game_state::GameState, player::camera::GameplayCamera};
+use crate::{
+    app::game_state::GameState, player::camera::GameplayCamera,
+    world::current_context::CurrentDimensionContext,
+};
 
 use super::{
     assets::CloudAssets,
@@ -20,7 +23,7 @@ const CLOUD_SPEED: f32 = 1.6;
 pub(super) struct CloudPart {
     cloud_index: usize,
     base: Vec2,
-    altitude: f32,
+    altitude_above_sea_level: f32,
     offset: Vec3,
 }
 
@@ -31,7 +34,7 @@ pub(super) fn spawn_clouds(mut commands: Commands, assets: Res<CloudAssets>) {
             hash_signed(seed.wrapping_mul(17).wrapping_add(3)) * CLOUD_SPAN * 0.5,
             hash_signed(seed.wrapping_mul(29).wrapping_add(11)) * CLOUD_SPAN * 0.5,
         );
-        let altitude = 34.0 + hash01(seed.wrapping_mul(37).wrapping_add(5)) * 14.0;
+        let altitude_above_sea_level = 34.0 + hash01(seed.wrapping_mul(37).wrapping_add(5)) * 14.0;
 
         for part_index in 0..CLOUD_PARTS {
             let (offset, scale) = cloud_part_shape(seed, part_index);
@@ -45,7 +48,7 @@ pub(super) fn spawn_clouds(mut commands: Commands, assets: Res<CloudAssets>) {
                 CloudPart {
                     cloud_index,
                     base,
-                    altitude,
+                    altitude_above_sea_level,
                     offset,
                 },
                 DespawnOnExit(GameState::Gameplay),
@@ -95,15 +98,20 @@ pub(super) fn sync_cloud_presentation(
 pub(super) fn update_cloud_positions(
     time: Res<Time>,
     visuals: Res<SkyLayerVisualState>,
+    dimension: CurrentDimensionContext,
     camera: Single<&GlobalTransform, With<GameplayCamera>>,
     mut clouds: Query<(&CloudPart, &mut Transform)>,
 ) {
     if visuals.cloud_density <= 0.0 {
         return;
     }
+    let Some(dimension) = dimension.definition() else {
+        return;
+    };
 
     let visible_count = (visuals.cloud_density * MAX_CLOUDS as f32).round() as usize;
     let camera_position = camera.translation();
+    let sea_level = dimension.sea_level as f32;
     let drift = time.elapsed_secs() * CLOUD_SPEED;
     let half_span = CLOUD_SPAN * 0.5;
 
@@ -116,7 +124,7 @@ pub(super) fn update_cloud_positions(
         let local_z = cloud.base.y;
         let translation = Vec3::new(
             camera_position.x + local_x,
-            cloud.altitude,
+            sea_level + cloud.altitude_above_sea_level,
             camera_position.z + local_z,
         ) + cloud.offset;
         if transform.translation != translation {
@@ -137,7 +145,6 @@ fn cloud_part_shape(seed: u32, part_index: usize) -> (Vec3, Vec3) {
         ),
         _ => (
             Vec3::new(-width * 0.32, -0.05, -depth * 0.28),
-            Vec3::new(width * 0.42, 0.7, depth * 0.62),
-        ),
+            Vec3::new(width * 0.42, 0.7, depth * 0.62)),
     }
 }
