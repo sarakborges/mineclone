@@ -12,7 +12,7 @@ use crate::{
 };
 
 #[derive(Component)]
-struct BrushTintIcon;
+pub(super) struct BrushTintIcon;
 
 fn selected_brush_tint(mode: &BrushMode, properties: &SecondaryPropertyRegistry) -> Option<Color> {
     mode.dye_id()
