@@ -12,22 +12,20 @@ pub(super) fn constrain_river_path_to_terrain(
     surface_elevation_at: &mut impl FnMut(Vec2) -> f32,
 ) {
     let last = points.len().saturating_sub(1);
-    if last == 0 {
+    if last <= 1 {
         return;
     }
 
+    // The endpoint heights belong to their authoritative drainage nodes (or
+    // water bodies). Sampling a different bank tangent for every incident edge
+    // used to lower the same junction independently and disconnect tributaries.
+    let minimum_endpoint_height = points[0].y.min(points[last].y);
     let mut upstream_height = points[0].y;
 
-    for index in 0..=last {
+    for index in 1..last {
         let t = index as f32 / last as f32;
         let horizontal = Vec2::new(points[index].x, points[index].z);
-        let tangent = if index == 0 {
-            points[1] - points[0]
-        } else if index == last {
-            points[last] - points[last - 1]
-        } else {
-            points[index + 1] - points[index - 1]
-        };
+        let tangent = points[index + 1] - points[index - 1];
         let horizontal_tangent = Vec2::new(tangent.x, tangent.z).normalize_or_zero();
         let bank_normal = Vec2::new(-horizontal_tangent.y, horizontal_tangent.x);
         let radius = lerp(start_radius, end_radius, t);
@@ -42,8 +40,12 @@ pub(super) fn constrain_river_path_to_terrain(
         let constrained_height = points[index]
             .y
             .min(supported_height)
-            .min(upstream_height);
+            .min(upstream_height)
+            .max(minimum_endpoint_height);
 
+        // The channel must not dip below its downstream junction and then
+        // climb back up in the final, unmodified segment. Shore grading/carving
+        // handles terrain that lies below the shared junction waterline.
         points[index].y = constrained_height;
         upstream_height = constrained_height;
     }
@@ -59,7 +61,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn terrain_support_prevents_floating_and_uphill_recovery() {
+    fn terrain_support_preserves_shared_junction_heights() {
         let mut points = vec![
             Vec3::new(0.0, 78.0, 0.0),
             Vec3::new(10.0, 77.0, 0.0),
@@ -72,7 +74,7 @@ mod tests {
 
         assert_eq!(points[0].y, 78.0);
         assert_eq!(points[1].y, 77.0);
-        assert_eq!(points[2].y, 48.0);
+        assert_eq!(points[2].y, 76.0);
 
         let mut recovered = vec![
             Vec3::new(0.0, 78.0, 0.0),
@@ -83,8 +85,26 @@ mod tests {
             if position.x < 5.0 || position.x > 15.0 { 80.0 } else { 50.0 }
         });
 
-        assert_eq!(recovered[1].y, 48.0);
-        assert_eq!(recovered[2].y, 48.0);
+        assert_eq!(recovered[0].y, 78.0);
+        assert_eq!(recovered[1].y, 76.0);
+        assert_eq!(recovered[2].y, 76.0);
+    }
+
+    #[test]
+    fn interior_channel_can_follow_terrain_without_dipping_below_its_outlet() {
+        let mut points = vec![
+            Vec3::new(0.0, 78.0, 0.0),
+            Vec3::new(10.0, 77.0, 0.0),
+            Vec3::new(20.0, 40.0, 0.0),
+        ];
+
+        constrain_river_path_to_terrain(&mut points, 4.0, 4.0, &mut |position| {
+            if position.x < 5.0 { 80.0 } else { 50.0 }
+        });
+
+        assert_eq!(points[0].y, 78.0);
+        assert_eq!(points[1].y, 48.0);
+        assert_eq!(points[2].y, 40.0);
     }
 
     #[test]
