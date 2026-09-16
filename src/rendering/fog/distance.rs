@@ -12,14 +12,7 @@ use crate::{
 const FOG_START_RADIUS_FRACTION: f32 = 0.78;
 const FOG_END_RADIUS_FRACTION: f32 = 0.98;
 const FOG_STREAMING_GUARD_CHUNKS: f32 = 1.0;
-const FOG_RECOVERY_CHUNKS_PER_SECOND: f32 = 3.0;
 const MIN_FOG_END_CHUNKS: f32 = 0.5;
-
-#[derive(Default)]
-pub(super) struct FogDistanceState {
-    current_end: Option<f32>,
-    active_columns: HashSet<IVec2>,
-}
 
 pub(super) fn fog_distances(render_distance_chunks: i32) -> (f32, f32) {
     let chunk_size = CHUNK_SIZE as f32;
@@ -36,44 +29,29 @@ pub(super) fn fog_falloff(render_distance_chunks: i32) -> FogFalloff {
 }
 
 pub(super) fn update_fog_distance(
-    time: Res<Time>,
     player: Single<&Transform, With<GameplayCamera>>,
     render_distance: Res<RenderDistanceSettings>,
     render_pool: Res<ChunkRenderPool>,
     mut fogs: Query<&mut DistanceFog, With<GameplayCamera>>,
-    mut state: Local<FogDistanceState>,
+    mut active_columns: Local<HashSet<IVec2>>,
 ) {
-    state.active_columns.clear();
-    state
-        .active_columns
-        .extend(render_pool.active_coords().map(|coord| coord.xz()));
+    active_columns.clear();
+    active_columns.extend(render_pool.active_coords().map(|coord| coord.xz()));
 
     let render_distance_chunks = render_distance.chunks();
     let (_, target_end) = fog_distances(render_distance_chunks);
     let guard_end = nearest_missing_column_distance(
         player.translation,
         render_distance_chunks,
-        &state.active_columns,
+        &active_columns,
     )
     .map(|distance| distance - FOG_STREAMING_GUARD_CHUNKS * CHUNK_SIZE as f32);
     let minimum_end = MIN_FOG_END_CHUNKS * CHUNK_SIZE as f32;
-    let desired_end = guard_end
-        .map_or(target_end, |end| end.min(target_end))
+    let end = guard_end
+        .map_or(target_end, |guard_end| guard_end.min(target_end))
         .max(minimum_end);
+    let (start, end) = guarded_fog_distances(render_distance_chunks, end);
 
-    let current_end = match state.current_end {
-        None => desired_end,
-        Some(current_end) if desired_end <= current_end => desired_end,
-        Some(current_end) => {
-            let recovery = FOG_RECOVERY_CHUNKS_PER_SECOND
-                * CHUNK_SIZE as f32
-                * time.delta().as_secs_f32();
-            (current_end + recovery).min(desired_end)
-        }
-    };
-    state.current_end = Some(current_end);
-
-    let (start, end) = guarded_fog_distances(render_distance_chunks, current_end);
     for mut fog in &mut fogs {
         fog.falloff = FogFalloff::Linear { start, end };
     }
