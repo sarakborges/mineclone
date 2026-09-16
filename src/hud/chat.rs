@@ -1,3 +1,4 @@
+mod autocomplete;
 mod visual;
 
 use std::collections::VecDeque;
@@ -24,9 +25,10 @@ use crate::{
     voxel::world::VoxelWorld,
 };
 
+use autocomplete::{ChatAutocomplete, ParsedLine, parse_line, update_autocomplete};
 use visual::{
-    advance_chat_timeout, rebuild_chat_history, scroll_chat_history, scroll_chat_to_bottom,
-    spawn_chat_ui, sync_chat_visibility,
+    advance_chat_timeout, rebuild_chat_history, render_autocomplete, scroll_chat_history,
+    scroll_chat_to_bottom, spawn_chat_ui, sync_chat_visibility,
 };
 
 const PLAYER_DISPLAY_NAME: &str = "Yogg'Sara";
@@ -79,6 +81,7 @@ pub(super) struct ChatHudPlugin;
 impl Plugin for ChatHudPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ChatState>()
+            .init_resource::<ChatAutocomplete>()
             .add_message::<ChatSubmission>()
             .add_systems(
                 OnEnter(GameState::Gameplay),
@@ -92,11 +95,13 @@ impl Plugin for ChatHudPlugin {
                 Update,
                 (
                     handle_chat_input,
+                    update_autocomplete,
                     interpret_chat_submissions,
                     advance_chat_timeout,
                     scroll_chat_history,
                     sync_chat_visibility,
                     rebuild_chat_history,
+                    render_autocomplete,
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
@@ -108,15 +113,21 @@ impl Plugin for ChatHudPlugin {
     }
 }
 
-fn reset_chat(mut chat: ResMut<ChatState>) {
+fn reset_chat(mut chat: ResMut<ChatState>, mut autocomplete: ResMut<ChatAutocomplete>) {
     *chat = ChatState::default();
+    *autocomplete = ChatAutocomplete::default();
 }
 
-fn close_chat_on_pause(mut chat: ResMut<ChatState>, mut focus: ResMut<InputFocus>) {
+fn close_chat_on_pause(
+    mut chat: ResMut<ChatState>,
+    mut autocomplete: ResMut<ChatAutocomplete>,
+    mut focus: ResMut<InputFocus>,
+) {
     if chat.is_open() {
         focus.clear();
     }
     chat.close();
+    *autocomplete = ChatAutocomplete::default();
 }
 
 #[derive(SystemParam)]
@@ -127,6 +138,7 @@ struct ChatInputContext<'w> {
     inventory: Res<'w, State<InventoryState>>,
     brush_palette: Res<'w, State<BrushPaletteState>>,
     focus: ResMut<'w, InputFocus>,
+    autocomplete: ResMut<'w, ChatAutocomplete>,
 }
 
 fn handle_chat_input(
@@ -151,6 +163,12 @@ fn handle_chat_input(
             return;
         }
         if input.keys.just_pressed(KeyCode::Escape) && !editor.is_composing() {
+            if input.autocomplete.visible() {
+                // First Esc only dismisses suggestions; the editor and draft stay intact.
+                input.autocomplete.dismiss(editor);
+                chat.escape_consumed = true;
+                return;
+            }
             chat.close();
             chat.escape_consumed = true;
             editor.clear();
@@ -197,6 +215,7 @@ fn handle_chat_input(
     }
 
     editor.clear();
+    *input.autocomplete = ChatAutocomplete::default();
     chat.open = true;
     input.focus.set(entity, FocusCause::Navigated);
     cursor.grab_mode = CursorGrabMode::None;
@@ -218,30 +237,6 @@ fn restore_game_cursor(
     mouse_look.ignore_next_delta = true;
 }
 
-#[derive(Debug, PartialEq, Eq)]
-enum ParsedLine<'a> {
-    Say(&'a str),
-    SpawnCreature(&'a str),
-    Usage,
-    Unknown(&'a str),
-}
-
-fn parse_line(input: &str) -> ParsedLine<'_> {
-    let line = input.trim();
-    if !line.starts_with('/') {
-        return ParsedLine::Say(line);
-    }
-    let mut words = line.split_whitespace();
-    match words.next() {
-        Some("/spawn_creature") => match (words.next(), words.next()) {
-            (Some(id), None) => ParsedLine::SpawnCreature(id),
-            _ => ParsedLine::Usage,
-        },
-        Some(command) => ParsedLine::Unknown(command),
-        None => ParsedLine::Unknown("/"),
-    }
-}
-
 #[derive(SystemParam)]
 struct ChatCreatureContext<'w> {
     definitions: Res<'w, CreatureRegistry>,
@@ -260,7 +255,7 @@ fn interpret_chat_submissions(
     for submission in submissions.read() {
         let response = match parse_line(&submission.0) {
             ParsedLine::Say(text) => format!("<{PLAYER_DISPLAY_NAME}>: {text}"),
-            ParsedLine::Usage => "Usage: /spawn_creature <id>".to_owned(),
+            ParsedLine::Usage(usage) => format!("Usage: {usage}"),
             ParsedLine::Unknown(command) => format!("Unknown command: {command}"),
             ParsedLine::SpawnCreature(id) => {
                 if let Some(eye) = players.iter().next().map(|player| player.translation) {
@@ -296,8 +291,8 @@ mod tests {
             parse_line(" /spawn_creature asteria:meadow_slime "),
             ParsedLine::SpawnCreature("asteria:meadow_slime")
         );
-        assert_eq!(parse_line("/spawn_creature"), ParsedLine::Usage);
-        assert_eq!(parse_line("/spawn_creature slime extra"), ParsedLine::Usage);
+        assert_eq!(parse_line("/spawn_creature"), ParsedLine::Usage("/spawn_creature <id>"));
+        assert_eq!(parse_line("/spawn_creature slime extra"), ParsedLine::Usage("/spawn_creature <id>"));
         assert_eq!(parse_line("/unknown"), ParsedLine::Unknown("/unknown"));
     }
 
