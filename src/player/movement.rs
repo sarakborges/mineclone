@@ -8,7 +8,7 @@ use walking::walk;
 use world_bounds::enforce_world_floor;
 
 mod collision;
-mod config;
+pub(crate) mod config;
 pub(crate) mod flight;
 pub(crate) mod gravity;
 mod smoothing;
