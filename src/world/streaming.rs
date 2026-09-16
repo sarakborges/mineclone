@@ -232,7 +232,7 @@ pub(super) fn stream_chunks(
     work.mesh_tasks.sync_snapshot(&content);
 
     if work.generation_tasks.pending_count() > 0 {
-        collect_generated_chunks(&mut work);
+        collect_generated_chunks(&content, &mut work, &mut queues);
     }
     if work.mesh_tasks.pending_count() > 0 {
         collect_built_chunk_meshes(&content, &mut renderer, &mut work, &mut queues.remesh);
@@ -241,11 +241,67 @@ pub(super) fn stream_chunks(
         dispatch_initial_mesh_tasks(&content, &mut renderer, &mut work, &mut queues);
     }
     if work.state.pending.len() > 0 {
-        dispatch_generation_tasks(&renderer.pool, &mut work);
+        dispatch_generation_tasks(&content, &renderer.pool, &mut work, &mut queues);
     }
 }
 
-fn collect_generated_chunks(work: &mut ChunkStreamingWork<'_>) {
+// A resident chunk must never expose unseeded DARK light to a neighboring
+// mesh snapshot. This used to happen while generated chunks waited in `ready`
+// for a free mesh task slot, darkening whole faces during streaming. Preserve
+// the once-per-residency rule and defer convergence through the existing queue.
+fn seed_loaded_chunk_lighting(
+    coord: IVec3,
+    content: &ChunkContent<'_>,
+    work: &mut ChunkStreamingWork<'_>,
+    queues: &mut ChunkStreamingQueues<'_>,
+) {
+    if !work.state.mark_initial_lighting_seeded(coord) {
+        return;
+    }
+
+    let chunk_is_empty = work
+        .world
+        .chunk(coord)
+        .unwrap_or_else(|| panic!("seeded chunk must be resident: {coord:?}"))
+        .is_empty();
+    queues.fluid.enqueue_loaded_fluid_frontier(&work.world, coord);
+    seed_chunk_direct_lighting(
+        &mut work.world,
+        coord,
+        content.blocks(),
+        content.fluids(),
+        content.secondary_properties(),
+    );
+
+    // A previously scheduled mesh may have captured a missing halo before
+    // this chunk arrived. Reconcile after first publication, never cancel it.
+    for y in -1..=1 {
+        for z in -1..=1 {
+            for x in -1..=1 {
+                let offset = IVec3::new(x, y, z);
+                if offset == IVec3::ZERO {
+                    continue;
+                }
+                let neighbor = coord + offset;
+                if work.mesh_tasks.contains(neighbor) {
+                    work.state.initial_mesh_seed_catchup.insert(neighbor);
+                }
+            }
+        }
+    }
+
+    if chunk_is_empty {
+        queues.lighting.enqueue_empty_chunk_relaxation(coord);
+    } else {
+        queues.lighting.enqueue_chunk_relaxation(coord);
+    }
+}
+
+fn collect_generated_chunks(
+    content: &ChunkContent<'_>,
+    work: &mut ChunkStreamingWork<'_>,
+    queues: &mut ChunkStreamingQueues<'_>,
+) {
     let current_revision = work.generation_tasks.revision();
     let mut budget = FrameWorkBudget::new(GENERATION_RESULT_INTEGRATION_BUDGET, 1)
         .with_maximum_items(MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME);
@@ -268,16 +324,30 @@ fn collect_generated_chunks(work: &mut ChunkStreamingWork<'_>) {
             continue;
         }
         if work.world.has_generated_chunk(completed.coord) {
+            if work.world.chunk(completed.coord).is_none() {
+                assert!(
+                    work.world.restore_chunk(completed.coord),
+                    "generated chunk must be resident or archived: {:?}",
+                    completed.coord
+                );
+            }
+            seed_loaded_chunk_lighting(completed.coord, content, work, queues);
             work.state.mark_ready(completed.coord);
             continue;
         }
 
         work.world.insert_chunk(completed.coord, completed.output);
+        seed_loaded_chunk_lighting(completed.coord, content, work, queues);
         work.state.mark_ready(completed.coord);
     }
 }
 
-fn dispatch_generation_tasks(render_pool: &ChunkRenderPool, work: &mut ChunkStreamingWork<'_>) {
+fn dispatch_generation_tasks(
+    content: &ChunkContent<'_>,
+    render_pool: &ChunkRenderPool,
+    work: &mut ChunkStreamingWork<'_>,
+    queues: &mut ChunkStreamingQueues<'_>,
+) {
     let max_in_flight = if work.mesh_tasks.pending_count() > 0 {
         MAX_GENERATION_TASKS_WITH_MESH_BACKLOG
     } else {
@@ -316,6 +386,7 @@ fn dispatch_generation_tasks(render_pool: &ChunkRenderPool, work: &mut ChunkStre
                 work.world.restore_chunk(coord),
                 "generated chunk must be resident or archived: {coord:?}"
             );
+            seed_loaded_chunk_lighting(coord, content, work, queues);
             work.state.mark_ready(coord);
             budget.record(1);
             continue;
@@ -374,6 +445,11 @@ fn dispatch_initial_mesh_tasks(
             work.state.requeue(coord);
             continue;
         };
+
+        // Also covers a resident chunk that reached `ready` by a path other
+        // than generated-result integration. No mesh may capture it as DARK.
+        seed_loaded_chunk_lighting(coord, content, work, queues);
+
         if !chunk_is_empty && work.mesh_tasks.pending_count() >= MAX_MESH_TASKS_IN_FLIGHT {
             let Some(center) = work.state.center else {
                 work.state.defer_ready(coord);
@@ -390,47 +466,6 @@ fn dispatch_initial_mesh_tasks(
                 break;
             };
             work.state.mark_ready(preempted);
-        }
-
-        // A stale or preempted initial mesh returns to `ready`. Rebuilding its
-        // direct light on every retry overwrote light already converged by
-        // background relaxation and invalidated the next snapshot yet again.
-        // Seed and enqueue the initial relaxation only once per residency.
-        if work.state.mark_initial_lighting_seeded(coord) {
-            queues
-                .fluid
-                .enqueue_loaded_fluid_frontier(&work.world, coord);
-            seed_chunk_direct_lighting(
-                &mut work.world,
-                coord,
-                content.blocks(),
-                content.fluids(),
-                content.secondary_properties(),
-            );
-
-            // A neighbor's first mesh may already be building from this chunk's
-            // pre-seed DARK light. Mark the in-flight mesh for post-publication
-            // reconciliation instead of cancelling it and delaying visibility.
-            for y in -1..=1 {
-                for z in -1..=1 {
-                    for x in -1..=1 {
-                        let offset = IVec3::new(x, y, z);
-                        if offset == IVec3::ZERO {
-                            continue;
-                        }
-                        let neighbor = coord + offset;
-                        if work.mesh_tasks.contains(neighbor) {
-                            work.state.initial_mesh_seed_catchup.insert(neighbor);
-                        }
-                    }
-                }
-            }
-
-            if chunk_is_empty {
-                queues.lighting.enqueue_empty_chunk_relaxation(coord);
-            } else {
-                queues.lighting.enqueue_chunk_relaxation(coord);
-            }
         }
 
         if chunk_is_empty {
