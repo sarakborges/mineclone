@@ -60,14 +60,15 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 23. Prioridade de streaming deve sobreviver às fronteiras async; trabalho imediato pode preemptar apenas trabalho não imediato e a vítima volta à fila.
 24. Worldgen/initial mesh/background remesh compartilham `AsyncComputeTaskPool`; quantidade de tasks in-flight não equivale a workers executando.
 25. **Invariant de produto para streaming:** em velocidade normal configurada, inclusive flight, o jogador não deve enxergar void/chunks ainda ausentes. Throughput deve ser antecipado e priorizado para tornar o streaming visualmente seamless; não aceitar “60 FPS com mundo atrasado” como sucesso.
+26. Anti-convoy de worldgen deve observar readiness real dos caches compartilhados; não manter shadow state de “cache aquecido” quando o próprio `OnceLock` já é a fonte autoritativa.
 
 ---
 
 # Estado atual
 
-Último HEAD de código publicado: `100f5bb2efc93101cc086e5820992ee85a39d0aa`  
-Bloco: `Reserve async capacity for visible chunk meshes`  
-`VERSION = 0.14.59`
+Último HEAD de código publicado: `52ec3179023fc04c2cba32e513add1c1e68bf153`  
+Bloco: `Group streaming selection parameters`  
+`VERSION = 0.14.61`
 
 ## Histórico recente relevante
 
@@ -84,20 +85,24 @@ Bloco: `Reserve async capacity for visible chunk meshes`
   - adiciona preload direcional de 2 chunks além do preload base;
   - chunks à frente ganham prioridade sobre lateral/traseira após os invariants locais;
   - quando o jogador está acima da faixa de superfície, terreno de superfície é priorizado antes de chunks de ar próximos, preservando o chunk atual como primeira prioridade;
-  - generation evita despachar vários chunks da mesma região/coluna fria até o primeiro chunk útil aquecer os caches compartilhados, evitando vários workers bloqueados no mesmo `OnceLock`;
+  - generation evita despachar vários chunks da mesma região/coluna fria ao mesmo tempo;
   - dispatch pode examinar até 16 candidatos/frame para pular candidatos temporariamente bloqueados sem head-of-line blocking.
 - `100f5bb` / 0.14.59: caminho `ready -> visible` ganha precedência:
   - initial mesh dispatch roda antes de novo generation dispatch no frame;
   - `ready` procura chunks à frente do movimento depois dos chunks críticos;
-  - enquanto há mesh backlog, generation fica limitada a até 4 tasks in-flight pelo dispatcher, reservando capacidade do pool compartilhado para converter chunks já gerados em meshes visíveis.
+  - enquanto há mesh backlog, generation deixa de repor o pool acima de 4 tasks, reservando capacidade para converter chunks gerados em meshes visíveis.
+- `a0921ca` / 0.14.60: anti-convoy deixa de inferir cache aquecido pelo primeiro chunk não vazio e passa a consultar diretamente `OnceLock::get()` em generation columns e prerequisites regionais (generation region + volume biomes + caves). Assim, dependência realmente fria continua com um único líder, mas cache que termina de inicializar libera paralelismo imediatamente mesmo antes de o chunk líder concluir todo o trabalho.
+- `52ec317` / 0.14.61: corrige o gate do Clippy introduzido pelo novo preload; os parâmetros de `rebuild_desired_chunk_coords` passam por `DesiredChunkSelection` em vez de ultrapassar o limite de argumentos.
 
 ## CI recente
 
 - 0.14.55 / run `35043364577`: Clippy + `cargo check` success.
 - 0.14.56 / run `35045326563`: Clippy + `cargo check` success.
-- 0.14.57: validação Rust acionada e o bloco foi executado em runtime pelo usuário com ganho observado.
-- 0.14.58 / run `35046400211`: em validação no momento deste handoff.
-- 0.14.59 / run `35046538650`: em validação no momento deste handoff.
+- 0.14.57: bloco executado em runtime pelo usuário com ganho observado.
+- 0.14.58 / run `35046400211`: Clippy failure exclusivamente por `too_many_arguments` em `rebuild_desired_chunk_coords`; lógica compilável não foi validada pelo segundo gate porque `cargo check` foi skipped após Clippy.
+- 0.14.59 / run `35046538650`: mesma falha herdada de Clippy; corrigida estruturalmente em 0.14.61, sem `#[allow]`.
+- 0.14.60 / run `35046928557`: em andamento no momento deste handoff e ainda contém o lint herdado no selector.
+- 0.14.61 / run `35047030986`: em andamento no momento deste handoff; é o gate canônico atual.
 - Commits handoff-only não abrem Rust CI.
 
 ---
@@ -116,9 +121,9 @@ Bloco: `Reserve async capacity for visible chunk meshes`
 - hot maps/sets sem semântica de ordem usam Bevy collections;
 - chunks imediatos podem preemptar trabalho distante sem perder a vítima;
 - Bevy task pools são dimensionados explicitamente para favorecer trabalho voxel async;
-- streaming agora carrega uma noção de direção, prefetch à frente e prioridade distinta para superfície quando o jogador está voando acima dela;
-- geração fria é serializada somente enquanto precisa aquecer dependências compartilhadas, evitando ocupar múltiplos workers esperando o mesmo cache;
-- quando há mesh backlog, generation não pode monopolizar todo o pool async.
+- streaming carrega direção horizontal recente, prefetch à frente e prioridade distinta para superfície quando o jogador está voando acima dela;
+- generation fria evita worker convoy em dependências compartilhadas e consulta readiness diretamente no cache autoritativo;
+- quando há mesh backlog, generation não deve monopolizar todo o pool async.
 
 ## Worldgen/biome
 
@@ -159,7 +164,7 @@ Pipeline atual:
 
 1. prioridade perdida depois da seleção: 0.14.56;
 2. pool async subdimensionado pelo default do Bevy: 0.14.57;
-3. workers desperdiçados aguardando a mesma região/coluna fria: 0.14.58;
+3. workers desperdiçados aguardando a mesma região/coluna fria: 0.14.58, refinado com readiness real em 0.14.60;
 4. flight priorizando ar local em vez de superfície visível: 0.14.58;
 5. ausência de lookahead direcional: 0.14.58;
 6. generation sendo despachada antes de mesh já pronta para avançar: 0.14.59;
@@ -169,28 +174,29 @@ Pipeline atual:
 
 - generation/mesh tasks atuais são CPU-bound e os futures não têm pontos de `await`/yield internos; dropar o handle evita polling futuro, mas não interrompe magicamente CPU já em execução.
 - `GENERATION_REGION_SIZE_CHUNKS = 8`; hydrology/volume/caves são compartilhados por região e usam caches `OnceLock`.
+- readiness regional do anti-convoy exige generation region, volume biome region e cave region inicializados; `None` de caves ainda conta como cache inicializado porque o `OnceLock<Option<_>>` possui valor.
 - flight speed atual = `WALK_SPEED 5 * FLY_SPEED_MULTIPLIER 5 = 25` blocos/s; chunk = 16 blocos, portanto ~1.56 chunks horizontais/s em velocidade máxima configurada.
-- o preload direcional de 0.14.58 adiciona 2 chunks à frente além do preload base, sem transformar toda a seleção em um anel simétrico maior.
+- preload direcional adiciona 2 chunks à frente além do preload base, sem inflar todo o anel simetricamente.
 
-### Próximo passo se 0.14.59 ainda mostrar void
+### Próximo passo se 0.14.61 ainda mostrar void
 
 Instrumentar apenas o necessário para localizar o novo limitante, medindo por estágio:
 
 - pending generation;
 - generation in-flight;
-- generation ready awaiting integration;
+- generation completed awaiting integration;
 - ready awaiting initial lighting/mesh dispatch;
 - mesh in-flight;
-- mesh ready awaiting integration;
+- mesh completed awaiting integration;
 - distância em chunks do primeiro buraco visível à frente.
 
 Com base nisso, próximos candidatos estruturais, nesta ordem:
 
 1. separar generation de mesh/remesh em pools dedicados com orçamento total controlado, se a competição do pool compartilhado continuar sendo o limitante;
-2. tornar cold regional prerequisites uma task explícita/readiness explícita, em vez de inferir aquecimento pela primeira geração útil;
+2. tornar cold regional prerequisites tasks explícitas/readiness explícita, se o custo de hydrology/volume/caves continuar dominando mesmo sem convoy;
 3. mover initial direct-light seed para pipeline async stale-safe ou introduzir readiness de lighting, se `ready -> mesh` for o estágio saturado;
 4. aumentar lookahead de forma **adaptativa à velocidade/backlog**, não como render distance artificial gigante;
-5. se throughput físico ainda não puder acompanhar um movimento permitido pelo jogo, implementar uma estratégia visual de LOD/far terrain/fog coerente — não aceitar void cru como fallback e não congelar o jogador como solução padrão.
+5. se throughput físico ainda não puder acompanhar um movimento permitido pelo jogo, implementar estratégia visual coerente de far terrain/LOD/fog; **não aceitar void cru** e não congelar o jogador como solução padrão.
 
 Não marcar P0.1 resolvido até runtime contínuo em flight máximo sem buracos visíveis.
 
@@ -315,7 +321,7 @@ Lighting lazy expansion só é aceitável se preservar FIFO + dedup global + pri
 
 # Ordem de execução no próximo `go`
 
-1. **P0.1 seamless streaming** — validar 0.14.58/0.14.59 em flight máximo; se ainda houver void, instrumentar backlog por estágio e atacar o estágio comprovado.
+1. **P0.1 seamless streaming** — validar 0.14.61 em flight máximo; se ainda houver void, instrumentar backlog por estágio e atacar o estágio comprovado.
 2. **P0.2 lighting/shadows** — lamp latency + seam; coordenar com initial lighting se compartilhar o gargalo.
 3. **P0.3 hydrology continuity** — primeiro river/tunnel gate binário, depois endpoints e margens/topo.
 4. **P1.1 biome distribution** — reduzir Mountains materialmente, tornar regionais perceptíveis e aumentar levemente árvores de Plains.
