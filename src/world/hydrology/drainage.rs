@@ -305,8 +305,10 @@ mod tests {
         };
         let mut network = DrainageNetwork::new(42, 0.45, 90.0, 1.0, &mut sample);
 
-        assert!(!network.is_wet_ocean(network.node(IVec2::X)));
-        assert!(network.is_wet_ocean(network.node(ocean_cell)));
+        let inland_descent = network.node(IVec2::X);
+        let ocean = network.node(ocean_cell);
+        assert!(!network.is_wet_ocean(inland_descent));
+        assert!(network.is_wet_ocean(ocean));
         assert_eq!(network.downstream_cell(IVec2::ZERO), Some(ocean_cell));
     }
 
