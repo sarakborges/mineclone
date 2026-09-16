@@ -94,16 +94,21 @@ impl HydrologyRegion {
                     lerp(sample.elevation, target_floor, ocean_strength)
                 });
 
-            choose_water(
-                &mut selected,
-                HydrologyWaterSample {
-                    fluid_id: self.settings.water_fluid.as_str(),
-                    water_level: self.sea_level,
-                    bed_level,
-                    strength: ocean_strength,
-                    kind: HydrologyWaterKind::Ocean,
-                },
-            );
+            // The first continentalness threshold can still leave terrain above
+            // sea level. Such a dry ocean sample must not supersede an actual
+            // river mouth merely because the ocean's nominal water level is high.
+            if bed_level < self.sea_level - 0.5 {
+                choose_water(
+                    &mut selected,
+                    HydrologyWaterSample {
+                        fluid_id: self.settings.water_fluid.as_str(),
+                        water_level: self.sea_level,
+                        bed_level,
+                        strength: ocean_strength,
+                        kind: HydrologyWaterKind::Ocean,
+                    },
+                );
+            }
         }
 
         selected

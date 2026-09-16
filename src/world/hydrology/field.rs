@@ -106,7 +106,13 @@ impl HydrologyField {
         }
 
         let ocean_threshold = ocean_continentalness_threshold(self.ocean_weight);
-        let mut drainage = DrainageNetwork::new(self.seed, ocean_threshold, &mut sample);
+        let mut drainage = DrainageNetwork::new(
+            self.seed,
+            ocean_threshold,
+            self.sea_level as f32,
+            self.ocean_weight,
+            &mut sample,
+        );
         let rivers = build_river_system(
             coord,
             self.seed,

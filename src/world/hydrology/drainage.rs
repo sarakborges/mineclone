@@ -6,12 +6,15 @@ use crate::content::biome_hydrology::BiomeHydrology;
 
 use super::{
     constants::{
-        HYDROLOGY_REGION_SIZE, RIVER_BASIN_ESCAPE_RADIUS_CELLS, RIVER_MINIMUM_DROP,
+        HYDROLOGY_REGION_SIZE, OCEAN_EXTRA_DEPTH, OCEAN_MINIMUM_DEPTH,
+        RIVER_BASIN_ESCAPE_RADIUS_CELLS, RIVER_MINIMUM_DROP,
         RIVER_OCEAN_OUTLET_RADIUS_CELLS, RIVER_ROUTE_VARIATION,
     },
-    math::{cell_hash, hash_signed, hash_unit},
+    math::{cell_hash, hash_signed, hash_unit, lerp, ocean_strength},
     types::HydrologySurfaceSample,
 };
+
+const OCEAN_OUTLET_MINIMUM_WATER_DEPTH: f32 = 4.0;
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct DrainageNode {
@@ -27,6 +30,8 @@ where
 {
     seed: u64,
     ocean_threshold: f32,
+    sea_level: f32,
+    ocean_weight: f32,
     sample: &'a mut F,
     nodes: HashMap<IVec2, DrainageNode>,
     downstream: HashMap<IVec2, Option<IVec2>>,
@@ -36,10 +41,18 @@ impl<'a, F> DrainageNetwork<'a, F>
 where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
-    pub fn new(seed: u64, ocean_threshold: f32, sample: &'a mut F) -> Self {
+    pub fn new(
+        seed: u64,
+        ocean_threshold: f32,
+        sea_level: f32,
+        ocean_weight: f32,
+        sample: &'a mut F,
+    ) -> Self {
         Self {
             seed,
             ocean_threshold,
+            sea_level,
+            ocean_weight,
             sample,
             nodes: HashMap::new(),
             downstream: HashMap::new(),
@@ -48,6 +61,11 @@ where
 
     pub fn ocean_threshold(&self) -> f32 {
         self.ocean_threshold
+    }
+
+    pub fn is_wet_ocean(&self, node: DrainageNode) -> bool {
+        wet_ocean_floor(node, self.sea_level, self.ocean_weight)
+            .is_some_and(|floor| floor <= self.sea_level - OCEAN_OUTLET_MINIMUM_WATER_DEPTH)
     }
 
     pub fn node(&mut self, cell: IVec2) -> DrainageNode {
@@ -98,7 +116,10 @@ where
 
                 let candidate_cell = source_cell + IVec2::new(dx, dz);
                 let candidate = self.node(candidate_cell);
-                if candidate.continentalness > self.ocean_threshold {
+                // A low continentalness value alone does not imply actual water:
+                // at the outer ocean blend the interpolated floor may still be
+                // above sea level. Never terminate a river on this dry fringe.
+                if !self.is_wet_ocean(candidate) {
                     continue;
                 }
 
@@ -182,6 +203,16 @@ where
     }
 }
 
+fn wet_ocean_floor(node: DrainageNode, sea_level: f32, ocean_weight: f32) -> Option<f32> {
+    let strength = ocean_strength(node.continentalness, ocean_weight);
+    if strength <= 0.0 {
+        return None;
+    }
+
+    let target_floor = sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength;
+    Some(lerp(node.elevation, target_floor, strength))
+}
+
 fn downstream_score(
     source_cell: IVec2,
     candidate_cell: IVec2,
@@ -235,11 +266,10 @@ mod tests {
     #[test]
     fn route_variation_is_deterministic() {
         let source = IVec2::new(2, -4);
-        let candidate = IVec2::new(3, -3);
 
         assert_eq!(
-            downstream_score(source, candidate, 70.0, 1.0, 42),
-            downstream_score(source, candidate, 70.0, 1.0, 42)
+            downstream_score(source, IVec2::new(3, -3), 70.0, 1.0, 42),
+            downstream_score(source, IVec2::new(3, -3), 70.0, 1.0, 42),
         );
     }
 
@@ -250,5 +280,27 @@ mod tests {
         let low = downstream_score(source, IVec2::Y, 65.0, 1.0, 42);
 
         assert!(low < high);
+    }
+
+    #[test]
+    fn dry_ocean_fringe_is_not_a_valid_river_destination() {
+        let node = DrainageNode {
+            position: Vec2::ZERO,
+            elevation: 100.0,
+            continentalness: 0.44,
+            biome_hydrology: BiomeHydrology::default(),
+        };
+        assert!(wet_ocean_floor(node, 90.0, 1.0).unwrap() > 90.0);
+    }
+
+    #[test]
+    fn deep_ocean_has_a_submerged_outlet() {
+        let node = DrainageNode {
+            position: Vec2::ZERO,
+            elevation: 100.0,
+            continentalness: 0.10,
+            biome_hydrology: BiomeHydrology::default(),
+        };
+        assert!(wet_ocean_floor(node, 90.0, 1.0).unwrap() <= 86.0);
     }
 }

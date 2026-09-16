@@ -106,7 +106,7 @@ where
             let cell = coord + IVec2::new(dx, dz);
             let source = network.node(cell);
 
-            if source.continentalness <= ocean_threshold {
+            if network.is_wet_ocean(source) {
                 continue;
             }
 

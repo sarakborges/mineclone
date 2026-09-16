@@ -31,7 +31,6 @@ where
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
     let mut connected = HashSet::new();
-    let ocean_threshold = network.ocean_threshold();
 
     for &start in lakes.keys() {
         let mut current = start;
@@ -43,7 +42,7 @@ where
             current = next;
             let node = network.node(current);
 
-            if node.continentalness <= ocean_threshold {
+            if network.is_wet_ocean(node) {
                 connected.insert(start);
                 break;
             }
@@ -72,7 +71,6 @@ where
         return cached;
     }
 
-    let ocean_threshold = network.ocean_threshold();
     let mut path = Vec::new();
     let mut current = start;
     let reaches_destination = loop {
@@ -86,7 +84,7 @@ where
         let node = network.node(current);
         path.push(current);
 
-        if node.continentalness <= ocean_threshold {
+        if network.is_wet_ocean(node) {
             break true;
         }
         if path.len() >= RIVER_FLOW_TRACE_STEPS {
@@ -115,7 +113,6 @@ where
 {
     let target_radius = RIVER_EDGE_MARGIN_CELLS + RIVER_BASIN_ESCAPE_RADIUS_CELLS;
     let source_radius = target_radius + RIVER_FLOW_SEARCH_RADIUS;
-    let ocean_threshold = network.ocean_threshold();
     let mut flow = HashMap::<IVec2, u32>::new();
 
     for dz in -source_radius..=source_radius {
@@ -136,7 +133,7 @@ where
                 }
 
                 let node = network.node(current);
-                if node.continentalness <= ocean_threshold {
+                if network.is_wet_ocean(node) {
                     break;
                 }
 
@@ -180,7 +177,7 @@ where
 
     for (&cell, &flow) in flow_cache {
         let source = network.node(cell);
-        if source.continentalness <= ocean_threshold {
+        if network.is_wet_ocean(source) {
             continue;
         }
 
@@ -265,7 +262,6 @@ fn keep_only_complete_downstream_paths<F>(
     F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
     let starts = selected.iter().copied().collect::<Vec<_>>();
-    let ocean_threshold = network.ocean_threshold();
     let mut complete = HashSet::new();
 
     for start in starts {
@@ -277,7 +273,7 @@ fn keep_only_complete_downstream_paths<F>(
             path.push(current);
             let node = network.node(current);
 
-            if node.continentalness <= ocean_threshold {
+            if network.is_wet_ocean(node) {
                 reaches_destination = true;
                 break;
             }
