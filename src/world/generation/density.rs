@@ -27,6 +27,7 @@ use super::{
 const SURFACE_CARVER_WATER_MARGIN: f32 = 4.0;
 const SURFACE_CARVER_WATER_ROOF: f32 = 3.0;
 const SURFACE_CARVER_WATER_FADE_DEPTH: f32 = 4.0;
+const SURFACE_CARVER_WATER_FADE_HEIGHT: f32 = 4.0;
 
 pub(super) struct DensityField {
     pub(super) values: Vec<f32>,
@@ -156,13 +157,20 @@ fn surface_carver_water_factor(
         return 1.0;
     };
 
-    let full_protection_y = water.bed_level - SURFACE_CARVER_WATER_ROOF;
-    let deep_progress = ((full_protection_y - sample_y) / SURFACE_CARVER_WATER_FADE_DEPTH)
+    // Protect the wet bed and a small roof above the waterline, not the entire
+    // column above a nearby river or lake. Both ends fade back into the tunnel
+    // so protection does not create a hard vertical wall at either boundary.
+    let lower_protection_y = water.bed_level - SURFACE_CARVER_WATER_ROOF;
+    let deep_progress = ((lower_protection_y - sample_y) / SURFACE_CARVER_WATER_FADE_DEPTH)
         .clamp(0.0, 1.0);
     let deep_factor = deep_progress * deep_progress * (3.0 - 2.0 * deep_progress);
+    let upper_protection_y = water.water_level + SURFACE_CARVER_WATER_ROOF;
+    let high_progress = ((sample_y - upper_protection_y) / SURFACE_CARVER_WATER_FADE_HEIGHT)
+        .clamp(0.0, 1.0);
+    let high_factor = high_progress * high_progress * (3.0 - 2.0 * high_progress);
     let water_strength = water.strength.clamp(0.0, 1.0);
 
-    1.0 - water_strength * (1.0 - deep_factor)
+    1.0 - water_strength * (1.0 - deep_factor.max(high_factor))
 }
 
 #[cfg(test)]
@@ -183,11 +191,22 @@ mod tests {
     #[test]
     fn surface_carver_is_fully_protected_near_strong_water_bed() {
         assert_eq!(surface_carver_water_factor(57.0, Some(water(1.0))), 0.0);
+        assert_eq!(surface_carver_water_factor(64.0, Some(water(1.0))), 0.0);
+        assert_eq!(surface_carver_water_factor(67.0, Some(water(1.0))), 0.0);
     }
 
     #[test]
     fn deep_surface_carver_continues_below_water() {
         assert_eq!(surface_carver_water_factor(50.0, Some(water(1.0))), 1.0);
+    }
+
+    #[test]
+    fn surface_carver_resumes_above_bounded_water_roof() {
+        let fade = surface_carver_water_factor(69.0, Some(water(1.0)));
+        assert!(fade > 0.0 && fade < 1.0);
+        assert_eq!(surface_carver_water_factor(71.0, Some(water(1.0))), 1.0);
+        assert_eq!(surface_carver_water_factor(100.0, Some(water(1.0))), 1.0);
+        assert_eq!(surface_carver_water_factor(64.0, None), 1.0);
     }
 
     #[test]
@@ -216,8 +235,13 @@ mod tests {
             scans += 1;
             Some(water(1.0))
         });
+        let high = apply_carver_water_protection(-4.0, 71.0, &mut nearby_water, || {
+            scans += 1;
+            Some(water(1.0))
+        });
         assert_eq!(protected, 0.0);
         assert_eq!(deep, -4.0);
+        assert_eq!(high, -4.0);
         assert_eq!(scans, 1);
     }
 }
