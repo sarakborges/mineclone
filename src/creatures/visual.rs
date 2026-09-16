@@ -37,16 +37,17 @@ pub(super) struct CreatureAnimationLink {
 #[derive(Component)]
 pub(crate) struct CreatureAnimationState(pub String);
 
+/// The same glTF material may need a different texture and/or tint per species.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct CreatureMaterialCacheKey {
+    material: AssetId<StandardMaterial>,
+    tint_bits: Option<[u32; 3]>,
+    texture: Option<AssetId<Image>>,
+}
+
 #[derive(Resource, Default)]
 pub(super) struct TintedCreatureMaterials(
-    HashMap<
-        (
-            AssetId<StandardMaterial>,
-            Option<[u32; 3]>,
-            Option<AssetId<Image>>,
-        ),
-        Handle<StandardMaterial>,
-    >,
+    HashMap<CreatureMaterialCacheKey, Handle<StandardMaterial>>,
 );
 
 /// Only roots still waiting for a glTF are visited; animated meshes and
@@ -152,11 +153,11 @@ fn configure_loaded_scene(
             let texture = appearance.material_textures.get(name);
             if tint.is_some() || texture.is_some() {
                 let rgb = tint.map(|color| color.to_srgb());
-                let cache_key = (
-                    original.id(),
-                    rgb.map(|color| color.map(f32::to_bits)),
-                    texture.map(|image| image.id()),
-                );
+                let cache_key = CreatureMaterialCacheKey {
+                    material: original.id(),
+                    tint_bits: rgb.map(|color| color.map(f32::to_bits)),
+                    texture: texture.map(|image| image.id()),
+                };
                 let replacement = if let Some(existing) = tint_assets.cache.0.get(&cache_key) {
                     Some(existing.clone())
                 } else {
