@@ -61,14 +61,16 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 24. Worldgen/initial mesh/background remesh compartilham `AsyncComputeTaskPool`; quantidade de tasks in-flight não equivale a workers executando.
 25. **Invariant de produto para streaming:** em velocidade normal configurada, inclusive flight, o jogador não deve enxergar void/chunks ainda ausentes. Throughput deve ser antecipado e priorizado para tornar o streaming visualmente seamless; não aceitar “60 FPS com mundo atrasado” como sucesso.
 26. Anti-convoy de worldgen deve observar readiness real dos caches compartilhados; não manter shadow state de “cache aquecido” quando o próprio `OnceLock` já é a fonte autoritativa.
+27. Validade de mesh async usa revision de **conteúdo por chunk** (blocks + fluids), separada de `chunk_mesh_revision`; mudanças de lighting não devem descartar geometria já construída e ficam responsáveis por seu próprio background remesh.
+28. Neighbor ausente no snapshot inicial pode aparecer enquanto o mesh está em flight; isso não invalida a primeira aparição, porque o carregamento/visibilidade do neighbor já agenda a correção de fronteira por remesh.
 
 ---
 
 # Estado atual
 
-Último HEAD de código publicado: `52ec3179023fc04c2cba32e513add1c1e68bf153`  
-Bloco: `Group streaming selection parameters`  
-`VERSION = 0.14.61`
+Último HEAD de código publicado: `91fbf4db862f156be068213df452de7d9e020c54`  
+Bloco: `Separate chunk content revisions from lighting mesh churn`  
+`VERSION = 0.14.62`
 
 ## Histórico recente relevante
 
@@ -92,7 +94,13 @@ Bloco: `Group streaming selection parameters`
   - `ready` procura chunks à frente do movimento depois dos chunks críticos;
   - enquanto há mesh backlog, generation deixa de repor o pool acima de 4 tasks, reservando capacidade para converter chunks gerados em meshes visíveis.
 - `a0921ca` / 0.14.60: anti-convoy deixa de inferir cache aquecido pelo primeiro chunk não vazio e passa a consultar diretamente `OnceLock::get()` em generation columns e prerequisites regionais (generation region + volume biomes + caves). Assim, dependência realmente fria continua com um único líder, mas cache que termina de inicializar libera paralelismo imediatamente mesmo antes de o chunk líder concluir todo o trabalho.
-- `52ec317` / 0.14.61: corrige o gate do Clippy introduzido pelo novo preload; os parâmetros de `rebuild_desired_chunk_coords` passam por `DesiredChunkSelection` em vez de ultrapassar o limite de argumentos.
+- `52ec317` / 0.14.61: corrige o gate do Clippy introduzido pelo novo preload; os parâmetros de `rebuild_desired_chunk_coords` passam por `DesiredChunkSelection` em vez de ultrapassar o limite de argumentos. Runtime subsequente do usuário: **buracos/void ainda aparecem em flight**.
+- `91fbf4d` / 0.14.62: remove um bloqueio oculto entre `ready` e `visible`:
+  - `VoxelWorld` passa a manter `chunk_content_revision` por chunk, atualizada por insert/restore e mutações de block/fluid, mas não por lighting;
+  - `ChunkMeshDependencies` deixa de usar `chunk_mesh_revision` ampla e passa a validar conteúdo voxel por chunk;
+  - propagation/relaxation de lighting pode alterar `chunk_mesh_revision` enquanto um mesh async está sendo construído sem tornar esse trabalho geométrico stale;
+  - neighbor ausente durante capture pode carregar antes da integração sem obrigar descarte do mesh inicial; a correção de boundary fica com o remesh disparado pela visibilidade do neighbor;
+  - mudanças reais de conteúdo em center/neighbor ainda invalidam o resultado async.
 
 ## CI recente
 
@@ -101,8 +109,9 @@ Bloco: `Group streaming selection parameters`
 - 0.14.57: bloco executado em runtime pelo usuário com ganho observado.
 - 0.14.58 / run `35046400211`: Clippy failure exclusivamente por `too_many_arguments` em `rebuild_desired_chunk_coords`; lógica compilável não foi validada pelo segundo gate porque `cargo check` foi skipped após Clippy.
 - 0.14.59 / run `35046538650`: mesma falha herdada de Clippy; corrigida estruturalmente em 0.14.61, sem `#[allow]`.
-- 0.14.60 / run `35046928557`: em andamento no momento deste handoff e ainda contém o lint herdado no selector.
-- 0.14.61 / run `35047030986`: em andamento no momento deste handoff; é o gate canônico atual.
+- 0.14.60 / run `35046928557`: contém o lint herdado no selector e foi superseded pela correção estrutural.
+- 0.14.61 / run `35047030986`: Clippy + `cargo check` success.
+- 0.14.62 / run `35047686262`: em validação no momento deste handoff; é o gate canônico atual.
 - Commits handoff-only não abrem Rust CI.
 
 ---
@@ -123,7 +132,8 @@ Bloco: `Group streaming selection parameters`
 - Bevy task pools são dimensionados explicitamente para favorecer trabalho voxel async;
 - streaming carrega direção horizontal recente, prefetch à frente e prioridade distinta para superfície quando o jogador está voando acima dela;
 - generation fria evita worker convoy em dependências compartilhadas e consulta readiness diretamente no cache autoritativo;
-- quando há mesh backlog, generation não deve monopolizar todo o pool async.
+- quando há mesh backlog, generation não deve monopolizar todo o pool async;
+- mesh async valida content revision por chunk em vez de ser invalidado por churn de lighting.
 
 ## Worldgen/biome
 
@@ -139,7 +149,8 @@ Bloco: `Group streaming selection parameters`
 - propagation usa leitura local de vizinhos quando possível;
 - changed chunks consolidam mesh revision por batch;
 - dynamic lighting só roda com trabalho;
-- fluid frontier usa boundary metadata + scan limitado à face.
+- fluid frontier usa boundary metadata + scan limitado à face;
+- lighting revision é separada da validade de conteúdo do mesh async; iluminação atualizada continua chegando por background remesh sem bloquear a primeira aparição do terreno.
 
 O antigo roadmap de micro-refactor genérico terminou em 0.14.55. Nova evidência runtime reabriu o trabalho com foco em throughput, continuidade e regressões visuais reais.
 
@@ -153,8 +164,8 @@ Sintoma confirmado:
 
 - FPS pode permanecer ~60 enquanto generation/rendering ficam atrás do movimento;
 - antes de 0.14.56 o jogador atravessava vários chunks vazios;
-- 0.14.56 e principalmente 0.14.57 melhoraram o comportamento, mas o usuário ainda observa ganho insuficiente;
-- requisito atualizado: **voar pelo mapa não pode expor chunks vazios/void**.
+- 0.14.56–0.14.61 melhoraram throughput/prioridade, mas o usuário ainda confirma buracos em flight;
+- requisito: **voar pelo mapa não pode expor chunks vazios/void**.
 
 Pipeline atual:
 
@@ -168,7 +179,8 @@ Pipeline atual:
 4. flight priorizando ar local em vez de superfície visível: 0.14.58;
 5. ausência de lookahead direcional: 0.14.58;
 6. generation sendo despachada antes de mesh já pronta para avançar: 0.14.59;
-7. generation monopolizando o pool enquanto há mesh backlog: 0.14.59.
+7. generation monopolizando o pool enquanto há mesh backlog: 0.14.59;
+8. mesh inicial sendo repetidamente descartado porque lighting relaxation alterava `chunk_mesh_revision` durante o trabalho async: 0.14.62.
 
 ### Nuances importantes
 
@@ -177,8 +189,9 @@ Pipeline atual:
 - readiness regional do anti-convoy exige generation region, volume biome region e cave region inicializados; `None` de caves ainda conta como cache inicializado porque o `OnceLock<Option<_>>` possui valor.
 - flight speed atual = `WALK_SPEED 5 * FLY_SPEED_MULTIPLIER 5 = 25` blocos/s; chunk = 16 blocos, portanto ~1.56 chunks horizontais/s em velocidade máxima configurada.
 - preload direcional adiciona 2 chunks à frente além do preload base, sem inflar todo o anel simetricamente.
+- `chunk_content_revision` agora é o owner da validade geométrica voxel por chunk; `chunk_mesh_revision` continua cobrindo lighting/mesh e não deve voltar a ser usada como proxy de conteúdo.
 
-### Próximo passo se 0.14.61 ainda mostrar void
+### Próximo passo se 0.14.62 ainda mostrar void
 
 Instrumentar apenas o necessário para localizar o novo limitante, medindo por estágio:
 
@@ -192,10 +205,10 @@ Instrumentar apenas o necessário para localizar o novo limitante, medindo por e
 
 Com base nisso, próximos candidatos estruturais, nesta ordem:
 
-1. separar generation de mesh/remesh em pools dedicados com orçamento total controlado, se a competição do pool compartilhado continuar sendo o limitante;
-2. tornar cold regional prerequisites tasks explícitas/readiness explícita, se o custo de hydrology/volume/caves continuar dominando mesmo sem convoy;
-3. mover initial direct-light seed para pipeline async stale-safe ou introduzir readiness de lighting, se `ready -> mesh` for o estágio saturado;
-4. aumentar lookahead de forma **adaptativa à velocidade/backlog**, não como render distance artificial gigante;
+1. aumentar lookahead de forma **adaptativa à velocidade/backlog**, não como render distance artificial gigante;
+2. separar generation de mesh/remesh em pools dedicados com orçamento total controlado, se a competição do pool compartilhado continuar sendo o limitante;
+3. tornar cold regional prerequisites tasks explícitas/readiness explícita, se o custo de hydrology/volume/caves continuar dominando mesmo sem convoy;
+4. mover initial direct-light seed para pipeline async stale-safe ou introduzir readiness explícita de lighting apenas se o seed síncrono aparecer como custo de main thread; ele não deve bloquear mesh por revision churn novamente;
 5. se throughput físico ainda não puder acompanhar um movimento permitido pelo jogo, implementar estratégia visual coerente de far terrain/LOD/fog; **não aceitar void cru** e não congelar o jogador como solução padrão.
 
 Não marcar P0.1 resolvido até runtime contínuo em flight máximo sem buracos visíveis.
@@ -213,14 +226,15 @@ Estado:
 - dynamic lighting: budget de 2 ms / até 4096 voxels por frame;
 - voxel edits entram com voxel + vizinhos prioritários;
 - changed chunks entram em remesh conforme propagação altera o campo;
-- initial/direct lighting seed continua síncrono entre generation integrada e mesh dispatch.
+- initial/direct lighting seed continua síncrono entre generation integrada e mesh dispatch;
+- desde 0.14.62 lighting pode convergir e solicitar remesh sem invalidar o primeiro mesh apenas por revision de luz.
 
 Próximo trabalho:
 
 1. seguir `lamp placement -> lighting queue -> changed_chunks -> remesh -> mesh visível`;
 2. separar latência de propagação vs remesh vs mesh integration;
 3. impedir lighting parcial de aparecer como seam;
-4. considerar content/light readiness + revisions por chunk se necessário.
+4. adicionar readiness explícita de lighting apenas se a evidência runtime exigir; content revision já está separada.
 
 Não marcar resolvido sem runtime com lamp junto e longe de fronteiras.
 
@@ -299,21 +313,21 @@ Próximo fix: altitude coerente com dimensão/mundo, preservando density/color d
 
 # Refactor estrutural ainda relevante
 
-## Candidate: per-chunk content/light readiness + revisions
+## Per-chunk content revision implementada; lighting readiness continua condicional
 
-Pode servir simultaneamente para:
+Implementado em 0.14.62:
 
+- `VoxelWorld` possui revision autoritativa por chunk para conteúdo voxel (blocks + fluids);
+- insert/restore/block/fluid bumpam content revision;
+- lighting não bumpa content revision;
+- async mesh dependencies usam content revision e deixam lighting churn para a fila de background remesh;
+- `chunk_mesh_revision` permanece separada para estado visual que inclui lighting.
+
+Ainda pode servir ao P0.2, se evidência exigir:
+
+- readiness explícita de lighting por chunk;
 - direct-light seed async stale-safe;
-- impedir shadow seam com lighting parcial;
-- saber quando chunk está realmente pronto para mesh/spawn;
-- reduzir remesh/reprocessamento após edits.
-
-Revisions atuais não são ideais:
-
-- `chunk_mesh_revision` é ampla porque lighting também a altera;
-- `block_content_revision` é global e não cobre fluid changes como revision por chunk.
-
-Se P0.1/P0.2 confirmarem, introduzir owner explícito para revision/readiness de conteúdo por chunk (blocks + fluids) e estado de lighting, separado de mesh revision.
+- impedir shadow seam com lighting parcial sem bloquear primeira visibilidade.
 
 Lighting lazy expansion só é aceitável se preservar FIFO + dedup global + priority promotion da fila atual.
 
@@ -321,8 +335,8 @@ Lighting lazy expansion só é aceitável se preservar FIFO + dedup global + pri
 
 # Ordem de execução no próximo `go`
 
-1. **P0.1 seamless streaming** — validar 0.14.61 em flight máximo; se ainda houver void, instrumentar backlog por estágio e atacar o estágio comprovado.
-2. **P0.2 lighting/shadows** — lamp latency + seam; coordenar com initial lighting se compartilhar o gargalo.
+1. **P0.1 seamless streaming** — validar 0.14.62 em flight máximo; se ainda houver void, instrumentar backlog por estágio e atacar o estágio comprovado, começando por lookahead adaptativo/backlog e competição entre pools.
+2. **P0.2 lighting/shadows** — lamp latency + seam; aproveitar a separação content/light feita em 0.14.62.
 3. **P0.3 hydrology continuity** — primeiro river/tunnel gate binário, depois endpoints e margens/topo.
 4. **P1.1 biome distribution** — reduzir Mountains materialmente, tornar regionais perceptíveis e aumentar levemente árvores de Plains.
 5. **P1.2 coast isolada** — corrigir overlay/identity hidrológico.
@@ -340,7 +354,7 @@ Meta não é apenas ~60 FPS; é mundo visualmente pronto antes de o jogador alca
 - prioridade baseada em visibilidade e direção de movimento, não só distância euclidiana;
 - preload adaptativo/preditivo em vez de render radius inflado indiscriminadamente;
 - reservar throughput para finalizar chunks já gerados antes de criar backlog novo;
-- revision tracking para stale async work;
+- revision tracking por domínio para stale async work;
 - caches/metadata no owner correto;
 - evitar worker convoy em caches compartilhados;
 - stack/reuse para scratch limitado;
