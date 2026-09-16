@@ -144,7 +144,7 @@ fn active_token(text: &str, cursor: usize) -> Option<(Range<usize>, usize)> {
     let start = text[..cursor]
         .char_indices()
         .filter(|(_, character)| character.is_whitespace())
-        .last()
+        .next_back()
         .map_or(0, |(index, character)| index + character.len_utf8());
     let end = text[cursor..]
         .find(char::is_whitespace)
