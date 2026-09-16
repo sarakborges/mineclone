@@ -10,7 +10,8 @@ pub(super) fn update_fog_color(
         return;
     }
 
-    let color = visuals.fog_color.to_color();
+    // Keep fully fogged geometry indistinguishable from the flat sky background.
+    let color = visuals.sky_color.to_color();
     for mut fog in &mut fogs {
         if fog.color != color {
             fog.color = color;
