@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use smallvec::SmallVec;
 
 use super::HydrologyRegion;
 use crate::world::hydrology::{
@@ -12,6 +13,7 @@ use crate::world::hydrology::{
 const RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE: f32 = 1.0 - SHORE_STRENGTH;
 const RIVER_BANK_OUTER_NORMALIZED_DISTANCE: f32 = 2.5;
 const RIVER_BANK_MARGIN: f32 = RIVER_MAXIMUM_RADIUS * 1.5;
+const INLINE_WATER_BODY_DELTAS: usize = 4;
 
 #[derive(Clone, Copy, Debug)]
 struct VerticalDensityDelta {
@@ -34,7 +36,9 @@ impl VerticalDensityDelta {
 struct DensityColumnProfile {
     ocean_delta: f32,
     river: Option<VerticalDensityDelta>,
-    water_bodies: Vec<VerticalDensityDelta>,
+    // Most columns intersect zero or a few water bodies. Inline storage avoids
+    // one allocation per wet column while still supporting arbitrary overlaps.
+    water_bodies: SmallVec<[VerticalDensityDelta; INLINE_WATER_BODY_DELTAS]>,
     shore_delta: f32,
 }
 
@@ -115,7 +119,7 @@ impl HydrologyRegion {
             let floor = lerp(base, target_floor, strength);
             floor - base
         });
-        let mut water_bodies = Vec::new();
+        let mut water_bodies = SmallVec::new();
         let mut water_body_opening = 0.0_f32;
 
         for body in &self.water_bodies {
@@ -281,5 +285,27 @@ mod tests {
         assert_eq!(delta.at(10.0), -4.0);
         assert_eq!(delta.at(20.0), -4.0);
         assert_eq!(delta.at(20.1), 0.0);
+    }
+
+    #[test]
+    fn water_overlap_storage_handles_more_bodies_than_inline_capacity() {
+        let mut bodies = SmallVec::<[VerticalDensityDelta; INLINE_WATER_BODY_DELTAS]>::new();
+        for index in 1..=6 {
+            bodies.push(VerticalDensityDelta {
+                minimum_y: 10.0,
+                maximum_y: 20.0,
+                delta: -(index as f32),
+            });
+        }
+        let profile = DensityColumnProfile {
+            ocean_delta: 0.0,
+            river: None,
+            water_bodies: bodies,
+            shore_delta: 0.0,
+        };
+
+        assert_eq!(profile.water_bodies.len(), 6);
+        assert_eq!(profile.delta_at(15.0), -21.0);
+        assert_eq!(profile.delta_at(25.0), 0.0);
     }
 }
