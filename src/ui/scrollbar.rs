@@ -10,18 +10,21 @@ pub(crate) struct AutoScrollbar {
     target: Entity,
 }
 
+/// For capped-height scroll areas: start hidden and reveal only when the
+/// laid-out content is taller than the available viewport.
 pub(crate) fn vertical_scrollbar(target: Entity) -> impl Bundle {
-    (AutoScrollbar { target }, scrollbar(target))
+    (AutoScrollbar { target }, scrollbar(target, true))
 }
 
 pub(crate) fn persistent_vertical_scrollbar(target: Entity) -> impl Bundle {
-    scrollbar(target)
+    scrollbar(target, false)
 }
 
-fn scrollbar(target: Entity) -> impl Bundle {
+fn scrollbar(target: Entity, initially_hidden: bool) -> impl Bundle {
     (
         Interaction::default(),
         Node {
+            display: if initially_hidden { Display::None } else { Display::Flex },
             min_width: px(8),
             margin: UiRect::left(px(6)),
             grid_column: GridPlacement::start(2),
@@ -44,6 +47,12 @@ fn scrollbar(target: Entity) -> impl Bundle {
     )
 }
 
+/// Uses measured visual content, not the number of elements: wrapped text
+/// consumes several lines. Equality means there is nothing to scroll.
+fn exceeds_viewport(content_height: f32, viewport_height: f32) -> bool {
+    content_height > viewport_height + 0.5
+}
+
 pub(crate) fn sync_auto_scrollbars(
     scroll_areas: Query<&ComputedNode, Without<AutoScrollbar>>,
     mut scrollbars: Query<(&AutoScrollbar, &mut Node)>,
@@ -52,9 +61,7 @@ pub(crate) fn sync_auto_scrollbars(
         let Ok(computed) = scroll_areas.get(scrollbar.target) else {
             continue;
         };
-
-        let overflowing = computed.content_size().y > computed.size().y + 0.5;
-        let next_display = if overflowing {
+        let next_display = if exceeds_viewport(computed.content_size().y, computed.size().y) {
             Display::Flex
         } else {
             Display::None
@@ -62,5 +69,18 @@ pub(crate) fn sync_auto_scrollbars(
         if node.display != next_display {
             node.display = next_display;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_actual_overflow_reveals_scrollbar() {
+        assert!(!exceeds_viewport(0.0, 330.0));
+        assert!(!exceeds_viewport(330.0, 330.0));
+        assert!(!exceeds_viewport(330.4, 330.0));
+        assert!(exceeds_viewport(331.0, 330.0));
     }
 }
