@@ -7,6 +7,7 @@ use crate::app::runtime_paths::data_root;
 use super::{
     biome::{BiomeDefinition, BiomeRegistry},
     block::{BlockDefinition, BlockRegistry},
+    creature::{CreatureDefinition, CreatureRegistry},
     day_night_cycle::{DayNightCycleDefinition, DayNightCycleRegistry},
     dimension::{DimensionDefinition, DimensionRegistry},
     fluid::{FluidDefinition, FluidRegistry},
@@ -23,6 +24,7 @@ use super::{
 pub(crate) struct LoadedContent {
     pub biomes: BiomeRegistry,
     pub blocks: BlockRegistry,
+    pub creatures: CreatureRegistry,
     pub dimensions: DimensionRegistry,
     pub day_night_cycles: DayNightCycleRegistry,
     pub fluids: FluidRegistry,
@@ -37,6 +39,7 @@ impl LoadedContent {
     pub fn insert(self, commands: &mut Commands) {
         commands.insert_resource(self.biomes);
         commands.insert_resource(self.blocks);
+        commands.insert_resource(self.creatures);
         commands.insert_resource(self.dimensions);
         commands.insert_resource(self.day_night_cycles);
         commands.insert_resource(self.fluids);
@@ -57,6 +60,7 @@ pub(crate) fn read_content() -> LoadedContent {
     let mut files = Vec::new();
 
     collect_json_files(&data_root(), &mut files);
+    files.sort();
 
     for path in files {
         load_definition(&path, &mut content);
@@ -105,6 +109,10 @@ fn load_definition(path: &Path, content: &mut LoadedContent) {
         content
             .blocks
             .insert(read_json_definition::<BlockDefinition>(path));
+    } else if path_has_component(path, "creatures") {
+        content
+            .creatures
+            .insert(read_json_definition::<CreatureDefinition>(path));
     } else if path_has_component(path, "tools") {
         content
             .tools
