@@ -36,9 +36,9 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica persistente; exports
 
 # Estado atual — 2026-09-16
 
-Último commit **de código** publicado: `68e506217ee04f6dbbe0ba12f81c74d368050804` (0.15.13); `VERSION = 0.15.13`. Este commit do handoff apenas documenta e não sobe VERSION.
+Último commit **de código** publicado: `cc77c4fbc92edf78993ba2cce2796d93b119d974` (proteção hídrica dos túneis). Commit de bump: `296960adfdad7fc6d85c56a78941c2feafa0793b`; `VERSION = 0.15.14`. O commit deste handoff apenas documenta e não sobe VERSION.
 
-CI: 0.15.3 `5297a69` run `35054771262` success; 0.15.4 fix `fbe301f` #2064 success; 0.15.5 `fa84d81` #2066 success; 0.15.6 `f8d244c` #2068 success; 0.15.7 `5c99616` #2070 success; 0.15.8 final `c22a199` #2075 success; 0.15.9 `b68ecb3` #2078 success; 0.15.10 `eadb6ea` #2080 success; 0.15.11 `780df02` #2082 success; 0.15.12 `68a26a3` #2084 success; **0.15.13 `68e5062` #2086 / run `35109440316` success, Clippy + Check.** Nenhuma 0.15.14 foi publicada neste registro.
+CI: 0.15.3 `5297a69` run `35054771262` success; 0.15.4 fix `fbe301f` #2064 success; 0.15.5 `fa84d81` #2066 success; 0.15.6 `f8d244c` #2068 success; 0.15.7 `5c99616` #2070 success; 0.15.8 final `c22a199` #2075 success; 0.15.9 `b68ecb3` #2078 success; 0.15.10 `eadb6ea` #2080 success; 0.15.11 `780df02` #2082 success; 0.15.12 `68a26a3` #2084 success; **0.15.13 `68e5062` #2086 / run `35109440316` success, Clippy + Check.** 0.15.14 publicada; resultado de CI e gameplay ainda não confirmado neste registro.
 
 ## Estado de prioridades — confirmação mais recente do usuário
 
@@ -48,7 +48,7 @@ Numeração abaixo referencia a listagem consolidada anterior. **Feedback de run
 | --- | --- | --- |
 | P0.1 FPS / carregamento | **Melhorou, ainda pode melhorar** | Continuar profiling e otimizações mensuráveis; não marcar resolvido |
 | P0.2 chunks totalmente escuros + atualização tardia de sombras | **Aberto** | Revisão seed→propagação→remesh→integração, com atenção a revisões distintas |
-| P0.3 rios cortam túneis com paredes/barreiras retas | **Aberto, reproduzido pelo usuário mesmo após 0.15.6 e 0.15.13** | Corrigir proteção de leito no volume exato e junção de density/carver; testar gameplay |
+| P0.3 rios cortam túneis com paredes/barreiras retas | **Aberto em gameplay; correção localizada publicada em 0.15.14, sem confirmação visual** | Verificar se paredes sumiram; se persistirem, inspecionar composição de density e carvers |
 | P0.4 rios param no meio do nada, sem conexão lago/oceano | **Aberto, reproduzido após 0.15.11** | Unificar grafo de drenagem, seleção, fluxo, edges e água física entre regiões |
 | P0.5 margens dos rios fazem corte vertical | **CORRIGIDO conforme confirmação explícita do usuário** após 0.15.12 | Não voltar a mexer sem nova evidência; preservar a correção |
 | P0.6 biomas regionais quase não aparecem | **Aberto: 3 mil blocos, quase só Plains e Mountains** | Diagnosticar seleção espacial/clima/proximidade + overlay macro; não só pesos |
@@ -57,7 +57,7 @@ Numeração abaixo referencia a listagem consolidada anterior. **Feedback de run
 | P2 anterior (hotbar/ghost/dye/HUD histórico) | **Usuário informou "2 feito"** | Registrar como concluído segundo relato; novo bug R é independente |
 | NOVO: R / held block | **Aberto: R ao rotacionar bloco distorce o modelo na mão** | Rastrear estado de orientação de placement versus Transform/mesh/viewmodel; evitar mutar escala ou aplicar rotação cumulativa na mão |
 
-**Ordem de execução atual:** evitar regressão de FPS; P0.2 e P0.3/P0.4 em blocos separados de correção; P0.6 e P0.7 igualmente críticos e precisam de investigação estrutural; bug R como próximo fix de viewmodel após bloqueadores. P0.5 encerrado por confirmação runtime. P1/P2 anteriores concluídos por feedback, mas não usar isso para declarar os novos bugs corrigidos. Não somar margens resolvidas ao problema ainda aberto de conectividade.
+**Ordem de execução atual:** evitar regressão de FPS; P0.3 tem patch localizado ainda sem confirmação runtime, P0.4 e P0.2 exigem investigação independente; P0.6 e P0.7 igualmente críticos e precisam de investigação estrutural; bug R como próximo fix de viewmodel após bloqueadores. P0.5 encerrado por confirmação runtime. P1/P2 anteriores concluídos por feedback, mas não usar isso para declarar os novos bugs corrigidos. Não somar margens resolvidas ao problema ainda aberto de conectividade.
 
 ## Histórico dos blocos de código
 
@@ -65,12 +65,13 @@ Numeração abaixo referencia a listagem consolidada anterior. **Feedback de run
 - 0.15.0 `1b16bee`: stack HDR explícita (world Skip, viewmodel final tone mapping, UI SDR). CI success. 0.15.1 `4aeb119`: frontier fog limitada à coluna ausente mais próxima do `ChunkRenderPool`, AABB real menos 1 chunk; usuário confirmou que chunks pararam de brotar dentro da fog. 0.15.2 `7b16f8f`: retira recovery temporal da fog. 0.15.3 `122d0ff`/`86da5c2`/`5297a69`: readiness change-driven, cache `active_columns` invalidado por `membership_revision`, inclui recriação de câmera; CI success.
 - 0.15.4 `766d970`/`fbe301f`: lighting lane interativa deduplicada preempta streaming, propagação mantém prioridade, remesh publicado quando onda converge. CI success, feedback ainda relata sombras não imediatas.
 - 0.15.5 `fa84d81`: async lighting-remesh valida halo 3×3×3 de lighting além de conteúdo via tracker próprio `ChunkRemeshTasks::lighting_revisions`, não é `VoxelWorld::chunk_mesh_revisions`. Seed inicial altera revisão world, não necessariamente tracker da remesh: possível freshness inconsistente; verificar antes de mexer.
-- 0.15.6 `f8d244c`: surface tunnels sob água trocam gate binário por fade vertical baseado em bed. Bug runtime: rios ainda cortam túneis com paredes retas; proteção no código original acima do leito não tem limite superior. Hipótese específica: `surface_carver_water_factor` mantém fator zero indefinidamente acima de `water.bed_level - ROOF`; limitar ao volume hídrico/roof com fades superior e inferior e inspecionar outras camadas de densidade antes de concluir. **Nenhum patch 0.15.14 foi enviado até este handoff.**
+- 0.15.6 `f8d244c`: surface tunnels sob água trocam gate binário por fade vertical baseado em bed. Bug runtime: rios ainda cortam túneis com paredes retas; proteção original acima do leito não tinha limite superior. A correção posterior está em 0.15.14; verificar efeito antes de concluir.
 - 0.15.7 `5c99616`: mountain_belt threshold .86→.90, width .22→.15; mountain peaks spacing760→850, chance .48→.36, radius120–230→110–205; pesos regionais Wasteland1→1.30 e Witchwood/Enchanted1→1.25; oak Plains chance .48→.54; não mudou size/avoidNear. Feedback novo 3k blocos quase só Plains/Mountains: ajustes de peso insuficientes, não marcar P1.1 de distribuição resolvido só porque P1 agregado foi marcado.
 - 0.15.8 `ebe0b7c`/`c22a199`: nuvem Y=seaLevel+34..48; X/Z ainda grudados na câmera. 0.15.9 `b68ecb3`: nuvens world-space com wind e tile pool 180, CI success; 0.15.10 `eadb6ea`: reduz 3 cubos transparentes a 1 mesh por nuvem (~2/3 entidades/draw calls do pool), CI success. FPS melhorou segundo usuário, ainda requer otimização.
 - 0.15.11 `780df02`: drainage exige oceano fisicamente submerso (bed pelo menos 4 abaixo seaLevel), continua pelo fringe seco e impede ocean water_at seco de substituir river mouth. CI success, mas **usuário confirma rios soltos ainda**: distinguir destino lógico de edges efetivamente geradas no `river_system` e água preenchida.
 - 0.15.12 `68a26a3`: river/lake shore grading assinado, amostra altura exata do terreno e faixa lateral maior, rebaixa high bank, eleva apenas outer bank baixo, sem preencher interior do canal. Ocean density usa altura exata em blend. CI #2084 success. **Usuário confirma P0.5 corrigido.**
 - 0.15.13 `68e5062`: `generation/density.rs` resolve surface carver primeiro e executa `hydrology.water_near` lazy apenas no primeiro voxel com delta de carve diferente de 0, cache `Option<Option<HydrologyWaterSample>>` por coluna (inclusive None); elimina scans redundantes em colunas sem carve. Teste verifica zero scans sem carve e exatamente um entre voxels carvados. CI #2086 success. FPS melhorou segundo usuário, porém não atribuir todo ganho a uma causa isolada sem métricas.
+- 0.15.14 `cc77c4f` + bump `296960a`: `surface_carver_water_factor` usa janela vertical limitada: proteção completa de `bed_level - 3` até `water_level + 3`, fade inferior de 4 blocos e fade superior de 4 blocos; carver volta progressivamente acima da água e não fica inibido por toda a coluna. Testes unitários adicionados para água/leito/teto, fade superior e retorno integral acima, além de preservar o teste do cache lazy `water_near` inclusive em Y alto. Sem mudança de raio horizontal/shore ou gasto extra com water scans. CI e gameplay ainda não confirmados.
 
 ## Subsistemas e diagnósticos a preservar
 
@@ -84,7 +85,7 @@ Pipeline: `selection/prefetch -> generation task -> integrate -> initial lightin
 
 ### Hidrologia — túnel versus rio e rios soltos
 
-`world/generation/density.rs` combina `sample_density_with_hydrology` + `surface_carver_density_delta` e water factor. Código 0.15.13 evita custo redundante, mas o fator original tem apenas fade em profundidade: se o voxel está acima do leito, proteção segue ativa até alturas arbitrárias. Este é um defeito concreto na fórmula que pode explicar parede reta no túnel; corrigir com janela vertical limitada à água/roof e fade no topo, além de inspecionar `density_sampling/hydrology.rs::enforce_hydrology_water_volume` e se diferentes carvers (surface tunnel e cave connector) divergem. Registrar patch só quando commit existir, gameplay ainda necessário.
+`world/generation/density.rs` combina `sample_density_with_hydrology` + `surface_carver_density_delta` e water factor. Antes de 0.15.14, o fator original tinha apenas fade em profundidade: acima de `bed_level - ROOF`, proteção ficava ativa indefinidamente, mesmo no ar distante acima do rio. 0.15.14 limita a proteção à água e a um roof de 3 blocos, adiciona fade superior de 4 blocos simétrico ao inferior e mantém a amostragem de água lazy por coluna. `density_sampling/hydrology.rs::enforce_hydrology_water_volume` já limita água real a bed→water_level e headroom de rio/lago acima disso, mas sua composição com diferentes carvers ainda precisa de confirmação em gameplay. Se a barreira persistir, inspecionar surface tunnel versus cave connector, amostras `water_near` nas bordas e limiares de densidade antes de nova mudança. Não confundir patch matemático com bug visual confirmado corrigido.
 
 `world/hydrology/river/selection.rs::keep_only_complete_downstream_paths` avalia destinos por wet ocean/lake e estende cells selecionadas; `river.rs::build_river_system` constrói edges por região em loop com raio `RIVER_EDGE_MARGIN_CELLS=4`, aplica filtro de reachability e `selected.channels`. `river/path/confluence.rs::add_path_to_graph` só inclui segmentos que intersectam a região e `hydrology/spatial.rs::edge_intersects_region` usa margem máxima do rio. Investigar discrepância de flow cache entre regiões, canais fora de seleção local, path/edge clipping, confluências e water fill; wet outlet lógico não garante ligação visual. `river_height` também trata continentalness abaixo do threshold como `seaLevel`, embora o wet outlet use critério físico; checar descontinuidade. Não estender rios arbitrariamente nem aumentar margens apenas.
 
@@ -110,8 +111,8 @@ P2 agregado reportado concluído pelo usuário: held block observa hotbar e esco
 
 # Próxima execução
 
-1. Tratar P0.3 em patch pequeno: correção limitada da proteção hídrica vertical, teste de fator acima/no/leito/abaixo da água e CI; **não dizer que o túnel está correto sem gameplay**. Se feedback indicar barreira persistente, seguir composição de density e carvers.
-2. P0.4: alinhar caminho completo do rio entre seleção/grafo/região/água física, manter margem corrigida, testar destinos e edges; revisão específica do renderer se fluido falta.
+1. P0.3: patch 0.15.14 já publicado; conferir CI e resultado visual quando houver feedback. Se barreira persistir, rastrear composição de density, cave connector, water_near e surface carver, sem voltar a ampliar margens corrigidas.
+2. P0.4: alinhar caminho completo do rio entre seleção/grafo/região/água física, manter margem corrigida, testar destinos e edges; revisão específica do renderer se fluido falta. Este é o próximo bloco de investigação independente enquanto não houver feedback de P0.3.
 3. P0.2: sincronizar inicialização e freshness da iluminação, evitar remesh stale e custo de main thread; FPS continua indicador obrigatório.
 4. P0.6 e P0.7: seleção real de biomas e pipeline de cores do ambiente, cada um em commit próprio.
 5. Novo bug R/viewmodel e otimizações adicionais de FPS baseadas em diagnóstico; preservar P0.5, P1 e P2 conforme relatados concluídos.
