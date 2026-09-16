@@ -121,10 +121,28 @@ impl HydrologyRegion {
         });
         let mut water_bodies = SmallVec::new();
         let mut water_body_opening = 0.0_f32;
+        let mut lake_shore_delta: Option<f32> = None;
 
         for body in &self.water_bodies {
-            let strength = body.horizontal_strength(horizontal);
+            // horizontal_strength() computes this exact irregular boundary
+            // distance internally. Reuse it for the shore instead of paying
+            // for sin/cos and boundary noise a second time per water body.
+            let distance = body.normalized_horizontal_distance(horizontal);
+            let strength = smoothstep(1.0 - distance.clamp(0.0, 1.0));
             water_body_opening = water_body_opening.max(strength);
+            let shore = shore_density_delta(
+                distance,
+                body.water_level,
+                river_opening,
+                surface_elevation,
+            );
+            // Iterator::max_by selects the last item when magnitudes tie.
+            // Preserve that order, including signed zero, without another scan.
+            if lake_shore_delta.is_none_or(|current| {
+                current.abs().total_cmp(&shore.abs()).is_le()
+            }) {
+                lake_shore_delta = Some(shore);
+            }
 
             if body.carve_depth <= 0.0 || strength <= 0.0 {
                 continue;
@@ -138,19 +156,7 @@ impl HydrologyRegion {
             });
         }
 
-        let lake_shore_delta = self
-            .water_bodies
-            .iter()
-            .map(|body| {
-                shore_density_delta(
-                    body.normalized_horizontal_distance(horizontal),
-                    body.water_level,
-                    river_opening,
-                    surface_elevation,
-                )
-            })
-            .max_by(|left, right| left.abs().total_cmp(&right.abs()))
-            .unwrap_or(0.0);
+        let lake_shore_delta = lake_shore_delta.unwrap_or(0.0);
         let river_shore_delta = river_graph_sample.map_or(0.0, |sample| {
             shore_density_delta(
                 river_shore_normalized_distance(sample.normalized_distance),
@@ -233,6 +239,7 @@ fn shore_strength(distance: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::world::hydrology::types::WaterBody;
 
     #[test]
     fn shore_grading_removes_high_terrain_above_water() {
@@ -307,5 +314,23 @@ mod tests {
         assert_eq!(profile.water_bodies.len(), 6);
         assert_eq!(profile.delta_at(15.0), -21.0);
         assert_eq!(profile.delta_at(25.0), 0.0);
+    }
+
+    #[test]
+    fn shared_boundary_distance_preserves_water_strength() {
+        let body = WaterBody {
+            center: Vec2::ZERO,
+            radius: Vec2::splat(20.0),
+            rotation: 0.4,
+            shape_seed: 42,
+            water_level: 90.0,
+            carve_depth: 10.0,
+            fluid_id: "asteria:water".into(),
+        };
+        for position in [Vec2::ZERO, Vec2::new(8.0, 5.0), Vec2::new(30.0, 0.0)] {
+            let distance = body.normalized_horizontal_distance(position);
+            let strength = smoothstep(1.0 - distance.clamp(0.0, 1.0));
+            assert_eq!(strength, body.horizontal_strength(position));
+        }
     }
 }
