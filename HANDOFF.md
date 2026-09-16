@@ -62,9 +62,9 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 
 # Estado atual
 
-Último HEAD de código publicado: `b28b3c20445c005f72ad9bad8cb8c507667900c8`  
-Bloco: `Fix bootstrap terrain sampling call`  
-`VERSION = 0.14.53`
+Último HEAD de código publicado: `7a0283d3095be6f374a72c549e9ee9d5f7130feb`  
+Bloco: `Reuse biome field hydrology metadata`  
+`VERSION = 0.14.54`
 
 ## Commits recentes relevantes
 
@@ -82,7 +82,8 @@ Bloco: `Fix bootstrap terrain sampling call`
 - `b2afe45` — 0.14.50, mesh buffer map usa Bevy hash map com output explicitamente ordenado.
 - `cbce686` — 0.14.51, Rust CI ignora commits exclusivamente de `HANDOFF.md`.
 - `573898d` — 0.14.52, `BiomeFieldEntry` carrega terrain/modifiers e reutiliza seed derivado; `surface_height_from_sample` resolve por `surface_index`, removendo lookup textual e hash/mix por influência sem alterar a matemática do noise.
-- `b28b3c2` — 0.14.53, corrige o único consumer esquecido da nova assinatura de `surface_height_from_sample` no bootstrap; nenhuma lógica adicional muda.
+- `b28b3c2` — 0.14.53, corrige o único consumer esquecido da nova assinatura de `surface_height_from_sample` no bootstrap.
+- `7a0283d` — 0.14.54, `BiomeFieldSample` carrega `primary_surface_index` e `BiomeFieldEntry` carrega `BiomeHydrology`; macro hydrology recorrente resolve metadata por índice sem `BiomeRegistry::get(surface.primary_id)`.
 
 ## CI recente
 
@@ -92,8 +93,9 @@ Bloco: `Fix bootstrap terrain sampling call`
 - 0.14.46: falhou por consumers esquecidos de `surface_index`; corrigido em 0.14.47.
 - 0.14.47–0.14.51: Clippy + `cargo check` green.
 - 0.14.51 / run `35041238324`: **success**.
-- 0.14.52 / run `35042143508`: **failure**; `setup/bootstrap.rs` ainda chamava `surface_height_from_sample` com a assinatura antiga.
-- 0.14.53 / run `35042627256`: **queued/pending** neste update.
+- 0.14.52 / run `35042143508`: **failure**; `setup/bootstrap.rs` ainda chamava `surface_height_from_sample` com assinatura antiga.
+- 0.14.53 / run `35042627256`: Clippy **success**, `cargo check` **success**.
+- 0.14.54 / run `35042991888`: **pending/in progress** neste update.
 - Confirmado: commits handoff-only após 0.14.51 não abrem Rust CI.
 
 ---
@@ -119,6 +121,7 @@ Bloco: `Fix bootstrap terrain sampling call`
 - `BiomeInfluence` conserva `surface_index`; geração/structure support reutilizam esse índice.
 - Registries e caches quentes de worldgen usam Bevy hash collections.
 - 0.14.52 elimina lookup textual + FNV/mix repetido em `surface_height_from_sample`; seed/terrain/modifiers vêm do snapshot derivado imutável do `BiomeField`.
+- 0.14.54 elimina o lookup textual de hydrology no macro-terrain recorrente mantendo `primary_id` compatível e usando `primary_surface_index` como referência autoritativa ao snapshot.
 
 ## Lighting
 
@@ -142,17 +145,29 @@ Bloco: `Fix bootstrap terrain sampling call`
 - `surface_cache` já calcula só misses com cinco probes conservadores e pruning raro.
 - `GenerationSnapshot` só reconstrói quando inputs autoritativos mudam; `WorldFeatureFields` compartilha caches por `Arc`.
 - Expansão eager de 4096 lighting seeds continua custo real, mas qualquer alternativa precisa preservar FIFO + dedup global + priority promotion exatamente; sem esse invariant, permanece bloqueada.
-- `seed_chunk_direct_lighting` ainda varre chunks superiores não vazios para reconstruir direct sky na main thread. Não há metadata autoritativa de atenuação vertical por coluna que sobreviva corretamente a edits; só transformar isso em cache com owner/invalidation explícitos e profiling que justifique a complexidade.
+- `seed_chunk_direct_lighting` ainda varre chunks superiores não vazios e o chunk atual para reconstruir direct sky na main thread. Não há metadata autoritativa de atenuação vertical por coluna que sobreviva corretamente a edits; cachear ou mover isso async exige owner/invalidation explícitos.
 
 ---
 
-# Roadmap restante
+# Auditoria final / encerramento do roadmap atual
 
-1. Aguardar CI de 0.14.53 (`35042627256`).
-2. **0.14.54 — hydrology primary metadata**: manter `BiomeFieldSample.primary_id`, adicionar `primary_surface_index`, carregar `BiomeHydrology` no `BiomeFieldEntry` e usar accessor por índice no macro hydrology recorrente de geração. O lookup equivalente no bootstrap é one-shot e fica fora deste hot-path patch.
-3. Validar CI de 0.14.54.
-4. Fazer auditoria global final dos hot paths. Sem alvo sustentado por evidência/invariant, encerrar este roadmap de refactor.
-5. Lighting seed expansion só volta se surgir representação semanticamente equivalente à fila atual.
+A auditoria final dos hot paths de movimento/streaming não encontrou outro patch pequeno seguro depois de 0.14.54:
+
+- dynamic lighting já é budgetado (2 ms / até 4096 voxels por frame) e só roda com trabalho;
+- unload é budgetado e seu scan de bootstrap ocorre uma única vez;
+- streaming rebuild/sort, task dispatch/integration, mesh halo e worldgen caches já foram tratados neste ciclo;
+- o custo síncrono material restante é initial/direct lighting seed. A fila atual expande 4096 voxels e boundary neighbors preservando FIFO, dedup global e priority promotion; uma fila lazy separada mudaria semântica;
+- mover direct-light seed para task async também não é seguro com as revisions atuais: `chunk_mesh_revision` é ampla demais porque lighting a altera, enquanto `block_content_revision` é global e não cobre fluid changes. Um próximo ciclo estrutural deve primeiro considerar uma revision de **conteúdo por chunk (blocks + fluids)**, separada de mesh/light, para snapshot/dependency validation.
+
+Portanto este roadmap de micro/refactor de performance encerra quando o CI de 0.14.54 fechar verde. O próximo trabalho de performance deve ser guiado por runtime/profiling e pode abrir um ciclo arquitetural para direct-light seed revisionado/async se os spikes continuarem.
+
+# Próximos passos
+
+1. Aguardar CI de 0.14.54 (`35042991888`).
+2. Se verde, marcar este roadmap como concluído sem novo bump de versão.
+3. Rodar o jogo/perf real e priorizar qualquer hotspot restante com evidência runtime.
+4. Se initial lighting continuar sendo fonte relevante de frame spike, desenhar per-chunk content revision (blocks + fluids) antes de mover direct-light seed para async.
+5. Lighting lazy expansion só volta se preservar exatamente FIFO + dedup global + priority promotion da fila atual.
 6. Divergência `VERSION` vs `Cargo.toml` continua intencional até mudança explícita de política.
 
 # Bugs/produto fora do refactor atual
