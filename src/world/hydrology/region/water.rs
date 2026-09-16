@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::HydrologyRegion;
 use crate::world::hydrology::{
     constants::{OCEAN_EXTRA_DEPTH, OCEAN_MINIMUM_DEPTH, SHORE_STRENGTH},
-    math::{lerp, smoothstep},
+    math::{lerp, river_channel_profile},
     types::{HydrologyRiverSurfaceSample, HydrologyWaterKind, HydrologyWaterSample},
 };
 
@@ -44,7 +44,9 @@ impl HydrologyRegion {
             .river_graph
             .sample_horizontal_with_margin(position, margin)
             .filter(|river| river.strength > SHORE_STRENGTH)?;
-        let profile = smoothstep(river.strength);
+        // The margin only discovers nearby channels: it must not inflate the
+        // physical river bed, which shares its profile with density carving.
+        let profile = river_channel_profile(river.normalized_distance);
 
         Some(HydrologyWaterSample {
             fluid_id: self.settings.water_fluid.as_str(),
