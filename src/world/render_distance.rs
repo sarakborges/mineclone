@@ -5,6 +5,8 @@ pub const MAX_RENDER_DISTANCE_CHUNKS: i32 = 24;
 pub const DEFAULT_RENDER_DISTANCE_CHUNKS: i32 = 12;
 pub const DEFAULT_VERTICAL_RENDER_DISTANCE_CHUNKS: i32 = 2;
 
+const MAX_VISIBILITY_SHOW_MARGIN_CHUNKS: i32 = 2;
+
 #[derive(Resource)]
 pub struct RenderDistanceSettings {
     horizontal_chunks: i32,
@@ -33,6 +35,16 @@ impl RenderDistanceSettings {
         self.horizontal_chunks =
             chunks.clamp(MIN_RENDER_DISTANCE_CHUNKS, MAX_RENDER_DISTANCE_CHUNKS);
     }
+}
+
+pub(crate) fn chunk_visibility_radii(render_distance_chunks: i32) -> (i32, i32) {
+    let nominal_radius = render_distance_chunks.max(1);
+    let proportional_margin = ((nominal_radius + 5) / 6).max(1);
+    let show_margin = proportional_margin.min(MAX_VISIBILITY_SHOW_MARGIN_CHUNKS);
+    let show_radius = nominal_radius.saturating_add(show_margin);
+    let hide_radius = show_radius.saturating_add(proportional_margin);
+
+    (show_radius, hide_radius)
 }
 
 pub fn chunk_coords_in_volume(
@@ -90,6 +102,13 @@ pub(crate) fn chunk_is_in_volume(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn visibility_radii_scale_from_render_distance() {
+        assert_eq!(chunk_visibility_radii(4), (5, 6));
+        assert_eq!(chunk_visibility_radii(12), (14, 16));
+        assert_eq!(chunk_visibility_radii(24), (26, 30));
+    }
 
     #[test]
     fn streaming_volume_never_crosses_below_zero() {

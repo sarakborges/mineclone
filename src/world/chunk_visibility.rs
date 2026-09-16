@@ -3,17 +3,16 @@ use bevy::prelude::*;
 use crate::{
     player::camera::GameplayCamera,
     voxel::coordinates::chunk_coord_from_position,
-    world::render_distance::RenderDistanceSettings,
+    world::render_distance::{RenderDistanceSettings, chunk_visibility_radii},
 };
 
 use super::chunk_rendering::ChunkRenderCoord;
 
-const FOG_OCCLUDED_RENDER_MARGIN_CHUNKS: i32 = 2;
-
 #[derive(Default)]
 pub(super) struct ChunkVisibilityState {
     center: Option<IVec2>,
-    horizontal_radius: i32,
+    show_radius: i32,
+    hide_radius: i32,
 }
 
 pub(super) fn sync_chunk_visibility(
@@ -23,16 +22,20 @@ pub(super) fn sync_chunk_visibility(
     mut state: Local<ChunkVisibilityState>,
 ) {
     let center = chunk_coord_from_position(player.translation).xz();
-    let horizontal_radius = rendered_chunk_radius(render_distance.chunks());
-    if state.center == Some(center) && state.horizontal_radius == horizontal_radius {
+    let (show_radius, hide_radius) = chunk_visibility_radii(render_distance.chunks());
+    if state.center == Some(center)
+        && state.show_radius == show_radius
+        && state.hide_radius == hide_radius
+    {
         return;
     }
 
     state.center = Some(center);
-    state.horizontal_radius = horizontal_radius;
+    state.show_radius = show_radius;
+    state.hide_radius = hide_radius;
 
     for (coord, mut visibility) in &mut chunks {
-        apply_chunk_visibility(center, horizontal_radius, coord.0, &mut visibility);
+        apply_chunk_visibility(center, show_radius, hide_radius, coord.0, &mut visibility);
     }
 }
 
@@ -42,24 +45,26 @@ pub(super) fn sync_new_chunk_visibility(
     mut chunks: Query<(&ChunkRenderCoord, &mut Visibility), Added<ChunkRenderCoord>>,
 ) {
     let center = chunk_coord_from_position(player.translation).xz();
-    let horizontal_radius = rendered_chunk_radius(render_distance.chunks());
+    let (show_radius, hide_radius) = chunk_visibility_radii(render_distance.chunks());
 
     for (coord, mut visibility) in &mut chunks {
-        apply_chunk_visibility(center, horizontal_radius, coord.0, &mut visibility);
+        apply_chunk_visibility(center, show_radius, hide_radius, coord.0, &mut visibility);
     }
-}
-
-fn rendered_chunk_radius(render_distance_chunks: i32) -> i32 {
-    render_distance_chunks.saturating_add(FOG_OCCLUDED_RENDER_MARGIN_CHUNKS)
 }
 
 fn apply_chunk_visibility(
     center: IVec2,
-    horizontal_radius: i32,
+    show_radius: i32,
+    hide_radius: i32,
     coord: IVec3,
     visibility: &mut Visibility,
 ) {
-    let target = if chunk_is_inside_visible_radius(center, coord, horizontal_radius) {
+    let threshold = if *visibility == Visibility::Visible {
+        hide_radius
+    } else {
+        show_radius
+    };
+    let target = if chunk_is_inside_visible_radius(center, coord, threshold) {
         Visibility::Visible
     } else {
         Visibility::Hidden
@@ -83,46 +88,68 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rendered_shell_extends_two_chunks_beyond_nominal_distance() {
+    fn hidden_chunk_only_enters_inside_show_radius() {
         let center = IVec2::ZERO;
-        let rendered_radius = rendered_chunk_radius(12);
+        let (show_radius, hide_radius) = chunk_visibility_radii(12);
+        let mut visibility = Visibility::Hidden;
 
-        assert_eq!(rendered_radius, 14);
-        assert!(chunk_is_inside_visible_radius(
+        apply_chunk_visibility(
             center,
-            IVec3::new(14, 0, 0),
-            rendered_radius
-        ));
-        assert!(!chunk_is_inside_visible_radius(
-            center,
+            show_radius,
+            hide_radius,
             IVec3::new(15, 0, 0),
-            rendered_radius
-        ));
+            &mut visibility,
+        );
+        assert_eq!(visibility, Visibility::Hidden);
+
+        apply_chunk_visibility(
+            center,
+            show_radius,
+            hide_radius,
+            IVec3::new(14, 0, 0),
+            &mut visibility,
+        );
+        assert_eq!(visibility, Visibility::Visible);
     }
 
     #[test]
-    fn rendered_shell_keeps_diagonal_circle_membership() {
+    fn visible_chunk_stays_visible_through_hysteresis_band() {
         let center = IVec2::ZERO;
-        let rendered_radius = rendered_chunk_radius(12);
+        let (show_radius, hide_radius) = chunk_visibility_radii(12);
+        let mut visibility = Visibility::Visible;
 
-        assert!(chunk_is_inside_visible_radius(
+        apply_chunk_visibility(
             center,
-            IVec3::new(9, 0, 10),
-            rendered_radius
-        ));
-        assert!(!chunk_is_inside_visible_radius(
+            show_radius,
+            hide_radius,
+            IVec3::new(15, 0, 0),
+            &mut visibility,
+        );
+        assert_eq!(visibility, Visibility::Visible);
+
+        apply_chunk_visibility(
             center,
-            IVec3::new(10, 0, 10),
-            rendered_radius
-        ));
+            show_radius,
+            hide_radius,
+            IVec3::new(17, 0, 0),
+            &mut visibility,
+        );
+        assert_eq!(visibility, Visibility::Hidden);
     }
 
     #[test]
     fn vertical_distance_does_not_hide_surface_while_flying() {
-        assert!(chunk_is_inside_visible_radius(
+        let (show_radius, hide_radius) = chunk_visibility_radii(4);
+        let mut visibility = Visibility::Hidden;
+
+        apply_chunk_visibility(
             IVec2::ZERO,
+            show_radius,
+            hide_radius,
             IVec3::new(3, 99, 4),
-            rendered_chunk_radius(4)
-        ));
+            &mut visibility,
+        );
+
+        assert_eq!(visibility, Visibility::Visible);
     }
 }
