@@ -39,21 +39,23 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 11. Retirement != unload imediato: chunks aposentados próximos permanecem reutilizáveis.
 12. Visibilidade usa histerese: `show` e `hide` são limiares distintos.
 13. A zona preditiva distante não deve ficar visualmente exposta.
-14. Enquanto o sky background for `ClearColor`, fog terminal e background precisam atravessar o mesmo caminho de color processing; cor numérica igual não basta se um lado sofre tonemapping e o outro não.
+14. Enquanto o sky background for `ClearColor`, fog terminal e background precisam ser visualmente compatíveis; porém isso não justifica alterar globalmente o pipeline da camera.
 15. Invariant de produto: em velocidade normal configurada, inclusive flight máximo, o jogador não deve enxergar void/chunks ausentes ou silhuetas de chunks brotando no fundo.
+16. Mudanças de camera/render pipeline têm blast radius global (mundo + UI + overlays). Não usar HDR/tonemapping global como workaround de fog sem projeto explícito e validação do pipeline inteiro.
 
 ---
 
 # Estado atual
 
-Último HEAD de código publicado: `57305f4f5246353709a8b88158d5bd95776d3115`  
-`VERSION = 0.14.72`
+Último HEAD de código publicado: `f864669e6d45b5d78cecf6c42b2b697ef8c2c96a`  
+`VERSION = 0.14.73`
 
 Blocos mais recentes:
 
 - `9302118` / 0.14.70 — terminal fog color alinhada ao sky color.
-- `b028fbe` / 0.14.71 — gameplay camera passa a usar `bevy::camera::Hdr` para mover tonemapping para o passe final e compor fog + background pelo mesmo caminho.
+- `b028fbe` / 0.14.71 — experimento com `bevy::camera::Hdr` na gameplay camera para unificar tonemapping de fog + background.
 - `57305f4` / 0.14.72 — liga `textures/sky/sun.png` e `textures/sky/moon.png` no `data/dimensions/overworld/sky.json`.
+- `f864669` / 0.14.73 — reverte `Hdr` imediatamente após regressão runtime: mundo preto + sobreposição/corrupção visual de textos e camadas de HUD. Texturas de sol/lua permanecem.
 
 ## Diagnóstico atual de fog / streaming
 
@@ -65,22 +67,24 @@ Feedback runtime acumulado:
 - 0.14.69: adicionou histerese de `Visibility`; ainda houve flicker.
 - 0.14.70: `DistanceFog.color` foi alinhado a `sky_color`; runtime ainda mostrou chunks brotando como silhueta no fundo.
 - Observação decisiva do usuário: **o que flicka aparece atrás da fog; parece silhueta de chunks surgindo no fundo**, e não mais simples toggle de rendering na borda.
+- 0.14.71 tentou mover tonemapping para passe final com HDR.
+- Feedback imediato da 0.14.71+: **tudo preto, com sobreposição de textos e camadas de HUD**. Portanto HDR global é incompatível com o pipeline visual/UI atual e foi revertido em 0.14.73.
 
 Investigação concreta em Bevy 0.19.1:
 
 - `DistanceFog` linear chega a opacidade total em `end` quando alpha=1.
-- O terrain shader usa `main_pass_post_lighting_processing`, portanto a fog é realmente aplicada pelo pipeline PBR.
-- Em câmera não-HDR, o próprio shader do Bevy aplica tonemapping depois da fog (`TONEMAP_IN_SHADER`).
-- O `ClearColor` do céu não passa por esse mesmo tonemap no main pass.
-- Resultado: mesmo usando a mesma `Color`, fragmento 100% fogged e background limpo podem terminar com cores diferentes na tela, criando silhueta quando geometria aparece/desaparece atrás da fog.
-- 0.14.71 adiciona `Hdr` à gameplay camera para que tonemapping ocorra como passe final sobre a imagem inteira, incluindo clear background e fragmentos fogged.
+- O terrain shader usa `main_pass_post_lighting_processing`, portanto a fog é aplicada pelo pipeline PBR.
+- Em câmera não-HDR, o shader pode aplicar color processing/tonemapping no caminho do material enquanto `ClearColor` não necessariamente atravessa o mesmo caminho.
+- Isso continua uma explicação plausível para a diferença visual entre fragmento totalmente fogged e fundo, mas **o workaround de habilitar HDR global foi rejeitado por regressão runtime grave**.
+- A próxima solução deve permanecer localizada em fog/far-background/terrain compositing, sem alterar o pipeline global da gameplay camera.
 
 Próxima validação runtime de P0.1:
 
-1. verificar especificamente se a silhueta de chunks ainda nasce no fundo da fog em 0.14.71+;
-2. testar linha reta + círculos + revisita rápida na mesma área;
-3. se persistir, não aumentar raios cegamente: inspecionar color/depth/compositing pós-HDR e confirmar se o pop é mesh replacement/remesh ou fragmentos parcialmente fogged antes do `end`;
-4. se necessário, implementar uma cobertura visual dedicada de horizonte/far background que seja renderizada no mesmo pipeline, em vez de depender de `ClearColor` como sky final.
+1. confirmar que 0.14.73 restaura mundo/UI normais após a reversão de HDR;
+2. verificar novamente a silhueta de chunks no fundo da fog com o pipeline restaurado;
+3. se persistir, não aumentar raios cegamente e não reativar HDR global;
+4. investigar uma cobertura visual dedicada de horizonte/far background renderizada no mesmo domínio da fog/terrain, ou composição específica de fog que elimine contraste com o clear;
+5. confirmar também se algum remesh/spawn substitui geometria já atrás da fog e produz silhueta por depth/compositing.
 
 Não marcar P0.1 resolvido sem runtime contínuo em flight máximo e movimento circular sem void/flicker/silhueta visível.
 
@@ -115,7 +119,8 @@ Gargalos tratados desde 0.14.56:
 11. novo mesh dentro do raio esperando movimento para promoção;
 12. unload precoce em revisita/círculos;
 13. visibility ping-pong na borda;
-14. fog/background passando por color-processing diferente.
+14. fog/background passando por color-processing diferente;
+15. workaround HDR global rejeitado por regressão de mundo/UI.
 
 ---
 
@@ -142,7 +147,7 @@ Validar runtime se textura aparece e alpha/orientação permanecem corretos.
 
 ## P0.1 — Streaming/fog seamless
 
-Prioridade máxima até eliminar silhueta/void/flicker.
+Prioridade máxima até eliminar silhueta/void/flicker. HDR global não é mais uma opção válida de workaround no pipeline atual.
 
 ## P0.2 — Lighting/shadows
 
