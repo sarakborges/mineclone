@@ -16,10 +16,6 @@ pub(crate) fn vertical_scrollbar(target: Entity) -> impl Bundle {
     (AutoScrollbar { target }, scrollbar(target, true))
 }
 
-pub(crate) fn persistent_vertical_scrollbar(target: Entity) -> impl Bundle {
-    scrollbar(target, false)
-}
-
 fn scrollbar(target: Entity, initially_hidden: bool) -> impl Bundle {
     (
         Interaction::default(),
