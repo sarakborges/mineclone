@@ -34,7 +34,6 @@ pub(crate) fn spawn_player_entity(
     commands.spawn((
         Camera3d::default(),
         Camera::default(),
-        bevy::camera::Hdr,
         Msaa::Off,
         Transform::from_translation(translation),
         GameplayCamera::default(),
