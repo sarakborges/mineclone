@@ -21,6 +21,8 @@ pub struct VoxelWorld {
     archived_chunks: HashMap<IVec3, ArchivedChunk>,
     generated_chunks: HashSet<IVec3>,
     dirty_chunks: HashSet<IVec3>,
+    chunk_content_revisions: HashMap<IVec3, u64>,
+    next_chunk_content_revision: u64,
     chunk_mesh_revisions: HashMap<IVec3, u64>,
     next_chunk_mesh_revision: u64,
     block_content_revision: u64,
@@ -38,6 +40,7 @@ impl VoxelWorld {
         self.chunks.insert(coord, chunk);
         self.track_loaded_chunk(coord);
         self.bump_block_content_revision();
+        self.bump_chunk_content_revision(coord);
         self.bump_chunk_mesh_revision(coord);
     }
 
@@ -47,6 +50,16 @@ impl VoxelWorld {
         }
 
         self.chunks.get(&coord)
+    }
+
+    pub(crate) fn chunk_content_revision(&self, coord: IVec3) -> Option<u64> {
+        self.chunk(coord)?;
+        Some(
+            *self
+                .chunk_content_revisions
+                .get(&coord)
+                .unwrap_or_else(|| panic!("loaded chunk content revision should exist at {coord:?}")),
+        )
     }
 
     pub(crate) fn chunk_with_mesh_revision(&self, coord: IVec3) -> Option<(&VoxelChunk, u64)> {
@@ -76,9 +89,14 @@ impl VoxelWorld {
             return;
         };
         self.untrack_loaded_chunk(coord);
-        let removed_revision = self.chunk_mesh_revisions.remove(&coord);
+        let removed_content_revision = self.chunk_content_revisions.remove(&coord);
         debug_assert!(
-            removed_revision.is_some(),
+            removed_content_revision.is_some(),
+            "archived loaded chunk should have a content revision: {coord:?}"
+        );
+        let removed_mesh_revision = self.chunk_mesh_revisions.remove(&coord);
+        debug_assert!(
+            removed_mesh_revision.is_some(),
             "archived loaded chunk should have a mesh revision: {coord:?}"
         );
         self.bump_block_content_revision();
@@ -103,6 +121,7 @@ impl VoxelWorld {
         self.chunks.insert(coord, archived.restore());
         self.track_loaded_chunk(coord);
         self.bump_block_content_revision();
+        self.bump_chunk_content_revision(coord);
         self.bump_chunk_mesh_revision(coord);
         true
     }
@@ -309,6 +328,7 @@ impl VoxelWorld {
         if block_changed {
             self.bump_block_content_revision();
         }
+        self.bump_chunk_content_revision(chunk_coord);
         self.bump_chunk_mesh_revision(chunk_coord);
         Some((chunk_coord, previous_block))
     }
@@ -342,6 +362,7 @@ impl VoxelWorld {
             chunk.set_fluid(x, y, z, fluid);
         }
         self.dirty_chunks.insert(chunk_coord);
+        self.bump_chunk_content_revision(chunk_coord);
         self.bump_chunk_mesh_revision(chunk_coord);
         Some(chunk_coord)
     }
@@ -359,6 +380,19 @@ impl VoxelWorld {
             .block_content_revision
             .checked_add(1)
             .expect("block content revision counter exhausted");
+    }
+
+    fn bump_chunk_content_revision(&mut self, coord: IVec3) {
+        debug_assert!(
+            self.chunks.contains_key(&coord),
+            "content revision bump requires a loaded chunk: {coord:?}"
+        );
+        self.next_chunk_content_revision = self
+            .next_chunk_content_revision
+            .checked_add(1)
+            .expect("chunk content revision counter exhausted");
+        self.chunk_content_revisions
+            .insert(coord, self.next_chunk_content_revision);
     }
 
     fn bump_chunk_mesh_revision(&mut self, coord: IVec3) {
@@ -452,6 +486,30 @@ mod tests {
     }
 
     #[test]
+    fn chunk_content_revision_ignores_lighting_but_tracks_voxel_content() {
+        let mut world = VoxelWorld::default();
+        let coord = IVec3::ZERO;
+        let position = IVec3::new(1, 2, 3);
+        world.insert_chunk(coord, VoxelChunk::empty());
+        let inserted_content = world
+            .chunk_content_revision(coord)
+            .expect("chunk should have a content revision");
+        let inserted_mesh = world.chunk_mesh_revision(coord).expect("chunk should be loaded");
+
+        assert!(world.clear_chunk_light(coord));
+        assert_eq!(world.chunk_content_revision(coord), Some(inserted_content));
+        assert!(world.chunk_mesh_revision(coord).expect("chunk should be loaded") > inserted_mesh);
+
+        world.set_block_at(position, Some(VoxelCell::new("stone", Default::default())));
+        assert!(
+            world
+                .chunk_content_revision(coord)
+                .expect("chunk should have a content revision")
+                > inserted_content
+        );
+    }
+
+    #[test]
     fn mesh_revision_tracks_resident_chunk_mutations_and_restore() {
         let mut world = VoxelWorld::default();
         let coord = IVec3::ZERO;
@@ -464,6 +522,7 @@ mod tests {
         assert!(edited > inserted);
 
         world.archive_chunk(coord);
+        assert_eq!(world.chunk_content_revision(coord), None);
         assert_eq!(world.chunk_mesh_revision(coord), None);
         assert!(world.restore_chunk(coord));
         let restored = world.chunk_mesh_revision(coord).expect("chunk should be restored");
