@@ -112,25 +112,34 @@ pub(super) fn update_cloud_positions(
     let visible_count = (visuals.cloud_density * MAX_CLOUDS as f32).round() as usize;
     let camera_position = camera.translation();
     let sea_level = dimension.sea_level as f32;
-    let drift = time.elapsed_secs() * CLOUD_SPEED;
-    let half_span = CLOUD_SPAN * 0.5;
+    // Wind is global. Keep it bounded so long sessions retain positioning precision.
+    let drift = (time.elapsed_secs() * CLOUD_SPEED).rem_euclid(CLOUD_SPAN);
 
     for (cloud, mut transform) in &mut clouds {
         if cloud.cloud_index >= visible_count {
             continue;
         }
 
-        let local_x = (cloud.base.x + drift + half_span).rem_euclid(CLOUD_SPAN) - half_span;
-        let local_z = cloud.base.y;
+        // Recycle the finite pool into the nearest world-space tile. The camera
+        // selects a tile but is never added to the cloud's position: walking or
+        // flying within a tile does not drag clouds along with the player.
+        let world_x = cloud_world_coordinate(cloud.base.x, drift, camera_position.x);
+        let world_z = cloud_world_coordinate(cloud.base.y, 0.0, camera_position.z);
         let translation = Vec3::new(
-            camera_position.x + local_x,
+            world_x,
             sea_level + cloud.altitude_above_sea_level,
-            camera_position.z + local_z,
+            world_z,
         ) + cloud.offset;
         if transform.translation != translation {
             transform.translation = translation;
         }
     }
+}
+
+fn cloud_world_coordinate(base: f32, drift: f32, camera: f32) -> f32 {
+    let world_position = base + drift;
+    let nearest_tile = ((camera - world_position) / CLOUD_SPAN).round();
+    world_position + nearest_tile * CLOUD_SPAN
 }
 
 fn cloud_part_shape(seed: u32, part_index: usize) -> (Vec3, Vec3) {
@@ -147,5 +156,28 @@ fn cloud_part_shape(seed: u32, part_index: usize) -> (Vec3, Vec3) {
             Vec3::new(-width * 0.32, -0.05, -depth * 0.28),
             Vec3::new(width * 0.42, 0.7, depth * 0.62),
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn moving_camera_does_not_move_cloud_within_its_world_tile() {
+        assert_eq!(cloud_world_coordinate(12.0, 8.0, 0.0), 20.0);
+        assert_eq!(cloud_world_coordinate(12.0, 8.0, 30.0), 20.0);
+    }
+
+    #[test]
+    fn distant_cloud_recycles_by_whole_world_tiles() {
+        assert_eq!(cloud_world_coordinate(10.0, 0.0, 0.0), 10.0);
+        assert_eq!(cloud_world_coordinate(10.0, 0.0, 200.0), 190.0);
+    }
+
+    #[test]
+    fn wind_changes_world_position_without_camera_motion() {
+        assert_eq!(cloud_world_coordinate(10.0, 0.0, 0.0), 10.0);
+        assert_eq!(cloud_world_coordinate(10.0, 2.0, 0.0), 12.0);
     }
 }
