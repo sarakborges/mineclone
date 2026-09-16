@@ -7,13 +7,10 @@ mod surface;
 mod visuals;
 mod volume;
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 
 use arrayvec::ArrayVec;
-use bevy::prelude::*;
+use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::content::{
     biome::{BiomeClimate, BiomeKind, BiomeRegistry, BiomeVerticalRange},

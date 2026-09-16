@@ -1,10 +1,12 @@
 use std::{
-    collections::{HashMap, HashSet},
     hash::Hash,
     sync::{Arc, Mutex, OnceLock, RwLock},
 };
 
-use bevy::prelude::*;
+use bevy::{
+    platform::collections::{HashMap, HashSet},
+    prelude::*,
+};
 
 use crate::voxel::chunk::CHUNK_SIZE;
 
