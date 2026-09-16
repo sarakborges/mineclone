@@ -141,14 +141,36 @@ impl FeatureGraph {
         position: Vec2,
         margin: f32,
     ) -> Option<FeatureGraphHorizontalSample> {
-        let margin = margin.max(0.0);
+        self.sample_horizontal_expanded(position, margin.max(0.0), 1.0)
+    }
+
+    // River bank grading scales with the base radius of EACH edge, not a
+    // fixed global extra width. Biomes may multiply widths above the default.
+    pub(crate) fn sample_horizontal_with_radius_multiplier(
+        &self,
+        position: Vec2,
+        radius_multiplier: f32,
+    ) -> Option<FeatureGraphHorizontalSample> {
+        self.sample_horizontal_expanded(position, 0.0, radius_multiplier.max(1.0))
+    }
+
+    fn sample_horizontal_expanded(
+        &self,
+        position: Vec2,
+        margin: f32,
+        radius_multiplier: f32,
+    ) -> Option<FeatureGraphHorizontalSample> {
         let mut strongest: Option<FeatureGraphHorizontalSample> = None;
 
         for edge in &self.edges {
-            if position.x < edge.minimum.x - margin
-                || position.x > edge.maximum.x + margin
-                || position.y < edge.minimum.z - margin
-                || position.y > edge.maximum.z + margin
+            // The stored bounding box already includes one maximum edge
+            // radius; expand only by the remainder of the requested footprint.
+            let extra = margin
+                + edge.start_radius.max(edge.end_radius) * (radius_multiplier - 1.0);
+            if position.x < edge.minimum.x - extra
+                || position.x > edge.maximum.x + extra
+                || position.y < edge.minimum.z - extra
+                || position.y > edge.maximum.z + extra
             {
                 continue;
             }
@@ -170,7 +192,7 @@ impl FeatureGraph {
             let distance = position.distance(closest);
             let base_radius =
                 edge.start_radius + (edge.end_radius - edge.start_radius) * progress;
-            let radius = base_radius + margin;
+            let radius = base_radius * radius_multiplier + margin;
             let strength = 1.0 - (distance / radius).clamp(0.0, 1.0);
 
             if strength <= 0.0 {
@@ -259,6 +281,24 @@ mod tests {
         assert!(graph.sample_horizontal(nearby).is_none());
         let expanded = graph.sample_horizontal_with_margin(nearby, 4.0).unwrap();
         assert!(expanded.normalized_distance > 1.0);
+    }
+
+    #[test]
+    fn scaled_bank_sampling_reaches_the_full_width_of_wide_edges() {
+        let mut graph = FeatureGraph::default();
+        let from = graph.add_node(Vec3::ZERO);
+        let to = graph.add_node(Vec3::new(10.0, 0.0, 0.0));
+        graph.add_edge(from, to, 20.0, 20.0);
+        let bank = Vec2::new(5.0, 45.0);
+
+        assert!(graph.sample_horizontal_with_margin(bank, 16.5).is_none());
+        let sampled = graph
+            .sample_horizontal_with_radius_multiplier(bank, 2.5)
+            .unwrap();
+        assert!((sampled.normalized_distance - 2.25).abs() <= f32::EPSILON);
+        assert!(graph
+            .sample_horizontal_with_radius_multiplier(Vec2::new(5.0, 51.0), 2.5)
+            .is_none());
     }
 
     #[test]
