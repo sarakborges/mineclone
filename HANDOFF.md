@@ -39,23 +39,67 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 11. Retirement != unload imediato: chunks aposentados próximos permanecem reutilizáveis.
 12. Visibilidade usa histerese: `show` e `hide` são limiares distintos.
 13. A zona preditiva distante não deve ficar visualmente exposta.
-14. Enquanto o sky background for `ClearColor`, fog terminal e background precisam ser visualmente compatíveis; porém isso não justifica alterar globalmente o pipeline da camera.
-15. Invariant de produto: em velocidade normal configurada, inclusive flight máximo, o jogador não deve enxergar void/chunks ausentes ou silhuetas de chunks brotando no fundo.
-16. Mudanças de camera/render pipeline têm blast radius global (mundo + UI + overlays). Não usar HDR/tonemapping global como workaround de fog sem projeto explícito e validação do pipeline inteiro.
+14. Gameplay rendering usa uma stack explícita de câmeras; mundo, viewmodel e UI não compartilham implicitamente o mesmo estágio de composição.
+15. O mundo 3D fica em HDR linear até a composição do viewmodel; tonemapping deve ocorrer uma única vez antes da UI.
+16. UI gameplay é SDR e entra depois do 3D via alpha blend; HUD não pertence à câmera 3D da mão.
+17. Invariant de produto: em velocidade normal configurada, inclusive flight máximo, o jogador não deve enxergar void/chunks ausentes ou silhuetas de chunks brotando no fundo.
+18. Mudanças de camera/render pipeline têm blast radius global. Qualquer alteração de HDR/tonemapping exige validar mundo + viewmodel + HUD + overlays, não apenas fog.
 
 ---
 
 # Estado atual
 
-Último HEAD de código publicado: `f864669e6d45b5d78cecf6c42b2b697ef8c2c96a`  
-`VERSION = 0.14.73`
+Último HEAD de código publicado: `1b16bee81ff609b7c4bc7e4667dd4a2e37831fff`  
+`VERSION = 0.15.0`
 
 Blocos mais recentes:
 
 - `9302118` / 0.14.70 — terminal fog color alinhada ao sky color.
-- `b028fbe` / 0.14.71 — experimento com `bevy::camera::Hdr` na gameplay camera para unificar tonemapping de fog + background.
+- `b028fbe` / 0.14.71 — experimento incompleto com `Hdr` apenas na gameplay/world camera; causou regressão grave.
 - `57305f4` / 0.14.72 — liga `textures/sky/sun.png` e `textures/sky/moon.png` no `data/dimensions/overworld/sky.json`.
-- `f864669` / 0.14.73 — reverte `Hdr` imediatamente após regressão runtime: mundo preto + sobreposição/corrupção visual de textos e camadas de HUD. Texturas de sol/lua permanecem.
+- `f864669` / 0.14.73 — reverte o experimento HDR incompleto após mundo preto + sobreposição/corrupção visual de HUD.
+- `1b16bee` / 0.15.0 — migração HDR completa da stack gameplay:
+  - câmera world: HDR, `Tonemapping::None`, `CameraOutputMode::Skip`, order 0;
+  - câmera viewmodel: HDR, order 1, `clear_color=None`, faz o único tonemap/write 3D;
+  - câmera UI dedicada: Camera2d SDR, order 2, clear transparente, `CameraOutputMode::Write` com alpha blending;
+  - `IsDefaultUiCamera` saiu da câmera viewmodel e passou para a câmera UI dedicada;
+  - ordens canônicas em `src/rendering/camera_stack.rs`;
+  - CI run `35052641180`: Clippy + `cargo check` success.
+
+## Arquitetura de câmera gameplay — 0.15.0
+
+Stack:
+
+`world HDR linear (order 0, Skip) -> viewmodel HDR (order 1, final 3D write/tonemap) -> UI SDR (order 2, alpha blend)`
+
+Motivação:
+
+- o experimento 0.14.71 ativou HDR somente no world camera enquanto a viewmodel camera permanecia SDR e ainda era `IsDefaultUiCamera`;
+- Bevy 0.19 possui sharp edges reais ao misturar câmeras HDR/SDR no mesmo target sem composição explícita;
+- o projeto já possuía duas câmeras 3D: world e viewmodel;
+- HUD/textos eram renderizados pela câmera 3D da viewmodel porque ela carregava `IsDefaultUiCamera`;
+- isso explica por que uma mudança aparentemente local na world camera afetou mundo e UI ao mesmo tempo.
+
+Regras da stack nova:
+
+1. world camera não faz tonemap nem escreve diretamente no target final;
+2. viewmodel camera compartilha o domínio HDR, preserva o world color buffer e faz o único write/tonemap do 3D;
+3. UI gameplay nunca é tonemapeada junto com o mundo;
+4. UI camera limpa seu próprio intermediate para transparente e alpha-blenda no target final já composto;
+5. world/viewmodel continuam `Msaa::Off`, evitando incompatibilidade de intermediate targets;
+6. não alterar exposure/tonemapper artístico sem evidência runtime; 0.15.0 preserva o tonemapper default no estágio final da viewmodel.
+
+Validação runtime obrigatória de 0.15.0:
+
+1. mundo não pode ficar preto;
+2. viewmodel/mão aparece uma única vez e com composição correta;
+3. HUD/textos aparecem uma única vez, sem duplicação/sobreposição;
+4. pause, inventory e settings in-world devem compor corretamente sobre gameplay;
+5. underwater tint deve continuar funcionando como UI overlay;
+6. sol/lua texturizados devem continuar visíveis;
+7. só depois verificar se a silhueta de chunks brotando no fundo da fog foi eliminada/reduzida pelo caminho HDR coerente.
+
+Não declarar a migração visualmente concluída até esse runtime.
 
 ## Diagnóstico atual de fog / streaming
 
@@ -67,24 +111,24 @@ Feedback runtime acumulado:
 - 0.14.69: adicionou histerese de `Visibility`; ainda houve flicker.
 - 0.14.70: `DistanceFog.color` foi alinhado a `sky_color`; runtime ainda mostrou chunks brotando como silhueta no fundo.
 - Observação decisiva do usuário: **o que flicka aparece atrás da fog; parece silhueta de chunks surgindo no fundo**, e não mais simples toggle de rendering na borda.
-- 0.14.71 tentou mover tonemapping para passe final com HDR.
-- Feedback imediato da 0.14.71+: **tudo preto, com sobreposição de textos e camadas de HUD**. Portanto HDR global é incompatível com o pipeline visual/UI atual e foi revertido em 0.14.73.
+- 0.14.71 tentou HDR de forma incompleta e quebrou o pipeline visual/UI.
+- 0.15.0 substitui o workaround por uma composição HDR explícita de múltiplas câmeras.
 
 Investigação concreta em Bevy 0.19.1:
 
 - `DistanceFog` linear chega a opacidade total em `end` quando alpha=1.
 - O terrain shader usa `main_pass_post_lighting_processing`, portanto a fog é aplicada pelo pipeline PBR.
-- Em câmera não-HDR, o shader pode aplicar color processing/tonemapping no caminho do material enquanto `ClearColor` não necessariamente atravessa o mesmo caminho.
-- Isso continua uma explicação plausível para a diferença visual entre fragmento totalmente fogged e fundo, mas **o workaround de habilitar HDR global foi rejeitado por regressão runtime grave**.
-- A próxima solução deve permanecer localizada em fog/far-background/terrain compositing, sem alterar o pipeline global da gameplay camera.
+- Em câmera não-HDR, o shader pode aplicar tonemapping/color processing no caminho do material enquanto `ClearColor` não atravessa necessariamente o mesmo caminho.
+- Isso pode tornar fragmento 100% fogged diferente do fundo mesmo com a mesma cor numérica.
+- Em 0.15.0 world + viewmodel permanecem no mesmo HDR intermediate e o tonemap é postergado até a composição 3D final; esse é agora o teste correto da hipótese de compositing.
 
 Próxima validação runtime de P0.1:
 
-1. confirmar que 0.14.73 restaura mundo/UI normais após a reversão de HDR;
-2. verificar novamente a silhueta de chunks no fundo da fog com o pipeline restaurado;
-3. se persistir, não aumentar raios cegamente e não reativar HDR global;
-4. investigar uma cobertura visual dedicada de horizonte/far background renderizada no mesmo domínio da fog/terrain, ou composição específica de fog que elimine contraste com o clear;
-5. confirmar também se algum remesh/spawn substitui geometria já atrás da fog e produz silhueta por depth/compositing.
+1. validar primeiro a stack 0.15.0 inteira sem regressão visual/UI;
+2. verificar a silhueta de chunks no fundo da fog em linha reta e movimento circular;
+3. se persistir, não aumentar raios cegamente;
+4. investigar fragment depth/far-background e, se necessário, uma cobertura de horizonte/far background no mesmo domínio HDR do terrain/fog;
+5. confirmar se remesh/spawn substitui geometria atrás da fog e produz silhueta antes/depois de `fog end`.
 
 Não marcar P0.1 resolvido sem runtime contínuo em flight máximo e movimento circular sem void/flicker/silhueta visível.
 
@@ -120,13 +164,13 @@ Gargalos tratados desde 0.14.56:
 12. unload precoce em revisita/círculos;
 13. visibility ping-pong na borda;
 14. fog/background passando por color-processing diferente;
-15. workaround HDR global rejeitado por regressão de mundo/UI.
+15. composição world/viewmodel/UI implícita e incompatível com HDR.
 
 ---
 
 # Celestial bodies
 
-`src/rendering/celestial.rs` já suportava textura data-driven corretamente:
+`src/rendering/celestial.rs` suporta textura data-driven:
 
 - `CelestialBodyDefinition.texture: Option<String>`;
 - `base_color_texture = definition.texture.as_ref().map(|texture| asset_server.load(texture.clone()))`;
@@ -134,7 +178,7 @@ Gargalos tratados desde 0.14.56:
 
 O problema do sol não era renderer: em `data/dimensions/overworld/sky.json`, `sun.texture` e `moon.texture` estavam `null` apesar de os arquivos existirem.
 
-0.14.72 agora aponta para:
+0.14.72 aponta para:
 
 - `textures/sky/sun.png`
 - `textures/sky/moon.png`
@@ -145,9 +189,9 @@ Validar runtime se textura aparece e alpha/orientação permanecem corretos.
 
 # Próximas prioridades
 
-## P0.1 — Streaming/fog seamless
+## P0.1 — Streaming/fog seamless + validação HDR
 
-Prioridade máxima até eliminar silhueta/void/flicker. HDR global não é mais uma opção válida de workaround no pipeline atual.
+Prioridade máxima: validar 0.15.0 e eliminar silhueta/void/flicker sem regredir world/viewmodel/UI.
 
 ## P0.2 — Lighting/shadows
 
