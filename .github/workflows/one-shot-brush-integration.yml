@@ -26,7 +26,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -- src/hud/hotbar.rs src/hud/inventory/layout.rs src/hud/inventory/sync.rs
-          git rm -- .github/workflows/one-shot-brush-integration.yml tools/one_shot_brush_patch.py tools/fix_one_shot_brush_patch.py
+          git rm -f -- .github/workflows/one-shot-brush-integration.yml tools/one_shot_brush_patch.py tools/fix_one_shot_brush_patch.py
           git diff --cached --check
           git commit -m 'feat(hud): render supplied brush base and optional tinted overlay in all item views'
           git push origin HEAD:develop
