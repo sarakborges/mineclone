@@ -95,10 +95,14 @@ where
         }
 
         let source = self.node(cell);
+        // A nearby *wet* ocean is a verified outlet. Prefer it before taking a
+        // locally lower step that may lead away from the coast into a closed
+        // depression. Dry ocean-transition fringes remain ineligible because
+        // ocean_outlet_cell checks the interpolated physical ocean floor.
         let downstream = self
             .ocean_outlet_cell(cell, 1)
-            .or_else(|| self.best_lower_cell(cell, source, 1))
             .or_else(|| self.ocean_outlet_cell(cell, RIVER_OCEAN_OUTLET_RADIUS_CELLS))
+            .or_else(|| self.best_lower_cell(cell, source, 1))
             .or_else(|| self.best_lower_cell(cell, source, RIVER_BASIN_ESCAPE_RADIUS_CELLS));
 
         self.downstream.insert(cell, downstream);
@@ -280,6 +284,30 @@ mod tests {
         let low = downstream_score(source, IVec2::Y, 65.0, 1.0, 42);
 
         assert!(low < high);
+    }
+
+    #[test]
+    fn verified_nearby_ocean_beats_a_local_descent_away_from_the_coast() {
+        let ocean_cell = IVec2::new(-3, 0);
+        let mut sample = |position: Vec2| {
+            let cell = (position / HYDROLOGY_REGION_SIZE).floor().as_ivec2();
+            HydrologySurfaceSample {
+                elevation: if cell == IVec2::X {
+                    90.0
+                } else if cell == IVec2::ZERO {
+                    100.0
+                } else {
+                    110.0
+                },
+                continentalness: if cell == ocean_cell { 0.0 } else { 0.8 },
+                biome_hydrology: BiomeHydrology::default(),
+            }
+        };
+        let mut network = DrainageNetwork::new(42, 0.45, 90.0, 1.0, &mut sample);
+
+        assert!(!network.is_wet_ocean(network.node(IVec2::X)));
+        assert!(network.is_wet_ocean(network.node(ocean_cell)));
+        assert_eq!(network.downstream_cell(IVec2::ZERO), Some(ocean_cell));
     }
 
     #[test]
