@@ -41,6 +41,7 @@ use super::{
 const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 1;
 const MAX_CHUNKS_PER_FRAME: usize = 4;
 const MAX_GENERATION_DISPATCH_WORK_PER_FRAME: usize = 16;
+const MAX_GENERATION_TASKS_WITH_MESH_BACKLOG: usize = 4;
 const MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME: usize = 8;
 const MAX_MESH_RESULTS_COLLECTED_PER_FRAME: usize = 4;
 const CRITICAL_PLAYER_RADIUS_CHUNKS: i32 = 1;
@@ -104,8 +105,18 @@ impl ChunkStreamingState {
 
     fn pop_ready(&mut self) -> Option<IVec3> {
         let center = self.center?;
+        let movement_direction = self.movement_direction;
         self.ready
             .pop_where(|coord| is_critical_streaming_coord(coord, center))
+            .or_else(|| {
+                if movement_direction == IVec2::ZERO {
+                    None
+                } else {
+                    self.ready.pop_where(|coord| {
+                        (coord.xz() - center.xz()).dot(movement_direction) > 0
+                    })
+                }
+            })
             .or_else(|| self.ready.pop())
     }
 
@@ -200,11 +211,11 @@ pub(super) fn stream_chunks(
     if work.mesh_tasks.pending_count() > 0 {
         collect_built_chunk_meshes(&content, &mut renderer, &mut work, &mut queues.remesh);
     }
-    if work.state.pending.len() > 0 {
-        dispatch_generation_tasks(&renderer.pool, &mut work);
-    }
     if work.state.ready.len() > 0 {
         dispatch_initial_mesh_tasks(&content, &mut renderer, &mut work, &mut queues);
+    }
+    if work.state.pending.len() > 0 {
+        dispatch_generation_tasks(&renderer.pool, &mut work);
     }
 }
 
@@ -241,6 +252,11 @@ fn collect_generated_chunks(work: &mut ChunkStreamingWork<'_>) {
 }
 
 fn dispatch_generation_tasks(render_pool: &ChunkRenderPool, work: &mut ChunkStreamingWork<'_>) {
+    let max_in_flight = if work.mesh_tasks.pending_count() > 0 {
+        MAX_GENERATION_TASKS_WITH_MESH_BACKLOG
+    } else {
+        MAX_GENERATION_TASKS_IN_FLIGHT
+    };
     let mut budget = FrameWorkBudget::new(GENERATION_DISPATCH_BUDGET, 1)
         .with_maximum_items(MAX_GENERATION_DISPATCH_WORK_PER_FRAME);
 
@@ -249,7 +265,7 @@ fn dispatch_generation_tasks(render_pool: &ChunkRenderPool, work: &mut ChunkStre
             break;
         }
 
-        let at_capacity = work.generation_tasks.pending_count() >= MAX_GENERATION_TASKS_IN_FLIGHT;
+        let at_capacity = work.generation_tasks.pending_count() >= max_in_flight;
         let coord = if at_capacity {
             work.state.pop_critical_pending()
         } else {
@@ -279,7 +295,7 @@ fn dispatch_generation_tasks(render_pool: &ChunkRenderPool, work: &mut ChunkStre
             continue;
         }
 
-        if work.generation_tasks.pending_count() >= MAX_GENERATION_TASKS_IN_FLIGHT {
+        if work.generation_tasks.pending_count() >= max_in_flight {
             let Some(center) = work.state.center else {
                 work.state.requeue(coord);
                 break;
