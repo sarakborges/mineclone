@@ -10,6 +10,7 @@ use crate::{
             DensitySampleContext, sample_density_column_hydrology, sample_density_with_hydrology,
         },
         generation_region::GenerationRegion,
+        hydrology::HydrologyWaterSample,
         terrain::terrain_density,
     },
 };
@@ -22,6 +23,10 @@ use super::{
         surface_carver_density_delta,
     },
 };
+
+const SURFACE_CARVER_WATER_MARGIN: f32 = 4.0;
+const SURFACE_CARVER_WATER_ROOF: f32 = 3.0;
+const SURFACE_CARVER_WATER_FADE_DEPTH: f32 = 4.0;
 
 pub(super) struct DensityField {
     pub(super) values: Vec<f32>,
@@ -71,19 +76,21 @@ pub(super) fn sample_density_field(
                 .region
                 .hydrology
                 .density_deltas_for_column::<CHUNK_SIZE>(horizontal, chunk_origin.y as f32 + 0.5);
-            // Surface tunnels may approach water naturally. Only the columns
-            // that actually contain surface water suppress the tunnel carver;
-            // the old twelve-block binary exclusion produced conspicuously flat
-            // tunnel walls around rivers and lakes.
-            let surface_carver_allowed = pass.region.hydrology.water_at(horizontal).is_none();
-            if surface_carver_allowed {
-                resolve_surface_carver_column(
-                    &mut surface_carvers,
-                    horizontal,
-                    &column.surface_influences,
-                    &surface_carver_context,
-                );
-            }
+            let nearby_water = pass
+                .region
+                .hydrology
+                .water_near(horizontal, SURFACE_CARVER_WATER_MARGIN);
+
+            // Resolve the tunnel continuously through hydrology instead of turning the
+            // entire carver off at the first wet column. Water protection is applied per
+            // voxel below, preserving a solid bed/roof while allowing deep tunnel volume
+            // to continue under rivers, lakes and oceans.
+            resolve_surface_carver_column(
+                &mut surface_carvers,
+                horizontal,
+                &column.surface_influences,
+                &surface_carver_context,
+            );
 
             for (local_y, hydrology_delta) in hydrology_deltas.iter().copied().enumerate() {
                 let world_position = IVec3::new(
@@ -105,11 +112,11 @@ pub(super) fn sample_density_field(
                     hydrology_delta,
                     &context,
                 );
-                let carver_delta = if surface_carver_allowed {
-                    surface_carver_density_delta(sampled_density, sample_position, &surface_carvers)
-                } else {
-                    0.0
-                };
+                let carver_delta = surface_carver_density_delta(
+                    sampled_density,
+                    sample_position,
+                    &surface_carvers,
+                ) * surface_carver_water_factor(sample_position.y, nearby_water);
 
                 field.values[index] = sampled_density + carver_delta;
                 field.volume[index] = volume;
@@ -118,4 +125,53 @@ pub(super) fn sample_density_field(
     }
 
     field
+}
+
+fn surface_carver_water_factor(
+    sample_y: f32,
+    water: Option<HydrologyWaterSample<'_>>,
+) -> f32 {
+    let Some(water) = water else {
+        return 1.0;
+    };
+
+    let full_protection_y = water.bed_level - SURFACE_CARVER_WATER_ROOF;
+    let deep_progress = ((full_protection_y - sample_y) / SURFACE_CARVER_WATER_FADE_DEPTH)
+        .clamp(0.0, 1.0);
+    let deep_factor = deep_progress * deep_progress * (3.0 - 2.0 * deep_progress);
+    let water_strength = water.strength.clamp(0.0, 1.0);
+
+    1.0 - water_strength * (1.0 - deep_factor)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::world::hydrology::HydrologyWaterKind;
+
+    fn water(strength: f32) -> HydrologyWaterSample<'static> {
+        HydrologyWaterSample {
+            fluid_id: "asteria:test/water",
+            water_level: 64.0,
+            bed_level: 58.0,
+            strength,
+            kind: HydrologyWaterKind::Lake,
+        }
+    }
+
+    #[test]
+    fn surface_carver_is_fully_protected_near_strong_water_bed() {
+        assert_eq!(surface_carver_water_factor(57.0, Some(water(1.0))), 0.0);
+    }
+
+    #[test]
+    fn deep_surface_carver_continues_below_water() {
+        assert_eq!(surface_carver_water_factor(50.0, Some(water(1.0))), 1.0);
+    }
+
+    #[test]
+    fn weak_water_edge_blends_carver_instead_of_binary_cutoff() {
+        let factor = surface_carver_water_factor(57.0, Some(water(0.25)));
+        assert!(factor > 0.0 && factor < 1.0);
+    }
 }
