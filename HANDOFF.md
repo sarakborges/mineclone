@@ -63,14 +63,15 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 26. Anti-convoy de worldgen deve observar readiness real dos caches compartilhados; não manter shadow state de “cache aquecido” quando o próprio `OnceLock` já é a fonte autoritativa.
 27. Validade de mesh async usa revision de **conteúdo por chunk** (blocks + fluids), separada de `chunk_mesh_revision`; mudanças de lighting não devem descartar geometria já construída e ficam responsáveis por seu próprio background remesh.
 28. Neighbor ausente no snapshot inicial pode aparecer enquanto o mesh está em flight; isso não invalida a primeira aparição, porque o carregamento/visibilidade do neighbor já agenda a correção de fronteira por remesh.
+29. Streaming distingue conceitualmente **raio visível obrigatório** de **faixa de preload/aquecimento**: trabalho faltando dentro do raio configurado precisa sempre ganhar prioridade sobre chunks que existem apenas para antecipação; preload deve comprar tempo antes de o jogador alcançar a fronteira, não competir com buracos já visíveis.
 
 ---
 
 # Estado atual
 
-Último HEAD de código publicado: `91fbf4db862f156be068213df452de7d9e020c54`  
-Bloco: `Separate chunk content revisions from lighting mesh churn`  
-`VERSION = 0.14.62`
+Último HEAD de código publicado: `ebbc0197365da2c4ab47c044a3099f25d4a44f86`  
+Bloco: `Preload terrain ahead of visible range`  
+`VERSION = 0.14.63`
 
 ## Histórico recente relevante
 
@@ -101,6 +102,14 @@ Bloco: `Separate chunk content revisions from lighting mesh churn`
   - propagation/relaxation de lighting pode alterar `chunk_mesh_revision` enquanto um mesh async está sendo construído sem tornar esse trabalho geométrico stale;
   - neighbor ausente durante capture pode carregar antes da integração sem obrigar descarte do mesh inicial; a correção de boundary fica com o remesh disparado pela visibilidade do neighbor;
   - mudanças reais de conteúdo em center/neighbor ainda invalidam o resultado async.
+  - runtime subsequente do usuário: **buracos ainda aparecem**; hipótese levantada pelo usuário de que a fronteira precisa ser carregada preemptivamente antes de entrar na distância visível.
+- `ebbc019` / 0.14.63: torna o preload realmente antecipatório em relação ao raio configurado:
+  - margem base passa de +1 para +2 chunks ao redor do raio nominal;
+  - faixa à frente do movimento passa de +2 para até +8 chunks além da margem base;
+  - a faixa preditiva é um corredor/funil frontal focado, e não outro disco inteiro deslocado, reduzindo trabalho lateral inútil;
+  - prioridade ganha `visibility_band`: qualquer chunk faltando dentro do raio nominal configurado vence trabalho existente apenas na faixa de aquecimento;
+  - direção continua desempate dentro de cada banda, sem permitir que preload distante roube slots de um buraco já visível;
+  - corrige também o gate de Clippy da 0.14.62 marcando getters de `chunk_mesh_revision` usados apenas nos testes como `#[cfg(test)]`.
 
 ## CI recente
 
@@ -111,7 +120,8 @@ Bloco: `Separate chunk content revisions from lighting mesh churn`
 - 0.14.59 / run `35046538650`: mesma falha herdada de Clippy; corrigida estruturalmente em 0.14.61, sem `#[allow]`.
 - 0.14.60 / run `35046928557`: contém o lint herdado no selector e foi superseded pela correção estrutural.
 - 0.14.61 / run `35047030986`: Clippy + `cargo check` success.
-- 0.14.62 / run `35047686262`: em validação no momento deste handoff; é o gate canônico atual.
+- 0.14.62 / run `35047686262`: Clippy failure apenas porque `chunk_with_mesh_revision` e `chunk_mesh_revision` ficaram runtime-dead após a separação de content revision; corrigido em 0.14.63 com `#[cfg(test)]`.
+- 0.14.63 / run `35048266986`: em validação no momento deste handoff; é o gate canônico atual.
 - Commits handoff-only não abrem Rust CI.
 
 ---
@@ -133,7 +143,8 @@ Bloco: `Separate chunk content revisions from lighting mesh churn`
 - streaming carrega direção horizontal recente, prefetch à frente e prioridade distinta para superfície quando o jogador está voando acima dela;
 - generation fria evita worker convoy em dependências compartilhadas e consulta readiness diretamente no cache autoritativo;
 - quando há mesh backlog, generation não deve monopolizar todo o pool async;
-- mesh async valida content revision por chunk em vez de ser invalidado por churn de lighting.
+- mesh async valida content revision por chunk em vez de ser invalidado por churn de lighting;
+- streaming mantém margem de aquecimento além do raio nominal e corredor preditivo à frente, mas o raio nominal sempre tem precedência de fila.
 
 ## Worldgen/biome
 
@@ -164,7 +175,8 @@ Sintoma confirmado:
 
 - FPS pode permanecer ~60 enquanto generation/rendering ficam atrás do movimento;
 - antes de 0.14.56 o jogador atravessava vários chunks vazios;
-- 0.14.56–0.14.61 melhoraram throughput/prioridade, mas o usuário ainda confirma buracos em flight;
+- 0.14.56–0.14.62 melhoraram throughput/prioridade, mas o usuário ainda confirma buracos em flight;
+- o usuário identificou como suspeita a distância visível versus carregamento tardio: chunks deveriam começar a ser preparados antes de entrarem na área que o jogador pode enxergar/alcançar;
 - requisito: **voar pelo mapa não pode expor chunks vazios/void**.
 
 Pipeline atual:
@@ -180,36 +192,34 @@ Pipeline atual:
 5. ausência de lookahead direcional: 0.14.58;
 6. generation sendo despachada antes de mesh já pronta para avançar: 0.14.59;
 7. generation monopolizando o pool enquanto há mesh backlog: 0.14.59;
-8. mesh inicial sendo repetidamente descartado porque lighting relaxation alterava `chunk_mesh_revision` durante o trabalho async: 0.14.62.
+8. mesh inicial sendo repetidamente descartado porque lighting relaxation alterava `chunk_mesh_revision` durante o trabalho async: 0.14.62;
+9. preload curto demais e direção podendo vencer trabalho faltante dentro do raio nominal: 0.14.63.
 
-### Nuances importantes
+### Estado do preload em 0.14.63
 
-- generation/mesh tasks atuais são CPU-bound e os futures não têm pontos de `await`/yield internos; dropar o handle evita polling futuro, mas não interrompe magicamente CPU já em execução.
-- `GENERATION_REGION_SIZE_CHUNKS = 8`; hydrology/volume/caves são compartilhados por região e usam caches `OnceLock`.
-- readiness regional do anti-convoy exige generation region, volume biome region e cave region inicializados; `None` de caves ainda conta como cache inicializado porque o `OnceLock<Option<_>>` possui valor.
-- flight speed atual = `WALK_SPEED 5 * FLY_SPEED_MULTIPLIER 5 = 25` blocos/s; chunk = 16 blocos, portanto ~1.56 chunks horizontais/s em velocidade máxima configurada.
-- preload direcional adiciona 2 chunks à frente além do preload base, sem inflar todo o anel simetricamente.
-- `chunk_content_revision` agora é o owner da validade geométrica voxel por chunk; `chunk_mesh_revision` continua cobrindo lighting/mesh e não deve voltar a ser usada como proxy de conteúdo.
+- raio configurado de renderização continua sendo a banda de maior prioridade;
+- margem base de aquecimento = +2 chunks além do raio nominal (ou maior se estruturas exigirem);
+- com movimento horizontal existe corredor frontal adicional de até +8 chunks além dessa margem;
+- a largura frontal é focada e afunila, evitando aquecer um disco inteiro enorme;
+- em render distance 12, a fronteira frontal pode começar a ser preparada até aproximadamente 22 chunks horizontais do jogador;
+- a 25 blocos/s (~1,56 chunks/s), isso compra vários segundos de antecedência para generation + lighting seed + mesh antes de a fronteira entrar na área nominal;
+- implementação atual ainda deixa chunks de preload percorrerem o pipeline completo até mesh/spawn; a separação é de **horizonte/prioridade**, não ainda um estado oculto `warm-only`.
 
-### Próximo passo se 0.14.62 ainda mostrar void
+### Se 0.14.63 ainda mostrar void
 
-Instrumentar apenas o necessário para localizar o novo limitante, medindo por estágio:
+Primeiro distinguir visualmente/por instrumentação dois casos:
 
-- pending generation;
-- generation in-flight;
-- generation completed awaiting integration;
-- ready awaiting initial lighting/mesh dispatch;
-- mesh in-flight;
-- mesh completed awaiting integration;
-- distância em chunks do primeiro buraco visível à frente.
+- **buraco dentro do raio nominal**: ainda existe throughput/backlog real; medir pending generation, generation in-flight/completed, ready, mesh in-flight/completed e atacar o estágio que fica para trás;
+- **void na borda/horizonte além do raio nominal**: alinhar o que a câmera pode expor com a garantia de terreno, verificando far plane/fog/visibilidade e/ou introduzindo estágio explícito de prewarm oculto com dados/mesh prontos antes da promoção ao raio visível.
 
-Com base nisso, próximos candidatos estruturais, nesta ordem:
+Próximos candidatos estruturais, nesta ordem:
 
-1. aumentar lookahead de forma **adaptativa à velocidade/backlog**, não como render distance artificial gigante;
-2. separar generation de mesh/remesh em pools dedicados com orçamento total controlado, se a competição do pool compartilhado continuar sendo o limitante;
-3. tornar cold regional prerequisites tasks explícitas/readiness explícita, se o custo de hydrology/volume/caves continuar dominando mesmo sem convoy;
-4. mover initial direct-light seed para pipeline async stale-safe ou introduzir readiness explícita de lighting apenas se o seed síncrono aparecer como custo de main thread; ele não deve bloquear mesh por revision churn novamente;
-5. se throughput físico ainda não puder acompanhar um movimento permitido pelo jogo, implementar estratégia visual coerente de far terrain/LOD/fog; **não aceitar void cru** e não congelar o jogador como solução padrão.
+1. tornar a distância de preload adaptativa à velocidade real e ao backlog/tempo observado, em vez de depender apenas dos +8 chunks fixos;
+2. introduzir estado explícito `warm/prepared` separado de `visible`, podendo gerar e até construir mesh sem expor a alocação até a promoção;
+3. alinhar camera far visibility/fog com a fronteira garantida se o usuário estiver vendo além do território que o streaming promete manter pronto;
+4. separar generation de mesh/remesh em pools dedicados com orçamento total controlado se o gargalo ainda for competição do pool compartilhado;
+5. tornar cold regional prerequisites tasks explícitas/readiness explícita se hydrology/volume/caves continuarem dominando;
+6. se throughput físico ainda não puder acompanhar um movimento permitido pelo jogo, usar estratégia visual coerente de far terrain/LOD/fog; **não aceitar void cru** e não congelar o jogador como solução padrão.
 
 Não marcar P0.1 resolvido até runtime contínuo em flight máximo sem buracos visíveis.
 
@@ -335,7 +345,7 @@ Lighting lazy expansion só é aceitável se preservar FIFO + dedup global + pri
 
 # Ordem de execução no próximo `go`
 
-1. **P0.1 seamless streaming** — validar 0.14.62 em flight máximo; se ainda houver void, instrumentar backlog por estágio e atacar o estágio comprovado, começando por lookahead adaptativo/backlog e competição entre pools.
+1. **P0.1 seamless streaming** — validar 0.14.63 em flight máximo; se ainda houver void, distinguir buraco dentro do raio nominal de horizonte exposto além dele e seguir com preload adaptativo / estado `warm` explícito / alinhamento camera-fog conforme a evidência.
 2. **P0.2 lighting/shadows** — lamp latency + seam; aproveitar a separação content/light feita em 0.14.62.
 3. **P0.3 hydrology continuity** — primeiro river/tunnel gate binário, depois endpoints e margens/topo.
 4. **P1.1 biome distribution** — reduzir Mountains materialmente, tornar regionais perceptíveis e aumentar levemente árvores de Plains.
@@ -352,6 +362,7 @@ Meta não é apenas ~60 FPS; é mundo visualmente pronto antes de o jogador alca
 - heavy generation/mesh/remesh fora da main thread;
 - integração/restore/unload/lighting/fluid budgetados sem backlog visível;
 - prioridade baseada em visibilidade e direção de movimento, não só distância euclidiana;
+- preencher primeiro a banda visível e usar capacidade restante para prewarm preditivo;
 - preload adaptativo/preditivo em vez de render radius inflado indiscriminadamente;
 - reservar throughput para finalizar chunks já gerados antes de criar backlog novo;
 - revision tracking por domínio para stale async work;
