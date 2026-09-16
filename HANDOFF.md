@@ -28,7 +28,7 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 ## Versionamento
 
 - Fonte operacional acordada: arquivo raiz `VERSION`.
-- Estado atual: `VERSION = 0.14.48`.
+- Estado atual: `VERSION = 0.14.49`.
 - `src/app/version.rs` deixa explícito que `VERSION` fica fora de `Cargo.toml` de propósito para que bumps frequentes não invalidem fingerprints do Cargo. A divergência de `[package].version = 0.10.16` é intencional enquanto essa política existir; não sincronizar silenciosamente.
 
 ## Validação
@@ -73,11 +73,11 @@ Roda em push para `develop`/`main` e em pull requests.
 
 Último HEAD de código publicado:
 
-`dd12f2e5478d732d9157ca26fcb263900cc34e7c`
+`84dfbe2564da82045fa5a1a59f9b36a9e7018966`
 
-Bloco: `Use Bevy hash maps for content registries`
+Bloco: `Use Bevy hash collections in worldgen caches`
 
-`VERSION`: `0.14.48`
+`VERSION`: `0.14.49`
 
 Commits recentes relevantes:
 
@@ -93,12 +93,13 @@ Commits recentes relevantes:
 - `da309b3` — `0.14.40`, hash collections quentes restantes de lighting usam Bevy.
 - `30c54ce` — `0.14.41`, streaming selection usa hash collections do Bevy; feature-cache retention aceita iterador.
 - `a6fc5c3` — `0.14.42`, `ChunkRenderPool.active` usa hash map do Bevy.
-- `8a96146` — `0.14.43`, `ChunkMeshSnapshot` captura clones COW + revisions no main thread e materializa os 1736 samples do halo dentro das tasks async.
-- `686d3cb` — `0.14.44`, pending sort do streaming reutiliza scratch e elimina allocation de `sort_by_cached_key` preservando empates via ordinal.
-- `a1a36c7` — `0.14.45`, corrige o `clippy::useless_vec` no teste do bloco anterior trocando o Vec fixo por array; nenhuma lógica muda.
-- `86d5f4b` — `0.14.46`, `BiomeInfluence` carrega `surface_index`; geração de colunas reutiliza o índice já calculado.
-- `181ccb8` — `0.14.47`, corrige os consumers esquecidos do novo `surface_index`; structure support também usa o índice carregado.
-- `dd12f2e` — `0.14.48`, `DefinitionMap<T>` e o mapa externo de `SecondaryPropertyRegistry` usam `bevy::platform::collections::HashMap` sem alterar semântica de lookup/iteração.
+- `8a96146` — `0.14.43`, halo de `ChunkMeshSnapshot` é materializado dentro da task async a partir de clones COW.
+- `686d3cb` — `0.14.44`, pending sort do streaming reutiliza scratch preservando empates via ordinal.
+- `a1a36c7` — `0.14.45`, corrige warning do teste do sort.
+- `86d5f4b` — `0.14.46`, `BiomeInfluence` carrega `surface_index`.
+- `181ccb8` — `0.14.47`, corrige consumers do novo índice; structure support usa o índice carregado.
+- `dd12f2e` — `0.14.48`, content registries usam `bevy::platform::collections::HashMap`.
+- `84dfbe2` — `0.14.49`, cache de sites de `BiomeField`, `FeatureCaches`, structure-origin maps e retention scratch usam hash collections do Bevy.
 
 ## CI recente
 
@@ -106,11 +107,12 @@ Commits recentes relevantes:
 - `0.14.41` / run `35037142837`: Clippy **success**, `cargo check` **success**.
 - `0.14.42` / run `35037660941`: Clippy **success**, `cargo check` **success**.
 - `0.14.43` / run `35038065308`: Clippy **success**, `cargo check` **success**.
-- `0.14.44` / run `35038433002`: **failure** de Clippy apenas no teste novo por `clippy::useless_vec`.
+- `0.14.44` / run `35038433002`: **failure** de Clippy no teste novo por `clippy::useless_vec`.
 - `0.14.45` / run `35038881264`: Clippy **success**, `cargo check` **success**.
-- `0.14.46` / run `35039241647`: **failure**; dois testes não inicializavam `BiomeInfluence.surface_index` e structure support ainda chamava helper removido.
+- `0.14.46` / run `35039241647`: **failure** por consumers esquecidos do novo `surface_index`.
 - `0.14.47` / run `35039797881`: Clippy **success**, `cargo check` **success**.
-- `0.14.48` / run `35040141257`: **pending/in progress** nesta atualização.
+- `0.14.48` / run `35040141257`: Clippy **success**, `cargo check` **success**.
+- `0.14.49` / run `35040506838`: **pending/in progress** nesta atualização.
 
 ---
 
@@ -136,7 +138,8 @@ Commits recentes relevantes:
 - `GenerationColumnSample` usa `SmallVec` inline no caso comum.
 - Structure support reutiliza a própria amostra de biome.
 - `BiomeInfluence` conserva o surface biome index calculado pelo sampler; geração de colunas e structure support não reconstruem mais esse índice por busca textual.
-- Content registries genéricos e secondary-property map usam o hasher de `bevy::platform`; isso alcança lookups de Block/Biome/Fluid/etc. sem introduzir ordem nova.
+- Content registries genéricos e secondary-property map usam o hasher de `bevy::platform`.
+- `BiomeField.surface_site_biomes`, caches concorrentes de worldgen, structure-origin maps e retention scratch usam as hash collections do Bevy; locking/retention semantics permanecem iguais.
 
 ## Lighting
 
@@ -157,7 +160,7 @@ Commits recentes relevantes:
 - Reduzir limites de task arbitrariamente tende a reduzir throughput e não prova ganho de FPS.
 - `ChunkTaskQueue` é pequeno por design; hasher não é prioridade.
 - Clouds só justificam reestruturação com profiling devido risco visual/lifecycle.
-- `surface_cache` já calcula apenas misses, usa cinco probes conservadores por coluna distante e só é podado em mudança de generation-region/radius; não reexpandir scans sem evidência.
+- `surface_cache` já calcula apenas misses, usa cinco probes conservadores e só é podado em mudança de generation-region/radius.
 - `GenerationSnapshot` só é reconstruído quando inputs autoritativos mudam; `WorldFeatureFields` compartilha caches por `Arc`.
 - A expansão eager de 4096 lighting seeds é custo real, mas uma fila lazy precisa preservar FIFO, dedup global e priority promotion do `DeduplicatedQueue`; não criar segunda semântica de fila sem invariant explícito.
 
@@ -165,13 +168,13 @@ Commits recentes relevantes:
 
 # Hot paths / roadmap restante
 
-1. **Próximo (`0.14.49`) — worldgen caches**: `BiomeField.surface_site_biomes` faz até 25 lookups de cache por `sample_surface`; `WorldFeatureFields`/`FeatureCaches` têm maps/sets quentes sob locks e scratch. Nenhum depende de ordenação; trocar para Bevy collections é candidato coerente.
-2. **Depois (`0.14.50`) — mesh buffers**: `build_chunk_mesh` agrupa faces expostas em `std::HashMap`; roda async, mas afeta throughput. O output já é ordenado explicitamente, então o hasher não é semântico.
-3. **Depois dos hot paths (`0.14.51`) — CI docs-only**: `.github/workflows/ci.yml` roda Clippy/check também quando o push altera apenas `HANDOFF.md`. Adicionar `paths-ignore` para não gastar uma validação Rust inteira em commit exclusivamente documental, preservando CI quando há qualquer arquivo de código/config junto.
-4. **Candidato estrutural a validar depois dos blocos acima**: `surface_height_from_sample` ainda faz lookup textual no `BiomeRegistry` e recalcula `string_hash` + `mix_seed` para cada influência de cada amostra. `BiomeFieldEntry` já é o snapshot derivado do biome e `BiomeTerrain`/`BiomeTerrainModifier` são clonáveis/copy; investigar carregar terrain/modifiers + terrain seed precomputado no `BiomeField`, preservando o registry como autoridade de carga. Isso afeta geração de 256 colunas e os probes síncronos de streaming.
+1. **Próximo (`0.14.50`) — mesh buffers**: `build_chunk_mesh` agrupa faces expostas em `std::HashMap`; roda async, mas afeta throughput. O output já é ordenado explicitamente, então o hasher não é semântico.
+2. **Depois (`0.14.51`) — CI docs-only**: `.github/workflows/ci.yml` roda Clippy/check também quando o push altera apenas `HANDOFF.md`. Adicionar `paths-ignore` para não gastar validação Rust em commit exclusivamente documental, preservando CI quando há qualquer arquivo de código/config junto.
+3. **Candidato estrutural validado para implementação depois (`0.14.52` se os gates anteriores forem verdes)**: `surface_height_from_sample` faz lookup textual no `BiomeRegistry` e recalcula `string_hash` + `mix_seed` para cada influência. `BiomeFieldEntry` já é snapshot derivado imutável; `BiomeTerrain`/modifiers são clonáveis/Copy, e o `density_seed` atual usa exatamente o mesmo FNV + mix do terrain. Carregar terrain/modifiers no entry e reutilizar esse seed permite resolver altura por `surface_index`, eliminando lookup textual e hashing por amostra sem alterar ruído/weights/IDs.
+4. Depois do terrain metadata, revisar o lookup adicional de `surface.primary_id` usado pelo hydrology region; só mexer se puder reutilizar índice/metadata já derivado sem ampliar estado duplicado.
 5. Reavaliar a expansão de 4096 lighting seeds apenas se houver desenho que preserve FIFO + dedup + priority promotion exatamente; atualmente bloqueado por corretude.
 6. A divergência `VERSION` vs `Cargo.toml` é intencional conforme `src/app/version.rs`; não há patch sem mudança explícita dessa política.
-7. Depois desses candidatos, fazer auditoria global final. Sem alvo sustentado por evidência/invariant, encerrar o roadmap.
+7. Fazer auditoria global final; sem novo alvo sustentado por evidência/invariant, encerrar o roadmap.
 
 ---
 
@@ -189,13 +192,13 @@ Só retomar quando o usuário priorizar ou runtime indicar regressão relacionad
 
 # Próximos passos
 
-1. Aguardar CI de `0.14.48` (`35040141257`).
-2. Se verde, publicar `0.14.49` migrando caches quentes de worldgen para `bevy::platform`.
-3. Depois migrar o mapa temporário de buffers do mesher (`0.14.50`).
-4. Ajustar workflow para pular commits exclusivamente documentais (`0.14.51`).
-5. Validar o candidato de terrain metadata/seed precomputado e só publicar se eliminar trabalho repetido sem duplicar autoridade.
-6. Registrar lighting seed expansion como bloqueada se nenhuma representação preservar a semântica da fila.
-7. Fazer auditoria global final. Sem novo alvo sustentado por evidência, encerrar roadmap.
+1. Aguardar CI de `0.14.49` (`35040506838`).
+2. Se verde, publicar `0.14.50` migrando o mapa temporário de buffers do mesher para `bevy::platform`.
+3. Ajustar workflow docs-only em `0.14.51`.
+4. Implementar terrain metadata/seed precomputado em `0.14.52`, validando que output determinístico permanece idêntico por construção.
+5. Revisar o lookup primário de hydrology e publicar só se houver ganho sem duplicação de autoridade.
+6. Manter lighting seed expansion bloqueada sem semântica de fila equivalente.
+7. Fazer auditoria global final e encerrar roadmap quando não restar alvo comprovado.
 
 # Performance direction
 
