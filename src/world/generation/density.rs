@@ -77,21 +77,17 @@ pub(super) fn sample_density_field(
                 chunk_origin.y as f32 + 0.5,
                 column.surface_height as f32,
             );
-            let nearby_water = pass
-                .region
-                .hydrology
-                .water_near(horizontal, SURFACE_CARVER_WATER_MARGIN);
 
-            // Resolve the tunnel continuously through hydrology instead of turning the
-            // entire carver off at the first wet column. Water protection is applied per
-            // voxel below, preserving a solid bed/roof while allowing deep tunnel volume
-            // to continue under rivers, lakes and oceans.
+            // Resolve carvers first. Water protection is only needed if a voxel
+            // is actually carved: a water_near scan on every column duplicated
+            // expensive lake/river/ocean sampling even in carver-free terrain.
             resolve_surface_carver_column(
                 &mut surface_carvers,
                 horizontal,
                 &column.surface_influences,
                 &surface_carver_context,
             );
+            let mut nearby_water = None;
 
             for (local_y, hydrology_delta) in hydrology_deltas.iter().copied().enumerate() {
                 let world_position = IVec3::new(
@@ -117,15 +113,39 @@ pub(super) fn sample_density_field(
                     sampled_density,
                     sample_position,
                     &surface_carvers,
-                ) * surface_carver_water_factor(sample_position.y, nearby_water);
+                );
+                let protected_carver_delta = apply_carver_water_protection(
+                    carver_delta,
+                    sample_position.y,
+                    &mut nearby_water,
+                    || {
+                        pass.region
+                            .hydrology
+                            .water_near(horizontal, SURFACE_CARVER_WATER_MARGIN)
+                    },
+                );
 
-                field.values[index] = sampled_density + carver_delta;
+                field.values[index] = sampled_density + protected_carver_delta;
                 field.volume[index] = volume;
             }
         }
     }
 
     field
+}
+
+fn apply_carver_water_protection<'a>(
+    carver_delta: f32,
+    sample_y: f32,
+    nearby_water: &mut Option<Option<HydrologyWaterSample<'a>>>,
+    load_water: impl FnOnce() -> Option<HydrologyWaterSample<'a>>,
+) -> f32 {
+    if carver_delta == 0.0 {
+        return 0.0;
+    }
+
+    let water = *nearby_water.get_or_insert_with(load_water);
+    carver_delta * surface_carver_water_factor(sample_y, water)
 }
 
 fn surface_carver_water_factor(
@@ -174,5 +194,30 @@ mod tests {
     fn weak_water_edge_blends_carver_instead_of_binary_cutoff() {
         let factor = surface_carver_water_factor(57.0, Some(water(0.25)));
         assert!(factor > 0.0 && factor < 1.0);
+    }
+
+    #[test]
+    fn water_scan_is_skipped_without_carving_and_cached_once_per_column() {
+        let mut nearby_water = None;
+        let mut scans = 0;
+
+        let no_carve = apply_carver_water_protection(0.0, 57.0, &mut nearby_water, || {
+            scans += 1;
+            Some(water(1.0))
+        });
+        assert_eq!(no_carve, 0.0);
+        assert_eq!(scans, 0);
+
+        let protected = apply_carver_water_protection(-4.0, 57.0, &mut nearby_water, || {
+            scans += 1;
+            Some(water(1.0))
+        });
+        let deep = apply_carver_water_protection(-4.0, 50.0, &mut nearby_water, || {
+            scans += 1;
+            Some(water(1.0))
+        });
+        assert_eq!(protected, 0.0);
+        assert_eq!(deep, -4.0);
+        assert_eq!(scans, 1);
     }
 }
