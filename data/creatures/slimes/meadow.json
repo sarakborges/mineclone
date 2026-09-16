@@ -1,5 +1,6 @@
 {
   "id": "asteria:meadow_slime",
+  "name": { "english": "Meadow Slime" },
   "model": "models/creatures/slime/slime.glb",
   "previewSpawn": true,
   "collider": {
