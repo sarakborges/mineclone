@@ -40,7 +40,7 @@ use super::{
 
 const MIN_CHUNKS_BEFORE_BUDGET_CHECK: usize = 1;
 const MAX_CHUNKS_PER_FRAME: usize = 4;
-const MAX_GENERATION_DISPATCH_WORK_PER_FRAME: usize = 4;
+const MAX_GENERATION_DISPATCH_WORK_PER_FRAME: usize = 16;
 const MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME: usize = 8;
 const MAX_MESH_RESULTS_COLLECTED_PER_FRAME: usize = 4;
 const CRITICAL_PLAYER_RADIUS_CHUNKS: i32 = 1;
@@ -52,6 +52,7 @@ const STREAMING_BUDGET: Duration = Duration::from_millis(4);
 #[derive(Resource, Default)]
 pub(super) struct ChunkStreamingState {
     center: Option<IVec3>,
+    movement_direction: IVec2,
     horizontal_radius: i32,
     vertical_radius: i32,
     desired: HashSet<IVec3>,
@@ -190,6 +191,7 @@ pub(super) fn stream_chunks(
     }
 
     work.generation_tasks.sync_snapshot(&generation, &content);
+    work.generation_tasks.sync_streaming_region(center);
     work.mesh_tasks.sync_snapshot(&content);
 
     if work.generation_tasks.pending_count() > 0 {
@@ -297,8 +299,8 @@ fn dispatch_generation_tasks(render_pool: &ChunkRenderPool, work: &mut ChunkStre
         if work.generation_tasks.schedule(coord) {
             budget.record(1);
         } else {
-            work.state.requeue(coord);
-            break;
+            work.state.defer_pending(coord);
+            budget.record(1);
         }
     }
 }

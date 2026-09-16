@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
+use bevy::{
+    platform::collections::HashSet,
+    prelude::*,
+    tasks::AsyncComputeTaskPool,
+};
 
 use crate::{
     content::{
@@ -15,6 +19,7 @@ use super::{
     chunk_system_params::{ChunkContent, ChunkGeneration},
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
     generation::{ChunkGenerationContext, generate_chunk},
+    generation_region::generation_region_coord,
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -61,6 +66,9 @@ pub(crate) struct ChunkGenerationTasks {
     revision: u64,
     snapshot: Option<Arc<GenerationSnapshot>>,
     pending: ChunkTaskQueue<VoxelChunk>,
+    streaming_region: Option<IVec3>,
+    warmed_columns: HashSet<IVec2>,
+    warmed_regions: HashSet<IVec3>,
 }
 
 impl ChunkGenerationTasks {
@@ -78,6 +86,19 @@ impl ChunkGenerationTasks {
         self.snapshot = Some(Arc::new(GenerationSnapshot::from_sources(
             generation, content,
         )));
+        self.warmed_columns.clear();
+        self.warmed_regions.clear();
+    }
+
+    pub(crate) fn sync_streaming_region(&mut self, center: IVec3) {
+        let region = generation_region_coord(center);
+        if self.streaming_region == Some(region) {
+            return;
+        }
+
+        self.streaming_region = Some(region);
+        self.warmed_columns.clear();
+        self.warmed_regions.clear();
     }
 
     pub(crate) fn revision(&self) -> u64 {
@@ -94,6 +115,24 @@ impl ChunkGenerationTasks {
 
     pub(crate) fn schedule(&mut self, coord: IVec3) -> bool {
         if self.pending.len() >= MAX_GENERATION_TASKS_IN_FLIGHT || self.pending.contains(coord) {
+            return false;
+        }
+
+        let region = generation_region_coord(coord);
+        if !self.warmed_regions.contains(&region)
+            && self
+                .pending
+                .any_coord(|pending_coord| generation_region_coord(pending_coord) == region)
+        {
+            return false;
+        }
+
+        let column = coord.xz();
+        if !self.warmed_columns.contains(&column)
+            && self
+                .pending
+                .any_coord(|pending_coord| pending_coord.xz() == column)
+        {
             return false;
         }
 
@@ -120,6 +159,12 @@ impl ChunkGenerationTasks {
     }
 
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<VoxelChunk>> {
-        self.pending.poll_ready()
+        let completed = self.pending.poll_ready()?;
+        if !completed.output.is_empty() {
+            self.warmed_columns.insert(completed.coord.xz());
+            self.warmed_regions
+                .insert(generation_region_coord(completed.coord));
+        }
+        Some(completed)
     }
 }
