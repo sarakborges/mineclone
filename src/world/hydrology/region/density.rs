@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use smallvec::SmallVec;
 
-use super::HydrologyRegion;
+use super::{water::bed_has_support, HydrologyRegion};
 use crate::world::hydrology::{
     constants::{
         LAKE_SHORE_OUTER_DISTANCE, LAKE_SHORE_SURFACE_OFFSET, OCEAN_EXTRA_DEPTH,
@@ -82,10 +82,22 @@ impl HydrologyRegion {
         // The graph scan must use the same radius-relative outer bank as
         // region culling. A fixed world-space margin truncated wide rivers.
         // Carve only inside the actual water footprint, not the full bank.
-        let river_graph_sample = self.river_graph.sample_horizontal_with_radius_multiplier(
-            horizontal,
-            RIVER_BANK_OUTER_NORMALIZED_DISTANCE,
-        );
+        // The physical pass rejects channels without a supporting bed: its
+        // density pass must not carve that rejected channel or its inner bank.
+        let river_graph_sample = self
+            .river_graph
+            .sample_horizontal_with_radius_multiplier(
+                horizontal,
+                RIVER_BANK_OUTER_NORMALIZED_DISTANCE,
+            )
+            .filter(|sample| {
+                let profile = river_channel_profile(sample.normalized_distance);
+                profile <= 0.0
+                    || bed_has_support(
+                        actual_surface_height,
+                        sample.height - self.river_carve_depth * profile,
+                    )
+            });
         let river_core = river_graph_sample.filter(|sample| {
             sample.normalized_distance < RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE
         });
@@ -138,6 +150,17 @@ impl HydrologyRegion {
             // for sin/cos and boundary noise a second time per water body.
             let distance = body.normalized_horizontal_distance(horizontal);
             let strength = smoothstep(1.0 - distance.clamp(0.0, 1.0));
+            // Reject the lake's inner carving and grading if the original
+            // column lies below its bed. Keep outer, dry shore grading: it
+            // does not create water, and can still blend a neighboring bank.
+            if strength > 0.0
+                && !bed_has_support(
+                    actual_surface_height,
+                    body.water_level - body.carve_depth * strength,
+                )
+            {
+                continue;
+            }
             water_body_opening = water_body_opening.max(strength);
             let shore = shore_density_delta(
                 distance,
@@ -253,6 +276,62 @@ fn shore_strength(distance: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        content::dimension_hydrology::DimensionHydrology,
+        world::feature_graph::FeatureGraph,
+    };
+
+    fn test_region(river_graph: FeatureGraph, water_bodies: Vec<WaterBody>) -> HydrologyRegion {
+        HydrologyRegion {
+            coord: IVec2::ZERO,
+            river_graph,
+            river_carve_depth: 7.0,
+            water_bodies,
+            sea_level: 64.0,
+            settings: DimensionHydrology::default(),
+            ocean_weight: 0.0,
+            macro_samples: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn unsupported_lake_does_not_carve_a_dry_basin() {
+        let body = WaterBody {
+            center: Vec2::ZERO,
+            radius: Vec2::splat(20.0),
+            rotation: 0.0,
+            shape_seed: 42,
+            water_level: 100.0,
+            carve_depth: 6.0,
+            fluid_id: "asteria:test/water".into(),
+        };
+        let region = test_region(FeatureGraph::default(), vec![body]);
+        assert!(region.water_at(Vec2::ZERO).is_some());
+        assert!(region.supported_water_at(Vec2::ZERO, 85.0).is_none());
+        assert_eq!(
+            region.density_deltas_for_column::<1>(Vec2::ZERO, 98.5, 85.0),
+            [0.0]
+        );
+        assert!(region.density_deltas_for_column::<1>(Vec2::ZERO, 98.5, 95.0)[0] < 0.0);
+    }
+
+    #[test]
+    fn unsupported_river_does_not_carve_a_dry_channel_or_headroom() {
+        let mut graph = FeatureGraph::default();
+        let from = graph.add_node(Vec3::new(0.0, 100.0, 0.0));
+        let to = graph.add_node(Vec3::new(20.0, 100.0, 0.0));
+        graph.add_edge(from, to, 8.0, 8.0);
+        let region = test_region(graph, Vec::new());
+        let center = Vec2::new(10.0, 0.0);
+        assert!(region.river_surface_at(center).is_some());
+        assert!(region.supported_river_surface_at(center, 80.0).is_none());
+        assert!(region.supported_river_surface_at(center, 94.0).is_some());
+        assert_eq!(
+            region.density_deltas_for_column::<1>(center, 99.5, 80.0),
+            [0.0]
+        );
+        assert!(region.density_deltas_for_column::<1>(center, 99.5, 94.0)[0] < 0.0);
+    }
 
     #[test]
     fn shore_grading_removes_high_terrain_above_water() {
