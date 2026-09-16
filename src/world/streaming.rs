@@ -62,6 +62,7 @@ pub(super) struct ChunkStreamingState {
     pending: DeduplicatedQueue<IVec3>,
     ready: DeduplicatedQueue<IVec3>,
     surface_ranges: HashMap<IVec2, (i32, i32)>,
+    initial_lighting_seeded: HashSet<IVec3>,
 }
 
 impl ChunkStreamingState {
@@ -140,6 +141,14 @@ impl ChunkStreamingState {
         if self.keeps_loaded(coord) && !self.ready.contains(coord) {
             self.ready.enqueue_front(coord);
         }
+    }
+
+    fn mark_initial_lighting_seeded(&mut self, coord: IVec3) -> bool {
+        self.initial_lighting_seeded.insert(coord)
+    }
+
+    pub(super) fn forget_initial_lighting_seeded(&mut self, coord: IVec3) {
+        self.initial_lighting_seeded.remove(&coord);
     }
 }
 
@@ -382,20 +391,26 @@ fn dispatch_initial_mesh_tasks(
             work.state.mark_ready(preempted);
         }
 
-        queues
-            .fluid
-            .enqueue_loaded_fluid_frontier(&work.world, coord);
-        seed_chunk_direct_lighting(
-            &mut work.world,
-            coord,
-            content.blocks(),
-            content.fluids(),
-            content.secondary_properties(),
-        );
-        if chunk_is_empty {
-            queues.lighting.enqueue_empty_chunk_relaxation(coord);
-        } else {
-            queues.lighting.enqueue_chunk_relaxation(coord);
+        // A stale or preempted initial mesh returns to `ready`. Rebuilding its
+        // direct light on every retry overwrote light already converged by
+        // background relaxation and invalidated the next snapshot yet again.
+        // Seed and enqueue the initial relaxation only once per residency.
+        if work.state.mark_initial_lighting_seeded(coord) {
+            queues
+                .fluid
+                .enqueue_loaded_fluid_frontier(&work.world, coord);
+            seed_chunk_direct_lighting(
+                &mut work.world,
+                coord,
+                content.blocks(),
+                content.fluids(),
+                content.secondary_properties(),
+            );
+            if chunk_is_empty {
+                queues.lighting.enqueue_empty_chunk_relaxation(coord);
+            } else {
+                queues.lighting.enqueue_chunk_relaxation(coord);
+            }
         }
 
         if chunk_is_empty {
@@ -580,5 +595,16 @@ mod tests {
             state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 22),
             Some(coord)
         );
+    }
+
+    #[test]
+    fn initial_lighting_seed_is_once_per_residency_not_per_mesh_retry() {
+        let coord = IVec3::new(3, 1, -2);
+        let mut state = ChunkStreamingState::default();
+
+        assert!(state.mark_initial_lighting_seeded(coord));
+        assert!(!state.mark_initial_lighting_seeded(coord));
+        state.forget_initial_lighting_seeded(coord);
+        assert!(state.mark_initial_lighting_seeded(coord));
     }
 }
