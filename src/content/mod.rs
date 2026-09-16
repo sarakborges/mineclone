@@ -13,6 +13,7 @@ pub(crate) mod block_id;
 pub(crate) mod block_orientation;
 pub(crate) mod builtin_ids;
 pub(crate) mod color;
+pub(crate) mod creature;
 pub(crate) mod day_night_cycle;
 pub(crate) mod day_night_phase;
 pub(crate) mod dimension;
