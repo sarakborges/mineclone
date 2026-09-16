@@ -111,6 +111,14 @@ impl ChunkGenerationTasks {
         self.pending.insert(coord, revision, task)
     }
 
+    pub(crate) fn cancel_farthest_where(
+        &mut self,
+        center: IVec3,
+        predicate: impl FnMut(IVec3) -> bool,
+    ) -> Option<IVec3> {
+        self.pending.cancel_farthest_where(center, predicate)
+    }
+
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<VoxelChunk>> {
         self.pending.poll_ready()
     }

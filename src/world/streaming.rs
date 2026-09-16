@@ -43,6 +43,7 @@ const MAX_CHUNKS_PER_FRAME: usize = 4;
 const MAX_GENERATION_DISPATCH_WORK_PER_FRAME: usize = 4;
 const MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME: usize = 8;
 const MAX_MESH_RESULTS_COLLECTED_PER_FRAME: usize = 4;
+const CRITICAL_PLAYER_RADIUS_CHUNKS: i32 = 1;
 const GENERATION_DISPATCH_BUDGET: Duration = Duration::from_millis(1);
 const GENERATION_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
 const MESH_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(2);
@@ -82,10 +83,29 @@ impl ChunkStreamingState {
         }
     }
 
+    fn defer_pending(&mut self, coord: IVec3) {
+        if self.keeps_loaded(coord) && !self.pending.contains(coord) && !self.ready.contains(coord) {
+            self.pending.enqueue(coord);
+        }
+    }
+
+    fn pop_critical_pending(&mut self) -> Option<IVec3> {
+        let center = self.center?;
+        self.pending
+            .pop_where(|coord| is_critical_streaming_coord(coord, center))
+    }
+
     fn mark_ready(&mut self, coord: IVec3) {
         if self.keeps_loaded(coord) && !self.ready.contains(coord) {
             self.ready.enqueue(coord);
         }
+    }
+
+    fn pop_ready(&mut self) -> Option<IVec3> {
+        let center = self.center?;
+        self.ready
+            .pop_where(|coord| is_critical_streaming_coord(coord, center))
+            .or_else(|| self.ready.pop())
     }
 
     fn defer_ready(&mut self, coord: IVec3) {
@@ -93,6 +113,13 @@ impl ChunkStreamingState {
             self.ready.enqueue_front(coord);
         }
     }
+}
+
+fn is_critical_streaming_coord(coord: IVec3, center: IVec3) -> bool {
+    let delta = coord - center;
+    delta.x.abs() <= CRITICAL_PLAYER_RADIUS_CHUNKS
+        && delta.y.abs() <= CRITICAL_PLAYER_RADIUS_CHUNKS
+        && delta.z.abs() <= CRITICAL_PLAYER_RADIUS_CHUNKS
 }
 
 struct QueueRebuildContext<'a> {
@@ -171,9 +198,7 @@ pub(super) fn stream_chunks(
     if work.mesh_tasks.pending_count() > 0 {
         collect_built_chunk_meshes(&content, &mut renderer, &mut work, &mut queues.remesh);
     }
-    if work.generation_tasks.pending_count() < MAX_GENERATION_TASKS_IN_FLIGHT
-        && work.state.pending.len() > 0
-    {
+    if work.state.pending.len() > 0 {
         dispatch_generation_tasks(&renderer.pool, &mut work);
     }
     if work.state.ready.len() > 0 {
@@ -217,12 +242,18 @@ fn dispatch_generation_tasks(render_pool: &ChunkRenderPool, work: &mut ChunkStre
     let mut budget = FrameWorkBudget::new(GENERATION_DISPATCH_BUDGET, 1)
         .with_maximum_items(MAX_GENERATION_DISPATCH_WORK_PER_FRAME);
 
-    while work.generation_tasks.pending_count() < MAX_GENERATION_TASKS_IN_FLIGHT {
+    loop {
         if budget.exhausted() {
             break;
         }
 
-        let Some(coord) = work.state.pending.pop() else {
+        let at_capacity = work.generation_tasks.pending_count() >= MAX_GENERATION_TASKS_IN_FLIGHT;
+        let coord = if at_capacity {
+            work.state.pop_critical_pending()
+        } else {
+            work.state.pending.pop()
+        };
+        let Some(coord) = coord else {
             break;
         };
 
@@ -244,6 +275,23 @@ fn dispatch_generation_tasks(render_pool: &ChunkRenderPool, work: &mut ChunkStre
             work.state.mark_ready(coord);
             budget.record(1);
             continue;
+        }
+
+        if work.generation_tasks.pending_count() >= MAX_GENERATION_TASKS_IN_FLIGHT {
+            let Some(center) = work.state.center else {
+                work.state.requeue(coord);
+                break;
+            };
+            let Some(preempted) = work
+                .generation_tasks
+                .cancel_farthest_where(center, |task_coord| {
+                    !is_critical_streaming_coord(task_coord, center)
+                })
+            else {
+                work.state.requeue(coord);
+                break;
+            };
+            work.state.defer_pending(preempted);
         }
 
         if work.generation_tasks.schedule(coord) {
@@ -269,7 +317,7 @@ fn dispatch_initial_mesh_tasks(
             break;
         }
 
-        let Some(coord) = work.state.ready.pop() else {
+        let Some(coord) = work.state.pop_ready() else {
             break;
         };
         if !work.state.keeps_loaded(coord) || renderer.pool.contains(coord) {
@@ -283,8 +331,21 @@ fn dispatch_initial_mesh_tasks(
             continue;
         };
         if !chunk_is_empty && work.mesh_tasks.pending_count() >= MAX_MESH_TASKS_IN_FLIGHT {
-            work.state.defer_ready(coord);
-            break;
+            let Some(center) = work.state.center else {
+                work.state.defer_ready(coord);
+                break;
+            };
+            if !is_critical_streaming_coord(coord, center) {
+                work.state.defer_ready(coord);
+                break;
+            }
+            let Some(preempted) = work.mesh_tasks.cancel_farthest_where(center, |task_coord| {
+                !is_critical_streaming_coord(task_coord, center)
+            }) else {
+                work.state.defer_ready(coord);
+                break;
+            };
+            work.state.mark_ready(preempted);
         }
 
         queues

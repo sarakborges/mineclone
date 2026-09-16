@@ -47,6 +47,24 @@ impl<T> ChunkTaskQueue<T> {
         true
     }
 
+    pub(crate) fn cancel_farthest_where(
+        &mut self,
+        center: IVec3,
+        mut predicate: impl FnMut(IVec3) -> bool,
+    ) -> Option<IVec3> {
+        let coord = self
+            .pending
+            .keys()
+            .copied()
+            .filter(|coord| predicate(*coord))
+            .max_by_key(|coord| {
+                let delta = *coord - center;
+                (delta.length_squared(), coord.x, coord.y, coord.z)
+            })?;
+        self.pending.remove(&coord);
+        Some(coord)
+    }
+
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<T>> {
         let ready = self.pending.iter_mut().find_map(|(coord, pending)| {
             check_ready(&mut pending.task)
