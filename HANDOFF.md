@@ -70,9 +70,9 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 
 # Estado atual
 
-Último HEAD de código publicado: `b1061f88ef9f20a215e5ed990b8eabce6b23a397`  
-Bloco: `Hide predictive preload outside render radius`  
-`VERSION = 0.14.64`
+Último HEAD de código publicado: `5a58d047a6c43f1f36a0192859b556c580abeec9`  
+Bloco: `Promote newly warmed chunks immediately`  
+`VERSION = 0.14.65`
 
 ## Histórico recente relevante
 
@@ -119,6 +119,11 @@ Bloco: `Hide predictive preload outside render radius`
   - chunks que saem do raio nominal mas permanecem na faixa de retenção/preload voltam a `Hidden`, sem descartar geração ou mesh;
   - a decisão é horizontal-only, para não esconder a superfície quando o jogador está voando alto;
   - geração antecipada e construção de mesh continuam acontecendo fora de cena; a mudança é somente de exposição/promoção visual.
+- `5a58d04` / 0.14.65: corrige promoção de meshes que terminam dentro do raio sem movimento de chunk do jogador:
+  - mantém o scan global apenas quando center/render distance mudam;
+  - adiciona `sync_new_chunk_visibility` filtrado por `Added<ChunkRenderCoord>`;
+  - render entities recém-criados recebem a visibilidade correta no frame de nascimento, sem exigir que o jogador cruze outra fronteira para serem promovidos;
+  - evita scan completo a cada frame e preserva o custo baixo do split warm/visible.
 
 ## CI recente
 
@@ -130,8 +135,9 @@ Bloco: `Hide predictive preload outside render radius`
 - 0.14.60 / run `35046928557`: contém o lint herdado no selector e foi superseded pela correção estrutural.
 - 0.14.61 / run `35047030986`: Clippy + `cargo check` success.
 - 0.14.62 / run `35047686262`: Clippy failure apenas porque `chunk_with_mesh_revision` e `chunk_mesh_revision` ficaram runtime-dead após a separação de content revision; corrigido em 0.14.63 com `#[cfg(test)]`.
-- 0.14.63 / run `35048266986`: ainda estava em validação quando 0.14.64 a supersedeu.
-- 0.14.64 / run `35048672602`: em validação no momento deste handoff; é o gate canônico atual.
+- 0.14.63 / run `35048266986`: superseded pelo split warm/visible antes da validação runtime seguinte.
+- 0.14.64 / run `35048672602`: superseded pela correção de promoção de entities recém-criados.
+- 0.14.65 / run `35048825147`: em validação no momento deste handoff; é o gate canônico atual.
 - Commits handoff-only não abrem Rust CI.
 
 ---
@@ -155,7 +161,8 @@ Bloco: `Hide predictive preload outside render radius`
 - quando há mesh backlog, generation não deve monopolizar todo o pool async;
 - mesh async valida content revision por chunk em vez de ser invalidado por churn de lighting;
 - streaming mantém margem de aquecimento além do raio nominal e corredor preditivo à frente, mas o raio nominal sempre tem precedência de fila;
-- meshes preload podem ficar completamente preparados em background, mas só são expostos quando entram no raio nominal de renderização.
+- meshes preload podem ficar completamente preparados em background, mas só são expostos quando entram no raio nominal de renderização;
+- entities recém-criados dentro do raio nominal são promovidos imediatamente sem depender de mudança no chunk do jogador.
 
 ## Worldgen/biome
 
@@ -206,9 +213,10 @@ Pipeline atual:
 7. generation monopolizando o pool enquanto há mesh backlog: 0.14.59;
 8. mesh inicial sendo repetidamente descartado porque lighting relaxation alterava `chunk_mesh_revision` durante o trabalho async: 0.14.62;
 9. preload curto demais e direção podendo vencer trabalho faltante dentro do raio nominal: 0.14.63;
-10. preload parcialmente pronto sendo renderizado como se já fizesse parte da área visível: 0.14.64.
+10. preload parcialmente pronto sendo renderizado como se já fizesse parte da área visível: 0.14.64;
+11. entity warm que terminava dentro do raio podendo esperar uma mudança de chunk para ser promovido: 0.14.65.
 
-### Estado do preload em 0.14.64
+### Estado do preload em 0.14.65
 
 - raio configurado de renderização continua sendo a banda de maior prioridade;
 - margem base de aquecimento = +2 chunks além do raio nominal (ou maior se estruturas exigirem);
@@ -217,9 +225,10 @@ Pipeline atual:
 - a 25 blocos/s (~1,56 chunks/s), isso compra vários segundos de antecedência;
 - chunks warm percorrem generation, initial light seed e mesh normalmente, mas seus entities ficam `Hidden` fora do raio nominal;
 - quando a coordenada horizontal entra no raio nominal, a promoção para `Visible` é só um toggle de visibilidade: não exige regeneração nem rebuild do mesh;
+- entities que terminam de nascer já dentro do raio são promovidos no mesmo frame via `Added<ChunkRenderCoord>`;
 - o `DistanceFog` existente continua útil para a transição estética, mas não é tratado como mecanismo de corretude: fog não pode esconder um chunk inexistente porque não há fragmento para receber fog.
 
-### Se 0.14.64 ainda mostrar buracos
+### Se 0.14.65 ainda mostrar buracos
 
 Qualquer buraco restante deve ser tratado primeiro como **miss real dentro do raio nominal**, porque a faixa warm externa não deve mais ficar visível. Nesse caso:
 
@@ -353,7 +362,7 @@ Lighting lazy expansion só é aceitável se preservar FIFO + dedup global + pri
 
 # Ordem de execução no próximo `go`
 
-1. **P0.1 seamless streaming** — validar 0.14.64 em flight máximo; se ainda houver buracos, eles são tratados primeiro como misses reais dentro do raio nominal e a próxima mudança deve garantir fronteira visível contígua/readiness, não simplesmente aumentar preload.
+1. **P0.1 seamless streaming** — validar 0.14.65 em flight máximo; se ainda houver buracos, eles são tratados primeiro como misses reais dentro do raio nominal e a próxima mudança deve garantir fronteira visível contígua/readiness, não simplesmente aumentar preload.
 2. **P0.2 lighting/shadows** — lamp latency + seam; aproveitar a separação content/light feita em 0.14.62.
 3. **P0.3 hydrology continuity** — primeiro river/tunnel gate binário, depois endpoints e margens/topo.
 4. **P1.1 biome distribution** — reduzir Mountains materialmente, tornar regionais perceptíveis e aumentar levemente árvores de Plains.
@@ -373,6 +382,7 @@ Meta não é apenas ~60 FPS; é mundo visualmente pronto antes de o jogador alca
 - preencher primeiro a banda visível e usar capacidade restante para prewarm preditivo;
 - preload adaptativo/preditivo em vez de render radius inflado indiscriminadamente;
 - manter preload/prepared oculto até a promoção ao raio visível;
+- promover imediatamente entities recém-prontos que já nasceram dentro do raio nominal;
 - reservar throughput para finalizar chunks já gerados antes de criar backlog novo;
 - revision tracking por domínio para stale async work;
 - caches/metadata no owner correto;
