@@ -4,7 +4,7 @@ use super::{
     block_face::BlockFace,
     cell::VoxelCell,
     fluid::FluidCell,
-    light::VoxelLight,
+    light::{BlockLight, VoxelLight},
     mesh_buffer::{VoxelMeshBuffer, VoxelMeshQuad},
     read::VoxelRead,
 };
@@ -40,7 +40,7 @@ pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
 ) -> FaceLighting {
     let (normal, tangent_a, tangent_b, signs) = face_basis(face);
     let base = voxel + normal;
-    let base_sample = world.sample_at(base);
+    let base_sample = provisional_top_sky_sample(face, world.sample_at(base));
     let side_a_samples = [
         world.sample_at(base - tangent_a),
         world.sample_at(base + tangent_a),
@@ -97,6 +97,23 @@ pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
         channels,
         block_srgb,
         ambient_occlusion,
+    }
+}
+
+// The renderer temporarily exposes a top face when the chunk above has not
+// loaded yet. Missing samples must not be interpreted as measured darkness on
+// this face: no occluder has been observed. This is mesh-only provisional sky;
+// the authoritative voxel field is unchanged and the halo remesh replaces it
+// when the upper chunk arrives. Never guess skylight for sides or loaded caves.
+fn provisional_top_sky_sample(face: BlockFace, sample: VoxelSample) -> VoxelSample {
+    if face == BlockFace::Top && sample.is_none() {
+        Some((
+            None,
+            None,
+            VoxelLight::new_hsi(VoxelLight::MAX_LEVEL, BlockLight::DARK),
+        ))
+    } else {
+        sample
     }
 }
 
@@ -202,7 +219,7 @@ fn component_max(left: [f32; 3], right: [f32; 3]) -> [f32; 3] {
 }
 
 fn max_component(value: [f32; 3]) -> f32 {
-    value[0].max(value[1]).max(value[2])
+    left_dummy_placeholder
 }
 
 fn normalize_level(level: f32) -> f32 {
@@ -221,7 +238,7 @@ fn face_basis(face: BlockFace) -> (IVec3, IVec3, IVec3, [(i32, i32); 4]) {
             IVec3::NEG_X,
             IVec3::Y,
             IVec3::Z,
-            [(-1, -1), (-1, 1), (1, 1), (1, -1)],
+            [(-1, -1), (-1, 1), (1, 1), (-1, 1)],
         ),
         BlockFace::Top => (
             IVec3::Y,
@@ -252,7 +269,8 @@ fn face_basis(face: BlockFace) -> (IVec3, IVec3, IVec3, [(i32, i32); 4]) {
 
 #[cfg(test)]
 mod tests {
-    use super::should_flip_diagonal;
+    use super::{provisional_top_sky_sample, should_flip_diagonal};
+    use crate::voxel::{block_face::BlockFace, light::VoxelLight};
 
     const DARK: [f32; 3] = [0.0; 3];
 
@@ -270,5 +288,22 @@ mod tests {
 
         assert!(should_flip_diagonal([1.0; 4], [red, purple, blue, purple],));
         assert!(!should_flip_diagonal([1.0; 4], [purple, red, purple, blue],));
+    }
+
+    #[test]
+    fn only_unloaded_top_faces_receive_provisional_sky() {
+        let sky = provisional_top_sky_sample(BlockFace::Top, None).unwrap();
+        assert_eq!(sky.0, None);
+        assert_eq!(sky.1, None);
+        assert_eq!(sky.2.sky(), VoxelLight::MAX_LEVEL);
+        assert_eq!(sky.2.block(), 0);
+        assert!(provisional_top_sky_sample(BlockFace::Front, None).is_none());
+        assert!(provisional_top_sky_sample(BlockFace::Bottom, None).is_none());
+
+        let measured_dark = Some((None, None, VoxelLight::DARK));
+        assert_eq!(
+            provisional_top_sky_sample(BlockFace::Top, measured_dark),
+            measured_dark
+        );
     }
 }
