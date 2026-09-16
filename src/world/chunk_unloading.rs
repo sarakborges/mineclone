@@ -164,7 +164,7 @@ fn enqueue_unloaded_halo_remeshes(
 }
 
 fn halo_remesh_needs(chunk: &VoxelChunk, offset: IVec3) -> (bool, bool) {
-    let toward_faces = |mut has_face: fn(&VoxelChunk, IVec3) -> bool| {
+    let toward_faces = |has_face: fn(&VoxelChunk, IVec3) -> bool| {
         (offset.x == 0 || has_face(chunk, IVec3::new(-offset.x, 0, 0)))
             && (offset.y == 0 || has_face(chunk, IVec3::new(0, -offset.y, 0)))
             && (offset.z == 0 || has_face(chunk, IVec3::new(0, 0, -offset.z)))
@@ -215,8 +215,9 @@ mod tests {
         let mut chunk = VoxelChunk::empty();
         chunk.set_fluid(0, 0, 7, Some(FluidCell::source(0, 8)));
 
-        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 1, 0)), (false, true));
-        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 0, 0)), (false, true));
+        // The generic content boundary counts include fluid occupancy too.
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 1, 0)), (true, true));
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 0, 0)), (true, true));
         assert_eq!(halo_remesh_needs(&chunk, IVec3::new(-1, 1, 0)), (false, false));
     }
 }
