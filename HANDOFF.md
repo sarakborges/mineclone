@@ -25,11 +25,13 @@ Hidrologia: rios incidentes compartilham X/Z/Y do nó de drenagem/lago, endpoint
 
 ## Estado confirmado em 16/09/2026
 
-**VERSION: 0.15.31.** HEAD do último commit de código `1965466e35683c0775d3a7b79e3bfaf37a49606f`; bump `ea2f9b338c7576e8086e975c7675276434e311ef`. Commit documental desta atualização é posterior; consultar HEAD antes de editar de novo.
+**VERSION: 0.15.31.** HEAD do último commit de código `1965466e35683c0775d3a7b79e3bfaf37a49606f`; bump `ea2f9b338c7576e8086e975c7675276434e311ef`. Commits documentais posteriores: consultar HEAD antes de editar novamente.
 
-**0.15.31 — correção estrutural PARCIAL de invalidação diagonal da luz:** em `src/world/lighting_updates.rs`, `process_dynamic_lighting` agora considera também as 20 posições diagonais do halo 3×3×3 em torno de cada chunk cuja luz realmente mudou. Só agenda Geometry se o vizinho carregado tem conteúdo nas faces orientadas para o chunk alterado; só agenda Fluid se tem fluido nas respectivas faces, preservando separação de filas e evitando remesh cego de 20 chunks. O revisionamento de iluminação existente invalida outputs async stale. Teste unitário acrescentado para condição de borda diagonal. **Não declarar que chunks pretos/costuras estão resolvidos sem CI e gameplay.** Não afirmar que esse teste foi executado: CI não roda unit tests.
+**0.15.31 — correção estrutural PARCIAL de invalidação diagonal da luz:** em `src/world/lighting_updates.rs`, `process_dynamic_lighting` agora considera também as 20 posições diagonais do halo 3×3×3 em torno de cada chunk cuja luz realmente mudou. Só agenda Geometry se o vizinho carregado tem conteúdo nas faces orientadas para o chunk alterado; só agenda Fluid se tem fluido nas respectivas faces, preservando separação de filas e evitando remesh cego de 20 chunks. O revisionamento de iluminação existente invalida outputs async stale. Teste unitário acrescentado para condição de borda diagonal; CI não executa unit tests. **Usuário confirma que os problemas de chunks pretos/costuras e TODOS os demais defeitos persistem em 16/09; não fechar nada visualmente por .31.**
 
-**CI:** .24 run35121054358 success; .25 run35122730177 success; .26 run35123049209 success; .27 run35123661593 success; .28 run35124362037 success; .29 run35132844975 success; .30 run35133472565 success (Clippy+Check, não runtime). .22/.23 falharam antes de correções subsequentes; não contar como aprovadas. **.31 push run35134931146 estava `in_progress` na consulta inicial; reconsultar antes de afirmar sucesso.**
+**CI:** .24 run35121054358 success; .25 run35122730177 success; .26 run35123049209 success; .27 run35123661593 success; .28 run35124362037 success; .29 run35132844975 success; .30 run35133472565 success (Clippy+Check, não runtime). .22/.23 falharam antes de correções subsequentes. **.31 run35134931146 job104924817286 COMPLETED/SUCCESS: Clippy e Check SUCCESS, não unit tests nem gameplay.**
+
+**Feedback novo confirmado pelo usuário em 16/09:** somente **céu por bioma CORRIGIDO no gameplay**. Fechar a regressão do céu por bioma, preservar `skyColor` independente de fog. `fogColor` artístico continua P0.7 ABERTO; todos os demais bugs anteriores e os nove defeitos abaixo PERSISTEM, inclusive a iluminação após .31. Não interpretar isto como confirmação de correção de fog ou outras cores.
 
 ### Achados de código sobre P0 iluminação, ainda abertos
 
@@ -38,13 +40,13 @@ Hidrologia: rios incidentes compartilham X/Z/Y do nó de drenagem/lago, endpoint
 3. **Outra lacuna a auditar:** `notify_loaded_chunk_neighbors` usa somente `CARDINAL_NEIGHBORS` e conteúdo da face, enquanto AO/lighting dependem de diagonais. Seed direta inicial de chunk pode mudar luz sem aparecer em `changed_chunks` da relaxação; checar atualização de vizinhos e revisão das tasks em voo na chegada de chunk, incluindo vazio, diagonal e fluido. .28 consertou apenas notificação cardinal para vizinho renderizado com conteúdo na face.
 4. Checar se chunk inteiramente preto envolve seed/snapshot de luz, `average_shader_light_levels` quando nenhum sample carregado/vazio, iluminação assíncrona e revisão de mesh. Não modificar arbitrariamente luz global, sombreamento ou fog para esconder sintomas; avaliar custo de remesh sob caminhada/voo.
 
-### Nove defeitos do teste de gameplay de 16/09 — TODOS ABERTOS
+### Nove defeitos do teste de gameplay de 16/09 — TODOS ABERTOS E PERSISTENTES
 
 Prioridade de investigação; não é ordem de causa comprovada. Cada item precisa de reprodução/correção/aceite físico ou visual. CI de .31 não fecha automaticamente nenhum.
 
 | Ordem | Prioridade | Relato e aceite |
 | --- | --- | --- |
-| 1 | P0 | Chunks inteiros pretos e costuras/sombras entre chunks apesar de .28. Investigar seed, luz assíncrona, halo 3×3×3, revisões, primeiro mesh e vizinhos; continuidade visual sem perda de FPS. .31 é correção parcial da notificação diagonal na relaxação. |
+| 1 | P0 | Chunks inteiros pretos e costuras/sombras entre chunks apesar de .28/.31. Investigar seed, luz assíncrona, halo 3×3×3, revisões, primeiro mesh e vizinhos; continuidade visual sem perda de FPS. .31 é correção parcial da notificação diagonal na relaxação. |
 | 2 | P0 | Rios morrem no nada. Provar por seed/coords grafo, leito E água física até lago/rio/oceano através de chunks e regiões. .15/.16/.19/.20 não resolveram no gameplay. |
 | 3 | P0 | Trajeto de 2.000 blocos só mostrou Plains/Mountains. Amostrar bioma FINAL vs aparência, seleção, suitability e distribuição regional; .25 só otimizou alocações. |
 | 4 | P0 | Na descida abrupta, margem do rio abaixa ANTES da água. Medir leito, nível, perfil margem e fluidos; vazamento lateral é HIPÓTESE, e não há causa comprovada para água não espalhar. Preservar margens gerais .12. |
@@ -59,15 +61,14 @@ Prioridade de investigação; não é ordem de causa comprovada. Cada item preci
 - FPS/carregamento melhoraram segundo usuário, mas FPS ~60 não foi medido; investigar throughput andando/voando, remesh Geometry da .28 e custo Fluid da .22. Não trocar cache owner-correct por segunda fonte de verdade stale.
 - Margens gerais de rio: **corrigidas conforme usuário em .12**; descida antecipada é novo defeito. Parede de rio/túnel ainda aberta apesar do carver .14. Hidrologia usa cache seletivo, SmallVec inline4 .26, distância única carve+shore .27, filtro conservador envelope irregular+margem .30; preservar geometria e água na fronteira.
 - Biomas .7 alterou peso/espessura mountain belt, sem comprovar variedade; .25 remove alocações (array de oito vizinhos e único Vec). Plains e Wasteland podem parecer semelhantes; verificar identidade real.
-- Sky .24 corrigiu ordenação `track_current_biome` antes dos visuais e manteve céu independente do fog; fog artístico pendente, não misturar fogColor fixo em sky. Fog/frontier/nuvens antigas informadas concluídas pelo usuário; preservar HDR .15.0 e nuvens world-space .9/.10.
+- Sky .24 corrigiu ordenação `track_current_biome` antes dos visuais e manteve céu independente do fog; **céu por bioma confirmado corrigido no gameplay 16/09**. Fog artístico pendente, não misturar fogColor fixo em sky. Fog/frontier/nuvens antigas informadas concluídas pelo usuário; preservar HDR .15.0 e nuvens world-space .9/.10.
 - Hotbar vazia, ghost alpha uniforme, dye e HUD histórica informados concluídos; highlight multilayer é novo. R/held block .18 tem CI aprovado, gameplay não confirmado. HUD futura: player inferior esquerdo `Yogg'Sara` com vida `50 / 100` na barra, status acima; target acima da crosshair com bloco à esquerda no estilo slot de inventário e texto à direita com shadow de tooltip.
 - Códigos importantes: .15.11 outlet oceano wet; .12 shore grading; .13 lazy water cache; .14 proteção do leito; .15 confluence meander; .16 outlet de lago; .17 seed uma vez/residência; .19 endpoints Y; .20 trace-limit não cacheia falso; .21 Geometry captura halo luz; .22 Terrain/Fluid queues distintas; .24 sky correto; .25 seleção bioma; .26/.27/.30 otimizações hidrologia; .28 remesh cardinal ao chegar chunk vazio; .29 elimina lookup duplicado de definição por face; .31 diagonais na relaxação. SHA, CI e detalhes de .14.70–.30 disponíveis no handoff histórico linkado no topo.
 
 ## Próxima execução concreta
 
-1. Reconsultar CI .31. Se falhar, corrigir todos erros/warnings tocados sem avançar o roadmap; nova alteração de código exige novo bump.
-2. Atacar lacuna do primeiro mesh: comparar snapshot capturado vs world atual após publicação, agendar catch-up de Geometry/Fluid para halo que mudou (incluindo vizinho antes ausente e luz seed/relax), mantendo time-to-visible e evitando starvation. Testar cenário vizinho ausente na captura e presente na integração; cenário luz muda enquanto task está em voo. Investigar notificação diagonal na integração de chunk novo com filtro de conteúdo/fluido e budget.
-3. Se CI e implementação permitirem, investigar iluminação inteiramente preta independentemente da costura, sem atribuir tudo ao mesmo defeito.
-4. Depois: continuidade física end-to-end dos rios por seed/coords; diversidade de biomas em trajetória real; perfil de descida e junção rio-lago; túneis; lua; highlight. Preservar margens .12 e desempenho.
+1. CI .31 verificado success. Atacar lacuna do primeiro mesh: comparar snapshot capturado vs world atual após publicação, agendar catch-up Geometry/Fluid para halo que mudou (incluindo vizinho antes ausente e luz seed/relax), mantendo time-to-visible e evitando starvation. Testar vizinho ausente na captura e presente na integração; luz muda durante task em voo. Investigar notificação diagonal na integração de chunk novo com filtro de conteúdo/fluido e budget.
+2. Investigar iluminação inteiramente preta independentemente da costura, sem atribuir tudo ao mesmo defeito.
+3. Depois: continuidade física end-to-end dos rios por seed/coords; diversidade de biomas em trajetória real; perfil de descida e junção rio-lago; túneis; lua; highlight. Preservar margens .12 e desempenho.
 
 Ao fechar qualquer bloco, bump `VERSION`, registrar commits, CI com estado **verificado** e HANDOFF na mesma sessão. Não declarar gameplay resolvido por inspeção ou CI.
