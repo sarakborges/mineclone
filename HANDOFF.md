@@ -25,7 +25,7 @@ Este `HANDOFF.md` de `develop` é a fonte persistente canônica; anexos/exports 
 5. Streaming separa visible/preload/retenção; retirement não implica unload imediato. Histerese, sem revelar preload distante. Luz interativa prioritária, revisão publicada após convergência. Iluminação direta inicial seed uma vez por residência, nunca por retry de mesh.
 6. Stack HDR: world camera order0 Skip, viewmodel HDR order1 tonemap final, UI SDR order2. Preservar mundo/mão/HUD/overlays.
 7. Fog readiness frontier até imóvel; esconder void/silhuetas sem perder paleta artística por bioma. Enquanto fundo for `ClearColor` plano, terminal `DistanceFog.color` deve coincidir com céu; não misturar paleta de fog em todo sky para disfarçar costura. Nuvens world-space, vento independente, seaLevel por dimensão.
-8. Hot paths change-driven, sem alocações/scans/dirty writes no idle. Held viewmodel observa hotbar/visual/tint e não `PlacementOrientation`; R só afeta bloco colocado. Biome site selection .25 usa array fixo para oito vizinhos e um único Vec para os dois sorteios; preservar escolhas determinísticas.
+8. Hot paths change-driven, sem alocações/scans/dirty writes no idle. Held viewmodel observa hotbar/visual/tint e não `PlacementOrientation`; R só afeta bloco colocado. Biome .25 usa array oito vizinhos/um Vec no sorteio; hidrologia .26 usa SmallVec inline para quatro corpos e heap para demais.
 9. Rios incidentes compartilham X/Z/Y do nó drenagem/lago; terrain adjustment não altera endpoints; regiões vizinhas reproduzem mesmo segmento. Margens corrigidas em 0.15.12 são regressão proibida.
 10. Objetivo caminhando/circulando/voo máximo: sem void, popping/flicker, chunks pretos ou fog breathing; não esconder throughput insuficiente apenas via fog.
 11. **Céu:** bioma é dono de sua paleta `skyColor` por fase. `CurrentBiome`/pesos + relógio determinam `EnvironmentVisualState.sky_color`; `SkyPlugin` escreve exatamente essa cor no `ClearColor`. `fogColor` é paleta independente. Ordenar rastreamento biome antes da atualização visual no mesmo frame; jamais misturar porcentagem fixa de fogColor no céu.
@@ -34,20 +34,20 @@ Este `HANDOFF.md` de `develop` é a fonte persistente canônica; anexos/exports 
 
 # Estado em 2026-09-16
 
-**Último código:** `ec38346a97e0d238f184aa32ed0a7c768ef0e3e4` em `src/world/biome_field/selection.rs`. Bump `.25` `87a27fe920a2d44405cb8eb02c4b4563c4f16d1b`. **VERSION = 0.15.25**. HEAD pode ser commit documental posterior: conferir antes de escrever. Último bloco precedente .24 `1d8d096` (sky ordenado / sem mistura) e `cb5222e` (teste), bump `3b5503e`.
+**Último código:** `.25` `ec38346a97e0d238f184aa32ed0a7c768ef0e3e4` (`biome_field/selection.rs`), bump `87a27fe920a2d44405cb8eb02c4b4563c4f16d1b`; `.26` `d492c3685babc705d8a6e248a2e0a6ebf91decaa` (`hydrology/region/density.rs`), bump `25b262065a9a3a995ddd2c6ab427ed0f3f660c55`. **VERSION = 0.15.26**. HEAD pode ser commit documental posterior: conferir antes de escrever. Precedente .24 `1d8d096` sky e `cb5222e` teste, bump `3b5503e`.
 
-**CI:** versões .3–.21 confirmadas Clippy + Check success (detalhes no histórico); .22 run35119214356 falhou sintaxe `OnceLock<Arc<[Option<...>]>>` corrigida .23; .23 run35120838368 falhou avisos `dead-code` da tentativa de mistura de sky descartada na .24; .24 run35121054358 **sucesso Clippy + Check**. **.25 run35122730177 em execução na consulta (Clippy in_progress, Check pending)**; confirmar resultado antes de declarar sucesso. CI NÃO executa unit tests/gameplay. Não relatar .22/.23 como aprovados.
+**CI:** versões .3–.21 confirmadas Clippy + Check success (detalhes no histórico); .22 run35119214356 falhou sintaxe `OnceLock<Arc<[Option<...>]>>` corrigida .23; .23 run35120838368 falhou avisos `dead-code` da tentativa de mistura de sky descartada na .24; .24 run35121054358 **sucesso Clippy + Check**. **.25 run35122730177 em execução** (Clippy in_progress na última consulta); **.26 run35123049209 em execução**. Confirmar ambos antes de declarar sucesso. CI NÃO executa unit tests/gameplay. Não relatar .22/.23 como aprovados.
 
 ## Prioridades — feedback 2026-09-16
 
 | Item | Estado | Próximo passo |
 | --- | --- | --- |
-| P0.1 FPS/carregamento | Melhorou, ainda aberto; seleção biome .25 reduziu alocações sem medição de FPS | Medir durante movimento; remesh Fluid .22, worldgen/biomes e buffers |
+| P0.1 FPS/carregamento | Melhorou, ainda aberto; biome .25 e hydrology .26 reduziram alocações sem medição de FPS | Medir durante movimento; custo Fluid remesh .22, worldgen/biomes |
 | P0.2 chunks escuros/sombras tardias | Aberto visualmente; seed única .17, Geometry freshness .21, Fluid freshness .22 compilaram até CI .24 | Primeira mesh stale/relight posterior; gameplay/FPS |
 | P0.3 rios cortam túneis com parede reta | Aberto visualmente; carver .14 CI aprovado | Investigar density/cave connector preservando margens |
 | P0.4 rios sem ligação lago/oceano | Aberto visualmente; patches .15/.16/.19/.20 CI aprovados | Teste end-to-end por seed/coords, fluido entre chunks |
 | P0.5 margens verticais de rios | **Corrigidas segundo usuário** após .12 | Preservar |
-| P0.6 biomas regionais ausentes | ~3000 blocos quase só Plains/Mountains; .25 NÃO muda seleção nem prova diversidade | Medir seleção final vs visual |
+| P0.6 biomas regionais ausentes | ~3000 blocos quase só Plains/Mountains; .25 NÃO muda seleção | Medir seleção final vs visual |
 | P0.7 sky/fog sem cor por bioma | Sky sincronização .24 CI aprovado, gameplay pendente; fog artístico ainda não aplicado no renderer | Verificar céu e transição fog terminal sem costura, nunca misturar cor do céu |
 | P1 antigo streaming/Coast/nuvens | Usuário informou `1 feito` | Preservar |
 | P2 antigo hotbar/ghost/dye/HUD | Usuário informou `2 feito` | Preservar |
@@ -72,16 +72,17 @@ Preservar FPS e margens P0.5; resolver erros reais de CI; P0.2/P0.4/P0.3/P0.6/P0
 - .15.19 `b04ad3f`/`391322c`/`bba6608`/`9044a40` bump `5fd8b56`: rios Y autoritativo nós/lagos endpoints, remove queda artificial0.5, ajusta só internos, testes segmento/lago/região. CI35116468021 success; risco seção elevada se vale abaixo saída, gameplay aberto.
 - .15.20 `a1d3fde` bump `754973c`: trace-limit64 inconclusivo não cacheia false nós internos, só destino/dead end comprovado; CI35116860460 success, rios gameplay aberto.
 - .15.21 `fcbafa8` bump `d4b5cc7`: Geometry remesh captura halo lighting como Lighting; CI35118558910 success.
-- .15.22 `685ab044`/`0edb5515`/`657804c6`/`ffd67c15` bump `fdbf3e8`: Terrain/Fluid não se suprimem nas filas, `enqueue_lighting_change(coord,&world)` inclui fluid center/vizinhos com `has_fluid()` O(1), Fluid também valida halo lighting. Testes filas/revisões; CI35119214356 falhou sintaxe OnceLock, corrigida .23.
+- .15.22 `685ab044`/`0edb5515`/`657804c6`/`ffd67c15` bump `fdbf3e8`: Terrain/Fluid não se suprimem nas filas, `enqueue_lighting_change(coord,&world)` inclui fluid center/vizinhos com `has_fluid()` O(1), Fluid também valida halo lighting. CI35119214356 falhou sintaxe OnceLock, corrigida .23.
 - .15.23 `93573d5` bump `eeaaacb2`: fecha `>` faltantes em OnceLock de block/fluid; CI35120838368 falhou dead-code da tentativa de sky mix, corrigido .24.
-- .15.24 `1d8d096`/`cb5222e` bump `3b5503e`: remove helper/mistura 35% sky+fog; `update_environment_visuals.after(track_current_biome)` impede bioma do frame anterior; ClearColor exatamente sky_color e teste Bevy App (compilado, não executado). CI35121054358 passou Clippy + Check; fog terminal continua sky e arte fog aberta.
-- **.15.25** `ec38346a97e0d238f184aa32ed0a7c768ef0e3e4` bump `87a27fe920a2d44405cb8eb02c4b4563c4f16d1b`: elimina Vec dos oito biomas vizinhos usando `[usize;8]`, remove Vec do fallback raw regional com count+nth, reutiliza um Vec ponderado ao fallback climático em vez de três vetores temporários. Mantém hash, critérios, pesos e ordem original; adiciona teste de reuso. **CI35122730177 em execução no último check, cargo test não rodado; melhoria de alocação não é ganho de FPS medido, biomas ainda não aferidos.**
+- .15.24 `1d8d096`/`cb5222e` bump `3b5503e`: remove helper/mistura 35% sky+fog; `update_environment_visuals.after(track_current_biome)` impede bioma do frame anterior; ClearColor exatamente sky_color e teste Bevy App (compilado, não executado). CI35121054358 passou Clippy + Check; fog terminal continua sky, arte fog aberta.
+- .15.25 `ec38346a97e0d238f184aa32ed0a7c768ef0e3e4` bump `87a27fe920a2d44405cb8eb02c4b4563c4f16d1b`: remove Vec oito vizinhos usando `[usize;8]`, remove Vec fallback raw com count+nth, reutiliza único Vec ponderado no fallback climático em vez de três vetores. Mantém hash/critérios/pesos/ordem, teste reuso. CI35122730177 em execução, `cargo test` não rodado, FPS/biomas não aferidos.
+- **.15.26** `d492c3685babc705d8a6e248a2e0a6ebf91decaa` bump `25b262065a9a3a995ddd2c6ab427ed0f3f660c55`: `DensityColumnProfile.water_bodies` usa `SmallVec<[VerticalDensityDelta; 4]>` no lugar de `Vec`. Corpo/ordem/strength, delta e margem NÃO mudam; colunas com ≤4 água não alocam; >4 fazem spill para heap sem perder corpos. Teste seis deltas acumulam -21 e preservam faixa vertical. CI35123049209 em execução; não declarar melhoria FPS medida nem gameplay corrigido.
 
 ## Subsistemas / investigação direcionada
 
 ### Streaming, FPS e iluminação
 
-Preload all-direction+2, corredor frontal+8; fog start~78% end~98% raio conforme readiness; histerese RD4=5/6 RD12=14/16 RD24=26/30; retention R+max(ceil(R/2),10): RD4=14 RD12=22 RD24=36. Geração/remesh async, integração por orçamento. `hydrology/region/density.rs` cria Vec<VerticalDensityDelta> por coluna e testa lagos carve+shore; otimizar só com evidência sem alterar geometria. Cloud mesh .10, lazy water .13, seed única .17 e biome .25 são ganhos localizados sem medição global; medir FPS parado/andando CPU worldgen/lighting/remesh vs GPU clouds.
+Preload all-direction+2, corredor frontal+8; fog start~78% end~98% raio conforme readiness; histerese RD4=5/6 RD12=14/16 RD24=26/30; retention R+max(ceil(R/2),10): RD4=14 RD12=22 RD24=36. Geração/remesh async, integração por orçamento. `hydrology/region/density.rs` antes .26 criava Vec<VerticalDensityDelta> por coluna úmida; agora SmallVec inline4 com spill, sem mudança geométrica. Cloud mesh .10, lazy water .13, seed única .17, biome .25 e hydrology .26 são otimizações localizadas sem medição global; medir FPS parado/andando CPU worldgen/lighting/remesh vs GPU clouds.
 
 Antes .17 `dispatch_initial_mesh_tasks` reseed a cada retry e `VoxelWorld::rebuild_chunk_light` apagava luz convergida. Seed única e unload remove marca. `lighting_updates.rs` 2ms/4096 voxels, remesh 2 tasks/frame, 4 inflight, 2 integrações. `ChunkMeshDependencies` inicial compara só conteúdo para time-to-visible; `VoxelWorld::chunk_mesh_revisions` inclui luz. .21 Geometry valida halo lighting e não pode sobrescrever Lighting mais nova; .22 separa fila Terrain/Fluid e refresca fluid apenas quando existe água, versionando halo. **Primeira mesh ainda pode publicar luz velha**, pois ChunkMeshTasks compara só conteúdo. Candidata: publicar primeira mesh rápido, depois relight se luz mudou desde captura (sem rejeitar primeira mesh ou reseed), avaliar custo. P0.2/FPS abertos.
 
@@ -105,10 +106,10 @@ Coast identidade usa continentalness raw, oceano físico macro5×5; material rej
 
 # Próxima execução
 
-1. Confirmar CI `.25` run35122730177; corrigir erros/warnings concretos. Não confundir Clippy/Check com cargo test/gameplay.
+1. Confirmar CI `.25` run35122730177 e `.26` run35123049209; corrigir erros/warnings concretos. Não confundir Clippy/Check com cargo test/gameplay.
 2. P0.2 primeira mesh vs iluminação revisada, relight posterior sem starvation e sem render duplo desnecessário; medir FPS/throughput Fluid .22.
 3. P0.4 teste end-to-end seed/coords e água física entre regiões, lake/confluence/ocean outlet; preservar margens .12 e correções .15/.16/.19/.20.
-4. P0.3 tunnel walls .14; P0.6 medir seleção final efetiva vs aparência, investigar distribuição e mount belt sem mudanças cegas.
+4. P0.3 tunnel walls .14; P0.6 medir seleção final efetiva vs aparência, investigar distribuição/mountain belt sem mudanças cegas.
 5. P0.7 sky runtime após .24, transição fog artística sem costura/HDR; R/viewmodel .18 e FPS gameplay.
 
 Todo novo bloco de código sobe `VERSION` e atualiza HANDOFF na mesma sessão.
