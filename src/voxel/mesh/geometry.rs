@@ -16,6 +16,7 @@ pub(super) fn is_face_exposed<W: VoxelRead + ?Sized>(
     world: &W,
     blocks: &BlockRegistry,
     block_id: &str,
+    block_is_transparent: bool,
     world_voxel: IVec3,
     face: BlockFace,
 ) -> bool {
@@ -27,20 +28,21 @@ pub(super) fn is_face_exposed<W: VoxelRead + ?Sized>(
     let Some(neighbor_id) = world.block_id_at(neighbor_position) else {
         return true;
     };
-    let block = blocks
-        .get(block_id)
-        .unwrap_or_else(|| panic!("missing block definition: {block_id}"));
     let neighbor = blocks
         .get(neighbor_id)
         .unwrap_or_else(|| panic!("missing block definition: {neighbor_id}"));
-    let block_is_transparent = block.alpha_blend || block.alpha_cutoff.is_some();
     let neighbor_occludes = !neighbor.alpha_blend && neighbor.alpha_cutoff.is_none();
 
-    if block_id == neighbor_id && block_is_transparent {
-        return false;
-    }
+    !face_is_occluded(block_id, neighbor_id, block_is_transparent, neighbor_occludes)
+}
 
-    !neighbor_occludes
+fn face_is_occluded(
+    block_id: &str,
+    neighbor_id: &str,
+    block_is_transparent: bool,
+    neighbor_occludes: bool,
+) -> bool {
+    (block_id == neighbor_id && block_is_transparent) || neighbor_occludes
 }
 
 pub(super) fn face_geometry(
@@ -79,4 +81,18 @@ pub(super) fn orient_face_geometry(
     });
     geometry.normal = orient_vector(Vec3::from_array(geometry.normal), orientation).to_array();
     geometry
+}
+
+#[cfg(test)]
+mod tests {
+    use super::face_is_occluded;
+
+    #[test]
+    fn face_occlusion_preserves_opaque_and_transparent_neighbor_rules() {
+        assert!(face_is_occluded("stone", "dirt", false, true));
+        assert!(face_is_occluded("glass", "glass", true, false));
+        assert!(!face_is_occluded("glass", "other_glass", true, false));
+        assert!(!face_is_occluded("stone", "glass", false, false));
+        assert!(face_is_occluded("glass", "stone", true, true));
+    }
 }
