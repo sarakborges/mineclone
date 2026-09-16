@@ -93,7 +93,7 @@ pub(super) struct InventoryRebuildView<'w, 's> {
         ),
         With<CreativeCatalogScrollArea>,
     >,
-    search_text: Query<'w, 's, &'static mut Text, With<CreativeSearchText>>,
+    search_text: Query<'w, 's, &'static mut Visibility, With<CreativeSearchText>>,
 }
 
 pub(super) type InventoryTrashButtonQuery<'w, 's> = Query<
@@ -104,7 +104,11 @@ pub(super) type InventoryTrashButtonQuery<'w, 's> = Query<
         &'static mut BackgroundColor,
         &'static mut BorderColor,
     ),
-    (With<Button>, With<InventoryTrashButton>, Changed<Interaction>),
+    (
+        With<Button>,
+        With<InventoryTrashButton>,
+        Changed<Interaction>,
+    ),
 >;
 
 pub(super) fn spawn_inventory(
@@ -241,16 +245,16 @@ pub(super) fn rebuild_inventory_when_changed(
         return;
     }
 
-    let next_search_text = if inputs.panel.creative_view.search_query().is_empty() {
-        inputs
-            .localization
-            .text(content.language.get(), "inventory.searchPlaceholder")
+    let show_placeholder = inputs.panel.creative_view.search_query().is_empty()
+        && !inputs.panel.creative_view.search_focused();
+    let next_visibility = if show_placeholder {
+        Visibility::Inherited
     } else {
-        inputs.panel.creative_view.search_query()
+        Visibility::Hidden
     };
-    for mut text in &mut view.search_text {
-        if text.0 != next_search_text {
-            text.0 = next_search_text.to_owned();
+    for mut visibility in &mut view.search_text {
+        if *visibility != next_visibility {
+            *visibility = next_visibility;
         }
     }
 

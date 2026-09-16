@@ -1,4 +1,5 @@
 mod block_icon;
+pub(crate) mod chat;
 mod crosshair;
 mod fps;
 mod hotbar;
@@ -16,6 +17,7 @@ use bevy::{
     ui::IsDefaultUiCamera,
 };
 use block_icon::BlockIconMaterial;
+use chat::ChatHudPlugin;
 use crosshair::CrosshairPlugin;
 use fps::FpsHudPlugin;
 use hotbar::HotbarHudPlugin;
@@ -82,6 +84,7 @@ impl Plugin for HudPlugin {
                 HotbarHudPlugin,
                 InventoryHudPlugin,
                 PlayerHudPlugin,
+                ChatHudPlugin,
                 TimeHudPlugin,
                 FpsHudPlugin,
                 WorldHudPlugin,

@@ -5,6 +5,7 @@ use crate::{
         game_state::GameState, pause_state::PauseState, resource_systems::reset_resource,
         state_systems::reset_next_state,
     },
+    hud::chat::ChatState,
     tools::BrushPaletteState,
 };
 
@@ -71,8 +72,12 @@ impl Plugin for PlayerInventoryPlugin {
 fn toggle_inventory(
     keys: Res<ButtonInput<KeyCode>>,
     inventory_state: Res<State<InventoryState>>,
+    chat: Res<ChatState>,
     mut next_inventory_state: ResMut<NextState<InventoryState>>,
 ) {
+    if chat.is_open() {
+        return;
+    }
     match inventory_state.get() {
         InventoryState::Closed if keys.just_pressed(KeyCode::KeyE) => {
             next_inventory_state.set(InventoryState::Open);

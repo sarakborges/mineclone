@@ -1,11 +1,8 @@
 use std::{collections::HashMap, time::Duration};
 
 use bevy::{
-    animation::RepeatAnimation,
-    asset::AssetId,
-    gltf::GltfMaterialName,
-    prelude::*,
-    world_serialization::WorldInstanceReady,
+    animation::RepeatAnimation, asset::AssetId, ecs::system::SystemParam, gltf::GltfMaterialName,
+    prelude::*, world_serialization::WorldInstanceReady,
 };
 
 use crate::content::{color::Hsi, creature::CreatureRegistry};
@@ -17,7 +14,7 @@ use super::CreatureInstance;
 pub(super) struct CreatureModel(pub Handle<Gltf>);
 
 #[derive(Component)]
-struct VisualAttached;
+pub(super) struct VisualAttached;
 
 #[derive(Component)]
 struct CreatureAppearance {
@@ -28,7 +25,7 @@ struct CreatureAppearance {
 }
 
 #[derive(Component)]
-struct CreatureAnimationLink {
+pub(super) struct CreatureAnimationLink {
     owner: Entity,
     nodes: HashMap<String, AnimationNodeIndex>,
     current_state: String,
@@ -63,7 +60,10 @@ pub(super) fn attach_loaded_models(
             continue;
         };
         let Some(scene) = gltf.default_scene.clone() else {
-            warn!("creature {} model {} has no default scene", definition.id, definition.model);
+            warn!(
+                "creature {} model {} has no default scene",
+                definition.id, definition.model
+            );
             commands.entity(root).insert(VisualAttached);
             continue;
         };
@@ -77,30 +77,45 @@ pub(super) fn attach_loaded_models(
                 states.push(state.clone());
                 clips.push(clip.clone());
             } else {
-                warn!("creature {} missing animation {clip_name} ({state}) in {}",
-                    definition.id, definition.model);
+                warn!(
+                    "creature {} missing animation {clip_name} ({state}) in {}",
+                    definition.id, definition.model
+                );
             }
         }
         let (graph, nodes) = if clips.is_empty() {
             (None, HashMap::new())
         } else {
             let (graph, indexes) = AnimationGraph::from_clips(clips);
-            (Some(graphs.add(graph)), states.into_iter().zip(indexes).collect())
+            (
+                Some(graphs.add(graph)),
+                states.into_iter().zip(indexes).collect(),
+            )
         };
         let tints = definition.material_tints.clone();
-        commands.entity(root).insert((VisualAttached, CreatureAnimationState("idle".to_owned())));
+        commands
+            .entity(root)
+            .insert((VisualAttached, CreatureAnimationState("idle".to_owned())));
         commands.entity(root).with_children(|parent| {
-            parent.spawn((
-                WorldAssetRoot(scene),
-                CreatureAppearance {
-                    owner: root,
-                    material_tints: tints,
-                    graph,
-                    nodes,
-                },
-            )).observe(configure_loaded_scene);
+            parent
+                .spawn((
+                    WorldAssetRoot(scene),
+                    CreatureAppearance {
+                        owner: root,
+                        material_tints: tints,
+                        graph,
+                        nodes,
+                    },
+                ))
+                .observe(configure_loaded_scene);
         });
     }
+}
+
+#[derive(SystemParam)]
+struct CreatureTintAssets<'w> {
+    materials: ResMut<'w, Assets<StandardMaterial>>,
+    cache: ResMut<'w, TintedCreatureMaterials>,
 }
 
 fn configure_loaded_scene(
@@ -110,8 +125,7 @@ fn configure_loaded_scene(
     appearances: Query<&CreatureAppearance>,
     mesh_materials: Query<(&MeshMaterial3d<StandardMaterial>, &GltfMaterialName)>,
     mut players: Query<(Entity, &mut AnimationPlayer)>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut tint_cache: ResMut<TintedCreatureMaterials>,
+    mut tint_assets: CreatureTintAssets,
 ) {
     let Ok(appearance) = appearances.get(ready.entity) else {
         return;
@@ -122,16 +136,20 @@ fn configure_loaded_scene(
         {
             let rgb = tint.to_srgb();
             let cache_key = (original.id(), rgb.map(f32::to_bits));
-            let replacement = if let Some(existing) = tint_cache.0.get(&cache_key) {
+            let replacement = if let Some(existing) = tint_assets.cache.0.get(&cache_key) {
                 Some(existing.clone())
             } else {
-                materials.get(original.id()).cloned().map(|mut material| {
-                    let alpha = material.base_color.to_srgba().alpha;
-                    material.base_color = Color::srgba(rgb[0], rgb[1], rgb[2], alpha);
-                    let handle = materials.add(material);
-                    tint_cache.0.insert(cache_key, handle.clone());
-                    handle
-                })
+                tint_assets
+                    .materials
+                    .get(original.id())
+                    .cloned()
+                    .map(|mut material| {
+                        let alpha = material.base_color.to_srgba().alpha;
+                        material.base_color = Color::srgba(rgb[0], rgb[1], rgb[2], alpha);
+                        let handle = tint_assets.materials.add(material);
+                        tint_assets.cache.0.insert(cache_key, handle.clone());
+                        handle
+                    })
             };
             if let Some(material) = replacement {
                 commands.entity(descendant).insert(MeshMaterial3d(material));
@@ -144,7 +162,9 @@ fn configure_loaded_scene(
             let mut transitions = AnimationTransitions::new();
             let initial = appearance.nodes.get("idle").copied();
             if let Some(index) = initial {
-                transitions.play(&mut player, index, Duration::ZERO).repeat();
+                transitions
+                    .play(&mut player, index, Duration::ZERO)
+                    .repeat();
             }
             commands.entity(player_entity).insert((
                 AnimationGraphHandle(graph.clone()),
@@ -161,7 +181,11 @@ fn configure_loaded_scene(
 
 pub(super) fn sync_creature_animations(
     states: Query<&CreatureAnimationState, With<CreatureInstance>>,
-    mut players: Query<(&mut AnimationPlayer, &mut AnimationTransitions, &mut CreatureAnimationLink)>,
+    mut players: Query<(
+        &mut AnimationPlayer,
+        &mut AnimationTransitions,
+        &mut CreatureAnimationLink,
+    )>,
 ) {
     for (mut player, mut transitions, mut link) in &mut players {
         let Ok(state) = states.get(link.owner) else {
