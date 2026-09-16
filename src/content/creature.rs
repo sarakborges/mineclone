@@ -3,6 +3,8 @@ use std::path::{Component, Path};
 use bevy::prelude::*;
 use serde::Deserialize;
 
+use crate::localization::LocalizedText;
+
 use super::{color::Hsi, registry::DefinitionMap};
 
 /// One reusable model can be referenced by any number of creature definitions.
@@ -11,6 +13,7 @@ use super::{color::Hsi, registry::DefinitionMap};
 #[serde(rename_all = "camelCase")]
 pub struct CreatureDefinition {
     pub id: String,
+    pub name: LocalizedText,
     pub model: String,
     pub collider: CreatureCollider,
     #[serde(default)]
@@ -68,6 +71,7 @@ pub struct CreatureRegistry {
 impl CreatureRegistry {
     pub fn insert(&mut self, definition: CreatureDefinition) {
         assert!(!definition.id.trim().is_empty(), "creature id cannot be empty");
+        definition.name.validate(&format!("creature {} name", definition.id));
         assert!(valid_creature_model_path(&definition.model),
             "creature {} model must be a safe relative .glb/.gltf path under assets/models/creatures/: {}",
             definition.id, definition.model);
