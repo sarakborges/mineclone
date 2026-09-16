@@ -30,12 +30,6 @@ pub(crate) enum ChunkRemeshTaskKind {
     Fluid,
 }
 
-impl ChunkRemeshTaskKind {
-    fn rebuilds_terrain(self) -> bool {
-        matches!(self, Self::Geometry | Self::Lighting)
-    }
-}
-
 pub(crate) enum ChunkRemeshTaskMeshes {
     Geometry(Vec<BuiltChunkMesh>),
     Fluid(Vec<ChunkFluidMesh>),
@@ -83,33 +77,25 @@ impl LightingRemeshDependencies {
 
 pub(crate) struct ChunkRemeshDependencies {
     content: ChunkMeshDependencies,
-    lighting: Option<LightingRemeshDependencies>,
+    lighting: LightingRemeshDependencies,
 }
 
 impl ChunkRemeshDependencies {
     fn capture(
-        kind: ChunkRemeshTaskKind,
         center: IVec3,
         world: &ChunkMeshSnapshot,
         revisions: &SharedLightingRevisions,
     ) -> Self {
         Self {
             content: world.dependencies(),
-            // Geometry and lighting tasks produce the same light-baked terrain
-            // mesh. A geometry result must not overwrite newer propagated light.
-            // Fluid-only work does not require this additional dependency.
-            lighting: kind
-                .rebuilds_terrain()
-                .then(|| LightingRemeshDependencies::capture(center, revisions)),
+            // Both terrain and fluid meshes bake light from the captured chunk
+            // and its halo. Neither may overwrite a newer lighting result.
+            lighting: LightingRemeshDependencies::capture(center, revisions),
         }
     }
 
     pub(crate) fn is_current(&self, world: &VoxelWorld) -> bool {
-        self.content.is_current(world)
-            && self
-                .lighting
-                .as_ref()
-                .is_none_or(LightingRemeshDependencies::is_current)
+        self.content.is_current(world) && self.lighting.is_current()
     }
 }
 
@@ -203,7 +189,6 @@ impl ChunkRemeshTasks {
             .clone();
         let revision = self.revision;
         let dependencies = ChunkRemeshDependencies::capture(
-            kind,
             coord,
             &world,
             &self.lighting_revisions,
@@ -257,37 +242,20 @@ mod tests {
     }
 
     #[test]
-    fn geometry_and_lighting_remeshes_reject_stale_light_but_fluid_does_not() {
+    fn all_remesh_outputs_reject_stale_lighting_in_the_halo() {
         let center = IVec3::new(3, 2, 5);
         let mut world = VoxelWorld::default();
         world.insert_chunk(center, VoxelChunk::empty());
         let snapshot = ChunkMeshSnapshot::capture(&world, center).unwrap();
         let mut tasks = ChunkRemeshTasks::default();
-        let geometry = ChunkRemeshDependencies::capture(
-            ChunkRemeshTaskKind::Geometry,
-            center,
-            &snapshot,
-            &tasks.lighting_revisions,
-        );
-        let lighting = ChunkRemeshDependencies::capture(
-            ChunkRemeshTaskKind::Lighting,
-            center,
-            &snapshot,
-            &tasks.lighting_revisions,
-        );
-        let fluid = ChunkRemeshDependencies::capture(
-            ChunkRemeshTaskKind::Fluid,
+        let dependencies = ChunkRemeshDependencies::capture(
             center,
             &snapshot,
             &tasks.lighting_revisions,
         );
 
-        assert!(geometry.is_current(&world));
-        assert!(lighting.is_current(&world));
-        assert!(fluid.is_current(&world));
+        assert!(dependencies.is_current(&world));
         tasks.bump_lighting_revisions([center + IVec3::X]);
-        assert!(!geometry.is_current(&world));
-        assert!(!lighting.is_current(&world));
-        assert!(fluid.is_current(&world));
+        assert!(!dependencies.is_current(&world));
     }
 }
