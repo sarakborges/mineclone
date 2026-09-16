@@ -9,6 +9,7 @@ pub(crate) mod chunk_rendering;
 pub(crate) mod chunk_system_params;
 mod chunk_task_queue;
 mod chunk_unloading;
+mod chunk_visibility;
 pub(crate) mod current_context;
 pub(crate) mod day_night;
 mod density_sampling;
@@ -52,6 +53,7 @@ use chunk_remesh::{
 use chunk_remesh_tasks::ChunkRemeshTasks;
 use chunk_rendering::{ChunkRenderPool, clear_chunk_render_pool};
 use chunk_unloading::{ChunkUnloadState, unload_chunk_meshes};
+use chunk_visibility::sync_chunk_visibility;
 use day_night::DayNightPlugin;
 use dimension::CurrentDimension;
 use fluid_updates::{PendingFluidUpdates, process_fluid_updates};
@@ -148,6 +150,7 @@ impl Plugin for WorldPlugin {
                     process_fluid_updates.run_if(world_ticks_advanced),
                     process_dynamic_lighting.run_if(pending_lighting_work),
                     process_chunk_remesh_queue,
+                    sync_chunk_visibility,
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),

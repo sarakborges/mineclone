@@ -22,6 +22,9 @@ pub(crate) use refresh::{
 };
 pub(crate) use spawn::{BuiltChunkMesh, build_chunk_render_meshes, spawn_built_chunk_meshes};
 
+#[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ChunkRenderCoord(pub(crate) IVec3);
+
 pub(crate) struct ChunkMeshBuildContext<'a, W: VoxelRead + ?Sized> {
     pub(crate) world: &'a W,
     pub(crate) blocks: &'a BlockRegistry,

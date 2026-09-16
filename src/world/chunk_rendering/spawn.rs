@@ -13,7 +13,7 @@ use crate::{
 };
 
 use super::{
-    ChunkMeshBuildContext, ChunkRenderContext,
+    ChunkMeshBuildContext, ChunkRenderContext, ChunkRenderCoord,
     pool::{ChunkMeshKey, ChunkRenderAllocation, ChunkRenderPool},
 };
 
@@ -167,6 +167,7 @@ pub(crate) fn spawn_built_chunk_meshes(
                 let (spawned_entities, mesh_handle) = spawn_terrain_mesh(
                     commands,
                     meshes,
+                    coord,
                     transform,
                     key,
                     face_mesh.mesh,
@@ -184,6 +185,7 @@ pub(crate) fn spawn_built_chunk_meshes(
                 let (entity, mesh_handle) = spawn_fluid_mesh(
                     commands,
                     meshes,
+                    coord,
                     transform,
                     fluid_mesh.fluid_id,
                     fluid_mesh.mesh,
@@ -230,7 +232,7 @@ pub(super) fn spawn_terrain_meshes_into_existing_allocation(
 
     for (key, mesh) in replacement_keys.iter().copied().zip(replacements) {
         let (spawned_entities, mesh_handle) =
-            spawn_terrain_mesh(commands, meshes, transform, key, mesh, context);
+            spawn_terrain_mesh(commands, meshes, coord, transform, key, mesh, context);
         entities.extend(spawned_entities);
         mesh_handles.push(mesh_handle);
     }
@@ -260,7 +262,7 @@ pub(super) fn spawn_fluid_meshes_into_existing_allocation(
 
     for (fluid_id, mesh) in replacements {
         let (entity, mesh_handle) =
-            spawn_fluid_mesh(commands, meshes, transform, fluid_id, mesh, context);
+            spawn_fluid_mesh(commands, meshes, coord, transform, fluid_id, mesh, context);
         entities.push(entity);
         mesh_handles.push(mesh_handle);
         fluid_ids.push(fluid_id);
@@ -278,6 +280,7 @@ pub(super) fn spawn_fluid_meshes_into_existing_allocation(
 fn spawn_terrain_mesh(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
+    coord: IVec3,
     transform: Transform,
     key: ChunkMeshKey,
     mesh: Mesh,
@@ -301,6 +304,8 @@ fn spawn_terrain_mesh(
             Mesh3d(mesh_handle.clone()),
             MeshMaterial3d(material.clone()),
             transform,
+            ChunkRenderCoord(coord),
+            Visibility::Hidden,
             DespawnOnExit(GameState::Gameplay),
         ));
 
@@ -317,6 +322,7 @@ fn spawn_terrain_mesh(
 fn spawn_fluid_mesh(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
+    coord: IVec3,
     transform: Transform,
     fluid_id: FluidId,
     mesh: Mesh,
@@ -328,6 +334,8 @@ fn spawn_fluid_mesh(
             Mesh3d(mesh_handle.clone()),
             MeshMaterial3d(context.fluid_materials.get(fluid_id).clone()),
             transform,
+            ChunkRenderCoord(coord),
+            Visibility::Hidden,
             NotShadowCaster,
             DespawnOnExit(GameState::Gameplay),
         ))
