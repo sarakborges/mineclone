@@ -61,8 +61,8 @@ impl HydrologyRegion {
         position: Vec2,
         surface_height: Option<f32>,
     ) -> Option<HydrologyRiverSurfaceSample> {
-        let river = self.river_water_with_margin(position, 0.0)?;
-        bed_has_support(surface_height, river.bed_level).then_some(HydrologyRiverSurfaceSample {
+        let river = self.river_water_with_margin(position, 0.0, surface_height)?;
+        Some(HydrologyRiverSurfaceSample {
             water_level: river.water_level,
             strength: river.strength,
         })
@@ -72,11 +72,24 @@ impl HydrologyRegion {
         &self,
         position: Vec2,
         margin: f32,
+        surface_height: Option<f32>,
     ) -> Option<HydrologyWaterSample<'_>> {
-        let river = self
-            .river_graph
-            .sample_horizontal_with_margin(position, margin)
-            .filter(|river| river.strength > SHORE_STRENGTH)?;
+        // An unsupported higher/stronger edge cannot hide another supported
+        // edge at a crossing. Filter each graph candidate before ranking.
+        let river = self.river_graph.sample_horizontal_filtered(
+            position,
+            margin,
+            1.0,
+            |river| {
+                river.strength > SHORE_STRENGTH
+                    && bed_has_support(
+                        surface_height,
+                        river.height
+                            - self.river_carve_depth
+                                * river_channel_profile(river.normalized_distance),
+                    )
+            },
+        )?;
         // The margin only discovers nearby channels: it must not inflate the
         // physical river bed, which shares its profile with density carving.
         let profile = river_channel_profile(river.normalized_distance);
@@ -117,7 +130,7 @@ impl HydrologyRegion {
             );
         }
 
-        if let Some(river) = self.river_water_with_margin(position, margin) {
+        if let Some(river) = self.river_water_with_margin(position, margin, surface_height) {
             choose_water(&mut selected, river, surface_height);
         }
 
@@ -239,6 +252,52 @@ mod tests {
         assert!(bed_has_support(Some(79.5), 80.0));
         assert!(!bed_has_support(Some(79.0), 80.0));
         assert!(bed_has_support(None, 100.0));
+    }
+
+    #[test]
+    fn overlapping_river_edges_choose_supported_physical_water_and_carving() {
+        for high_first in [true, false] {
+            let mut graph = FeatureGraph::default();
+            let high_from = graph.add_node(Vec3::new(0.0, 100.0, 0.0));
+            let high_to = graph.add_node(Vec3::new(20.0, 100.0, 0.0));
+            let low_from = graph.add_node(Vec3::new(0.0, 86.0, 3.0));
+            let low_to = graph.add_node(Vec3::new(20.0, 86.0, 3.0));
+            if high_first {
+                graph.add_edge(high_from, high_to, 10.0, 10.0);
+                graph.add_edge(low_from, low_to, 10.0, 10.0);
+            } else {
+                graph.add_edge(low_from, low_to, 10.0, 10.0);
+                graph.add_edge(high_from, high_to, 10.0, 10.0);
+            }
+            let region = HydrologyRegion {
+                coord: IVec2::ZERO,
+                river_graph: graph,
+                river_carve_depth: 7.0,
+                water_bodies: Vec::new(),
+                sea_level: 64.0,
+                settings: Default::default(),
+                ocean_weight: 0.0,
+                macro_samples: Vec::new(),
+            };
+            let position = Vec2::new(10.0, 0.0);
+            let original_surface = 85.0;
+            assert_eq!(region.water_at(position).unwrap().water_level, 100.0);
+            assert_eq!(region.river_surface_at(position).unwrap().water_level, 100.0);
+
+            let supported = region.supported_water_at(position, original_surface).unwrap();
+            assert_eq!(supported.kind, HydrologyWaterKind::River);
+            assert_eq!(supported.water_level, 86.0);
+            assert!(supported.bed_level <= original_surface + 0.5);
+            assert_eq!(
+                region.supported_river_surface_at(position, original_surface)
+                    .unwrap()
+                    .water_level,
+                86.0
+            );
+            assert!(region.density_deltas_for_column::<1>(position, 85.0, original_surface)[0] < 0.0);
+            assert!(region.supported_water_at(position, 60.0).is_none());
+            assert_eq!(region.density_deltas_for_column::<1>(position, 85.0, 60.0), [0.0]);
+        }
     }
 
     #[test]
