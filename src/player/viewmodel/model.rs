@@ -1,6 +1,8 @@
 use bevy::{
-    camera::visibility::RenderLayers, ecs::system::SystemParam, light::NotShadowCaster, prelude::*,
-    ui::IsDefaultUiCamera,
+    camera::{Hdr, visibility::RenderLayers},
+    ecs::system::SystemParam,
+    light::NotShadowCaster,
+    prelude::*,
 };
 
 use crate::{
@@ -13,6 +15,7 @@ use crate::{
         },
         block_model_material::BlockModelMaterial,
         block_visual_content::BlockVisualContent,
+        camera_stack::VIEW_MODEL_CAMERA_ORDER,
     },
     targeting::PlacementOrientation,
     voxel::{block_face::BlockFace, orientation::orientation_rotation},
@@ -154,13 +157,13 @@ pub(super) fn spawn_viewmodel(
             camera.spawn((
                 Camera3d::default(),
                 Camera {
-                    order: 1,
+                    order: VIEW_MODEL_CAMERA_ORDER,
                     clear_color: ClearColorConfig::None,
                     ..default()
                 },
+                Hdr,
                 Msaa::Off,
                 RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
-                IsDefaultUiCamera,
             ));
 
             camera

@@ -7,10 +7,15 @@ pub(crate) mod player_id;
 pub(crate) mod save;
 pub(crate) mod viewmodel;
 
-use bevy::prelude::*;
+use bevy::{
+    camera::{CameraOutputMode, Hdr},
+    core_pipeline::tonemapping::Tonemapping,
+    prelude::*,
+};
 
 use crate::{
     app::game_state::GameState,
+    rendering::camera_stack::WORLD_CAMERA_ORDER,
     voxel::{spatial_search::find_map_square_rings, world::VoxelWorld},
 };
 use camera::GameplayCamera;
@@ -33,7 +38,13 @@ pub(crate) fn spawn_player_entity(
 ) {
     commands.spawn((
         Camera3d::default(),
-        Camera::default(),
+        Camera {
+            order: WORLD_CAMERA_ORDER,
+            output_mode: CameraOutputMode::Skip,
+            ..default()
+        },
+        Hdr,
+        Tonemapping::None,
         Msaa::Off,
         Transform::from_translation(translation),
         GameplayCamera::default(),

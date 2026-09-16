@@ -6,6 +6,7 @@ pub(crate) mod block_model_material;
 pub(crate) mod block_texture;
 pub(crate) mod block_tint;
 pub(crate) mod block_visual_content;
+pub(crate) mod camera_stack;
 mod celestial;
 mod celestial_path;
 pub(crate) mod color;
