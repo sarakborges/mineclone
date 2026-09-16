@@ -62,11 +62,9 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 
 # Estado atual
 
-Último HEAD de código publicado: `573898d824ae5e71d4b70e6a07eb97df0e2e76d8`  
-Bloco: `Reuse biome field terrain metadata in surface sampling`  
-`VERSION = 0.14.52`
-
-Último commit documental antes deste update: `f1eee699f81a0cb065a654e20dbb736b6308ed26`.
+Último HEAD de código publicado: `b28b3c20445c005f72ad9bad8cb8c507667900c8`  
+Bloco: `Fix bootstrap terrain sampling call`  
+`VERSION = 0.14.53`
 
 ## Commits recentes relevantes
 
@@ -81,20 +79,22 @@ Bloco: `Reuse biome field terrain metadata in surface sampling`
 - `86d5f4b` / `181ccb8` — 0.14.46–47, `BiomeInfluence.surface_index` e correção de consumers.
 - `dd12f2e` — 0.14.48, content registries usam Bevy hash maps.
 - `84dfbe2` — 0.14.49, worldgen caches usam Bevy hash collections.
-- `b2afe45` — 0.14.50, mesh buffer map usa Bevy hash map com output ainda explicitamente ordenado.
+- `b2afe45` — 0.14.50, mesh buffer map usa Bevy hash map com output explicitamente ordenado.
 - `cbce686` — 0.14.51, Rust CI ignora commits exclusivamente de `HANDOFF.md`.
-- `573898d` — 0.14.52, `BiomeFieldEntry` carrega terrain/modifiers e reutiliza o seed já derivado; `surface_height_from_sample` resolve por `surface_index`, removendo lookup textual e hash/mix por influência sem alterar a matemática do noise.
+- `573898d` — 0.14.52, `BiomeFieldEntry` carrega terrain/modifiers e reutiliza seed derivado; `surface_height_from_sample` resolve por `surface_index`, removendo lookup textual e hash/mix por influência sem alterar a matemática do noise.
+- `b28b3c2` — 0.14.53, corrige o único consumer esquecido da nova assinatura de `surface_height_from_sample` no bootstrap; nenhuma lógica adicional muda.
 
 ## CI recente
 
 - 0.14.40–0.14.43: green.
-- 0.14.44: falhou apenas por `clippy::useless_vec` no teste; corrigido em 0.14.45.
+- 0.14.44: falhou por `clippy::useless_vec`; corrigido em 0.14.45.
 - 0.14.45: green.
 - 0.14.46: falhou por consumers esquecidos de `surface_index`; corrigido em 0.14.47.
 - 0.14.47–0.14.51: Clippy + `cargo check` green.
 - 0.14.51 / run `35041238324`: **success**.
-- 0.14.52 / run `35042143508`: **queued/pending** neste update.
-- Confirmado: o commit handoff-only após 0.14.51 não abriu Rust CI.
+- 0.14.52 / run `35042143508`: **failure**; `setup/bootstrap.rs` ainda chamava `surface_height_from_sample` com a assinatura antiga.
+- 0.14.53 / run `35042627256`: **queued/pending** neste update.
+- Confirmado: commits handoff-only após 0.14.51 não abrem Rust CI.
 
 ---
 
@@ -142,16 +142,18 @@ Bloco: `Reuse biome field terrain metadata in surface sampling`
 - `surface_cache` já calcula só misses com cinco probes conservadores e pruning raro.
 - `GenerationSnapshot` só reconstrói quando inputs autoritativos mudam; `WorldFeatureFields` compartilha caches por `Arc`.
 - Expansão eager de 4096 lighting seeds continua custo real, mas qualquer alternativa precisa preservar FIFO + dedup global + priority promotion exatamente; sem esse invariant, permanece bloqueada.
+- `seed_chunk_direct_lighting` ainda varre chunks superiores não vazios para reconstruir direct sky na main thread. Não há metadata autoritativa de atenuação vertical por coluna que sobreviva corretamente a edits; só transformar isso em cache com owner/invalidation explícitos e profiling que justifique a complexidade.
 
 ---
 
 # Roadmap restante
 
-1. **0.14.53 — hydrology primary metadata**: manter `BiomeFieldSample.primary_id` para compatibilidade, adicionar `primary_surface_index`, carregar `BiomeHydrology` no `BiomeFieldEntry` e usar accessor por índice no macro hydrology. Objetivo: remover `BiomeRegistry::get(surface.primary_id)` sem duplicar autoridade mutável.
-2. Validar CI de 0.14.53.
-3. Fazer auditoria global final dos hot paths. Sem alvo sustentado por evidência/invariant, encerrar este roadmap de refactor.
-4. Lighting seed expansion só volta se surgir representação semanticamente equivalente à fila atual.
-5. Divergência `VERSION` vs `Cargo.toml` continua intencional até mudança explícita de política.
+1. Aguardar CI de 0.14.53 (`35042627256`).
+2. **0.14.54 — hydrology primary metadata**: manter `BiomeFieldSample.primary_id`, adicionar `primary_surface_index`, carregar `BiomeHydrology` no `BiomeFieldEntry` e usar accessor por índice no macro hydrology recorrente de geração. O lookup equivalente no bootstrap é one-shot e fica fora deste hot-path patch.
+3. Validar CI de 0.14.54.
+4. Fazer auditoria global final dos hot paths. Sem alvo sustentado por evidência/invariant, encerrar este roadmap de refactor.
+5. Lighting seed expansion só volta se surgir representação semanticamente equivalente à fila atual.
+6. Divergência `VERSION` vs `Cargo.toml` continua intencional até mudança explícita de política.
 
 # Bugs/produto fora do refactor atual
 
