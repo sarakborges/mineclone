@@ -1,15 +1,17 @@
+mod motion;
 mod visual;
 
 use bevy::prelude::*;
 
 use crate::{
-    app::game_state::GameState,
+    app::{game_state::GameState, pause_state::PauseState},
     content::creature::{CreatureCollider, CreatureRegistry},
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera, find_safe_spawn_position},
     voxel::world::VoxelWorld,
 };
 
-use visual::{CreatureModel, attach_loaded_models};
+use motion::{CreatureMotion, move_creatures};
+use visual::{CreatureModel, attach_loaded_models, sync_creature_animations};
 
 /// The entity root owns position and collision; only its visual child is animated.
 #[derive(Component)]
@@ -26,6 +28,16 @@ impl Plugin for CreaturesPlugin {
             .add_systems(
                 Update,
                 attach_loaded_models.run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                Update,
+                move_creatures
+                    .run_if(in_state(GameState::Gameplay))
+                    .run_if(in_state(PauseState::Running)),
+            )
+            .add_systems(
+                PostUpdate,
+                sync_creature_animations.run_if(in_state(GameState::Gameplay)),
             );
     }
 }
@@ -66,8 +78,10 @@ fn spawn_preview_creatures(
             Name::new(format!("Creature: {}", definition.id)),
             CreatureInstance { definition_id: definition.id.clone() },
             CreatureModel(asset_server.load(definition.model.clone())),
+            CreatureMotion::default(),
             collider,
             Transform::from_translation(feet),
+            Visibility::default(),
             DespawnOnExit(GameState::Gameplay),
         ));
     }
