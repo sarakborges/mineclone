@@ -99,9 +99,9 @@ impl WorldFeatureFields {
     ) -> Arc<GenerationRegion> {
         self.caches.generation_region(coord, || {
             let hydrology_coord = coord.xz();
-            let hydrology = self.caches.hydrology_region(hydrology_coord, || {
-                hydrology_factory(&self.hydrology)
-            });
+            let hydrology = self
+                .caches
+                .hydrology_region(hydrology_coord, || hydrology_factory(&self.hydrology));
 
             GenerationRegion { coord, hydrology }
         })
@@ -112,10 +112,7 @@ impl WorldFeatureFields {
             .generation_region_prerequisites_initialized(coord)
     }
 
-    pub(crate) fn retain_for_chunks<'a>(
-        &self,
-        desired: impl IntoIterator<Item = &'a IVec3>,
-    ) {
+    pub(crate) fn retain_for_chunks<'a>(&self, desired: impl IntoIterator<Item = &'a IVec3>) {
         self.caches.retain_for_chunks(desired);
     }
 
@@ -153,10 +150,7 @@ impl WorldFeatureFields {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        voxel::chunk::CHUNK_SIZE,
-        world::generation_region::generation_region_coord,
-    };
+    use crate::{voxel::chunk::CHUNK_SIZE, world::generation_region::generation_region_coord};
 
     fn test_fields() -> WorldFeatureFields {
         WorldFeatureFields::new(42, 64, DimensionHydrology::default(), 1.0, 1.0)

@@ -8,9 +8,7 @@ use crate::world::{deterministic::sorted_unique_vec3s, feature_graph::FeatureGra
 
 use self::{
     lake::{UndergroundLake, lake_for_anchor},
-    river::{
-        UndergroundWaterfall, add_river_segment, connection_carries_water, river_sample_at,
-    },
+    river::{UndergroundWaterfall, add_river_segment, connection_carries_water, river_sample_at},
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -134,10 +132,7 @@ mod tests {
         let second = UndergroundWaterRegion::from_anchors(&anchors, 42);
 
         assert_eq!(first.lakes.len(), second.lakes.len());
-        for position in [
-            Vec3::new(12.5, 28.5, 8.5),
-            Vec3::new(80.5, 16.5, 20.5),
-        ] {
+        for position in [Vec3::new(12.5, 28.5, 8.5), Vec3::new(80.5, 16.5, 20.5)] {
             assert_eq!(
                 first.water_at(position).is_some(),
                 second.water_at(position).is_some(),
@@ -187,6 +182,8 @@ mod tests {
         let high = chosen.expect("test should find a deterministic lake anchor");
         let low = high + Vec3::new(20.0, -12.0, 0.0);
 
-        assert!(UndergroundWaterRegion::connection_carries_water(high, low, 42));
+        assert!(UndergroundWaterRegion::connection_carries_water(
+            high, low, 42
+        ));
     }
 }

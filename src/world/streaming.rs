@@ -10,9 +10,7 @@ use bevy::{
 };
 
 use crate::{
-    content::{
-        biome::BiomeRegistry, dimension::DimensionDefinition, structure::StructureRegistry,
-    },
+    content::{biome::BiomeRegistry, dimension::DimensionDefinition, structure::StructureRegistry},
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
         coordinates::chunk_coord_from_position,
@@ -97,13 +95,15 @@ impl ChunkStreamingState {
     }
 
     fn requeue(&mut self, coord: IVec3) {
-        if self.keeps_loaded(coord) && !self.pending.contains(coord) && !self.ready.contains(coord) {
+        if self.keeps_loaded(coord) && !self.pending.contains(coord) && !self.ready.contains(coord)
+        {
             self.pending.enqueue_front(coord);
         }
     }
 
     fn defer_pending(&mut self, coord: IVec3) {
-        if self.keeps_loaded(coord) && !self.pending.contains(coord) && !self.ready.contains(coord) {
+        if self.keeps_loaded(coord) && !self.pending.contains(coord) && !self.ready.contains(coord)
+        {
             self.pending.enqueue(coord);
         }
     }
@@ -129,9 +129,8 @@ impl ChunkStreamingState {
                 if movement_direction == IVec2::ZERO {
                     None
                 } else {
-                    self.ready.pop_where(|coord| {
-                        (coord.xz() - center.xz()).dot(movement_direction) > 0
-                    })
+                    self.ready
+                        .pop_where(|coord| (coord.xz() - center.xz()).dot(movement_direction) > 0)
                 }
             })
             .or_else(|| self.ready.pop())
@@ -264,7 +263,9 @@ fn seed_loaded_chunk_lighting(
         .chunk(coord)
         .unwrap_or_else(|| panic!("seeded chunk must be resident: {coord:?}"))
         .is_empty();
-    queues.fluid.enqueue_loaded_fluid_frontier(&work.world, coord);
+    queues
+        .fluid
+        .enqueue_loaded_fluid_frontier(&work.world, coord);
     seed_chunk_direct_lighting(
         &mut work.world,
         coord,
@@ -544,8 +545,14 @@ fn collect_built_chunk_meshes(
             continue;
         };
         let chunk_has_fluid = chunk.has_fluid();
-        let catchup = completed.output.dependencies.needs_initial_catchup(&work.world)
-            || work.state.initial_mesh_seed_catchup.contains(&completed.coord);
+        let catchup = completed
+            .output
+            .dependencies
+            .needs_initial_catchup(&work.world)
+            || work
+                .state
+                .initial_mesh_seed_catchup
+                .contains(&completed.coord);
         let render_context = content.render_context(
             &work.world,
             &renderer.terrain_materials,
@@ -560,19 +567,16 @@ fn collect_built_chunk_meshes(
             completed.output.meshes,
             &render_context,
         );
-        work.state.initial_mesh_seed_catchup.remove(&completed.coord);
+        work.state
+            .initial_mesh_seed_catchup
+            .remove(&completed.coord);
         if catchup {
             remesh_queue.enqueue_priority(completed.coord);
             if chunk_has_fluid {
                 remesh_queue.enqueue_fluid_priority(completed.coord);
             }
         }
-        notify_loaded_chunk_neighbors(
-            completed.coord,
-            &work.world,
-            &renderer.pool,
-            remesh_queue,
-        );
+        notify_loaded_chunk_neighbors(completed.coord, &work.world, &renderer.pool, remesh_queue);
     }
 }
 
@@ -615,9 +619,8 @@ fn notify_loaded_chunk_neighbors(
                     remesh_queue.enqueue_priority(neighbor);
                 }
 
-                let has_fluid_border = boundary_faces_toward(offset, |face| {
-                    neighbor_chunk.boundary_has_fluid(face)
-                });
+                let has_fluid_border =
+                    boundary_faces_toward(offset, |face| neighbor_chunk.boundary_has_fluid(face));
                 let new_cardinal_fluid = offset.x.abs() + offset.y.abs() + offset.z.abs() == 1
                     && chunk.boundary_has_fluid(offset);
                 if has_fluid_border || new_cardinal_fluid {
@@ -631,9 +634,7 @@ fn notify_loaded_chunk_neighbors(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::voxel::{
-        cell::VoxelCell, chunk::VoxelChunk, texture_rotation::TextureRotation,
-    };
+    use crate::voxel::{cell::VoxelCell, chunk::VoxelChunk, texture_rotation::TextureRotation};
 
     #[test]
     fn retired_chunks_wait_inside_horizontal_retention_radius() {

@@ -16,10 +16,8 @@ use crate::{
 };
 
 use super::{
-    BlockTargetingScene, BlockTargetingVisualSnapshot,
-    block::BlockTargetingSet,
-    placement::placement_voxel,
-    placement_orientation::PlacementOrientation,
+    BlockTargetingScene, BlockTargetingVisualSnapshot, block::BlockTargetingSet,
+    placement::placement_voxel, placement_orientation::PlacementOrientation,
 };
 
 const PREVIEW_OPACITY: f32 = 0.82;
@@ -88,12 +86,7 @@ fn spawn_placement_preview(
     let selected = content
         .hotbar
         .item_at(content.hotbar.selected_slot())
-        .and_then(|block_id| {
-            content
-                .blocks
-                .get(block_id)
-                .map(|block| (block_id, block))
-        });
+        .and_then(|block_id| content.blocks.get(block_id).map(|block| (block_id, block)));
     let block_model = selected
         .map(|(block_id, _)| BlockModel::world(block_id, PREVIEW_OPACITY))
         .unwrap_or_else(|| BlockModel::empty_world(PREVIEW_OPACITY));
@@ -123,8 +116,7 @@ fn spawn_placement_preview(
                             block,
                             &content.asset_server,
                             block_model.opacity(),
-                        )
-                    {
+                        ) {
                         if let Some(mut material_asset) = materials.get_mut(&material) {
                             *material_asset = face_material;
                         }
@@ -187,12 +179,10 @@ fn update_placement_preview(
         mut faces,
     } = view;
     let selected_slot = selection.scene.selected_slot();
-    let selected = selection.scene.selected_item().and_then(|block_id| {
-        content
-            .blocks
-            .get(block_id)
-            .map(|block| (block_id, block))
-    });
+    let selected = selection
+        .scene
+        .selected_item()
+        .and_then(|block_id| content.blocks.get(block_id).map(|block| (block_id, block)));
     let Some((block_id, block)) = selected else {
         let block_changed = if root.0.block_id().is_some() {
             root.0.set_block_id(None)
@@ -272,14 +262,17 @@ fn update_placement_preview(
     };
 
     let horizontal = IVec2::new(voxel.x, voxel.z);
-    let tint_target_changed = tint_target
-        .as_ref()
-        .is_none_or(|(cached_block_id, cached_horizontal)| {
-            *cached_block_id != block_id || *cached_horizontal != horizontal
-        });
+    let tint_target_changed =
+        tint_target
+            .as_ref()
+            .is_none_or(|(cached_block_id, cached_horizontal)| {
+                *cached_block_id != block_id || *cached_horizontal != horizontal
+            });
     if block_changed || content_changed || tint_target_changed {
         let tint_position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-        let tint = content.tint_at(block_id, tint_position).unwrap_or(Color::WHITE);
+        let tint = content
+            .tint_at(block_id, tint_position)
+            .unwrap_or(Color::WHITE);
 
         for (_, material_handle, _) in &mut faces {
             let Some(mut material) = materials.get_mut(&material_handle.0) else {

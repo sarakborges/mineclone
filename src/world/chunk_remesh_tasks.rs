@@ -1,10 +1,6 @@
 use std::sync::{Arc, RwLock};
 
-use bevy::{
-    platform::collections::HashMap,
-    prelude::*,
-    tasks::AsyncComputeTaskPool,
-};
+use bevy::{platform::collections::HashMap, prelude::*, tasks::AsyncComputeTaskPool};
 
 use crate::voxel::{
     fluid_mesh::ChunkFluidMesh,
@@ -146,10 +142,7 @@ impl ChunkRemeshTasks {
         self.pending.contains(coord)
     }
 
-    pub(crate) fn bump_lighting_revisions(
-        &mut self,
-        coords: impl IntoIterator<Item = IVec3>,
-    ) {
+    pub(crate) fn bump_lighting_revisions(&mut self, coords: impl IntoIterator<Item = IVec3>) {
         let mut revisions = self
             .lighting_revisions
             .write()
@@ -188,11 +181,8 @@ impl ChunkRemeshTasks {
             .unwrap_or_else(|| panic!("chunk remesh snapshot must be prepared before scheduling"))
             .clone();
         let revision = self.revision;
-        let dependencies = ChunkRemeshDependencies::capture(
-            coord,
-            &world,
-            &self.lighting_revisions,
-        );
+        let dependencies =
+            ChunkRemeshDependencies::capture(coord, &world, &self.lighting_revisions);
         let task = AsyncComputeTaskPool::get().spawn(async move {
             let world = world.materialize_shell();
             let context = snapshot.context(&world);
@@ -233,8 +223,7 @@ mod tests {
     fn lighting_dependencies_detect_halo_revision_changes() {
         let mut tasks = ChunkRemeshTasks::default();
         let center = IVec3::new(3, 2, 5);
-        let dependencies =
-            LightingRemeshDependencies::capture(center, &tasks.lighting_revisions);
+        let dependencies = LightingRemeshDependencies::capture(center, &tasks.lighting_revisions);
 
         assert!(dependencies.is_current());
         tasks.bump_lighting_revisions([center + IVec3::X]);
@@ -248,11 +237,8 @@ mod tests {
         world.insert_chunk(center, VoxelChunk::empty());
         let snapshot = ChunkMeshSnapshot::capture(&world, center).unwrap();
         let mut tasks = ChunkRemeshTasks::default();
-        let dependencies = ChunkRemeshDependencies::capture(
-            center,
-            &snapshot,
-            &tasks.lighting_revisions,
-        );
+        let dependencies =
+            ChunkRemeshDependencies::capture(center, &snapshot, &tasks.lighting_revisions);
 
         assert!(dependencies.is_current(&world));
         tasks.bump_lighting_revisions([center + IVec3::X]);

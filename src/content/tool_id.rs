@@ -7,9 +7,7 @@ static TOOL_ID_INTERNER: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLo
 
 pub(crate) fn intern_tool_id(id: &str) -> &'static str {
     let interner = TOOL_ID_INTERNER.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut ids = interner
-        .lock()
-        .expect("tool ID interner lock was poisoned");
+    let mut ids = interner.lock().expect("tool ID interner lock was poisoned");
 
     if let Some(&interned) = ids.get(id) {
         return interned;

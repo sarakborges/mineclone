@@ -1,6 +1,7 @@
 use bevy::{
     input::mouse::{MouseScrollUnit, MouseWheel},
     prelude::*,
+    text::{EditableText, TextCursorStyle},
 };
 
 use crate::{
@@ -8,7 +9,7 @@ use crate::{
     ui::{scrollbar, typography},
 };
 
-use super::{CHAT_TIMEOUT_SECS, ChatState};
+use super::{CHAT_TIMEOUT_SECS, ChatState, MAX_INPUT_CHARS};
 
 // The chat grows naturally until fifteen lines of 17px HUD text at 22px
 // line spacing, including wrapped visual lines. Beyond this, it scrolls.
@@ -115,15 +116,29 @@ pub(super) fn spawn_chat_ui(mut commands: Commands) {
                 Pickable::IGNORE,
             ))
             .with_children(|field| {
+                field.spawn((typography::hud("> "), Pickable::IGNORE));
                 field.spawn((
                     ChatDraft,
-                    typography::hud(""),
-                    typography::tooltip_shadow(),
-                    Node {
-                        width: percent(100),
+                    EditableText {
+                        max_characters: Some(MAX_INPUT_CHARS),
                         ..default()
                     },
-                    Pickable::IGNORE,
+                    TextCursorStyle {
+                        color: Color::WHITE,
+                        ..default()
+                    },
+                    TextFont {
+                        font: FontSource::SystemUi,
+                        font_size: FontSize::Px(17.0),
+                        ..default()
+                    },
+                    TextColor(Color::WHITE),
+                    TextLayout::no_wrap(),
+                    Node {
+                        flex_grow: 1.0,
+                        min_width: px(0),
+                        ..default()
+                    },
                 ));
             });
         });
@@ -151,17 +166,6 @@ pub(super) fn sync_chat_visibility(
     };
     if **entry != entry_visibility {
         **entry = entry_visibility;
-    }
-}
-
-pub(super) fn sync_chat_draft(chat: Res<ChatState>, mut text: Single<&mut Text, With<ChatDraft>>) {
-    let next = if chat.open {
-        format!("> {}▏", chat.draft.text())
-    } else {
-        String::new()
-    };
-    if text.0 != next {
-        text.0 = next;
     }
 }
 

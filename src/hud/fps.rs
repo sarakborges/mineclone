@@ -9,10 +9,7 @@ pub struct FpsHudPlugin;
 impl Plugin for FpsHudPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_fps_hud)
-            .add_systems(
-                Update,
-                update_fps_hud.run_if(in_state(GameState::Gameplay)),
-            );
+            .add_systems(Update, update_fps_hud.run_if(in_state(GameState::Gameplay)));
     }
 }
 

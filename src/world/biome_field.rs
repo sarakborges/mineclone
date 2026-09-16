@@ -14,8 +14,10 @@ use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::content::{
     biome::{BiomeClimate, BiomeKind, BiomeRegistry, BiomeVerticalRange},
-    biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
-    biome_hydrology::BiomeHydrology, biome_terrain::BiomeTerrain,
+    biome_density::BiomeDensityModifier,
+    biome_distribution::BiomeDistribution,
+    biome_hydrology::BiomeHydrology,
+    biome_terrain::BiomeTerrain,
     biome_terrain_modifier::BiomeTerrainModifier,
     dimension::{DimensionBiomeSize, DimensionDefinition},
 };

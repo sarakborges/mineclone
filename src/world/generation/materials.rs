@@ -44,10 +44,10 @@ pub(super) fn rasterize_material_pass(
                     chunk_origin.x as f32 + local_x as f32 + 0.5,
                     chunk_origin.z as f32 + local_z as f32 + 0.5,
                 );
-                let hydrology_blocks = context.region.hydrology.solid_blocks_for_column::<CHUNK_SIZE>(
-                    horizontal,
-                    chunk_origin.y as f32 + 0.5,
-                );
+                let hydrology_blocks = context
+                    .region
+                    .hydrology
+                    .solid_blocks_for_column::<CHUNK_SIZE>(horizontal, chunk_origin.y as f32 + 0.5);
                 resolve_surface_material_column(
                     &column.surface_influences,
                     context.biome_field,
@@ -67,7 +67,8 @@ pub(super) fn rasterize_material_pass(
                         chunk_origin.z + local_z as i32,
                     );
                     let sample_position = world_position.as_vec3() + Vec3::splat(0.5);
-                    let surface_depth = (column.surface_height - world_position.y - 1).max(0) as u32;
+                    let surface_depth =
+                        (column.surface_height - world_position.y - 1).max(0) as u32;
                     let block_id = solid_block_id(
                         sample_position,
                         surface_depth,

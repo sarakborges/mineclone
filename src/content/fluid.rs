@@ -36,7 +36,11 @@ impl FluidRegistry {
         definition
             .name
             .validate(&format!("fluid {} name", definition.id));
-        assert!(definition.color.is_valid(), "fluid {} HSI color is invalid", definition.id);
+        assert!(
+            definition.color.is_valid(),
+            "fluid {} HSI color is invalid",
+            definition.id
+        );
         assert!(
             (0.0..=1.0).contains(&definition.opacity),
             "fluid {} opacity must be between 0 and 1",

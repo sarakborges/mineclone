@@ -1,4 +1,8 @@
-use bevy::{prelude::*, ui_widgets::ScrollArea};
+use bevy::{
+    prelude::*,
+    text::{EditableText, TextCursorStyle},
+    ui_widgets::ScrollArea,
+};
 
 use crate::{
     localization::{Language, UiLocalization},
@@ -129,6 +133,21 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                             (
                                 Button,
                                 SpawnBiomeSearchBar,
+                                EditableText {
+                                    max_characters: Some(128),
+                                    ..default()
+                                },
+                                TextCursorStyle {
+                                    color: Color::WHITE,
+                                    ..default()
+                                },
+                                TextFont {
+                                    font: FontSource::SystemUi,
+                                    font_size: FontSize::Px(14.0),
+                                    ..default()
+                                },
+                                TextColor(Color::WHITE),
+                                TextLayout::no_wrap(),
                                 Node {
                                     width: percent(100),
                                     height: px(SEARCH_HEIGHT),
@@ -142,6 +161,7 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                                 BorderColor::all(surface::HUD_SELECTED_BORDER_COLOR),
                                 children![(
                                     SpawnBiomeSearchText,
+                                    Visibility::Inherited,
                                     typography::caption(
                                         localization
                                             .text(language, "newWorld.spawnBiome.search")

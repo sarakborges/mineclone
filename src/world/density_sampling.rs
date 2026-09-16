@@ -3,15 +3,15 @@ mod volume;
 
 use bevy::prelude::*;
 
+use self::{
+    hydrology::{cave_water_clearance, enforce_hydrology_water_volume},
+    volume::volume_biome_density_delta,
+};
 use super::{
     biome_field::{BiomeField, VolumeBiomeSelection},
     cave_connectivity::CaveConnectivityRegion,
     generation_region::GenerationRegion,
     math::smoothstep,
-};
-use self::{
-    hydrology::{cave_water_clearance, enforce_hydrology_water_volume},
-    volume::volume_biome_density_delta,
 };
 
 pub(crate) use hydrology::{DensityColumnHydrology, sample_density_column_hydrology};
@@ -48,10 +48,8 @@ pub(crate) fn sample_density(
     volume: Option<VolumeBiomeSelection>,
     context: &DensitySampleContext<'_>,
 ) -> f32 {
-    let column_hydrology = sample_density_column_hydrology(
-        Vec2::new(position.x, position.z),
-        context.region,
-    );
+    let column_hydrology =
+        sample_density_column_hydrology(Vec2::new(position.x, position.z), context.region);
     let hydrology_delta = context.region.hydrology.density_delta(position);
 
     sample_density_with_hydrology(

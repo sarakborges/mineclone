@@ -77,7 +77,10 @@ mod tests {
     fn river_bed_profile_ends_at_the_actual_water_boundary() {
         assert_eq!(river_channel_profile(0.0), 1.0);
         assert!(river_channel_profile(0.5) > 0.0);
-        assert_eq!(river_channel_profile(RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE), 0.0);
+        assert_eq!(
+            river_channel_profile(RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE),
+            0.0
+        );
         assert_eq!(river_channel_profile(0.9), 0.0);
     }
 }

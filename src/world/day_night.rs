@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{
-    app::game_state::GameState,
-    content::day_night_cycle::DayNightCycleRegistry,
-};
+use crate::{app::game_state::GameState, content::day_night_cycle::DayNightCycleRegistry};
 
 use super::{
     WorldLoadMode,
@@ -63,8 +60,7 @@ fn initialize_clock(
     clock.day = 1;
     clock.tick_in_day =
         (cycle.initial_time.rem_euclid(1.0) * cycle.day_duration_ticks as f32).floor() as u64;
-    clock.normalized_time =
-        clock.tick_in_day as f32 / cycle.day_duration_ticks.max(1) as f32;
+    clock.normalized_time = clock.tick_in_day as f32 / cycle.day_duration_ticks.max(1) as f32;
 }
 
 fn advance_clock(

@@ -9,8 +9,7 @@ pub(crate) trait VoxelRead: Send + Sync {
     ) -> Option<(Option<VoxelCell>, Option<FluidCell>, VoxelLight)>;
 
     fn cell_at(&self, world_position: IVec3) -> Option<VoxelCell> {
-        self.sample_at(world_position)
-            .and_then(|(cell, _, _)| cell)
+        self.sample_at(world_position).and_then(|(cell, _, _)| cell)
     }
 
     fn fluid_at(&self, world_position: IVec3) -> Option<FluidCell> {

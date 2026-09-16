@@ -1,8 +1,7 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::content::{
-    block::BlockRegistry, fluid::FluidRegistry,
-    secondary_property::SecondaryPropertyRegistry,
+    block::BlockRegistry, fluid::FluidRegistry, secondary_property::SecondaryPropertyRegistry,
 };
 use crate::voxel::{chunk::CHUNK_SIZE, light::VoxelLight, world::VoxelWorld};
 

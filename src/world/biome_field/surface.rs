@@ -20,8 +20,7 @@ impl BiomeField {
             (warped.x / self.surface_site_spacing.x).round() as i32,
             (warped.y / self.surface_site_spacing.y).round() as i32,
         );
-        let mut sampled_sites =
-            [(IVec2::ZERO, Vec2::ZERO, 0.0_f32, None); SITE_SAMPLE_COUNT];
+        let mut sampled_sites = [(IVec2::ZERO, Vec2::ZERO, 0.0_f32, None); SITE_SAMPLE_COUNT];
         let mut sample_count = 0;
 
         {
@@ -33,12 +32,8 @@ impl BiomeField {
                 for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
                     let cell = center + IVec2::new(x, z);
                     let site = surface_site_position(cell, self.surface_site_spacing, self.seed);
-                    sampled_sites[sample_count] = (
-                        cell,
-                        site,
-                        warped.distance(site),
-                        cache.get(&cell).copied(),
-                    );
+                    sampled_sites[sample_count] =
+                        (cell, site, warped.distance(site), cache.get(&cell).copied());
                     sample_count += 1;
                 }
             }
@@ -85,8 +80,7 @@ impl BiomeField {
         for (_, _, distance, candidate_index) in &sampled_sites[..sample_count] {
             let candidate_index = candidate_index.expect("surface biome site must be resolved");
             let distance_gap = (*distance - nearest_distance).max(0.0);
-            let border_progress =
-                1.0 - (distance_gap / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
+            let border_progress = 1.0 - (distance_gap / BORDER_TRANSITION_WIDTH).clamp(0.0, 1.0);
             let smooth_progress = smoothstep(border_progress);
             set_max_weight(
                 &mut weights,
@@ -137,12 +131,7 @@ impl BiomeField {
             for (_, weight) in &mut weights[..weight_count] {
                 *weight *= retained_regional_weight;
             }
-            add_weight(
-                &mut weights,
-                &mut weight_count,
-                macro_index,
-                macro_strength,
-            );
+            add_weight(&mut weights, &mut weight_count, macro_index, macro_strength);
         }
 
         if let Some((index, _)) = weights[..weight_count]

@@ -5,12 +5,17 @@ use crate::localization::LocalizedText;
 
 use self::validation::validate_biome_definition;
 use super::{
-    biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
-    biome_hydrology::BiomeHydrology, biome_material::BiomeMaterialLayer,
+    biome_density::BiomeDensityModifier,
+    biome_distribution::BiomeDistribution,
+    biome_hydrology::BiomeHydrology,
+    biome_material::BiomeMaterialLayer,
     biome_sky_layer::BiomeSkyLayerVisuals,
     biome_structure::{BiomeStructure, StructurePlacementRules},
-    biome_surface_carver::BiomeSurfaceCarver, biome_terrain::BiomeTerrain,
-    biome_terrain_modifier::BiomeTerrainModifier, color::Hsi, day_night_phase::DayNightPhases,
+    biome_surface_carver::BiomeSurfaceCarver,
+    biome_terrain::BiomeTerrain,
+    biome_terrain_modifier::BiomeTerrainModifier,
+    color::Hsi,
+    day_night_phase::DayNightPhases,
     registry::DefinitionMap,
 };
 
@@ -176,11 +181,14 @@ impl BiomeRegistry {
             .definitions
             .values()
             .flat_map(|biome| {
-                biome.structures.iter().map(|structure| BiomeStructurePlacement {
-                    biome_id: biome.id.clone(),
-                    structure_id: structure.id.clone(),
-                    placement: structure.placement,
-                })
+                biome
+                    .structures
+                    .iter()
+                    .map(|structure| BiomeStructurePlacement {
+                        biome_id: biome.id.clone(),
+                        structure_id: structure.id.clone(),
+                        placement: structure.placement,
+                    })
             })
             .collect();
         self.structure_placements.sort_by(|left, right| {

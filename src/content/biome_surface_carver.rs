@@ -35,7 +35,10 @@ impl BiomeSurfaceCarver {
                 elevation,
                 jitter,
             } => {
-                assert!(spacing > 0.0, "biome {biome_id} tunnel spacing must be positive");
+                assert!(
+                    spacing > 0.0,
+                    "biome {biome_id} tunnel spacing must be positive"
+                );
                 assert!(
                     (0.0..=1.0).contains(&chance),
                     "biome {biome_id} tunnel chance must be between 0 and 1"
@@ -43,7 +46,10 @@ impl BiomeSurfaceCarver {
                 validate_range(biome_id, "tunnel length", length, false);
                 validate_range(biome_id, "tunnel radius", radius, false);
                 validate_range(biome_id, "tunnel elevation", elevation, true);
-                assert!(jitter >= 0.0, "biome {biome_id} tunnel jitter cannot be negative");
+                assert!(
+                    jitter >= 0.0,
+                    "biome {biome_id} tunnel jitter cannot be negative"
+                );
                 assert!(
                     jitter * 2.0 < spacing,
                     "biome {biome_id} tunnel jitter must be less than half its spacing"
@@ -53,16 +59,17 @@ impl BiomeSurfaceCarver {
     }
 }
 
-fn validate_range(
-    biome_id: &str,
-    label: &str,
-    range: SurfaceCarverRange,
-    allow_zero: bool,
-) {
+fn validate_range(biome_id: &str, label: &str, range: SurfaceCarverRange, allow_zero: bool) {
     if allow_zero {
-        assert!(range.min >= 0.0, "biome {biome_id} {label}.min cannot be negative");
+        assert!(
+            range.min >= 0.0,
+            "biome {biome_id} {label}.min cannot be negative"
+        );
     } else {
-        assert!(range.min > 0.0, "biome {biome_id} {label}.min must be positive");
+        assert!(
+            range.min > 0.0,
+            "biome {biome_id} {label}.min must be positive"
+        );
     }
     assert!(
         range.max >= range.min,

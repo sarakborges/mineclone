@@ -9,19 +9,14 @@ pub(crate) fn compare_vec3(left: &Vec3, right: &Vec3) -> Ordering {
         .then_with(|| left.z.total_cmp(&right.z))
 }
 
-pub(crate) fn sorted_unique_vec3s(
-    positions: impl IntoIterator<Item = Vec3>,
-) -> Vec<Vec3> {
+pub(crate) fn sorted_unique_vec3s(positions: impl IntoIterator<Item = Vec3>) -> Vec<Vec3> {
     let mut positions = positions.into_iter().collect::<Vec<_>>();
     positions.sort_by(compare_vec3);
     positions.dedup_by(|left, right| *left == *right);
     positions
 }
 
-pub(crate) fn mix_u32_components(
-    mut hash: u64,
-    components: impl IntoIterator<Item = u32>,
-) -> u64 {
+pub(crate) fn mix_u32_components(mut hash: u64, components: impl IntoIterator<Item = u32>) -> u64 {
     for component in components {
         hash ^= component as u64;
         hash = hash.wrapping_mul(0x9e37_79b1_85eb_ca87);

@@ -4,8 +4,9 @@ use std::collections::VecDeque;
 
 use bevy::{
     ecs::system::SystemParam,
-    input::{ButtonState, keyboard::KeyboardInput},
+    input_focus::{FocusCause, InputFocus},
     prelude::*,
+    text::EditableText,
     window::{CursorGrabMode, CursorOptions},
 };
 
@@ -19,13 +20,13 @@ use crate::{
         inventory::InventoryState,
     },
     tools::BrushPaletteState,
-    ui::text_input::{TextInputState, select_all_pressed},
+    ui::text_input::editable_value,
     voxel::world::VoxelWorld,
 };
 
 use visual::{
     advance_chat_timeout, rebuild_chat_history, scroll_chat_history, scroll_chat_to_bottom,
-    spawn_chat_ui, sync_chat_draft, sync_chat_visibility,
+    spawn_chat_ui, sync_chat_visibility,
 };
 
 const PLAYER_DISPLAY_NAME: &str = "Yogg'Sara";
@@ -38,7 +39,6 @@ const MAX_INPUT_CHARS: usize = 256;
 pub(crate) struct ChatState {
     open: bool,
     escape_consumed: bool,
-    draft: TextInputState,
     history: VecDeque<String>,
     since_last_message: f32,
     revision: u64,
@@ -55,7 +55,6 @@ impl ChatState {
 
     fn close(&mut self) {
         self.open = false;
-        self.draft.reset();
     }
 
     fn append(&mut self, text: String) {
@@ -97,7 +96,6 @@ impl Plugin for ChatHudPlugin {
                     advance_chat_timeout,
                     scroll_chat_history,
                     sync_chat_visibility,
-                    sync_chat_draft,
                     rebuild_chat_history,
                 )
                     .chain()
@@ -114,7 +112,10 @@ fn reset_chat(mut chat: ResMut<ChatState>) {
     *chat = ChatState::default();
 }
 
-fn close_chat_on_pause(mut chat: ResMut<ChatState>) {
+fn close_chat_on_pause(mut chat: ResMut<ChatState>, mut focus: ResMut<InputFocus>) {
+    if chat.is_open() {
+        focus.clear();
+    }
     chat.close();
 }
 
@@ -125,81 +126,79 @@ struct ChatInputContext<'w> {
     settings: Res<'w, State<SettingsState>>,
     inventory: Res<'w, State<InventoryState>>,
     brush_palette: Res<'w, State<BrushPaletteState>>,
+    focus: ResMut<'w, InputFocus>,
 }
 
 fn handle_chat_input(
-    input: ChatInputContext,
-    mut keyboard: MessageReader<KeyboardInput>,
+    mut input: ChatInputContext,
     mut submissions: MessageWriter<ChatSubmission>,
     mut chat: ResMut<ChatState>,
     window: Single<&Window>,
     mut cursor: Single<&mut CursorOptions>,
     mut mouse_look: ResMut<MouseLookInputState>,
+    mut draft: Single<(Entity, &mut EditableText), With<visual::ChatDraft>>,
 ) {
     if !input.keys.just_pressed(KeyCode::Escape) {
         chat.escape_consumed = false;
     }
+    let (entity, editor) = &mut *draft;
+    let entity = *entity;
 
     if chat.open {
         if *input.pause.get() != PauseState::Running {
             chat.close();
-            keyboard.clear();
+            input.focus.clear();
             return;
         }
-        if input.keys.just_pressed(KeyCode::Escape) {
+        if input.keys.just_pressed(KeyCode::Escape) && !editor.is_composing() {
             chat.close();
             chat.escape_consumed = true;
+            editor.clear();
+            input.focus.clear();
             restore_game_cursor(window.focused, &mut cursor, &mut mouse_look);
-            keyboard.clear();
             return;
         }
-        if input.keys.just_pressed(KeyCode::Enter) || input.keys.just_pressed(KeyCode::NumpadEnter)
+        if (input.keys.just_pressed(KeyCode::Enter)
+            || input.keys.just_pressed(KeyCode::NumpadEnter))
+            && !editor.is_composing()
         {
-            let line = chat.draft.text().trim().to_owned();
+            let line = editable_value(editor).trim().to_owned();
             chat.close();
+            editor.clear();
+            input.focus.clear();
             restore_game_cursor(window.focused, &mut cursor, &mut mouse_look);
             if !line.is_empty() {
                 submissions.write(ChatSubmission(line));
             }
-            keyboard.clear();
             return;
         }
-        if select_all_pressed(&input.keys) {
-            chat.draft.select_all();
-        }
-        for event in keyboard.read() {
-            if event.state != ButtonState::Pressed {
-                continue;
-            }
-            if event.key_code == KeyCode::Backspace {
-                chat.draft.backspace();
-            } else if let Some(text) = &event.text {
-                let remaining = MAX_INPUT_CHARS.saturating_sub(chat.draft.text().chars().count());
-                if remaining > 0 {
-                    let limited: String = text
-                        .chars()
-                        .filter(|character| !character.is_control())
-                        .take(remaining)
-                        .collect();
-                    chat.draft.push_text(&limited);
-                }
-            }
+        if input.focus.get() != Some(entity) {
+            input.focus.set(entity, FocusCause::Navigated);
         }
         return;
     }
 
-    keyboard.clear();
     let can_open = *input.pause.get() == PauseState::Running
         && *input.settings.get() == SettingsState::Closed
         && *input.inventory.get() == InventoryState::Closed
         && *input.brush_palette.get() == BrushPaletteState::Closed;
-    if !can_open || !input.keys.just_pressed(KeyCode::KeyT) {
+    let has_command_modifier = [
+        KeyCode::ControlLeft,
+        KeyCode::ControlRight,
+        KeyCode::SuperLeft,
+        KeyCode::SuperRight,
+        KeyCode::AltLeft,
+        KeyCode::AltRight,
+    ]
+    .iter()
+    .any(|key| input.keys.pressed(*key));
+    if !can_open || !input.keys.just_pressed(KeyCode::KeyT) || has_command_modifier {
         return;
     }
 
-    chat.draft.reset();
-    chat.draft.focus();
+    editor.clear();
     chat.open = true;
+    input.focus.set(entity, FocusCause::Navigated);
     cursor.grab_mode = CursorGrabMode::None;
     cursor.visible = true;
     mouse_look.ignore_next_delta = true;
