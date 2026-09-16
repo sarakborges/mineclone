@@ -136,7 +136,7 @@ where
             let Some(downstream_cell) = network.downstream_cell(cell) else {
                 continue;
             };
-            let downstream = network.node(downstream_cell);
+            let downstream: DrainageNode = network.node(downstream_cell);
             let flow = flow_cache.get(&cell).copied().unwrap_or(1);
             let downstream_flow = flow_cache.get(&downstream_cell).copied().unwrap_or(flow);
             let source_water_level = selection
