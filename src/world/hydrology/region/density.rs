@@ -5,13 +5,15 @@ use super::HydrologyRegion;
 use crate::world::hydrology::{
     constants::{
         LAKE_SHORE_OUTER_DISTANCE, LAKE_SHORE_SURFACE_OFFSET, OCEAN_EXTRA_DEPTH,
-        OCEAN_MINIMUM_DEPTH, RIVER_CARVE_STRENGTH, RIVER_MAXIMUM_RADIUS, SHORE_STRENGTH,
+        OCEAN_MINIMUM_DEPTH, RIVER_CARVE_STRENGTH, RIVER_MAXIMUM_RADIUS,
     },
-    math::{lerp, ocean_strength, smoothstep},
+    math::{
+        lerp, ocean_strength, river_channel_profile, smoothstep,
+        RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE,
+    },
     types::WaterBody,
 };
 
-const RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE: f32 = 1.0 - SHORE_STRENGTH;
 const RIVER_BANK_OUTER_NORMALIZED_DISTANCE: f32 = 2.5;
 const RIVER_BANK_MARGIN: f32 = RIVER_MAXIMUM_RADIUS * 1.5;
 const INLINE_WATER_BODY_DELTAS: usize = 4;
@@ -79,23 +81,24 @@ impl HydrologyRegion {
         horizontal: Vec2,
         actual_surface_height: Option<f32>,
     ) -> DensityColumnProfile {
-        // Include the shore outside the channel in the same graph scan. The
-        // core still uses the original physical radius, not the margin's
-        // inflated strength, and the extended ring only grades the terrain.
+        // Include the shore outside the channel in the same graph scan. Carve
+        // only inside the actual water footprint, not the graph's full radius:
+        // the latter left a dry, sunken ring between water and the bank.
         let river_graph_sample = self
             .river_graph
             .sample_horizontal_with_margin(horizontal, RIVER_BANK_MARGIN);
-        let river_core = river_graph_sample.filter(|sample| sample.normalized_distance < 1.0);
+        let river_core = river_graph_sample.filter(|sample| {
+            sample.normalized_distance < RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE
+        });
         let (river, river_opening) = river_core.map_or((None, 0.0), |sample| {
-            let strength = (1.0 - sample.normalized_distance).clamp(0.0, 1.0);
-            let profile = smoothstep(strength);
+            let profile = river_channel_profile(sample.normalized_distance);
             let bed = sample.height - self.river_carve_depth * profile;
             let river = (profile > 0.0).then_some(VerticalDensityDelta {
                 minimum_y: bed - 0.5,
                 maximum_y: sample.height + 1.5,
                 delta: -RIVER_CARVE_STRENGTH * profile,
             });
-            let opening = smoothstep((strength * 2.0).clamp(0.0, 1.0));
+            let opening = smoothstep((profile * 2.0).clamp(0.0, 1.0));
 
             (river, opening)
         });
@@ -289,6 +292,15 @@ mod tests {
                 .abs()
                 <= f32::EPSILON
         );
+    }
+
+    #[test]
+    fn dry_ring_outside_river_water_does_not_get_a_channel_profile() {
+        let boundary = RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE;
+        assert!(river_channel_profile(boundary - 0.01) > 0.0);
+        assert_eq!(river_channel_profile(boundary), 0.0);
+        assert_eq!(river_channel_profile(0.9), 0.0);
+        assert!(river_shore_normalized_distance(0.9) > 1.0);
     }
 
     #[test]
