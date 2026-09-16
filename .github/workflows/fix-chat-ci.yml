@@ -1,0 +1,141 @@
+name: Repair and validate chat feature
+
+on:
+  push:
+    branches:
+      - feature/game-chat-creature-command
+    paths:
+      - .github/workflows/fix-chat-ci.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/game-chat-creature-command
+          persist-credentials: true
+      - name: Repair Rust diagnostics without suppressing lints
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_one(source, before, after, context):
+              assert source.count(before) == 1, f'{context}: expected exactly one source match, got {source.count(before)}'
+              return source.replace(before, after, 1)
+
+          path = Path('src/creatures/visual.rs')
+          source = path.read_text()
+          source = replace_one(source, '    prelude::*,', '    ecs::system::SystemParam,\n    prelude::*,', 'visual import')
+          for marker in ('VisualAttached', 'CreatureAnimationLink'):
+              source = replace_one(source, f'struct {marker}', f'pub(super) struct {marker}', marker)
+          source = replace_one(source, 'fn configure_loaded_scene(', '''#[derive(SystemParam)]
+          struct CreatureTintAssets<'w> {
+              materials: ResMut<'w, Assets<StandardMaterial>>,
+              cache: ResMut<'w, TintedCreatureMaterials>,
+          }
+
+          fn configure_loaded_scene(''', 'tint context')
+          source = replace_one(source, '    mut materials: ResMut<Assets<StandardMaterial>>,\n    mut tint_cache: ResMut<TintedCreatureMaterials>,', '    mut tint_assets: CreatureTintAssets,', 'tint parameters')
+          prefix, rest = source.split('fn configure_loaded_scene(', 1)
+          body, tail = rest.split('pub(super) fn sync_creature_animations(', 1)
+          assert body.count('tint_cache.0') == 2 and body.count('materials.get(') == 1 and body.count('materials.add(') == 1, 'Unexpected scene material usage'
+          body = body.replace('tint_cache.0', 'tint_assets.cache.0').replace('materials.get(', 'tint_assets.materials.get(').replace('materials.add(', 'tint_assets.materials.add(')
+          path.write_text(prefix + 'fn configure_loaded_scene(' + body + 'pub(super) fn sync_creature_animations(' + tail)
+
+          path = Path('src/hud/chat.rs')
+          source = path.read_text()
+          source = replace_one(source, '    input::{ButtonState, keyboard::KeyboardInput},', '    ecs::system::SystemParam,\n    input::{ButtonState, keyboard::KeyboardInput},', 'chat import')
+          source = replace_one(source, 'fn handle_chat_input(', '''#[derive(SystemParam)]
+          struct ChatInputContext<'w> {
+              keys: Res<'w, ButtonInput<KeyCode>>,
+              pause: Res<'w, State<PauseState>>,
+              settings: Res<'w, State<SettingsState>>,
+              inventory: Res<'w, State<InventoryState>>,
+              brush_palette: Res<'w, State<BrushPaletteState>>,
+          }
+
+          fn handle_chat_input(''', 'chat input context')
+          old = '''    keys: Res<ButtonInput<KeyCode>>,
+              mut keyboard: MessageReader<KeyboardInput>,
+              mut submissions: MessageWriter<ChatSubmission>,
+              mut chat: ResMut<ChatState>,
+              pause: Res<State<PauseState>>,
+              settings: Res<State<SettingsState>>,
+              inventory: Res<State<InventoryState>>,
+              brush_palette: Res<State<BrushPaletteState>>,'''
+          new = '''    input: ChatInputContext,
+              mut keyboard: MessageReader<KeyboardInput>,
+              mut submissions: MessageWriter<ChatSubmission>,
+              mut chat: ResMut<ChatState>,'''
+          source = replace_one(source, old, new, 'chat input parameters')
+          prefix, rest = source.split('fn handle_chat_input(', 1)
+          body, tail = rest.split('fn restore_game_cursor(', 1)
+          body = body.replace('keys.just_pressed(', 'input.keys.just_pressed(').replace('select_all_pressed(&keys)', 'select_all_pressed(&input.keys)')
+          for marker in ('pause', 'settings', 'inventory', 'brush_palette'):
+              body = body.replace(f'*{marker}.get()', f'*input.{marker}.get()')
+          source = prefix + 'fn handle_chat_input(' + body + 'fn restore_game_cursor(' + tail
+          source = replace_one(source, 'fn interpret_chat_submissions(', '''#[derive(SystemParam)]
+          struct ChatCreatureContext<'w> {
+              definitions: Res<'w, CreatureRegistry>,
+              assets: Res<'w, AssetServer>,
+              world: Res<'w, VoxelWorld>,
+              language: Res<'w, ActiveLanguage>,
+          }
+
+          fn interpret_chat_submissions(''', 'creature command context')
+          old = '''    definitions: Res<CreatureRegistry>,
+              assets: Res<AssetServer>,
+              world: Res<VoxelWorld>,
+              language: Res<ActiveLanguage>,'''
+          source = replace_one(source, old, '    creature_context: ChatCreatureContext,', 'creature command parameters')
+          prefix, rest = source.split('fn interpret_chat_submissions(', 1)
+          body, tail = rest.split('#[cfg(test)]', 1)
+          for marker in ('definitions', 'assets', 'world'):
+              body = body.replace(f'&{marker}', f'&creature_context.{marker}')
+          body = body.replace('language.get()', 'creature_context.language.get()')
+          path.write_text(prefix + 'fn interpret_chat_submissions(' + body + '#[cfg(test)]' + tail)
+
+          path = Path('src/hud/chat/visual.rs')
+          source = path.read_text()
+          for marker in ('ChatRoot', 'ChatHistory', 'ChatInputRoot', 'ChatDraft'):
+              source = replace_one(source, f'struct {marker};', f'pub(super) struct {marker};', marker)
+          path.write_text(source)
+
+          version = Path('VERSION')
+          assert version.read_text().strip() == '0.17.1', 'Unexpected semantic version'
+          version.write_text('0.17.2\n')
+          with Path('HANDOFF.md').open('a') as handoff:
+              handoff.write('\n\n## Chat feature CI repair — 16/09/2026 (branch 0.17.2)\nThe branch feature/game-chat-creature-command targets feature/slime-creature-integration. Fixes visibility of markers referenced by pub(super) system functions and groups related Bevy system resources into SystemParam instead of suppressing Clippy. Settings and New World conditional scrollbars from 0.17.1 remain intact. Do not merge before CI and runtime testing. develop remains untouched.\n')
+          PY
+      - name: Format Rust
+        run: cargo fmt --all
+      - name: Install Rust with Clippy
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libasound2-dev libfontconfig1-dev libudev-dev libwayland-dev \
+            libx11-dev libxkbcommon-dev libxcursor-dev libxi-dev libxrandr-dev
+      - name: Clippy (all targets and features, warnings denied)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Cargo check
+        run: cargo check
+      - name: Commit validated repair to feature branch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -- .github/workflows/fix-chat-ci.yml
+          git add -- src/creatures/visual.rs src/hud/chat.rs src/hud/chat/visual.rs VERSION HANDOFF.md
+          git diff --cached --check
+          git commit -m 'fix(ci): resolve chat and creature visibility and system-param diagnostics'
+          git push origin HEAD:feature/game-chat-creature-command
