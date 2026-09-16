@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use bevy::platform::collections::HashMap;
 
 #[derive(Clone)]
 pub(super) struct DefinitionMap<T> {
