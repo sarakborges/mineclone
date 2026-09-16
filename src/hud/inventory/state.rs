@@ -1,7 +1,5 @@
 use bevy::prelude::*;
 
-use crate::ui::text_input::TextInputState;
-
 pub(super) const SLOT_SIZE: f32 = 44.0;
 pub(super) const ITEM_ICON_SIZE: f32 = 34.0;
 pub(super) const SLOT_GAP: f32 = 4.0;
@@ -66,17 +64,18 @@ pub(super) struct InventoryCursorIcon;
 
 #[derive(Resource, Default)]
 pub(super) struct CreativeInventoryView {
-    search: TextInputState,
+    search: String,
+    search_focused: bool,
     selected_category: Option<String>,
 }
 
 impl CreativeInventoryView {
     pub(super) fn search_query(&self) -> &str {
-        self.search.text()
+        &self.search
     }
 
     pub(super) fn search_focused(&self) -> bool {
-        self.search.focused()
+        self.search_focused
     }
 
     pub(super) fn selected_category(&self) -> Option<&str> {
@@ -84,23 +83,17 @@ impl CreativeInventoryView {
     }
 
     pub(super) fn focus_search(&mut self) {
-        self.search.focus();
+        self.search_focused = true;
     }
 
     pub(super) fn blur_search(&mut self) {
-        self.search.blur();
+        self.search_focused = false;
     }
 
-    pub(super) fn select_all_search(&mut self) {
-        self.search.select_all();
-    }
-
-    pub(super) fn push_search_text(&mut self, text: &str) {
-        self.search.push_text(text);
-    }
-
-    pub(super) fn backspace_search(&mut self) {
-        self.search.backspace();
+    pub(super) fn set_search_query(&mut self, query: String) {
+        if self.search != query {
+            self.search = query;
+        }
     }
 
     pub(super) fn select_category(&mut self, category: Option<&str>) {

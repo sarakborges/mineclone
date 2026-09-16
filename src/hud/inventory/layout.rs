@@ -1,4 +1,7 @@
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    text::{EditableText, TextCursorStyle},
+};
 
 use crate::{
     app::game_state::GameState,
@@ -288,16 +291,29 @@ fn spawn_search_bar(
     } else {
         surface::HUD_BORDER_COLOR
     };
-    let search_text = if creative_view.search_query().is_empty() {
-        localization.text(language, "inventory.searchPlaceholder")
-    } else {
-        creative_view.search_query()
-    };
+    let placeholder_visible =
+        creative_view.search_query().is_empty() && !creative_view.search_focused();
+    let placeholder = localization.text(language, "inventory.searchPlaceholder");
 
     parent
         .spawn((
             Button,
             CreativeSearchBar,
+            EditableText {
+                max_characters: Some(128),
+                ..EditableText::new(creative_view.search_query())
+            },
+            TextCursorStyle {
+                color: theme::TEXT_PRIMARY,
+                ..default()
+            },
+            TextFont {
+                font: FontSource::SystemUi,
+                font_size: FontSize::Px(17.0),
+                ..default()
+            },
+            TextColor(theme::TEXT_PRIMARY),
+            TextLayout::no_wrap(),
             Node {
                 width: px(creative_content_width()),
                 height: px(SEARCH_HEIGHT),
@@ -313,7 +329,12 @@ fn spawn_search_bar(
         .with_children(|search| {
             search.spawn((
                 CreativeSearchText,
-                typography::hud(search_text),
+                typography::hud(placeholder),
+                if placeholder_visible {
+                    Visibility::Inherited
+                } else {
+                    Visibility::Hidden
+                },
                 Pickable::IGNORE,
             ));
         });

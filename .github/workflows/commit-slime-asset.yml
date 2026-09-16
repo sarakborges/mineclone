@@ -1,0 +1,66 @@
+name: Commit original slime GLB
+
+on:
+  push:
+    branches:
+      - feature/slime-creature-integration
+    paths:
+      - assets/models/creatures/slime/generate_slime.py
+      - .github/workflows/commit-slime-asset.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  commit-original-asset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/slime-creature-integration
+          persist-credentials: true
+
+      - name: Reconcile generator with the verified original
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          script = Path('assets/models/creatures/slime/generate_slime.py')
+          original = script.read_text(encoding='utf-8')
+          incorrect = '[.98,1.025,1.05],[1,1,1]])'
+          expected = '[.98,1.025,.98],[1,1,1]])'
+          if incorrect in original:
+              script.write_text(original.replace(incorrect, expected), encoding='utf-8')
+          elif expected not in original:
+              raise SystemExit('Unrecognized generator source: refusing to upload a different model')
+          PY
+
+      - name: Install precisely the original generator dependencies
+        run: python -m pip install 'numpy==2.3.5' 'trimesh==4.11.1'
+
+      - name: Generate asset and verify exact SHA-256
+        shell: bash
+        run: |
+          python assets/models/creatures/slime/generate_slime.py
+          echo '8f1cfcdecaa6a8d49cf9e3268f03ae264e94efcd91f87b0ea392c39e5cb1c7b6  assets/models/creatures/slime/slime.glb' | sha256sum --check --status
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('assets/models/creatures/slime/slime.collider.json')
+          config = json.loads(p.read_text(encoding='utf-8'))
+          config['integration_status'] = 'Runtime implementation on feature/slime-creature-integration; compilation and gameplay require separate validation.'
+          p.write_text(json.dumps(config, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+
+      - name: Commit actual GLB and model metadata to requested branch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- assets/models/creatures/slime/generate_slime.py assets/models/creatures/slime/slime.glb assets/models/creatures/slime/slime.collider.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'assets(creatures): commit SHA-verified original slime GLB and collider JSON'
+            git push origin HEAD:feature/slime-creature-integration
+          fi

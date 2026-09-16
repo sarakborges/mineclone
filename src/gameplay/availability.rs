@@ -2,6 +2,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
+    hud::chat::ChatState,
     player::inventory::InventoryState,
     tools::BrushPaletteState,
 };
@@ -13,6 +14,7 @@ pub(crate) struct WorldInteractionState<'w> {
     settings: Res<'w, State<SettingsState>>,
     inventory: Res<'w, State<InventoryState>>,
     brush_palette: Res<'w, State<BrushPaletteState>>,
+    chat: Res<'w, ChatState>,
 }
 
 impl WorldInteractionState<'_> {
@@ -22,6 +24,7 @@ impl WorldInteractionState<'_> {
             && *self.settings.get() == SettingsState::Closed
             && *self.inventory.get() == InventoryState::Closed
             && *self.brush_palette.get() == BrushPaletteState::Closed
+            && !self.chat.is_open()
     }
 }
 

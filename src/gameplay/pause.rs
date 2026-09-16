@@ -2,6 +2,7 @@ use bevy::{prelude::*, window::WindowFocused};
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
+    hud::chat::ChatState,
     player::inventory::InventoryState,
     tools::BrushPaletteState,
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
@@ -28,9 +29,10 @@ impl Plugin for PausePlugin {
 fn toggle_pause(
     keys: Res<ButtonInput<KeyCode>>,
     pause_state: Res<State<PauseState>>,
+    chat: Res<ChatState>,
     mut transition: ResMut<ScreenTransition>,
 ) {
-    if !keys.just_pressed(KeyCode::Escape) {
+    if !keys.just_pressed(KeyCode::Escape) || chat.blocks_pause_escape() {
         return;
     }
 
@@ -48,10 +50,8 @@ fn pause_on_focus_lost(
     mut next_pause_state: ResMut<NextState<PauseState>>,
 ) {
     let lost_focus = focused_events.read().any(|event| !event.focused);
-
     if *pause_state.get() == PauseState::Paused || !lost_focus {
         return;
     }
-
     next_pause_state.set(PauseState::Paused);
 }

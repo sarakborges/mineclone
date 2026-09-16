@@ -1,11 +1,9 @@
 use bevy::{
     ecs::system::SystemParam,
-    input::{
-        ButtonState,
-        keyboard::KeyboardInput,
-        mouse::{MouseScrollUnit, MouseWheel},
-    },
+    input::mouse::{MouseScrollUnit, MouseWheel},
+    input_focus::{FocusCause, InputFocus},
     prelude::*,
+    text::EditableText,
 };
 
 use crate::{
@@ -13,7 +11,7 @@ use crate::{
         hotbar::PlayerHotbar,
         inventory::{InventoryCursor, InventoryState},
     },
-    ui::text_input::select_all_pressed,
+    ui::text_input::editable_value,
 };
 
 use super::state::{
@@ -26,21 +24,16 @@ use super::state::{
 pub(super) fn handle_search_focus(
     mut creative_view: ResMut<CreativeInventoryView>,
     search_bars: Query<&Interaction, (With<CreativeSearchBar>, Changed<Interaction>)>,
+    editor: Query<Entity, With<CreativeSearchBar>>,
+    mut focus: ResMut<InputFocus>,
 ) {
-    for interaction in &search_bars {
-        if *interaction == Interaction::Pressed {
-            creative_view.focus_search();
-            break;
-        }
-    }
-}
-
-pub(super) fn handle_search_select_all(
-    keys: Res<ButtonInput<KeyCode>>,
-    mut creative_view: ResMut<CreativeInventoryView>,
-) {
-    if select_all_pressed(&keys) {
-        creative_view.select_all_search();
+    if search_bars
+        .iter()
+        .any(|interaction| *interaction == Interaction::Pressed)
+        && let Ok(entity) = editor.single()
+    {
+        creative_view.focus_search();
+        focus.set(entity, FocusCause::Pressed);
     }
 }
 
@@ -55,34 +48,40 @@ pub(super) fn handle_inventory_close_shortcut(
 }
 
 pub(super) fn handle_search_input(
-    mut keyboard_input: MessageReader<KeyboardInput>,
+    editor: Query<(Entity, &EditableText), With<CreativeSearchBar>>,
+    focus: Res<InputFocus>,
     mut creative_view: ResMut<CreativeInventoryView>,
     mut scroll_state: ResMut<CreativeScrollState>,
     mut ui_dirty: ResMut<CreativeInventoryUiDirty>,
 ) {
-    if !creative_view.search_focused() {
-        keyboard_input.clear();
+    let Ok((entity, editable)) = editor.single() else {
         return;
+    };
+    let focused = focus.get() == Some(entity);
+    if focused && !creative_view.search_focused() {
+        creative_view.focus_search();
+    } else if !focused && creative_view.search_focused() {
+        creative_view.blur_search();
     }
 
-    for event in keyboard_input.read() {
-        if event.state != ButtonState::Pressed {
-            continue;
-        }
+    let next = editable_value(editable);
+    if next != creative_view.search_query() {
+        creative_view.set_search_query(next);
+        scroll_state.catalog_y = 0.0;
+        ui_dirty.mark();
+    }
+}
 
-        let before = creative_view.search_query().to_owned();
-        if event.key_code == KeyCode::Backspace {
-            creative_view.backspace_search();
-        } else if let Some(text) = &event.text {
-            creative_view.push_search_text(text);
-        } else {
-            continue;
-        }
-
-        if creative_view.search_query() != before {
-            scroll_state.catalog_y = 0.0;
-            ui_dirty.mark();
-        }
+pub(super) fn sync_search_focus(
+    creative_view: Res<CreativeInventoryView>,
+    mut focus: ResMut<InputFocus>,
+    editor: Query<Entity, With<CreativeSearchBar>>,
+) {
+    if !creative_view.search_focused()
+        && let Ok(entity) = editor.single()
+        && focus.get() == Some(entity)
+    {
+        focus.clear();
     }
 }
 
@@ -114,11 +113,17 @@ pub(super) fn handle_creative_scroll(
     category_scrollbars: Query<&Interaction, With<CreativeCategoryScrollbar>>,
     mut category_scroll: Query<
         &mut ScrollPosition,
-        (With<CreativeCategoryScrollArea>, Without<CreativeCatalogScrollArea>),
+        (
+            With<CreativeCategoryScrollArea>,
+            Without<CreativeCatalogScrollArea>,
+        ),
     >,
     mut catalog_scroll: Query<
         &mut ScrollPosition,
-        (With<CreativeCatalogScrollArea>, Without<CreativeCategoryScrollArea>),
+        (
+            With<CreativeCatalogScrollArea>,
+            Without<CreativeCategoryScrollArea>,
+        ),
     >,
 ) {
     let mut delta = 0.0;

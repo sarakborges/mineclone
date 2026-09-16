@@ -4,8 +4,8 @@ use crate::app::{
     game_state::GameState, resource_systems::reset_resource, settings_state::SettingsState,
 };
 use game_rules_section::{
-    TicksPerSecondInputState, handle_ticks_input, handle_ticks_keyboard,
-    handle_ticks_step_buttons, sync_ticks_per_second_text,
+    TicksPerSecondInputState, handle_ticks_input, handle_ticks_keyboard, handle_ticks_step_buttons,
+    sync_ticks_per_second_text,
 };
 use hud_section::{
     TargetBlockPositionDropdownState, close_target_block_position_dropdown_outside_hud,
@@ -28,8 +28,8 @@ use spawn_biome_section::{
     SpawnBiomeDropdownState, close_spawn_biome_dropdown_outside_general,
     handle_spawn_biome_dropdown_button, handle_spawn_biome_option_buttons,
     handle_spawn_biome_search_focus, handle_spawn_biome_search_keyboard,
-    populate_spawn_biome_options, sync_spawn_biome_dropdown_state,
-    sync_spawn_biome_option_labels, sync_spawn_biome_options, sync_spawn_biome_selected_label,
+    populate_spawn_biome_options, sync_spawn_biome_dropdown_state, sync_spawn_biome_option_labels,
+    sync_spawn_biome_options, sync_spawn_biome_selected_label,
 };
 use world_settings_section::{handle_game_mode_buttons, sync_game_mode_buttons};
 
@@ -84,16 +84,16 @@ impl Plugin for SettingsScreenPlugin {
                 (
                     (
                         handle_section_buttons,
-                        sync_new_world_input_focus_to_section
-                            .run_if(in_state(GameState::NewWorld)),
+                        sync_new_world_input_focus_to_section.run_if(in_state(GameState::NewWorld)),
                         close_spawn_biome_dropdown_outside_general,
                         close_target_block_position_dropdown_outside_hud,
                         handle_seed_focus,
-                        handle_new_world_general_control_focus.run_if(in_state(GameState::NewWorld)),
+                        handle_new_world_general_control_focus
+                            .run_if(in_state(GameState::NewWorld)),
                         handle_random_seed,
-                        handle_spawn_biome_dropdown_button,
-                        handle_spawn_biome_search_focus,
-                        handle_spawn_biome_option_buttons,
+                        handle_spawn_biome_dropdown_button.run_if(in_state(GameState::NewWorld)),
+                        handle_spawn_biome_search_focus.run_if(in_state(GameState::NewWorld)),
+                        handle_spawn_biome_option_buttons.run_if(in_state(GameState::NewWorld)),
                         handle_game_mode_buttons,
                     )
                         .chain(),
@@ -101,9 +101,9 @@ impl Plugin for SettingsScreenPlugin {
                         handle_ticks_step_buttons,
                         handle_ticks_input,
                         handle_new_world_footer,
-                        handle_spawn_biome_search_keyboard,
-                        handle_seed_keyboard,
-                        handle_ticks_keyboard,
+                        handle_spawn_biome_search_keyboard.run_if(in_state(GameState::NewWorld)),
+                        handle_seed_keyboard.run_if(in_state(GameState::NewWorld)),
+                        handle_ticks_keyboard.run_if(has_ticks_input),
                         handle_language_buttons,
                         handle_display_tooltips_toggle,
                         handle_target_block_position_dropdown_button,
@@ -124,10 +124,10 @@ impl Plugin for SettingsScreenPlugin {
                     sync_display_tooltips_toggle,
                     sync_target_block_position_dropdown,
                     sync_target_block_position_options,
-                    sync_spawn_biome_dropdown_state,
+                    sync_spawn_biome_dropdown_state.run_if(in_state(GameState::NewWorld)),
                     sync_spawn_biome_selected_label,
                     sync_spawn_biome_option_labels,
-                    sync_spawn_biome_options,
+                    sync_spawn_biome_options.run_if(in_state(GameState::NewWorld)),
                     sync_seed_text,
                     sync_ticks_per_second_text,
                     sync_render_distance_text,
@@ -150,4 +150,8 @@ fn settings_screen_active(
     game_state: Res<State<GameState>>,
 ) -> bool {
     *settings_state.get() == SettingsState::Open || *game_state.get() == GameState::NewWorld
+}
+
+fn has_ticks_input(inputs: Query<(), With<game_rules_section::TicksPerSecondInput>>) -> bool {
+    !inputs.is_empty()
 }

@@ -13,15 +13,14 @@ use crate::{
 use interaction::{
     handle_category_clicks, handle_creative_scroll, handle_creative_slot_clicks,
     handle_empty_inventory_click, handle_inventory_close_shortcut, handle_inventory_trash_clicks,
-    handle_search_focus, handle_search_input, handle_search_select_all, handle_slot_clicks,
-    remember_creative_scroll_positions,
+    handle_search_focus, handle_search_input, handle_slot_clicks,
+    remember_creative_scroll_positions, sync_search_focus,
 };
 use state::{CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState};
 use sync::{
-    rebuild_inventory_when_changed, spawn_inventory, style_category_buttons,
-    style_creative_slots, style_inventory_slots, style_inventory_trash_button,
-    style_search_bar, sync_inventory_cursor_icon, sync_inventory_slot_contents,
-    update_cursor_icon_position,
+    rebuild_inventory_when_changed, spawn_inventory, style_category_buttons, style_creative_slots,
+    style_inventory_slots, style_inventory_trash_button, style_search_bar,
+    sync_inventory_cursor_icon, sync_inventory_slot_contents, update_cursor_icon_position,
 };
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -64,7 +63,6 @@ impl Plugin for InventoryHudPlugin {
                 (
                     remember_creative_scroll_positions,
                     handle_search_focus,
-                    handle_search_select_all,
                     handle_inventory_close_shortcut,
                     handle_search_input,
                     handle_category_clicks,
@@ -73,6 +71,7 @@ impl Plugin for InventoryHudPlugin {
                     handle_slot_clicks,
                     handle_inventory_trash_clicks,
                     handle_empty_inventory_click,
+                    sync_search_focus,
                 )
                     .chain()
                     .in_set(InventoryHudSet::Input)

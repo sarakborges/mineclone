@@ -5,6 +5,7 @@
 
 mod app;
 mod content;
+mod creatures;
 mod gameplay;
 mod hud;
 mod localization;
@@ -38,6 +39,7 @@ use bevy::{
     prelude::*,
 };
 use content::ContentPlugin;
+use creatures::CreaturesPlugin;
 use gameplay::GameplayPlugin;
 use hud::HudPlugin;
 use localization::LocalizationPlugin;
@@ -90,6 +92,7 @@ fn run_game() {
             ScreensPlugin,
             WorldPlugin,
             GameplayPlugin,
+            CreaturesPlugin,
             RenderingPlugin,
             BlockTargetingPlugin,
             ToolsPlugin,

@@ -8,7 +8,7 @@ use crate::{
     ui::{
         button::menu_button,
         cosmic_background::{self, STAR_FIELD},
-        scrollbar::persistent_vertical_scrollbar,
+        scrollbar::vertical_scrollbar,
         surface, theme, typography,
     },
     world::{NewWorldConfig, game_rules::GameRules, render_distance::RenderDistanceSettings},
@@ -340,7 +340,7 @@ fn spawn_sidebar(
                         })
                         .id();
 
-                    frame.spawn(persistent_vertical_scrollbar(scroll_area_id));
+                    frame.spawn(vertical_scrollbar(scroll_area_id));
                 });
         });
 }
@@ -454,7 +454,7 @@ fn spawn_content(columns: &mut ChildSpawnerCommands, view: SettingsContentView<'
                         })
                         .id();
 
-                    frame.spawn(persistent_vertical_scrollbar(scroll_area_id));
+                    frame.spawn(vertical_scrollbar(scroll_area_id));
                 });
         });
 }
