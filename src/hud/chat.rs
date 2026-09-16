@@ -3,6 +3,7 @@ mod visual;
 use std::collections::VecDeque;
 
 use bevy::{
+    ecs::system::SystemParam,
     input::{ButtonState, keyboard::KeyboardInput},
     prelude::*,
     window::{CursorGrabMode, CursorOptions},
@@ -13,7 +14,10 @@ use crate::{
     content::creature::CreatureRegistry,
     creatures::spawn_creature_at,
     localization::ActiveLanguage,
-    player::{camera::{GameplayCamera, look::MouseLookInputState}, inventory::InventoryState},
+    player::{
+        camera::{GameplayCamera, look::MouseLookInputState},
+        inventory::InventoryState,
+    },
     tools::BrushPaletteState,
     ui::text_input::{TextInputState, select_all_pressed},
     voxel::world::VoxelWorld,
@@ -77,7 +81,10 @@ impl Plugin for ChatHudPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ChatState>()
             .add_message::<ChatSubmission>()
-            .add_systems(OnEnter(GameState::Gameplay), (reset_chat, spawn_chat_ui).chain())
+            .add_systems(
+                OnEnter(GameState::Gameplay),
+                (reset_chat, spawn_chat_ui).chain(),
+            )
             .add_systems(
                 OnEnter(PauseState::Paused),
                 close_chat_on_pause.run_if(in_state(GameState::Gameplay)),
@@ -96,7 +103,10 @@ impl Plugin for ChatHudPlugin {
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
             )
-            .add_systems(Last, scroll_chat_to_bottom.run_if(in_state(GameState::Gameplay)));
+            .add_systems(
+                Last,
+                scroll_chat_to_bottom.run_if(in_state(GameState::Gameplay)),
+            );
     }
 }
 
@@ -108,37 +118,43 @@ fn close_chat_on_pause(mut chat: ResMut<ChatState>) {
     chat.close();
 }
 
+#[derive(SystemParam)]
+struct ChatInputContext<'w> {
+    keys: Res<'w, ButtonInput<KeyCode>>,
+    pause: Res<'w, State<PauseState>>,
+    settings: Res<'w, State<SettingsState>>,
+    inventory: Res<'w, State<InventoryState>>,
+    brush_palette: Res<'w, State<BrushPaletteState>>,
+}
+
 fn handle_chat_input(
-    keys: Res<ButtonInput<KeyCode>>,
+    input: ChatInputContext,
     mut keyboard: MessageReader<KeyboardInput>,
     mut submissions: MessageWriter<ChatSubmission>,
     mut chat: ResMut<ChatState>,
-    pause: Res<State<PauseState>>,
-    settings: Res<State<SettingsState>>,
-    inventory: Res<State<InventoryState>>,
-    brush_palette: Res<State<BrushPaletteState>>,
     window: Single<&Window>,
     mut cursor: Single<&mut CursorOptions>,
     mut mouse_look: ResMut<MouseLookInputState>,
 ) {
-    if !keys.just_pressed(KeyCode::Escape) {
+    if !input.keys.just_pressed(KeyCode::Escape) {
         chat.escape_consumed = false;
     }
 
     if chat.open {
-        if *pause.get() != PauseState::Running {
+        if *input.pause.get() != PauseState::Running {
             chat.close();
             keyboard.clear();
             return;
         }
-        if keys.just_pressed(KeyCode::Escape) {
+        if input.keys.just_pressed(KeyCode::Escape) {
             chat.close();
             chat.escape_consumed = true;
             restore_game_cursor(window.focused, &mut cursor, &mut mouse_look);
             keyboard.clear();
             return;
         }
-        if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::NumpadEnter) {
+        if input.keys.just_pressed(KeyCode::Enter) || input.keys.just_pressed(KeyCode::NumpadEnter)
+        {
             let line = chat.draft.text().trim().to_owned();
             chat.close();
             restore_game_cursor(window.focused, &mut cursor, &mut mouse_look);
@@ -148,7 +164,7 @@ fn handle_chat_input(
             keyboard.clear();
             return;
         }
-        if select_all_pressed(&keys) {
+        if select_all_pressed(&input.keys) {
             chat.draft.select_all();
         }
         for event in keyboard.read() {
@@ -173,11 +189,11 @@ fn handle_chat_input(
     }
 
     keyboard.clear();
-    let can_open = *pause.get() == PauseState::Running
-        && *settings.get() == SettingsState::Closed
-        && *inventory.get() == InventoryState::Closed
-        && *brush_palette.get() == BrushPaletteState::Closed;
-    if !can_open || !keys.just_pressed(KeyCode::KeyT) {
+    let can_open = *input.pause.get() == PauseState::Running
+        && *input.settings.get() == SettingsState::Closed
+        && *input.inventory.get() == InventoryState::Closed
+        && *input.brush_palette.get() == BrushPaletteState::Closed;
+    if !can_open || !input.keys.just_pressed(KeyCode::KeyT) {
         return;
     }
 
@@ -194,7 +210,11 @@ fn restore_game_cursor(
     cursor: &mut CursorOptions,
     mouse_look: &mut MouseLookInputState,
 ) {
-    cursor.grab_mode = if focused { CursorGrabMode::Locked } else { CursorGrabMode::None };
+    cursor.grab_mode = if focused {
+        CursorGrabMode::Locked
+    } else {
+        CursorGrabMode::None
+    };
     cursor.visible = !focused;
     mouse_look.ignore_next_delta = true;
 }
@@ -223,14 +243,19 @@ fn parse_line(input: &str) -> ParsedLine<'_> {
     }
 }
 
+#[derive(SystemParam)]
+struct ChatCreatureContext<'w> {
+    definitions: Res<'w, CreatureRegistry>,
+    assets: Res<'w, AssetServer>,
+    world: Res<'w, VoxelWorld>,
+    language: Res<'w, ActiveLanguage>,
+}
+
 fn interpret_chat_submissions(
     mut submissions: MessageReader<ChatSubmission>,
     mut chat: ResMut<ChatState>,
     mut commands: Commands,
-    definitions: Res<CreatureRegistry>,
-    assets: Res<AssetServer>,
-    world: Res<VoxelWorld>,
-    language: Res<ActiveLanguage>,
+    creature_context: ChatCreatureContext,
     players: Query<&Transform, With<GameplayCamera>>,
 ) {
     for submission in submissions.read() {
@@ -242,10 +267,10 @@ fn interpret_chat_submissions(
                 if let Some(eye) = players.iter().next().map(|player| player.translation) {
                     match spawn_creature_at(
                         &mut commands,
-                        &definitions,
-                        &assets,
-                        &world,
-                        language.get(),
+                        &creature_context.definitions,
+                        &creature_context.assets,
+                        &creature_context.world,
+                        creature_context.language.get(),
                         id,
                         eye,
                     ) {
@@ -268,8 +293,10 @@ mod tests {
     #[test]
     fn commands_are_distinguished_from_plain_messages() {
         assert_eq!(parse_line("hello"), ParsedLine::Say("hello"));
-        assert_eq!(parse_line(" /spawn_creature asteria:meadow_slime "),
-            ParsedLine::SpawnCreature("asteria:meadow_slime"));
+        assert_eq!(
+            parse_line(" /spawn_creature asteria:meadow_slime "),
+            ParsedLine::SpawnCreature("asteria:meadow_slime")
+        );
         assert_eq!(parse_line("/spawn_creature"), ParsedLine::Usage);
         assert_eq!(parse_line("/spawn_creature slime extra"), ParsedLine::Usage);
         assert_eq!(parse_line("/unknown"), ParsedLine::Unknown("/unknown"));

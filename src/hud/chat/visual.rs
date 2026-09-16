@@ -17,16 +17,16 @@ const CHAT_LINE_HEIGHT: f32 = 22.0;
 const MAX_HISTORY_HEIGHT: f32 = MAX_VISIBLE_LINES * CHAT_LINE_HEIGHT;
 
 #[derive(Component)]
-struct ChatRoot;
+pub(super) struct ChatRoot;
 
 #[derive(Component)]
-struct ChatHistory;
+pub(super) struct ChatHistory;
 
 #[derive(Component)]
-struct ChatInputRoot;
+pub(super) struct ChatInputRoot;
 
 #[derive(Component)]
-struct ChatDraft;
+pub(super) struct ChatDraft;
 
 pub(super) fn advance_chat_timeout(
     time: Res<Time>,
@@ -119,7 +119,10 @@ pub(super) fn spawn_chat_ui(mut commands: Commands) {
                     ChatDraft,
                     typography::hud(""),
                     typography::tooltip_shadow(),
-                    Node { width: percent(100), ..default() },
+                    Node {
+                        width: percent(100),
+                        ..default()
+                    },
                     Pickable::IGNORE,
                 ));
             });
@@ -151,10 +154,7 @@ pub(super) fn sync_chat_visibility(
     }
 }
 
-pub(super) fn sync_chat_draft(
-    chat: Res<ChatState>,
-    mut text: Single<&mut Text, With<ChatDraft>>,
-) {
+pub(super) fn sync_chat_draft(chat: Res<ChatState>, mut text: Single<&mut Text, With<ChatDraft>>) {
     let next = if chat.open {
         format!("> {}▏", chat.draft.text())
     } else {
@@ -189,7 +189,10 @@ pub(super) fn rebuild_chat_history(
             list.spawn((
                 typography::hud(message.clone()),
                 typography::tooltip_shadow(),
-                Node { width: percent(100), ..default() },
+                Node {
+                    width: percent(100),
+                    ..default()
+                },
                 Pickable::IGNORE,
             ));
         }
@@ -218,7 +221,7 @@ pub(super) fn scroll_chat_history(
     let (position, computed) = &mut *history;
     let maximum = ((computed.content_size().y - computed.size().y).max(0.0)
         * computed.inverse_scale_factor())
-        .max(0.0);
+    .max(0.0);
     let target = (position.0.y + delta).clamp(0.0, maximum);
     if position.0.y != target {
         position.0.y = target;
@@ -239,7 +242,7 @@ pub(super) fn scroll_chat_to_bottom(
     let (position, computed) = &mut *history;
     let bottom = ((computed.content_size().y - computed.size().y).max(0.0)
         * computed.inverse_scale_factor())
-        .max(0.0);
+    .max(0.0);
     if position.0.y != bottom {
         position.0.y = bottom;
     }

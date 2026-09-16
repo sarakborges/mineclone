@@ -49,3 +49,7 @@ Outras pendências antigas: fogColor artístico, medição FPS ao caminhar, HUD 
 
 ## Feature branch follow-up: settings and New World conditional scrollbars (0.17.1)
 PR #10 targets feature/slime-creature-integration, not develop. Settings and New World share src/screens/settings_screen/layout.rs; sidebar and main-content scrollbars changed from persistent_vertical_scrollbar to vertical_scrollbar. The shared AutoScrollbar checks measured content overflow and hides again below the threshold. Inventory category/catalog and chat use the same automatic policy. No gameplay or UI resize test is confirmed. Initial PR #10 CI run 35148336319 failed on genuine Rust visibility and Clippy argument-count diagnostics in creature visual and chat; those remain open until separately fixed and CI passes. Preserve the nine preexisting world defects as open. User explicitly requires branch-only code changes.
+
+
+## CI fixes — feature/game-chat-creature-command 0.17.2
+Repair Rust marker visibility and group related resources into Bevy SystemParam in creature visual and chat. No lint suppressions. Settings/New World conditionally visible scrollbars remain from 0.17.1. Feature branch only; develop untouched. Test Clippy, check and gameplay before merge.
