@@ -16,7 +16,7 @@ use crate::voxel::{
 use super::{
     context::LightingContext,
     medium::{block_emission_for_cell, light_transmission, medium_dampening_for_cells},
-    queue::LightingQueue,
+    queue::{LightingLane, LightingQueue},
 };
 
 const HUE_VECTOR_SCALE: i32 = 1024;
@@ -59,6 +59,7 @@ pub(super) fn relax(
     queue: &mut LightingQueue,
 ) -> HashSet<IVec3> {
     let mut changed_chunks = HashSet::new();
+    let mut interactive_changed_chunks = HashSet::new();
     let mut context = LightingContext::default();
     relax_budgeted(
         world,
@@ -66,6 +67,7 @@ pub(super) fn relax(
         queue,
         &mut context,
         &mut changed_chunks,
+        &mut interactive_changed_chunks,
         |_| false,
     );
     changed_chunks
@@ -77,13 +79,18 @@ pub(super) fn relax_budgeted(
     queue: &mut LightingQueue,
     context: &mut LightingContext,
     changed_chunks: &mut HashSet<IVec3>,
+    interactive_changed_chunks: &mut HashSet<IVec3>,
     mut budget_exhausted: impl FnMut(usize) -> bool,
 ) {
     changed_chunks.clear();
     context.clear();
+    let processing_interactive = queue.has_interactive_work();
     let mut processed = 0;
 
     loop {
+        if processing_interactive && !queue.has_interactive_work() {
+            break;
+        }
         if processed > 0
             && processed % BUDGET_CHECK_INTERVAL_VOXELS == 0
             && budget_exhausted(processed)
@@ -91,9 +98,14 @@ pub(super) fn relax_budgeted(
             break;
         }
 
-        let Some(position) = queue.pop() else {
+        let Some((position, lane)) = queue.pop() else {
             break;
         };
+        if processing_interactive {
+            debug_assert_eq!(lane, LightingLane::Interactive);
+        } else {
+            debug_assert_eq!(lane, LightingLane::Background);
+        }
         processed += 1;
 
         let (chunk_coord, local_position) = split_world_position(position);
@@ -122,8 +134,17 @@ pub(super) fn relax_budgeted(
         if !world.set_light_at_deferred_mesh_revision(chunk_coord, local_position, desired) {
             continue;
         }
-        changed_chunks.insert(chunk_coord);
-        queue.enqueue_with_neighbors(position);
+        if lane == LightingLane::Interactive {
+            interactive_changed_chunks.insert(chunk_coord);
+        } else {
+            changed_chunks.insert(chunk_coord);
+        }
+        queue.enqueue_with_neighbors_in_lane(position, lane);
+    }
+
+    if processing_interactive && !queue.has_interactive_work() {
+        interactive_changed_chunks.retain(|coord| world.chunk(*coord).is_some());
+        changed_chunks.extend(interactive_changed_chunks.drain());
     }
 
     world.commit_deferred_light_mesh_revisions(changed_chunks.iter().copied());

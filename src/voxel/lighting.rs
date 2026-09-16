@@ -34,6 +34,7 @@ pub(crate) struct PendingLightingUpdates {
     queue: LightingQueue,
     emission_edit_previous_cells: HashMap<IVec3, Option<VoxelCell>>,
     context: LightingContext,
+    interactive_changed_chunks: HashSet<IVec3>,
 }
 
 impl PendingLightingUpdates {
@@ -45,7 +46,7 @@ impl PendingLightingUpdates {
     }
 
     pub(crate) fn enqueue_medium_edit(&mut self, position: IVec3) {
-        self.queue.enqueue_with_neighbors_priority(position);
+        self.queue.enqueue_with_neighbors(position);
     }
 
     pub(crate) fn enqueue_chunk_unloads(&mut self, unloaded: &[IVec3]) {
@@ -68,7 +69,9 @@ impl PendingLightingUpdates {
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.queue.is_empty() && self.emission_edit_previous_cells.is_empty()
+        self.queue.is_empty()
+            && self.emission_edit_previous_cells.is_empty()
+            && self.interactive_changed_chunks.is_empty()
     }
 
     fn enqueue_emission_edit_volumes(
@@ -91,9 +94,9 @@ impl PendingLightingUpdates {
 
             // Changing an existing source's HSI emission can leave stale color channels
             // mutually supporting one another in the incremental field. Re-evaluate the
-            // complete maximum Manhattan footprint only for that nonzero -> nonzero
-            // emission change. New sources propagate outward from the priority seed, while
-            // removed sources already converge through the normal invalidation frontier.
+            // complete maximum Manhattan footprint as interactive work so source edits
+            // cannot fall behind streaming relaxation. New and removed sources converge
+            // through the same interactive propagation lane.
             for y in -radius..=radius {
                 let y_cost = y.abs();
                 for z in -radius..=radius {
@@ -104,7 +107,7 @@ impl PendingLightingUpdates {
 
                     let x_span = radius - yz_cost;
                     for x in -x_span..=x_span {
-                        queue.enqueue(center + IVec3::new(x, y, z));
+                        queue.enqueue_interactive(center + IVec3::new(x, y, z));
                     }
                 }
             }
@@ -191,13 +194,19 @@ pub(crate) fn process_pending_lighting(
     budget_exhausted: impl FnMut(usize) -> bool,
 ) {
     pending.enqueue_emission_edit_volumes(world, blocks, secondary_properties);
-    let PendingLightingUpdates { queue, context, .. } = pending;
+    let PendingLightingUpdates {
+        queue,
+        context,
+        interactive_changed_chunks,
+        ..
+    } = pending;
     relax_budgeted(
         world,
         LightingRegistries::new(blocks, fluids, secondary_properties),
         queue,
         context,
         changed_chunks,
+        interactive_changed_chunks,
         budget_exhausted,
     );
 }

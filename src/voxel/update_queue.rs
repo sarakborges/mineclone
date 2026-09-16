@@ -42,6 +42,14 @@ impl VoxelUpdateQueue {
         self.enqueue_priority(position);
     }
 
+    pub(crate) fn contains(&self, position: IVec3) -> bool {
+        self.queue.contains(position)
+    }
+
+    pub(crate) fn remove(&mut self, position: IVec3) -> bool {
+        self.queue.remove(position)
+    }
+
     pub(crate) fn pop(&mut self) -> Option<IVec3> {
         self.queue.pop()
     }
@@ -78,5 +86,17 @@ mod tests {
         queue.enqueue_with_neighbors_priority(IVec3::new(3, 4, 7));
 
         assert_eq!(queue.pop(), Some(IVec3::new(3, 4, 7)));
+    }
+
+    #[test]
+    fn remove_clears_membership() {
+        let position = IVec3::new(3, 4, 7);
+        let mut queue = VoxelUpdateQueue::default();
+        queue.enqueue(position);
+
+        assert!(queue.contains(position));
+        assert!(queue.remove(position));
+        assert!(!queue.contains(position));
+        assert_eq!(queue.pop(), None);
     }
 }
