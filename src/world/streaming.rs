@@ -75,8 +75,24 @@ impl ChunkStreamingState {
         }
     }
 
-    pub(super) fn pop_retired(&mut self) -> Option<IVec3> {
-        self.retired.pop()
+    pub(super) fn pop_retired_outside_horizontal_radius(
+        &mut self,
+        center: IVec3,
+        horizontal_radius: i32,
+    ) -> Option<IVec3> {
+        let center = center.xz();
+        let radius_squared = horizontal_radius.max(0).pow(2);
+        let desired = &self.desired;
+        let retained = &self.retained;
+
+        self.retired.pop_where(|coord| {
+            if desired.contains(&coord) || retained.contains(&coord) {
+                return false;
+            }
+
+            let delta = coord.xz() - center;
+            delta.length_squared() > radius_squared
+        })
     }
 
     fn requeue(&mut self, coord: IVec3) {
@@ -517,5 +533,52 @@ fn notify_loaded_chunk_neighbors(
         } else if chunk.boundary_has_fluid(offset) || neighbor_chunk.boundary_has_fluid(-offset) {
             remesh_queue.enqueue_fluid_priority(neighbor);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retired_chunks_wait_inside_horizontal_retention_radius() {
+        let near = IVec3::new(20, 0, 0);
+        let far = IVec3::new(23, 0, 0);
+        let mut state = ChunkStreamingState::default();
+        state.enqueue_retired(near);
+        state.enqueue_retired(far);
+
+        assert_eq!(
+            state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 22),
+            Some(far)
+        );
+        assert_eq!(
+            state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 22),
+            None
+        );
+
+        assert_eq!(
+            state.pop_retired_outside_horizontal_radius(IVec3::new(-3, 0, 0), 22),
+            Some(near)
+        );
+    }
+
+    #[test]
+    fn retired_chunk_that_reenters_selection_is_not_unloaded() {
+        let coord = IVec3::new(30, 0, 0);
+        let mut state = ChunkStreamingState::default();
+        state.enqueue_retired(coord);
+        state.desired.insert(coord);
+
+        assert_eq!(
+            state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 22),
+            None
+        );
+
+        state.desired.remove(&coord);
+        assert_eq!(
+            state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 22),
+            Some(coord)
+        );
     }
 }
