@@ -263,10 +263,6 @@ fn mix_strongest_block_lights<const N: usize>(lights: [BlockLight; N]) -> BlockL
     let mut strongest_count = 0_u32;
 
     for light in &lights {
-        strongest_intensity = strongest_intensity.max(light.intensity());
-    }
-
-    for light in &lights {
         if light.intensity() != strongest_intensity {
             continue;
         }
