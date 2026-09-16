@@ -20,12 +20,12 @@ const NEGATIVE_Z_FACE: usize = 4;
 const POSITIVE_Z_FACE: usize = 5;
 
 fn shared_empty_blocks() -> Arc<[Option<VoxelCell>]> {
-    static EMPTY_BLOCKS: OnceLock<Arc<[Option<VoxelCell]>> = OnceLock::new();
+    static EMPTY_BLOCKS: OnceLock<Arc<[Option<VoxelCell>]>> = OnceLock::new();
     Arc::clone(EMPTY_BLOCKS.get_or_init(|| Arc::from(vec![None; CHUNK_VOLUME])))
 }
 
 fn shared_empty_fluids() -> Arc<[Option<FluidCell>]> {
-    static EMPTY_FLUIDS: OnceLock<Arc<[Option<FluidCell]>> = OnceLock::new();
+    static EMPTY_FLUIDS: OnceLock<Arc<[Option<FluidCell>]>> = OnceLock::new();
     Arc::clone(EMPTY_FLUIDS.get_or_init(|| Arc::from(vec![None; CHUNK_VOLUME])))
 }
 
