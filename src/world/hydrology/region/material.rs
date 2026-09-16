@@ -3,8 +3,8 @@ use bevy::prelude::*;
 use super::HydrologyRegion;
 use crate::world::hydrology::{
     constants::{
-        BED_MATERIAL_DEPTH, COAST_MAXIMUM_SURFACE_HEIGHT, OCEAN_EXTRA_DEPTH, OCEAN_MINIMUM_DEPTH,
-        SHORE_STRENGTH,
+        BED_MATERIAL_DEPTH, COAST_MAXIMUM_SURFACE_HEIGHT, OCEAN_EXTRA_DEPTH,
+        OCEAN_MINIMUM_DEPTH, SHORE_STRENGTH,
     },
     math::{hydrology_dominates_surface, lerp, ocean_strength, smoothstep},
 };
@@ -92,7 +92,8 @@ impl HydrologyRegion {
                 return None;
             }
 
-            let target_floor = self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength;
+            let target_floor =
+                self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength;
             let floor = lerp(sample.elevation, target_floor, strength);
             if floor > self.sea_level + COAST_MAXIMUM_SURFACE_HEIGHT {
                 return None;

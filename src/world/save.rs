@@ -39,9 +39,7 @@ impl InMemoryWorldSave {
     }
 
     pub fn player_position(&self, player_id: PlayerId) -> Option<Vec3> {
-        self.players
-            .get(&player_id)
-            .and_then(PlayerSaveData::position)
+        self.players.get(&player_id).and_then(PlayerSaveData::position)
     }
 
     pub fn player_game_mode(&self, player_id: PlayerId) -> GameMode {
@@ -51,7 +49,12 @@ impl InMemoryWorldSave {
             .unwrap_or_default()
     }
 
-    pub fn begin_new_world(&mut self, seed: WorldSeed, dimension_id: &str, game_rules: GameRules) {
+    pub fn begin_new_world(
+        &mut self,
+        seed: WorldSeed,
+        dimension_id: &str,
+        game_rules: GameRules,
+    ) {
         self.seed = Some(seed.0);
         self.dimension_id = Some(dimension_id.to_owned());
         self.game_rules = game_rules;
@@ -64,7 +67,12 @@ impl InMemoryWorldSave {
         }
     }
 
-    pub fn save_player_state(&mut self, player_id: PlayerId, position: Vec3, game_mode: GameMode) {
+    pub fn save_player_state(
+        &mut self,
+        player_id: PlayerId,
+        position: Vec3,
+        game_mode: GameMode,
+    ) {
         if self.has_world() {
             self.players
                 .entry(player_id)

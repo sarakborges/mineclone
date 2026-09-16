@@ -1,6 +1,10 @@
 use std::time::Duration;
 
-use bevy::{ecs::system::SystemParam, platform::collections::HashSet, prelude::*};
+use bevy::{
+    ecs::system::SystemParam,
+    platform::collections::HashSet,
+    prelude::*,
+};
 
 use crate::voxel::{
     chunk::VoxelChunk,

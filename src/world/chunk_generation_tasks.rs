@@ -102,9 +102,10 @@ impl ChunkGenerationTasks {
             return false;
         }
 
-        let snapshot = self.snapshot.as_ref().unwrap_or_else(|| {
-            panic!("chunk generation snapshot must be prepared before scheduling")
-        });
+        let snapshot = self
+            .snapshot
+            .as_ref()
+            .unwrap_or_else(|| panic!("chunk generation snapshot must be prepared before scheduling"));
         let region = generation_region_coord(coord);
         if !snapshot
             .feature_fields
@@ -117,9 +118,7 @@ impl ChunkGenerationTasks {
         }
 
         let column = coord.xz();
-        if !snapshot
-            .feature_fields
-            .generation_columns_initialized(column)
+        if !snapshot.feature_fields.generation_columns_initialized(column)
             && self
                 .pending
                 .any_coord(|pending_coord| pending_coord.xz() == column)

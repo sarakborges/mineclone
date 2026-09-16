@@ -169,7 +169,11 @@ fn desired_light(
         registries.secondary_properties,
         position,
     );
-    let emitted = block_emission_for_cell(cell, registries.blocks, registries.secondary_properties);
+    let emitted = block_emission_for_cell(
+        cell,
+        registries.blocks,
+        registries.secondary_properties,
+    );
 
     if blocks_light {
         return VoxelLight::new_hsi(0, emitted);

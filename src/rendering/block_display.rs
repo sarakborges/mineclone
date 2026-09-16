@@ -2,8 +2,11 @@ use bevy::prelude::*;
 
 use crate::voxel::block_face::BlockFace;
 
-pub(crate) const BLOCK_DISPLAY_FACES: [BlockFace; 3] =
-    [BlockFace::Top, BlockFace::Front, BlockFace::Right];
+pub(crate) const BLOCK_DISPLAY_FACES: [BlockFace; 3] = [
+    BlockFace::Top,
+    BlockFace::Front,
+    BlockFace::Right,
+];
 
 const DISPLAY_LEFT: f32 = 0.10;
 const DISPLAY_CENTER_X: f32 = 0.50;

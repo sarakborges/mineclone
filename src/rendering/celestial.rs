@@ -41,7 +41,11 @@ struct CelestialRuntimeScene<'w, 's> {
     camera: Single<'w, 's, (Entity, &'static GlobalTransform), With<GameplayCamera>>,
 }
 
-fn spawn_celestial_bodies(mut commands: Commands, scene: SkyContext, assets: CelestialSpawnAssets) {
+fn spawn_celestial_bodies(
+    mut commands: Commands,
+    scene: SkyContext,
+    assets: CelestialSpawnAssets,
+) {
     let CelestialSpawnAssets {
         mut meshes,
         mut materials,
@@ -109,9 +113,9 @@ fn update_celestial_bodies(
     let CelestialRuntimeScene { day_night, camera } = scene;
     let (camera_entity, camera_transform) = camera.into_inner();
     let camera_position = camera_transform.translation();
-    let camera_changed = last_camera
-        .as_ref()
-        .is_none_or(|(entity, previous)| *entity != camera_entity || *previous != camera_position);
+    let camera_changed = last_camera.as_ref().is_none_or(|(entity, previous)| {
+        *entity != camera_entity || *previous != camera_position
+    });
     if !camera_changed && !day_night.inputs_changed() {
         return;
     }

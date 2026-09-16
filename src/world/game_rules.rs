@@ -25,10 +25,7 @@ impl GameRules {
     }
 
     pub(crate) fn set_ticks_per_second(&mut self, ticks_per_second: u32) {
-        assert!(
-            ticks_per_second > 0,
-            "ticks per second must be greater than zero"
-        );
+        assert!(ticks_per_second > 0, "ticks per second must be greater than zero");
         self.ticks_per_second = ticks_per_second;
     }
 }

@@ -18,9 +18,11 @@ pub(super) fn update_coordinates_hud(
     let position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let block_position = position.floor().as_ivec3();
     let language = language.get();
-    let cache_matches = cached.as_ref().is_some_and(|(position, cached_language)| {
-        *position == block_position && *cached_language == language
-    });
+    let cache_matches = cached
+        .as_ref()
+        .is_some_and(|(position, cached_language)| {
+            *position == block_position && *cached_language == language
+        });
     if cache_matches && !localization.is_changed() {
         return;
     }

@@ -74,8 +74,7 @@ fn edit_targeted_block(
     let selected_slot = input.hotbar.selected_slot();
     let selected_item = input.hotbar.item_at(selected_slot);
 
-    if let Some(tool_id) = selected_item.filter(|item_id| definitions.tools.get(item_id).is_some())
-    {
+    if let Some(tool_id) = selected_item.filter(|item_id| definitions.tools.get(item_id).is_some()) {
         if left_pressed {
             tool_uses.write(ToolUse {
                 tool_id,

@@ -1,8 +1,10 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::game_state::GameState, player::camera::GameplayCamera,
-    rendering::biome_visuals::CurrentBiomeVisuals, voxel::world::VoxelWorld,
+    app::game_state::GameState,
+    player::camera::GameplayCamera,
+    rendering::biome_visuals::CurrentBiomeVisuals,
+    voxel::world::VoxelWorld,
 };
 
 #[derive(Component)]

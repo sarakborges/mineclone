@@ -89,7 +89,12 @@ pub(super) fn apply_volume_identity(
     }
 
     if let Some(volume) = volume {
-        push_influence(influences, &mut influence_count, volume.id, volume_strength);
+        push_influence(
+            influences,
+            &mut influence_count,
+            volume.id,
+            volume_strength,
+        );
     }
 
     normalize_influences(&mut influences[..influence_count]);
@@ -173,7 +178,12 @@ fn push_influence(
     *target_count += 1;
 }
 
-fn write_influence(target: &mut Vec<CurrentBiomeInfluence>, index: usize, id: &str, weight: f32) {
+fn write_influence(
+    target: &mut Vec<CurrentBiomeInfluence>,
+    index: usize,
+    id: &str,
+    weight: f32,
+) {
     if let Some(existing) = target.get_mut(index) {
         replace_string(&mut existing.id, id);
         existing.weight = weight;

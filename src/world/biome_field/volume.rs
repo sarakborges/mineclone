@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::content::{biome::BiomeVerticalRange, biome_density::BiomeDensityModifier};
+use crate::content::{
+    biome::BiomeVerticalRange,
+    biome_density::BiomeDensityModifier,
+};
 
 use super::{
     BiomeField, BiomeFieldEntry, VolumeBiomeAnchor,
@@ -90,7 +93,8 @@ impl BiomeField {
 
             let normalized_distance =
                 normalized_ellipsoid_distance(warped - site.position, site.radii);
-            let strength = volume_site_strength(normalized_distance) * biome.weight.clamp(0.0, 1.0);
+            let strength =
+                volume_site_strength(normalized_distance) * biome.weight.clamp(0.0, 1.0);
             if strength <= 0.0 {
                 continue;
             }

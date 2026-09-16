@@ -84,7 +84,10 @@ fn sync_held_dynamic_light(
     }
 }
 
-fn held_light_state(block_id: Option<&'static str>, blocks: &BlockRegistry) -> (f32, Visibility) {
+fn held_light_state(
+    block_id: Option<&'static str>,
+    blocks: &BlockRegistry,
+) -> (f32, Visibility) {
     let emission = block_id
         .and_then(|block_id| blocks.get(block_id))
         .map_or(0, |block| block.light_emission)

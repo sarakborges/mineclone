@@ -171,10 +171,7 @@ fn select_weighted_biome_index(
     let mut weighted = Vec::with_capacity(biomes.len());
     for (index, biome) in biomes.iter().enumerate() {
         if predicate(biome) && biome.weight > f32::EPSILON {
-            weighted.push((
-                index,
-                biome.weight * climate_suitability(biome.climate, climate),
-            ));
+            weighted.push((index, biome.weight * climate_suitability(biome.climate, climate)));
         }
     }
 

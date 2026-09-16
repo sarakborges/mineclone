@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
-use super::super::super::math::{cell_hash, hash_unit, lerp, smoothstep};
 use super::RiverPath;
+use super::super::super::math::{cell_hash, hash_unit, lerp, smoothstep};
 
 pub(in crate::world::hydrology::river) const WATERFALL_MINIMUM_DROP: f32 = 10.0;
 const WATERFALL_MINIMUM_SLOPE: f32 = 0.075;
@@ -69,8 +69,8 @@ pub(super) fn river_path_height(
         return lerp(start_height, approach_height, smoothstep(progress));
     }
     if t <= waterfall.end_t {
-        let progress =
-            ((t - waterfall.start_t) / (waterfall.end_t - waterfall.start_t)).clamp(0.0, 1.0);
+        let progress = ((t - waterfall.start_t) / (waterfall.end_t - waterfall.start_t))
+            .clamp(0.0, 1.0);
         return lerp(approach_height, landing_height, smoothstep(progress));
     }
 

@@ -95,7 +95,8 @@ pub(crate) fn chunk_is_in_volume(
     let delta = coord - center;
     let horizontal_squared = delta.x * delta.x + delta.z * delta.z;
 
-    horizontal_squared <= horizontal_radius * horizontal_radius && delta.y.abs() <= vertical_radius
+    horizontal_squared <= horizontal_radius * horizontal_radius
+        && delta.y.abs() <= vertical_radius
 }
 
 #[cfg(test)]

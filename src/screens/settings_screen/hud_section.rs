@@ -59,7 +59,11 @@ pub(super) fn hud_section(
         },
         children![
             display_tooltips_setting(settings.display_tooltips(), localization, language),
-            target_block_position_setting(settings.target_block_position(), localization, language,),
+            target_block_position_setting(
+                settings.target_block_position(),
+                localization,
+                language,
+            ),
         ],
     )
 }
@@ -308,10 +312,7 @@ pub(super) fn handle_display_tooltips_toggle(
 pub(super) fn handle_target_block_position_dropdown_button(
     interactions: Query<
         &Interaction,
-        (
-            Changed<Interaction>,
-            With<TargetBlockPositionDropdownButton>,
-        ),
+        (Changed<Interaction>, With<TargetBlockPositionDropdownButton>),
     >,
     mut state: ResMut<TargetBlockPositionDropdownState>,
 ) {
@@ -324,7 +325,10 @@ pub(super) fn handle_target_block_position_dropdown_button(
 }
 
 pub(super) fn handle_target_block_position_options(
-    interactions: Query<(&Interaction, &TargetBlockPositionOption), Changed<Interaction>>,
+    interactions: Query<
+        (&Interaction, &TargetBlockPositionOption),
+        Changed<Interaction>,
+    >,
     mut settings: ResMut<HudSettings>,
     mut state: ResMut<TargetBlockPositionDropdownState>,
 ) {
@@ -367,10 +371,7 @@ pub(super) fn sync_display_tooltips_toggle(
         }
 
         surface::apply_control_colors(
-            (
-                toggle_background(enabled, *interaction),
-                toggle_border(enabled),
-            ),
+            (toggle_background(enabled, *interaction), toggle_border(enabled)),
             background,
             border,
         );

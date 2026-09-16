@@ -156,9 +156,7 @@ impl DimensionDefinition {
                     entry.id
                 );
                 assert!(
-                    self.biomes
-                        .iter()
-                        .any(|candidate| candidate.id == *avoided_id),
+                    self.biomes.iter().any(|candidate| candidate.id == *avoided_id),
                     "dimension {} biome {} avoidNear references missing biome: {}",
                     self.id,
                     entry.id,
@@ -168,14 +166,8 @@ impl DimensionDefinition {
         }
 
         for (field, biome_id) in [
-            (
-                "hydrology.oceanBiome",
-                self.hydrology.ocean_biome.as_deref(),
-            ),
-            (
-                "hydrology.coastBiome",
-                self.hydrology.coast_biome.as_deref(),
-            ),
+            ("hydrology.oceanBiome", self.hydrology.ocean_biome.as_deref()),
+            ("hydrology.coastBiome", self.hydrology.coast_biome.as_deref()),
         ] {
             let Some(biome_id) = biome_id else {
                 continue;

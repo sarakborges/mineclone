@@ -77,8 +77,12 @@ pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
         } else {
             side_a_solid as usize + side_b_solid as usize + corner_solid as usize
         };
-        let (sky_level, sampled_block_srgb) =
-            average_shader_light_levels([base_sample, side_a_sample, side_b_sample, corner_sample]);
+        let (sky_level, sampled_block_srgb) = average_shader_light_levels([
+            base_sample,
+            side_a_sample,
+            side_b_sample,
+            corner_sample,
+        ]);
         let sampled_block_srgb = component_max(sampled_block_srgb, surface_block_srgb);
 
         channels[index] = [

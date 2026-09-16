@@ -80,23 +80,22 @@ pub(super) fn add_river_segment(
         .max(UNDERGROUND_RIVER_MINIMUM_SURFACE_OFFSET);
     let river_from = from - Vec3::Y * start_surface_offset;
     let river_to = to - Vec3::Y * end_surface_offset;
-    let start_radius = (start_cave_radius * UNDERGROUND_RIVER_RADIUS_SCALE).clamp(
-        UNDERGROUND_RIVER_MINIMUM_RADIUS,
-        UNDERGROUND_RIVER_MAXIMUM_RADIUS,
-    );
-    let end_radius = (end_cave_radius * UNDERGROUND_RIVER_RADIUS_SCALE).clamp(
-        UNDERGROUND_RIVER_MINIMUM_RADIUS,
-        UNDERGROUND_RIVER_MAXIMUM_RADIUS,
-    );
+    let start_radius = (start_cave_radius * UNDERGROUND_RIVER_RADIUS_SCALE)
+        .clamp(UNDERGROUND_RIVER_MINIMUM_RADIUS, UNDERGROUND_RIVER_MAXIMUM_RADIUS);
+    let end_radius = (end_cave_radius * UNDERGROUND_RIVER_RADIUS_SCALE)
+        .clamp(UNDERGROUND_RIVER_MINIMUM_RADIUS, UNDERGROUND_RIVER_MAXIMUM_RADIUS);
     let from_node = river_graph.add_node(river_from);
     let to_node = river_graph.add_node(river_to);
 
     river_graph.add_edge(from_node, to_node, start_radius, end_radius);
 
     let vertical_drop = (river_from.y - river_to.y).abs();
-    let horizontal_distance = Vec2::new(river_to.x - river_from.x, river_to.z - river_from.z)
-        .length()
-        .max(0.5);
+    let horizontal_distance = Vec2::new(
+        river_to.x - river_from.x,
+        river_to.z - river_from.z,
+    )
+    .length()
+    .max(0.5);
     let slope = vertical_drop / horizontal_distance;
     if vertical_drop >= UNDERGROUND_WATERFALL_MINIMUM_DROP
         && slope >= UNDERGROUND_WATERFALL_MINIMUM_SLOPE

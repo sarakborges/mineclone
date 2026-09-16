@@ -155,8 +155,8 @@ fn terrain_modifier_height(position: Vec2, seed: u64, modifier: BiomeTerrainModi
                     seed ^ 0xc2b2_ae3d_27d4_eb4f,
                 ),
             ) * warp_strength;
-            let value =
-                ((fractal_noise((position + warp) * scale, seed) + 1.0) * 0.5).clamp(0.0, 1.0);
+            let value = ((fractal_noise((position + warp) * scale, seed) + 1.0) * 0.5)
+                .clamp(0.0, 1.0);
             let half_edge = edge_width * 0.5;
             let lower = (threshold - half_edge).clamp(0.0, 1.0);
             let upper = (threshold + half_edge).clamp(0.0, 1.0);

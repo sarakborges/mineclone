@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::{app::game_state::GameState, gameplay::availability::world_interaction_available};
+use crate::{
+    app::game_state::GameState,
+    gameplay::availability::world_interaction_available,
+};
 
 pub const BACKPACK_SLOT_COUNT: usize = 27;
 pub const HOTBAR_SLOT_COUNT: usize = 9;

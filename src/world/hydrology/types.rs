@@ -23,7 +23,11 @@ impl WaterBody {
         self.normalized_horizontal_distance_with_margin(position, 0.0)
     }
 
-    pub fn normalized_horizontal_distance_with_margin(&self, position: Vec2, margin: f32) -> f32 {
+    pub fn normalized_horizontal_distance_with_margin(
+        &self,
+        position: Vec2,
+        margin: f32,
+    ) -> f32 {
         let delta = position - self.center;
         let (sin, cos) = self.rotation.sin_cos();
         let local = Vec2::new(
@@ -31,7 +35,10 @@ impl WaterBody {
             -delta.x * sin + delta.y * cos,
         );
         let expanded_radius = self.radius + Vec2::splat(margin.max(0.0));
-        let normalized = Vec2::new(local.x / expanded_radius.x, local.y / expanded_radius.y);
+        let normalized = Vec2::new(
+            local.x / expanded_radius.x,
+            local.y / expanded_radius.y,
+        );
         let boundary_scale = irregular_boundary_scale(normalized, self.shape_seed);
 
         normalized.length() / boundary_scale
@@ -60,7 +67,8 @@ fn irregular_boundary_scale(normalized: Vec2, seed: u64) -> f32 {
     let phase = hash_unit(seed.rotate_left(37)) * std::f32::consts::TAU;
     let asymmetric_lobe = (angle + phase).sin() * 0.10;
 
-    (1.0 + broad * 0.23 + medium * 0.13 + detail * 0.07 + asymmetric_lobe).clamp(0.58, 1.42)
+    (1.0 + broad * 0.23 + medium * 0.13 + detail * 0.07 + asymmetric_lobe)
+        .clamp(0.58, 1.42)
 }
 
 fn cyclic_boundary_noise(angle: f32, seed: u64, segments: u32) -> f32 {
@@ -70,7 +78,9 @@ fn cyclic_boundary_noise(angle: f32, seed: u64, segments: u32) -> f32 {
     let second = (first + 1) % segments;
     let t = smoothstep(scaled - scaled.floor());
     let sample = |index: u32| {
-        let mixed = avalanche_u64(seed ^ (index as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15));
+        let mixed = avalanche_u64(
+            seed ^ (index as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15),
+        );
         hash_signed(mixed)
     };
 

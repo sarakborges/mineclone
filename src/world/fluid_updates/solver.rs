@@ -61,7 +61,9 @@ pub(super) fn desired_fluid(
         if strongest.is_none_or(|current| {
             candidate.0 > current.0
                 || (candidate.0 == current.0 && candidate.1 < current.1)
-                || (candidate.0 == current.0 && candidate.1 == current.1 && candidate.2 < current.2)
+                || (candidate.0 == current.0
+                    && candidate.1 == current.1
+                    && candidate.2 < current.2)
         }) {
             strongest = Some(candidate);
         }

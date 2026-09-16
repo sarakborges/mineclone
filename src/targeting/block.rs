@@ -95,7 +95,12 @@ fn update_targeted_block(
     cache.last_inputs = Some(inputs);
 
     let next = if interaction_available {
-        raycast_voxels(&world, inputs.origin, inputs.direction, TARGET_RANGE)
+        raycast_voxels(
+            &world,
+            inputs.origin,
+            inputs.direction,
+            TARGET_RANGE,
+        )
     } else {
         None
     };

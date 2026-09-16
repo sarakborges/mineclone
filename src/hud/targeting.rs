@@ -2,11 +2,15 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::{builtin_ids::DYED_PROPERTY_ID, secondary_property::SecondaryPropertyRegistry},
+    content::{
+        builtin_ids::DYED_PROPERTY_ID,
+        secondary_property::SecondaryPropertyRegistry,
+    },
     hud::block_icon::BlockIconMaterial,
     localization::{ActiveLanguage, Language, UiLocalization},
     rendering::{
-        block_model::BlockModel, block_tint::apply_secondary_property_tint,
+        block_model::BlockModel,
+        block_tint::apply_secondary_property_tint,
         block_visual_content::BlockVisualContent,
     },
     targeting::block::TargetedBlock,
@@ -95,10 +99,7 @@ struct TargetHudView<'w, 's> {
     icon: Single<
         'w,
         's,
-        (
-            &'static mut BlockModel,
-            &'static MaterialNode<BlockIconMaterial>,
-        ),
+        (&'static mut BlockModel, &'static MaterialNode<BlockIconMaterial>),
         With<TargetBlockModel>,
     >,
     icon_materials: ResMut<'w, Assets<BlockIconMaterial>>,
@@ -334,9 +335,12 @@ fn update_target_hud(
         .tint_at(hit.block_id, tint_position)
         .unwrap_or(Color::WHITE);
     let tint = match (block, cell) {
-        (Some(block), Some(cell)) => {
-            apply_secondary_property_tint(base_tint, block, cell, &content.secondary_properties)
-        }
+        (Some(block), Some(cell)) => apply_secondary_property_tint(
+            base_tint,
+            block,
+            cell,
+            &content.secondary_properties,
+        ),
         _ => base_tint,
     };
     let icon_snapshot = TargetHudIconSnapshot {

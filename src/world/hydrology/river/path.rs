@@ -7,11 +7,13 @@ use bevy::prelude::*;
 
 use crate::world::feature_graph::FeatureGraph;
 
-pub(super) use self::waterfall::{WATERFALL_MINIMUM_DROP, WaterfallLanding};
 use self::{
-    confluence::add_path_to_graph, curve::river_path, terrain::constrain_river_path_to_terrain,
+    confluence::add_path_to_graph,
+    curve::river_path,
+    terrain::constrain_river_path_to_terrain,
     waterfall::align_waterfall_landing_to_path,
 };
+pub(super) use self::waterfall::{WATERFALL_MINIMUM_DROP, WaterfallLanding};
 use super::super::{
     constants::{
         OCEAN_CONTINENTALNESS_THRESHOLD, RIVER_FLOW_FOR_MAX_WIDTH, RIVER_MAXIMUM_RADIUS,
@@ -76,13 +78,7 @@ where
         &mut surface_elevation_at,
     );
     align_waterfall_landing_to_path(&mut path);
-    add_path_to_graph(
-        graph,
-        spec.region_coord,
-        &mut path,
-        start_radius,
-        end_radius,
-    );
+    add_path_to_graph(graph, spec.region_coord, &mut path, start_radius, end_radius);
 
     path.waterfall
 }
@@ -137,18 +133,14 @@ mod tests {
         let source = node(Vec2::new(64.0, 64.0), 100.0);
         let downstream = node(Vec2::new(192.0, 64.0), 90.0);
         let path = river_path(IVec2::ZERO, source, downstream, 42, 64.0, None, None);
-        let crossing = path
-            .points
-            .windows(2)
-            .find_map(|segment| {
-                let [from, to] = segment else { return None };
-                if from.x > 128.0 || to.x < 128.0 {
-                    return None;
-                }
-                let t = (128.0 - from.x) / (to.x - from.x);
-                Some(Vec2::new(128.0, lerp(from.z, to.z, t)))
-            })
-            .expect("the river must cross the region boundary");
+        let crossing = path.points.windows(2).find_map(|segment| {
+            let [from, to] = segment else { return None };
+            if from.x > 128.0 || to.x < 128.0 {
+                return None;
+            }
+            let t = (128.0 - from.x) / (to.x - from.x);
+            Some(Vec2::new(128.0, lerp(from.z, to.z, t)))
+        }).expect("the river must cross the region boundary");
 
         let mut left = FeatureGraph::default();
         let mut right = FeatureGraph::default();

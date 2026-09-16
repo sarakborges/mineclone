@@ -9,7 +9,8 @@ use crate::voxel::{
 
 use super::{
     chunk_remesh_tasks::{
-        ChunkRemeshTaskKind, ChunkRemeshTaskMeshes, ChunkRemeshTasks, MAX_REMESH_TASKS_IN_FLIGHT,
+        ChunkRemeshTaskKind, ChunkRemeshTaskMeshes, ChunkRemeshTasks,
+        MAX_REMESH_TASKS_IN_FLIGHT,
     },
     chunk_rendering::{
         ChunkRenderPool, apply_built_chunk_fluid_meshes, apply_built_chunk_geometry_meshes,
@@ -235,7 +236,13 @@ pub(super) fn process_chunk_remesh_queue(
     tasks.sync_snapshot(&content);
 
     if tasks.pending_count() > 0 {
-        collect_completed_remesh_tasks(&content, &mut renderer, &world, &mut queue, &mut tasks);
+        collect_completed_remesh_tasks(
+            &content,
+            &mut renderer,
+            &world,
+            &mut queue,
+            &mut tasks,
+        );
     }
 
     if tasks.pending_count() >= MAX_REMESH_TASKS_IN_FLIGHT || !queue.has_background_work() {

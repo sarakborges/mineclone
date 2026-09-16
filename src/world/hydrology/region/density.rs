@@ -8,8 +8,8 @@ use crate::world::hydrology::{
         OCEAN_MINIMUM_DEPTH, RIVER_BANK_OUTER_NORMALIZED_DISTANCE, RIVER_CARVE_STRENGTH,
     },
     math::{
-        RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE, lerp, ocean_strength, river_channel_profile,
-        smoothstep,
+        lerp, ocean_strength, river_channel_profile, smoothstep,
+        RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE,
     },
     types::WaterBody,
 };
@@ -86,8 +86,9 @@ impl HydrologyRegion {
             horizontal,
             RIVER_BANK_OUTER_NORMALIZED_DISTANCE,
         );
-        let river_core = river_graph_sample
-            .filter(|sample| sample.normalized_distance < RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE);
+        let river_core = river_graph_sample.filter(|sample| {
+            sample.normalized_distance < RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE
+        });
         let (river, river_opening) = river_core.map_or((None, 0.0), |sample| {
             let profile = river_channel_profile(sample.normalized_distance);
             let bed = sample.height - self.river_carve_depth * profile;
@@ -105,15 +106,15 @@ impl HydrologyRegion {
         let ocean_strength_at_column = macro_sample.map_or(0.0, |sample| {
             ocean_strength(sample.continentalness, self.ocean_weight)
         });
-        let surface_elevation =
-            actual_surface_height.or(macro_sample.map(|sample| sample.elevation));
+        let surface_elevation = actual_surface_height.or(macro_sample.map(|sample| sample.elevation));
         let ocean_delta = macro_sample.map_or(0.0, |sample| {
             let strength = ocean_strength_at_column;
             if strength <= 0.0 {
                 return 0.0;
             }
 
-            let target_floor = self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength;
+            let target_floor =
+                self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength;
             // Keep the existing ocean blend relative to the exact column's
             // starting height. Subtracting a macro floor from an exact surface
             // would create an abrupt jump at the first nonzero ocean strength.
@@ -138,12 +139,17 @@ impl HydrologyRegion {
             let distance = body.normalized_horizontal_distance(horizontal);
             let strength = smoothstep(1.0 - distance.clamp(0.0, 1.0));
             water_body_opening = water_body_opening.max(strength);
-            let shore =
-                shore_density_delta(distance, body.water_level, river_opening, surface_elevation);
+            let shore = shore_density_delta(
+                distance,
+                body.water_level,
+                river_opening,
+                surface_elevation,
+            );
             // Iterator::max_by selects the last item when magnitudes tie.
             // Preserve that order, including signed zero, without another scan.
-            if lake_shore_delta.is_none_or(|current| current.abs().total_cmp(&shore.abs()).is_le())
-            {
+            if lake_shore_delta.is_none_or(|current| {
+                current.abs().total_cmp(&shore.abs()).is_le()
+            }) {
                 lake_shore_delta = Some(shore);
             }
 
@@ -225,7 +231,8 @@ fn river_shore_normalized_distance(graph_distance: f32) -> f32 {
     let bank_width = (RIVER_BANK_OUTER_NORMALIZED_DISTANCE
         - RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE)
         .max(f32::EPSILON);
-    let progress = (graph_distance - RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE) / bank_width;
+    let progress =
+        (graph_distance - RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE) / bank_width;
 
     1.0 + progress * (LAKE_SHORE_OUTER_DISTANCE - 1.0)
 }
@@ -238,7 +245,8 @@ fn shore_strength(distance: f32) -> f32 {
         return 0.0;
     }
 
-    let progress = 1.0 - (distance - 1.0) / (LAKE_SHORE_OUTER_DISTANCE - 1.0).max(f32::EPSILON);
+    let progress =
+        1.0 - (distance - 1.0) / (LAKE_SHORE_OUTER_DISTANCE - 1.0).max(f32::EPSILON);
     smoothstep(progress.clamp(0.0, 1.0))
 }
 
@@ -366,9 +374,6 @@ mod tests {
         assert!(!water_body_might_affect_column(&body, distant));
         assert!(body.normalized_horizontal_distance(distant) > LAKE_SHORE_OUTER_DISTANCE);
         assert_eq!(body.horizontal_strength(distant), 0.0);
-        assert_eq!(
-            shore_strength(body.normalized_horizontal_distance(distant)),
-            0.0
-        );
+        assert_eq!(shore_strength(body.normalized_horizontal_distance(distant)), 0.0);
     }
 }

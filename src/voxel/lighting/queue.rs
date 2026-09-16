@@ -6,7 +6,8 @@ use crate::voxel::{
     update_queue::VoxelUpdateQueue,
 };
 
-const CHUNK_INTERIOR_VOLUME: usize = (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2);
+const CHUNK_INTERIOR_VOLUME: usize =
+    (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2);
 const CHUNK_BOUNDARY_VOXEL_COUNT: usize = CHUNK_VOLUME - CHUNK_INTERIOR_VOLUME;
 const CHUNK_BOUNDARY_NEIGHBOR_COUNT: usize = 6 * CHUNK_SIZE * CHUNK_SIZE;
 
@@ -54,7 +55,11 @@ impl LightingQueue {
         self.enqueue_interactive_priority(position);
     }
 
-    pub(super) fn enqueue_with_neighbors_in_lane(&mut self, position: IVec3, lane: LightingLane) {
+    pub(super) fn enqueue_with_neighbors_in_lane(
+        &mut self,
+        position: IVec3,
+        lane: LightingLane,
+    ) {
         match lane {
             LightingLane::Interactive => {
                 self.enqueue_interactive(position);
@@ -197,9 +202,6 @@ mod tests {
 
         queue.enqueue_with_neighbors_in_lane(position, lane);
 
-        assert_eq!(
-            queue.pop().map(|(_, lane)| lane),
-            Some(LightingLane::Interactive)
-        );
+        assert_eq!(queue.pop().map(|(_, lane)| lane), Some(LightingLane::Interactive));
     }
 }

@@ -74,9 +74,13 @@ pub(super) fn anchored_cave_region(
                 anchors.push(entrance);
             }
 
-            if let Some(ocean_opening) =
-                ocean_cave_entrance(region, &underground_anchors, minimum, maximum, biome_field)
-            {
+            if let Some(ocean_opening) = ocean_cave_entrance(
+                region,
+                &underground_anchors,
+                minimum,
+                maximum,
+                biome_field,
+            ) {
                 anchors.push(ocean_opening);
                 water_source_anchors.push(ocean_opening);
             }

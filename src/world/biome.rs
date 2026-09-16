@@ -90,7 +90,8 @@ pub fn track_current_biome(
             let (minimum, maximum) = generation_region_world_bounds(region_coord);
             biome_field.volume_region_in_bounds(minimum, maximum)
         });
-        let selection = biome_field.volume_selection_in_region(position, volume_region.as_ref())?;
+        let selection =
+            biome_field.volume_selection_in_region(position, volume_region.as_ref())?;
 
         Some(VolumeBiomeIdentity {
             id: biome_field.volume_biome_id(selection),

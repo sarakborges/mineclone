@@ -47,7 +47,8 @@ pub(crate) fn secondary_property_dye_tint(
         return Some(Color::BLACK);
     }
 
-    let saturation = 1.0 - (1.0 - dye.color.saturation.clamp(0.0, 1.0)).powf(DYE_SATURATION_GAMMA);
+    let saturation =
+        1.0 - (1.0 - dye.color.saturation.clamp(0.0, 1.0)).powf(DYE_SATURATION_GAMMA);
     Some(
         Hsi::new(dye.color.hue, saturation, dye.color.intensity)
             .normalized()

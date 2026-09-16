@@ -5,8 +5,10 @@ use bevy::{
 };
 
 use crate::{
-    app::game_state::GameState, content::day_night_phase::DayNightPhase,
-    player::camera::GameplayCamera, world::current_context::DayNightContext,
+    app::game_state::GameState,
+    content::day_night_phase::DayNightPhase,
+    player::camera::GameplayCamera,
+    world::current_context::DayNightContext,
 };
 
 use super::{assets::StarAssets, deterministic::hash01, state::SkyLayerVisualState};
@@ -74,9 +76,9 @@ pub(super) fn update_stars(
     let StarView { camera, assets } = view;
     let (camera_entity, camera_transform) = camera.into_inner();
     let camera_position = camera_transform.translation();
-    let camera_changed = last_camera
-        .as_ref()
-        .is_none_or(|(entity, previous)| *entity != camera_entity || *previous != camera_position);
+    let camera_changed = last_camera.as_ref().is_none_or(|(entity, previous)| {
+        *entity != camera_entity || *previous != camera_position
+    });
 
     if !camera_changed && !scene.visuals.is_changed() && !scene.day_night.inputs_changed() {
         return;
@@ -108,7 +110,9 @@ pub(super) fn update_stars(
         let material_color_changed = materials
             .get(&assets.material)
             .is_some_and(|material| material.base_color != visual_snapshot.color);
-        if material_color_changed && let Some(mut material) = materials.get_mut(&assets.material) {
+        if material_color_changed
+            && let Some(mut material) = materials.get_mut(&assets.material)
+        {
             material.base_color = visual_snapshot.color;
         }
     }

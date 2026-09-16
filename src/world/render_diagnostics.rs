@@ -72,8 +72,12 @@ pub(super) fn log_render_asset_pressure(
     let image_assets = assets.images.len();
     let runtime_images = image_assets.saturating_sub(file_images);
     let mut runtime_top_shapes = runtime_image_shapes.into_iter().collect::<Vec<_>>();
-    runtime_top_shapes
-        .sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+    runtime_top_shapes.sort_by(|left, right| {
+        right
+            .1
+            .cmp(&left.1)
+            .then_with(|| left.0.cmp(&right.0))
+    });
     runtime_top_shapes.truncate(RUNTIME_IMAGE_SHAPE_LIMIT);
 
     let font_atlas_keys = assets.font_atlases.len();

@@ -1,4 +1,5 @@
-pub(crate) const VOXEL_FACE_UVS: [[f32; 2]; 4] = [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
+pub(crate) const VOXEL_FACE_UVS: [[f32; 2]; 4] =
+    [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
 
 pub(crate) const QUAD_TRIANGLE_INDICES: [u32; 6] = [0, 1, 2, 0, 2, 3];
 const FLIPPED_QUAD_TRIANGLE_INDICES: [u32; 6] = [0, 1, 3, 1, 2, 3];

@@ -135,10 +135,7 @@ where
             return Some(value);
         }
 
-        debug_assert!(
-            queued.is_empty(),
-            "active queue entries must have pending records"
-        );
+        debug_assert!(queued.is_empty(), "active queue entries must have pending records");
         None
     }
 
@@ -194,8 +191,9 @@ where
             return;
         }
 
-        self.pending
-            .retain(|(value, generation)| self.queued.get(value).copied() == Some(*generation));
+        self.pending.retain(|(value, generation)| {
+            self.queued.get(value).copied() == Some(*generation)
+        });
     }
 }
 

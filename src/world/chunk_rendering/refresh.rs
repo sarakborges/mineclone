@@ -4,7 +4,9 @@ use crate::voxel::fluid_mesh::ChunkFluidMesh;
 
 use super::{
     ChunkRenderContext,
-    pool::{ChunkRenderPool, retire_chunk_render_allocation, retire_render_allocation_parts},
+    pool::{
+        ChunkRenderPool, retire_chunk_render_allocation, retire_render_allocation_parts,
+    },
     spawn::{
         BuiltChunkMesh, build_chunk_terrain_render_meshes, mesh_asset_bytes, spawn_chunk_mesh,
         spawn_fluid_meshes_into_existing_allocation, spawn_terrain_meshes_into_existing_allocation,
@@ -45,7 +47,14 @@ pub fn refresh_chunk_geometry_mesh(
 
     let build_context = context.mesh_build_context();
     let built_meshes = build_chunk_terrain_render_meshes(coord, chunk, &build_context);
-    apply_built_chunk_geometry_meshes(commands, meshes, render_pool, coord, built_meshes, context);
+    apply_built_chunk_geometry_meshes(
+        commands,
+        meshes,
+        render_pool,
+        coord,
+        built_meshes,
+        context,
+    );
 }
 
 pub(crate) fn apply_built_chunk_geometry_meshes(
@@ -71,8 +80,12 @@ pub(crate) fn apply_built_chunk_geometry_meshes(
         .map(|built| mesh_asset_bytes(built.mesh()))
         .sum();
 
-    if render_pool.replace_terrain_mesh_assets(coord, meshes, &mut built_meshes, terrain_mesh_bytes)
-    {
+    if render_pool.replace_terrain_mesh_assets(
+        coord,
+        meshes,
+        &mut built_meshes,
+        terrain_mesh_bytes,
+    ) {
         return;
     }
 
@@ -119,7 +132,12 @@ pub(crate) fn apply_built_chunk_fluid_meshes(
         .map(|fluid| mesh_asset_bytes(&fluid.mesh))
         .sum();
 
-    if render_pool.replace_fluid_mesh_assets(coord, meshes, &mut fluid_meshes, fluid_mesh_bytes) {
+    if render_pool.replace_fluid_mesh_assets(
+        coord,
+        meshes,
+        &mut fluid_meshes,
+        fluid_mesh_bytes,
+    ) {
         return;
     }
 

@@ -9,7 +9,8 @@ use bevy::prelude::*;
 
 use crate::app::game_state::GameState;
 use clouds::{
-    cloud_presentation_needs_sync, spawn_clouds, sync_cloud_presentation, update_cloud_positions,
+    cloud_presentation_needs_sync, spawn_clouds, sync_cloud_presentation,
+    update_cloud_positions,
 };
 use stars::{spawn_stars, update_stars};
 use state::{SkyLayerVisualState, update_sky_layer_visuals};

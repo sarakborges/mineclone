@@ -8,8 +8,13 @@ use crate::voxel::{
 
 use super::PendingFluidUpdates;
 
-const FLUID_SPREAD_TARGETS: [IVec3; 5] =
-    [IVec3::NEG_Y, IVec3::X, IVec3::NEG_X, IVec3::Z, IVec3::NEG_Z];
+const FLUID_SPREAD_TARGETS: [IVec3; 5] = [
+    IVec3::NEG_Y,
+    IVec3::X,
+    IVec3::NEG_X,
+    IVec3::Z,
+    IVec3::NEG_Z,
+];
 
 pub(super) fn enqueue_loaded_fluid_frontier(
     pending: &mut PendingFluidUpdates,

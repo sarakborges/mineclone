@@ -11,7 +11,9 @@ mod underwater;
 mod world;
 
 use bevy::{
-    camera::CameraOutputMode, prelude::*, render::render_resource::BlendState,
+    camera::CameraOutputMode,
+    prelude::*,
+    render::render_resource::BlendState,
     ui::IsDefaultUiCamera,
 };
 use block_icon::BlockIconMaterial;

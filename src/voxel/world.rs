@@ -55,9 +55,10 @@ impl VoxelWorld {
     pub(crate) fn chunk_content_revision(&self, coord: IVec3) -> Option<u64> {
         self.chunk(coord)?;
         Some(
-            *self.chunk_content_revisions.get(&coord).unwrap_or_else(|| {
-                panic!("loaded chunk content revision should exist at {coord:?}")
-            }),
+            *self
+                .chunk_content_revisions
+                .get(&coord)
+                .unwrap_or_else(|| panic!("loaded chunk content revision should exist at {coord:?}")),
         )
     }
 
@@ -455,10 +456,7 @@ mod tests {
         );
 
         world.archive_chunk(low);
-        assert_eq!(
-            world.highest_loaded_world_y_in_column(world_x, world_z),
-            None
-        );
+        assert_eq!(world.highest_loaded_world_y_in_column(world_x, world_z), None);
     }
 
     #[test]
@@ -498,18 +496,11 @@ mod tests {
         let inserted_content = world
             .chunk_content_revision(coord)
             .expect("chunk should have a content revision");
-        let inserted_mesh = world
-            .chunk_mesh_revision(coord)
-            .expect("chunk should be loaded");
+        let inserted_mesh = world.chunk_mesh_revision(coord).expect("chunk should be loaded");
 
         assert!(world.clear_chunk_light(coord));
         assert_eq!(world.chunk_content_revision(coord), Some(inserted_content));
-        assert!(
-            world
-                .chunk_mesh_revision(coord)
-                .expect("chunk should be loaded")
-                > inserted_mesh
-        );
+        assert!(world.chunk_mesh_revision(coord).expect("chunk should be loaded") > inserted_mesh);
 
         world.set_block_at(position, Some(VoxelCell::new("stone", Default::default())));
         assert!(
@@ -526,23 +517,17 @@ mod tests {
         let coord = IVec3::ZERO;
         let position = IVec3::new(1, 2, 3);
         world.insert_chunk(coord, VoxelChunk::empty());
-        let inserted = world
-            .chunk_mesh_revision(coord)
-            .expect("chunk should be loaded");
+        let inserted = world.chunk_mesh_revision(coord).expect("chunk should be loaded");
 
         world.set_block_at(position, Some(VoxelCell::new("stone", Default::default())));
-        let edited = world
-            .chunk_mesh_revision(coord)
-            .expect("chunk should be loaded");
+        let edited = world.chunk_mesh_revision(coord).expect("chunk should be loaded");
         assert!(edited > inserted);
 
         world.archive_chunk(coord);
         assert_eq!(world.chunk_content_revision(coord), None);
         assert_eq!(world.chunk_mesh_revision(coord), None);
         assert!(world.restore_chunk(coord));
-        let restored = world
-            .chunk_mesh_revision(coord)
-            .expect("chunk should be restored");
+        let restored = world.chunk_mesh_revision(coord).expect("chunk should be restored");
         assert!(restored > edited);
     }
 }

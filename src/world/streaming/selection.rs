@@ -5,7 +5,10 @@ use bevy::{
 
 use crate::{
     voxel::{chunk::CHUNK_SIZE, coordinates::chunks_for_block_extent},
-    world::{generation_region::generation_region_coord, render_distance::chunk_is_in_volume},
+    world::{
+        generation_region::generation_region_coord,
+        render_distance::chunk_is_in_volume,
+    },
 };
 
 use super::{
@@ -306,8 +309,8 @@ fn inside_forward_preload(
     }
 
     let extra = forward - base;
-    let lateral_width =
-        FORWARD_PRELOAD_HALF_WIDTH_CHUNKS + (FORWARD_PRELOAD_CHUNKS as f32 - extra) * 0.5;
+    let lateral_width = FORWARD_PRELOAD_HALF_WIDTH_CHUNKS
+        + (FORWARD_PRELOAD_CHUNKS as f32 - extra) * 0.5;
     let lateral_squared = (offset.length_squared() - forward * forward).max(0.0);
     lateral_squared <= lateral_width * lateral_width
 }
@@ -399,10 +402,11 @@ fn rebuild_desired_chunk_coords(
             } else {
                 FAR_SURFACE_PADDING_BELOW_CHUNKS
             };
-            let minimum_y = (surrounding_minimum.div_euclid(chunk_size) - padding_below).max(0);
+            let minimum_y =
+                (surrounding_minimum.div_euclid(chunk_size) - padding_below).max(0);
             let maximum_y = (own_maximum.div_euclid(chunk_size)
                 + SURFACE_PADDING_ABOVE_CHUNKS.max(structure_chunk_allowance))
-            .max(minimum_y);
+                .max(minimum_y);
 
             for y in minimum_y..=maximum_y {
                 desired.insert(IVec3::new(horizontal.x, y, horizontal.y));
@@ -499,8 +503,10 @@ mod tests {
 
     #[test]
     fn movement_direction_prefers_forward_chunks() {
-        let surface_ranges =
-            HashMap::from([(IVec2::new(3, 0), (0, 0)), (IVec2::new(-3, 0), (0, 0))]);
+        let surface_ranges = HashMap::from([
+            (IVec2::new(3, 0), (0, 0)),
+            (IVec2::new(-3, 0), (0, 0)),
+        ]);
         let forward = pending_priority(
             IVec3::new(3, 0, 0),
             IVec3::ZERO,
@@ -528,12 +534,29 @@ mod tests {
         let center = IVec3::ZERO;
         let visible = IVec3::new(0, 0, 12);
         let preload = IVec3::new(18, 0, 0);
-        let surface_ranges = HashMap::from([(visible.xz(), (0, 0)), (preload.xz(), (0, 0))]);
+        let surface_ranges = HashMap::from([
+            (visible.xz(), (0, 0)),
+            (preload.xz(), (0, 0)),
+        ]);
 
-        let visible_priority =
-            pending_priority(visible, center, 12, 0, IVec2::X, false, &surface_ranges);
-        let preload_priority =
-            pending_priority(preload, center, 12, 0, IVec2::X, false, &surface_ranges);
+        let visible_priority = pending_priority(
+            visible,
+            center,
+            12,
+            0,
+            IVec2::X,
+            false,
+            &surface_ranges,
+        );
+        let preload_priority = pending_priority(
+            preload,
+            center,
+            12,
+            0,
+            IVec2::X,
+            false,
+            &surface_ranges,
+        );
 
         assert!(visible_priority < preload_priority);
     }
@@ -573,7 +596,8 @@ mod tests {
 
         let surface_priority =
             pending_priority(surface, center, 12, 0, IVec2::X, true, &surface_ranges);
-        let air_priority = pending_priority(air, center, 12, 0, IVec2::X, true, &surface_ranges);
+        let air_priority =
+            pending_priority(air, center, 12, 0, IVec2::X, true, &surface_ranges);
 
         assert!(surface_priority < air_priority);
     }

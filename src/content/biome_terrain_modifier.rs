@@ -34,10 +34,7 @@ impl BiomeTerrainModifier {
                 warp_scale,
                 warp_strength,
             } => {
-                assert!(
-                    scale > 0.0,
-                    "biome {biome_id} cliffs scale must be positive"
-                );
+                assert!(scale > 0.0, "biome {biome_id} cliffs scale must be positive");
                 assert!(
                     (0.0..=1.0).contains(&threshold),
                     "biome {biome_id} cliffs threshold must be between 0 and 1"

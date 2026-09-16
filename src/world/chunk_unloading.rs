@@ -80,8 +80,10 @@ pub(super) fn unload_chunk_meshes(
         .state
         .bootstrap(&mut streaming, &runtime.world, center);
 
-    let mut budget =
-        FrameWorkBudget::new(CHUNK_UNLOAD_BUDGET, MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK);
+    let mut budget = FrameWorkBudget::new(
+        CHUNK_UNLOAD_BUDGET,
+        MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK,
+    );
 
     loop {
         if budget.exhausted() {
@@ -111,7 +113,9 @@ pub(super) fn unload_chunk_meshes(
         return;
     }
 
-    runtime.lighting.enqueue_chunk_unloads(unloaded.as_slice());
+    runtime
+        .lighting
+        .enqueue_chunk_unloads(unloaded.as_slice());
 
     for coord in unloaded.drain(..) {
         enqueue_unloaded_halo_remeshes(
@@ -180,7 +184,9 @@ fn unload_retention_radius(render_distance_chunks: i32) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::voxel::{cell::VoxelCell, fluid::FluidCell, texture_rotation::TextureRotation};
+    use crate::voxel::{
+        cell::VoxelCell, fluid::FluidCell, texture_rotation::TextureRotation,
+    };
 
     #[test]
     fn unload_retention_scales_from_render_distance() {
@@ -199,18 +205,9 @@ mod tests {
             Some(VoxelCell::new("asteria:test", TextureRotation::default())),
         );
 
-        assert_eq!(
-            halo_remesh_needs(&chunk, IVec3::new(1, 1, 0)),
-            (true, false)
-        );
-        assert_eq!(
-            halo_remesh_needs(&chunk, IVec3::new(-1, 1, 0)),
-            (false, false)
-        );
-        assert_eq!(
-            halo_remesh_needs(&chunk, IVec3::new(1, 1, 1)),
-            (false, false)
-        );
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 1, 0)), (true, false));
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(-1, 1, 0)), (false, false));
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 1, 1)), (false, false));
     }
 
     #[test]
@@ -221,9 +218,6 @@ mod tests {
         // The generic content boundary counts include fluid occupancy too.
         assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 1, 0)), (true, true));
         assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 0, 0)), (true, true));
-        assert_eq!(
-            halo_remesh_needs(&chunk, IVec3::new(-1, 1, 0)),
-            (false, false)
-        );
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(-1, 1, 0)), (false, false));
     }
 }

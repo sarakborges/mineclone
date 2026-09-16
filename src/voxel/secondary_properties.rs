@@ -50,14 +50,8 @@ impl SecondaryProperties {
     }
 
     pub(crate) fn set(&mut self, property: &str, value: &str) {
-        assert!(
-            !property.is_empty(),
-            "secondary property id cannot be empty"
-        );
-        assert!(
-            !value.is_empty(),
-            "secondary property value cannot be empty"
-        );
+        assert!(!property.is_empty(), "secondary property id cannot be empty");
+        assert!(!value.is_empty(), "secondary property value cannot be empty");
 
         let property = intern_token(property);
         let value = intern_token(value);
@@ -73,7 +67,9 @@ impl SecondaryProperties {
         }
 
         let Some(slot) = self.values.iter_mut().find(|slot| slot.is_none()) else {
-            panic!("voxel cannot hold more than {MAX_SECONDARY_PROPERTIES} secondary properties");
+            panic!(
+                "voxel cannot hold more than {MAX_SECONDARY_PROPERTIES} secondary properties"
+            );
         };
 
         *slot = Some(SecondaryPropertyValue { property, value });

@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::{player::camera::GameplayCamera, voxel::world::VoxelWorld};
+use crate::{
+    player::camera::GameplayCamera,
+    voxel::world::VoxelWorld,
+};
 
 use super::{
     collision::{Axis, move_axis, player_collides},
@@ -54,7 +57,12 @@ pub(super) fn apply_gravity(
 
     gravity.vertical_velocity += GRAVITY * delta_seconds;
     let vertical_delta = gravity.vertical_velocity * delta_seconds;
-    let hit_vertical_surface = move_axis(&mut transform, &context.world, vertical_delta, Axis::Y);
+    let hit_vertical_surface = move_axis(
+        &mut transform,
+        &context.world,
+        vertical_delta,
+        Axis::Y,
+    );
 
     if hit_vertical_surface {
         if gravity.vertical_velocity < 0.0 {

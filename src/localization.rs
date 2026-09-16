@@ -76,17 +76,11 @@ impl UiLocalization {
                 .join("localization")
                 .join(format!("{}.json", language.key()));
             let source = fs::read_to_string(&path).unwrap_or_else(|error| {
-                panic!(
-                    "failed to read localization file {}: {error}",
-                    path.display()
-                )
+                panic!("failed to read localization file {}: {error}", path.display())
             });
-            let strings =
-                serde_json::from_str::<HashMap<String, String>>(&source).unwrap_or_else(|error| {
-                    panic!(
-                        "failed to parse localization file {}: {error}",
-                        path.display()
-                    )
+            let strings = serde_json::from_str::<HashMap<String, String>>(&source)
+                .unwrap_or_else(|error| {
+                    panic!("failed to parse localization file {}: {error}", path.display())
                 });
             languages.insert(language, strings);
         }

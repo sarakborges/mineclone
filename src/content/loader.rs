@@ -85,9 +85,7 @@ fn load_definition(path: &Path, content: &mut LoadedContent) {
             .day_night_cycles
             .insert(read_json_definition::<DayNightCycleDefinition>(path));
     } else if file_name == "sky.json" {
-        content
-            .skies
-            .insert(read_json_definition::<SkyDefinition>(path));
+        content.skies.insert(read_json_definition::<SkyDefinition>(path));
     } else if path_has_component(path, "inventory_categories") {
         content
             .inventory_categories

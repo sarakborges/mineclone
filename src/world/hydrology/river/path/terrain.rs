@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
-use super::super::super::math::lerp;
 use super::RIVER_WATER_SURFACE_OFFSET;
+use super::super::super::math::lerp;
 
 const RIVER_BANK_SAMPLE_RADIUS_MULTIPLIER: f32 = 1.45;
 
@@ -82,11 +82,7 @@ mod tests {
             Vec3::new(20.0, 76.0, 0.0),
         ];
         constrain_river_path_to_terrain(&mut recovered, 4.0, 4.0, &mut |position| {
-            if position.x < 5.0 || position.x > 15.0 {
-                80.0
-            } else {
-                50.0
-            }
+            if position.x < 5.0 || position.x > 15.0 { 80.0 } else { 50.0 }
         });
 
         assert_eq!(recovered[0].y, 78.0);

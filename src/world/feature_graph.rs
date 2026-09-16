@@ -50,16 +50,16 @@ impl FeatureGraph {
         index
     }
 
-    pub(crate) fn add_edge(&mut self, from: usize, to: usize, start_radius: f32, end_radius: f32) {
-        assert!(
-            from < self.nodes.len(),
-            "feature edge source node is missing"
-        );
+    pub(crate) fn add_edge(
+        &mut self,
+        from: usize,
+        to: usize,
+        start_radius: f32,
+        end_radius: f32,
+    ) {
+        assert!(from < self.nodes.len(), "feature edge source node is missing");
         assert!(to < self.nodes.len(), "feature edge target node is missing");
-        assert!(
-            start_radius > 0.0,
-            "feature edge start radius must be positive"
-        );
+        assert!(start_radius > 0.0, "feature edge start radius must be positive");
         assert!(end_radius > 0.0, "feature edge end radius must be positive");
 
         let from_position = self.nodes[from].position;
@@ -129,7 +129,10 @@ impl FeatureGraph {
         strongest
     }
 
-    pub(crate) fn sample_horizontal(&self, position: Vec2) -> Option<FeatureGraphHorizontalSample> {
+    pub(crate) fn sample_horizontal(
+        &self,
+        position: Vec2,
+    ) -> Option<FeatureGraphHorizontalSample> {
         self.sample_horizontal_with_margin(position, 0.0)
     }
 
@@ -162,7 +165,8 @@ impl FeatureGraph {
         for edge in &self.edges {
             // The stored bounding box already includes one maximum edge
             // radius; expand only by the remainder of the requested footprint.
-            let extra = margin + edge.start_radius.max(edge.end_radius) * (radius_multiplier - 1.0);
+            let extra = margin
+                + edge.start_radius.max(edge.end_radius) * (radius_multiplier - 1.0);
             if position.x < edge.minimum.x - extra
                 || position.x > edge.maximum.x + extra
                 || position.y < edge.minimum.z - extra
@@ -186,7 +190,8 @@ impl FeatureGraph {
             let progress = (relative.dot(segment) / length_squared).clamp(0.0, 1.0);
             let closest = from_horizontal + segment * progress;
             let distance = position.distance(closest);
-            let base_radius = edge.start_radius + (edge.end_radius - edge.start_radius) * progress;
+            let base_radius =
+                edge.start_radius + (edge.end_radius - edge.start_radius) * progress;
             let radius = base_radius * radius_multiplier + margin;
             let strength = 1.0 - (distance / radius).clamp(0.0, 1.0);
 
@@ -291,11 +296,9 @@ mod tests {
             .sample_horizontal_with_radius_multiplier(bank, 2.5)
             .unwrap();
         assert!((sampled.normalized_distance - 2.25).abs() <= f32::EPSILON);
-        assert!(
-            graph
-                .sample_horizontal_with_radius_multiplier(Vec2::new(5.0, 51.0), 2.5)
-                .is_none()
-        );
+        assert!(graph
+            .sample_horizontal_with_radius_multiplier(Vec2::new(5.0, 51.0), 2.5)
+            .is_none());
     }
 
     #[test]

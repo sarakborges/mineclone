@@ -7,8 +7,8 @@ use crate::content::biome_hydrology::BiomeHydrology;
 use super::{
     constants::{
         HYDROLOGY_REGION_SIZE, OCEAN_EXTRA_DEPTH, OCEAN_MINIMUM_DEPTH,
-        RIVER_BASIN_ESCAPE_RADIUS_CELLS, RIVER_MINIMUM_DROP, RIVER_OCEAN_OUTLET_RADIUS_CELLS,
-        RIVER_ROUTE_VARIATION,
+        RIVER_BASIN_ESCAPE_RADIUS_CELLS, RIVER_MINIMUM_DROP,
+        RIVER_OCEAN_OUTLET_RADIUS_CELLS, RIVER_ROUTE_VARIATION,
     },
     math::{cell_hash, hash_signed, hash_unit, lerp, ocean_strength},
     types::HydrologySurfaceSample,

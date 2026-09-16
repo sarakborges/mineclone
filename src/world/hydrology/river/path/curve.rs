@@ -222,15 +222,7 @@ mod tests {
         let lake = node(Vec2::new(128.0, 0.0), 96.0);
         let downstream = node(Vec2::new(256.0, 0.0), 85.0);
         let lake_level = 95.35;
-        let incoming = river_path(
-            IVec2::ZERO,
-            upstream,
-            lake,
-            42,
-            64.0,
-            None,
-            Some(lake_level),
-        );
+        let incoming = river_path(IVec2::ZERO, upstream, lake, 42, 64.0, None, Some(lake_level));
         let outgoing = river_path(IVec2::X, lake, downstream, 42, 64.0, Some(lake_level), None);
 
         assert_eq!(incoming.points.last(), outgoing.points.first());

@@ -7,12 +7,16 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     content::fluid::FluidRegistry,
-    voxel::{lighting::PendingLightingUpdates, update_queue::VoxelUpdateQueue, world::VoxelWorld},
+    voxel::{
+        lighting::PendingLightingUpdates, update_queue::VoxelUpdateQueue, world::VoxelWorld,
+    },
 };
 
 use self::solver::{desired_fluid, enqueue_remesh};
 use super::{
-    chunk_remesh::ChunkRemeshQueue, game_rules::GameRules, tick::WorldTickClock,
+    chunk_remesh::ChunkRemeshQueue,
+    game_rules::GameRules,
+    tick::WorldTickClock,
     work_budget::FrameWorkBudget,
 };
 
@@ -126,9 +130,11 @@ pub(super) fn process_fluid_updates(
         return;
     }
 
-    let mut budget =
-        FrameWorkBudget::new(FLUID_UPDATE_BUDGET, MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK)
-            .with_maximum_items(MAX_FLUID_UPDATES_PER_FRAME);
+    let mut budget = FrameWorkBudget::new(
+        FLUID_UPDATE_BUDGET,
+        MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK,
+    )
+    .with_maximum_items(MAX_FLUID_UPDATES_PER_FRAME);
 
     'steps: for step_index in 0..max_steps {
         if budget.exhausted() {
@@ -172,8 +178,8 @@ pub(super) fn process_fluid_updates(
                 continue;
             }
 
-            let lighting_medium_changed =
-                current.map(|fluid| fluid.fluid_id) != desired.map(|fluid| fluid.fluid_id);
+            let lighting_medium_changed = current.map(|fluid| fluid.fluid_id)
+                != desired.map(|fluid| fluid.fluid_id);
 
             if runtime.world.set_fluid_at(position, desired).is_none() {
                 continue;

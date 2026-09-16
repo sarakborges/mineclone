@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::content::{biome_structure::StructurePlacementRules, structure::StructureDefinition};
+use crate::content::{
+    biome_structure::StructurePlacementRules,
+    structure::StructureDefinition,
+};
 
 pub(super) fn candidate_anchor(
     world_seed: u64,

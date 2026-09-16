@@ -56,16 +56,10 @@ impl CreatureCollider {
     }
 
     fn validate(self, id: &str) {
-        assert!(
-            self.size
-                .iter()
-                .all(|value| value.is_finite() && *value > 0.0),
-            "creature {id} collider size must be positive and finite"
-        );
-        assert!(
-            self.center_offset.iter().all(|value| value.is_finite()),
-            "creature {id} collider offset must be finite"
-        );
+        assert!(self.size.iter().all(|value| value.is_finite() && *value > 0.0),
+            "creature {id} collider size must be positive and finite");
+        assert!(self.center_offset.iter().all(|value| value.is_finite()),
+            "creature {id} collider offset must be finite");
     }
 }
 
@@ -76,53 +70,27 @@ pub struct CreatureRegistry {
 
 impl CreatureRegistry {
     pub fn insert(&mut self, definition: CreatureDefinition) {
-        assert!(
-            !definition.id.trim().is_empty(),
-            "creature id cannot be empty"
-        );
-        definition
-            .name
-            .validate(&format!("creature {} name", definition.id));
-        assert!(
-            valid_creature_model_path(&definition.model),
+        assert!(!definition.id.trim().is_empty(), "creature id cannot be empty");
+        definition.name.validate(&format!("creature {} name", definition.id));
+        assert!(valid_creature_model_path(&definition.model),
             "creature {} model must be a safe relative .glb/.gltf path under assets/models/creatures/: {}",
-            definition.id,
-            definition.model
-        );
+            definition.id, definition.model);
         definition.collider.validate(&definition.id);
-        assert!(
-            definition.jump_speed.is_finite() && definition.jump_speed >= 0.0,
-            "creature {} has invalid jumpSpeed",
-            definition.id
-        );
-        assert!(
-            definition.jump_interval.is_finite() && definition.jump_interval > 0.0,
-            "creature {} has invalid jumpInterval",
-            definition.id
-        );
-        assert!(
-            definition.anticipation_seconds.is_finite() && definition.anticipation_seconds >= 0.0,
-            "creature {} has invalid anticipationSeconds",
-            definition.id
-        );
-        assert!(
-            definition.landing_seconds.is_finite() && definition.landing_seconds >= 0.0,
-            "creature {} has invalid landingSeconds",
-            definition.id
-        );
+        assert!(definition.jump_speed.is_finite() && definition.jump_speed >= 0.0,
+            "creature {} has invalid jumpSpeed", definition.id);
+        assert!(definition.jump_interval.is_finite() && definition.jump_interval > 0.0,
+            "creature {} has invalid jumpInterval", definition.id);
+        assert!(definition.anticipation_seconds.is_finite() && definition.anticipation_seconds >= 0.0,
+            "creature {} has invalid anticipationSeconds", definition.id);
+        assert!(definition.landing_seconds.is_finite() && definition.landing_seconds >= 0.0,
+            "creature {} has invalid landingSeconds", definition.id);
         for (material, tint) in &definition.material_tints {
-            assert!(
-                !material.is_empty() && tint.is_valid(),
-                "creature {} has an invalid material tint for {material}",
-                definition.id
-            );
+            assert!(!material.is_empty() && tint.is_valid(),
+                "creature {} has an invalid material tint for {material}", definition.id);
         }
         for (state, clip) in &definition.animations {
-            assert!(
-                !state.is_empty() && !clip.is_empty(),
-                "creature {} has an empty animation state/clip",
-                definition.id
-            );
+            assert!(!state.is_empty() && !clip.is_empty(),
+                "creature {} has an empty animation state/clip", definition.id);
         }
         self.definitions.insert(definition.id.clone(), definition);
     }
@@ -141,10 +109,7 @@ fn valid_creature_model_path(path: &str) -> bool {
         return false;
     }
     let candidate = Path::new(path);
-    if !candidate
-        .components()
-        .all(|component| matches!(component, Component::Normal(_)))
-    {
+    if !candidate.components().all(|component| matches!(component, Component::Normal(_))) {
         return false;
     }
     let mut parts = path.split('/');
@@ -154,10 +119,7 @@ fn valid_creature_model_path(path: &str) -> bool {
     if !parts.all(|part| !part.is_empty() && part != "." && part != "..") {
         return false;
     }
-    matches!(
-        candidate.extension().and_then(|ext| ext.to_str()),
-        Some("glb" | "gltf")
-    )
+    matches!(candidate.extension().and_then(|ext| ext.to_str()), Some("glb" | "gltf"))
 }
 
 #[cfg(test)]
@@ -166,9 +128,7 @@ mod tests {
 
     #[test]
     fn model_paths_remain_inside_moddable_creatures_directory() {
-        assert!(valid_creature_model_path(
-            "models/creatures/slime/slime.glb"
-        ));
+        assert!(valid_creature_model_path("models/creatures/slime/slime.glb"));
         assert!(!valid_creature_model_path("models/creatures/../secret.glb"));
         assert!(!valid_creature_model_path("/models/creatures/slime.glb"));
         assert!(!valid_creature_model_path("models/blocks/stone.glb"));

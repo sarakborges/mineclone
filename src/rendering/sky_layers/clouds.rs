@@ -76,7 +76,9 @@ pub(super) fn sync_cloud_presentation(
     let color_changed = materials
         .get(&assets.material)
         .is_some_and(|material| material.base_color != color);
-    if color_changed && let Some(mut material) = materials.get_mut(&assets.material) {
+    if color_changed
+        && let Some(mut material) = materials.get_mut(&assets.material)
+    {
         material.base_color = color;
     }
 
@@ -122,7 +124,11 @@ pub(super) fn update_cloud_positions(
         // flying within a tile does not drag clouds along with the player.
         let world_x = cloud_world_coordinate(cloud.base.x, drift, camera_position.x);
         let world_z = cloud_world_coordinate(cloud.base.y, 0.0, camera_position.z);
-        let translation = Vec3::new(world_x, sea_level + cloud.altitude_above_sea_level, world_z);
+        let translation = Vec3::new(
+            world_x,
+            sea_level + cloud.altitude_above_sea_level,
+            world_z,
+        );
         if transform.translation != translation {
             transform.translation = translation;
         }

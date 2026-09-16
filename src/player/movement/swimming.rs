@@ -53,7 +53,8 @@ pub(super) fn swim_vertical(
         } else {
             SWIM_ASCEND_SPEED
         }
-    } else if context.keys.pressed(KeyCode::ShiftLeft) || context.keys.pressed(KeyCode::ShiftRight)
+    } else if context.keys.pressed(KeyCode::ShiftLeft)
+        || context.keys.pressed(KeyCode::ShiftRight)
     {
         -SWIM_DESCEND_SPEED
     } else {
@@ -75,7 +76,14 @@ pub(super) fn swim_vertical(
     }
 
     let vertical_delta = gravity.vertical_velocity * delta_seconds;
-    if vertical_delta != 0.0 && move_axis(&mut transform, &context.world, vertical_delta, Axis::Y) {
+    if vertical_delta != 0.0
+        && move_axis(
+            &mut transform,
+            &context.world,
+            vertical_delta,
+            Axis::Y,
+        )
+    {
         gravity.vertical_velocity = 0.0;
     }
 }

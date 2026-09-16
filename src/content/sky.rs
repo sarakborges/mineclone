@@ -32,16 +32,8 @@ pub struct SkyRegistry {
 
 impl SkyRegistry {
     pub fn insert(&mut self, definition: SkyDefinition) {
-        assert!(
-            definition.sun.tint.is_valid(),
-            "sky {} sun HSI tint is invalid",
-            definition.id
-        );
-        assert!(
-            definition.moon.tint.is_valid(),
-            "sky {} moon HSI tint is invalid",
-            definition.id
-        );
+        assert!(definition.sun.tint.is_valid(), "sky {} sun HSI tint is invalid", definition.id);
+        assert!(definition.moon.tint.is_valid(), "sky {} moon HSI tint is invalid", definition.id);
         self.definitions.insert(definition.id.clone(), definition);
     }
 

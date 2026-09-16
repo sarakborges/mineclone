@@ -33,12 +33,7 @@ pub(super) fn is_face_exposed<W: VoxelRead + ?Sized>(
         .unwrap_or_else(|| panic!("missing block definition: {neighbor_id}"));
     let neighbor_occludes = !neighbor.alpha_blend && neighbor.alpha_cutoff.is_none();
 
-    !face_is_occluded(
-        block_id,
-        neighbor_id,
-        block_is_transparent,
-        neighbor_occludes,
-    )
+    !face_is_occluded(block_id, neighbor_id, block_is_transparent, neighbor_occludes)
 }
 
 fn face_is_occluded(

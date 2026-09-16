@@ -27,11 +27,7 @@ pub(super) struct CreatureMotion {
 
 impl Default for CreatureMotion {
     fn default() -> Self {
-        Self {
-            phase: HopPhase::Idle,
-            timer: 1.0,
-            velocity_y: 0.0,
-        }
+        Self { phase: HopPhase::Idle, timer: 1.0, velocity_y: 0.0 }
     }
 }
 
@@ -55,9 +51,7 @@ pub(super) fn move_creatures(
         if !world.is_loaded_at(transform.translation.floor().as_ivec3()) {
             continue;
         }
-        if motion.phase != HopPhase::Airborne
-            && !on_ground(&world, *collider, transform.translation)
-        {
+        if motion.phase != HopPhase::Airborne && !on_ground(&world, *collider, transform.translation) {
             motion.phase = HopPhase::Airborne;
             motion.velocity_y = 0.0;
             set_animation(&mut animation, "airborne");

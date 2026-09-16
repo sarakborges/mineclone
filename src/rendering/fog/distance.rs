@@ -3,7 +3,10 @@ use bevy::{platform::collections::HashSet, prelude::*};
 use crate::{
     player::camera::GameplayCamera,
     voxel::{chunk::CHUNK_SIZE, coordinates::chunk_coord_from_position},
-    world::{chunk_rendering::ChunkRenderPool, render_distance::RenderDistanceSettings},
+    world::{
+        chunk_rendering::ChunkRenderPool,
+        render_distance::RenderDistanceSettings,
+    },
 };
 
 const FOG_START_RADIUS_FRACTION: f32 = 0.78;
@@ -181,8 +184,12 @@ mod tests {
         let mut columns = filled_columns(radius);
         columns.remove(&IVec2::new(3, 0));
 
-        let distance = nearest_missing_column_distance(Vec3::new(8.0, 0.0, 8.0), radius, &columns)
-            .expect("missing column should constrain the fog frontier");
+        let distance = nearest_missing_column_distance(
+            Vec3::new(8.0, 0.0, 8.0),
+            radius,
+            &columns,
+        )
+        .expect("missing column should constrain the fog frontier");
 
         assert_eq!(distance, 40.0);
     }

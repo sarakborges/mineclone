@@ -188,9 +188,7 @@ pub struct BlockRegistry {
 
 impl BlockRegistry {
     pub fn insert(&mut self, definition: BlockDefinition) {
-        definition
-            .name
-            .validate(&format!("block {} name", definition.id));
+        definition.name.validate(&format!("block {} name", definition.id));
         assert!(
             definition.light_emission <= MAX_LIGHT_DAMPENING,
             "block {} light emission must be between 0 and 15",

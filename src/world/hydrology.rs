@@ -15,7 +15,9 @@ pub(crate) use field::HydrologyField;
 pub(crate) use math::ocean_strength;
 pub(crate) use region::HydrologyRegion;
 pub(crate) use types::{HydrologyBiomeOverlay, HydrologySurfaceSample};
-pub(crate) use types::{HydrologyRiverSurfaceSample, HydrologyWaterKind, HydrologyWaterSample};
+pub(crate) use types::{
+    HydrologyRiverSurfaceSample, HydrologyWaterKind, HydrologyWaterSample,
+};
 
 #[cfg(test)]
 use types::WaterBody;

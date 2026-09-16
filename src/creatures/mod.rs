@@ -61,7 +61,9 @@ pub(crate) fn spawn_creature_at(
     let feet = player_eye - Vec3::Y * PLAYER_EYE_HEIGHT;
     let collider: CreatureCollider = definition.collider;
     let (min, max) = collider.bounds(feet);
-    if !world.is_loaded_at(min.floor().as_ivec3()) || !world.is_loaded_at(max.floor().as_ivec3()) {
+    if !world.is_loaded_at(min.floor().as_ivec3())
+        || !world.is_loaded_at(max.floor().as_ivec3())
+    {
         return Err("Cannot spawn creature: the destination is not loaded.".to_owned());
     }
     if collides_aabb(world, min, max) {

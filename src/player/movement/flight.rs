@@ -145,13 +145,34 @@ pub(super) fn move_flying(
     }
 
     let velocity = flight.velocity;
-    if velocity.x != 0.0 && move_axis(&mut transform, &world, velocity.x * delta_seconds, Axis::X) {
+    if velocity.x != 0.0
+        && move_axis(
+            &mut transform,
+            &world,
+            velocity.x * delta_seconds,
+            Axis::X,
+        )
+    {
         flight.velocity.x = 0.0;
     }
-    if velocity.z != 0.0 && move_axis(&mut transform, &world, velocity.z * delta_seconds, Axis::Z) {
+    if velocity.z != 0.0
+        && move_axis(
+            &mut transform,
+            &world,
+            velocity.z * delta_seconds,
+            Axis::Z,
+        )
+    {
         flight.velocity.z = 0.0;
     }
-    if velocity.y != 0.0 && move_axis(&mut transform, &world, velocity.y * delta_seconds, Axis::Y) {
+    if velocity.y != 0.0
+        && move_axis(
+            &mut transform,
+            &world,
+            velocity.y * delta_seconds,
+            Axis::Y,
+        )
+    {
         flight.velocity.y = 0.0;
     }
 }

@@ -52,7 +52,13 @@ pub(crate) struct VoxelChunkContentMut<'a> {
 }
 
 impl VoxelChunkContentMut<'_> {
-    pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: Option<VoxelCell>) {
+    pub(crate) fn set_block(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        block: Option<VoxelCell>,
+    ) {
         set_block_in_storage(
             &mut *self.blocks,
             &*self.fluids,
@@ -65,7 +71,13 @@ impl VoxelChunkContentMut<'_> {
         );
     }
 
-    pub(crate) fn set_fluid(&mut self, x: usize, y: usize, z: usize, fluid: Option<FluidCell>) {
+    pub(crate) fn set_fluid(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        fluid: Option<FluidCell>,
+    ) {
         set_fluid_in_storage(
             &*self.blocks,
             &mut *self.fluids,
@@ -104,11 +116,13 @@ impl VoxelChunk {
     }
 
     pub(crate) fn boundary_has_content(&self, outward: IVec3) -> bool {
-        boundary_face_index(outward).is_some_and(|face| self.boundary_content_counts[face] > 0)
+        boundary_face_index(outward)
+            .is_some_and(|face| self.boundary_content_counts[face] > 0)
     }
 
     pub(crate) fn boundary_has_fluid(&self, outward: IVec3) -> bool {
-        boundary_face_index(outward).is_some_and(|face| self.boundary_fluid_counts[face] > 0)
+        boundary_face_index(outward)
+            .is_some_and(|face| self.boundary_fluid_counts[face] > 0)
     }
 
     pub(crate) fn boundary_dynamic_fluid_count(&self, outward: IVec3) -> usize {
@@ -237,10 +251,7 @@ impl VoxelChunk {
     }
 
     pub(crate) fn rebuild_empty_light_columns(&mut self, sky_by_column: &[u8; CHUNK_AREA]) {
-        debug_assert!(
-            self.is_empty(),
-            "empty light rebuild requires an empty chunk"
-        );
+        debug_assert!(self.is_empty(), "empty light rebuild requires an empty chunk");
         let lights = Arc::make_mut(&mut self.light);
 
         for (light, &sky) in lights[..CHUNK_AREA].iter_mut().zip(sky_by_column) {
@@ -316,7 +327,13 @@ fn set_fluid_in_storage(
         adjust_boundary_counts(boundary_fluid_counts, x, y, z, has_fluid);
     }
     if had_dynamic_fluid != has_dynamic_fluid {
-        adjust_boundary_counts(boundary_dynamic_fluid_counts, x, y, z, has_dynamic_fluid);
+        adjust_boundary_counts(
+            boundary_dynamic_fluid_counts,
+            x,
+            y,
+            z,
+            has_dynamic_fluid,
+        );
     }
     if had_content != has_content {
         adjust_boundary_counts(boundary_content_counts, x, y, z, has_content);

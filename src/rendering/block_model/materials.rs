@@ -150,7 +150,11 @@ fn block_model_placeholder_material(opacity: f32, layer_index: usize) -> BlockMo
     }
 }
 
-fn block_model_alpha_mode(block: &BlockDefinition, layer_index: usize, opacity: f32) -> AlphaMode {
+fn block_model_alpha_mode(
+    block: &BlockDefinition,
+    layer_index: usize,
+    opacity: f32,
+) -> AlphaMode {
     if opacity < 1.0 {
         if layer_index > 0 || block.alpha_blend {
             return AlphaMode::Mask(PREVIEW_ALPHA_CUTOFF);

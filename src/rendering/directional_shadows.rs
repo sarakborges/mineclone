@@ -49,7 +49,10 @@ impl Plugin for DirectionalShadowsPlugin {
 #[derive(Component)]
 struct SunShadowLight;
 
-fn spawn_sun_shadow_light(mut commands: Commands, render_distance: Res<RenderDistanceSettings>) {
+fn spawn_sun_shadow_light(
+    mut commands: Commands,
+    render_distance: Res<RenderDistanceSettings>,
+) {
     commands.spawn((
         DirectionalLight {
             illuminance: 0.0,
@@ -83,8 +86,7 @@ fn update_sun_shadow_light(
         }
     }
 
-    let (Some(sky), Some(cycle), Some(sample)) = (scene.sky(), scene.cycle(), scene.sample())
-    else {
+    let (Some(sky), Some(cycle), Some(sample)) = (scene.sky(), scene.cycle(), scene.sample()) else {
         hide_lights(&mut lights);
         return;
     };

@@ -83,10 +83,24 @@ pub(super) fn walk(
     }
 
     let velocity = walking.velocity;
-    if velocity.x != 0.0 && move_axis(&mut transform, &world, velocity.x * delta_seconds, Axis::X) {
+    if velocity.x != 0.0
+        && move_axis(
+            &mut transform,
+            &world,
+            velocity.x * delta_seconds,
+            Axis::X,
+        )
+    {
         walking.velocity.x = 0.0;
     }
-    if velocity.z != 0.0 && move_axis(&mut transform, &world, velocity.z * delta_seconds, Axis::Z) {
+    if velocity.z != 0.0
+        && move_axis(
+            &mut transform,
+            &world,
+            velocity.z * delta_seconds,
+            Axis::Z,
+        )
+    {
         walking.velocity.z = 0.0;
     }
 }

@@ -159,7 +159,9 @@ impl ChunkRenderPool {
 
         let entities = slot.entities.drain(..terrain_entity_count).collect();
         let meshes = slot.meshes.drain(..terrain_mesh_count).collect();
-        slot.mesh_keys.drain(..terrain_mesh_count).for_each(drop);
+        slot.mesh_keys
+            .drain(..terrain_mesh_count)
+            .for_each(drop);
         slot.mesh_bytes = slot.fluid_mesh_bytes;
 
         Some(DetachedRenderAllocationParts { entities, meshes })

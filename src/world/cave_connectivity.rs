@@ -17,7 +17,10 @@ pub struct CaveConnectivityRegion {
 }
 
 impl CaveConnectivityRegion {
-    pub(crate) fn underground_water_at(&self, position: Vec3) -> Option<UndergroundWaterSample> {
+    pub(crate) fn underground_water_at(
+        &self,
+        position: Vec3,
+    ) -> Option<UndergroundWaterSample> {
         self.underground_water.water_at(position)
     }
 }
@@ -63,8 +66,7 @@ impl CaveConnectivityField {
         }
 
         let water_seed = self.seed.rotate_left(17) ^ 0xbb67_ae85_84ca_a73b;
-        let mut underground_water =
-            UndergroundWaterRegion::from_anchors(underground_anchors, water_seed);
+        let mut underground_water = UndergroundWaterRegion::from_anchors(underground_anchors, water_seed);
         let connector_graph = build_connector_graph(
             coord,
             anchors,

@@ -19,7 +19,10 @@ impl CurrentBiomeVisuals<'_> {
         self.current.is_changed() || self.biomes.is_changed()
     }
 
-    pub(crate) fn weighted_scalar(&self, value: impl Fn(&BiomeDefinition) -> f32) -> f32 {
+    pub(crate) fn weighted_scalar(
+        &self,
+        value: impl Fn(&BiomeDefinition) -> f32,
+    ) -> f32 {
         self.current
             .influences
             .iter()
@@ -31,7 +34,10 @@ impl CurrentBiomeVisuals<'_> {
             .sum()
     }
 
-    pub(crate) fn blend_hsi(&self, value: impl Fn(&BiomeDefinition) -> Hsi) -> Hsi {
+    pub(crate) fn blend_hsi(
+        &self,
+        value: impl Fn(&BiomeDefinition) -> Hsi,
+    ) -> Hsi {
         Hsi::blend_weighted(self.current.influences.iter().filter_map(|influence| {
             self.biomes
                 .get(&influence.id)

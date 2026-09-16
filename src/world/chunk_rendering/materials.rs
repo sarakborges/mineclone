@@ -71,7 +71,11 @@ impl TerrainMaterials {
         }
     }
 
-    pub(super) fn for_face(&self, block_id: &str, face: BlockFace) -> &[Handle<TerrainMaterial>] {
+    pub(super) fn for_face(
+        &self,
+        block_id: &str,
+        face: BlockFace,
+    ) -> &[Handle<TerrainMaterial>] {
         self.blocks
             .get(block_id)
             .unwrap_or_else(|| panic!("missing terrain materials for block: {block_id}"))

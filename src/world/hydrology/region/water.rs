@@ -20,7 +20,10 @@ impl HydrologyRegion {
         self.water_with_margin(position, radius.max(0.0))
     }
 
-    pub(crate) fn river_surface_at(&self, position: Vec2) -> Option<HydrologyRiverSurfaceSample> {
+    pub(crate) fn river_surface_at(
+        &self,
+        position: Vec2,
+    ) -> Option<HydrologyRiverSurfaceSample> {
         let river = self
             .river_graph
             .sample_horizontal(position)
@@ -54,7 +57,11 @@ impl HydrologyRegion {
         })
     }
 
-    fn water_with_margin(&self, position: Vec2, margin: f32) -> Option<HydrologyWaterSample<'_>> {
+    fn water_with_margin(
+        &self,
+        position: Vec2,
+        margin: f32,
+    ) -> Option<HydrologyWaterSample<'_>> {
         let mut selected = None;
 
         for body in &self.water_bodies {

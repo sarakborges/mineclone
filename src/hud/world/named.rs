@@ -65,9 +65,11 @@ pub(super) fn update_localized_name_hud<S, R, M>(
 {
     let id = source.id();
     let language = language.get();
-    let cache_matches = cached.as_ref().is_some_and(|(cached_id, cached_language)| {
-        cached_id == id && *cached_language == language
-    });
+    let cache_matches = cached
+        .as_ref()
+        .is_some_and(|(cached_id, cached_language)| {
+            cached_id == id && *cached_language == language
+        });
     if cache_matches && !registry.is_changed() {
         return;
     }

@@ -65,8 +65,8 @@ impl ChunkMeshDependencies {
                     if offset_x == 0 && offset_y == 0 && offset_z == 0 {
                         continue;
                     }
-                    if self.content_revisions[(offset_y + 1) as usize][(offset_z + 1) as usize]
-                        [(offset_x + 1) as usize]
+                    if self.content_revisions[(offset_y + 1) as usize]
+                        [(offset_z + 1) as usize][(offset_x + 1) as usize]
                         .is_some()
                     {
                         continue;
@@ -100,8 +100,9 @@ impl ChunkMeshSnapshot {
             .expect("loaded center chunk should have a content revision");
         let chunk = center_chunk.clone();
         let chunk_origin = chunk_origin(coord);
-        let mut neighbor_chunks: NeighborChunks =
-            std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| None)));
+        let mut neighbor_chunks: NeighborChunks = std::array::from_fn(|_| {
+            std::array::from_fn(|_| std::array::from_fn(|_| None))
+        });
         let mut content_revisions = [[[None; 3]; 3]; 3];
         content_revisions[1][1][1] = Some(center_revision);
 
@@ -322,7 +323,9 @@ fn shell_index_from_snapshot_coords(x: usize, y: usize, z: usize) -> Option<usiz
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::voxel::{cell::VoxelCell, texture_rotation::TextureRotation, world::VoxelWorld};
+    use crate::voxel::{
+        cell::VoxelCell, texture_rotation::TextureRotation, world::VoxelWorld,
+    };
 
     #[test]
     fn snapshot_preserves_central_chunk_and_one_voxel_halo() {
@@ -377,7 +380,8 @@ mod tests {
         );
         world.insert_chunk(IVec3::new(1, 1, 1), diagonal);
 
-        let snapshot = ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
+        let snapshot =
+            ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
         let edge = CHUNK_SIZE as i32;
         assert_eq!(
             snapshot.block_id_at(IVec3::new(edge, edge, edge)),
@@ -400,7 +404,8 @@ mod tests {
         );
         world.insert_chunk(IVec3::X, neighbor);
 
-        let snapshot = ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
+        let snapshot =
+            ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
         world.set_block_at(
             IVec3::new(edge, 0, 0),
             Some(VoxelCell::new("asteria:after", TextureRotation::default())),
@@ -418,7 +423,8 @@ mod tests {
     fn snapshot_dependencies_allow_new_neighbors_but_detect_content_changes() {
         let mut world = VoxelWorld::default();
         world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
-        let snapshot = ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
+        let snapshot =
+            ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
         assert!(snapshot.dependencies().is_current(&world));
         assert!(!snapshot.dependencies().needs_initial_catchup(&world));
 
@@ -443,7 +449,8 @@ mod tests {
     fn snapshot_dependencies_ignore_lighting_revision_churn() {
         let mut world = VoxelWorld::default();
         world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
-        let snapshot = ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
+        let snapshot =
+            ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
         let mesh_revision = world
             .chunk_mesh_revision(IVec3::ZERO)
             .expect("chunk should have a mesh revision");
