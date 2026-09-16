@@ -1,0 +1,15 @@
+{
+  "id": "asteria:bassalt",
+  "name": { "english": "Bassalt" },
+  "category": "stone_blocks",
+  "textures": {
+    "top": "textures/blocks/bassalt.png",
+    "bottom": "textures/blocks/bassalt.png",
+    "left": "textures/blocks/bassalt.png",
+    "right": "textures/blocks/bassalt.png",
+    "front": "textures/blocks/bassalt.png",
+    "back": "textures/blocks/bassalt.png"
+  },
+  "lightDampening": 15,
+  "castsShadow": true
+}
