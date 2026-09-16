@@ -131,7 +131,17 @@ fn fluid_level_for_surface(water_level: f32, world_y: i32) -> Option<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::hydrology::HydrologyWaterKind;
+    use std::sync::Arc;
+
+    use smallvec::SmallVec;
+
+    use crate::{
+        content::{
+            biome_hydrology::BiomeHydrology, builtin_ids::WATER_FLUID_ID,
+            dimension_hydrology::DimensionHydrology, fluid::FluidDefinition,
+        },
+        world::hydrology::{HydrologyField, HydrologySurfaceSample, HydrologyWaterKind},
+    };
 
     fn sample(
         kind: HydrologyWaterKind,
@@ -173,5 +183,84 @@ mod tests {
             sample(HydrologyWaterKind::River, 80.0, 74.0),
             90.0,
         ));
+    }
+
+    #[test]
+    fn generated_river_crossing_places_sources_on_both_sides_of_region_seam() {
+        // This uses the production drainage/selection/path builder, not a
+        // manually constructed river graph. The coast is beyond the x=128
+        // region boundary, so the crossing itself has supporting inland land.
+        let field = HydrologyField::new(42, 64, DimensionHydrology::default(), 1.0, 1.0);
+        let terrain = |position: Vec2| HydrologySurfaceSample {
+            elevation: if position.x >= 256.0 {
+                40.0
+            } else {
+                110.0 - position.x * 0.04
+            },
+            continentalness: if position.x >= 256.0 { 0.0 } else { 0.8 },
+            biome_hydrology: BiomeHydrology::default(),
+        };
+        let left_hydrology = field.region_from_macro_terrain(IVec2::ZERO, terrain);
+        let right_hydrology = field.region_from_macro_terrain(IVec2::X, terrain);
+        let original_surface = 104.0;
+        let crossing = (-384..=384).find_map(|z| {
+            let z = z as f32 + 0.5;
+            let left = left_hydrology.supported_water_at(Vec2::new(127.5, z), original_surface)?;
+            let right = right_hydrology.supported_water_at(Vec2::new(128.5, z), original_surface)?;
+            if left.kind != HydrologyWaterKind::River || right.kind != HydrologyWaterKind::River {
+                return None;
+            }
+            let y = left.water_level.min(right.water_level).floor() as i32 - 1;
+            if y < 0 || y as f32 + 1.0 <= left.bed_level.max(right.bed_level) {
+                return None;
+            }
+            Some((z as i32, y))
+        });
+        let (world_z, world_y) = crossing.expect("synthetic drainage must cross the region seam");
+
+        let mut fluids = FluidRegistry::default();
+        let water: FluidDefinition =
+            serde_json::from_str(include_str!("../../../data/fluids/water.json")).unwrap();
+        fluids.insert(water);
+        let fluid_id = fluids.id_of(WATER_FLUID_ID).unwrap();
+        let columns = (0..CHUNK_SIZE * CHUNK_SIZE)
+            .map(|_| GenerationColumnSample {
+                surface_height: original_surface as i32,
+                surface_influences: SmallVec::new(),
+            })
+            .collect::<Vec<_>>();
+        let density = vec![-1.0; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
+        let chunk_z = world_z.div_euclid(CHUNK_SIZE as i32);
+        let chunk_y = world_y.div_euclid(CHUNK_SIZE as i32);
+        let local_z = world_z.rem_euclid(CHUNK_SIZE as i32) as usize;
+        let local_y = world_y.rem_euclid(CHUNK_SIZE as i32) as usize;
+
+        for (chunk_x, hydrology, local_x) in
+            [(7, left_hydrology, CHUNK_SIZE - 1), (8, right_hydrology, 0)]
+        {
+            let chunk_coord = IVec3::new(chunk_x, chunk_y, chunk_z);
+            let region = GenerationRegion {
+                coord: IVec3::new(chunk_x.div_euclid(8), chunk_y.div_euclid(8), chunk_z.div_euclid(8)),
+                hydrology: Arc::new(hydrology),
+            };
+            let mut chunk = VoxelChunk::empty();
+            rasterize_fluid_pass(
+                &mut chunk,
+                chunk_coord * CHUNK_SIZE as i32,
+                &columns,
+                &density,
+                &FluidPassContext {
+                    fluids: &fluids,
+                    region: &region,
+                    anchored_caves: None,
+                    underground_water_fluid: WATER_FLUID_ID,
+                },
+            );
+            assert_eq!(
+                chunk.fluid_at(local_x, local_y, local_z),
+                Some(FluidCell::source(fluid_id, MAX_FLUID_LEVEL)),
+                "physical river must fill both sides of the x=128 seam at {chunk_coord:?}",
+            );
+        }
     }
 }
