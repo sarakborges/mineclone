@@ -62,6 +62,7 @@ impl VoxelWorld {
         )
     }
 
+    #[cfg(test)]
     pub(crate) fn chunk_with_mesh_revision(&self, coord: IVec3) -> Option<(&VoxelChunk, u64)> {
         let chunk = self.chunk(coord)?;
         let revision = *self
@@ -71,6 +72,7 @@ impl VoxelWorld {
         Some((chunk, revision))
     }
 
+    #[cfg(test)]
     pub(crate) fn chunk_mesh_revision(&self, coord: IVec3) -> Option<u64> {
         self.chunk_with_mesh_revision(coord)
             .map(|(_, revision)| revision)

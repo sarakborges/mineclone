@@ -16,8 +16,9 @@ use super::{
     surface_cache::{cached_surface_range, prune_surface_cache},
 };
 
-const HORIZONTAL_PRELOAD_CHUNKS: i32 = 1;
-const FORWARD_PRELOAD_CHUNKS: i32 = 2;
+const HORIZONTAL_PRELOAD_CHUNKS: i32 = 2;
+const FORWARD_PRELOAD_CHUNKS: i32 = 8;
+const FORWARD_PRELOAD_HALF_WIDTH_CHUNKS: f32 = 8.0;
 const SURFACE_PADDING_ABOVE_CHUNKS: i32 = 1;
 const NEAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const FAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
@@ -25,7 +26,7 @@ const PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS: i32 = 3;
 const IMMEDIATE_PLAYER_PRIORITY_RADIUS_CHUNKS: i32 = 1;
 const SURFACE_SUPPORT_NEIGHBORS: [IVec2; 4] = [IVec2::X, IVec2::NEG_X, IVec2::Y, IVec2::NEG_Y];
 
-type PendingPriority = (i32, i32, i32, i32, i32, i32, i32, i32, i32);
+type PendingPriority = (i32, i32, i32, i32, i32, i32, i32, i32, i32, i32);
 
 #[derive(Clone, Copy)]
 struct PendingEntry {
@@ -68,9 +69,8 @@ pub(super) fn rebuild_queue(
         horizontal_radius,
         vertical_radius,
     );
-    let horizontal_structure_allowance = chunks_for_block_extent(
-        context.structures.max_horizontal_extent_from_anchor(),
-    );
+    let horizontal_structure_allowance =
+        chunks_for_block_extent(context.structures.max_horizontal_extent_from_anchor());
     let preload_radius =
         horizontal_radius + HORIZONTAL_PRELOAD_CHUNKS.max(horizontal_structure_allowance);
     let retention_radius = preload_radius
@@ -119,6 +119,7 @@ pub(super) fn rebuild_queue(
                 priority: pending_priority(
                     coord,
                     center,
+                    horizontal_radius,
                     vertical_structure_allowance,
                     movement_direction,
                     prioritize_surface,
@@ -214,6 +215,7 @@ fn player_is_above_surface(
 fn pending_priority(
     coord: IVec3,
     center: IVec3,
+    visible_radius: i32,
     structure_chunk_allowance: i32,
     movement_direction: IVec2,
     prioritize_surface: bool,
@@ -240,6 +242,11 @@ fn pending_priority(
     let horizontal_distance = horizontal_delta.length_squared();
     let vertical_distance = delta.y.abs();
     let total_distance = delta.length_squared();
+    let visibility_band = if horizontal_distance <= visible_radius * visible_radius {
+        0
+    } else {
+        1
+    };
     let off_surface = if surface_distance > 0 { 1 } else { 0 };
     let immediate_neighborhood = if delta.x.abs() <= IMMEDIATE_PLAYER_PRIORITY_RADIUS_CHUNKS
         && delta.y.abs() <= IMMEDIATE_PLAYER_PRIORITY_RADIUS_CHUNKS
@@ -271,6 +278,7 @@ fn pending_priority(
 
     (
         player_chunk,
+        visibility_band,
         primary_locality,
         secondary_locality,
         immediate_distance,
@@ -280,6 +288,31 @@ fn pending_priority(
         vertical_distance,
         total_distance,
     )
+}
+
+fn inside_forward_preload(
+    offset: IVec2,
+    horizontal_radius: i32,
+    movement_direction: IVec2,
+) -> bool {
+    if movement_direction == IVec2::ZERO {
+        return false;
+    }
+
+    let direction = movement_direction.as_vec2().normalize();
+    let offset = offset.as_vec2();
+    let forward = offset.dot(direction);
+    let base = horizontal_radius as f32;
+    let limit = base + FORWARD_PRELOAD_CHUNKS as f32;
+    if forward <= base || forward > limit {
+        return false;
+    }
+
+    let extra = forward - base;
+    let lateral_width = FORWARD_PRELOAD_HALF_WIDTH_CHUNKS
+        + (FORWARD_PRELOAD_CHUNKS as f32 - extra) * 0.5;
+    let lateral_squared = (offset.length_squared() - forward * forward).max(0.0);
+    lateral_squared <= lateral_width * lateral_width
 }
 
 fn rebuild_desired_chunk_coords(
@@ -321,7 +354,6 @@ fn rebuild_desired_chunk_coords(
         }
     }
 
-    let forward_offset = movement_direction * FORWARD_PRELOAD_CHUNKS;
     let search_radius = horizontal_radius
         + if movement_direction == IVec2::ZERO {
             0
@@ -333,9 +365,8 @@ fn rebuild_desired_chunk_coords(
             let offset = IVec2::new(x, z);
             let horizontal_distance_squared = offset.length_squared();
             let inside_base = horizontal_distance_squared <= horizontal_radius * horizontal_radius;
-            let inside_forward_preload = movement_direction != IVec2::ZERO
-                && (offset - forward_offset).length_squared()
-                    <= horizontal_radius * horizontal_radius;
+            let inside_forward_preload =
+                inside_forward_preload(offset, horizontal_radius, movement_direction);
             if !inside_base && !inside_forward_preload {
                 continue;
             }
@@ -454,12 +485,12 @@ mod tests {
         let mut pending = [
             PendingEntry {
                 coord: IVec3::new(3, 0, 0),
-                priority: (1, 1, 0, 0, 1, 9, 0, 0, 9),
+                priority: (1, 0, 1, 0, 0, 1, 9, 0, 0, 9),
                 ordinal: 0,
             },
             PendingEntry {
                 coord: IVec3::new(-3, 0, 0),
-                priority: (1, 1, 0, 0, 1, 9, 0, 0, 9),
+                priority: (1, 0, 1, 0, 0, 1, 9, 0, 0, 9),
                 ordinal: 1,
             },
         ];
@@ -479,6 +510,7 @@ mod tests {
         let forward = pending_priority(
             IVec3::new(3, 0, 0),
             IVec3::ZERO,
+            12,
             0,
             IVec2::X,
             false,
@@ -487,6 +519,7 @@ mod tests {
         let behind = pending_priority(
             IVec3::new(-3, 0, 0),
             IVec3::ZERO,
+            12,
             0,
             IVec2::X,
             false,
@@ -494,6 +527,59 @@ mod tests {
         );
 
         assert!(forward < behind);
+    }
+
+    #[test]
+    fn visible_chunks_beat_forward_preload_chunks() {
+        let center = IVec3::ZERO;
+        let visible = IVec3::new(0, 0, 12);
+        let preload = IVec3::new(18, 0, 0);
+        let surface_ranges = HashMap::from([
+            (visible.xz(), (0, 0)),
+            (preload.xz(), (0, 0)),
+        ]);
+
+        let visible_priority = pending_priority(
+            visible,
+            center,
+            12,
+            0,
+            IVec2::X,
+            false,
+            &surface_ranges,
+        );
+        let preload_priority = pending_priority(
+            preload,
+            center,
+            12,
+            0,
+            IVec2::X,
+            false,
+            &surface_ranges,
+        );
+
+        assert!(visible_priority < preload_priority);
+    }
+
+    #[test]
+    fn forward_preload_extends_only_in_front_of_motion() {
+        let base_radius = 14;
+
+        assert!(inside_forward_preload(
+            IVec2::new(20, 0),
+            base_radius,
+            IVec2::X
+        ));
+        assert!(!inside_forward_preload(
+            IVec2::new(-20, 0),
+            base_radius,
+            IVec2::X
+        ));
+        assert!(!inside_forward_preload(
+            IVec2::new(22, 12),
+            base_radius,
+            IVec2::X
+        ));
     }
 
     #[test]
@@ -509,8 +595,9 @@ mod tests {
         assert!(player_is_above_surface(center, 0, &surface_ranges));
 
         let surface_priority =
-            pending_priority(surface, center, 0, IVec2::X, true, &surface_ranges);
-        let air_priority = pending_priority(air, center, 0, IVec2::X, true, &surface_ranges);
+            pending_priority(surface, center, 12, 0, IVec2::X, true, &surface_ranges);
+        let air_priority =
+            pending_priority(air, center, 12, 0, IVec2::X, true, &surface_ranges);
 
         assert!(surface_priority < air_priority);
     }
