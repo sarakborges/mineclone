@@ -9,13 +9,14 @@ use crate::{
     ui::{scrollbar, typography},
 };
 
-use super::{CHAT_TIMEOUT_SECS, ChatState, MAX_INPUT_CHARS};
+use super::{CHAT_TIMEOUT_SECS, ChatState, MAX_INPUT_CHARS, autocomplete::ChatAutocomplete};
 
 // The chat grows naturally until fifteen lines of 17px HUD text at 22px
 // line spacing, including wrapped visual lines. Beyond this, it scrolls.
 const MAX_VISIBLE_LINES: f32 = 15.0;
 const CHAT_LINE_HEIGHT: f32 = 22.0;
 const MAX_HISTORY_HEIGHT: f32 = MAX_VISIBLE_LINES * CHAT_LINE_HEIGHT;
+const MAX_SUGGESTIONS: usize = 7;
 
 #[derive(Component)]
 pub(super) struct ChatRoot;
@@ -28,6 +29,9 @@ pub(super) struct ChatInputRoot;
 
 #[derive(Component)]
 pub(super) struct ChatDraft;
+
+#[derive(Component)]
+pub(super) struct ChatSuggestions;
 
 pub(super) fn advance_chat_timeout(
     time: Res<Time>,
@@ -95,6 +99,21 @@ pub(super) fn spawn_chat_ui(mut commands: Commands) {
                     .id();
                 row.spawn(scrollbar::vertical_scrollbar(viewport));
             });
+
+            root.spawn((
+                ChatSuggestions,
+                Node {
+                    width: percent(100),
+                    padding: UiRect::all(px(5)),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(2),
+                    border_radius: BorderRadius::all(px(4)),
+                    ..default()
+                },
+                BackgroundColor(Color::srgba(0.045, 0.04, 0.105, 0.96)),
+                Visibility::Hidden,
+                Pickable::IGNORE,
+            ));
 
             root.spawn((
                 ChatInputRoot,
@@ -167,6 +186,78 @@ pub(super) fn sync_chat_visibility(
     if **entry != entry_visibility {
         **entry = entry_visibility;
     }
+}
+
+/// Updates only when the completion list or selection changes, not on every frame.
+pub(super) fn render_autocomplete(
+    mut commands: Commands,
+    chat: Res<ChatState>,
+    autocomplete: Res<ChatAutocomplete>,
+    mut panel: Single<(Entity, &mut Visibility), With<ChatSuggestions>>,
+    descendants: Query<&Children>,
+    mut rendered_revision: Local<Option<u64>>,
+) {
+    let (panel_entity, visibility) = &mut *panel;
+    let panel_entity = *panel_entity;
+    let visible = chat.open && autocomplete.visible();
+    let desired = if visible { Visibility::Inherited } else { Visibility::Hidden };
+    if **visibility != desired {
+        **visibility = desired;
+    }
+    if *rendered_revision == Some(autocomplete.revision) {
+        return;
+    }
+    *rendered_revision = Some(autocomplete.revision);
+    if let Ok(children) = descendants.get(panel_entity) {
+        for child in children.iter() {
+            commands.entity(child).despawn();
+        }
+    }
+    if !visible {
+        return;
+    }
+    let count = autocomplete.suggestions.len();
+    let first = autocomplete.selected.saturating_sub(MAX_SUGGESTIONS / 2)
+        .min(count.saturating_sub(MAX_SUGGESTIONS));
+    commands.entity(panel_entity).with_children(|list| {
+        list.spawn((
+            typography::caption(format!(
+                "Suggestions {}/{}  ·  ↑ ↓ select  ·  Tab complete  ·  Esc dismiss",
+                autocomplete.selected + 1,
+                count,
+            )),
+            Node { width: percent(100), padding: UiRect::horizontal(px(5)), ..default() },
+            Pickable::IGNORE,
+        ));
+        for (index, suggestion) in autocomplete.suggestions.iter().enumerate().skip(first).take(MAX_SUGGESTIONS) {
+            let selected = index == autocomplete.selected;
+            list.spawn((
+                Node {
+                    width: percent(100),
+                    min_height: px(24),
+                    padding: UiRect::axes(px(8), px(3)),
+                    border_radius: BorderRadius::all(px(3)),
+                    ..default()
+                },
+                BackgroundColor(if selected {
+                    Color::srgba(0.31, 0.25, 0.53, 0.93)
+                } else {
+                    Color::NONE
+                }),
+                Pickable::IGNORE,
+            ))
+            .with_children(|row| {
+                row.spawn((
+                    typography::hud(format!("{}{}", if selected { "▶ " } else { "  " }, suggestion.value)),
+                    Pickable::IGNORE,
+                ));
+                row.spawn((
+                    typography::caption(format!("  {}", suggestion.description)),
+                    Pickable::IGNORE,
+                ));
+            });
+        }
+    });
 }
 
 pub(super) fn rebuild_chat_history(
