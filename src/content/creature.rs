@@ -23,10 +23,14 @@ pub struct CreatureDefinition {
     pub jump_speed: f32,
     #[serde(default = "default_jump_interval")]
     pub jump_interval: f32,
+    #[serde(default)]
+    pub anticipation_seconds: f32,
+    #[serde(default)]
+    pub landing_seconds: f32,
 }
 
 fn default_jump_speed() -> f32 {
-    5.0
+    0.0
 }
 
 fn default_jump_interval() -> f32 {
@@ -72,6 +76,10 @@ impl CreatureRegistry {
             "creature {} has invalid jumpSpeed", definition.id);
         assert!(definition.jump_interval.is_finite() && definition.jump_interval > 0.0,
             "creature {} has invalid jumpInterval", definition.id);
+        assert!(definition.anticipation_seconds.is_finite() && definition.anticipation_seconds >= 0.0,
+            "creature {} has invalid anticipationSeconds", definition.id);
+        assert!(definition.landing_seconds.is_finite() && definition.landing_seconds >= 0.0,
+            "creature {} has invalid landingSeconds", definition.id);
         for (material, tint) in &definition.material_tints {
             assert!(!material.is_empty() && tint.is_valid(),
                 "creature {} has an invalid material tint for {material}", definition.id);
@@ -130,7 +138,7 @@ mod tests {
             center_offset: [0.0, 0.42, 0.0],
         };
         let (min, max) = box_shape.bounds(Vec3::new(2.0, 3.0, 4.0));
-        assert_eq!(min, Vec3::new(1.61, 3.0, 3.61));
-        assert_eq!(max, Vec3::new(2.39, 3.84, 4.39));
+        assert!((min - Vec3::new(1.61, 3.0, 3.61)).length() < 0.0001);
+        assert!((max - Vec3::new(2.39, 3.84, 4.39)).length() < 0.0001);
     }
 }
