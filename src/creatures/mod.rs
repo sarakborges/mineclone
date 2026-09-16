@@ -8,7 +8,7 @@ use crate::{
     content::creature::{CreatureCollider, CreatureRegistry},
     localization::{ActiveLanguage, Language},
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera, find_safe_spawn_position},
-    voxel::world::VoxelWorld,
+    voxel::{collision::collides_aabb, world::VoxelWorld},
 };
 
 use motion::{CreatureMotion, move_creatures};
@@ -43,8 +43,50 @@ impl Plugin for CreaturesPlugin {
     }
 }
 
-/// Temporary, explicitly opt-in content preview: world spawning/AI will be a
-/// separate feature. All properties, including the model, come from JSON.
+/// Spawns any registered creature at a player's position, retaining the exact
+/// horizontal coordinates and using the player's feet as the creature origin.
+/// The model, name, animation mapping and collider are owned by the JSON.
+pub(crate) fn spawn_creature_at(
+    commands: &mut Commands,
+    definitions: &CreatureRegistry,
+    asset_server: &AssetServer,
+    world: &VoxelWorld,
+    language: Language,
+    id: &str,
+    player_eye: Vec3,
+) -> Result<String, String> {
+    let definition = definitions
+        .get(id)
+        .ok_or_else(|| format!("Unknown creature id: {id}"))?;
+    let feet = player_eye - Vec3::Y * PLAYER_EYE_HEIGHT;
+    let collider: CreatureCollider = definition.collider;
+    let (min, max) = collider.bounds(feet);
+    if !world.is_loaded_at(min.floor().as_ivec3())
+        || !world.is_loaded_at(max.floor().as_ivec3())
+    {
+        return Err("Cannot spawn creature: the destination is not loaded.".to_owned());
+    }
+    if collides_aabb(world, min, max) {
+        return Err("Cannot spawn creature: the destination is obstructed.".to_owned());
+    }
+
+    let name = definition.name.text(language).to_owned();
+    commands.spawn((
+        Name::new(name.clone()),
+        CreatureInstance {
+            definition_id: definition.id.clone(),
+        },
+        CreatureModel(asset_server.load(definition.model.clone())),
+        CreatureMotion::default(),
+        collider,
+        Transform::from_translation(feet),
+        Visibility::default(),
+        DespawnOnExit(GameState::Gameplay),
+    ));
+    Ok(name)
+}
+
+/// Temporary opt-in preview, not biome spawning or world persistence.
 fn spawn_preview_creatures(
     mut commands: Commands,
     creatures: Res<CreatureRegistry>,
@@ -57,7 +99,10 @@ fn spawn_preview_creatures(
         warn!("creature previews skipped: player not spawned");
         return;
     };
-    let mut previews: Vec<_> = creatures.iter().filter(|definition| definition.preview_spawn).collect();
+    let mut previews: Vec<_> = creatures
+        .iter()
+        .filter(|definition| definition.preview_spawn)
+        .collect();
     previews.sort_by(|left, right| left.id.cmp(&right.id));
     let base = player.translation.floor().as_ivec3();
 
@@ -67,25 +112,16 @@ fn spawn_preview_creatures(
             warn!("no valid surface for creature preview {}", definition.id);
             continue;
         };
-        let feet = eye_position - Vec3::Y * PLAYER_EYE_HEIGHT;
-        let collider: CreatureCollider = definition.collider;
-        let (min, max) = collider.bounds(feet);
-        if !world.is_loaded_at(min.floor().as_ivec3())
-            || !world.is_loaded_at(max.floor().as_ivec3())
-        {
-            continue;
+        if let Err(error) = spawn_creature_at(
+            &mut commands,
+            &creatures,
+            &asset_server,
+            &world,
+            active_language.get(),
+            &definition.id,
+            eye_position,
+        ) {
+            warn!("creature preview {}: {error}", definition.id);
         }
-
-        let language: Language = active_language.get();
-        commands.spawn((
-            Name::new(definition.name.text(language).to_owned()),
-            CreatureInstance { definition_id: definition.id.clone() },
-            CreatureModel(asset_server.load(definition.model.clone())),
-            CreatureMotion::default(),
-            collider,
-            Transform::from_translation(feet),
-            Visibility::default(),
-            DespawnOnExit(GameState::Gameplay),
-        ));
     }
 }
