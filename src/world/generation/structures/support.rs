@@ -104,8 +104,7 @@ fn supported_surface_ground_y(
     let raw_surface_height = surface_height_from_sample(
         position,
         context.dimension,
-        context.biomes,
-        context.biome_field.seed(),
+        context.biome_field,
         &surface,
     );
     let raw_ground_y = raw_surface_height - 1;

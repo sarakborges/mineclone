@@ -15,7 +15,7 @@ pub(crate) struct GenerationColumnSample {
 pub(crate) fn sample_generation_columns(
     horizontal_chunk: IVec2,
     dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
+    _biomes: &BiomeRegistry,
     biome_field: &BiomeField,
 ) -> Vec<GenerationColumnSample> {
     let mut columns = Vec::with_capacity(CHUNK_SIZE * CHUNK_SIZE);
@@ -27,13 +27,8 @@ pub(crate) fn sample_generation_columns(
             let world_z = chunk_origin.y + local_z as i32;
             let position = IVec2::new(world_x, world_z);
             let surface = biome_field.sample_surface(position.as_vec2() + Vec2::splat(0.5));
-            let surface_height = surface_height_from_sample(
-                position,
-                dimension,
-                biomes,
-                biome_field.seed(),
-                &surface,
-            );
+            let surface_height =
+                surface_height_from_sample(position, dimension, biome_field, &surface);
             let surface_influences = surface
                 .influences
                 .iter()

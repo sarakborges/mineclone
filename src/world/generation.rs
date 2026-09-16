@@ -65,8 +65,7 @@ impl ChunkGenerationContext<'_> {
                     let elevation = surface_height_from_sample(
                         surface_position,
                         self.dimension,
-                        self.biomes,
-                        self.biome_field.seed(),
+                        self.biome_field,
                         &surface,
                     ) as f32;
                     let continentalness = self.biome_field.climate_at(position).continentalness;

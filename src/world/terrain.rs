@@ -15,38 +15,31 @@ const NOISE_OCTAVES: usize = 4;
 pub fn surface_height(
     position: IVec2,
     dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
+    _biomes: &BiomeRegistry,
     biome_field: &BiomeField,
 ) -> i32 {
     let sample = biome_field.sample_surface(position.as_vec2() + Vec2::splat(0.5));
 
-    surface_height_from_sample(position, dimension, biomes, biome_field.seed(), &sample)
+    surface_height_from_sample(position, dimension, biome_field, &sample)
 }
 
 pub(crate) fn surface_height_from_sample(
     position: IVec2,
     dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
-    world_seed: u64,
+    biome_field: &BiomeField,
     sample: &BiomeFieldSample<'_>,
 ) -> i32 {
     let mut height = 0.0;
 
     for influence in &sample.influences {
-        let biome = biomes
-            .get(influence.id)
-            .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
-        let terrain = biome
-            .terrain
-            .as_ref()
-            .unwrap_or_else(|| panic!("surface biome {} must define terrain", biome.id));
+        let (terrain, modifiers, terrain_seed) =
+            biome_field.surface_terrain(influence.surface_index);
         height += biome_surface_height(
             position.as_vec2(),
             dimension.sea_level,
-            world_seed,
-            biome.id.as_str(),
+            terrain_seed,
             terrain,
-            &biome.terrain_modifiers,
+            modifiers,
         ) * influence.weight;
     }
 
@@ -100,15 +93,13 @@ pub(crate) fn chunk_y_bounds(
 fn biome_surface_height(
     position: Vec2,
     sea_level: i32,
-    world_seed: u64,
-    biome_id: &str,
-    terrain: &BiomeTerrain,
+    seed: u64,
+    terrain: BiomeTerrain,
     modifiers: &[BiomeTerrainModifier],
 ) -> f32 {
-    let seed = mix_seed(world_seed ^ string_hash(biome_id));
     let sea_level = sea_level as f32;
 
-    let base_height = match *terrain {
+    let base_height = match terrain {
         BiomeTerrain::Rolling {
             base_height,
             amplitude,
@@ -222,26 +213,6 @@ fn lattice_noise(x: i32, z: i32, seed: u64) -> f32 {
     let normalized = (hash & 0xffff) as f32 / u16::MAX as f32;
 
     normalized * 2.0 - 1.0
-}
-
-fn string_hash(value: &str) -> u64 {
-    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-
-    for byte in value.bytes() {
-        hash ^= byte as u64;
-        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-
-    hash
-}
-
-fn mix_seed(mut seed: u64) -> u64 {
-    seed ^= seed >> 33;
-    seed = seed.wrapping_mul(0xff51_afd7_ed55_8ccd);
-    seed ^= seed >> 33;
-    seed = seed.wrapping_mul(0xc4ce_b9fe_1a85_ec53);
-    seed ^= seed >> 33;
-    seed
 }
 
 fn smoothstep(value: f32) -> f32 {

@@ -15,6 +15,7 @@ use bevy::{platform::collections::HashMap, prelude::*};
 use crate::content::{
     biome::{BiomeClimate, BiomeKind, BiomeRegistry, BiomeVerticalRange},
     biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
+    biome_terrain::BiomeTerrain, biome_terrain_modifier::BiomeTerrainModifier,
     dimension::{DimensionBiomeSize, DimensionDefinition},
 };
 
@@ -38,6 +39,8 @@ pub(super) struct BiomeFieldEntry {
     pub climate: BiomeClimate,
     pub vertical_range: Option<BiomeVerticalRange>,
     pub priority: i32,
+    pub terrain: Option<BiomeTerrain>,
+    pub terrain_modifiers: Vec<BiomeTerrainModifier>,
     pub density_modifier: Option<BiomeDensityModifier>,
     pub solid_block: Option<String>,
     pub density_seed: u64,
@@ -123,6 +126,8 @@ impl BiomeField {
                 climate: biome.climate,
                 vertical_range: biome.vertical_range,
                 priority: biome.priority,
+                terrain: biome.terrain,
+                terrain_modifiers: biome.terrain_modifiers.clone(),
                 density_modifier: biome.density_modifier,
                 solid_block: biome.solid_block.clone(),
                 density_seed: biome_density_seed(seed, &biome.id),
@@ -197,6 +202,21 @@ impl BiomeField {
             .unwrap_or_else(|| panic!("surface biome index out of bounds: {index}"))
             .id
             .as_str()
+    }
+
+    pub(crate) fn surface_terrain(
+        &self,
+        index: usize,
+    ) -> (BiomeTerrain, &[BiomeTerrainModifier], u64) {
+        let biome = self
+            .surface_biomes
+            .get(index)
+            .unwrap_or_else(|| panic!("surface biome index out of bounds: {index}"));
+        let terrain = biome
+            .terrain
+            .unwrap_or_else(|| panic!("surface biome {} must define terrain", biome.id));
+
+        (terrain, &biome.terrain_modifiers, biome.density_seed)
     }
 
     pub(crate) fn volume_biome_id(&self, selection: VolumeBiomeSelection) -> &str {
