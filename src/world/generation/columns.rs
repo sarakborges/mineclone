@@ -37,12 +37,7 @@ pub(crate) fn sample_generation_columns(
             let surface_influences = surface
                 .influences
                 .iter()
-                .map(|influence| {
-                    (
-                        biome_field.surface_biome_index(influence.id),
-                        influence.weight,
-                    )
-                })
+                .map(|influence| (influence.surface_index, influence.weight))
                 .collect();
 
             columns.push(GenerationColumnSample {

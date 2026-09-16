@@ -168,6 +168,7 @@ impl BiomeField {
             .map(|(index, weight)| BiomeInfluence {
                 id: self.surface_biomes[*index].id.as_str(),
                 weight: *weight / total_weight,
+                surface_index: *index,
             })
             .collect::<ArrayVec<_, MAX_SURFACE_INFLUENCES>>();
 
