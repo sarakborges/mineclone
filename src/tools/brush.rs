@@ -19,8 +19,6 @@ use crate::{
 
 use self::palette::{handle_palette_selection, spawn_brush_palette};
 
-const DEFAULT_DYE_ID: &str = "red";
-
 #[derive(States, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub(crate) enum BrushPaletteState {
     #[default]
@@ -42,7 +40,7 @@ pub(crate) struct BrushMode {
 impl Default for BrushMode {
     fn default() -> Self {
         Self {
-            selection: BrushSelection::Dye(DEFAULT_DYE_ID.to_owned()),
+            selection: BrushSelection::Clear,
         }
     }
 }
@@ -143,5 +141,15 @@ fn handle_brush_use(
         };
 
         runtime.set_block(hit.voxel, Some(updated));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BrushMode;
+
+    #[test]
+    fn brush_starts_without_a_selected_dye() {
+        assert_eq!(BrushMode::default().dye_id(), None);
     }
 }
