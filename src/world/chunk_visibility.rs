@@ -9,7 +9,7 @@ use crate::{
 use super::chunk_rendering::ChunkRenderCoord;
 
 #[derive(Default)]
-struct ChunkVisibilityState {
+pub(super) struct ChunkVisibilityState {
     center: Option<IVec2>,
     horizontal_radius: i32,
 }
