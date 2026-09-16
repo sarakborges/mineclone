@@ -10,7 +10,7 @@ use cursor::{capture_cursor, handle_cursor_grab, handle_window_focus, release_cu
 use look::{MouseLookInputState, drain_or_apply_mouse_look};
 
 mod cursor;
-mod look;
+pub(crate) mod look;
 
 pub struct PlayerCameraPlugin;
 
