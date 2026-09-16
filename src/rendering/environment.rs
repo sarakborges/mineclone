@@ -8,11 +8,24 @@ use crate::{
 
 use super::biome_visuals::CurrentBiomeVisuals;
 
+// The background is a flat sky color, not a sky gradient. Its terminal color
+// must equal the fog color to avoid exposing unrendered chunks as silhouettes.
+// Incorporate the biome's authored fog palette without losing the sky palette.
+const HORIZON_FOG_COLOR_WEIGHT: f32 = 0.35;
+
 #[derive(Resource, PartialEq)]
 pub struct EnvironmentVisualState {
     pub sky_color: Hsi,
     pub fog_color: Hsi,
     pub sky_light_factor: f32,
+}
+
+impl EnvironmentVisualState {
+    pub(crate) fn horizon_color(&self) -> Color {
+        self.sky_color
+            .lerp(self.fog_color, HORIZON_FOG_COLOR_WEIGHT)
+            .to_color()
+    }
 }
 
 impl Default for EnvironmentVisualState {
@@ -72,5 +85,30 @@ fn update_environment_visuals(
 
     if *visuals != next {
         *visuals = next;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_horizon_uses_both_biome_palettes() {
+        let visuals = EnvironmentVisualState {
+            sky_color: Hsi::new(210.0, 1.0, 0.5),
+            fog_color: Hsi::new(90.0, 1.0, 0.5),
+            sky_light_factor: 1.0,
+        };
+        let horizon = visuals.horizon_color();
+
+        assert_eq!(
+            horizon,
+            visuals
+                .sky_color
+                .lerp(visuals.fog_color, HORIZON_FOG_COLOR_WEIGHT)
+                .to_color(),
+        );
+        assert_ne!(horizon, visuals.sky_color.to_color());
+        assert_ne!(horizon, visuals.fog_color.to_color());
     }
 }
