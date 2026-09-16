@@ -6,7 +6,11 @@ use bevy::{
     text::{EditableText, EditableTextFilter, FontWeight, TextCursorStyle},
 };
 
-use super::{button::COMPACT_CONTROL_HEIGHT, text_input::editable_value, theme};
+use super::{
+    button::COMPACT_CONTROL_HEIGHT,
+    text_input::{self, editable_value},
+    theme,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NumericInputEvent {
@@ -153,14 +157,15 @@ pub(crate) fn numeric_input_field<I: Component, L: Component>(
             min_width,
             height: px(COMPACT_CONTROL_HEIGHT),
             border: UiRect::all(px(1)),
-            padding: UiRect::axes(px(14), px(0)),
+            padding: UiRect::horizontal(px(text_input::INPUT_PADDING_X)),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::FlexStart,
-            border_radius: BorderRadius::all(px(7)),
+            overflow: Overflow::clip(),
+            border_radius: BorderRadius::all(px(text_input::INPUT_RADIUS)),
             ..default()
         },
-        BackgroundColor(Color::srgba(0.045, 0.035, 0.09, 0.88)),
-        BorderColor::all(numeric_input_border(false)),
+        BackgroundColor(text_input::INPUT_FILL),
+        BorderColor::all(text_input::input_border(false)),
     )
 }
 
@@ -183,19 +188,11 @@ pub(crate) fn sync_numeric_input_view<M, I, L>(
         }
     }
 
-    let next_border = BorderColor::all(numeric_input_border(state.editing()));
+    let next_border = BorderColor::all(text_input::input_border(state.editing()));
     for mut border in inputs {
         if *border != next_border {
             *border = next_border;
         }
-    }
-}
-
-fn numeric_input_border(editing: bool) -> Color {
-    if editing {
-        theme::TEXT_PRIMARY.with_alpha(0.92)
-    } else {
-        Color::srgba(0.43, 0.36, 0.68, 0.72)
     }
 }
 
