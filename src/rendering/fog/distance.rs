@@ -14,6 +14,14 @@ const FOG_END_RADIUS_FRACTION: f32 = 0.98;
 const FOG_STREAMING_GUARD_CHUNKS: f32 = 1.0;
 const MIN_FOG_END_CHUNKS: f32 = 0.5;
 
+#[derive(Default)]
+struct FogDistanceState {
+    active_columns: HashSet<IVec2>,
+    render_pool_revision: Option<u64>,
+    render_distance_chunks: Option<i32>,
+    player_horizontal: Option<Vec2>,
+}
+
 pub(super) fn fog_distances(render_distance_chunks: i32) -> (f32, f32) {
     let chunk_size = CHUNK_SIZE as f32;
     let radius = render_distance_chunks.max(1) as f32 * chunk_size;
@@ -33,17 +41,37 @@ pub(super) fn update_fog_distance(
     render_distance: Res<RenderDistanceSettings>,
     render_pool: Res<ChunkRenderPool>,
     mut fogs: Query<&mut DistanceFog, With<GameplayCamera>>,
-    mut active_columns: Local<HashSet<IVec2>>,
+    mut state: Local<FogDistanceState>,
 ) {
-    active_columns.clear();
-    active_columns.extend(render_pool.active_coords().map(|coord| coord.xz()));
+    let render_pool_revision = render_pool.membership_revision();
+    let membership_changed = state.render_pool_revision != Some(render_pool_revision);
+
+    if membership_changed {
+        state.active_columns.clear();
+        state
+            .active_columns
+            .extend(render_pool.active_coords().map(|coord| coord.xz()));
+    }
 
     let render_distance_chunks = render_distance.chunks();
+    let player_horizontal = player.translation.xz();
+    let frontier_inputs_changed = membership_changed
+        || state.render_distance_chunks != Some(render_distance_chunks)
+        || state.player_horizontal != Some(player_horizontal);
+
+    if !frontier_inputs_changed {
+        return;
+    }
+
+    state.render_pool_revision = Some(render_pool_revision);
+    state.render_distance_chunks = Some(render_distance_chunks);
+    state.player_horizontal = Some(player_horizontal);
+
     let (_, target_end) = fog_distances(render_distance_chunks);
     let guard_end = nearest_missing_column_distance(
         player.translation,
         render_distance_chunks,
-        &active_columns,
+        &state.active_columns,
     )
     .map(|distance| distance - FOG_STREAMING_GUARD_CHUNKS * CHUNK_SIZE as f32);
     let minimum_end = MIN_FOG_END_CHUNKS * CHUNK_SIZE as f32;
