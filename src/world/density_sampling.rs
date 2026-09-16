@@ -175,7 +175,7 @@ mod tests {
         );
         assert_eq!(
             depth_strength(
-                CAVERN_FULL_STRENGTH_DEPTH,
+                CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
                 CAVERN_MINIMUM_SURFACE_DEPTH,
                 CAVERN_FULL_STRENGTH_SURFACE_DEPTH,
             ),
