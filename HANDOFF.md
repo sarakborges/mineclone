@@ -62,9 +62,9 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 
 # Estado atual
 
-Último HEAD de código publicado: `7a0283d3095be6f374a72c549e9ee9d5f7130feb`  
-Bloco: `Reuse biome field hydrology metadata`  
-`VERSION = 0.14.54`
+Último HEAD de código publicado: `ee806d06f4f2eb476b027fdb2106f00ba06b1dee`  
+Bloco: `Fix biome field sample test index`  
+`VERSION = 0.14.55`
 
 ## Commits recentes relevantes
 
@@ -82,8 +82,9 @@ Bloco: `Reuse biome field hydrology metadata`
 - `b2afe45` — 0.14.50, mesh buffer map usa Bevy hash map com output explicitamente ordenado.
 - `cbce686` — 0.14.51, Rust CI ignora commits exclusivamente de `HANDOFF.md`.
 - `573898d` — 0.14.52, `BiomeFieldEntry` carrega terrain/modifiers e reutiliza seed derivado; `surface_height_from_sample` resolve por `surface_index`, removendo lookup textual e hash/mix por influência sem alterar a matemática do noise.
-- `b28b3c2` — 0.14.53, corrige o único consumer esquecido da nova assinatura de `surface_height_from_sample` no bootstrap.
+- `b28b3c2` — 0.14.53, corrige o consumer esquecido da nova assinatura de `surface_height_from_sample` no bootstrap.
 - `7a0283d` — 0.14.54, `BiomeFieldSample` carrega `primary_surface_index` e `BiomeFieldEntry` carrega `BiomeHydrology`; macro hydrology recorrente resolve metadata por índice sem `BiomeRegistry::get(surface.primary_id)`.
+- `ee806d0` — 0.14.55, corrige o initializer de teste de `BiomeFieldSample` para fornecer `primary_surface_index`; nenhuma lógica de gameplay muda.
 
 ## CI recente
 
@@ -95,7 +96,8 @@ Bloco: `Reuse biome field hydrology metadata`
 - 0.14.51 / run `35041238324`: **success**.
 - 0.14.52 / run `35042143508`: **failure**; `setup/bootstrap.rs` ainda chamava `surface_height_from_sample` com assinatura antiga.
 - 0.14.53 / run `35042627256`: Clippy **success**, `cargo check` **success**.
-- 0.14.54 / run `35042991888`: **pending/in progress** neste update.
+- 0.14.54 / run `35042991888`: **failure**; initializer de teste em `world/biome/identity.rs` não fornecia `BiomeFieldSample.primary_surface_index`.
+- 0.14.55 / run `35043364577`: Clippy **success**, `cargo check` **success**.
 - Confirmado: commits handoff-only após 0.14.51 não abrem Rust CI.
 
 ---
@@ -149,9 +151,9 @@ Bloco: `Reuse biome field hydrology metadata`
 
 ---
 
-# Auditoria final / encerramento do roadmap atual
+# Auditoria final — roadmap concluído
 
-A auditoria final dos hot paths de movimento/streaming não encontrou outro patch pequeno seguro depois de 0.14.54:
+A auditoria final dos hot paths de movimento/streaming não encontrou outro patch pequeno seguro depois de 0.14.55:
 
 - dynamic lighting já é budgetado (2 ms / até 4096 voxels por frame) e só roda com trabalho;
 - unload é budgetado e seu scan de bootstrap ocorre uma única vez;
@@ -159,16 +161,14 @@ A auditoria final dos hot paths de movimento/streaming não encontrou outro patc
 - o custo síncrono material restante é initial/direct lighting seed. A fila atual expande 4096 voxels e boundary neighbors preservando FIFO, dedup global e priority promotion; uma fila lazy separada mudaria semântica;
 - mover direct-light seed para task async também não é seguro com as revisions atuais: `chunk_mesh_revision` é ampla demais porque lighting a altera, enquanto `block_content_revision` é global e não cobre fluid changes. Um próximo ciclo estrutural deve primeiro considerar uma revision de **conteúdo por chunk (blocks + fluids)**, separada de mesh/light, para snapshot/dependency validation.
 
-Portanto este roadmap de micro/refactor de performance encerra quando o CI de 0.14.54 fechar verde. O próximo trabalho de performance deve ser guiado por runtime/profiling e pode abrir um ciclo arquitetural para direct-light seed revisionado/async se os spikes continuarem.
+Este roadmap de micro/refactor de performance está **concluído em 0.14.55 com CI verde**. Não adicionar novas micro-otimizações sem evidência runtime/profiling.
 
 # Próximos passos
 
-1. Aguardar CI de 0.14.54 (`35042991888`).
-2. Se verde, marcar este roadmap como concluído sem novo bump de versão.
-3. Rodar o jogo/perf real e priorizar qualquer hotspot restante com evidência runtime.
-4. Se initial lighting continuar sendo fonte relevante de frame spike, desenhar per-chunk content revision (blocks + fluids) antes de mover direct-light seed para async.
-5. Lighting lazy expansion só volta se preservar exatamente FIFO + dedup global + priority promotion da fila atual.
-6. Divergência `VERSION` vs `Cargo.toml` continua intencional até mudança explícita de política.
+1. Rodar/perfilar o jogo real durante movimento e streaming e priorizar qualquer hotspot restante com evidência runtime.
+2. Se initial lighting continuar sendo fonte relevante de frame spike, desenhar per-chunk content revision (blocks + fluids) antes de mover direct-light seed para async.
+3. Lighting lazy expansion só volta se preservar exatamente FIFO + dedup global + priority promotion da fila atual.
+4. Divergência `VERSION` vs `Cargo.toml` continua intencional até mudança explícita de política.
 
 # Bugs/produto fora do refactor atual
 
