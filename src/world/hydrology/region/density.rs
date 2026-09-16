@@ -4,12 +4,14 @@ use super::HydrologyRegion;
 use crate::world::hydrology::{
     constants::{
         LAKE_SHORE_OUTER_DISTANCE, LAKE_SHORE_SURFACE_OFFSET, OCEAN_EXTRA_DEPTH,
-        OCEAN_MINIMUM_DEPTH, RIVER_CARVE_STRENGTH, SHORE_STRENGTH,
+        OCEAN_MINIMUM_DEPTH, RIVER_CARVE_STRENGTH, RIVER_MAXIMUM_RADIUS, SHORE_STRENGTH,
     },
     math::{lerp, ocean_strength, smoothstep},
 };
 
 const RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE: f32 = 1.0 - SHORE_STRENGTH;
+const RIVER_BANK_OUTER_NORMALIZED_DISTANCE: f32 = 2.5;
+const RIVER_BANK_MARGIN: f32 = RIVER_MAXIMUM_RADIUS * 1.5;
 
 #[derive(Clone, Copy, Debug)]
 struct VerticalDensityDelta {
@@ -52,7 +54,7 @@ impl DensityColumnProfile {
 
 impl HydrologyRegion {
     pub(crate) fn density_delta(&self, position: Vec3) -> f32 {
-        self.density_column_profile(Vec2::new(position.x, position.z))
+        self.density_column_profile(Vec2::new(position.x, position.z), None)
             .delta_at(position.y)
     }
 
@@ -60,27 +62,35 @@ impl HydrologyRegion {
         &self,
         horizontal: Vec2,
         first_y: f32,
+        actual_surface_height: f32,
     ) -> [f32; N] {
-        let profile = self.density_column_profile(horizontal);
+        let profile = self.density_column_profile(horizontal, Some(actual_surface_height));
 
         std::array::from_fn(|index| profile.delta_at(first_y + index as f32))
     }
 
-    fn density_column_profile(&self, horizontal: Vec2) -> DensityColumnProfile {
-        let river_graph_sample = self.river_graph.sample_horizontal(horizontal);
-        let (river, river_opening) = river_graph_sample.map_or((None, 0.0), |sample| {
-            // Carving uses the complete feature radius instead of abruptly
-            // stopping at SHORE_STRENGTH. Water itself still starts at the
-            // narrower channel boundary, while this low-strength outer ring
-            // creates a continuous bank transition instead of a flat wall.
-            let profile = smoothstep(sample.strength.clamp(0.0, 1.0));
+    fn density_column_profile(
+        &self,
+        horizontal: Vec2,
+        actual_surface_height: Option<f32>,
+    ) -> DensityColumnProfile {
+        // Include the shore outside the channel in the same graph scan. The
+        // core still uses the original physical radius, not the margin's
+        // inflated strength, and the extended ring only grades the terrain.
+        let river_graph_sample = self
+            .river_graph
+            .sample_horizontal_with_margin(horizontal, RIVER_BANK_MARGIN);
+        let river_core = river_graph_sample.filter(|sample| sample.normalized_distance < 1.0);
+        let (river, river_opening) = river_core.map_or((None, 0.0), |sample| {
+            let strength = (1.0 - sample.normalized_distance).clamp(0.0, 1.0);
+            let profile = smoothstep(strength);
             let bed = sample.height - self.river_carve_depth * profile;
             let river = (profile > 0.0).then_some(VerticalDensityDelta {
                 minimum_y: bed - 0.5,
                 maximum_y: sample.height + 1.5,
                 delta: -RIVER_CARVE_STRENGTH * profile,
             });
-            let opening = smoothstep((sample.strength * 2.0).clamp(0.0, 1.0));
+            let opening = smoothstep((strength * 2.0).clamp(0.0, 1.0));
 
             (river, opening)
         });
@@ -89,6 +99,7 @@ impl HydrologyRegion {
         let ocean_strength_at_column = macro_sample.map_or(0.0, |sample| {
             ocean_strength(sample.continentalness, self.ocean_weight)
         });
+        let surface_elevation = actual_surface_height.or(macro_sample.map(|sample| sample.elevation));
         let ocean_delta = macro_sample.map_or(0.0, |sample| {
             let strength = ocean_strength_at_column;
             if strength <= 0.0 {
@@ -97,11 +108,13 @@ impl HydrologyRegion {
 
             let target_floor =
                 self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength;
-            let floor = lerp(sample.elevation, target_floor, strength);
-
-            floor - sample.elevation
+            // Keep the existing ocean blend relative to the exact column's
+            // starting height. Subtracting a macro floor from an exact surface
+            // would create an abrupt jump at the first nonzero ocean strength.
+            let base = surface_elevation.unwrap_or(sample.elevation);
+            let floor = lerp(base, target_floor, strength);
+            floor - base
         });
-        let surface_elevation = macro_sample.map(|sample| sample.elevation);
         let mut water_bodies = Vec::new();
         let mut water_body_opening = 0.0_f32;
 
@@ -132,7 +145,7 @@ impl HydrologyRegion {
                     surface_elevation,
                 )
             })
-            .max_by(f32::total_cmp)
+            .max_by(|left, right| left.abs().total_cmp(&right.abs()))
             .unwrap_or(0.0);
         let river_shore_delta = river_graph_sample.map_or(0.0, |sample| {
             shore_density_delta(
@@ -142,7 +155,11 @@ impl HydrologyRegion {
                 surface_elevation,
             )
         });
-        let shore_delta = lake_shore_delta.max(river_shore_delta);
+        let shore_delta = if lake_shore_delta.abs() >= river_shore_delta.abs() {
+            lake_shore_delta
+        } else {
+            river_shore_delta
+        };
 
         DensityColumnProfile {
             ocean_delta,
@@ -168,13 +185,28 @@ fn shore_density_delta(
         return 0.0;
     };
     let target_surface = water_level + LAKE_SHORE_SURFACE_OFFSET;
-    let missing_height = (target_surface - surface_elevation).max(0.0);
+    let height_delta = target_surface - surface_elevation;
 
-    missing_height * shore_strength * (1.0 - opening)
+    // Remove high terrain above the channel as well as raising a low outer
+    // bank. Inside the water footprint only remove roof material: adding
+    // positive density there could fill the lake or river itself.
+    let height_delta = if normalized_distance < 1.0 {
+        height_delta.min(0.0)
+    } else {
+        height_delta
+    };
+
+    height_delta * shore_strength * (1.0 - opening)
 }
 
 fn river_shore_normalized_distance(graph_distance: f32) -> f32 {
-    let bank_width = (1.0 - RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE).max(f32::EPSILON);
+    if graph_distance <= RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE {
+        return graph_distance / RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE;
+    }
+
+    let bank_width = (RIVER_BANK_OUTER_NORMALIZED_DISTANCE
+        - RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE)
+        .max(f32::EPSILON);
     let progress =
         (graph_distance - RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE) / bank_width;
 
@@ -182,7 +214,10 @@ fn river_shore_normalized_distance(graph_distance: f32) -> f32 {
 }
 
 fn shore_strength(distance: f32) -> f32 {
-    if distance < 1.0 || distance > LAKE_SHORE_OUTER_DISTANCE {
+    if distance <= 1.0 {
+        return 1.0;
+    }
+    if distance >= LAKE_SHORE_OUTER_DISTANCE {
         return 0.0;
     }
 
@@ -196,8 +231,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn shore_reinforcement_stays_outside_water_boundary() {
-        assert_eq!(shore_strength(0.9), 0.0);
+    fn shore_grading_removes_high_terrain_above_water() {
+        assert!(shore_density_delta(0.9, 90.0, 0.0, Some(120.0)) < 0.0);
+        assert!(shore_density_delta(1.0, 90.0, 0.0, Some(120.0)) < 0.0);
+        assert!(shore_density_delta(1.1, 90.0, 0.0, Some(120.0)) < 0.0);
+    }
+
+    #[test]
+    fn low_terrain_is_not_filled_inside_water() {
+        assert_eq!(shore_density_delta(0.9, 90.0, 0.0, Some(80.0)), 0.0);
+        assert!(shore_density_delta(1.0, 90.0, 0.0, Some(80.0)) > 0.0);
+    }
+
+    #[test]
+    fn shore_grading_fades_to_unchanged_terrain() {
+        assert_eq!(shore_strength(0.9), 1.0);
         assert_eq!(shore_strength(1.0), 1.0);
         assert!(shore_strength(1.1) > 0.0);
         assert_eq!(shore_strength(1.3), 0.0);
@@ -212,9 +260,11 @@ mod tests {
     }
 
     #[test]
-    fn river_feature_edge_maps_to_shared_shore_outer_edge() {
+    fn river_outer_bank_edge_maps_to_shared_shore_outer_edge() {
         assert!(
-            (river_shore_normalized_distance(1.0) - LAKE_SHORE_OUTER_DISTANCE).abs()
+            (river_shore_normalized_distance(RIVER_BANK_OUTER_NORMALIZED_DISTANCE)
+                - LAKE_SHORE_OUTER_DISTANCE)
+                .abs()
                 <= f32::EPSILON
         );
     }
