@@ -1,314 +1,244 @@
 #!/usr/bin/env python3
-"""Generate an original, color-customizable animated glTF 2.0 slime asset.
+"""Generate Asteria's sharp-edged slime GLB and its pixel-perfect 64x64 skin.
 
-Self-contained (Python 3 + numpy + trimesh); no Blender or texture files needed.
-Animates only visual child nodes. The collider is a separate, static definition.
+Uses only Python's standard library. Never rounds corners or smooths face details.
+Physics stays on SlimeRoot; named animation clips move only visual children.
 """
 from __future__ import annotations
+
 import json
 import math
 import struct
+import zlib
 from pathlib import Path
-import numpy as np
-import trimesh
 
 OUT = Path(__file__).resolve().parent
 binary = bytearray()
-buffer_views = []
-accessors = []
-meshes = []
-nodes = []
-animations = []
+views: list[dict] = []
+accessors: list[dict] = []
+meshes: list[dict] = []
+nodes: list[dict] = []
+animations: list[dict] = []
 
 
-def append_bytes(data: bytes, target=None) -> int:
-    while len(binary) % 4:
-        binary.append(0)
+def store(data: bytes, target: int | None = None) -> int:
+    binary.extend(b'\0' * (-len(binary) % 4))
     offset = len(binary)
     binary.extend(data)
-    view = {'buffer': 0, 'byteOffset': offset, 'byteLength': len(data)}
+    entry = {'buffer': 0, 'byteOffset': offset, 'byteLength': len(data)}
     if target is not None:
-        view['target'] = target
-    buffer_views.append(view)
-    return len(buffer_views) - 1
+        entry['target'] = target
+    views.append(entry)
+    return len(views) - 1
 
 
-def accessor(values, component=5126, kind='VEC3', target=None, bounds=False):
-    dtype = {5126: '<f4', 5123: '<u2', 5125: '<u4'}[component]
-    ar = np.asarray(values, dtype=dtype)
-    if kind == 'SCALAR':
-        ar = ar.reshape(-1)
-    else:
-        ar = ar.reshape(-1, {'VEC3': 3, 'VEC4': 4}[kind])
-    view = append_bytes(ar.tobytes(order='C'), target=target)
-    a = {'bufferView': view, 'componentType': component, 'count': len(ar), 'type': kind}
+def accessor(values, kind='VEC3', component=5126, target=None, bounds=False):
+    width = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4}[kind]
+    assert len(values) % width == 0
+    fmt = {5126: 'f', 5123: 'H'}[component]
+    payload = struct.pack('<' + fmt * len(values), *values)
+    entry = {'bufferView': store(payload, target), 'componentType': component,
+             'count': len(values) // width, 'type': kind}
     if bounds:
-        if ar.ndim == 1:
-            a['min'], a['max'] = [float(ar.min())], [float(ar.max())]
-        else:
-            a['min'] = [float(x) for x in ar.min(axis=0)]
-            a['max'] = [float(x) for x in ar.max(axis=0)]
-    accessors.append(a)
+        rows = [values[i:i + width] for i in range(0, len(values), width)]
+        entry['min'] = [float(min(row[j] for row in rows)) for j in range(width)]
+        entry['max'] = [float(max(row[j] for row in rows)) for j in range(width)]
+    accessors.append(entry)
     return len(accessors) - 1
 
 
-def add_mesh(name, vertices, faces, material, normals=None):
-    v = np.asarray(vertices, dtype=np.float32).reshape(-1, 3)
-    f = np.asarray(faces, dtype=np.uint32).reshape(-1, 3)
-    if normals is None:
-        mesh = trimesh.Trimesh(vertices=v, faces=f, process=False)
-        n = np.asarray(mesh.vertex_normals, dtype=np.float32)
-    else:
-        n = np.asarray(normals, dtype=np.float32).reshape(-1, 3)
-    p_idx = accessor(v, target=34962, bounds=True)
-    n_idx = accessor(n, target=34962)
-    index_type = 5123 if len(v) < 65536 else 5125
-    i_idx = accessor(f.flatten(), component=index_type, kind='SCALAR', target=34963)
-    meshes.append({'name': name, 'primitives': [{
-        'attributes': {'POSITION': p_idx, 'NORMAL': n_idx},
-        'indices': i_idx, 'material': material, 'mode': 4,
-    }]})
-    return len(meshes) - 1
+# An RGBA 64x64 atlas. Each 16x16 tile maps onto a cube face without bilinear filtering.
+# White/grayscale skin preserves runtime HSI colors independently for each slime species.
+pixels = bytearray([255, 255, 255, 255] * 64 * 64)
+for y in range(64):
+    for x in range(64):
+        tile_x, tile_y = x // 16, y // 16
+        u, v = x % 16, y % 16
+        if (tile_x, tile_y) == (0, 0):  # outer shell: square pixel bands and sharp border
+            gray = 232 if min(u, v, 15-u, 15-v) < 2 else (247 if (u//4 + v//4)%2 else 255)
+        elif (tile_x, tile_y) == (1, 0):  # cubical nucleus: 4x4 pixel highlights
+            gray = 225 if min(u, v, 15-u, 15-v) < 2 else (242 if (u//4 + v//4)%2 else 255)
+        elif (tile_x, tile_y) == (0, 1):  # cheeks
+            gray = 246 if u < 4 or v < 4 else 255
+        else:
+            gray = 255
+        idx = (y*64+x)*4
+        pixels[idx:idx+4] = bytes((gray, gray, gray, 255))
 
 
-def rounded_box(extents, radius=.13, segments=12):
-    half = np.asarray(extents, dtype=float) / 2
-    inner = half - radius
-    verts, norms, faces = [], [], []
-    for axis, ua, va in [(0, 1, 2), (1, 2, 0), (2, 0, 1)]:
-        for sign in [-1, 1]:
-            origin = len(verts)
-            for i in range(segments + 1):
-                u = -half[ua] + 2 * half[ua] * i / segments
-                for j in range(segments + 1):
-                    v = -half[va] + 2 * half[va] * j / segments
-                    p = np.zeros(3)
-                    p[axis], p[ua], p[va] = sign * half[axis], u, v
-                    q = np.clip(p, -inner, inner)
-                    direction = p - q
-                    length = np.linalg.norm(direction)
-                    direction = direction / length if length > 1e-9 else np.eye(3)[axis] * sign
-                    verts.append((q + radius * direction).tolist())
-                    norms.append(direction.tolist())
-            for i in range(segments):
-                for j in range(segments):
-                    a = origin + i * (segments + 1) + j
-                    b = origin + (i + 1) * (segments + 1) + j
-                    c, d = a + 1, b + 1
-                    if sign > 0:
-                        faces.extend([[a, b, c], [b, d, c]])
-                    else:
-                        faces.extend([[a, c, b], [b, c, d]])
-    return verts, faces, norms
+def png_chunk(kind: bytes, payload: bytes) -> bytes:
+    content = kind + payload
+    return struct.pack('>I', len(payload)) + content + struct.pack('>I', zlib.crc32(content) & 0xffffffff)
 
 
-def ellipsoid(extents, center, subdivisions=2):
-    shape = trimesh.creation.icosphere(subdivisions=subdivisions, radius=1.0)
-    v = np.asarray(shape.vertices) * np.asarray(extents) + np.asarray(center)
-    normal = np.asarray(shape.vertices) / np.asarray(extents)
-    normal /= np.linalg.norm(normal, axis=1, keepdims=True)
-    return v, shape.faces, normal
+scanlines = b''.join(b'\0' + pixels[y*64*4:(y+1)*64*4] for y in range(64))
+png = (b'\x89PNG\r\n\x1a\n' + png_chunk(b'IHDR', struct.pack('>IIBBBBB', 64, 64, 8, 6, 0, 0, 0))
+       + png_chunk(b'IDAT', zlib.compress(scanlines, 9)) + png_chunk(b'IEND', b''))
+(OUT / 'slime_skin_64.png').write_bytes(png)
+image_view = store(png)
 
-
-def mouth_curve():
-    # Small low-poly smile on the front (-Z), designed to be readable at game distance.
-    points = []
-    for i in range(13):
-        x = -0.152 + .304 * i / 12
-        y = -.145 + .063 * (x / .152) ** 2
-        points.append(np.array([x, y, -.529], dtype=float))
-    v, n, f = [], [], []
-    sides = 7
-    for j, p in enumerate(points):
-        tangent = points[min(j+1, len(points)-1)] - points[max(j-1, 0)]
-        tangent /= np.linalg.norm(tangent)
-        axis = np.array([0., 0., 1.])
-        binormal = np.cross(tangent, axis)
-        binormal /= np.linalg.norm(binormal)
-        for k in range(sides):
-            angle = k * math.tau / sides
-            norm = binormal * math.cos(angle) + axis * math.sin(angle)
-            v.append((p + .014 * norm).tolist())
-            n.append(norm.tolist())
-    for j in range(len(points)-1):
-        for k in range(sides):
-            a = j*sides + k
-            b = j*sides + (k+1)%sides
-            c = (j+1)*sides + k
-            d = (j+1)*sides + (k+1)%sides
-            f.extend([[a, b, c], [b, d, c]])
-    return v, f, n
-
-
-def mat(name, rgb, alpha=1, rough=.36, metal=0, emissive=None, double=False):
-    pbr = {'baseColorFactor': [*rgb, alpha], 'metallicFactor': metal, 'roughnessFactor': rough}
-    material = {'name': name, 'pbrMetallicRoughness': pbr, 'doubleSided': double}
-    if alpha < 1:
-        material['alphaMode'] = 'BLEND'
-    if emissive is not None:
-        material['emissiveFactor'] = emissive
-    return material
-
-materials = [
-    mat('SlimeShell', [.50, .91, .78], .76, rough=.23),
-    mat('SlimeCore', [.18, .70, .57], 1, rough=.32, emissive=[.025, .08, .06]),
-    mat('SlimeEyes', [.055, .12, .115], 1, rough=.34),
-    mat('SlimeHighlights', [.97, 1., .96], 1, rough=.16, emissive=[.10, .10, .10]),
-    mat('SlimeCheeks', [.28, .71, .62], 1, rough=.35),
+# Outward winding is verified by the axis-aligned normals and vertex corner order.
+# normal, horizontal axis, vertical axis; cross(horizontal, vertical) == normal.
+faces = [
+    ((1,0,0), (0,0,-1), (0,1,0)), ((-1,0,0), (0,0,1), (0,1,0)),
+    ((0,1,0), (1,0,0), (0,0,-1)), ((0,-1,0), (1,0,0), (0,0,1)),
+    ((0,0,1), (1,0,0), (0,1,0)), ((0,0,-1), (-1,0,0), (0,1,0)),
 ]
 
 
-def node(name, mesh=None, children=None, translation=None, scale=None, rotation=None, extras=None):
-    result = {'name': name}
-    if mesh is not None: result['mesh'] = mesh
-    if children is not None: result['children'] = children
-    if translation is not None: result['translation'] = translation
-    if scale is not None: result['scale'] = scale
-    if rotation is not None: result['rotation'] = rotation
-    if extras is not None: result['extras'] = extras
-    nodes.append(result)
+def cube(positions, normals, uvs, indices, extent, center=(0,0,0), tile=(0,0)):
+    half = [v/2 for v in extent]
+    u0, u1 = (tile[0]*16 + .5)/64, (tile[0]*16 + 15.5)/64
+    v0, v1 = (tile[1]*16 + .5)/64, (tile[1]*16 + 15.5)/64
+    for normal, horizontal, vertical in faces:
+        offset = len(positions)//3
+        for a,b,uv in [(-1,-1,(u0,v1)), (1,-1,(u1,v1)),
+                       (1,1,(u1,v0)), (-1,1,(u0,v0))]:
+            point = [center[i] + normal[i]*half[i] + a*horizontal[i]*half[i]
+                     + b*vertical[i]*half[i] for i in range(3)]
+            positions.extend(point)
+            normals.extend(normal)
+            uvs.extend(uv)
+        indices.extend([offset,offset+1,offset+2,offset,offset+2,offset+3])
+
+
+def make_mesh(name, cuboids, material, tile):
+    positions, normals, uvs, indices = [], [], [], []
+    for extent, center in cuboids:
+        cube(positions, normals, uvs, indices, extent, center, tile)
+    assert len(positions)//3 < 65536
+    attrs = {'POSITION': accessor(positions, bounds=True, target=34962),
+             'NORMAL': accessor(normals, target=34962),
+             'TEXCOORD_0': accessor(uvs, kind='VEC2', target=34962)}
+    mesh = {'name': name, 'primitives': [{
+        'attributes': attrs, 'indices': accessor(indices, kind='SCALAR', component=5123, target=34963),
+        'material': material, 'mode': 4}]}
+    meshes.append(mesh)
+    return len(meshes)-1
+
+
+def material(name, color, alpha=1., rough=.36, emission=None):
+    mat = {'name': name, 'pbrMetallicRoughness': {
+        'baseColorFactor': [*color, alpha], 'baseColorTexture': {'index': 0},
+        'metallicFactor': 0, 'roughnessFactor': rough}, 'doubleSided': False}
+    if alpha < 1:
+        mat['alphaMode'] = 'BLEND'
+    if emission is not None:
+        mat['emissiveFactor'] = emission
+    return mat
+
+
+materials = [
+    material('SlimeShell', [.50,.91,.78], .76, .23),
+    material('SlimeCore', [.18,.70,.57], 1., .32, [.025,.08,.06]),
+    material('SlimeEyes', [.055,.12,.115], 1., .34),
+    material('SlimeHighlights', [.97,1.,.96], 1., .16, [.10,.10,.10]),
+    material('SlimeCheeks', [.28,.71,.62], 1., .35),
+]
+shell = make_mesh('square_translucent_shell', [([.96,.90,.96], (0,0,0))], 0, (0,0))
+core = make_mesh('square_nucleus', [([.36,.40,.36], (0,0,0))], 1, (1,0))
+eye = make_mesh('square_eyes', [([.102,.125,.024], (0,0,0))], 2, (2,0))
+glint = make_mesh('square_eye_glints', [([.025,.025,.009], (0,0,0))], 3, (3,0))
+cheek = make_mesh('square_cheeks', [([.072,.046,.018], (0,0,0))], 4, (0,1))
+# Five adjoining rectangles create a pixel-step smile; NO curves or cylindrical tubes.
+smile_boxes = [([.056,.027,.018], (x, y, 0)) for x,y in
+               [(-.112,-.108),(-.056,-.145),(0,-.162),(.056,-.145),(.112,-.108)]]
+smile = make_mesh('pixel_step_smile', smile_boxes, 2, (2,0))
+
+
+def node(name, mesh=None, children=None, translation=None, scale=None, extras=None):
+    entry = {'name': name}
+    if mesh is not None: entry['mesh'] = mesh
+    if children is not None: entry['children'] = children
+    if translation is not None: entry['translation'] = translation
+    if scale is not None: entry['scale'] = scale
+    if extras is not None: entry['extras'] = extras
+    nodes.append(entry)
     return len(nodes)-1
 
-v, f, n = rounded_box([.96, .90, .96], .135, 12)
-shell = add_mesh('rounded_translucent_gel', v, f, 0, normals=n)
-# Crystalline nucleus with its own bob/rotation animation.
-v, f, n = ellipsoid([.20, .24, .19], [0, 0, 0], 1)
-core = add_mesh('faceted_nucleus', v, f, 1, normals=n)
-# Raised front-facing eyes rather than borrowing Minecraft's pixel face.
-v, f, n = ellipsoid([.072, .112, .036], [0, 0, 0], 2)
-eye = add_mesh('oval_eyes', v, f, 2, normals=n)
-v, f, n = ellipsoid([.020, .032, .012], [0, 0, 0], 1)
-glint = add_mesh('eye_glints', v, f, 3, normals=n)
-v, f, n = mouth_curve()
-mouth = add_mesh('curved_smile', v, f, 2, normals=n)
-v, f, n = ellipsoid([.052, .026, .018], [0, 0, 0], 1)
-cheek = add_mesh('gel_cheeks', v, f, 4, normals=n)
 
-root = node('SlimeRoot', children=[1], extras={
+root = node('SlimeRoot', children=[], extras={
     'asteria_asset': 'creature/slime', 'unit': 'meters', 'forward': '-Z',
-    'collider': {'shape': 'aabb', 'size': [.78, .84, .78], 'offset': [0, .42, 0]},
-    'collider_is_animated': False,
-})
-visual = node('Visual', children=[2])
-body = node('BodyPivot', translation=[0, .5, 0], children=[])
-inner = node('InnerCore', mesh=core, translation=[0, -.025, 0], scale=[1,1,1])
-body_children = [node('Shell', mesh=shell), inner]
-for x in [-.177, .177]:
-    body_children.append(node('Eye_L' if x < 0 else 'Eye_R', mesh=eye, translation=[x,.055,-.501]))
-    body_children.append(node('Glint_L' if x < 0 else 'Glint_R', mesh=glint, translation=[x-.016,.09,-.538]))
-    body_children.append(node('Cheek_L' if x < 0 else 'Cheek_R', mesh=cheek, translation=[x*1.43,-.139,-.491]))
-body_children.append(node('Smile', mesh=mouth))
+    'collider': {'shape':'aabb','size':[.78,.84,.78],'offset':[0,.42,0]},
+    'collider_is_animated': False})
+visual = node('Visual', children=[])
+body = node('BodyPivot', children=[], translation=[0,.5,0])
+inner = node('InnerCore', mesh=core, translation=[0,-.025,0], scale=[1,1,1])
+body_children = [node('Shell',mesh=shell),inner]
+for x,label in [(-.177,'L'),(.177,'R')]:
+    body_children.append(node('Eye_'+label,mesh=eye,translation=[x,.055,-.494]))
+    body_children.append(node('Glint_'+label,mesh=glint,translation=[x-.018,.092,-.513]))
+    body_children.append(node('Cheek_'+label,mesh=cheek,translation=[x*1.43,-.139,-.493]))
+body_children.append(node('Smile',mesh=smile,translation=[0,0,-.502]))
 nodes[body]['children'] = body_children
-# Dedicated metadata-only child: physics must use this AABB on the unanimated root.
+nodes[visual]['children'] = [body]
 collider_node = node('Hitbox_AABB', translation=[0,.42,0], extras={
-    'asteria_collider': {'shape': 'aabb', 'size': [.78,.84,.78], 'solid': True, 'targetable': True},
-    'debug_display': False,
-})
-nodes[root]['children'].append(collider_node)
+    'asteria_collider': {'shape':'aabb','size':[.78,.84,.78],'solid':True,'targetable':True},
+    'debug_display': False})
+nodes[root]['children'] = [visual,collider_node]
 
 
 def tracks(clip, times, body_scale, center_y=None, core_scale=None, core_angle=None):
-    """Key visual nodes only. World position, velocity and collider belong to ECS."""
-    assert len(times)==len(body_scale)
-    center_y = center_y or [0.5*s[1] for s in body_scale]
-    if core_scale is None: core_scale = [[1,1,1]]*len(times)
-    if core_angle is None: core_angle = [0]*len(times)
+    assert len(times) == len(body_scale)
+    center_y = center_y if center_y is not None else [.5*s[1] for s in body_scale]
+    core_scale = core_scale if core_scale is not None else [[1,1,1]]*len(times)
+    core_angle = core_angle if core_angle is not None else [0]*len(times)
     t = accessor(times, kind='SCALAR', bounds=True)
     channels, samplers = [], []
-    def add(target_node, path, vals, kind):
-        a = accessor(vals, kind=kind)
-        idx = len(samplers)
-        samplers.append({'input': t, 'output': a, 'interpolation': 'LINEAR'})
-        channels.append({'sampler': idx, 'target': {'node': target_node, 'path': path}})
-    add(body, 'scale', body_scale, 'VEC3')
-    add(body, 'translation', [[0,y,0] for y in center_y], 'VEC3')
-    add(inner, 'scale', core_scale, 'VEC3')
-    add(inner, 'rotation', [[0, math.sin(a/2), 0, math.cos(a/2)] for a in core_angle], 'VEC4')
-    animations.append({'name': clip, 'channels': channels, 'samplers': samplers,
-                       'extras': {'loop_recommended': clip in ('Idle','Airborne')}})
+    def add(target, path, values, kind):
+        out = accessor([v for item in values for v in item], kind=kind)
+        samplers.append({'input':t,'output':out,'interpolation':'LINEAR'})
+        channels.append({'sampler':len(samplers)-1,'target':{'node':target,'path':path}})
+    add(body,'scale',body_scale,'VEC3')
+    add(body,'translation',[[0,y,0] for y in center_y],'VEC3')
+    add(inner,'scale',core_scale,'VEC3')
+    add(inner,'rotation',[[0,math.sin(a/2),0,math.cos(a/2)] for a in core_angle],'VEC4')
+    animations.append({'name':clip,'channels':channels,'samplers':samplers,
+                       'extras':{'loop_recommended':clip in ('Idle','Airborne')}})
 
-tracks('Idle', [0,.5,1,1.5,2],
+
+tracks('Idle',[0,.5,1,1.5,2],
        [[1,1,1],[1.018,.974,1.018],[1,1,1],[.988,1.021,.988],[1,1,1]],
        core_scale=[[1,1,1],[1.065,.97,1.065],[1,1,1],[.96,1.04,.96],[1,1,1]],
        core_angle=[0,.04,0,-.04,0])
-tracks('Anticipate', [0,.07,.17,.24],
+tracks('Anticipate',[0,.07,.17,.24],
        [[1,1,1],[1.09,.845,1.09],[1.125,.76,1.125],[1.09,.83,1.09]],
        core_scale=[[1,1,1],[1.05,.9,1.05],[1.10,.84,1.10],[1.05,.92,1.05]],
        core_angle=[0,-.07,-.10,-.04])
-tracks('Airborne', [0,.12,.35,.55,.72],
+tracks('Airborne',[0,.12,.35,.55,.72],
        [[1.09,.83,1.09],[.91,1.15,.91],[.96,1.085,.96],[.97,1.06,.97],[1,1,1]],
        core_scale=[[1,1,1],[.95,1.08,.95],[.98,1.035,.98],[1,1,1],[1,1,1]],
        core_angle=[0,.13,.23,.11,0])
-tracks('Land', [0,.045,.12,.20,.34],
+tracks('Land',[0,.045,.12,.20,.34],
        [[.97,1.055,.97],[1.17,.74,1.17],[1.12,.805,1.12],[.975,1.047,.975],[1,1,1]],
        core_scale=[[1,1,1],[1.12,.85,1.12],[1.05,.94,1.05],[.98,1.025,.98],[1,1,1]])
-tracks('Hurt', [0,.085,.15,.24,.38],
+tracks('Hurt',[0,.085,.15,.24,.38],
        [[1,1,1],[1.1,.88,1.1],[.94,1.08,.94],[1.025,.968,1.025],[1,1,1]],
        core_angle=[0,-.22,.19,-.08,0])
-tracks('Death', [0,.12,.31,.55,.75],
-       [[1,1,1],[1.13,.8,1.13],[1.2,.60,1.2],[1.12,.19,1.12],[0.001,.001,.001]],
+tracks('Death',[0,.12,.31,.55,.75],
+       [[1,1,1],[1.13,.8,1.13],[1.2,.60,1.2],[1.12,.19,1.12],[.001,.001,.001]],
        center_y=[.5,.4,.3,.095,.0005],
        core_scale=[[1,1,1],[1.1,.88,1.1],[1.2,.7,1.2],[.95,.3,.95],[.001,.001,.001]],
        core_angle=[0,.2,.5,.9,1.2])
 
 scene = {
-    'asset': {'version': '2.0', 'generator': 'Asteria procedural slime v1'},
-    'scene': 0, 'scenes': [{'name':'Slime', 'nodes':[root]}],
-    'nodes': nodes, 'meshes': meshes, 'materials': materials,
-    'animations': animations, 'bufferViews': buffer_views, 'accessors': accessors,
-    'buffers': [{'byteLength': len(binary)}],
-    'extras': {'asset_id': 'asteria:slime_base', 'color_materials': ['SlimeShell','SlimeCore','SlimeCheeks'],
-               'collision_source': 'slime.collider.json',
-               'notes': 'glTF transforms animate BodyPivot/InnerCore only; physics owns SlimeRoot'},
+    'asset':{'version':'2.0','generator':'Asteria cubic pixel slime v2'},
+    'scene':0,'scenes':[{'name':'Slime','nodes':[root]}],
+    'nodes':nodes,'meshes':meshes,'materials':materials,'animations':animations,
+    'images':[{'name':'slime_skin_64','mimeType':'image/png','bufferView':image_view}],
+    'samplers':[{'magFilter':9728,'minFilter':9728,'wrapS':33071,'wrapT':33071}],
+    'textures':[{'source':0,'sampler':0}],
+    'bufferViews':views,'accessors':accessors,'buffers':[{'byteLength':len(binary)}],
+    'extras':{'asset_id':'asteria:slime_base','color_materials':['SlimeShell','SlimeCore','SlimeCheeks'],
+              'collision_source':'slime.collider.json','skin_resolution':[64,64],
+              'notes':'Axis-aligned cube geometry; visual animation only, physics belongs to SlimeRoot'},
 }
-json_chunk = json.dumps(scene, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
-json_chunk += b' ' * (-len(json_chunk) % 4)
-bin_chunk = bytes(binary) + b'\x00' * (-len(binary) % 4)
-size = 12 + 8 + len(json_chunk) + 8 + len(bin_chunk)
-glb = (struct.pack('<4sII', b'glTF', 2, size) +
-       struct.pack('<I4s', len(json_chunk), b'JSON') + json_chunk +
-       struct.pack('<I4s', len(bin_chunk), b'BIN\x00') + bin_chunk)
-(OUT / 'slime.glb').write_bytes(glb)
-
-config = {
-  'schema_version': 1, 'id': 'asteria:slime_base',
-  'asset': 'slime.glb', 'units': 'meters', 'world_up': '+Y', 'forward': '-Z',
-  'origin': 'center of ground contact, feet at local y = 0',
-  'model_bounds_rest': {'size': [.96,.90,.96], 'center': [0,.5,0], 'approximate_visual_height': .95},
-  'collider': {
-    'type': 'aabb', 'size': [.78,.84,.78], 'center_offset': [0,.42,0],
-    'min_offset': [-.39,0,-.39], 'max_offset': [.39,.84,.39],
-    'follows': 'SlimeRoot world transform, NOT BodyPivot scale or GLB animation',
-    'solid_world_collision': True, 'targeting': True,
-  },
-  'animation': {
-    'clips': {
-      'Idle': {'duration_s':2.0, 'loop':True},
-      'Anticipate': {'duration_s':.24, 'loop':False},
-      'Airborne': {'duration_s':.72, 'loop':True},
-      'Land': {'duration_s':.34, 'loop':False},
-      'Hurt': {'duration_s':.38, 'loop':False},
-      'Death': {'duration_s':.75, 'loop':False},
-    },
-    'root_motion': False, 'visual_root': 'BodyPivot',
-    'jump_sequence': ['Anticipate','Airborne','Land','Idle'],
-    'transition_rule': 'Actual lift, gravity, collision and landing come from movement simulation; animations never move collider.',
-  },
-  'tint': {
-    'authoritative_color_space': 'HSI', 'hue_range': [0,360],
-    'material_slots': ['SlimeShell','SlimeCore','SlimeCheeks'],
-    'independent_slots': ['SlimeEyes','SlimeHighlights'],
-    'runtime_rule': 'Create or cache a material set per species; do not mutate the shared glTF asset material across species.',
-    'alpha_of_SlimeShell': .76,
-    'core_shade_rule': 'Use same species hue with darker intensity for nucleus; cheek shade is optional.',
-  },
-  'species_examples': {
-    'meadow': {'hue':153, 'saturation':.62, 'intensity':.64},
-    'arcane': {'hue':275, 'saturation':.75, 'intensity':.59},
-    'ember': {'hue':16, 'saturation':.83, 'intensity':.58},
-    'frost': {'hue':199, 'saturation':.57, 'intensity':.74},
-  },
-  'integration_status': 'Asset only: Bevy spawn, per-species tint, animation graph/controller and voxel collision not implemented in this package.',
-}
-(OUT / 'slime.collider.json').write_text(json.dumps(config, ensure_ascii=False, indent=2)+'\n', encoding='utf8')
-print('Generated', OUT/'slime.glb', len(glb), 'bytes', len(meshes), 'meshes', len(animations), 'animation clips')
+json_chunk = json.dumps(scene,separators=(',',':'),ensure_ascii=False).encode('utf-8')
+json_chunk += b' ' * (-len(json_chunk)%4)
+bin_chunk = bytes(binary) + b'\0' * (-len(binary)%4)
+glb = (struct.pack('<4sII',b'glTF',2,12+8+len(json_chunk)+8+len(bin_chunk))
+       + struct.pack('<I4s',len(json_chunk),b'JSON')+json_chunk
+       + struct.pack('<I4s',len(bin_chunk),b'BIN\0')+bin_chunk)
+(OUT/'slime.glb').write_bytes(glb)
+print(f'Generated {OUT/"slime.glb"}: {len(meshes)} sharp box meshes, '
+      f'{len(animations)} animation clips, embedded 64x64 pixel skin')
