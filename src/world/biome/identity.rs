@@ -224,6 +224,7 @@ mod tests {
     fn hydrology_overlay_keeps_surface_and_hydrology_layers_separate() {
         let surface = BiomeFieldSample {
             primary_id: "surface",
+            primary_surface_index: 0,
             influences: [BiomeInfluence {
                 id: "surface",
                 weight: 1.0,
