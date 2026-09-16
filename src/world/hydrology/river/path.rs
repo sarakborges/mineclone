@@ -105,7 +105,10 @@ pub(super) fn river_height(node: DrainageNode, sea_level: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::content::biome_hydrology::BiomeHydrology;
+    use crate::{
+        content::biome_hydrology::BiomeHydrology,
+        world::hydrology::HydrologyRegion,
+    };
 
     fn node(position: Vec2, elevation: f32) -> DrainageNode {
         DrainageNode {
@@ -168,5 +171,33 @@ mod tests {
         assert_eq!(left_sample.height, right_sample.height);
         assert_eq!(left_sample.strength, right_sample.strength);
         assert_eq!(left_sample.strength, 1.0);
+
+        // The graph alone is not enough: a seam may share path height yet lose
+        // physical water or carving when the two regions select their sources.
+        let physical_region = |coord, graph| HydrologyRegion {
+            coord,
+            river_graph: graph,
+            river_carve_depth: 7.0,
+            water_bodies: Vec::new(),
+            sea_level: 64.0,
+            settings: Default::default(),
+            ocean_weight: 0.0,
+            macro_samples: Vec::new(),
+        };
+        let left = physical_region(IVec2::ZERO, left);
+        let right = physical_region(IVec2::X, right);
+        let original_surface = 120.0;
+        for x in [127.5, 128.0, 128.5] {
+            let point = Vec2::new(x, crossing.y);
+            let left_water = left.supported_water_at(point, original_surface).unwrap();
+            let right_water = right.supported_water_at(point, original_surface).unwrap();
+            assert_eq!(left_water.water_level, right_water.water_level);
+            assert_eq!(left_water.bed_level, right_water.bed_level);
+            let y = left_water.water_level - 0.5;
+            let left_delta = left.density_deltas_for_column::<1>(point, y, original_surface);
+            let right_delta = right.density_deltas_for_column::<1>(point, y, original_surface);
+            assert_eq!(left_delta, right_delta);
+            assert!(left_delta[0] < 0.0);
+        }
     }
 }
