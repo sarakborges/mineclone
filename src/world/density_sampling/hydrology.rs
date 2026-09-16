@@ -63,14 +63,24 @@ pub(crate) struct DensityColumnHydrology {
 pub(crate) fn sample_density_column_hydrology(
     horizontal: Vec2,
     region: &GenerationRegion,
+    original_surface_height: Option<f32>,
 ) -> DensityColumnHydrology {
+    // During chunk generation, the density's authoritative wet volume must
+    // use the SAME supported candidate as the later physical fluid pass.
+    // Unfiltered water_at may prefer a high lake whose bed is above the
+    // original terrain, carving an empty volume that no fluid can occupy.
+    // Other callers without a terrain column retain the original behavior.
+    let water = match original_surface_height {
+        Some(height) => region.hydrology.supported_water_at(horizontal, height),
+        None => region.hydrology.water_at(horizontal),
+    };
     DensityColumnHydrology {
         cave_water: region
             .hydrology
             .water_near(horizontal, CAVE_WATER_HORIZONTAL_CLEARANCE)
             .map(Into::into),
         river_surface: region.hydrology.river_surface_at(horizontal).map(Into::into),
-        water: region.hydrology.water_at(horizontal).map(Into::into),
+        water: water.map(Into::into),
     }
 }
 
@@ -216,5 +226,28 @@ mod tests {
         let right = river_headroom(0.5, Vec2::new(96.5, 14.5), 42);
 
         assert_ne!(left, right);
+    }
+
+    #[test]
+    fn supported_river_water_volume_does_not_carve_an_unsupported_high_lake() {
+        // Supported river: water 83, bed 78. A lake at 100 with bed 94
+        // would have won unfiltered water_at, despite no physical source.
+        let column = DensityColumnHydrology {
+            water: Some(WaterLevels {
+                water_level: 83.0,
+                bed_level: 78.0,
+                strength: 1.0,
+                kind: HydrologyWaterKind::River,
+            }),
+            ..Default::default()
+        };
+        assert_eq!(
+            enforce_hydrology_water_volume(3.0, 3.0, Vec3::new(0.5, 95.5, 0.5), column, 42),
+            3.0
+        );
+        assert_eq!(
+            enforce_hydrology_water_volume(3.0, 3.0, Vec3::new(0.5, 80.5, 0.5), column, 42),
+            WATER_VOLUME_AIR_DENSITY
+        );
     }
 }
