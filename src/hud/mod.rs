@@ -7,6 +7,7 @@ mod inventory;
 mod player;
 mod targeting;
 mod time;
+mod tool_icon;
 mod underwater;
 mod world;
 
@@ -77,6 +78,10 @@ impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<HudSettings>()
             .add_systems(OnEnter(GameState::Gameplay), spawn_gameplay_ui_camera)
+            .add_systems(
+                Update,
+                tool_icon::sync_brush_tint_icons.run_if(in_state(GameState::Gameplay)),
+            )
             .add_plugins(UiMaterialPlugin::<BlockIconMaterial>::default())
             .add_plugins((
                 UnderwaterTintPlugin,
