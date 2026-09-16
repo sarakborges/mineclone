@@ -7,7 +7,7 @@ default-run = "asteria"
 
 [dependencies]
 arrayvec = "0.7"
-bevy = { version = "0.19.1", features = ["system_font_discovery"] }
+bevy = { version = "0.19.1", features = ["system_font_discovery", "system_clipboard"] }
 bevy_dylib = { version = "0.19.1", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png"] }
 serde = { version = "1.0", features = ["derive"] }

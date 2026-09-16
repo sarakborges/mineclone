@@ -1,4 +1,4 @@
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{ecs::system::SystemParam, input_focus::InputFocus, prelude::*, text::EditableText};
 
 use crate::{
     app::game_state::GameState,
@@ -190,26 +190,26 @@ pub(super) fn handle_ticks_input(
 
 pub(super) fn handle_ticks_keyboard(
     keys: Res<ButtonInput<KeyCode>>,
+    mut focus: ResMut<InputFocus>,
     mut settings: TicksPerSecondEditor,
     mut input_state: ResMut<TicksPerSecondInputState>,
+    mut editor: Single<(Entity, &mut EditableText), With<TicksPerSecondInput>>,
 ) {
+    let (entity, editable) = &mut *editor;
     let event = TicksPerSecondInputState::handle_keyboard(
-        &mut input_state,
-        &keys,
+        &mut input_state, &keys, &mut focus, *entity, editable,
         TICKS_INPUT_MAX_DIGITS,
-        |_| true,
+        |next| next.is_empty() || next.parse::<u32>().is_ok(),
     );
-    if event != NumericInputEvent::Changed {
-        return;
+    if event == NumericInputEvent::Changed {
+        settings.apply_buffer(input_state.buffer());
     }
-
-    settings.apply_buffer(input_state.buffer());
 }
 
 pub(super) fn sync_ticks_per_second_text(
     settings: TicksPerSecondSettings,
     input_state: Res<TicksPerSecondInputState>,
-    mut labels: Query<&mut Text, With<TicksPerSecondValueText>>,
+    mut labels: Query<&mut EditableText, With<TicksPerSecondValueText>>,
     mut inputs: Query<&mut BorderColor, With<TicksPerSecondInput>>,
 ) {
     if !settings.inputs_changed() && !input_state.is_changed() {

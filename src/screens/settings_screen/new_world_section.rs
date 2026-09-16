@@ -1,4 +1,4 @@
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{ecs::system::SystemParam, input_focus::InputFocus, prelude::*, text::EditableText};
 
 use crate::{
     app::game_state::GameState,
@@ -248,12 +248,17 @@ pub(super) fn handle_random_seed(
 
 pub(super) fn handle_seed_keyboard(
     keys: Res<ButtonInput<KeyCode>>,
+    mut focus: ResMut<InputFocus>,
     mut config: ResMut<NewWorldConfig>,
     mut input: ResMut<SeedInputState>,
+    mut editor: Single<(Entity, &mut EditableText), With<SeedInput>>,
 ) {
-    let event = SeedInputState::handle_keyboard(&mut input, &keys, SEED_INPUT_MAX_DIGITS, |next| {
-        next.parse::<u64>().is_ok()
-    });
+    let (entity, editable) = &mut *editor;
+    let event = SeedInputState::handle_keyboard(
+        &mut input, &keys, &mut focus, *entity, editable,
+        SEED_INPUT_MAX_DIGITS,
+        |next| next.is_empty() || next.parse::<u64>().is_ok(),
+    );
     if event == NumericInputEvent::Changed {
         apply_seed_buffer(input.buffer(), &mut config);
     }
@@ -299,7 +304,7 @@ pub(super) fn handle_new_world_footer(
 pub(super) fn sync_seed_text(
     config: Res<NewWorldConfig>,
     input: Res<SeedInputState>,
-    mut labels: Query<&mut Text, With<SeedValueText>>,
+    mut labels: Query<&mut EditableText, With<SeedValueText>>,
     mut inputs: Query<&mut BorderColor, With<SeedInput>>,
 ) {
     if !config.is_changed() && !input.is_changed() {
