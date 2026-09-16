@@ -263,9 +263,6 @@ fn rebuild_desired_chunk_coords(
             );
             let mut surrounding_minimum = own_minimum;
 
-            // Cardinal support is sufficient for the conservative vertical
-            // envelope and avoids probing all eight surrounding chunk columns
-            // whenever the player crosses into a new streaming center.
             for offset in SURFACE_SUPPORT_NEIGHBORS {
                 let neighbor = horizontal + offset;
                 let (neighbor_minimum, _) = cached_surface_range(
@@ -366,7 +363,7 @@ mod tests {
 
     #[test]
     fn pending_entries_preserve_source_order_for_equal_priorities() {
-        let mut pending = vec![
+        let mut pending = [
             PendingEntry {
                 coord: IVec3::new(3, 0, 0),
                 priority: (1, 0, 0, 9, 0, 0, 9),
