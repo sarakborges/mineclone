@@ -12,8 +12,8 @@ const MOUSE_SENSITIVITY: f32 = 0.003;
 const MAX_PITCH: f32 = 1.54;
 
 #[derive(Resource, Default)]
-pub(super) struct MouseLookInputState {
-    pub(super) ignore_next_delta: bool,
+pub(crate) struct MouseLookInputState {
+    pub(crate) ignore_next_delta: bool,
 }
 
 pub(super) fn drain_or_apply_mouse_look(
