@@ -160,6 +160,18 @@ impl FeatureGraph {
         margin: f32,
         radius_multiplier: f32,
     ) -> Option<FeatureGraphHorizontalSample> {
+        self.sample_horizontal_filtered(position, margin, radius_multiplier, |_| true)
+    }
+
+    // Apply physical eligibility to EACH edge before choosing the strongest.
+    // Unfiltered callers retain their existing ranking and tie behavior.
+    pub(crate) fn sample_horizontal_filtered(
+        &self,
+        position: Vec2,
+        margin: f32,
+        radius_multiplier: f32,
+        mut accepts: impl FnMut(FeatureGraphHorizontalSample) -> bool,
+    ) -> Option<FeatureGraphHorizontalSample> {
         let mut strongest: Option<FeatureGraphHorizontalSample> = None;
 
         for edge in &self.edges {
@@ -204,9 +216,10 @@ impl FeatureGraph {
                 strength,
                 normalized_distance: distance / base_radius,
             };
-            if strongest
-                .as_ref()
-                .is_none_or(|current| candidate.strength > current.strength)
+            if accepts(candidate)
+                && strongest
+                    .as_ref()
+                    .is_none_or(|current| candidate.strength > current.strength)
             {
                 strongest = Some(candidate);
             }
@@ -299,6 +312,26 @@ mod tests {
         assert!(graph
             .sample_horizontal_with_radius_multiplier(Vec2::new(5.0, 51.0), 2.5)
             .is_none());
+    }
+
+    #[test]
+    fn filtering_overlapping_edges_keeps_a_weaker_eligible_sample() {
+        let mut graph = FeatureGraph::default();
+        let high_from = graph.add_node(Vec3::new(0.0, 100.0, 0.0));
+        let high_to = graph.add_node(Vec3::new(20.0, 100.0, 0.0));
+        graph.add_edge(high_from, high_to, 10.0, 10.0);
+        let low_from = graph.add_node(Vec3::new(0.0, 86.0, 3.0));
+        let low_to = graph.add_node(Vec3::new(20.0, 86.0, 3.0));
+        graph.add_edge(low_from, low_to, 10.0, 10.0);
+        let position = Vec2::new(10.0, 0.0);
+
+        assert_eq!(graph.sample_horizontal(position).unwrap().height, 100.0);
+        let eligible = graph
+            .sample_horizontal_filtered(position, 0.0, 1.0, |sample| sample.height < 90.0)
+            .unwrap();
+        assert_eq!(eligible.height, 86.0);
+        assert!(eligible.strength < 1.0);
+        assert_eq!(graph.sample_horizontal(position).unwrap().height, 100.0);
     }
 
     #[test]
