@@ -20,6 +20,7 @@ pub(super) struct FogDistanceState {
     render_pool_revision: Option<u64>,
     render_distance_chunks: Option<i32>,
     player_horizontal: Option<Vec2>,
+    camera_entity: Option<Entity>,
 }
 
 pub(super) fn fog_distances(render_distance_chunks: i32) -> (f32, f32) {
@@ -37,12 +38,13 @@ pub(super) fn fog_falloff(render_distance_chunks: i32) -> FogFalloff {
 }
 
 pub(super) fn update_fog_distance(
-    player: Single<&Transform, With<GameplayCamera>>,
+    player: Single<(Entity, &Transform), With<GameplayCamera>>,
     render_distance: Res<RenderDistanceSettings>,
     render_pool: Res<ChunkRenderPool>,
     mut fogs: Query<&mut DistanceFog, With<GameplayCamera>>,
     mut state: Local<FogDistanceState>,
 ) {
+    let (camera_entity, player) = *player;
     let render_pool_revision = render_pool.membership_revision();
     let membership_changed = state.render_pool_revision != Some(render_pool_revision);
 
@@ -57,7 +59,8 @@ pub(super) fn update_fog_distance(
     let player_horizontal = player.translation.xz();
     let frontier_inputs_changed = membership_changed
         || state.render_distance_chunks != Some(render_distance_chunks)
-        || state.player_horizontal != Some(player_horizontal);
+        || state.player_horizontal != Some(player_horizontal)
+        || state.camera_entity != Some(camera_entity);
 
     if !frontier_inputs_changed {
         return;
@@ -66,6 +69,7 @@ pub(super) fn update_fog_distance(
     state.render_pool_revision = Some(render_pool_revision);
     state.render_distance_chunks = Some(render_distance_chunks);
     state.player_horizontal = Some(player_horizontal);
+    state.camera_entity = Some(camera_entity);
 
     let (_, target_end) = fog_distances(render_distance_chunks);
     let guard_end = nearest_missing_column_distance(
