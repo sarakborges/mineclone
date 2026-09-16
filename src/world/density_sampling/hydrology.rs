@@ -65,21 +65,24 @@ pub(crate) fn sample_density_column_hydrology(
     region: &GenerationRegion,
     original_surface_height: Option<f32>,
 ) -> DensityColumnHydrology {
-    // During chunk generation, the density's authoritative wet volume must
-    // use the SAME supported candidate as the later physical fluid pass.
-    // Unfiltered water_at may prefer a high lake whose bed is above the
-    // original terrain, carving an empty volume that no fluid can occupy.
-    // Other callers without a terrain column retain the original behavior.
+    // The authoritative wet volume and the roof opening must use the same
+    // support rule as the subsequent physical fluid pass. A high unsupported
+    // lake must not hide a lower river, and an unsupported river must not cut
+    // a dry headroom tunnel into the terrain.
     let water = match original_surface_height {
         Some(height) => region.hydrology.supported_water_at(horizontal, height),
         None => region.hydrology.water_at(horizontal),
+    };
+    let river_surface = match original_surface_height {
+        Some(height) => region.hydrology.supported_river_surface_at(horizontal, height),
+        None => region.hydrology.river_surface_at(horizontal),
     };
     DensityColumnHydrology {
         cave_water: region
             .hydrology
             .water_near(horizontal, CAVE_WATER_HORIZONTAL_CLEARANCE)
             .map(Into::into),
-        river_surface: region.hydrology.river_surface_at(horizontal).map(Into::into),
+        river_surface: river_surface.map(Into::into),
         water: water.map(Into::into),
     }
 }
