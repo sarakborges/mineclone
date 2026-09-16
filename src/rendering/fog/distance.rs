@@ -15,7 +15,7 @@ const FOG_STREAMING_GUARD_CHUNKS: f32 = 1.0;
 const MIN_FOG_END_CHUNKS: f32 = 0.5;
 
 #[derive(Default)]
-struct FogDistanceState {
+pub(super) struct FogDistanceState {
     active_columns: HashSet<IVec2>,
     render_pool_revision: Option<u64>,
     render_distance_chunks: Option<i32>,
