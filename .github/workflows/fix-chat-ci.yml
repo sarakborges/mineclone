@@ -6,6 +6,7 @@ on:
       - feature/game-chat-creature-command
     paths:
       - .github/workflows/fix-chat-ci.yml
+      - src/ui/scrollbar.rs
   workflow_dispatch:
 
 permissions:
