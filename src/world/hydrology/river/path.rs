@@ -127,4 +127,46 @@ mod tests {
 
         assert_eq!(river_height(source, 64.0), 78.0);
     }
+
+    #[test]
+    fn neighboring_regions_reproduce_identical_water_height_at_the_same_river_crossing() {
+        let source = node(Vec2::new(64.0, 64.0), 100.0);
+        let downstream = node(Vec2::new(192.0, 64.0), 90.0);
+        let path = river_path(IVec2::ZERO, source, downstream, 42, 64.0, None, None);
+        let crossing = path.points.windows(2).find_map(|segment| {
+            let [from, to] = segment else { return None };
+            if from.x > 128.0 || to.x < 128.0 {
+                return None;
+            }
+            let t = (128.0 - from.x) / (to.x - from.x);
+            Some(Vec2::new(128.0, lerp(from.z, to.z, t)))
+        }).expect("the river must cross the region boundary");
+
+        let mut left = FeatureGraph::default();
+        let mut right = FeatureGraph::default();
+        for (coord, graph) in [(IVec2::ZERO, &mut left), (IVec2::X, &mut right)] {
+            add_curved_river_edge(
+                graph,
+                RiverEdgeSpec {
+                    region_coord: coord,
+                    source_cell: IVec2::ZERO,
+                    source,
+                    downstream,
+                    source_water_level: None,
+                    downstream_water_level: None,
+                    flow: 4,
+                    downstream_flow: 4,
+                    seed: 42,
+                    sea_level: 64.0,
+                },
+                |_| 120.0,
+            );
+        }
+
+        let left_sample = left.sample_horizontal(crossing).unwrap();
+        let right_sample = right.sample_horizontal(crossing).unwrap();
+        assert_eq!(left_sample.height, right_sample.height);
+        assert_eq!(left_sample.strength, right_sample.strength);
+        assert_eq!(left_sample.strength, 1.0);
+    }
 }
