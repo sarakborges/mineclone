@@ -72,7 +72,13 @@ pub(super) fn sample_density_field(
                 chunk_origin.x as f32 + local_x as f32 + 0.5,
                 chunk_origin.z as f32 + local_z as f32 + 0.5,
             );
-            let column_hydrology = sample_density_column_hydrology(horizontal, pass.region);
+            // The density and the subsequent fluid pass must select the same
+            // physically supported water candidate for this exact column.
+            let column_hydrology = sample_density_column_hydrology(
+                horizontal,
+                pass.region,
+                Some(column.surface_height as f32),
+            );
             let hydrology_deltas = pass.region.hydrology.density_deltas_for_column::<CHUNK_SIZE>(
                 horizontal,
                 chunk_origin.y as f32 + 0.5,
