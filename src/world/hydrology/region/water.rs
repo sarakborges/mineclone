@@ -7,6 +7,13 @@ use crate::world::hydrology::{
     types::{HydrologyRiverSurfaceSample, HydrologyWaterKind, HydrologyWaterSample},
 };
 
+// All physical hydrology consumers must agree on whether the unmodified
+// terrain can support a natural source. A missing original surface means the
+// caller only wants an unfiltered hydrological sample.
+pub(super) fn bed_has_support(surface_height: Option<f32>, bed_level: f32) -> bool {
+    surface_height.is_none_or(|surface| surface + 0.5 >= bed_level)
+}
+
 impl HydrologyRegion {
     pub(crate) fn water_at(&self, position: Vec2) -> Option<HydrologyWaterSample<'_>> {
         self.water_with_margin(position, 0.0, None)
@@ -36,13 +43,27 @@ impl HydrologyRegion {
         &self,
         position: Vec2,
     ) -> Option<HydrologyRiverSurfaceSample> {
-        let river = self
-            .river_graph
-            .sample_horizontal(position)
-            .filter(|river| river.strength > SHORE_STRENGTH)?;
+        self.river_surface_with_support(position, None)
+    }
 
-        Some(HydrologyRiverSurfaceSample {
-            water_level: river.height,
+    // Carving the headroom above a river is part of generating its physical
+    // channel. Do not excavate that roof if its bed has no supporting terrain.
+    pub(crate) fn supported_river_surface_at(
+        &self,
+        position: Vec2,
+        surface_height: f32,
+    ) -> Option<HydrologyRiverSurfaceSample> {
+        self.river_surface_with_support(position, Some(surface_height))
+    }
+
+    fn river_surface_with_support(
+        &self,
+        position: Vec2,
+        surface_height: Option<f32>,
+    ) -> Option<HydrologyRiverSurfaceSample> {
+        let river = self.river_water_with_margin(position, 0.0)?;
+        bed_has_support(surface_height, river.bed_level).then_some(HydrologyRiverSurfaceSample {
+            water_level: river.water_level,
             strength: river.strength,
         })
     }
@@ -137,10 +158,9 @@ fn choose_water<'a>(
     candidate: HydrologyWaterSample<'a>,
     surface_height: Option<f32>,
 ) {
-    // The physical fluid pass must never pick a floating water body. Filter
-    // each candidate rather than filtering the *winner*, which could leave
-    // a supported river hidden under an unsupported higher lake.
-    if surface_height.is_some_and(|surface| surface + 0.5 < candidate.bed_level) {
+    // Filter each candidate rather than filtering the *winner*, which could
+    // leave a supported river hidden under an unsupported higher lake.
+    if !bed_has_support(surface_height, candidate.bed_level) {
         return;
     }
 
@@ -205,5 +225,12 @@ mod tests {
             None,
         );
         assert_eq!(selected.unwrap().kind, HydrologyWaterKind::Lake);
+    }
+
+    #[test]
+    fn support_rule_accepts_exact_bed_boundary() {
+        assert!(bed_has_support(Some(79.5), 80.0));
+        assert!(!bed_has_support(Some(79.0), 80.0));
+        assert!(bed_has_support(None, 100.0));
     }
 }
