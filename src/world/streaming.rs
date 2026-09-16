@@ -568,6 +568,11 @@ mod tests {
             Some(far)
         );
         assert_eq!(
+            state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 22),
+            None
+        );
+
+        assert_eq!(
             state.pop_retired_outside_horizontal_radius(IVec3::new(-3, 0, 0), 22),
             Some(near)
         );
