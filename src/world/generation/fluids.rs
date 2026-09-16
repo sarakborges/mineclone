@@ -232,11 +232,11 @@ mod tests {
         let density = vec![-1.0; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
         let chunk_z = world_z.div_euclid(CHUNK_SIZE as i32);
         let chunk_y = world_y.div_euclid(CHUNK_SIZE as i32);
-        let local_z = world_z.rem_euclid(CHUNK_SIZE as i32) as usize;
-        let local_y = world_y.rem_euclid(CHUNK_SIZE as i32) as usize;
+        let local_z = world_z.rem_euclid(CHUNK_SIZE as i32);
+        let local_y = world_y.rem_euclid(CHUNK_SIZE as i32);
 
         for (chunk_x, hydrology, local_x) in
-            [(7, left_hydrology, CHUNK_SIZE - 1), (8, right_hydrology, 0)]
+            [(7, left_hydrology, CHUNK_SIZE as i32 - 1), (8, right_hydrology, 0)]
         {
             let chunk_coord = IVec3::new(chunk_x, chunk_y, chunk_z);
             let region = GenerationRegion {
