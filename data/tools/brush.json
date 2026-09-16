@@ -2,5 +2,6 @@
   "id": "asteria:brush",
   "name": { "english": "Brush" },
   "category": "tools",
-  "icon": ""
+  "icon": "textures/tools/brush.png",
+  "tintIcon": "textures/tools/brush-tint.png"
 }
