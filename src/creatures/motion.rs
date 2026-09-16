@@ -1,14 +1,13 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::{creature::{CreatureCollider, CreatureRegistry}},
+    content::creature::{CreatureCollider, CreatureRegistry},
+    player::movement::config::{COLLISION_STEP, GRAVITY},
     voxel::{collision::collides_aabb, world::VoxelWorld},
 };
 
 use super::{CreatureInstance, visual::CreatureAnimationState};
 
-const GRAVITY: f32 = -18.0;
-const COLLISION_STEP: f32 = 0.05;
 const GROUND_PROBE: f32 = 0.06;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -65,7 +64,7 @@ pub(super) fn move_creatures(
                 motion.timer -= dt;
                 if motion.timer <= 0.0 {
                     motion.phase = HopPhase::Anticipate;
-                    motion.timer = 0.24;
+                    motion.timer = definition.anticipation_seconds;
                     set_animation(&mut animation, "anticipate");
                 }
             }
@@ -83,7 +82,7 @@ pub(super) fn move_creatures(
                 let hit = advance_vertical(&world, *collider, &mut transform.translation, travel);
                 if hit && motion.velocity_y <= 0.0 {
                     motion.phase = HopPhase::Land;
-                    motion.timer = 0.34;
+                    motion.timer = definition.landing_seconds;
                     motion.velocity_y = 0.0;
                     set_animation(&mut animation, "land");
                 } else if hit {
@@ -114,7 +113,7 @@ fn on_ground(world: &VoxelWorld, collider: CreatureCollider, feet: Vec3) -> bool
 }
 
 /// Substeps stop thin blocks from being skipped at high vertical speed.
-/// The collider remains the exact same size during squash/stretch clips.
+/// The collider remains the same size throughout every squash/stretch clip.
 fn advance_vertical(
     world: &VoxelWorld,
     collider: CreatureCollider,
