@@ -1,139 +1,119 @@
 # HANDOFF — Asteria / Mineclone
 
 Repo: `sarakborges/mineclone`  
-Branch de trabalho: `develop`  
+Branch: `develop`  
 Stack: Rust + Bevy 0.19.1
 
 ## Fonte canônica e regras
 
-Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do projeto. Exports/anexos são snapshots derivados.
+Este `HANDOFF.md` na raiz de `develop` é a fonte canônica persistente; exports e anexos são snapshots derivados.
 
-- Trabalhar diretamente em `develop`; feature branch só sob pedido explícito.
-- Antes de escrever: buscar HEAD/VERSION atuais e abrir os arquivos reais envolvidos.
-- Commits pequenos e coerentes; não misturar mudanças sem relação.
-- Todo bloco coerente sobe `VERSION`: patch para fix/refactor/tooling compatível; minor para feature compatível; major para breaking.
-- Commit só de `HANDOFF.md` não sobe versão.
-- Depois de mudança material em código, arquitetura, roadmap ou processo, atualizar este handoff na mesma sessão de trabalho. Não acumular versões sem atualização.
-- Runtime error/warning/feedback do usuário tem prioridade sobre roadmap. `go` / `continua` = executar próximo bloco sem confirmação desnecessária.
-- Corrigir warnings Rust dos blocos tocados. CI canônico: `cargo clippy --all-targets --all-features -- -D warnings` + `cargo check`.
-- Não repetir que falta cargo check/run local; CI é gate de compilação. `cargo test` manual só sob pedido explícito; fmt não é gate.
-- Não declarar bug visual/gameplay ou recuperação de FPS resolvido sem evidência runtime. Registrar claramente hipóteses vs causas confirmadas.
-- Não gerar imagens sem pedido explícito.
-- Root `VERSION` é a fonte operacional; `Cargo.toml` permanece intencionalmente em 0.10.16.
+- Trabalhar diretamente em `develop`, salvo pedido explícito de branch. Antes de escrever, verificar HEAD, `VERSION` e arquivos reais envolvidos.
+- Commits pequenos e coerentes, sem misturar causas independentes. Cada bloco de alteração de código sobe `VERSION` (PATCH para fix/refactor compatível, MINOR para feature compatível, MAJOR para breaking); documentação isolada não sobe versão.
+- Atualizar este HANDOFF na mesma sessão de qualquer alteração material de código, arquitetura, roadmap, processo ou feedback de runtime. **Não deixar o handoff defasado.**
+- Feedback de gameplay/erro/warning tem prioridade sobre roadmap. `go`/`continua` = executar sem confirmação desnecessária.
+- Corrigir warnings dos blocos tocados. CI canônico: `cargo clippy --all-targets --all-features -- -D warnings` e `cargo check`. Não repetir que faltou cargo local ou que está esperando `cargo run`; testes manuais cargo só sob pedido explícito, fmt não é gate.
+- Compilação não comprova correção visual, hidrológica nem FPS; separar causa identificada, patch publicado e confirmação em gameplay.
+- Sem geração de imagens sem pedido explícito. Root `VERSION` é operacional; versão de `Cargo.toml` permanece intencionalmente antiga (0.10.16).
 
-## Invariants arquiteturais relevantes
+## Invariantes arquiteturais
 
-1. Cada fato de gameplay tem owner autoritativo.
-2. Heavy generation/mesh/remesh fora da main thread; integração budgetada.
-3. Resultados async revisionados; stale descartado e rescheduled.
-4. `DeduplicatedQueue<T>` / `VoxelUpdateQueue` são primitives canônicos de fila deduplicada.
-5. `FrameWorkBudget` é o primitive canônico de budget por tempo/quantidade.
-6. Prioridade streaming atravessa fronteiras async; trabalho imediato só preempta não imediato e vítima volta à fila.
-7. Mesh async valida revision de conteúdo separada de lighting; um halo novo que estava ausente inicialmente não invalida first-visible work, boundary remesh corrige depois.
-8. Streaming separa visible mandatory, warm/preload e retention/unload. Trabalho faltante visível vence preload.
-9. Retirement != unload imediato; chunks aposentados próximos seguem reutilizáveis.
-10. Visibility tem histerese show/hide, não mostrar zona preditiva distante.
-11. Gameplay rendering é stack explícita de câmeras HDR world/viewmodel + SDR UI; tonemap uma vez antes da UI, que não pertence à câmera 3D da mão.
-12. Invariant de produto: flight máximo, caminhada/círculos/parado sem void/chunk popping/silhuetas à distância.
-13. HDR/tonemap exige validação mundo+viewmodel+HUD+overlays; mudança isolada pode quebrar a stack.
-14. Fog de streaming limitada pelo frontier real de readiness, reage à readiness parado.
-15. Hot paths change-driven, sem scans/dirty writes quando inputs autoritativos não mudam.
-16. Lighting de edits usa lane interativa deduplicada, preempta backlog e publica revisões/remesh depois da convergência; feedback atual informa que essa política ainda gera latência perceptível e precisa ser refinada com controle de custo.
-17. Async lighting-remesh valida halo de content e revisão própria de lighting; geometry/fluid não devem ser invalidados apenas por churn de luz.
-18. Sky layers usam seaLevel data-driven da dimensão; nuvens têm coordenadas reais de mundo e câmera só escolhe qual tile distante reciclar, nunca soma posição do player continuamente.
-19. Fog terminal e clear sky devem concordar para não expor chunk frontier; restaurar paleta artística de `fogColor` sem quebrar essa continuidade exige estratégia explícita, não simplesmente trocar uma das duas cores.
+1. Cada fato de gameplay tem owner autoritativo; dados e decisões devem ser consistentes entre geração, rendering e HUD.
+2. Geração, mesh e remesh pesados fora da main thread; integração orçamentada. Resultados async revisionados; stale descartado e reagendado.
+3. Filas deduplicadas canônicas: `DeduplicatedQueue<T>` e `VoxelUpdateQueue`; budget canônico `FrameWorkBudget`.
+4. Prioridade de chunks atravessa fronteiras async: visible mandatory vence warm/preload; preempção devolve trabalho não crítico à fila.
+5. Mesh async valida revisão de conteúdo e de iluminação separadamente; halo recém-disponível pode ser corrigido por boundary remesh. `ChunkRemeshTasks::lighting_revisions` é tracker próprio, distinto de `VoxelWorld::chunk_mesh_revisions`.
+6. Streaming separa visible, preload e retenção; retirement não é descarte imediato. Visibilidade tem histerese e não expõe chunks de preload distantes.
+7. Stack HDR: world camera order 0 Skip -> viewmodel HDR order 1 tonemap final -> UI SDR order 2; nunca alterar parcialmente sem validar mundo, mão, HUD, overlays.
+8. Fog deve acompanhar readiness do frontier mesmo parado; terminal fog e fundo do céu precisam evitar silhuetas/void. Cores por bioma não podem ser descartadas para isso.
+9. Hot paths devem ser change-driven; não fazer scans ou dirty writes quando nada mudou.
+10. Luz interativa tem prioridade sobre streaming; publicação atrasada após convergência ainda precisa de revisão. Seed inicial e remesh devem concordar sobre freshness.
+11. Sky layers usam seaLevel da dimensão; nuvens permanecem world-space, câmera apenas seleciona tile para reciclagem, vento não é acoplado ao player.
+12. Block held/viewmodel deve observar hotbar e manter transform geométrico próprio. Rotação de placement acionada por R não deve distorcer nem reescalar o modelo da mão.
+13. Produto: caminhada, círculos e voo máximo sem void, flicker, chunks inteiramente escuros, popping ou fog breathing; não mascarar throughput só com fog.
 
 ---
 
 # Estado atual — 2026-09-16
 
-Último HEAD **de código** publicado: `68a26a333365a161b0e75b7efd6f702cae31bb2c`  
-`VERSION = 0.15.12`  
-Branch `develop`. Este commit do HANDOFF é somente documentação e não sobe `VERSION`.
+Último commit **de código** publicado: `68e506217ee04f6dbbe0ba12f81c74d368050804` (0.15.13); `VERSION = 0.15.13`. Este commit do handoff apenas documenta e não sobe VERSION.
 
-CI: 0.15.3 final (`5297a69`) run `35054771262` success; 0.15.4 fix (`fbe301f`) #2064 success; 0.15.5 (`fa84d81`) #2066 success; 0.15.6 (`f8d244c`) #2068 success; 0.15.7 (`5c99616`) #2070 success; 0.15.8 final (`c22a199`) #2075 success; 0.15.9 (`b68ecb3`) #2078 success; 0.15.10 (`eadb6ea`) #2080 success; 0.15.11 (`780df02`) #2082 success; **0.15.12 (`68a26a3`) #2084 está em execução na última consulta**. Conferir resultado, corrigir falha/warnings antes do próximo bloco.
+CI: 0.15.3 `5297a69` run `35054771262` success; 0.15.4 fix `fbe301f` #2064 success; 0.15.5 `fa84d81` #2066 success; 0.15.6 `f8d244c` #2068 success; 0.15.7 `5c99616` #2070 success; 0.15.8 final `c22a199` #2075 success; 0.15.9 `b68ecb3` #2078 success; 0.15.10 `eadb6ea` #2080 success; 0.15.11 `780df02` #2082 success; 0.15.12 `68a26a3` #2084 success; **0.15.13 `68e5062` #2086 / run `35109440316` success, Clippy + Check.** Nenhuma 0.15.14 foi publicada neste registro.
 
-## Blocos recentes
+## Estado de prioridades — confirmação mais recente do usuário
 
-- `9302118` / 0.14.70 — terminal fog color alinhada ao sky color; feedback então ainda tinha silhuetas.
-- `b028fbe` / 0.14.71 — experimento HDR parcial causou mundo preto/HUD corrompida; `57305f4` / 0.14.72 apontou texturas do sol/lua; `f864669` / 0.14.73 reverteu HDR parcial.
-- `1b16bee` / 0.15.0 — HDR stack explícita: world order 0 Skip; viewmodel HDR order 1 final write/tonemap; UI SDR order 2 alpha blend. CI `35052641180` success; feedback runtime composição normalizada, mas fog ainda tinha chunk popping.
-- `4aeb119` / 0.15.1 — fog limitada pela coluna ausente mais próxima de `ChunkRenderPool`, distância até AABB real menos guarda de 1 chunk. Usuário confirmou que chunks pararam de brotar dentro da fog.
-- `7b16f8f` / 0.15.2 — remove recuperação temporal da fog; readiness determina start/end diretamente.
-- `122d0ff` + `86da5c2` + `5297a69` / 0.15.3 — frontier change-driven, cache `active_columns` invalidado por `membership_revision`; scan só quando readiness/render distance/posição horizontal/camera entity mudam, cobre recriação de câmera. CI `35054771262` success.
-- `766d970` + `fbe301f` / 0.15.4 — lighting: lane interativa deduplicada, preempção de streaming, prioridade acompanha propagação; mudanças da onda publicadas após convergir. CI #2064 success.
-- `fa84d81` / 0.15.5 — lighting-remesh async verifica revisão do halo 3×3×3 além do content. Implementação mantém tracker próprio em `ChunkRemeshTasks`, separado do `VoxelWorld::chunk_mesh_revisions`; **não o chamar de tracker único/autoritativo**. Seed inicial de luz não faz bump nesse tracker automaticamente: ponto a investigar com chunks escuros. CI #2066 success.
-- `f8d244c` / 0.15.6 — remove gate binário que desativava surface tunnels em coluna molhada, usa blend vertical abaixo de bed; pode adicionar `water_near` em todo column hot path, investigar FPS. CI #2068 success; aparência ainda não comprovada.
-- `5c99616` / 0.15.7 — P1.1 tuning data-driven: mountain_belt threshold `0.86 -> 0.90`, width `0.22 -> 0.15`; mountain_peak spacing `760 -> 850`, chance `0.48 -> 0.36`, radius `120–230 -> 110–205`; Wasteland weight `1.0 -> 1.30`, Witchwood/Enchanted `1.0 -> 1.25`; Plains oak chance `0.48 -> 0.54`, spacing80 mantido. Evitar novos pesos sem amostragem/runtime. CI #2070 success.
-- `ebe0b7c` + `c22a199` / 0.15.8 — nuvens Y=`seaLevel + 34..48` em vez de Y absoluto abaixo de Overworld, mas X/Z ainda seguiam a câmera; feedback runtime: posição grudada na câmera, esquisito. CI #2075 success.
-- `b68ecb3` / 0.15.9 — nuvens ancoradas em world coordinates e vento global, câmera apenas escolhe tile do pool por múltiplos de 180, testes de helper incluídos. CI #2078 success; ainda requer feedback visual sobre teleport nos boundaries/tile recycling.
-- `eadb6ea` / 0.15.10 — performance: uma mesh transparente por nuvem em vez de três cubos transparentes sobrepostos; elimina 2/3 de entidades/draws de cloud pool, mantém densidade data-driven, world coordinates. CI #2080 success; **não concluir FPS recuperado até medições runtime**.
-- `780df02` / 0.15.11 — rios só consideram destino oceânico quando o bed efetivo calculado fica pelo menos 4 blocos abaixo do seaLevel, não somente pela continentalness; flow tracing/selection avança pela faixa oceânica ainda seca e ocean outlet prioriza destino molhado; ocean water_at seco não suplanta a água de uma foz. Testes de predicado de ocean wet adicionados. CI #2082 success. Verificar conectividade entre regiões, largura da foz e seeds em runtime.
-- `68a26a3` / 0.15.12 — margens: mesmo graph scan com margin alargada, separa força do núcleo real e faixa externa; grade signed até altura da água+offset sobre coluna de terreno exata, rebaixa terra alta e eleva somente banco externo baixo, sem preencher interior da água; transição com smoothstep e testes de grading. Ocean density interpola a partir de altura exata sem salto na entrada da faixa oceânica. CI #2084 em execução; validar rios/lagos visualmente e perfil de FPS.
+Numeração abaixo referencia a listagem consolidada anterior. **Feedback de runtime 2026-09-16 é autoritativo para status.**
 
-## Arquitetura de câmera e fog
+| Item | Status | Próximo passo |
+| --- | --- | --- |
+| P0.1 FPS / carregamento | **Melhorou, ainda pode melhorar** | Continuar profiling e otimizações mensuráveis; não marcar resolvido |
+| P0.2 chunks totalmente escuros + atualização tardia de sombras | **Aberto** | Revisão seed→propagação→remesh→integração, com atenção a revisões distintas |
+| P0.3 rios cortam túneis com paredes/barreiras retas | **Aberto, reproduzido pelo usuário mesmo após 0.15.6 e 0.15.13** | Corrigir proteção de leito no volume exato e junção de density/carver; testar gameplay |
+| P0.4 rios param no meio do nada, sem conexão lago/oceano | **Aberto, reproduzido após 0.15.11** | Unificar grafo de drenagem, seleção, fluxo, edges e água física entre regiões |
+| P0.5 margens dos rios fazem corte vertical | **CORRIGIDO conforme confirmação explícita do usuário** após 0.15.12 | Não voltar a mexer sem nova evidência; preservar a correção |
+| P0.6 biomas regionais quase não aparecem | **Aberto: 3 mil blocos, quase só Plains e Mountains** | Diagnosticar seleção espacial/clima/proximidade + overlay macro; não só pesos |
+| P0.7 céu e fog não mudam conforme o bioma | **Aberto, usuário reconfirmou** | Restaurar identidade sky/fog em toda cadeia sem reintroduzir silhuetas no frontier |
+| P1 anterior (streaming/Coast/nuvens) | **Usuário informou "1 feito"** | Registrar como concluído segundo relato, preservar invariantes; reabrir só por nova evidência |
+| P2 anterior (hotbar/ghost/dye/HUD histórico) | **Usuário informou "2 feito"** | Registrar como concluído segundo relato; novo bug R é independente |
+| NOVO: R / held block | **Aberto: R ao rotacionar bloco distorce o modelo na mão** | Rastrear estado de orientação de placement versus Transform/mesh/viewmodel; evitar mutar escala ou aplicar rotação cumulativa na mão |
 
-`world HDR linear (order 0, Skip) -> viewmodel HDR (order 1, final 3D write/tonemap) -> UI SDR (order 2, alpha blend)`
+**Ordem de execução atual:** evitar regressão de FPS; P0.2 e P0.3/P0.4 em blocos separados de correção; P0.6 e P0.7 igualmente críticos e precisam de investigação estrutural; bug R como próximo fix de viewmodel após bloqueadores. P0.5 encerrado por confirmação runtime. P1/P2 anteriores concluídos por feedback, mas não usar isso para declarar os novos bugs corrigidos. Não somar margens resolvidas ao problema ainda aberto de conectividade.
 
-0.14.71 aplicou HDR só à world camera, mas viewmodel SDR mantinha `IsDefaultUiCamera`, causando regressão em composição. Stack 0.15.0 separa UI; world e viewmodel usam `Msaa::Off`; não alterar exposure/tonemap artístico sem evidência. Fog em `src/rendering/fog/distance.rs`: cache de colunas do `ChunkRenderPool`; distância à AABB física da coluna faltante; recua fog end 1 chunk, start acompanha preservando largura nominal, target ~98% do render radius, readiness ou câmera recriada força update parado. Fallback visual, não substituto de throughput.
+## Histórico dos blocos de código
 
-**Nova regressão observada 2026-09-16:** usuário relata que os biomas perderam suas cores de fog/sky. `EnvironmentVisualState` ainda calcula `sky_color` e `fog_color` por bioma/fase, mas `rendering/fog/color.rs` e `fog/attachment.rs` usam só `visuals.sky_color`, ignorando `fog_color` desde alinhamento antigo; `SkyPlugin` atualiza `ClearColor` com sky_color. Verificar também se a identidade CurrentBiome e registro de visuals refletem bioma correto, e composição HDR em runtime; não afirmar que o sky perdeu cor por esse único fato. **Não trocar fog_color isoladamente sem resolver terminal sky mismatch**, pois isso reintroduz silhuetas do streaming. Uma solução consistente de horizonte/gradiente deve restaurar identidade visual preservando o frontier oculto.
+- 0.14.70 `9302118`: terminal fog alinhada ao sky mas silhuetas persistiam. 0.14.71 `b028fbe`: HDR parcial deixou mundo preto/HUD corrompido; 0.14.72 `57305f4`: texturas sol/lua, 0.14.73 `f864669`: revert HDR parcial.
+- 0.15.0 `1b16bee`: stack HDR explícita (world Skip, viewmodel final tone mapping, UI SDR). CI success. 0.15.1 `4aeb119`: frontier fog limitada à coluna ausente mais próxima do `ChunkRenderPool`, AABB real menos 1 chunk; usuário confirmou que chunks pararam de brotar dentro da fog. 0.15.2 `7b16f8f`: retira recovery temporal da fog. 0.15.3 `122d0ff`/`86da5c2`/`5297a69`: readiness change-driven, cache `active_columns` invalidado por `membership_revision`, inclui recriação de câmera; CI success.
+- 0.15.4 `766d970`/`fbe301f`: lighting lane interativa deduplicada preempta streaming, propagação mantém prioridade, remesh publicado quando onda converge. CI success, feedback ainda relata sombras não imediatas.
+- 0.15.5 `fa84d81`: async lighting-remesh valida halo 3×3×3 de lighting além de conteúdo via tracker próprio `ChunkRemeshTasks::lighting_revisions`, não é `VoxelWorld::chunk_mesh_revisions`. Seed inicial altera revisão world, não necessariamente tracker da remesh: possível freshness inconsistente; verificar antes de mexer.
+- 0.15.6 `f8d244c`: surface tunnels sob água trocam gate binário por fade vertical baseado em bed. Bug runtime: rios ainda cortam túneis com paredes retas; proteção no código original acima do leito não tem limite superior. Hipótese específica: `surface_carver_water_factor` mantém fator zero indefinidamente acima de `water.bed_level - ROOF`; limitar ao volume hídrico/roof com fades superior e inferior e inspecionar outras camadas de densidade antes de concluir. **Nenhum patch 0.15.14 foi enviado até este handoff.**
+- 0.15.7 `5c99616`: mountain_belt threshold .86→.90, width .22→.15; mountain peaks spacing760→850, chance .48→.36, radius120–230→110–205; pesos regionais Wasteland1→1.30 e Witchwood/Enchanted1→1.25; oak Plains chance .48→.54; não mudou size/avoidNear. Feedback novo 3k blocos quase só Plains/Mountains: ajustes de peso insuficientes, não marcar P1.1 de distribuição resolvido só porque P1 agregado foi marcado.
+- 0.15.8 `ebe0b7c`/`c22a199`: nuvem Y=seaLevel+34..48; X/Z ainda grudados na câmera. 0.15.9 `b68ecb3`: nuvens world-space com wind e tile pool 180, CI success; 0.15.10 `eadb6ea`: reduz 3 cubos transparentes a 1 mesh por nuvem (~2/3 entidades/draw calls do pool), CI success. FPS melhorou segundo usuário, ainda requer otimização.
+- 0.15.11 `780df02`: drainage exige oceano fisicamente submerso (bed pelo menos 4 abaixo seaLevel), continua pelo fringe seco e impede ocean water_at seco de substituir river mouth. CI success, mas **usuário confirma rios soltos ainda**: distinguir destino lógico de edges efetivamente geradas no `river_system` e água preenchida.
+- 0.15.12 `68a26a3`: river/lake shore grading assinado, amostra altura exata do terreno e faixa lateral maior, rebaixa high bank, eleva apenas outer bank baixo, sem preencher interior do canal. Ocean density usa altura exata em blend. CI #2084 success. **Usuário confirma P0.5 corrigido.**
+- 0.15.13 `68e5062`: `generation/density.rs` resolve surface carver primeiro e executa `hydrology.water_near` lazy apenas no primeiro voxel com delta de carve diferente de 0, cache `Option<Option<HydrologyWaterSample>>` por coluna (inclusive None); elimina scans redundantes em colunas sem carve. Teste verifica zero scans sem carve e exatamente um entre voxels carvados. CI #2086 success. FPS melhorou segundo usuário, porém não atribuir todo ganho a uma causa isolada sem métricas.
 
-P0.1 runtime pendente: player parado enquanto chunks terminam, flight máximo, círculos, sem void/flicker/silhuetas/fog breathing. Feedback 0.15.1 parou popping dentro da fog, mas versões posteriores sem validação completa.
+## Subsistemas e diagnósticos a preservar
 
-## Streaming atual e gargalos
+### Streaming / FPS
 
-`selection/prefetch -> generation task -> integrate -> initial lighting -> halo snapshot -> mesh task -> integrate -> render allocation -> visibility hysteresis -> retention -> archive/unload`
+Pipeline: `selection/prefetch -> generation task -> integrate -> initial lighting -> halo snapshot -> mesh task -> integrate -> render allocation -> visibility hysteresis -> retention -> archive/unload`. Preload all-direction +2 chunks, corredor frontal +8 ao andar, fog nominal start ~78% / end ~98% do raio mas recua conforme readiness. Histerese visibility RD4=5/6, RD12=14/16, RD24=26/30; retention `R + max(ceil(R/2),10)` (RD4=14 RD12=22 RD24=36); horizontais. Geração e remesh async, integração budgetada. Não sacrificar FPS elevando budgets de luz indiscriminadamente. Perfil parado versus andando, CPU worldgen/lighting/remesh versus GPU cloud transparency. `hydrology/region/density.rs` ainda constrói `Vec<VerticalDensityDelta>` por coluna e verifica lago duas vezes (carve+shore); só otimizar com evidência e preservar geometria. 0.15.10 cloud overdraw e 0.15.13 lazy water scans foram mudanças concretas, FPS ainda pode melhorar.
 
-Horizontes: render distance nominal=visible/priority; preload all-direction +2 chunks, corredor frontal até +8 em movimento horizontal; fog nominal start~78%/end~98%, podendo recuar no frontier; visibility RD4=5/6, RD12=14/16, RD24=26/30; retention `R + max(ceil(R/2),10)` com RD4=14 RD12=22 RD24=36; retention/visibility horizontal-only.
+### Iluminação
 
-Gargalos tratados desde 0.14.56: prioridade perdida entre seleção e task; task pool/worker convoy/cache frio; flight selecionando ar vs superfície; lookahead; geração monopolizando mesh; initial light invalidando mesh; preload vencendo visible; warm exposto; mesh pronta esperando movimento; unload precoce; visibility ping-pong; background fog mismatch; HDR partial; fixed fog; temporal recovery; scan/dirty write a cada frame; interatividade de luz, async lighting stale.
+`world/streaming.rs::dispatch_initial_mesh_tasks` executa `seed_chunk_direct_lighting` e enfileira chunk relaxation, mas snapshot/mesh inicial pode ocorrer antes de luz entre vizinhos convergir. `lighting_updates.rs` budget 2 ms / até 4096 voxels, remesh despacha até 2 tasks/frame, 4 in-flight e integra até 2/frame. Initial light bump no VoxelWorld não implica bump do tracker lighting_revisions do ChunkRemeshTasks, que recebe bump no dynamic lighting quando changed_chunks publicados. Investigar stale mesh de luz, ausência de propagação, remesh scheduling e integração; separar chunk realmente sem skylight de mesh escura persistente. Não declarar concluído por CI.
 
-**Performance nova regressão observada:** FPS caiu drasticamente após blocos 0.15.6–0.15.9 (não atribuir causalidade sem medidas); 0.15.10 reduz cloud alpha overdraw agora acima do terreno, porém FPS ainda não foi reavaliado. Inspecionar hot path `generation/density.rs`: `water_near` executa em toda coluna mesmo quando não há surface-carver candidato; `SurfaceCarverColumn` pode ser vazio, propagar fast path antes de scan hídrico. `hydrology/region/density.rs` cria `Vec` de water bodies por coluna; avaliar SmallVec sem modificar sem necessidade. Comparar FPS parado vs andando e log `render assets`/profiling se disponível; priorizar correção compatível sem elevar budget de iluminação arbitrariamente. Novos cálculos de 0.15.11/0.15.12 também exigem atenção ao custo de worldgen.
+### Hidrologia — túnel versus rio e rios soltos
 
----
+`world/generation/density.rs` combina `sample_density_with_hydrology` + `surface_carver_density_delta` e water factor. Código 0.15.13 evita custo redundante, mas o fator original tem apenas fade em profundidade: se o voxel está acima do leito, proteção segue ativa até alturas arbitrárias. Este é um defeito concreto na fórmula que pode explicar parede reta no túnel; corrigir com janela vertical limitada à água/roof e fade no topo, além de inspecionar `density_sampling/hydrology.rs::enforce_hydrology_water_volume` e se diferentes carvers (surface tunnel e cave connector) divergem. Registrar patch só quando commit existir, gameplay ainda necessário.
 
-# Celestial bodies
+`world/hydrology/river/selection.rs::keep_only_complete_downstream_paths` avalia destinos por wet ocean/lake e estende cells selecionadas; `river.rs::build_river_system` constrói edges por região em loop com raio `RIVER_EDGE_MARGIN_CELLS=4`, aplica filtro de reachability e `selected.channels`. `river/path/confluence.rs::add_path_to_graph` só inclui segmentos que intersectam a região e `hydrology/spatial.rs::edge_intersects_region` usa margem máxima do rio. Investigar discrepância de flow cache entre regiões, canais fora de seleção local, path/edge clipping, confluências e water fill; wet outlet lógico não garante ligação visual. `river_height` também trata continentalness abaixo do threshold como `seaLevel`, embora o wet outlet use critério físico; checar descontinuidade. Não estender rios arbitrariamente nem aumentar margens apenas.
 
-`src/rendering/celestial.rs` suporta `CelestialBodyDefinition.texture: Option<String>` como `base_color_texture`; material unlit/alpha blend/double-sided/fog disabled. Overworld sky aponta `textures/sky/sun.png`/`moon.png` desde 0.14.72. Validar alpha/orientação/texturas no jogo.
+P0.5 margens verticais: **corrigido confirmado pelo usuário**, preservar 0.15.12; não reabrir como problema ativo sem nova ocorrência.
 
----
+### Distribuição dos biomas
 
-# Próximas prioridades (feedback runtime governa ordem)
+`world/biome_field/selection.rs` amostra suitability em temperatura/humidade/continentalness/erosion, pesos só dos elegíveis; seleção restringe candidatos pelo vizinho dominante e `avoidNear` em 8 vizinhos, fallback ao raw. `surface.rs` associa amostras de site Voronoi e aplica overlay Mountains via mountain belt/peak independente da seleção regional. BiomeField `surface_site_spacing` deriva do maior raio regional, não do individual. Overworld `dimension.json` já tem pesos Wasteland 1.30, Witchwood/Enchanted 1.25, Plains 1.0, Mountains macro .85. Usuário andou 3000 blocos encontrando praticamente Plains/Mountains: inspecionar distribuição real por seed, seleção/caches e proximidade; não insistir em mudar pesos sem causa identificada. Este item P0.6 continua **aberto**, independentemente da confirmação agregada P1.
 
-## P0.1 — Regressão grave de FPS
+### Cores do céu e fog
 
-**Usuário informou queda drástica de FPS em 2026-09-16.** Checar CI da 0.15.12 e feedback/medidas da 0.15.10, distinguir GPU cloud alpha overdraw de CPU worldgen/lighting/remesh. Não considerar resolvido pela redução de draw calls. Investigar/otimizar `water_near` desnecessário em `generation/density.rs` após 0.15.6 e allocations de hydrology, sem voltar ao gate binário que interrompe túneis.
+`rendering/environment.rs::update_environment_visuals` calcula HSI sky_color/fog_color com pesos de `CurrentBiome` e fases day/night se inputs mudaram. `world/biome.rs::track_current_biome` usa player position e muda CurrentBiome só se amostra difere; `world/biome/identity.rs` mistura surface/hydrology/volume. `rendering/sky.rs` escreve `ClearColor` com `visuals.sky_color` se recurso changed. `rendering/fog/color.rs` e `fog/attachment.rs` escolhem `visuals.sky_color` para DistanceFog, ignorando `visuals.fog_color`; portanto fog artístico do bioma não está aplicado. Isto sozinho não explica por que sky não varia: rastrear atualizações de CurrentBiome, combinação/influências, origem das definições, registro de visuais, fase e stack de câmera. Substituir DistanceFog por fog_color sem casar seu terminal com sky pode reintroduzir chunk popping/silhuetas; projetar composição horizonte/gradiente mantendo frontier mascarado. Usuário reconfirmou ambos céu/fog sem cor por bioma.
 
-## P0.2 — Chunks totalmente escuros + sombras atrasadas
+### Coast / celestial / nuvens / histórico concluído
 
-Feedback 2026-09-16: sombras melhoraram, mas atualização **não é imediata**; chunks **inteiramente escuros ainda existem**. 0.15.4 prioriza propagação edit mas segura publicação de remesh até convergir, `lighting_updates.rs` usa budget 2ms/até4096 voxels; `chunk_remesh.rs` despacha até2 tasks/frame, 4 in-flight, integra até2/frame; primeira mesh pode capturar luz apenas seeded e preceder convergência dos vizinhos. 0.15.5 tem tracker `lighting_revisions` separado que só recebe bump em `process_dynamic_lighting` quando `changed_chunks` publicado; `seed_chunk_direct_lighting` atualiza `VoxelWorld` revision mas não esse tracker: hipótese de freshness incoerente que precisa de correção/teste. Investigar priorização no remesh/integração, dark chunk que permanece vs atraso transitório; evitar simplesmente aumentar budgets e reduzir FPS. **Não marcar P0.2 corrigido pelo CI.**
+Coast diagnóstico anterior: identidade hydrology overlay usa continentalness raw `BiomeField::climate_at`, enquanto oceano físico usa macro sample interpolado 5×5 `HydrologyRegion::macro_sample_at`; material rejeita ocean bed acima seaLevel+3 sem que a identidade Coast considere altura. P1 agregado foi reportado concluído pelo usuário; preservar diagnóstico como histórico, reabrir apenas mediante novo relato.
 
-## P0.3 — River/lake morphology e conectividade
+Celestial `rendering/celestial.rs` utiliza `CelestialBodyDefinition.texture` como base_color_texture; Overworld tem sun.png/moon.png. Clouds world-space Y seaLevel relativo e tile recycling; P1 agregado concluído por feedback.
 
-Feedback 2026-09-16: margens ainda formavam corte seco vertical, rios ainda existiam sem ligação a outros corpos d'água. Causa verificada: antiga `shore_density_delta` fazia `(target_surface - surface_elevation).max(0)`, não rebaixava cliffs, faixa de river bank só raio0.75..1.0 (~1–3 blocos), carve parava em `water_level+1.5` deixando teto alto intacto. 0.15.12 introduz grade assinado sobre interior alto e faixa lateral maior, com altura real da coluna. `keep_only_complete_downstream_paths` antiga aceitava primeiro nó sob limiar de continentalness, que podia estar acima do seaLevel e sem água; 0.15.11 usa wet outlet. Validar margem, confluências, outlets, conexão entre regiões e water fill. Se houver trecho solto mesmo com outlet wet, investigar seleção flow-cache local de regiões vs path/edge graphs. Não declarar hidrologia concluída sem gameplay.
-
-## P1.1 — Biome distribution
-
-Feedback: Mountains demais; Witchwood/Enchanted/Wasteland raros; Plains pouco oak. Tuning 0.15.7 altera cobertura mountain belt/peak e pesos sem mexer no tamanho/avoidNear; regionais compartilham sites Voronoi e Mountains é macro overlay separado. Validar múltiplas seeds/áreas e densidade oak no runtime, não repetir tuning às cegas.
-
-## P1.2 — Coast isolada
-
-`track_current_biome` obtém hydrology overlay com continentalness raw de `BiomeField::climate_at`; oceano físico usa `HydrologyRegion::macro_sample_at` interpolado 5×5. Material oceânico rejeita floor acima de `seaLevel+3`, identidade Coast não. 0.15.11 rejeita destinos oceânicos fisicamente secos na drenagem, mas identidade visual continua com critérios diferentes; investigar caso reproduzível raw/interpolado/elevation/strength/coast blend, alinhar owner da identidade sem gerar oceanos falsos.
-
-## P1.3 — Clouds
-
-0.15.8 altura relativa ao seaLevel (Overworld 90 -> centros Y124–138), 0.15.9 world-space/tile recycling, 0.15.10 uma mesh por nuvem reduz custo. Conferir visual em diferentes dimensões, tile transitions/teleports, densidade e FPS.
-
-## P2 histórico
-
-- held block observa hotbar e esconde slot vazio;
-- ghost block transparência uniforme por bloco, não faces individualmente;
-- dye reportado fraco;
-- Player HUD planejada canto inferior esquerdo, nome placeholder Yogg'Sara, vida 50/100 dentro da barra, status acima; Target HUD acima da crosshair, bloco à esquerda em slot de inventory, textos à direita com tooltip shadow, entidades futuramente. Não gerar imagens sem pedido.
+P2 agregado reportado concluído pelo usuário: held block observa hotbar e esconde slot vazio; ghost block transparência uniforme por bloco; dye intensidade; HUD planejamento jogador canto inferior esquerdo, Yogg'Sara, vida 50/100 dentro da barra, status acima, target HUD acima da crosshair, bloco à esquerda estilo inventory e texto à direita tooltip shadow. **Novo bug independente:** tecla R de rotação do bloco distorce o modelo na mão; inspecionar hotkey, estado da orientação da colocação, transform da entidade held block/viewmodel e rotação de UV/mesh, evitar alterações acumuladas na geometria ou escala.
 
 ---
 
-# Performance direction
+# Próxima execução
 
-Meta não só ~60 FPS, mas mundo pronto antes de ser alcançado. Heavy generation/mesh/remesh async; integração/restore/unload/lighting/fluid budgetados; prioridade por visibilidade e direção; visible antes do backlog; preload preditivo; evitar unload/visibility/remesh churn e scans/dirty writes; hydrology autoritativa na generation. Void cru, flicker, silhueta na fog e chunks totalmente escuros não são fallbacks aceitáveis. Alterações visuais devem preservar identidade de biomas e pipeline HDR completo.
+1. Tratar P0.3 em patch pequeno: correção limitada da proteção hídrica vertical, teste de fator acima/no/leito/abaixo da água e CI; **não dizer que o túnel está correto sem gameplay**. Se feedback indicar barreira persistente, seguir composição de density e carvers.
+2. P0.4: alinhar caminho completo do rio entre seleção/grafo/região/água física, manter margem corrigida, testar destinos e edges; revisão específica do renderer se fluido falta.
+3. P0.2: sincronizar inicialização e freshness da iluminação, evitar remesh stale e custo de main thread; FPS continua indicador obrigatório.
+4. P0.6 e P0.7: seleção real de biomas e pipeline de cores do ambiente, cada um em commit próprio.
+5. Novo bug R/viewmodel e otimizações adicionais de FPS baseadas em diagnóstico; preservar P0.5, P1 e P2 conforme relatados concluídos.
+
+Todo novo bloco de código incrementa `VERSION` e é seguido por atualização do HANDOFF. Feedback do usuário reordena imediatamente estas prioridades.
