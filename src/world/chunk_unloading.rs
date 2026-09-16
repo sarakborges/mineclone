@@ -102,6 +102,9 @@ pub(super) fn unload_chunk_meshes(
         runtime.remesh_queue.remove(coord);
         runtime.remesh_tasks.remove_lighting_revision(coord);
         runtime.world.archive_chunk(coord);
+        // Restored or newly generated chunks need a fresh direct-light seed,
+        // but an obsolete mesh retry while still resident must not reseed.
+        streaming.forget_initial_lighting_seeded(coord);
         unloaded.push(coord);
         budget.record(1);
     }
