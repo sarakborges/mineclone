@@ -100,11 +100,10 @@ pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
     }
 }
 
-// The renderer temporarily exposes a top face when the chunk above has not
-// loaded yet. Missing samples must not be interpreted as measured darkness on
-// this face: no occluder has been observed. This is mesh-only provisional sky;
-// the authoritative voxel field is unchanged and the halo remesh replaces it
-// when the upper chunk arrives. Never guess skylight for sides or loaded caves.
+// A top face is provisionally exposed when the chunk above has not loaded.
+// Absence is not measured darkness: sample the open sky until a real neighbor
+// arrives and the existing halo remesh replaces the provisional vertex data.
+// Do not brighten lateral faces or replace loaded cave measurements.
 fn provisional_top_sky_sample(face: BlockFace, sample: VoxelSample) -> VoxelSample {
     if face == BlockFace::Top && sample.is_none() {
         Some((
@@ -219,7 +218,7 @@ fn component_max(left: [f32; 3], right: [f32; 3]) -> [f32; 3] {
 }
 
 fn max_component(value: [f32; 3]) -> f32 {
-    left_dummy_placeholder
+    value[0].max(value[1]).max(value[2])
 }
 
 fn normalize_level(level: f32) -> f32 {
@@ -238,7 +237,7 @@ fn face_basis(face: BlockFace) -> (IVec3, IVec3, IVec3, [(i32, i32); 4]) {
             IVec3::NEG_X,
             IVec3::Y,
             IVec3::Z,
-            [(-1, -1), (-1, 1), (1, 1), (-1, 1)],
+            [(-1, -1), (-1, 1), (1, 1), (1, -1)],
         ),
         BlockFace::Top => (
             IVec3::Y,
