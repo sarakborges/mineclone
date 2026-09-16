@@ -62,6 +62,8 @@ pub(super) fn process_dynamic_lighting(
         .remesh_tasks
         .bump_lighting_revisions(changed_chunks.iter().copied());
     for coord in changed_chunks.drain() {
-        runtime.remesh_queue.enqueue_lighting_change(coord);
+        runtime
+            .remesh_queue
+            .enqueue_lighting_change(coord, &runtime.world);
     }
 }
