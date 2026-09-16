@@ -15,7 +15,6 @@ use crate::{
     },
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
-        chunk::VoxelChunk,
         coordinates::chunk_coord_from_position,
         deduplicated_queue::DeduplicatedQueue,
         lighting::{PendingLightingUpdates, seed_chunk_direct_lighting},
@@ -597,7 +596,9 @@ fn notify_loaded_chunk_neighbors(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::voxel::{cell::VoxelCell, texture_rotation::TextureRotation};
+    use crate::voxel::{
+        cell::VoxelCell, chunk::VoxelChunk, texture_rotation::TextureRotation,
+    };
 
     #[test]
     fn retired_chunks_wait_inside_horizontal_retention_radius() {
