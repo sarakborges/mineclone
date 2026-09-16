@@ -2,7 +2,7 @@ mod path;
 mod selection;
 mod water_bodies;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 
@@ -137,6 +137,16 @@ where
                 continue;
             };
             let downstream: DrainageNode = network.node(downstream_cell);
+            if !valid_lake_outlet(
+                cell,
+                downstream_cell,
+                downstream,
+                &connected_lakes,
+                network,
+                &mut destination_cache,
+            ) {
+                continue;
+            }
             let flow = flow_cache.get(&cell).copied().unwrap_or(1);
             let downstream_flow = flow_cache.get(&downstream_cell).copied().unwrap_or(flow);
             let source_water_level = selection
@@ -152,10 +162,9 @@ where
                 .map(|lake| lake.water_level)
                 .or_else(|| confluence_water_levels.get(&downstream_cell).copied());
 
-            // Every incoming edge must end at the same authoritative drainage
-            // node that the trunk's outgoing edge starts from. The previous
-            // tributary offset interpolated along a straight chord while the
-            // trunk meandered away from that chord, leaving detached mouths.
+            // Every incoming edge ends at the same authoritative drainage node
+            // that starts the outgoing edge. Never aim tributaries at a straight
+            // chord while the downstream channel actually meanders.
             let waterfall = add_curved_river_edge(
                 &mut graph,
                 RiverEdgeSpec {
@@ -188,6 +197,33 @@ where
     }
 }
 
+// Receiving a river marks a lake as connected, but does not imply that the
+// lake's own downstream path has a valid outlet. Do not manufacture a stub
+// from a terminal lake into dry terrain. Other river cells already passed
+// their full downstream-reachability check above, so this extra trace is only
+// needed for lake cells and benefits from the shared destination cache.
+fn valid_lake_outlet<F>(
+    source: IVec2,
+    downstream_cell: IVec2,
+    downstream: DrainageNode,
+    connected_lakes: &HashSet<IVec2>,
+    network: &mut DrainageNetwork<'_, F>,
+    destination_cache: &mut HashMap<IVec2, bool>,
+) -> bool
+where
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
+{
+    !connected_lakes.contains(&source)
+        || network.is_wet_ocean(downstream)
+        || connected_lakes.contains(&downstream_cell)
+        || drainage_reaches_water_destination(
+            downstream_cell,
+            connected_lakes,
+            network,
+            destination_cache,
+        )
+}
+
 fn direct_confluence_counts<F>(
     selection: &RiverSelection,
     network: &mut DrainageNetwork<'_, F>,
@@ -207,4 +243,44 @@ where
     }
 
     incoming
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::content::biome_hydrology::BiomeHydrology;
+
+    #[test]
+    fn receiving_lake_does_not_emit_an_outlet_into_a_dry_dead_end() {
+        let mut sample = |_position| HydrologySurfaceSample {
+            elevation: 100.0,
+            continentalness: 0.8,
+            biome_hydrology: BiomeHydrology::default(),
+        };
+        let mut network = DrainageNetwork::new(42, 0.45, 90.0, 1.0, &mut sample);
+        let source = IVec2::ZERO;
+        let downstream_cell = IVec2::X;
+        let downstream = network.node(downstream_cell);
+        let mut connected_lakes = HashSet::from([source]);
+        let mut cache = HashMap::new();
+
+        assert!(!valid_lake_outlet(
+            source,
+            downstream_cell,
+            downstream,
+            &connected_lakes,
+            &mut network,
+            &mut cache,
+        ));
+
+        connected_lakes.insert(downstream_cell);
+        assert!(valid_lake_outlet(
+            source,
+            downstream_cell,
+            downstream,
+            &connected_lakes,
+            &mut network,
+            &mut cache,
+        ));
+    }
 }
