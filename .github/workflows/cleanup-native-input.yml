@@ -1,0 +1,81 @@
+name: Trim unrelated formatting and finalize handoff
+on:
+  push:
+    branches:
+      - feature/game-chat-creature-command
+    paths:
+      - .github/workflows/cleanup-native-input.yml
+permissions:
+  contents: write
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout published text editor patch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/game-chat-creature-command
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Restore only unrelated rustfmt edits and correct canonical handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          base = 'd9fa6009944f5546b594664e0e5ddd7d4eb0b0ee'
+          preserve = {
+              'src/hud/chat.rs',
+              'src/hud/chat/visual.rs',
+              'src/hud/inventory.rs',
+              'src/hud/inventory/interaction.rs',
+              'src/hud/inventory/layout.rs',
+              'src/hud/inventory/state.rs',
+              'src/hud/inventory/sync.rs',
+              'src/screens/settings_screen.rs',
+              'src/screens/settings_screen/game_rules_section.rs',
+              'src/screens/settings_screen/new_world_section.rs',
+              'src/screens/settings_screen/spawn_biome_section/layout.rs',
+              'src/screens/settings_screen/spawn_biome_section/state.rs',
+              'src/screens/settings_screen/spawn_biome_section/systems.rs',
+              'src/ui/numeric_input.rs',
+              'src/ui/text_input.rs',
+          }
+          changed = subprocess.check_output(['git', 'diff', '--name-only', base, 'HEAD', '--', 'src'], text=True).splitlines()
+          unrelated = [path for path in changed if path.endswith('.rs') and path not in preserve]
+          if len(unrelated) < 90:
+              raise RuntimeError(f'Unexpected unrelated rustfmt file count: {len(unrelated)}')
+          for path in unrelated:
+              subprocess.run(['git', 'restore', '--source', base, '--', path], check=True)
+          print(f'Restored {len(unrelated)} unrelated formatted files; preserved all {len(preserve)} potential text-input source paths.')
+          p = Path('HANDOFF.md')
+          text = p.read_text()
+          changes = [
+              ('VERSION = 0.17.2 nesta branch', 'VERSION = 0.17.3 nesta branch'),
+              ('**Chat `0.17.2`:**', '**Chat `0.17.3`:**'),
+              ('migrates chat, biome search, world seed and ticks-per-second to Bevy 0.19.1 `TextInput` + `EditableText`', 'migrates chat, inventory search, biome search, world seed and ticks-per-second to Bevy 0.19.1 `EditableText`'),
+              ('Scripted CI must run fmt, strict Clippy, check and unit tests before publication;', 'The generated patch passed strict Clippy and cargo check in workflow 35155837628. Unit tests were explicitly not required for publication and their result is unconfirmed;'),
+          ]
+          for old, new in changes:
+              if text.count(old) != 1:
+                  raise RuntimeError(f'HANDOFF replacement guard failed: {old!r}: {text.count(old)} matches')
+              text = text.replace(old, new, 1)
+          text += '\n## Publicação efetiva do editor nativo — 16/09/2026\n\nA versão 0.17.3 foi publicada na branch `feature/game-chat-creature-command` via commit `86da47735fc64541d45a1b8218b5d58a3a29c4ef` e workflow `35156635406`, após strict Clippy e cargo check aprovados sobre o patch completo no run `35155837628`. O usuário dispensou aguardar testes unitários, portanto não registrar sucesso deles. Esta rodada de limpeza elimina somente formatação incidental de Rust fora dos módulos relacionados a inputs; preserva a migração de chat, busca do inventário, biomas, seed, ticks e seus consumidores. Nenhuma comprovação de comportamento de Ctrl+A/C/V/X e seleção em runtime foi obtida; validar diretamente no jogo. Atualizar somente este arquivo do repositório, nunca o anexo do projeto.\n'
+          p.write_text(text)
+          PY
+      - name: Publish cleanup on the same feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin feature/game-chat-creature-command
+          test "$(git rev-parse origin/feature/game-chat-creature-command)" = "$GITHUB_SHA"
+          test "$(cat VERSION)" = '0.17.3'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -- .github/workflows/cleanup-native-input.yml
+          git add -- HANDOFF.md src
+          git diff --cached --check
+          git diff --cached --stat
+          git commit -m 'chore(ui): trim unrelated formatting and correct v0.17.3 handoff'
+          git push origin HEAD:feature/game-chat-creature-command
