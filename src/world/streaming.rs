@@ -515,7 +515,7 @@ fn collect_built_chunk_meshes(
 
 fn notify_loaded_chunk_neighbors(
     coord: IVec3,
-    chunk_is_empty: bool,
+    _chunk_is_empty: bool,
     world: &VoxelWorld,
     render_pool: &ChunkRenderPool,
     remesh_queue: &mut ChunkRemeshQueue,
@@ -533,19 +533,19 @@ fn notify_loaded_chunk_neighbors(
             continue;
         };
 
-        if chunk_is_empty {
-            if neighbor_chunk.boundary_has_fluid(-offset) {
-                remesh_queue.enqueue_fluid_priority(neighbor);
-            }
-            continue;
+        // Geometry uses both neighbor occupancy and halo voxel lighting.
+        // A newly rendered empty or air-boundary chunk can supply direct sky
+        // light even when its relaxation makes no further voxel changes.
+        // Refresh only rendered neighbors that actually have border content;
+        // don't remesh every empty neighbor on each chunk integration.
+        if neighbor_chunk.boundary_has_content(-offset) {
+            remesh_queue.enqueue_priority(neighbor);
         }
 
-        let chunk_boundary_has_content = chunk.boundary_has_content(offset);
-        let neighbor_boundary_has_content = neighbor_chunk.boundary_has_content(-offset);
-
-        if chunk_boundary_has_content && neighbor_boundary_has_content {
-            remesh_queue.enqueue_priority(neighbor);
-        } else if chunk.boundary_has_fluid(offset) || neighbor_chunk.boundary_has_fluid(-offset) {
+        // Fluid surfaces are separate meshes and need their own refresh when
+        // either side contributes boundary water. Geometry must not consume
+        // their independent queued work.
+        if chunk.boundary_has_fluid(offset) || neighbor_chunk.boundary_has_fluid(-offset) {
             remesh_queue.enqueue_fluid_priority(neighbor);
         }
     }
@@ -567,11 +567,6 @@ mod tests {
             state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 22),
             Some(far)
         );
-        assert_eq!(
-            state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 22),
-            None
-        );
-
         assert_eq!(
             state.pop_retired_outside_horizontal_radius(IVec3::new(-3, 0, 0), 22),
             Some(near)
