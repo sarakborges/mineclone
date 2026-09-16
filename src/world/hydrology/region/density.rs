@@ -8,6 +8,7 @@ use crate::world::hydrology::{
         OCEAN_MINIMUM_DEPTH, RIVER_CARVE_STRENGTH, RIVER_MAXIMUM_RADIUS, SHORE_STRENGTH,
     },
     math::{lerp, ocean_strength, smoothstep},
+    types::WaterBody,
 };
 
 const RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE: f32 = 1.0 - SHORE_STRENGTH;
@@ -124,6 +125,12 @@ impl HydrologyRegion {
         let mut lake_shore_delta: Option<f32> = None;
 
         for body in &self.water_bodies {
+            // The irregular boundary is bounded by 1.42 * the longest radius.
+            // Expand by the entire outer shore before culling: neither water
+            // carving nor bank grading can influence more distant columns.
+            if !water_body_might_affect_column(body, horizontal) {
+                continue;
+            }
             // horizontal_strength() computes this exact irregular boundary
             // distance internally. Reuse it for the shore instead of paying
             // for sin/cos and boundary noise a second time per water body.
@@ -178,6 +185,11 @@ impl HydrologyRegion {
             shore_delta,
         }
     }
+}
+
+fn water_body_might_affect_column(body: &WaterBody, position: Vec2) -> bool {
+    let outer_extent = body.maximum_horizontal_extent() * LAKE_SHORE_OUTER_DISTANCE;
+    body.center.distance_squared(position) <= outer_extent * outer_extent
 }
 
 fn shore_density_delta(
@@ -239,7 +251,6 @@ fn shore_strength(distance: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::world::hydrology::types::WaterBody;
 
     #[test]
     fn shore_grading_removes_high_terrain_above_water() {
@@ -332,5 +343,26 @@ mod tests {
             let strength = smoothstep(1.0 - distance.clamp(0.0, 1.0));
             assert_eq!(strength, body.horizontal_strength(position));
         }
+    }
+
+    #[test]
+    fn distant_water_body_cull_keeps_the_entire_shore_margin() {
+        let body = WaterBody {
+            center: Vec2::ZERO,
+            radius: Vec2::new(20.0, 12.0),
+            rotation: 0.4,
+            shape_seed: 42,
+            water_level: 90.0,
+            carve_depth: 10.0,
+            fluid_id: "asteria:water".into(),
+        };
+        let outer_extent = body.maximum_horizontal_extent() * LAKE_SHORE_OUTER_DISTANCE;
+        assert!(water_body_might_affect_column(&body, Vec2::ZERO));
+        assert!(water_body_might_affect_column(&body, Vec2::new(20.0, 0.0)));
+        let distant = Vec2::new(outer_extent + 1.0, 0.0);
+        assert!(!water_body_might_affect_column(&body, distant));
+        assert!(body.normalized_horizontal_distance(distant) > LAKE_SHORE_OUTER_DISTANCE);
+        assert_eq!(body.horizontal_strength(distant), 0.0);
+        assert_eq!(shore_strength(body.normalized_horizontal_distance(distant)), 0.0);
     }
 }
