@@ -63,6 +63,14 @@ where
         entry.get_or_init(factory).clone()
     }
 
+    fn is_initialized(&self, key: &K) -> bool {
+        self.entries
+            .read()
+            .unwrap_or_else(|_| panic!("{} read lock was poisoned", self.name))
+            .get(key)
+            .is_some_and(|entry| entry.get().is_some())
+    }
+
     fn retain(&self, mut predicate: impl FnMut(&K) -> bool) {
         self.entries
             .write()
@@ -192,6 +200,10 @@ impl FeatureCaches {
             .get_or_insert_with(coord, || Arc::new(factory()))
     }
 
+    pub(super) fn generation_columns_initialized(&self, coord: IVec2) -> bool {
+        self.generation_columns.is_initialized(&coord)
+    }
+
     pub(super) fn volume_biome_region(
         &self,
         coord: IVec3,
@@ -236,6 +248,12 @@ impl FeatureCaches {
     ) -> Arc<GenerationRegion> {
         self.regions
             .get_or_insert_with(coord, || Arc::new(factory()))
+    }
+
+    pub(super) fn generation_region_prerequisites_initialized(&self, coord: IVec3) -> bool {
+        self.regions.is_initialized(&coord)
+            && self.volume_biomes.is_initialized(&coord)
+            && self.caves.is_initialized(&coord)
     }
 
     pub(super) fn retain_for_chunks<'a>(
@@ -370,5 +388,6 @@ mod tests {
 
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         assert_eq!(cache.len(), 1);
+        assert!(cache.is_initialized(&7));
     }
 }

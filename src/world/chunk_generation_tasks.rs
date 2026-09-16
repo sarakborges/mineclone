@@ -1,10 +1,6 @@
 use std::sync::Arc;
 
-use bevy::{
-    platform::collections::HashSet,
-    prelude::*,
-    tasks::AsyncComputeTaskPool,
-};
+use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 
 use crate::{
     content::{
@@ -66,9 +62,6 @@ pub(crate) struct ChunkGenerationTasks {
     revision: u64,
     snapshot: Option<Arc<GenerationSnapshot>>,
     pending: ChunkTaskQueue<VoxelChunk>,
-    streaming_region: Option<IVec3>,
-    warmed_columns: HashSet<IVec2>,
-    warmed_regions: HashSet<IVec3>,
 }
 
 impl ChunkGenerationTasks {
@@ -86,19 +79,10 @@ impl ChunkGenerationTasks {
         self.snapshot = Some(Arc::new(GenerationSnapshot::from_sources(
             generation, content,
         )));
-        self.warmed_columns.clear();
-        self.warmed_regions.clear();
     }
 
-    pub(crate) fn sync_streaming_region(&mut self, center: IVec3) {
-        let region = generation_region_coord(center);
-        if self.streaming_region == Some(region) {
-            return;
-        }
-
-        self.streaming_region = Some(region);
-        self.warmed_columns.clear();
-        self.warmed_regions.clear();
+    pub(crate) fn sync_streaming_region(&mut self, _center: IVec3) {
+        // Cold-cache readiness is queried directly from the shared OnceLocks.
     }
 
     pub(crate) fn revision(&self) -> u64 {
@@ -118,8 +102,14 @@ impl ChunkGenerationTasks {
             return false;
         }
 
+        let snapshot = self
+            .snapshot
+            .as_ref()
+            .unwrap_or_else(|| panic!("chunk generation snapshot must be prepared before scheduling"));
         let region = generation_region_coord(coord);
-        if !self.warmed_regions.contains(&region)
+        if !snapshot
+            .feature_fields
+            .generation_region_prerequisites_initialized(region)
             && self
                 .pending
                 .any_coord(|pending_coord| generation_region_coord(pending_coord) == region)
@@ -128,7 +118,7 @@ impl ChunkGenerationTasks {
         }
 
         let column = coord.xz();
-        if !self.warmed_columns.contains(&column)
+        if !snapshot.feature_fields.generation_columns_initialized(column)
             && self
                 .pending
                 .any_coord(|pending_coord| pending_coord.xz() == column)
@@ -136,11 +126,7 @@ impl ChunkGenerationTasks {
             return false;
         }
 
-        let snapshot = self
-            .snapshot
-            .as_ref()
-            .unwrap_or_else(|| panic!("chunk generation snapshot must be prepared before scheduling"))
-            .clone();
+        let snapshot = snapshot.clone();
         let revision = self.revision;
         let task = AsyncComputeTaskPool::get().spawn(async move {
             let context = snapshot.context();
@@ -159,12 +145,6 @@ impl ChunkGenerationTasks {
     }
 
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<VoxelChunk>> {
-        let completed = self.pending.poll_ready()?;
-        if !completed.output.is_empty() {
-            self.warmed_columns.insert(completed.coord.xz());
-            self.warmed_regions
-                .insert(generation_region_coord(completed.coord));
-        }
-        Some(completed)
+        self.pending.poll_ready()
     }
 }
