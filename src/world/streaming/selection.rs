@@ -24,10 +24,19 @@ const PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS: i32 = 3;
 const IMMEDIATE_PLAYER_PRIORITY_RADIUS_CHUNKS: i32 = 1;
 const SURFACE_SUPPORT_NEIGHBORS: [IVec2; 4] = [IVec2::X, IVec2::NEG_X, IVec2::Y, IVec2::NEG_Y];
 
+type PendingPriority = (i32, i32, i32, i32, i32, i32, i32);
+
+#[derive(Clone, Copy)]
+struct PendingEntry {
+    coord: IVec3,
+    priority: PendingPriority,
+    ordinal: usize,
+}
+
 #[derive(Default)]
 pub(super) struct QueueRebuildScratch {
     desired: HashSet<IVec3>,
-    pending: Vec<IVec3>,
+    pending: Vec<PendingEntry>,
     retired: Vec<IVec3>,
 }
 
@@ -77,16 +86,22 @@ pub(super) fn rebuild_queue(
             .desired
             .iter()
             .copied()
-            .filter(|coord| !context.render_pool.contains(*coord)),
+            .filter(|coord| !context.render_pool.contains(*coord))
+            .enumerate()
+            .map(|(ordinal, coord)| PendingEntry {
+                coord,
+                priority: pending_priority(
+                    coord,
+                    center,
+                    vertical_structure_allowance,
+                    &streaming.surface_ranges,
+                ),
+                ordinal,
+            }),
     );
-    scratch.pending.sort_by_cached_key(|coord| {
-        pending_priority(
-            *coord,
-            center,
-            vertical_structure_allowance,
-            &streaming.surface_ranges,
-        )
-    });
+    scratch
+        .pending
+        .sort_unstable_by_key(|entry| (entry.priority, entry.ordinal));
 
     collect_retired_chunk_coords(
         &streaming.retained,
@@ -104,8 +119,8 @@ pub(super) fn rebuild_queue(
 
     streaming.pending.clear();
     streaming.pending.reserve(scratch.pending.len());
-    for coord in scratch.pending.drain(..) {
-        streaming.pending.enqueue(coord);
+    for entry in scratch.pending.drain(..) {
+        streaming.pending.enqueue(entry.coord);
     }
 
     for coord in scratch.retired.drain(..) {
@@ -148,7 +163,7 @@ fn pending_priority(
     center: IVec3,
     structure_chunk_allowance: i32,
     surface_ranges: &HashMap<IVec2, (i32, i32)>,
-) -> (i32, i32, i32, i32, i32, i32, i32) {
+) -> PendingPriority {
     let chunk_size = CHUNK_SIZE as i32;
     let horizontal = coord.xz();
     let (minimum_surface, maximum_surface) = surface_ranges
@@ -347,5 +362,26 @@ mod tests {
             radius + 1,
             vertical_radius,
         ));
+    }
+
+    #[test]
+    fn pending_entries_preserve_source_order_for_equal_priorities() {
+        let mut pending = vec![
+            PendingEntry {
+                coord: IVec3::new(3, 0, 0),
+                priority: (1, 0, 0, 9, 0, 0, 9),
+                ordinal: 0,
+            },
+            PendingEntry {
+                coord: IVec3::new(-3, 0, 0),
+                priority: (1, 0, 0, 9, 0, 0, 9),
+                ordinal: 1,
+            },
+        ];
+
+        pending.sort_unstable_by_key(|entry| (entry.priority, entry.ordinal));
+
+        assert_eq!(pending[0].coord, IVec3::new(3, 0, 0));
+        assert_eq!(pending[1].coord, IVec3::new(-3, 0, 0));
     }
 }
