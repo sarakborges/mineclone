@@ -16,7 +16,7 @@
     "size": 73.0,
     "orbitRadius": 600.0,
     "risePhase": "Dusk",
-    "setPhase": "Dawn",
+    "setPhase": "Night",
     "riseAzimuthDegrees": 90.0,
     "setAzimuthDegrees": 270.0,
     "maxAltitudeDegrees": 64.0,
