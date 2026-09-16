@@ -24,7 +24,7 @@ use crate::{
     world::biome_field::BiomeField,
 };
 
-use crate::hud::block_icon::BlockIconMaterial;
+use crate::hud::{block_icon::BlockIconMaterial, tool_icon::spawn_tool_icon};
 
 use super::state::{
     CATEGORY_GAP, CATEGORY_ICON_SIZE, CATEGORY_ROW_HEIGHT, CATEGORY_WIDTH, CREATIVE_COLUMNS,
@@ -76,6 +76,8 @@ pub(super) struct InventoryItemView<'a> {
     pub(super) asset_server: &'a AssetServer,
     pub(super) blocks: &'a BlockRegistry,
     pub(super) tools: &'a ToolRegistry,
+    pub(super) dyes: &'a crate::content::secondary_property::SecondaryPropertyRegistry,
+    pub(super) brush_mode: &'a crate::tools::BrushMode,
     pub(super) biomes: &'a BiomeRegistry,
     pub(super) biome_field: &'a BiomeField,
     pub(super) player_position: Vec2,
@@ -174,19 +176,45 @@ pub(super) fn spawn_cursor_icon(
     }
 
     if let Some(tool) = items.tools.get(item_id) {
-        root.spawn((
-            InventoryCursorIcon,
-            typography::caption(tool.name.text(items.language)),
-            TextLayout::justify(Justify::Center),
-            Node {
-                position_type: PositionType::Absolute,
-                left: px(position.x - 36.0),
-                top: px(position.y - ITEM_ICON_SIZE * 0.5),
-                width: px(72),
-                ..default()
-            },
-            Pickable::IGNORE,
-        ));
+        if tool.icon.is_empty() {
+            root.spawn((
+                InventoryCursorIcon,
+                typography::caption(tool.name.text(items.language)),
+                TextLayout::justify(Justify::Center),
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(position.x - 36.0),
+                    top: px(position.y - ITEM_ICON_SIZE * 0.5),
+                    width: px(72),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ));
+        } else {
+            root.spawn((
+                InventoryCursorIcon,
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(position.x - ITEM_ICON_SIZE * 0.5),
+                    top: px(position.y - ITEM_ICON_SIZE * 0.5),
+                    width: px(ITEM_ICON_SIZE),
+                    height: px(ITEM_ICON_SIZE),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|cursor| {
+                spawn_tool_icon(
+                    cursor,
+                    tool,
+                    items.asset_server,
+                    items.brush_mode,
+                    items.dyes,
+                    items.language,
+                    ITEM_ICON_SIZE,
+                );
+            });
+        }
         return;
     }
 
@@ -732,11 +760,15 @@ fn spawn_creative_slot(
                     ));
                 }
                 CreativeCatalogItem::Tool(tool) => {
-                    slot.spawn((
-                        typography::caption(tool.name.text(items.language)),
-                        TextLayout::justify(Justify::Center),
-                        Pickable::IGNORE,
-                    ));
+                    spawn_tool_icon(
+                        slot,
+                        tool,
+                        items.asset_server,
+                        items.brush_mode,
+                        items.dyes,
+                        items.language,
+                        ITEM_ICON_SIZE,
+                    );
                 }
             }
         });
@@ -807,11 +839,15 @@ pub(super) fn spawn_inventory_item(
     }
 
     if let Some(tool) = items.tools.get(item_id) {
-        slot.spawn((
-            typography::caption(tool.name.text(items.language)),
-            TextLayout::justify(Justify::Center),
-            Pickable::IGNORE,
-        ));
+        spawn_tool_icon(
+            slot,
+            tool,
+            items.asset_server,
+            items.brush_mode,
+            items.dyes,
+            items.language,
+            ITEM_ICON_SIZE,
+        );
         return;
     }
 

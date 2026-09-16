@@ -2,8 +2,11 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::{block::BlockRegistry, block_orientation::BlockOrientation, tool::ToolRegistry},
-    hud::block_icon::BlockIconMaterial,
+    content::{
+        block::BlockRegistry, block_orientation::BlockOrientation,
+        secondary_property::SecondaryPropertyRegistry, tool::ToolRegistry,
+    },
+    hud::{block_icon::BlockIconMaterial, tool_icon::spawn_tool_icon},
     localization::{ActiveLanguage, Language},
     player::{
         camera::GameplayCamera,
@@ -12,6 +15,7 @@ use crate::{
     },
     rendering::{block_model::BlockModel, block_visual_content::BlockVisualContent},
     targeting::{PlacementOrientation, block::BlockTargetingSet},
+    tools::BrushMode,
     ui::{surface, typography, visibility::set_visibility},
 };
 
@@ -46,6 +50,8 @@ struct HotbarHudContent<'w> {
     asset_server: Res<'w, AssetServer>,
     blocks: Res<'w, BlockRegistry>,
     tools: Res<'w, ToolRegistry>,
+    dyes: Res<'w, SecondaryPropertyRegistry>,
+    brush_mode: Res<'w, BrushMode>,
     hotbar: Res<'w, PlayerHotbar>,
     language: Res<'w, ActiveLanguage>,
 }
@@ -54,6 +60,8 @@ struct HotbarItemView<'a> {
     asset_server: &'a AssetServer,
     blocks: &'a BlockRegistry,
     tools: &'a ToolRegistry,
+    dyes: &'a SecondaryPropertyRegistry,
+    brush_mode: &'a BrushMode,
     language: Language,
     icon_materials: &'a mut Assets<BlockIconMaterial>,
 }
@@ -123,6 +131,8 @@ fn spawn_hotbar(
         asset_server: &content.asset_server,
         blocks: &content.blocks,
         tools: &content.tools,
+        dyes: &content.dyes,
+        brush_mode: &content.brush_mode,
         language,
         icon_materials: &mut icon_materials,
     };
@@ -225,6 +235,8 @@ fn sync_hotbar(
         asset_server: &content.asset_server,
         blocks: &content.blocks,
         tools: &content.tools,
+        dyes: &content.dyes,
+        brush_mode: &content.brush_mode,
         language,
         icon_materials: &mut icon_materials,
     };
@@ -282,11 +294,15 @@ fn spawn_hotbar_item(
     }
 
     if let Some(tool) = items.tools.get(item_id) {
-        slot.spawn((
-            typography::caption(tool.name.text(items.language)),
-            TextLayout::justify(Justify::Center),
-            Pickable::IGNORE,
-        ));
+        spawn_tool_icon(
+            slot,
+            tool,
+            items.asset_server,
+            items.brush_mode,
+            items.dyes,
+            items.language,
+            ITEM_ICON_SIZE,
+        );
         return;
     }
 

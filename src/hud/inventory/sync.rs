@@ -1,7 +1,10 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    content::{inventory_category::InventoryCategoryRegistry, tool::ToolRegistry},
+    content::{
+        inventory_category::InventoryCategoryRegistry,
+        secondary_property::SecondaryPropertyRegistry, tool::ToolRegistry,
+    },
     localization::{ActiveLanguage, UiLocalization},
     player::{
         camera::GameplayCamera,
@@ -10,6 +13,7 @@ use crate::{
         inventory::InventoryCursor,
     },
     rendering::block_visual_content::BlockVisualContent,
+    tools::BrushMode,
     ui::surface,
 };
 
@@ -32,6 +36,8 @@ use super::{
 pub(super) struct InventoryItemContent<'w> {
     visual: BlockVisualContent<'w>,
     tools: Res<'w, ToolRegistry>,
+    dyes: Res<'w, SecondaryPropertyRegistry>,
+    brush_mode: Res<'w, BrushMode>,
     language: Res<'w, ActiveLanguage>,
 }
 
@@ -45,6 +51,8 @@ impl InventoryItemContent<'_> {
             asset_server: &self.visual.asset_server,
             blocks: &self.visual.blocks,
             tools: &self.tools,
+            dyes: &self.dyes,
+            brush_mode: &self.brush_mode,
             biomes: &self.visual.biomes,
             biome_field: &self.visual.biome_field,
             player_position,
