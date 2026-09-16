@@ -17,6 +17,8 @@ jobs:
           persist-credentials: true
       - name: Apply guarded integration fixes
         run: python scripts/repair_native_input_followup.py
+      - name: Correct Clippy and Settings context
+        run: python scripts/repair_native_input_diagnostics.py
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -38,7 +40,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm -- .github/workflows/validate-native-input.yml .github/workflows/inspect-native-input.yml .github/workflows/native-input-repair.yml scripts_native_input_snapshot.py scripts/repair_native_input_followup.py
+          git rm -- .github/workflows/validate-native-input.yml .github/workflows/inspect-native-input.yml .github/workflows/native-input-repair.yml scripts_native_input_snapshot.py scripts/repair_native_input_followup.py scripts/repair_native_input_diagnostics.py
           git add -- Cargo.toml VERSION HANDOFF.md src
           git diff --cached --check
           git commit -m 'fix(ui): use native text editing and system clipboard across all text fields'
