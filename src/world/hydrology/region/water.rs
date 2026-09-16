@@ -9,7 +9,19 @@ use crate::world::hydrology::{
 
 impl HydrologyRegion {
     pub(crate) fn water_at(&self, position: Vec2) -> Option<HydrologyWaterSample<'_>> {
-        self.water_with_margin(position, 0.0)
+        self.water_with_margin(position, 0.0, None)
+    }
+
+    // The physical fluid pass knows the original terrain height. Reject an
+    // unsupported high lake/ocean candidate *before* selecting the highest
+    // water level, so it cannot hide a lower, supported river at a junction.
+    // Other hydrology consumers retain the original unfiltered water_at API.
+    pub(crate) fn supported_water_at(
+        &self,
+        position: Vec2,
+        surface_height: f32,
+    ) -> Option<HydrologyWaterSample<'_>> {
+        self.water_with_margin(position, 0.0, Some(surface_height))
     }
 
     pub(crate) fn water_near(
@@ -17,7 +29,7 @@ impl HydrologyRegion {
         position: Vec2,
         radius: f32,
     ) -> Option<HydrologyWaterSample<'_>> {
-        self.water_with_margin(position, radius.max(0.0))
+        self.water_with_margin(position, radius.max(0.0), None)
     }
 
     pub(crate) fn river_surface_at(
@@ -61,6 +73,7 @@ impl HydrologyRegion {
         &self,
         position: Vec2,
         margin: f32,
+        surface_height: Option<f32>,
     ) -> Option<HydrologyWaterSample<'_>> {
         let mut selected = None;
 
@@ -79,11 +92,12 @@ impl HydrologyRegion {
                     strength,
                     kind: HydrologyWaterKind::Lake,
                 },
+                surface_height,
             );
         }
 
         if let Some(river) = self.river_water_with_margin(position, margin) {
-            choose_water(&mut selected, river);
+            choose_water(&mut selected, river, surface_height);
         }
 
         let ocean_strength = self.ocean_strength_at(position);
@@ -109,6 +123,7 @@ impl HydrologyRegion {
                         strength: ocean_strength,
                         kind: HydrologyWaterKind::Ocean,
                     },
+                    surface_height,
                 );
             }
         }
@@ -120,7 +135,15 @@ impl HydrologyRegion {
 fn choose_water<'a>(
     selected: &mut Option<HydrologyWaterSample<'a>>,
     candidate: HydrologyWaterSample<'a>,
+    surface_height: Option<f32>,
 ) {
+    // The physical fluid pass must never pick a floating water body. Filter
+    // each candidate rather than filtering the *winner*, which could leave
+    // a supported river hidden under an unsupported higher lake.
+    if surface_height.is_some_and(|surface| surface + 0.5 < candidate.bed_level) {
+        return;
+    }
+
     let should_replace = selected.as_ref().is_none_or(|current| {
         candidate.water_level > current.water_level
             || ((candidate.water_level - current.water_level).abs() <= f32::EPSILON
@@ -129,5 +152,58 @@ fn choose_water<'a>(
 
     if should_replace {
         *selected = Some(candidate);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample(
+        kind: HydrologyWaterKind,
+        water_level: f32,
+        bed_level: f32,
+    ) -> HydrologyWaterSample<'static> {
+        HydrologyWaterSample {
+            fluid_id: "asteria:test/water",
+            water_level,
+            bed_level,
+            strength: 1.0,
+            kind,
+        }
+    }
+
+    #[test]
+    fn unsupported_high_lake_cannot_hide_a_supported_lower_river() {
+        let mut selected = None;
+        choose_water(
+            &mut selected,
+            sample(HydrologyWaterKind::Lake, 100.0, 94.0),
+            Some(85.0),
+        );
+        assert!(selected.is_none());
+
+        choose_water(
+            &mut selected,
+            sample(HydrologyWaterKind::River, 83.0, 78.0),
+            Some(85.0),
+        );
+        assert_eq!(selected.unwrap().kind, HydrologyWaterKind::River);
+    }
+
+    #[test]
+    fn unfiltered_hydrology_still_prefers_highest_water_level() {
+        let mut selected = None;
+        choose_water(
+            &mut selected,
+            sample(HydrologyWaterKind::River, 83.0, 78.0),
+            None,
+        );
+        choose_water(
+            &mut selected,
+            sample(HydrologyWaterKind::Lake, 100.0, 94.0),
+            None,
+        );
+        assert_eq!(selected.unwrap().kind, HydrologyWaterKind::Lake);
     }
 }
