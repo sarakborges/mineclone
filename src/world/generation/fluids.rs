@@ -137,10 +137,16 @@ mod tests {
 
     use crate::{
         content::{
-            biome_hydrology::BiomeHydrology, builtin_ids::WATER_FLUID_ID,
+            biome::{BiomeDefinition, BiomeRegistry}, biome_hydrology::BiomeHydrology,
+            builtin_ids::WATER_FLUID_ID, dimension::DimensionDefinition,
             dimension_hydrology::DimensionHydrology, fluid::FluidDefinition,
         },
-        world::hydrology::{HydrologyField, HydrologySurfaceSample, HydrologyWaterKind},
+        world::{
+            biome_field::{BiomeField, VolumeBiomeRegion},
+            generation::density::{DensityPassContext, sample_density_field},
+            hydrology::{HydrologyField, HydrologySurfaceSample, HydrologyWaterKind},
+            terrain::terrain_density,
+        },
     };
 
     fn sample(
@@ -186,10 +192,11 @@ mod tests {
     }
 
     #[test]
-    fn generated_river_crossing_places_sources_on_both_sides_of_region_seam() {
-        // This uses the production drainage/selection/path builder, not a
-        // manually constructed river graph. The coast is beyond the x=128
-        // region boundary, so the crossing itself has supporting inland land.
+    fn generated_river_crossing_carves_and_fills_both_sides_of_region_seam() {
+        // Production drainage and river generation over a deterministic
+        // synthetic slope. Search only inside each region's own Z bounds:
+        // scanning distant coordinates against a region at Z=0 would test
+        // the wrong region and could produce a false seam regression.
         let field = HydrologyField::new(42, 64, DimensionHydrology::default(), 1.0, 1.0);
         let terrain = |position: Vec2| HydrologySurfaceSample {
             elevation: if position.x >= 256.0 {
@@ -200,23 +207,57 @@ mod tests {
             continentalness: if position.x >= 256.0 { 0.0 } else { 0.8 },
             biome_hydrology: BiomeHydrology::default(),
         };
-        let left_hydrology = field.region_from_macro_terrain(IVec2::ZERO, terrain);
-        let right_hydrology = field.region_from_macro_terrain(IVec2::X, terrain);
         let original_surface = 104.0;
-        let crossing = (-384..=384).find_map(|world_z: i32| {
-            let z = world_z as f32 + 0.5;
-            let left = left_hydrology.supported_water_at(Vec2::new(127.5, z), original_surface)?;
-            let right = right_hydrology.supported_water_at(Vec2::new(128.5, z), original_surface)?;
-            if left.kind != HydrologyWaterKind::River || right.kind != HydrologyWaterKind::River {
-                return None;
-            }
-            let y = left.water_level.min(right.water_level).floor() as i32 - 1;
-            if y < 0 || y as f32 + 1.0 <= left.bed_level.max(right.bed_level) {
-                return None;
-            }
-            Some((world_z, y))
+        let crossing = (-2..=2).find_map(|region_z: i32| {
+            let left = field.region_from_macro_terrain(IVec2::new(0, region_z), terrain);
+            let right = field.region_from_macro_terrain(IVec2::new(1, region_z), terrain);
+            (region_z * 128..(region_z + 1) * 128)
+                .find_map(|world_z| {
+                    let z = world_z as f32 + 0.5;
+                    let left_water =
+                        left.supported_water_at(Vec2::new(127.5, z), original_surface)?;
+                    let right_water =
+                        right.supported_water_at(Vec2::new(128.5, z), original_surface)?;
+                    if left_water.kind != HydrologyWaterKind::River
+                        || right_water.kind != HydrologyWaterKind::River
+                    {
+                        return None;
+                    }
+                    let y = left_water.water_level.min(right_water.water_level).floor() as i32 - 1;
+                    // Prove the normal density pass really excavates terrain;
+                    // an already-empty voxel cannot demonstrate carving.
+                    if y < 0
+                        || y >= original_surface as i32
+                        || y as f32 + 1.0 <= left_water.bed_level.max(right_water.bed_level)
+                    {
+                        return None;
+                    }
+                    Some((world_z, y))
+                })
+                .map(|(world_z, world_y)| (left, right, world_z, world_y))
         });
-        let (world_z, world_y) = crossing.expect("synthetic drainage must cross the region seam");
+        let (left_hydrology, right_hydrology, world_z, world_y) =
+            crossing.expect("synthetic drainage must cross the region seam below original terrain");
+
+        // A real Plains definition supplies the density pass's biome context.
+        // The base columns remain a controlled flat 104-block fixture; unlike
+        // v0.15.50, density is no longer a fabricated all-air vector.
+        let mut dimension: DimensionDefinition = serde_json::from_str(include_str!(
+            "../../../data/dimensions/overworld/dimension.json"
+        ))
+        .unwrap();
+        dimension.biomes.retain(|biome| biome.id == "asteria:overworld/plains");
+        dimension.hydrology.coast_biome = None;
+        dimension.hydrology.ocean_biome = None;
+        dimension.sea_level = 64;
+        let mut biomes = BiomeRegistry::default();
+        let plains: BiomeDefinition = serde_json::from_str(include_str!(
+            "../../../data/dimensions/overworld/biomes/plains.json"
+        ))
+        .unwrap();
+        biomes.insert(plains);
+        let biome_field = BiomeField::from_dimension(&dimension, &biomes, 42);
+        let volume_region = VolumeBiomeRegion::default();
 
         let mut fluids = FluidRegistry::default();
         let water: FluidDefinition =
@@ -224,12 +265,15 @@ mod tests {
         fluids.insert(water);
         let fluid_id = fluids.id_of(WATER_FLUID_ID).unwrap();
         let columns = (0..CHUNK_SIZE * CHUNK_SIZE)
-            .map(|_| GenerationColumnSample {
-                surface_height: original_surface as i32,
-                surface_influences: SmallVec::new(),
+            .map(|_| {
+                let mut surface_influences = SmallVec::new();
+                surface_influences.push((0, 1.0));
+                GenerationColumnSample {
+                    surface_height: original_surface as i32,
+                    surface_influences,
+                }
             })
             .collect::<Vec<_>>();
-        let density = vec![-1.0; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
         let chunk_z = world_z.div_euclid(CHUNK_SIZE as i32);
         let chunk_y = world_y.div_euclid(CHUNK_SIZE as i32);
         let local_z = world_z.rem_euclid(CHUNK_SIZE as i32);
@@ -239,16 +283,37 @@ mod tests {
             [(7, left_hydrology, CHUNK_SIZE as i32 - 1), (8, right_hydrology, 0)]
         {
             let chunk_coord = IVec3::new(chunk_x, chunk_y, chunk_z);
+            let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
             let region = GenerationRegion {
                 coord: IVec3::new(chunk_x.div_euclid(8), chunk_y.div_euclid(8), chunk_z.div_euclid(8)),
                 hydrology: Arc::new(hydrology),
             };
+            assert_eq!(region.coord.xz(), region.hydrology.coord);
+            let density = sample_density_field(
+                chunk_origin,
+                &columns,
+                &DensityPassContext {
+                    region: &region,
+                    volume_region: &volume_region,
+                    anchored_caves: None,
+                    biome_field: &biome_field,
+                    biomes: &biomes,
+                    sea_level: dimension.sea_level as f32,
+                },
+            );
+            let density_index = voxel_index(local_x as usize, local_y as usize, local_z as usize);
+            assert!(terrain_density(original_surface as i32, world_y) > 0.0);
+            assert!(
+                density.values[density_index] <= 0.0,
+                "the production density pass must excavate the river at {chunk_coord:?}",
+            );
+
             let mut chunk = VoxelChunk::empty();
             rasterize_fluid_pass(
                 &mut chunk,
-                chunk_coord * CHUNK_SIZE as i32,
+                chunk_origin,
                 &columns,
-                &density,
+                &density.values,
                 &FluidPassContext {
                     fluids: &fluids,
                     region: &region,
