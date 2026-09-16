@@ -50,13 +50,21 @@ where
                 let block = blocks
                     .get(cell.block_id)
                     .unwrap_or_else(|| panic!("missing block definition: {}", cell.block_id));
+                let block_is_transparent = block.alpha_blend || block.alpha_cutoff.is_some();
                 let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
                 let mut tint = None;
                 let mut source_block_srgb = None;
 
                 for block_face in BlockFace::ALL {
                     let face = orient_face(block_face, cell.orientation);
-                    if !is_face_exposed(world, blocks, cell.block_id, world_voxel, face) {
+                    if !is_face_exposed(
+                        world,
+                        blocks,
+                        cell.block_id,
+                        block_is_transparent,
+                        world_voxel,
+                        face,
+                    ) {
                         continue;
                     }
 
