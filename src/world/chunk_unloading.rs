@@ -5,15 +5,15 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
-        coordinates::chunk_coord_from_position, lighting::PendingLightingUpdates,
-        neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld,
+        chunk::VoxelChunk, coordinates::chunk_coord_from_position,
+        lighting::PendingLightingUpdates, world::VoxelWorld,
     },
 };
 
 use super::{
     chunk_remesh::ChunkRemeshQueue,
     chunk_remesh_tasks::ChunkRemeshTasks,
-    chunk_rendering::retire_chunk_render_allocation,
+    chunk_rendering::{ChunkRenderPool, retire_chunk_render_allocation},
     chunk_system_params::ChunkRenderer,
     render_distance::RenderDistanceSettings,
     streaming::ChunkStreamingState,
@@ -118,10 +118,61 @@ pub(super) fn unload_chunk_meshes(
         .enqueue_chunk_unloads(unloaded.as_slice());
 
     for coord in unloaded.drain(..) {
-        for offset in CARDINAL_NEIGHBORS {
-            runtime.remesh_queue.enqueue_priority(coord + offset);
+        enqueue_unloaded_halo_remeshes(
+            coord,
+            &runtime.world,
+            &renderer.pool,
+            &mut runtime.remesh_queue,
+        );
+    }
+}
+
+// Vertex lighting/AO and fluid corner heights use all 26 neighbors, not just
+// the six cardinals. An unloaded halo must invalidate both mesh families; a
+// lighting relaxation is not guaranteed to change a voxel and trigger remesh.
+// Check only rendered neighbors with actual content on each toward-source face.
+fn enqueue_unloaded_halo_remeshes(
+    coord: IVec3,
+    world: &VoxelWorld,
+    render_pool: &ChunkRenderPool,
+    remesh_queue: &mut ChunkRemeshQueue,
+) {
+    for y in -1..=1 {
+        for z in -1..=1 {
+            for x in -1..=1 {
+                let offset = IVec3::new(x, y, z);
+                if offset == IVec3::ZERO {
+                    continue;
+                }
+                let neighbor = coord + offset;
+                if neighbor.y < 0 || !render_pool.contains(neighbor) {
+                    continue;
+                }
+                let Some(chunk) = world.chunk(neighbor) else {
+                    continue;
+                };
+                let (geometry, fluid) = halo_remesh_needs(chunk, offset);
+                if geometry {
+                    remesh_queue.enqueue_priority(neighbor);
+                }
+                if fluid {
+                    remesh_queue.enqueue_fluid_priority(neighbor);
+                }
+            }
         }
     }
+}
+
+fn halo_remesh_needs(chunk: &VoxelChunk, offset: IVec3) -> (bool, bool) {
+    let toward_faces = |mut has_face: fn(&VoxelChunk, IVec3) -> bool| {
+        (offset.x == 0 || has_face(chunk, IVec3::new(-offset.x, 0, 0)))
+            && (offset.y == 0 || has_face(chunk, IVec3::new(0, -offset.y, 0)))
+            && (offset.z == 0 || has_face(chunk, IVec3::new(0, 0, -offset.z)))
+    };
+    (
+        toward_faces(VoxelChunk::boundary_has_content),
+        toward_faces(VoxelChunk::boundary_has_fluid),
+    )
 }
 
 fn unload_retention_radius(render_distance_chunks: i32) -> i32 {
@@ -133,11 +184,39 @@ fn unload_retention_radius(render_distance_chunks: i32) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::voxel::{
+        cell::VoxelCell, fluid::FluidCell, texture_rotation::TextureRotation,
+    };
 
     #[test]
     fn unload_retention_scales_from_render_distance() {
         assert_eq!(unload_retention_radius(4), 14);
         assert_eq!(unload_retention_radius(12), 22);
         assert_eq!(unload_retention_radius(24), 36);
+    }
+
+    #[test]
+    fn diagonal_unload_invalidates_only_toward_source_content() {
+        let mut chunk = VoxelChunk::empty();
+        chunk.set_block(
+            0,
+            0,
+            7,
+            Some(VoxelCell::new("asteria:test", TextureRotation::default())),
+        );
+
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 1, 0)), (true, false));
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(-1, 1, 0)), (false, false));
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 1, 1)), (false, false));
+    }
+
+    #[test]
+    fn fluid_halo_remesh_is_independent_of_terrain_content() {
+        let mut chunk = VoxelChunk::empty();
+        chunk.set_fluid(0, 0, 7, Some(FluidCell::source(0, 8)));
+
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 1, 0)), (false, true));
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(1, 0, 0)), (false, true));
+        assert_eq!(halo_remesh_needs(&chunk, IVec3::new(-1, 1, 0)), (false, false));
     }
 }
