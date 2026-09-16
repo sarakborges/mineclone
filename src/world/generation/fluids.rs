@@ -203,8 +203,8 @@ mod tests {
         let left_hydrology = field.region_from_macro_terrain(IVec2::ZERO, terrain);
         let right_hydrology = field.region_from_macro_terrain(IVec2::X, terrain);
         let original_surface = 104.0;
-        let crossing = (-384..=384).find_map(|z| {
-            let z = z as f32 + 0.5;
+        let crossing = (-384..=384).find_map(|world_z: i32| {
+            let z = world_z as f32 + 0.5;
             let left = left_hydrology.supported_water_at(Vec2::new(127.5, z), original_surface)?;
             let right = right_hydrology.supported_water_at(Vec2::new(128.5, z), original_surface)?;
             if left.kind != HydrologyWaterKind::River || right.kind != HydrologyWaterKind::River {
@@ -214,7 +214,7 @@ mod tests {
             if y < 0 || y as f32 + 1.0 <= left.bed_level.max(right.bed_level) {
                 return None;
             }
-            Some((z as i32, y))
+            Some((world_z, y))
         });
         let (world_z, world_y) = crossing.expect("synthetic drainage must cross the region seam");
 
