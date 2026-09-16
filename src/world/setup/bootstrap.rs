@@ -367,8 +367,7 @@ fn spawn_column_has_water(
             let elevation = surface_height_from_sample(
                 surface_position,
                 dimension,
-                biomes,
-                biome_field.seed(),
+                biome_field,
                 &surface,
             ) as f32;
             let continentalness = biome_field.climate_at(position).continentalness;
