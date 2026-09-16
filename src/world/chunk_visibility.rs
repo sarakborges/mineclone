@@ -8,6 +8,8 @@ use crate::{
 
 use super::chunk_rendering::ChunkRenderCoord;
 
+const FOG_OCCLUDED_RENDER_MARGIN_CHUNKS: i32 = 2;
+
 #[derive(Default)]
 pub(super) struct ChunkVisibilityState {
     center: Option<IVec2>,
@@ -21,7 +23,7 @@ pub(super) fn sync_chunk_visibility(
     mut state: Local<ChunkVisibilityState>,
 ) {
     let center = chunk_coord_from_position(player.translation).xz();
-    let horizontal_radius = render_distance.chunks();
+    let horizontal_radius = rendered_chunk_radius(render_distance.chunks());
     if state.center == Some(center) && state.horizontal_radius == horizontal_radius {
         return;
     }
@@ -40,11 +42,15 @@ pub(super) fn sync_new_chunk_visibility(
     mut chunks: Query<(&ChunkRenderCoord, &mut Visibility), Added<ChunkRenderCoord>>,
 ) {
     let center = chunk_coord_from_position(player.translation).xz();
-    let horizontal_radius = render_distance.chunks();
+    let horizontal_radius = rendered_chunk_radius(render_distance.chunks());
 
     for (coord, mut visibility) in &mut chunks {
         apply_chunk_visibility(center, horizontal_radius, coord.0, &mut visibility);
     }
+}
+
+fn rendered_chunk_radius(render_distance_chunks: i32) -> i32 {
+    render_distance_chunks.saturating_add(FOG_OCCLUDED_RENDER_MARGIN_CHUNKS)
 }
 
 fn apply_chunk_visibility(
@@ -77,23 +83,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn visible_radius_matches_horizontal_render_circle() {
+    fn rendered_shell_extends_two_chunks_beyond_nominal_distance() {
         let center = IVec2::ZERO;
+        let rendered_radius = rendered_chunk_radius(12);
 
+        assert_eq!(rendered_radius, 14);
         assert!(chunk_is_inside_visible_radius(
             center,
-            IVec3::new(12, 0, 0),
-            12
+            IVec3::new(14, 0, 0),
+            rendered_radius
         ));
         assert!(!chunk_is_inside_visible_radius(
             center,
-            IVec3::new(13, 0, 0),
-            12
+            IVec3::new(15, 0, 0),
+            rendered_radius
         ));
+    }
+
+    #[test]
+    fn rendered_shell_keeps_diagonal_circle_membership() {
+        let center = IVec2::ZERO;
+        let rendered_radius = rendered_chunk_radius(12);
+
         assert!(chunk_is_inside_visible_radius(
             center,
-            IVec3::new(8, 0, 8),
-            12
+            IVec3::new(9, 0, 10),
+            rendered_radius
+        ));
+        assert!(!chunk_is_inside_visible_radius(
+            center,
+            IVec3::new(10, 0, 10),
+            rendered_radius
         ));
     }
 
@@ -102,7 +122,7 @@ mod tests {
         assert!(chunk_is_inside_visible_radius(
             IVec2::ZERO,
             IVec3::new(3, 99, 4),
-            5
+            rendered_chunk_radius(4)
         ));
     }
 }
