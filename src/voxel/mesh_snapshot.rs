@@ -40,10 +40,9 @@ impl ChunkMeshDependencies {
                     let expected = self.content_revisions[(offset_y + 1) as usize]
                         [(offset_z + 1) as usize][(offset_x + 1) as usize];
                     let Some(expected) = expected else {
-                        // A neighbor absent when this snapshot was captured may load while the
-                        // async mesh is building. Its later visibility notification queues the
-                        // boundary remesh, so discarding otherwise valid first-visible work here
-                        // only increases time-to-visible at the streaming frontier.
+                        // Do not discard first-visible mesh when a previously absent neighbor
+                        // loads during the async build. A cheap post-publication catch-up handles
+                        // that new halo without starving the streaming frontier.
                         continue;
                     };
                     let coord = self.center + IVec3::new(offset_x, offset_y, offset_z);
@@ -54,6 +53,34 @@ impl ChunkMeshDependencies {
             }
         }
         true
+    }
+
+    /// Initial meshes intentionally tolerate a missing neighbor becoming available.
+    /// Once that first mesh is visible, reconcile its formerly absent halo rather
+    /// than invalidating and repeatedly rescheduling the initial async task.
+    pub(crate) fn needs_initial_catchup(&self, world: &VoxelWorld) -> bool {
+        for offset_y in -1..=1 {
+            for offset_z in -1..=1 {
+                for offset_x in -1..=1 {
+                    if offset_x == 0 && offset_y == 0 && offset_z == 0 {
+                        continue;
+                    }
+                    if self.content_revisions[(offset_y + 1) as usize]
+                        [(offset_z + 1) as usize][(offset_x + 1) as usize]
+                        .is_some()
+                    {
+                        continue;
+                    }
+                    if world
+                        .chunk(self.center + IVec3::new(offset_x, offset_y, offset_z))
+                        .is_some()
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
 }
 
@@ -333,6 +360,7 @@ mod tests {
         );
         assert!(!snapshot.is_loaded_at(IVec3::new(CHUNK_SIZE as i32 + 1, 0, 0)));
         assert!(snapshot.dependencies().is_current(&world));
+        assert!(!snapshot.dependencies().needs_initial_catchup(&world));
     }
 
     #[test]
@@ -398,12 +426,15 @@ mod tests {
         let snapshot =
             ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
         assert!(snapshot.dependencies().is_current(&world));
+        assert!(!snapshot.dependencies().needs_initial_catchup(&world));
 
         world.insert_chunk(IVec3::X, VoxelChunk::empty());
         assert!(snapshot.dependencies().is_current(&world));
+        assert!(snapshot.dependencies().needs_initial_catchup(&world));
 
         let refreshed =
             ChunkMeshSnapshot::capture(&world, IVec3::ZERO).expect("chunk should exist");
+        assert!(!refreshed.dependencies().needs_initial_catchup(&world));
         world.set_block_at(
             IVec3::new(CHUNK_SIZE as i32, 0, 0),
             Some(VoxelCell::new(
