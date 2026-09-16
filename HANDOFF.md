@@ -28,7 +28,7 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 ## Versionamento
 
 - Fonte operacional acordada: arquivo raiz `VERSION`.
-- Estado atual: `VERSION = 0.14.50`.
+- Estado atual: `VERSION = 0.14.51`.
 - `src/app/version.rs` deixa explícito que `VERSION` fica fora de `Cargo.toml` de propósito para que bumps frequentes não invalidem fingerprints do Cargo. A divergência de `[package].version = 0.10.16` é intencional enquanto essa política existir; não sincronizar silenciosamente.
 
 ## Validação
@@ -37,8 +37,9 @@ CI automático em `.github/workflows/ci.yml`:
 
 - `cargo clippy --all-targets --all-features -- -D warnings`
 - `cargo check`
+- push/PR que altera exclusivamente `HANDOFF.md` é ignorado via `paths-ignore`; qualquer mudança de código, VERSION ou config continua validada.
 
-Roda em push para `develop`/`main` e em pull requests.
+Roda em push para `develop`/`main` e em pull requests quando há arquivo relevante.
 
 ## Canon arquitetural
 
@@ -73,11 +74,11 @@ Roda em push para `develop`/`main` e em pull requests.
 
 Último HEAD de código publicado:
 
-`b2afe453c937096c9cd362423d4d40a4b5fbf493`
+`cbce686eb15ec90501f5744f02444fca51e0952d`
 
-Bloco: `Use Bevy hash map for mesh buffers`
+Bloco: `Skip Rust CI for handoff-only changes`
 
-`VERSION`: `0.14.50`
+`VERSION`: `0.14.51`
 
 Commits recentes relevantes:
 
@@ -99,8 +100,9 @@ Commits recentes relevantes:
 - `86d5f4b` — `0.14.46`, `BiomeInfluence` carrega `surface_index`.
 - `181ccb8` — `0.14.47`, corrige consumers do novo índice; structure support usa o índice carregado.
 - `dd12f2e` — `0.14.48`, content registries usam `bevy::platform::collections::HashMap`.
-- `84dfbe2` — `0.14.49`, cache de sites de `BiomeField`, `FeatureCaches`, structure-origin maps e retention scratch usam hash collections do Bevy.
-- `b2afe45` — `0.14.50`, mapa temporário de buffers do mesher usa `bevy::platform::collections::HashMap`; output continua explicitamente ordenado antes de retornar.
+- `84dfbe2` — `0.14.49`, caches de worldgen usam hash collections do Bevy.
+- `b2afe45` — `0.14.50`, mapa temporário de buffers do mesher usa hash map do Bevy; output continua explicitamente ordenado.
+- `cbce686` — `0.14.51`, workflow ignora commits exclusivamente de `HANDOFF.md` e preserva CI para qualquer mudança material.
 
 ## CI recente
 
@@ -114,7 +116,8 @@ Commits recentes relevantes:
 - `0.14.47` / run `35039797881`: Clippy **success**, `cargo check` **success**.
 - `0.14.48` / run `35040141257`: Clippy **success**, `cargo check` **success**.
 - `0.14.49` / run `35040506838`: Clippy **success**, `cargo check` **success**.
-- `0.14.50` / run `35040885336`: **pending/in progress** nesta atualização.
+- `0.14.50` / run `35040885336`: Clippy **success**, `cargo check` **success**.
+- `0.14.51` / run `35041238324`: **pending/in progress** nesta atualização.
 
 ---
 
@@ -131,7 +134,7 @@ Commits recentes relevantes:
 - Streaming pending sort não depende mais do scratch temporário interno de `sort_by_cached_key`.
 - `ChunkMeshSnapshot` não expande mais o halo de 1736 samples no main thread; a task async materializa o shell congelado a partir de clones COW dos vizinhos.
 - O light storage de `VoxelChunk` também é `Arc<[VoxelLight]>`; clones de snapshot permanecem baratos e mutação usa COW via `Arc::make_mut`.
-- `build_chunk_mesh` usa hasher do Bevy para os buffers temporários e mantém sort explícito do resultado final.
+- `build_chunk_mesh` usa hasher do Bevy para buffers temporários e mantém sort explícito do resultado final.
 
 ## Worldgen / biome
 
@@ -171,12 +174,11 @@ Commits recentes relevantes:
 
 # Hot paths / roadmap restante
 
-1. **Próximo (`0.14.51`) — CI docs-only**: `.github/workflows/ci.yml` roda Clippy/check também quando o push altera apenas `HANDOFF.md`. Adicionar `paths-ignore` para não gastar validação Rust em commit exclusivamente documental, preservando CI quando há qualquer arquivo de código/config junto.
-2. **Depois (`0.14.52`) — terrain metadata/seed**: `surface_height_from_sample` faz lookup textual no `BiomeRegistry` e recalcula hash/mix de seed por influência. `BiomeFieldEntry` já é snapshot derivado imutável; `BiomeTerrain`, `BiomeTerrainModifier` e `BiomeHydrology` são Copy/clonáveis, e o `density_seed` atual usa exatamente o mesmo FNV + mix do terrain. Carregar terrain/modifiers no entry e reutilizar esse seed permite resolver altura por `surface_index`, eliminando lookup textual e hashing por amostra sem alterar ruído/weights/IDs.
-3. **Depois (`0.14.53` se continuar limpo) — hydrology primary metadata**: macro hydrology ainda resolve `surface.primary_id` por `BiomeRegistry::get`; `BiomeHydrology` é `Copy`. Reutilizar primary surface index/metadata do `BiomeField` pode remover esse lookup, desde que a mudança permaneça derivada do registry e não duplique autoridade mutável.
-4. Reavaliar a expansão de 4096 lighting seeds apenas se houver desenho que preserve FIFO + dedup + priority promotion exatamente; atualmente bloqueado por corretude.
-5. A divergência `VERSION` vs `Cargo.toml` é intencional conforme `src/app/version.rs`; não há patch sem mudança explícita dessa política.
-6. Fazer auditoria global final; sem novo alvo sustentado por evidência/invariant, encerrar o roadmap.
+1. **Próximo (`0.14.52`) — terrain metadata/seed**: `surface_height_from_sample` faz lookup textual no `BiomeRegistry` e recalcula hash/mix de seed por influência. `BiomeFieldEntry` já é snapshot derivado imutável; `BiomeTerrain`, `BiomeTerrainModifier` e `BiomeHydrology` são Copy/clonáveis, e o `density_seed` atual usa exatamente o mesmo FNV + mix do terrain. Carregar terrain/modifiers no entry e reutilizar esse seed permite resolver altura por `surface_index`, eliminando lookup textual e hashing por amostra sem alterar ruído/weights/IDs. O blob preparado foi revisado contra o noise atual; uma diferença acidental de interpolação foi detectada e corrigida antes de qualquer publicação.
+2. **Depois (`0.14.53` se continuar limpo) — hydrology primary metadata**: macro hydrology ainda resolve `surface.primary_id` por `BiomeRegistry::get`; `BiomeHydrology` é `Copy`. Reutilizar primary surface index/metadata do `BiomeField` pode remover esse lookup, desde que a mudança permaneça derivada do registry e não duplique autoridade mutável.
+3. Reavaliar a expansão de 4096 lighting seeds apenas se houver desenho que preserve FIFO + dedup + priority promotion exatamente; atualmente bloqueado por corretude.
+4. A divergência `VERSION` vs `Cargo.toml` é intencional conforme `src/app/version.rs`; não há patch sem mudança explícita dessa política.
+5. Fazer auditoria global final; sem novo alvo sustentado por evidência/invariant, encerrar o roadmap.
 
 ---
 
@@ -194,12 +196,11 @@ Só retomar quando o usuário priorizar ou runtime indicar regressão relacionad
 
 # Próximos passos
 
-1. Aguardar CI de `0.14.50` (`35040885336`).
-2. Se verde, publicar `0.14.51` com `paths-ignore` para `HANDOFF.md` em push/PR.
-3. Implementar terrain metadata/seed precomputado em `0.14.52`, validando que o output determinístico permanece idêntico por construção.
-4. Revisar/remover o lookup primário de hydrology em `0.14.53` apenas se o shape derivado permanecer limpo.
-5. Manter lighting seed expansion bloqueada sem semântica de fila equivalente.
-6. Fazer auditoria global final e encerrar roadmap quando não restar alvo comprovado.
+1. Aguardar CI de `0.14.51` (`35041238324`).
+2. Se verde, publicar `0.14.52` com terrain metadata/seed precomputado, preservando exatamente a matemática de noise existente.
+3. Revisar/remover o lookup primário de hydrology em `0.14.53` apenas se o shape derivado permanecer limpo.
+4. Manter lighting seed expansion bloqueada sem semântica de fila equivalente.
+5. Fazer auditoria global final e encerrar roadmap quando não restar alvo comprovado.
 
 # Performance direction
 
