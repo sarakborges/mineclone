@@ -30,14 +30,36 @@ pub(super) fn sync_chunk_visibility(
     state.horizontal_radius = horizontal_radius;
 
     for (coord, mut visibility) in &mut chunks {
-        let target = if chunk_is_inside_visible_radius(center, coord.0, horizontal_radius) {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-        if *visibility != target {
-            *visibility = target;
-        }
+        apply_chunk_visibility(center, horizontal_radius, coord.0, &mut visibility);
+    }
+}
+
+pub(super) fn sync_new_chunk_visibility(
+    player: Single<&Transform, With<GameplayCamera>>,
+    render_distance: Res<RenderDistanceSettings>,
+    mut chunks: Query<(&ChunkRenderCoord, &mut Visibility), Added<ChunkRenderCoord>>,
+) {
+    let center = chunk_coord_from_position(player.translation).xz();
+    let horizontal_radius = render_distance.chunks();
+
+    for (coord, mut visibility) in &mut chunks {
+        apply_chunk_visibility(center, horizontal_radius, coord.0, &mut visibility);
+    }
+}
+
+fn apply_chunk_visibility(
+    center: IVec2,
+    horizontal_radius: i32,
+    coord: IVec3,
+    visibility: &mut Visibility,
+) {
+    let target = if chunk_is_inside_visible_radius(center, coord, horizontal_radius) {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
+    if *visibility != target {
+        *visibility = target;
     }
 }
 
