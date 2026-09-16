@@ -25,8 +25,8 @@ s = p.read_text()
 start = s.index('fn handle_chat_input(')
 stop = s.index('fn restore_game_cursor(', start)
 body = s[start:stop]
-if body.count('focus.') != 5:
-    raise RuntimeError(f'chat focus references changed: expected 5, got {body.count("focus.")}')
+if body.count('focus.') != 6:
+    raise RuntimeError(f'chat focus references changed: expected 6, got {body.count("focus.")}')
 p.write_text(s[:start] + body.replace('focus.', 'input.focus.') + s[stop:])
 
 screen = 'src/screens/settings_screen.rs'
