@@ -174,6 +174,7 @@ impl BiomeField {
 
         BiomeFieldSample {
             primary_id: self.surface_biomes[primary_index].id.as_str(),
+            primary_surface_index: primary_index,
             influences,
         }
     }

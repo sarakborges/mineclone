@@ -69,14 +69,14 @@ impl ChunkGenerationContext<'_> {
                         &surface,
                     ) as f32;
                     let continentalness = self.biome_field.climate_at(position).continentalness;
-                    let primary = self.biomes.get(surface.primary_id).unwrap_or_else(|| {
-                        panic!("missing biome definition: {}", surface.primary_id)
-                    });
+                    let biome_hydrology = self
+                        .biome_field
+                        .surface_biome_hydrology(surface.primary_surface_index);
 
                     HydrologySurfaceSample {
                         elevation,
                         continentalness,
-                        biome_hydrology: primary.hydrology,
+                        biome_hydrology,
                     }
                 })
             })
