@@ -1,3 +1,5 @@
+mod visual;
+
 use std::collections::VecDeque;
 
 use bevy::{
@@ -13,17 +15,21 @@ use crate::{
     localization::ActiveLanguage,
     player::{camera::{GameplayCamera, look::MouseLookInputState}, inventory::InventoryState},
     tools::BrushPaletteState,
-    ui::{text_input::{TextInputState, select_all_pressed}, typography},
+    ui::text_input::{TextInputState, select_all_pressed},
     voxel::world::VoxelWorld,
+};
+
+use visual::{
+    advance_chat_timeout, rebuild_chat_history, scroll_chat_history, scroll_chat_to_bottom,
+    spawn_chat_ui, sync_chat_draft, sync_chat_visibility,
 };
 
 const PLAYER_DISPLAY_NAME: &str = "Yogg'Sara";
 const HISTORY_CAPACITY: usize = 64;
-const VISIBLE_MESSAGES: usize = 10;
 const CHAT_TIMEOUT_SECS: f32 = 10.0;
 const MAX_INPUT_CHARS: usize = 256;
 
-/// Gameplay input is gated by this state; the history is independent of UI nodes.
+/// Oldest entries are first; visual order is the same as chronological order.
 #[derive(Resource, Default)]
 pub(crate) struct ChatState {
     open: bool,
@@ -49,8 +55,10 @@ impl ChatState {
     }
 
     fn append(&mut self, text: String) {
-        self.history.push_front(text);
-        self.history.truncate(HISTORY_CAPACITY);
+        if self.history.len() == HISTORY_CAPACITY {
+            self.history.pop_front();
+        }
+        self.history.push_back(text);
         self.since_last_message = 0.0;
         self.revision = self.revision.wrapping_add(1);
     }
@@ -62,18 +70,6 @@ impl ChatState {
 
 #[derive(Message)]
 struct ChatSubmission(String);
-
-#[derive(Component)]
-struct ChatRoot;
-
-#[derive(Component)]
-struct ChatHistory;
-
-#[derive(Component)]
-struct ChatInputRoot;
-
-#[derive(Component)]
-struct ChatDraft;
 
 pub(super) struct ChatHudPlugin;
 
@@ -92,13 +88,15 @@ impl Plugin for ChatHudPlugin {
                     handle_chat_input,
                     interpret_chat_submissions,
                     advance_chat_timeout,
+                    scroll_chat_history,
                     sync_chat_visibility,
                     sync_chat_draft,
                     rebuild_chat_history,
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
-            );
+            )
+            .add_systems(Last, scroll_chat_to_bottom.run_if(in_state(GameState::Gameplay)));
     }
 }
 
@@ -162,7 +160,11 @@ fn handle_chat_input(
             } else if let Some(text) = &event.text {
                 let remaining = MAX_INPUT_CHARS.saturating_sub(chat.draft.text().chars().count());
                 if remaining > 0 {
-                    let limited: String = text.chars().filter(|ch| !ch.is_control()).take(remaining).collect();
+                    let limited: String = text
+                        .chars()
+                        .filter(|character| !character.is_control())
+                        .take(remaining)
+                        .collect();
                     chat.draft.push_text(&limited);
                 }
             }
@@ -232,7 +234,7 @@ fn interpret_chat_submissions(
     players: Query<&Transform, With<GameplayCamera>>,
 ) {
     for submission in submissions.read() {
-        let result = match parse_line(&submission.0) {
+        let response = match parse_line(&submission.0) {
             ParsedLine::Say(text) => format!("<{PLAYER_DISPLAY_NAME}>: {text}"),
             ParsedLine::Usage => "Usage: /spawn_creature <id>".to_owned(),
             ParsedLine::Unknown(command) => format!("Unknown command: {command}"),
@@ -255,144 +257,8 @@ fn interpret_chat_submissions(
                 }
             }
         };
-        chat.append(result);
+        chat.append(response);
     }
-}
-
-fn advance_chat_timeout(time: Res<Time>, mut chat: ResMut<ChatState>) {
-    if !chat.history.is_empty() && chat.since_last_message < CHAT_TIMEOUT_SECS {
-        chat.since_last_message += time.delta_secs();
-    }
-}
-
-fn spawn_chat_ui(mut commands: Commands) {
-    commands
-        .spawn((
-            ChatRoot,
-            Node {
-                position_type: PositionType::Absolute,
-                left: px(18),
-                bottom: px(138),
-                width: px(500),
-                height: px(246),
-                max_width: percent(92),
-                padding: UiRect::all(px(10)),
-                border: UiRect::all(px(1)),
-                border_radius: BorderRadius::all(px(5)),
-                flex_direction: FlexDirection::Column,
-                row_gap: px(7),
-                ..default()
-            },
-            BackgroundColor(Color::srgba(0.035, 0.03, 0.075, 0.23)),
-            BorderColor::all(Color::srgba(0.74, 0.70, 0.92, 0.20)),
-            Visibility::Hidden,
-            GlobalZIndex(20),
-            Pickable::IGNORE,
-            DespawnOnExit(GameState::Gameplay),
-        ))
-        .with_children(|root| {
-            root.spawn((
-                ChatHistory,
-                Node {
-                    width: percent(100),
-                    flex_grow: 1.0,
-                    min_height: px(0),
-                    flex_direction: FlexDirection::Column,
-                    justify_content: JustifyContent::FlexEnd,
-                    row_gap: px(3),
-                    overflow: Overflow::clip(),
-                    ..default()
-                },
-                Pickable::IGNORE,
-            ));
-            root.spawn((
-                ChatInputRoot,
-                Node {
-                    width: percent(100),
-                    min_height: px(34),
-                    padding: UiRect::axes(px(10), px(6)),
-                    border_radius: BorderRadius::all(px(4)),
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-                BackgroundColor(Color::srgba(0.04, 0.035, 0.09, 0.76)),
-                Visibility::Hidden,
-                Pickable::IGNORE,
-            ))
-            .with_children(|field| {
-                field.spawn((
-                    ChatDraft,
-                    typography::hud(""),
-                    typography::tooltip_shadow(),
-                    Node { width: percent(100), ..default() },
-                    Pickable::IGNORE,
-                ));
-            });
-        });
-}
-
-fn sync_chat_visibility(
-    chat: Res<ChatState>,
-    pause: Res<State<PauseState>>,
-    mut root: Single<&mut Visibility, (With<ChatRoot>, Without<ChatInputRoot>)>,
-    mut entry: Single<&mut Visibility, (With<ChatInputRoot>, Without<ChatRoot>)>,
-) {
-    let running = *pause.get() == PauseState::Running;
-    let root_visibility = if running && chat.visible() {
-        Visibility::Inherited
-    } else {
-        Visibility::Hidden
-    };
-    if **root != root_visibility {
-        **root = root_visibility;
-    }
-    let input_visibility = if running && chat.open {
-        Visibility::Inherited
-    } else {
-        Visibility::Hidden
-    };
-    if **entry != input_visibility {
-        **entry = input_visibility;
-    }
-}
-
-fn sync_chat_draft(chat: Res<ChatState>, mut text: Single<&mut Text, With<ChatDraft>>) {
-    let next = if chat.open {
-        format!("> {}▏", chat.draft.text())
-    } else {
-        String::new()
-    };
-    if text.0 != next {
-        text.0 = next;
-    }
-}
-
-fn rebuild_chat_history(
-    mut commands: Commands,
-    chat: Res<ChatState>,
-    history: Single<(Entity, &Children), With<ChatHistory>>,
-    mut rendered_revision: Local<u64>,
-) {
-    if chat.revision == *rendered_revision {
-        return;
-    }
-    *rendered_revision = chat.revision;
-    let (root, children) = history.into_inner();
-    for child in children.iter() {
-        commands.entity(child).despawn();
-    }
-    commands.entity(root).with_children(|list| {
-        // The newest message is first in the visual column; the column itself
-        // is bottom-anchored so its content grows upward.
-        for message in chat.history.iter().take(VISIBLE_MESSAGES) {
-            list.spawn((
-                typography::hud(message.clone()),
-                typography::tooltip_shadow(),
-                Node { width: percent(100), ..default() },
-                Pickable::IGNORE,
-            ));
-        }
-    });
 }
 
 #[cfg(test)]
@@ -410,14 +276,26 @@ mod tests {
     }
 
     #[test]
-    fn chat_history_is_newest_first_and_expires_when_closed() {
-        let mut state = ChatState::default();
-        state.append("old".to_owned());
-        state.append("new".to_owned());
-        assert_eq!(state.history.front().map(String::as_str), Some("new"));
-        state.since_last_message = CHAT_TIMEOUT_SECS;
-        assert!(!state.visible());
-        state.open = true;
-        assert!(state.visible());
+    fn new_messages_append_below_old_messages_and_expire_when_closed() {
+        let mut chat = ChatState::default();
+        chat.append("old".to_owned());
+        chat.append("new".to_owned());
+        assert_eq!(chat.history.front().map(String::as_str), Some("old"));
+        assert_eq!(chat.history.back().map(String::as_str), Some("new"));
+        chat.since_last_message = CHAT_TIMEOUT_SECS;
+        assert!(!chat.visible());
+        chat.open = true;
+        assert!(chat.visible());
+    }
+
+    #[test]
+    fn history_retains_last_entries_in_chronological_order() {
+        let mut chat = ChatState::default();
+        for index in 0..=HISTORY_CAPACITY {
+            chat.append(index.to_string());
+        }
+        assert_eq!(chat.history.len(), HISTORY_CAPACITY);
+        assert_eq!(chat.history.front().map(String::as_str), Some("1"));
+        assert_eq!(chat.history.back().map(String::as_str), Some("64"));
     }
 }
