@@ -1,7 +1,7 @@
 {
   "id": "asteria:overworld/sky",
   "sun": {
-    "texture": null,
+    "texture": "textures/sky/sun.png",
     "size": 93.0,
     "orbitRadius": 600.0,
     "risePhase": "Dawn",
@@ -12,7 +12,7 @@
     "tint": { "hue": 52.4109, "saturation": 0.1940, "intensity": 0.8933 }
   },
   "moon": {
-    "texture": null,
+    "texture": "textures/sky/moon.png",
     "size": 73.0,
     "orbitRadius": 600.0,
     "risePhase": "Dusk",
