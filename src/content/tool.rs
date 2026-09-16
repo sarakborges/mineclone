@@ -12,6 +12,8 @@ pub struct ToolDefinition {
     pub name: LocalizedText,
     pub category: String,
     pub icon: String,
+    #[serde(default)]
+    pub tint_icon: Option<String>,
 }
 
 #[derive(Resource, Default)]
@@ -25,6 +27,10 @@ impl ToolRegistry {
             .name
             .validate(&format!("tool {} name", definition.id));
         definition.icon = definition.icon.trim().to_owned();
+        definition.tint_icon = definition
+            .tint_icon
+            .map(|path| path.trim().to_owned())
+            .filter(|path| !path.is_empty());
         intern_tool_id(&definition.id);
         self.definitions.insert(definition.id.clone(), definition);
     }
