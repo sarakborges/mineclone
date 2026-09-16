@@ -33,7 +33,10 @@ use app::{
     runtime_paths::prepare_runtime_directory,
     window_icon::WindowIconPlugin,
 };
-use bevy::prelude::*;
+use bevy::{
+    app::{TaskPoolOptions, TaskPoolPlugin},
+    prelude::*,
+};
 use content::ContentPlugin;
 use gameplay::GameplayPlugin;
 use hud::HudPlugin;
@@ -63,6 +66,9 @@ fn run_game() {
     App::new()
         .add_plugins(
             DefaultPlugins
+                .set(TaskPoolPlugin {
+                    task_pool_options: voxel_task_pool_options(),
+                })
                 .set(ImagePlugin::default_nearest())
                 .set(WindowPlugin {
                     primary_window: Some(Window {
@@ -90,4 +96,13 @@ fn run_game() {
             HudPlugin,
         ))
         .run();
+}
+
+fn voxel_task_pool_options() -> TaskPoolOptions {
+    let mut options = TaskPoolOptions::default();
+    options.io.percent = 0.10;
+    options.io.max_threads = 2;
+    options.async_compute.percent = 0.50;
+    options.async_compute.max_threads = 8;
+    options
 }
