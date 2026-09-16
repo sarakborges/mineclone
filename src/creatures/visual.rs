@@ -20,6 +20,7 @@ pub(super) struct VisualAttached;
 struct CreatureAppearance {
     owner: Entity,
     material_tints: HashMap<String, Hsi>,
+    material_textures: HashMap<String, Handle<Image>>,
     graph: Option<Handle<AnimationGraph>>,
     nodes: HashMap<String, AnimationNodeIndex>,
 }
@@ -38,7 +39,14 @@ pub(crate) struct CreatureAnimationState(pub String);
 
 #[derive(Resource, Default)]
 pub(super) struct TintedCreatureMaterials(
-    HashMap<(AssetId<StandardMaterial>, [u32; 3]), Handle<StandardMaterial>>,
+    HashMap<
+        (
+            AssetId<StandardMaterial>,
+            Option<[u32; 3]>,
+            Option<AssetId<Image>>,
+        ),
+        Handle<StandardMaterial>,
+    >,
 );
 
 /// Only roots still waiting for a glTF are visited; animated meshes and
@@ -47,6 +55,7 @@ pub(super) fn attach_loaded_models(
     mut commands: Commands,
     roots: Query<(Entity, &CreatureInstance, &CreatureModel), Without<VisualAttached>>,
     definitions: Res<CreatureRegistry>,
+    asset_server: Res<AssetServer>,
     gltfs: Res<Assets<Gltf>>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
 ) {
@@ -93,6 +102,11 @@ pub(super) fn attach_loaded_models(
             )
         };
         let tints = definition.material_tints.clone();
+        let textures = definition
+            .textures
+            .iter()
+            .map(|(material, path)| (material.clone(), asset_server.load::<Image>(path.clone())))
+            .collect();
         commands
             .entity(root)
             .insert((VisualAttached, CreatureAnimationState("idle".to_owned())));
@@ -103,6 +117,7 @@ pub(super) fn attach_loaded_models(
                     CreatureAppearance {
                         owner: root,
                         material_tints: tints,
+                        material_textures: textures,
                         graph,
                         nodes,
                     },
@@ -131,28 +146,41 @@ fn configure_loaded_scene(
         return;
     };
     for descendant in descendants.iter_descendants(ready.entity) {
-        if let Ok((original, material_name)) = mesh_materials.get(descendant)
-            && let Some(tint) = appearance.material_tints.get(material_name.0.as_str())
-        {
-            let rgb = tint.to_srgb();
-            let cache_key = (original.id(), rgb.map(f32::to_bits));
-            let replacement = if let Some(existing) = tint_assets.cache.0.get(&cache_key) {
-                Some(existing.clone())
-            } else {
-                tint_assets
-                    .materials
-                    .get(original.id())
-                    .cloned()
-                    .map(|mut material| {
-                        let alpha = material.base_color.to_srgba().alpha;
-                        material.base_color = Color::srgba(rgb[0], rgb[1], rgb[2], alpha);
-                        let handle = tint_assets.materials.add(material);
-                        tint_assets.cache.0.insert(cache_key, handle.clone());
-                        handle
-                    })
-            };
-            if let Some(material) = replacement {
-                commands.entity(descendant).insert(MeshMaterial3d(material));
+        if let Ok((original, material_name)) = mesh_materials.get(descendant) {
+            let name = material_name.0.as_str();
+            let tint = appearance.material_tints.get(name);
+            let texture = appearance.material_textures.get(name);
+            if tint.is_some() || texture.is_some() {
+                let rgb = tint.map(|color| color.to_srgb());
+                let cache_key = (
+                    original.id(),
+                    rgb.map(|color| color.map(f32::to_bits)),
+                    texture.map(|image| image.id()),
+                );
+                let replacement = if let Some(existing) = tint_assets.cache.0.get(&cache_key) {
+                    Some(existing.clone())
+                } else {
+                    tint_assets
+                        .materials
+                        .get(original.id())
+                        .cloned()
+                        .map(|mut material| {
+                            if let Some(color) = rgb {
+                                let alpha = material.base_color.to_srgba().alpha;
+                                material.base_color =
+                                    Color::srgba(color[0], color[1], color[2], alpha);
+                            }
+                            if let Some(image) = texture {
+                                material.base_color_texture = Some(image.clone());
+                            }
+                            let handle = tint_assets.materials.add(material);
+                            tint_assets.cache.0.insert(cache_key, handle.clone());
+                            handle
+                        })
+                };
+                if let Some(material) = replacement {
+                    commands.entity(descendant).insert(MeshMaterial3d(material));
+                }
             }
         }
 
