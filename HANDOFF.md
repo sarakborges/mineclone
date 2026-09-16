@@ -28,7 +28,7 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 ## Versionamento
 
 - Fonte operacional acordada: arquivo raiz `VERSION`.
-- Estado atual: `VERSION = 0.14.45`.
+- Estado atual: `VERSION = 0.14.46`.
 - `src/app/version.rs` deixa explícito que `VERSION` fica fora de `Cargo.toml` de propósito para que bumps frequentes não invalidem fingerprints do Cargo. A divergência de `[package].version = 0.10.16` é intencional enquanto essa política existir; não sincronizar silenciosamente.
 
 ## Validação
@@ -73,11 +73,11 @@ Roda em push para `develop`/`main` e em pull requests.
 
 Último HEAD de código publicado:
 
-`a1a36c748d7be237bb4c8ccd169e630233aafc43`
+`86d5f4b60ab785004ae3f16fe56bc8559f789484`
 
-Bloco: `Fix streaming sort regression test allocation`
+Bloco: `Carry surface biome index in influences`
 
-`VERSION`: `0.14.45`
+`VERSION`: `0.14.46`
 
 Commits recentes relevantes:
 
@@ -94,8 +94,9 @@ Commits recentes relevantes:
 - `30c54ce` — `0.14.41`, streaming selection usa hash collections do Bevy; feature-cache retention aceita iterador.
 - `a6fc5c3` — `0.14.42`, `ChunkRenderPool.active` usa hash map do Bevy.
 - `8a96146` — `0.14.43`, `ChunkMeshSnapshot` captura clones COW + revisions no main thread e materializa os 1736 samples do halo dentro das tasks async.
-- `686d3cb` — `0.14.44`, `QueueRebuildScratch.pending` guarda coord + priority + ordinal e usa sort in-place; remove a allocation de `sort_by_cached_key` preservando empates via ordinal.
-- `a1a36c7` — `0.14.45`, corrige o único warning do bloco anterior trocando o `Vec` fixo do teste de regressão por array; nenhuma lógica de streaming muda.
+- `686d3cb` — `0.14.44`, pending sort do streaming reutiliza scratch e elimina allocation de `sort_by_cached_key` preservando empates via ordinal.
+- `a1a36c7` — `0.14.45`, corrige o `clippy::useless_vec` no teste do bloco anterior trocando o Vec fixo por array; nenhuma lógica muda.
+- `86d5f4b` — `0.14.46`, `BiomeInfluence` carrega `surface_index`; `sample_generation_columns` reutiliza o índice já calculado e deixa de fazer scan linear ID -> índice para cada influência de cada coluna.
 
 ## CI recente
 
@@ -103,16 +104,9 @@ Commits recentes relevantes:
 - `0.14.41` / run `35037142837`: Clippy **success**, `cargo check` **success**.
 - `0.14.42` / run `35037660941`: Clippy **success**, `cargo check` **success**.
 - `0.14.43` / run `35038065308`: Clippy **success**, `cargo check` **success**.
-- `0.14.44` / run `35038433002`: **failure** de Clippy apenas no teste novo: `vec![...]` com dois entries fixos disparou `clippy::useless_vec`; `cargo check` foi skipped pelo workflow.
-- `0.14.45` / run `35038881264`: **pending/in progress** nesta atualização; corrige exatamente esse warning sem `allow`.
-
-Falhas históricas que não devem ser reintroduzidas:
-
-- `0.14.16/17`: dia do HUD precisa acompanhar `WorldClock.day` (`u64`).
-- `0.14.19/20`: não expor scratch privado em assinatura de sistema; usar `SystemParam` coerente.
-- `0.14.25`: manter callers alinhados ao surface carver atual.
-- `0.14.38`: não manter API órfã só para preservar shape anterior.
-- Draft `9c1a0e7`: não acoplar feature-cache retention a hasher concreto.
+- `0.14.44` / run `35038433002`: **failure** de Clippy apenas no teste novo por `clippy::useless_vec`.
+- `0.14.45` / run `35038881264`: Clippy **success**, `cargo check` **success**.
+- `0.14.46` / run `35039241647`: **queued/pending** nesta atualização.
 
 ---
 
@@ -136,6 +130,7 @@ Falhas históricas que não devem ser reintroduzidas:
 - `BiomeField::sample_surface` usa `ArrayVec` para o máximo estrutural de 26 influências.
 - `GenerationColumnSample` usa `SmallVec` inline no caso comum.
 - Structure support reutiliza a própria amostra de biome.
+- `BiomeInfluence` conserva o surface biome index calculado pelo sampler; geração de colunas não reconstrói mais esse índice por busca textual.
 
 ## Lighting
 
@@ -162,13 +157,12 @@ Falhas históricas que não devem ser reintroduzidas:
 
 # Hot paths / roadmap restante
 
-1. **Próximo candidato (`0.14.46`)**: `BiomeField::sample_surface` já conhece o índice de cada influência, mas `sample_generation_columns` converte `influence.id` de volta para índice com scan linear para cada influência de cada uma das 256 colunas. Carregar `surface_index` em `BiomeInfluence` e reutilizá-lo remove esse trabalho sem mudar IDs/weights.
-2. **Content registries**: `DefinitionMap<T>` ainda usa `std::HashMap`; ele sustenta registries de block/biome/fluid e `BlockRegistry::get` ocorre por voxel não vazio durante mesh build. `SecondaryPropertyRegistry` também tem um mapa externo `std::HashMap`. Como não há ordem semântica, trocar para `bevy::platform` é candidato seguro depois do índice de biome.
-3. **Worldgen caches**: `BiomeField.surface_site_biomes` faz até 25 lookups de cache por `sample_surface` e ainda usa `std::HashMap`; `WorldFeatureFields`/`FeatureCaches` também mantêm maps/sets quentes sem requisito de ordenação. Candidato coerente posterior.
-4. **Mesh buffers**: `build_chunk_mesh` ainda usa `std::HashMap` para agrupar faces expostas; o output é explicitamente ordenado depois, então hasher não é semântico. Candidato menor depois dos caches de worldgen.
-5. Reavaliar a expansão de 4096 lighting seeds apenas se houver desenho que preserve a fila canônica exatamente; atualmente bloqueado por corretude.
-6. A divergência `VERSION` vs `Cargo.toml` foi reavaliada e é intencional conforme `src/app/version.rs`; não há patch a fazer sem mudança explícita dessa política.
-7. Depois dos candidatos acima, fazer auditoria global final. Sem alvo sustentado por evidência/invariant, encerrar o roadmap.
+1. **Próximo candidato (`0.14.47`) — content registries**: `DefinitionMap<T>` ainda usa `std::HashMap`; ele sustenta Block/Biome/Fluid/etc. registries e `BlockRegistry::get` ocorre por voxel não vazio durante mesh build. `SecondaryPropertyRegistry` também tem mapa externo `std::HashMap`. Não há ordem contratual hoje; troca de hasher para `bevy::platform` é compatível.
+2. **Depois (`0.14.48`) — worldgen caches**: `BiomeField.surface_site_biomes` faz até 25 lookups de cache por `sample_surface`; `WorldFeatureFields`/`FeatureCaches` têm maps/sets quentes sob locks e scratch. Nenhum depende de ordenação; trocar para Bevy collections é candidato coerente.
+3. **Depois (`0.14.49`) — mesh buffers**: `build_chunk_mesh` agrupa faces expostas em `std::HashMap`; roda async, mas afeta throughput. O output já é ordenado explicitamente, então o hasher não é semântico.
+4. Reavaliar a expansão de 4096 lighting seeds apenas se houver desenho que preserve FIFO + dedup + priority promotion exatamente; atualmente bloqueado por corretude.
+5. A divergência `VERSION` vs `Cargo.toml` é intencional conforme `src/app/version.rs`; não há patch sem mudança explícita dessa política.
+6. Depois desses candidatos, fazer auditoria global final. Sem alvo sustentado por evidência/invariant, encerrar o roadmap.
 
 ---
 
@@ -186,13 +180,12 @@ Só retomar quando o usuário priorizar ou runtime indicar regressão relacionad
 
 # Próximos passos
 
-1. Aguardar CI de `0.14.45` (`35038881264`).
-2. Se verde, publicar `0.14.46` carregando o surface biome index em `BiomeInfluence` e removendo o ID -> índice linear em `sample_generation_columns`.
-3. Depois auditar/aplicar Bevy hash maps em content registries.
-4. Depois auditar/aplicar Bevy hash collections nos caches quentes de worldgen.
-5. Depois avaliar o hash map de buffers do mesher.
-6. Registrar lighting seed expansion como bloqueada se nenhuma representação preservar a semântica da fila.
-7. Fazer auditoria global final. Sem novo alvo sustentado por evidência, encerrar roadmap.
+1. Aguardar CI de `0.14.46` (`35039241647`).
+2. Se verde, publicar `0.14.47` migrando content registries para `bevy::platform`.
+3. Depois migrar caches quentes de worldgen (`0.14.48`).
+4. Depois migrar o mapa temporário de buffers do mesher (`0.14.49`).
+5. Registrar lighting seed expansion como bloqueada se nenhuma representação preservar a semântica da fila.
+6. Fazer auditoria global final. Sem novo alvo sustentado por evidência, encerrar roadmap.
 
 # Performance direction
 
