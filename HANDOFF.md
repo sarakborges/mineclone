@@ -50,8 +50,8 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 
 # Estado atual
 
-Último HEAD de código publicado: `7b16f8f72ea2c8837e63972a7cde8ae771ccc894`  
-`VERSION = 0.15.2`
+Último HEAD de código publicado: `122d0ff7b539657574e1d0a6c12ca4eb2c74b093`  
+`VERSION = 0.15.3`
 
 Blocos mais recentes:
 
@@ -68,6 +68,7 @@ Blocos mais recentes:
   - CI run `35052641180`: Clippy + `cargo check` success.
 - `4aeb119` / 0.15.1 — fog passa a ser limitada pelo primeiro column frontier sem `ChunkRenderPool` allocation dentro do raio nominal. O limite usa distância horizontal até a AABB física do chunk faltante, com guarda de 1 chunk. Feedback runtime: **funcionou; chunks deixaram de brotar dentro da fog**.
 - `7b16f8f` / 0.15.2 — remove recuperação temporal (`current_end` + delta time). `DistanceFog.start/end` agora são função direta do frontier de readiness em todo frame; readiness nova deve abrir a fog mesmo com câmera parada.
+- `122d0ff` / 0.15.3 — frontier adaptativo passa a ser change-driven: `active_columns` é cacheado e invalidado por `ChunkRenderPool::membership_revision()`, e o scan do raio só roda quando mudam readiness, render distance ou posição horizontal do player. Movimento vertical isolado não força rescan. A reação imediata à readiness da 0.15.2 é preservada sem scan/dirty write em todo frame estável.
 
 ## Arquitetura de câmera gameplay — 0.15.x
 
@@ -114,24 +115,26 @@ Feedback runtime acumulado:
 - Feedback runtime da 0.15.1: **funcionou** para impedir chunks brotando dentro da fog.
 - Novo feedback: com player parado, a fog podia permanecer fechada até haver movimento.
 - 0.15.2 remove o estado temporal de recovery; fog passa a ser recalculada diretamente do `ChunkRenderPool` a cada frame.
+- 0.15.3 mantém o mesmo modelo readiness-driven, mas deixa a avaliação change-driven: a `membership_revision` do render pool invalida o cache quando chunks entram/saem, enquanto posição horizontal/render distance invalidam a geometria do frontier. Em estado estável não há rebuild do `HashSet`, scan do disco nem reescrita de `DistanceFog`.
 
 ### Frontier adaptativo da fog
 
 `src/rendering/fog/distance.rs` agora:
 
-1. coleta as colunas presentes em `ChunkRenderPool::active_coords()`;
+1. mantém cache das colunas presentes em `ChunkRenderPool::active_coords()`, reconstruído quando `membership_revision()` muda;
 2. procura a coluna faltante mais próxima dentro do render distance nominal;
 3. mede distância horizontal do player até a AABB real desse chunk, não até seu centro;
 4. coloca `fog end` antes dessa borda com guarda de 1 chunk;
 5. preserva aproximadamente a largura original da faixa linear ao recuar `start/end`;
 6. nunca ultrapassa o target normal de ~98% do render radius;
-7. em 0.15.2 não existe `current_end` nem recovery baseado em `Time`: readiness mudou => fog muda no mesmo frame.
+7. não existe `current_end` nem recovery baseado em `Time`: readiness mudou => fog muda no mesmo frame;
+8. em 0.15.3 o scan roda apenas se mudou `membership_revision`, render distance ou posição horizontal; movimento vertical isolado não altera o frontier horizontal.
 
 Isso é fallback visual de backlog, não substituto para throughput. O objetivo continua sendo manter o frontier pronto suficientemente longe para a fog ficar normalmente próxima do render radius configurado.
 
 Próxima validação runtime de P0.1:
 
-1. confirmar que 0.15.2 abre/reajusta a fog enquanto o player está completamente parado conforme chunks terminam;
+1. confirmar que 0.15.3 abre/reajusta a fog enquanto o player está completamente parado conforme chunks terminam;
 2. repetir flight máximo e movimento circular;
 3. confirmar que não voltam void, flicker ou silhuetas nascendo dentro da fog;
 4. observar se a fog “respira” demais sob backlog. Se sim, melhorar throughput/priorização do frontier, não maquiar com raio fixo maior;
@@ -174,7 +177,8 @@ Gargalos tratados desde 0.14.56:
 14. fog/background passando por color-processing diferente;
 15. composição world/viewmodel/UI implícita e incompatível com HDR;
 16. fog fixa não refletia atraso real do render frontier;
-17. recovery temporal da fog podia parecer dependente de movimento; removido em 0.15.2.
+17. recovery temporal da fog podia parecer dependente de movimento; removido em 0.15.2;
+18. frontier adaptativo fazia rebuild/scan/write em todo frame estável; tornado change-driven em 0.15.3.
 
 ---
 
@@ -201,7 +205,7 @@ Validar runtime se textura aparece e alpha/orientação permanecem corretos.
 
 ## P0.1 — Streaming/fog seamless
 
-Prioridade máxima: validar a 0.15.2 parada + flight máximo + círculos. O comportamento correto agora é readiness-driven: a fog cobre backlog real e reage sem movimento do player.
+Prioridade máxima: validar a 0.15.3 parada + flight máximo + círculos. O comportamento correto continua readiness-driven, agora sem scan/dirty write em frames estáveis: a fog cobre backlog real e reage sem movimento do player.
 
 ## P0.2 — Lighting/shadows
 
