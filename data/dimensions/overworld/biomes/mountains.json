@@ -5,8 +5,8 @@
     {
       "type": "mountain_belt",
       "scale": 0.0017,
-      "threshold": 0.90,
-      "width": 0.15,
+      "threshold": 0.965,
+      "width": 0.08,
       "warpScale": 0.0025,
       "warpStrength": 85.0
     },
