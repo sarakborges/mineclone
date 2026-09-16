@@ -57,34 +57,47 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 20. Queries mutáveis múltiplas sobre o mesmo Component precisam ser disjuntas via `Without<T>` ou `ParamSet`.
 21. Child UI que obedece ao hide do parent usa `Visibility::Inherited`.
 22. Revisions derivadas são separadas por domínio quando consumers têm dependências diferentes.
-23. Prioridade de streaming deve sobreviver às fronteiras async; quando generation/mesh saturarem, o raio imediato do jogador pode preemptar apenas trabalho não imediato, que precisa voltar para a fila em vez de ser perdido.
+23. Prioridade de streaming deve sobreviver às fronteiras async; trabalho imediato pode preemptar apenas trabalho não imediato e a vítima volta à fila.
+24. Worldgen/initial mesh/background remesh compartilham `AsyncComputeTaskPool`; quantidade de tasks in-flight não equivale a workers executando.
+25. **Invariant de produto para streaming:** em velocidade normal configurada, inclusive flight, o jogador não deve enxergar void/chunks ainda ausentes. Throughput deve ser antecipado e priorizado para tornar o streaming visualmente seamless; não aceitar “60 FPS com mundo atrasado” como sucesso.
 
 ---
 
 # Estado atual
 
-Último HEAD de código publicado: `37959acf5ff9f0997b3817dc09d8970348a47861`  
-Bloco: `Prioritize critical chunks through async streaming`  
-`VERSION = 0.14.56`
+Último HEAD de código publicado: `100f5bb2efc93101cc086e5820992ee85a39d0aa`  
+Bloco: `Reserve async capacity for visible chunk meshes`  
+`VERSION = 0.14.59`
 
 ## Histórico recente relevante
 
 - 0.14.31–0.14.50: ciclo de streaming/worldgen/lighting/perf com COW, queues, scratch reuse, Bevy hash collections, async mesh halo e eliminação de lookups repetidos.
 - `cbce686` / 0.14.51: CI ignora commits exclusivamente de `HANDOFF.md`.
-- `573898d` / 0.14.52: terrain/modifiers/seed derivados do `BiomeField` por índice em vez de lookup textual repetido.
+- `573898d` / 0.14.52: terrain/modifiers/seed derivados do `BiomeField` por índice.
 - `b28b3c2` / 0.14.53: corrige call site esquecido da nova assinatura no bootstrap.
 - `7a0283d` / 0.14.54: `BiomeFieldSample.primary_surface_index` + hydrology metadata por índice.
 - `ee806d0` / 0.14.55: corrige initializer de teste; CI verde.
-- `37959ac` / 0.14.56: preserva prioridade do raio imediato do jogador depois do dispatch async; generation/mesh distante podem ser preemptados quando saturam os 8 slots, trabalho preemptado é refileirado e a fila `ready` deixa de bloquear chunks imediatos pela ordem FIFO de conclusão.
+- `37959ac` / 0.14.56: prioridade do raio imediato sobrevive ao dispatch async; generation/mesh distante podem ser preemptados e refileirados; `ready` deixa de ser FIFO puro para chunks críticos.
+- `643a30c` / 0.14.57: configura `TaskPoolPlugin` explicitamente: IO 10%/máx. 2 workers, async compute 50%/máx. 8, compute recebe o restante. Feedback runtime do usuário: **ganho perceptível, mas ainda não seamless**.
+- `7451d77` / 0.14.58: streaming passa a antecipar movimento e atacar worker convoy/custo inútil durante flight:
+  - mantém direção horizontal recente;
+  - adiciona preload direcional de 2 chunks além do preload base;
+  - chunks à frente ganham prioridade sobre lateral/traseira após os invariants locais;
+  - quando o jogador está acima da faixa de superfície, terreno de superfície é priorizado antes de chunks de ar próximos, preservando o chunk atual como primeira prioridade;
+  - generation evita despachar vários chunks da mesma região/coluna fria até o primeiro chunk útil aquecer os caches compartilhados, evitando vários workers bloqueados no mesmo `OnceLock`;
+  - dispatch pode examinar até 16 candidatos/frame para pular candidatos temporariamente bloqueados sem head-of-line blocking.
+- `100f5bb` / 0.14.59: caminho `ready -> visible` ganha precedência:
+  - initial mesh dispatch roda antes de novo generation dispatch no frame;
+  - `ready` procura chunks à frente do movimento depois dos chunks críticos;
+  - enquanto há mesh backlog, generation fica limitada a até 4 tasks in-flight pelo dispatcher, reservando capacidade do pool compartilhado para converter chunks já gerados em meshes visíveis.
 
 ## CI recente
 
-- 0.14.51 / run `35041238324`: success.
-- 0.14.52 / run `35042143508`: failure; bootstrap usava assinatura antiga.
-- 0.14.53 / run `35042627256`: success.
-- 0.14.54 / run `35042991888`: failure; teste sem `primary_surface_index`.
 - 0.14.55 / run `35043364577`: Clippy + `cargo check` success.
-- 0.14.56 / run `35045326563`: em andamento no momento deste handoff.
+- 0.14.56 / run `35045326563`: Clippy + `cargo check` success.
+- 0.14.57: validação Rust acionada e o bloco foi executado em runtime pelo usuário com ganho observado.
+- 0.14.58 / run `35046400211`: em validação no momento deste handoff.
+- 0.14.59 / run `35046538650`: em validação no momento deste handoff.
 - Commits handoff-only não abrem Rust CI.
 
 ---
@@ -101,7 +114,11 @@ Bloco: `Prioritize critical chunks through async streaming`
 - halo de mesh materializa async a partir de clones COW + revisions;
 - mesh output mantém sort explícito;
 - hot maps/sets sem semântica de ordem usam Bevy collections;
-- quando generation/mesh estão saturados, chunks no raio imediato do jogador podem preemptar apenas tarefas não imediatas; vítimas retornam às filas e `ready` procura primeiro trabalho imediato.
+- chunks imediatos podem preemptar trabalho distante sem perder a vítima;
+- Bevy task pools são dimensionados explicitamente para favorecer trabalho voxel async;
+- streaming agora carrega uma noção de direção, prefetch à frente e prioridade distinta para superfície quando o jogador está voando acima dela;
+- geração fria é serializada somente enquanto precisa aquecer dependências compartilhadas, evitando ocupar múltiplos workers esperando o mesmo cache;
+- quando há mesh backlog, generation não pode monopolizar todo o pool async.
 
 ## Worldgen/biome
 
@@ -119,78 +136,85 @@ Bloco: `Prioritize critical chunks through async streaming`
 - dynamic lighting só roda com trabalho;
 - fluid frontier usa boundary metadata + scan limitado à face.
 
-O antigo roadmap de **micro-refactor genérico** terminou em 0.14.55. Nova evidência runtime reabriu o trabalho com foco em throughput, continuidade e regressões visuais reais.
+O antigo roadmap de micro-refactor genérico terminou em 0.14.55. Nova evidência runtime reabriu o trabalho com foco em throughput, continuidade e regressões visuais reais.
 
 ---
 
 # Ciclo ativo — prioridades runtime
 
-## P0.1 — Chunk streaming: tempo até chunk visível
+## P0.1 — Chunk streaming: **seamless time-to-visible**
 
 Sintoma confirmado:
 
-- o jogo pode manter ~60 FPS, mas rendering/generation de chunks fica muito atrás do movimento;
-- o jogador consegue atravessar **diversos chunks vazios** antes de terrain/mesh aparecer;
-- o problema é portanto throughput/latência do pipeline, não apenas FPS.
+- FPS pode permanecer ~60 enquanto generation/rendering ficam atrás do movimento;
+- antes de 0.14.56 o jogador atravessava vários chunks vazios;
+- 0.14.56 e principalmente 0.14.57 melhoraram o comportamento, mas o usuário ainda observa ganho insuficiente;
+- requisito atualizado: **voar pelo mapa não pode expor chunks vazios/void**.
 
-Pipeline auditado:
+Pipeline atual:
 
-`stream selection -> generation dispatch/task -> generation integration -> initial lighting -> halo snapshot -> mesh dispatch/task -> mesh integration -> spawn/visibility`
+`selection/prefetch -> generation dispatch/task -> generation integration -> initial lighting -> halo snapshot -> mesh dispatch/task -> mesh integration -> spawn`
 
-### Achado concreto em 0.14.56
+### Gargalos já tratados
 
-A seleção inicial já ordenava chunks por proximidade, mas essa prioridade não sobrevivia integralmente às etapas seguintes:
+1. prioridade perdida depois da seleção: 0.14.56;
+2. pool async subdimensionado pelo default do Bevy: 0.14.57;
+3. workers desperdiçados aguardando a mesma região/coluna fria: 0.14.58;
+4. flight priorizando ar local em vez de superfície visível: 0.14.58;
+5. ausência de lookahead direcional: 0.14.58;
+6. generation sendo despachada antes de mesh já pronta para avançar: 0.14.59;
+7. generation monopolizando o pool enquanto há mesh backlog: 0.14.59.
 
-- `ChunkGenerationTasks` e `ChunkMeshTasks` mantêm até 8 tarefas in-flight; com todos os slots ocupados, um chunk que se tornou imediato ao jogador não tinha mecanismo para tomar o lugar de trabalho distante;
-- `ready` era consumida em FIFO pela ordem em que generation results eram integrados, então um chunk distante na frente da fila podia causar head-of-line blocking antes do mesh dispatch;
-- isso permite starvation perceptível mesmo com a seleção `pending` corretamente ordenada.
+### Nuances importantes
 
-Mudança de 0.14.56:
+- generation/mesh tasks atuais são CPU-bound e os futures não têm pontos de `await`/yield internos; dropar o handle evita polling futuro, mas não interrompe magicamente CPU já em execução.
+- `GENERATION_REGION_SIZE_CHUNKS = 8`; hydrology/volume/caves são compartilhados por região e usam caches `OnceLock`.
+- flight speed atual = `WALK_SPEED 5 * FLY_SPEED_MULTIPLIER 5 = 25` blocos/s; chunk = 16 blocos, portanto ~1.56 chunks horizontais/s em velocidade máxima configurada.
+- o preload direcional de 0.14.58 adiciona 2 chunks à frente além do preload base, sem transformar toda a seleção em um anel simétrico maior.
 
-- raio crítico = 1 chunk em X/Y/Z ao redor do player chunk, alinhado com a prioridade imediata já usada pela seleção;
-- se generation estiver saturada e existir trabalho crítico ainda não despachado, a tarefa in-flight não crítica mais distante pode ser cancelada e refileirada no fim de `pending`;
-- se mesh estiver saturada e um chunk crítico estiver `ready`, uma mesh task não crítica distante pode ser cancelada e o chunk vítima volta para `ready`;
-- `ready` agora procura chunks críticos antes de cair no FIFO normal;
-- nenhum limite, budget ou número máximo de tasks foi aumentado.
+### Próximo passo se 0.14.59 ainda mostrar void
 
-Estado:
+Instrumentar apenas o necessário para localizar o novo limitante, medindo por estágio:
 
-- o gargalo de **prioridade perdida após o dispatch** recebeu correção estrutural;
-- ainda não declarar P0.1 resolvido sem runtime em movimento normal;
-- a seleção ainda não possui viés explícito por vetor de movimento; ela é proximity-first, e 0.14.56 garante prioridade forte somente quando o chunk entra no raio crítico;
-- `seed_chunk_direct_lighting` continua síncrono entre generation pronta e mesh dispatch e permanece candidato caso ainda exista backlog visual após 0.14.56.
+- pending generation;
+- generation in-flight;
+- generation ready awaiting integration;
+- ready awaiting initial lighting/mesh dispatch;
+- mesh in-flight;
+- mesh ready awaiting integration;
+- distância em chunks do primeiro buraco visível à frente.
 
-Próximo trabalho, se o runtime ainda deixar o jogador alcançar vazio:
+Com base nisso, próximos candidatos estruturais, nesta ordem:
 
-1. medir/logar `pending`, `ready`, generation in-flight e mesh in-flight durante movimento;
-2. identificar se o backlog restante está antes de generation completion, no direct-light seed, mesh task ou mesh integration;
-3. adicionar viés de direção somente se chunks à frente continuarem perdendo para chunks de distância equivalente;
-4. não aumentar limits/budgets sem evidência do estágio saturado;
-5. objetivo runtime continua: em velocidade normal, o jogador não deve alcançar área sem terrain visível.
+1. separar generation de mesh/remesh em pools dedicados com orçamento total controlado, se a competição do pool compartilhado continuar sendo o limitante;
+2. tornar cold regional prerequisites uma task explícita/readiness explícita, em vez de inferir aquecimento pela primeira geração útil;
+3. mover initial direct-light seed para pipeline async stale-safe ou introduzir readiness de lighting, se `ready -> mesh` for o estágio saturado;
+4. aumentar lookahead de forma **adaptativa à velocidade/backlog**, não como render distance artificial gigante;
+5. se throughput físico ainda não puder acompanhar um movimento permitido pelo jogo, implementar uma estratégia visual de LOD/far terrain/fog coerente — não aceitar void cru como fallback e não congelar o jogador como solução padrão.
+
+Não marcar P0.1 resolvido até runtime contínuo em flight máximo sem buracos visíveis.
 
 ## P0.2 — Lighting/shadows: lamp latency + seam entre chunks
 
 Sintomas confirmados:
 
 - lighting/shadow demora perceptivelmente para estabilizar;
-- posicionar `lamp` evidencia bastante a latência;
-- durante convergência/carregamento aparece sombra falsa/linha escura na fronteira entre chunks.
+- `lamp` evidencia a latência;
+- durante convergência/carregamento aparece linha/sombra falsa na fronteira entre chunks.
 
-Estado atual relevante:
+Estado:
 
 - dynamic lighting: budget de 2 ms / até 4096 voxels por frame;
-- voxel edits entram em `PendingLightingUpdates::enqueue_voxel_edit` com voxel + vizinhos prioritários;
-- changed chunks entram em remesh conforme a propagação altera o campo;
-- initial/direct lighting seed continua síncrono e separado da convergência dinâmica.
+- voxel edits entram com voxel + vizinhos prioritários;
+- changed chunks entram em remesh conforme propagação altera o campo;
+- initial/direct lighting seed continua síncrono entre generation integrada e mesh dispatch.
 
 Próximo trabalho:
 
-1. seguir `lamp placement -> lighting queue -> changed_chunks -> remesh -> mesh visível/shadow`;
-2. localizar se a latência está na propagação, remesh queue, mesh task ou integration;
-3. não resolver apenas aumentando budget;
-4. impedir que lighting incompleto de chunk se manifeste como shadow seam;
-5. considerar readiness/revision explícita por chunk se geometry e lighting ficam observáveis em estados incoerentes;
-6. se necessário, introduzir content/light revision por chunk antes de qualquer async lighting mais agressivo.
+1. seguir `lamp placement -> lighting queue -> changed_chunks -> remesh -> mesh visível`;
+2. separar latência de propagação vs remesh vs mesh integration;
+3. impedir lighting parcial de aparecer como seam;
+4. considerar content/light readiness + revisions por chunk se necessário.
 
 Não marcar resolvido sem runtime com lamp junto e longe de fronteiras.
 
@@ -198,51 +222,35 @@ Não marcar resolvido sem runtime com lamp junto e longe de fronteiras.
 
 Sintomas confirmados:
 
-- rivers e lakes ainda geram paredes/cortes retos em vez de carvar margens/topo naturalmente;
-- rivers ainda podem nascer no meio do nada;
-- rivers ainda podem morrer no meio do nada;
-- intersection river/tunnel ainda faz o tunnel terminar abruptamente.
+- rivers/lakes ainda podem produzir paredes/cortes retos;
+- rivers podem nascer ou morrer sem origem/destino visualmente válidos;
+- river/tunnel pode terminar abruptamente na interseção.
 
-### Causa concreta já identificada para river/tunnel
+Causa concreta já identificada para river/tunnel em `src/world/generation/density.rs`:
 
-Em `src/world/generation/density.rs`:
+- `surface_carver_allowed = pass.region.hydrology.water_at(horizontal).is_none()` desliga o surface tunnel carver inteiro por coluna ao entrar em água;
+- o gate binário produz descontinuidade na borda de river/lake;
+- próximo fix deve compor/blendar o carver com hydrology, sem reintroduzir shaft/água quebrada.
 
-- `surface_carver_allowed = pass.region.hydrology.water_at(horizontal).is_none()`;
-- isso desliga o **surface tunnel carver inteiro por coluna** ao entrar em coluna com água;
-- o gate binário produz uma descontinuidade exatamente na borda de river/lake;
-- `surface_carver_density_delta` já compõe sobre a densidade atual, então o próximo fix deve substituir/remover esse veto por composição/blend correto, sem reintroduzir shaft/água quebrada.
+Investigar também:
 
-### River graph/selection
+- origem válida: spring/lake/upstream/confluence;
+- destino válido: downstream contínuo até lake/ocean/confluence/trunk;
+- continuidade entre hydrology regions;
+- slope/blend vertical e horizontal de margens/topo;
+- confluences e waterfall outlets.
 
-Investigar:
+Não marcar resolvido sem runtime de margem, nascente, foz, lago, confluence, waterfall e tunnel cruzando água.
 
-- `keep_only_complete_downstream_paths` garante destino lake/ocean dentro do trace, mas não garante origem visível semanticamente válida;
-- cells podem entrar em `channels` pelo flow threshold sem serem spring/lake source;
-- continuidade entre hydrology regions e margins;
-- primeiro edge materializado não pode parecer uma nascente só porque predecessor ficou fora da região;
-- confluences que reposicionam tributários precisam preservar conexão visual/geométrica;
-- origem válida: spring/lake/upstream/confluence; destino válido: downstream contínuo até lake/ocean/confluence/trunk.
+## P1.1 — Mountains dominantes + regionais raros
 
-### Margens/topo
+Feedback confirmado:
 
-- river/lake bed já varia por horizontal `strength`;
-- carve usa `VerticalDensityDelta` em uma faixa Y fixa por coluna;
-- `enforce_hydrology_water_volume` também força air no volume molhado e headroom acima;
-- revisar composição para slope/blend vertical + horizontal contínuo em vez de parede/patamar;
-- river carve pode ser mais largo que water boundary para formar bank, mas a transição precisa ser suave;
-- lake shore reinforcement precisa acompanhar o relevo realmente gerado.
+- Mountains estão MUITO presentes;
+- Witchwood, Enchanted Forest e Wasteland aparecem raramente;
+- Plains precisa de leve aumento de oak trees.
 
-Não marcar resolvido sem runtime de margem lateral, topo, nascente, foz, lago, confluence, waterfall e tunnel cruzando/chegando em água.
-
-## P1.1 — Mountains extremamente dominantes + outros biomas raros
-
-Feedback reforçado pelo usuário:
-
-- mountains estão **MUITO** presentes, não apenas levemente acima do desejado;
-- Witchwood, Enchanted Forest e Wasteland aparecem extremamente raramente;
-- aumentar um pouco a quantidade de oak trees em Plains.
-
-Valores atuais:
+Valores relevantes atuais:
 
 - Plains/Wasteland regional weight: 1.0;
 - Witchwood/Enchanted Forest regional weight: 1.0;
@@ -250,127 +258,87 @@ Valores atuais:
 - Plains/Wasteland size: 120–420;
 - Witchwood/Enchanted Forest size: 140–460;
 - Mountains metadata size: 90–260;
-- Plains oak: spacing 80, chance 0.48, jitter 24.
+- Plains oak: spacing 80, chance 0.48, jitter 24;
+- `mountain_belt`: scale 0.0017, threshold 0.86, width 0.22, warpStrength 85;
+- `mountain_peak`: spacing 760, chance 0.48, radius 120–230, warpStrength 42.
 
-Importante: Mountains **não é um regional biome simples**. O JSON usa:
+Montanhas usam distributions especiais; sobrepresença deve ser corrigida na geometria/cobertura belt+peak, não só no `weight`.
 
-- `mountain_belt`: scale `0.0017`, threshold `0.86`, width `0.22`, warpStrength `85`;
-- `mountain_peak`: spacing `760`, chance `0.48`, radius `120–230`, warpStrength `42`.
+## P1.2 — Coast isolada no interior
 
-Logo, a sobrepresença provavelmente é controlada principalmente por **belt/peak distribution geometry** (threshold/width/chance/spacing/radius/warp), e não apenas por `weight = 0.85` ou tamanho mínimo.
-
-Próximo trabalho:
-
-1. medir/entender cobertura efetiva de mountain belts + peaks no selector;
-2. reduzir cobertura de mountains pelas distributions especiais;
-3. auditar por que regionais de peso igual aparecem tão pouco: `select_surface_biome_index`, dominant-neighbor suppression, site spacing e fallback;
-4. preservar regiões grandes — não resolver transformando o mapa em mosaico pequeno;
-5. aumentar levemente árvores em Plains, mantendo Plains claramente menos arborizado que Witchwood/Enchanted Forest.
-
-Tratar a presença excessiva de mountains como bug de balanceamento severo, não tuning cosmético.
-
-## P1.2 — Coast aparecendo isolada no interior
-
-Sintoma confirmado:
-
-- `coast` observado no meio de `plains`, sem ocean visível por perto.
-
-Estado atual:
-
-- `coast.json` e `ocean.json` são `kind: hydrology`;
-- `BiomeField::from_dimension` os exclui corretamente de `surface_biomes` regionais;
-- portanto coast isolada não vem do weighted regional selector normal.
-
-Próximo trabalho:
-
-- auditar hydrology overlay/identity e consumers de nome/visual do biome;
-- coast deve existir apenas na faixa real de transição oceânica/hydrology;
-- conferir `ocean_strength`, coast blend thresholds e residual de continentalness que possa promover coast em terra sem ocean próximo.
+- `coast.json` e `ocean.json` são `kind: hydrology` e não entram no selector regional comum;
+- coast isolada deve ser investigada no hydrology overlay/identity;
+- conferir `ocean_strength`, coast blend thresholds e continentalness residual.
 
 ## P1.3 — Clouds não renderizam
 
-Sintoma confirmado:
+Causa provável forte:
 
-- nuvens não estão visíveis/renderizando em gameplay.
+- `src/rendering/sky_layers/clouds.rs` usa altitude absoluta ~34–48;
+- Overworld `seaLevel = 90`;
+- X/Z seguem câmera, Y permanece absoluto, então clouds ficam abaixo do terreno/jogador.
 
-Causa provável forte já identificada em `src/rendering/sky_layers/clouds.rs`:
+Próximo fix: altitude coerente com dimensão/mundo, preservando density/color data-driven.
 
-- `altitude = 34.0 + ... * 14.0`, portanto clouds ficam em Y absoluto ~34–48;
-- Overworld usa `seaLevel = 90`;
-- `update_cloud_positions` acompanha a câmera em X/Z, mas mantém Y em `cloud.altitude` absoluto;
-- em gameplay normal, clouds ficam abaixo do terreno/jogador e parecem não renderizar.
+## P2 — Ghost/held block e outros
 
-Próximo fix esperado:
-
-- tornar altitude coerente com o mundo/câmera/dimensão em vez de hardcode absoluto abaixo do sea level;
-- preservar data-driven density/color já vindos dos biome visuals;
-- validar visibilidade em plains, mountains e biomas com cloud density baixa/alta;
-- não transformar isso em reestruturação grande de sky layers sem necessidade.
-
-## P2 — Ghost/held block
-
-Código atual está alinhado ao invariant pedido:
-
-- held block observa `PlayerHotbar.selected_slot()` + `item_at(selected_slot)`;
-- slot vazio -> root/faces hidden;
-- placement preview limpa id/transform/visibility sem item.
-
-Como houve bug histórico, manter como verificação de regressão. Transparência do ghost deve ser percebida no bloco inteiro.
-
-## P2 — Outros itens pendentes
-
-- dye anteriormente fraco;
-- Player HUD / target HUD e demais produto fora deste ciclo até repriorização explícita.
+- held block observa apenas `PlayerHotbar.selected_slot()` + `item_at`;
+- slot vazio deve esconder root/faces;
+- placement preview deve limpar id/transform/visibility sem item;
+- transparência do ghost deve ser percebida no bloco inteiro;
+- dye foi reportado anteriormente como fraco;
+- Player HUD / target HUD permanecem fora deste ciclo até repriorização explícita.
 
 ---
 
 # Refactor estrutural ainda relevante
 
-O próximo refactor não deve ser uma sequência de micro-otimizações sem repro. Ele deve apoiar os P0 atuais.
-
 ## Candidate: per-chunk content/light readiness + revisions
 
-Problemas que podem se beneficiar da mesma fundação:
+Pode servir simultaneamente para:
 
-- mover direct-light seed para trabalho async stale-safe;
+- direct-light seed async stale-safe;
 - impedir shadow seam com lighting parcial;
-- saber quando chunk está pronto para mesh/spawn;
-- reduzir reprocessamento de mesh/lighting após edits.
+- saber quando chunk está realmente pronto para mesh/spawn;
+- reduzir remesh/reprocessamento após edits.
 
-As revisions atuais não são ideais:
+Revisions atuais não são ideais:
 
-- `chunk_mesh_revision` é ampla demais porque lighting também a altera;
+- `chunk_mesh_revision` é ampla porque lighting também a altera;
 - `block_content_revision` é global e não cobre fluid changes como revision por chunk.
 
-Se os P0 confirmarem essa necessidade, considerar owner explícito para revision/readiness de **conteúdo por chunk (blocks + fluids)** e estado de lighting, separado de mesh revision.
+Se P0.1/P0.2 confirmarem, introduzir owner explícito para revision/readiness de conteúdo por chunk (blocks + fluids) e estado de lighting, separado de mesh revision.
 
-Lighting lazy expansion só é aceitável se preservar exatamente FIFO + dedup global + priority promotion da fila atual.
+Lighting lazy expansion só é aceitável se preservar FIFO + dedup global + priority promotion da fila atual.
 
 ---
 
 # Ordem de execução no próximo `go`
 
-1. **P0.1 streaming/time-to-visible** — validar 0.14.56; se ainda houver vazio à frente, instrumentar backlog por estágio e atacar o estágio comprovadamente saturado, incluindo direction tie-break/direct-light seed se a evidência apontar para eles.
-2. **P0.2 lighting/shadows** — lamp latency e seam entre chunks; coordenar com initial lighting se for o mesmo gargalo.
-3. **P0.3 hydrology continuity** — primeiro river/tunnel gate binário; depois endpoints e margens/topo.
-4. **P1.1 biome distribution** — reduzir mountains de forma material, tornar regionais perceptíveis e aumentar levemente árvores de Plains.
+1. **P0.1 seamless streaming** — validar 0.14.58/0.14.59 em flight máximo; se ainda houver void, instrumentar backlog por estágio e atacar o estágio comprovado.
+2. **P0.2 lighting/shadows** — lamp latency + seam; coordenar com initial lighting se compartilhar o gargalo.
+3. **P0.3 hydrology continuity** — primeiro river/tunnel gate binário, depois endpoints e margens/topo.
+4. **P1.1 biome distribution** — reduzir Mountains materialmente, tornar regionais perceptíveis e aumentar levemente árvores de Plains.
 5. **P1.2 coast isolada** — corrigir overlay/identity hidrológico.
 6. **P1.3 clouds** — corrigir altitude absoluta incompatível com sea level/mundo.
-7. Retomar refactor estrutural/perf conforme a evidência dos P0, evitando micro-churn sem efeito runtime.
+7. Retomar refactor estrutural conforme evidência dos P0, evitando micro-churn sem efeito runtime.
 
 ---
 
 # Performance direction
 
-Meta não é apenas ~60 FPS; também é streaming responsivo e mundo visualmente pronto à frente do jogador.
+Meta não é apenas ~60 FPS; é mundo visualmente pronto antes de o jogador alcançá-lo.
 
 - heavy generation/mesh/remesh fora da main thread;
-- integração/restore/unload/lighting/fluid budgetados sem criar backlog visível;
-- reduzir custo indivisível dentro de budgets;
-- preservar prioridade de chunks próximos ao longo de todo o pipeline;
+- integração/restore/unload/lighting/fluid budgetados sem backlog visível;
+- prioridade baseada em visibilidade e direção de movimento, não só distância euclidiana;
+- preload adaptativo/preditivo em vez de render radius inflado indiscriminadamente;
+- reservar throughput para finalizar chunks já gerados antes de criar backlog novo;
 - revision tracking para stale async work;
 - caches/metadata no owner correto;
+- evitar worker convoy em caches compartilhados;
 - stack/reuse para scratch limitado;
 - evitar scans globais, allocations temporárias e writes idempotentes;
 - não trocar corretude por performance aparente;
-- natural hydrology permanece generation-authoritative.
+- natural hydrology permanece generation-authoritative;
+- **void cru nunca é o fallback visual aceitável para streaming normal.**
