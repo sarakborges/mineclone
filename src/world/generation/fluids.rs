@@ -46,10 +46,13 @@ pub(super) fn rasterize_fluid_pass(
                 let world_z = chunk_origin.z + local_z as i32;
                 let horizontal = Vec2::new(world_x as f32 + 0.5, world_z as f32 + 0.5);
                 let surface_height = columns[column_index(local_x, local_z)].surface_height as f32;
+                // Rank only candidates with a plausible original floor. A
+                // higher unsupported lake previously won water_at(), then got
+                // rejected here, hiding an otherwise supported river below.
                 let surface_water = pass
                     .region
                     .hydrology
-                    .water_at(horizontal)
+                    .supported_water_at(horizontal, surface_height)
                     .filter(|water| surface_water_is_supported(*water, surface_height));
                 let surface_fluid_id = surface_water.as_ref().map(|water| {
                     pass.fluids.id_of(water.fluid_id).unwrap_or_else(|| {
