@@ -142,7 +142,12 @@ pub(super) fn relax_budgeted(
         queue.enqueue_with_neighbors_in_lane(position, lane);
     }
 
-    if processing_interactive && !queue.has_interactive_work() {
+    if processing_interactive {
+        // Publish each completed frame's voxel changes even if a large edit
+        // still has interactive relaxation queued. Deferring mesh revisions
+        // until the entire lane drains leaves visible meshes stale under
+        // repeated edits; the next batch will enqueue another deduplicated
+        // remesh if convergence changes these voxels again.
         interactive_changed_chunks.retain(|coord| world.chunk(*coord).is_some());
         changed_chunks.extend(interactive_changed_chunks.drain());
     }
@@ -258,6 +263,10 @@ fn mix_strongest_block_lights<const N: usize>(lights: [BlockLight; N]) -> BlockL
     let mut strongest_count = 0_u32;
 
     for light in &lights {
+        strongest_intensity = strongest_intensity.max(light.intensity());
+    }
+
+    for light in &lights {
         if light.intensity() != strongest_intensity {
             continue;
         }
@@ -319,8 +328,8 @@ fn filtered_level(level: u8, factor: f32) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::mix_strongest_block_lights;
-    use crate::{content::color::Hsi, voxel::light::BlockLight};
+    use super::*;
+    use crate::content::color::Hsi;
 
     #[test]
     fn colored_attenuation_preserves_hue_and_saturation() {
@@ -363,5 +372,39 @@ mod tests {
 
         assert_eq!(mixed.intensity(), 15);
         assert_eq!(mixed.saturation(), 0);
+    }
+
+    #[test]
+    fn budgeted_interactive_changes_publish_before_the_queue_drains() {
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
+        let initial_revision = world.chunk_mesh_revision(IVec3::ZERO).unwrap();
+        let blocks = BlockRegistry::default();
+        let fluids = FluidRegistry::default();
+        let secondary_properties = SecondaryPropertyRegistry::default();
+        let mut queue = LightingQueue::default();
+        for z in 0..CHUNK_SIZE as i32 {
+            for x in 0..CHUNK_SIZE as i32 {
+                queue.enqueue_interactive(IVec3::new(x, 8, z));
+            }
+        }
+        let mut context = LightingContext::default();
+        let mut changed = HashSet::new();
+        let mut interactive_changed = HashSet::new();
+
+        relax_budgeted(
+            &mut world,
+            LightingRegistries::new(&blocks, &fluids, &secondary_properties),
+            &mut queue,
+            &mut context,
+            &mut changed,
+            &mut interactive_changed,
+            |processed| processed >= BUDGET_CHECK_INTERVAL_VOXELS,
+        );
+
+        assert!(queue.has_interactive_work());
+        assert!(changed.contains(&IVec3::ZERO));
+        assert!(interactive_changed.is_empty());
+        assert!(world.chunk_mesh_revision(IVec3::ZERO).unwrap() > initial_revision);
     }
 }
