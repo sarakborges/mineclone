@@ -227,6 +227,7 @@ mod tests {
             influences: [BiomeInfluence {
                 id: "surface",
                 weight: 1.0,
+                surface_index: 0,
             }]
             .into_iter()
             .collect(),
@@ -275,6 +276,7 @@ mod tests {
         let source = [BiomeInfluence {
             id: "new",
             weight: 1.0,
+            surface_index: 0,
         }];
 
         replace_influences(&mut target, &source);

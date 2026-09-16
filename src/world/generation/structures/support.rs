@@ -114,12 +114,7 @@ fn supported_surface_ground_y(
     let influences = surface
         .influences
         .iter()
-        .map(|influence| {
-            (
-                context.biome_field.surface_biome_index(influence.id),
-                influence.weight,
-            )
-        })
+        .map(|influence| (influence.surface_index, influence.weight))
         .collect::<ArrayVec<_, MAX_SURFACE_INFLUENCES>>();
     let surface_carver_allowed = region
         .hydrology
