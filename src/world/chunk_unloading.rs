@@ -12,6 +12,7 @@ use crate::{
 
 use super::{
     chunk_remesh::ChunkRemeshQueue,
+    chunk_remesh_tasks::ChunkRemeshTasks,
     chunk_rendering::retire_chunk_render_allocation,
     chunk_system_params::ChunkRenderer,
     render_distance::RenderDistanceSettings,
@@ -58,6 +59,7 @@ pub(super) struct ChunkUnloadRuntime<'w> {
     state: ResMut<'w, ChunkUnloadState>,
     lighting: ResMut<'w, PendingLightingUpdates>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
+    remesh_tasks: ResMut<'w, ChunkRemeshTasks>,
 }
 
 pub(super) fn unload_chunk_meshes(
@@ -98,6 +100,7 @@ pub(super) fn unload_chunk_meshes(
 
         retire_chunk_render_allocation(&mut renderer.commands, &mut renderer.pool, coord);
         runtime.remesh_queue.remove(coord);
+        runtime.remesh_tasks.remove_lighting_revision(coord);
         runtime.world.archive_chunk(coord);
         unloaded.push(coord);
         budget.record(1);

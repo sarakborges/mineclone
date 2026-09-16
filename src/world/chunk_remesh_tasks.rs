@@ -1,10 +1,15 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
-use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
+use bevy::{
+    platform::collections::HashMap,
+    prelude::*,
+    tasks::AsyncComputeTaskPool,
+};
 
 use crate::voxel::{
     fluid_mesh::ChunkFluidMesh,
     mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot},
+    world::VoxelWorld,
 };
 
 use super::{
@@ -15,6 +20,8 @@ use super::{
 };
 
 pub(crate) const MAX_REMESH_TASKS_IN_FLIGHT: usize = 4;
+
+type SharedLightingRevisions = Arc<RwLock<HashMap<IVec3, u64>>>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ChunkRemeshTaskKind {
@@ -28,17 +35,84 @@ pub(crate) enum ChunkRemeshTaskMeshes {
     Fluid(Vec<ChunkFluidMesh>),
 }
 
+#[derive(Clone)]
+struct LightingRemeshDependencies {
+    expected: Vec<(IVec3, u64)>,
+    revisions: SharedLightingRevisions,
+}
+
+impl LightingRemeshDependencies {
+    fn capture(center: IVec3, revisions: &SharedLightingRevisions) -> Self {
+        let current = revisions
+            .read()
+            .expect("lighting remesh revision tracker should not be poisoned");
+        let mut expected = Vec::with_capacity(27);
+
+        for y in -1..=1 {
+            for z in -1..=1 {
+                for x in -1..=1 {
+                    let coord = center + IVec3::new(x, y, z);
+                    expected.push((coord, current.get(&coord).copied().unwrap_or(0)));
+                }
+            }
+        }
+
+        drop(current);
+        Self {
+            expected,
+            revisions: Arc::clone(revisions),
+        }
+    }
+
+    fn is_current(&self) -> bool {
+        let current = self
+            .revisions
+            .read()
+            .expect("lighting remesh revision tracker should not be poisoned");
+        self.expected
+            .iter()
+            .all(|(coord, expected)| current.get(coord).copied().unwrap_or(0) == *expected)
+    }
+}
+
+pub(crate) struct ChunkRemeshDependencies {
+    content: ChunkMeshDependencies,
+    lighting: Option<LightingRemeshDependencies>,
+}
+
+impl ChunkRemeshDependencies {
+    pub(crate) fn is_current(&self, world: &VoxelWorld) -> bool {
+        self.content.is_current(world)
+            && self
+                .lighting
+                .as_ref()
+                .is_none_or(LightingRemeshDependencies::is_current)
+    }
+}
+
 pub(crate) struct ChunkRemeshTaskOutput {
     pub(crate) kind: ChunkRemeshTaskKind,
     pub(crate) meshes: ChunkRemeshTaskMeshes,
-    pub(crate) dependencies: ChunkMeshDependencies,
+    pub(crate) dependencies: ChunkRemeshDependencies,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub(crate) struct ChunkRemeshTasks {
     revision: u64,
     snapshot: Option<Arc<MeshContentSnapshot>>,
     pending: ChunkTaskQueue<ChunkRemeshTaskOutput>,
+    lighting_revisions: SharedLightingRevisions,
+}
+
+impl Default for ChunkRemeshTasks {
+    fn default() -> Self {
+        Self {
+            revision: 0,
+            snapshot: None,
+            pending: ChunkTaskQueue::default(),
+            lighting_revisions: Arc::new(RwLock::new(HashMap::default())),
+        }
+    }
 }
 
 impl ChunkRemeshTasks {
@@ -63,6 +137,32 @@ impl ChunkRemeshTasks {
         self.pending.contains(coord)
     }
 
+    pub(crate) fn bump_lighting_revisions(
+        &mut self,
+        coords: impl IntoIterator<Item = IVec3>,
+    ) {
+        let mut revisions = self
+            .lighting_revisions
+            .write()
+            .expect("lighting remesh revision tracker should not be poisoned");
+        for coord in coords {
+            let next = revisions
+                .get(&coord)
+                .copied()
+                .unwrap_or(0)
+                .wrapping_add(1)
+                .max(1);
+            revisions.insert(coord, next);
+        }
+    }
+
+    pub(crate) fn remove_lighting_revision(&mut self, coord: IVec3) {
+        self.lighting_revisions
+            .write()
+            .expect("lighting remesh revision tracker should not be poisoned")
+            .remove(&coord);
+    }
+
     pub(crate) fn schedule(
         &mut self,
         coord: IVec3,
@@ -79,7 +179,11 @@ impl ChunkRemeshTasks {
             .unwrap_or_else(|| panic!("chunk remesh snapshot must be prepared before scheduling"))
             .clone();
         let revision = self.revision;
-        let dependencies = world.dependencies();
+        let dependencies = ChunkRemeshDependencies {
+            content: world.dependencies(),
+            lighting: (kind == ChunkRemeshTaskKind::Lighting)
+                .then(|| LightingRemeshDependencies::capture(coord, &self.lighting_revisions)),
+        };
         let task = AsyncComputeTaskPool::get().spawn(async move {
             let world = world.materialize_shell();
             let context = snapshot.context(&world);
@@ -108,5 +212,22 @@ impl ChunkRemeshTasks {
 
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<ChunkRemeshTaskOutput>> {
         self.pending.poll_ready()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lighting_dependencies_detect_halo_revision_changes() {
+        let mut tasks = ChunkRemeshTasks::default();
+        let center = IVec3::new(3, 2, 5);
+        let dependencies =
+            LightingRemeshDependencies::capture(center, &tasks.lighting_revisions);
+
+        assert!(dependencies.is_current());
+        tasks.bump_lighting_revisions([center + IVec3::X]);
+        assert!(!dependencies.is_current());
     }
 }

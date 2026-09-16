@@ -12,7 +12,8 @@ use crate::voxel::{
 };
 
 use super::{
-    chunk_remesh::ChunkRemeshQueue, chunk_system_params::VoxelContent, work_budget::FrameWorkBudget,
+    chunk_remesh::ChunkRemeshQueue, chunk_remesh_tasks::ChunkRemeshTasks,
+    chunk_system_params::VoxelContent, work_budget::FrameWorkBudget,
 };
 
 const LIGHTING_BUDGET: Duration = Duration::from_millis(2);
@@ -24,6 +25,7 @@ pub(super) struct DynamicLightingRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
     lighting: ResMut<'w, PendingLightingUpdates>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
+    remesh_tasks: ResMut<'w, ChunkRemeshTasks>,
 }
 
 pub(super) fn pending_lighting_work(lighting: Res<PendingLightingUpdates>) -> bool {
@@ -56,6 +58,9 @@ pub(super) fn process_dynamic_lighting(
         },
     );
 
+    runtime
+        .remesh_tasks
+        .bump_lighting_revisions(changed_chunks.iter().copied());
     for coord in changed_chunks.drain() {
         runtime.remesh_queue.enqueue_lighting_change(coord);
     }
