@@ -28,7 +28,7 @@ Este `HANDOFF.md` na raiz de `develop` é a fonte canônica e persistente do pro
 ## Versionamento
 
 - Fonte operacional acordada: arquivo raiz `VERSION`.
-- Estado atual: `VERSION = 0.14.46`.
+- Estado atual: `VERSION = 0.14.47`.
 - `src/app/version.rs` deixa explícito que `VERSION` fica fora de `Cargo.toml` de propósito para que bumps frequentes não invalidem fingerprints do Cargo. A divergência de `[package].version = 0.10.16` é intencional enquanto essa política existir; não sincronizar silenciosamente.
 
 ## Validação
@@ -73,11 +73,11 @@ Roda em push para `develop`/`main` e em pull requests.
 
 Último HEAD de código publicado:
 
-`86d5f4b60ab785004ae3f16fe56bc8559f789484`
+`181ccb83472302e3ac892687859cda91503492c6`
 
-Bloco: `Carry surface biome index in influences`
+Bloco: `Fix carried biome influence index consumers`
 
-`VERSION`: `0.14.46`
+`VERSION`: `0.14.47`
 
 Commits recentes relevantes:
 
@@ -96,7 +96,8 @@ Commits recentes relevantes:
 - `8a96146` — `0.14.43`, `ChunkMeshSnapshot` captura clones COW + revisions no main thread e materializa os 1736 samples do halo dentro das tasks async.
 - `686d3cb` — `0.14.44`, pending sort do streaming reutiliza scratch e elimina allocation de `sort_by_cached_key` preservando empates via ordinal.
 - `a1a36c7` — `0.14.45`, corrige o `clippy::useless_vec` no teste do bloco anterior trocando o Vec fixo por array; nenhuma lógica muda.
-- `86d5f4b` — `0.14.46`, `BiomeInfluence` carrega `surface_index`; `sample_generation_columns` reutiliza o índice já calculado e deixa de fazer scan linear ID -> índice para cada influência de cada coluna.
+- `86d5f4b` — `0.14.46`, `BiomeInfluence` carrega `surface_index`; geração de colunas reutiliza o índice já calculado.
+- `181ccb8` — `0.14.47`, corrige os consumers esquecidos do novo `surface_index`: testes de identidade passam o campo explicitamente e structure support usa o índice carregado em vez do helper linear removido.
 
 ## CI recente
 
@@ -106,7 +107,8 @@ Commits recentes relevantes:
 - `0.14.43` / run `35038065308`: Clippy **success**, `cargo check` **success**.
 - `0.14.44` / run `35038433002`: **failure** de Clippy apenas no teste novo por `clippy::useless_vec`.
 - `0.14.45` / run `35038881264`: Clippy **success**, `cargo check` **success**.
-- `0.14.46` / run `35039241647`: **queued/pending** nesta atualização.
+- `0.14.46` / run `35039241647`: **failure**; dois testes não inicializavam `BiomeInfluence.surface_index` e structure support ainda chamava `surface_biome_index` removido.
+- `0.14.47` / run `35039797881`: **queued/pending** nesta atualização.
 
 ---
 
@@ -122,6 +124,7 @@ Commits recentes relevantes:
 - `DeduplicatedQueue`, `VoxelWorld`, streaming selection e `ChunkRenderPool.active` usam hash collections do Bevy quando não há requisito de ordem.
 - Streaming pending sort não depende mais do scratch temporário interno de `sort_by_cached_key`.
 - `ChunkMeshSnapshot` não expande mais o halo de 1736 samples no main thread; a task async materializa o shell congelado a partir de clones COW dos vizinhos.
+- O light storage de `VoxelChunk` também é `Arc<[VoxelLight]>`; clones de snapshot permanecem baratos e mutação usa COW via `Arc::make_mut`.
 
 ## Worldgen / biome
 
@@ -130,7 +133,7 @@ Commits recentes relevantes:
 - `BiomeField::sample_surface` usa `ArrayVec` para o máximo estrutural de 26 influências.
 - `GenerationColumnSample` usa `SmallVec` inline no caso comum.
 - Structure support reutiliza a própria amostra de biome.
-- `BiomeInfluence` conserva o surface biome index calculado pelo sampler; geração de colunas não reconstrói mais esse índice por busca textual.
+- `BiomeInfluence` conserva o surface biome index calculado pelo sampler; geração de colunas e structure support não reconstruem mais esse índice por busca textual.
 
 ## Lighting
 
@@ -157,12 +160,13 @@ Commits recentes relevantes:
 
 # Hot paths / roadmap restante
 
-1. **Próximo candidato (`0.14.47`) — content registries**: `DefinitionMap<T>` ainda usa `std::HashMap`; ele sustenta Block/Biome/Fluid/etc. registries e `BlockRegistry::get` ocorre por voxel não vazio durante mesh build. `SecondaryPropertyRegistry` também tem mapa externo `std::HashMap`. Não há ordem contratual hoje; troca de hasher para `bevy::platform` é compatível.
-2. **Depois (`0.14.48`) — worldgen caches**: `BiomeField.surface_site_biomes` faz até 25 lookups de cache por `sample_surface`; `WorldFeatureFields`/`FeatureCaches` têm maps/sets quentes sob locks e scratch. Nenhum depende de ordenação; trocar para Bevy collections é candidato coerente.
-3. **Depois (`0.14.49`) — mesh buffers**: `build_chunk_mesh` agrupa faces expostas em `std::HashMap`; roda async, mas afeta throughput. O output já é ordenado explicitamente, então o hasher não é semântico.
-4. Reavaliar a expansão de 4096 lighting seeds apenas se houver desenho que preserve FIFO + dedup + priority promotion exatamente; atualmente bloqueado por corretude.
-5. A divergência `VERSION` vs `Cargo.toml` é intencional conforme `src/app/version.rs`; não há patch sem mudança explícita dessa política.
-6. Depois desses candidatos, fazer auditoria global final. Sem alvo sustentado por evidência/invariant, encerrar o roadmap.
+1. **Próximo candidato (`0.14.48`) — content registries**: `DefinitionMap<T>` ainda usa `std::HashMap`; ele sustenta Block/Biome/Fluid/etc. registries e `BlockRegistry::get` ocorre por voxel não vazio durante mesh build. `SecondaryPropertyRegistry` também tem mapa externo `std::HashMap`. Não há ordem contratual hoje; troca de hasher para `bevy::platform` é compatível.
+2. **Depois (`0.14.49`) — worldgen caches**: `BiomeField.surface_site_biomes` faz até 25 lookups de cache por `sample_surface`; `WorldFeatureFields`/`FeatureCaches` têm maps/sets quentes sob locks e scratch. Nenhum depende de ordenação; trocar para Bevy collections é candidato coerente.
+3. **Depois (`0.14.50`) — mesh buffers**: `build_chunk_mesh` agrupa faces expostas em `std::HashMap`; roda async, mas afeta throughput. O output já é ordenado explicitamente, então o hasher não é semântico.
+4. **Depois dos hot paths (`0.14.51`) — CI docs-only**: `.github/workflows/ci.yml` roda Clippy/check também quando o push altera apenas `HANDOFF.md`. Adicionar filtro de paths para não gastar uma validação Rust inteira em commit exclusivamente documental, preservando CI para código/config relevante.
+5. Reavaliar a expansão de 4096 lighting seeds apenas se houver desenho que preserve FIFO + dedup + priority promotion exatamente; atualmente bloqueado por corretude.
+6. A divergência `VERSION` vs `Cargo.toml` é intencional conforme `src/app/version.rs`; não há patch sem mudança explícita dessa política.
+7. Depois desses candidatos, fazer auditoria global final. Sem alvo sustentado por evidência/invariant, encerrar o roadmap.
 
 ---
 
@@ -180,12 +184,13 @@ Só retomar quando o usuário priorizar ou runtime indicar regressão relacionad
 
 # Próximos passos
 
-1. Aguardar CI de `0.14.46` (`35039241647`).
-2. Se verde, publicar `0.14.47` migrando content registries para `bevy::platform`.
-3. Depois migrar caches quentes de worldgen (`0.14.48`).
-4. Depois migrar o mapa temporário de buffers do mesher (`0.14.49`).
-5. Registrar lighting seed expansion como bloqueada se nenhuma representação preservar a semântica da fila.
-6. Fazer auditoria global final. Sem novo alvo sustentado por evidência, encerrar roadmap.
+1. Aguardar CI de `0.14.47` (`35039797881`).
+2. Se verde, publicar `0.14.48` migrando content registries para `bevy::platform`.
+3. Depois migrar caches quentes de worldgen (`0.14.49`).
+4. Depois migrar o mapa temporário de buffers do mesher (`0.14.50`).
+5. Ajustar workflow para pular commits exclusivamente documentais (`0.14.51`).
+6. Registrar lighting seed expansion como bloqueada se nenhuma representação preservar a semântica da fila.
+7. Fazer auditoria global final. Sem novo alvo sustentado por evidência, encerrar roadmap.
 
 # Performance direction
 
