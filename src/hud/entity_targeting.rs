@@ -55,39 +55,35 @@ fn entity_hud_node(position: TargetBlockPosition) -> Node {
     }
 }
 
+fn entity_label_node(position: TargetBlockPosition) -> Node {
+    Node {
+        position_type: PositionType::Relative,
+        bottom: if position == TargetBlockPosition::Center {
+            px(TARGET_CROSSHAIR_OFFSET)
+        } else {
+            Val::Auto
+        },
+        ..default()
+    }
+}
+
 fn spawn_entity_hud(mut commands: Commands, settings: Res<HudSettings>) {
     let position = settings.target_block_position();
-    commands
-        .spawn((
-            EntityHudRoot,
-            entity_hud_node(position),
-            Visibility::Hidden,
-            GlobalZIndex(10),
+    commands.spawn((
+        EntityHudRoot,
+        entity_hud_node(position),
+        Visibility::Hidden,
+        GlobalZIndex(10),
+        Pickable::IGNORE,
+        DespawnOnExit(GameState::Gameplay),
+        children![(
+            EntityHudText,
+            typography::hud(""),
+            typography::tooltip_shadow(),
+            entity_label_node(position),
             Pickable::IGNORE,
-            DespawnOnExit(GameState::Gameplay),
-        ))
-        .with_children(|root| {
-            root.spawn((
-                Node {
-                    position_type: PositionType::Relative,
-                    bottom: if position == TargetBlockPosition::Center {
-                        px(TARGET_CROSSHAIR_OFFSET)
-                    } else {
-                        Val::Auto
-                    },
-                    ..default()
-                },
-                Pickable::IGNORE,
-            ))
-            .with_children(|row| {
-                row.spawn((
-                    EntityHudText,
-                    typography::hud(""),
-                    typography::tooltip_shadow(),
-                    Pickable::IGNORE,
-                ));
-            });
-        });
+        )],
+    ));
 }
 
 fn update_entity_hud(
@@ -97,32 +93,24 @@ fn update_entity_hud(
     definitions: Res<CreatureRegistry>,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
-    mut root: Single<(&mut Node, &mut Visibility, &Children), With<EntityHudRoot>>,
-    mut nodes: Query<&mut Node>,
-    mut text: Single<&mut Text, With<EntityHudText>>,
+    mut root: Single<(&mut Node, &mut Visibility), With<EntityHudRoot>>,
+    mut label: Single<(&mut Text, &mut Node), (With<EntityHudText>, Without<EntityHudRoot>)>,
 ) {
-    let (root_node, visibility, children) = &mut *root;
     let position = settings.target_block_position();
     let visible_target = if position != TargetBlockPosition::Hidden {
         targeted.0.and_then(|entity| creatures.get(entity).ok())
     } else {
         None
     };
+    let (root_node, visibility) = &mut *root;
     let desired = if visible_target.is_some() { Visibility::Visible } else { Visibility::Hidden };
     if **visibility != desired {
         **visibility = desired;
     }
+    let (text, label_node) = &mut *label;
     if settings.is_changed() {
         **root_node = entity_hud_node(position);
-        if let Some(child) = children.first()
-            && let Ok(mut node) = nodes.get_mut(*child)
-        {
-            node.bottom = if position == TargetBlockPosition::Center {
-                px(TARGET_CROSSHAIR_OFFSET)
-            } else {
-                Val::Auto
-            };
-        }
+        **label_node = entity_label_node(position);
     }
     let Some((creature, transform)) = visible_target else {
         return;
