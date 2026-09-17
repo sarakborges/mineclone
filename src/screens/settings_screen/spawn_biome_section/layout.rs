@@ -27,6 +27,10 @@ pub(in crate::screens::settings_screen) struct SpawnBiomeDropdownLabel;
 #[derive(Component)]
 pub(in crate::screens::settings_screen) struct SpawnBiomeDropdownPanel;
 
+/// Owns border/padding; the editable child remains the keyboard focus target.
+#[derive(Component)]
+pub(in crate::screens::settings_screen) struct SpawnBiomeSearchFrame;
+
 #[derive(Component)]
 pub(in crate::screens::settings_screen) struct SpawnBiomeSearchBar;
 
@@ -132,23 +136,9 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                         children![
                             (
                                 Button,
-                                SpawnBiomeSearchBar,
-                                EditableText {
-                                    max_characters: Some(128),
-                                    ..default()
-                                },
-                                TextCursorStyle {
-                                    color: theme::TEXT_PRIMARY,
-                                    ..default()
-                                },
-                                TextFont {
-                                    font: FontSource::SystemUi,
-                                    font_size: FontSize::Px(17.0),
-                                    ..default()
-                                },
-                                TextColor(theme::TEXT_PRIMARY),
-                                TextLayout::no_wrap(),
+                                SpawnBiomeSearchFrame,
                                 Node {
+                                    position_type: PositionType::Relative,
                                     width: percent(100),
                                     height: px(SEARCH_HEIGHT),
                                     padding: UiRect::horizontal(px(text_input::INPUT_PADDING_X)),
@@ -160,33 +150,60 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                                 },
                                 BackgroundColor(text_input::INPUT_FILL),
                                 BorderColor::all(text_input::input_border(false)),
-                                // The hint is an overlay, not a normal flex child of the editable text.
-                                // In-flow text makes the input stretch/shift as the user types.
-                                children![(
-                                    SpawnBiomeSearchText,
-                                    Visibility::Inherited,
-                                    Text::new(
-                                        localization
-                                            .text(language, "newWorld.spawnBiome.search")
-                                            .to_owned(),
+                                children![
+                                    (
+                                        Button,
+                                        SpawnBiomeSearchBar,
+                                        EditableText {
+                                            max_characters: Some(128),
+                                            ..default()
+                                        },
+                                        TextCursorStyle {
+                                            color: theme::TEXT_PRIMARY,
+                                            ..default()
+                                        },
+                                        TextFont {
+                                            font: FontSource::SystemUi,
+                                            font_size: FontSize::Px(17.0),
+                                            ..default()
+                                        },
+                                        TextColor(theme::TEXT_PRIMARY),
+                                        TextLayout::no_wrap(),
+                                        Node {
+                                            width: percent(100),
+                                            min_width: px(0),
+                                            height: percent(100),
+                                            align_items: AlignItems::Center,
+                                            overflow: Overflow::clip(),
+                                            ..default()
+                                        },
                                     ),
-                                    TextFont {
-                                        font: FontSource::SystemUi,
-                                        font_size: FontSize::Px(17.0),
-                                        ..default()
-                                    },
-                                    TextColor(theme::TEXT_MUTED),
-                                    TextLayout::no_wrap(),
-                                    Node {
-                                        position_type: PositionType::Absolute,
-                                        top: px(10),
-                                        left: px(text_input::INPUT_PADDING_X),
-                                        max_width: percent(90),
-                                        overflow: Overflow::clip(),
-                                        ..default()
-                                    },
-                                    Pickable::IGNORE,
-                                )],
+                                    (
+                                        SpawnBiomeSearchText,
+                                        Visibility::Inherited,
+                                        Text::new(
+                                            localization
+                                                .text(language, "newWorld.spawnBiome.search")
+                                                .to_owned(),
+                                        ),
+                                        TextFont {
+                                            font: FontSource::SystemUi,
+                                            font_size: FontSize::Px(17.0),
+                                            ..default()
+                                        },
+                                        TextColor(theme::TEXT_MUTED),
+                                        TextLayout::no_wrap(),
+                                        Node {
+                                            position_type: PositionType::Absolute,
+                                            top: px(10),
+                                            left: px(text_input::INPUT_PADDING_X + 1.0),
+                                            max_width: percent(90),
+                                            overflow: Overflow::clip(),
+                                            ..default()
+                                        },
+                                        Pickable::IGNORE,
+                                    ),
+                                ],
                             ),
                             (
                                 SpawnBiomeOptionsFrame,
