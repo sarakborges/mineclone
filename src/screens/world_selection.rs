@@ -75,13 +75,12 @@ impl PendingWorldLoad {
             slot.abandoned = true;
             slot.result.take()
         };
-        if let Some(stale) = stale {
-            if let Err(error) = thread::Builder::new()
+        if let Some(stale) = stale
+            && let Err(error) = thread::Builder::new()
                 .name("asteria-discard-world".to_owned())
                 .spawn(move || drop(stale))
-            {
-                warn!("Could not start abandoned-world cleanup worker: {error}");
-            }
+        {
+            warn!("Could not start abandoned-world cleanup worker: {error}");
         }
     }
 }
@@ -310,7 +309,7 @@ fn spawn_world_selection(
                     },
                 ));
                 panel.spawn((SelectionFeedback, typography::caption(String::new())));
-                panel.spawn((SelectionError, typography::caption(state.error.clone())));
+                panel.spawn((SelectionError, typography::caption(String::new())));
                 panel.spawn(menu_button(
                     localization.text(language.get(), "worldSelection.load").to_owned(),
                     WorldSelectionAction::Load,
@@ -413,7 +412,7 @@ fn poll_world_load(
     transition.request(ScreenTransitionTarget::game(GameState::Loading));
 }
 
-fn abandon_world_load(mut state: ResMut<WorldSelectionState>) {
+fn abandon_world_load(state: Res<WorldSelectionState>) {
     if let Some(pending) = state.loading.as_ref() {
         pending.abandon();
     }
