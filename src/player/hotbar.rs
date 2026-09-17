@@ -112,6 +112,10 @@ impl PlayerHotbar {
         Ok(())
     }
 
+    pub(crate) fn set_selected_item(&mut self, item: Option<&'static str>) {
+        self.slots[self.selected_slot] = item;
+    }
+
     fn select(&mut self, slot: usize) {
         assert!(
             slot < HOTBAR_SLOT_COUNT,
