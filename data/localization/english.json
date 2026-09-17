@@ -1,6 +1,8 @@
 {
   "starting.newWorld": "New World",
   "starting.loadWorlds": "Load Worlds",
+  "worldSelection.empty": "No completed saved worlds found.",
+  "worldSelection.load": "Load selected world",
   "common.settings": "Settings",
   "common.exitGame": "Exit Game",
   "newWorld.title": "NEW WORLD",
