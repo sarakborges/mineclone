@@ -15,7 +15,9 @@ use crate::{
     player::camera::GameplayCamera,
     tools::BrushMode,
     voxel::{
-        microblock::{MICROBLOCK_EDGE, ChiselResolution, MicroblockMask, parent_voxel},
+        microblock::{
+            MICROBLOCK_EDGE, ChiselResolution, MicroblockMask, local_cell, parent_voxel,
+        },
         raycast::raycast_micro_voxels,
     },
 };
@@ -214,16 +216,19 @@ fn update_highlight(
 
         let placement_cell = precise.fine + precise.normal;
         let placement_voxel = parent_voxel(placement_cell);
+        // The preview must match the actual Chisel edit: only a previously
+        // carved cell of the targeted macroblock can be restored, never air or
+        // a fresh neighboring block. Also suppress no-op green previews.
         let can_place = precise.normal != IVec3::ZERO
-            && placement_voxel.y >= 0
-            && input.scene.world().is_loaded_at(placement_voxel)
-            && input.scene.world().cell_at(placement_voxel).map_or_else(
-                || input.scene.world().fluid_at(placement_voxel).is_none(),
-                |cell| {
-                    content.blocks.get(cell.block_id).is_some_and(|block| block.can_fragment())
-                        && MicroblockMask::has_room(cell)
-                },
-            );
+            && placement_voxel == precise.voxel
+            && input.scene.world().cell_at(placement_voxel).is_some_and(|cell| {
+                content.blocks.get(cell.block_id).is_some_and(|block| block.can_fragment())
+                    && MicroblockMask::can_restore(cell)
+                    && {
+                        let mut mask = MicroblockMask::from_cell(cell);
+                        mask.edit(local_cell(placement_cell), *input.chisel_resolution, true)
+                    }
+            });
         if can_place {
             let (translation, edge) = snapped_preview(placement_cell, width);
             if view.chisel_placement.0.translation != translation {
