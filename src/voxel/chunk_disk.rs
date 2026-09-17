@@ -61,13 +61,12 @@ impl DiskChunk {
             let (block, fluid, _) = chunk
                 .sample_local(x as i32, y as i32, z as i32)
                 .expect("disk chunk coordinates must be in range");
-            // A carved macroblock retains its exact 8^3 occupancy mask in the
-            // existing properties field. Do not drop a sculpted block or
-            // strip its shape: both would lose player edits on restart.
+            // Save the complete cell state, including private Chisel masks;
+            // public presentation intentionally uses a different iterator.
             if let Some(cell) = block {
                 let mut properties = cell
                     .secondary_properties()
-                    .iter()
+                    .iter_for_save()
                     .map(|(key, value)| (key.to_owned(), value.to_owned()))
                     .collect::<Vec<_>>();
                 properties.sort_unstable();
