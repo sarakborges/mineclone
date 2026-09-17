@@ -15,7 +15,7 @@ use crate::{
     player::camera::GameplayCamera,
     tools::BrushMode,
     voxel::{
-        microblock::{MICROBLOCK_EDGE, ChiselResolution, parent_voxel},
+        microblock::{MICROBLOCK_EDGE, ChiselResolution, MicroblockMask, parent_voxel},
         raycast::raycast_micro_voxels,
     },
 };
@@ -194,7 +194,10 @@ fn update_highlight(
             input.scene.player_forward(),
             8.0,
         );
-        let Some(precise) = precise.filter(|precise| precise.voxel == hit.voxel) else {
+        let Some(precise) = precise.filter(|precise| {
+            precise.voxel == hit.voxel
+                && content.blocks.get(precise.block_id).is_some_and(|block| block.can_fragment())
+        }) else {
             hide_if_visible(&mut view.highlight.1);
             hide_if_visible(&mut view.chisel_placement.1);
             return;
@@ -214,8 +217,13 @@ fn update_highlight(
         let can_place = precise.normal != IVec3::ZERO
             && placement_voxel.y >= 0
             && input.scene.world().is_loaded_at(placement_voxel)
-            && (input.scene.world().cell_at(placement_voxel).is_some()
-                || input.scene.world().fluid_at(placement_voxel).is_none());
+            && input.scene.world().cell_at(placement_voxel).map_or_else(
+                || input.scene.world().fluid_at(placement_voxel).is_none(),
+                |cell| {
+                    content.blocks.get(cell.block_id).is_some_and(|block| block.can_fragment())
+                        && MicroblockMask::has_room(cell)
+                },
+            );
         if can_place {
             let (translation, edge) = snapped_preview(placement_cell, width);
             if view.chisel_placement.0.translation != translation {
