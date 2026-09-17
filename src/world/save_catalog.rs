@@ -618,7 +618,7 @@ fn manifest_paths(directory: &Path) -> io::Result<Vec<(u64, PathBuf)>> {
         if !entry.file_type()?.is_file() {
             continue;
         }
-        let Some(name) = entry.file_name().to_str() .map(str::to_owned) else {
+        let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
             continue;
         };
         if let Some(generation) = parse_generation(&name, "manifest-") {
@@ -643,18 +643,48 @@ fn snapshot_name(generation: u64) -> String {
     format!("snapshot-{generation:020}.json")
 }
 
-fn publish_json<T: Serialize>(directory: &Path, filename: &str, value: &T) -> io::Result<()> {
-    let mut data = serde_json::to_vec(value).map_err(io::Error::other)?;
-    data.push(b'\n');
-    // Reject a snapshot the loader itself would refuse, before publishing it.
-    if filename.starts_with("snapshot-") && data.len() as u64 > MAX_SNAPSHOT_BYTES {
-        return Err(invalid_data("snapshot exceeds the maximum supported size"));
+/// Cap serialized JSON while writing, rather than creating a potentially
+/// 512-MiB Vec just to reject it after serialization. Include the final newline.
+struct SnapshotSizeLimit<W> {
+    writer: W,
+    remaining: u64,
+}
+
+impl<W: Write> Write for SnapshotSizeLimit<W> {
+    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+        if data.len() as u64 > self.remaining {
+            return Err(invalid_data("snapshot exceeds the maximum supported size"));
+        }
+        let written = self.writer.write(data)?;
+        self.remaining -= written as u64;
+        Ok(written)
     }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.writer.flush()
+    }
+}
+
+fn publish_json<T: Serialize>(directory: &Path, filename: &str, value: &T) -> io::Result<()> {
     let temporary = directory.join(format!("{filename}.tmp"));
     let final_path = directory.join(filename);
     let mut file = OpenOptions::new().write(true).create_new(true).open(&temporary)?;
     let result = (|| {
-        file.write_all(&data)?;
+        {
+            let mut buffered = io::BufWriter::new(&mut file);
+            if filename.starts_with("snapshot-") {
+                let mut bounded = SnapshotSizeLimit {
+                    writer: &mut buffered,
+                    remaining: MAX_SNAPSHOT_BYTES,
+                };
+                serde_json::to_writer(&mut bounded, value).map_err(io::Error::other)?;
+                bounded.write_all(b"\n")?;
+            } else {
+                serde_json::to_writer(&mut buffered, value).map_err(io::Error::other)?;
+                buffered.write_all(b"\n")?;
+            }
+            buffered.flush()?;
+        }
         file.sync_all()?;
         drop(file);
         fs::rename(&temporary, &final_path)
