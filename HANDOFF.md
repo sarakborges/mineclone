@@ -246,3 +246,13 @@ Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigi
 - d48a0dca7b19bd58b4c31a91ebc42370305cf4c2 atualiza os três eixos do voo para tratar `MoveAxisResult::Blocked | MoveAxisResult::Stepped(_)`.
 - As correções anteriores de `walking.rs` e `swimming.rs` já estão no `develop` atual.
 - Não executei `cargo test`, `cargo run` ou QA Windows; a validação foi baseada diretamente no log do CI.
+
+
+## Checkpoint 79 — segunda correção objetiva da CI do step-up [CÓDIGO; CI PENDENTE]
+
+- Run CI `35285959254` (run 3125) falhou no Clippy depois da correção de `flight.rs`. O log mostrou exatamente dois `clippy::collapsible_if` em `src/player/movement/walking.rs:103` e `:115`, nos testes de movimento dos eixos X/Z.
+- `4e8b159f5d54c8db618a0c5baa12b02819afb4ca` colapsa os dois `if` aninhados para as condições compostas sugeridas pelo próprio Clippy, sem alterar a lógica de bloqueio/step-up.
+- O CI executa Rust 1.98.1 com `cargo clippy --locked --all-targets --all-features -- -D warnings`; portanto o warning é erro de build e foi tratado diretamente, sem supressão.
+- Não executei `cargo test`, `cargo run` ou QA Windows. É necessário aguardar a próxima CI para confirmar que não há outro erro no conjunto integrado.
+
+Próximo passo imediato: consultar a nova CI do HEAD e corrigir todos os erros objetivos restantes antes de iniciar outro item funcional.
