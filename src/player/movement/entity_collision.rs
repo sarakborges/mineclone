@@ -18,6 +18,12 @@ const PLAYER_PUSH_SHARE: f32 = 0.35;
 const MAX_CONTACT_PASSES: usize = 4;
 
 type Bounds = (Vec3, Vec3);
+type CreatureContacts<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Transform, &'static CreatureCollider),
+    (With<CreatureInstance>, Without<GameplayCamera>),
+>;
 
 fn player_bounds(eye: Vec3) -> Bounds {
     let feet = eye.y - PLAYER_EYE_HEIGHT;
@@ -105,7 +111,7 @@ fn push(
 pub(super) fn resolve_player_creature_contacts(
     world: Res<VoxelWorld>,
     mut player: Single<&mut Transform, (With<GameplayCamera>, Without<CreatureInstance>)>,
-    mut creatures: Query<(&mut Transform, &CreatureCollider), (With<CreatureInstance>, Without<GameplayCamera>)>,
+    mut creatures: CreatureContacts<'_, '_>,
 ) {
     for _ in 0..MAX_CONTACT_PASSES {
         let mut changed = false;
