@@ -13,7 +13,7 @@ use crate::{
         hotbar::{PlayerHotbar, PlayerHotbarSet},
         inventory::InventoryState,
     },
-    targeting::block::TargetedBlock,
+    targeting::block::{TargetedBlock, TargetedCreature},
     tools::{BrushMode, BrushPaletteState},
     ui::{theme, typography, visibility::set_visibility},
 };
@@ -45,6 +45,7 @@ impl Plugin for CrosshairPlugin {
                 Update,
                 update_action_hint
                     .after(PlayerHotbarSet::Selection)
+                    .after(crate::targeting::block::BlockTargetingSet::Raycast)
                     .run_if(world_interaction_available),
             )
             .add_systems(
@@ -77,6 +78,7 @@ struct ActionHintRuntime<'w> {
     hotbar: Res<'w, PlayerHotbar>,
     settings: Res<'w, HudSettings>,
     targeted: Res<'w, TargetedBlock>,
+    targeted_creature: Res<'w, TargetedCreature>,
     brush_mode: Res<'w, BrushMode>,
 }
 
@@ -164,6 +166,7 @@ fn update_action_hint(
     if !runtime.hotbar.is_changed()
         && !runtime.settings.is_changed()
         && !runtime.targeted.is_changed()
+        && !runtime.targeted_creature.is_changed()
         && !runtime.brush_mode.is_changed()
         && !content.blocks.is_changed()
         && !content.secondary_properties.is_changed()
@@ -177,7 +180,7 @@ fn update_action_hint(
     let selected_item = runtime.hotbar.item_at(runtime.hotbar.selected_slot());
     let selected_block = selected_item.and_then(|id| content.blocks.get(id));
 
-    let next_text = if !runtime.settings.display_tooltips() {
+    let next_text = if !runtime.settings.display_tooltips() || runtime.targeted_creature.0.is_some() {
         None
     } else if let Some(hit) = runtime.targeted.0 {
         if selected_item == Some(BRUSH_TOOL_ID) {
@@ -205,12 +208,8 @@ fn update_action_hint(
                     }
                 })
             } else {
-                Some(
-                    content
-                        .localization
-                        .text(language, "hud.breakBlock")
-                        .to_owned(),
-                )
+                // A brush has paint actions only; never fall back to Break/Place.
+                None
             }
         } else if selected_block.is_some() {
             Some(
@@ -227,6 +226,8 @@ fn update_action_hint(
                     .to_owned(),
             )
         }
+    } else if selected_item == Some(BRUSH_TOOL_ID) {
+        None
     } else {
         selected_block
             .filter(|block| block.is_rotatable())
