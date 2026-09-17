@@ -225,7 +225,7 @@ fn face_is_exposed<W: VoxelRead + ?Sized>(
     }
 }
 
-fn partial_block_face_has_opening(cell: crate::voxel::cell::VoxelCell, face: BlockFace) -> bool {
+fn partial_block_face_has_opening(cell: VoxelCell, face: BlockFace) -> bool {
     let mask = crate::voxel::microblock::MicroblockMask::from_cell(cell);
     if mask == crate::voxel::microblock::MicroblockMask::FULL {
         return false;
