@@ -18,6 +18,8 @@ pub struct CreatureDefinition {
     #[serde(default)]
     pub textures: std::collections::HashMap<String, String>,
     pub collider: CreatureCollider,
+    #[serde(default = "default_creature_health")]
+    pub health: f32,
     #[serde(default)]
     pub material_tints: std::collections::HashMap<String, Hsi>,
     #[serde(default)]
@@ -32,6 +34,10 @@ pub struct CreatureDefinition {
     pub anticipation_seconds: f32,
     #[serde(default)]
     pub landing_seconds: f32,
+}
+
+fn default_creature_health() -> f32 {
+    10.0
 }
 
 fn default_jump_speed() -> f32 {
@@ -99,6 +105,11 @@ impl CreatureRegistry {
             );
         }
         definition.collider.validate(&definition.id);
+        assert!(
+            definition.health.is_finite() && definition.health > 0.0,
+            "creature {} health must be positive and finite",
+            definition.id
+        );
         assert!(
             definition.jump_speed.is_finite() && definition.jump_speed >= 0.0,
             "creature {} has invalid jumpSpeed",
