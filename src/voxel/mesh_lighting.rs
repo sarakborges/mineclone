@@ -293,7 +293,7 @@ mod tests {
         assert_eq!(ao_brightness(3.0), 0.58);
         assert!(ao_brightness(1.5) > 0.72);
         assert!(sample_occlusion(Some((Some(VoxelCell::new("stone", Default::default())), None, VoxelLight::DARK))) > 0.0);
-        let empty = MicroblockMask::EMPTY.apply_to_cell(VoxelCell::new("stone", Default::default()), false);
+        let empty = MicroblockMask::EMPTY.apply_to_cell(VoxelCell::new("stone", Default::default()), true);
         assert_eq!(sample_occlusion(Some((Some(empty), None, VoxelLight::DARK))), 0.0);
     }
 
