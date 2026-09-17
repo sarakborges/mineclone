@@ -59,14 +59,17 @@ pub(super) enum NewWorldFooterAction {
 }
 
 #[derive(SystemParam)]
-pub(super) struct NewWorldDraft<'w> {
+pub(super) struct NewWorldDraft<'w, 's> {
     config: ResMut<'w, NewWorldConfig>,
     seed_input: Res<'w, SeedInputState>,
     ticks_input: Res<'w, TicksPerSecondInputState>,
     spawn_biome_dropdown: Res<'w, SpawnBiomeDropdownState>,
+    name_input: Query<'w, 's, (Entity, &'static EditableText), With<WorldNameInput>>,
+    focus: ResMut<'w, InputFocus>,
+    name_feedback: ResMut<'w, WorldNameFeedback>,
 }
 
-impl NewWorldDraft<'_> {
+impl NewWorldDraft<'_, '_> {
     fn input_editing(&self) -> bool {
         self.seed_input.editing()
             || self.ticks_input.editing()
@@ -177,8 +180,8 @@ pub(super) fn spawn_new_world_footer(
     ));
     footer.spawn(menu_button(
         localization
-        .text(language, "newWorld.createWorld")
-        .to_owned(),
+            .text(language, "newWorld.createWorld")
+            .to_owned(),
         NewWorldFooterAction::CreateWorld,
     ));
 }
@@ -280,9 +283,6 @@ pub(super) fn handle_new_world_footer(
     keys: Res<ButtonInput<KeyCode>>,
     interactions: Query<(&Interaction, &NewWorldFooterAction), Changed<Interaction>>,
     mut draft: NewWorldDraft,
-    name_input: Query<(Entity, &EditableText), With<WorldNameInput>>,
-    mut focus: ResMut<InputFocus>,
-    mut name_feedback: ResMut<WorldNameFeedback>,
     mut transition: ResMut<ScreenTransition>,
 ) {
     if *game_state.get() != GameState::NewWorld {
@@ -292,12 +292,13 @@ pub(super) fn handle_new_world_footer(
     let action = interactions.iter().find_map(|(interaction, action)| {
         (*interaction == Interaction::Pressed).then_some(*action)
     });
-    let active_name = name_input
+    let active_name = draft
+        .name_input
         .single()
         .ok()
-        .is_some_and(|(entity, _)| focus.get() == Some(entity));
+        .is_some_and(|(entity, _)| draft.focus.get() == Some(entity));
     if keys.just_pressed(KeyCode::Escape) && active_name {
-        focus.clear();
+        draft.focus.clear();
         return;
     }
     if matches!(action, Some(NewWorldFooterAction::Return))
@@ -311,19 +312,19 @@ pub(super) fn handle_new_world_footer(
         return;
     }
 
-    let requested = match name_input.single() {
+    let requested = match draft.name_input.single() {
         Ok((_, editor)) if !editor.is_composing() => editable_value(editor),
         _ => return,
     };
     let name = match available_world_name(&requested) {
         Ok(name) => name,
         Err(error) => {
-            name_feedback.set(error.to_string());
+            draft.name_feedback.set(error.to_string());
             return;
         }
     };
     draft.config.set_name(name);
-    name_feedback.set(String::new());
+    draft.name_feedback.set(String::new());
     draft.commit_seed_input();
 
     commands.insert_resource(CurrentDimension::default());
