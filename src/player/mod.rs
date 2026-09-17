@@ -39,27 +39,29 @@ pub(crate) fn spawn_player_entity(
     translation: Vec3,
     game_mode: GameMode,
 ) {
-    commands.spawn((
-        PlayerEntity,
-        Camera3d::default(),
-        Camera {
-            order: WORLD_CAMERA_ORDER,
-            output_mode: CameraOutputMode::Skip,
-            ..default()
-        },
-        Hdr,
-        Tonemapping::None,
-        Msaa::Off,
-        Transform::from_translation(translation),
-        GameplayCamera::default(),
-        LOCAL_PLAYER_ID,
-        game_mode,
-        WalkingState::default(),
-        FlightState::default(),
-        GravityState::default(),
-        SwimmingState::default(),
-        DespawnOnExit(GameState::Gameplay),
-    ));
+    commands
+        .spawn((
+            PlayerEntity,
+            Camera3d::default(),
+            Camera {
+                order: WORLD_CAMERA_ORDER,
+                output_mode: CameraOutputMode::Skip,
+                ..default()
+            },
+            Hdr,
+            Tonemapping::None,
+            Msaa::Off,
+            Transform::from_translation(translation),
+            GameplayCamera::default(),
+            LOCAL_PLAYER_ID,
+            game_mode,
+            WalkingState::default(),
+            FlightState::default(),
+            GravityState::default(),
+            SwimmingState::default(),
+            DespawnOnExit(GameState::Gameplay),
+        ))
+        .insert(Name::new("Player"));
 }
 
 pub(crate) fn player_position_is_clear(world: &VoxelWorld, translation: Vec3) -> bool {
