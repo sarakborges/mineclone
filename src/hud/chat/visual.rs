@@ -6,7 +6,7 @@ use bevy::{
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
-    ui::{scrollbar, typography},
+    ui::{scrollbar, text_input, theme, typography},
 };
 
 use super::{CHAT_TIMEOUT_SECS, ChatState, MAX_INPUT_CHARS, autocomplete::ChatAutocomplete};
@@ -119,18 +119,17 @@ pub(super) fn spawn_chat_ui(mut commands: Commands) {
                 ChatInputRoot,
                 Node {
                     width: percent(100),
-                    min_height: px(34),
-                    padding: UiRect {
-                        left: px(10),
-                        right: px(10),
-                        top: px(6),
-                        bottom: px(6),
-                    },
-                    border_radius: BorderRadius::all(px(4)),
+                    min_height: px(38),
+                    min_width: px(0),
+                    padding: UiRect::axes(px(text_input::INPUT_PADDING_X), px(7)),
+                    border: UiRect::all(px(1)),
+                    border_radius: BorderRadius::all(px(text_input::INPUT_RADIUS)),
                     align_items: AlignItems::Center,
+                    overflow: Overflow::clip(),
                     ..default()
                 },
-                BackgroundColor(Color::srgba(0.04, 0.035, 0.09, 0.76)),
+                BackgroundColor(text_input::INPUT_FILL),
+                BorderColor::all(text_input::input_border(true)),
                 Visibility::Hidden,
                 Pickable::IGNORE,
             ))
@@ -143,7 +142,7 @@ pub(super) fn spawn_chat_ui(mut commands: Commands) {
                         ..default()
                     },
                     TextCursorStyle {
-                        color: Color::WHITE,
+                        color: theme::TEXT_PRIMARY,
                         ..default()
                     },
                     TextFont {
@@ -151,11 +150,13 @@ pub(super) fn spawn_chat_ui(mut commands: Commands) {
                         font_size: FontSize::Px(17.0),
                         ..default()
                     },
-                    TextColor(Color::WHITE),
+                    TextColor(theme::TEXT_PRIMARY),
                     TextLayout::no_wrap(),
                     Node {
                         flex_grow: 1.0,
                         min_width: px(0),
+                        min_height: px(21),
+                        overflow: Overflow::clip(),
                         ..default()
                     },
                 ));
