@@ -8,7 +8,7 @@ use crate::ui::{text_input, theme};
 use super::state::{CreativeInventoryView, CreativeSearchBar, CreativeSearchText, SEARCH_HEIGHT};
 
 #[derive(Component)]
-struct CreativeSearchFrame;
+pub(super) struct CreativeSearchFrame;
 
 /// The inventory panel owns its existing editor entity, focus and search state.
 /// Insert one frame in the editor's original layout slot, then move the editor
