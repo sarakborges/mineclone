@@ -2,19 +2,42 @@ use bevy::prelude::*;
 
 use crate::player::game_mode::GameMode;
 
-use super::{WorldSeed, game_rules::GameRules};
+use super::{WorldSeed, game_rules::GameRules, world_names::DEFAULT_WORLD_NAME};
 
-#[derive(Resource, Debug, Clone, Default)]
+#[derive(Resource, Debug, Clone)]
 pub(crate) struct NewWorldConfig {
+    name: String,
     seed: WorldSeed,
     game_mode: GameMode,
     game_rules: GameRules,
     spawn_biome: Option<String>,
 }
 
+impl Default for NewWorldConfig {
+    fn default() -> Self {
+        Self {
+            name: DEFAULT_WORLD_NAME.to_owned(),
+            seed: WorldSeed::default(),
+            game_mode: GameMode::default(),
+            game_rules: GameRules::default(),
+            spawn_biome: None,
+        }
+    }
+}
+
 impl NewWorldConfig {
     pub(crate) fn reset(&mut self) {
         *self = Self::default();
+    }
+
+    pub(crate) fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub(crate) fn set_name(&mut self, name: String) {
+        if self.name != name {
+            self.name = name;
+        }
     }
 
     pub(crate) fn seed(&self) -> WorldSeed {
