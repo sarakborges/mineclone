@@ -37,6 +37,7 @@ pub(crate) mod terrain;
 pub(crate) mod tick;
 mod work_budget;
 pub(crate) mod world_feature_fields;
+pub(crate) mod world_names;
 
 use bevy::prelude::*;
 
