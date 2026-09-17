@@ -222,7 +222,7 @@ pub(super) fn render_autocomplete(
         .min(count.saturating_sub(MAX_SUGGESTIONS));
     commands.entity(panel_entity).with_children(|list| {
         list.spawn((
-            typography::caption("↑ ↓ select  ·  Tab complete  ·  Esc dismiss"),
+            typography::caption("Use ↑ and ↓ to choose an option. Press Tab to complete it. Press Esc to close suggestions."),
             Node { width: percent(100), padding: UiRect::horizontal(px(5)), ..default() },
             Pickable::IGNORE,
         ));
@@ -246,13 +246,11 @@ pub(super) fn render_autocomplete(
                 Pickable::IGNORE,
             ))
             .with_children(|row| {
-                row.spawn((
-                    typography::hud(format!("{}{}", if selected { "▶ " } else { "  " }, suggestion.value)),
-                    Pickable::IGNORE,
-                ));
+                // Selection is conveyed only by the highlighted background, never a chevron.
+                row.spawn((typography::hud(suggestion.value.clone()), Pickable::IGNORE));
                 row.spawn((
                     typography::caption(suggestion.description.clone()),
-                    Node { width: percent(100), padding: UiRect::horizontal(px(17)), ..default() },
+                    Node { width: percent(100), ..default() },
                     Pickable::IGNORE,
                 ));
             });
