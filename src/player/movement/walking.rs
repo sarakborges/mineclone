@@ -165,4 +165,3 @@ fn approach_step_height(current: f32, target: f32, max_delta: f32) -> f32 {
         current + delta.signum() * max_delta
     }
 }
-}
