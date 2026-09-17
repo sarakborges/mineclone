@@ -3,7 +3,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     content::{block::BlockRegistry, tool::ToolRegistry},
     gameplay::availability::world_interaction_available,
-    player::{camera::GameplayCamera, hotbar::PlayerHotbar, viewmodel::ViewModelAnimation},
+    player::{camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar, viewmodel::ViewModelAnimation},
     voxel::{
         cell::VoxelCell, edit::VoxelTopologyRuntime, raycast::VoxelHit,
         texture_rotation::TextureRotation,
@@ -47,7 +47,7 @@ struct BlockEditInput<'w, 's> {
     buttons: Res<'w, ButtonInput<MouseButton>>,
     hotbar: Res<'w, PlayerHotbar>,
     placement_orientation: Res<'w, PlacementOrientation>,
-    player: Single<'w, 's, &'static Transform, With<GameplayCamera>>,
+    player: Single<'w, 's, (&'static Transform, &'static GameMode), With<GameplayCamera>>,
     targeted: ResMut<'w, TargetedBlock>,
 }
 
@@ -66,8 +66,19 @@ fn edit_targeted_block(
 ) {
     let left_pressed = input.buttons.just_pressed(MouseButton::Left);
     let right_pressed = input.buttons.just_pressed(MouseButton::Right);
+    let middle_pressed = input.buttons.just_pressed(MouseButton::Middle);
 
-    if !left_pressed && !right_pressed {
+    if !left_pressed && !right_pressed && !middle_pressed {
+        return;
+    }
+
+    let (player_transform, game_mode) = input.player.into_inner();
+    if middle_pressed && game_mode.has_creative_inventory() {
+        if let Some(hit) = input.targeted.0
+            && definitions.blocks.get(hit.block_id).is_some()
+        {
+            input.hotbar.set_selected_item(Some(hit.block_id));
+        }
         return;
     }
 
@@ -102,7 +113,7 @@ fn edit_targeted_block(
         let Some(block_id) = selected_item else {
             return;
         };
-        let Some(voxel) = placement_voxel(hit, runtime.world(), input.player.translation) else {
+        let Some(voxel) = placement_voxel(hit, runtime.world(), player_transform.translation) else {
             return;
         };
         let Some(block) = definitions.blocks.get(block_id) else {
