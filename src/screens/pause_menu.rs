@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
+    app::{
+        game_state::GameState, pause_state::PauseState,
+        settings_state::{SettingsScope, SettingsState},
+    },
     localization::{ActiveLanguage, UiLocalization},
     ui::{
         button::menu_button,
@@ -44,7 +47,8 @@ struct PauseSaveFeedback;
 #[derive(Component, Clone, Copy)]
 enum PauseMenuAction {
     Resume,
-    Settings,
+    WorldOptions,
+    GameOptions,
     LeaveWorld,
     ExitGame,
 }
@@ -81,17 +85,36 @@ fn spawn_pause_menu(
                         ..default()
                     },
                 ));
+
+                // Groups are separated by spacing and typography, never card borders.
+                panel.spawn(typography::setting_title(
+                    localization.text(language, "pause.worldGroup").to_owned(),
+                ));
+                panel.spawn(menu_button(
+                    localization.text(language, "pause.worldOptions").to_owned(),
+                    PauseMenuAction::WorldOptions,
+                ));
+                panel.spawn(menu_button(
+                    localization.text(language, "pause.leaveWorld").to_owned(),
+                    PauseMenuAction::LeaveWorld,
+                ));
+
+                panel.spawn((
+                    typography::setting_title(
+                        localization.text(language, "pause.gameGroup").to_owned(),
+                    ),
+                    Node {
+                        margin: UiRect::top(px(14)),
+                        ..default()
+                    },
+                ));
                 panel.spawn(menu_button(
                     localization.text(language, "pause.resume").to_owned(),
                     PauseMenuAction::Resume,
                 ));
                 panel.spawn(menu_button(
-                    localization.text(language, "common.settings").to_owned(),
-                    PauseMenuAction::Settings,
-                ));
-                panel.spawn(menu_button(
-                    localization.text(language, "pause.leaveWorld").to_owned(),
-                    PauseMenuAction::LeaveWorld,
+                    localization.text(language, "pause.gameOptions").to_owned(),
+                    PauseMenuAction::GameOptions,
                 ));
                 panel.spawn(menu_button(
                     localization.text(language, "common.exitGame").to_owned(),
@@ -107,6 +130,7 @@ fn handle_pause_menu_buttons(
     snapshot: WorldSaveContext,
     mut session: ResMut<WorldSession>,
     mut feedback: Query<&mut Text, With<PauseSaveFeedback>>,
+    mut scope: ResMut<SettingsScope>,
     mut transition: ResMut<ScreenTransition>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
@@ -121,7 +145,12 @@ fn handle_pause_menu_buttons(
             PauseMenuAction::Resume => {
                 transition.request(ScreenTransitionTarget::pause(PauseState::Running));
             }
-            PauseMenuAction::Settings => {
+            PauseMenuAction::WorldOptions => {
+                *scope = SettingsScope::World;
+                transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
+            }
+            PauseMenuAction::GameOptions => {
+                *scope = SettingsScope::Game;
                 transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
             }
             PauseMenuAction::LeaveWorld | PauseMenuAction::ExitGame => {
