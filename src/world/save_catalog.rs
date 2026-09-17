@@ -397,10 +397,17 @@ pub(crate) fn list_verified_worlds(registries: &PruneRegistries) -> io::Result<V
     Ok(verified)
 }
 
-fn newest_restorable_timestamp(id: &str, registries: &PruneRegistries) -> io::Result<u64> {
+/// Manifest inspection and opening every fallback snapshot are protected by
+/// the world's lock. The returned file handles pin all candidate data before
+/// pruning can remove paths; decoding and chunk reconstruction run off-lock.
+struct OpenedSnapshot {
+    generation: u64,
+    manifest: WorldManifest,
+    file: io::Result<fs::File>,
+}
+
+fn pinned_candidates(id: &str) -> io::Result<Vec<OpenedSnapshot>> {
     validate_world_name(id)?;
-    // Hold only this world's lock across enumeration and reconstruction.
-    // Backup pruning cannot unlink its fallback until validation finishes.
     let world_lock = world_lock(id)?;
     let _lock = world_lock.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
     let directory = Path::new(WORLDS_DIRECTORY).join(id);
@@ -409,65 +416,52 @@ fn newest_restorable_timestamp(id: &str, registries: &PruneRegistries) -> io::Re
     }
     let mut candidates = manifest_paths(&directory)?;
     candidates.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.0));
+    let mut opened = Vec::with_capacity(candidates.len());
     for (generation, path) in candidates {
         let Ok(manifest) = read_json::<WorldManifest>(&path) else {
             continue;
         };
-        if !valid_manifest(&manifest, id, generation) {
-            continue;
+        if valid_manifest(&manifest, id, generation) {
+            let file = open_snapshot_file(&directory, &manifest);
+            opened.push(OpenedSnapshot { generation, manifest, file });
         }
-        match load_snapshot(
-            &directory,
-            id,
-            &manifest,
-            &registries.blocks,
-            &registries.fluids,
-            |snapshot| registries.validate_playable(snapshot),
-        ) {
-            Ok(_) => return Ok(manifest.last_saved_unix_ms),
-            Err(error) => warn!("Skipping damaged save for world {id}, generation {generation}: {error}"),
+    }
+    Ok(opened)
+}
+
+fn newest_restorable_timestamp(id: &str, registries: &PruneRegistries) -> io::Result<u64> {
+    for candidate in pinned_candidates(id)? {
+        let loaded = candidate.file.and_then(|file| {
+            decode_snapshot(file, id, &candidate.manifest, &registries.blocks, &registries.fluids, |snapshot| {
+                registries.validate_playable(snapshot)
+            })
+        });
+        match loaded {
+            Ok(_) => return Ok(candidate.manifest.last_saved_unix_ms),
+            Err(error) => warn!("Skipping damaged save for world {id}, generation {}: {error}", candidate.generation),
         }
     }
     Err(invalid_data(format!("world {id} has no restorable save")))
 }
 
-/// Try each published generation newest first. All gameplay-visible state must
-/// validate before accepting a candidate so the next older snapshot is tried
-/// for an invalid inventory or clock as well as corrupt chunk data.
+/// All fallback files are pinned together before expensive decoding. A prune
+/// can run concurrently after the handles are opened without removing any
+/// candidate's bytes out from under this load (including older fallbacks).
 pub(crate) fn load_world(
     id: &str,
     registries: SaveRegistries<'_>,
 ) -> io::Result<(WorldSnapshot, VoxelWorld)> {
-    validate_world_name(id)?;
-    // Lock this world's enumeration and reconstruction only. The prune worker
-    // also takes this lock before deleting its old manifests and snapshots.
-    let world_lock = world_lock(id)?;
-    let _lock = world_lock.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
-    let directory = Path::new(WORLDS_DIRECTORY).join(id);
-    if !fs::symlink_metadata(&directory)?.file_type().is_dir() {
-        return Err(invalid_data("world directory cannot be a symbolic link"));
-    }
-    let mut candidates = manifest_paths(&directory)?;
-    candidates.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.0));
     let mut last_error = None;
-    for (generation, path) in candidates {
-        let Ok(manifest) = read_json::<WorldManifest>(&path) else {
-            continue;
-        };
-        if !valid_manifest(&manifest, id, generation) {
-            continue;
-        }
-        match load_snapshot(
-            &directory,
-            id,
-            &manifest,
-            registries.blocks,
-            registries.fluids,
-            |snapshot| registries.validate_playable(snapshot),
-        ) {
+    for candidate in pinned_candidates(id)? {
+        let loaded = candidate.file.and_then(|file| {
+            decode_snapshot(file, id, &candidate.manifest, registries.blocks, registries.fluids, |snapshot| {
+                registries.validate_playable(snapshot)
+            })
+        });
+        match loaded {
             Ok(loaded) => return Ok(loaded),
             Err(error) => {
-                warn!("Skipping damaged save for world {id}, generation {generation}: {error}");
+                warn!("Skipping damaged save for world {id}, generation {}: {error}", candidate.generation);
                 last_error = Some(error);
             }
         }
@@ -475,14 +469,7 @@ pub(crate) fn load_world(
     Err(last_error.unwrap_or_else(|| invalid_data(format!("world {id} has no restorable save"))))
 }
 
-fn load_snapshot(
-    directory: &Path,
-    id: &str,
-    manifest: &WorldManifest,
-    blocks: &BlockRegistry,
-    fluids: &FluidRegistry,
-    validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
-) -> io::Result<(WorldSnapshot, VoxelWorld)> {
+fn open_snapshot_file(directory: &Path, manifest: &WorldManifest) -> io::Result<fs::File> {
     let filename = manifest.snapshot_file.as_ref().ok_or_else(|| invalid_data("no complete snapshot"))?;
     let expected = snapshot_name(manifest.generation);
     if filename != &expected {
@@ -493,7 +480,35 @@ fn load_snapshot(
     if !metadata.file_type().is_file() || metadata.len() > MAX_SNAPSHOT_BYTES {
         return Err(invalid_data("snapshot is not a regular file or exceeds supported size"));
     }
-    let mut snapshot: WorldSnapshot = read_json(&path)?;
+    let file = fs::File::open(path)?;
+    let opened_metadata = file.metadata()?;
+    if !opened_metadata.is_file() || opened_metadata.len() > MAX_SNAPSHOT_BYTES {
+        return Err(invalid_data("opened snapshot is not a regular file or exceeds supported size"));
+    }
+    Ok(file)
+}
+
+fn load_snapshot(
+    directory: &Path,
+    id: &str,
+    manifest: &WorldManifest,
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+    validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
+) -> io::Result<(WorldSnapshot, VoxelWorld)> {
+    let file = open_snapshot_file(directory, manifest)?;
+    decode_snapshot(file, id, manifest, blocks, fluids, validate)
+}
+
+fn decode_snapshot(
+    file: fs::File,
+    id: &str,
+    manifest: &WorldManifest,
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+    validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
+) -> io::Result<(WorldSnapshot, VoxelWorld)> {
+    let mut snapshot: WorldSnapshot = serde_json::from_reader(io::BufReader::new(file)).map_err(io::Error::other)?;
     if snapshot.format_version != SAVE_FORMAT_VERSION
         || snapshot.id != id
         || snapshot.seed != manifest.seed
@@ -540,7 +555,7 @@ fn latest_complete_manifest(directory: &Path, id: &str) -> io::Result<WorldManif
 
 /// Validate backups off-thread and prune only when four generations decode.
 /// The writer only appends immutable generations. The deletion phase locks
-/// this world only, so other worlds remain writable during a slow load.
+/// this world only; pinned readers can finish even after paths are removed.
 fn prune_old_generations(directory: &Path, id: &str, registries: &PruneRegistries) -> io::Result<()> {
     if !fs::symlink_metadata(directory)?.file_type().is_dir() {
         return Err(invalid_data("world directory cannot be a symbolic link"));
@@ -707,8 +722,7 @@ fn publish_json<T: Serialize>(directory: &Path, filename: &str, value: &T) -> io
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> io::Result<T> {
-    // Avoid a second allocation as large as the on-disk JSON. The deserialized
-    // snapshot still owns its chunks, and callers continue validating them.
+    // Manifest parsing is small; snapshots use their already-opened handles.
     serde_json::from_reader(io::BufReader::new(fs::File::open(path)?)).map_err(io::Error::other)
 }
 
