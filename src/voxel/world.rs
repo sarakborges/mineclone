@@ -25,6 +25,9 @@ pub struct VoxelWorld {
     dirty_chunks: HashSet<IVec3>,
     chunk_content_revisions: HashMap<IVec3, u64>,
     next_chunk_content_revision: u64,
+    // Only actual block/fluid changes trigger a new autosave. Worldgen,
+    // lighting, archiving and restoring chunks must not advance this counter.
+    save_edit_revision: u64,
     chunk_mesh_revisions: HashMap<IVec3, u64>,
     next_chunk_mesh_revision: u64,
     block_content_revision: u64,
@@ -154,7 +157,9 @@ impl VoxelWorld {
         let (chunk_coord, local_position) = split_world_position(world_position);
 
         self.chunks.get(&chunk_coord)?.fluid_at(
-            local_position.x, local_position.y, local_position.z,
+            local_position.x,
+            local_position.y,
+            local_position.z,
         )
     }
 
@@ -327,6 +332,7 @@ impl VoxelWorld {
         }
 
         self.dirty_chunks.insert(chunk_coord);
+        self.bump_save_edit_revision();
         if block_changed {
             self.bump_block_content_revision();
         }
@@ -364,6 +370,7 @@ impl VoxelWorld {
             chunk.set_fluid(x, y, z, fluid);
         }
         self.dirty_chunks.insert(chunk_coord);
+        self.bump_save_edit_revision();
         self.bump_chunk_content_revision(chunk_coord);
         self.bump_chunk_mesh_revision(chunk_coord);
         Some(chunk_coord)
@@ -382,6 +389,13 @@ impl VoxelWorld {
             .block_content_revision
             .checked_add(1)
             .expect("block content revision counter exhausted");
+    }
+
+    fn bump_save_edit_revision(&mut self) {
+        self.save_edit_revision = self
+            .save_edit_revision
+            .checked_add(1)
+            .expect("world save edit revision counter exhausted");
     }
 
     fn bump_chunk_content_revision(&mut self, coord: IVec3) {
