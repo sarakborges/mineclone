@@ -121,6 +121,7 @@ fn spawn_highlight(
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgba(1.0, 1.0, 1.0, 0.18),
             alpha_mode: AlphaMode::Blend,
+            depth_bias: 1.0,
             unlit: true,
             ..default()
         })),
