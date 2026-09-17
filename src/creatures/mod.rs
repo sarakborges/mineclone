@@ -14,7 +14,7 @@ use crate::{
 };
 
 use motion::{CreatureMotion, move_creatures};
-use visual::{CreatureModel, attach_loaded_models, sync_creature_animations, sync_creature_damage_flash, sync_creature_facing, tick_entity_health};
+use visual::{CreatureModel, attach_loaded_models, sync_creature_animations, sync_creature_facing};
 pub(crate) use visual::CreatureAnimationState;
 
 /// The entity root owns position and collision; only its visual child is animated or rotated.
@@ -30,8 +30,7 @@ impl Plugin for CreaturesPlugin {
         app.init_resource::<visual::TintedCreatureMaterials>()
             .add_systems(Update, natural_spawn_creatures.run_if(in_state(GameState::Gameplay)).run_if(in_state(PauseState::Running)))
             .add_systems(Update, attach_loaded_models.run_if(in_state(GameState::Gameplay)))
-            .add_systems(Update, tick_entity_health.run_if(in_state(GameState::Gameplay)))
-            .add_systems(PostUpdate, sync_creature_damage_flash.run_if(in_state(GameState::Gameplay)))
+
             .add_systems(
                 Update,
                 move_creatures
