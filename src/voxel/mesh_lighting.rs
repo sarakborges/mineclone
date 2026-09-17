@@ -288,7 +288,7 @@ fn face_basis(face: BlockFace) -> (IVec3, IVec3, IVec3, [(i32, i32); 4]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{ao_brightness, provisional_top_sky_sample, sample_occlusion, sample_open_fraction, should_flip_diagonal};
+    use super::{ao_brightness, average_shader_light_levels, provisional_top_sky_sample, sample_occlusion, sample_open_fraction, should_flip_diagonal};
     use crate::voxel::{block_face::BlockFace, cell::VoxelCell, light::VoxelLight, microblock::MicroblockMask};
 
     const DARK: [f32; 3] = [0.0; 3];
@@ -320,6 +320,23 @@ mod tests {
         let half = half_mask.apply_to_cell(full, true);
         assert!((sample_open_fraction(Some(half)) - 0.5).abs() < f32::EPSILON);
         assert_eq!(sample_open_fraction(Some(empty)), 1.0);
+    }
+
+    #[test]
+    fn open_fraction_weights_light_samples() {
+        let full = VoxelCell::new("stone", Default::default());
+        let empty = MicroblockMask::EMPTY.apply_to_cell(full, true);
+        let bright = VoxelLight::new_hsi(VoxelLight::MAX_LEVEL, crate::voxel::light::BlockLight::new(15, 0, 0));
+        let dark = VoxelLight::DARK;
+
+        let (sky, block) = average_shader_light_levels([
+            Some((Some(full), None, bright)),
+            Some((Some(empty), None, dark)),
+            None,
+            None,
+        ]);
+        assert_eq!(sky, 0.0);
+        assert_eq!(block, [0.0, 0.0, 0.0]);
     }
 
     #[test]
