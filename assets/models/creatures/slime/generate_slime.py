@@ -84,7 +84,7 @@ def make_skin(kind: str) -> bytes:
                 raise ValueError(f'unknown slime skin kind: {kind}')
             index = (y * 64 + x) * 4
             pixels[index:index + 4] = bytes((gray, gray, gray, 255))
-    scanlines = b''.join(b'\\0' + pixels[y*64*4:(y+1)*64*4] for y in range(64))
+    scanlines = b''.join(b'\0' + pixels[y*64*4:(y+1)*64*4] for y in range(64))
     return (b'\\x89PNG\\r\\n\\x1a\\n' + png_chunk(b'IHDR', struct.pack('>IIBBBBB', 64, 64, 8, 6, 0, 0, 0))
             + png_chunk(b'IDAT', zlib.compress(scanlines, 9)) + png_chunk(b'IEND', b''))
 
