@@ -1,5 +1,4 @@
 mod block_icon;
-mod chisel;
 pub(crate) mod chat;
 mod crosshair;
 mod entity_card;
@@ -22,7 +21,6 @@ use bevy::{
 };
 use serde::{Deserialize, Serialize};
 use block_icon::BlockIconMaterial;
-use chisel::ChiselHudPlugin;
 use chat::ChatHudPlugin;
 use crosshair::CrosshairPlugin;
 use entity_targeting::EntityHudPlugin;
@@ -105,7 +103,6 @@ impl Plugin for HudPlugin {
                 InventoryHudPlugin,
                 PlayerHudPlugin,
                 ChatHudPlugin,
-                ChiselHudPlugin,
                 TimeHudPlugin,
                 FpsHudPlugin,
                 WorldHudPlugin,
