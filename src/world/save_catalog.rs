@@ -1,8 +1,13 @@
 use std::{
+    collections::{HashMap, HashSet},
     fs::{self, OpenOptions},
     io::{self, Write},
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    thread,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -14,7 +19,7 @@ use crate::{
         block::BlockRegistry, day_night_cycle::DayNightCycleRegistry,
         dimension::DimensionRegistry, fluid::FluidRegistry, tool::ToolRegistry,
     },
-    player::hotbar::PlayerHotbar,
+    player::hotbar::INVENTORY_SLOT_COUNT,
     voxel::{chunk_disk::DiskChunk, world::VoxelWorld},
 };
 
@@ -25,10 +30,11 @@ const MAX_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
 /// Count only generations that can actually be loaded into the current game.
 const RETAINED_GENERATIONS: usize = 4;
 static SAVE_LOCK: Mutex<()> = Mutex::new(());
+static PRUNE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 
-/// The same content definitions must validate a candidate during load and
-/// before old backups are removed. Otherwise an invalid inventory or clock
-/// could be counted as a recoverable generation and erase the last good save.
+/// The same content definitions must validate candidates during load and
+/// before old backups are removed. Invalid inventories and clocks must never
+/// count toward the four recoverable backups.
 #[derive(Clone, Copy)]
 pub(crate) struct SaveRegistries<'a> {
     pub(crate) blocks: &'a BlockRegistry,
@@ -40,18 +46,79 @@ pub(crate) struct SaveRegistries<'a> {
 
 impl SaveRegistries<'_> {
     fn validate_playable(self, snapshot: &WorldSnapshot) -> io::Result<()> {
-        let cycle = self
+        let duration = self
             .dimensions
             .get(&snapshot.dimension_id)
             .and_then(|dimension| self.cycles.get(&dimension.day_night_cycle))
-            .ok_or_else(|| invalid_data("saved dimension or day-night cycle is unavailable"))?;
-        if cycle.day_duration_ticks == 0 || snapshot.tick_in_day >= cycle.day_duration_ticks {
-            return Err(invalid_data("saved world clock is invalid"));
-        }
-        let mut inventory = PlayerHotbar::default();
-        inventory.restore_items(&snapshot.inventory, self.blocks, self.tools)?;
-        Ok(())
+            .map(|cycle| cycle.day_duration_ticks);
+        validate_playable(snapshot, duration, |id| {
+            self.blocks.get(id).is_some() || self.tools.get(id).is_some()
+        })
     }
+
+    /// Snapshot the small content lookup tables before starting the worker.
+    /// Chunk JSON decoding and validation are intentionally not done here.
+    fn owned_for_pruning(self) -> PruneRegistries {
+        let valid_items = self
+            .blocks
+            .iter()
+            .map(|block| block.id.clone())
+            .chain(self.tools.iter().map(|tool| tool.id.clone()))
+            .collect();
+        let day_lengths = self
+            .dimensions
+            .iter()
+            .filter_map(|dimension| {
+                self.cycles
+                    .get(&dimension.day_night_cycle)
+                    .map(|cycle| (dimension.id.clone(), cycle.day_duration_ticks))
+            })
+            .collect();
+        PruneRegistries {
+            blocks: self.blocks.clone(),
+            fluids: self.fluids.clone(),
+            valid_items,
+            day_lengths,
+        }
+    }
+}
+
+/// Owned data for a detached cleanup worker; no Bevy resources are borrowed
+/// across frames or sent by reference to another thread.
+struct PruneRegistries {
+    blocks: BlockRegistry,
+    fluids: FluidRegistry,
+    valid_items: HashSet<String>,
+    day_lengths: HashMap<String, u64>,
+}
+
+impl PruneRegistries {
+    fn validate_playable(&self, snapshot: &WorldSnapshot) -> io::Result<()> {
+        validate_playable(
+            snapshot,
+            self.day_lengths.get(&snapshot.dimension_id).copied(),
+            |id| self.valid_items.contains(id),
+        )
+    }
+}
+
+fn validate_playable(
+    snapshot: &WorldSnapshot,
+    duration: Option<u64>,
+    valid_item: impl Fn(&str) -> bool,
+) -> io::Result<()> {
+    if duration.is_none_or(|ticks| ticks == 0 || snapshot.tick_in_day >= ticks) {
+        return Err(invalid_data("saved dimension or world clock is invalid"));
+    }
+    if snapshot.inventory.len() != INVENTORY_SLOT_COUNT {
+        return Err(invalid_data("invalid inventory length"));
+    }
+    for id in snapshot.inventory.iter().flatten() {
+        if !valid_item(id) {
+            return Err(invalid_data(format!("unknown inventory item ID: {id}")));
+        }
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -113,9 +180,11 @@ impl WorldSnapshot {
         if source.ticks_per_second == 0 || source.dimension_id.is_empty() || source.day == 0 {
             return Err(invalid_data("incomplete world state"));
         }
-        if source.player.as_ref().is_some_and(|player| {
-            player.position.iter().any(|coord| !coord.is_finite())
-        }) {
+        if source
+            .player
+            .as_ref()
+            .is_some_and(|player| player.position.iter().any(|coord| !coord.is_finite()))
+        {
             return Err(invalid_data("player position must be finite"));
         }
         Ok(Self {
@@ -180,10 +249,10 @@ pub(crate) fn create_new_world(
     }
 }
 
-/// Write a complete immutable snapshot first, then publish its manifest as
-/// the commit marker. Failed cleanup must not invalidate a committed save.
+/// Publish the immutable snapshot before its manifest commit marker. The
+/// worker only removes backups AFTER publication, never during the write.
 pub(crate) fn save_world(snapshot: &WorldSnapshot, registries: SaveRegistries<'_>) -> io::Result<u64> {
-    let _lock = SAVE_LOCK.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+    let lock = SAVE_LOCK.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
     validate_world_name(&snapshot.id)?;
     if snapshot.format_version != SAVE_FORMAT_VERSION {
         return Err(invalid_data("unsupported snapshot format"));
@@ -229,10 +298,42 @@ pub(crate) fn save_world(snapshot: &WorldSnapshot, registries: SaveRegistries<'_
         }
         return Err(error);
     }
-    if let Err(error) = prune_old_generations(&directory, &snapshot.id, registries) {
-        warn!("World save committed, but old snapshot cleanup failed: {error}");
+    let saved_at = manifest.last_saved_unix_ms;
+    // Release the writer before scheduling any cleanup work. A detached worker
+    // may be interrupted by process exit; this only leaves additional backups.
+    drop(lock);
+    if next > RETAINED_GENERATIONS as u64 {
+        schedule_backup_prune(snapshot.id.clone(), registries);
     }
-    Ok(manifest.last_saved_unix_ms)
+    Ok(saved_at)
+}
+
+fn schedule_backup_prune(id: String, registries: SaveRegistries<'_>) {
+    // Bound background work: a slow cleanup must not queue an unbounded number
+    // of worker threads. The next save retries a skipped cleanup.
+    if PRUNE_IN_PROGRESS.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let owned = registries.owned_for_pruning();
+    let spawned = thread::Builder::new()
+        .name("asteria-save-prune".to_owned())
+        .spawn(move || {
+            struct ResetPruneFlag;
+            impl Drop for ResetPruneFlag {
+                fn drop(&mut self) {
+                    PRUNE_IN_PROGRESS.store(false, Ordering::Release);
+                }
+            }
+            let _reset = ResetPruneFlag;
+            let directory = Path::new(WORLDS_DIRECTORY).join(&id);
+            if let Err(error) = prune_old_generations(&directory, &id, &owned) {
+                warn!("World {id} was saved, but background backup cleanup failed: {error}");
+            }
+        });
+    if let Err(error) = spawned {
+        PRUNE_IN_PROGRESS.store(false, Ordering::Release);
+        warn!("World was saved, but backup cleanup thread could not start: {error}");
+    }
 }
 
 /// Enumerate only fully published generations. Missing or temporary snapshots
@@ -287,7 +388,14 @@ pub(crate) fn load_world(
         if !valid_manifest(&manifest, id, generation) {
             continue;
         }
-        match load_snapshot(&directory, id, &manifest, registries) {
+        match load_snapshot(
+            &directory,
+            id,
+            &manifest,
+            registries.blocks,
+            registries.fluids,
+            |snapshot| registries.validate_playable(snapshot),
+        ) {
             Ok(loaded) => return Ok(loaded),
             Err(error) => {
                 warn!("Skipping damaged save for world {id}, generation {generation}: {error}");
@@ -302,7 +410,9 @@ fn load_snapshot(
     directory: &Path,
     id: &str,
     manifest: &WorldManifest,
-    registries: SaveRegistries<'_>,
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+    validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
 ) -> io::Result<(WorldSnapshot, VoxelWorld)> {
     let filename = manifest.snapshot_file.as_ref().ok_or_else(|| invalid_data("no complete snapshot"))?;
     let expected = snapshot_name(manifest.generation);
@@ -322,18 +432,15 @@ fn load_snapshot(
         || snapshot.ticks_per_second != manifest.ticks_per_second
         || snapshot.ticks_per_second == 0
         || snapshot.day == 0
-        || snapshot.player.as_ref().is_some_and(|player| {
-            player.position.iter().any(|coord| !coord.is_finite())
-        })
+        || snapshot
+            .player
+            .as_ref()
+            .is_some_and(|player| player.position.iter().any(|coord| !coord.is_finite()))
     {
         return Err(invalid_data("snapshot metadata or player state is invalid"));
     }
-    registries.validate_playable(&snapshot)?;
-    let world = VoxelWorld::from_saved_chunks(
-        std::mem::take(&mut snapshot.chunks),
-        registries.blocks,
-        registries.fluids,
-    )?;
+    validate(&snapshot)?;
+    let world = VoxelWorld::from_saved_chunks(std::mem::take(&mut snapshot.chunks), blocks, fluids)?;
     Ok((snapshot, world))
 }
 
@@ -362,14 +469,13 @@ fn latest_complete_manifest(directory: &Path, id: &str) -> io::Result<WorldManif
     Err(invalid_data(format!("world {id} has no published complete save")))
 }
 
-/// A backup counts toward retention only after all its persisted gameplay
-/// state has been validated. Keep the generation-zero reservation forever.
-/// This full validation still runs synchronously and needs a budgeted path.
-fn prune_old_generations(
-    directory: &Path,
-    id: &str,
-    registries: SaveRegistries<'_>,
-) -> io::Result<()> {
+/// Validate backups off-thread and prune only when four generations decode.
+/// The writer only appends immutable generations; deleting older generations
+/// does not require holding its lock across expensive validation or removals.
+fn prune_old_generations(directory: &Path, id: &str, registries: &PruneRegistries) -> io::Result<()> {
+    if !fs::symlink_metadata(directory)?.file_type().is_dir() {
+        return Err(invalid_data("world directory cannot be a symbolic link"));
+    }
     let mut candidates = manifest_paths(directory)?;
     if candidates.len() <= RETAINED_GENERATIONS + 1 {
         return Ok(());
@@ -384,7 +490,14 @@ fn prune_old_generations(
         if !valid_manifest(&manifest, id, *generation) {
             continue;
         }
-        match load_snapshot(directory, id, &manifest, registries) {
+        match load_snapshot(
+            directory,
+            id,
+            &manifest,
+            &registries.blocks,
+            &registries.fluids,
+            |snapshot| registries.validate_playable(snapshot),
+        ) {
             Ok(_) => {
                 restorable += 1;
                 if restorable == RETAINED_GENERATIONS {
@@ -400,8 +513,8 @@ fn prune_old_generations(
     let Some(cutoff) = cutoff else {
         return Ok(());
     };
-    // Remove the marker before its snapshot. An interrupted prune cannot leave
-    // a manifest advertising data already removed by this cleanup.
+    // Remove each manifest before its snapshot: process termination during
+    // cleanup cannot leave a manifest pointing at a deleted snapshot.
     for (generation, path) in candidates {
         if generation > 0 && generation < cutoff {
             fs::remove_file(path)?;
@@ -436,10 +549,10 @@ fn highest_generation(directory: &Path) -> io::Result<u64> {
 fn manifest_paths(directory: &Path) -> io::Result<Vec<(u64, PathBuf)>> {
     let mut result = Vec::new();
     for entry in fs::read_dir(directory)? {
-        let entry = entry?;
-        if !entry.file_type()?.is_file() {
+        if !entry?.file_type()?.is_file() {
             continue;
         }
+        let entry = entry?;
         let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
             continue;
         };
