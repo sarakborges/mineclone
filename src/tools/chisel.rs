@@ -73,7 +73,8 @@ fn handle_chisel_use(
             target.voxel == hit.voxel
                 && target.block_id == hit.block_id
                 && target.normal == hit.normal
-        }) {
+        }) || runtime.world().block_id_at(hit.voxel) != Some(hit.block_id)
+        {
             continue;
         }
 
