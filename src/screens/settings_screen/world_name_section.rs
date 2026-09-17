@@ -32,6 +32,13 @@ impl WorldNameFeedback {
     }
 }
 
+type WorldNameInteractions<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Interaction),
+    (With<WorldNameInput>, Changed<Interaction>),
+>;
+
 pub(super) fn world_name_setting(
     config: &NewWorldConfig,
     localization: &UiLocalization,
@@ -95,7 +102,7 @@ pub(super) fn world_name_setting(
 }
 
 pub(super) fn handle_world_name_focus(
-    interactions: Query<(Entity, &Interaction), (With<WorldNameInput>, Changed<Interaction>)>,
+    interactions: WorldNameInteractions,
     mut focus: ResMut<InputFocus>,
 ) {
     for (entity, interaction) in &interactions {
