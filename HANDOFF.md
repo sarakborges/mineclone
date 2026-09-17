@@ -115,3 +115,9 @@ Próximo passo: validar a nova sequência por CI quando disponível e, sem esper
 - 0.22.5 registra a nova alteração funcional. Não executei cargo test, cargo run ou QA Windows.
 
 Próximo passo: obter CI; se verde, continuar a revisão de fronteira sólido/fluido e de máscaras parciais na geometria de faces. Se a CI apontar regressão, corrigir antes de outro checkpoint.
+
+
+### Checkpoint 63 follow-up — ajuste da regressão de teste
+
+- 8bb1c86fea50c9a995658c57fb3180c71fe80d17 corrige o caso de regressão do AO: uma máscara EMPTY sem prefixo transitório é normalizada para FULL ao persistir, então o teste precisa manter a máscara com o caminho transitório para verificar ocupação zero. Nenhuma lógica de produção foi alterada neste follow-up.
+- A run 35281227881 foi observada para o commit anterior d9f3505fb511c89f2912c0d4de7132d5afe4b7f4 e estava em andamento; este follow-up ainda não tem run reportada no conector.
