@@ -6,7 +6,7 @@ use bevy::{
 
 use crate::{
     localization::{Language, UiLocalization},
-    ui::{dropdown, surface, theme, typography},
+    ui::{dropdown, surface, text_input, theme, typography},
 };
 
 pub(super) const OPTION_HEIGHT: f32 = 40.0;
@@ -138,35 +138,53 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                                     ..default()
                                 },
                                 TextCursorStyle {
-                                    color: Color::WHITE,
+                                    color: theme::TEXT_PRIMARY,
                                     ..default()
                                 },
                                 TextFont {
                                     font: FontSource::SystemUi,
-                                    font_size: FontSize::Px(14.0),
+                                    font_size: FontSize::Px(17.0),
                                     ..default()
                                 },
-                                TextColor(Color::WHITE),
+                                TextColor(theme::TEXT_PRIMARY),
                                 TextLayout::no_wrap(),
                                 Node {
                                     width: percent(100),
                                     height: px(SEARCH_HEIGHT),
-                                    padding: UiRect::horizontal(px(11)),
+                                    padding: UiRect::horizontal(px(text_input::INPUT_PADDING_X)),
                                     border: UiRect::all(px(1)),
-                                    border_radius: BorderRadius::all(px(5)),
+                                    border_radius: BorderRadius::all(px(text_input::INPUT_RADIUS)),
                                     align_items: AlignItems::Center,
+                                    overflow: Overflow::clip(),
                                     ..default()
                                 },
-                                BackgroundColor(theme::SLIDER_TRACK),
-                                BorderColor::all(surface::HUD_SELECTED_BORDER_COLOR),
+                                BackgroundColor(text_input::INPUT_FILL),
+                                BorderColor::all(text_input::input_border(false)),
+                                // The hint is an overlay, not a normal flex child of the editable text.
+                                // In-flow text makes the input stretch/shift as the user types.
                                 children![(
                                     SpawnBiomeSearchText,
                                     Visibility::Inherited,
-                                    typography::caption(
+                                    Text::new(
                                         localization
                                             .text(language, "newWorld.spawnBiome.search")
                                             .to_owned(),
                                     ),
+                                    TextFont {
+                                        font: FontSource::SystemUi,
+                                        font_size: FontSize::Px(17.0),
+                                        ..default()
+                                    },
+                                    TextColor(theme::TEXT_MUTED),
+                                    TextLayout::no_wrap(),
+                                    Node {
+                                        position_type: PositionType::Absolute,
+                                        top: px(10),
+                                        left: px(text_input::INPUT_PADDING_X),
+                                        max_width: percent(90),
+                                        overflow: Overflow::clip(),
+                                        ..default()
+                                    },
                                     Pickable::IGNORE,
                                 )],
                             ),
