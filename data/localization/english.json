@@ -58,6 +58,8 @@
   "settings.targetBlockPosition.topRight": "Top-right",
   "settings.targetBlockPosition.hidden": "Hidden",
   "language.english": "English",
+  "language.portugueseBrazil": "Brazilian Portuguese",
+  "language.spanish": "Spanish",
   "inventory.searchPlaceholder": "Search items...",
   "inventory.everything": "Everything",
   "hud.rotateBlock": "Press R to rotate block",
