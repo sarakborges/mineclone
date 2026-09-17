@@ -41,6 +41,7 @@ use bevy::{
 };
 use content::ContentPlugin;
 use creatures::CreaturesPlugin;
+use entity::EntityPlugin;
 use gameplay::GameplayPlugin;
 use hud::HudPlugin;
 use localization::LocalizationPlugin;
@@ -94,6 +95,7 @@ fn run_game() {
             WorldPlugin,
             GameplayPlugin,
             CreaturesPlugin,
+            EntityPlugin,
             RenderingPlugin,
             BlockTargetingPlugin,
             ToolsPlugin,
