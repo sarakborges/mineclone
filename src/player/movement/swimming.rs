@@ -6,7 +6,7 @@ use crate::{
 };
 
 use super::{
-    collision::{Axis, move_axis},
+    collision::{Axis, MoveAxisResult, move_axis},
     config::{
         JUMP_SPEED, SWIM_ASCEND_SPEED, SWIM_BUOYANCY_SPEED, SWIM_DESCEND_SPEED,
         SWIM_EXIT_SURFACE_MARGIN, SWIM_VERTICAL_ACCELERATION,
@@ -77,12 +77,15 @@ pub(super) fn swim_vertical(
 
     let vertical_delta = gravity.vertical_velocity * delta_seconds;
     if vertical_delta != 0.0
-        && move_axis(
-            &mut transform,
-            &context.world,
-            vertical_delta,
-            Axis::Y,
-            None,
+        && matches!(
+            move_axis(
+                &mut transform,
+                &context.world,
+                vertical_delta,
+                Axis::Y,
+                None,
+            ),
+            MoveAxisResult::Blocked | MoveAxisResult::Stepped(_)
         )
     {
         gravity.vertical_velocity = 0.0;
