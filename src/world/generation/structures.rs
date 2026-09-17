@@ -16,6 +16,7 @@ use crate::{
     },
 };
 
+pub(crate) use self::support::fit_structure_to_ground;
 use self::{placement::candidate_anchor, support::compute_structure_origin_y};
 use super::ChunkGenerationContext;
 
