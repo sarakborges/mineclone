@@ -53,6 +53,12 @@ impl InMemoryWorldSave {
         self.players.clear();
     }
 
+    pub(crate) fn save_game_rules(&mut self, game_rules: GameRules) {
+        if self.has_world() {
+            self.game_rules = game_rules;
+        }
+    }
+
     pub fn save_player_state(
         &mut self,
         player_id: PlayerId,
