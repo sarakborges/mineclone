@@ -20,17 +20,24 @@ const VIEW_MODEL_RENDER_LAYER: usize = 1;
 const BRUSH_DISPLAY_SIZE: f32 = 0.43;
 
 #[derive(Component)]
-struct HeldBrushRoot;
+pub(super) struct HeldBrushRoot;
 
 #[derive(Component)]
-struct HeldBrushTint;
+pub(super) struct HeldBrushTint;
 
 #[derive(Resource)]
-struct HeldBrushAssets {
+pub(super) struct HeldBrushAssets {
     mesh: Handle<Mesh>,
     icon: Handle<StandardMaterial>,
     tint_icon: Option<Handle<StandardMaterial>>,
 }
+
+type HeldBrushOverlays<'w, 's> = Query<
+    'w,
+    's,
+    (&'static MeshMaterial3d<StandardMaterial>, &'static mut Visibility),
+    (With<HeldBrushTint>, Without<HeldBrushRoot>),
+>;
 
 fn selected_tint(mode: &BrushMode, properties: &SecondaryPropertyRegistry) -> Option<Color> {
     mode.dye_id()
@@ -127,10 +134,7 @@ pub(super) fn sync_held_brush(
     mode: Res<BrushMode>,
     properties: Res<SecondaryPropertyRegistry>,
     mut roots: Query<&mut Visibility, (With<HeldBrushRoot>, Without<HeldBrushTint>)>,
-    mut overlays: Query<
-        (&MeshMaterial3d<StandardMaterial>, &mut Visibility),
-        (With<HeldBrushTint>, Without<HeldBrushRoot>),
-    >,
+    mut overlays: HeldBrushOverlays,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     if !hotbar.is_changed() && !mode.is_changed() && !properties.is_changed() {
