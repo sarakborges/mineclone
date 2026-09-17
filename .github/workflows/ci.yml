@@ -39,16 +39,33 @@ jobs:
             libx11-dev libxkbcommon-dev libxcursor-dev libxi-dev libxrandr-dev
           version: ubuntu-24.04-bevy-0.19-v1
 
+      # Cargo.lock is intentionally gitignored. Without restoring it BEFORE
+      # rust-cache, every fresh runner resolves hundreds of dependencies again,
+      # potentially downloading newer crates and invalidating compiled artifacts
+      # even when the Cargo cache reports an exact hit.
+      - name: Cache CI Cargo.lock
+        id: cargo-lock
+        uses: actions/cache@v4
+        with:
+          path: Cargo.lock
+          key: ubuntu-24.04-cargo-lock-v1-${{ hashFiles('Cargo.toml', '.cargo/config.toml') }}
+
+      # On a cold cache only: generate the lock before rust-cache computes its
+      # dependency key; the cache action saves this file at the end of the job.
+      - name: Resolve dependencies on cache miss
+        if: steps.cargo-lock.outputs.cache-hit != 'true'
+        run: cargo generate-lockfile
+
       # Cache downloaded crates and compiled dependency artifacts. The key
-      # includes the Rust toolchain and Cargo manifests; do not cache the
-      # project binary or needlessly rebuild all Bevy crates on each push.
+      # now sees the restored lockfile, keeping crate versions stable across
+      # successive commits instead of repeatedly rebuilding Bevy.
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
 
       - name: Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
       - name: Check
-        run: cargo check
+        run: cargo check --locked
