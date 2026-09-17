@@ -47,6 +47,8 @@ pub(crate) fn validate_world_name(name: &str) -> io::Result<()> {
             // Windows also reserves ISO-8859-1 superscript digits in these
             // device names, including when followed by a file extension.
             | "COM¹" | "COM²" | "COM³" | "LPT¹" | "LPT²" | "LPT³"
+            // Win32 console input/output handles are not portable directory IDs.
+            | "CONIN$" | "CONOUT$"
     );
     if invalid || reserved || Path::new(name).components().count() != 1 {
         return Err(io::Error::new(
@@ -84,7 +86,10 @@ mod tests {
 
     #[test]
     fn rejects_windows_device_names_and_path_traversal() {
-        for name in ["CON", "nul.txt", "../world", "foo/bar", "foo\\bar", "test.", " "] {
+        for name in [
+            "CON", "nul.txt", "COM¹", "lpt².txt", "CONIN$", "conout$.txt",
+            "../world", "foo/bar", "foo\\bar", "test.", " ",
+        ] {
             assert!(validate_world_name(name).is_err(), "{name}");
         }
     }
