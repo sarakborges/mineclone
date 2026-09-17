@@ -40,7 +40,6 @@ pub(crate) fn spawn_player_entity(
     game_mode: GameMode,
 ) {
     commands.spawn((
-        Name::new("Player"),
         PlayerEntity,
         Camera3d::default(),
         Camera {
