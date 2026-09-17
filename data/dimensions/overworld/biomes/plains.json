@@ -20,6 +20,17 @@
     "lakeChanceMultiplier": 1.0,
     "riverWidthMultiplier": 1.0
   },
+  "creatureSpawns": [
+    {
+      "creature": "asteria:slime",
+      "weight": 1.0,
+      "lightMin": 0,
+      "lightMax": 15,
+      "spacing": 16.0,
+      "maxPerType": 4,
+      "maxInDimension": 16
+    }
+  ],
   "structures": [
     {
       "id": "asteria:tree_oak",
