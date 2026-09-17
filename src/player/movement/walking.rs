@@ -32,7 +32,7 @@ pub(super) fn walk(
     >,
 ) {
     let camera = camera.into_inner();
-    let (mut transform, flight, mut gravity, mut walking) = player.into_inner();
+    let (mut transform, flight, gravity, mut walking) = player.into_inner();
 
     if flight.active {
         if walking.velocity != Vec3::ZERO {
@@ -52,8 +52,6 @@ pub(super) fn walk(
             target_y,
             STEP_SMOOTH_SPEED * delta_seconds,
         );
-        gravity.grounded = true;
-        gravity.vertical_velocity = 0.0;
         if (transform.translation.y - target_y).abs() <= f32::EPSILON {
             transform.translation.y = target_y;
             walking.step_target_y = None;
