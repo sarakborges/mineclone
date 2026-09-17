@@ -7,7 +7,7 @@ use bevy::{
 
 use crate::content::{color::Hsi, creature::CreatureRegistry};
 
-use super::CreatureInstance;
+use super::{CreatureInstance, motion::CreatureMotion};
 
 /// The glTF asset belongs to the visual loader; the root owns physics/position.
 #[derive(Component)]
@@ -115,6 +115,7 @@ pub(super) fn attach_loaded_models(
             parent
                 .spawn((
                     WorldAssetRoot(scene),
+                    Transform::default(),
                     CreatureAppearance {
                         owner: root,
                         material_tints: tints,
@@ -204,6 +205,23 @@ fn configure_loaded_scene(
                     current_state: "idle".to_owned(),
                 },
             ));
+        }
+    }
+}
+
+/// Rotate only the glTF wrapper; the root transform and its world-space
+/// collider remain aligned with the movement system.
+pub(super) fn sync_creature_facing(
+    motions: Query<&CreatureMotion, With<CreatureInstance>>,
+    mut appearances: Query<(&CreatureAppearance, &mut Transform)>,
+) {
+    for (appearance, mut transform) in &mut appearances {
+        let Ok(motion) = motions.get(appearance.owner) else {
+            continue;
+        };
+        let facing = Quat::from_rotation_y(motion.facing_yaw());
+        if transform.rotation != facing {
+            transform.rotation = facing;
         }
     }
 }
