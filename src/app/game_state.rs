@@ -5,6 +5,7 @@ pub enum GameState {
     #[default]
     StartingScreen,
     NewWorld,
+    WorldSelection,
     Loading,
     Gameplay,
 }
