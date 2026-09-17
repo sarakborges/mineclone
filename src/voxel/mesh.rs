@@ -1,17 +1,22 @@
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::prelude::*;
 
 use crate::{
     content::block::{BlockRegistry, BlockTextureRotations},
     rendering::block_texture::block_face_material_face,
 };
 
-use self::geometry::{face_geometry, is_face_exposed, orient_face_geometry};
+use self::{
+    geometry::{face_geometry, is_face_exposed, orient_face_geometry},
+    micro_mesh::{
+        MicroMeshBuffers, MicroSurface, emit_neighbor_openings, emit_sculpted_faces, occludes,
+    },
+};
 use super::{
     block_face::BlockFace,
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, VoxelChunk},
-    mesh_buffer::VoxelMeshBuffer,
     mesh_lighting::{face_lighting, push_lit_quad, surface_block_srgb},
+    microblock::MicroblockMask,
     orientation::orient_face,
     quad::VOXEL_FACE_UVS,
     read::VoxelRead,
@@ -19,6 +24,7 @@ use super::{
 };
 
 mod geometry;
+mod micro_mesh;
 
 pub struct ChunkFaceMesh {
     pub block_id: &'static str,
@@ -38,7 +44,7 @@ where
     W: VoxelRead + ?Sized,
     F: Fn(IVec3, VoxelCell) -> [f32; 3],
 {
-    let mut buffers = HashMap::<(&'static str, BlockFace, bool), VoxelMeshBuffer>::new();
+    let mut buffers = MicroMeshBuffers::default();
     let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
 
     for y in 0..CHUNK_SIZE {
@@ -54,33 +60,81 @@ where
                 let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
                 let mut tint = None;
                 let mut source_block_srgb = None;
+                let tint_for_cell = || {
+                    if block.textures.is_empty() {
+                        [1.0, 1.0, 1.0]
+                    } else {
+                        tint_at(world_voxel, cell)
+                    }
+                };
+                let block_srgb_for_cell = || {
+                    surface_block_srgb(
+                        chunk.light_at(x as i32, y as i32, z as i32),
+                        block.light_emission > 0,
+                    )
+                };
+
+                // Geometry and texture identity stay with the original parent.
+                // A compact 8^3 mask is expanded only while meshing this voxel.
+                if MicroblockMask::is_modified(cell) {
+                    let surface = MicroSurface {
+                        world,
+                        blocks,
+                        cell,
+                        block,
+                        world_voxel,
+                        local_voxel: IVec3::new(x as i32, y as i32, z as i32),
+                        tint: tint_for_cell(),
+                        block_srgb: block_srgb_for_cell(),
+                    };
+                    emit_sculpted_faces(&surface, &mut buffers);
+                    continue;
+                }
 
                 for block_face in BlockFace::ALL {
                     let face = orient_face(block_face, cell.orientation);
-                    if !is_face_exposed(
-                        world,
-                        blocks,
-                        cell.block_id,
-                        block_is_transparent,
-                        world_voxel,
-                        face,
-                    ) {
+                    let partial_occluder = world
+                        .cell_at(world_voxel + face.offset())
+                        .filter(|neighbor| MicroblockMask::is_modified(*neighbor))
+                        .filter(|neighbor| {
+                            let definition = blocks.get(neighbor.block_id).unwrap_or_else(|| {
+                                panic!("missing block definition: {}", neighbor.block_id)
+                            });
+                            occludes(cell.block_id, block, neighbor.block_id, definition)
+                        });
+
+                    if partial_occluder.is_none()
+                        && !is_face_exposed(
+                            world,
+                            blocks,
+                            cell.block_id,
+                            block_is_transparent,
+                            world_voxel,
+                            face,
+                        )
+                    {
                         continue;
                     }
 
-                    let tint = *tint.get_or_insert_with(|| {
-                        if block.textures.is_empty() {
-                            [1.0, 1.0, 1.0]
-                        } else {
-                            tint_at(world_voxel, cell)
-                        }
-                    });
-                    let source_block_srgb = *source_block_srgb.get_or_insert_with(|| {
-                        surface_block_srgb(
-                            chunk.light_at(x as i32, y as i32, z as i32),
-                            block.light_emission > 0,
-                        )
-                    });
+                    let tint = *tint.get_or_insert_with(tint_for_cell);
+                    let source_block_srgb =
+                        *source_block_srgb.get_or_insert_with(block_srgb_for_cell);
+
+                    if let Some(neighbor) = partial_occluder {
+                        let surface = MicroSurface {
+                            world,
+                            blocks,
+                            cell,
+                            block,
+                            world_voxel,
+                            local_voxel: IVec3::new(x as i32, y as i32, z as i32),
+                            tint,
+                            block_srgb: source_block_srgb,
+                        };
+                        emit_neighbor_openings(&surface, &mut buffers, face, neighbor);
+                        continue;
+                    }
+
                     let texture_rotation =
                         if face_uses_texture_rotation(block.rotate_texture, block_face) {
                             cell.texture_rotation
