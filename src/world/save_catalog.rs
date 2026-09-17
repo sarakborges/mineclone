@@ -696,7 +696,9 @@ fn publish_json<T: Serialize>(directory: &Path, filename: &str, value: &T) -> io
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> io::Result<T> {
-    serde_json::from_slice(&fs::read(path)?).map_err(io::Error::other)
+    // Avoid a second allocation as large as the on-disk JSON. The deserialized
+    // snapshot still owns its chunks, and callers continue validating them.
+    serde_json::from_reader(io::BufReader::new(fs::File::open(path)?)).map_err(io::Error::other)
 }
 
 fn now_unix_ms() -> io::Result<u64> {
