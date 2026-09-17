@@ -59,9 +59,8 @@ impl SaveRegistries<'_> {
         })
     }
 
-    /// Snapshot the small content lookup tables before starting the worker.
-    /// Chunk JSON decoding and validation are intentionally not done here.
-    fn owned_for_pruning(self) -> PruneRegistries {
+    /// Copy content lookups before starting a worker, without decoding chunks.
+    pub(crate) fn owned_for_pruning(self) -> PruneRegistries {
         let valid_items = self
             .blocks
             .iter()
@@ -86,9 +85,8 @@ impl SaveRegistries<'_> {
     }
 }
 
-/// Owned data for a detached cleanup worker; no Bevy resources are borrowed
-/// across frames or sent by reference to another thread.
-struct PruneRegistries {
+/// Owned data for detached workers; no Bevy resources are borrowed across frames.
+pub(crate) struct PruneRegistries {
     blocks: BlockRegistry,
     fluids: FluidRegistry,
     valid_items: HashSet<String>,
@@ -340,10 +338,8 @@ fn schedule_backup_prune(id: String, registries: SaveRegistries<'_>) {
 }
 
 /// Enumerate only fully published generations. Missing or temporary snapshots
-/// never become selectable worlds.
+/// never become selectable worlds. Metadata-only; never assert restorable here.
 pub(crate) fn list_worlds() -> io::Result<Vec<WorldSummary>> {
-    // A writer or prune must not change the manifest set halfway through UI
-    // enumeration. This lock covers metadata only, never backup validation.
     let _lock = SAVE_LOCK.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
     let entries = match fs::read_dir(WORLDS_DIRECTORY) {
         Ok(entries) => entries,
@@ -370,6 +366,58 @@ pub(crate) fn list_worlds() -> io::Result<Vec<WorldSummary>> {
         b.last_saved_unix_ms.cmp(&a.last_saved_unix_ms).then_with(|| a.id.cmp(&b.id))
     });
     Ok(worlds)
+}
+
+/// Expensive: only call from the world-selection worker, never from a Bevy
+/// system. Reuses the exact snapshot and gameplay validation used by pruning.
+pub(crate) fn list_verified_worlds(registries: &PruneRegistries) -> io::Result<Vec<WorldSummary>> {
+    let candidates = list_worlds()?;
+    let mut verified = Vec::with_capacity(candidates.len());
+    for candidate in candidates {
+        match newest_restorable_timestamp(&candidate.id, registries) {
+            Ok(timestamp) => verified.push(WorldSummary {
+                id: candidate.id,
+                last_saved_unix_ms: timestamp,
+            }),
+            Err(error) => warn!("World {} has no verified snapshot: {error}", candidate.id),
+        }
+    }
+    verified.sort_unstable_by(|a, b| {
+        b.last_saved_unix_ms.cmp(&a.last_saved_unix_ms).then_with(|| a.id.cmp(&b.id))
+    });
+    Ok(verified)
+}
+
+fn newest_restorable_timestamp(id: &str, registries: &PruneRegistries) -> io::Result<u64> {
+    validate_world_name(id)?;
+    // A prune cannot delete the selected generation while it is decoded.
+    let _lock = SAVE_LOCK.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+    let directory = Path::new(WORLDS_DIRECTORY).join(id);
+    if !fs::symlink_metadata(&directory)?.file_type().is_dir() {
+        return Err(invalid_data("world directory cannot be a symbolic link"));
+    }
+    let mut candidates = manifest_paths(&directory)?;
+    candidates.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.0));
+    for (generation, path) in candidates {
+        let Ok(manifest) = read_json::<WorldManifest>(&path) else {
+            continue;
+        };
+        if !valid_manifest(&manifest, id, generation) {
+            continue;
+        }
+        match load_snapshot(
+            &directory,
+            id,
+            &manifest,
+            &registries.blocks,
+            &registries.fluids,
+            |snapshot| registries.validate_playable(snapshot),
+        ) {
+            Ok(_) => return Ok(manifest.last_saved_unix_ms),
+            Err(error) => warn!("Skipping damaged save for world {id}, generation {generation}: {error}"),
+        }
+    }
+    Err(invalid_data(format!("world {id} has no restorable save")))
 }
 
 /// Try each published generation newest first. All gameplay-visible state must
@@ -570,7 +618,7 @@ fn manifest_paths(directory: &Path) -> io::Result<Vec<(u64, PathBuf)>> {
         if !entry.file_type()?.is_file() {
             continue;
         }
-        let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
+        let Some(name) = entry.file_name().to_str() .map(str::to_owned) else {
             continue;
         };
         if let Some(generation) = parse_generation(&name, "manifest-") {
@@ -598,6 +646,10 @@ fn snapshot_name(generation: u64) -> String {
 fn publish_json<T: Serialize>(directory: &Path, filename: &str, value: &T) -> io::Result<()> {
     let mut data = serde_json::to_vec(value).map_err(io::Error::other)?;
     data.push(b'\n');
+    // Reject a snapshot the loader itself would refuse, before publishing it.
+    if filename.starts_with("snapshot-") && data.len() as u64 > MAX_SNAPSHOT_BYTES {
+        return Err(invalid_data("snapshot exceeds the maximum supported size"));
+    }
     let temporary = directory.join(format!("{filename}.tmp"));
     let final_path = directory.join(filename);
     let mut file = OpenOptions::new().write(true).create_new(true).open(&temporary)?;
