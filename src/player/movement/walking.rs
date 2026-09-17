@@ -100,29 +100,29 @@ pub(super) fn walk(
 
     let step_up_height = gravity.grounded.then_some(ENTITY_STEP_HEIGHT);
     let velocity = walking.velocity;
-    if velocity.x != 0.0 {
-        if !move_horizontal_axis(
+    if velocity.x != 0.0
+        && !move_horizontal_axis(
             &mut transform,
             &world,
             velocity.x * delta_seconds,
             Axis::X,
             step_up_height,
             &mut walking.step_target_y,
-        ) {
-            walking.velocity.x = 0.0;
-        }
+        )
+    {
+        walking.velocity.x = 0.0;
     }
-    if velocity.z != 0.0 {
-        if !move_horizontal_axis(
+    if velocity.z != 0.0
+        && !move_horizontal_axis(
             &mut transform,
             &world,
             velocity.z * delta_seconds,
             Axis::Z,
             step_up_height,
             &mut walking.step_target_y,
-        ) {
-            walking.velocity.z = 0.0;
-        }
+        )
+    {
+        walking.velocity.z = 0.0;
     }
 }
 
