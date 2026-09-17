@@ -191,3 +191,10 @@ Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigi
 - 3060/35282920752 falhou porque a tentativa anterior de cleanup referenciava VoxelCell sem import no escopo de produção. A primeira correção não foi aplicada no local correto; revisão do arquivo confirmou isso.
 - c3810b618aa54ff808a0270482226d5546a5ac67 adiciona explicitamente voxel::cell::VoxelCell ao import do módulo. Esta é a correção efetiva.
 - CI 35283168150 (run 3065) concluiu GREEN, validando a correção do import. Não executei cargo test/cargo run.
+
+
+## Checkpoint — smooth stair stepping + target highlight depth
+- Ajustado o movimento de subida de degrau para separar a posição física elevada da elevação visual: a colisão continua usando a altura final segura, enquanto a câmera/jogador sobe progressivamente com `STEP_SMOOTH_SPEED`.
+- `move_axis` agora diferencia movimento livre, bloqueio e `Stepped(position)`; gravidade foi adaptada ao novo resultado.
+- O highlight de alvo recebeu `StandardMaterial.depth_bias = 1.0` para evitar que a malha translúcida fique atrás da textura por disputa de profundidade. Bevy 0.19 documenta `depth_bias` como ajuste de profundidade para malhas com profundidade semelhante.
+- Não executei `cargo test`, `cargo run` ou QA Windows; validação deve ser feita pela CI.
