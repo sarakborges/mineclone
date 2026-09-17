@@ -69,13 +69,13 @@ pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
         let side_a_sample = side_a_samples[side_a_index];
         let side_b_sample = side_b_samples[side_b_index];
         let corner_sample = corner_samples[side_a_index][side_b_index];
-        let side_a_solid = sample_is_solid(side_a_sample);
-        let side_b_solid = sample_is_solid(side_b_sample);
-        let corner_solid = sample_is_solid(corner_sample);
-        let occlusion = if side_a_solid && side_b_solid {
-            3
+        let side_a_occlusion = sample_occlusion(side_a_sample);
+        let side_b_occlusion = sample_occlusion(side_b_sample);
+        let corner_occlusion = sample_occlusion(corner_sample);
+        let occlusion = if side_a_occlusion >= 1.0 && side_b_occlusion >= 1.0 {
+            3.0
         } else {
-            side_a_solid as usize + side_b_solid as usize + corner_solid as usize
+            (side_a_occlusion + side_b_occlusion + corner_occlusion).min(3.0)
         };
         let (sky_level, sampled_block_srgb) = average_shader_light_levels([
             base_sample,
@@ -90,7 +90,7 @@ pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
             normalize_level(max_component(sampled_block_srgb)),
         ];
         block_srgb[index] = sampled_block_srgb.map(normalize_level);
-        ambient_occlusion[index] = AO_BRIGHTNESS[occlusion];
+        ambient_occlusion[index] = ao_brightness(occlusion);
     }
 
     FaceLighting {
@@ -169,8 +169,22 @@ fn sign_index(sign: i32) -> usize {
     if sign < 0 { 0 } else { 1 }
 }
 
-fn sample_is_solid(sample: VoxelSample) -> bool {
-    sample.is_some_and(|(cell, _, _)| cell.is_some())
+fn sample_occlusion(sample: VoxelSample) -> f32 {
+    sample.map_or(0.0, |(cell, _, _)| {
+        cell.map_or(0.0, |cell| {
+            crate::voxel::microblock::MicroblockMask::from_cell(cell).occupied_fraction()
+        })
+    })
+}
+
+fn ao_brightness(occlusion: f32) -> f32 {
+    let clamped = occlusion.clamp(0.0, 3.0);
+    let lower = clamped.floor() as usize;
+    if lower >= 3 {
+        return AO_BRIGHTNESS[3];
+    }
+    let fraction = clamped - lower as f32;
+    AO_BRIGHTNESS[lower] * (1.0 - fraction) + AO_BRIGHTNESS[lower + 1] * fraction
 }
 
 fn average_shader_light_levels(samples: [VoxelSample; 4]) -> (f32, [f32; 3]) {
@@ -269,9 +283,19 @@ fn face_basis(face: BlockFace) -> (IVec3, IVec3, IVec3, [(i32, i32); 4]) {
 #[cfg(test)]
 mod tests {
     use super::{provisional_top_sky_sample, should_flip_diagonal};
-    use crate::voxel::{block_face::BlockFace, light::VoxelLight};
+    use crate::voxel::{block_face::BlockFace, light::VoxelLight, microblock::MicroblockMask};
 
     const DARK: [f32; 3] = [0.0; 3];
+
+    #[test]
+    fn partial_microblocks_reduce_ambient_occlusion() {
+        assert_eq!(ao_brightness(0.0), 1.0);
+        assert_eq!(ao_brightness(3.0), 0.58);
+        assert!(ao_brightness(1.5) > 0.72);
+        assert!(sample_occlusion(Some((Some(VoxelCell::new("stone", Default::default())), None, VoxelLight::DARK))) > 0.0);
+        let empty = MicroblockMask::EMPTY.apply_to_cell(VoxelCell::new("stone", Default::default()), false);
+        assert_eq!(sample_occlusion(Some((Some(empty), None, VoxelLight::DARK))), 0.0);
+    }
 
     #[test]
     fn chooses_the_lower_error_ao_diagonal() {
