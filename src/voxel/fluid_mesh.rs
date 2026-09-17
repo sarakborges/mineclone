@@ -238,8 +238,8 @@ fn partial_block_face_has_opening(cell: crate::voxel::cell::VoxelCell, face: Blo
                 BlockFace::Left => [7, a, b],
                 BlockFace::Top => [a, b, 0],
                 BlockFace::Bottom => [a, b, 7],
-                BlockFace::Front => [a, b, 7],
-                BlockFace::Back => [a, b, 0],
+                BlockFace::Front => [a, b, 0],
+                BlockFace::Back => [a, b, 7],
             };
             if !mask.contains(position) {
                 return true;
@@ -286,8 +286,8 @@ mod tests {
             (BlockFace::Left, [7, 0, 0], [0, 0, 0]),
             (BlockFace::Top, [0, 0, 0], [0, 7, 0]),
             (BlockFace::Bottom, [0, 7, 0], [0, 0, 0]),
-            (BlockFace::Front, [0, 0, 7], [0, 0, 0]),
-            (BlockFace::Back, [0, 0, 0], [0, 0, 7]),
+            (BlockFace::Front, [0, 0, 0], [0, 0, 7]),
+            (BlockFace::Back, [0, 0, 7], [0, 0, 0]),
         ] {
             let mut mask = crate::voxel::microblock::MicroblockMask::FULL;
             mask.edit(wrong_position, ChiselResolution::ExtraThin, false);
