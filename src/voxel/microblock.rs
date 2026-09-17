@@ -96,6 +96,23 @@ impl MicroblockMask {
         self.layers[z] & (1_u64 << (x + y * LAYERS)) != 0
     }
 
+    /// Approximate macro-cell light attenuation from its occupied microcells.
+    /// Lighting is stored at macro resolution, so a carved cell cannot expose
+    /// exact directional holes; occupancy-weighted attenuation preserves the
+    /// useful distinction between full, partial, and empty geometry.
+    pub(crate) fn light_dampening(self, full_dampening: u8) -> u8 {
+        const MICROBLOCK_VOLUME: usize = LAYERS * LAYERS * LAYERS;
+        let occupied = self
+            .layers
+            .iter()
+            .map(|layer| layer.count_ones() as usize)
+            .sum::<usize>();
+
+        ((usize::from(full_dampening) * occupied)
+            .saturating_add(MICROBLOCK_VOLUME - 1)
+            / MICROBLOCK_VOLUME) as u8
+    }
+
     pub(crate) fn edit(
         &mut self,
         position: [usize; 3],
