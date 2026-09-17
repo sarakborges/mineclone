@@ -231,22 +231,19 @@ fn partial_block_face_has_opening(cell: crate::voxel::cell::VoxelCell, face: Blo
         return false;
     }
 
-    for a in 0..crate::voxel::microblock::MICROBLOCK_EDGE as usize {
-        for b in 0..crate::voxel::microblock::MICROBLOCK_EDGE as usize {
-            let position = match face {
-                BlockFace::Right => [0, a, b],
-                BlockFace::Left => [7, a, b],
-                BlockFace::Top => [a, b, 0],
-                BlockFace::Bottom => [a, b, 7],
-                BlockFace::Front => [a, b, 0],
-                BlockFace::Back => [a, b, 7],
-            };
-            if !mask.contains(position) {
-                return true;
-            }
-        }
+    const X0: u64 = 0x0101_0101_0101_0101;
+    const X7: u64 = 0x8080_8080_8080_8080;
+    const Y0: u64 = 0x0000_0000_0000_00ff;
+    const Y7: u64 = 0xff00_0000_0000_0000;
+
+    match face {
+        BlockFace::Right => mask.layers().iter().any(|layer| layer & X0 != X0),
+        BlockFace::Left => mask.layers().iter().any(|layer| layer & X7 != X7),
+        BlockFace::Top => mask.layers().iter().any(|layer| layer & Y0 != Y0),
+        BlockFace::Bottom => mask.layers().iter().any(|layer| layer & Y7 != Y7),
+        BlockFace::Front => mask.layer(0) != u64::MAX,
+        BlockFace::Back => mask.layer(crate::voxel::microblock::MICROBLOCK_EDGE as usize - 1) != u64::MAX,
     }
-    false
 }
 
 #[cfg(test)]
