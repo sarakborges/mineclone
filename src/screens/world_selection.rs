@@ -7,9 +7,7 @@ use crate::{
         dimension::DimensionRegistry, fluid::FluidRegistry, tool::ToolRegistry,
     },
     localization::{ActiveLanguage, UiLocalization},
-    player::{
-        game_mode::GameMode, hotbar::PlayerHotbar, player_id::LOCAL_PLAYER_ID,
-    },
+    player::{game_mode::GameMode, hotbar::PlayerHotbar, player_id::LOCAL_PLAYER_ID},
     ui::{
         button::menu_button, surface, theme,
         transition::{ScreenTransition, ScreenTransitionTarget}, typography,
@@ -17,7 +15,7 @@ use crate::{
     world::{
         InMemoryWorldSave, WorldLoadMode, WorldSeed,
         dimension::CurrentDimension, game_rules::GameRules,
-        save_catalog::{WorldSummary, list_worlds, load_world},
+        save_catalog::{SaveRegistries, WorldSummary, list_worlds, load_world},
         save_session::WorldSession,
     },
 };
@@ -161,25 +159,22 @@ fn handle_world_selection(
                     state.error = "Select a world first.".to_owned();
                     return;
                 };
-                let (snapshot, world) = match load_world(&id, &context.blocks, &context.fluids) {
+                let registries = SaveRegistries {
+                    blocks: &context.blocks,
+                    fluids: &context.fluids,
+                    tools: &context.tools,
+                    dimensions: &context.dimensions,
+                    cycles: &context.cycles,
+                };
+                let (snapshot, world) = match load_world(&id, registries) {
                     Ok(loaded) => loaded,
                     Err(error) => {
                         state.error = format!("Cannot load {id}: {error}");
                         return;
                     }
                 };
-                let valid_clock = context
-                    .dimensions
-                    .get(&snapshot.dimension_id)
-                    .and_then(|dimension| context.cycles.get(&dimension.day_night_cycle))
-                    .is_some_and(|cycle| {
-                        cycle.day_duration_ticks > 0
-                            && snapshot.tick_in_day < cycle.day_duration_ticks
-                    });
-                if !valid_clock {
-                    state.error = "Saved world uses an unavailable dimension or invalid clock.".to_owned();
-                    return;
-                }
+                // Validation was performed on each candidate *before* it was
+                // accepted. Restore into the active inventory only on success.
                 if let Err(error) = context.inventory.restore_items(
                     &snapshot.inventory,
                     &context.blocks,

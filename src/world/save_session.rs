@@ -4,7 +4,10 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::{block::BlockRegistry, day_night_cycle::DayNightCycleRegistry, fluid::FluidRegistry},
+    content::{
+        block::BlockRegistry, day_night_cycle::DayNightCycleRegistry,
+        dimension::DimensionRegistry, fluid::FluidRegistry, tool::ToolRegistry,
+    },
     player::{
         camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar,
         player_id::PlayerId,
@@ -17,7 +20,7 @@ use super::{
     day_night::DayNightClock,
     dimension::CurrentDimension,
     game_rules::GameRules,
-    save_catalog::{SavedPlayer, SnapshotSource, WorldSnapshot, save_world},
+    save_catalog::{SaveRegistries, SavedPlayer, SnapshotSource, WorldSnapshot, save_world},
     seed::WorldSeed,
 };
 
@@ -78,7 +81,16 @@ impl WorldSession {
         let id = self.id.as_deref().ok_or_else(|| io::Error::other("no active world"))?;
         let state = snapshot.saved_state()?;
         let captured = snapshot.capture(id)?;
-        save_world(&captured, &snapshot.blocks, &snapshot.fluids)?;
+        save_world(
+            &captured,
+            SaveRegistries {
+                blocks: &snapshot.blocks,
+                fluids: &snapshot.fluids,
+                tools: &snapshot.tools,
+                dimensions: &snapshot.dimensions,
+                cycles: &snapshot.cycles,
+            },
+        )?;
         self.last_saved_state = Some(state);
         self.baseline_loaded_save = false;
         self.first_save_done = true;
@@ -97,6 +109,9 @@ pub(crate) struct WorldSaveContext<'w, 's> {
     world: Res<'w, VoxelWorld>,
     blocks: Res<'w, BlockRegistry>,
     fluids: Res<'w, FluidRegistry>,
+    tools: Res<'w, ToolRegistry>,
+    dimensions: Res<'w, DimensionRegistry>,
+    cycles: Res<'w, DayNightCycleRegistry>,
     player: Query<'w, 's, (&'static PlayerId, &'static Transform, &'static GameMode), With<GameplayCamera>>,
 }
 

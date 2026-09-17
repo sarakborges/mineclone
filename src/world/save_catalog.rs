@@ -10,7 +10,11 @@ use bevy::log::warn;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    content::{block::BlockRegistry, fluid::FluidRegistry},
+    content::{
+        block::BlockRegistry, day_night_cycle::DayNightCycleRegistry,
+        dimension::DimensionRegistry, fluid::FluidRegistry, tool::ToolRegistry,
+    },
+    player::hotbar::PlayerHotbar,
     voxel::{chunk_disk::DiskChunk, world::VoxelWorld},
 };
 
@@ -18,10 +22,37 @@ use super::world_names::{WORLDS_DIRECTORY, available_world_name, validate_world_
 
 const SAVE_FORMAT_VERSION: u32 = 1;
 const MAX_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
-/// Keep four *restorable* generations. A corrupt manifest or snapshot must not
-/// count as a backup that permits the deletion of older recoverable data.
+/// Count only generations that can actually be loaded into the current game.
 const RETAINED_GENERATIONS: usize = 4;
 static SAVE_LOCK: Mutex<()> = Mutex::new(());
+
+/// The same content definitions must validate a candidate during load and
+/// before old backups are removed. Otherwise an invalid inventory or clock
+/// could be counted as a recoverable generation and erase the last good save.
+#[derive(Clone, Copy)]
+pub(crate) struct SaveRegistries<'a> {
+    pub(crate) blocks: &'a BlockRegistry,
+    pub(crate) fluids: &'a FluidRegistry,
+    pub(crate) tools: &'a ToolRegistry,
+    pub(crate) dimensions: &'a DimensionRegistry,
+    pub(crate) cycles: &'a DayNightCycleRegistry,
+}
+
+impl SaveRegistries<'_> {
+    fn validate_playable(self, snapshot: &WorldSnapshot) -> io::Result<()> {
+        let cycle = self
+            .dimensions
+            .get(&snapshot.dimension_id)
+            .and_then(|dimension| self.cycles.get(&dimension.day_night_cycle))
+            .ok_or_else(|| invalid_data("saved dimension or day-night cycle is unavailable"))?;
+        if cycle.day_duration_ticks == 0 || snapshot.tick_in_day >= cycle.day_duration_ticks {
+            return Err(invalid_data("saved world clock is invalid"));
+        }
+        let mut inventory = PlayerHotbar::default();
+        inventory.restore_items(&snapshot.inventory, self.blocks, self.tools)?;
+        Ok(())
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct WorldManifest {
@@ -102,8 +133,8 @@ impl WorldSnapshot {
     }
 }
 
-/// Create and reserve the ID *before* world generation. Initial metadata is
-/// intentionally not a complete save; only published snapshots appear in Load Worlds.
+/// Reserve the unique directory before generating a world. Generation zero is
+/// an identity marker only; Load Worlds never exposes it as a complete save.
 pub(crate) fn create_new_world(
     requested_name: &str,
     seed: u64,
@@ -149,19 +180,15 @@ pub(crate) fn create_new_world(
     }
 }
 
-/// Publish a complete immutable snapshot first, followed by its manifest as
-/// the commit marker. A crash before manifest publication leaves the previous
-/// complete generation usable; the next writer never overwrites an old file.
-pub(crate) fn save_world(
-    snapshot: &WorldSnapshot,
-    blocks: &BlockRegistry,
-    fluids: &FluidRegistry,
-) -> io::Result<u64> {
+/// Write a complete immutable snapshot first, then publish its manifest as
+/// the commit marker. Failed cleanup must not invalidate a committed save.
+pub(crate) fn save_world(snapshot: &WorldSnapshot, registries: SaveRegistries<'_>) -> io::Result<u64> {
     let _lock = SAVE_LOCK.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
     validate_world_name(&snapshot.id)?;
     if snapshot.format_version != SAVE_FORMAT_VERSION {
         return Err(invalid_data("unsupported snapshot format"));
     }
+    registries.validate_playable(snapshot)?;
     let directory = Path::new(WORLDS_DIRECTORY).join(&snapshot.id);
     if !fs::symlink_metadata(&directory)?.file_type().is_dir() {
         return Err(invalid_data("world directory cannot be a symbolic link"));
@@ -197,22 +224,19 @@ pub(crate) fn save_world(
         snapshot_file: Some(snapshot_file.clone()),
     };
     if let Err(error) = publish_json(&directory, &manifest_name(next), &manifest) {
-        // No commit marker was published: the new file is an orphan, not a save.
         if let Err(cleanup_error) = fs::remove_file(directory.join(snapshot_file)) {
             warn!("Could not remove unpublished world snapshot: {cleanup_error}");
         }
         return Err(error);
     }
-    // Publication succeeded. Pruning is best effort: a cleanup error must not
-    // turn an already committed save into an apparent save failure.
-    if let Err(error) = prune_old_generations(&directory, &snapshot.id, blocks, fluids) {
+    if let Err(error) = prune_old_generations(&directory, &snapshot.id, registries) {
         warn!("World save committed, but old snapshot cleanup failed: {error}");
     }
     Ok(manifest.last_saved_unix_ms)
 }
 
-/// Return only valid, completed manifests. Incomplete world creation and
-/// temporary files cannot masquerade as a world available for loading.
+/// Enumerate only fully published generations. Missing or temporary snapshots
+/// never become selectable worlds.
 pub(crate) fn list_worlds() -> io::Result<Vec<WorldSummary>> {
     let entries = match fs::read_dir(WORLDS_DIRECTORY) {
         Ok(entries) => entries,
@@ -241,13 +265,12 @@ pub(crate) fn list_worlds() -> io::Result<Vec<WorldSummary>> {
     Ok(worlds)
 }
 
-/// Try generations newest first, validating the entire snapshot and its block
-/// and fluid registries before returning a world. A damaged newest generation
-/// must not hide an older, restorable save.
+/// Try each published generation newest first. All gameplay-visible state must
+/// validate before accepting a candidate so the next older snapshot is tried
+/// for an invalid inventory or clock as well as corrupt chunk data.
 pub(crate) fn load_world(
     id: &str,
-    blocks: &BlockRegistry,
-    fluids: &FluidRegistry,
+    registries: SaveRegistries<'_>,
 ) -> io::Result<(WorldSnapshot, VoxelWorld)> {
     validate_world_name(id)?;
     let directory = Path::new(WORLDS_DIRECTORY).join(id);
@@ -264,7 +287,7 @@ pub(crate) fn load_world(
         if !valid_manifest(&manifest, id, generation) {
             continue;
         }
-        match load_snapshot(&directory, id, &manifest, blocks, fluids) {
+        match load_snapshot(&directory, id, &manifest, registries) {
             Ok(loaded) => return Ok(loaded),
             Err(error) => {
                 warn!("Skipping damaged save for world {id}, generation {generation}: {error}");
@@ -279,8 +302,7 @@ fn load_snapshot(
     directory: &Path,
     id: &str,
     manifest: &WorldManifest,
-    blocks: &BlockRegistry,
-    fluids: &FluidRegistry,
+    registries: SaveRegistries<'_>,
 ) -> io::Result<(WorldSnapshot, VoxelWorld)> {
     let filename = manifest.snapshot_file.as_ref().ok_or_else(|| invalid_data("no complete snapshot"))?;
     let expected = snapshot_name(manifest.generation);
@@ -306,7 +328,12 @@ fn load_snapshot(
     {
         return Err(invalid_data("snapshot metadata or player state is invalid"));
     }
-    let world = VoxelWorld::from_saved_chunks(std::mem::take(&mut snapshot.chunks), blocks, fluids)?;
+    registries.validate_playable(&snapshot)?;
+    let world = VoxelWorld::from_saved_chunks(
+        std::mem::take(&mut snapshot.chunks),
+        registries.blocks,
+        registries.fluids,
+    )?;
     Ok((snapshot, world))
 }
 
@@ -335,19 +362,15 @@ fn latest_complete_manifest(directory: &Path, id: &str) -> io::Result<WorldManif
     Err(invalid_data(format!("world {id} has no published complete save")))
 }
 
-/// Prune only after the new manifest was committed, and only after finding
-/// four generations that actually decode into valid worlds. Corrupt files do
-/// not count toward retention and cannot cause deletion of an older good save.
-/// This validation is synchronous; large-world frame cost needs QA and a
-/// budgeted cleanup path before the feature is declared production-ready.
+/// A backup counts toward retention only after all its persisted gameplay
+/// state has been validated. Keep the generation-zero reservation forever.
+/// This full validation still runs synchronously and needs a budgeted path.
 fn prune_old_generations(
     directory: &Path,
     id: &str,
-    blocks: &BlockRegistry,
-    fluids: &FluidRegistry,
+    registries: SaveRegistries<'_>,
 ) -> io::Result<()> {
     let mut candidates = manifest_paths(directory)?;
-    // Generation zero is the reserved identity, never a complete save.
     if candidates.len() <= RETAINED_GENERATIONS + 1 {
         return Ok(());
     }
@@ -361,7 +384,7 @@ fn prune_old_generations(
         if !valid_manifest(&manifest, id, *generation) {
             continue;
         }
-        match load_snapshot(directory, id, &manifest, blocks, fluids) {
+        match load_snapshot(directory, id, &manifest, registries) {
             Ok(_) => {
                 restorable += 1;
                 if restorable == RETAINED_GENERATIONS {
@@ -377,8 +400,8 @@ fn prune_old_generations(
     let Some(cutoff) = cutoff else {
         return Ok(());
     };
-    // Manifest removal precedes snapshot removal so an interrupted prune
-    // cannot advertise a generation whose file has already been removed.
+    // Remove the marker before its snapshot. An interrupted prune cannot leave
+    // a manifest advertising data already removed by this cleanup.
     for (generation, path) in candidates {
         if generation > 0 && generation < cutoff {
             fs::remove_file(path)?;
