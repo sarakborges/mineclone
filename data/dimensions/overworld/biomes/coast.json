@@ -1,6 +1,6 @@
 {
   "id": "asteria:overworld/coast",
-  "name": { "english": "Coast" },
+  "name": { "english": "Coast", "portuguese_brazil": "Costa", "spanish": "Costa" },
   "kind": "hydrology",
   "visuals": {
     "skyColor": { "dawn": { "hue": 214.2333, "saturation": 0.2569, "intensity": 0.7267 }, "day": { "hue": 210.0000, "saturation": 0.5625, "intensity": 0.6400 }, "dusk": { "hue": 280.8934, "saturation": 0.1562, "intensity": 0.6400 }, "night": { "hue": 227.7837, "saturation": 0.5500, "intensity": 0.0667 } },

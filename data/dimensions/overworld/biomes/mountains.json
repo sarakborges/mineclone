@@ -1,6 +1,6 @@
 {
   "id": "asteria:overworld/mountains",
-  "name": { "english": "Mountains" },
+  "name": { "english": "Mountains", "portuguese_brazil": "Montanhas", "spanish": "Montañas" },
   "distributions": [
     {
       "type": "mountain_belt",

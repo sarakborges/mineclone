@@ -1,6 +1,6 @@
 {
   "id": "asteria:overworld/witchwood",
-  "name": { "english": "Witchwood" },
+  "name": { "english": "Witchwood", "portuguese_brazil": "Bosque das Bruxas", "spanish": "Bosque de las Brujas" },
   "terrain": {
     "type": "rolling",
     "baseHeight": 4.0,

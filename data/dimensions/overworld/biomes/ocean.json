@@ -1,6 +1,6 @@
 {
   "id": "asteria:overworld/ocean",
-  "name": { "english": "Ocean" },
+  "name": { "english": "Ocean", "portuguese_brazil": "Oceano", "spanish": "Océano" },
   "kind": "hydrology",
   "visuals": {
     "skyColor": { "dawn": { "hue": 214.5016, "saturation": 0.3043, "intensity": 0.6900 }, "day": { "hue": 211.7405, "saturation": 0.6512, "intensity": 0.5733 }, "dusk": { "hue": 265.2850, "saturation": 0.1724, "intensity": 0.5800 }, "night": { "hue": 227.7837, "saturation": 0.6471, "intensity": 0.0567 } },
