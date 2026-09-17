@@ -210,12 +210,63 @@ fn face_is_exposed<W: VoxelRead + ?Sized>(
         return face == BlockFace::Top;
     };
 
-    if cell.is_some() {
-        return false;
+    if let Some(block) = cell {
+        if !crate::voxel::microblock::MicroblockMask::is_modified(block) {
+            return false;
+        }
+        if !partial_block_face_has_opening(block, face) {
+            return false;
+        }
     }
 
     match fluid {
         Some(neighbor) => neighbor.fluid_id != fluid_id,
         None => true,
+    }
+}
+
+
+fn partial_block_face_has_opening(cell: crate::voxel::cell::VoxelCell, face: BlockFace) -> bool {
+    let mask = crate::voxel::microblock::MicroblockMask::from_cell(cell);
+    if mask == crate::voxel::microblock::MicroblockMask::FULL {
+        return false;
+    }
+
+    for a in 0..crate::voxel::microblock::MICROBLOCK_EDGE as usize {
+        for b in 0..crate::voxel::microblock::MICROBLOCK_EDGE as usize {
+            let position = match face {
+                BlockFace::Right => [0, a, b],
+                BlockFace::Left => [7, a, b],
+                BlockFace::Top => [a, b, 0],
+                BlockFace::Bottom => [a, b, 7],
+                BlockFace::Front => [a, b, 0],
+                BlockFace::Back => [a, b, 7],
+            };
+            if !mask.contains(position) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::voxel::microblock::ChiselResolution;
+
+    #[test]
+    fn partial_block_face_opening_exposes_fluid() {
+        let cell = VoxelCell::new("stone", Default::default());
+        let mut mask = crate::voxel::microblock::MicroblockMask::FULL;
+        mask.edit([0, 0, 0], ChiselResolution::ExtraThin, false);
+        let partial = mask.apply_to_cell(cell, true);
+        assert!(partial_block_face_has_opening(partial, BlockFace::Right));
+    }
+
+    #[test]
+    fn full_block_face_stays_closed_to_fluid() {
+        let cell = VoxelCell::new("stone", Default::default());
+        assert!(!partial_block_face_has_opening(cell, BlockFace::Right));
     }
 }
