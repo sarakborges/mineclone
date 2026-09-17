@@ -10,7 +10,6 @@ use crate::{
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
     },
-    world::{InMemoryWorldSave, WorldLoadMode, WorldSeed, dimension::CurrentDimension},
 };
 
 pub struct StartingScreenPlugin;
@@ -118,9 +117,7 @@ fn setup_starting_screen(
 }
 
 fn handle_menu_buttons(
-    mut commands: Commands,
     interactions: Query<(&Interaction, &StartingScreenAction), Changed<Interaction>>,
-    save: Res<InMemoryWorldSave>,
     mut transition: ResMut<ScreenTransition>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
@@ -134,16 +131,7 @@ fn handle_menu_buttons(
                 transition.request(ScreenTransitionTarget::game(GameState::NewWorld));
             }
             StartingScreenAction::LoadWorlds => {
-                let (Some(seed), Some(dimension_id)) = (save.seed(), save.dimension_id()) else {
-                    continue;
-                };
-
-                commands.insert_resource(WorldSeed(seed.0));
-                commands.insert_resource(CurrentDimension {
-                    id: dimension_id.to_owned(),
-                });
-                commands.insert_resource(WorldLoadMode::Load);
-                transition.request(ScreenTransitionTarget::game(GameState::Loading));
+                transition.request(ScreenTransitionTarget::game(GameState::WorldSelection));
             }
             StartingScreenAction::Settings => {
                 transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
