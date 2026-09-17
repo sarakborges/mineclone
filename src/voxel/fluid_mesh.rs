@@ -258,10 +258,19 @@ mod tests {
     #[test]
     fn partial_block_face_opening_exposes_fluid() {
         let cell = VoxelCell::new("stone", Default::default());
-        let mut mask = crate::voxel::microblock::MicroblockMask::FULL;
-        mask.edit([0, 0, 0], ChiselResolution::ExtraThin, false);
-        let partial = mask.apply_to_cell(cell, true);
-        assert!(partial_block_face_has_opening(partial, BlockFace::Right));
+        for (face, position) in [
+            (BlockFace::Right, [0, 0, 0]),
+            (BlockFace::Left, [7, 0, 0]),
+            (BlockFace::Top, [0, 0, 0]),
+            (BlockFace::Bottom, [0, 7, 0]),
+            (BlockFace::Front, [0, 0, 0]),
+            (BlockFace::Back, [0, 0, 7]),
+        ] {
+            let mut mask = crate::voxel::microblock::MicroblockMask::FULL;
+            mask.edit(position, ChiselResolution::ExtraThin, false);
+            let partial = mask.apply_to_cell(cell, true);
+            assert!(partial_block_face_has_opening(partial, face));
+        }
     }
 
     #[test]
