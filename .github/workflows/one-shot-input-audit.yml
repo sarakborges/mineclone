@@ -1,0 +1,18 @@
+name: One-shot editable input audit
+on:
+  push:
+    branches: [develop]
+    paths: [.github/workflows/one-shot-input-audit.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enumerate all editable inputs and their layout
+        run: |
+          echo '=== Every editable input in src ==='
+          rg -n -C 12 'EditableText\s*\{|EditableText::new|TextInput|INPUT_PADDING_X' src || true
+          echo '=== Input related files ==='
+          rg -l 'EditableText|TextInput' src || true
