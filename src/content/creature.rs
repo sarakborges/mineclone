@@ -22,8 +22,6 @@ pub struct CreatureDefinition {
     pub material_tints: std::collections::HashMap<String, Hsi>,
     #[serde(default)]
     pub animations: std::collections::HashMap<String, String>,
-    #[serde(default)]
-    pub preview_spawn: bool,
     #[serde(default = "default_jump_speed")]
     pub jump_speed: f32,
     #[serde(default)]
