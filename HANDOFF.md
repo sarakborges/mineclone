@@ -105,3 +105,13 @@ Próximo passo: verificar a CI do checkpoint 61; se verde, prosseguir com AO/fac
 - A run 35280905635 falhou no Clippy antes do check; depois das correções não há run reportada para os novos commits nesta integração, portanto CI ainda está pendente.
 
 Próximo passo: validar a nova sequência por CI quando disponível e, sem esperar passivamente, continuar a revisão de iluminação/AO e fronteiras sólido-fluido, sempre sem cargo test/cargo run.
+
+
+## Checkpoint 63 — AO de geometria parcial respeita ocupação do Chisel [CÓDIGO; CI AGUARDANDO]
+
+- d40bd62b4d6f224ac8043af6fe7626c39b0b8ecb adiciona MicroblockMask::occupied_fraction(), reutilizando a mesma representação 8³ do Chisel sem criar entidades por microcélula.
+- ba4f0cf98e279867fea3792055fa8680c8978d02 e d9f3505fb511c89f2912c0d4de7132d5afe4b7f fazem o AO de vértices interpolar a ocupação do vizinho parcial em vez de tratar qualquer máscara Chisel como cubo sólido. Blocos integrais mantêm o resultado anterior; uma máscara vazia deixa de contribuir como occluder. O caso de dois lados totalmente sólidos continua saturando o AO máximo.
+- A mudança é deliberadamente isotrópica no AO, assim como a aproximação de dampening: ela usa fração ocupada do macrobloco, não inventa direção subvoxel que a resolução atual de VoxelLight não armazena.
+- 0.22.5 registra a nova alteração funcional. Não executei cargo test, cargo run ou QA Windows.
+
+Próximo passo: obter CI; se verde, continuar a revisão de fronteira sólido/fluido e de máscaras parciais na geometria de faces. Se a CI apontar regressão, corrigir antes de outro checkpoint.
