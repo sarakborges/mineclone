@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 
 use crate::{
-    player::camera::GameplayCamera,
-    voxel::world::VoxelWorld,
+    player::{PlayerEntity, camera::GameplayCamera},
+    voxel::{collision::ENTITY_STEP_HEIGHT, world::VoxelWorld},
     world::{game_rules::GameRules, tick::WorldTickClock},
 };
 
@@ -10,6 +10,7 @@ use super::{
     collision::{Axis, move_axis},
     config::{WALK_ACCELERATION, WALK_DECELERATION, WALK_SPEED},
     flight::FlightState,
+    gravity::GravityState,
     smoothing::approach_velocity,
 };
 
@@ -23,14 +24,14 @@ pub(super) fn walk(
     world_ticks: Res<WorldTickClock>,
     keys: Res<ButtonInput<KeyCode>>,
     world: Res<VoxelWorld>,
-    player: Single<(
-        &mut Transform,
-        &GameplayCamera,
-        &FlightState,
-        &mut WalkingState,
-    )>,
+    camera: Single<&GameplayCamera>,
+    player: Single<
+        (&mut Transform, &FlightState, &GravityState, &mut WalkingState),
+        With<PlayerEntity>,
+    >,
 ) {
-    let (mut transform, camera, flight, mut walking) = player.into_inner();
+    let camera = camera.into_inner();
+    let (mut transform, flight, gravity, mut walking) = player.into_inner();
 
     if flight.active {
         if walking.velocity != Vec3::ZERO {
@@ -82,6 +83,7 @@ pub(super) fn walk(
         walking.velocity = next_velocity;
     }
 
+    let step_up_height = gravity.grounded.then_some(ENTITY_STEP_HEIGHT);
     let velocity = walking.velocity;
     if velocity.x != 0.0
         && move_axis(
@@ -89,6 +91,7 @@ pub(super) fn walk(
             &world,
             velocity.x * delta_seconds,
             Axis::X,
+            step_up_height,
         )
     {
         walking.velocity.x = 0.0;
@@ -99,6 +102,7 @@ pub(super) fn walk(
             &world,
             velocity.z * delta_seconds,
             Axis::Z,
+            step_up_height,
         )
     {
         walking.velocity.z = 0.0;
