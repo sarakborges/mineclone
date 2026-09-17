@@ -1,6 +1,7 @@
 mod block_icon;
 pub(crate) mod chat;
 mod crosshair;
+mod entity_targeting;
 mod fps;
 mod hotbar;
 mod inventory;
@@ -20,6 +21,7 @@ use bevy::{
 use block_icon::BlockIconMaterial;
 use chat::ChatHudPlugin;
 use crosshair::CrosshairPlugin;
+use entity_targeting::EntityHudPlugin;
 use fps::FpsHudPlugin;
 use hotbar::HotbarHudPlugin;
 use inventory::InventoryHudPlugin;
@@ -94,6 +96,7 @@ impl Plugin for HudPlugin {
                 FpsHudPlugin,
                 WorldHudPlugin,
                 TargetHudPlugin,
+                EntityHudPlugin,
             ));
     }
 }
