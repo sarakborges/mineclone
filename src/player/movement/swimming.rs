@@ -82,6 +82,7 @@ pub(super) fn swim_vertical(
             &context.world,
             vertical_delta,
             Axis::Y,
+            None,
         )
     {
         gravity.vertical_velocity = 0.0;
