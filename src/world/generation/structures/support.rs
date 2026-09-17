@@ -28,34 +28,21 @@ const MAX_STRUCTURE_GROUND_VARIATION: i32 = 1;
 const MAX_STRUCTURE_GROUND_RISE: i32 = 3;
 const SURFACE_CARVER_WATER_CLEARANCE: f32 = 12.0;
 
-pub(super) fn compute_structure_origin_y(
+/// Both world generation and /place use the exact same bottom-voxel footprint
+/// and terrain-variation rule. The caller supplies ground samples from either
+/// procedural density or the already-generated, possibly edited voxel world.
+pub(crate) fn fit_structure_to_ground(
     anchor: IVec2,
     voxels: &[StructureVoxel],
-    context: &ChunkGenerationContext<'_>,
+    mut ground_at: impl FnMut(IVec2) -> Option<i32>,
 ) -> Option<i32> {
-    let (region, anchored_caves) = structure_support_context(anchor, context);
     let minimum_offset_y = voxels.iter().map(|voxel| voxel.offset.y).min()?;
     let mut minimum_ground_y = i32::MAX;
     let mut maximum_ground_y = i32::MIN;
 
-    for voxel in voxels
-        .iter()
-        .filter(|voxel| voxel.offset.y == minimum_offset_y)
-    {
-        let horizontal_offset = IVec2::new(voxel.offset.x, voxel.offset.z);
-        let position = anchor + horizontal_offset;
-        let sample_position = position.as_vec2() + Vec2::splat(0.5);
-
-        if region.hydrology.water_at(sample_position).is_some() {
-            return None;
-        }
-
-        let ground_y = supported_surface_ground_y(
-            position,
-            region.as_ref(),
-            anchored_caves.as_deref(),
-            context,
-        )?;
+    for voxel in voxels.iter().filter(|voxel| voxel.offset.y == minimum_offset_y) {
+        let position = anchor + IVec2::new(voxel.offset.x, voxel.offset.z);
+        let ground_y = ground_at(position)?;
         minimum_ground_y = minimum_ground_y.min(ground_y);
         maximum_ground_y = maximum_ground_y.max(ground_y);
     }
@@ -67,6 +54,21 @@ pub(super) fn compute_structure_origin_y(
     }
 
     Some(minimum_ground_y - minimum_offset_y)
+}
+
+pub(super) fn compute_structure_origin_y(
+    anchor: IVec2,
+    voxels: &[StructureVoxel],
+    context: &ChunkGenerationContext<'_>,
+) -> Option<i32> {
+    let (region, anchored_caves) = structure_support_context(anchor, context);
+    fit_structure_to_ground(anchor, voxels, |position| {
+        let sample_position = position.as_vec2() + Vec2::splat(0.5);
+        if region.hydrology.water_at(sample_position).is_some() {
+            return None;
+        }
+        supported_surface_ground_y(position, region.as_ref(), anchored_caves.as_deref(), context)
+    })
 }
 
 fn structure_support_context(
