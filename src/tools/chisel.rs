@@ -9,11 +9,26 @@ use crate::{
     player::hotbar::PlayerHotbar,
 };
 
+/// Cut size measured along each axis, not the volume of a microblock.
+/// The corresponding face grids are 1x1, 2x2, 4x4 and 8x8.
 #[derive(Resource, Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum ChiselResolution {
     #[default]
+    Whole,
+    Half,
+    Quarter,
     Eighth,
-    SixtyFourth,
+}
+
+impl ChiselResolution {
+    const fn next(self) -> Self {
+        match self {
+            Self::Whole => Self::Half,
+            Self::Half => Self::Quarter,
+            Self::Quarter => Self::Eighth,
+            Self::Eighth => Self::Whole,
+        }
+    }
 }
 
 pub(super) struct ChiselPlugin;
@@ -38,8 +53,5 @@ fn cycle_chisel_resolution(
         return;
     }
 
-    *resolution = match *resolution {
-        ChiselResolution::Eighth => ChiselResolution::SixtyFourth,
-        ChiselResolution::SixtyFourth => ChiselResolution::Eighth,
-    };
+    *resolution = resolution.next();
 }
