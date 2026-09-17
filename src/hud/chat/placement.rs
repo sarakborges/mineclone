@@ -17,6 +17,8 @@ use crate::{
 
 const DISPLACEMENT_MARGIN: i32 = 3;
 const DISPLACEMENT_HEIGHTS: [i32; 5] = [0, 1, -1, 2, -2];
+const SUPPORT_PROBE: f32 = 0.08;
+const BOUNDS_EPSILON: f32 = 0.0001;
 
 type ExistingCreatures<'w, 's> = Query<
     'w,
@@ -51,6 +53,33 @@ fn player_bounds(eye: Vec3) -> (Vec3, Vec3) {
     )
 }
 
+/// A collider occupies only the voxels it actually intersects, not the
+/// adjacent voxel when a maximum bound lies exactly on a grid boundary.
+/// Every intersected voxel must be loaded, empty and dry.
+fn clear_volume(world: &VoxelWorld, bounds: (Vec3, Vec3)) -> bool {
+    let minimum = (bounds.0 + Vec3::splat(BOUNDS_EPSILON)).floor().as_ivec3();
+    let maximum = (bounds.1 - Vec3::splat(BOUNDS_EPSILON)).floor().as_ivec3();
+    for y in minimum.y..=maximum.y {
+        for z in minimum.z..=maximum.z {
+            for x in minimum.x..=maximum.x {
+                let voxel = IVec3::new(x, y, z);
+                if !world.is_loaded_at(voxel)
+                    || world.is_solid(voxel)
+                    || world.fluid_at(voxel).is_some()
+                {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+fn has_support(world: &VoxelWorld, bounds: (Vec3, Vec3)) -> bool {
+    let offset = Vec3::Y * SUPPORT_PROBE;
+    collides_aabb(world, bounds.0 - offset, bounds.1 - offset)
+}
+
 fn clear_destination(
     world: &VoxelWorld,
     eye: Vec3,
@@ -69,27 +98,7 @@ fn clear_destination(
     {
         return false;
     }
-
-    let minimum = bounds.0.floor().as_ivec3();
-    let maximum = (bounds.1 - Vec3::splat(0.0001)).floor().as_ivec3();
-    for y in minimum.y..=maximum.y {
-        for z in minimum.z..=maximum.z {
-            for x in minimum.x..=maximum.x {
-                let voxel = IVec3::new(x, y, z);
-                if !world.is_loaded_at(voxel)
-                    || world.is_solid(voxel)
-                    || world.fluid_at(voxel).is_some()
-                {
-                    return false;
-                }
-            }
-        }
-    }
-    let below = eye - Vec3::Y * 0.08;
-    let support = player_bounds(below);
-    world.is_loaded_at(support.0.floor().as_ivec3())
-        && world.is_loaded_at(support.1.floor().as_ivec3())
-        && collides_aabb(world, support.0, support.1)
+    clear_volume(world, bounds) && has_support(world, bounds)
 }
 
 /// Search the perimeter outside the *entire* occupied volume. No edits happen
@@ -143,20 +152,20 @@ impl ChatPlacementContext<'_, '_> {
         };
         let feet = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
         let blocked = definition.collider.bounds(feet);
-        let occupied = collides_aabb(self.runtime.world(), blocked.0, blocked.1)
+        let world = self.runtime.world();
+        let occupied = !clear_volume(world, blocked)
+            || !has_support(world, blocked)
             || self.existing.iter().any(|(other, collider)| {
                 overlaps(blocked, collider.bounds(other.translation))
             })
             || reserved.iter().any(|(other, collider)| {
                 overlaps(blocked, collider.bounds(*other))
             });
-        if occupied || !self.runtime.world().is_loaded_at(blocked.0.floor().as_ivec3())
-            || !self.runtime.world().is_loaded_at(blocked.1.floor().as_ivec3())
-        {
+        if occupied {
             return format!("not enough space to spawn {id}");
         }
         let Some(destination) = displaced_eye(
-            self.runtime.world(), player.translation, blocked, &self.existing, reserved,
+            world, player.translation, blocked, &self.existing, reserved,
         ) else {
             return format!("not enough space to spawn {id}");
         };
@@ -207,6 +216,8 @@ impl ChatPlacementContext<'_, '_> {
             let position = origin + voxel.offset;
             let voxel_bounds = (position.as_vec3(), position.as_vec3() + Vec3::ONE);
             world.is_loaded_at(position)
+                && !world.is_solid(position)
+                && world.fluid_at(position).is_none()
                 && !self.existing.iter().any(|(other, collider)| {
                     overlaps(voxel_bounds, collider.bounds(other.translation))
                 })
@@ -214,7 +225,11 @@ impl ChatPlacementContext<'_, '_> {
                     overlaps(voxel_bounds, collider.bounds(*other))
                 })
         });
-        if !all_loaded_and_clear {
+        // An anchored structure must have at least one block on solid terrain.
+        // Do not require every elevated or overhanging voxel to have support.
+        let has_foundation = voxels.iter().filter(|voxel| origin.y + voxel.offset.y == min.y)
+            .any(|voxel| world.is_solid(origin + voxel.offset - IVec3::Y));
+        if !all_loaded_and_clear || !has_foundation {
             return format!("not enough space to place {id}");
         }
         let Some(destination) = displaced_eye(
@@ -223,15 +238,17 @@ impl ChatPlacementContext<'_, '_> {
             return format!("not enough space to place {id}");
         };
 
-        // Preflight completed: all structure voxels and the player's new position
-        // were verified before the first mutation. The topology runtime updates
-        // lighting, fluid frontiers and remesh queues exactly like block placement.
+        // Every target cell is vacant, dry and loaded before the first edit.
+        // Mutations cannot return None under this preflight, so no partial
+        // structure can be silently reported as a successful placement.
         for voxel in voxels {
             let position = origin + voxel.offset;
             let block = self.blocks.get(voxel.block_id).expect("validated structure block");
             let rotation = TextureRotation::for_position(position, block.rotate_texture.any());
             let cell = VoxelCell::oriented(voxel.block_id, rotation, voxel.orientation);
-            self.runtime.set_block(position, Some(cell));
+            self.runtime
+                .set_block(position, Some(cell))
+                .expect("preflight guarantees a loaded empty structure voxel");
         }
         player.translation = destination;
         format!("Placed {} ({id}).", structure.name.text(self.language.get()))
