@@ -140,3 +140,11 @@ Próximo passo: obter CI; se verde, continuar a revisão de fronteira sólido/fl
 - Não executei cargo test/cargo run.
 
 - CI 35281655138 falhou apenas nos testes recém-adicionados: havia `#[test]` duplicado e o teste acessava o campo privado `layers`. 1ad52d13 foi corrigido em a1f6141bc1f77107926eb9b605576e300ab2a82d usando a API pública `edit` e removendo o atributo duplicado. Nova execução de CI ainda não apareceu no endpoint de runs.
+
+## Checkpoint 66 — fluido atravessa aberturas de Chisel na fronteira [CÓDIGO; CI PENDENTE]
+
+- 0edbf363e6768760ec0f592a50068a09e61f2baa adiciona detecção de abertura na face do vizinho Chisel parcial; 44ce27a899b36b00bf75cec4d243dcc9ade34035 corrige os imports dos testes.
+- O mesh de fluido agora mantém a face oculta diante de bloco integral, mas permite a face macro do fluido quando a face do bloco vizinho tem ao menos um microvazio. A geometria sólida continua na frente e o depth buffer oculta a parte coberta, deixando a superfície do fluido aparecer apenas pelos vãos.
+- Foram adicionados testes para face parcial aberta e bloco integral fechado.
+- VERSION foi atualizado para 0.22.6 em 19f593d958d6b3ac5e2ff29ec92f8f8f8142778b.
+- Não executei cargo test/cargo run. CI pendente.
