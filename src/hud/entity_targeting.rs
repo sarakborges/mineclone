@@ -20,6 +20,13 @@ struct EntityHudRoot;
 #[derive(Component)]
 struct EntityHudText;
 
+type EntityHudLabel<'w, 's> = Single<
+    'w,
+    's,
+    (&'static mut Text, &'static mut Node),
+    (With<EntityHudText>, Without<EntityHudRoot>),
+>;
+
 pub(super) struct EntityHudPlugin;
 
 impl Plugin for EntityHudPlugin {
@@ -99,7 +106,7 @@ struct EntityHudContext<'w, 's> {
 fn update_entity_hud(
     context: EntityHudContext,
     mut root: Single<(&mut Node, &mut Visibility), With<EntityHudRoot>>,
-    mut label: Single<(&mut Text, &mut Node), (With<EntityHudText>, Without<EntityHudRoot>)>,
+    mut label: EntityHudLabel,
 ) {
     let position = context.settings.target_block_position();
     let visible_target = if position != TargetBlockPosition::Hidden {
