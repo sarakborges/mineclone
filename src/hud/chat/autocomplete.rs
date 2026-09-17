@@ -5,19 +5,24 @@ use bevy::{
     text::{EditableText, TextEdit},
 };
 
-use crate::{content::creature::CreatureRegistry, localization::ActiveLanguage};
+use crate::{
+    content::{creature::CreatureRegistry, structure::StructureRegistry},
+    localization::ActiveLanguage,
+};
 
 use super::{ChatState, MAX_INPUT_CHARS, visual::ChatDraft};
 
 /// Command signatures are the single source of truth for parsing, help and completion.
 #[derive(Clone, Copy)]
 enum CommandId {
-    SpawnCreature,
+    Spawn,
+    Place,
 }
 
 #[derive(Clone, Copy)]
 enum ParameterKind {
     CreatureId,
+    StructureId,
 }
 
 struct CommandDefinition {
@@ -28,18 +33,28 @@ struct CommandDefinition {
     id: CommandId,
 }
 
-const COMMANDS: &[CommandDefinition] = &[CommandDefinition {
-    name: "spawn_creature",
-    usage: "/spawn_creature <id>",
-    description: "Spawn a creature",
-    parameters: &[ParameterKind::CreatureId],
-    id: CommandId::SpawnCreature,
-}];
+const COMMANDS: &[CommandDefinition] = &[
+    CommandDefinition {
+        name: "spawn",
+        usage: "/spawn <id>",
+        description: "Spawn a creature",
+        parameters: &[ParameterKind::CreatureId],
+        id: CommandId::Spawn,
+    },
+    CommandDefinition {
+        name: "place",
+        usage: "/place <id>",
+        description: "Place a structure",
+        parameters: &[ParameterKind::StructureId],
+        id: CommandId::Place,
+    },
+];
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum ParsedLine<'a> {
     Say(&'a str),
-    SpawnCreature(&'a str),
+    Spawn(&'a str),
+    Place(&'a str),
     Usage(&'static str),
     Unknown(&'a str),
 }
@@ -64,7 +79,8 @@ pub(super) fn parse_line(input: &str) -> ParsedLine<'_> {
         return ParsedLine::Usage(definition.usage);
     }
     match definition.id {
-        CommandId::SpawnCreature => ParsedLine::SpawnCreature(args[0]),
+        CommandId::Spawn => ParsedLine::Spawn(args[0]),
+        CommandId::Place => ParsedLine::Place(args[0]),
     }
 }
 
@@ -102,7 +118,13 @@ impl ChatAutocomplete {
         }
     }
 
-    fn refresh(&mut self, editor: &EditableText, creatures: &CreatureRegistry, language: &ActiveLanguage) {
+    fn refresh(
+        &mut self,
+        editor: &EditableText,
+        creatures: &CreatureRegistry,
+        structures: &StructureRegistry,
+        language: &ActiveLanguage,
+    ) {
         if editor.is_composing() {
             self.set_suggestions(0..0, Vec::new());
             return;
@@ -119,8 +141,14 @@ impl ChatAutocomplete {
             self.set_suggestions(0..0, Vec::new());
             return;
         }
-        let (range, suggestions) = suggestions_for(&context.0, context.1, creatures, language)
-            .unwrap_or_else(|| (0..0, Vec::new()));
+        let (range, suggestions) = suggestions_for(
+            &context.0,
+            context.1,
+            creatures,
+            structures,
+            language,
+        )
+        .unwrap_or_else(|| (0..0, Vec::new()));
         self.set_suggestions(range, suggestions);
     }
 }
@@ -160,6 +188,7 @@ fn suggestions_for(
     text: &str,
     cursor: usize,
     creatures: &CreatureRegistry,
+    structures: &StructureRegistry,
     language: &ActiveLanguage,
 ) -> Option<(Range<usize>, Vec<Suggestion>)> {
     let (range, word_index) = active_token(text, cursor)?;
@@ -175,7 +204,9 @@ fn suggestions_for(
             .collect::<Vec<_>>()
     } else {
         let command = text.split_whitespace().next()?;
-        let definition = COMMANDS.iter().find(|item| command.strip_prefix('/') == Some(item.name))?;
+        let definition = COMMANDS
+            .iter()
+            .find(|item| command.strip_prefix('/') == Some(item.name))?;
         match definition.parameters.get(word_index - 1)? {
             ParameterKind::CreatureId => creatures
                 .iter()
@@ -187,6 +218,18 @@ fn suggestions_for(
                 .map(|creature| Suggestion {
                     value: creature.id.clone(),
                     description: creature.name.text(language.get()).to_owned(),
+                })
+                .collect::<Vec<_>>(),
+            ParameterKind::StructureId => structures
+                .iter()
+                .filter(|structure| {
+                    let id = structure.id.to_ascii_lowercase();
+                    id.starts_with(&prefix)
+                        || id.strip_prefix("asteria:").is_some_and(|short| short.starts_with(&prefix))
+                })
+                .map(|structure| Suggestion {
+                    value: structure.id.clone(),
+                    description: structure.name.text(language.get()).to_owned(),
                 })
                 .collect::<Vec<_>>(),
         }
@@ -212,6 +255,7 @@ pub(super) fn update_autocomplete(
     chat: Res<ChatState>,
     keys: Res<ButtonInput<KeyCode>>,
     creatures: Res<CreatureRegistry>,
+    structures: Res<StructureRegistry>,
     language: Res<ActiveLanguage>,
     mut autocomplete: ResMut<ChatAutocomplete>,
     mut draft: Single<&mut EditableText, With<ChatDraft>>,
@@ -222,7 +266,7 @@ pub(super) fn update_autocomplete(
         }
         return;
     }
-    autocomplete.refresh(&draft, &creatures, &language);
+    autocomplete.refresh(&draft, &creatures, &structures, &language);
     if !autocomplete.visible() || draft.is_composing() {
         return;
     }
@@ -262,24 +306,30 @@ mod tests {
     #[test]
     fn command_registry_also_drives_parser() {
         assert_eq!(parse_line("hello"), ParsedLine::Say("hello"));
-        assert_eq!(parse_line("/spawn_creature asteria:meadow_slime"), ParsedLine::SpawnCreature("asteria:meadow_slime"));
-        assert_eq!(parse_line("/spawn_creature"), ParsedLine::Usage("/spawn_creature <id>"));
-        assert_eq!(parse_line("/spawn_creature extra extra"), ParsedLine::Usage("/spawn_creature <id>"));
+        assert_eq!(parse_line("/spawn asteria:meadow_slime"), ParsedLine::Spawn("asteria:meadow_slime"));
+        assert_eq!(parse_line("/place asteria:hut"), ParsedLine::Place("asteria:hut"));
+        assert_eq!(parse_line("/spawn"), ParsedLine::Usage("/spawn <id>"));
+        assert_eq!(parse_line("/place extra extra"), ParsedLine::Usage("/place <id>"));
+        assert_eq!(parse_line("/spawn_creature old"), ParsedLine::Unknown("/spawn_creature"));
         assert_eq!(parse_line("/missing"), ParsedLine::Unknown("/missing"));
     }
 
     #[test]
     fn token_detection_handles_partial_parameters_and_caret_in_middle() {
         assert_eq!(active_token("/", 1), Some((0..1, 0)));
-        assert_eq!(active_token("/spawn_creature ", 16), Some((16..16, 1)));
-        assert_eq!(active_token("/spawn_creature asteria:ember_slime", 22), Some((16..35, 1)));
+        assert_eq!(active_token("/spawn ", 7), Some((7..7, 1)));
+        assert_eq!(active_token("/spawn id", 8), Some((7..9, 1)));
         assert_eq!(active_token("hello", 5), None);
     }
 
     #[test]
     fn completing_command_adds_space_and_preserves_existing_arguments() {
-        assert_eq!(completed_line("/spa", 0..4, "/spawn_creature"), ("/spawn_creature ".to_owned(), 16));
-        let text = "/spawn_creature me tail";
-        assert_eq!(completed_line(text, 16..18, "asteria:meadow_slime"), ("/spawn_creature asteria:meadow_slime tail".to_owned(), 36));
+        assert_eq!(completed_line("/spa", 0..4, "/spawn"), ("/spawn ".to_owned(), 7));
+        let text = "/spawn me tail";
+        let expected = "/spawn asteria:meadow_slime tail";
+        assert_eq!(
+            completed_line(text, 7..9, "asteria:meadow_slime"),
+            (expected.to_owned(), "/spawn asteria:meadow_slime".len())
+        );
     }
 }
