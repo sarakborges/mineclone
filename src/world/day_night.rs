@@ -28,6 +28,22 @@ impl Default for DayNightClock {
     }
 }
 
+impl DayNightClock {
+    pub(crate) fn tick_in_day(&self) -> u64 {
+        self.tick_in_day
+    }
+
+    pub(crate) fn restore(&mut self, day: u64, tick_in_day: u64, day_duration_ticks: u64) -> bool {
+        if day == 0 || day_duration_ticks == 0 || tick_in_day >= day_duration_ticks {
+            return false;
+        }
+        self.day = day;
+        self.tick_in_day = tick_in_day;
+        self.normalized_time = tick_in_day as f32 / day_duration_ticks as f32;
+        true
+    }
+}
+
 pub struct DayNightPlugin;
 
 impl Plugin for DayNightPlugin {
