@@ -5,7 +5,6 @@ use bevy::{
 };
 
 use crate::{
-    app::game_state::GameState,
     content::{
         builtin_ids::{BRUSH_TOOL_ID, DYED_PROPERTY_ID},
         secondary_property::SecondaryPropertyRegistry,
@@ -156,7 +155,7 @@ pub(super) fn sync_held_brush(
             *current = desired;
         }
         if let Some(color) = tint
-            && let Some(material) = materials.get_mut(&material_handle.0)
+            && let Some(mut material) = materials.get_mut(&material_handle.0)
             && material.base_color != color
         {
             material.base_color = color;
