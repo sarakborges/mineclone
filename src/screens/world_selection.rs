@@ -75,13 +75,20 @@ struct WorldListStatus;
 #[derive(Component)]
 struct WorldListContainer;
 
+/// Content needed to validate the world catalog, not the mutable state needed
+/// to activate a selected world. Keep the scan's resource access read-only.
+#[derive(SystemParam)]
+struct WorldSelectionScanContent<'w> {
+    blocks: Res<'w, BlockRegistry>,
+    fluids: Res<'w, FluidRegistry>,
+    tools: Res<'w, ToolRegistry>,
+    dimensions: Res<'w, DimensionRegistry>,
+    cycles: Res<'w, DayNightCycleRegistry>,
+}
+
 fn refresh_world_list(
     mut state: ResMut<WorldSelectionState>,
-    blocks: Res<BlockRegistry>,
-    fluids: Res<FluidRegistry>,
-    tools: Res<ToolRegistry>,
-    dimensions: Res<DimensionRegistry>,
-    cycles: Res<DayNightCycleRegistry>,
+    content: WorldSelectionScanContent,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
 ) {
@@ -95,11 +102,11 @@ fn refresh_world_list(
         return;
     }
     let owned = SaveRegistries {
-        blocks: &blocks,
-        fluids: &fluids,
-        tools: &tools,
-        dimensions: &dimensions,
-        cycles: &cycles,
+        blocks: &content.blocks,
+        fluids: &content.fluids,
+        tools: &content.tools,
+        dimensions: &content.dimensions,
+        cycles: &content.cycles,
     }
     .owned_for_pruning();
     let result: WorldScanResult = Arc::new(Mutex::new(None));
