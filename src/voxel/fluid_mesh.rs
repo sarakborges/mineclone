@@ -10,6 +10,7 @@ use super::{
     fluid::FluidCell,
     mesh_buffer::VoxelMeshBuffer,
     mesh_lighting::{face_lighting, push_lit_quad, surface_block_srgb},
+    microblock::{MICROBLOCK_EDGE, MicroblockMask},
     quad::VOXEL_FACE_UVS,
     read::VoxelRead,
 };
@@ -77,14 +78,31 @@ where
                         continue;
                     }
 
-                    push_lit_quad(
-                        fluid,
-                        fluid_face_vertices(face, x as f32, y as f32, z as f32, heights),
-                        face.normal(),
-                        VOXEL_FACE_UVS,
-                        tint,
-                        face_lighting(world, world_voxel, face, source_block_srgb),
-                    );
+                    let lighting = face_lighting(world, world_voxel, face, source_block_srgb);
+                    if let Some(block) = chunk.cell_at(x as i32, y as i32, z as i32)
+                        .filter(|block| MicroblockMask::is_modified(*block))
+                    {
+                        emit_fluid_openings(
+                            fluid,
+                            face,
+                            x as f32,
+                            y as f32,
+                            z as f32,
+                            heights,
+                            MicroblockMask::from_cell(block),
+                            tint,
+                            lighting,
+                        );
+                    } else {
+                        push_lit_quad(
+                            fluid,
+                            fluid_face_vertices(face, x as f32, y as f32, z as f32, heights),
+                            face.normal(),
+                            VOXEL_FACE_UVS,
+                            tint,
+                            lighting,
+                        );
+                    }
                 }
             }
         }
@@ -100,6 +118,103 @@ where
         .collect::<Vec<_>>();
     meshes.sort_by_key(|mesh| mesh.fluid_id);
     meshes
+}
+
+fn emit_fluid_openings(
+    buffer: &mut VoxelMeshBuffer,
+    face: BlockFace,
+    x0: f32,
+    y0: f32,
+    z0: f32,
+    heights: FluidFaceHeights,
+    mask: MicroblockMask,
+    tint: [f32; 3],
+    lighting: crate::voxel::mesh_lighting::FaceLighting,
+) {
+    const EDGE: usize = MICROBLOCK_EDGE as usize;
+    for v in 0..EDGE {
+        for u in 0..EDGE {
+            let boundary_position = match face {
+                BlockFace::Right => [0, v, u],
+                BlockFace::Left => [EDGE - 1, v, u],
+                BlockFace::Top => [u, 0, v],
+                BlockFace::Bottom => [u, EDGE - 1, v],
+                BlockFace::Front => [u, v, 0],
+                BlockFace::Back => [u, v, EDGE - 1],
+            };
+            if mask.contains(boundary_position) {
+                continue;
+            }
+
+            let min_u = u as f32 / EDGE as f32;
+            let max_u = (u + 1) as f32 / EDGE as f32;
+            let min_v = v as f32 / EDGE as f32;
+            let max_v = (v + 1) as f32 / EDGE as f32;
+            let vertices = fluid_micro_face_vertices(
+                face, x0, y0, z0, heights, min_u, max_u, min_v, max_v,
+            );
+            let uvs = vertices.map(|vertex| {
+                let local = Vec3::new(vertex[0] - x0, vertex[1] - y0, vertex[2] - z0);
+                fluid_uv(face, local)
+            });
+            push_lit_quad(buffer, vertices, face.normal(), uvs, tint, lighting);
+        }
+    }
+}
+
+fn fluid_micro_face_vertices(
+    face: BlockFace,
+    x0: f32,
+    y0: f32,
+    z0: f32,
+    heights: FluidFaceHeights,
+    min_u: f32,
+    max_u: f32,
+    min_v: f32,
+    max_v: f32,
+) -> [[f32; 3]; 4] {
+    let point = |u: f32, v: f32| -> [f32; 3] {
+        let height = bilinear_height(heights, u, v);
+        match face {
+            BlockFace::Right => [x0 + 1.0, y0 + if v == 0.0 { 0.0 } else { height }, z0 + 1.0 - u],
+            BlockFace::Left => [x0, y0 + if v == 0.0 { 0.0 } else { height }, z0 + u],
+            BlockFace::Top => [x0 + u, y0 + height, z0 + v],
+            BlockFace::Bottom => [x0 + u, y0, z0 + v],
+            BlockFace::Front => [x0 + u, y0 + if v == 0.0 { 0.0 } else { height }, z0 + 1.0],
+            BlockFace::Back => [x0 + 1.0 - u, y0 + if v == 0.0 { 0.0 } else { height }, z0],
+        }
+    };
+    match face {
+        BlockFace::Right => [
+            point(max_v, min_u), point(min_v, min_u), point(min_v, max_u), point(max_v, max_u),
+        ],
+        BlockFace::Left => [
+            point(min_v, min_u), point(max_v, min_u), point(max_v, max_u), point(min_v, max_u),
+        ],
+        BlockFace::Top | BlockFace::Bottom | BlockFace::Front => [
+            point(min_u, max_v), point(max_u, max_v), point(max_u, min_v), point(min_u, min_v),
+        ],
+        BlockFace::Back => [
+            point(max_u, max_v), point(min_u, max_v), point(min_u, min_v), point(max_u, min_v),
+        ],
+    }
+}
+
+fn bilinear_height(heights: FluidFaceHeights, u: f32, v: f32) -> f32 {
+    let h0 = heights.h00 * (1.0 - u) + heights.h10 * u;
+    let h1 = heights.h01 * (1.0 - u) + heights.h11 * u;
+    h0 * (1.0 - v) + h1 * v
+}
+
+fn fluid_uv(face: BlockFace, local: Vec3) -> [f32; 2] {
+    match face {
+        BlockFace::Right => [1.0 - local.z, 1.0 - local.y],
+        BlockFace::Left => [local.z, 1.0 - local.y],
+        BlockFace::Top => [local.x, local.z],
+        BlockFace::Bottom => [local.x, 1.0 - local.z],
+        BlockFace::Front => [local.x, 1.0 - local.y],
+        BlockFace::Back => [1.0 - local.x, 1.0 - local.y],
+    }
 }
 
 fn fluid_face_vertices(
