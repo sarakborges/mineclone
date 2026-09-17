@@ -16,10 +16,10 @@ const LAYERS: usize = MICROBLOCK_EDGE as usize;
 const ENCODED_LENGTH: usize = LAYERS * 16;
 const TRANSIENT_PREFIX: char = 't';
 
+/// Full-block interactions belong to ordinary block tools, not the Chisel.
 #[derive(Resource, Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum ChiselResolution {
     #[default]
-    Full,
     Thick,
     Thin,
     ExtraThin,
@@ -28,16 +28,14 @@ pub(crate) enum ChiselResolution {
 impl ChiselResolution {
     pub(crate) const fn next(self) -> Self {
         match self {
-            Self::Full => Self::Thick,
             Self::Thick => Self::Thin,
             Self::Thin => Self::ExtraThin,
-            Self::ExtraThin => Self::Full,
+            Self::ExtraThin => Self::Thick,
         }
     }
 
     pub(crate) const fn cell_width(self) -> usize {
         match self {
-            Self::Full => 8,
             Self::Thick => 4,
             Self::Thin => 2,
             Self::ExtraThin => 1,
