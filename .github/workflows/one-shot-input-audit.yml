@@ -13,6 +13,6 @@ jobs:
       - name: Enumerate all editable inputs and their layout
         run: |
           echo '=== Every editable input in src ==='
-          rg -n -C 12 'EditableText\s*\{|EditableText::new|TextInput|INPUT_PADDING_X' src || true
+          grep -RnE -C 12 'EditableText[[:space:]]*\{|EditableText::new|TextInput|INPUT_PADDING_X' src || true
           echo '=== Input related files ==='
-          rg -l 'EditableText|TextInput' src || true
+          grep -RlE 'EditableText|TextInput' src || true
