@@ -325,18 +325,26 @@ mod tests {
     #[test]
     fn open_fraction_weights_light_samples() {
         let full = VoxelCell::new("stone", Default::default());
-        let empty = MicroblockMask::EMPTY.apply_to_cell(full, true);
-        let bright = VoxelLight::new_hsi(VoxelLight::MAX_LEVEL, crate::voxel::light::BlockLight::new(15, 0, 0));
+        let mut half_mask = MicroblockMask::EMPTY;
+        for layer in 0..4 {
+            for y in 0..8 {
+                for x in 0..8 {
+                    half_mask.edit([x, y, layer], crate::voxel::microblock::ChiselResolution::ExtraThin, true);
+                }
+            }
+        }
+        let half = half_mask.apply_to_cell(full, true);
+        let bright = VoxelLight::new_hsi(VoxelLight::MAX_LEVEL, crate::voxel::light::BlockLight::new(0, 0, 15));
         let dark = VoxelLight::DARK;
 
         let (sky, block) = average_shader_light_levels([
-            Some((Some(full), None, bright)),
-            Some((Some(empty), None, dark)),
+            Some((Some(half), None, bright)),
+            Some((None, None, dark)),
             None,
             None,
         ]);
-        assert_eq!(sky, 0.0);
-        assert_eq!(block, [0.0, 0.0, 0.0]);
+        assert!((sky - 5.0).abs() < f32::EPSILON);
+        assert_eq!(block, [5.0, 5.0, 5.0]);
     }
 
     #[test]
