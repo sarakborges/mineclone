@@ -37,6 +37,14 @@ Solicitação do usuário: **“jogador deve ser uma entidade. ajustar comportam
 - **CI final verificada:** run `35265288988` no commit `7275f4b7cbb60c0271bb68fe4b72b5da5a08ef90` ficou **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows.
 - `PlayerEntity` não cria uma entidade separada para câmera, braços ou microcélulas; é o root lógico do corpo do jogador. O step-up é compartilhável por outros AABBs, mas nesta etapa só o Player usa-o efetivamente, porque criaturas atuais têm locomoção baseada em salto e não possuem um estado de caminhada no solo que justifique aplicar a mesma subida sem alterar sua mecânica.
 
+## Checkpoint 57 — corrida de nomes longos em AlreadyExists [CÓDIGO; CI PENDENTE]
+
+- `4e3690a1acef41f678627763069927992251ae53` corrige `src/world/save_catalog.rs`: após uma corrida em `fs::create_dir` que retorna `AlreadyExists`, `create_new_world` volta a resolver a partir de `requested_name`, em vez de prefixar `Copy of ` ao candidato já resolvido. Isso evita exceder o limite de 200 unidades UTF-16 quando um nome longo colide entre o scan e a criação do diretório, e deixa `available_world_name` escolher a forma numerada/truncada segura. A correção cobre também novas colisões concorrentes, pois cada `AlreadyExists` refaz a resolução contra o estado atual do diretório.
+- `bab9589afca22b45558716cc6dc90199c85c0401` sobe `VERSION` de `0.22.0` para `0.22.1` (fix sem mudança de formato/protocolo).
+- **Validação:** inspeção do diff e das funções `available_world_name`/`unique_name`/ `create_new_world`; nenhum `cargo test`, `cargo run` ou QA Windows foi executado. A busca de workflow associada ao commit de código ainda não reportou run, portanto CI fica **PENDENTE** e não deve ser alegada como verde.
+
+**Próximo passo:** executar CI obrigatória; depois, quando houver Windows real, fazer o QA da etapa 56 e o roundtrip do Chisel/save conforme os itens abaixo. A corrida de nomes longos continua sendo candidata a validação em cópia descartável Windows, mas a correção já está isolada em código.
+
 ## Próximas ações
 
 1. QA real Windows do step-up: caminhar contra degraus de 1/8, 1/4 e 1/2 bloco sem pressionar Space; confirmar que bloco >1/2 continua bloqueando, que não há subida enquanto airborne/voando, e que a altura final fica sobre a superfície sem jitter. Testar formas de Chisel e blocos macro normais.
