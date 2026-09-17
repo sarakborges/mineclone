@@ -11,9 +11,12 @@ pub(super) fn style_inventory_search_field(
     view: Res<CreativeInventoryView>,
     mut inputs: Query<
         (&mut Node, &mut BackgroundColor, &mut BorderColor),
-        With<CreativeSearchBar>,
+        (With<CreativeSearchBar>, Without<CreativeSearchText>),
     >,
-    mut placeholders: Query<(&mut Node, &mut TextColor), With<CreativeSearchText>>,
+    mut placeholders: Query<
+        (&mut Node, &mut TextColor),
+        (With<CreativeSearchText>, Without<CreativeSearchBar>),
+    >,
 ) {
     let padding = UiRect::horizontal(px(text_input::INPUT_PADDING_X));
     let radius = BorderRadius::all(px(text_input::INPUT_RADIUS));
