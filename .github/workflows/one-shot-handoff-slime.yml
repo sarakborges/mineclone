@@ -1,0 +1,63 @@
+name: One-shot handoff consolidation for slime 0.20.3
+
+on:
+  push:
+    branches: [develop]
+    paths: [.github/workflows/one-shot-handoff-slime.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  update-handoff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          persist-credentials: true
+      - name: Consolidate validated work and remaining QA
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('HANDOFF.md')
+          s = p.read_text(encoding='utf-8')
+          old_version = '**Versão raiz `0.20.1`**'
+          assert s.count(old_version) == 1
+          s = s.replace(old_version, '**Versão raiz `0.20.3`**', 1)
+          anchor = '## Bloco 16/09/2026 — v0.20.1: corrigir estilização dos campos de input'
+          assert s.count(anchor) == 1
+          new = '''## Bloco 16/09/2026 — v0.20.3: núcleo ampliado e face retirada do modelo do slime
+
+          - Pedido explícito do usuário que a antiga v0.19.0 NÃO havia atendido: **aumentar o núcleo e extrair a face do GLB**. Correção efetivamente publicada em [`ab0bc6c`](https://github.com/sarakborges/mineclone/commit/ab0bc6c35200078c2c6c46c8fdd9b24ce5482531), após migração one-shot validada [run `35165913764`](https://github.com/sarakborges/mineclone/actions/runs/35165913764). Não confundir a implementação cubical de v0.19.0 com esta mudança posterior.
+          - `assets/models/creatures/slime/generate_slime.py` e `slime.glb`: duas meshes apenas (`square_translucent_shell`, `square_nucleus`), cinco materiais reduzidos a `SlimeShell`/`SlimeCore`; olhos, brilho, bochechas, boca e todos os nós faciais removidos. Núcleo **0.36×0.40×0.36 → 0.58×0.62×0.58**, volume cúbico com cantos vivos. Casca mantém 0.96×0.90×0.96. Face desenhada exclusivamente no tile (2,0) da textura externa, aplicado apenas à frente -Z do shell; outras faces tile (0,0), núcleo tile (1,0). PNGs Meadow/Ember 64×64 ficam somente em `assets/textures/creatures/`, sem imagens glTF embutidas. Gerador cria apenas skins ausentes; migração sobrescreveu somente os PNGs iniciais após verificar seus hashes para preservar mudanças futuras de artista.
+          - JSONs `data/creatures/slimes/{meadow,ember}.json` continuam data-driven e selecionam os próprios PNGs; removidos mapeamentos de materiais faciais extintos. `SlimeRoot`, AABB e seis animações preservados. Ver [`docs/creature-textures.md`](https://github.com/sarakborges/mineclone/blob/develop/docs/creature-textures.md) atualizado em [`1097ce1`](https://github.com/sarakborges/mineclone/commit/1097ce1b67c854b92acc8481293588ce2514a1a9).
+          - Verificações da migração concluídas: cabeçalho/estrutura do GLB, duas meshes e materiais, dimensões do núcleo, nenhuma face geométrica ou imagem embutida, seis clips, pixels faciais nos dois PNGs 64×64. **QA de renderização/UV, legibilidade da face/transparência, animações/collider em jogo continua pendente.** VERSION `0.20.2 → 0.20.3`. CI Rust Clippy/Check [run `35165956285`](https://github.com/sarakborges/mineclone/actions/runs/35165956285) estava em progresso na verificação; não afirmar sucesso antes do resultado.
+
+          ## Bloco anterior — v0.20.2: busca do inventário e CI anterior
+
+          - [`18c342e`](https://github.com/sarakborges/mineclone/commit/18c342e0f67e1f6c3c4a8fb7a580e1fd9d154da4) criou `src/hud/inventory/search_style.rs`; [`77b84a8`](https://github.com/sarakborges/mineclone/commit/77b84a8803c7c98e09a38bfd48e082768f7ea36f) conectou o estilo compartilhado da busca; [`bc48e95`](https://github.com/sarakborges/mineclone/commit/bc48e958126e05689a9f852f31909c52f3f7fe35) ajustou o componente; [`15749ea`](https://github.com/sarakborges/mineclone/commit/15749ea923b968fc4ea50746cbb7d91f4f8f9b83) elevou VERSION para 0.20.2. Corrige padding, bordas e placeholder sem participação no fluxo do editor; QA visual aberto.
+          - CI v0.20.2 [run `35165096445`](https://github.com/sarakborges/mineclone/actions/runs/35165096445): **Clippy e cargo check concluídos com sucesso**, sem execução de testes unitários. Isso não certifica aparência dos inputs ou slime.
+
+          '''
+          s = s.replace(anchor, new + anchor, 1)
+          tail = '## Próxima execução\n'
+          assert s.count(tail) == 1
+          s = s[:s.index(tail)] + '''## Próxima execução
+
+          1. Conferir resultado de Clippy + `cargo check` da v0.20.3 [run `35165956285`](https://github.com/sarakborges/mineclone/actions/runs/35165956285); se falhar, corrigir erros reais sem suprimir warnings e sem adicionar execução de `cargo test` ao CI.
+          2. QA em gameplay do slime v0.20.3: tamanho aumentado do núcleo, rosto agora exclusivamente na textura frontal externa, UV/alpha/pixel nearest, cores por espécie, animações e collider. Não fechar visual sem observação real.
+          3. QA visual de inputs (seed/ticks, busca bioma, chat, inventário) e teclado do autocomplete. Depois retomar P0 do mundo: iluminação/chunks, rios, biomas e margens; manter nove bugs abertos até confirmação em jogo.
+          '''
+          p.write_text(s, encoding='utf-8')
+          print('HANDOFF v0.20.3 consolidated; historical sections and nine world bugs preserved')
+          PY
+      - name: Commit handoff and remove temporary workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- HANDOFF.md
+          git rm -f -- .github/workflows/one-shot-handoff-slime.yml
+          git diff --cached --check
+          git commit -m 'docs(handoff): record slime face extraction and v0.20.3 validation'
+          git push origin HEAD:develop
