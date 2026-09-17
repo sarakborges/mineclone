@@ -26,6 +26,8 @@ pub struct CreatureDefinition {
     pub preview_spawn: bool,
     #[serde(default = "default_jump_speed")]
     pub jump_speed: f32,
+    #[serde(default)]
+    pub move_speed: f32,
     #[serde(default = "default_jump_interval")]
     pub jump_interval: f32,
     #[serde(default)]
@@ -102,6 +104,11 @@ impl CreatureRegistry {
         assert!(
             definition.jump_speed.is_finite() && definition.jump_speed >= 0.0,
             "creature {} has invalid jumpSpeed",
+            definition.id
+        );
+        assert!(
+            definition.move_speed.is_finite() && definition.move_speed >= 0.0,
+            "creature {} has invalid moveSpeed",
             definition.id
         );
         assert!(
@@ -214,9 +221,7 @@ mod tests {
         assert!(valid_creature_texture_path(
             "textures/creatures/meadow_slime.png"
         ));
-        assert!(!valid_creature_texture_path(
-            "textures/creatures/../secret.png"
-        ));
+        assert!(!valid_creature_texture_path("textures/creatures/../secret.png"));
         assert!(!valid_creature_texture_path(
             "/textures/creatures/slime.png"
         ));
