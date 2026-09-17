@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{
-    collision::{Axis, move_axis},
+    collision::{Axis, MoveAxisResult, move_axis},
     config::{
         FLIGHT_TOGGLE_WINDOW_TICKS, FLY_ACCELERATION, FLY_DECELERATION, FLY_SPEED_MULTIPLIER,
         WALK_SPEED,
@@ -146,34 +146,43 @@ pub(super) fn move_flying(
 
     let velocity = flight.velocity;
     if velocity.x != 0.0
-        && move_axis(
-            &mut transform,
-            &world,
-            velocity.x * delta_seconds,
-            Axis::X,
-            None,
+        && matches!(
+            move_axis(
+                &mut transform,
+                &world,
+                velocity.x * delta_seconds,
+                Axis::X,
+                None,
+            ),
+            MoveAxisResult::Blocked | MoveAxisResult::Stepped(_)
         )
     {
         flight.velocity.x = 0.0;
     }
     if velocity.z != 0.0
-        && move_axis(
-            &mut transform,
-            &world,
-            velocity.z * delta_seconds,
-            Axis::Z,
-            None,
+        && matches!(
+            move_axis(
+                &mut transform,
+                &world,
+                velocity.z * delta_seconds,
+                Axis::Z,
+                None,
+            ),
+            MoveAxisResult::Blocked | MoveAxisResult::Stepped(_)
         )
     {
         flight.velocity.z = 0.0;
     }
     if velocity.y != 0.0
-        && move_axis(
-            &mut transform,
-            &world,
-            velocity.y * delta_seconds,
-            Axis::Y,
-            None,
+        && matches!(
+            move_axis(
+                &mut transform,
+                &world,
+                velocity.y * delta_seconds,
+                Axis::Y,
+                None,
+            ),
+            MoveAxisResult::Blocked | MoveAxisResult::Stepped(_)
         )
     {
         flight.velocity.y = 0.0;
