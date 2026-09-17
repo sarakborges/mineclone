@@ -44,11 +44,14 @@ pub(crate) fn validate_world_name(name: &str) -> io::Result<()> {
         "CON" | "PRN" | "AUX" | "NUL" | "COM1" | "COM2" | "COM3" | "COM4"
             | "COM5" | "COM6" | "COM7" | "COM8" | "COM9" | "LPT1" | "LPT2"
             | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9"
+            // Windows also reserves ISO-8859-1 superscript digits in these
+            // device names, including when followed by a file extension.
+            | "COM¹" | "COM²" | "COM³" | "LPT¹" | "LPT²" | "LPT³"
     );
     if invalid || reserved || Path::new(name).components().count() != 1 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "Choose a nonempty name without path separators, reserved device names or trailing dots/spaces (maximum 200 characters).",
+            "Choose a nonempty name without path separators, reserved device names or trailing dots/spaces (maximum 200 UTF-16 code units).",
         ));
     }
     Ok(())
