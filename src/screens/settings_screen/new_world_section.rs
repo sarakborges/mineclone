@@ -15,7 +15,7 @@ use crate::{
     },
     world::{
         NewWorldConfig, WorldLoadMode, WorldSeed, biome::CurrentBiome, dimension::CurrentDimension,
-        world_names::available_world_name,
+        save_catalog::create_new_world,
     },
 };
 
@@ -285,7 +285,7 @@ pub(super) fn handle_new_world_footer(
     mut draft: NewWorldDraft,
     mut transition: ResMut<ScreenTransition>,
 ) {
-    if *game_state.get() != GameState::NewWorld {
+    if *game_state.get() != GameState::NewWorld || transition.is_active() {
         return;
     }
 
@@ -316,7 +316,16 @@ pub(super) fn handle_new_world_footer(
         Ok((_, editor)) if !editor.is_composing() => editable_value(editor),
         _ => return,
     };
-    let name = match available_world_name(&requested) {
+    draft.commit_seed_input();
+    let dimension = CurrentDimension::default();
+    let seed = draft.config.seed().0;
+    let rules = draft.config.game_rules();
+    let name = match create_new_world(
+        &requested,
+        seed,
+        &dimension.id,
+        rules.ticks_per_second(),
+    ) {
         Ok(name) => name,
         Err(error) => {
             draft.name_feedback.set(error.to_string());
@@ -325,12 +334,11 @@ pub(super) fn handle_new_world_footer(
     };
     draft.config.set_name(name);
     draft.name_feedback.set(String::new());
-    draft.commit_seed_input();
 
-    commands.insert_resource(CurrentDimension::default());
+    commands.insert_resource(dimension);
     commands.insert_resource(CurrentBiome::default());
-    commands.insert_resource(WorldSeed(draft.config.seed().0));
-    commands.insert_resource(draft.config.game_rules());
+    commands.insert_resource(WorldSeed(seed));
+    commands.insert_resource(rules);
     commands.insert_resource(WorldLoadMode::New);
     transition.request(ScreenTransitionTarget::game(GameState::Loading));
 }
