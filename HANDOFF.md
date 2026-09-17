@@ -63,3 +63,15 @@ Solicitação do usuário: **“jogador deve ser uma entidade. ajustar comportam
 - Validação: não executei cargo test, cargo run ou QA Windows. No momento do registro, ainda não havia workflow reportado para o último commit.
 
 Próximo passo: obter CI do checkpoint 58; se verde, medir/inspecionar o crescimento real do interner em uma sessão com bastante Chisel e então atacar macro-iluminação/fluidos/solid conforme o resultado.
+
+
+## Checkpoint 59 — iluminação macro respeita ocupação do Chisel [CÓDIGO; CI PENDENTE]
+
+- e5bb8568b8936c31cc2b8754373f50f409827347 adiciona MicroblockMask::light_dampening(), uma aproximação de atenuação na resolução macro baseada na fração de microcélulas ocupadas.
+- a8faea87b02b10f37cc8c648f2b0eff217505b1b usa essa atenuação em lighting/medium.rs. Bloco sem máscara continua equivalente a FULL; máscara parcial deixa de bloquear luz como se fosse um cubo integral; máscara vazia transmite sem atenuação de bloco.
+- ac2224c2b130395c9d3931915e7a61df0fffb8b7 adiciona regressões para EMPTY/FULL e ocupação de meio volume.
+- 117f7ddf45e3d783bdc2353437fc21a1a159a836 sobe VERSION para 0.22.3.
+- A aproximação é deliberadamente isotrópica porque VoxelLight existe na resolução de macrovoxel; não tenta reconstruir transmissão direcional de cada furo do Chisel.
+- Validação: não executei cargo test, cargo run ou QA Windows. CI ainda não estava disponível para os commits novos no momento do registro.
+
+Próximo passo: verificar CI; depois revisar se AO/face lighting também precisa distinguir máscaras parciais e investigar o caminho de fluidos/solid com a mesma preocupação de macro resolução.
