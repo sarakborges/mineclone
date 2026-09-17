@@ -3,7 +3,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     content::{block::BlockRegistry, tool::ToolRegistry},
     gameplay::availability::world_interaction_available,
-    creatures::{EntityHealth, CreatureInstance, visual::CreatureAnimationState},
+    creatures::{CreatureAnimationState, CreatureInstance, EntityHealth},
     player::{camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar, viewmodel::ViewModelAnimation},
     voxel::{
         cell::VoxelCell, edit::VoxelTopologyRuntime, raycast::VoxelHit,
@@ -66,6 +66,7 @@ fn edit_targeted_block(
     mut tool_uses: MessageWriter<ToolUse>,
     mut viewmodel_animation: ResMut<ViewModelAnimation>,
     mut creature_health: Query<(&mut EntityHealth, &mut CreatureAnimationState), With<CreatureInstance>>,
+    mut commands: Commands,
 ) {
     let left_pressed = input.buttons.just_pressed(MouseButton::Left);
     let right_pressed = input.buttons.just_pressed(MouseButton::Right);
@@ -94,7 +95,7 @@ fn edit_targeted_block(
             animation.0 = if dead { "death" } else { "hurt" }.to_owned();
             viewmodel_animation.play_break();
             if dead {
-                // Death animation remains data-driven; the entity is removed by the death cleanup system.
+                commands.entity(entity).despawn();
             }
         }
         return;
