@@ -103,3 +103,16 @@ fn fluid_dampening(cell: Option<FluidCell>, fluids: &FluidRegistry) -> u8 {
         + u16::from(crate::voxel::fluid::MAX_FLUID_LEVEL) - 1)
         / u16::from(crate::voxel::fluid::MAX_FLUID_LEVEL)) as u8
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::scale_dampening;
+
+    #[test]
+    fn fluid_dampening_tracks_fill_level() {
+        assert_eq!(scale_dampening(15, 1), 2);
+        assert_eq!(scale_dampening(15, 4), 8);
+        assert_eq!(scale_dampening(15, 8), 15);
+    }
+}
