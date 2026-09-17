@@ -38,7 +38,9 @@ impl Plugin for WorldSelectionPlugin {
             )
             .add_systems(
                 Update,
-                (poll_world_scan, poll_world_load, handle_world_selection, sync_world_selection_feedback)
+                // Consume Back before a worker result. A completed load in the
+                // same frame as Back must never activate the discarded world.
+                (poll_world_scan, handle_world_selection, poll_world_load, sync_world_selection_feedback)
                     .chain()
                     .run_if(in_state(GameState::WorldSelection)),
             );
@@ -380,16 +382,20 @@ fn handle_world_selection(
     if transition.is_active() {
         return;
     }
+    // Back takes precedence even if Load and Back both changed to Pressed in
+    // one frame; do not depend on entity iteration order to cancel a load.
+    if interactions.iter().any(|(interaction, action)| {
+        *interaction == Interaction::Pressed && matches!(action, WorldSelectionAction::Back)
+    }) {
+        if let Some(pending) = state.loading.as_mut() {
+            pending.abandoned = true;
+        }
+        transition.request(ScreenTransitionTarget::game(GameState::StartingScreen));
+        return;
+    }
     for (interaction, action) in &interactions {
         if *interaction != Interaction::Pressed {
             continue;
-        }
-        if let WorldSelectionAction::Back = action {
-            if let Some(pending) = state.loading.as_mut() {
-                pending.abandoned = true;
-            }
-            transition.request(ScreenTransitionTarget::game(GameState::StartingScreen));
-            return;
         }
         // Never start a second loader while an existing or abandoned worker
         // still owns its result. Its completion will be consumed, not applied.
