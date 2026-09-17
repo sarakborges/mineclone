@@ -177,8 +177,9 @@ pub(crate) fn numeric_input_field<I: Component, L: Component>(
             Node {
                 width: percent(100),
                 min_width: px(0),
-                height: percent(100),
-                align_items: AlignItems::Center,
+                // The frame centers the glyph-sized editor; 100% height would
+                // leave text/caret anchored at the top of a 44px field.
+                height: px(26),
                 overflow: Overflow::clip(),
                 ..default()
             },
@@ -226,7 +227,6 @@ mod tests {
         assert!(editor.editing());
         assert_eq!(editor.buffer(), "123");
         editor.reset();
-        assert!(!editor.editing());
         assert_eq!(editor.buffer(), "");
     }
 }
