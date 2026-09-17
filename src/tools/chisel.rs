@@ -4,7 +4,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::builtin_ids::CHISEL_TOOL_ID,
+    content::{block::BlockRegistry, builtin_ids::CHISEL_TOOL_ID},
     gameplay::availability::world_interaction_available,
     player::{
         PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT,
@@ -51,6 +51,7 @@ fn handle_chisel_use(
     mut uses: MessageReader<ToolUse>,
     camera: Single<&GlobalTransform, With<GameplayCamera>>,
     resolution: Res<ChiselResolution>,
+    blocks: Res<BlockRegistry>,
     mut runtime: VoxelMutationRuntime,
     mut targeted: ResMut<TargetedBlock>,
     mut viewmodel: ResMut<ViewModelAnimation>,
@@ -77,12 +78,8 @@ fn handle_chisel_use(
         {
             continue;
         }
-
-        if usage.button == ToolUseButton::Left && *resolution == ChiselResolution::Full {
-            if runtime.set_block(hit.voxel, None).is_some() {
-                viewmodel.play_break();
-                targeted.0 = None;
-            }
+        // A forbidden hit cannot be sculpted or used as a source for placement.
+        if !blocks.get(hit.block_id).is_some_and(|block| block.can_fragment()) {
             continue;
         }
 
@@ -109,7 +106,10 @@ fn handle_chisel_use(
         } else {
             continue;
         };
-        if !MicroblockMask::has_room(source) {
+        // A tagged neighbor does not permit chiseling an ineligible destination.
+        if !blocks.get(source.block_id).is_some_and(|block| block.can_fragment())
+            || !MicroblockMask::has_room(source)
+        {
             continue;
         }
         let transient = existing.is_none_or(MicroblockMask::is_transient_parent);
