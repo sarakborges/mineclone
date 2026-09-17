@@ -67,6 +67,20 @@ pub(super) fn languages_section(
                 Language::English,
                 active_language,
             ),
+            language_button(
+                localization
+                    .text(active_language, Language::PortugueseBrazil.localization_key())
+                    .to_owned(),
+                Language::PortugueseBrazil,
+                active_language,
+            ),
+            language_button(
+                localization
+                    .text(active_language, Language::Spanish.localization_key())
+                    .to_owned(),
+                Language::Spanish,
+                active_language,
+            ),
         ],
     )
 }
