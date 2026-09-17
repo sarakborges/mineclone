@@ -4,7 +4,7 @@ use std::{
     io::{self, Write},
     path::{Path, PathBuf},
     sync::{
-        Mutex,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicBool, Ordering},
     },
     thread,
@@ -29,11 +29,18 @@ const SAVE_FORMAT_VERSION: u32 = 1;
 const MAX_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
 /// Count only generations that can actually be loaded into the current game.
 const RETAINED_GENERATIONS: usize = 4;
-// Protect published-generation enumeration and loading from pruning's delete
-// phase. The worker validates immutable snapshots WITHOUT holding this lock:
-// expensive backup reconstruction must not block the gameplay save writer.
-static SAVE_LOCK: Mutex<()> = Mutex::new(());
+// The catalog mutex only looks up an Arc. Never hold it while touching disk or
+// rebuilding chunks: loading world A must not block a save of world B.
+static WORLD_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
 static PRUNE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+
+fn world_lock(id: &str) -> io::Result<Arc<Mutex<()>>> {
+    let locks = WORLD_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut locks = locks.lock().map_err(|_| io::Error::other("world lock catalog poisoned"))?;
+    Ok(Arc::clone(
+        locks.entry(id.to_owned()).or_insert_with(|| Arc::new(Mutex::new(()))),
+    ))
+}
 
 /// The same content definitions must validate candidates during load and
 /// before old backups are removed. Invalid inventories and clocks must never
@@ -253,8 +260,9 @@ pub(crate) fn create_new_world(
 /// Publish the immutable snapshot before its manifest commit marker. The
 /// worker only removes backups AFTER publication, never during the write.
 pub(crate) fn save_world(snapshot: &WorldSnapshot, registries: SaveRegistries<'_>) -> io::Result<u64> {
-    let lock = SAVE_LOCK.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
     validate_world_name(&snapshot.id)?;
+    let world_lock = world_lock(&snapshot.id)?;
+    let lock = world_lock.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
     if snapshot.format_version != SAVE_FORMAT_VERSION {
         return Err(invalid_data("unsupported snapshot format"));
     }
@@ -300,8 +308,8 @@ pub(crate) fn save_world(snapshot: &WorldSnapshot, registries: SaveRegistries<'_
         return Err(error);
     }
     let saved_at = manifest.last_saved_unix_ms;
-    // Release the writer before scheduling any cleanup work. A detached worker
-    // may be interrupted by process exit; this only leaves additional backups.
+    // Release the world's writer before scheduling cleanup. A detached worker
+    // may be interrupted by process exit; this only leaves extra backups.
     drop(lock);
     if next > RETAINED_GENERATIONS as u64 {
         schedule_backup_prune(snapshot.id.clone(), registries);
@@ -340,7 +348,6 @@ fn schedule_backup_prune(id: String, registries: SaveRegistries<'_>) {
 /// Enumerate only fully published generations. Missing or temporary snapshots
 /// never become selectable worlds. Metadata-only; never assert restorable here.
 pub(crate) fn list_worlds() -> io::Result<Vec<WorldSummary>> {
-    let _lock = SAVE_LOCK.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
     let entries = match fs::read_dir(WORLDS_DIRECTORY) {
         Ok(entries) => entries,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -358,6 +365,8 @@ pub(crate) fn list_worlds() -> io::Result<Vec<WorldSummary>> {
         if validate_world_name(&id).is_err() {
             continue;
         }
+        let world_lock = world_lock(&id)?;
+        let _lock = world_lock.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
         if let Ok(manifest) = latest_complete_manifest(&entry.path(), &id) {
             worlds.push(WorldSummary { id, last_saved_unix_ms: manifest.last_saved_unix_ms });
         }
@@ -390,8 +399,10 @@ pub(crate) fn list_verified_worlds(registries: &PruneRegistries) -> io::Result<V
 
 fn newest_restorable_timestamp(id: &str, registries: &PruneRegistries) -> io::Result<u64> {
     validate_world_name(id)?;
-    // A prune cannot delete the selected generation while it is decoded.
-    let _lock = SAVE_LOCK.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+    // Hold only this world's lock across enumeration and reconstruction.
+    // Backup pruning cannot unlink its fallback until validation finishes.
+    let world_lock = world_lock(id)?;
+    let _lock = world_lock.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
     let directory = Path::new(WORLDS_DIRECTORY).join(id);
     if !fs::symlink_metadata(&directory)?.file_type().is_dir() {
         return Err(invalid_data("world directory cannot be a symbolic link"));
@@ -428,11 +439,10 @@ pub(crate) fn load_world(
     registries: SaveRegistries<'_>,
 ) -> io::Result<(WorldSnapshot, VoxelWorld)> {
     validate_world_name(id)?;
-    // Hold the shared lock across candidate enumeration AND reconstruction.
-    // Without this, pruning may delete the fallback manifest/snapshot after
-    // enumeration but before load_snapshot opens it. Prune validates off-lock
-    // and takes the lock only for its short delete phase.
-    let _lock = SAVE_LOCK.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+    // Lock this world's enumeration and reconstruction only. The prune worker
+    // also takes this lock before deleting its old manifests and snapshots.
+    let world_lock = world_lock(id)?;
+    let _lock = world_lock.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
     let directory = Path::new(WORLDS_DIRECTORY).join(id);
     if !fs::symlink_metadata(&directory)?.file_type().is_dir() {
         return Err(invalid_data("world directory cannot be a symbolic link"));
@@ -529,8 +539,8 @@ fn latest_complete_manifest(directory: &Path, id: &str) -> io::Result<WorldManif
 }
 
 /// Validate backups off-thread and prune only when four generations decode.
-/// The writer only appends immutable generations. The deletion phase takes
-/// SAVE_LOCK so a simultaneous loader never loses its selected fallback.
+/// The writer only appends immutable generations. The deletion phase locks
+/// this world only, so other worlds remain writable during a slow load.
 fn prune_old_generations(directory: &Path, id: &str, registries: &PruneRegistries) -> io::Result<()> {
     if !fs::symlink_metadata(directory)?.file_type().is_dir() {
         return Err(invalid_data("world directory cannot be a symbolic link"));
@@ -572,9 +582,10 @@ fn prune_old_generations(directory: &Path, id: &str, registries: &PruneRegistrie
     let Some(cutoff) = cutoff else {
         return Ok(());
     };
-    // Expensive validation is complete: lock only the deletion phase. Saves
-    // append immutable generations and cannot invalidate a verified cutoff.
-    let _lock = SAVE_LOCK.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+    // Expensive validation is complete: lock only this world's deletion phase.
+    // Saves append immutable generations and cannot invalidate the cutoff.
+    let world_lock = world_lock(id)?;
+    let _lock = world_lock.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
     if !fs::symlink_metadata(directory)?.file_type().is_dir() {
         return Err(invalid_data("world directory cannot be a symbolic link"));
     }
