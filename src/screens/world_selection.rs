@@ -82,6 +82,8 @@ fn refresh_world_list(
     tools: Res<ToolRegistry>,
     dimensions: Res<DimensionRegistry>,
     cycles: Res<DayNightCycleRegistry>,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
 ) {
     state.selected = None;
     state.worlds.clear();
@@ -117,7 +119,10 @@ fn refresh_world_list(
         Ok(_) => state.scan = Some(result),
         Err(error) => {
             state.loading = false;
-            state.error = format!("Cannot start saved-world verification: {error}");
+            state.error = format!(
+                "{}: {error}",
+                localization.text(language.get(), "worldSelection.scanStartError")
+            );
         }
     }
 }
@@ -127,6 +132,8 @@ fn poll_world_scan(
     mut state: ResMut<WorldSelectionState>,
     list: Query<Entity, With<WorldListContainer>>,
     mut statuses: Query<&mut Text, With<WorldListStatus>>,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
 ) {
     let Some(scan) = state.scan.as_ref().cloned() else {
         return;
@@ -155,11 +162,16 @@ fn poll_world_scan(
                 });
             }
         }
-        Err(error) => state.error = format!("Cannot verify saved worlds: {error}"),
+        Err(error) => {
+            state.error = format!(
+                "{}: {error}",
+                localization.text(language.get(), "worldSelection.scanError")
+            );
+        }
     }
     for mut status in &mut statuses {
         status.0 = if state.worlds.is_empty() {
-            "No restorable saved worlds found.".to_owned()
+            localization.text(language.get(), "worldSelection.noRestorable").to_owned()
         } else {
             String::new()
         };
@@ -194,9 +206,9 @@ fn spawn_world_selection(
                 panel.spawn((
                     WorldListStatus,
                     typography::caption(if state.loading {
-                        "Verifying saved worlds...".to_owned()
+                        localization.text(language.get(), "worldSelection.verifying").to_owned()
                     } else {
-                        localization.text(language.get(), "worldSelection.empty").to_owned()
+                        localization.text(language.get(), "worldSelection.noRestorable").to_owned()
                     }),
                 ));
                 panel.spawn((
@@ -238,6 +250,8 @@ fn handle_world_selection(
     mut state: ResMut<WorldSelectionState>,
     mut context: WorldSelectionLoadContext,
     mut transition: ResMut<ScreenTransition>,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
 ) {
     if transition.is_active() {
         return;
@@ -257,11 +271,15 @@ fn handle_world_selection(
             }
             WorldSelectionAction::Load => {
                 if state.loading {
-                    state.error = "Saved worlds are still being verified.".to_owned();
+                    state.error = localization
+                        .text(language.get(), "worldSelection.stillVerifying")
+                        .to_owned();
                     return;
                 }
                 let Some(id) = state.selected.clone() else {
-                    state.error = "Select a world first.".to_owned();
+                    state.error = localization
+                        .text(language.get(), "worldSelection.selectFirst")
+                        .to_owned();
                     return;
                 };
                 let registries = SaveRegistries {
@@ -274,7 +292,10 @@ fn handle_world_selection(
                 let (snapshot, world) = match load_world(&id, registries) {
                     Ok(loaded) => loaded,
                     Err(error) => {
-                        state.error = format!("Cannot load {id}: {error}");
+                        state.error = format!(
+                            "{} {id}: {error}",
+                            localization.text(language.get(), "worldSelection.loadError")
+                        );
                         return;
                     }
                 };
@@ -285,7 +306,10 @@ fn handle_world_selection(
                     &context.blocks,
                     &context.tools,
                 ) {
-                    state.error = format!("Cannot load inventory: {error}");
+                    state.error = format!(
+                        "{}: {error}",
+                        localization.text(language.get(), "worldSelection.inventoryError")
+                    );
                     return;
                 }
                 let mut rules = GameRules::default();
@@ -319,12 +343,16 @@ fn sync_world_selection_feedback(
     state: Res<WorldSelectionState>,
     mut selected: Query<&mut Text, (With<SelectionFeedback>, Without<SelectionError>)>,
     mut errors: Query<&mut Text, With<SelectionError>>,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
 ) {
     if !state.is_changed() {
         return;
     }
     for mut text in &mut selected {
-        text.0 = state.selected.as_deref().map_or_else(String::new, |id| format!("Selected: {id}"));
+        text.0 = state.selected.as_deref().map_or_else(String::new, |id| {
+            format!("{}: {id}", localization.text(language.get(), "worldSelection.selected"))
+        });
     }
     for mut text in &mut errors {
         text.0.clone_from(&state.error);
