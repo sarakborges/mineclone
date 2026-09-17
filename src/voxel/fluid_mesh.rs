@@ -199,12 +199,12 @@ fn fluid_micro_face_vertices(
         BlockFace::Right | BlockFace::Left | BlockFace::Front | BlockFace::Back
     ) {
         let bottom = min_v;
-        let top = side_height((min_u + max_u) * 0.5).min(max_v);
+        let corner_height_min = side_height(min_u);
+        let corner_height_max = side_height(max_u);
+        let top = corner_height_min.max(corner_height_max).min(max_v);
         if bottom >= top {
             return None;
         }
-        let corner_height_min = side_height(min_u);
-        let corner_height_max = side_height(max_u);
         let top_min = corner_height_min.min(max_v).max(bottom);
         let top_max = corner_height_max.min(max_v).max(bottom);
         let bottom = bottom.max(0.0);
