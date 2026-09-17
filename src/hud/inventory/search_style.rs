@@ -62,7 +62,9 @@ pub(super) fn frame_inventory_search_field(
         if let Ok(mut editor_node) = nodes.get_mut(editor) {
             editor_node.width = percent(100);
             editor_node.min_width = px(0);
-            editor_node.height = percent(100);
+            // Center the actual line box; centering a 100%-height editor does
+            // not center its glyphs or its caret within the frame.
+            editor_node.height = px(text_input::INPUT_EDITOR_HEIGHT);
             editor_node.padding = UiRect::default();
             editor_node.border = UiRect::default();
             editor_node.border_radius = BorderRadius::default();
@@ -90,7 +92,7 @@ pub(super) fn focus_inventory_search_frame(
 }
 
 /// Only the frame receives the border and padding. The placeholder uses the
-/// same horizontal origin as the editor and never participates in flex layout.
+/// same horizontal and vertical line-box origin as the editor.
 pub(super) fn style_inventory_search_field(
     view: Res<CreativeInventoryView>,
     mut frames: Query<(&mut BackgroundColor, &mut BorderColor), With<CreativeSearchFrame>>,
@@ -108,7 +110,7 @@ pub(super) fn style_inventory_search_field(
     }
     for (mut node, mut color) in &mut placeholders {
         let left = px(text_input::INPUT_PADDING_X + 1.0);
-        let top = px((SEARCH_HEIGHT - 17.0) * 0.5);
+        let top = px(text_input::centered_text_top(SEARCH_HEIGHT));
         if node.position_type != PositionType::Absolute {
             node.position_type = PositionType::Absolute;
         }
