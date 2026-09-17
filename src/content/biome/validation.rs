@@ -22,6 +22,7 @@ pub(super) fn validate_biome_definition(definition: &BiomeDefinition) {
 
     validate_climate(&definition.id, definition.climate);
     validate_distributions(definition);
+    validate_creature_spawns(definition);
     definition.hydrology.validate(&definition.id);
     validate_visuals(definition);
 
@@ -210,4 +211,15 @@ fn validate_climate_range(biome_id: &str, field: &str, range: Option<BiomeClimat
         range.max >= range.min,
         "biome {biome_id} climate.{field}.max must be greater than or equal to min"
     );
+}
+
+fn validate_creature_spawns(definition: &BiomeDefinition) {
+    for spawn in &definition.creature_spawns {
+        assert!(!spawn.creature.trim().is_empty(), "biome {} has an empty creature spawn id", definition.id);
+        assert!(spawn.weight.is_finite() && spawn.weight >= 0.0, "biome {} creature {} weight must be finite and non-negative", definition.id, spawn.creature);
+        assert!(spawn.light_min <= 15 && spawn.light_max <= 15 && spawn.light_max >= spawn.light_min, "biome {} creature {} light range is invalid", definition.id, spawn.creature);
+        assert!(spawn.spacing.is_finite() && spawn.spacing > 0.0, "biome {} creature {} spacing must be positive and finite", definition.id, spawn.creature);
+        assert!(spawn.max_per_type > 0, "biome {} creature {} maxPerType must be positive", definition.id, spawn.creature);
+        assert!(spawn.max_in_dimension > 0, "biome {} creature {} maxInDimension must be positive", definition.id, spawn.creature);
+    }
 }
