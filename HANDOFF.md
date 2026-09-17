@@ -128,4 +128,5 @@ Próximo passo: obter CI; se verde, continuar a revisão de fronteira sólido/fl
 - A CI 35281260132 encontrou cinco erros no checkpoint 63: os testes novos não importavam os helpers privados, e Clippy rejeitou a implementação manual de divisão por teto em scale_dampening.
 - 6482ba4902091ff81f929f2d8e9ec2eefcb9b24b importa ao_brightness/sample_occlusion nos testes.
 - 5bc03e5e768702ed9325172aa870a82d48daf692 usa u16::div_ceil(), preservando a fórmula anterior e removendo o lint clippy::manual_div_ceil.
+- CI 35281390697 concluiu GREEN após esses ajustes.
 - Não executei cargo test/cargo run; a CI é a validação automática usada para estes ajustes.
