@@ -26,14 +26,6 @@ impl InMemoryWorldSave {
         self.seed.is_some() && self.dimension_id.is_some()
     }
 
-    pub fn seed(&self) -> Option<WorldSeed> {
-        self.seed.map(WorldSeed)
-    }
-
-    pub fn dimension_id(&self) -> Option<&str> {
-        self.dimension_id.as_deref()
-    }
-
     pub(crate) fn game_rules(&self) -> GameRules {
         self.game_rules
     }
@@ -59,12 +51,6 @@ impl InMemoryWorldSave {
         self.dimension_id = Some(dimension_id.to_owned());
         self.game_rules = game_rules;
         self.players.clear();
-    }
-
-    pub(crate) fn save_game_rules(&mut self, game_rules: GameRules) {
-        if self.has_world() {
-            self.game_rules = game_rules;
-        }
     }
 
     pub fn save_player_state(
