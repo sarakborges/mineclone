@@ -5,7 +5,7 @@ use bevy::{
     prelude::*, world_serialization::WorldInstanceReady,
 };
 
-use crate::{content::{color::Hsi, creature::CreatureRegistry}, entity::{DamageFlashMaterial, EntityHealth}};
+use crate::content::{color::Hsi, creature::CreatureRegistry};
 
 use super::{CreatureInstance, motion::CreatureMotion};
 
@@ -222,53 +222,6 @@ pub(super) fn sync_creature_facing(
         let facing = Quat::from_rotation_y(motion.facing_yaw());
         if transform.rotation != facing {
             transform.rotation = facing;
-        }
-    }
-}
-
-pub(super) fn tick_entity_health(
-    time: Res<Time>,
-    mut health: Query<&mut EntityHealth>,
-) {
-    for mut health in &mut health {
-        health.tick_hurt(time.delta_secs());
-    }
-}
-
-pub(super) fn sync_creature_damage_flash(
-    health: Query<(&EntityHealth, &CreatureAppearance)>,
-    descendants: Query<&Children>,
-    mesh_materials: Query<(
-        Entity,
-        &MeshMaterial3d<StandardMaterial>,
-        Option<&DamageFlashMaterial>,
-    )>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut commands: Commands,
-) {
-    for (entity_health, appearance) in &health {
-        for descendant in descendants.iter_descendants(appearance.owner) {
-            let Ok((mesh_entity, current, flash)) = mesh_materials.get(descendant) else {
-                continue;
-            };
-            if entity_health.is_hurt() {
-                if flash.is_none() {
-                    let flash_material = materials.add(StandardMaterial {
-                        base_color: Color::srgba(1.0, 0.0, 0.0, 0.5),
-                        alpha_mode: AlphaMode::Blend,
-                        unlit: true,
-                        ..default()
-                    });
-                    commands.entity(mesh_entity).insert((
-                        DamageFlashMaterial { original: current.0.clone() },
-                        MeshMaterial3d(flash_material),
-                    ));
-                }
-            } else if let Some(flash) = flash {
-                commands.entity(mesh_entity)
-                    .insert(MeshMaterial3d(flash.original.clone()))
-                    .remove::<DamageFlashMaterial>();
-            }
         }
     }
 }
