@@ -215,3 +215,11 @@ Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigi
 - 94af19e2100edfef2a93eb95723414a2b41a5416 corrige a máscara usada pelo recorte: a face do fluido agora consulta o bloco Chisel vizinho em `world_voxel + face.offset()`, em vez do bloco do próprio voxel do fluido.
 - 6387a4e8ba6b5f60ec5159ae0863bd8199d1a4c4 marca explicitamente os dois helpers de recorte com `#[expect(clippy::too_many_arguments)]`, evitando que o `-D warnings` do CI derrube o build por esses helpers deliberadamente parametrizados.
 - Não executei `cargo test`, `cargo run` ou QA Windows. A integração disponível aqui continua sem expor os runs de push do branch `develop` via consulta por commit, então não marquei CI como verde.
+
+
+## Checkpoint 75 — estabilização do degrau suave [CÓDIGO; CI NÃO VISÍVEL]
+
+- 9f2c393a728b84fe69374630fecadf68a72d1fe6 torna o `GravityState` mutável no sistema de caminhada apenas durante o step-up suave e mantém `grounded = true` com velocidade vertical zerada enquanto a interpolação de altura está ativa. Isso evita a gravidade competir com a subida visual e puxar o jogador para baixo no meio do degrau.
+- 4c7e6b1c5bab10efc01efb42dea2c176a820baf7 adiciona cobertura unitária para a interpolação do step, incluindo aproximação sem overshoot e movimento descendente.
+- A ordem dos sistemas já é encadeada em `PlayerMovementPlugin`, então `walk` termina de atualizar o estado antes de `apply_gravity`.
+- Não executei `cargo test`, `cargo run` ou QA Windows.
