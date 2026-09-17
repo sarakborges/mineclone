@@ -33,7 +33,10 @@ pub fn settings_content() -> impl Bundle {
     })
 }
 
-pub fn hud_container(node: Node) -> impl Bundle {
+/// Cards use their surface and shadow for separation. Outlines belong only to
+/// interactive controls (buttons, fields, selectable slots), not containers.
+pub fn hud_container(mut node: Node) -> impl Bundle {
+    node.border = UiRect::all(px(0));
     hud_surface(node)
 }
 
