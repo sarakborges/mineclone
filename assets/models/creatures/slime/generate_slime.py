@@ -14,7 +14,7 @@ import zlib
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent
-TEXTURES = OUT.parents[2] / 'textures' / 'creatures'
+TEXTURES = OUT.parents[2] / 'textures' / 'creatures' / 'slime'
 binary = bytearray()
 views: list[dict] = []
 accessors: list[dict] = []
@@ -58,49 +58,43 @@ def png_chunk(kind: bytes, payload: bytes) -> bytes:
             + struct.pack('>I', zlib.crc32(content) & 0xffffffff))
 
 
-def make_skin(species: str) -> bytes:
+def make_skin(kind: str) -> bytes:
+    """Create a standalone 64x64 grayscale skin for one slime material."""
     pixels = bytearray([255, 255, 255, 255] * 64 * 64)
     for y in range(64):
         for x in range(64):
-            tile = (x // 16, y // 16)
-            u, v = x % 16, y % 16
-            if tile == (0, 0):
-                border = min(u, v, 15-u, 15-v) < 2
-                # Different square patterns, never rounded or smoothed.
-                if species == 'meadow_slime':
-                    gray = 229 if border else (247 if (u//4 + v//4) % 2 else 255)
-                else:
-                    gray = 222 if border else (239 if (u//2 + v//4) % 2 else 255)
-            elif tile == (2, 0):
-                # Only pixels form the facial features: square eyes, glints, cheeks and mouth.
-                gray = 247 if (u // 4 + v // 4) % 2 else 255
-                if 4 <= v <= 7 and (3 <= u <= 5 or 10 <= u <= 12):
-                    gray = 15
-                if v == 4 and u in (3, 10):
-                    gray = 255
-                if v in (9, 10) and (1 <= u <= 2 or 13 <= u <= 14):
-                    gray = 170 if species == 'meadow_slime' else 152
-                if (v == 10 and u in (4, 11)) or (v == 11 and u in (5, 10)) or (v == 12 and 6 <= u <= 9):
-                    gray = 24
-            elif tile == (1, 0):
-                gray = 220 if min(u, v, 15-u, 15-v) < 2 else (246 if (u//4 + v//4) % 2 else 255)
-            elif tile == (0, 1):
-                gray = 245 if u < 4 or v < 4 else 255
-            else:
+            u, v = x % 64, y % 64
+            if kind == 'shell':
+                border = min(u, v, 63-u, 63-v) < 4
+                gray = 229 if border else (247 if (u//8 + v//8) % 2 else 255)
+            elif kind == 'core':
+                border = min(u, v, 63-u, 63-v) < 3
+                gray = 222 if border else (246 if (u//8 + v//8) % 2 else 255)
+            elif kind == 'face':
                 gray = 255
+                if 20 <= v <= 29 and (16 <= u <= 23 or 40 <= u <= 47):
+                    gray = 15
+                if v == 20 and u in (16, 40):
+                    gray = 255
+                if 29 <= v <= 31 and (8 <= u <= 13 or 50 <= u <= 55):
+                    gray = 170
+                if (v == 38 and 24 <= u <= 39) or (v == 39 and 27 <= u <= 36):
+                    gray = 24
+            else:
+                raise ValueError(f'unknown slime skin kind: {kind}')
             index = (y * 64 + x) * 4
             pixels[index:index + 4] = bytes((gray, gray, gray, 255))
-    scanlines = b''.join(b'\0' + pixels[y*64*4:(y+1)*64*4] for y in range(64))
-    return (b'\x89PNG\r\n\x1a\n' + png_chunk(b'IHDR', struct.pack('>IIBBBBB', 64, 64, 8, 6, 0, 0, 0))
+    scanlines = b''.join(b'\\0' + pixels[y*64*4:(y+1)*64*4] for y in range(64))
+    return (b'\\x89PNG\\r\\n\\x1a\\n' + png_chunk(b'IHDR', struct.pack('>IIBBBBB', 64, 64, 8, 6, 0, 0, 0))
             + png_chunk(b'IDAT', zlib.compress(scanlines, 9)) + png_chunk(b'IEND', b''))
 
 
 TEXTURES.mkdir(parents=True, exist_ok=True)
-for species in ('meadow_slime', 'ember_slime'):
-    destination = TEXTURES / f'{species}.png'
+for kind in ('shell', 'core', 'face'):
+    destination = TEXTURES / f'{kind}.png'
     # Only create missing default skins; never overwrite subsequent artist edits.
     if not destination.exists():
-        destination.write_bytes(make_skin(species))
+        destination.write_bytes(make_skin(kind))
 
 # Outward winding is verified by the axis-aligned normals and vertex corner order.
 # normal, horizontal axis, vertical axis; cross(horizontal, vertical) == normal.
@@ -157,11 +151,11 @@ def material(name, color, alpha=1., rough=.36, emission=None):
 materials = [
     material('SlimeShell', [.50,.91,.78], .76, .23),
     material('SlimeCore', [.18,.70,.57], 1., .32, [.025,.08,.06]),
+    material('SlimeFace', [1.,1.,1.], 1., .30),
 ]
-# Only shell and core have geometry; the face is a front-facing tile of the
-# external 64x64 skin selected by each creature JSON.
-shell = make_mesh('square_translucent_shell', [([.96,.90,.96], (0,0,0))], 0, (0,0), (2,0))
-core = make_mesh('square_nucleus', [([.58,.62,.58], (0,0,0))], 1, (1,0))
+shell = make_mesh('square_translucent_shell', [([.96,.90,.96], (0,0,0))], 0, (0,0))
+core = make_mesh('square_nucleus', [([.58,.62,.58], (0,0,0))], 1, (0,0))
+face = make_mesh('square_pixel_face', [([.42,.28,.02], (0,.50,-.49))], 2, (0,0))
 
 
 def node(name, mesh=None, children=None, translation=None, scale=None, extras=None):
@@ -182,7 +176,7 @@ root = node('SlimeRoot', children=[], extras={
 visual = node('Visual', children=[])
 body = node('BodyPivot', children=[], translation=[0,.5,0])
 inner = node('InnerCore', mesh=core, translation=[0,-.025,0], scale=[1,1,1])
-body_children = [node('Shell',mesh=shell),inner]
+body_children = [node('Shell',mesh=shell),inner,node('Face',mesh=face,translation=[0,0,0])]
 nodes[body]['children'] = body_children
 nodes[visual]['children'] = [body]
 collider_node = node('Hitbox_AABB', translation=[0,.42,0], extras={
@@ -239,7 +233,7 @@ scene = {
     'scene':0,'scenes':[{'name':'Slime','nodes':[root]}],
     'nodes':nodes,'meshes':meshes,'materials':materials,'animations':animations,
     'bufferViews':views,'accessors':accessors,'buffers':[{'byteLength':len(binary)}],
-    'extras':{'asset_id':'asteria:slime_base','color_materials':['SlimeShell','SlimeCore'],
+    'extras':{'asset_id':'asteria:slime_base','color_materials':['SlimeShell','SlimeCore','SlimeFace'],
               'collision_source':'slime.collider.json','skin_resolution':[64,64],
               'texture_source':'creature JSON material textures under textures/creatures/',
               'notes':'Only cubic shell and enlarged core; face in species PNG front tile; collider does not animate'},
