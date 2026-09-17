@@ -157,3 +157,9 @@ Próximo passo: obter CI; se verde, continuar a revisão de fronteira sólido/fl
 - O checkpoint 66/67 não foi validado por cargo test/cargo run localmente, conforme restrição do projeto.
 
 Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigir regressões encontradas pela CI antes de avançar.
+
+
+## Checkpoint 68 — correção de orientação da face fluido/Chisel [CI PENDENTE]
+
+- 2812484587f5bd9e32fa0bbe0cdfecf71d9b2a37 corrige a leitura da fronteira do vizinho: Front consulta a camada Z=7 (Back do vizinho) e Back consulta Z=0 (Front do vizinho). Right/Left e Top/Bottom já estavam orientados corretamente.
+- CI nova 35282185332 (run 3046) está em andamento.
