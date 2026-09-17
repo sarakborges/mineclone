@@ -2,6 +2,7 @@
   "id": "asteria:sand",
   "name": { "english": "Sand", "portuguese_brazil": "Areia", "spanish": "Arena" },
   "category": "natural_blocks",
+  "tags": ["fragmentable"],
   "textures": {
     "top": "textures/blocks/sand.png",
     "bottom": "textures/blocks/sand.png",
