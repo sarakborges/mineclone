@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::{BTreeSet, HashMap}, fs};
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -10,20 +10,27 @@ use crate::app::runtime_paths::data_root;
 pub(crate) enum Language {
     #[default]
     English,
+    #[serde(rename = "portuguese_brazil")]
+    PortugueseBrazil,
+    Spanish,
 }
 
 impl Language {
-    pub(crate) const ALL: [Self; 1] = [Self::English];
+    pub(crate) const ALL: [Self; 3] = [Self::English, Self::PortugueseBrazil, Self::Spanish];
 
     pub(crate) const fn key(self) -> &'static str {
         match self {
             Self::English => "english",
+            Self::PortugueseBrazil => "portuguese_brazil",
+            Self::Spanish => "spanish",
         }
     }
 
     pub(crate) const fn localization_key(self) -> &'static str {
         match self {
             Self::English => "language.english",
+            Self::PortugueseBrazil => "language.portugueseBrazil",
+            Self::Spanish => "language.spanish",
         }
     }
 }
@@ -67,6 +74,13 @@ pub(crate) struct UiLocalization {
     languages: HashMap<Language, HashMap<String, String>>,
 }
 
+fn placeholders(text: &str) -> BTreeSet<&str> {
+    text.split('{')
+        .skip(1)
+        .filter_map(|part| part.split_once('}').map(|(name, _)| name))
+        .collect()
+}
+
 impl UiLocalization {
     fn load() -> Self {
         let mut languages = HashMap::new();
@@ -85,6 +99,35 @@ impl UiLocalization {
             languages.insert(language, strings);
         }
 
+        let english = languages
+            .get(&Language::English)
+            .expect("english UI localization must exist");
+        for language in Language::ALL {
+            let strings = languages
+                .get(&language)
+                .expect("all configured UI localizations must exist");
+            assert_eq!(
+                strings.len(), english.len(),
+                "{} UI localization must have exactly the English keys",
+                language.key()
+            );
+            for (key, original) in english {
+                let translated = strings.get(key).unwrap_or_else(|| {
+                    panic!("{} UI localization is missing key {key}", language.key())
+                });
+                assert!(
+                    !translated.trim().is_empty(),
+                    "{} UI localization has empty key {key}",
+                    language.key()
+                );
+                assert_eq!(
+                    placeholders(translated), placeholders(original),
+                    "{} UI localization has mismatched placeholders for {key}",
+                    language.key()
+                );
+            }
+        }
+
         Self { languages }
     }
 
@@ -92,13 +135,8 @@ impl UiLocalization {
         self.languages
             .get(&language)
             .and_then(|strings| strings.get(key))
-            .or_else(|| {
-                self.languages
-                    .get(&Language::English)
-                    .and_then(|strings| strings.get(key))
-            })
             .map(String::as_str)
-            .unwrap_or_else(|| panic!("missing localization key: {key}"))
+            .unwrap_or_else(|| panic!("missing {} localization key: {key}", language.key()))
     }
 }
 
