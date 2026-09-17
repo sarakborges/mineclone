@@ -79,7 +79,8 @@ where
                     }
 
                     let lighting = face_lighting(world, world_voxel, face, source_block_srgb);
-                    if let Some(block) = chunk.cell_at(x as i32, y as i32, z as i32)
+                    if let Some(block) = world
+                        .cell_at(world_voxel + face.offset())
                         .filter(|block| MicroblockMask::is_modified(*block))
                     {
                         emit_fluid_openings(
