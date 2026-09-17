@@ -1,3 +1,9 @@
+use std::{
+    io,
+    sync::{Arc, Mutex},
+    thread,
+};
+
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
@@ -15,7 +21,7 @@ use crate::{
     world::{
         InMemoryWorldSave, WorldLoadMode, WorldSeed,
         dimension::CurrentDimension, game_rules::GameRules,
-        save_catalog::{SaveRegistries, WorldSummary, list_worlds, load_world},
+        save_catalog::{SaveRegistries, WorldSummary, list_verified_worlds, load_world},
         save_session::WorldSession,
     },
 };
@@ -31,18 +37,23 @@ impl Plugin for WorldSelectionPlugin {
             )
             .add_systems(
                 Update,
-                (handle_world_selection, sync_world_selection_feedback)
+                (poll_world_scan, handle_world_selection, sync_world_selection_feedback)
                     .chain()
                     .run_if(in_state(GameState::WorldSelection)),
             );
     }
 }
 
+// Only the worker writes the result; Bevy polls without blocking the main thread.
+type WorldScanResult = Arc<Mutex<Option<io::Result<Vec<WorldSummary>>>>>;
+
 #[derive(Resource, Default)]
 struct WorldSelectionState {
     worlds: Vec<WorldSummary>,
     selected: Option<String>,
     error: String,
+    loading: bool,
+    scan: Option<WorldScanResult>,
 }
 
 #[derive(Component, Clone)]
@@ -58,15 +69,100 @@ struct SelectionFeedback;
 #[derive(Component)]
 struct SelectionError;
 
-fn refresh_world_list(mut state: ResMut<WorldSelectionState>) {
+#[derive(Component)]
+struct WorldListStatus;
+
+#[derive(Component)]
+struct WorldListContainer;
+
+fn refresh_world_list(
+    mut state: ResMut<WorldSelectionState>,
+    blocks: Res<BlockRegistry>,
+    fluids: Res<FluidRegistry>,
+    tools: Res<ToolRegistry>,
+    dimensions: Res<DimensionRegistry>,
+    cycles: Res<DayNightCycleRegistry>,
+) {
     state.selected = None;
+    state.worlds.clear();
     state.error.clear();
-    match list_worlds() {
-        Ok(worlds) => state.worlds = worlds,
+    state.loading = true;
+    // Returning to this menu while a prior scan is running reuses that scan
+    // rather than creating an unbounded number of detached workers.
+    if state.scan.is_some() {
+        return;
+    }
+    let owned = SaveRegistries {
+        blocks: &blocks,
+        fluids: &fluids,
+        tools: &tools,
+        dimensions: &dimensions,
+        cycles: &cycles,
+    }
+    .owned_for_pruning();
+    let result: WorldScanResult = Arc::new(Mutex::new(None));
+    let worker_result = Arc::clone(&result);
+    match thread::Builder::new()
+        .name("asteria-world-scan".to_owned())
+        .spawn(move || {
+            let verified = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                list_verified_worlds(&owned)
+            }))
+            .unwrap_or_else(|_| Err(io::Error::other("saved-world verification worker panicked")));
+            if let Ok(mut slot) = worker_result.lock() {
+                *slot = Some(verified);
+            }
+        })
+    {
+        Ok(_) => state.scan = Some(result),
         Err(error) => {
-            state.worlds.clear();
-            state.error = format!("Cannot read saved worlds: {error}");
+            state.loading = false;
+            state.error = format!("Cannot start saved-world verification: {error}");
         }
+    }
+}
+
+fn poll_world_scan(
+    mut commands: Commands,
+    mut state: ResMut<WorldSelectionState>,
+    list: Query<Entity, With<WorldListContainer>>,
+    mut statuses: Query<&mut Text, With<WorldListStatus>>,
+) {
+    let Some(scan) = state.scan.as_ref().cloned() else {
+        return;
+    };
+    let result = scan.try_lock().ok().and_then(|mut slot| slot.take());
+    let Some(result) = result else {
+        return;
+    };
+    state.scan = None;
+    state.loading = false;
+    match result {
+        Ok(worlds) => {
+            state.worlds = worlds;
+            for list_entity in &list {
+                commands.entity(list_entity).with_children(|parent| {
+                    for world in &state.worlds {
+                        parent.spawn(menu_button(
+                            format!(
+                                "{} — {}",
+                                world.id,
+                                format_save_time(world.last_saved_unix_ms)
+                            ),
+                            WorldSelectionAction::Select(world.id.clone()),
+                        ));
+                    }
+                });
+            }
+        }
+        Err(error) => state.error = format!("Cannot verify saved worlds: {error}"),
+    }
+    for mut status in &mut statuses {
+        status.0 = if state.worlds.is_empty() {
+            "No restorable saved worlds found.".to_owned()
+        } else {
+            String::new()
+        };
     }
 }
 
@@ -95,17 +191,22 @@ fn spawn_world_selection(
                 panel.spawn(typography::title(
                     localization.text(language.get(), "starting.loadWorlds").to_owned(),
                 ));
-                if state.worlds.is_empty() {
-                    panel.spawn(typography::caption(
-                        localization.text(language.get(), "worldSelection.empty").to_owned(),
-                    ));
-                }
-                for world in &state.worlds {
-                    panel.spawn(menu_button(
-                        format!("{} — {}", world.id, format_save_time(world.last_saved_unix_ms)),
-                        WorldSelectionAction::Select(world.id.clone()),
-                    ));
-                }
+                panel.spawn((
+                    WorldListStatus,
+                    typography::caption(if state.loading {
+                        "Verifying saved worlds...".to_owned()
+                    } else {
+                        localization.text(language.get(), "worldSelection.empty").to_owned()
+                    }),
+                ));
+                panel.spawn((
+                    WorldListContainer,
+                    Node {
+                        width: percent(100),
+                        flex_direction: FlexDirection::Column,
+                        ..default()
+                    },
+                ));
                 panel.spawn((SelectionFeedback, typography::caption(String::new())));
                 panel.spawn((SelectionError, typography::caption(state.error.clone())));
                 panel.spawn(menu_button(
@@ -155,6 +256,10 @@ fn handle_world_selection(
                 return;
             }
             WorldSelectionAction::Load => {
+                if state.loading {
+                    state.error = "Saved worlds are still being verified.".to_owned();
+                    return;
+                }
                 let Some(id) = state.selected.clone() else {
                     state.error = "Select a world first.".to_owned();
                     return;
@@ -173,8 +278,8 @@ fn handle_world_selection(
                         return;
                     }
                 };
-                // Validation was performed on each candidate *before* it was
-                // accepted. Restore into the active inventory only on success.
+                // Revalidate on load: files could change after the background
+                // scan displayed its timestamp.
                 if let Err(error) = context.inventory.restore_items(
                     &snapshot.inventory,
                     &context.blocks,
