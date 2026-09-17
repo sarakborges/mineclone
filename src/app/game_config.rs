@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    hud::HudSettings,
+    hud::{HudSettings, TargetBlockPosition},
     localization::{ActiveLanguage, Language},
     world::render_distance::{DEFAULT_RENDER_DISTANCE_CHUNKS, RenderDistanceSettings},
 };
@@ -60,6 +60,7 @@ impl GameConfig {
             },
             miscellaneous: MiscellaneousConfig {
                 display_tooltips: hud.display_tooltips(),
+                target_block_position: hud.target_block_position(),
             },
         }
     }
@@ -115,12 +116,14 @@ impl Default for GraphicsConfig {
 #[serde(default)]
 struct MiscellaneousConfig {
     display_tooltips: bool,
+    target_block_position: TargetBlockPosition,
 }
 
 impl Default for MiscellaneousConfig {
     fn default() -> Self {
         Self {
             display_tooltips: true,
+            target_block_position: TargetBlockPosition::default(),
         }
     }
 }
@@ -136,6 +139,7 @@ impl Plugin for GameConfigPlugin {
 
         let mut hud_settings = HudSettings::default();
         hud_settings.set_display_tooltips(config.miscellaneous.display_tooltips);
+        hud_settings.set_target_block_position(config.miscellaneous.target_block_position);
 
         let mut render_distance = RenderDistanceSettings::default();
         render_distance.set_chunks(config.graphics.render_distance_chunks);

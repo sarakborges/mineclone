@@ -19,6 +19,7 @@ use bevy::{
     render::render_resource::BlendState,
     ui::IsDefaultUiCamera,
 };
+use serde::{Deserialize, Serialize};
 use block_icon::BlockIconMaterial;
 use chat::ChatHudPlugin;
 use crosshair::CrosshairPlugin;
@@ -38,7 +39,8 @@ use crate::{
     targeting::block::BlockTargetingSet,
 };
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub(crate) enum TargetBlockPosition {
     #[default]
     Center,
