@@ -3,7 +3,8 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     content::{block::BlockRegistry, tool::ToolRegistry},
     gameplay::availability::world_interaction_available,
-    creatures::{CreatureAnimationState, CreatureInstance, EntityHealth},
+    creatures::{CreatureAnimationState, CreatureInstance},
+    entity::EntityHealth,
     player::{camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar, viewmodel::ViewModelAnimation},
     voxel::{
         cell::VoxelCell, edit::VoxelTopologyRuntime, raycast::VoxelHit,
@@ -92,10 +93,9 @@ fn edit_targeted_block(
     if left_pressed && let Some(entity) = input.creature_target.0 {
         if let Ok((mut health, mut animation)) = creature_health.get_mut(entity) {
             let dead = health.damage(1.0);
-            animation.0 = if dead { "death" } else { "hurt" }.to_owned();
             viewmodel_animation.play_break();
             if dead {
-                commands.entity(entity).despawn();
+                animation.0 = "death".to_owned();
             }
         }
         return;
