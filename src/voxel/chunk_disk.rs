@@ -15,6 +15,7 @@ use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk},
     fluid::{FluidCell, MAX_FLUID_LEVEL},
+    microblock::MicroblockMask,
     secondary_properties::SecondaryProperties,
     texture_rotation::TextureRotation,
 };
@@ -60,7 +61,10 @@ impl DiskChunk {
             let (block, fluid, _) = chunk
                 .sample_local(x as i32, y as i32, z as i32)
                 .expect("disk chunk coordinates must be in range");
-            if let Some(cell) = block {
+            // The first Chisel iteration is session-only. A sculpted original
+            // saves as its unmodified macro cell; a temporary parent created
+            // into air is omitted, never accidentally saved as a whole cube.
+            if let Some(cell) = block.filter(|cell| !MicroblockMask::is_transient_parent(*cell)) {
                 let mut properties = cell
                     .secondary_properties()
                     .iter()
