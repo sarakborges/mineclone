@@ -10,10 +10,8 @@ use crate::{
     app::game_state::GameState,
     content::creature::CreatureRegistry,
     creatures::CreatureInstance,
-    targeting::block::TargetedCreature,
+    hud::entity_card::{EntityCard, EntityCardSource},
 };
-
-use super::super::{HudSettings, TargetBlockPosition};
 
 const PORTRAIT_RENDER_LAYER: usize = 2;
 
@@ -32,28 +30,27 @@ struct PortraitAppearance(String);
 
 #[derive(SystemParam)]
 pub(super) struct PortraitSelection<'w, 's> {
-    target: Res<'w, TargetedCreature>,
-    settings: Res<'w, HudSettings>,
+    cards: Query<'w, 's, &'static EntityCard>,
     creatures: Query<'w, 's, &'static CreatureInstance>,
     definitions: Res<'w, CreatureRegistry>,
     asset_server: Res<'w, AssetServer>,
 }
 
-/// Only one portrait scene exists, even if the target changes every frame.
-/// Its camera and meshes are confined to a layer invisible to world cameras.
+/// Read the entity bound to the reusable target card, rather than selecting
+/// another target independently of what the HUD displays.
 pub(super) fn sync_portrait(
     mut commands: Commands,
     selection: PortraitSelection,
     mut camera: Single<(&mut Camera, &mut Transform), With<PortraitCamera>>,
     portraits: Query<(Entity, &PortraitModel)>,
 ) {
-    let target = if selection.settings.target_block_position() == TargetBlockPosition::Hidden {
-        None
-    } else {
-        selection.target.0
-            .and_then(|entity| selection.creatures.get(entity).ok())
-            .and_then(|creature| selection.definitions.get(&creature.definition_id))
-    };
+    let target = selection
+        .cards
+        .iter()
+        .find(|card| card.source == EntityCardSource::Target)
+        .and_then(|card| card.entity)
+        .and_then(|entity| selection.creatures.get(entity).ok())
+        .and_then(|creature| selection.definitions.get(&creature.definition_id));
     let (camera_settings, camera_transform) = &mut *camera;
     camera_settings.is_active = target.is_some();
     let Some(definition) = target else {
