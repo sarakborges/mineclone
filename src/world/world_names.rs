@@ -61,8 +61,33 @@ pub(crate) fn validate_world_name(name: &str) -> io::Result<()> {
 
 fn unique_name(requested: &str, occupied: &HashSet<String>) -> io::Result<String> {
     let mut candidate = requested.to_owned();
+    let prefix_units = COPY_PREFIX.encode_utf16().count();
+    let mut numbered_copy = 0_u64;
     while occupied.contains(&candidate.to_lowercase()) {
-        candidate = format!("{COPY_PREFIX}{candidate}");
+        if candidate.encode_utf16().count() + prefix_units <= MAX_NAME_UTF16_UNITS {
+            // Keep the established naming convention when it fits.
+            candidate = format!("{COPY_PREFIX}{candidate}");
+        } else {
+            // Repeated prefixes eventually exceed the Windows-safe limit.
+            // Number the original name instead, truncating at Unicode scalar
+            // boundaries without splitting a UTF-16 surrogate pair.
+            numbered_copy = numbered_copy
+                .checked_add(1)
+                .ok_or_else(|| io::Error::other("world copy numbering exhausted"))?;
+            let suffix = format!(" ({numbered_copy})");
+            let budget = MAX_NAME_UTF16_UNITS
+                .saturating_sub(prefix_units + suffix.encode_utf16().count());
+            let mut original_prefix = String::new();
+            let mut used_units = 0;
+            for character in requested.chars() {
+                if used_units + character.len_utf16() > budget {
+                    break;
+                }
+                original_prefix.push(character);
+                used_units += character.len_utf16();
+            }
+            candidate = format!("{COPY_PREFIX}{original_prefix}{suffix}");
+        }
         validate_world_name(&candidate)?;
     }
     Ok(candidate)
@@ -82,6 +107,20 @@ mod tests {
             unique_name("Forest", &occupied).unwrap(),
             "Copy of Copy of Forest"
         );
+    }
+
+    #[test]
+    fn duplicate_at_utf16_limit_uses_distinct_numbered_names() {
+        let requested = "🌲".repeat(100);
+        let mut occupied = HashSet::from([requested.to_lowercase()]);
+        let first = unique_name(&requested, &occupied).unwrap();
+        assert!(first.ends_with(" (1)"));
+        assert!(validate_world_name(&first).is_ok());
+        occupied.insert(first.to_lowercase());
+        let second = unique_name(&requested, &occupied).unwrap();
+        assert!(second.ends_with(" (2)"));
+        assert!(validate_world_name(&second).is_ok());
+        assert_ne!(first, second);
     }
 
     #[test]
