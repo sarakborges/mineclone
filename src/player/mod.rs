@@ -45,7 +45,6 @@ pub(crate) fn spawn_player_entity(
     commands
         .spawn((
             PlayerEntity,
-            EntityHealth::new(definition.health),
             Camera3d::default(),
             Camera {
                 order: WORLD_CAMERA_ORDER,
@@ -65,7 +64,7 @@ pub(crate) fn spawn_player_entity(
             SwimmingState::default(),
             DespawnOnExit(GameState::Gameplay),
         ))
-        .insert(Name::new("Player"));
+        .insert((Name::new("Player"), EntityHealth::new(definition.health)));
 }
 
 pub(crate) fn player_position_is_clear(world: &VoxelWorld, translation: Vec3) -> bool {
