@@ -1,6 +1,6 @@
 {
   "id": "asteria:lamp",
-  "name": { "english": "Lamp" },
+  "name": { "english": "Lamp", "portuguese_brazil": "Lâmpada", "spanish": "Lámpara" },
   "category": "light_sources",
   "secondaryProperties": ["dyed"],
   "textures": {

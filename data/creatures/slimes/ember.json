@@ -1,7 +1,9 @@
 {
   "id": "asteria:ember_slime",
   "name": {
-    "english": "Ember Slime"
+    "english": "Ember Slime",
+    "portuguese_brazil": "Gosma de brasas",
+    "spanish": "Limo de brasas"
   },
   "model": "models/creatures/slime/slime.glb",
   "collider": {

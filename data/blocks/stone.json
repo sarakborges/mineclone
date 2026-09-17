@@ -1,6 +1,6 @@
 {
   "id": "asteria:stone",
-  "name": { "english": "Stone" },
+  "name": { "english": "Stone", "portuguese_brazil": "Pedra", "spanish": "Piedra" },
   "category": "stone_blocks",
   "textures": {
     "top": "textures/blocks/stone.png",

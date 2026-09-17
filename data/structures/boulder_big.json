@@ -1,6 +1,6 @@
 {
   "id": "asteria:boulder_big",
-  "name": { "english": "Big Boulder" },
+  "name": { "english": "Big Boulder", "portuguese_brazil": "Pedregulho grande", "spanish": "Roca grande" },
   "anchor": { "x": 3, "y": 0, "z": 3 },
   "palette": { "S": { "block": "asteria:stone" } },
   "layers": [

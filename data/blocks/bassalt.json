@@ -1,6 +1,6 @@
 {
   "id": "asteria:bassalt",
-  "name": { "english": "Bassalt" },
+  "name": { "english": "Bassalt", "portuguese_brazil": "Basalto", "spanish": "Basalto" },
   "category": "stone_blocks",
   "textures": {
     "top": "textures/blocks/bassalt.png",

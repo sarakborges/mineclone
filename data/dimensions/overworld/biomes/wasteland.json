@@ -1,6 +1,6 @@
 {
   "id": "asteria:overworld/wasteland",
-  "name": { "english": "Wasteland" },
+  "name": { "english": "Wasteland", "portuguese_brazil": "Terras Devastadas", "spanish": "Tierras Baldías" },
   "terrain": {
     "type": "rolling",
     "baseHeight": 4.0,

@@ -1,6 +1,6 @@
 {
   "id": "asteria:oak_log",
-  "name": { "english": "Oak Log" },
+  "name": { "english": "Oak Log", "portuguese_brazil": "Tronco de carvalho", "spanish": "Tronco de roble" },
   "category": "wooden_blocks",
   "textures": {
     "top": "textures/blocks/trees/oak/top.png",

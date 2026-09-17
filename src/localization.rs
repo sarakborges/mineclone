@@ -43,16 +43,29 @@ impl LocalizedText {
     pub(crate) fn text(&self, language: Language) -> &str {
         self.0
             .get(&language)
-            .or_else(|| self.0.get(&Language::English))
             .map(String::as_str)
-            .unwrap_or_else(|| panic!("localized text is missing english fallback"))
+            .unwrap_or_else(|| panic!("localized text is missing {} translation", language.key()))
     }
 
     pub(crate) fn validate(&self, context: &str) {
-        assert!(
-            !self.text(Language::English).trim().is_empty(),
-            "{context} english localization cannot be empty"
-        );
+        let english = self.0.get(&Language::English).unwrap_or_else(|| {
+            panic!("{context} is missing english localization")
+        });
+        for language in Language::ALL {
+            let translated = self.0.get(&language).unwrap_or_else(|| {
+                panic!("{context} is missing {} localization", language.key())
+            });
+            assert!(
+                !translated.trim().is_empty(),
+                "{context} {} localization cannot be empty",
+                language.key()
+            );
+            assert_eq!(
+                placeholders(translated), placeholders(english),
+                "{context} {} localization has mismatched placeholders",
+                language.key()
+            );
+        }
     }
 }
 

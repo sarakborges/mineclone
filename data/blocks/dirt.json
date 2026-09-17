@@ -1,6 +1,6 @@
 {
   "id": "asteria:dirt",
-  "name": { "english": "Dirt" },
+  "name": { "english": "Dirt", "portuguese_brazil": "Terra", "spanish": "Tierra" },
   "category": "natural_blocks",
   "textures": {
     "top": "textures/blocks/dirt.png",

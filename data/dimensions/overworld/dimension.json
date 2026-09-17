@@ -1,6 +1,6 @@
 {
   "id": "asteria:overworld",
-  "name": { "english": "The Overworld" },
+  "name": { "english": "The Overworld", "portuguese_brazil": "Mundo da Superfície", "spanish": "Mundo de la Superficie" },
   "biomes": [
     {
       "id": "asteria:overworld/plains",

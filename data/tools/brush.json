@@ -1,6 +1,6 @@
 {
   "id": "asteria:brush",
-  "name": { "english": "Brush" },
+  "name": { "english": "Brush", "portuguese_brazil": "Pincel", "spanish": "Pincel" },
   "category": "tools",
   "icon": "textures/tools/brush.png",
   "tintIcon": "textures/tools/brush-tint.png"

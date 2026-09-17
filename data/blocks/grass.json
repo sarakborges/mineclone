@@ -1,6 +1,6 @@
 {
   "id": "asteria:grass",
-  "name": { "english": "Grass" },
+  "name": { "english": "Grass", "portuguese_brazil": "Grama", "spanish": "Césped" },
   "category": "natural_blocks",
   "tint": "grass",
   "textures": {
