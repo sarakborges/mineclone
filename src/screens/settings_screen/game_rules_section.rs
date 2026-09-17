@@ -6,8 +6,8 @@ use crate::{
     ui::{
         button::compact_control_button,
         numeric_input::{
-            NumericInputEvent, NumericInputSizing, NumericInputState, numeric_input_field,
-            sync_numeric_input_view,
+            NumericInputEvent, NumericInputFrame, NumericInputSizing, NumericInputState,
+            numeric_input_field, sync_numeric_input_view,
         },
         typography,
     },
@@ -214,7 +214,7 @@ pub(super) fn sync_ticks_per_second_text(
     settings: TicksPerSecondSettings,
     input_state: Res<TicksPerSecondInputState>,
     mut labels: Query<&mut EditableText, With<TicksPerSecondValueText>>,
-    mut inputs: Query<&mut BorderColor, With<TicksPerSecondInput>>,
+    mut inputs: Query<&mut BorderColor, With<NumericInputFrame<TicksPerSecondInput>>>,
 ) {
     if !settings.inputs_changed() && !input_state.is_changed() {
         return;
