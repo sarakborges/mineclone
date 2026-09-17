@@ -6,8 +6,8 @@ use crate::{
     ui::{
         button::{compact_control_button, menu_button},
         numeric_input::{
-            NumericInputEvent, NumericInputSizing, NumericInputState, numeric_input_field,
-            sync_numeric_input_view,
+            NumericInputEvent, NumericInputFrame, NumericInputSizing, NumericInputState,
+            numeric_input_field, sync_numeric_input_view,
         },
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
@@ -171,8 +171,8 @@ pub(super) fn spawn_new_world_footer(
     ));
     footer.spawn(menu_button(
         localization
-            .text(language, "newWorld.createWorld")
-            .to_owned(),
+        .text(language, "newWorld.createWorld")
+        .to_owned(),
         NewWorldFooterAction::CreateWorld,
     ));
 }
@@ -283,7 +283,6 @@ pub(super) fn handle_new_world_footer(
     let action = interactions.iter().find_map(|(interaction, action)| {
         (*interaction == Interaction::Pressed).then_some(*action)
     });
-
     if matches!(action, Some(NewWorldFooterAction::Return))
         || (keys.just_pressed(KeyCode::Escape) && !draft.input_editing())
     {
@@ -309,7 +308,7 @@ pub(super) fn sync_seed_text(
     config: Res<NewWorldConfig>,
     input: Res<SeedInputState>,
     mut labels: Query<&mut EditableText, With<SeedValueText>>,
-    mut inputs: Query<&mut BorderColor, With<SeedInput>>,
+    mut inputs: Query<&mut BorderColor, With<NumericInputFrame<SeedInput>>>,
 ) {
     if !config.is_changed() && !input.is_changed() {
         return;
