@@ -66,7 +66,6 @@ fn sync_chisel_hud(
     }
 
     let precision_key = match *resolution {
-        ChiselResolution::Full => "chisel.precision.full",
         ChiselResolution::Thick => "chisel.precision.thick",
         ChiselResolution::Thin => "chisel.precision.thin",
         ChiselResolution::ExtraThin => "chisel.precision.extraThin",
