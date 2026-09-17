@@ -121,6 +121,10 @@ where
     meshes
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "clipped fluid emission needs face bounds, mask, tint, and lighting"
+)]
 fn emit_fluid_openings(
     buffer: &mut VoxelMeshBuffer,
     face: BlockFace,
@@ -165,6 +169,10 @@ fn emit_fluid_openings(
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a clipped fluid microface needs its face, origin, heights, and UV bounds"
+)]
 fn fluid_micro_face_vertices(
     face: BlockFace,
     x0: f32,
