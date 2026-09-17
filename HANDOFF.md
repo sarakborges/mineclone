@@ -229,3 +229,12 @@ Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigi
 
 - d370e3e46cbb75c2bc814f599b8c8a0ac98974ff corrige a decisão de emissão das microfaces laterais inclinadas: o recorte agora considera a maior altura entre os dois cantos da célula, em vez de depender apenas da altura no ponto médio. Isso evita sumir com uma microface válida em bordas inclinadas da superfície.
 - A sequência de correções desta rodada permanece sem `cargo test`, `cargo run` ou QA Windows, conforme restrição do projeto.
+
+
+## Checkpoint 77 — bloco + fluido no mesmo voxel [CÓDIGO; CI NÃO EXECUTADA]
+
+- 0d32627fd18fdb5e8cda7a1c8761fe7e909e70d5 remove a rejeição do formato de save que impedia bloco e fluido no mesmo índice. O runtime já mantém canais independentes de bloco e fluido no `VoxelChunk`, então o save/load agora preserva os dois.
+- bb9b49e301c44f64533a4e22806e2abbdffb80a6 faz a malha de fluido considerar simultaneamente a máscara Chisel do próprio voxel e a máscara do vizinho. Assim, quando bloco e fluido coexistem, o fluido só ocupa/renderiza microcélulas abertas; um bloco vizinho também fecha os microvãos correspondentes.
+- 530f11a278f8c9ec25267948cfdefc2e2831cde7 adiciona regressão de runtime para bloco e fluido compartilharem o mesmo voxel sem perder nenhum canal.
+- e61def3c22e94fea9304ff02c9dc5b71937220db atualiza VERSION para 0.22.8.
+- Não executei `cargo test`, `cargo run` ou QA Windows.
