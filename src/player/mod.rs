@@ -15,6 +15,8 @@ use bevy::{
 
 use crate::{
     app::game_state::GameState,
+    content::player::PlayerDefinition,
+    entity::EntityHealth,
     rendering::camera_stack::WORLD_CAMERA_ORDER,
     voxel::{spatial_search::find_map_square_rings, world::VoxelWorld},
 };
@@ -38,10 +40,12 @@ pub(crate) fn spawn_player_entity(
     commands: &mut Commands,
     translation: Vec3,
     game_mode: GameMode,
+    definition: &PlayerDefinition,
 ) {
     commands
         .spawn((
             PlayerEntity,
+            EntityHealth::new(definition.health),
             Camera3d::default(),
             Camera {
                 order: WORLD_CAMERA_ORDER,
