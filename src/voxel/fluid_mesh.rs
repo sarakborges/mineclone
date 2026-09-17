@@ -79,10 +79,15 @@ where
                     }
 
                     let lighting = face_lighting(world, world_voxel, face, source_block_srgb);
-                    if let Some(block) = world
+                    let source_mask = chunk
+                        .cell_at(x as i32, y as i32, z as i32)
+                        .filter(|block| MicroblockMask::is_modified(*block))
+                        .map(MicroblockMask::from_cell);
+                    let neighbor_mask = world
                         .cell_at(world_voxel + face.offset())
                         .filter(|block| MicroblockMask::is_modified(*block))
-                    {
+                        .map(MicroblockMask::from_cell);
+                    if source_mask.is_some() || neighbor_mask.is_some() {
                         emit_fluid_openings(
                             fluid,
                             face,
@@ -90,7 +95,8 @@ where
                             y as f32,
                             z as f32,
                             heights,
-                            MicroblockMask::from_cell(block),
+                            source_mask,
+                            neighbor_mask,
                             tint,
                             lighting,
                         );
@@ -132,7 +138,8 @@ fn emit_fluid_openings(
     y0: f32,
     z0: f32,
     heights: FluidFaceHeights,
-    mask: MicroblockMask,
+    source_mask: Option<MicroblockMask>,
+    neighbor_mask: Option<MicroblockMask>,
     tint: [f32; 3],
     lighting: crate::voxel::mesh_lighting::FaceLighting,
 ) {
@@ -147,7 +154,9 @@ fn emit_fluid_openings(
                 BlockFace::Front => [u, v, 0],
                 BlockFace::Back => [u, v, EDGE - 1],
             };
-            if mask.contains(boundary_position) {
+            if source_mask.is_some_and(|mask| mask.contains(boundary_position))
+                || neighbor_mask.is_some_and(|mask| mask.contains(boundary_position))
+            {
                 continue;
             }
 
