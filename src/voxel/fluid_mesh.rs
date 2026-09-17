@@ -239,8 +239,8 @@ fn partial_block_face_has_opening(cell: crate::voxel::cell::VoxelCell, face: Blo
                 BlockFace::Left => [7, a, b],
                 BlockFace::Top => [a, b, 0],
                 BlockFace::Bottom => [a, b, 7],
-                BlockFace::Front => [a, b, 0],
-                BlockFace::Back => [a, b, 7],
+                BlockFace::Front => [a, b, 7],
+                BlockFace::Back => [a, b, 0],
             };
             if !mask.contains(position) {
                 return true;
