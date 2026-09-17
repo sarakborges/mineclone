@@ -29,6 +29,9 @@ pub(crate) const PLAYER_HEIGHT: f32 = 1.8;
 pub(crate) const PLAYER_EYE_HEIGHT: f32 = 1.62;
 pub(crate) const PLAYER_HALF_WIDTH: f32 = 0.3;
 
+#[derive(Component, Default)]
+pub(crate) struct PlayerEntity;
+
 const SPAWN_SEARCH_RADIUS_BLOCKS: i32 = 64;
 
 pub(crate) fn spawn_player_entity(
@@ -37,6 +40,8 @@ pub(crate) fn spawn_player_entity(
     game_mode: GameMode,
 ) {
     commands.spawn((
+        Name::new("Player"),
+        PlayerEntity,
         Camera3d::default(),
         Camera {
             order: WORLD_CAMERA_ORDER,
