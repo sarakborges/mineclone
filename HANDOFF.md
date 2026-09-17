@@ -276,3 +276,9 @@ Próximo passo imediato: consultar a CI do novo HEAD e corrigir qualquer erro ob
 - Added data-driven `data/entities/player.json` and `content::player::PlayerDefinition`; player spawn initializes the shared `EntityHealth`.
 - Slime JSON already declares `hurt` and `death` animation states; the current asset can omit those clips until they are authored, and the animation resolver simply skips missing clips.
 - CI runs 3195/3194 failed on the pre-refactor private `EntityHealth` import and the Bevy 16-component player tuple; both were corrected. Latest CI runs 3197/3199 are currently in progress; no local `cargo test`/`cargo run` was executed.
+
+
+## Checkpoint — 2026-09-17: hurt animation replaces red flash
+- Removed the generic red damage flash entirely; damage feedback is now animation-driven (`hurt`), as requested.
+- The shared `EntityHealth` remains for data-driven health/death state, without visual flash state.
+- Slime already declares `hurt` and `death` animation clips in `data/creatures/slime.json`; next asset work is to author those clips in `models/creatures/slime/slime.glb`.
