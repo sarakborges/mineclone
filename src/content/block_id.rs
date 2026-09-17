@@ -18,7 +18,7 @@ pub(crate) fn intern_block_id(id: &str) -> &'static str {
     }
 
     let interned = Box::leak(id.to_owned().into_boxed_str());
-    ids.insert(id.to_owned(), interned);
+    ids.insert(interned);
     interned
 }
 
