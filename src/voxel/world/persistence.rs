@@ -6,6 +6,13 @@ use crate::voxel::{chunk_archive::ArchivedChunk, chunk_disk::DiskChunk};
 use super::VoxelWorld;
 
 impl VoxelWorld {
+    /// Monotonic content revision. Includes edits to blocks and fluids even if
+    /// their chunks are subsequently archived; derived lighting is excluded.
+    /// World generation and chunk restoration also advance it, conservatively.
+    pub(crate) fn save_content_revision(&self) -> u64 {
+        self.next_chunk_content_revision
+    }
+
     /// Captures only modified chunks, including ones unloaded from RAM-facing
     /// resident storage. Generated but unmodified terrain is seed-derived.
     pub(crate) fn save_modified_chunks(&self, fluids: &FluidRegistry) -> io::Result<Vec<DiskChunk>> {
