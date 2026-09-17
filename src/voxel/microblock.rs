@@ -1,10 +1,9 @@
-//! Session-only Chisel geometry. The original macro cell is the sole source
-//! of material, texture rotation, orientation and visual properties.
+//! Persisted Chisel geometry. The original macro cell supplies the material,
+//! texture rotation, orientation and visual properties; its occupancy mask
+//! preserves the carved shape across saves and archived chunks.
 //!
-//! Modified cells carry one private occupancy mask. A leading `t` additionally
-//! identifies a parent created in empty space by the Chisel; such a parent is
-//! omitted from disk snapshots so a tiny temporary piece never reloads as a
-//! whole block. In-memory chunk archives retain both the mask and this marker.
+//! A leading `t` is retained for compatibility with legacy session-created
+//! parent blocks. New Chisel placement never creates parents in empty space.
 
 use bevy::prelude::*;
 
@@ -63,6 +62,23 @@ impl MicroblockMask {
     pub(crate) fn is_transient_parent(cell: VoxelCell) -> bool {
         cell.secondary_property(CHISEL_MASK_PROPERTY)
             .is_some_and(|encoded| encoded.starts_with(TRANSIENT_PREFIX))
+    }
+
+    /// A new piece must restore a previously carved portion of this very
+    /// macroblock. Legacy parents placed in air are not valid restore targets.
+    pub(crate) fn can_restore(cell: VoxelCell) -> bool {
+        Self::is_modified(cell)
+            && !Self::is_transient_parent(cell)
+            && Self::from_cell(cell) != Self::FULL
+    }
+
+    /// Reject corrupted disk masks before interning properties or exposing a
+    /// partially loaded world. Existing saves without a mask remain valid.
+    pub(crate) fn valid_saved(encoded: &str) -> bool {
+        let encoded = encoded.strip_prefix(TRANSIENT_PREFIX).unwrap_or(encoded);
+        encoded.len() == ENCODED_LENGTH
+            && encoded.bytes().all(|byte| byte.is_ascii_hexdigit())
+            && Self::decode(encoded).is_some()
     }
 
     pub(crate) fn from_cell(cell: VoxelCell) -> Self {
