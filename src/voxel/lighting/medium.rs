@@ -80,10 +80,12 @@ fn block_dampening(cell: Option<VoxelCell>, blocks: &BlockRegistry) -> u8 {
         return 0;
     };
 
-    blocks
+    let full_dampening = blocks
         .get(cell.block_id)
         .map(|block| block.light_dampening.min(VoxelLight::MAX_LEVEL))
-        .unwrap_or(VoxelLight::MAX_LEVEL)
+        .unwrap_or(VoxelLight::MAX_LEVEL);
+
+    crate::voxel::microblock::MicroblockMask::from_cell(cell).light_dampening(full_dampening)
 }
 
 fn fluid_dampening(cell: Option<FluidCell>, fluids: &FluidRegistry) -> u8 {
