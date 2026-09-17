@@ -2,25 +2,21 @@ mod portrait;
 
 use bevy::{
     camera::{RenderTarget, visibility::RenderLayers},
-    ecs::system::SystemParam,
     prelude::*,
     render::render_resource::TextureFormat,
 };
 
 use crate::{
     app::game_state::GameState,
-    content::creature::CreatureRegistry,
-    creatures::CreatureInstance,
-    localization::ActiveLanguage,
-    targeting::block::{BlockTargetingSet, TargetedCreature},
-    ui::{surface, typography},
+    ui::surface,
 };
 
-use super::{HudSettings, TargetBlockPosition};
+use super::{
+    HudSettings, TargetBlockPosition,
+    entity_card::{EntityCard, EntityCardSource, spawn_entity_card, sync_entity_cards},
+};
 use portrait::PortraitCamera;
 
-const TARGET_SLOT_SIZE: f32 = 44.0;
-const TARGET_ICON_SIZE: f32 = 34.0;
 const TARGET_CROSSHAIR_OFFSET: f32 = 62.0;
 const TARGET_CORNER_MARGIN: f32 = 18.0;
 const PORTRAIT_RENDER_LAYER: usize = 2;
@@ -31,37 +27,20 @@ struct EntityHudRoot;
 #[derive(Component)]
 struct EntityHudRow;
 
-#[derive(Component)]
-struct EntityHudText;
-
-type EntityHudRootView<'w, 's> = Single<
-    'w,
-    's,
-    (&'static mut Node, &'static mut Visibility),
-    (With<EntityHudRoot>, Without<EntityHudRow>),
->;
-
-type EntityHudRowView<'w, 's> = Single<
-    'w,
-    's,
-    &'static mut Node,
-    (With<EntityHudRow>, Without<EntityHudRoot>),
->;
-
 pub(super) struct EntityHudPlugin;
 
 impl Plugin for EntityHudPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::Gameplay), spawn_entity_hud)
+        app.add_systems(OnEnter(GameState::Gameplay), spawn_target_entity_hud)
             .add_systems(
                 Update,
                 (
-                    update_entity_hud,
+                    sync_target_entity_layout,
                     portrait::sync_portrait,
                     portrait::prepare_portrait,
                 )
                     .chain()
-                    .after(BlockTargetingSet::Raycast)
+                    .after(sync_entity_cards)
                     .run_if(in_state(GameState::Gameplay)),
             );
     }
@@ -96,13 +75,11 @@ fn entity_row_node(position: TargetBlockPosition) -> Node {
         } else {
             Val::Auto
         },
-        align_items: AlignItems::Center,
-        column_gap: px(10),
         ..default()
     }
 }
 
-fn spawn_entity_hud(
+fn spawn_target_entity_hud(
     mut commands: Commands,
     settings: Res<HudSettings>,
     mut images: ResMut<Assets<Image>>,
@@ -139,7 +116,6 @@ fn spawn_entity_hud(
     ));
 
     let position = settings.target_block_position();
-    let (background, border) = surface::hud_control_static(false);
     commands
         .spawn((
             EntityHudRoot,
@@ -152,79 +128,34 @@ fn spawn_entity_hud(
         .with_children(|root| {
             root.spawn((EntityHudRow, entity_row_node(position), Pickable::IGNORE))
                 .with_children(|row| {
-                    row.spawn((
-                        Node {
-                            width: px(TARGET_SLOT_SIZE),
-                            height: px(TARGET_SLOT_SIZE),
-                            min_width: px(TARGET_SLOT_SIZE),
-                            min_height: px(TARGET_SLOT_SIZE),
-                            border: UiRect::all(px(2)),
-                            border_radius: BorderRadius::all(px(4)),
-                            align_items: AlignItems::Center,
-                            justify_content: JustifyContent::Center,
-                            ..default()
-                        },
-                        BackgroundColor(background),
-                        BorderColor::all(border),
-                        Pickable::IGNORE,
-                    ))
-                    .with_children(|slot| {
-                        slot.spawn((
-                            ImageNode::new(image),
-                            Node {
-                                width: px(TARGET_ICON_SIZE),
-                                height: px(TARGET_ICON_SIZE),
-                                ..default()
-                            },
-                            Pickable::IGNORE,
-                        ));
-                    });
-                    row.spawn((
-                        EntityHudText,
-                        typography::hud(""),
-                        typography::tooltip_shadow(),
-                        Pickable::IGNORE,
-                    ));
+                    spawn_entity_card(row, EntityCardSource::Target, Some(image));
                 });
         });
 }
 
-#[derive(SystemParam)]
-struct EntityHudContext<'w, 's> {
-    targeted: Res<'w, TargetedCreature>,
-    settings: Res<'w, HudSettings>,
-    creatures: Query<'w, 's, &'static CreatureInstance>,
-    definitions: Res<'w, CreatureRegistry>,
-    language: Res<'w, ActiveLanguage>,
-}
-
-fn update_entity_hud(
-    context: EntityHudContext,
-    mut root: EntityHudRootView,
-    mut row: EntityHudRowView,
-    mut text: Single<&mut Text, With<EntityHudText>>,
+fn sync_target_entity_layout(
+    settings: Res<HudSettings>,
+    mut root: Single<
+        (&mut Node, &mut Visibility),
+        (With<EntityHudRoot>, Without<EntityHudRow>),
+    >,
+    mut row: Single<&mut Node, (With<EntityHudRow>, Without<EntityHudRoot>)>,
+    cards: Query<&EntityCard>,
 ) {
-    let position = context.settings.target_block_position();
-    let visible_target = if position != TargetBlockPosition::Hidden {
-        context.targeted.0.and_then(|entity| context.creatures.get(entity).ok())
-    } else {
-        None
-    };
-    let (root_node, visibility) = &mut *root;
-    let desired = if visible_target.is_some() { Visibility::Visible } else { Visibility::Hidden };
-    if **visibility != desired {
-        **visibility = desired;
-    }
-    if context.settings.is_changed() {
-        **root_node = entity_hud_node(position);
+    let position = settings.target_block_position();
+    if settings.is_changed() {
+        *root.0 = entity_hud_node(position);
         **row = entity_row_node(position);
     }
-    let Some(creature) = visible_target else {
-        return;
+    let target_present = cards
+        .iter()
+        .any(|card| card.source == EntityCardSource::Target && card.entity.is_some());
+    let desired = if position != TargetBlockPosition::Hidden && target_present {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
     };
-    let name = context.definitions.get(&creature.definition_id)
-        .map_or(creature.definition_id.as_str(), |definition| definition.name.text(context.language.get()));
-    if text.0 != name {
-        text.0 = name.to_owned();
+    if *root.1 != desired {
+        *root.1 = desired;
     }
 }
