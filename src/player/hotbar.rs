@@ -1,7 +1,13 @@
+use std::io;
+
 use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
+    content::{
+        block::BlockRegistry, block_id::intern_block_id, tool::ToolRegistry,
+        tool_id::intern_tool_id,
+    },
     gameplay::availability::world_interaction_available,
 };
 
@@ -66,6 +72,44 @@ impl PlayerHotbar {
             )
         });
         std::mem::replace(slot, item)
+    }
+
+    pub(crate) fn saved_items(&self) -> Vec<Option<String>> {
+        self.backpack
+            .iter()
+            .chain(self.slots.iter())
+            .map(|item| item.map(str::to_owned))
+            .collect()
+    }
+
+    pub(crate) fn restore_items(
+        &mut self,
+        items: &[Option<String>],
+        blocks: &BlockRegistry,
+        tools: &ToolRegistry,
+    ) -> io::Result<()> {
+        if items.len() != INVENTORY_SLOT_COUNT {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid inventory length"));
+        }
+        let mut restored = Vec::with_capacity(INVENTORY_SLOT_COUNT);
+        for item in items {
+            let item = match item {
+                None => None,
+                Some(id) if blocks.get(id).is_some() => Some(intern_block_id(id)),
+                Some(id) if tools.get(id).is_some() => Some(intern_tool_id(id)),
+                Some(id) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("unknown inventory item ID: {id}"),
+                    ));
+                }
+            };
+            restored.push(item);
+        }
+        self.backpack.copy_from_slice(&restored[..BACKPACK_SLOT_COUNT]);
+        self.slots.copy_from_slice(&restored[BACKPACK_SLOT_COUNT..]);
+        self.selected_slot = 0;
+        Ok(())
     }
 
     fn select(&mut self, slot: usize) {
