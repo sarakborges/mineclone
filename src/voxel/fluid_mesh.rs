@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use crate::content::fluid::FluidId;
+use crate::{content::fluid::FluidId, voxel::cell::VoxelCell};
 
 use super::{
     block_face::BlockFace,
