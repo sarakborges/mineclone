@@ -31,3 +31,9 @@ impl EntityHealth {
 
     pub(crate) fn is_hurt(self) -> bool { self.hurt_timer > 0.0 }
 }
+
+
+#[derive(Component, Clone)]
+pub(crate) struct DamageFlashMaterial {
+    pub(crate) original: Handle<StandardMaterial>,
+}
