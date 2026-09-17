@@ -11,7 +11,7 @@ use crate::{
         dimension::DimensionRegistry,
     },
     localization::{ActiveLanguage, UiLocalization},
-    ui::{scrollbar::vertical_scrollbar, surface, text_input::editable_value, typography},
+    ui::{scrollbar::vertical_scrollbar, surface, text_input::{self, editable_value}, typography},
     world::{NewWorldConfig, dimension::DEFAULT_DIMENSION_ID},
 };
 
@@ -286,11 +286,7 @@ pub(in crate::screens::settings_screen) fn sync_spawn_biome_dropdown_state(
             panel.display = next_display;
         }
     }
-    let next_border = BorderColor::all(if focused {
-        surface::HUD_SELECTED_BORDER_COLOR
-    } else {
-        surface::HUD_BORDER_COLOR
-    });
+    let next_border = BorderColor::all(text_input::input_border(focused));
     for mut border in &mut search_borders {
         if *border != next_border {
             *border = next_border;
