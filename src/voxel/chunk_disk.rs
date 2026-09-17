@@ -15,7 +15,7 @@ use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk},
     fluid::{FluidCell, MAX_FLUID_LEVEL},
-    microblock::MicroblockMask,
+    microblock::{CHISEL_MASK_PROPERTY, MicroblockMask},
     secondary_properties::SecondaryProperties,
     texture_rotation::TextureRotation,
 };
@@ -61,10 +61,10 @@ impl DiskChunk {
             let (block, fluid, _) = chunk
                 .sample_local(x as i32, y as i32, z as i32)
                 .expect("disk chunk coordinates must be in range");
-            // Session-only Chisel geometry: preserve an original macroblock
-            // without its private mask, but never save a parent created in air
-            // as an entire block after a restart.
-            if let Some(cell) = block.filter(|cell| !MicroblockMask::is_transient_parent(*cell)) {
+            // A carved macroblock retains its exact 8^3 occupancy mask in the
+            // existing properties field. Do not drop a sculpted block or
+            // strip its shape: both would lose player edits on restart.
+            if let Some(cell) = block {
                 let mut properties = cell
                     .secondary_properties()
                     .iter()
@@ -105,7 +105,8 @@ impl DiskChunk {
     }
 
     /// Validate the *entire* chunk before mutating the world; malformed files
-    /// are errors, not panics in runtime cell constructors.
+    /// are errors, not panics in runtime cell constructors. An invalid Chisel
+    /// mask rejects this save generation rather than restoring a full cube.
     pub(crate) fn into_chunk(
         self,
         blocks: &BlockRegistry,
@@ -124,11 +125,12 @@ impl DiskChunk {
             if entry.rotation > 3 || entry.orientation > 2 || entry.properties.len() > MAX_PROPERTIES {
                 return Err(invalid_data("invalid block rotation, orientation or property count"));
             }
-            if blocks.get(&entry.id).is_none() {
-                return Err(invalid_data(format!("missing block definition: {}", entry.id)));
-            }
-            // At most eight properties: validate in-place rather than allocate a
-            // HashSet per saved block. Reject duplicates before interning.
+            let definition = blocks.get(&entry.id).ok_or_else(|| {
+                invalid_data(format!("missing block definition: {}", entry.id))
+            })?;
+            // At most eight properties: validate in-place rather than allocate
+            // a HashSet per saved block. Reject duplicates and damaged masks
+            // before interning any properties or exposing the restored world.
             for (property_index, (key, value)) in entry.properties.iter().enumerate() {
                 if key.is_empty()
                     || value.is_empty()
@@ -137,6 +139,11 @@ impl DiskChunk {
                         .any(|(previous_key, _)| previous_key == key)
                 {
                     return Err(invalid_data("empty or duplicate secondary property"));
+                }
+                if key == CHISEL_MASK_PROPERTY
+                    && (!definition.can_fragment() || !MicroblockMask::valid_saved(value))
+                {
+                    return Err(invalid_data("invalid Chisel mask or ineligible block"));
                 }
             }
             let mut properties = SecondaryProperties::default();
