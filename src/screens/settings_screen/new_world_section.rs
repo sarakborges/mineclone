@@ -9,11 +9,13 @@ use crate::{
             NumericInputEvent, NumericInputFrame, NumericInputSizing, NumericInputState,
             numeric_input_field, sync_numeric_input_view,
         },
+        text_input::editable_value,
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
     },
     world::{
         NewWorldConfig, WorldLoadMode, WorldSeed, biome::CurrentBiome, dimension::CurrentDimension,
+        world_names::available_world_name,
     },
 };
 
@@ -21,6 +23,7 @@ use super::{
     game_rules_section::TicksPerSecondInputState,
     navigation::{SettingsSection, SettingsSectionSelection},
     spawn_biome_section::{SpawnBiomeDropdownState, spawn_biome_setting},
+    world_name_section::{WorldNameFeedback, WorldNameInput, world_name_setting},
     world_settings_section::{GameModeButton, world_settings_section},
 };
 
@@ -87,12 +90,14 @@ pub(super) fn reset_new_world_settings(
     mut seed_input: ResMut<SeedInputState>,
     mut ticks_input: ResMut<TicksPerSecondInputState>,
     mut spawn_biome_dropdown: ResMut<SpawnBiomeDropdownState>,
+    mut name_feedback: ResMut<WorldNameFeedback>,
 ) {
     config.reset();
     selection.selected = SettingsSection::General;
     seed_input.reset();
     ticks_input.reset();
     spawn_biome_dropdown.reset();
+    name_feedback.set(String::new());
 }
 
 pub(super) fn new_world_general_section(
@@ -109,6 +114,7 @@ pub(super) fn new_world_general_section(
             ..default()
         },
         children![
+            world_name_setting(config, localization, language),
             seed_setting(config.seed().0, localization, language),
             spawn_biome_setting(localization, language),
             world_settings_section(config.game_mode(), localization, language),
@@ -274,6 +280,9 @@ pub(super) fn handle_new_world_footer(
     keys: Res<ButtonInput<KeyCode>>,
     interactions: Query<(&Interaction, &NewWorldFooterAction), Changed<Interaction>>,
     mut draft: NewWorldDraft,
+    name_input: Query<(Entity, &EditableText), With<WorldNameInput>>,
+    mut focus: ResMut<InputFocus>,
+    mut name_feedback: ResMut<WorldNameFeedback>,
     mut transition: ResMut<ScreenTransition>,
 ) {
     if *game_state.get() != GameState::NewWorld {
@@ -283,6 +292,14 @@ pub(super) fn handle_new_world_footer(
     let action = interactions.iter().find_map(|(interaction, action)| {
         (*interaction == Interaction::Pressed).then_some(*action)
     });
+    let active_name = name_input
+        .single()
+        .ok()
+        .is_some_and(|(entity, _)| focus.get() == Some(entity));
+    if keys.just_pressed(KeyCode::Escape) && active_name {
+        focus.clear();
+        return;
+    }
     if matches!(action, Some(NewWorldFooterAction::Return))
         || (keys.just_pressed(KeyCode::Escape) && !draft.input_editing())
     {
@@ -294,6 +311,19 @@ pub(super) fn handle_new_world_footer(
         return;
     }
 
+    let requested = match name_input.single() {
+        Ok((_, editor)) if !editor.is_composing() => editable_value(editor),
+        _ => return,
+    };
+    let name = match available_world_name(&requested) {
+        Ok(name) => name,
+        Err(error) => {
+            name_feedback.set(error.to_string());
+            return;
+        }
+    };
+    draft.config.set_name(name);
+    name_feedback.set(String::new());
     draft.commit_seed_input();
 
     commands.insert_resource(CurrentDimension::default());
