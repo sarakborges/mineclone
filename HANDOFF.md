@@ -178,3 +178,10 @@ Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigi
 - 1a06f434f4574a3ef175b9d35ac6a8b81e917768 corrige a correção anterior: como face_is_exposed recebe o vizinho em world_voxel + face.offset(), a face Front (+Z) consulta a fronteira Z=0 do vizinho e Back (-Z) consulta Z=7. Os testes direcionais foram ajustados para validar a fronteira próxima correta.
 - A revisão de BlockFace::offset, unit_vertices e emit_neighbor_openings confirmou essa orientação: para uma face positiva do voxel de origem, a fronteira correspondente do vizinho é a camada 0; para uma face negativa, é a camada 7.
 - CI 35282728940 (run 3057) concluiu GREEN após a correção e a cobertura direcional. Não executei cargo test/cargo run.
+
+## Checkpoint 71 — clareza da fronteira Chisel/fluido [CÓDIGO; CI PENDENTE]
+
+- d5274635815ed1ffaca69dc10b740886ae79a615 elimina índices mágicos `7` em `partial_block_face_has_opening`, reutiliza a dimensão `MICROBLOCK_EDGE` e remove qualificação redundante de `VoxelCell`; comportamento e mapeamento direcional permanecem inalterados.
+- A mudança é deliberadamente pequena: mantém o loop explícito de 64 microcélulas, evitando uma otimização bit-level sem API pública adequada.
+- CI 35282728940 (run 3057) confirmou GREEN para o código anterior; a nova mudança aguarda uma execução própria da CI.
+- Não executei cargo test/cargo run.
