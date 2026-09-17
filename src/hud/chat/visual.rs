@@ -222,11 +222,7 @@ pub(super) fn render_autocomplete(
         .min(count.saturating_sub(MAX_SUGGESTIONS));
     commands.entity(panel_entity).with_children(|list| {
         list.spawn((
-            typography::caption(format!(
-                "Suggestions {}/{}  ·  ↑ ↓ select  ·  Tab complete  ·  Esc dismiss",
-                autocomplete.selected + 1,
-                count,
-            )),
+            typography::caption("↑ ↓ select  ·  Tab complete  ·  Esc dismiss"),
             Node { width: percent(100), padding: UiRect::horizontal(px(5)), ..default() },
             Pickable::IGNORE,
         ));
@@ -235,9 +231,11 @@ pub(super) fn render_autocomplete(
             list.spawn((
                 Node {
                     width: percent(100),
-                    min_height: px(24),
-                    padding: UiRect::axes(px(8), px(3)),
+                    min_height: px(42),
+                    padding: UiRect::axes(px(8), px(5)),
                     border_radius: BorderRadius::all(px(3)),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(2),
                     ..default()
                 },
                 BackgroundColor(if selected {
@@ -253,7 +251,8 @@ pub(super) fn render_autocomplete(
                     Pickable::IGNORE,
                 ));
                 row.spawn((
-                    typography::caption(format!("  {}", suggestion.description)),
+                    typography::caption(suggestion.description.clone()),
+                    Node { width: percent(100), padding: UiRect::horizontal(px(17)), ..default() },
                     Pickable::IGNORE,
                 ));
             });
