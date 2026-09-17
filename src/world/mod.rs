@@ -30,6 +30,7 @@ mod noise;
 mod render_diagnostics;
 pub(crate) mod render_distance;
 mod save;
+mod save_catalog;
 mod seed;
 mod setup;
 mod streaming;
