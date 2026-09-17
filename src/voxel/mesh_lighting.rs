@@ -304,14 +304,19 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn partial_microblocks_contribute_open_light_fraction() {
         let full = VoxelCell::new("stone", Default::default());
         let empty = MicroblockMask::EMPTY.apply_to_cell(full, true);
         assert_eq!(sample_open_fraction(None), 1.0);
         assert_eq!(sample_open_fraction(Some(full)), 0.0);
         let mut half_mask = MicroblockMask::EMPTY;
-        half_mask.layers[..4].fill(u64::MAX);
+        for layer in 0..4 {
+            for y in 0..8 {
+                for x in 0..8 {
+                    half_mask.edit([x, y, layer], crate::voxel::microblock::ChiselResolution::ExtraThin, true);
+                }
+            }
+        }
         let half = half_mask.apply_to_cell(full, true);
         assert!((sample_open_fraction(Some(half)) - 0.5).abs() < f32::EPSILON);
         assert_eq!(sample_open_fraction(Some(empty)), 1.0);
