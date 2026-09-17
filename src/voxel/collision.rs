@@ -4,6 +4,8 @@ use super::{microblock::MicroblockMask, world::VoxelWorld};
 
 const COLLISION_EPSILON: f32 = 0.0001;
 const MICRO_EDGE: f32 = 8.0;
+pub const ENTITY_STEP_HEIGHT: f32 = 0.5;
+pub const ENTITY_STEP_INCREMENT: f32 = 0.125;
 
 pub fn collides_aabb(world: &VoxelWorld, min: Vec3, max: Vec3) -> bool {
     let min = min + Vec3::splat(COLLISION_EPSILON);
@@ -47,4 +49,96 @@ pub fn collides_aabb(world: &VoxelWorld, min: Vec3, max: Vec3) -> bool {
     }
 
     false
+}
+
+/// Try to climb a collision that is no taller than the entity step height.
+/// Geometry is evaluated at the world's 1/8-block micro resolution so a
+/// quarter-block or smaller ledge is climbed by exactly the required amount.
+pub fn try_step_up_aabb(
+    world: &VoxelWorld,
+    position: Vec3,
+    horizontal_delta: Vec3,
+    max_step_height: f32,
+    bounds_at: impl Fn(Vec3) -> (Vec3, Vec3),
+) -> Option<Vec3> {
+    if horizontal_delta.x == 0.0 && horizontal_delta.z == 0.0 {
+        return None;
+    }
+
+    let max_step_height = max_step_height.max(0.0);
+    if max_step_height < ENTITY_STEP_INCREMENT {
+        return None;
+    }
+
+    let mut rise = ENTITY_STEP_INCREMENT;
+    while rise <= max_step_height + COLLISION_EPSILON {
+        let elevated = position + Vec3::Y * rise;
+        if aabb_is_clear(world, bounds_at(elevated)) {
+            if let Some(horizontal_position) =
+                move_aabb_horizontally(world, elevated, horizontal_delta, &bounds_at)
+            {
+                if let Some(settled) =
+                    settle_after_step(world, horizontal_position, rise, &bounds_at)
+                {
+                    return Some(settled);
+                }
+            }
+        }
+        rise += ENTITY_STEP_INCREMENT;
+    }
+
+    None
+}
+
+fn aabb_is_clear(world: &VoxelWorld, bounds: (Vec3, Vec3)) -> bool {
+    let min = (bounds.0 + Vec3::splat(COLLISION_EPSILON)).floor().as_ivec3();
+    let max = (bounds.1 - Vec3::splat(COLLISION_EPSILON)).floor().as_ivec3();
+    for y in min.y..=max.y {
+        for z in min.z..=max.z {
+            for x in min.x..=max.x {
+                if !world.is_loaded_at(IVec3::new(x, y, z)) {
+                    return false;
+                }
+            }
+        }
+    }
+    !collides_aabb(world, bounds.0, bounds.1)
+}
+
+fn move_aabb_horizontally(
+    world: &VoxelWorld,
+    position: Vec3,
+    horizontal_delta: Vec3,
+    bounds_at: &impl Fn(Vec3) -> (Vec3, Vec3),
+) -> Option<Vec3> {
+    let steps = (horizontal_delta.length() / 0.05).ceil().max(1.0) as usize;
+    let step = horizontal_delta / steps as f32;
+    let mut current = position;
+    for _ in 0..steps {
+        let next = current + step;
+        if !aabb_is_clear(world, bounds_at(next)) {
+            return None;
+        }
+        current = next;
+    }
+    Some(current)
+}
+
+fn settle_after_step(
+    world: &VoxelWorld,
+    position: Vec3,
+    rise: f32,
+    bounds_at: &impl Fn(Vec3) -> (Vec3, Vec3),
+) -> Option<Vec3> {
+    let steps = (rise / ENTITY_STEP_INCREMENT).ceil().max(1.0) as usize;
+    let step = rise / steps as f32;
+    let mut current = position;
+    for _ in 0..steps {
+        let next = current - Vec3::Y * step;
+        if !aabb_is_clear(world, bounds_at(next)) {
+            return Some(current);
+        }
+        current = next;
+    }
+    None
 }
