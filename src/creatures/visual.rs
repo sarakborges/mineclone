@@ -17,7 +17,7 @@ pub(super) struct CreatureModel(pub Handle<Gltf>);
 pub(super) struct VisualAttached;
 
 #[derive(Component)]
-struct CreatureAppearance {
+pub(super) struct CreatureAppearance {
     owner: Entity,
     material_tints: HashMap<String, Hsi>,
     material_textures: HashMap<String, Handle<Image>>,
