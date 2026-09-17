@@ -149,9 +149,18 @@ pub(super) fn spawn_settings_screen(
     world: SettingsScreenWorldContext,
     content: SettingsScreenContent,
     mut selection: ResMut<SettingsSectionSelection>,
+    roots: Query<(Entity, &SettingsScreenContext)>,
 ) {
     let context = world.screen_context();
-    selection.selected = context.initial_section();
+    // Refresh labels captured during spawning, but preserve the selected tab
+    // and the actual settings held in resources when switching languages.
+    let replacing = roots.iter().any(|(_, existing)| *existing == context);
+    for (entity, _) in &roots {
+        commands.entity(entity).despawn();
+    }
+    if !replacing {
+        selection.selected = context.initial_section();
+    }
 
     let language = content.active_language.get();
     let game_mode = world.game_mode(context);
