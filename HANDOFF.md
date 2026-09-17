@@ -52,3 +52,14 @@ Solicitação do usuário: **“jogador deve ser uma entidade. ajustar comportam
 3. QA real Windows do Chisel conforme [docs/chisel-microblocking.md](docs/chisel-microblocking.md) e [docs/save-roundtrip-qa.md](docs/save-roundtrip-qa.md): esculpir pedra/tronco em Thick/Thin/Extra Thin, forma assimétrica/oco/placa 1/8, arquivar chunk por streaming, salvar, fechar PROCESSO, reabrir e comparar máscara/material/UV/rotação; validar autosave e Leave/Exit. Registrar PASS/FAIL/NOT RUN, logs e medições.
 4. Em cópia descartável com gerações anteriores válidas, corromper `asteria:chisel_mask` no snapshot mais recente, verificar fallback sem cubo inteiro inesperado; validar snapshot legado SEM máscara, prune e arquivos acima do render distance. Manter limite de 512 MiB e retenção de quatro backups.
 5. Investigar macro-iluminação/fluidos/solid e crescimento do interner de máscaras com medições reais. Não executar `cargo test` sem autorização expressa.
+
+
+## Checkpoint 58 — reduzir duplicação dos interners de IDs e propriedades [CÓDIGO; CI PENDENTE]
+
+- 64e905d7b350ddd002721d03cebb7ed30f864e38 e f1b30bf84c42c13948054d6935b6b8ce2b00ccb9 substituem o HashMap<String, &'static str> do interner de block IDs por HashSet<&'static str>. O token canônico vazado passa a ser também a chave, eliminando a segunda String alocada para cada ID único.
+- f4719fa42cb730ad49234fd46f5c102a1c407183 e efd6d412d7623fc0d4954c1c4939d6cb02dd9f8d aplicam a mesma redução ao interner global de secondary-property tokens. Isso é especialmente relevante para asteria:chisel_mask, cujos valores são strings hexadecimais grandes e podem variar conforme o jogador esculpe formas.
+- 64fa681c6a2c6becd62a246b531a6b49fa786015 sobe VERSION de 0.22.1 para 0.22.2.
+- A mudança não elimina o crescimento monotônico do conjunto de strings: os &'static str continuam deliberadamente vivos durante o processo para preservar VoxelCell: Copy. O ganho é eliminar a duplicação de armazenamento e reduzir overhead por entrada. Medição de heap/runtime e QA Windows ainda estão pendentes.
+- Validação: não executei cargo test, cargo run ou QA Windows. No momento do registro, ainda não havia workflow reportado para o último commit.
+
+Próximo passo: obter CI do checkpoint 58; se verde, medir/inspecionar o crescimento real do interner em uma sessão com bastante Chisel e então atacar macro-iluminação/fluidos/solid conforme o resultado.
