@@ -190,4 +190,4 @@ Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigi
 
 - 3060/35282920752 falhou porque a tentativa anterior de cleanup referenciava VoxelCell sem import no escopo de produção. A primeira correção não foi aplicada no local correto; revisão do arquivo confirmou isso.
 - c3810b618aa54ff808a0270482226d5546a5ac67 adiciona explicitamente voxel::cell::VoxelCell ao import do módulo. Esta é a correção efetiva.
-- Não executei cargo test/cargo run; CI deve validar a correção.
+- CI 35283168150 (run 3065) concluiu GREEN, validando a correção do import. Não executei cargo test/cargo run.
