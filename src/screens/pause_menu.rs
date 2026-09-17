@@ -3,7 +3,6 @@ use bevy::prelude::*;
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     localization::{ActiveLanguage, UiLocalization},
-    player::{camera::GameplayCamera, game_mode::GameMode, player_id::PlayerId},
     ui::{
         button::menu_button,
         surface, theme,
@@ -11,7 +10,7 @@ use crate::{
         typography,
         visibility::set_visibility,
     },
-    world::{InMemoryWorldSave, game_rules::GameRules},
+    world::save_session::{WorldSaveContext, WorldSession},
 };
 
 pub struct PauseMenuPlugin;
@@ -38,6 +37,9 @@ impl Plugin for PauseMenuPlugin {
 
 #[derive(Component)]
 struct PauseMenuRoot;
+
+#[derive(Component)]
+struct PauseSaveFeedback;
 
 #[derive(Component, Clone, Copy)]
 enum PauseMenuAction {
@@ -95,23 +97,26 @@ fn spawn_pause_menu(
                     localization.text(language, "common.exitGame").to_owned(),
                     PauseMenuAction::ExitGame,
                 ));
+                panel.spawn((PauseSaveFeedback, typography::caption(String::new())));
             });
         });
 }
 
 fn handle_pause_menu_buttons(
     interactions: Query<(&Interaction, &PauseMenuAction), Changed<Interaction>>,
-    player: Query<(&PlayerId, &Transform, &GameMode), With<GameplayCamera>>,
-    game_rules: Res<GameRules>,
-    mut save: ResMut<InMemoryWorldSave>,
+    snapshot: WorldSaveContext,
+    mut session: ResMut<WorldSession>,
+    mut feedback: Query<&mut Text, With<PauseSaveFeedback>>,
     mut transition: ResMut<ScreenTransition>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
+    if transition.is_active() {
+        return;
+    }
     for (interaction, action) in &interactions {
         if *interaction != Interaction::Pressed {
             continue;
         }
-
         match action {
             PauseMenuAction::Resume => {
                 transition.request(ScreenTransitionTarget::pause(PauseState::Running));
@@ -119,19 +124,23 @@ fn handle_pause_menu_buttons(
             PauseMenuAction::Settings => {
                 transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
             }
-            PauseMenuAction::LeaveWorld => {
-                save.save_game_rules(*game_rules);
-                if let Ok((player_id, transform, game_mode)) = player.single() {
-                    save.save_player_state(*player_id, transform.translation, *game_mode);
+            PauseMenuAction::LeaveWorld | PauseMenuAction::ExitGame => {
+                if let Err(error) = session.persist(&snapshot) {
+                    error!("World save failed; keeping current world loaded: {error}");
+                    if let Ok(mut label) = feedback.single_mut() {
+                        label.0 = format!("Save failed: {error}. World kept open.");
+                    }
+                    return;
                 }
-
-                transition.request(
-                    ScreenTransitionTarget::game(GameState::StartingScreen)
-                        .with_pause(PauseState::Running),
-                );
-            }
-            PauseMenuAction::ExitGame => {
-                app_exit.write(AppExit::Success);
+                if matches!(action, PauseMenuAction::LeaveWorld) {
+                    transition.request(
+                        ScreenTransitionTarget::game(GameState::StartingScreen)
+                            .with_pause(PauseState::Running),
+                    );
+                } else {
+                    app_exit.write(AppExit::Success);
+                }
+                return;
             }
         }
     }
