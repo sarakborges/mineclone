@@ -116,7 +116,7 @@ fn intern_token(token: &str) -> &'static str {
     }
 
     let interned = Box::leak(token.to_owned().into_boxed_str());
-    tokens.insert(token.to_owned(), interned);
+    tokens.insert(interned);
     interned
 }
 
