@@ -18,7 +18,7 @@ pub(crate) mod dimension;
 pub(crate) mod feature_graph;
 pub(crate) mod fluid_updates;
 pub(crate) mod game_rules;
-mod generation;
+pub(crate) mod generation;
 pub(crate) mod generation_region;
 pub(crate) mod hydrology;
 mod lighting_updates;
