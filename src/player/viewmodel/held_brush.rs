@@ -17,7 +17,12 @@ use crate::{
 use super::animation::{PlayerViewModel, base_viewmodel_transform};
 
 const VIEW_MODEL_RENDER_LAYER: usize = 1;
-const BRUSH_DISPLAY_SIZE: f32 = 0.43;
+// The artwork contains the entire handle and bristles. Keep it close to the
+// held-block footprint so the handle meets the hand rather than covering it.
+const BRUSH_DISPLAY_SIZE: f32 = 0.30;
+// A small camera-facing separation prevents coincident surfaces without
+// noticeably changing the registration of the two 64x64 textures.
+const BRUSH_TINT_DEPTH: f32 = 0.004;
 
 #[derive(Component)]
 pub(super) struct HeldBrushRoot;
@@ -59,7 +64,10 @@ pub(super) fn setup_held_brush_assets(
     let brush = tools.get(BRUSH_TOOL_ID).expect("Brush tool definition is required");
     let icon = materials.add(StandardMaterial {
         base_color_texture: Some(asset_server.load(brush.icon.clone())),
-        alpha_mode: AlphaMode::Blend,
+        // The 64x64 base is pixel art: alpha masking preserves its silhouette
+        // and draws it in the opaque pass, before the transparent dye overlay.
+        // Two Blend materials can be depth-sorted in the opposite order to UI.
+        alpha_mode: AlphaMode::Mask(0.5),
         unlit: true,
         double_sided: true,
         ..default()
@@ -114,7 +122,9 @@ pub(super) fn spawn_held_brush(
                         HeldBrushTint,
                         Mesh3d(assets.mesh.clone()),
                         MeshMaterial3d(material.clone()),
-                        Transform::from_translation(Vec3::new(0.0, 0.0, 0.001)),
+                        // Positive Z is towards the viewmodel camera; keep the
+                        // dye on top of the base, as in the hotbar icon.
+                        Transform::from_translation(Vec3::new(0.0, 0.0, BRUSH_TINT_DEPTH)),
                         if mode.dye_id().is_some() {
                             Visibility::Inherited
                         } else {
