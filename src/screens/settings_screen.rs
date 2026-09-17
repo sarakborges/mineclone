@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::app::{
     game_state::GameState, resource_systems::reset_resource, settings_state::SettingsState,
 };
+use crate::localization::ActiveLanguage;
 use game_rules_section::{
     TicksPerSecondInputState, handle_ticks_input, handle_ticks_keyboard, handle_ticks_step_buttons,
     sync_ticks_per_second_text,
@@ -144,6 +145,16 @@ impl Plugin for SettingsScreenPlugin {
                 )
                     .chain()
                     .in_set(SettingsScreenSet::Sync),
+            )
+            // Some labels and descriptions are captured as plain Text bundles
+            // during UI construction. Rebuild only on a real language change,
+            // after input/sync, preserving the selected section and settings.
+            .add_systems(
+                Update,
+                spawn_settings_screen
+                    .run_if(resource_changed::<ActiveLanguage>)
+                    .run_if(in_state(SettingsState::Open))
+                    .after(SettingsScreenSet::Sync),
             )
             .add_systems(
                 Update,
