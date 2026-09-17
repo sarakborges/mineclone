@@ -173,35 +173,29 @@ fn fluid_micro_face_vertices(
     min_v: f32,
     max_v: f32,
 ) -> [[f32; 3]; 4] {
-    let side_point = |u: f32, v: f32| -> (f32, f32) {
-        (u, bilinear_height(heights, u, v))
+    let side_height = |u: f32| -> f32 {
+        match face {
+            BlockFace::Right => heights.h10 * u + heights.h11 * (1.0 - u),
+            BlockFace::Left => heights.h00 * (1.0 - u) + heights.h01 * u,
+            BlockFace::Front => heights.h01 * (1.0 - u) + heights.h11 * u,
+            BlockFace::Back => heights.h00 * (1.0 - u) + heights.h10 * u,
+            BlockFace::Top | BlockFace::Bottom => 0.0,
+        }
     };
 
     match face {
-        BlockFace::Right => {
-            let (z0a, h0a) = side_point(min_u, min_v);
-            let (z1a, h1a) = side_point(max_u, min_v);
-            let (z0b, h0b) = side_point(min_u, max_v);
-            let (z1b, h1b) = side_point(max_u, max_v);
-            [
-                [x0 + 1.0, y0, z0 + 1.0 - z1a],
-                [x0 + 1.0, y0, z0 + 1.0 - z0a],
-                [x0 + 1.0, y0 + h0b, z0 + 1.0 - z0b],
-                [x0 + 1.0, y0 + h1b, z0 + 1.0 - z1b],
-            ]
-        }
-        BlockFace::Left => {
-            let (z0a, _) = side_point(min_u, min_v);
-            let (z1a, _) = side_point(max_u, min_v);
-            let (z0b, h0b) = side_point(min_u, max_v);
-            let (z1b, h1b) = side_point(max_u, max_v);
-            [
-                [x0, y0, z0 + z0a],
-                [x0, y0, z0 + z1a],
-                [x0, y0 + h1b, z0 + z1b],
-                [x0, y0 + h0b, z0 + z0b],
-            ]
-        }
+        BlockFace::Right => [
+            [x0 + 1.0, y0, z0 + 1.0 - max_u],
+            [x0 + 1.0, y0, z0 + 1.0 - min_u],
+            [x0 + 1.0, y0 + side_height(min_u), z0 + 1.0 - min_u],
+            [x0 + 1.0, y0 + side_height(max_u), z0 + 1.0 - max_u],
+        ],
+        BlockFace::Left => [
+            [x0, y0, z0 + min_u],
+            [x0, y0, z0 + max_u],
+            [x0, y0 + side_height(max_u), z0 + max_u],
+            [x0, y0 + side_height(min_u), z0 + min_u],
+        ],
         BlockFace::Top => [
             [x0 + min_u, y0 + bilinear_height(heights, min_u, max_v), z0 + max_v],
             [x0 + max_u, y0 + bilinear_height(heights, max_u, max_v), z0 + max_v],
@@ -214,30 +208,18 @@ fn fluid_micro_face_vertices(
             [x0 + max_u, y0, z0 + max_v],
             [x0 + min_u, y0, z0 + max_v],
         ],
-        BlockFace::Front => {
-            let (x0a, _) = side_point(min_u, min_v);
-            let (x1a, _) = side_point(max_u, min_v);
-            let (_, h0b) = side_point(min_u, max_v);
-            let (_, h1b) = side_point(max_u, max_v);
-            [
-                [x0 + x0a, y0, z0 + 1.0],
-                [x0 + x1a, y0, z0 + 1.0],
-                [x0 + x1a, y0 + h1b, z0 + 1.0],
-                [x0 + x0a, y0 + h0b, z0 + 1.0],
-            ]
-        }
-        BlockFace::Back => {
-            let (x0a, _) = side_point(min_u, min_v);
-            let (x1a, _) = side_point(max_u, min_v);
-            let (_, h0b) = side_point(min_u, max_v);
-            let (_, h1b) = side_point(max_u, max_v);
-            [
-                [x0 + 1.0 - x1a, y0, z0],
-                [x0 + 1.0 - x0a, y0, z0],
-                [x0 + 1.0 - x0a, y0 + h0b, z0],
-                [x0 + 1.0 - x1a, y0 + h1b, z0],
-            ]
-        }
+        BlockFace::Front => [
+            [x0 + min_u, y0, z0 + 1.0],
+            [x0 + max_u, y0, z0 + 1.0],
+            [x0 + max_u, y0 + side_height(max_u), z0 + 1.0],
+            [x0 + min_u, y0 + side_height(min_u), z0 + 1.0],
+        ],
+        BlockFace::Back => [
+            [x0 + 1.0 - max_u, y0, z0],
+            [x0 + 1.0 - min_u, y0, z0],
+            [x0 + 1.0 - min_u, y0 + side_height(min_u), z0],
+            [x0 + 1.0 - max_u, y0 + side_height(max_u), z0],
+        ],
     }
 }
 
