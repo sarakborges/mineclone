@@ -83,6 +83,30 @@ pub struct BiomeVisuals {
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CreatureSpawnRule {
+    pub creature: String,
+    #[serde(default = "default_spawn_weight")]
+    pub weight: f32,
+    #[serde(default)]
+    pub light_min: u8,
+    #[serde(default = "default_spawn_light_max")]
+    pub light_max: u8,
+    #[serde(default = "default_spawn_spacing")]
+    pub spacing: f32,
+    #[serde(default = "default_spawn_max_per_type")]
+    pub max_per_type: usize,
+    #[serde(default = "default_spawn_max_in_dimension")]
+    pub max_in_dimension: usize,
+}
+
+fn default_spawn_weight() -> f32 { 1.0 }
+fn default_spawn_light_max() -> u8 { 15 }
+fn default_spawn_spacing() -> f32 { 16.0 }
+fn default_spawn_max_per_type() -> usize { 4 }
+fn default_spawn_max_in_dimension() -> usize { 16 }
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BiomeDefinition {
     pub id: String,
     pub name: LocalizedText,
@@ -112,6 +136,8 @@ pub struct BiomeDefinition {
     pub hydrology: BiomeHydrology,
     #[serde(default)]
     pub structures: Vec<BiomeStructure>,
+    #[serde(default)]
+    pub creature_spawns: Vec<CreatureSpawnRule>,
     pub visuals: BiomeVisuals,
 }
 
