@@ -6,6 +6,7 @@
 mod app;
 mod content;
 mod creatures;
+mod entity;
 mod gameplay;
 mod hud;
 mod localization;
