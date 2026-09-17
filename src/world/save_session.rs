@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, time::Instant};
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 
@@ -79,8 +79,26 @@ impl WorldSession {
 
     pub(crate) fn persist(&mut self, snapshot: &WorldSaveContext<'_, '_>) -> io::Result<()> {
         let id = self.id.as_deref().ok_or_else(|| io::Error::other("no active world"))?;
-        let state = snapshot.saved_state()?;
+        let capture_started = Instant::now();
         let captured = snapshot.capture(id)?;
+        let capture_elapsed = capture_started.elapsed();
+        // Derive the successful baseline from the EXACT snapshot being written.
+        // Calling saved_state() here used to query the player and inventory a
+        // second time, independently of the captured save.
+        let player = captured
+            .player
+            .as_ref()
+            .ok_or_else(|| io::Error::other("cannot save world without player state"))?;
+        let state = SavedWorldState {
+            seed: captured.seed,
+            dimension_id: captured.dimension_id.clone(),
+            ticks_per_second: captured.ticks_per_second,
+            world_revision: snapshot.world.save_content_revision(),
+            position: player.position,
+            creative: player.creative,
+            inventory: captured.inventory.clone(),
+        };
+        let publication_started = Instant::now();
         save_world(
             &captured,
             SaveRegistries {
@@ -91,6 +109,13 @@ impl WorldSession {
                 cycles: &snapshot.cycles,
             },
         )?;
+        let publication_elapsed = publication_started.elapsed();
+        // Measured on the machine running the game, not inferred from CI.
+        // Publication includes JSON serialization, fsync and cleanup dispatch;
+        // it still blocks Leave World/Exit until the save is committed.
+        info!(
+            "World {id} saved: capture={capture_elapsed:?}, publication={publication_elapsed:?}"
+        );
         self.last_saved_state = Some(state);
         self.baseline_loaded_save = false;
         self.first_save_done = true;
