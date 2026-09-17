@@ -8,6 +8,7 @@ use super::{
     biome::{BiomeDefinition, BiomeRegistry},
     block::{BlockDefinition, BlockRegistry},
     creature::{CreatureDefinition, CreatureRegistry},
+    player::PlayerDefinition,
     day_night_cycle::{DayNightCycleDefinition, DayNightCycleRegistry},
     dimension::{DimensionDefinition, DimensionRegistry},
     fluid::{FluidDefinition, FluidRegistry},
@@ -25,6 +26,7 @@ pub(crate) struct LoadedContent {
     pub biomes: BiomeRegistry,
     pub blocks: BlockRegistry,
     pub creatures: CreatureRegistry,
+    pub player: PlayerDefinition,
     pub dimensions: DimensionRegistry,
     pub day_night_cycles: DayNightCycleRegistry,
     pub fluids: FluidRegistry,
@@ -40,6 +42,7 @@ impl LoadedContent {
         commands.insert_resource(self.biomes);
         commands.insert_resource(self.blocks);
         commands.insert_resource(self.creatures);
+        commands.insert_resource(self.player);
         commands.insert_resource(self.dimensions);
         commands.insert_resource(self.day_night_cycles);
         commands.insert_resource(self.fluids);
@@ -56,7 +59,7 @@ pub fn load_content(mut commands: Commands) {
 }
 
 pub(crate) fn read_content() -> LoadedContent {
-    let mut content = LoadedContent::default();
+    let mut content = LoadedContent { player: PlayerDefinition { health: 20.0, model: None }, ..Default::default() };
     let mut files = Vec::new();
 
     collect_json_files(&data_root(), &mut files);
@@ -76,7 +79,10 @@ fn load_definition(path: &Path, content: &mut LoadedContent) {
         .and_then(|name| name.to_str())
         .unwrap_or_default();
 
-    if file_name == "dimension.json" {
+    if file_name == "player.json" && path_has_component(path, "entities") {
+        content.player = read_json_definition::<PlayerDefinition>(path);
+        content.player.validate();
+    } else if file_name == "dimension.json" {
         content
             .dimensions
             .insert(read_json_definition::<DimensionDefinition>(path));
