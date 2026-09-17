@@ -4,7 +4,7 @@ use std::{
     thread,
 };
 
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{ecs::system::SystemParam, log::warn, prelude::*};
 
 use crate::{
     app::game_state::GameState,
@@ -36,6 +36,7 @@ impl Plugin for WorldSelectionPlugin {
                 OnEnter(GameState::WorldSelection),
                 (refresh_world_list, spawn_world_selection).chain(),
             )
+            .add_systems(OnExit(GameState::WorldSelection), abandon_world_load)
             .add_systems(
                 Update,
                 // Consume Back before a worker result. A completed load in the
@@ -47,15 +48,42 @@ impl Plugin for WorldSelectionPlugin {
     }
 }
 
-// Only workers write their result; Bevy polls with try_lock, never waits for IO.
+// A worker writes once; Bevy polls the tiny result guard without waiting for IO.
 type WorldScanResult = Arc<Mutex<Option<io::Result<Vec<WorldSummary>>>>>;
-type WorldLoadResult = Arc<Mutex<Option<io::Result<(WorldSnapshot, VoxelWorld)>>>>;
+type WorldLoadResult = Arc<Mutex<WorldLoadSlot>>;
+
+#[derive(Default)]
+struct WorldLoadSlot {
+    abandoned: bool,
+    complete: bool,
+    result: Option<io::Result<(WorldSnapshot, VoxelWorld)>>,
+}
 
 struct PendingWorldLoad {
     id: String,
     result: WorldLoadResult,
-    // Back leaves the worker to finish safely, but must never activate its result.
-    abandoned: bool,
+}
+
+impl PendingWorldLoad {
+    fn abandon(&self) {
+        // Cancellation and worker publication are serialized by THIS small
+        // mutex. An already-completed large world is moved to a disposer rather
+        // than being dropped on the input frame; a late result is discarded by
+        // the original worker itself. Neither case leaves a world in the menu.
+        let stale = {
+            let mut slot = self.result.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            slot.abandoned = true;
+            slot.result.take()
+        };
+        if let Some(stale) = stale {
+            if let Err(error) = thread::Builder::new()
+                .name("asteria-discard-world".to_owned())
+                .spawn(move || drop(stale))
+            {
+                warn!("Could not start abandoned-world cleanup worker: {error}");
+            }
+        }
+    }
 }
 
 #[derive(Resource, Default)]
@@ -153,8 +181,8 @@ fn refresh_world_list(
     state.worlds.clear();
     state.error.clear();
     // Reuse an unfinished scan after a return to the menu. An abandoned load
-    // likewise stays tracked until its result is consumed; no orphan result
-    // can silently initiate gameplay when the selection screen is reopened.
+    // likewise stays tracked until its completion is consumed, but its heavy
+    // result is disposed on a worker even if the menu is never reopened.
     if state.scan.is_some() {
         return;
     }
@@ -312,17 +340,31 @@ fn poll_world_load(
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
 ) {
+    if transition.is_active() {
+        return;
+    }
     let Some(pending) = state.loading.as_ref() else {
         return;
     };
-    let result = pending.result.try_lock().ok().and_then(|mut slot| slot.take());
-    let Some(result) = result else {
-        return;
+    let (complete, abandoned, result) = match pending.result.try_lock() {
+        Ok(mut slot) => (slot.complete, slot.abandoned, slot.result.take()),
+        Err(_) => return,
     };
-    let pending = state.loading.take().expect("completed load must be tracked");
-    if pending.abandoned || transition.is_active() {
+    if !complete {
         return;
     }
+    let pending = state.loading.take().expect("completed load must be tracked");
+    if abandoned {
+        return;
+    }
+    let Some(result) = result else {
+        state.error = format!(
+            "{} {}: completed worker returned no result",
+            localization.text(language.get(), "worldSelection.loadError"),
+            pending.id
+        );
+        return;
+    };
     let (snapshot, world) = match result {
         Ok(loaded) => loaded,
         Err(error) => {
@@ -371,6 +413,12 @@ fn poll_world_load(
     transition.request(ScreenTransitionTarget::game(GameState::Loading));
 }
 
+fn abandon_world_load(mut state: ResMut<WorldSelectionState>) {
+    if let Some(pending) = state.loading.as_ref() {
+        pending.abandon();
+    }
+}
+
 fn handle_world_selection(
     interactions: Query<(&Interaction, &WorldSelectionAction), Changed<Interaction>>,
     mut state: ResMut<WorldSelectionState>,
@@ -387,8 +435,8 @@ fn handle_world_selection(
     if interactions.iter().any(|(interaction, action)| {
         *interaction == Interaction::Pressed && matches!(action, WorldSelectionAction::Back)
     }) {
-        if let Some(pending) = state.loading.as_mut() {
-            pending.abandoned = true;
+        if let Some(pending) = state.loading.as_ref() {
+            pending.abandon();
         }
         transition.request(ScreenTransitionTarget::game(GameState::StartingScreen));
         return;
@@ -424,7 +472,7 @@ fn handle_world_selection(
                     return;
                 };
                 let owned = content.owned_for_loading();
-                let result: WorldLoadResult = Arc::new(Mutex::new(None));
+                let result: WorldLoadResult = Arc::new(Mutex::new(WorldLoadSlot::default()));
                 let worker_result = Arc::clone(&result);
                 let worker_id = id.clone();
                 match thread::Builder::new()
@@ -434,13 +482,21 @@ fn handle_world_selection(
                             load_world(&worker_id, owned.registries())
                         }))
                         .unwrap_or_else(|_| Err(io::Error::other("saved-world loading worker panicked")));
-                        if let Ok(mut slot) = worker_result.lock() {
-                            *slot = Some(loaded);
+                        let mut loaded = Some(loaded);
+                        {
+                            let mut slot = worker_result.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                            slot.complete = true;
+                            if !slot.abandoned {
+                                slot.result = loaded.take();
+                            }
                         }
+                        // If Back won, the original worker owns and drops its
+                        // discarded VoxelWorld here, never on the Bevy frame.
+                        drop(loaded);
                     })
                 {
                     Ok(_) => {
-                        state.loading = Some(PendingWorldLoad { id, result, abandoned: false });
+                        state.loading = Some(PendingWorldLoad { id, result });
                         state.error = localization
                             .text(language.get(), "worldSelection.loadingSelected")
                             .to_owned();
