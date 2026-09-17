@@ -7,6 +7,8 @@
   "newWorld.return": "Return",
   "newWorld.createWorld": "Create World",
   "newWorld.section.general": "General",
+  "newWorld.name": "Name",
+  "newWorld.name.description": "Names identify saved worlds. If this name already exists, the new world will be named Copy of ...",
   "newWorld.seed": "Seed",
   "newWorld.seed.description": "Sets the deterministic seed used to generate the world. Use Random Seed for a new value.",
   "newWorld.randomSeed": "Random Seed",
