@@ -84,7 +84,7 @@ impl VoxelWorld {
         self.block_content_revision
     }
 
-    pub(crate) fn loaded_chunk_coords(&self) -> impl Iterator<Item = Ivec3> + '_ {
+    pub(crate) fn loaded_chunk_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
         self.chunks.keys().copied()
     }
 
