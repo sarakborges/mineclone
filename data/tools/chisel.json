@@ -1,0 +1,6 @@
+{
+  "id": "asteria:chisel",
+  "name": { "english": "Chisel", "portuguese_brazil": "Cinzel", "spanish": "Cincel" },
+  "category": "tools",
+  "icon": "textures/tools/chisel.png"
+}
