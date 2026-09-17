@@ -73,7 +73,6 @@
   "hud.brushPaint": "Clique esquerdo para pintar de {color}. Clique direito para escolher a cor.",
   "hud.brushClear": "Clique esquerdo para remover a tinta. Clique direito para escolher a cor.",
   "hud.chisel": "Cinzel: {precision} · R: precisão · Esquerdo: remover · Direito: colocar",
-  "chisel.precision.full": "Inteiro",
   "chisel.precision.thick": "Grosso",
   "chisel.precision.thin": "Fino",
   "chisel.precision.extraThin": "Extrafino",
