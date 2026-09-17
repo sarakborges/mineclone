@@ -6,7 +6,7 @@ use crate::{
 };
 
 use super::{
-    collision::{Axis, move_axis, player_collides},
+    collision::{Axis, MoveAxisResult, move_axis, player_collides},
     config::{GRAVITY, GROUND_PROBE, JUMP_SPEED},
     flight::FlightState,
     swimming::SwimmingState,
@@ -65,7 +65,7 @@ pub(super) fn apply_gravity(
         None,
     );
 
-    if hit_vertical_surface {
+    if matches!(hit_vertical_surface, MoveAxisResult::Blocked | MoveAxisResult::Stepped(_)) {
         if gravity.vertical_velocity < 0.0 {
             gravity.grounded = true;
         }
