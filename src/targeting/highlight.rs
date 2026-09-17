@@ -121,7 +121,9 @@ fn spawn_highlight(
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgba(1.0, 1.0, 1.0, 0.18),
             alpha_mode: AlphaMode::Blend,
-            depth_bias: 1.0,
+            // Keep the translucent selection shell in front of near-coplanar
+            // texture/parallax layers without making it win over distant geometry.
+            depth_bias: 0.01,
             unlit: true,
             ..default()
         })),
