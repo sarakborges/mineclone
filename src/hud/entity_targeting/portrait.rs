@@ -1,5 +1,4 @@
 use bevy::{
-    asset::AssetId,
     camera::visibility::RenderLayers,
     ecs::system::SystemParam,
     gltf::GltfMaterialName,
@@ -8,9 +7,9 @@ use bevy::{
 };
 
 use crate::{
+    app::game_state::GameState,
     content::creature::CreatureRegistry,
     creatures::CreatureInstance,
-    localization::ActiveLanguage,
     targeting::block::TargetedCreature,
 };
 
@@ -83,6 +82,7 @@ pub(super) fn sync_portrait(
         },
         Transform::default(),
         RenderLayers::layer(PORTRAIT_RENDER_LAYER),
+        DespawnOnExit(GameState::Gameplay),
     ));
 }
 
