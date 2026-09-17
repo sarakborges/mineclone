@@ -45,6 +45,10 @@ impl BlockTargetingScene<'_, '_> {
         self.player.translation
     }
 
+    pub(crate) fn player_forward(&self) -> Vec3 {
+        self.player.forward().as_vec3()
+    }
+
     pub(crate) fn visual_snapshot(&self) -> BlockTargetingVisualSnapshot {
         let selected_slot = self.selected_slot();
         BlockTargetingVisualSnapshot {
