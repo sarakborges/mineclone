@@ -1,10 +1,17 @@
-use bevy::{input_focus::{FocusCause, InputFocus}, prelude::*, text::{EditableText, TextCursorStyle}};
+use bevy::{
+    input_focus::{FocusCause, InputFocus},
+    prelude::*,
+    text::{EditableText, TextCursorStyle},
+};
 
 use crate::{
     localization::{Language, UiLocalization},
     ui::{text_input, theme, typography},
     world::NewWorldConfig,
 };
+
+#[derive(Component)]
+pub(super) struct WorldNameFrame;
 
 #[derive(Component)]
 pub(super) struct WorldNameInput;
@@ -42,23 +49,7 @@ pub(super) fn world_name_setting(
             typography::setting_title(localization.text(language, "newWorld.name").to_owned()),
             typography::caption(localization.text(language, "newWorld.name.description").to_owned()),
             (
-                Button,
-                WorldNameInput,
-                EditableText {
-                    max_characters: Some(200),
-                    ..EditableText::new(config.name())
-                },
-                TextFont {
-                    font: FontSource::SystemUi,
-                    font_size: FontSize::Px(20.0),
-                    ..default()
-                },
-                TextColor(theme::TEXT_PRIMARY),
-                TextCursorStyle {
-                    color: theme::TEXT_PRIMARY,
-                    ..default()
-                },
-                TextLayout::no_wrap(),
+                WorldNameFrame,
                 Node {
                     width: percent(100),
                     height: px(44),
@@ -71,12 +62,34 @@ pub(super) fn world_name_setting(
                 },
                 BackgroundColor(text_input::INPUT_FILL),
                 BorderColor::all(text_input::input_border(false)),
+                children![(
+                    Button,
+                    WorldNameInput,
+                    EditableText {
+                        max_characters: Some(200),
+                        ..EditableText::new(config.name())
+                    },
+                    TextFont {
+                        font: FontSource::SystemUi,
+                        font_size: FontSize::Px(20.0),
+                        ..default()
+                    },
+                    TextColor(theme::TEXT_PRIMARY),
+                    TextCursorStyle {
+                        color: theme::TEXT_PRIMARY,
+                        ..default()
+                    },
+                    TextLayout::no_wrap(),
+                    Node {
+                        width: percent(100),
+                        min_width: px(0),
+                        height: px(text_input::INPUT_EDITOR_HEIGHT),
+                        overflow: Overflow::clip(),
+                        ..default()
+                    },
+                )],
             ),
-            (
-                WorldNameError,
-                typography::caption(String::new()),
-                TextColor(theme::TEXT_PRIMARY),
-            ),
+            (WorldNameError, typography::caption(String::new())),
         ],
     )
 }
@@ -95,7 +108,8 @@ pub(super) fn handle_world_name_focus(
 pub(super) fn sync_world_name_view(
     feedback: Res<WorldNameFeedback>,
     focus: Res<InputFocus>,
-    mut inputs: Query<(Entity, &mut BorderColor), With<WorldNameInput>>,
+    input: Query<Entity, With<WorldNameInput>>,
+    mut frames: Query<&mut BorderColor, With<WorldNameFrame>>,
     mut errors: Query<&mut Text, With<WorldNameError>>,
 ) {
     if !feedback.is_changed() && !focus.is_changed() {
@@ -106,8 +120,11 @@ pub(super) fn sync_world_name_view(
             text.0.clone_from(&feedback.message);
         }
     }
-    for (entity, mut border) in &mut inputs {
-        let next = BorderColor::all(text_input::input_border(focus.get() == Some(entity)));
+    let focused = input
+        .single()
+        .is_ok_and(|entity| focus.get() == Some(entity));
+    let next = BorderColor::all(text_input::input_border(focused));
+    for mut border in &mut frames {
         if *border != next {
             *border = next;
         }
