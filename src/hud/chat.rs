@@ -1,4 +1,5 @@
 mod autocomplete;
+mod placement;
 mod visual;
 
 use std::collections::VecDeque;
@@ -13,19 +14,13 @@ use bevy::{
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
-    content::creature::CreatureRegistry,
-    creatures::spawn_creature_at,
-    localization::ActiveLanguage,
-    player::{
-        camera::{GameplayCamera, look::MouseLookInputState},
-        inventory::InventoryState,
-    },
+    player::{camera::look::MouseLookInputState, inventory::InventoryState},
     tools::BrushPaletteState,
     ui::text_input::editable_value,
-    voxel::world::VoxelWorld,
 };
 
 use autocomplete::{ChatAutocomplete, ParsedLine, parse_line, update_autocomplete};
+use placement::ChatPlacementContext;
 use visual::{
     advance_chat_timeout, rebuild_chat_history, render_autocomplete, scroll_chat_history,
     scroll_chat_to_bottom, spawn_chat_ui, sync_chat_visibility,
@@ -237,44 +232,22 @@ fn restore_game_cursor(
     mouse_look.ignore_next_delta = true;
 }
 
-#[derive(SystemParam)]
-struct ChatCreatureContext<'w> {
-    definitions: Res<'w, CreatureRegistry>,
-    assets: Res<'w, AssetServer>,
-    world: Res<'w, VoxelWorld>,
-    language: Res<'w, ActiveLanguage>,
-}
-
 fn interpret_chat_submissions(
     mut submissions: MessageReader<ChatSubmission>,
     mut chat: ResMut<ChatState>,
     mut commands: Commands,
-    creature_context: ChatCreatureContext,
-    players: Query<&Transform, With<GameplayCamera>>,
+    mut placement: ChatPlacementContext,
 ) {
+    // Commands::spawn is deferred, so preflight must also account for creatures
+    // already requested by earlier submissions during this same frame.
+    let mut reserved = Vec::new();
     for submission in submissions.read() {
         let response = match parse_line(&submission.0) {
             ParsedLine::Say(text) => format!("<{PLAYER_DISPLAY_NAME}>: {text}"),
             ParsedLine::Usage(usage) => format!("Usage: {usage}"),
             ParsedLine::Unknown(command) => format!("Unknown command: {command}"),
-            ParsedLine::SpawnCreature(id) => {
-                if let Some(eye) = players.iter().next().map(|player| player.translation) {
-                    match spawn_creature_at(
-                        &mut commands,
-                        &creature_context.definitions,
-                        &creature_context.assets,
-                        &creature_context.world,
-                        creature_context.language.get(),
-                        id,
-                        eye,
-                    ) {
-                        Ok(name) => format!("Spawned {name} ({id})."),
-                        Err(error) => error,
-                    }
-                } else {
-                    "Cannot spawn creature: player is unavailable.".to_owned()
-                }
-            }
+            ParsedLine::Spawn(id) => placement.spawn(&mut commands, id, &mut reserved),
+            ParsedLine::Place(id) => placement.place(id, &reserved),
         };
         chat.append(response);
     }
@@ -287,12 +260,11 @@ mod tests {
     #[test]
     fn commands_are_distinguished_from_plain_messages() {
         assert_eq!(parse_line("hello"), ParsedLine::Say("hello"));
-        assert_eq!(
-            parse_line(" /spawn_creature asteria:meadow_slime "),
-            ParsedLine::SpawnCreature("asteria:meadow_slime")
-        );
-        assert_eq!(parse_line("/spawn_creature"), ParsedLine::Usage("/spawn_creature <id>"));
-        assert_eq!(parse_line("/spawn_creature slime extra"), ParsedLine::Usage("/spawn_creature <id>"));
+        assert_eq!(parse_line(" /spawn asteria:meadow_slime "), ParsedLine::Spawn("asteria:meadow_slime"));
+        assert_eq!(parse_line("/spawn"), ParsedLine::Usage("/spawn <id>"));
+        assert_eq!(parse_line("/place"), ParsedLine::Usage("/place <id>"));
+        assert_eq!(parse_line("/place foo extra"), ParsedLine::Usage("/place <id>"));
+        assert_eq!(parse_line("/spawn_creature foo"), ParsedLine::Unknown("/spawn_creature"));
         assert_eq!(parse_line("/unknown"), ParsedLine::Unknown("/unknown"));
     }
 
