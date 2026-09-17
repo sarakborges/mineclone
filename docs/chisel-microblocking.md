@@ -1,33 +1,34 @@
-# Chisel — first runtime-only delivery (2026-09-17)
+# Chisel — runtime-only first delivery (2026-09-17)
 
-Branch: `feature/chisel-microblocking`, created from `develop` at `f06c68c39563b07095f383b060639463b0aac659`. [Draft PR #12](https://github.com/sarakborges/mineclone/pull/12). No merge into `develop`. Root `VERSION` remains `0.20.3`, independent from `Cargo.toml` `0.10.16`. Do not bump before functional QA. This specification supersedes earlier two-resolution and 64³ prototypes.
+Branch: `feature/chisel-microblocking`, created from `develop` commit `f06c68c39563b07095f383b060639463b0aac659`. [Draft PR #12](https://github.com/sarakborges/mineclone/pull/12). No merge into `develop`. Root `VERSION` remains `0.20.3`; `Cargo.toml` has an independent version. Do not bump until functional QA is complete. This specification supersedes the former two-resolution, four-mode and 64³ prototypes.
 
-## User-agreed mechanics
+## Agreed mechanics and controls
 
-| English name | Subdivisions per axis | Face grid | Max microcells |
+The Chisel has **three** resolutions, with no Full mode: whole-block removal or placement belongs to normal block tools.
+
+| Chisel name | Divisions on each axis | Cells per face | Maximum cells in macroblock |
 | --- | ---: | ---: | ---: |
-| Full | 1 | 1×1 | 1 |
 | Thick | 2 | 2×2 | 8 |
 | Thin | 4 | 4×4 | 64 |
 | Extra Thin | 8 | 8×8 | 512 |
 
-`R`: cycle Full → Thick → Thin → Extra Thin → Full while Chisel is equipped and UI/world interaction is available. Left mouse removes, right mouse places. No add/remove mode, scroll wheel or middle button. Extra Thin supports one-eighth-block-thick trapdoors. **Every piece inherits the macro block's ID, texture, orientation and visual properties.** The tool edits shape, not microcell material. A naturally textured hollow tree trunk with real empty center and appropriate collision is a reference scenario.
+`R` cycles Thick → Thin → Extra Thin → Thick only while Chisel is selected and world interaction is available. Left mouse removes, right mouse places. No scroll, middle button, Full mode, or add/remove toggle. Extra Thin allows 1/8-thick trapdoors. Every microcell inherits its macroblock's ID, texture, orientation and visual properties: shape editing, not multi-material painting. Hollow logs have real carved-out space.
 
-## Integrated source (not a substitute for gameplay QA)
+**Eligibility is explicit and safe by default:** `BlockDefinition.tags` is a validated string list. The `fragmentable` tag opts a block into Chisel. Currently `bassalt`, `dirt`, `grass`, `oak_log`, `sand`, `stone` are opted in. `oak_leaf`, `lamp` and `glass` are deliberately untagged and cannot be cut or used as a source/destination for Chisel placement. A future block without the tag is also ineligible by default. The gameplay edit handler validates both the hit macroblock and any existing destination macroblock; the targeting previews follow the same gating. This is data-driven, not an ID blacklist or a category-based inference.
 
-- `src/voxel/microblock.rs`: 8×8×8 shape in eight `u64` masks. Normal macroblocks have no mask; cuts snap to precision and skip no-ops. Euclidean world coordinates handle negative axes. Temporary macro parents in empty space are marked transient.
-- `src/voxel/raycast.rs`, `src/voxel/collision.rs`: 8-grid ray traversal and actual AABB subcell collision. A regular full cube keeps its simple collision path.
-- `src/voxel/mesh.rs`, `src/voxel/mesh/micro_mesh.rs`: greedy face rectangles, neighboring-cell occlusion and partial regular/micro boundaries; all faces grouped in the normal chunk material buffers (no entity per piece). Original macroblock textures and orientation are used, with subregion UVs.
-- `src/tools/chisel.rs`: existing `ToolUse` left/right, R precision cycle, material inheritance on right placement, player overlap guard, chunk remesh/lighting invalidation and removal of empty temporary parents.
-- Tool definition `data/tools/chisel.json` and new icon `assets/textures/tools/chisel.png`. `src/targeting/highlight.rs` now has distinct exact-size **white removal** and **green placement** previews; both follow selected precision and hit face, with the placement ghost hidden when target chunk is unloaded or fluid blocks placement. `src/hud/chisel.rs` displays active precision/controls, translated in EN/PT-BR/ES.
-- Runtime chunk archives retain masks via raw `SecondaryProperties`. `SecondaryProperties::iter` keeps the private mask out of public/disk properties. `DiskChunk::from_chunk` saves the original macro material without micro geometry and omits Chisel-created transient parents; they cannot reload as full cubes. **Micro shapes are intentionally not persisted across restart.**
+**Tooltip placement:** Chisel information reuses the existing Brush `ActionHint` under the crosshair via `src/hud/crosshair.rs`, never a dedicated label above the hotbar. It respects `HudSettings.display_tooltips`, hides on creature targets or unsupported blocks and refreshes when R changes precision. Removed the old `src/hud/chisel.rs` HUD plugin and file.
 
-## Verification
+## Code integration
 
-[CI run 35257019737](https://github.com/sarakborges/mineclone/actions/runs/35257019737) for source commit `e7f4911829e07b988d1a3dda699fba54956cde4f`: audit of three languages, strict Clippy (`cargo clippy --locked --all-targets --all-features -- -D warnings`) and `cargo check --locked` all **passed**. Earlier failures (`TextLayout::new_with_justify`, dead `block_id_at`) were fixed, without lint suppression. Additional preview code commit `b462fe9a6819df1a7ee504744f1d9c3aa7e5b86e` followed the green run and requires its own CI result. No `cargo test` added or run. Windows gameplay QA and benchmarks have not run.
+- `src/voxel/microblock.rs`: eight `u64` occupancy layers (8³) for modified macroblocks; regular blocks require no mask. Snapping, no-op suppression and negative Euclidean coordinates. Temporary parent blocks placed in an otherwise empty voxel carry a session marker.
+- `src/voxel/raycast.rs` and `src/voxel/collision.rs`: subvoxel targeting and AABB occupancy for carved openings; regular blocks retain the fast collision path.
+- `src/voxel/mesh.rs` and `src/voxel/mesh/micro_mesh.rs`: greedy contiguous face merging, local and macro neighbor occlusion, shared chunk material buffers, original macro texture/orientation and subregion UVs. No Bevy entity per microcell.
+- `src/tools/chisel.rs`: `ToolUse` left/right, R cycle, `fragmentable` enforcement on hit and destination, material inheritance, player intersection check, chunk remesh/lighting invalidation and removal of empty temporary parents. No Full-level whole-block break.
+- `data/tools/chisel.json` and `assets/textures/tools/chisel.png`: definition/icon. `src/targeting/highlight.rs`: white cut-size preview and green placement preview; forbidden hit and occupied forbidden destination suppress previews. `src/hud/crosshair.rs`: shared Brush location for contextual precision/actions, translated EN/PT-BR/ES.
+- Runtime chunk archives retain masks via raw `SecondaryProperties`; disk snapshots save original macroblocks without Chisel shape and omit temporary parents, so they never reload as full blocks. **Micro geometry intentionally does not persist across game restart.**
 
-## Known limitations and essential gameplay checks
+## Verification and limitations
 
-Macro-resolution lighting, fluid occupancy and other callers of `VoxelWorld::is_solid` do not yet represent every opening; player collision and raycasts use the detailed shape. The `SecondaryProperties` token interner retains each distinct occupancy string over the session, so replace this provisional shape storage with a bounded per-chunk overlay before claiming production-grade memory behavior. Autosave revision can advance from session-only shape changes. No measured performance data, no QA for winding/UV, texture rotation, adjacent chunk edges, continuous hollow trunks, extreme coordinates, full-empty/restored state, transient temporary parents, streaming archive, fluid interaction or clean restart fallback.
+[CI run 35257019737](https://github.com/sarakborges/mineclone/actions/runs/35257019737) passed language audit, strict Clippy (`--all-targets --all-features -- -D warnings`) and cargo check for earlier source commit `e7f4911829e07b988d1a3dda699fba54956cde4f`. The preview and new tag/three-level/tooltip commits are later and require fresh CI; do **not** describe them as already validated. No `cargo test` was added or executed. Windows gameplay QA and performance benchmarks remain unperformed.
 
-Keep PR #12 **draft**, keep develop and VERSION unchanged, resolve latest preview commit CI, test actual editing/rendering/player collision in-game, and update this checkpoint plus root HANDOFF only with observed outcomes. Do not merge without explicit instruction.
+Macro-resolution lighting, fluid occupancy and other `VoxelWorld::is_solid` callers may still treat some carved cavities as solid. The temporary `SecondaryProperties` interner retains distinct masks across session edits; a bounded per-chunk shape overlay remains necessary for production memory behavior. Autosave revision may advance despite runtime-only shape changes. Gameplay QA required for eligible/ineligible materials, preview consistency, camera targeting, rotations/UV, all three levels, hollow trunks, borders and negative coords, collision, chunk archive and restart fallback. Keep PR draft, `develop` unchanged and `VERSION` unchanged until QA/closure. Do not merge without explicit user instruction.
