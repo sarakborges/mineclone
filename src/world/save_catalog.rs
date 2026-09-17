@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex, OnceLock,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     thread,
     time::{SystemTime, UNIX_EPOCH},
@@ -29,17 +29,33 @@ const SAVE_FORMAT_VERSION: u32 = 1;
 const MAX_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
 /// Count only generations that can actually be loaded into the current game.
 const RETAINED_GENERATIONS: usize = 4;
-// The catalog mutex only looks up an Arc. Never hold it while touching disk or
-// rebuilding chunks: loading world A must not block a save of world B.
-static WORLD_LOCKS: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
-static PRUNE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+// The catalog mutex only looks up an Arc. Never hold it while touching disk.
+static WORLD_LOCKS: OnceLock<Mutex<HashMap<String, Arc<WorldGate>>>> = OnceLock::new();
 
-fn world_lock(id: &str) -> io::Result<Arc<Mutex<()>>> {
+/// Save publication and prune deletion are serialized for each world. Active
+/// readers hold a lease, not a mutex, during expensive JSON/chunk decoding.
+/// Pruning defers deletion rather than unlinking any reader's fallback paths.
+#[derive(Default)]
+struct WorldGate {
+    write: Mutex<()>,
+    readers: AtomicUsize,
+    prune_running: AtomicBool,
+}
+
+fn world_lock(id: &str) -> io::Result<Arc<WorldGate>> {
     let locks = WORLD_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
     let mut locks = locks.lock().map_err(|_| io::Error::other("world lock catalog poisoned"))?;
     Ok(Arc::clone(
-        locks.entry(id.to_owned()).or_insert_with(|| Arc::new(Mutex::new(()))),
+        locks.entry(id.to_owned()).or_insert_with(|| Arc::new(WorldGate::default())),
     ))
+}
+
+struct ReadLease(Arc<WorldGate>);
+
+impl Drop for ReadLease {
+    fn drop(&mut self) {
+        self.0.readers.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 /// The same content definitions must validate candidates during load and
@@ -261,8 +277,8 @@ pub(crate) fn create_new_world(
 /// worker only removes backups AFTER publication, never during the write.
 pub(crate) fn save_world(snapshot: &WorldSnapshot, registries: SaveRegistries<'_>) -> io::Result<u64> {
     validate_world_name(&snapshot.id)?;
-    let world_lock = world_lock(&snapshot.id)?;
-    let lock = world_lock.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+    let gate = world_lock(&snapshot.id)?;
+    let lock = gate.write.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
     if snapshot.format_version != SAVE_FORMAT_VERSION {
         return Err(invalid_data("unsupported snapshot format"));
     }
@@ -308,8 +324,6 @@ pub(crate) fn save_world(snapshot: &WorldSnapshot, registries: SaveRegistries<'_
         return Err(error);
     }
     let saved_at = manifest.last_saved_unix_ms;
-    // Release the world's writer before scheduling cleanup. A detached worker
-    // may be interrupted by process exit; this only leaves extra backups.
     drop(lock);
     if next > RETAINED_GENERATIONS as u64 {
         schedule_backup_prune(snapshot.id.clone(), registries);
@@ -318,29 +332,36 @@ pub(crate) fn save_world(snapshot: &WorldSnapshot, registries: SaveRegistries<'_
 }
 
 fn schedule_backup_prune(id: String, registries: SaveRegistries<'_>) {
-    // Bound background work: a slow cleanup must not queue an unbounded number
-    // of worker threads. The next save retries a skipped cleanup.
-    if PRUNE_IN_PROGRESS.swap(true, Ordering::AcqRel) {
+    let gate = match world_lock(&id) {
+        Ok(gate) => gate,
+        Err(error) => {
+            warn!("World {id} was saved, but its cleanup lock is unavailable: {error}");
+            return;
+        }
+    };
+    // A long cleanup for world A must not prevent world B's cleanup.
+    if gate.prune_running.swap(true, Ordering::AcqRel) {
         return;
     }
     let owned = registries.owned_for_pruning();
+    let worker_gate = Arc::clone(&gate);
     let spawned = thread::Builder::new()
         .name("asteria-save-prune".to_owned())
         .spawn(move || {
-            struct ResetPruneFlag;
+            struct ResetPruneFlag(Arc<WorldGate>);
             impl Drop for ResetPruneFlag {
                 fn drop(&mut self) {
-                    PRUNE_IN_PROGRESS.store(false, Ordering::Release);
+                    self.0.prune_running.store(false, Ordering::Release);
                 }
             }
-            let _reset = ResetPruneFlag;
+            let _reset = ResetPruneFlag(worker_gate);
             let directory = Path::new(WORLDS_DIRECTORY).join(&id);
             if let Err(error) = prune_old_generations(&directory, &id, &owned) {
                 warn!("World {id} was saved, but background backup cleanup failed: {error}");
             }
         });
     if let Err(error) = spawned {
-        PRUNE_IN_PROGRESS.store(false, Ordering::Release);
+        gate.prune_running.store(false, Ordering::Release);
         warn!("World was saved, but backup cleanup thread could not start: {error}");
     }
 }
@@ -365,8 +386,8 @@ pub(crate) fn list_worlds() -> io::Result<Vec<WorldSummary>> {
         if validate_world_name(&id).is_err() {
             continue;
         }
-        let world_lock = world_lock(&id)?;
-        let _lock = world_lock.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+        let gate = world_lock(&id)?;
+        let _lock = gate.write.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
         if let Ok(manifest) = latest_complete_manifest(&entry.path(), &id) {
             worlds.push(WorldSummary { id, last_saved_unix_ms: manifest.last_saved_unix_ms });
         }
@@ -397,41 +418,49 @@ pub(crate) fn list_verified_worlds(registries: &PruneRegistries) -> io::Result<V
     Ok(verified)
 }
 
-/// Manifest inspection and opening every fallback snapshot are protected by
-/// the world's lock. The returned file handles pin all candidate data before
-/// pruning can remove paths; decoding and chunk reconstruction run off-lock.
-struct OpenedSnapshot {
+struct Candidate {
     generation: u64,
     manifest: WorldManifest,
-    file: io::Result<fs::File>,
 }
 
-fn pinned_candidates(id: &str) -> io::Result<Vec<OpenedSnapshot>> {
+/// A reader lease prevents prune deletion while this operation tries any
+/// fallback. Only ONE snapshot File is open at a time, even with many backups.
+struct SnapshotCandidates {
+    directory: PathBuf,
+    candidates: Vec<Candidate>,
+    _lease: ReadLease,
+}
+
+fn snapshot_candidates(id: &str) -> io::Result<SnapshotCandidates> {
     validate_world_name(id)?;
-    let world_lock = world_lock(id)?;
-    let _lock = world_lock.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
-    let directory = Path::new(WORLDS_DIRECTORY).join(id);
-    if !fs::symlink_metadata(&directory)?.file_type().is_dir() {
-        return Err(invalid_data("world directory cannot be a symbolic link"));
-    }
-    let mut candidates = manifest_paths(&directory)?;
-    candidates.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.0));
-    let mut opened = Vec::with_capacity(candidates.len());
-    for (generation, path) in candidates {
-        let Ok(manifest) = read_json::<WorldManifest>(&path) else {
-            continue;
-        };
-        if valid_manifest(&manifest, id, generation) {
-            let file = open_snapshot_file(&directory, &manifest);
-            opened.push(OpenedSnapshot { generation, manifest, file });
+    let gate = world_lock(id)?;
+    let (directory, candidates, lease) = {
+        let _lock = gate.write.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+        let directory = Path::new(WORLDS_DIRECTORY).join(id);
+        if !fs::symlink_metadata(&directory)?.file_type().is_dir() {
+            return Err(invalid_data("world directory cannot be a symbolic link"));
         }
-    }
-    Ok(opened)
+        let mut paths = manifest_paths(&directory)?;
+        paths.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.0));
+        let mut candidates = Vec::with_capacity(paths.len());
+        for (generation, path) in paths {
+            let Ok(manifest) = read_json::<WorldManifest>(&path) else {
+                continue;
+            };
+            if valid_manifest(&manifest, id, generation) {
+                candidates.push(Candidate { generation, manifest });
+            }
+        }
+        gate.readers.fetch_add(1, Ordering::AcqRel);
+        (directory, candidates, ReadLease(Arc::clone(&gate)))
+    };
+    Ok(SnapshotCandidates { directory, candidates, _lease: lease })
 }
 
 fn newest_restorable_timestamp(id: &str, registries: &PruneRegistries) -> io::Result<u64> {
-    for candidate in pinned_candidates(id)? {
-        let loaded = candidate.file.and_then(|file| {
+    let pinned = snapshot_candidates(id)?;
+    for candidate in &pinned.candidates {
+        let loaded = open_snapshot_file(&pinned.directory, &candidate.manifest).and_then(|file| {
             decode_snapshot(file, id, &candidate.manifest, &registries.blocks, &registries.fluids, |snapshot| {
                 registries.validate_playable(snapshot)
             })
@@ -444,16 +473,17 @@ fn newest_restorable_timestamp(id: &str, registries: &PruneRegistries) -> io::Re
     Err(invalid_data(format!("world {id} has no restorable save")))
 }
 
-/// All fallback files are pinned together before expensive decoding. A prune
-/// can run concurrently after the handles are opened without removing any
-/// candidate's bytes out from under this load (including older fallbacks).
+/// The lease protects all fallback paths against pruning, without holding a
+/// mutex during decode or opening every candidate at once. Each candidate is
+/// independently validated before accepting it as the loaded world.
 pub(crate) fn load_world(
     id: &str,
     registries: SaveRegistries<'_>,
 ) -> io::Result<(WorldSnapshot, VoxelWorld)> {
+    let pinned = snapshot_candidates(id)?;
     let mut last_error = None;
-    for candidate in pinned_candidates(id)? {
-        let loaded = candidate.file.and_then(|file| {
+    for candidate in &pinned.candidates {
+        let loaded = open_snapshot_file(&pinned.directory, &candidate.manifest).and_then(|file| {
             decode_snapshot(file, id, &candidate.manifest, registries.blocks, registries.fluids, |snapshot| {
                 registries.validate_playable(snapshot)
             })
@@ -555,7 +585,7 @@ fn latest_complete_manifest(directory: &Path, id: &str) -> io::Result<WorldManif
 
 /// Validate backups off-thread and prune only when four generations decode.
 /// The writer only appends immutable generations. The deletion phase locks
-/// this world only; pinned readers can finish even after paths are removed.
+/// this world, and defers deletion if any reader holds a fallback lease.
 fn prune_old_generations(directory: &Path, id: &str, registries: &PruneRegistries) -> io::Result<()> {
     if !fs::symlink_metadata(directory)?.file_type().is_dir() {
         return Err(invalid_data("world directory cannot be a symbolic link"));
@@ -597,15 +627,16 @@ fn prune_old_generations(directory: &Path, id: &str, registries: &PruneRegistrie
     let Some(cutoff) = cutoff else {
         return Ok(());
     };
-    // Expensive validation is complete: lock only this world's deletion phase.
-    // Saves append immutable generations and cannot invalidate the cutoff.
-    let world_lock = world_lock(id)?;
-    let _lock = world_lock.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+    let gate = world_lock(id)?;
+    let _lock = gate.write.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+    if gate.readers.load(Ordering::Acquire) != 0 {
+        // Retry on a later save. Never delete any fallback path a loader is
+        // about to open, including on Windows where unlinking open files fails.
+        return Ok(());
+    }
     if !fs::symlink_metadata(directory)?.file_type().is_dir() {
         return Err(invalid_data("world directory cannot be a symbolic link"));
     }
-    // Remove each manifest before its snapshot: process termination during
-    // cleanup cannot leave a manifest pointing at a deleted snapshot.
     for (generation, path) in candidates {
         if generation > 0 && generation < cutoff {
             fs::remove_file(path)?;
@@ -722,7 +753,6 @@ fn publish_json<T: Serialize>(directory: &Path, filename: &str, value: &T) -> io
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> io::Result<T> {
-    // Manifest parsing is small; snapshots use their already-opened handles.
     serde_json::from_reader(io::BufReader::new(fs::File::open(path)?)).map_err(io::Error::other)
 }
 
