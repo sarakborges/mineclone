@@ -150,9 +150,11 @@ fn emit_fluid_openings(
             let max_u = (u + 1) as f32 / EDGE as f32;
             let min_v = v as f32 / EDGE as f32;
             let max_v = (v + 1) as f32 / EDGE as f32;
-            let vertices = fluid_micro_face_vertices(
+            let Some(vertices) = fluid_micro_face_vertices(
                 face, x0, y0, z0, heights, min_u, max_u, min_v, max_v,
-            );
+            ) else {
+                continue;
+            };
             let uvs = vertices.map(|vertex| {
                 let local = Vec3::new(vertex[0] - x0, vertex[1] - y0, vertex[2] - z0);
                 fluid_uv(face, local)
@@ -172,10 +174,10 @@ fn fluid_micro_face_vertices(
     max_u: f32,
     min_v: f32,
     max_v: f32,
-) -> [[f32; 3]; 4] {
+) -> Option<[[f32; 3]; 4]> {
     let side_height = |u: f32| -> f32 {
         match face {
-            BlockFace::Right => heights.h10 * u + heights.h11 * (1.0 - u),
+            BlockFace::Right => heights.h10 * (1.0 - u) + heights.h11 * u,
             BlockFace::Left => heights.h00 * (1.0 - u) + heights.h01 * u,
             BlockFace::Front => heights.h01 * (1.0 - u) + heights.h11 * u,
             BlockFace::Back => heights.h00 * (1.0 - u) + heights.h10 * u,
@@ -183,19 +185,51 @@ fn fluid_micro_face_vertices(
         }
     };
 
-    match face {
-        BlockFace::Right => [
-            [x0 + 1.0, y0, z0 + 1.0 - max_u],
-            [x0 + 1.0, y0, z0 + 1.0 - min_u],
-            [x0 + 1.0, y0 + side_height(min_u), z0 + 1.0 - min_u],
-            [x0 + 1.0, y0 + side_height(max_u), z0 + 1.0 - max_u],
-        ],
-        BlockFace::Left => [
-            [x0, y0, z0 + min_u],
-            [x0, y0, z0 + max_u],
-            [x0, y0 + side_height(max_u), z0 + max_u],
-            [x0, y0 + side_height(min_u), z0 + min_u],
-        ],
+    if matches!(
+        face,
+        BlockFace::Right | BlockFace::Left | BlockFace::Front | BlockFace::Back
+    ) {
+        let bottom = min_v;
+        let top = side_height((min_u + max_u) * 0.5).min(max_v);
+        if bottom >= top {
+            return None;
+        }
+        let corner_height_min = side_height(min_u);
+        let corner_height_max = side_height(max_u);
+        let top_min = corner_height_min.min(max_v).max(bottom);
+        let top_max = corner_height_max.min(max_v).max(bottom);
+        let bottom = bottom.max(0.0);
+        let vertices = match face {
+            BlockFace::Right => [
+                [x0 + 1.0, y0 + bottom, z0 + 1.0 - max_u],
+                [x0 + 1.0, y0 + bottom, z0 + 1.0 - min_u],
+                [x0 + 1.0, y0 + top_min, z0 + 1.0 - min_u],
+                [x0 + 1.0, y0 + top_max, z0 + 1.0 - max_u],
+            ],
+            BlockFace::Left => [
+                [x0, y0 + bottom, z0 + min_u],
+                [x0, y0 + bottom, z0 + max_u],
+                [x0, y0 + top_max, z0 + max_u],
+                [x0, y0 + top_min, z0 + min_u],
+            ],
+            BlockFace::Front => [
+                [x0 + min_u, y0 + bottom, z0 + 1.0],
+                [x0 + max_u, y0 + bottom, z0 + 1.0],
+                [x0 + max_u, y0 + top_max, z0 + 1.0],
+                [x0 + min_u, y0 + top_min, z0 + 1.0],
+            ],
+            BlockFace::Back => [
+                [x0 + 1.0 - max_u, y0 + bottom, z0],
+                [x0 + 1.0 - min_u, y0 + bottom, z0],
+                [x0 + 1.0 - min_u, y0 + top_min, z0],
+                [x0 + 1.0 - max_u, y0 + top_max, z0],
+            ],
+            BlockFace::Top | BlockFace::Bottom => unreachable!(),
+        };
+        return Some(vertices);
+    }
+
+    Some(match face {
         BlockFace::Top => [
             [x0 + min_u, y0 + bilinear_height(heights, min_u, max_v), z0 + max_v],
             [x0 + max_u, y0 + bilinear_height(heights, max_u, max_v), z0 + max_v],
@@ -208,19 +242,8 @@ fn fluid_micro_face_vertices(
             [x0 + max_u, y0, z0 + max_v],
             [x0 + min_u, y0, z0 + max_v],
         ],
-        BlockFace::Front => [
-            [x0 + min_u, y0, z0 + 1.0],
-            [x0 + max_u, y0, z0 + 1.0],
-            [x0 + max_u, y0 + side_height(max_u), z0 + 1.0],
-            [x0 + min_u, y0 + side_height(min_u), z0 + 1.0],
-        ],
-        BlockFace::Back => [
-            [x0 + 1.0 - max_u, y0, z0],
-            [x0 + 1.0 - min_u, y0, z0],
-            [x0 + 1.0 - min_u, y0 + side_height(min_u), z0],
-            [x0 + 1.0 - max_u, y0 + side_height(max_u), z0],
-        ],
-    }
+        _ => unreachable!(),
+    })
 }
 
 fn bilinear_height(heights: FluidFaceHeights, u: f32, v: f32) -> f32 {
