@@ -176,7 +176,7 @@ fn spawn_player_health_placeholder(info: &mut ChildSpawnerCommands) {
 }
 
 #[derive(SystemParam)]
-struct EntityCardSubjects<'w, 's> {
+pub(super) struct EntityCardSubjects<'w, 's> {
     player: Query<'w, 's, Entity, With<GameplayCamera>>,
     target: Res<'w, TargetedCreature>,
     creatures: Query<'w, 's, &'static CreatureInstance>,
