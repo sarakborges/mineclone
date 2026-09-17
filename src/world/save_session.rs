@@ -4,7 +4,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::{day_night_cycle::DayNightCycleRegistry, fluid::FluidRegistry},
+    content::{block::BlockRegistry, day_night_cycle::DayNightCycleRegistry, fluid::FluidRegistry},
     player::{
         camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar,
         player_id::PlayerId,
@@ -78,7 +78,7 @@ impl WorldSession {
         let id = self.id.as_deref().ok_or_else(|| io::Error::other("no active world"))?;
         let state = snapshot.saved_state()?;
         let captured = snapshot.capture(id)?;
-        save_world(&captured)?;
+        save_world(&captured, &snapshot.blocks, &snapshot.fluids)?;
         self.last_saved_state = Some(state);
         self.baseline_loaded_save = false;
         self.first_save_done = true;
@@ -95,6 +95,7 @@ pub(crate) struct WorldSaveContext<'w, 's> {
     clock: Res<'w, DayNightClock>,
     inventory: Res<'w, PlayerHotbar>,
     world: Res<'w, VoxelWorld>,
+    blocks: Res<'w, BlockRegistry>,
     fluids: Res<'w, FluidRegistry>,
     player: Query<'w, 's, (&'static PlayerId, &'static Transform, &'static GameMode), With<GameplayCamera>>,
 }

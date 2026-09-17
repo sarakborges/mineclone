@@ -18,8 +18,8 @@ use super::world_names::{WORLDS_DIRECTORY, available_world_name, validate_world_
 
 const SAVE_FORMAT_VERSION: u32 = 1;
 const MAX_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
-/// Retain the newest save and three predecessors so a damaged recent snapshot
-/// does not immediately destroy the last known good generation.
+/// Keep four *restorable* generations. A corrupt manifest or snapshot must not
+/// count as a backup that permits the deletion of older recoverable data.
 const RETAINED_GENERATIONS: usize = 4;
 static SAVE_LOCK: Mutex<()> = Mutex::new(());
 
@@ -152,7 +152,11 @@ pub(crate) fn create_new_world(
 /// Publish a complete immutable snapshot first, followed by its manifest as
 /// the commit marker. A crash before manifest publication leaves the previous
 /// complete generation usable; the next writer never overwrites an old file.
-pub(crate) fn save_world(snapshot: &WorldSnapshot) -> io::Result<u64> {
+pub(crate) fn save_world(
+    snapshot: &WorldSnapshot,
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+) -> io::Result<u64> {
     let _lock = SAVE_LOCK.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
     validate_world_name(&snapshot.id)?;
     if snapshot.format_version != SAVE_FORMAT_VERSION {
@@ -201,7 +205,7 @@ pub(crate) fn save_world(snapshot: &WorldSnapshot) -> io::Result<u64> {
     }
     // Publication succeeded. Pruning is best effort: a cleanup error must not
     // turn an already committed save into an apparent save failure.
-    if let Err(error) = prune_old_generations(&directory, &snapshot.id) {
+    if let Err(error) = prune_old_generations(&directory, &snapshot.id, blocks, fluids) {
         warn!("World save committed, but old snapshot cleanup failed: {error}");
     }
     Ok(manifest.last_saved_unix_ms)
@@ -331,39 +335,55 @@ fn latest_complete_manifest(directory: &Path, id: &str) -> io::Result<WorldManif
     Err(invalid_data(format!("world {id} has no published complete save")))
 }
 
-/// Prune only after a newer manifest has been committed, and only when four
-/// published generations exist. Preserve generation zero (the reserved ID).
-/// Manifest removal precedes snapshot removal so interrupted pruning cannot
-/// expose a dangling entry in the world catalogue.
-fn prune_old_generations(directory: &Path, id: &str) -> io::Result<()> {
+/// Prune only after the new manifest was committed, and only after finding
+/// four generations that actually decode into valid worlds. Corrupt files do
+/// not count toward retention and cannot cause deletion of an older good save.
+/// This validation is synchronous; large-world frame cost needs QA and a
+/// budgeted cleanup path before the feature is declared production-ready.
+fn prune_old_generations(
+    directory: &Path,
+    id: &str,
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+) -> io::Result<()> {
     let mut candidates = manifest_paths(directory)?;
+    // Generation zero is the reserved identity, never a complete save.
+    if candidates.len() <= RETAINED_GENERATIONS + 1 {
+        return Ok(());
+    }
     candidates.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.0));
-    let mut published = 0;
+    let mut restorable = 0;
     let mut cutoff = None;
     for (generation, path) in &candidates {
         let Ok(manifest) = read_json::<WorldManifest>(path) else {
             continue;
         };
-        if valid_manifest(&manifest, id, *generation)
-            && directory.join(snapshot_name(*generation)).is_file()
-        {
-            published += 1;
-            if published == RETAINED_GENERATIONS {
-                cutoff = Some(*generation);
-                break;
+        if !valid_manifest(&manifest, id, *generation) {
+            continue;
+        }
+        match load_snapshot(directory, id, &manifest, blocks, fluids) {
+            Ok(_) => {
+                restorable += 1;
+                if restorable == RETAINED_GENERATIONS {
+                    cutoff = Some(*generation);
+                    break;
+                }
+            }
+            Err(error) => {
+                warn!("Preserving older saves because world {id} generation {generation} is not restorable: {error}");
             }
         }
     }
     let Some(cutoff) = cutoff else {
         return Ok(());
     };
+    // Manifest removal precedes snapshot removal so an interrupted prune
+    // cannot advertise a generation whose file has already been removed.
     for (generation, path) in candidates {
         if generation > 0 && generation < cutoff {
             fs::remove_file(path)?;
         }
     }
-    // Include orphaned snapshots from a crash before manifest publication or
-    // during a previous cleanup, but never touch newer unpublished snapshots.
     for entry in fs::read_dir(directory)? {
         let entry = entry?;
         if !entry.file_type()?.is_file() {
