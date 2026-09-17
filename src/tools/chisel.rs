@@ -16,8 +16,7 @@ use crate::{
     voxel::{
         edit::VoxelMutationRuntime,
         microblock::{
-            CHISEL_MASK_PROPERTY, MICROBLOCK_EDGE, ChiselResolution, MicroblockMask,
-            local_cell, parent_voxel,
+            MICROBLOCK_EDGE, ChiselResolution, MicroblockMask, local_cell, parent_voxel,
         },
         raycast::raycast_micro_voxels,
     },
@@ -78,7 +77,6 @@ fn handle_chisel_use(
         {
             continue;
         }
-        // A forbidden hit cannot be sculpted or used as a source for placement.
         if !blocks.get(hit.block_id).is_some_and(|block| block.can_fragment()) {
             continue;
         }
@@ -93,27 +91,21 @@ fn handle_chisel_use(
             continue;
         }
         let placing = usage.button == ToolUseButton::Right;
-        let existing = runtime.cell_at(voxel);
-        let source = if let Some(cell) = existing {
-            cell
-        } else if placing && runtime.world().fluid_at(voxel).is_none() {
-            // A temporary parent in empty space inherits the hit block's
-            // material. Disk snapshots skip it instead of restoring a full cube.
-            let Some(cell) = runtime.cell_at(hit.voxel) else {
-                continue;
-            };
-            cell.without_secondary_property(CHISEL_MASK_PROPERTY)
-        } else {
+        let Some(source) = runtime.cell_at(voxel) else {
+            // A chisel can restore a removed piece, never create a new parent
+            // block in air (including at a neighboring macroblock boundary).
             continue;
         };
-        // A tagged neighbor does not permit chiseling an ineligible destination.
+        if placing && (voxel != hit.voxel || !MicroblockMask::can_restore(source)) {
+            continue;
+        }
         if !blocks.get(source.block_id).is_some_and(|block| block.can_fragment())
             || !MicroblockMask::has_room(source)
         {
             continue;
         }
-        let transient = existing.is_none_or(MicroblockMask::is_transient_parent);
-        let mut mask = existing.map_or(MicroblockMask::EMPTY, MicroblockMask::from_cell);
+        let transient = MicroblockMask::is_transient_parent(source);
+        let mut mask = MicroblockMask::from_cell(source);
         if !mask.edit(local_cell(fine), *resolution, placing) {
             continue;
         }
