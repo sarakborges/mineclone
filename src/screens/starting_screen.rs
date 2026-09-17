@@ -19,6 +19,10 @@ impl Plugin for StartingScreenPlugin {
         app.add_systems(OnEnter(GameState::StartingScreen), setup_starting_screen)
             .add_systems(
                 Update,
+                sync_starting_screen_labels.run_if(in_state(GameState::StartingScreen)),
+            )
+            .add_systems(
+                Update,
                 handle_menu_buttons
                     .run_if(in_state(GameState::StartingScreen))
                     .run_if(in_state(SettingsState::Closed)),
@@ -32,6 +36,17 @@ enum StartingScreenAction {
     LoadWorlds,
     Settings,
     ExitGame,
+}
+
+impl StartingScreenAction {
+    const fn localization_key(self) -> &'static str {
+        match self {
+            Self::NewWorld => "starting.newWorld",
+            Self::LoadWorlds => "starting.loadWorlds",
+            Self::Settings => "common.settings",
+            Self::ExitGame => "common.exitGame",
+        }
+    }
 }
 
 fn setup_starting_screen(
@@ -114,6 +129,29 @@ fn setup_starting_screen(
                 },
             ));
         });
+}
+
+fn sync_starting_screen_labels(
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
+    buttons: Query<(&StartingScreenAction, &Children)>,
+    mut labels: Query<&mut Text>,
+) {
+    if !language.is_changed() && !localization.is_changed() {
+        return;
+    }
+    for (action, children) in &buttons {
+        let Some(&label_entity) = children.first() else {
+            continue;
+        };
+        let Ok(mut label) = labels.get_mut(label_entity) else {
+            continue;
+        };
+        let translated = localization.text(language.get(), action.localization_key());
+        if label.0 != translated {
+            label.0 = translated.to_owned();
+        }
+    }
 }
 
 fn handle_menu_buttons(
