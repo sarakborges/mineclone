@@ -196,5 +196,5 @@ Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigi
 ## Checkpoint — smooth stair stepping + target highlight depth
 - Ajustado o movimento de subida de degrau para separar a posição física elevada da elevação visual: a colisão continua usando a altura final segura, enquanto a câmera/jogador sobe progressivamente com `STEP_SMOOTH_SPEED`.
 - `move_axis` agora diferencia movimento livre, bloqueio e `Stepped(position)`; gravidade foi adaptada ao novo resultado.
-- O highlight de alvo recebeu `StandardMaterial.depth_bias = 1.0` para evitar que a malha translúcida fique atrás da textura por disputa de profundidade. Bevy 0.19 documenta `depth_bias` como ajuste de profundidade para malhas com profundidade semelhante.
+- O highlight de alvo recebeu `StandardMaterial.depth_bias = 0.01` para evitar que a malha translúcida fique atrás da textura por disputa de profundidade. Bevy 0.19 documenta `depth_bias` como ajuste de profundidade para malhas com profundidade semelhante.
 - Não executei `cargo test`, `cargo run` ou QA Windows; validação deve ser feita pela CI.
