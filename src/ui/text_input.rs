@@ -7,6 +7,13 @@ pub(crate) const INPUT_FILL: Color = Color::srgba(0.045, 0.035, 0.09, 0.88);
 pub(crate) const INPUT_BORDER: Color = Color::srgba(0.43, 0.36, 0.68, 0.72);
 pub(crate) const INPUT_RADIUS: f32 = 7.0;
 pub(crate) const INPUT_PADDING_X: f32 = 14.0;
+/// Explicit editor line box: a full-height EditableText lays out its own glyphs
+/// at the top; centering the full-height node does not center its text/caret.
+pub(crate) const INPUT_EDITOR_HEIGHT: f32 = 22.0;
+
+pub(crate) fn centered_text_top(frame_height: f32) -> f32 {
+    (frame_height - INPUT_EDITOR_HEIGHT) * 0.5
+}
 
 pub(crate) fn input_border(focused: bool) -> Color {
     if focused {
@@ -37,5 +44,10 @@ mod tests {
     fn input_focus_changes_only_border() {
         assert_eq!(input_border(false), INPUT_BORDER);
         assert_eq!(input_border(true), theme::TEXT_PRIMARY.with_alpha(0.92));
+    }
+
+    #[test]
+    fn line_box_is_centered_within_search_field() {
+        assert_eq!(centered_text_top(40.0), 9.0);
     }
 }
