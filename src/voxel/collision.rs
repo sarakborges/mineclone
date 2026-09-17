@@ -73,16 +73,13 @@ pub fn try_step_up_aabb(
     let mut rise = ENTITY_STEP_INCREMENT;
     while rise <= max_step_height + COLLISION_EPSILON {
         let elevated = position + Vec3::Y * rise;
-        if aabb_is_clear(world, bounds_at(elevated)) {
-            if let Some(horizontal_position) =
+        if aabb_is_clear(world, bounds_at(elevated))
+            && let Some(horizontal_position) =
                 move_aabb_horizontally(world, elevated, horizontal_delta, &bounds_at)
-            {
-                if let Some(settled) =
-                    settle_after_step(world, horizontal_position, rise, &bounds_at)
-                {
-                    return Some(settled);
-                }
-            }
+            && let Some(settled) =
+                settle_after_step(world, horizontal_position, rise, &bounds_at)
+        {
+            return Some(settled);
         }
         rise += ENTITY_STEP_INCREMENT;
     }
