@@ -1,7 +1,9 @@
 {
   "id": "asteria:meadow_slime",
   "name": {
-    "english": "Meadow Slime"
+    "english": "Meadow Slime",
+    "portuguese_brazil": "Gosma do prado",
+    "spanish": "Limo de la pradera"
   },
   "model": "models/creatures/slime/slime.glb",
   "collider": {

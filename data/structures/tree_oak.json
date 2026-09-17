@@ -1,6 +1,6 @@
 {
   "id": "asteria:tree_oak",
-  "name": { "english": "Oak Tree" },
+  "name": { "english": "Oak Tree", "portuguese_brazil": "Carvalho", "spanish": "Roble" },
   "anchor": { "x": 2, "y": 0, "z": 2 },
   "palette": {
     "G": { "block": "asteria:grass" },
