@@ -122,6 +122,11 @@ fn load_definition(path: &Path, content: &mut LoadedContent) {
             .fluids
             .insert(read_json_definition::<FluidDefinition>(path));
     } else if path_has_component(path, "structures") {
+        assert!(
+            path.starts_with(data_root().join("structures")),
+            "structure definitions must be under data/structures/, not {}",
+            path.display()
+        );
         content
             .structures
             .insert(read_json_definition::<StructureDefinition>(path));
