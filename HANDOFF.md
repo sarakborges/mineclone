@@ -185,3 +185,9 @@ Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigi
 - A mudança é deliberadamente pequena: mantém o loop explícito de 64 microcélulas, evitando uma otimização bit-level sem API pública adequada.
 - CI 35282920752 (run 3060) detectou que a limpeza removeu uma importação necessária de `VoxelCell`; correção aplicada em ca98dc1b9564d10b10cf0353932ea8e43de35ca8.
 - Não executei cargo test/cargo run.
+
+## Checkpoint 72 — correção real do import do VoxelCell [CÓDIGO; CI PENDENTE]
+
+- 3060/35282920752 falhou porque a tentativa anterior de cleanup referenciava VoxelCell sem import no escopo de produção. A primeira correção não foi aplicada no local correto; revisão do arquivo confirmou isso.
+- c3810b618aa54ff808a0270482226d5546a5ac67 adiciona explicitamente voxel::cell::VoxelCell ao import do módulo. Esta é a correção efetiva.
+- Não executei cargo test/cargo run; CI deve validar a correção.
