@@ -7,7 +7,9 @@ use super::microblock::CHISEL_MASK_PROPERTY;
 
 const MAX_SECONDARY_PROPERTIES: usize = 8;
 
-static SECONDARY_PROPERTY_TOKEN_INTERNER: OnceLock<Mutex<HashMap<String, &'static str>>> =
+// Store each canonical token only once. The previous HashMap<String, &str>
+// duplicated every token as an owned key in addition to the leaked value.
+static SECONDARY_PROPERTY_TOKEN_INTERNER: OnceLock<Mutex<HashSet<&'static str>>> =
     OnceLock::new();
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
