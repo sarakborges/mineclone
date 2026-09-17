@@ -148,3 +148,12 @@ Próximo passo: obter CI; se verde, continuar a revisão de fronteira sólido/fl
 - Foram adicionados testes para face parcial aberta e bloco integral fechado.
 - VERSION foi atualizado para 0.22.6 em 19f593d958d6b3ac5e2ff29ec92f8f8f8142778b.
 - Não executei cargo test/cargo run. CI pendente.
+
+
+## Checkpoint 67 — cobertura direcional da fronteira fluido/Chisel [CI VERDE]
+
+- 4c15ac4341b9f2249f4e1c156a816aabf0f58b88 amplia o teste da abertura parcial para Right/Left/Top/Bottom/Front/Back, validando o mapeamento de cada face.
+- CI 35281985377 (run 3037) concluiu GREEN; Clippy e Check passaram.
+- O checkpoint 66/67 não foi validado por cargo test/cargo run localmente, conforme restrição do projeto.
+
+Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigir regressões encontradas pela CI antes de avançar.
