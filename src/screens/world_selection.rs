@@ -2,6 +2,7 @@ use std::{
     io,
     sync::{Arc, Mutex},
     thread,
+    time::Instant,
 };
 
 use bevy::{ecs::system::SystemParam, log::warn, prelude::*};
@@ -185,6 +186,7 @@ fn refresh_world_list(
     if state.scan.is_some() {
         return;
     }
+    let copy_started = Instant::now();
     let owned = SaveRegistries {
         blocks: &content.blocks,
         fluids: &content.fluids,
@@ -193,15 +195,23 @@ fn refresh_world_list(
         cycles: &content.cycles,
     }
     .owned_for_pruning();
+    info!("Saved-world catalog definitions copied on main thread: {:?}", copy_started.elapsed());
     let result: WorldScanResult = Arc::new(Mutex::new(None));
     let worker_result = Arc::clone(&result);
     match thread::Builder::new()
         .name("asteria-world-scan".to_owned())
         .spawn(move || {
+            let scan_started = Instant::now();
             let verified = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 list_verified_worlds(&owned)
             }))
             .unwrap_or_else(|_| Err(io::Error::other("saved-world verification worker panicked")));
+            info!(
+                "Saved-world catalog verification: duration={:?}, successful={}, worlds={}",
+                scan_started.elapsed(),
+                verified.is_ok(),
+                verified.as_ref().map_or(0, Vec::len)
+            );
             if let Ok(mut slot) = worker_result.lock() {
                 *slot = Some(verified);
             }
@@ -309,7 +319,7 @@ fn spawn_world_selection(
                     },
                 ));
                 panel.spawn((SelectionFeedback, typography::caption(String::new())));
-                panel.spawn((SelectionError, typography::caption(String::new())));
+                panel.spawn((SelectionError, typography::caption(state.error.clone())));
                 panel.spawn(menu_button(
                     localization.text(language.get(), "worldSelection.load").to_owned(),
                     WorldSelectionAction::Load,
@@ -470,17 +480,25 @@ fn handle_world_selection(
                         .to_owned();
                     return;
                 };
+                let copy_started = Instant::now();
                 let owned = content.owned_for_loading();
+                info!("World {id} load definitions copied on main thread: {:?}", copy_started.elapsed());
                 let result: WorldLoadResult = Arc::new(Mutex::new(WorldLoadSlot::default()));
                 let worker_result = Arc::clone(&result);
                 let worker_id = id.clone();
                 match thread::Builder::new()
                     .name("asteria-world-load".to_owned())
                     .spawn(move || {
+                        let load_started = Instant::now();
                         let loaded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                             load_world(&worker_id, owned.registries())
                         }))
                         .unwrap_or_else(|_| Err(io::Error::other("saved-world loading worker panicked")));
+                        info!(
+                            "World {worker_id} load worker: duration={:?}, successful={}",
+                            load_started.elapsed(),
+                            loaded.is_ok()
+                        );
                         let mut loaded = Some(loaded);
                         {
                             let mut slot = worker_result.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
