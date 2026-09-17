@@ -435,6 +435,41 @@ mod tests {
     }
 
     #[test]
+    fn clipped_fluid_side_stops_at_surface_height() {
+        let heights = FluidFaceHeights {
+            h00: 0.5,
+            h10: 0.5,
+            h11: 0.5,
+            h01: 0.5,
+        };
+
+        assert!(fluid_micro_face_vertices(
+            BlockFace::Front,
+            0.0,
+            0.0,
+            0.0,
+            heights,
+            0.0,
+            1.0,
+            0.0,
+            0.5,
+        )
+        .is_some());
+        assert!(fluid_micro_face_vertices(
+            BlockFace::Front,
+            0.0,
+            0.0,
+            0.0,
+            heights,
+            0.0,
+            1.0,
+            0.5,
+            0.625,
+        )
+        .is_none());
+    }
+
+    #[test]
     fn full_block_face_stays_closed_to_fluid() {
         let cell = VoxelCell::new("stone", Default::default());
         assert!(!partial_block_face_has_opening(cell, BlockFace::Right));
