@@ -42,6 +42,14 @@ pub(super) fn validate_content(content: &LoadedContent) {
 
     for biome in content.biomes.iter() {
         biome.validate_material_references(&content.blocks);
+        for spawn in &biome.creature_spawns {
+            assert!(
+                content.creatures.get(&spawn.creature).is_some(),
+                "biome {} references missing creature spawn: {}",
+                biome.id,
+                spawn.creature
+            );
+        }
         biome.validate_structure_references(&content.structures);
     }
 
