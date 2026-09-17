@@ -190,37 +190,43 @@ fn ao_brightness(occlusion: f32) -> f32 {
 fn average_shader_light_levels(samples: [VoxelSample; 4]) -> (f32, [f32; 3]) {
     let mut sky_total = 0.0;
     let mut block_total = [0.0; 3];
-    let mut count = 0_u32;
+    let mut weight_total = 0.0;
 
     for sample in samples {
         let Some((cell, _, light)) = sample else {
             continue;
         };
-        if cell.is_some() {
+        let weight = sample_open_fraction(cell);
+        if weight <= f32::EPSILON {
             continue;
         }
 
-        sky_total += light.sky() as f32;
+        sky_total += light.sky() as f32 * weight;
         let block = light.block_srgb_levels();
-        block_total[0] += block[0] as f32;
-        block_total[1] += block[1] as f32;
-        block_total[2] += block[2] as f32;
-        count += 1;
+        block_total[0] += block[0] as f32 * weight;
+        block_total[1] += block[1] as f32 * weight;
+        block_total[2] += block[2] as f32 * weight;
+        weight_total += weight;
     }
 
-    if count == 0 {
+    if weight_total <= f32::EPSILON {
         (0.0, [0.0; 3])
     } else {
-        let count = count as f32;
         (
-            sky_total / count,
+            sky_total / weight_total,
             [
-                block_total[0] / count,
-                block_total[1] / count,
-                block_total[2] / count,
+                block_total[0] / weight_total,
+                block_total[1] / weight_total,
+                block_total[2] / weight_total,
             ],
         )
     }
+}
+
+fn sample_open_fraction(cell: Option<VoxelCell>) -> f32 {
+    cell.map_or(1.0, |cell| {
+        1.0 - crate::voxel::microblock::MicroblockMask::from_cell(cell).occupied_fraction()
+    })
 }
 
 fn component_max(left: [f32; 3], right: [f32; 3]) -> [f32; 3] {
@@ -282,7 +288,7 @@ fn face_basis(face: BlockFace) -> (IVec3, IVec3, IVec3, [(i32, i32); 4]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{ao_brightness, provisional_top_sky_sample, sample_occlusion, should_flip_diagonal};
+    use super::{ao_brightness, provisional_top_sky_sample, sample_occlusion, sample_open_fraction, should_flip_diagonal};
     use crate::voxel::{block_face::BlockFace, cell::VoxelCell, light::VoxelLight, microblock::MicroblockMask};
 
     const DARK: [f32; 3] = [0.0; 3];
@@ -295,6 +301,31 @@ mod tests {
         assert!(sample_occlusion(Some((Some(VoxelCell::new("stone", Default::default())), None, VoxelLight::DARK))) > 0.0);
         let empty = MicroblockMask::EMPTY.apply_to_cell(VoxelCell::new("stone", Default::default()), true);
         assert_eq!(sample_occlusion(Some((Some(empty), None, VoxelLight::DARK))), 0.0);
+    }
+
+    #[test]
+    #[test]
+    fn partial_microblocks_contribute_open_light_fraction() {
+        let full = VoxelCell::new("stone", Default::default());
+        let empty = MicroblockMask::EMPTY.apply_to_cell(full, true);
+        assert_eq!(sample_open_fraction(None), 1.0);
+        assert_eq!(sample_open_fraction(Some(full)), 0.0);
+        let mut half_mask = MicroblockMask::EMPTY;
+        for layer in 0..4 {
+            half_mask = {
+                let mut mask = half_mask;
+                mask.edit([0, 0, layer], crate::voxel::microblock::ChiselResolution::ExtraThin, true);
+                for y in 0..8 {
+                    for x in 0..8 {
+                        mask.edit([x, y, layer], crate::voxel::microblock::ChiselResolution::ExtraThin, true);
+                    }
+                }
+                mask
+            };
+        }
+        let half = half_mask.apply_to_cell(full, true);
+        assert!((sample_open_fraction(Some(half)) - 0.5).abs() < f32::EPSILON);
+        assert_eq!(sample_open_fraction(Some(empty)), 1.0);
     }
 
     #[test]
