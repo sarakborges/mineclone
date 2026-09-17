@@ -103,9 +103,8 @@ fn fluid_dampening(cell: Option<FluidCell>, fluids: &FluidRegistry) -> u8 {
 }
 
 fn scale_dampening(full_dampening: u8, level: u8) -> u8 {
-    ((u16::from(full_dampening) * u16::from(level)
-        + u16::from(crate::voxel::fluid::MAX_FLUID_LEVEL) - 1)
-        / u16::from(crate::voxel::fluid::MAX_FLUID_LEVEL)) as u8
+    (u16::from(full_dampening) * u16::from(level))
+        .div_ceil(u16::from(crate::voxel::fluid::MAX_FLUID_LEVEL)) as u8
 }
 
 
