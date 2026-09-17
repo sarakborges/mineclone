@@ -8,7 +8,7 @@ use std::{
 static BLOCK_ID_INTERNER: OnceLock<Mutex<HashSet<&'static str>>> = OnceLock::new();
 
 pub(crate) fn intern_block_id(id: &str) -> &'static str {
-    let interner = BLOCK_ID_INTERNER.get_or_init(|| Mutex::new(HashMap::new()));
+    let interner = BLOCK_ID_INTERNER.get_or_init(|| Mutex::new(HashSet::new()));
     let mut ids = interner
         .lock()
         .expect("block ID interner lock was poisoned");
