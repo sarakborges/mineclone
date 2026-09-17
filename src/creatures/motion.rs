@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     content::creature::{CreatureCollider, CreatureRegistry},
+    entity::EntityHealth,
     player::movement::config::{COLLISION_STEP, GRAVITY},
     voxel::{collision::collides_aabb, world::VoxelWorld},
 };
@@ -82,10 +83,15 @@ pub(super) fn move_creatures(
         &mut Transform,
         &mut CreatureMotion,
         &mut CreatureAnimationState,
+        &EntityHealth,
     )>,
 ) {
     let dt = time.delta_secs().min(0.05);
-    for (instance, collider, mut transform, mut motion, mut animation) in &mut creatures {
+    for (instance, collider, mut transform, mut motion, mut animation, health) in &mut creatures {
+        if health.is_dead() {
+            set_animation(&mut animation, "death");
+            continue;
+        }
         let Some(definition) = definitions.get(&instance.definition_id) else {
             continue;
         };
