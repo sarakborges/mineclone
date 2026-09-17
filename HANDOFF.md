@@ -238,3 +238,11 @@ Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigi
 - 530f11a278f8c9ec25267948cfdefc2e2831cde7 adiciona regressão de runtime para bloco e fluido compartilharem o mesmo voxel sem perder nenhum canal.
 - e61def3c22e94fea9304ff02c9dc5b71937220db atualiza VERSION para 0.22.8.
 - Não executei `cargo test`, `cargo run` ou QA Windows.
+
+
+## Checkpoint 78 — CI corrigido após leitura do run 3122
+
+- Run CI `35285853346` (run 3122), associado ao PR #7, falhou no Clippy por três usos antigos de `move_axis() -> bool` em `src/player/movement/flight.rs`; o log confirmou `expected bool, found MoveAxisResult`.
+- d48a0dca7b19bd58b4c31a91ebc42370305cf4c2 atualiza os três eixos do voo para tratar `MoveAxisResult::Blocked | MoveAxisResult::Stepped(_)`.
+- As correções anteriores de `walking.rs` e `swimming.rs` já estão no `develop` atual.
+- Não executei `cargo test`, `cargo run` ou QA Windows; a validação foi baseada diretamente no log do CI.
