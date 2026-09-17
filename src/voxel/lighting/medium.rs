@@ -93,9 +93,13 @@ fn fluid_dampening(cell: Option<FluidCell>, fluids: &FluidRegistry) -> u8 {
         return 0;
     };
 
-    fluids
+    let full_dampening = fluids
         .get(cell.fluid_id)
         .unwrap_or_else(|| panic!("missing fluid definition for id {}", cell.fluid_id))
         .light_dampening
-        .min(VoxelLight::MAX_LEVEL)
+        .min(VoxelLight::MAX_LEVEL);
+
+    ((u16::from(full_dampening) * u16::from(cell.level)
+        + u16::from(crate::voxel::fluid::MAX_FLUID_LEVEL) - 1)
+        / u16::from(crate::voxel::fluid::MAX_FLUID_LEVEL)) as u8
 }
