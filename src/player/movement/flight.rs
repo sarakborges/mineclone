@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    player::{camera::GameplayCamera, game_mode::GameMode},
+    player::{PlayerEntity, camera::GameplayCamera, game_mode::GameMode},
     voxel::world::VoxelWorld,
     world::{game_rules::GameRules, tick::WorldTickClock},
 };
@@ -81,7 +81,7 @@ pub(super) fn move_flying(
     world_ticks: Res<WorldTickClock>,
     keys: Res<ButtonInput<KeyCode>>,
     world: Res<VoxelWorld>,
-    player: Single<(&mut Transform, &GameplayCamera, &mut FlightState)>,
+    player: Single<(&mut Transform, &GameplayCamera, &mut FlightState), With<PlayerEntity>>,
 ) {
     let (mut transform, camera, mut flight) = player.into_inner();
 
@@ -151,6 +151,7 @@ pub(super) fn move_flying(
             &world,
             velocity.x * delta_seconds,
             Axis::X,
+            None,
         )
     {
         flight.velocity.x = 0.0;
@@ -161,6 +162,7 @@ pub(super) fn move_flying(
             &world,
             velocity.z * delta_seconds,
             Axis::Z,
+            None,
         )
     {
         flight.velocity.z = 0.0;
@@ -171,6 +173,7 @@ pub(super) fn move_flying(
             &world,
             velocity.y * delta_seconds,
             Axis::Y,
+            None,
         )
     {
         flight.velocity.y = 0.0;
