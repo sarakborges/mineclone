@@ -21,7 +21,7 @@ const PORTRAIT_RENDER_LAYER: usize = 2;
 pub(super) struct PortraitCamera;
 
 #[derive(Component)]
-struct PortraitModel {
+pub(super) struct PortraitModel {
     definition_id: String,
     gltf: Handle<Gltf>,
     scene_attached: bool,
@@ -31,7 +31,7 @@ struct PortraitModel {
 struct PortraitAppearance(String);
 
 #[derive(SystemParam)]
-struct PortraitSelection<'w, 's> {
+pub(super) struct PortraitSelection<'w, 's> {
     target: Res<'w, TargetedCreature>,
     settings: Res<'w, HudSettings>,
     creatures: Query<'w, 's, &'static CreatureInstance>,
