@@ -52,7 +52,6 @@ struct WorldSelectionState {
     worlds: Vec<WorldSummary>,
     selected: Option<String>,
     error: String,
-    loading: bool,
     scan: Option<WorldScanResult>,
 }
 
@@ -95,7 +94,6 @@ fn refresh_world_list(
     state.selected = None;
     state.worlds.clear();
     state.error.clear();
-    state.loading = true;
     // Returning to this menu while a prior scan is running reuses that scan
     // rather than creating an unbounded number of detached workers.
     if state.scan.is_some() {
@@ -125,7 +123,6 @@ fn refresh_world_list(
     {
         Ok(_) => state.scan = Some(result),
         Err(error) => {
-            state.loading = false;
             state.error = format!(
                 "{}: {error}",
                 localization.text(language.get(), "worldSelection.scanStartError")
@@ -150,7 +147,6 @@ fn poll_world_scan(
         return;
     };
     state.scan = None;
-    state.loading = false;
     match result {
         Ok(worlds) => {
             state.worlds = worlds;
@@ -212,7 +208,7 @@ fn spawn_world_selection(
                 ));
                 panel.spawn((
                     WorldListStatus,
-                    typography::caption(if state.loading {
+                    typography::caption(if state.scan.is_some() {
                         localization.text(language.get(), "worldSelection.verifying").to_owned()
                     } else {
                         localization.text(language.get(), "worldSelection.noRestorable").to_owned()
@@ -242,11 +238,7 @@ fn spawn_world_selection(
 
 #[derive(SystemParam)]
 struct WorldSelectionLoadContext<'w> {
-    blocks: Res<'w, BlockRegistry>,
-    fluids: Res<'w, FluidRegistry>,
-    tools: Res<'w, ToolRegistry>,
-    dimensions: Res<'w, DimensionRegistry>,
-    cycles: Res<'w, DayNightCycleRegistry>,
+    content: WorldSelectionScanContent<'w>,
     inventory: ResMut<'w, PlayerHotbar>,
     save: ResMut<'w, InMemoryWorldSave>,
 }
@@ -277,7 +269,7 @@ fn handle_world_selection(
                 return;
             }
             WorldSelectionAction::Load => {
-                if state.loading {
+                if state.scan.is_some() {
                     state.error = localization
                         .text(language.get(), "worldSelection.stillVerifying")
                         .to_owned();
@@ -290,11 +282,11 @@ fn handle_world_selection(
                     return;
                 };
                 let registries = SaveRegistries {
-                    blocks: &context.blocks,
-                    fluids: &context.fluids,
-                    tools: &context.tools,
-                    dimensions: &context.dimensions,
-                    cycles: &context.cycles,
+                    blocks: &context.content.blocks,
+                    fluids: &context.content.fluids,
+                    tools: &context.content.tools,
+                    dimensions: &context.content.dimensions,
+                    cycles: &context.content.cycles,
                 };
                 let (snapshot, world) = match load_world(&id, registries) {
                     Ok(loaded) => loaded,
@@ -310,8 +302,8 @@ fn handle_world_selection(
                 // scan displayed its timestamp.
                 if let Err(error) = context.inventory.restore_items(
                     &snapshot.inventory,
-                    &context.blocks,
-                    &context.tools,
+                    &context.content.blocks,
+                    &context.content.tools,
                 ) {
                     state.error = format!(
                         "{}: {error}",
