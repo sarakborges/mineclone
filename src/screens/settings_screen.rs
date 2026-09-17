@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 
 use crate::app::{
-    game_state::GameState, resource_systems::reset_resource, settings_state::SettingsState,
+    game_state::GameState, resource_systems::reset_resource,
+    settings_state::{SettingsScope, SettingsState},
 };
 use game_rules_section::{
     TicksPerSecondInputState, handle_ticks_input, handle_ticks_keyboard, handle_ticks_step_buttons,
@@ -59,6 +60,7 @@ pub struct SettingsScreenPlugin;
 impl Plugin for SettingsScreenPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<SettingsState>()
+            .init_resource::<SettingsScope>()
             .init_resource::<SettingsSectionSelection>()
             .init_resource::<TicksPerSecondInputState>()
             .init_resource::<SeedInputState>()
