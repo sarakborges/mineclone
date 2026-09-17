@@ -145,8 +145,8 @@ mod tests {
     #[test]
     fn removes_secondary_property_values() {
         let mut properties = SecondaryProperties::default().with("dyed", "red");
-        assert_eq!(properties.get("dyed"), Some("red"));
-        properties.remove("dyed");
+        assert!(properties.remove("dyed"));
         assert_eq!(properties.get("dyed"), None);
+        assert!(!properties.remove("dyed"));
     }
 }
