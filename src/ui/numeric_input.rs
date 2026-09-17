@@ -25,6 +25,12 @@ pub(crate) enum NumericInputSizing {
     Flexible,
 }
 
+/// The border belongs to an outer frame. The marker and editable text stay on
+/// the inner Button so the existing input focus, pointer and keyboard systems
+/// continue targeting exactly the same entity.
+#[derive(Component)]
+pub(crate) struct NumericInputFrame<I: Component>(PhantomData<I>);
+
 #[derive(Resource)]
 pub(crate) struct NumericInputState<M: Send + Sync + 'static> {
     editing: bool,
@@ -131,26 +137,7 @@ pub(crate) fn numeric_input_field<I: Component, L: Component>(
         NumericInputSizing::Flexible => (Val::Auto, 1.0, px(0)),
     };
     (
-        Button,
-        input_marker,
-        label_marker,
-        EditableText {
-            max_characters: Some(20),
-            ..EditableText::new(value.into())
-        },
-        EditableTextFilter::new(|character| character.is_ascii_digit()),
-        TextLayout::no_wrap(),
-        TextFont {
-            font: FontSource::SystemUi,
-            font_size: FontSize::Px(20.0),
-            weight: FontWeight::MEDIUM,
-            ..default()
-        },
-        TextColor(theme::TEXT_PRIMARY),
-        TextCursorStyle {
-            color: theme::TEXT_PRIMARY,
-            ..default()
-        },
+        NumericInputFrame::<I>(PhantomData),
         Node {
             width,
             flex_grow,
@@ -166,6 +153,36 @@ pub(crate) fn numeric_input_field<I: Component, L: Component>(
         },
         BackgroundColor(text_input::INPUT_FILL),
         BorderColor::all(text_input::input_border(false)),
+        children![(
+            Button,
+            input_marker,
+            label_marker,
+            EditableText {
+                max_characters: Some(20),
+                ..EditableText::new(value.into())
+            },
+            EditableTextFilter::new(|character| character.is_ascii_digit()),
+            TextLayout::no_wrap(),
+            TextFont {
+                font: FontSource::SystemUi,
+                font_size: FontSize::Px(20.0),
+                weight: FontWeight::MEDIUM,
+                ..default()
+            },
+            TextColor(theme::TEXT_PRIMARY),
+            TextCursorStyle {
+                color: theme::TEXT_PRIMARY,
+                ..default()
+            },
+            Node {
+                width: percent(100),
+                min_width: px(0),
+                height: percent(100),
+                align_items: AlignItems::Center,
+                overflow: Overflow::clip(),
+                ..default()
+            },
+        )],
     )
 }
 
@@ -173,7 +190,7 @@ pub(crate) fn sync_numeric_input_view<M, I, L>(
     state: &NumericInputState<M>,
     value: impl Display,
     editors: &mut Query<&mut EditableText, With<L>>,
-    inputs: &mut Query<&mut BorderColor, With<I>>,
+    inputs: &mut Query<&mut BorderColor, With<NumericInputFrame<I>>>,
 ) where
     M: Send + Sync + 'static,
     I: Component,
