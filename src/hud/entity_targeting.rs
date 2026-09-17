@@ -6,10 +6,7 @@ use bevy::{
     render::render_resource::TextureFormat,
 };
 
-use crate::{
-    app::game_state::GameState,
-    ui::surface,
-};
+use crate::app::game_state::GameState;
 
 use super::{
     HudSettings, TargetBlockPosition,
@@ -26,6 +23,13 @@ struct EntityHudRoot;
 
 #[derive(Component)]
 struct EntityHudRow;
+
+type EntityHudRootLayout<'w, 's> = Single<
+    'w,
+    's,
+    (&'static mut Node, &'static mut Visibility),
+    (With<EntityHudRoot>, Without<EntityHudRow>),
+>;
 
 pub(super) struct EntityHudPlugin;
 
@@ -135,16 +139,14 @@ fn spawn_target_entity_hud(
 
 fn sync_target_entity_layout(
     settings: Res<HudSettings>,
-    mut root: Single<
-        (&mut Node, &mut Visibility),
-        (With<EntityHudRoot>, Without<EntityHudRow>),
-    >,
+    root: EntityHudRootLayout,
     mut row: Single<&mut Node, (With<EntityHudRow>, Without<EntityHudRoot>)>,
     cards: Query<&EntityCard>,
 ) {
     let position = settings.target_block_position();
+    let (mut root_node, mut visibility) = root.into_inner();
     if settings.is_changed() {
-        *root.0 = entity_hud_node(position);
+        *root_node = entity_hud_node(position);
         **row = entity_row_node(position);
     }
     let target_present = cards
@@ -155,7 +157,7 @@ fn sync_target_entity_layout(
     } else {
         Visibility::Hidden
     };
-    if *root.1 != desired {
-        *root.1 = desired;
+    if *visibility != desired {
+        *visibility = desired;
     }
 }
