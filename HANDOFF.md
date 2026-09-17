@@ -256,3 +256,14 @@ Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigi
 - Não executei `cargo test`, `cargo run` ou QA Windows. É necessário aguardar a próxima CI para confirmar que não há outro erro no conjunto integrado.
 
 Próximo passo imediato: consultar a nova CI do HEAD e corrigir todos os erros objetivos restantes antes de iniciar outro item funcional.
+
+
+## Checkpoint 80 — alinhar código ao novo slime.json/PNG [CÓDIGO; CI PENDENTE]
+
+- O branch develop atual já contém o novo data/creatures/slime.json (asteria:slime) e o novo assets/textures/creatures/slime.png; não havia mais meadow.json/ember.json no tree atual.
+- O código de produção já é data-driven e aceita exatamente o schema atual: textures por material, materialTints, animations, collider e parâmetros de movimento; visual.rs resolve nomes de materiais/clips a partir do JSON e motion.rs usa os parâmetros da definição.
+- A única inconsistência encontrada era um teste de validação em src/content/creature.rs que ainda esperava o caminho antigo textures/creatures/meadow_slime.png. db8f3f1d2c6c72b8291c279ae0be05a9040bd043 atualiza o teste para textures/creatures/slime.png.
+- O VERSION já está em 0.22.8; não foi incrementado porque esta correção apenas alinha uma regressão de teste ao asset já adotado, sem mudança de comportamento do jogo.
+- Não executei cargo test, cargo run ou QA Windows. CI pendente para este commit.
+
+Próximo passo imediato: consultar a CI do novo HEAD e corrigir qualquer erro objetivo restante antes de avançar.
