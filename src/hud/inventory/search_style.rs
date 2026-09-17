@@ -4,19 +4,24 @@ use crate::ui::{text_input, theme};
 
 use super::state::{CreativeInventoryView, CreativeSearchBar, CreativeSearchText, SEARCH_HEIGHT};
 
-/// The inventory search field is an editable text node, so the placeholder must
-/// be positioned independently instead of participating in the editor's flex layout.
-/// Apply the shared input styling after the inventory's normal interaction styles.
+type SearchInputs<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Node, &'static mut BackgroundColor, &'static mut BorderColor),
+    (With<CreativeSearchBar>, Without<CreativeSearchText>),
+>;
+type SearchPlaceholders<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Node, &'static mut TextColor),
+    (With<CreativeSearchText>, Without<CreativeSearchBar>),
+>;
+
+/// Keep the placeholder outside the editable text's flex layout and use shared styling.
 pub(super) fn style_inventory_search_field(
     view: Res<CreativeInventoryView>,
-    mut inputs: Query<
-        (&mut Node, &mut BackgroundColor, &mut BorderColor),
-        (With<CreativeSearchBar>, Without<CreativeSearchText>),
-    >,
-    mut placeholders: Query<
-        (&mut Node, &mut TextColor),
-        (With<CreativeSearchText>, Without<CreativeSearchBar>),
-    >,
+    mut inputs: SearchInputs,
+    mut placeholders: SearchPlaceholders,
 ) {
     let padding = UiRect::horizontal(px(text_input::INPUT_PADDING_X));
     let radius = BorderRadius::all(px(text_input::INPUT_RADIUS));
