@@ -75,3 +75,13 @@ Próximo passo: obter CI do checkpoint 58; se verde, medir/inspecionar o crescim
 - Validação: não executei cargo test, cargo run ou QA Windows. CI ainda não estava disponível para os commits novos no momento do registro.
 
 Próximo passo: verificar CI; depois revisar se AO/face lighting também precisa distinguir máscaras parciais e investigar o caminho de fluidos/solid com a mesma preocupação de macro resolução.
+
+
+## Checkpoint 60 — atenuação de luz de fluidos por nível [CÓDIGO; CI PENDENTE]
+
+- 15ab12f6cb177909889bd753d0893233c1ce41bd escala a atenuação configurada do fluido pela altura real do FluidCell. Um fluido de nível 8 mantém a atenuação integral; níveis menores deixam passar proporcionalmente mais luz em vez de tratar qualquer presença como uma coluna cheia.
+- 25bde922682378bac6d31858a668240d81b36dfc adiciona regressão para níveis 1/4/8 com dampening integral 15.
+- a23cadf1f903f65dc7760b4bbd99bfaecdbaf2b1 sobe VERSION para 0.22.4.
+- Validação: não executei cargo test, cargo run ou QA Windows. Há CI da PR em andamento, mas ainda não foi observado resultado verde para os commits mais novos.
+
+Próximo passo: aguardar/consultar a CI atual; revisar face_lighting/AO para máscaras parciais e, se não houver regressão, continuar nos casos de solid/fluid boundary.
