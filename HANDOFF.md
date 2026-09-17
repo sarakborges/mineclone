@@ -223,3 +223,9 @@ Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigi
 - 4c7e6b1c5bab10efc01efb42dea2c176a820baf7 adiciona cobertura unitária para a interpolação do step, incluindo aproximação sem overshoot e movimento descendente.
 - A ordem dos sistemas já é encadeada em `PlayerMovementPlugin`, então `walk` termina de atualizar o estado antes de `apply_gravity`.
 - Não executei `cargo test`, `cargo run` ou QA Windows.
+
+
+## Checkpoint 76 — robustez do recorte lateral de fluido [CÓDIGO; CI NÃO VISÍVEL]
+
+- d370e3e46cbb75c2bc814f599b8c8a0ac98974ff corrige a decisão de emissão das microfaces laterais inclinadas: o recorte agora considera a maior altura entre os dois cantos da célula, em vez de depender apenas da altura no ponto médio. Isso evita sumir com uma microface válida em bordas inclinadas da superfície.
+- A sequência de correções desta rodada permanece sem `cargo test`, `cargo run` ou QA Windows, conforme restrição do projeto.
