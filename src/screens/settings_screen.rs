@@ -33,6 +33,7 @@ use spawn_biome_section::{
     sync_spawn_biome_options, sync_spawn_biome_search_frame,
     sync_spawn_biome_selected_label,
 };
+use world_name_section::{WorldNameFeedback, handle_world_name_focus, sync_world_name_view};
 use world_settings_section::{handle_game_mode_buttons, sync_game_mode_buttons};
 
 pub(crate) mod game_rules_section;
@@ -44,6 +45,7 @@ mod new_world_section;
 mod render_distance_logic;
 mod render_distance_section;
 mod spawn_biome_section;
+mod world_name_section;
 pub(crate) mod world_settings_section;
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -61,6 +63,7 @@ impl Plugin for SettingsScreenPlugin {
             .init_resource::<TicksPerSecondInputState>()
             .init_resource::<SeedInputState>()
             .init_resource::<SpawnBiomeDropdownState>()
+            .init_resource::<WorldNameFeedback>()
             .init_resource::<TargetBlockPositionDropdownState>()
             .configure_sets(
                 Update,
@@ -90,6 +93,7 @@ impl Plugin for SettingsScreenPlugin {
                         close_spawn_biome_dropdown_outside_general,
                         close_target_block_position_dropdown_outside_hud,
                         handle_seed_focus,
+                        handle_world_name_focus.run_if(in_state(GameState::NewWorld)),
                         handle_new_world_general_control_focus
                             .run_if(in_state(GameState::NewWorld)),
                         handle_random_seed,
@@ -105,7 +109,7 @@ impl Plugin for SettingsScreenPlugin {
                         handle_ticks_input,
                         handle_new_world_footer,
                         handle_spawn_biome_search_keyboard.run_if(in_state(GameState::NewWorld)),
-                        handle_seed_keyboard.run_if(in_state(GameState::NewWorld)),
+                        handle_seed_keyboard,
                         handle_ticks_keyboard.run_if(has_ticks_input),
                         handle_language_buttons,
                         handle_display_tooltips_toggle,
@@ -132,6 +136,7 @@ impl Plugin for SettingsScreenPlugin {
                     sync_spawn_biome_selected_label,
                     sync_spawn_biome_option_labels,
                     sync_spawn_biome_options.run_if(in_state(GameState::NewWorld)),
+                    sync_world_name_view.run_if(in_state(GameState::NewWorld)),
                     sync_seed_text,
                     sync_ticks_per_second_text,
                     sync_render_distance_text,
