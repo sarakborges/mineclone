@@ -1,150 +1,164 @@
-//! Sparse storage and edit primitives for the Chisel's four cut sizes.
+//! Session-only Chisel geometry. The original macro cell is always the sole
+//! source of the material, texture rotation, orientation and visual properties.
 //!
-//! This module is intentionally not wired into the voxel pipeline yet: a microblock
-//! must not be player-editable until meshing, targeting, collision and save/load
-//! all consume the same data. Ordinary, unmodified blocks remain ordinary cells.
+//! A modified cell carries one private, fixed-size occupancy mask. The mask is
+//! deliberately excluded from disk serialization by SecondaryProperties::iter,
+//! while the in-memory chunk archive retains it across streaming unloads.
 
-use super::cell::VoxelCell;
+use bevy::prelude::*;
 
-/// Maximum subdivisions along each edge. A fully detailed block has 8^3 cells,
-/// not 64^3: the player's "64" refers to the 8x8 grid on one face.
-pub(crate) const MICROBLOCK_EDGE: usize = 8;
+use super::{cell::VoxelCell, read::VoxelRead};
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) enum MicroblockResolution {
+pub(crate) const MICROBLOCK_EDGE: i32 = 8;
+pub(crate) const CHISEL_MASK_PROPERTY: &str = "asteria:chisel_mask";
+const LAYERS: usize = MICROBLOCK_EDGE as usize;
+const ENCODED_LENGTH: usize = LAYERS * 16;
+
+#[derive(Resource, Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum ChiselResolution {
     #[default]
-    Whole,
-    Half,
-    Quarter,
-    Eighth,
+    Full,
+    Thick,
+    Thin,
+    ExtraThin,
 }
 
-impl MicroblockResolution {
+impl ChiselResolution {
     pub(crate) const fn next(self) -> Self {
         match self {
-            Self::Whole => Self::Half,
-            Self::Half => Self::Quarter,
-            Self::Quarter => Self::Eighth,
-            Self::Eighth => Self::Whole,
+            Self::Full => Self::Thick,
+            Self::Thick => Self::Thin,
+            Self::Thin => Self::ExtraThin,
+            Self::ExtraThin => Self::Full,
         }
     }
 
-    /// Width of one cut in units of the finest 8x8x8 grid.
-    const fn cell_width(self) -> usize {
+    pub(crate) const fn cell_width(self) -> usize {
         match self {
-            Self::Whole => 8,
-            Self::Half => 4,
-            Self::Quarter => 2,
-            Self::Eighth => 1,
+            Self::Full => 8,
+            Self::Thick => 4,
+            Self::Thin => 2,
+            Self::ExtraThin => 1,
         }
     }
 }
 
-/// A uniform region uses one cell; only modified regions allocate children.
-/// Eight children partition a parent into 2x2x2 octants. Uniform children
-/// automatically collapse back into their parent after edits.
-#[derive(Clone, Debug)]
-pub(crate) enum MicroblockStorage {
-    Uniform(Option<VoxelCell>),
-    Split(Box<[MicroblockStorage; 8]>),
+/// Each of the eight Z layers stores an 8x8 XY occupancy bitmap. An ordinary
+/// block needs no mask at all; a sculpted block needs only 64 occupancy bytes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct MicroblockMask {
+    layers: [u64; LAYERS],
 }
 
-impl MicroblockStorage {
-    pub(crate) const fn uniform(cell: Option<VoxelCell>) -> Self {
-        Self::Uniform(cell)
+impl MicroblockMask {
+    pub(crate) const EMPTY: Self = Self { layers: [0; LAYERS] };
+    pub(crate) const FULL: Self = Self {
+        layers: [u64::MAX; LAYERS],
+    };
+
+    pub(crate) fn is_modified(cell: VoxelCell) -> bool {
+        cell.secondary_property(CHISEL_MASK_PROPERTY).is_some()
     }
 
-    /// `None` means out of bounds; `Some(None)` means empty microcell.
-    pub(crate) fn cell_at(&self, position: [usize; 3]) -> Option<Option<VoxelCell>> {
-        if !position.iter().all(|&coordinate| coordinate < MICROBLOCK_EDGE) {
-            return None;
+    pub(crate) fn from_cell(cell: VoxelCell) -> Self {
+        let Some(encoded) = cell.secondary_property(CHISEL_MASK_PROPERTY) else {
+            return Self::FULL;
+        };
+        let Some(mask) = Self::decode(encoded) else {
+            // Malformed internal data cannot trigger out-of-bounds geometry.
+            return Self::FULL;
+        };
+        mask
+    }
+
+    pub(crate) fn contains(self, [x, y, z]: [usize; 3]) -> bool {
+        if x >= LAYERS || y >= LAYERS || z >= LAYERS {
+            return false;
         }
-        Some(self.cell_in_region(position, MICROBLOCK_EDGE))
+        self.layers[z] & (1_u64 << (x + y * LAYERS)) != 0
     }
 
-    /// Returns true only for real changes. Position is in the fine 8x8x8 grid,
-    /// and edits snap down to the selected cut size on all three axes.
+    /// The selected cut replaces one aligned cube, never an individual
+    /// arbitrary microcell at a coarser resolution.
     pub(crate) fn edit(
         &mut self,
         position: [usize; 3],
-        resolution: MicroblockResolution,
-        replacement: Option<VoxelCell>,
+        resolution: ChiselResolution,
+        occupied: bool,
     ) -> bool {
-        if !position.iter().all(|&coordinate| coordinate < MICROBLOCK_EDGE) {
+        if position.iter().any(|&axis| axis >= LAYERS) {
             return false;
         }
-
         let width = resolution.cell_width();
-        let start = position.map(|coordinate| coordinate / width * width);
-        self.edit_region(start, MICROBLOCK_EDGE, width, replacement)
-    }
-
-    /// Only a wholly uniform region can be represented as an ordinary cell.
-    pub(crate) fn uniform_cell(&self) -> Option<Option<VoxelCell>> {
-        match self {
-            Self::Uniform(cell) => Some(*cell),
-            Self::Split(_) => None,
-        }
-    }
-
-    fn cell_in_region(&self, position: [usize; 3], size: usize) -> Option<VoxelCell> {
-        match self {
-            Self::Uniform(cell) => *cell,
-            Self::Split(children) => {
-                let half = size / 2;
-                let index = octant_index(position, half);
-                let local = position.map(|coordinate| coordinate % half);
-                children[index].cell_in_region(local, half)
+        let origin = position.map(|axis| axis / width * width);
+        let mut changed = false;
+        for z in origin[2]..origin[2] + width {
+            for y in origin[1]..origin[1] + width {
+                for x in origin[0]..origin[0] + width {
+                    let bit = 1_u64 << (x + y * LAYERS);
+                    let previous = self.layers[z];
+                    if occupied {
+                        self.layers[z] |= bit;
+                    } else {
+                        self.layers[z] &= !bit;
+                    }
+                    changed |= previous != self.layers[z];
+                }
             }
-        }
-    }
-
-    fn edit_region(
-        &mut self,
-        position: [usize; 3],
-        size: usize,
-        width: usize,
-        replacement: Option<VoxelCell>,
-    ) -> bool {
-        if let Self::Uniform(cell) = self {
-            if *cell == replacement {
-                return false;
-            }
-        }
-        if size == width {
-            *self = Self::Uniform(replacement);
-            return true;
-        }
-
-        if let Self::Uniform(cell) = self {
-            let original = *cell;
-            *self = Self::Split(Box::new(std::array::from_fn(|_| Self::Uniform(original))));
-        }
-
-        let half = size / 2;
-        let index = octant_index(position, half);
-        let local = position.map(|coordinate| coordinate % half);
-        let Self::Split(children) = self else {
-            unreachable!("non-leaf edit must have subdivided its parent")
-        };
-        let changed = children[index].edit_region(local, half, width, replacement);
-        if changed {
-            self.compact();
         }
         changed
     }
 
-    fn compact(&mut self) {
-        if let Self::Split(children) = self {
-            if let Some(first) = children[0].uniform_cell() {
-                if children.iter().all(|child| child.uniform_cell() == Some(first)) {
-                    *self = Self::Uniform(first);
-                }
-            }
+    pub(crate) fn apply_to_cell(self, cell: VoxelCell) -> VoxelCell {
+        if self == Self::FULL {
+            return cell.without_secondary_property(CHISEL_MASK_PROPERTY);
         }
+        let mut encoded = String::with_capacity(ENCODED_LENGTH);
+        use std::fmt::Write as _;
+        for layer in self.layers {
+            write!(&mut encoded, "{layer:016x}").expect("writing to a String cannot fail");
+        }
+        cell.with_secondary_property(CHISEL_MASK_PROPERTY, &encoded)
+    }
+
+    pub(crate) fn has_room(cell: VoxelCell) -> bool {
+        Self::is_modified(cell) || cell.secondary_properties().iter().count() < 8
+    }
+
+    fn decode(encoded: &str) -> Option<Self> {
+        if encoded.len() != ENCODED_LENGTH {
+            return None;
+        }
+        let mut layers = [0; LAYERS];
+        for (index, layer) in layers.iter_mut().enumerate() {
+            *layer = u64::from_str_radix(encoded.get(index * 16..(index + 1) * 16)?, 16).ok()?;
+        }
+        Some(Self { layers })
     }
 }
 
-const fn octant_index([x, y, z]: [usize; 3], half: usize) -> usize {
-    usize::from(x >= half) | (usize::from(y >= half) << 1) | (usize::from(z >= half) << 2)
+/// `div_euclid` and `rem_euclid` keep neighboring cells correct even at
+/// negative world coordinates and across chunk boundaries.
+pub(crate) fn parent_voxel(fine: IVec3) -> IVec3 {
+    IVec3::new(
+        fine.x.div_euclid(MICROBLOCK_EDGE),
+        fine.y.div_euclid(MICROBLOCK_EDGE),
+        fine.z.div_euclid(MICROBLOCK_EDGE),
+    )
+}
+
+pub(crate) fn local_cell(fine: IVec3) -> [usize; 3] {
+    [
+        fine.x.rem_euclid(MICROBLOCK_EDGE) as usize,
+        fine.y.rem_euclid(MICROBLOCK_EDGE) as usize,
+        fine.z.rem_euclid(MICROBLOCK_EDGE) as usize,
+    ]
+}
+
+pub(crate) fn occupied_cell<W: VoxelRead + ?Sized>(world: &W, fine: IVec3) -> Option<VoxelCell> {
+    let parent = parent_voxel(fine);
+    let cell = world.cell_at(parent)?;
+    MicroblockMask::from_cell(cell)
+        .contains(local_cell(fine))
+        .then_some(cell)
 }
