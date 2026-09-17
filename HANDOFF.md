@@ -85,3 +85,12 @@ Próximo passo: verificar CI; depois revisar se AO/face lighting também precisa
 - Validação: não executei cargo test, cargo run ou QA Windows. Há CI da PR em andamento, mas ainda não foi observado resultado verde para os commits mais novos.
 
 Próximo passo: aguardar/consultar a CI atual; revisar face_lighting/AO para máscaras parciais e, se não houver regressão, continuar nos casos de solid/fluid boundary.
+
+
+## Checkpoint 61 — corrigir falha de CI da atenuação de fluidos [CÓDIGO; CI PENDENTE]
+
+- A CI do checkpoint 60 falhou no Clippy antes do `check`; a causa objetiva foi o teste referenciar `scale_dampening` antes de a função auxiliar existir.
+- 3db2d1668d81c17fae10bdbc135b8130726da94b adiciona a função e a usa no caminho de produção.
+- Não executei `cargo test` nem `cargo run`; a correção depende da nova CI.
+
+Próximo passo: verificar a CI do checkpoint 61; se verde, prosseguir com AO/face lighting ou solid/fluid boundaries.
