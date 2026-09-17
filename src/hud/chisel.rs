@@ -30,7 +30,7 @@ fn spawn_chisel_hud(mut commands: Commands) {
         ChiselHudText,
         typography::hud(""),
         typography::tooltip_shadow(),
-        TextLayout::new_with_justify(Justify::Center),
+        TextLayout::justify(Justify::Center),
         Node {
             position_type: PositionType::Absolute,
             bottom: px(108),
