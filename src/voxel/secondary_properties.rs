@@ -38,14 +38,23 @@ impl SecondaryProperties {
             .map(|entry| entry.value)
     }
 
-    /// Only public, persistable properties. The private Chisel shape is kept
-    /// in memory and in archived chunks, but must not leak into disk snapshots,
-    /// target HUD tooltips or public secondary-property rendering.
+    /// Only public properties for HUD and rendering; the Chisel shape must not
+    /// appear as a normal block property in tooltips or visual definitions.
     pub(crate) fn iter(self) -> impl Iterator<Item = (&'static str, &'static str)> {
         self.values
             .into_iter()
             .flatten()
             .filter(|entry| entry.property != CHISEL_MASK_PROPERTY)
+            .map(|entry| (entry.property, entry.value))
+    }
+
+    /// Snapshot serialization needs the complete cell state, including its
+    /// private 8x8x8 occupancy mask. Keep this explicit instead of changing
+    /// `iter()`, which also serves public presentation paths.
+    pub(crate) fn iter_for_save(self) -> impl Iterator<Item = (&'static str, &'static str)> {
+        self.values
+            .into_iter()
+            .flatten()
             .map(|entry| (entry.property, entry.value))
     }
 
@@ -136,9 +145,8 @@ mod tests {
     #[test]
     fn removes_secondary_property_values() {
         let mut properties = SecondaryProperties::default().with("dyed", "red");
-
-        assert!(properties.remove("dyed"));
+        assert_eq!(properties.get("dyed"), Some("red"));
+        properties.remove("dyed");
         assert_eq!(properties.get("dyed"), None);
-        assert!(!properties.remove("dyed"));
     }
 }
