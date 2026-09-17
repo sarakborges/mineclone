@@ -94,3 +94,14 @@ Próximo passo: aguardar/consultar a CI atual; revisar face_lighting/AO para má
 - Não executei `cargo test` nem `cargo run`; a correção depende da nova CI.
 
 Próximo passo: verificar a CI do checkpoint 61; se verde, prosseguir com AO/face lighting ou solid/fluid boundaries.
+
+
+## Checkpoint 62 — corrigir os construtores dos interners após a otimização [CÓDIGO; CI AGUARDANDO]
+
+- A CI do checkpoint 61 confirmou a falha objetiva já suspeitada: os tipos foram trocados para HashSet, mas os closures de inicialização ainda chamavam HashMap::new(). O Clippy/compilação parou em src/content/block_id.rs e src/voxel/secondary_properties.rs.
+- 6082869c8877081173b05557249c1538630f9938 corrige o construtor do interner de block IDs para HashSet::new().
+- 91b2d001672fbf6f74121afe5fdee353ed954f67 corrige o construtor do interner de tokens de secondary properties para HashSet::new().
+- O código de produção agora é coerente com a estrutura HashSet<&'static str>; não executei cargo test nem cargo run.
+- A run 35280905635 falhou no Clippy antes do check; depois das correções não há run reportada para os novos commits nesta integração, portanto CI ainda está pendente.
+
+Próximo passo: validar a nova sequência por CI quando disponível e, sem esperar passivamente, continuar a revisão de iluminação/AO e fronteiras sólido-fluido, sempre sem cargo test/cargo run.
