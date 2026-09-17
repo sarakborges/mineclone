@@ -47,6 +47,8 @@ pub(crate) fn validate_world_name(name: &str) -> io::Result<()> {
             // Windows also reserves ISO-8859-1 superscript digits in these
             // device names, including when followed by a file extension.
             | "COM¹" | "COM²" | "COM³" | "LPT¹" | "LPT²" | "LPT³"
+            // Win32 console input/output handles are not portable directory IDs.
+            | "CONIN$" | "CONOUT$"
     );
     if invalid || reserved || Path::new(name).components().count() != 1 {
         return Err(io::Error::new(
@@ -59,8 +61,33 @@ pub(crate) fn validate_world_name(name: &str) -> io::Result<()> {
 
 fn unique_name(requested: &str, occupied: &HashSet<String>) -> io::Result<String> {
     let mut candidate = requested.to_owned();
+    let prefix_units = COPY_PREFIX.encode_utf16().count();
+    let mut numbered_copy = 0_u64;
     while occupied.contains(&candidate.to_lowercase()) {
-        candidate = format!("{COPY_PREFIX}{candidate}");
+        if candidate.encode_utf16().count() + prefix_units <= MAX_NAME_UTF16_UNITS {
+            // Keep the established naming convention when it fits.
+            candidate = format!("{COPY_PREFIX}{candidate}");
+        } else {
+            // Repeated prefixes eventually exceed the Windows-safe limit.
+            // Number the original name instead, truncating at Unicode scalar
+            // boundaries without splitting a UTF-16 surrogate pair.
+            numbered_copy = numbered_copy
+                .checked_add(1)
+                .ok_or_else(|| io::Error::other("world copy numbering exhausted"))?;
+            let suffix = format!(" ({numbered_copy})");
+            let budget = MAX_NAME_UTF16_UNITS
+                .saturating_sub(prefix_units + suffix.encode_utf16().count());
+            let mut original_prefix = String::new();
+            let mut used_units = 0;
+            for character in requested.chars() {
+                if used_units + character.len_utf16() > budget {
+                    break;
+                }
+                original_prefix.push(character);
+                used_units += character.len_utf16();
+            }
+            candidate = format!("{COPY_PREFIX}{original_prefix}{suffix}");
+        }
         validate_world_name(&candidate)?;
     }
     Ok(candidate)
@@ -83,8 +110,25 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_at_utf16_limit_uses_distinct_numbered_names() {
+        let requested = "🌲".repeat(100);
+        let mut occupied = HashSet::from([requested.to_lowercase()]);
+        let first = unique_name(&requested, &occupied).unwrap();
+        assert!(first.ends_with(" (1)"));
+        assert!(validate_world_name(&first).is_ok());
+        occupied.insert(first.to_lowercase());
+        let second = unique_name(&requested, &occupied).unwrap();
+        assert!(second.ends_with(" (2)"));
+        assert!(validate_world_name(&second).is_ok());
+        assert_ne!(first, second);
+    }
+
+    #[test]
     fn rejects_windows_device_names_and_path_traversal() {
-        for name in ["CON", "nul.txt", "../world", "foo/bar", "foo\\bar", "test.", " "] {
+        for name in [
+            "CON", "nul.txt", "COM¹", "lpt².txt", "CONIN$", "conout$.txt",
+            "../world", "foo/bar", "foo\\bar", "test.", " ",
+        ] {
             assert!(validate_world_name(name).is_err(), "{name}");
         }
     }
