@@ -11,6 +11,7 @@ use crate::{
 
 use motion::{CreatureMotion, move_creatures};
 use visual::{CreatureModel, attach_loaded_models, sync_creature_animations, sync_creature_facing};
+pub(crate) use visual::CreatureAnimationState;
 
 /// The entity root owns position and collision; only its visual child is animated or rotated.
 #[derive(Component)]
