@@ -5,7 +5,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
-    content::{biome::CreatureSpawnRule, creature::CreatureRegistry},
+    content::{biome::BiomeRegistry, creature::CreatureRegistry},
     localization::{ActiveLanguage, Language},
     player::camera::GameplayCamera,
     world::biome::CurrentBiome,
@@ -104,6 +104,7 @@ fn natural_spawn_creatures(
     world: Res<VoxelWorld>,
     biome: Res<CurrentBiome>,
     definitions: Res<CreatureRegistry>,
+    biomes: Res<BiomeRegistry>,
     language: Res<ActiveLanguage>,
     asset_server: Res<AssetServer>,
     player: Single<&Transform, With<GameplayCamera>>,
@@ -119,23 +120,28 @@ fn natural_spawn_creatures(
     if state.1 == 0 { state.1 = player.translation.x.to_bits() ^ player.translation.z.to_bits().rotate_left(13) ^ 0x9E37_79B9; }
 
     let total = creatures.iter().count();
-    let mut candidates: Vec<&CreatureSpawnRule> = biome
-        .influences
+    let Some(biome_definition) = biomes.get(&biome.id) else { return; };
+    let candidates: Vec<_> = biome_definition
+        .creature_spawns
         .iter()
-        .filter(|influence| influence.weight > 0.0)
-        .filter_map(|influence| definitions.get(&influence.id).map(|_| influence.id.as_str()))
-        .flat_map(|biome_id| {
-            if biome_id != biome.id { return Vec::new(); }
-            biome_spawn_rules(&biome.id, &definitions, total, &creatures)
+        .filter(|rule| rule.weight > 0.0 && definitions.get(&rule.creature).is_some())
+        .filter(|rule| {
+            let type_count = creatures
+                .iter()
+                .filter(|(instance, _)| instance.definition_id == rule.creature)
+                .count();
+            type_count < rule.max_per_type && total < rule.max_in_dimension
         })
         .collect();
     if candidates.is_empty() { return; }
-
     let total_weight: f32 = candidates.iter().map(|rule| rule.weight).sum();
     if total_weight <= 0.0 { return; }
     let roll = next_random(&mut state.1) as f32 / u32::MAX as f32 * total_weight;
     let mut cursor = 0.0;
-    let rule = candidates.drain(..).find(|rule| { cursor += rule.weight; roll <= cursor }).unwrap_or_else(|| panic!("spawn candidate selection failed"));
+    let rule = candidates
+        .into_iter()
+        .find(|rule| { cursor += rule.weight; roll <= cursor })
+        .unwrap_or_else(|| panic!("spawn candidate selection failed"));
 
     for _ in 0..8 {
         let angle = next_random(&mut state.1) as f32 / u32::MAX as f32 * std::f32::consts::TAU;
@@ -152,19 +158,6 @@ fn natural_spawn_creatures(
         let _ = spawn_creature_at(&mut commands, &definitions, &asset_server, language.get(), &rule.creature, feet);
         break;
     }
-}
-
-fn biome_spawn_rules<'a>(
-    biome_id: &str,
-    definitions: &'a CreatureRegistry,
-    total: usize,
-    creatures: &Query<'_, '_, (&CreatureInstance, &Transform)>,
-) -> Vec<&'a CreatureSpawnRule> {
-    let _ = biome_id;
-    let _ = definitions;
-    let _ = total;
-    let _ = creatures;
-    Vec::new()
 }
 
 fn natural_spawn_feet_y(world: &VoxelWorld, column: IVec2) -> Option<i32> {
