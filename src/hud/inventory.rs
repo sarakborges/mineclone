@@ -1,5 +1,6 @@
 mod interaction;
 mod layout;
+mod search_style;
 mod state;
 mod sync;
 
@@ -16,6 +17,7 @@ use interaction::{
     handle_search_focus, handle_search_input, handle_slot_clicks,
     remember_creative_scroll_positions, sync_search_focus,
 };
+use search_style::style_inventory_search_field;
 use state::{CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState};
 use sync::{
     rebuild_inventory_when_changed, spawn_inventory, style_category_buttons, style_creative_slots,
@@ -94,6 +96,7 @@ impl Plugin for InventoryHudPlugin {
                 Update,
                 (
                     style_search_bar,
+                    style_inventory_search_field,
                     style_category_buttons,
                     style_creative_slots,
                     style_inventory_slots,
