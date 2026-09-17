@@ -173,8 +173,8 @@ Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigi
 - Não executei cargo test/cargo run; validação segue pela CI.
 
 
-## Checkpoint 70 — correção do mapeamento Front/Back após revisão de semântica [CÓDIGO; CI PENDENTE]
+## Checkpoint 70 — correção do mapeamento Front/Back após revisão de semântica [CÓDIGO; CI VERDE]
 
 - 1a06f434f4574a3ef175b9d35ac6a8b81e917768 corrige a correção anterior: como face_is_exposed recebe o vizinho em world_voxel + face.offset(), a face Front (+Z) consulta a fronteira Z=0 do vizinho e Back (-Z) consulta Z=7. Os testes direcionais foram ajustados para validar a fronteira próxima correta.
 - A revisão de BlockFace::offset, unit_vertices e emit_neighbor_openings confirmou essa orientação: para uma face positiva do voxel de origem, a fronteira correspondente do vizinho é a camada 0; para uma face negativa, é a camada 7.
-- Não executei cargo test/cargo run. CI será a validação desta correção.
+- CI 35282728940 (run 3057) concluiu GREEN após a correção e a cobertura direcional. Não executei cargo test/cargo run.
