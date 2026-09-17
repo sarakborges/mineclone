@@ -1,3 +1,5 @@
+mod persistence;
+
 use std::collections::BTreeSet;
 
 use bevy::{
@@ -82,7 +84,7 @@ impl VoxelWorld {
         self.block_content_revision
     }
 
-    pub(crate) fn loaded_chunk_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
+    pub(crate) fn loaded_chunk_coords(&self) -> impl Iterator<Item = Ivec3> + '_ {
         self.chunks.keys().copied()
     }
 
@@ -152,9 +154,7 @@ impl VoxelWorld {
         let (chunk_coord, local_position) = split_world_position(world_position);
 
         self.chunks.get(&chunk_coord)?.fluid_at(
-            local_position.x,
-            local_position.y,
-            local_position.z,
+            local_position.x, local_position.y, local_position.z,
         )
     }
 
