@@ -1,5 +1,5 @@
 {
   "id": "lime",
-  "name": { "english": "Lime" },
+  "name": { "english": "Lime", "portuguese_brazil": "Verde-limão", "spanish": "Verde lima" },
   "color": { "hue": 84.894062, "saturation": 0.740223, "intensity": 0.467974 }
 }

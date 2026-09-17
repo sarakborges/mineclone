@@ -1,5 +1,5 @@
 {
   "id": "pink",
-  "name": { "english": "Pink" },
+  "name": { "english": "Pink", "portuguese_brazil": "Rosa", "spanish": "Rosa" },
   "color": { "hue": 343.124577, "saturation": 0.244565, "intensity": 0.721569 }
 }

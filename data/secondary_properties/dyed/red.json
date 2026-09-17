@@ -1,5 +1,5 @@
 {
   "id": "red",
-  "name": { "english": "Red" },
+  "name": { "english": "Red", "portuguese_brazil": "Vermelho", "spanish": "Rojo" },
   "color": { "hue": 2.959678, "saturation": 0.561537, "intensity": 0.339869 }
 }

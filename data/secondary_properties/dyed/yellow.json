@@ -1,5 +1,5 @@
 {
   "id": "yellow",
-  "name": { "english": "Yellow" },
+  "name": { "english": "Yellow", "portuguese_brazil": "Amarelo", "spanish": "Amarillo" },
   "color": { "hue": 49.290077, "saturation": 0.655367, "intensity": 0.694118 }
 }
