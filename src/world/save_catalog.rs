@@ -29,6 +29,9 @@ const SAVE_FORMAT_VERSION: u32 = 1;
 const MAX_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
 /// Count only generations that can actually be loaded into the current game.
 const RETAINED_GENERATIONS: usize = 4;
+// Protect published-generation enumeration and loading from pruning's delete
+// phase. The worker validates immutable snapshots WITHOUT holding this lock:
+// expensive backup reconstruction must not block the gameplay save writer.
 static SAVE_LOCK: Mutex<()> = Mutex::new(());
 static PRUNE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 
@@ -339,6 +342,9 @@ fn schedule_backup_prune(id: String, registries: SaveRegistries<'_>) {
 /// Enumerate only fully published generations. Missing or temporary snapshots
 /// never become selectable worlds.
 pub(crate) fn list_worlds() -> io::Result<Vec<WorldSummary>> {
+    // A writer or prune must not change the manifest set halfway through UI
+    // enumeration. This lock covers metadata only, never backup validation.
+    let _lock = SAVE_LOCK.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
     let entries = match fs::read_dir(WORLDS_DIRECTORY) {
         Ok(entries) => entries,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -374,6 +380,11 @@ pub(crate) fn load_world(
     registries: SaveRegistries<'_>,
 ) -> io::Result<(WorldSnapshot, VoxelWorld)> {
     validate_world_name(id)?;
+    // Hold the shared lock across candidate enumeration AND reconstruction.
+    // Without this, pruning may delete the fallback manifest/snapshot after
+    // enumeration but before load_snapshot opens it. Prune validates off-lock
+    // and takes the lock only for its short delete phase.
+    let _lock = SAVE_LOCK.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
     let directory = Path::new(WORLDS_DIRECTORY).join(id);
     if !fs::symlink_metadata(&directory)?.file_type().is_dir() {
         return Err(invalid_data("world directory cannot be a symbolic link"));
@@ -470,8 +481,8 @@ fn latest_complete_manifest(directory: &Path, id: &str) -> io::Result<WorldManif
 }
 
 /// Validate backups off-thread and prune only when four generations decode.
-/// The writer only appends immutable generations; deleting older generations
-/// does not require holding its lock across expensive validation or removals.
+/// The writer only appends immutable generations. The deletion phase takes
+/// SAVE_LOCK so a simultaneous loader never loses its selected fallback.
 fn prune_old_generations(directory: &Path, id: &str, registries: &PruneRegistries) -> io::Result<()> {
     if !fs::symlink_metadata(directory)?.file_type().is_dir() {
         return Err(invalid_data("world directory cannot be a symbolic link"));
@@ -513,6 +524,12 @@ fn prune_old_generations(directory: &Path, id: &str, registries: &PruneRegistrie
     let Some(cutoff) = cutoff else {
         return Ok(());
     };
+    // Expensive validation is complete: lock only the deletion phase. Saves
+    // append immutable generations and cannot invalidate a verified cutoff.
+    let _lock = SAVE_LOCK.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+    if !fs::symlink_metadata(directory)?.file_type().is_dir() {
+        return Err(invalid_data("world directory cannot be a symbolic link"));
+    }
     // Remove each manifest before its snapshot: process termination during
     // cleanup cannot leave a manifest pointing at a deleted snapshot.
     for (generation, path) in candidates {
