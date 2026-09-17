@@ -67,7 +67,6 @@ fn edit_targeted_block(
     mut tool_uses: MessageWriter<ToolUse>,
     mut viewmodel_animation: ResMut<ViewModelAnimation>,
     mut creature_health: Query<(&mut EntityHealth, &mut CreatureAnimationState), With<CreatureInstance>>,
-    mut commands: Commands,
 ) {
     let left_pressed = input.buttons.just_pressed(MouseButton::Left);
     let right_pressed = input.buttons.just_pressed(MouseButton::Right);
