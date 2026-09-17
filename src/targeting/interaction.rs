@@ -45,10 +45,11 @@ impl Plugin for BlockInteractionPlugin {
 #[derive(SystemParam)]
 struct BlockEditInput<'w, 's> {
     buttons: Res<'w, ButtonInput<MouseButton>>,
-    hotbar: Res<'w, PlayerHotbar>,
+    hotbar: ResMut<'w, PlayerHotbar>,
     placement_orientation: Res<'w, PlacementOrientation>,
     player: Single<'w, 's, (&'static Transform, &'static GameMode), With<GameplayCamera>>,
     targeted: ResMut<'w, TargetedBlock>,
+    creature_target: Res<'w, super::block::TargetedCreature>,
 }
 
 #[derive(SystemParam)]
@@ -84,6 +85,11 @@ fn edit_targeted_block(
 
     let selected_slot = input.hotbar.selected_slot();
     let selected_item = input.hotbar.item_at(selected_slot);
+
+    if left_pressed && let Some(entity) = input.creature_target.0 {
+        tool_uses.write(ToolUse { tool_id: "", button: ToolUseButton::Left, target: None });
+        return;
+    }
 
     if let Some(tool_id) = selected_item.filter(|item_id| definitions.tools.get(item_id).is_some()) {
         if left_pressed {
