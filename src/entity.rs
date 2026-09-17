@@ -1,7 +1,5 @@
 use bevy::prelude::*;
 
-use crate::app::{game_state::GameState, pause_state::PauseState};
-
 /// Shared gameplay health for every damageable entity, including the player.
 #[derive(Component, Debug, Clone, Copy)]
 pub(crate) struct EntityHealth {
