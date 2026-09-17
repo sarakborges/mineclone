@@ -49,9 +49,9 @@ def accessor(values, kind='VEC3', component=5126, target=None, bounds=False):
     return len(accessors) - 1
 
 
-# A grayscale atlas enables independent HSI tinting of shell/core/cheeks. Each
+# Grayscale external atlas: shell, larger core and a pixel face on the front tile. Each
 # species keeps its own PNG, selected exclusively through its creature JSON.
-# Atlas tile positions must match the UV tile coordinates below.
+# Atlas tile positions must match the UV tile coordinates below. No face mesh.
 def png_chunk(kind: bytes, payload: bytes) -> bytes:
     content = kind + payload
     return (struct.pack('>I', len(payload)) + content
@@ -71,6 +71,17 @@ def make_skin(species: str) -> bytes:
                     gray = 229 if border else (247 if (u//4 + v//4) % 2 else 255)
                 else:
                     gray = 222 if border else (239 if (u//2 + v//4) % 2 else 255)
+            elif tile == (2, 0):
+                # Only pixels form the facial features: square eyes, glints, cheeks and mouth.
+                gray = 247 if (u // 4 + v // 4) % 2 else 255
+                if 4 <= v <= 7 and (3 <= u <= 5 or 10 <= u <= 12):
+                    gray = 15
+                if v == 4 and u in (3, 10):
+                    gray = 255
+                if v in (9, 10) and (1 <= u <= 2 or 13 <= u <= 14):
+                    gray = 170 if species == 'meadow_slime' else 152
+                if (v == 10 and u in (4, 11)) or (v == 11 and u in (5, 10)) or (v == 12 and 6 <= u <= 9):
+                    gray = 24
             elif tile == (1, 0):
                 gray = 220 if min(u, v, 15-u, 15-v) < 2 else (246 if (u//4 + v//4) % 2 else 255)
             elif tile == (0, 1):
@@ -100,11 +111,12 @@ faces = [
 ]
 
 
-def cube(positions, normals, uvs, indices, extent, center=(0,0,0), tile=(0,0)):
+def cube(positions, normals, uvs, indices, extent, center=(0,0,0), tile=(0,0), front_tile=None):
     half = [v/2 for v in extent]
-    u0, u1 = (tile[0]*16 + .5)/64, (tile[0]*16 + 15.5)/64
-    v0, v1 = (tile[1]*16 + .5)/64, (tile[1]*16 + 15.5)/64
     for normal, horizontal, vertical in faces:
+        face_tile = front_tile if front_tile is not None and normal == (0,0,-1) else tile
+        u0, u1 = (face_tile[0]*16 + .5)/64, (face_tile[0]*16 + 15.5)/64
+        v0, v1 = (face_tile[1]*16 + .5)/64, (face_tile[1]*16 + 15.5)/64
         offset = len(positions)//3
         for a,b,uv in [(-1,-1,(u0,v1)), (1,-1,(u1,v1)),
                        (1,1,(u1,v0)), (-1,1,(u0,v0))]:
@@ -116,10 +128,10 @@ def cube(positions, normals, uvs, indices, extent, center=(0,0,0), tile=(0,0)):
         indices.extend([offset,offset+1,offset+2,offset,offset+2,offset+3])
 
 
-def make_mesh(name, cuboids, material, tile):
+def make_mesh(name, cuboids, material, tile, front_tile=None):
     positions, normals, uvs, indices = [], [], [], []
     for extent, center in cuboids:
-        cube(positions, normals, uvs, indices, extent, center, tile)
+        cube(positions, normals, uvs, indices, extent, center, tile, front_tile)
     assert len(positions)//3 < 65536
     attrs = {'POSITION': accessor(positions, bounds=True, target=34962),
              'NORMAL': accessor(normals, target=34962),
@@ -145,19 +157,11 @@ def material(name, color, alpha=1., rough=.36, emission=None):
 materials = [
     material('SlimeShell', [.50,.91,.78], .76, .23),
     material('SlimeCore', [.18,.70,.57], 1., .32, [.025,.08,.06]),
-    material('SlimeEyes', [.055,.12,.115], 1., .34),
-    material('SlimeHighlights', [.97,1.,.96], 1., .16, [.10,.10,.10]),
-    material('SlimeCheeks', [.28,.71,.62], 1., .35),
 ]
-shell = make_mesh('square_translucent_shell', [([.96,.90,.96], (0,0,0))], 0, (0,0))
-core = make_mesh('square_nucleus', [([.36,.40,.36], (0,0,0))], 1, (1,0))
-eye = make_mesh('square_eyes', [([.102,.125,.024], (0,0,0))], 2, (2,0))
-glint = make_mesh('square_eye_glints', [([.025,.025,.009], (0,0,0))], 3, (3,0))
-cheek = make_mesh('square_cheeks', [([.072,.046,.018], (0,0,0))], 4, (0,1))
-# Five adjoining rectangles create a pixel-step smile; NO curves or cylindrical tubes.
-smile_boxes = [([.056,.027,.018], (x, y, 0)) for x,y in
-               [(-.112,-.108),(-.056,-.145),(0,-.162),(.056,-.145),(.112,-.108)]]
-smile = make_mesh('pixel_step_smile', smile_boxes, 2, (2,0))
+# Only shell and core have geometry; the face is a front-facing tile of the
+# external 64x64 skin selected by each creature JSON.
+shell = make_mesh('square_translucent_shell', [([.96,.90,.96], (0,0,0))], 0, (0,0), (2,0))
+core = make_mesh('square_nucleus', [([.58,.62,.58], (0,0,0))], 1, (1,0))
 
 
 def node(name, mesh=None, children=None, translation=None, scale=None, extras=None):
@@ -179,11 +183,6 @@ visual = node('Visual', children=[])
 body = node('BodyPivot', children=[], translation=[0,.5,0])
 inner = node('InnerCore', mesh=core, translation=[0,-.025,0], scale=[1,1,1])
 body_children = [node('Shell',mesh=shell),inner]
-for x,label in [(-.177,'L'),(.177,'R')]:
-    body_children.append(node('Eye_'+label,mesh=eye,translation=[x,.055,-.494]))
-    body_children.append(node('Glint_'+label,mesh=glint,translation=[x-.018,.092,-.513]))
-    body_children.append(node('Cheek_'+label,mesh=cheek,translation=[x*1.43,-.139,-.493]))
-body_children.append(node('Smile',mesh=smile,translation=[0,0,-.502]))
 nodes[body]['children'] = body_children
 nodes[visual]['children'] = [body]
 collider_node = node('Hitbox_AABB', translation=[0,.42,0], extras={
@@ -236,14 +235,14 @@ tracks('Death',[0,.12,.31,.55,.75],
        core_angle=[0,.2,.5,.9,1.2])
 
 scene = {
-    'asset':{'version':'2.0','generator':'Asteria cubic pixel slime v2'},
+    'asset':{'version':'2.0','generator':'Asteria cubic pixel slime v3'},
     'scene':0,'scenes':[{'name':'Slime','nodes':[root]}],
     'nodes':nodes,'meshes':meshes,'materials':materials,'animations':animations,
     'bufferViews':views,'accessors':accessors,'buffers':[{'byteLength':len(binary)}],
-    'extras':{'asset_id':'asteria:slime_base','color_materials':['SlimeShell','SlimeCore','SlimeCheeks'],
+    'extras':{'asset_id':'asteria:slime_base','color_materials':['SlimeShell','SlimeCore'],
               'collision_source':'slime.collider.json','skin_resolution':[64,64],
               'texture_source':'creature JSON material textures under textures/creatures/',
-              'notes':'Axis-aligned cube geometry; visual animation only, physics belongs to SlimeRoot'},
+              'notes':'Only cubic shell and enlarged core; face in species PNG front tile; collider does not animate'},
 }
 json_chunk = json.dumps(scene,separators=(',',':'),ensure_ascii=False).encode('utf-8')
 json_chunk += b' ' * (-len(json_chunk)%4)

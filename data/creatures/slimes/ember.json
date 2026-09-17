@@ -27,11 +27,6 @@
       "hue": 16.0,
       "saturation": 0.95,
       "intensity": 0.36
-    },
-    "SlimeCheeks": {
-      "hue": 25.0,
-      "saturation": 0.74,
-      "intensity": 0.72
     }
   },
   "animations": {
@@ -48,9 +43,6 @@
   "landingSeconds": 0.34,
   "textures": {
     "SlimeShell": "textures/creatures/ember_slime.png",
-    "SlimeCore": "textures/creatures/ember_slime.png",
-    "SlimeEyes": "textures/creatures/ember_slime.png",
-    "SlimeHighlights": "textures/creatures/ember_slime.png",
-    "SlimeCheeks": "textures/creatures/ember_slime.png"
+    "SlimeCore": "textures/creatures/ember_slime.png"
   }
 }

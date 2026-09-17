@@ -27,11 +27,6 @@
       "hue": 153.0,
       "saturation": 0.72,
       "intensity": 0.34
-    },
-    "SlimeCheeks": {
-      "hue": 153.0,
-      "saturation": 0.45,
-      "intensity": 0.76
     }
   },
   "animations": {
@@ -48,9 +43,6 @@
   "landingSeconds": 0.34,
   "textures": {
     "SlimeShell": "textures/creatures/meadow_slime.png",
-    "SlimeCore": "textures/creatures/meadow_slime.png",
-    "SlimeEyes": "textures/creatures/meadow_slime.png",
-    "SlimeHighlights": "textures/creatures/meadow_slime.png",
-    "SlimeCheeks": "textures/creatures/meadow_slime.png"
+    "SlimeCore": "textures/creatures/meadow_slime.png"
   }
 }
