@@ -9,11 +9,12 @@ use crate::{
     app::game_state::GameState,
     content::{
         block::BlockRegistry,
-        builtin_ids::{BRUSH_TOOL_ID, DYED_PROPERTY_ID},
+        builtin_ids::{BRUSH_TOOL_ID, CHISEL_TOOL_ID, DYED_PROPERTY_ID},
         secondary_property::SecondaryPropertyRegistry,
     },
     player::camera::GameplayCamera,
     tools::BrushMode,
+    voxel::{microblock::{MICROBLOCK_EDGE, ChiselResolution}, raycast::raycast_micro_voxels},
 };
 
 const HIGHLIGHT_SCALE: f32 = 1.01;
@@ -71,6 +72,7 @@ struct BrushGhost;
 struct TargetHighlightInput<'w, 's> {
     scene: BlockTargetingScene<'w, 's>,
     brush_mode: Res<'w, BrushMode>,
+    chisel_resolution: Res<'w, ChiselResolution>,
 }
 
 #[derive(SystemParam)]
@@ -130,7 +132,9 @@ fn update_highlight(
 ) {
     let scene_snapshot = input.scene.visual_snapshot();
     let scene_changed = last_scene.as_ref() != Some(&scene_snapshot);
+    let chisel_selected = input.scene.selected_item() == Some(CHISEL_TOOL_ID);
     if !scene_changed
+        && !chisel_selected
         && !input.brush_mode.is_changed()
         && !content.blocks.is_changed()
         && !content.secondary_properties.is_changed()
@@ -145,6 +149,39 @@ fn update_highlight(
         return;
     };
 
+    if chisel_selected {
+        hide_if_visible(&mut view.brush_ghost.1);
+        let precise = raycast_micro_voxels(
+            input.scene.world(),
+            input.scene.player_translation(),
+            input.scene.player_forward(),
+            8.0,
+        );
+        let Some(precise) = precise.filter(|precise| precise.voxel == hit.voxel) else {
+            hide_if_visible(&mut view.highlight.1);
+            return;
+        };
+        let width = input.chisel_resolution.cell_width() as i32;
+        let origin = IVec3::new(
+            precise.fine.x.div_euclid(width) * width,
+            precise.fine.y.div_euclid(width) * width,
+            precise.fine.z.div_euclid(width) * width,
+        );
+        let edge = width as f32 / MICROBLOCK_EDGE as f32;
+        let translation = origin.as_vec3() / MICROBLOCK_EDGE as f32 + Vec3::splat(edge * 0.5);
+        if view.highlight.0.translation != translation {
+            view.highlight.0.translation = translation;
+        }
+        if view.highlight.0.scale != Vec3::splat(edge) {
+            view.highlight.0.scale = Vec3::splat(edge);
+        }
+        show_if_hidden(&mut view.highlight.1);
+        return;
+    }
+
+    if view.highlight.0.scale != Vec3::ONE {
+        view.highlight.0.scale = Vec3::ONE;
+    }
     let selected_item = input.scene.selected_item();
     if selected_item == Some(BRUSH_TOOL_ID) {
         hide_if_visible(&mut view.highlight.1);
