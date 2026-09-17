@@ -9,11 +9,15 @@ use crate::{
     app::game_state::GameState,
     content::{
         block::BlockRegistry,
-        builtin_ids::{BRUSH_TOOL_ID, DYED_PROPERTY_ID},
+        builtin_ids::{BRUSH_TOOL_ID, CHISEL_TOOL_ID, DYED_PROPERTY_ID},
         secondary_property::SecondaryPropertyRegistry,
     },
     player::camera::GameplayCamera,
     tools::BrushMode,
+    voxel::{
+        microblock::{MICROBLOCK_EDGE, ChiselResolution, MicroblockMask, parent_voxel},
+        raycast::raycast_micro_voxels,
+    },
 };
 
 const HIGHLIGHT_SCALE: f32 = 1.01;
@@ -28,6 +32,7 @@ type HighlightTarget<'w, 's> = Single<
     (
         With<TargetHighlight>,
         Without<BrushGhost>,
+        Without<ChiselPlacementGhost>,
         Without<GameplayCamera>,
     ),
 >;
@@ -42,6 +47,19 @@ type BrushGhostTarget<'w, 's> = Single<
     ),
     (
         With<BrushGhost>,
+        Without<TargetHighlight>,
+        Without<ChiselPlacementGhost>,
+        Without<GameplayCamera>,
+    ),
+>;
+
+type ChiselPlacementTarget<'w, 's> = Single<
+    'w,
+    's,
+    (&'static mut Transform, &'static mut Visibility),
+    (
+        With<ChiselPlacementGhost>,
+        Without<BrushGhost>,
         Without<TargetHighlight>,
         Without<GameplayCamera>,
     ),
@@ -67,10 +85,14 @@ struct TargetHighlight;
 #[derive(Component)]
 struct BrushGhost;
 
+#[derive(Component)]
+struct ChiselPlacementGhost;
+
 #[derive(SystemParam)]
 struct TargetHighlightInput<'w, 's> {
     scene: BlockTargetingScene<'w, 's>,
     brush_mode: Res<'w, BrushMode>,
+    chisel_resolution: Res<'w, ChiselResolution>,
 }
 
 #[derive(SystemParam)]
@@ -84,6 +106,7 @@ struct TargetHighlightView<'w, 's> {
     materials: ResMut<'w, Assets<StandardMaterial>>,
     highlight: HighlightTarget<'w, 's>,
     brush_ghost: BrushGhostTarget<'w, 's>,
+    chisel_placement: ChiselPlacementTarget<'w, 's>,
 }
 
 fn spawn_highlight(
@@ -120,6 +143,21 @@ fn spawn_highlight(
         BrushGhost,
         DespawnOnExit(GameState::Gameplay),
     ));
+
+    commands.spawn((
+        Mesh3d(meshes.add(Cuboid::from_size(Vec3::splat(HIGHLIGHT_SCALE)))),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::srgba(0.30, 0.95, 0.65, 0.24),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        })),
+        Transform::default(),
+        Visibility::Hidden,
+        NotShadowCaster,
+        ChiselPlacementGhost,
+        DespawnOnExit(GameState::Gameplay),
+    ));
 }
 
 fn update_highlight(
@@ -130,7 +168,9 @@ fn update_highlight(
 ) {
     let scene_snapshot = input.scene.visual_snapshot();
     let scene_changed = last_scene.as_ref() != Some(&scene_snapshot);
+    let chisel_selected = input.scene.selected_item() == Some(CHISEL_TOOL_ID);
     if !scene_changed
+        && !chisel_selected
         && !input.brush_mode.is_changed()
         && !content.blocks.is_changed()
         && !content.secondary_properties.is_changed()
@@ -142,9 +182,67 @@ fn update_highlight(
     let Some(hit) = input.scene.hit() else {
         hide_if_visible(&mut view.highlight.1);
         hide_if_visible(&mut view.brush_ghost.1);
+        hide_if_visible(&mut view.chisel_placement.1);
         return;
     };
 
+    if chisel_selected {
+        hide_if_visible(&mut view.brush_ghost.1);
+        let precise = raycast_micro_voxels(
+            input.scene.world(),
+            input.scene.player_translation(),
+            input.scene.player_forward(),
+            8.0,
+        );
+        let Some(precise) = precise.filter(|precise| {
+            precise.voxel == hit.voxel
+                && content.blocks.get(precise.block_id).is_some_and(|block| block.can_fragment())
+        }) else {
+            hide_if_visible(&mut view.highlight.1);
+            hide_if_visible(&mut view.chisel_placement.1);
+            return;
+        };
+        let width = input.chisel_resolution.cell_width() as i32;
+        let (translation, edge) = snapped_preview(precise.fine, width);
+        if view.highlight.0.translation != translation {
+            view.highlight.0.translation = translation;
+        }
+        if view.highlight.0.scale != Vec3::splat(edge) {
+            view.highlight.0.scale = Vec3::splat(edge);
+        }
+        show_if_hidden(&mut view.highlight.1);
+
+        let placement_cell = precise.fine + precise.normal;
+        let placement_voxel = parent_voxel(placement_cell);
+        let can_place = precise.normal != IVec3::ZERO
+            && placement_voxel.y >= 0
+            && input.scene.world().is_loaded_at(placement_voxel)
+            && input.scene.world().cell_at(placement_voxel).map_or_else(
+                || input.scene.world().fluid_at(placement_voxel).is_none(),
+                |cell| {
+                    content.blocks.get(cell.block_id).is_some_and(|block| block.can_fragment())
+                        && MicroblockMask::has_room(cell)
+                },
+            );
+        if can_place {
+            let (translation, edge) = snapped_preview(placement_cell, width);
+            if view.chisel_placement.0.translation != translation {
+                view.chisel_placement.0.translation = translation;
+            }
+            if view.chisel_placement.0.scale != Vec3::splat(edge) {
+                view.chisel_placement.0.scale = Vec3::splat(edge);
+            }
+            show_if_hidden(&mut view.chisel_placement.1);
+        } else {
+            hide_if_visible(&mut view.chisel_placement.1);
+        }
+        return;
+    }
+
+    hide_if_visible(&mut view.chisel_placement.1);
+    if view.highlight.0.scale != Vec3::ONE {
+        view.highlight.0.scale = Vec3::ONE;
+    }
     let selected_item = input.scene.selected_item();
     if selected_item == Some(BRUSH_TOOL_ID) {
         hide_if_visible(&mut view.highlight.1);
@@ -212,6 +310,19 @@ fn update_highlight(
         view.highlight.0.translation = translation;
     }
     show_if_hidden(&mut view.highlight.1);
+}
+
+fn snapped_preview(fine: IVec3, width: i32) -> (Vec3, f32) {
+    let origin = IVec3::new(
+        fine.x.div_euclid(width) * width,
+        fine.y.div_euclid(width) * width,
+        fine.z.div_euclid(width) * width,
+    );
+    let edge = width as f32 / MICROBLOCK_EDGE as f32;
+    (
+        origin.as_vec3() / MICROBLOCK_EDGE as f32 + Vec3::splat(edge * 0.5),
+        edge,
+    )
 }
 
 fn hide_if_visible(visibility: &mut Visibility) {

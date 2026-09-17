@@ -3,6 +3,8 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
+use super::microblock::CHISEL_MASK_PROPERTY;
+
 const MAX_SECONDARY_PROPERTIES: usize = 8;
 
 static SECONDARY_PROPERTY_TOKEN_INTERNER: OnceLock<Mutex<HashMap<String, &'static str>>> =
@@ -36,10 +38,14 @@ impl SecondaryProperties {
             .map(|entry| entry.value)
     }
 
+    /// Only public, persistable properties. The private Chisel shape is kept
+    /// in memory and in archived chunks, but must not leak into disk snapshots,
+    /// target HUD tooltips or public secondary-property rendering.
     pub(crate) fn iter(self) -> impl Iterator<Item = (&'static str, &'static str)> {
         self.values
             .into_iter()
             .flatten()
+            .filter(|entry| entry.property != CHISEL_MASK_PROPERTY)
             .map(|entry| (entry.property, entry.value))
     }
 

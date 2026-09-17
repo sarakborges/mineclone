@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use super::world::VoxelWorld;
+use super::{
+    microblock::{MICROBLOCK_EDGE, occupied_cell, parent_voxel},
+    world::VoxelWorld,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VoxelHit {
@@ -9,18 +12,44 @@ pub struct VoxelHit {
     pub normal: IVec3,
 }
 
+/// Exact occupied cell in the fixed 8x8x8 precision grid. A macro block with
+/// no Chisel mask behaves as 512 occupied subcells without extra allocation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct MicroVoxelHit {
+    pub(crate) voxel: IVec3,
+    pub(crate) fine: IVec3,
+    pub(crate) block_id: &'static str,
+    pub(crate) normal: IVec3,
+}
+
 pub fn raycast_voxels(
     world: &VoxelWorld,
     origin: Vec3,
     direction: Vec3,
     max_distance: f32,
 ) -> Option<VoxelHit> {
-    if direction.length_squared() == 0.0 {
+    raycast_micro_voxels(world, origin, direction, max_distance).map(|hit| VoxelHit {
+        voxel: hit.voxel,
+        block_id: hit.block_id,
+        normal: hit.normal,
+    })
+}
+
+pub(crate) fn raycast_micro_voxels(
+    world: &VoxelWorld,
+    origin: Vec3,
+    direction: Vec3,
+    max_distance: f32,
+) -> Option<MicroVoxelHit> {
+    if direction.length_squared() == 0.0 || max_distance < 0.0 {
         return None;
     }
 
-    let direction = direction.normalize();
-    let mut voxel = origin.floor().as_ivec3();
+    // Scale both origin and velocity. DDA times remain measured in macro-block
+    // world units, so the existing target-range semantics are unchanged.
+    let direction = direction.normalize() * MICROBLOCK_EDGE as f32;
+    let origin = origin * MICROBLOCK_EDGE as f32;
+    let mut fine = origin.floor().as_ivec3();
     let step = IVec3::new(
         direction.x.signum() as i32,
         direction.y.signum() as i32,
@@ -34,35 +63,36 @@ pub fn raycast_voxels(
         reciprocal_abs(direction.z),
     );
     let mut t_max = Vec3::new(
-        first_boundary_distance(origin.x, voxel.x, direction.x),
-        first_boundary_distance(origin.y, voxel.y, direction.y),
-        first_boundary_distance(origin.z, voxel.z, direction.z),
+        first_boundary_distance(origin.x, fine.x, direction.x),
+        first_boundary_distance(origin.y, fine.y, direction.y),
+        first_boundary_distance(origin.z, fine.z, direction.z),
     );
 
     loop {
-        if let Some(block_id) = world.block_id_at(voxel) {
-            return Some(VoxelHit {
-                voxel,
-                block_id,
+        if let Some(cell) = occupied_cell(world, fine) {
+            return Some(MicroVoxelHit {
+                voxel: parent_voxel(fine),
+                fine,
+                block_id: cell.block_id,
                 normal: entry_normal,
             });
         }
 
         let distance = if t_max.x <= t_max.y && t_max.x <= t_max.z {
             let distance = t_max.x;
-            voxel.x += step.x;
+            fine.x += step.x;
             entry_normal = IVec3::new(-step.x, 0, 0);
             t_max.x += t_delta.x;
             distance
         } else if t_max.y <= t_max.z {
             let distance = t_max.y;
-            voxel.y += step.y;
+            fine.y += step.y;
             entry_normal = IVec3::new(0, -step.y, 0);
             t_max.y += t_delta.y;
             distance
         } else {
             let distance = t_max.z;
-            voxel.z += step.z;
+            fine.z += step.z;
             entry_normal = IVec3::new(0, 0, -step.z);
             t_max.z += t_delta.z;
             distance

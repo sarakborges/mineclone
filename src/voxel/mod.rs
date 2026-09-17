@@ -15,6 +15,7 @@ pub(crate) mod mesh;
 pub(crate) mod mesh_buffer;
 mod mesh_lighting;
 pub(crate) mod mesh_snapshot;
+pub(crate) mod microblock;
 pub(crate) mod neighbors;
 pub(crate) mod orientation;
 pub(crate) mod quad;

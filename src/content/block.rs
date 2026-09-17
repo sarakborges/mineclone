@@ -8,6 +8,7 @@ use super::{
 };
 
 const MAX_LIGHT_DAMPENING: u8 = 15;
+pub const FRAGMENTABLE_BLOCK_TAG: &str = "fragmentable";
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,6 +124,9 @@ pub struct BlockDefinition {
     pub id: String,
     pub name: LocalizedText,
     pub category: String,
+    /// Opt-in capabilities. Blocks without `fragmentable` cannot be sculpted.
+    #[serde(default)]
+    pub tags: Vec<String>,
     #[serde(default)]
     pub tint: BlockTint,
     #[serde(default)]
@@ -146,6 +150,10 @@ pub struct BlockDefinition {
 }
 
 impl BlockDefinition {
+    pub fn can_fragment(&self) -> bool {
+        self.tags.iter().any(|tag| tag == FRAGMENTABLE_BLOCK_TAG)
+    }
+
     pub fn alpha_mode(&self, opacity: f32) -> AlphaMode {
         if opacity < 1.0 || self.alpha_blend {
             AlphaMode::Blend
@@ -211,6 +219,18 @@ impl BlockRegistry {
             "block {} cannot use alphaBlend and alphaCutoff together",
             definition.id
         );
+        for (index, tag) in definition.tags.iter().enumerate() {
+            assert!(
+                !tag.trim().is_empty(),
+                "block {} tags cannot contain empty values",
+                definition.id
+            );
+            assert!(
+                !definition.tags[..index].contains(tag),
+                "block {} tags cannot contain duplicates",
+                definition.id
+            );
+        }
         for (index, orientation) in definition.orientations.iter().enumerate() {
             assert!(
                 !definition.orientations[..index].contains(orientation),

@@ -15,6 +15,7 @@ use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk},
     fluid::{FluidCell, MAX_FLUID_LEVEL},
+    microblock::MicroblockMask,
     secondary_properties::SecondaryProperties,
     texture_rotation::TextureRotation,
 };
@@ -60,7 +61,10 @@ impl DiskChunk {
             let (block, fluid, _) = chunk
                 .sample_local(x as i32, y as i32, z as i32)
                 .expect("disk chunk coordinates must be in range");
-            if let Some(cell) = block {
+            // Session-only Chisel geometry: preserve an original macroblock
+            // without its private mask, but never save a parent created in air
+            // as an entire block after a restart.
+            if let Some(cell) = block.filter(|cell| !MicroblockMask::is_transient_parent(*cell)) {
                 let mut properties = cell
                     .secondary_properties()
                     .iter()
@@ -123,9 +127,8 @@ impl DiskChunk {
             if blocks.get(&entry.id).is_none() {
                 return Err(invalid_data(format!("missing block definition: {}", entry.id)));
             }
-            // There can be at most eight properties, so checking prior entries
-            // avoids allocating a HashSet for every saved block (including
-            // blocks with no properties). Validate before interning any values.
+            // At most eight properties: validate in-place rather than allocate a
+            // HashSet per saved block. Reject duplicates before interning.
             for (property_index, (key, value)) in entry.properties.iter().enumerate() {
                 if key.is_empty()
                     || value.is_empty()

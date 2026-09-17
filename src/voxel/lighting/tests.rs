@@ -327,6 +327,7 @@ fn test_block(id: &str, light_emission: u8) -> BlockDefinition {
         id: id.to_owned(),
         name: localized_text(id),
         category: "test".to_owned(),
+        tags: Vec::new(),
         tint: BlockTint::None,
         textures: BlockTextures::default(),
         rotate_texture: BlockTextureRotations::default(),
