@@ -262,7 +262,7 @@ pub(crate) fn load_world(
 
 fn latest_complete_manifest(directory: &Path, id: &str) -> io::Result<WorldManifest> {
     let mut candidates = manifest_paths(directory)?;
-    candidates.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+    candidates.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.0));
     for (generation, path) in candidates {
         let Ok(manifest) = read_json::<WorldManifest>(&path) else {
             continue;
