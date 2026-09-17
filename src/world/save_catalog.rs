@@ -4,7 +4,7 @@ use std::{
     io::{self, Write},
     path::{Path, PathBuf},
     sync::{
-        Arc, Mutex, OnceLock,
+        Arc, Condvar, Mutex, OnceLock,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     thread,
@@ -34,11 +34,14 @@ static WORLD_LOCKS: OnceLock<Mutex<HashMap<String, Arc<WorldGate>>>> = OnceLock:
 
 /// Save publication and prune deletion are serialized for each world. Active
 /// readers hold a lease, not a mutex, during expensive JSON/chunk decoding.
-/// Pruning defers deletion rather than unlinking any reader's fallback paths.
+/// The condition variable lets a prune worker wait without holding the writer
+/// or spinning when a reader still needs an older fallback snapshot.
 #[derive(Default)]
 struct WorldGate {
     write: Mutex<()>,
     readers: AtomicUsize,
+    reader_signal: Mutex<()>,
+    readers_finished: Condvar,
     prune_running: AtomicBool,
 }
 
@@ -54,7 +57,13 @@ struct ReadLease(Arc<WorldGate>);
 
 impl Drop for ReadLease {
     fn drop(&mut self) {
-        self.0.readers.fetch_sub(1, Ordering::AcqRel);
+        // Serialize the count change with the condition-variable check. A
+        // notifier that runs between the check and wait would otherwise be
+        // lost and leave a prune worker waiting indefinitely.
+        let _signal = self.0.reader_signal.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if self.0.readers.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.0.readers_finished.notify_all();
+        }
     }
 }
 
@@ -584,8 +593,8 @@ fn latest_complete_manifest(directory: &Path, id: &str) -> io::Result<WorldManif
 }
 
 /// Validate backups off-thread and prune only when four generations decode.
-/// The writer only appends immutable generations. The deletion phase locks
-/// this world, and defers deletion if any reader holds a fallback lease.
+/// The writer only appends immutable generations. Release its lock while
+/// waiting for leases, then recheck under the lock before deleting anything.
 fn prune_old_generations(directory: &Path, id: &str, registries: &PruneRegistries) -> io::Result<()> {
     if !fs::symlink_metadata(directory)?.file_type().is_dir() {
         return Err(invalid_data("world directory cannot be a symbolic link"));
@@ -628,11 +637,22 @@ fn prune_old_generations(directory: &Path, id: &str, registries: &PruneRegistrie
         return Ok(());
     };
     let gate = world_lock(id)?;
-    let _lock = gate.write.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
-    if gate.readers.load(Ordering::Acquire) != 0 {
-        // Retry on a later save. Never delete any fallback path a loader is
-        // about to open, including on Windows where unlinking open files fails.
-        return Ok(());
+    let mut write = gate.write.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+    loop {
+        if gate.readers.load(Ordering::Acquire) == 0 {
+            break;
+        }
+        // The writer must remain free while waiting. reader_signal protects
+        // both the final decrement and the test before Condvar::wait.
+        drop(write);
+        let mut signal = gate.reader_signal.lock().map_err(|_| io::Error::other("reader wait lock poisoned"))?;
+        while gate.readers.load(Ordering::Acquire) != 0 {
+            signal = gate.readers_finished.wait(signal).map_err(|_| io::Error::other("reader wait lock poisoned"))?;
+        }
+        drop(signal);
+        // A new reader might have leased the world between waking and
+        // reacquiring write. Recheck under write before removing paths.
+        write = gate.write.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
     }
     if !fs::symlink_metadata(directory)?.file_type().is_dir() {
         return Err(invalid_data("world directory cannot be a symbolic link"));
