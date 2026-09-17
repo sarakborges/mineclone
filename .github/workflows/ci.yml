@@ -24,6 +24,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # Fail early on untranslated player-facing content, mismatched UI keys
+      # or broken placeholders. Do not spend time restoring Bevy for bad JSON.
+      - name: Audit localizations
+        run: python3 tools/check_localizations.py
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
