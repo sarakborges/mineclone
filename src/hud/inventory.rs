@@ -17,7 +17,9 @@ use interaction::{
     handle_search_focus, handle_search_input, handle_slot_clicks,
     remember_creative_scroll_positions, sync_search_focus,
 };
-use search_style::style_inventory_search_field;
+use search_style::{
+    focus_inventory_search_frame, frame_inventory_search_field, style_inventory_search_field,
+};
 use state::{CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState};
 use sync::{
     rebuild_inventory_when_changed, spawn_inventory, style_category_buttons, style_creative_slots,
@@ -65,6 +67,7 @@ impl Plugin for InventoryHudPlugin {
                 (
                     remember_creative_scroll_positions,
                     handle_search_focus,
+                    focus_inventory_search_frame,
                     handle_inventory_close_shortcut,
                     handle_search_input,
                     handle_category_clicks,
@@ -96,6 +99,7 @@ impl Plugin for InventoryHudPlugin {
                 Update,
                 (
                     style_search_bar,
+                    frame_inventory_search_field,
                     style_inventory_search_field,
                     style_category_buttons,
                     style_creative_slots,
