@@ -1,1 +1,1 @@
-{ "id": "stone_blocks", "displayName": { "english": "Stone Blocks" }, "order": 40, "blockIcon": { "block": "asteria:stone" } }
+{ "id": "stone_blocks", "displayName": { "english": "Stone Blocks", "portuguese_brazil": "Blocos de Pedra", "spanish": "Bloques de Piedra" }, "order": 40, "blockIcon": { "block": "asteria:stone" } }

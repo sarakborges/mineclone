@@ -1,1 +1,1 @@
-{ "id": "light_sources", "displayName": { "english": "Light Sources" }, "order": 60, "blockIcon": { "block": "asteria:lamp" } }
+{ "id": "light_sources", "displayName": { "english": "Light Sources", "portuguese_brazil": "Fontes de Luz", "spanish": "Fuentes de Luz" }, "order": 60, "blockIcon": { "block": "asteria:lamp" } }

@@ -1,1 +1,1 @@
-{ "id": "tools", "displayName": { "english": "Tools" }, "order": 70 }
+{ "id": "tools", "displayName": { "english": "Tools", "portuguese_brazil": "Ferramentas", "spanish": "Herramientas" }, "order": 70 }
