@@ -2,6 +2,7 @@ pub(crate) mod block_face;
 pub(crate) mod cell;
 pub(crate) mod chunk;
 pub(crate) mod chunk_archive;
+pub(crate) mod chunk_disk;
 pub(crate) mod collision;
 pub(crate) mod coordinates;
 pub(crate) mod deduplicated_queue;
