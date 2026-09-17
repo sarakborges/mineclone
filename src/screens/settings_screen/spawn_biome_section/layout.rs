@@ -172,8 +172,7 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                                         Node {
                                             width: percent(100),
                                             min_width: px(0),
-                                            height: percent(100),
-                                            align_items: AlignItems::Center,
+                                            height: px(text_input::INPUT_EDITOR_HEIGHT),
                                             overflow: Overflow::clip(),
                                             ..default()
                                         },
@@ -195,7 +194,7 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                                         TextLayout::no_wrap(),
                                         Node {
                                             position_type: PositionType::Absolute,
-                                            top: px(10),
+                                            top: px(text_input::centered_text_top(SEARCH_HEIGHT)),
                                             left: px(text_input::INPUT_PADDING_X + 1.0),
                                             max_width: percent(90),
                                             overflow: Overflow::clip(),
