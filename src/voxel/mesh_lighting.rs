@@ -282,7 +282,7 @@ fn face_basis(face: BlockFace) -> (IVec3, IVec3, IVec3, [(i32, i32); 4]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{provisional_top_sky_sample, should_flip_diagonal};
+    use super::{ao_brightness, provisional_top_sky_sample, sample_occlusion, should_flip_diagonal};
     use crate::voxel::{block_face::BlockFace, cell::VoxelCell, light::VoxelLight, microblock::MicroblockMask};
 
     const DARK: [f32; 3] = [0.0; 3];
