@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     app::game_state::GameState,
@@ -86,19 +86,24 @@ fn spawn_entity_hud(mut commands: Commands, settings: Res<HudSettings>) {
     ));
 }
 
+#[derive(SystemParam)]
+struct EntityHudContext<'w, 's> {
+    targeted: Res<'w, TargetedCreature>,
+    settings: Res<'w, HudSettings>,
+    creatures: Query<'w, 's, (&'static CreatureInstance, &'static Transform)>,
+    definitions: Res<'w, CreatureRegistry>,
+    localization: Res<'w, UiLocalization>,
+    language: Res<'w, ActiveLanguage>,
+}
+
 fn update_entity_hud(
-    targeted: Res<TargetedCreature>,
-    settings: Res<HudSettings>,
-    creatures: Query<(&CreatureInstance, &Transform)>,
-    definitions: Res<CreatureRegistry>,
-    localization: Res<UiLocalization>,
-    language: Res<ActiveLanguage>,
+    context: EntityHudContext,
     mut root: Single<(&mut Node, &mut Visibility), With<EntityHudRoot>>,
     mut label: Single<(&mut Text, &mut Node), (With<EntityHudText>, Without<EntityHudRoot>)>,
 ) {
-    let position = settings.target_block_position();
+    let position = context.settings.target_block_position();
     let visible_target = if position != TargetBlockPosition::Hidden {
-        targeted.0.and_then(|entity| creatures.get(entity).ok())
+        context.targeted.0.and_then(|entity| context.creatures.get(entity).ok())
     } else {
         None
     };
@@ -108,18 +113,18 @@ fn update_entity_hud(
         **visibility = desired;
     }
     let (text, label_node) = &mut *label;
-    if settings.is_changed() {
+    if context.settings.is_changed() {
         **root_node = entity_hud_node(position);
         **label_node = entity_label_node(position);
     }
     let Some((creature, transform)) = visible_target else {
         return;
     };
-    let language = language.get();
-    let name = definitions.get(&creature.definition_id)
+    let language = context.language.get();
+    let name = context.definitions.get(&creature.definition_id)
         .map_or(creature.definition_id.as_str(), |definition| definition.name.text(language));
     let voxel = transform.translation.floor().as_ivec3();
-    let coordinates = localization.text(language, "hud.coordinates")
+    let coordinates = context.localization.text(language, "hud.coordinates")
         .replace("{x}", &voxel.x.to_string())
         .replace("{y}", &voxel.y.to_string())
         .replace("{z}", &voxel.z.to_string());
