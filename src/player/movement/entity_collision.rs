@@ -4,7 +4,9 @@ use crate::{
     app::{game_state::GameState, pause_state::PauseState},
     content::creature::CreatureCollider,
     creatures::CreatureInstance,
-    player::{PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, camera::GameplayCamera},
+    player::{
+        PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT, PlayerEntity,
+    },
     voxel::{collision::collides_aabb, world::VoxelWorld},
 };
 
@@ -22,7 +24,7 @@ type CreatureContacts<'w, 's> = Query<
     'w,
     's,
     (&'static mut Transform, &'static CreatureCollider),
-    (With<CreatureInstance>, Without<GameplayCamera>),
+    (With<CreatureInstance>, Without<PlayerEntity>),
 >;
 
 fn player_bounds(eye: Vec3) -> Bounds {
@@ -110,7 +112,7 @@ fn push(
 /// the other. No displacement may pass through a solid or unloaded voxel.
 pub(super) fn resolve_player_creature_contacts(
     world: Res<VoxelWorld>,
-    mut player: Single<&mut Transform, (With<GameplayCamera>, Without<CreatureInstance>)>,
+    mut player: Single<&mut Transform, With<PlayerEntity>>,
     mut creatures: CreatureContacts<'_, '_>,
 ) {
     for _ in 0..MAX_CONTACT_PASSES {
