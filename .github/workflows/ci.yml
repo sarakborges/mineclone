@@ -24,37 +24,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # cargo check and Clippy do not execute UiLocalization::load(), which
-      # requires every language to match English at runtime. Validate the same
-      # invariants before installing dependencies or compiling the game.
-      - name: Validate UI localizations
-        run: |
-          python3 - <<'PY'
-          import json
-          import re
-          from pathlib import Path
-
-          root = Path('data/localization')
-          english = json.loads((root / 'english.json').read_text(encoding='utf-8'))
-          expected = set(english)
-          placeholders = lambda text: set(re.findall(r'\{([^{}]*)\}', text))
-          errors = []
-          for language in ('english', 'portuguese_brazil', 'spanish'):
-              strings = json.loads((root / f'{language}.json').read_text(encoding='utf-8'))
-              actual = set(strings)
-              for key in sorted(expected - actual):
-                  errors.append(f'{language}: missing key {key}')
-              for key in sorted(actual - expected):
-                  errors.append(f'{language}: unexpected key {key}')
-              for key in sorted(expected & actual):
-                  if not strings[key].strip():
-                      errors.append(f'{language}: empty key {key}')
-                  if placeholders(strings[key]) != placeholders(english[key]):
-                      errors.append(f'{language}: mismatched placeholders for {key}')
-          if errors:
-              raise SystemExit('\n'.join(errors))
-          print(f'UI localization OK: {len(expected)} keys in all three languages.')
-          PY
+      # Fail early on untranslated player-facing content, mismatched UI keys
+      # or broken placeholders. Do not spend time restoring Bevy for bad JSON.
+      - name: Audit localizations
+        run: python3 tools/check_localizations.py
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -74,7 +47,7 @@ jobs:
       # Cargo.lock is intentionally gitignored. Without restoring it BEFORE
       # rust-cache, every fresh runner resolves hundreds of dependencies again,
       # potentially downloading newer crates and invalidating compiled artifacts
-      # even when the Cargo cache reports an exact hit.
+      # even when Cargo reports an exact cache hit.
       - name: Cache CI Cargo.lock
         id: cargo-lock
         uses: actions/cache@v5
