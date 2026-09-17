@@ -1,6 +1,7 @@
 mod block_icon;
 pub(crate) mod chat;
 mod crosshair;
+mod entity_card;
 mod entity_targeting;
 mod fps;
 mod hotbar;
@@ -31,7 +32,11 @@ use time::TimeHudPlugin;
 use underwater::UnderwaterTintPlugin;
 use world::WorldHudPlugin;
 
-use crate::{app::game_state::GameState, rendering::camera_stack::UI_CAMERA_ORDER};
+use crate::{
+    app::game_state::GameState,
+    rendering::camera_stack::UI_CAMERA_ORDER,
+    targeting::block::BlockTargetingSet,
+};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum TargetBlockPosition {
@@ -82,7 +87,11 @@ impl Plugin for HudPlugin {
             .add_systems(OnEnter(GameState::Gameplay), spawn_gameplay_ui_camera)
             .add_systems(
                 Update,
-                tool_icon::sync_brush_tint_icons.run_if(in_state(GameState::Gameplay)),
+                (
+                    tool_icon::sync_brush_tint_icons,
+                    entity_card::sync_entity_cards.after(BlockTargetingSet::Raycast),
+                )
+                    .run_if(in_state(GameState::Gameplay)),
             )
             .add_plugins(UiMaterialPlugin::<BlockIconMaterial>::default())
             .add_plugins((
