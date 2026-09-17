@@ -275,7 +275,7 @@ pub(crate) fn create_new_world(
                 return Ok(candidate);
             }
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                candidate = available_world_name(&format!("Copy of {candidate}"))?;
+                candidate = available_world_name(requested_name)?;
             }
             Err(error) => return Err(error),
         }
