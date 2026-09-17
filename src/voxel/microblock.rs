@@ -196,3 +196,25 @@ pub(crate) fn occupied_cell<W: VoxelRead + ?Sized>(world: &W, fine: IVec3) -> Op
         .contains(local_cell(fine))
         .then_some(cell)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn light_dampening_scales_with_occupied_microcells() {
+        assert_eq!(MicroblockMask::EMPTY.light_dampening(15), 0);
+        assert_eq!(MicroblockMask::FULL.light_dampening(15), 15);
+
+        let mut half = MicroblockMask::EMPTY;
+        for layer in 0..LAYERS / 2 {
+            half.layers[layer] = u64::MAX;
+        }
+        assert_eq!(half.light_dampening(15), 8);
+    }
+
+    #[test]
+    fn zero_base_dampening_stays_zero_for_sculpted_geometry() {
+        assert_eq!(MicroblockMask::FULL.light_dampening(0), 0);
+    }
+}
