@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    player::camera::GameplayCamera,
+    player::PlayerEntity,
     voxel::world::VoxelWorld,
 };
 
@@ -30,7 +30,7 @@ impl Default for GravityState {
 
 pub(super) fn apply_gravity(
     context: VerticalMovementContext,
-    mut transform: Single<&mut Transform, With<GameplayCamera>>,
+    mut transform: Single<&mut Transform, With<PlayerEntity>>,
     flight: Single<&FlightState>,
     swimming: Single<&SwimmingState>,
     mut gravity: Single<&mut GravityState>,
@@ -62,6 +62,7 @@ pub(super) fn apply_gravity(
         &context.world,
         vertical_delta,
         Axis::Y,
+        None,
     );
 
     if hit_vertical_surface {
