@@ -9,6 +9,7 @@ use world_bounds::enforce_world_floor;
 
 mod collision;
 pub(crate) mod config;
+mod entity_collision;
 pub(crate) mod flight;
 pub(crate) mod gravity;
 mod smoothing;
@@ -34,6 +35,11 @@ impl Plugin for PlayerMovementPlugin {
             )
                 .chain()
                 .run_if(world_interaction_available),
+        )
+        .add_systems(
+            PostUpdate,
+            entity_collision::resolve_player_creature_contacts
+                .run_if(entity_collision::contacts_enabled()),
         );
     }
 }
