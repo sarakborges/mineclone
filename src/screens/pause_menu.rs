@@ -1,11 +1,14 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
+    app::{
+        game_state::GameState, pause_state::PauseState,
+        settings_state::{SettingsScope, SettingsState},
+    },
     localization::{ActiveLanguage, UiLocalization},
     ui::{
         button::menu_button,
-        surface, theme,
+        theme,
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
         visibility::set_visibility,
@@ -44,9 +47,28 @@ struct PauseSaveFeedback;
 #[derive(Component, Clone, Copy)]
 enum PauseMenuAction {
     Resume,
-    Settings,
+    WorldOptions,
+    GameOptions,
     LeaveWorld,
     ExitGame,
+}
+
+fn pause_group() -> impl Bundle {
+    (
+        Node {
+            width: percent(48),
+            min_width: px(0),
+            flex_grow: 1.0,
+            padding: UiRect::all(px(24)),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Stretch,
+            row_gap: px(14),
+            border_radius: BorderRadius::all(px(14)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.09, 0.07, 0.17, 0.92)),
+        theme::frosted_surface_gradient(),
+    )
 }
 
 fn spawn_pause_menu(
@@ -66,6 +88,7 @@ fn spawn_pause_menu(
                 position_type: PositionType::Absolute,
                 left: px(0),
                 top: px(0),
+                padding: UiRect::all(px(20)),
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
                 ..default()
@@ -73,30 +96,107 @@ fn spawn_pause_menu(
             BackgroundColor(theme::OVERLAY),
         ))
         .with_children(|root| {
-            root.spawn(surface::modal_panel()).with_children(|panel| {
-                panel.spawn((
-                    typography::title(localization.text(language, "pause.title").to_owned()),
-                    Node {
-                        margin: UiRect::bottom(px(10)),
+            root.spawn((
+                Node {
+                    width: percent(100),
+                    max_width: px(1100),
+                    padding: UiRect::all(px(30)),
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Stretch,
+                    row_gap: px(26),
+                    border_radius: BorderRadius::all(px(18)),
+                    ..default()
+                },
+                BackgroundColor(Color::srgba(0.035, 0.026, 0.075, 0.97)),
+                theme::frosted_surface_gradient(),
+                BoxShadow(vec![ShadowStyle {
+                    color: Color::srgba(0.0, 0.0, 0.0, 0.52),
+                    x_offset: px(0),
+                    y_offset: px(18),
+                    spread_radius: px(0),
+                    blur_radius: px(48),
+                }]),
+            ))
+            .with_children(|panel| {
+                panel
+                    .spawn(Node {
+                        width: percent(100),
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::SpaceBetween,
                         ..default()
-                    },
-                ));
-                panel.spawn(menu_button(
-                    localization.text(language, "pause.resume").to_owned(),
-                    PauseMenuAction::Resume,
-                ));
-                panel.spawn(menu_button(
-                    localization.text(language, "common.settings").to_owned(),
-                    PauseMenuAction::Settings,
-                ));
-                panel.spawn(menu_button(
-                    localization.text(language, "pause.leaveWorld").to_owned(),
-                    PauseMenuAction::LeaveWorld,
-                ));
-                panel.spawn(menu_button(
-                    localization.text(language, "common.exitGame").to_owned(),
-                    PauseMenuAction::ExitGame,
-                ));
+                    })
+                    .with_children(|header| {
+                        header.spawn(typography::title(
+                            localization.text(language, "pause.title").to_owned(),
+                        ));
+                        header.spawn(typography::caption("ASTERIA"));
+                    });
+
+                // Distinct world/game surfaces: no decorative borders on cards.
+                panel
+                    .spawn(Node {
+                        width: percent(100),
+                        min_width: px(0),
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Stretch,
+                        column_gap: px(20),
+                        ..default()
+                    })
+                    .with_children(|groups| {
+                        groups.spawn(pause_group()).with_children(|world| {
+                            world.spawn((
+                                Node {
+                                    width: px(38),
+                                    height: px(4),
+                                    margin: UiRect::bottom(px(4)),
+                                    border_radius: BorderRadius::all(px(2)),
+                                    ..default()
+                                },
+                                BackgroundColor(Color::srgb(0.63, 0.40, 0.96)),
+                            ));
+                            world.spawn(typography::heading(
+                                localization.text(language, "pause.worldGroup").to_owned(),
+                            ));
+                            world.spawn(menu_button(
+                                localization.text(language, "pause.worldOptions").to_owned(),
+                                PauseMenuAction::WorldOptions,
+                            ));
+                            world.spawn(menu_button(
+                                localization.text(language, "pause.leaveWorld").to_owned(),
+                                PauseMenuAction::LeaveWorld,
+                            ));
+                        });
+
+                        groups.spawn(pause_group()).with_children(|game| {
+                            game.spawn((
+                                Node {
+                                    width: px(38),
+                                    height: px(4),
+                                    margin: UiRect::bottom(px(4)),
+                                    border_radius: BorderRadius::all(px(2)),
+                                    ..default()
+                                },
+                                BackgroundColor(Color::srgb(0.34, 0.80, 0.92)),
+                            ));
+                            game.spawn(typography::heading(
+                                localization.text(language, "pause.gameGroup").to_owned(),
+                            ));
+                            game.spawn(menu_button(
+                                localization.text(language, "pause.resume").to_owned(),
+                                PauseMenuAction::Resume,
+                            ));
+                            game.spawn(menu_button(
+                                localization.text(language, "pause.gameOptions").to_owned(),
+                                PauseMenuAction::GameOptions,
+                            ));
+                            game.spawn(menu_button(
+                                localization.text(language, "common.exitGame").to_owned(),
+                                PauseMenuAction::ExitGame,
+                            ));
+                        });
+                    });
+
                 panel.spawn((PauseSaveFeedback, typography::caption(String::new())));
             });
         });
@@ -107,6 +207,7 @@ fn handle_pause_menu_buttons(
     snapshot: WorldSaveContext,
     mut session: ResMut<WorldSession>,
     mut feedback: Query<&mut Text, With<PauseSaveFeedback>>,
+    mut scope: ResMut<SettingsScope>,
     mut transition: ResMut<ScreenTransition>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
@@ -121,7 +222,12 @@ fn handle_pause_menu_buttons(
             PauseMenuAction::Resume => {
                 transition.request(ScreenTransitionTarget::pause(PauseState::Running));
             }
-            PauseMenuAction::Settings => {
+            PauseMenuAction::WorldOptions => {
+                *scope = SettingsScope::World;
+                transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
+            }
+            PauseMenuAction::GameOptions => {
+                *scope = SettingsScope::Game;
                 transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
             }
             PauseMenuAction::LeaveWorld | PauseMenuAction::ExitGame => {

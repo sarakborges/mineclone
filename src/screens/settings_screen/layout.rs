@@ -1,7 +1,10 @@
 use bevy::{ecs::system::SystemParam, prelude::*, ui_widgets::ScrollArea};
 
 use crate::{
-    app::{game_state::GameState, settings_state::SettingsState},
+    app::{
+        game_state::GameState,
+        settings_state::{SettingsScope, SettingsState},
+    },
     hud::HudSettings,
     localization::{ActiveLanguage, Language, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
@@ -27,24 +30,19 @@ use super::{
     world_settings_section::world_settings_section,
 };
 
-const CONTENT_WIDTH: f32 = 1120.0;
 const SIDEBAR_WIDTH: f32 = 280.0;
 const HEADER_HEIGHT: f32 = 116.0;
 const FOOTER_HEIGHT: f32 = 104.0;
-const COLUMN_GAP: f32 = 22.0;
 const SIDEBAR_BUTTON_GAP: f32 = 11.0;
 
-const START_SECTIONS: &[SettingsSection] = &[
+const GAME_SECTIONS: &[SettingsSection] = &[
     SettingsSection::Graphics,
     SettingsSection::Languages,
     SettingsSection::Hud,
 ];
-const IN_WORLD_SECTIONS: &[SettingsSection] = &[
+const WORLD_SECTIONS: &[SettingsSection] = &[
     SettingsSection::WorldSettings,
     SettingsSection::GameRules,
-    SettingsSection::Graphics,
-    SettingsSection::Languages,
-    SettingsSection::Hud,
 ];
 const CREATE_WORLD_SECTIONS: &[SettingsSection] =
     &[SettingsSection::General, SettingsSection::GameRules];
@@ -52,15 +50,19 @@ const CREATE_WORLD_SECTIONS: &[SettingsSection] =
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SettingsScreenContext {
     Start,
-    InWorld,
+    InWorldGame,
+    InWorldWorld,
     CreateWorld,
 }
 
 impl SettingsScreenContext {
-    fn from_game_state(game_state: GameState) -> Self {
+    fn from_game_state(game_state: GameState, scope: SettingsScope) -> Self {
         match game_state {
             GameState::NewWorld => Self::CreateWorld,
-            GameState::Gameplay => Self::InWorld,
+            GameState::Gameplay => match scope {
+                SettingsScope::Game => Self::InWorldGame,
+                SettingsScope::World => Self::InWorldWorld,
+            },
             _ => Self::Start,
         }
     }
@@ -68,22 +70,23 @@ impl SettingsScreenContext {
     const fn title_key(self) -> &'static str {
         match self {
             Self::CreateWorld => "newWorld.title",
-            Self::Start | Self::InWorld => "settings.title",
+            Self::InWorldWorld => "settings.worldTitle",
+            Self::Start | Self::InWorldGame => "settings.title",
         }
     }
 
     const fn initial_section(self) -> SettingsSection {
         match self {
-            Self::Start => SettingsSection::Graphics,
-            Self::InWorld => SettingsSection::WorldSettings,
+            Self::Start | Self::InWorldGame => SettingsSection::Graphics,
+            Self::InWorldWorld => SettingsSection::WorldSettings,
             Self::CreateWorld => SettingsSection::General,
         }
     }
 
     const fn sections(self) -> &'static [SettingsSection] {
         match self {
-            Self::Start => START_SECTIONS,
-            Self::InWorld => IN_WORLD_SECTIONS,
+            Self::Start | Self::InWorldGame => GAME_SECTIONS,
+            Self::InWorldWorld => WORLD_SECTIONS,
             Self::CreateWorld => CREATE_WORLD_SECTIONS,
         }
     }
@@ -92,6 +95,7 @@ impl SettingsScreenContext {
 #[derive(SystemParam)]
 pub(super) struct SettingsScreenWorldContext<'w, 's> {
     game_state: Res<'w, State<GameState>>,
+    scope: Res<'w, SettingsScope>,
     game_rules: Res<'w, GameRules>,
     new_world: Res<'w, NewWorldConfig>,
     player: Query<'w, 's, &'static GameMode, With<GameplayCamera>>,
@@ -99,13 +103,13 @@ pub(super) struct SettingsScreenWorldContext<'w, 's> {
 
 impl SettingsScreenWorldContext<'_, '_> {
     fn screen_context(&self) -> SettingsScreenContext {
-        SettingsScreenContext::from_game_state(*self.game_state.get())
+        SettingsScreenContext::from_game_state(*self.game_state.get(), *self.scope)
     }
 
     fn game_mode(&self, context: SettingsScreenContext) -> GameMode {
         match context {
             SettingsScreenContext::CreateWorld => self.new_world.game_mode(),
-            SettingsScreenContext::InWorld => self
+            SettingsScreenContext::InWorldGame | SettingsScreenContext::InWorldWorld => self
                 .player
                 .single()
                 .map_or_else(|_| GameMode::default(), |game_mode| *game_mode),
@@ -116,9 +120,9 @@ impl SettingsScreenWorldContext<'_, '_> {
     fn ticks_per_second(&self, context: SettingsScreenContext) -> u32 {
         match context {
             SettingsScreenContext::CreateWorld => self.new_world.game_rules().ticks_per_second(),
-            SettingsScreenContext::Start | SettingsScreenContext::InWorld => {
-                self.game_rules.ticks_per_second()
-            }
+            SettingsScreenContext::Start
+            | SettingsScreenContext::InWorldGame
+            | SettingsScreenContext::InWorldWorld => self.game_rules.ticks_per_second(),
         }
     }
 }
@@ -186,7 +190,9 @@ pub(super) fn spawn_settings_screen(
         SettingsScreenContext::CreateWorld => {
             root.insert(DespawnOnExit(GameState::NewWorld));
         }
-        SettingsScreenContext::Start | SettingsScreenContext::InWorld => {
+        SettingsScreenContext::Start
+        | SettingsScreenContext::InWorldGame
+        | SettingsScreenContext::InWorldWorld => {
             root.insert(DespawnOnExit(SettingsState::Open));
         }
     }
@@ -215,47 +221,36 @@ pub(super) fn spawn_settings_screen(
             ));
         });
 
+        // Full-width row: sidebar starts at x=0; content owns all remaining width.
         root.spawn(Node {
             position_type: PositionType::Absolute,
             top: px(HEADER_HEIGHT),
             bottom: px(FOOTER_HEIGHT),
             left: px(0),
             right: px(0),
-            padding: UiRect::axes(px(32), px(18)),
-            align_items: AlignItems::Stretch,
-            justify_content: JustifyContent::Center,
+            width: percent(100),
             min_height: px(0),
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Stretch,
             ..default()
         })
-        .with_children(|body| {
-            body.spawn(Node {
-                width: px(CONTENT_WIDTH),
-                max_width: percent(100),
-                height: percent(100),
-                min_height: px(0),
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Stretch,
-                column_gap: px(COLUMN_GAP),
-                ..default()
-            })
-            .with_children(|columns| {
-                spawn_sidebar(columns, context, &content.localization, language);
-                spawn_content(
-                    columns,
-                    SettingsContentView {
-                        context,
-                        render_distance: &content.render_distance,
-                        game_rules: &world.game_rules,
-                        new_world: &world.new_world,
-                        hud_settings: &content.hud_settings,
-                        game_mode,
-                        localization: &content.localization,
-                        language,
-                        selected: selection.selected,
-                        ticks_per_second,
-                    },
-                );
-            });
+        .with_children(|columns| {
+            spawn_sidebar(columns, context, &content.localization, language);
+            spawn_content(
+                columns,
+                SettingsContentView {
+                    context,
+                    render_distance: &content.render_distance,
+                    game_rules: &world.game_rules,
+                    new_world: &world.new_world,
+                    hud_settings: &content.hud_settings,
+                    game_mode,
+                    localization: &content.localization,
+                    language,
+                    selected: selection.selected,
+                    ticks_per_second,
+                },
+            );
         });
 
         root.spawn(Node {
@@ -274,7 +269,9 @@ pub(super) fn spawn_settings_screen(
             SettingsScreenContext::CreateWorld => {
                 spawn_new_world_footer(footer, &content.localization, language);
             }
-            SettingsScreenContext::Start | SettingsScreenContext::InWorld => {
+            SettingsScreenContext::Start
+            | SettingsScreenContext::InWorldGame
+            | SettingsScreenContext::InWorldWorld => {
                 footer.spawn(menu_button(
                     content
                         .localization
@@ -294,15 +291,21 @@ fn spawn_sidebar(
     language: Language,
 ) {
     columns
-        .spawn(Node {
-            width: px(SIDEBAR_WIDTH),
-            height: percent(100),
-            min_height: px(0),
-            flex_shrink: 0.0,
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Stretch,
-            ..default()
-        })
+        .spawn((
+            Node {
+                width: px(SIDEBAR_WIDTH),
+                max_width: percent(35),
+                height: percent(100),
+                min_height: px(0),
+                flex_shrink: 0.0,
+                padding: UiRect::axes(px(18), px(20)),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Stretch,
+                ..default()
+            },
+            BackgroundColor(theme::FROSTED_SURFACE),
+            theme::frosted_surface_gradient(),
+        ))
         .with_children(|sidebar| {
             sidebar
                 .spawn(Node {
@@ -347,115 +350,117 @@ fn spawn_sidebar(
 
 fn spawn_content(columns: &mut ChildSpawnerCommands, view: SettingsContentView<'_>) {
     columns
-        .spawn(surface::settings_content())
-        .with_children(|content| {
-            content
-                .spawn(Node {
-                    display: Display::Grid,
-                    width: percent(100),
-                    height: percent(100),
-                    min_height: px(0),
-                    grid_template_columns: vec![
-                        RepeatedGridTrack::flex(1, 1.0),
-                        RepeatedGridTrack::auto(1),
-                    ],
-                    ..default()
-                })
-                .with_children(|frame| {
-                    let scroll_area_id = frame
-                        .spawn((
-                            Node {
-                                width: percent(100),
-                                height: percent(100),
-                                min_height: px(0),
-                                padding: UiRect::right(px(14)),
-                                flex_direction: FlexDirection::Column,
-                                align_items: AlignItems::Stretch,
-                                overflow: Overflow::scroll_y(),
-                                ..default()
-                            },
-                            ScrollPosition(Vec2::ZERO),
-                            ScrollArea,
-                        ))
-                        .with_children(|panels| match view.context {
-                            SettingsScreenContext::CreateWorld => {
-                                panels
-                                    .spawn((
-                                        SettingsSectionPanel(SettingsSection::General),
-                                        section_panel_node(
-                                            view.selected == SettingsSection::General,
-                                        ),
-                                    ))
-                                    .with_child(new_world_general_section(
-                                        view.new_world,
+        .spawn(Node {
+            flex_grow: 1.0,
+            min_width: px(0),
+            height: percent(100),
+            min_height: px(0),
+            padding: UiRect::axes(px(24), px(10)),
+            flex_direction: FlexDirection::Column,
+            ..default()
+        })
+        .with_children(|area| {
+            area.spawn(surface::settings_content()).with_children(|content| {
+                content
+                    .spawn(Node {
+                        display: Display::Grid,
+                        width: percent(100),
+                        height: percent(100),
+                        min_height: px(0),
+                        grid_template_columns: vec![
+                            RepeatedGridTrack::flex(1, 1.0),
+                            RepeatedGridTrack::auto(1),
+                        ],
+                        ..default()
+                    })
+                    .with_children(|frame| {
+                        let scroll_area_id = frame
+                            .spawn((
+                                Node {
+                                    width: percent(100),
+                                    height: percent(100),
+                                    min_height: px(0),
+                                    padding: UiRect::right(px(14)),
+                                    flex_direction: FlexDirection::Column,
+                                    align_items: AlignItems::Stretch,
+                                    overflow: Overflow::scroll_y(),
+                                    ..default()
+                                },
+                                ScrollPosition(Vec2::ZERO),
+                                ScrollArea,
+                            ))
+                            .with_children(|panels| match view.context {
+                                SettingsScreenContext::CreateWorld => {
+                                    panels
+                                        .spawn((
+                                            SettingsSectionPanel(SettingsSection::General),
+                                            section_panel_node(
+                                                view.selected == SettingsSection::General,
+                                            ),
+                                        ))
+                                        .with_child(new_world_general_section(
+                                            view.new_world,
+                                            view.localization,
+                                            view.language,
+                                        ));
+
+                                    panels
+                                        .spawn((
+                                            SettingsSectionPanel(SettingsSection::GameRules),
+                                            section_panel_node(
+                                                view.selected == SettingsSection::GameRules,
+                                            ),
+                                        ))
+                                        .with_child(game_rules_section(
+                                            view.ticks_per_second,
+                                            view.localization,
+                                            view.language,
+                                        ));
+                                }
+                                SettingsScreenContext::InWorldWorld => {
+                                    panels
+                                        .spawn((
+                                            SettingsSectionPanel(SettingsSection::WorldSettings),
+                                            section_panel_node(
+                                                view.selected == SettingsSection::WorldSettings,
+                                            ),
+                                        ))
+                                        .with_child(world_settings_section(
+                                            view.game_mode,
+                                            view.localization,
+                                            view.language,
+                                        ));
+
+                                    panels
+                                        .spawn((
+                                            SettingsSectionPanel(SettingsSection::GameRules),
+                                            section_panel_node(
+                                                view.selected == SettingsSection::GameRules,
+                                            ),
+                                        ))
+                                        .with_child(game_rules_section(
+                                            view.game_rules.ticks_per_second(),
+                                            view.localization,
+                                            view.language,
+                                        ));
+                                }
+                                SettingsScreenContext::Start
+                                | SettingsScreenContext::InWorldGame => {
+                                    spawn_global_settings_panels(
+                                        panels,
+                                        view.render_distance,
+                                        view.hud_settings,
                                         view.localization,
                                         view.language,
-                                    ));
+                                        view.selected,
+                                    );
+                                }
+                            })
+                            .id();
 
-                                panels
-                                    .spawn((
-                                        SettingsSectionPanel(SettingsSection::GameRules),
-                                        section_panel_node(
-                                            view.selected == SettingsSection::GameRules,
-                                        ),
-                                    ))
-                                    .with_child(game_rules_section(
-                                        view.ticks_per_second,
-                                        view.localization,
-                                        view.language,
-                                    ));
-                            }
-                            SettingsScreenContext::InWorld => {
-                                panels
-                                    .spawn((
-                                        SettingsSectionPanel(SettingsSection::WorldSettings),
-                                        section_panel_node(
-                                            view.selected == SettingsSection::WorldSettings,
-                                        ),
-                                    ))
-                                    .with_child(world_settings_section(
-                                        view.game_mode,
-                                        view.localization,
-                                        view.language,
-                                    ));
-
-                                panels
-                                    .spawn((
-                                        SettingsSectionPanel(SettingsSection::GameRules),
-                                        section_panel_node(
-                                            view.selected == SettingsSection::GameRules,
-                                        ),
-                                    ))
-                                    .with_child(game_rules_section(
-                                        view.game_rules.ticks_per_second(),
-                                        view.localization,
-                                        view.language,
-                                    ));
-
-                                spawn_global_settings_panels(
-                                    panels,
-                                    view.render_distance,
-                                    view.hud_settings,
-                                    view.localization,
-                                    view.language,
-                                    view.selected,
-                                );
-                            }
-                            SettingsScreenContext::Start => {
-                                spawn_global_settings_panels(
-                                    panels,
-                                    view.render_distance,
-                                    view.hud_settings,
-                                    view.localization,
-                                    view.language,
-                                    view.selected,
-                                );
-                            }
-                        })
-                        .id();
-
-                    frame.spawn(vertical_scrollbar(scroll_area_id));
-                });
+                        frame.spawn(vertical_scrollbar(scroll_area_id));
+                    });
+            });
         });
 }
 

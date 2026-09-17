@@ -19,7 +19,10 @@ pub fn menu_button<A: Component>(label: impl Into<String>, action: A) -> impl Bu
         action,
         AsteriaButtonVisual::default(),
         Node {
-            width: px(MENU_BUTTON_WIDTH),
+            width: percent(100),
+            max_width: px(MENU_BUTTON_WIDTH),
+            min_width: px(0),
+            flex_shrink: 1.0,
             height: px(MENU_BUTTON_HEIGHT),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
