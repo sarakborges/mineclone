@@ -38,6 +38,7 @@
     "death": "Death"
   },
   "jumpSpeed": 5.4,
+  "moveSpeed": 1.7,
   "jumpInterval": 2.4,
   "anticipationSeconds": 0.24,
   "landingSeconds": 0.34,
