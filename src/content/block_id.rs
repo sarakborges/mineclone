@@ -1,9 +1,11 @@
 use std::{
-    collections::HashMap,
+    collections::HashSet,
     sync::{Mutex, OnceLock},
 };
 
-static BLOCK_ID_INTERNER: OnceLock<Mutex<HashMap<String, &'static str>>> = OnceLock::new();
+// The leaked string itself is the canonical storage. Keeping a second String
+// as the HashMap key doubled the allocation for every unique block ID.
+static BLOCK_ID_INTERNER: OnceLock<Mutex<HashSet<&'static str>>> = OnceLock::new();
 
 pub(crate) fn intern_block_id(id: &str) -> &'static str {
     let interner = BLOCK_ID_INTERNER.get_or_init(|| Mutex::new(HashMap::new()));
