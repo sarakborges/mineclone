@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use serde::Deserialize;
 
 /// Data-driven definition for the local player entity.
-#[derive(Resource, Clone, Deserialize)]
+#[derive(Resource, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerDefinition {
     #[serde(default = "default_player_health")]
