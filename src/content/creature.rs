@@ -217,7 +217,7 @@ mod tests {
     #[test]
     fn texture_paths_remain_inside_moddable_creatures_directory() {
         assert!(valid_creature_texture_path(
-            "textures/creatures/meadow_slime.png"
+            "textures/creatures/slime.png"
         ));
         assert!(!valid_creature_texture_path("textures/creatures/../secret.png"));
         assert!(!valid_creature_texture_path(
