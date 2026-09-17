@@ -1,3 +1,4 @@
+pub const STEP_SMOOTH_SPEED: f32 = 4.0;
 pub const WALK_SPEED: f32 = 5.0;
 pub const WALK_ACCELERATION: f32 = 28.0;
 pub const WALK_DECELERATION: f32 = 36.0;
