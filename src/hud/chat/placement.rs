@@ -13,6 +13,7 @@ use crate::{
         cell::VoxelCell, collision::collides_aabb, edit::VoxelTopologyRuntime,
         texture_rotation::TextureRotation, world::VoxelWorld,
     },
+    world::generation::fit_structure_to_ground,
 };
 
 const DISPLACEMENT_MARGIN: i32 = 3;
@@ -55,8 +56,9 @@ fn player_bounds(eye: Vec3) -> (Vec3, Vec3) {
 
 /// A collider occupies only the voxels it actually intersects, not the
 /// adjacent voxel when a maximum bound lies exactly on a grid boundary.
-/// Every intersected voxel must be loaded, empty and dry.
-fn clear_volume(world: &VoxelWorld, bounds: (Vec3, Vec3)) -> bool {
+/// Every intersected voxel must be loaded and empty; player relocation also
+/// requires dry space, whereas creature spawn may take place in fluids.
+fn clear_volume(world: &VoxelWorld, bounds: (Vec3, Vec3), require_dry: bool) -> bool {
     let minimum = (bounds.0 + Vec3::splat(BOUNDS_EPSILON)).floor().as_ivec3();
     let maximum = (bounds.1 - Vec3::splat(BOUNDS_EPSILON)).floor().as_ivec3();
     for y in minimum.y..=maximum.y {
@@ -65,7 +67,7 @@ fn clear_volume(world: &VoxelWorld, bounds: (Vec3, Vec3)) -> bool {
                 let voxel = IVec3::new(x, y, z);
                 if !world.is_loaded_at(voxel)
                     || world.is_solid(voxel)
-                    || world.fluid_at(voxel).is_some()
+                    || (require_dry && world.fluid_at(voxel).is_some())
                 {
                     return false;
                 }
@@ -86,6 +88,7 @@ fn clear_destination(
     blocked: (Vec3, Vec3),
     existing: &ExistingCreatures<'_, '_>,
     reserved: &[(Vec3, CreatureCollider)],
+    require_support: bool,
 ) -> bool {
     let bounds = player_bounds(eye);
     if overlaps(bounds, blocked)
@@ -98,17 +101,19 @@ fn clear_destination(
     {
         return false;
     }
-    clear_volume(world, bounds) && has_support(world, bounds)
+    clear_volume(world, bounds, true) && (!require_support || has_support(world, bounds))
 }
 
 /// Search the perimeter outside the *entire* occupied volume. No edits happen
-/// until a dry, loaded and supported destination for the whole player is found.
+/// until a dry, loaded destination for the whole player is found. Spawning in
+/// midair must not require the displaced player to be standing on the ground.
 fn displaced_eye(
     world: &VoxelWorld,
     initial_eye: Vec3,
     blocked: (Vec3, Vec3),
     existing: &ExistingCreatures<'_, '_>,
     reserved: &[(Vec3, CreatureCollider)],
+    require_support: bool,
 ) -> Option<Vec3> {
     let min = blocked.0.floor().as_ivec3() - IVec3::splat(DISPLACEMENT_MARGIN);
     let max = blocked.1.ceil().as_ivec3() + IVec3::splat(DISPLACEMENT_MARGIN);
@@ -133,8 +138,23 @@ fn displaced_eye(
             .total_cmp(&b.distance_squared(initial_eye))
     });
     candidates.into_iter().find(|eye| {
-        clear_destination(world, *eye, blocked, existing, reserved)
+        clear_destination(world, *eye, blocked, existing, reserved, require_support)
     })
+}
+
+/// Inspect the *loaded* world instead of predicting an old procedural height:
+/// structures must fit the terrain currently present, including player edits.
+/// Return the first empty level directly above the highest solid voxel.
+fn loaded_surface_level(world: &VoxelWorld, position: IVec2) -> Option<i32> {
+    let highest = world.highest_loaded_world_y_in_column(position.x, position.y)?;
+    let ground_y = (0..=highest).rev().find(|&y| {
+        world.is_solid(IVec3::new(position.x, y, position.y))
+    })?;
+    let above = IVec3::new(position.x, ground_y + 1, position.y);
+    (world.is_loaded_at(above)
+        && !world.is_solid(above)
+        && world.fluid_at(above).is_none())
+    .then_some(ground_y + 1)
 }
 
 impl ChatPlacementContext<'_, '_> {
@@ -153,8 +173,7 @@ impl ChatPlacementContext<'_, '_> {
         let feet = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
         let blocked = definition.collider.bounds(feet);
         let world = self.runtime.world();
-        let occupied = !clear_volume(world, blocked)
-            || !has_support(world, blocked)
+        let occupied = !clear_volume(world, blocked, false)
             || self.existing.iter().any(|(other, collider)| {
                 overlaps(blocked, collider.bounds(other.translation))
             })
@@ -165,7 +184,7 @@ impl ChatPlacementContext<'_, '_> {
             return format!("not enough space to spawn {id}");
         }
         let Some(destination) = displaced_eye(
-            world, player.translation, blocked, &self.existing, reserved,
+            world, player.translation, blocked, &self.existing, reserved, false,
         ) else {
             return format!("not enough space to spawn {id}");
         };
@@ -197,13 +216,19 @@ impl ChatPlacementContext<'_, '_> {
         let Ok(mut player) = self.player.single_mut() else {
             return "Cannot place structure: player is unavailable.".to_owned();
         };
-        let origin = (player.translation - Vec3::Y * PLAYER_EYE_HEIGHT)
-            .floor()
-            .as_ivec3();
+        let feet = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
+        let anchor = feet.floor().as_ivec3().xz();
         let voxels = structure.voxels();
-        if voxels.is_empty() {
+        let world = self.runtime.world();
+        // Reuse the world generator's footprint and slope-fitting rule. Unlike
+        // worldgen's density-based ground voxel, the live-world sample returns
+        // the first empty level above terrain so existing blocks are preserved.
+        let Some(origin_y) = fit_structure_to_ground(anchor, voxels, |position| {
+            loaded_surface_level(world, position)
+        }) else {
             return format!("not enough space to place {id}");
-        }
+        };
+        let origin = IVec3::new(anchor.x, origin_y, anchor.y);
         let min = voxels
             .iter()
             .fold(IVec3::splat(i32::MAX), |min, voxel| min.min(origin + voxel.offset));
@@ -211,7 +236,6 @@ impl ChatPlacementContext<'_, '_> {
             .iter()
             .fold(IVec3::splat(i32::MIN), |max, voxel| max.max(origin + voxel.offset));
         let blocked = (min.as_vec3(), (max + IVec3::ONE).as_vec3());
-        let world = self.runtime.world();
         let all_loaded_and_clear = voxels.iter().all(|voxel| {
             let position = origin + voxel.offset;
             let voxel_bounds = (position.as_vec3(), position.as_vec3() + Vec3::ONE);
@@ -225,16 +249,21 @@ impl ChatPlacementContext<'_, '_> {
                     overlaps(voxel_bounds, collider.bounds(*other))
                 })
         });
-        // An anchored structure must have at least one block on solid terrain.
-        // Do not require every elevated or overhanging voxel to have support.
+        // Every bottom-layer structure voxel must be supported. On a slope
+        // with no safe flush fit we reject rather than leave floating blocks.
         let has_foundation = voxels.iter().filter(|voxel| origin.y + voxel.offset.y == min.y)
-            .any(|voxel| world.is_solid(origin + voxel.offset - IVec3::Y));
+            .all(|voxel| world.is_solid(origin + voxel.offset - IVec3::Y));
         if !all_loaded_and_clear || !has_foundation {
             return format!("not enough space to place {id}");
         }
-        let Some(destination) = displaced_eye(
-            world, player.translation, blocked, &self.existing, reserved,
-        ) else {
+        let destination = if !overlaps(player_bounds(player.translation), blocked) {
+            Some(player.translation)
+        } else {
+            displaced_eye(
+                world, player.translation, blocked, &self.existing, reserved, true,
+            )
+        };
+        let Some(destination) = destination else {
             return format!("not enough space to place {id}");
         };
 
