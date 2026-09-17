@@ -11,6 +11,13 @@ use crate::{
 use super::config::COLLISION_STEP;
 
 #[derive(Clone, Copy)]
+pub(super) enum MoveAxisResult {
+    Clear,
+    Blocked,
+    Stepped(Vec3),
+}
+
+#[derive(Clone, Copy)]
 pub(super) enum Axis {
     X,
     Y,
@@ -23,9 +30,9 @@ pub(super) fn move_axis(
     delta: f32,
     axis: Axis,
     step_up_height: Option<f32>,
-) -> bool {
+) -> MoveAxisResult {
     if delta == 0.0 {
-        return false;
+        return MoveAxisResult::Clear;
     }
 
     let steps = (delta.abs() / COLLISION_STEP).ceil().max(1.0) as usize;
@@ -53,16 +60,16 @@ pub(super) fn move_axis(
                     player_bounds,
                 ) {
                     transform.translation = stepped_position;
-                    return false;
+                    return MoveAxisResult::Stepped(stepped_position);
                 }
             }
 
-            return true;
+            return MoveAxisResult::Blocked;
         }
         moved += step;
     }
 
-    false
+    MoveAxisResult::Clear
 }
 
 pub(super) fn player_collides(eye_position: Vec3, world: &VoxelWorld) -> bool {
