@@ -31,6 +31,7 @@ mod render_diagnostics;
 pub(crate) mod render_distance;
 mod save;
 pub(crate) mod save_catalog;
+pub(crate) mod save_session;
 mod seed;
 mod setup;
 mod streaming;
@@ -65,6 +66,7 @@ pub(crate) use new_world::NewWorldConfig;
 use render_diagnostics::{log_render_asset_pressure, render_diagnostics_due};
 use render_distance::RenderDistanceSettings;
 pub(crate) use save::{InMemoryWorldSave, WorldLoadMode};
+use save_session::{WorldSession, autosave_only_in_gameplay, autosave_world, restore_loaded_clock};
 pub(crate) use seed::WorldSeed;
 pub(crate) use setup::WorldLoadingState;
 use setup::{begin_world_loading, setup_world};
@@ -80,6 +82,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<WorldSeed>()
             .init_resource::<WorldLoadMode>()
             .init_resource::<InMemoryWorldSave>()
+            .init_resource::<WorldSession>()
             .init_resource::<NewWorldConfig>()
             .init_resource::<GameRules>()
             .init_resource::<WorldTickClock>()
@@ -113,7 +116,9 @@ impl Plugin for WorldPlugin {
                     reset_resource::<ChunkRemeshTasks>,
                     reset_resource::<ChunkUnloadState>,
                     reset_resource::<WorldTickClock>,
-                ),
+                    restore_loaded_clock,
+                )
+                    .chain(),
             )
             .add_systems(
                 OnExit(GameState::Gameplay),
@@ -158,6 +163,7 @@ impl Plugin for WorldPlugin {
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
             )
-            .add_systems(Last, log_render_asset_pressure.run_if(render_diagnostics_due));
+            .add_systems(Last, log_render_asset_pressure.run_if(render_diagnostics_due))
+            .add_systems(Last, autosave_world.run_if(autosave_only_in_gameplay));
     }
 }
