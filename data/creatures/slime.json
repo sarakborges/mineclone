@@ -1,22 +1,14 @@
 {
-  "id": "asteria:meadow_slime",
+  "id": "asteria:slime",
   "name": {
-    "english": "Meadow Slime",
-    "portuguese_brazil": "Gosma do prado",
-    "spanish": "Limo de la pradera"
+    "english": "Slime",
+    "portuguese_brazil": "Gosma",
+    "spanish": "Limo"
   },
   "model": "models/creatures/slime/slime.glb",
   "collider": {
-    "size": [
-      0.78,
-      0.84,
-      0.78
-    ],
-    "centerOffset": [
-      0.0,
-      0.42,
-      0.0
-    ]
+    "size": [0.78, 0.84, 0.78],
+    "centerOffset": [0.0, 0.42, 0.0]
   },
   "materialTints": {
     "SlimeShell": {
@@ -44,7 +36,7 @@
   "anticipationSeconds": 0.24,
   "landingSeconds": 0.34,
   "textures": {
-    "SlimeShell": "textures/creatures/meadow_slime.png",
-    "SlimeCore": "textures/creatures/meadow_slime.png"
+    "SlimeShell": "textures/creatures/slime.png",
+    "SlimeCore": "textures/creatures/slime.png"
   }
 }
