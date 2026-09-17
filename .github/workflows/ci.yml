@@ -47,7 +47,7 @@ jobs:
       # Cargo.lock is intentionally gitignored. Without restoring it BEFORE
       # rust-cache, every fresh runner resolves hundreds of dependencies again,
       # potentially downloading newer crates and invalidating compiled artifacts
-      # even when the Cargo cache reports an exact hit.
+      # even when Cargo reports an exact cache hit.
       - name: Cache CI Cargo.lock
         id: cargo-lock
         uses: actions/cache@v5
