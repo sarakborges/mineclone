@@ -1,7 +1,7 @@
 //! Portable, version-independent representation of a modified chunk.
 //! Runtime palette indices, fluid numeric IDs and derived lighting must never
 //! cross the disk boundary.
-use std::{collections::HashSet, io};
+use std::io;
 
 use bevy::prelude::IVec3;
 use serde::{Deserialize, Serialize};
@@ -61,9 +61,9 @@ impl DiskChunk {
             let (block, fluid, _) = chunk
                 .sample_local(x as i32, y as i32, z as i32)
                 .expect("disk chunk coordinates must be in range");
-            // The first Chisel iteration is session-only. A sculpted original
-            // saves as its unmodified macro cell; a temporary parent created
-            // into air is omitted, never accidentally saved as a whole cube.
+            // Session-only Chisel geometry: preserve an original macroblock
+            // without its private mask, but never save a parent created in air
+            // as an entire block after a restart.
             if let Some(cell) = block.filter(|cell| !MicroblockMask::is_transient_parent(*cell)) {
                 let mut properties = cell
                     .secondary_properties()
@@ -127,12 +127,20 @@ impl DiskChunk {
             if blocks.get(&entry.id).is_none() {
                 return Err(invalid_data(format!("missing block definition: {}", entry.id)));
             }
-            let mut properties = SecondaryProperties::default();
-            let mut seen = HashSet::new();
-            for (key, value) in entry.properties {
-                if key.is_empty() || value.is_empty() || !seen.insert(key.clone()) {
+            // At most eight properties: validate in-place rather than allocate a
+            // HashSet per saved block. Reject duplicates before interning.
+            for (property_index, (key, value)) in entry.properties.iter().enumerate() {
+                if key.is_empty()
+                    || value.is_empty()
+                    || entry.properties[..property_index]
+                        .iter()
+                        .any(|(previous_key, _)| previous_key == key)
+                {
                     return Err(invalid_data("empty or duplicate secondary property"));
                 }
+            }
+            let mut properties = SecondaryProperties::default();
+            for (key, value) in entry.properties {
                 properties.set(&key, &value);
             }
             let (x, y, z) = coordinates(index);

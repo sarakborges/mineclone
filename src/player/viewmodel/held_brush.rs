@@ -17,7 +17,15 @@ use crate::{
 use super::animation::{PlayerViewModel, base_viewmodel_transform};
 
 const VIEW_MODEL_RENDER_LAYER: usize = 1;
-const BRUSH_DISPLAY_SIZE: f32 = 0.43;
+// The handle needs to remain large enough to reach into the player's hand.
+const BRUSH_DISPLAY_SIZE: f32 = 0.52;
+// In the 64x64 sprite, the end of the handle is near the bottom-left corner.
+// These are offsets from the sprite's center, expressed as fractions of its size.
+const BRUSH_GRIP_OFFSET: Vec2 = Vec2::new(-0.36, -0.36);
+// Angle the head upwards while keeping the handle's grip fixed in the hand.
+const BRUSH_DISPLAY_ANGLE: f32 = 0.30;
+// The tint and base use identical geometry and transforms except for depth.
+const BRUSH_TINT_DEPTH: f32 = 0.004;
 
 #[derive(Component)]
 pub(super) struct HeldBrushRoot;
@@ -45,6 +53,15 @@ fn selected_tint(mode: &BrushMode, properties: &SecondaryPropertyRegistry) -> Op
         .map(|definition| definition.color.to_color())
 }
 
+/// Place the *handle's grip*, rather than the sprite's center, at the root.
+/// Both layers must use this exact transform so the dye matches the hotbar art.
+fn brush_sprite_transform(depth: f32) -> Transform {
+    let rotation = Quat::from_rotation_z(BRUSH_DISPLAY_ANGLE);
+    let grip = BRUSH_GRIP_OFFSET.extend(0.0) * BRUSH_DISPLAY_SIZE;
+    Transform::from_translation(-(rotation * grip) + Vec3::Z * depth)
+        .with_rotation(rotation)
+}
+
 /// Load the same two images used by the hotbar; the overlay is hidden for an
 /// unpainted Brush and its color is updated when the palette changes.
 pub(super) fn setup_held_brush_assets(
@@ -59,7 +76,10 @@ pub(super) fn setup_held_brush_assets(
     let brush = tools.get(BRUSH_TOOL_ID).expect("Brush tool definition is required");
     let icon = materials.add(StandardMaterial {
         base_color_texture: Some(asset_server.load(brush.icon.clone())),
-        alpha_mode: AlphaMode::Blend,
+        // The 64x64 base is pixel art: alpha masking preserves its silhouette
+        // and draws it in the opaque pass, before the transparent dye overlay.
+        // Two Blend materials can be depth-sorted in the opposite order to UI.
+        alpha_mode: AlphaMode::Mask(0.5),
         unlit: true,
         double_sided: true,
         ..default()
@@ -81,8 +101,8 @@ pub(super) fn setup_held_brush_assets(
     });
 }
 
-/// Attach the Brush to the same animated hand root as held blocks. A textured
-/// flat mesh is intentional: the Brush artwork is a 64x64 item sprite.
+/// Attach the Brush to the animated hand. The root marks the grip inside the
+/// hand; the sprite and paint layer move and rotate together around that grip.
 pub(super) fn spawn_held_brush(
     mut commands: Commands,
     viewmodels: Query<Entity, Added<PlayerViewModel>>,
@@ -96,7 +116,9 @@ pub(super) fn spawn_held_brush(
         commands.entity(viewmodel).with_children(|hand| {
             hand.spawn((
                 HeldBrushRoot,
-                Transform::from_translation(Vec3::new(-0.02, 0.72, 0.21))
+                // The arm extends from Y=0 to Y=0.60 in the hand's frame.
+                // Put the end of the brush handle inside it, not beside it.
+                Transform::from_translation(Vec3::new(-0.08, 0.46, 0.21))
                     .with_rotation(rotation),
                 if selected { Visibility::Visible } else { Visibility::Hidden },
                 RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
@@ -105,7 +127,7 @@ pub(super) fn spawn_held_brush(
                 brush.spawn((
                     Mesh3d(assets.mesh.clone()),
                     MeshMaterial3d(assets.icon.clone()),
-                    Transform::IDENTITY,
+                    brush_sprite_transform(0.0),
                     RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
                     NotShadowCaster,
                 ));
@@ -114,7 +136,7 @@ pub(super) fn spawn_held_brush(
                         HeldBrushTint,
                         Mesh3d(assets.mesh.clone()),
                         MeshMaterial3d(material.clone()),
-                        Transform::from_translation(Vec3::new(0.0, 0.0, 0.001)),
+                        brush_sprite_transform(BRUSH_TINT_DEPTH),
                         if mode.dye_id().is_some() {
                             Visibility::Inherited
                         } else {

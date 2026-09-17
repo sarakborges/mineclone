@@ -1,4 +1,6 @@
-use std::{collections::HashSet, io};
+use std::io;
+
+use bevy::prelude::IVec3;
 
 use crate::content::{block::BlockRegistry, fluid::FluidRegistry};
 use crate::voxel::{chunk_archive::ArchivedChunk, chunk_disk::DiskChunk};
@@ -35,29 +37,25 @@ impl VoxelWorld {
             .collect()
     }
 
-    /// Rebuild a *fresh* world from disk. Keep all saved chunks archived until
-    /// streaming needs them; don't rehydrate the entire explored map at once.
-    /// Validate every chunk and duplicate coordinate before any world is exposed.
+    /// Rebuild a *fresh* world from disk, archiving saved chunks until streaming
+    /// needs them. Reject duplicate coordinates BEFORE decoding their content.
+    /// On any error the partially built world is dropped without being exposed.
     pub(crate) fn from_saved_chunks(
         saved: Vec<DiskChunk>,
         blocks: &BlockRegistry,
         fluids: &FluidRegistry,
     ) -> io::Result<Self> {
-        let mut decoded = Vec::with_capacity(saved.len());
-        let mut seen = HashSet::with_capacity(saved.len());
+        let mut world = Self::default();
         for entry in saved {
-            let (coord, chunk) = entry.into_chunk(blocks, fluids)?;
-            if !seen.insert(coord) {
+            let coord = IVec3::from_array(entry.coord);
+            if world.generated_chunks.contains(&coord) {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     format!("duplicate saved chunk coordinate: {coord:?}"),
                 ));
             }
-            decoded.push((coord, ArchivedChunk::from_chunk(&chunk)));
-        }
-
-        let mut world = Self::default();
-        for (coord, archived) in decoded {
+            let (coord, chunk) = entry.into_chunk(blocks, fluids)?;
+            let archived = ArchivedChunk::from_chunk(&chunk);
             world.generated_chunks.insert(coord);
             world.dirty_chunks.insert(coord);
             world.archived_chunks.insert(coord, archived);
