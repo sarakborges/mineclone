@@ -9,24 +9,24 @@ use crate::{
     player::hotbar::PlayerHotbar,
 };
 
-/// Cut size measured along each axis, not the volume of a microblock.
-/// The corresponding face grids are 1x1, 2x2, 4x4 and 8x8.
+/// Precision labels are ordered from the whole block to 1/8 of each axis.
+/// The corresponding grids are 1x1x1, 2x2x2, 4x4x4 and 8x8x8.
 #[derive(Resource, Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum ChiselResolution {
     #[default]
-    Whole,
-    Half,
-    Quarter,
-    Eighth,
+    Full,
+    Thick,
+    Thin,
+    ExtraThin,
 }
 
 impl ChiselResolution {
     const fn next(self) -> Self {
         match self {
-            Self::Whole => Self::Half,
-            Self::Half => Self::Quarter,
-            Self::Quarter => Self::Eighth,
-            Self::Eighth => Self::Whole,
+            Self::Full => Self::Thick,
+            Self::Thick => Self::Thin,
+            Self::Thin => Self::ExtraThin,
+            Self::ExtraThin => Self::Full,
         }
     }
 }
