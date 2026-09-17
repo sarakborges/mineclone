@@ -106,7 +106,7 @@ impl SecondaryProperties {
 }
 
 fn intern_token(token: &str) -> &'static str {
-    let interner = SECONDARY_PROPERTY_TOKEN_INTERNER.get_or_init(|| Mutex::new(HashMap::new()));
+    let interner = SECONDARY_PROPERTY_TOKEN_INTERNER.get_or_init(|| Mutex::new(HashSet::new()));
     let mut tokens = interner
         .lock()
         .expect("secondary property token interner lock was poisoned");
