@@ -165,3 +165,15 @@ fn approach_step_height(current: f32, target: f32, max_delta: f32) -> f32 {
         current + delta.signum() * max_delta
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::approach_step_height;
+
+    #[test]
+    fn step_height_moves_toward_target_without_overshoot() {
+        assert_eq!(approach_step_height(1.0, 2.0, 0.25), 1.25);
+        assert_eq!(approach_step_height(1.9, 2.0, 0.25), 2.0);
+        assert_eq!(approach_step_height(2.0, 1.0, 0.25), 1.75);
+    }
+}
