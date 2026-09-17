@@ -549,10 +549,10 @@ fn highest_generation(directory: &Path) -> io::Result<u64> {
 fn manifest_paths(directory: &Path) -> io::Result<Vec<(u64, PathBuf)>> {
     let mut result = Vec::new();
     for entry in fs::read_dir(directory)? {
-        if !entry?.file_type()?.is_file() {
+        let entry = entry?;
+        if !entry.file_type()?.is_file() {
             continue;
         }
-        let entry = entry?;
         let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
             continue;
         };
