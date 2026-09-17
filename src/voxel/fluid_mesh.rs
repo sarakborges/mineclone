@@ -253,7 +253,7 @@ fn partial_block_face_has_opening(cell: crate::voxel::cell::VoxelCell, face: Blo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::voxel::microblock::ChiselResolution;
+    use crate::voxel::{cell::VoxelCell, microblock::ChiselResolution};
 
     #[test]
     fn partial_block_face_opening_exposes_fluid() {
