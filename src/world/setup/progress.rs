@@ -43,6 +43,7 @@ pub(in crate::world) fn setup_world(
     mut generation_tasks: ResMut<ChunkGenerationTasks>,
     mut mesh_tasks: ResMut<ChunkMeshTasks>,
     persistence: WorldSetupPersistence,
+    player_definition: Res<crate::content::player::PlayerDefinition>,
 ) {
     if transition.is_active() {
         return;
@@ -71,6 +72,7 @@ pub(in crate::world) fn setup_world(
             &mut progress,
             &mut transition,
             &persistence,
+            &player_definition,
         ),
     }
 }
@@ -347,6 +349,7 @@ fn spawn_loaded_world(
     progress: &mut WorldSetupProgress<'_>,
     transition: &mut ScreenTransition,
     persistence: &WorldSetupPersistence<'_>,
+    player_definition: &crate::content::player::PlayerDefinition,
 ) {
     if progress.loading_state.transition_requested {
         return;
@@ -364,7 +367,7 @@ fn spawn_loaded_world(
         persistence.new_world_config.game_mode()
     };
 
-    spawn_player_entity(&mut renderer.commands, translation, game_mode);
+    spawn_player_entity(&mut renderer.commands, translation, game_mode, player_definition);
     progress.loading_state.transition_requested = true;
     transition.request(ScreenTransitionTarget::game(GameState::Gameplay));
 }
