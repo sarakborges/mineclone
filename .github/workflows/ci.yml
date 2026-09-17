@@ -16,7 +16,9 @@ permissions:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    # Keep the OS fixed: native package archives and compiler outputs are
+    # specific to the runner distribution and Rust toolchain.
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
@@ -27,19 +29,23 @@ jobs:
         with:
           components: clippy
 
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes \
-            libasound2-dev \
-            libfontconfig1-dev \
-            libudev-dev \
-            libwayland-dev \
-            libx11-dev \
-            libxkbcommon-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libxrandr-dev
+      # The first run installs the Bevy system libraries; subsequent runs
+      # restore their installed files instead of repeating apt-get install.
+      - name: Cache Linux dependencies
+        uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
+        with:
+          packages: >-
+            libasound2-dev libfontconfig1-dev libudev-dev libwayland-dev
+            libx11-dev libxkbcommon-dev libxcursor-dev libxi-dev libxrandr-dev
+          version: ubuntu-24.04-bevy-0.19-v1
+
+      # Cache downloaded crates and compiled dependency artifacts. The key
+      # includes the Rust toolchain and Cargo manifests; do not cache the
+      # project binary or needlessly rebuild all Bevy crates on each push.
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
 
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
