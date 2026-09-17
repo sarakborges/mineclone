@@ -282,3 +282,10 @@ Próximo passo imediato: consultar a CI do novo HEAD e corrigir qualquer erro ob
 - Removed the generic red damage flash entirely; damage feedback is now animation-driven (`hurt`), as requested.
 - The shared `EntityHealth` remains for data-driven health/death state, without visual flash state.
 - Slime already declares `hurt` and `death` animation clips in `data/creatures/slime.json`; next asset work is to author those clips in `models/creatures/slime/slime.glb`.
+
+
+## Checkpoint — 2026-09-17: slime health and per-material skins
+- `data/creatures/slime.json` now explicitly declares `health: 10.0`.
+- Slime material textures are now data-driven per mesh material: `SlimeShell -> textures/creatures/slime/shell.png`, `SlimeCore -> .../core.png`, and `SlimeFace -> .../face.png`.
+- Updated `assets/models/creatures/slime/generate_slime.py` to generate/use the three standalone skins and add a dedicated `SlimeFace` mesh/material to newly generated GLBs.
+- The checked-in `slime.glb` is binary and was not regenerated through the GitHub text-file API in this checkpoint; the generator is the source of truth for the updated GLB layout.
