@@ -267,3 +267,12 @@ Próximo passo imediato: consultar a nova CI do HEAD e corrigir todos os erros o
 - Não executei cargo test, cargo run ou QA Windows. CI pendente para este commit.
 
 Próximo passo imediato: consultar a CI do novo HEAD e corrigir qualquer erro objetivo restante antes de avançar.
+
+
+## Checkpoint — 2026-09-17: entity damage feedback and data-driven player health
+- Shared `src/entity.rs` now owns `EntityHealth` and the generic damage-flash lifecycle.
+- Damage starts a 0.15s red material flash using `Color::srgba(1.0, 0.0, 0.0, 0.5)` and restores the original material afterward; the system walks entity descendants so it also applies to a future player model.
+- Creature attacks keep using the block-break viewmodel animation and now switch to `death` when health reaches zero instead of despawning immediately, allowing a future Death clip to play. Dead creatures no longer move.
+- Added data-driven `data/entities/player.json` and `content::player::PlayerDefinition`; player spawn initializes the shared `EntityHealth`.
+- Slime JSON already declares `hurt` and `death` animation states; the current asset can omit those clips until they are authored, and the animation resolver simply skips missing clips.
+- CI runs 3195/3194 failed on the pre-refactor private `EntityHealth` import and the Bevy 16-component player tuple; both were corrected. Latest CI runs 3197/3199 are currently in progress; no local `cargo test`/`cargo run` was executed.
