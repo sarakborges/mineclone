@@ -170,7 +170,7 @@ fn suggestions_for(
             .filter(|command| format!("/{}", command.name).starts_with(&prefix))
             .map(|command| Suggestion {
                 value: format!("/{}", command.name),
-                description: command.usage.to_owned() + " — " + command.description,
+                description: command.description.to_owned(),
             })
             .collect::<Vec<_>>()
     } else {
