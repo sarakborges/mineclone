@@ -1,9 +1,10 @@
-//! Session-only Chisel geometry. The original macro cell is always the sole
-//! source of the material, texture rotation, orientation and visual properties.
+//! Session-only Chisel geometry. The original macro cell is the sole source
+//! of material, texture rotation, orientation and visual properties.
 //!
-//! A modified cell carries one private, fixed-size occupancy mask. The mask is
-//! deliberately excluded from disk serialization by SecondaryProperties::iter,
-//! while the in-memory chunk archive retains it across streaming unloads.
+//! Modified cells carry one private occupancy mask. A leading `t` additionally
+//! identifies a parent created in empty space by the Chisel; such a parent is
+//! omitted from disk snapshots so a tiny temporary piece never reloads as a
+//! whole block. In-memory chunk archives retain both the mask and this marker.
 
 use bevy::prelude::*;
 
@@ -13,6 +14,7 @@ pub(crate) const MICROBLOCK_EDGE: i32 = 8;
 pub(crate) const CHISEL_MASK_PROPERTY: &str = "asteria:chisel_mask";
 const LAYERS: usize = MICROBLOCK_EDGE as usize;
 const ENCODED_LENGTH: usize = LAYERS * 16;
+const TRANSIENT_PREFIX: char = 't';
 
 #[derive(Resource, Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum ChiselResolution {
@@ -43,8 +45,8 @@ impl ChiselResolution {
     }
 }
 
-/// Each of the eight Z layers stores an 8x8 XY occupancy bitmap. An ordinary
-/// block needs no mask at all; a sculpted block needs only 64 occupancy bytes.
+/// Eight Z layers, each holding an 8x8 XY occupancy bitmap. Ordinary blocks
+/// have no mask; sculpted blocks need only 64 bytes before string encoding.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct MicroblockMask {
     layers: [u64; LAYERS],
@@ -60,15 +62,17 @@ impl MicroblockMask {
         cell.secondary_property(CHISEL_MASK_PROPERTY).is_some()
     }
 
+    pub(crate) fn is_transient_parent(cell: VoxelCell) -> bool {
+        cell.secondary_property(CHISEL_MASK_PROPERTY)
+            .is_some_and(|encoded| encoded.starts_with(TRANSIENT_PREFIX))
+    }
+
     pub(crate) fn from_cell(cell: VoxelCell) -> Self {
         let Some(encoded) = cell.secondary_property(CHISEL_MASK_PROPERTY) else {
             return Self::FULL;
         };
-        let Some(mask) = Self::decode(encoded) else {
-            // Malformed internal data cannot trigger out-of-bounds geometry.
-            return Self::FULL;
-        };
-        mask
+        let encoded = encoded.strip_prefix(TRANSIENT_PREFIX).unwrap_or(encoded);
+        Self::decode(encoded).unwrap_or(Self::FULL)
     }
 
     pub(crate) fn contains(self, [x, y, z]: [usize; 3]) -> bool {
@@ -78,8 +82,6 @@ impl MicroblockMask {
         self.layers[z] & (1_u64 << (x + y * LAYERS)) != 0
     }
 
-    /// The selected cut replaces one aligned cube, never an individual
-    /// arbitrary microcell at a coarser resolution.
     pub(crate) fn edit(
         &mut self,
         position: [usize; 3],
@@ -109,11 +111,14 @@ impl MicroblockMask {
         changed
     }
 
-    pub(crate) fn apply_to_cell(self, cell: VoxelCell) -> VoxelCell {
-        if self == Self::FULL {
+    pub(crate) fn apply_to_cell(self, cell: VoxelCell, transient: bool) -> VoxelCell {
+        if self == Self::FULL && !transient {
             return cell.without_secondary_property(CHISEL_MASK_PROPERTY);
         }
-        let mut encoded = String::with_capacity(ENCODED_LENGTH);
+        let mut encoded = String::with_capacity(ENCODED_LENGTH + usize::from(transient));
+        if transient {
+            encoded.push(TRANSIENT_PREFIX);
+        }
         use std::fmt::Write as _;
         for layer in self.layers {
             write!(&mut encoded, "{layer:016x}").expect("writing to a String cannot fail");
@@ -137,8 +142,7 @@ impl MicroblockMask {
     }
 }
 
-/// `div_euclid` and `rem_euclid` keep neighboring cells correct even at
-/// negative world coordinates and across chunk boundaries.
+/// Euclidean coordinates preserve adjacency at negative X/Z and chunk borders.
 pub(crate) fn parent_voxel(fine: IVec3) -> IVec3 {
     IVec3::new(
         fine.x.div_euclid(MICROBLOCK_EDGE),
@@ -156,8 +160,7 @@ pub(crate) fn local_cell(fine: IVec3) -> [usize; 3] {
 }
 
 pub(crate) fn occupied_cell<W: VoxelRead + ?Sized>(world: &W, fine: IVec3) -> Option<VoxelCell> {
-    let parent = parent_voxel(fine);
-    let cell = world.cell_at(parent)?;
+    let cell = world.cell_at(parent_voxel(fine))?;
     MicroblockMask::from_cell(cell)
         .contains(local_cell(fine))
         .then_some(cell)
