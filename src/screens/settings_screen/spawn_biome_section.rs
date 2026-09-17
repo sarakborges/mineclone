@@ -1,8 +1,10 @@
 mod layout;
+mod search_frame;
 mod state;
 mod systems;
 
 pub(super) use layout::spawn_biome_setting;
+pub(super) use search_frame::{focus_spawn_biome_search_frame, sync_spawn_biome_search_frame};
 pub(super) use state::SpawnBiomeDropdownState;
 pub(super) use systems::{
     close_spawn_biome_dropdown_outside_general, handle_spawn_biome_dropdown_button,
