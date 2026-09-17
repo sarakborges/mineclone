@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -45,7 +45,7 @@ jobs:
       # even when the Cargo cache reports an exact hit.
       - name: Cache CI Cargo.lock
         id: cargo-lock
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: Cargo.lock
           key: ubuntu-24.04-cargo-lock-v1-${{ hashFiles('Cargo.toml', '.cargo/config.toml') }}
@@ -55,6 +55,13 @@ jobs:
       - name: Resolve dependencies on cache miss
         if: steps.cargo-lock.outputs.cache-hit != 'true'
         run: cargo generate-lockfile
+
+      # Provide auditable evidence that the lockfile and crate versions remain
+      # stable across commits. A true cache hit skips dependency resolution.
+      - name: Report dependency cache
+        run: |
+          echo "Cargo.lock restored from cache: ${{ steps.cargo-lock.outputs.cache-hit }}"
+          sha256sum Cargo.lock
 
       # Cache downloaded crates and compiled dependency artifacts. The key
       # now sees the restored lockfile, keeping crate versions stable across
