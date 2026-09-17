@@ -1,54 +1,113 @@
-use bevy::prelude::*;
+use bevy::{
+    input_focus::{FocusCause, InputFocus},
+    prelude::*,
+};
 
 use crate::ui::{text_input, theme};
 
 use super::state::{CreativeInventoryView, CreativeSearchBar, CreativeSearchText, SEARCH_HEIGHT};
 
-type SearchInputs<'w, 's> = Query<
-    'w,
-    's,
-    (&'static mut Node, &'static mut BackgroundColor, &'static mut BorderColor),
-    (With<CreativeSearchBar>, Without<CreativeSearchText>),
->;
-type SearchPlaceholders<'w, 's> = Query<
-    'w,
-    's,
-    (&'static mut Node, &'static mut TextColor),
-    (With<CreativeSearchText>, Without<CreativeSearchBar>),
->;
+#[derive(Component)]
+struct CreativeSearchFrame;
 
-/// Keep the placeholder outside the editable text's flex layout and use shared styling.
+/// The inventory panel owns its existing editor entity, focus and search state.
+/// Insert one frame in the editor's original layout slot, then move the editor
+/// and placeholder inside it. A wrapper is necessary because EditableText
+/// renders its text/caret on its own node and cannot provide its own padding.
+pub(super) fn frame_inventory_search_field(
+    mut commands: Commands,
+    editors: Query<(Entity, &ChildOf), Added<CreativeSearchBar>>,
+    children: Query<&Children>,
+    hints: Query<(), With<CreativeSearchText>>,
+    mut nodes: Query<&mut Node, With<CreativeSearchBar>>,
+) {
+    for (editor, parent) in &editors {
+        let parent_entity = parent.parent();
+        let Some(index) = children
+            .get(parent_entity)
+            .ok()
+            .and_then(|siblings| siblings.iter().position(|sibling| sibling == editor))
+        else {
+            continue;
+        };
+        let hint = children
+            .get(editor)
+            .ok()
+            .and_then(|children| children.iter().find(|child| hints.contains(*child)));
+
+        let frame = commands
+            .spawn((
+                Button,
+                CreativeSearchFrame,
+                Node {
+                    position_type: PositionType::Relative,
+                    width: nodes.get(editor).map_or(Val::Auto, |node| node.width),
+                    height: px(SEARCH_HEIGHT),
+                    padding: UiRect::horizontal(px(text_input::INPUT_PADDING_X)),
+                    border: UiRect::all(px(1)),
+                    border_radius: BorderRadius::all(px(text_input::INPUT_RADIUS)),
+                    align_items: AlignItems::Center,
+                    overflow: Overflow::clip(),
+                    ..default()
+                },
+                BackgroundColor(text_input::INPUT_FILL),
+                BorderColor::all(text_input::input_border(false)),
+            ))
+            .id();
+        commands.entity(parent_entity).insert_children(index, &[frame]);
+        commands.entity(frame).add_child(editor);
+        if let Some(hint) = hint {
+            commands.entity(frame).add_child(hint);
+        }
+        if let Ok(mut editor_node) = nodes.get_mut(editor) {
+            editor_node.width = percent(100);
+            editor_node.min_width = px(0);
+            editor_node.height = percent(100);
+            editor_node.padding = UiRect::default();
+            editor_node.border = UiRect::default();
+            editor_node.border_radius = BorderRadius::default();
+            editor_node.align_items = AlignItems::Center;
+            editor_node.overflow = Overflow::clip();
+        }
+        commands.entity(editor).remove::<(BackgroundColor, BorderColor)>();
+    }
+}
+
+/// The border and its padding are clickable without changing the actual
+/// EditableText entity used by every existing search and focus system.
+pub(super) fn focus_inventory_search_frame(
+    frames: Query<&Interaction, (With<CreativeSearchFrame>, Changed<Interaction>)>,
+    editor: Query<Entity, With<CreativeSearchBar>>,
+    mut focus: ResMut<InputFocus>,
+    mut view: ResMut<CreativeInventoryView>,
+) {
+    if frames.iter().any(|interaction| *interaction == Interaction::Pressed)
+        && let Ok(entity) = editor.single()
+    {
+        view.focus_search();
+        focus.set(entity, FocusCause::Pressed);
+    }
+}
+
+/// Only the frame receives the border and padding. The placeholder uses the
+/// same horizontal origin as the editor and never participates in flex layout.
 pub(super) fn style_inventory_search_field(
     view: Res<CreativeInventoryView>,
-    mut inputs: SearchInputs,
-    mut placeholders: SearchPlaceholders,
+    mut frames: Query<(&mut BackgroundColor, &mut BorderColor), With<CreativeSearchFrame>>,
+    mut placeholders: Query<(&mut Node, &mut TextColor), With<CreativeSearchText>>,
 ) {
-    let padding = UiRect::horizontal(px(text_input::INPUT_PADDING_X));
-    let radius = BorderRadius::all(px(text_input::INPUT_RADIUS));
-    let clipped = Overflow::clip();
     let fill = BackgroundColor(text_input::INPUT_FILL);
     let border = BorderColor::all(text_input::input_border(view.search_focused()));
-
-    for (mut node, mut background, mut input_border) in &mut inputs {
-        if node.padding != padding {
-            node.padding = padding;
-        }
-        if node.border_radius != radius {
-            node.border_radius = radius;
-        }
-        if node.overflow != clipped {
-            node.overflow = clipped;
-        }
+    for (mut background, mut current_border) in &mut frames {
         if *background != fill {
             *background = fill;
         }
-        if *input_border != border {
-            *input_border = border;
+        if *current_border != border {
+            *current_border = border;
         }
     }
-
     for (mut node, mut color) in &mut placeholders {
-        let left = px(text_input::INPUT_PADDING_X);
+        let left = px(text_input::INPUT_PADDING_X + 1.0);
         let top = px((SEARCH_HEIGHT - 17.0) * 0.5);
         if node.position_type != PositionType::Absolute {
             node.position_type = PositionType::Absolute;
