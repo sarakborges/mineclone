@@ -132,9 +132,11 @@ Próximo passo: obter CI; se verde, continuar a revisão de fronteira sólido/fl
 - Não executei cargo test/cargo run; a CI é a validação automática usada para estes ajustes.
 
 
-## Checkpoint 65 — iluminação de Chisel parcial pondera abertura [CÓDIGO; CI PENDENTE]
+## Checkpoint 65 — iluminação de Chisel parcial pondera abertura [CÓDIGO; CI CORREÇÃO PENDENTE]
 
 - 74c41cb36314f08663e81ed1e06d705bea61ba61 alterou average_shader_light_levels para ponderar sky/block light pela fração aberta do macrocell; blocos completos continuam contribuindo 0 e células vazias 1.
 - 1ad52d13eedc2b4e4f228afb3e69267fbdd67c6e simplificou o teste de fração aberta de um Chisel 50% ocupado.
 - Isso complementa o AO/dampening isotrópico: aberturas de Chisel agora também deixam a luz amostrada atravessar proporcionalmente, sem fingir direção que a resolução macro não possui.
 - Não executei cargo test/cargo run.
+
+- CI 35281655138 falhou apenas nos testes recém-adicionados: havia `#[test]` duplicado e o teste acessava o campo privado `layers`. 1ad52d13 foi corrigido em a1f6141bc1f77107926eb9b605576e300ab2a82d usando a API pública `edit` e removendo o atributo duplicado. Nova execução de CI ainda não apareceu no endpoint de runs.
