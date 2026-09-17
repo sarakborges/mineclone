@@ -225,7 +225,6 @@ fn face_is_exposed<W: VoxelRead + ?Sized>(
     }
 }
 
-
 fn partial_block_face_has_opening(cell: crate::voxel::cell::VoxelCell, face: BlockFace) -> bool {
     let mask = crate::voxel::microblock::MicroblockMask::from_cell(cell);
     if mask == crate::voxel::microblock::MicroblockMask::FULL {
@@ -277,5 +276,28 @@ mod tests {
     fn full_block_face_stays_closed_to_fluid() {
         let cell = VoxelCell::new("stone", Default::default());
         assert!(!partial_block_face_has_opening(cell, BlockFace::Right));
+    }
+
+    #[test]
+    fn partial_block_face_requires_opening_on_that_face() {
+        let cell = VoxelCell::new("stone", Default::default());
+        for (face, open_position, wrong_position) in [
+            (BlockFace::Right, [0, 0, 0], [7, 0, 0]),
+            (BlockFace::Left, [7, 0, 0], [0, 0, 0]),
+            (BlockFace::Top, [0, 0, 0], [0, 7, 0]),
+            (BlockFace::Bottom, [0, 7, 0], [0, 0, 0]),
+            (BlockFace::Front, [0, 0, 7], [0, 0, 0]),
+            (BlockFace::Back, [0, 0, 0], [0, 0, 7]),
+        ] {
+            let mut mask = crate::voxel::microblock::MicroblockMask::FULL;
+            mask.edit(wrong_position, ChiselResolution::ExtraThin, false);
+            let partial = mask.apply_to_cell(cell, true);
+            assert!(!partial_block_face_has_opening(partial, face));
+
+            let mut mask = crate::voxel::microblock::MicroblockMask::FULL;
+            mask.edit(open_position, ChiselResolution::ExtraThin, false);
+            let partial = mask.apply_to_cell(cell, true);
+            assert!(partial_block_face_has_opening(partial, face));
+        }
     }
 }
