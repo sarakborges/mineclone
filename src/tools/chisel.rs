@@ -95,11 +95,12 @@ fn handle_chisel_use(
             continue;
         }
         let placing = usage.button == ToolUseButton::Right;
-        let source = if let Some(cell) = runtime.cell_at(voxel) {
+        let existing = runtime.cell_at(voxel);
+        let source = if let Some(cell) = existing {
             cell
         } else if placing && runtime.world().fluid_at(voxel).is_none() {
-            // An adjacent empty macro voxel acquires the source macro material;
-            // no independently chosen microblock material is introduced.
+            // A temporary parent in empty space inherits the hit block's
+            // material. Disk snapshots skip it instead of restoring a full cube.
             let Some(cell) = runtime.cell_at(hit.voxel) else {
                 continue;
             };
@@ -110,20 +111,20 @@ fn handle_chisel_use(
         if !MicroblockMask::has_room(source) {
             continue;
         }
-
-        let mut mask = if runtime.cell_at(voxel).is_some() {
-            MicroblockMask::from_cell(source)
-        } else {
-            MicroblockMask::EMPTY
-        };
-        let position = local_cell(fine);
-        if !mask.edit(position, *resolution, placing) {
+        let transient = existing.is_none_or(MicroblockMask::is_transient_parent);
+        let mut mask = existing.map_or(MicroblockMask::EMPTY, MicroblockMask::from_cell);
+        if !mask.edit(local_cell(fine), *resolution, placing) {
             continue;
         }
         if placing && piece_intersects_player(fine, *resolution, camera.translation()) {
             continue;
         }
-        if runtime.set_block(voxel, Some(mask.apply_to_cell(source))).is_some() {
+        let updated = if transient && mask == MicroblockMask::EMPTY {
+            None
+        } else {
+            Some(mask.apply_to_cell(source, transient))
+        };
+        if runtime.set_block(voxel, updated).is_some() {
             if placing {
                 viewmodel.play_place();
             } else {
