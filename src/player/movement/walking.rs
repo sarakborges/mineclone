@@ -27,12 +27,12 @@ pub(super) fn walk(
     world: Res<VoxelWorld>,
     camera: Single<&GameplayCamera>,
     player: Single<
-        (&mut Transform, &FlightState, &GravityState, &mut WalkingState),
+        (&mut Transform, &FlightState, &mut GravityState, &mut WalkingState),
         With<PlayerEntity>,
     >,
 ) {
     let camera = camera.into_inner();
-    let (mut transform, flight, gravity, mut walking) = player.into_inner();
+    let (mut transform, flight, mut gravity, mut walking) = player.into_inner();
 
     if flight.active {
         if walking.velocity != Vec3::ZERO {
@@ -47,6 +47,8 @@ pub(super) fn walk(
     }
 
     if let Some(target_y) = walking.step_target_y {
+        gravity.grounded = true;
+        gravity.vertical_velocity = 0.0;
         transform.translation.y = approach_step_height(
             transform.translation.y,
             target_y,
