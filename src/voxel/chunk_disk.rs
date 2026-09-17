@@ -116,7 +116,6 @@ impl DiskChunk {
             return Err(invalid_data("negative chunk Y"));
         }
         let mut chunk = VoxelChunk::empty();
-        let mut occupied = [false; CHUNK_VOLUME];
         let mut previous = None;
         for entry in self.blocks {
             let index = validate_index(entry.index, previous)?;
@@ -163,15 +162,11 @@ impl DiskChunk {
                     .with_secondary_properties(properties),
                 ),
             );
-            occupied[index] = true;
         }
         previous = None;
         for entry in self.fluids {
             let index = validate_index(entry.index, previous)?;
             previous = Some(index);
-            if occupied[index] {
-                return Err(invalid_data("block and fluid overlap in saved chunk"));
-            }
             if !(1..=MAX_FLUID_LEVEL).contains(&entry.level) {
                 return Err(invalid_data("invalid saved fluid level"));
             }
