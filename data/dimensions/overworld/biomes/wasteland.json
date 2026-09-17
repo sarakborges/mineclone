@@ -22,19 +22,19 @@
   },
   "structures": [
     {
-      "id": "asteria:small_boulder",
+      "id": "asteria:boulder_small",
       "placement": { "spacing": 24, "chance": 0.40, "jitter": 7 }
     },
     {
-      "id": "asteria:medium_boulder",
+      "id": "asteria:boulder_medium",
       "placement": { "spacing": 40, "chance": 0.30, "jitter": 12 }
     },
     {
-      "id": "asteria:big_boulder",
+      "id": "asteria:boulder_big",
       "placement": { "spacing": 64, "chance": 0.20, "jitter": 20 }
     },
     {
-      "id": "asteria:huge_boulder",
+      "id": "asteria:boulder_huge",
       "placement": { "spacing": 104, "chance": 0.10, "jitter": 32 }
     }
   ],

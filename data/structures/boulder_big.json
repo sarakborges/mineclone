@@ -1,5 +1,5 @@
 {
-  "id": "asteria:big_boulder",
+  "id": "asteria:boulder_big",
   "name": { "english": "Big Boulder" },
   "anchor": { "x": 3, "y": 0, "z": 3 },
   "palette": { "S": { "block": "asteria:stone" } },

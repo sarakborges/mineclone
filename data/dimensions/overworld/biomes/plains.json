@@ -22,23 +22,23 @@
   },
   "structures": [
     {
-      "id": "asteria:oak_tree",
+      "id": "asteria:tree_oak",
       "placement": { "spacing": 80, "chance": 0.54, "jitter": 24 }
     },
     {
-      "id": "asteria:small_boulder",
+      "id": "asteria:boulder_small",
       "placement": { "spacing": 36, "chance": 0.28, "jitter": 11 }
     },
     {
-      "id": "asteria:medium_boulder",
+      "id": "asteria:boulder_medium",
       "placement": { "spacing": 58, "chance": 0.20, "jitter": 18 }
     },
     {
-      "id": "asteria:big_boulder",
+      "id": "asteria:boulder_big",
       "placement": { "spacing": 88, "chance": 0.13, "jitter": 27 }
     },
     {
-      "id": "asteria:huge_boulder",
+      "id": "asteria:boulder_huge",
       "placement": { "spacing": 140, "chance": 0.07, "jitter": 43 }
     }
   ],

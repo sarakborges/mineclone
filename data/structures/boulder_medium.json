@@ -1,5 +1,5 @@
 {
-  "id": "asteria:medium_boulder",
+  "id": "asteria:boulder_medium",
   "name": { "english": "Medium Boulder" },
   "anchor": { "x": 2, "y": 0, "z": 2 },
   "palette": { "S": { "block": "asteria:stone" } },

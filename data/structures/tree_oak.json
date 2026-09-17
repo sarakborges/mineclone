@@ -1,5 +1,5 @@
 {
-  "id": "asteria:oak_tree",
+  "id": "asteria:tree_oak",
   "name": { "english": "Oak Tree" },
   "anchor": { "x": 2, "y": 0, "z": 2 },
   "palette": {
