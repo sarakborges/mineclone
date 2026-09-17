@@ -121,3 +121,11 @@ Próximo passo: obter CI; se verde, continuar a revisão de fronteira sólido/fl
 
 - 8bb1c86fea50c9a995658c57fb3180c71fe80d17 corrige o caso de regressão do AO: uma máscara EMPTY sem prefixo transitório é normalizada para FULL ao persistir, então o teste precisa manter a máscara com o caminho transitório para verificar ocupação zero. Nenhuma lógica de produção foi alterada neste follow-up.
 - A run 35281227881 foi observada para o commit anterior d9f3505fb511c89f2912c0d4de7132d5afe4b7f4 e estava em andamento; este follow-up ainda não tem run reportada no conector.
+
+
+## Checkpoint 64 — correções encontradas pela CI do AO/fluid [CÓDIGO; CI PENDENTE]
+
+- A CI 35281260132 encontrou cinco erros no checkpoint 63: os testes novos não importavam os helpers privados, e Clippy rejeitou a implementação manual de divisão por teto em scale_dampening.
+- 6482ba4902091ff81f929f2d8e9ec2eefcb9b24b importa ao_brightness/sample_occlusion nos testes.
+- 5bc03e5e768702ed9325172aa870a82d48daf692 usa u16::div_ceil(), preservando a fórmula anterior e removendo o lint clippy::manual_div_ceil.
+- Não executei cargo test/cargo run; a CI é a validação automática usada para estes ajustes.
