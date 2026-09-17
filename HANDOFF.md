@@ -198,3 +198,12 @@ Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigi
 - `move_axis` agora diferencia movimento livre, bloqueio e `Stepped(position)`; gravidade foi adaptada ao novo resultado.
 - O highlight de alvo recebeu `StandardMaterial.depth_bias = 0.01` para evitar que a malha translúcida fique atrás da textura por disputa de profundidade. Bevy 0.19 documenta `depth_bias` como ajuste de profundidade para malhas com profundidade semelhante.
 - Não executei `cargo test`, `cargo run` ou QA Windows; validação deve ser feita pela CI.
+
+
+## Checkpoint 73 — fluido recortado pelos vãos do Chisel [CÓDIGO; CI PENDENTE]
+
+- daebec8d1118e2543323ab9f1977f6b422f86a49 passou a recortar as faces do fluido quando o mesmo macrovoxel também possui um bloco Chisel parcial. Antes, o fluido gerava uma quadra macro inteira e podia aparecer atravessando a parte sólida; agora só os microvãos da fronteira são emitidos.
+- 1f873230809a92deecd395e93042355552f1b396 corrige a interpolação da altura nas faces laterais, mantendo a superfície do fluido alinhada às alturas dos cantos do macrovoxel.
+- a071432b16cc0352d8f52c58a9840e907dd7e019 adiciona regressão para impedir que a malha lateral do fluido continue acima da altura da água.
+- c5be8c12648a348cc951894f99eab5c2ed8f4e47 atualiza VERSION para 0.22.7.
+- Não executei cargo test/cargo run/QA Windows. A CI de push para develop é configurada no repositório, mas a integração disponível para consulta de runs neste contexto expõe apenas runs associados a pull requests; portanto o status deste HEAD precisa ser confirmado pela CI do GitHub.
