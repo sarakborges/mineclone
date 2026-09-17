@@ -183,5 +183,5 @@ Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigi
 
 - d5274635815ed1ffaca69dc10b740886ae79a615 elimina índices mágicos `7` em `partial_block_face_has_opening`, reutiliza a dimensão `MICROBLOCK_EDGE` e remove qualificação redundante de `VoxelCell`; comportamento e mapeamento direcional permanecem inalterados.
 - A mudança é deliberadamente pequena: mantém o loop explícito de 64 microcélulas, evitando uma otimização bit-level sem API pública adequada.
-- CI 35282728940 (run 3057) confirmou GREEN para o código anterior; a nova mudança aguarda uma execução própria da CI.
+- CI 35282920752 (run 3060) detectou que a limpeza removeu uma importação necessária de `VoxelCell`; correção aplicada em ca98dc1b9564d10b10cf0353932ea8e43de35ca8.
 - Não executei cargo test/cargo run.
