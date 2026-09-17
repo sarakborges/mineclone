@@ -1,6 +1,6 @@
 {
   "id": "asteria:water",
-  "name": { "english": "Water" },
+  "name": { "english": "Water", "portuguese_brazil": "Água", "spanish": "Agua" },
   "color": { "hue": 214.7150, "saturation": 0.8065, "intensity": 0.4133 },
   "opacity": 0.32,
   "roughness": 0.18,
