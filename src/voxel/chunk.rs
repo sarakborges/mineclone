@@ -478,6 +478,21 @@ mod tests {
     }
 
     #[test]
+    fn block_and_fluid_can_share_a_voxel() {
+        let mut chunk = VoxelChunk::empty();
+        let block = VoxelCell::new("stone", Default::default());
+        let fluid = FluidCell::source(0, 8);
+
+        chunk.set_block(2, 3, 4, Some(block));
+        chunk.set_fluid(2, 3, 4, Some(fluid));
+
+        assert_eq!(chunk.cell_at(2, 3, 4), Some(block));
+        assert_eq!(chunk.fluid_at(2, 3, 4), Some(fluid));
+        assert!(!chunk.is_empty());
+        assert!(chunk.has_fluid());
+    }
+
+    #[test]
     fn boundary_dynamic_fluid_tracks_source_transitions() {
         let mut chunk = VoxelChunk::empty();
         let last = CHUNK_SIZE - 1;
