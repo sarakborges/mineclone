@@ -163,3 +163,11 @@ Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigi
 
 - 2812484587f5bd9e32fa0bbe0cdfecf71d9b2a37 corrige a leitura da fronteira do vizinho: Front consulta a camada Z=7 (Back do vizinho) e Back consulta Z=0 (Front do vizinho). Right/Left e Top/Bottom já estavam orientados corretamente.
 - CI nova 35282185332 (run 3046) está em andamento.
+
+
+## Checkpoint 69 — teste de fronteira específica do Chisel [CÓDIGO; CI PENDENTE]
+
+- 474761b1516b2524001ef1c447f39c330a539ab4 adiciona teste que exige a abertura na própria fronteira consultada e rejeita abertura somente na fronteira oposta para Right/Left/Top/Bottom/Front/Back. Isso fixa o detalhe de orientação corrigido no checkpoint 68 e reduz o risco de regressão silenciosa.
+- e6c2b959ae61f3a0e83ee51d00ef1cbe0ce6b4f7 extrai occupied_count() em MicroblockMask para reutilizar o mesmo cálculo em occupied_fraction() e light_dampening(), sem mudança funcional.
+- 79961ab3baf8ad4b2924f27994a390de0c9f71be adiciona cobertura para ponderação de amostras de luz pela fração aberta do Chisel.
+- Não executei cargo test/cargo run; validação segue pela CI.
