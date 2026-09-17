@@ -207,3 +207,11 @@ Próximo passo: continuar a revisão de geometria parcial/iluminação e corrigi
 - a071432b16cc0352d8f52c58a9840e907dd7e019 adiciona regressão para impedir que a malha lateral do fluido continue acima da altura da água.
 - c5be8c12648a348cc951894f99eab5c2ed8f4e47 atualiza VERSION para 0.22.7.
 - Não executei cargo test/cargo run/QA Windows. A CI de push para develop é configurada no repositório, mas a integração disponível para consulta de runs neste contexto expõe apenas runs associados a pull requests; portanto o status deste HEAD precisa ser confirmado pela CI do GitHub.
+
+
+## Checkpoint 74 — correção da explosão de erros do recorte Chisel/fluido [CÓDIGO; CI NÃO VISÍVEL]
+
+- c8c820f8e203073e157cc49e401b186908afd18a torna `FaceLighting` `Clone + Copy`, permitindo reutilizar a mesma iluminação ao emitir várias microquads sem erro de move.
+- 94af19e2100edfef2a93eb95723414a2b41a5416 corrige a máscara usada pelo recorte: a face do fluido agora consulta o bloco Chisel vizinho em `world_voxel + face.offset()`, em vez do bloco do próprio voxel do fluido.
+- 6387a4e8ba6b5f60ec5159ae0863bd8199d1a4c4 marca explicitamente os dois helpers de recorte com `#[expect(clippy::too_many_arguments)]`, evitando que o `-D warnings` do CI derrube o build por esses helpers deliberadamente parametrizados.
+- Não executei `cargo test`, `cargo run` ou QA Windows. A integração disponível aqui continua sem expor os runs de push do branch `develop` via consulta por commit, então não marquei CI como verde.
