@@ -131,7 +131,6 @@ fn spawn_entity_hud(
         PointLight {
             intensity: 1_500.0,
             range: 8.0,
-            shadows_enabled: false,
             ..default()
         },
         Transform::from_xyz(1.6, 2.4, 2.5),
