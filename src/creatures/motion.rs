@@ -2,7 +2,6 @@ use bevy::prelude::*;
 
 use crate::{
     content::creature::{CreatureCollider, CreatureRegistry},
-    entity::EntityHealth,
     player::movement::config::{COLLISION_STEP, GRAVITY},
     voxel::{collision::collides_aabb, world::VoxelWorld},
 };
