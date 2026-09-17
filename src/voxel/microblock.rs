@@ -100,25 +100,20 @@ impl MicroblockMask {
     /// Lighting is stored at macro resolution, so a carved cell cannot expose
     /// exact directional holes; occupancy-weighted attenuation preserves the
     /// useful distinction between full, partial, and empty geometry.
-    pub(crate) fn occupied_fraction(self) -> f32 {
-        const MICROBLOCK_VOLUME: f32 = (LAYERS * LAYERS * LAYERS) as f32;
-        let occupied = self
-            .layers
+    fn occupied_count(self) -> usize {
+        self.layers
             .iter()
-            .map(|layer| layer.count_ones() as f32)
-            .sum::<f32>();
-        occupied / MICROBLOCK_VOLUME
+            .map(|layer| layer.count_ones() as usize)
+            .sum()
+    }
+
+    pub(crate) fn occupied_fraction(self) -> f32 {
+        self.occupied_count() as f32 / (LAYERS * LAYERS * LAYERS) as f32
     }
 
     pub(crate) fn light_dampening(self, full_dampening: u8) -> u8 {
         const MICROBLOCK_VOLUME: usize = LAYERS * LAYERS * LAYERS;
-        let occupied = self
-            .layers
-            .iter()
-            .map(|layer| layer.count_ones() as usize)
-            .sum::<usize>();
-
-        ((usize::from(full_dampening) * occupied)
+        ((usize::from(full_dampening) * self.occupied_count())
             .saturating_add(MICROBLOCK_VOLUME - 1)
             / MICROBLOCK_VOLUME) as u8
     }
