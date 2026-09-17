@@ -18,10 +18,11 @@ use crate::{
         button::menu_button, surface, theme,
         transition::{ScreenTransition, ScreenTransitionTarget}, typography,
     },
+    voxel::world::VoxelWorld,
     world::{
         InMemoryWorldSave, WorldLoadMode, WorldSeed,
         dimension::CurrentDimension, game_rules::GameRules,
-        save_catalog::{SaveRegistries, WorldSummary, list_verified_worlds, load_world},
+        save_catalog::{SaveRegistries, WorldSnapshot, WorldSummary, list_verified_worlds, load_world},
         save_session::WorldSession,
     },
 };
@@ -37,15 +38,23 @@ impl Plugin for WorldSelectionPlugin {
             )
             .add_systems(
                 Update,
-                (poll_world_scan, handle_world_selection, sync_world_selection_feedback)
+                (poll_world_scan, poll_world_load, handle_world_selection, sync_world_selection_feedback)
                     .chain()
                     .run_if(in_state(GameState::WorldSelection)),
             );
     }
 }
 
-// Only the worker writes the result; Bevy polls without blocking the main thread.
+// Only workers write their result; Bevy polls with try_lock, never waits for IO.
 type WorldScanResult = Arc<Mutex<Option<io::Result<Vec<WorldSummary>>>>>;
+type WorldLoadResult = Arc<Mutex<Option<io::Result<(WorldSnapshot, VoxelWorld)>>>>;
+
+struct PendingWorldLoad {
+    id: String,
+    result: WorldLoadResult,
+    // Back leaves the worker to finish safely, but must never activate its result.
+    abandoned: bool,
+}
 
 #[derive(Resource, Default)]
 struct WorldSelectionState {
@@ -53,6 +62,7 @@ struct WorldSelectionState {
     selected: Option<String>,
     error: String,
     scan: Option<WorldScanResult>,
+    loading: Option<PendingWorldLoad>,
 }
 
 #[derive(Component, Clone)]
@@ -85,6 +95,52 @@ struct WorldSelectionScanContent<'w> {
     cycles: Res<'w, DayNightCycleRegistry>,
 }
 
+/// The selected-world loader owns its content definitions; no Bevy resource
+/// borrows escape into a detached thread or survive a menu/world transition.
+struct OwnedLoadContent {
+    blocks: BlockRegistry,
+    fluids: FluidRegistry,
+    tools: ToolRegistry,
+    dimensions: DimensionRegistry,
+    cycles: DayNightCycleRegistry,
+}
+
+impl WorldSelectionScanContent<'_> {
+    fn owned_for_loading(&self) -> OwnedLoadContent {
+        let mut tools = ToolRegistry::default();
+        for definition in self.tools.iter() {
+            tools.insert(definition.clone());
+        }
+        let mut dimensions = DimensionRegistry::default();
+        let mut cycles = DayNightCycleRegistry::default();
+        for definition in self.dimensions.iter() {
+            if let Some(cycle) = self.cycles.get(&definition.day_night_cycle) {
+                cycles.insert(cycle.clone());
+            }
+            dimensions.insert(definition.clone());
+        }
+        OwnedLoadContent {
+            blocks: self.blocks.clone(),
+            fluids: self.fluids.clone(),
+            tools,
+            dimensions,
+            cycles,
+        }
+    }
+}
+
+impl OwnedLoadContent {
+    fn registries(&self) -> SaveRegistries<'_> {
+        SaveRegistries {
+            blocks: &self.blocks,
+            fluids: &self.fluids,
+            tools: &self.tools,
+            dimensions: &self.dimensions,
+            cycles: &self.cycles,
+        }
+    }
+}
+
 fn refresh_world_list(
     mut state: ResMut<WorldSelectionState>,
     content: WorldSelectionScanContent,
@@ -94,8 +150,9 @@ fn refresh_world_list(
     state.selected = None;
     state.worlds.clear();
     state.error.clear();
-    // Returning to this menu while a prior scan is running reuses that scan
-    // rather than creating an unbounded number of detached workers.
+    // Reuse an unfinished scan after a return to the menu. An abandoned load
+    // likewise stays tracked until its result is consumed; no orphan result
+    // can silently initiate gameplay when the selection screen is reopened.
     if state.scan.is_some() {
         return;
     }
@@ -243,11 +300,79 @@ struct WorldSelectionLoadContext<'w> {
     save: ResMut<'w, InMemoryWorldSave>,
 }
 
-fn handle_world_selection(
+/// Polling a completed result and activating a world is cheap relative to
+/// parsing and rehydrating every saved chunk, which happens on the worker.
+fn poll_world_load(
     mut commands: Commands,
-    interactions: Query<(&Interaction, &WorldSelectionAction), Changed<Interaction>>,
     mut state: ResMut<WorldSelectionState>,
     mut context: WorldSelectionLoadContext,
+    mut transition: ResMut<ScreenTransition>,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
+) {
+    let Some(pending) = state.loading.as_ref() else {
+        return;
+    };
+    let result = pending.result.try_lock().ok().and_then(|mut slot| slot.take());
+    let Some(result) = result else {
+        return;
+    };
+    let pending = state.loading.take().expect("completed load must be tracked");
+    if pending.abandoned || transition.is_active() {
+        return;
+    }
+    let (snapshot, world) = match result {
+        Ok(loaded) => loaded,
+        Err(error) => {
+            state.error = format!(
+                "{} {}: {error}",
+                localization.text(language.get(), "worldSelection.loadError"),
+                pending.id
+            );
+            return;
+        }
+    };
+    // Content or files might have changed since the catalog scan. The worker
+    // revalidated its own immutable content; the live inventory is changed
+    // only once that result has been accepted on the Bevy thread.
+    if let Err(error) = context.inventory.restore_items(
+        &snapshot.inventory,
+        &context.content.blocks,
+        &context.content.tools,
+    ) {
+        state.error = format!(
+            "{}: {error}",
+            localization.text(language.get(), "worldSelection.inventoryError")
+        );
+        return;
+    }
+    let mut rules = GameRules::default();
+    rules.set_ticks_per_second(snapshot.ticks_per_second);
+    context.save.begin_new_world(
+        WorldSeed(snapshot.seed),
+        &snapshot.dimension_id,
+        rules,
+    );
+    if let Some(player) = snapshot.player {
+        context.save.save_player_state(
+            LOCAL_PLAYER_ID,
+            Vec3::from_array(player.position),
+            if player.creative { GameMode::Creative } else { GameMode::Survival },
+        );
+    }
+    commands.insert_resource(WorldSeed(snapshot.seed));
+    commands.insert_resource(CurrentDimension { id: snapshot.dimension_id });
+    commands.insert_resource(rules);
+    commands.insert_resource(world);
+    commands.insert_resource(WorldSession::loaded(pending.id, snapshot.day, snapshot.tick_in_day));
+    commands.insert_resource(WorldLoadMode::Load);
+    transition.request(ScreenTransitionTarget::game(GameState::Loading));
+}
+
+fn handle_world_selection(
+    interactions: Query<(&Interaction, &WorldSelectionAction), Changed<Interaction>>,
+    mut state: ResMut<WorldSelectionState>,
+    content: WorldSelectionScanContent,
     mut transition: ResMut<ScreenTransition>,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
@@ -259,14 +384,25 @@ fn handle_world_selection(
         if *interaction != Interaction::Pressed {
             continue;
         }
+        if let WorldSelectionAction::Back = action {
+            if let Some(pending) = state.loading.as_mut() {
+                pending.abandoned = true;
+            }
+            transition.request(ScreenTransitionTarget::game(GameState::StartingScreen));
+            return;
+        }
+        // Never start a second loader while an existing or abandoned worker
+        // still owns its result. Its completion will be consumed, not applied.
+        if state.loading.is_some() {
+            state.error = localization
+                .text(language.get(), "worldSelection.stillLoading")
+                .to_owned();
+            return;
+        }
         match action {
             WorldSelectionAction::Select(id) => {
                 state.selected = Some(id.clone());
                 state.error.clear();
-            }
-            WorldSelectionAction::Back => {
-                transition.request(ScreenTransitionTarget::game(GameState::StartingScreen));
-                return;
             }
             WorldSelectionAction::Load => {
                 if state.scan.is_some() {
@@ -281,59 +417,38 @@ fn handle_world_selection(
                         .to_owned();
                     return;
                 };
-                let registries = SaveRegistries {
-                    blocks: &context.content.blocks,
-                    fluids: &context.content.fluids,
-                    tools: &context.content.tools,
-                    dimensions: &context.content.dimensions,
-                    cycles: &context.content.cycles,
-                };
-                let (snapshot, world) = match load_world(&id, registries) {
-                    Ok(loaded) => loaded,
+                let owned = content.owned_for_loading();
+                let result: WorldLoadResult = Arc::new(Mutex::new(None));
+                let worker_result = Arc::clone(&result);
+                let worker_id = id.clone();
+                match thread::Builder::new()
+                    .name("asteria-world-load".to_owned())
+                    .spawn(move || {
+                        let loaded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            load_world(&worker_id, owned.registries())
+                        }))
+                        .unwrap_or_else(|_| Err(io::Error::other("saved-world loading worker panicked")));
+                        if let Ok(mut slot) = worker_result.lock() {
+                            *slot = Some(loaded);
+                        }
+                    })
+                {
+                    Ok(_) => {
+                        state.loading = Some(PendingWorldLoad { id, result, abandoned: false });
+                        state.error = localization
+                            .text(language.get(), "worldSelection.loadingSelected")
+                            .to_owned();
+                    }
                     Err(error) => {
                         state.error = format!(
-                            "{} {id}: {error}",
-                            localization.text(language.get(), "worldSelection.loadError")
+                            "{}: {error}",
+                            localization.text(language.get(), "worldSelection.loadStartError")
                         );
-                        return;
                     }
-                };
-                // Revalidate on load: files could change after the background
-                // scan displayed its timestamp.
-                if let Err(error) = context.inventory.restore_items(
-                    &snapshot.inventory,
-                    &context.content.blocks,
-                    &context.content.tools,
-                ) {
-                    state.error = format!(
-                        "{}: {error}",
-                        localization.text(language.get(), "worldSelection.inventoryError")
-                    );
-                    return;
                 }
-                let mut rules = GameRules::default();
-                rules.set_ticks_per_second(snapshot.ticks_per_second);
-                context.save.begin_new_world(
-                    WorldSeed(snapshot.seed),
-                    &snapshot.dimension_id,
-                    rules,
-                );
-                if let Some(player) = snapshot.player {
-                    context.save.save_player_state(
-                        LOCAL_PLAYER_ID,
-                        Vec3::from_array(player.position),
-                        if player.creative { GameMode::Creative } else { GameMode::Survival },
-                    );
-                }
-                commands.insert_resource(WorldSeed(snapshot.seed));
-                commands.insert_resource(CurrentDimension { id: snapshot.dimension_id });
-                commands.insert_resource(rules);
-                commands.insert_resource(world);
-                commands.insert_resource(WorldSession::loaded(id, snapshot.day, snapshot.tick_in_day));
-                commands.insert_resource(WorldLoadMode::Load);
-                transition.request(ScreenTransitionTarget::game(GameState::Loading));
                 return;
             }
+            WorldSelectionAction::Back => unreachable!("Back was handled above"),
         }
     }
 }
