@@ -6,11 +6,11 @@ use crate::voxel::{chunk_archive::ArchivedChunk, chunk_disk::DiskChunk};
 use super::VoxelWorld;
 
 impl VoxelWorld {
-    /// Monotonic content revision. Includes edits to blocks and fluids even if
-    /// their chunks are subsequently archived; derived lighting is excluded.
-    /// World generation and chunk restoration also advance it, conservatively.
+    /// Monotonic revision of actual block/fluid mutations only. Generating,
+    /// archiving, restoring and lighting chunks must not force a disk autosave.
+    /// The first new-world save still happens independently of this counter.
     pub(crate) fn save_content_revision(&self) -> u64 {
-        self.next_chunk_content_revision
+        self.save_edit_revision
     }
 
     /// Captures only modified chunks, including ones unloaded from RAM-facing
@@ -49,9 +49,9 @@ impl VoxelWorld {
             let (coord, chunk) = entry.into_chunk(blocks, fluids)?;
             if !seen.insert(coord) {
                 return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("duplicate saved chunk coordinate: {coord:?}"),
-                ));
+                io::ErrorKind::InvalidData,
+                format!("duplicate saved chunk coordinate: {coord:?}"),
+            ));
             }
             decoded.push((coord, ArchivedChunk::from_chunk(&chunk)));
         }
