@@ -14,6 +14,10 @@ pub(crate) fn distribution_strength(
     world_seed: u64,
     biome_id: &str,
 ) -> f32 {
+    if distribution.is_regional() {
+        return 1.0;
+    }
+
     mountain_belt_strength(distribution, position, world_seed, biome_id)
         .max(mountain_peak_strength(
             distribution,
