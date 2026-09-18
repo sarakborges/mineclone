@@ -24,7 +24,22 @@ pub fn pause_panel() -> impl Bundle {
 }
 
 pub fn settings_content() -> impl Bundle {
-    frosted_surface(Node { flex_grow: 1.0, height: percent(100), min_width: px(0), min_height: px(0), padding: UiRect::all(px(18)), flex_direction: FlexDirection::Column, align_items: AlignItems::Stretch, border: UiRect::all(px(2)), ..default() })
+    frosted_surface(Node {
+        flex_grow: 1.0,
+        height: percent(100),
+        min_width: px(0),
+        min_height: px(0),
+        padding: UiRect {
+            left: px(18),
+            right: px(0),
+            top: px(18),
+            bottom: px(18),
+        },
+        flex_direction: FlexDirection::Column,
+        align_items: AlignItems::Stretch,
+        border: UiRect::all(px(2)),
+        ..default()
+    })
 }
 
 pub fn hud_container(node: Node) -> impl Bundle { hud_surface(node) }
