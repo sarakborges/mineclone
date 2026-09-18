@@ -18,6 +18,8 @@ pub const PURPLE: Color = Color::srgb(0.48, 0.30, 0.72);
 pub const PURPLE_HOVER: Color = Color::srgb(0.58, 0.38, 0.84);
 pub const PURPLE_SOFT: Color = Color::srgba(0.42, 0.27, 0.62, 0.72);
 pub const DANGER: Color = Color::srgb(0.78, 0.20, 0.20);
+pub const DANGER_HOVER: Color = Color::srgb(0.86, 0.28, 0.28);
+pub const DANGER_PRESSED: Color = Color::srgb(0.62, 0.14, 0.14);
 pub const SLIDER_TRACK: Color = Color::srgb(0.20, 0.18, 0.24);
 pub const SLIDER_THUMB: Color = Color::srgb(0.88, 0.88, 0.90);
 
