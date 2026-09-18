@@ -30,6 +30,21 @@ pub(crate) fn ocean_strength(continentalness: f32, ocean_weight: f32) -> f32 {
     smoothstep(raw.clamp(0.0, 1.0))
 }
 
+pub(crate) fn suppress_ocean_continentalness(
+    continentalness: f32,
+    ocean_weight: f32,
+    suppression: f32,
+) -> f32 {
+    let threshold = ocean_continentalness_threshold(ocean_weight);
+    let raw = ((threshold - continentalness) / OCEAN_TRANSITION_WIDTH).clamp(0.0, 1.0);
+    if raw <= 0.0 {
+        return continentalness;
+    }
+
+    let retained_raw = raw * (1.0 - suppression.clamp(0.0, 1.0));
+    threshold - retained_raw * OCEAN_TRANSITION_WIDTH
+}
+
 pub(super) fn hydrology_biome_weights(strength: f32) -> (f32, f32, f32) {
     let strength = strength.clamp(0.0, 1.0);
 
