@@ -242,10 +242,19 @@ fn validate_forced_spawn_biome(
         biome.kind == BiomeKind::Surface,
         "requested spawn biome must be a surface biome: {biome_id}"
     );
+    let dimension_biome = dimension
+        .biomes
+        .iter()
+        .find(|entry| entry.id == biome_id)
+        .unwrap_or_else(|| {
+            panic!(
+                "requested spawn biome is not part of dimension {}: {biome_id}",
+                dimension.id
+            )
+        });
     assert!(
-        dimension.biomes.iter().any(|entry| entry.id == biome_id),
-        "requested spawn biome is not part of dimension {}: {biome_id}",
-        dimension.id
+        dimension_biome.require_near.is_empty(),
+        "requested spawn biome cannot be forced alone because it requires an adjacent biome: {biome_id}"
     );
 }
 
