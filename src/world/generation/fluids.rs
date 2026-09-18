@@ -134,7 +134,7 @@ fn authored_surface_fluid_at(
 ) -> Option<FluidCell> {
     let biome_id = pass
         .biome_field
-        .surface_biome_id(column.primary_surface_index);
+        .surface_biome_id(column.identity_surface_index);
     let biome = pass
         .biomes
         .get(biome_id)
@@ -375,6 +375,7 @@ mod tests {
                 GenerationColumnSample {
                     surface_height: original_surface as i32,
                     primary_surface_index: 0,
+                    identity_surface_index: 0,
                     primary_terrain_strength: 1.0,
                     surface_margin_index: None,
                     surface_influences,
