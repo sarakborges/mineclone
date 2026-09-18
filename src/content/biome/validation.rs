@@ -38,6 +38,9 @@ pub(super) fn validate_biome_definition(definition: &BiomeDefinition) {
     if let Some(surface_fluid) = &definition.surface_fluid {
         surface_fluid.validate(&definition.id);
     }
+    if let Some(surface_margin) = &definition.surface_margin {
+        surface_margin.validate(&definition.id);
+    }
     if let Some(modifier) = &definition.density_modifier {
         modifier.validate(&definition.id);
     }
@@ -139,6 +142,11 @@ fn validate_volume_biome(definition: &BiomeDefinition) {
         definition.id
     );
     assert!(
+        definition.surface_margin.is_none(),
+        "volume biome {} cannot define surfaceMargin",
+        definition.id
+    );
+    assert!(
         definition.surface_fluid.is_none(),
         "volume biome {} cannot define surfaceFluid",
         definition.id
@@ -179,6 +187,11 @@ fn validate_hydrology_biome(definition: &BiomeDefinition) {
     assert!(
         definition.surface_layers.is_empty(),
         "hydrology biome {} cannot define surfaceLayers",
+        definition.id
+    );
+    assert!(
+        definition.surface_margin.is_none(),
+        "hydrology biome {} cannot define surfaceMargin",
         definition.id
     );
     assert!(
