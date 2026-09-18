@@ -321,3 +321,12 @@ Próximo passo imediato: aguardar a CI do HEAD 77b847822b6daa5ac5ba3018c0028e3f1
 - O objetivo é superar diferenças reais de profundidade introduzidas por texture/parallax layers, não apenas evitar z-fighting. No Bevy 0.19, `depth_bias` positivo aproxima a profundidade do mesh da câmera e pode ser usado para forçar a ordem de renderização entre superfícies próximas.
 - Mantida a escala `1.025` e o depth test: o highlight continua respeitando geometria realmente distante, mas passa a ficar à frente de layers muito próximas da face selecionada.
 - Não executei `cargo test`, `cargo run` ou QA Windows. CI/validação visual local ainda pendentes.
+
+
+## Checkpoint 85 — highlight em câmera de overlay dedicada [CÓDIGO; CI PENDENTE]
+
+- `c7e116a570bd8187e2e09e589915c1c93597fdfc` reserva a ordem de câmera 1 para o highlight, deslocando viewmodel para 2 e HUD para 3.
+- `cc025db9e689098937fc1319cda287b48156da83` cria uma Camera3d filha da câmera do Player, com `ClearColorConfig::None`, ordem 1 e RenderLayer 2. Ela usa exatamente a mesma Transform herdada da câmera principal.
+- `e86b2a784541ba3c0241b9e6e5397b50dfc135ad` coloca o TargetHighlight e o ChiselPlacementGhost no RenderLayer 2. Assim o overlay é composto depois do mundo, em câmera separada, sem depender de `depth_bias` para atravessar layers de textura/parallax.
+- A abordagem anterior (`depth_bias = 4.0`) não resolveu o problema visual reportado; por isso o mecanismo foi trocado para composição por câmera/layer, que é mais determinístico para overlay.
+- Não executei `cargo test`, `cargo run` ou QA Windows. CI/validação visual local pendentes.
