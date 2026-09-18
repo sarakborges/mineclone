@@ -5,10 +5,7 @@ use crate::{
     localization::{Language, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{
-        button::{
-            initial_button_background, initial_button_border,
-            AsteriaButtonVisual, ButtonVariant,
-        },
+        button::{standard_button_with_marker, ButtonVariant},
         typography,
     },
     world::NewWorldConfig,
@@ -94,26 +91,15 @@ fn game_mode_button(
     mode: GameMode,
     current_game_mode: GameMode,
 ) -> impl Bundle {
-    let active = mode == current_game_mode;
-
-    (
-        Button,
+    standard_button_with_marker(
+        label,
         GameModeButton(mode),
-        Node {
-            flex_grow: 1.0,
-            height: px(GAME_MODE_BUTTON_HEIGHT),
-            border: UiRect::all(px(2)),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            ..default()
-        },
-        AsteriaButtonVisual::default(),
-        ButtonVariant::from_active(active),
-        BackgroundColor(initial_button_background(active)),
-        BorderColor::all(initial_button_border(active)),
-        children![(typography::button_label_light(label), GameModeButtonLabel(mode))],
+        0.0,
+        ButtonVariant::from_active(mode == current_game_mode),
+        GameModeButtonLabel(mode),
     )
 }
+
 
 pub(crate) fn handle_game_mode_buttons(
     interactions: GameModeButtonInteractions,
