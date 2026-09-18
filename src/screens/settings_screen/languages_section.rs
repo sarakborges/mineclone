@@ -194,3 +194,20 @@ pub(super) fn sync_language_dropdown(
         }
     }
 }
+
+
+pub(super) fn close_language_dropdown_outside(
+    mouse: Res<ButtonInput<MouseButton>>,
+    button: Query<&Interaction, With<LanguageDropdownButton>>,
+    options: Query<&Interaction, With<LanguageOption>>,
+    mut state: ResMut<LanguageDropdownState>,
+) {
+    if !state.open || !mouse.just_pressed(MouseButton::Left) {
+        return;
+    }
+    let clicked_inside = button.iter().any(|i| *i == Interaction::Pressed)
+        || options.iter().any(|i| *i == Interaction::Pressed);
+    if !clicked_inside {
+        state.open = false;
+    }
+}
