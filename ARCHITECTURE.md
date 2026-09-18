@@ -59,9 +59,13 @@ Reusable UI behavior and appearance belong under `src/ui`.
 
 - Screens and HUD modules resolve domain data and assemble layouts; they should not clone interaction mechanics or control styling.
 - View-only state such as search focus, filter text, selected presentation categories, scroll positions, and UI dirtiness belongs to the owning HUD/screen module rather than gameplay/player domains.
+- Action buttons use the canonical `ui::button::button(...)` primitive and `ButtonVariant`; screens must not create parallel button constructors for the same interaction model.
 - Numeric fields use `numeric_input_field`, `NumericInputState`, and `sync_numeric_input_view`.
-- Compact controls use the shared button primitives.
-- Shared typography, shadows, surfaces, selectable visuals, scrollbar behavior, text input behavior, and visibility helpers remain centralized.
+- Editable fields reuse `ui::text_input` for input surface, cursor/text styling, padding, and focus-border rules while domain validation and focus lifecycle stay with the owning screen/HUD.
+- Selectable control states (normal, hover, pressed, selected, danger) belong to `ui::selectable`; `ui::surface` owns containers/panels and must not absorb interactive-control state again.
+- Dropdown shell geometry, option visuals, open/close state, chevron, and outside-click detection belong to `ui::dropdown`. Search/filter semantics, option data, and domain side effects remain with the owning screen.
+- Toggle geometry and visual states belong to `ui::toggle`; domain resources own the boolean value being toggled.
+- Shared typography, shadows, scrollbar behavior, transitions, and visibility helpers remain centralized.
 - New controls that repeat an existing visual/interaction invariant in two places should become a design-system primitive before a third copy appears.
 - Do not create a generic UI abstraction when the only similarity is a few `Node` fields and the controls have different behavior.
 
