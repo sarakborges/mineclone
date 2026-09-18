@@ -366,6 +366,32 @@ impl BiomeField {
             .hydrology
     }
 
+    pub(crate) fn surface_distribution_strength(&self, index: usize, position: Vec2) -> f32 {
+        let biome = self
+            .surface_biomes
+            .get(index)
+            .unwrap_or_else(|| panic!("surface biome index out of bounds: {index}"));
+
+        if biome.is_regional() {
+            return 1.0;
+        }
+
+        biome
+            .distributions
+            .iter()
+            .copied()
+            .map(|distribution| {
+                self::distribution::distribution_strength(
+                    distribution,
+                    position,
+                    self.seed,
+                    biome.id.as_str(),
+                )
+            })
+            .fold(0.0_f32, f32::max)
+            .clamp(0.0, 1.0)
+    }
+
     pub(crate) fn surface_terrain(
         &self,
         index: usize,
