@@ -1,5 +1,7 @@
 # HANDOFF — Asteria / Mineclone
 
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.27.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. O PR #14 já foi mergeado em `develop`. **HEAD versionado imediatamente anterior a esta atualização documental:** `27e6249f1390bf0401fbc739b0d499be27869112`. O bloco funcional de surface-biome ownership/persistência passou na CI de push `35395177274` em `004068bd7be914afa85081cc7a10b2a2c89506b3`. O bump `0.27.0` está na run de push `35395333221`, ainda em execução no momento desta atualização. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.26.1`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. O PR #14 já foi mergeado em `develop`. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `9367da25dc6b15b4ddcd1175fd5ae3dbb0a1909c`. O fix funcional de terrain forçado está em `db05e21ed9a28f25b23202c5b5dbfe1741194319` e passou na CI de push `35393716818`; o bump `0.26.1` está em `9367da25dc6b15b4ddcd1175fd5ae3dbb0a1909c`, com run de push `35393788708` ainda enfileirada no momento desta atualização. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 ## Histórico integral obrigatório
@@ -1051,3 +1053,169 @@ Foram removidos do caminho final:
 - Não executei `cargo test`, `cargo run` nem QA Windows.
 
 Próximo passo imediato: QA Windows criando mundo com Spawn Biome = Volcano e Spawn Biome = Gorge. Confirmar que Volcano possui slope radial + cratera visível e que Gorge possui seção transversal com paredes/fundo, sem regressão de identidade, material `asteria:bassalt`, hydrology ou transição para biomes vizinhos. Também validar um Volcano/Gorge natural fora da região forçada para confirmar equivalência visual aproximada entre spawn forçado e ocorrência natural.
+
+
+## Checkpoint 103 — 2026-09-18: surface biomes unificados + mountain separation + Gorge/Volcano tuning + crash/OOM hardening [CÓDIGO FUNCIONAL CI VERDE; VERSION 0.27.0; QA WINDOWS PENDENTE]
+
+### Relatos que motivaram o bloco
+
+- Após caminhar pelo Overworld, o único biome terrestre não-montanhoso encontrado voltava a ser Plains.
+- Mountains/Ocean e as novas formações montanhosas estavam efetivamente sendo aplicados por cima da seleção regional, consumindo biomas vizinhos e deixando trechos de poucos blocos.
+- Volcano podia nascer imediatamente ao lado de Gorge, produzindo transição visual ruim.
+- Gorge tinha fundo totalmente flat.
+- A cratera de Volcano estava grande demais e o vulcão parecia circular/perfeito demais.
+- Mundo iniciado em Enchanted Forest fechou após exploração sem relatório de crash.
+
+### Ownership único de surface biome
+
+- Foi removido o estágio `strongest_macro` de `BiomeField::sample_surface()`.
+- Todo biome físico de superfície agora disputa a mesma região territorial de surface:
+  - Plains;
+  - Wasteland;
+  - Witchwood;
+  - Enchanted Forest;
+  - Mountains;
+  - Gorge;
+  - Alps;
+  - Mountain Belt;
+  - Volcano;
+  - Coast;
+  - Ocean.
+- `distribution` continua controlando elegibilidade/força de biomas não-regionais, mas não existe mais uma segunda fase que sobrepõe Mountains/Gorge/Volcano/etc. em cima de outro biome já selecionado.
+- Depois que um biome ganha uma região, sua `distribution_strength` pode continuar alimentando apenas a geometria interna do terrain próprio.
+- Isso elimina a arquitetura que podia “comer” um biome regional e reduzi-lo a uma faixa estreita.
+
+### Frequência / Plains dominante
+
+- O selector de sites agora considera todos os surface biomes no mesmo weighted draw.
+- Regional continua tendo distribution strength 1.0.
+- Biomas de distribuição especial competem somente onde a distribution própria possui força.
+- Plains/Wasteland/Witchwood/Enchanted e todos os biomas terrestres atuais recebem faixa de continentalness terrestre (`min=0.36`).
+- Ocean usa faixa oceânica (`0.0..0.32`) e Coast usa faixa de transição (`0.28..0.48`).
+- Isso impede biomas terrestres genéricos de continuarem competindo normalmente no miolo oceânico e reduz o viés estrutural que deixava Plains como fallback visual dominante.
+
+### Ocean e Coast são Surface
+
+- `asteria:overworld/ocean` e `asteria:overworld/coast` foram migrados de `kind: hydrology` para `kind: surface`.
+- Ambos agora possuem:
+  - terrain próprio;
+  - surface layers;
+  - size X/Z na Dimension;
+  - climate continentalness;
+  - hydrology/materials próprios.
+- Ocean size atual: X/Z 180–520.
+- Coast size atual: X/Z 90–220.
+- Hydrology não entra mais no `CurrentBiome.influences` geral; Coast/Ocean permanecem como diagnóstico hidrológico separado, enquanto a identidade principal vem do surface biome real.
+- Ocean carving/water usa continentalness efetiva atenuada pela influência surface de Ocean/Coast; low continentalness sozinho não deve mais cavar oceano dentro de um biome terrestre sem ownership oceânico.
+- Forced Spawn Biome de land continua suprimindo oceano proporcionalmente ao override; forced Ocean/Coast não se auto-suprime.
+
+### `avoidNear` entre formações montanhosas
+
+- Mountains, Gorge, Alps, Mountain Belt e Volcano declaram `avoidNear` mutuamente.
+- Antes deste bloco isso seria ineficaz para macro-biomes porque `avoidNear` só participava do grafo regional.
+- Como todos agora disputam a mesma seleção de surface site, a regra passa a valer de verdade:
+  - formações conflitantes podem existir próximas;
+  - mas não podem compartilhar uma fronteira Voronoi direta;
+  - um biome surface compatível deve separar as regiões.
+
+### Gorge
+
+- `BiomeTerrain::Gorge` agora possui:
+  - `floorAmplitude`;
+  - `floorScale`.
+- Tuning atual:
+  - `floorAmplitude = 6`;
+  - `floorScale = 0.032`.
+- O relief é aplicado principalmente no interior do desfiladeiro e desaparece em direção às paredes.
+- Portanto o fundo não deve mais ser uma chapa plana.
+
+### Volcano
+
+- `craterRadius`: **0.22 → 0.14**.
+- O cone/cratera ganhou parâmetros data-driven de irregularidade:
+  - `irregularity = 0.13`;
+  - `irregularityScale = 0.009`;
+  - `detailIrregularity = 0.055`;
+  - `detailScale = 0.031`;
+  - `craterIrregularity = 0.08`.
+- A deformação broad/detail atua principalmente na meia-encosta, preservando centro e borda externa.
+- A borda da cratera recebe noise separado, evitando crater rim perfeitamente circular.
+- Continua usando `asteria:bassalt` e continua com river/lake desabilitados.
+
+### Crash seco / pressão de memória durante exploração
+
+Foram encontrados dois problemas concretos capazes de gerar grande pressão de memória sem necessariamente produzir Rust panic:
+
+1. **Chunks nunca editados eram arquivados para sempre em RAM.**
+   - Cada chunk gerado entrava em `generated_chunks`.
+   - Ao sair da janela de streaming, o chunk era transformado em `ArchivedChunk` e mantido indefinidamente.
+   - Caminhar continuamente fazia memória crescer com a distância explorada.
+
+2. **Autosave clonava o `VoxelWorld` residente inteiro.**
+   - `capture_owned()` fazia `self.world.clone()`;
+   - isso duplicava toda a janela residente no momento do autosave, além dos chunks arquivados.
+
+Correção:
+
+- Terrain determinístico e nunca editado agora é derived state:
+  - ao sair da retenção de streaming, ele é descartado completamente;
+  - se o jogador voltar, é regenerado pelo mesmo seed.
+- A primeira mutação persistente de block/fluid marca o chunk como `persistent_chunks`.
+- Apenas chunks persistentes são arquivados e serializados no save.
+- Chunks vindos de saves existentes são tratados conservadoramente como persistentes.
+- Geração determinística por si só não incrementa mais a revisão persistente do mundo.
+- Autosave não clona mais `VoxelWorld`:
+  - o main thread captura diretamente um `WorldSnapshot` serializável;
+  - somente chunks persistentes entram no snapshot;
+  - o worker recebe o snapshot pronto para validar/publicar.
+- Session logging agora marca a sessão anterior com `UNCLEAN SHUTDOWN DETECTED` no próximo boot quando não encontra:
+  - `CLEAN SHUTDOWN`;
+  - `RUST PANIC`;
+  - `WINDOWS NATIVE EXCEPTION`.
+- Esse marcador não inventa a causa do término, mas impede que um kill/OOM/fail-fast silencioso pareça uma sessão normal sem evidência.
+
+### Arquitetura / documentação
+
+- `ARCHITECTURE.md` atualizado para registrar:
+  - ownership territorial único de surface biomes;
+  - Ocean/Coast como surface identities;
+  - hydrology sem substituir surface identity;
+  - `avoidNear` para qualquer surface region;
+  - descarte/regeneração de terrain determinístico não editado;
+  - autosave proibido de clonar o `VoxelWorld`.
+
+### Commits principais
+
+- Gorge floor relief: `61c08296...`, `e2fb1f32...`, `c062276a...`.
+- Volcano crater/irregularidade: `b6410ecd...`, `c01a778c...`, `b2e5e3be...`, `c311a203...`.
+- Mountain `avoidNear`: `dfceb6d6...`.
+- Surface ownership unificado: `24f4f04b...`, `1bc22fcb...`, `da9c0e1f...`, `e832bfcf...`, `10f5c3e5...`.
+- Ocean/Coast Surface + climate: `62735891...`, `7d5eb8db...`, `5bba770c...` e sequência de climate commits.
+- Hydrology/identity ownership: `a496d85b...`, `61f53854...`, `df77645b...`, `8cc8b956...`, `28242873...`, `d2ff35e2...`.
+- Memória/persistência/autosave: `e9ef8150...`, `076250f3...`, `ae50a577...`.
+- Crash-log unclean marker: `a1399a03...`.
+- Contrato arquitetural: `41d8acf1...`.
+- Version bump: `27e6249f1390bf0401fbc739b0d499be27869112` — `0.26.1 → 0.27.0`.
+
+### CI / validação
+
+- Código funcional validado em `004068bd7be914afa85081cc7a10b2a2c89506b3`.
+- Run de push `35395177274` — **success**:
+  - auditoria de localizações;
+  - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- Cleanup posterior `8b4a0d44...` remove apenas uma linha redundante da construção do overlay.
+- `VERSION 0.27.0` em `27e6249f...`; run de push `35395333221` estava em execução no momento desta escrita.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+### Próximo passo imediato
+
+QA Windows em mundo novo, prioritariamente:
+
+1. Spawn Biome = Enchanted Forest, caminhar continuamente além de pelo menos uma janela de unload e atravessar um autosave; confirmar ausência de fechamento seco e observar o log se houver término anormal.
+2. Navegar vários quilômetros e confirmar diversidade real entre Plains/Wasteland/Witchwood/Enchanted + formações montanhosas, sem biomes terrestres reduzidos a tiras por overlays.
+3. Confirmar Ocean/Coast como regiões surface coerentes e água oceânica restrita ao ownership oceânico/transição.
+4. Confirmar que Mountains/Gorge/Alps/Mountain Belt/Volcano não compartilham fronteira direta quando conflitam por `avoidNear`.
+5. Gorge: fundo visivelmente irregular, mantendo paredes/desfiladeiro.
+6. Volcano: cone não circular perfeito, cratera menor porém ainda grande, irregularidade natural e `bassalt`.
+7. Reabrir/revisitar chunks não editados e confirmar regeneração determinística; editar um chunk, sair da área, voltar e confirmar que a edição persiste.
