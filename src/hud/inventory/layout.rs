@@ -1,6 +1,6 @@
 use bevy::{
     prelude::*,
-    text::{EditableText, TextCursorStyle},
+    text::{EditableText, FontWeight},
 };
 
 use crate::{
@@ -331,17 +331,7 @@ fn spawn_search_bar(
                 max_characters: Some(128),
                 ..EditableText::new(creative_view.search_query())
             },
-            TextCursorStyle {
-                color: theme::TEXT_PRIMARY,
-                ..default()
-            },
-            TextFont {
-                font: FontSource::SystemUi,
-                font_size: FontSize::Px(17.0),
-                ..default()
-            },
-            TextColor(theme::TEXT_PRIMARY),
-            TextLayout::no_wrap(),
+            crate::ui::text_input::editor_style(17.0, FontWeight::NORMAL),
             Node {
                 width: px(creative_content_width()),
                 height: px(SEARCH_HEIGHT),
