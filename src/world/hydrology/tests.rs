@@ -17,13 +17,12 @@ use bevy::prelude::*;
 fn settings() -> DimensionHydrology {
     DimensionHydrology {
         ocean_biome: Some("asteria:test/ocean".into()),
-        coast_biome: Some("asteria:test/coast".into()),
         ..default()
     }
 }
 
 fn field() -> HydrologyField {
-    HydrologyField::new(42, 64, settings(), 1.0, 1.0)
+    HydrologyField::new(42, 64, settings(), 1.0)
 }
 
 fn surface(elevation: f32, continentalness: f32) -> HydrologySurfaceSample {
@@ -78,20 +77,16 @@ fn low_continentalness_produces_ocean_water_and_carving() {
 }
 
 #[test]
-fn hydrology_biome_overlay_transitions_surface_to_coast_to_ocean() {
+fn hydrology_biome_overlay_transitions_surface_to_ocean() {
     let field = field();
     let land = field.biome_overlay(0.5);
-    let coast_fringe = field.biome_overlay(0.44);
-    let coast = field.biome_overlay(0.4);
+    let fringe = field.biome_overlay(0.44);
     let ocean = field.biome_overlay(0.1);
 
-    assert_eq!(land.coast_weight, 0.0);
     assert_eq!(land.ocean_weight, 0.0);
-    assert!(coast_fringe.coast_weight > 0.0);
-    assert!(coast.coast_weight > 0.0);
-    assert_eq!(coast.coast_weight, 1.0);
-    assert_eq!(coast.ocean_weight, 0.0);
-    assert_eq!(ocean.ocean_weight, 1.0);
+    assert!(fringe.ocean_weight > 0.0);
+    assert!(ocean.ocean_weight > fringe.ocean_weight);
+    assert!(ocean.ocean_weight <= 1.0);
 }
 
 #[test]
