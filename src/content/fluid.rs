@@ -21,6 +21,8 @@ pub struct FluidDefinition {
     pub metallic: f32,
     #[serde(default)]
     pub light_dampening: u8,
+    #[serde(default)]
+    pub light_emission: u8,
     pub spread_speed: f32,
     pub max_spread: u16,
 }
@@ -55,6 +57,11 @@ impl FluidRegistry {
         assert!(
             definition.light_dampening <= 15,
             "fluid {} light dampening must be between 0 and 15",
+            definition.id
+        );
+        assert!(
+            definition.light_emission <= 15,
+            "fluid {} light emission must be between 0 and 15",
             definition.id
         );
         assert!(
