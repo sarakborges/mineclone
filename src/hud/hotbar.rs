@@ -1,7 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    app::{game_state::GameState, pause_state::PauseState},
+    app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     content::{
         block::BlockRegistry, block_orientation::BlockOrientation,
         secondary_property::SecondaryPropertyRegistry, tool::ToolRegistry,
@@ -16,7 +16,7 @@ use crate::{
     rendering::{block_model::BlockModel, block_visual_content::BlockVisualContent},
     targeting::{PlacementOrientation, block::BlockTargetingSet},
     tools::BrushMode,
-    ui::{selectable, typography, visibility::set_visibility},
+    ui::{selectable, typography},
 };
 
 const SLOT_SIZE: f32 = 44.0;
@@ -94,27 +94,15 @@ impl Plugin for HotbarHudPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_hotbar)
             .add_systems(
-                OnEnter(PauseState::Paused),
-                set_visibility::<HotbarHudRoot, false>.run_if(in_state(GameState::Gameplay)),
+                Update,
+                (sync_hotbar_visibility, sync_hotbar)
+                    .run_if(in_state(GameState::Gameplay)),
             )
-            .add_systems(
-                OnEnter(PauseState::Running),
-                set_visibility::<HotbarHudRoot, true>.run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(Update, sync_hotbar.run_if(in_state(GameState::Gameplay)))
             .add_systems(
                 Update,
                 update_hotbar_item_visuals
                     .after(BlockTargetingSet::PlacementState)
                     .run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
-                OnEnter(InventoryState::Open),
-                set_visibility::<HotbarHudRoot, false>.run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
-                OnEnter(InventoryState::Closed),
-                set_visibility::<HotbarHudRoot, true>.run_if(in_state(GameState::Gameplay)),
             );
     }
 }
@@ -123,13 +111,15 @@ fn spawn_hotbar(
     mut commands: Commands,
     content: HotbarHudContent,
     inventory_state: Res<State<InventoryState>>,
+    pause_state: Res<State<PauseState>>,
+    settings_state: Res<State<SettingsState>>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
-    let visibility = if *inventory_state.get() == InventoryState::Open {
-        Visibility::Hidden
-    } else {
-        Visibility::Visible
-    };
+    let visibility = hotbar_visibility(
+        *pause_state.get(),
+        *settings_state.get(),
+        *inventory_state.get(),
+    );
     let language = content.language.get();
     let selected_name = content
         .hotbar
@@ -210,6 +200,36 @@ fn spawn_hotbar(
                 }
             });
         });
+}
+
+fn hotbar_visibility(
+    pause: PauseState,
+    settings: SettingsState,
+    inventory: InventoryState,
+) -> Visibility {
+    if pause == PauseState::Paused
+        || settings == SettingsState::Open
+        || inventory == InventoryState::Open
+    {
+        Visibility::Hidden
+    } else {
+        Visibility::Visible
+    }
+}
+
+fn sync_hotbar_visibility(
+    pause: Res<State<PauseState>>,
+    settings: Res<State<SettingsState>>,
+    inventory: Res<State<InventoryState>>,
+    mut root: Single<&mut Visibility, With<HotbarHudRoot>>,
+) {
+    if !pause.is_changed() && !settings.is_changed() && !inventory.is_changed() {
+        return;
+    }
+    let next = hotbar_visibility(*pause.get(), *settings.get(), *inventory.get());
+    if **root != next {
+        **root = next;
+    }
 }
 
 fn sync_hotbar(
