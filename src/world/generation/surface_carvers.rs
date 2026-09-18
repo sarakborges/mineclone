@@ -4,8 +4,13 @@ use crate::{
     content::{
         biome::BiomeRegistry,
         biome_surface_carver::{BiomeSurfaceCarver, SurfaceCarverRange},
+        dimension::DimensionDefinition,
     },
-    world::{biome_field::BiomeField, feature_graph::FeatureGraph},
+    world::{
+        biome_field::BiomeField,
+        feature_graph::FeatureGraph,
+        terrain::surface_height,
+    },
 };
 
 const MAXIMUM_TUNNEL_SLOPE: f32 = 0.06;
@@ -21,10 +26,13 @@ const TUNNEL_MOUTH_HORIZONTAL_FLARE: f32 = 0.85;
 const TUNNEL_MARGIN_OUTER_DISTANCE: f32 = 14.0;
 const TUNNEL_MARGIN_SURFACE_OFFSET: f32 = 0.5;
 const TUNNEL_MOUTH_CENTER_HEIGHT_FRACTION: f32 = 0.25;
+const TUNNEL_CAVE_CONNECTION_MIN_ROOF_DEPTH: f32 = 6.0;
+const TUNNEL_CONNECTION_SAMPLES_PER_SEGMENT: usize = 6;
+const TUNNEL_MOUTH_SURFACE_OVERSHOOT: f32 = 0.5;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct ResolvedSurfaceTunnel {
-    points: [Vec3; TUNNEL_PATH_SAMPLES],
+    points: Vec<Vec3>,
     radius: f32,
     weight: f32,
 }
@@ -36,6 +44,7 @@ pub(super) struct SurfaceCarverColumn {
 }
 
 pub(super) struct SurfaceCarverResolveContext<'a> {
+    pub(super) dimension: &'a DimensionDefinition,
     pub(super) biomes: &'a BiomeRegistry,
     pub(super) biome_field: &'a BiomeField,
     pub(super) world_seed: u64,
@@ -241,14 +250,15 @@ fn resolve_tunnel_candidates(
                 center_y + vertical_half_span,
                 end_horizontal.y,
             );
-            let points = std::array::from_fn(|index| {
-                let t = index as f32 / (TUNNEL_PATH_SAMPLES - 1) as f32;
-                quadratic_bezier(start, control, end, t)
-            });
-
-            if !tunnel_connects_to_cave(&points, tunnel_radius, context.cave_graph) {
+            let points = (0..TUNNEL_PATH_SAMPLES)
+                .map(|index| {
+                    let t = index as f32 / (TUNNEL_PATH_SAMPLES - 1) as f32;
+                    quadratic_bezier(start, control, end, t)
+                })
+                .collect::<Vec<_>>();
+            let Some(points) = connected_surface_tunnel(points, tunnel_radius, context) else {
                 continue;
-            }
+            };
 
             tunnels.push(ResolvedSurfaceTunnel {
                 points,
@@ -259,23 +269,117 @@ fn resolve_tunnel_candidates(
     }
 }
 
-fn tunnel_connects_to_cave(
-    points: &[Vec3],
+fn connected_surface_tunnel(
+    mut points: Vec<Vec3>,
     radius: f32,
-    cave_graph: Option<&FeatureGraph>,
-) -> bool {
-    let Some(cave_graph) = cave_graph else {
-        return false;
+    context: &SurfaceCarverResolveContext<'_>,
+) -> Option<Vec<Vec3>> {
+    let cave_graph = context.cave_graph?;
+    let mut surface_at = |horizontal: Vec2| {
+        let block_position =
+            IVec2::new(horizontal.x.floor() as i32, horizontal.y.floor() as i32);
+        surface_height(
+            block_position,
+            context.dimension,
+            context.biomes,
+            context.biome_field,
+        ) as f32
     };
 
-    const INTERSECTION_SAMPLES_PER_SEGMENT: usize = 4;
-    points.windows(2).any(|segment| {
-        (0..=INTERSECTION_SAMPLES_PER_SEGMENT).any(|index| {
-            let t = index as f32 / INTERSECTION_SAMPLES_PER_SEGMENT as f32;
-            let position = segment[0].lerp(segment[1], t);
-            cave_graph.sample_with_margin(position, radius).is_some()
+    let (mouth_index, mouth_surface) = points
+        .iter()
+        .enumerate()
+        .filter_map(|(index, point)| {
+            let horizontal = Vec2::new(point.x, point.z);
+            let surface = surface_at(horizontal);
+            let roof_gap = surface - (point.y + radius);
+            (roof_gap.abs() <= TUNNEL_MOUTH_BLEND_DEPTH)
+                .then_some((index, surface, roof_gap.abs()))
         })
-    })
+        .min_by(|left, right| {
+            left.2
+                .total_cmp(&right.2)
+                .then_with(|| left.0.cmp(&right.0))
+        })
+        .map(|(index, surface, _)| (index, surface))?;
+
+    points[mouth_index].y = mouth_surface + TUNNEL_MOUTH_SURFACE_OVERSHOOT - radius;
+
+    let forward = tunnel_branch_to_cave(
+        &points,
+        mouth_index,
+        1,
+        radius,
+        cave_graph,
+        &mut surface_at,
+    );
+    let backward = tunnel_branch_to_cave(
+        &points,
+        mouth_index,
+        -1,
+        radius,
+        cave_graph,
+        &mut surface_at,
+    );
+
+    match (forward, backward) {
+        (Some(left), Some(right)) => {
+            if polyline_length(&left) <= polyline_length(&right) {
+                Some(left)
+            } else {
+                Some(right)
+            }
+        }
+        (Some(path), None) | (None, Some(path)) => Some(path),
+        (None, None) => None,
+    }
+}
+
+fn tunnel_branch_to_cave(
+    points: &[Vec3],
+    mouth_index: usize,
+    direction: i32,
+    radius: f32,
+    cave_graph: &FeatureGraph,
+    surface_at: &mut impl FnMut(Vec2) -> f32,
+) -> Option<Vec<Vec3>> {
+    let mut branch = vec![points[mouth_index]];
+    let mut index = mouth_index as i32;
+
+    loop {
+        let next = index + direction;
+        if next < 0 || next >= points.len() as i32 {
+            return None;
+        }
+
+        let start = *branch
+            .last()
+            .expect("surface tunnel branch must contain its mouth");
+        let end = points[next as usize];
+
+        for sample_index in 1..=TUNNEL_CONNECTION_SAMPLES_PER_SEGMENT {
+            let t = sample_index as f32 / TUNNEL_CONNECTION_SAMPLES_PER_SEGMENT as f32;
+            let position = start.lerp(end, t);
+            let horizontal = Vec2::new(position.x, position.z);
+            let roof_depth = surface_at(horizontal) - (position.y + radius);
+            if roof_depth >= TUNNEL_CAVE_CONNECTION_MIN_ROOF_DEPTH
+                && cave_graph.sample_with_margin(position, radius).is_some()
+            {
+                branch.push(position);
+                return Some(branch);
+            }
+        }
+
+        branch.push(end);
+        index = next;
+    }
+}
+
+fn polyline_length(points: &[Vec3]) -> f32 {
+    points
+        .windows(2)
+        .map(|segment| segment[0].distance(segment[1]))
+        .sum()
 }
 
 fn quadratic_bezier(start: Vec3, control: Vec3, end: Vec3, t: f32) -> Vec3 {
@@ -480,35 +584,56 @@ mod tests {
     }
 
     #[test]
-    fn disconnected_surface_tunnel_is_rejected() {
-        let points = [
-            Vec3::new(0.0, 64.0, 0.0),
-            Vec3::new(5.0, 64.0, 0.0),
-            Vec3::new(10.0, 64.0, 0.0),
-            Vec3::new(15.0, 64.0, 0.0),
-            Vec3::new(20.0, 64.0, 0.0),
+    fn branch_requires_a_deep_cave_intersection() {
+        let points = vec![
+            Vec3::new(0.0, 60.0, 0.0),
+            Vec3::new(10.0, 56.0, 0.0),
+            Vec3::new(20.0, 50.0, 0.0),
         ];
-        assert!(!tunnel_connects_to_cave(&points, 3.0, None));
+        let mut graph = FeatureGraph::default();
+        let from = graph.add_node(Vec3::new(18.0, 50.0, -10.0));
+        let to = graph.add_node(Vec3::new(18.0, 50.0, 10.0));
+        graph.add_edge(from, to, 4.0, 4.0);
+        let mut surface_at = |_horizontal: Vec2| 64.0;
 
-        let graph = FeatureGraph::default();
-        assert!(!tunnel_connects_to_cave(&points, 3.0, Some(&graph)));
+        let branch = tunnel_branch_to_cave(
+            &points,
+            0,
+            1,
+            4.0,
+            &graph,
+            &mut surface_at,
+        )
+        .expect("deep intersection should connect the branch");
+
+        assert!(branch.len() >= 2);
+        assert!(branch.last().unwrap().x < points.last().unwrap().x);
     }
 
     #[test]
-    fn surface_tunnel_touching_cave_graph_is_kept() {
-        let points = [
-            Vec3::new(0.0, 64.0, 0.0),
-            Vec3::new(5.0, 64.0, 0.0),
-            Vec3::new(10.0, 64.0, 0.0),
-            Vec3::new(15.0, 64.0, 0.0),
-            Vec3::new(20.0, 64.0, 0.0),
+    fn branch_rejects_surface_only_graph_touch() {
+        let points = vec![
+            Vec3::new(0.0, 60.0, 0.0),
+            Vec3::new(10.0, 60.0, 0.0),
+            Vec3::new(20.0, 60.0, 0.0),
         ];
         let mut graph = FeatureGraph::default();
-        let from = graph.add_node(Vec3::new(10.0, 56.0, -10.0));
-        let to = graph.add_node(Vec3::new(10.0, 56.0, 10.0));
+        let from = graph.add_node(Vec3::new(10.0, 60.0, -10.0));
+        let to = graph.add_node(Vec3::new(10.0, 60.0, 10.0));
         graph.add_edge(from, to, 5.0, 5.0);
+        let mut surface_at = |_horizontal: Vec2| 64.0;
 
-        assert!(tunnel_connects_to_cave(&points, 4.0, Some(&graph)));
+        assert!(
+            tunnel_branch_to_cave(
+                &points,
+                0,
+                1,
+                4.0,
+                &graph,
+                &mut surface_at,
+            )
+            .is_none()
+        );
     }
 
     #[test]
