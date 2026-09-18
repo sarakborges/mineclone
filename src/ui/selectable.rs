@@ -35,9 +35,5 @@ pub(crate) fn selectable_button_background(active: bool, interaction: Interactio
 }
 
 pub(crate) fn selectable_label_color(active: bool) -> Color {
-    if active {
-        theme::TEXT_PRIMARY
-    } else {
-        theme::TEXT_PRIMARY
-    }
+    theme::TEXT_PRIMARY
 }
