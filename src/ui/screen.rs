@@ -46,6 +46,22 @@ pub fn content() -> Node {
     }
 }
 
+pub fn content_row(column_gap: f32) -> Node {
+    let mut node = content();
+    node.flex_direction = FlexDirection::Row;
+    node.align_items = AlignItems::Stretch;
+    node.column_gap = px(column_gap);
+    node
+}
+
+pub fn content_column(row_gap: f32) -> Node {
+    let mut node = content();
+    node.flex_direction = FlexDirection::Column;
+    node.align_items = AlignItems::Stretch;
+    node.row_gap = px(row_gap);
+    node
+}
+
 pub fn footer() -> Node {
     Node {
         position_type: PositionType::Absolute,
