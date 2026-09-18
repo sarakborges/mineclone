@@ -193,6 +193,7 @@ mod tests {
         let surface = BiomeFieldSample {
             primary_id: "surface",
             primary_surface_index: 0,
+            nearest_boundary: None,
             influences: [BiomeInfluence {
                 id: "surface",
                 weight: 1.0,
