@@ -2,7 +2,8 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        biome::BiomeRegistry,
+        biome::{BiomeKind, BiomeRegistry},
+        biome_density::BiomeDensityModifier,
         biome_surface_carver::{BiomeSurfaceCarver, SurfaceCarverRange},
         dimension::DimensionDefinition,
     },
@@ -71,20 +72,47 @@ pub(super) fn resolve_surface_carver_column(
     column.tunnels.clear();
     column.margin_density_delta = 0.0;
 
-    for &(biome_index, weight) in surface_influences {
-        if weight <= 0.0 {
-            continue;
-        }
+    let Some((primary_index, _)) = surface_influences
+        .iter()
+        .copied()
+        .max_by(|left, right| left.1.total_cmp(&right.1))
+    else {
+        return;
+    };
+    let primary_id = context.biome_field.surface_biome_id(primary_index);
+    let primary = context
+        .biomes
+        .get(primary_id)
+        .unwrap_or_else(|| panic!("missing biome definition: {primary_id}"));
+    if !primary.allow_surface_carvers {
+        return;
+    }
 
-        let biome_id = context.biome_field.surface_biome_id(biome_index);
-        let biome = context
-            .biomes
-            .get(biome_id)
-            .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
-        if !biome.allow_surface_carvers {
-            continue;
-        }
+    let surface_weight = surface_influences
+        .iter()
+        .copied()
+        .filter_map(|(biome_index, weight)| {
+            let biome_id = context.biome_field.surface_biome_id(biome_index);
+            context
+                .biomes
+                .get(biome_id)
+                .filter(|biome| biome.allow_surface_carvers)
+                .map(|_| weight)
+        })
+        .sum::<f32>()
+        .clamp(0.0, 1.0);
+    if surface_weight <= f32::EPSILON {
+        return;
+    }
 
+    for biome in context.biomes.iter().filter(|biome| {
+        biome.kind == BiomeKind::Volume
+            && matches!(
+                biome.density_modifier,
+                Some(BiomeDensityModifier::Cavern { .. })
+            )
+            && !biome.surface_carvers.is_empty()
+    }) {
         for (index, carver) in biome.surface_carvers.iter().copied().enumerate() {
             if !carver_intersects_vertical_range(
                 carver,
@@ -103,7 +131,7 @@ pub(super) fn resolve_surface_carver_column(
                     biome_id: biome.id.as_str(),
                     carver_index: index,
                     carver,
-                    weight,
+                    weight: surface_weight,
                 },
             );
         }
