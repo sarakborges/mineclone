@@ -14,6 +14,7 @@ use crate::{
 };
 
 use motion::{CreatureMotion, move_creatures};
+pub(crate) use motion::CreatureMotion as CreatureMotionComponent;
 use visual::{CreatureModel, attach_loaded_models, sync_creature_animations, sync_creature_facing};
 pub(crate) use visual::CreatureAnimationState;
 
