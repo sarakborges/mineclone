@@ -9,7 +9,8 @@ use super::{
     biome_hydrology::BiomeHydrology, biome_material::BiomeMaterialLayer,
     biome_sky_layer::BiomeSkyLayerVisuals,
     biome_structure::{BiomeStructure, StructurePlacementRules},
-    biome_surface_carver::BiomeSurfaceCarver, biome_terrain::BiomeTerrain,
+    biome_surface_carver::BiomeSurfaceCarver, biome_surface_fluid::BiomeSurfaceFluid,
+    biome_terrain::BiomeTerrain,
     biome_terrain_modifier::BiomeTerrainModifier, color::Hsi, day_night_phase::DayNightPhases,
     registry::DefinitionMap,
 };
@@ -122,6 +123,8 @@ pub struct BiomeDefinition {
     pub allow_surface_carvers: bool,
     #[serde(default)]
     pub surface_carvers: Vec<BiomeSurfaceCarver>,
+    #[serde(default)]
+    pub surface_fluid: Option<BiomeSurfaceFluid>,
     #[serde(default)]
     pub surface_layers: Vec<BiomeMaterialLayer>,
     #[serde(default)]
