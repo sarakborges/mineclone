@@ -21,11 +21,11 @@ pub struct VoxelWorld {
     chunks: HashMap<IVec3, VoxelChunk>,
     loaded_chunk_columns: HashMap<IVec2, BTreeSet<i32>>,
     archived_chunks: HashMap<IVec3, Arc<ArchivedChunk>>,
-    generated_chunks: HashSet<IVec3>,
+    persistent_chunks: HashSet<IVec3>,
     chunk_content_revisions: HashMap<IVec3, u64>,
     next_chunk_content_revision: u64,
-    // Any newly generated chunk or block/fluid mutation changes persistent
-    // world state. Lighting, archiving and restoring do not.
+    // Only persistent block/fluid mutations change saved voxel state.
+    // Deterministic generated terrain can be discarded and regenerated.
     save_revision: u64,
     chunk_mesh_revisions: HashMap<IVec3, u64>,
     next_chunk_mesh_revision: u64,
@@ -36,12 +36,9 @@ impl VoxelWorld {
     pub fn insert_chunk(&mut self, coord: IVec3, chunk: VoxelChunk) {
         assert!(coord.y >= 0, "chunk Y cannot be negative: {}", coord.y);
         assert!(
-            !self.generated_chunks.contains(&coord),
-            "worldgen cannot overwrite an already generated chunk: {coord:?}"
+            !self.has_generated_chunk(coord),
+            "worldgen cannot overwrite a resident or persisted chunk: {coord:?}"
         );
-
-        self.generated_chunks.insert(coord);
-        self.bump_save_revision();
         self.chunks.insert(coord, chunk);
         self.track_loaded_chunk(coord);
         self.bump_block_content_revision();
@@ -108,8 +105,10 @@ impl VoxelWorld {
         );
         self.bump_block_content_revision();
 
-        self.archived_chunks
-            .insert(coord, Arc::new(ArchivedChunk::from_chunk(&chunk)));
+        if self.persistent_chunks.contains(&coord) {
+            self.archived_chunks
+                .insert(coord, Arc::new(ArchivedChunk::from_chunk(&chunk)));
+        }
     }
 
     pub fn restore_chunk(&mut self, coord: IVec3) -> bool {
@@ -130,7 +129,8 @@ impl VoxelWorld {
     }
 
     pub fn has_generated_chunk(&self, coord: IVec3) -> bool {
-        coord.y >= 0 && self.generated_chunks.contains(&coord)
+        coord.y >= 0
+            && (self.chunks.contains_key(&coord) || self.archived_chunks.contains_key(&coord))
     }
 
     pub fn cell_at(&self, world_position: IVec3) -> Option<VoxelCell> {
@@ -327,6 +327,7 @@ impl VoxelWorld {
             }
         }
 
+        self.persistent_chunks.insert(chunk_coord);
         self.bump_save_revision();
         if block_changed {
             self.bump_block_content_revision();
@@ -364,6 +365,7 @@ impl VoxelWorld {
 
             chunk.set_fluid(x, y, z, fluid);
         }
+        self.persistent_chunks.insert(chunk_coord);
         self.bump_save_revision();
         self.bump_chunk_content_revision(chunk_coord);
         self.bump_chunk_mesh_revision(chunk_coord);
@@ -465,6 +467,34 @@ mod tests {
 
         world.archive_chunk(low);
         assert_eq!(world.highest_loaded_world_y_in_column(world_x, world_z), None);
+    }
+
+    #[test]
+    fn unmodified_generated_chunk_is_dropped_when_archived() {
+        let mut world = VoxelWorld::default();
+        let coord = IVec3::new(3, 2, -4);
+        world.insert_chunk(coord, VoxelChunk::empty());
+
+        world.archive_chunk(coord);
+
+        assert!(!world.has_generated_chunk(coord));
+        assert!(!world.restore_chunk(coord));
+    }
+
+    #[test]
+    fn modified_chunk_is_persisted_when_archived() {
+        let mut world = VoxelWorld::default();
+        let coord = IVec3::ZERO;
+        world.insert_chunk(coord, VoxelChunk::empty());
+        world.set_block_at(
+            IVec3::new(1, 1, 1),
+            Some(VoxelCell::new("stone", Default::default())),
+        );
+
+        world.archive_chunk(coord);
+
+        assert!(world.has_generated_chunk(coord));
+        assert!(world.restore_chunk(coord));
     }
 
     #[test]
