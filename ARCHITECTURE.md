@@ -187,6 +187,7 @@ Heavy generation and initial meshing belong off the main frame when they can ope
 - Snapshot boundaries must contain everything the task needs, including neighbor/halo data required for culling, ambient occlusion, lighting, and fluid-surface decisions. A task must not reach back into mutable runtime world state.
 - Integrating a completed task is main-thread work and must respect frame budgets. Moving CPU construction off-thread does not justify unbounded result integration, entity spawning, asset insertion, lighting, or remesh work in one frame.
 - Updates that arrive while work is in flight must not be lost. Remesh, lighting, fluid, or topology invalidation remains pending until the authoritative result reflecting that update has been integrated.
+- Background remesh dispatch must be fair across fluid, lighting, and terrain geometry work. Continuous lighting invalidation may not starve fluid remeshes; fluid state changes must become visually observable while lighting convergence continues, and later lighting passes may schedule follow-up fluid remeshes for final illumination.
 - Generation and runtime simulation remain separate responsibilities. Natural rivers, lakes, and oceans are authored by deterministic generation rather than reconstructed by the runtime fluid solver.
 - Initial direct-light seeding may remain synchronous when required to preserve approved lighting semantics, but its frame cost must stay explicit and budgetable.
 
