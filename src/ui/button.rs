@@ -32,14 +32,6 @@ impl ButtonVariant {
     }
 }
 
-pub(crate) fn initial_button_background(active: bool) -> Color {
-    if active { BUTTON_PRIMARY } else { BUTTON_NORMAL }
-}
-
-pub(crate) fn initial_button_border(active: bool) -> Color {
-    if active { BUTTON_BORDER_STRONG } else { BUTTON_BORDER }
-}
-
 type ButtonAnimationQuery<'w, 's> = Query<
     'w,
     's,
