@@ -231,8 +231,7 @@ fn spawn_creative_panel(
         align_items: AlignItems::Center,
         row_gap: px(SEARCH_GAP),
         padding: UiRect::all(px(PANEL_PADDING)),
-        border: UiRect::all(px(1)),
-        border_radius: BorderRadius::all(px(8)),
+        border: UiRect::all(px(2)),
         ..default()
     }))
     .insert(Pickable::IGNORE)
@@ -347,11 +346,10 @@ fn spawn_search_bar(
                 height: px(SEARCH_HEIGHT),
                 padding: UiRect::horizontal(px(12)),
                 border: UiRect::all(px(1)),
-                border_radius: BorderRadius::all(px(6)),
                 align_items: AlignItems::Center,
                 ..default()
             },
-            BackgroundColor(theme::HUD_SURFACE),
+            BackgroundColor(theme::SURFACE_INSET),
             BorderColor::all(search_border),
         ))
         .with_children(|search| {
@@ -455,7 +453,6 @@ fn spawn_category_button(
                 min_height: px(CATEGORY_ROW_HEIGHT),
                 padding: UiRect::horizontal(px(8)),
                 border: UiRect::all(px(2)),
-                border_radius: BorderRadius::all(px(4)),
                 align_items: AlignItems::Center,
                 column_gap: px(8),
                 ..default()
@@ -553,7 +550,6 @@ fn spawn_player_inventory_panel(
         row_gap: px(SECTION_GAP),
         padding: UiRect::all(px(PANEL_PADDING)),
         border: UiRect::all(px(1)),
-        border_radius: BorderRadius::all(px(8)),
         ..default()
     }))
     .insert(Pickable::IGNORE)
@@ -642,7 +638,6 @@ fn spawn_inventory_trash_button(parent: &mut ChildSpawnerCommands) {
                 min_width: px(SLOT_SIZE),
                 min_height: px(SLOT_SIZE),
                 border: UiRect::all(px(2)),
-                border_radius: BorderRadius::all(px(4)),
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
                 ..default()
@@ -668,7 +663,6 @@ fn spawn_inventory_trash_button(parent: &mut ChildSpawnerCommands) {
                         Node {
                             width: px(8),
                             height: px(3),
-                            border_radius: BorderRadius::all(px(2)),
                             ..default()
                         },
                         BackgroundColor(icon_color),
@@ -678,7 +672,6 @@ fn spawn_inventory_trash_button(parent: &mut ChildSpawnerCommands) {
                         Node {
                             width: px(20),
                             height: px(3),
-                            border_radius: BorderRadius::all(px(2)),
                             ..default()
                         },
                         BackgroundColor(icon_color),
@@ -689,7 +682,6 @@ fn spawn_inventory_trash_button(parent: &mut ChildSpawnerCommands) {
                             width: px(16),
                             height: px(16),
                             border: UiRect::all(px(2)),
-                            border_radius: BorderRadius::all(px(2)),
                             ..default()
                         },
                         BackgroundColor(Color::NONE),
@@ -720,7 +712,6 @@ fn spawn_creative_slot(
                 min_width: px(SLOT_SIZE),
                 min_height: px(SLOT_SIZE),
                 border: UiRect::all(px(2)),
-                border_radius: BorderRadius::all(px(4)),
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
                 ..default()
@@ -792,7 +783,6 @@ fn spawn_slot(
                 width: px(SLOT_SIZE),
                 height: px(SLOT_SIZE),
                 border: UiRect::all(px(2)),
-                border_radius: BorderRadius::all(px(4)),
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Center,
                 ..default()
