@@ -100,7 +100,7 @@ pub(super) fn sync_section_ui(
         return;
     }
 
-    for (label, mut text, mut color) in &mut labels {
+    for (label, mut text) in &mut labels {
         let next = localization.text(language.get(), label.0.localization_key());
         if text.0 != next {
             text.0 = next.to_owned();
