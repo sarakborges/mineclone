@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     content::biome::{BiomeClimate, BiomeClimateRange, BiomeVerticalRange},
-    world::{hydrology::ocean_strength, macro_climate::MacroClimateSample},
+    world::macro_climate::MacroClimateSample,
 };
 
 use super::{
@@ -14,6 +14,17 @@ use super::{
 const PROXIMITY_SITE_RADIUS: i32 = 1;
 const PROXIMITY_NEIGHBOR_COUNT: usize =
     ((PROXIMITY_SITE_RADIUS * 2 + 1) * (PROXIMITY_SITE_RADIUS * 2 + 1) - 1) as usize;
+
+struct SurfaceAdjacencyContext<'a> {
+    cell: IVec2,
+    site: Vec2,
+    nearby_cells: &'a [IVec2; PROXIMITY_NEIGHBOR_COUNT],
+    nearby_sites: &'a [Vec2; PROXIMITY_NEIGHBOR_COUNT],
+    nearby_biomes: &'a [usize; PROXIMITY_NEIGHBOR_COUNT],
+    biomes: &'a [BiomeFieldEntry],
+    spacing: Vec2,
+    seed: u64,
+}
 
 impl BiomeField {
     pub(super) fn select_surface_biome_index(&self, cell: IVec2, site: Vec2) -> usize {
@@ -46,34 +57,23 @@ impl BiomeField {
 
         let climate = self.climate.sample(site);
         let hash = cell_hash(cell, self.seed);
-        let raw_index = self.raw_surface_biome_index(cell, site);
-        if adjacency_allows(
-            &self.surface_biomes[raw_index],
+        let adjacency = SurfaceAdjacencyContext {
             cell,
             site,
-            &nearby_cells,
-            &nearby_sites,
-            &nearby_biomes,
-            &self.surface_biomes,
-            self.surface_site_spacing,
-            self.seed,
-        ) {
+            nearby_cells: &nearby_cells,
+            nearby_sites: &nearby_sites,
+            nearby_biomes: &nearby_biomes,
+            biomes: &self.surface_biomes,
+            spacing: self.surface_site_spacing,
+            seed: self.seed,
+        };
+        let raw_index = self.raw_surface_biome_index(cell, site);
+        if adjacency_allows(&self.surface_biomes[raw_index], &adjacency) {
             return raw_index;
         }
 
         select_weighted_biome_index(&self.surface_biomes, climate, hash.rotate_left(9), |candidate| {
-            candidate.is_regional()
-                && adjacency_allows(
-                    candidate,
-                    cell,
-                    site,
-                    &nearby_cells,
-                    &nearby_sites,
-                    &nearby_biomes,
-                    &self.surface_biomes,
-                    self.surface_site_spacing,
-                    self.seed,
-                )
+            candidate.is_regional() && adjacency_allows(candidate, &adjacency)
         })
         .unwrap_or_else(|| {
             panic!(
@@ -116,29 +116,23 @@ impl BiomeField {
 
 fn adjacency_allows(
     candidate: &BiomeFieldEntry,
-    cell: IVec2,
-    site: Vec2,
-    nearby_cells: &[IVec2; PROXIMITY_NEIGHBOR_COUNT],
-    nearby_sites: &[Vec2; PROXIMITY_NEIGHBOR_COUNT],
-    nearby_biomes: &[usize; PROXIMITY_NEIGHBOR_COUNT],
-    biomes: &[BiomeFieldEntry],
-    spacing: Vec2,
-    seed: u64,
+    context: &SurfaceAdjacencyContext<'_>,
 ) -> bool {
-    nearby_cells
+    context
+        .nearby_cells
         .iter()
-        .zip(nearby_sites)
-        .zip(nearby_biomes)
+        .zip(context.nearby_sites)
+        .zip(context.nearby_biomes)
         .all(|((&neighbor_cell, &neighbor_site), &neighbor_index)| {
-            let neighbor = &biomes[neighbor_index];
+            let neighbor = &context.biomes[neighbor_index];
             !biomes_conflict(candidate, neighbor)
                 || !surface_sites_share_border(
-                    cell,
-                    site,
+                    context.cell,
+                    context.site,
                     neighbor_cell,
                     neighbor_site,
-                    spacing,
-                    seed,
+                    context.spacing,
+                    context.seed,
                 )
         })
 }
