@@ -11,6 +11,7 @@ use crate::{
             NumericInputEvent, NumericInputFrame, NumericInputSizing, NumericInputState,
             numeric_input_field, sync_numeric_input_view,
         },
+        settings as settings_layout,
         text_input::editable_value,
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
@@ -111,13 +112,7 @@ pub(super) fn new_world_general_section(
     language: Language,
 ) -> impl Bundle {
     (
-        Node {
-            width: percent(100),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Stretch,
-            row_gap: px(8),
-            ..default()
-        },
+        settings_layout::group_column(),
         children![
             world_name_setting(config, localization, language),
             seed_setting(config.seed().0, localization, language),
@@ -129,13 +124,7 @@ pub(super) fn new_world_general_section(
 
 fn seed_setting(seed: u64, localization: &UiLocalization, language: Language) -> impl Bundle {
     (
-        Node {
-            width: percent(100),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Stretch,
-            row_gap: px(8),
-            ..default()
-        },
+        settings_layout::setting_column(),
         children![
             typography::setting_title(localization.text(language, "newWorld.seed").to_owned()),
             typography::caption(
