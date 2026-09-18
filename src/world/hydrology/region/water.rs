@@ -304,6 +304,7 @@ mod tests {
     #[test]
     fn physical_ocean_uses_the_same_original_column_floor_as_density() {
         let region = HydrologyRegion {
+            seed: 42,
             coord: IVec2::ZERO,
             river_graph: FeatureGraph::default(),
             river_carve_depth: 7.0,
