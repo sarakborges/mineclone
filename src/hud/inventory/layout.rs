@@ -345,7 +345,7 @@ fn spawn_search_bar(
                 width: px(creative_content_width()),
                 height: px(SEARCH_HEIGHT),
                 padding: UiRect::horizontal(px(12)),
-                border: UiRect::all(px(1)),
+                border: UiRect::all(px(2)),
                 align_items: AlignItems::Center,
                 ..default()
             },
