@@ -81,6 +81,9 @@ pub(super) fn resolve_surface_carver_column(
             .biomes
             .get(biome_id)
             .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
+        if !biome.allow_surface_carvers {
+            continue;
+        }
 
         for (index, carver) in biome.surface_carvers.iter().copied().enumerate() {
             if !carver_intersects_vertical_range(
