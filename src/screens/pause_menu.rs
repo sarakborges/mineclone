@@ -96,7 +96,8 @@ fn spawn_pause_menu(
                         flex_direction: FlexDirection::Row,
                         column_gap: px(12),
                         ..default()
-                    ),
+                    },
+                    children![
                     children![
                         standard_button(
                             localization.text(language, "settings.section.worldSettings").to_owned(),
