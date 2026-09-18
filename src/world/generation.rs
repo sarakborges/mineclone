@@ -72,19 +72,11 @@ impl ChunkGenerationContext<'_> {
                     let raw_continentalness =
                         self.biome_field.climate_at(position).continentalness;
                     let ocean_id = self.dimension.hydrology.ocean_biome.as_deref();
-                    let coast_id = self.dimension.hydrology.coast_biome.as_deref();
                     let ocean_surface_factor = surface
                         .influences
                         .iter()
-                        .map(|influence| {
-                            if Some(influence.id) == ocean_id {
-                                influence.weight
-                            } else if Some(influence.id) == coast_id {
-                                influence.weight * 0.85
-                            } else {
-                                0.0
-                            }
-                        })
+                        .filter(|influence| Some(influence.id) == ocean_id)
+                        .map(|influence| influence.weight)
                         .sum::<f32>()
                         .clamp(0.0, 1.0);
                     let continentalness = 1.0
