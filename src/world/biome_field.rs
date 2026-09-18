@@ -88,7 +88,6 @@ pub(crate) struct SurfaceBoundarySample {
 pub struct BiomeFieldSample<'a> {
     pub primary_id: &'a str,
     pub(crate) primary_surface_index: usize,
-    pub(crate) nearest_boundary: Option<SurfaceBoundarySample>,
     pub(crate) surface_margin_index: Option<usize>,
     pub(crate) identity_surface_index: usize,
     pub influences: ArrayVec<BiomeInfluence<'a>, MAX_SURFACE_INFLUENCES>,
