@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::voxel::{
-    chunk::{CHUNK_SIZE, VoxelChunk},
+    chunk::CHUNK_SIZE,
     neighbors::CARDINAL_NEIGHBORS,
     world::VoxelWorld,
 };
