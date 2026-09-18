@@ -247,7 +247,7 @@ mod tests {
     }
 
     #[test]
-    fn all_remesh_outputs_reject_stale_lighting_in_the_halo() {
+    fn remesh_dependencies_track_content_and_lighting_freshness_independently() {
         let center = IVec3::new(3, 2, 5);
         let mut world = VoxelWorld::default();
         world.insert_chunk(center, VoxelChunk::empty());
@@ -259,8 +259,12 @@ mod tests {
             &tasks.lighting_revisions,
         );
 
-        assert!(dependencies.is_current(&world));
+        assert!(dependencies.content_is_current(&world));
+        assert!(dependencies.lighting_is_current());
+
         tasks.bump_lighting_revisions([center + IVec3::X]);
-        assert!(!dependencies.is_current(&world));
+
+        assert!(dependencies.content_is_current(&world));
+        assert!(!dependencies.lighting_is_current());
     }
 }
