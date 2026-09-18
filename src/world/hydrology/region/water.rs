@@ -270,6 +270,7 @@ mod tests {
                 graph.add_edge(high_from, high_to, 10.0, 10.0);
             }
             let region = HydrologyRegion {
+                seed: 42,
                 coord: IVec2::ZERO,
                 river_graph: graph,
                 river_carve_depth: 7.0,
