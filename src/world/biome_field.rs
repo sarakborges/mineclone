@@ -197,7 +197,7 @@ impl BiomeField {
 
             match biome.kind {
                 BiomeKind::Surface => {
-                    if entry.weight > 0.0 && entry.is_regional() {
+                    if entry.weight > 0.0 {
                         surface_minimum_radius.x = surface_minimum_radius.x.max(entry.size.x.min);
                         surface_minimum_radius.y = surface_minimum_radius.y.max(entry.size.z.min);
                     }
@@ -220,10 +220,8 @@ impl BiomeField {
         }
 
         assert!(
-            surface_biomes
-                .iter()
-                .any(|biome| biome.weight > 0.0 && biome.is_regional()),
-            "dimension {} must define at least one active regional surface biome",
+            surface_biomes.iter().any(|biome| biome.weight > 0.0),
+            "dimension {} must define at least one active surface biome",
             dimension.id
         );
 
