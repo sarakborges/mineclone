@@ -4,7 +4,7 @@ use crate::{
     app::{game_state::GameState, settings_state::SettingsState, version},
     localization::{ActiveLanguage, UiLocalization},
     ui::{
-        button::{menu_button, primary_menu_button},
+        button::{button, primary_button},
         cosmic_background::{self, STAR_FIELD},
         theme,
         transition::{ScreenTransition, ScreenTransitionTarget},
@@ -101,11 +101,11 @@ fn setup_starting_screen(
                         },
                     ));
 
-                    content.spawn(primary_menu_button(
+                    content.spawn(primary_button(
                         localization.text(language, "starting.newWorld").to_owned(),
                         StartingScreenAction::NewWorld,
                     ));
-                    content.spawn(menu_button(
+                    content.spawn(button(
                         localization.text(language, "starting.loadWorlds").to_owned(),
                         StartingScreenAction::LoadWorlds,
                     ));
