@@ -59,7 +59,7 @@ Reusable UI behavior and appearance belong under `src/ui`.
 
 - Screens and HUD modules resolve domain data and assemble layouts; they should not clone interaction mechanics or control styling.
 - View-only state such as search focus, filter text, selected presentation categories, scroll positions, and UI dirtiness belongs to the owning HUD/screen module rather than gameplay/player domains.
-- Action buttons use the canonical `ui::button::button(...)` primitive and `ButtonVariant`; screens must not create parallel button constructors for the same interaction model.
+- Action buttons use the canonical `ui::button::button(...)` primitive and `ButtonVariant`; screens must not create parallel button constructors for the same interaction model. Canonical button labels render in Title Case (initial uppercase for every whitespace-separated word), so screens/localizations must not invent a different capitalization rule.
 - Numeric fields use `numeric_input_field`, `NumericInputState`, and `sync_numeric_input_view`.
 - Editable fields reuse `ui::text_input` for input surface, cursor/text styling, padding, and focus-border rules while domain validation and focus lifecycle stay with the owning screen/HUD.
 - Selectable control states (normal, hover, pressed, selected, danger) belong to `ui::selectable`; `ui::surface` owns containers/panels and must not absorb interactive-control state again.
@@ -100,11 +100,13 @@ Time-sliced world work uses `FrameWorkBudget`.
 
 Natural hydrology is generated authoritatively with terrain/world generation. It must not be bulk-enqueued into the runtime dynamic-fluid solver. Dynamic fluid updates are for runtime topology/fluid changes.
 
+Chunk generation is a one-time creation event per world coordinate. Once a chunk has been generated, its voxel/fluid/property result becomes authoritative world state: runtime unloading may archive it but must never forget its generated coordinate or regenerate it from the seed. Saves serialize every generated chunk, including empty and currently archived chunks. Loading reconstructs only registered saved chunks; seed-based worldgen is reserved exclusively for coordinates that have never existed in that world. Meshes and lighting remain derived and may be rebuilt from saved chunk content.
+
 Surface-carver tunnels are subordinate to cave connectivity: a surface tunnel is generated only when its carved volume intersects the anchored cave connector graph. Disconnected surface tunnels/dead ends must be rejected before density rasterization, and structure-support sampling must use the same connectivity rule.
 
 Spawn-column dryness must use the same physically supported hydrology as terrain generation. When actual terrain surface height is available, bootstrap/spawn selection must use `supported_water_at(...)` rather than unfiltered `water_at(...)`, so unsupported lake/ocean candidates cannot make genuinely dry terrain impossible to select.
 
-A user-selected Spawn Biome is not a request to search the seed for a distant natural occurrence. It is a deterministic initial-region override owned by `BiomeField`: the canonical 9×9 bootstrap chunks around the default spawn are forced to the selected surface biome, with the same override feeding terrain sampling, biome identity and continentalness/hydrology so Coast/Ocean cannot supersede it. Only dry-column placement is searched inside that already-forced core. The selected spawn biome is persisted in world snapshots and restored on load so regenerated/queried initial terrain keeps the same identity across sessions.
+A user-selected Spawn Biome is not a request to search the seed for a distant natural occurrence. It is a deterministic initial-region override owned by `BiomeField`, centered on the default spawn. The forced region must respect the selected dimension biome's authored `size.x/z.min..max`: deterministic radii are chosen inside those ranges, the core is elliptical rather than chunk-aligned, and the border uses the same surface warp/fade machinery as biome sampling. The same override feeds terrain sampling, biome identity and continentalness/hydrology so Coast/Ocean cannot supersede it inside the forced region. Only dry-column placement is searched inside that already-forced core. The selected spawn biome is persisted in world snapshots and restored on load so the same region is reconstructed across sessions.
 
 ## 8. Rendering and color
 
