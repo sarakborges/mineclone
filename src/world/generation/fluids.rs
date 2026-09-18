@@ -375,6 +375,8 @@ mod tests {
                 surface_influences.push((0, 1.0));
                 GenerationColumnSample {
                     surface_height: original_surface as i32,
+                    primary_surface_index: 0,
+                    primary_terrain_strength: 1.0,
                     surface_influences,
                 }
             })
@@ -421,6 +423,9 @@ mod tests {
                 &density.values,
                 &FluidPassContext {
                     fluids: &fluids,
+                    biomes: &biomes,
+                    biome_field: &biome_field,
+                    sea_level: dimension.sea_level,
                     region: &region,
                     anchored_caves: None,
                     underground_water_fluid: WATER_FLUID_ID,
