@@ -24,7 +24,7 @@ enum HopPhase {
 }
 
 #[derive(Component)]
-pub(super) struct CreatureMotion {
+pub(crate) struct CreatureMotion {
     phase: HopPhase,
     timer: f32,
     velocity_y: f32,
@@ -53,7 +53,7 @@ impl CreatureMotion {
         self.facing_yaw
     }
 
-    pub(super) fn apply_knockback(&mut self, direction: Vec3, strength: f32) {
+    pub(crate) fn apply_knockback(&mut self, direction: Vec3, strength: f32) {
         let horizontal = Vec2::new(direction.x, direction.z);
         if horizontal.length_squared() > 0.0 && strength > 0.0 {
             let impulse = horizontal.normalize() * strength;
