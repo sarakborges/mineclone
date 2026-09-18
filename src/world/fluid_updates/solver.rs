@@ -172,7 +172,7 @@ fn preferred_horizontal_directions(
             .map(|(_, directions)| *directions)
             .expect("queued fluid path node must be visited");
 
-        if can_fall_from(world, position) {
+        if can_fall_from(world, position, fluid_id) {
             match nearest_drop {
                 None => {
                     nearest_drop = Some(distance);
@@ -227,14 +227,24 @@ fn can_flow_horizontally_through(
     })
 }
 
-fn can_fall_from(world: &VoxelWorld, position: IVec3) -> bool {
+fn can_fall_from(world: &VoxelWorld, position: IVec3, fluid_id: FluidId) -> bool {
     if position.y == 0 {
         return false;
     }
 
     world
         .sample_at(position - IVec3::Y)
-        .is_some_and(|(cell, fluid, _)| cell.is_none() && fluid.is_none())
+        .is_some_and(|(cell, fluid, _)| {
+            if cell.is_some() {
+                return false;
+            }
+
+            fluid.is_none_or(|fluid| {
+                fluid.fluid_id == fluid_id
+                    && !fluid.is_source()
+                    && fluid.spread_distance() == 0
+            })
+        })
 }
 
 fn horizontal_direction_bit(offset: IVec3) -> Option<u8> {
@@ -351,6 +361,28 @@ mod tests {
         let mut world = world_with_floor();
 
         world.set_block_at(IVec3::new(8, 0, 6), None);
+
+        assert!(horizontal_spread_is_preferred(
+            &world, origin, east, 0, 7,
+        ));
+        assert!(!horizontal_spread_is_preferred(
+            &world, origin, north, 0, 7,
+        ));
+    }
+
+    #[test]
+    fn horizontal_flow_keeps_preferring_an_existing_falling_column() {
+        let origin = IVec3::new(6, 1, 6);
+        let east = origin + IVec3::X;
+        let north = origin + IVec3::NEG_Z;
+        let drop = origin + IVec3::new(2, 0, 0);
+        let mut world = world_with_floor();
+
+        world.set_block_at(drop - IVec3::Y, None);
+        world.set_fluid_at(
+            drop - IVec3::Y,
+            Some(FluidCell::spreading(0, MAX_FLUID_LEVEL, 0)),
+        );
 
         assert!(horizontal_spread_is_preferred(
             &world, origin, east, 0, 7,
