@@ -5,9 +5,7 @@ use crate::content::{
     block_id::intern_block_id,
 };
 
-use super::biome_field::{
-    BiomeField, VolumeBiomeSelection, distribution::distribution_strength,
-};
+use super::biome_field::{BiomeField, VolumeBiomeSelection};
 
 #[derive(Clone, Copy)]
 struct ResolvedSurfaceInfluence<'a> {
@@ -21,7 +19,6 @@ pub(crate) struct SurfaceMaterialColumn<'a> {
 }
 
 pub(crate) fn resolve_surface_material_column<'a>(
-    horizontal: Vec2,
     surface_influences: &[(usize, f32)],
     biome_field: &BiomeField,
     biomes: &'a BiomeRegistry,
@@ -42,57 +39,6 @@ pub(crate) fn resolve_surface_material_column<'a>(
             }
         }));
 
-    for overlay in biome_field.terrain_overlays() {
-        let overlay_biome = biomes
-            .get(&overlay.id)
-            .unwrap_or_else(|| panic!("missing terrain overlay biome definition: {}", overlay.id));
-        if overlay_biome.surface_layers.is_empty() {
-            continue;
-        }
-
-        let Some(parent_weight) = surface_influences
-            .iter()
-            .find(|(surface_index, _)| *surface_index == overlay.parent_surface_index)
-            .map(|(_, weight)| *weight)
-        else {
-            continue;
-        };
-        if parent_weight <= f32::EPSILON {
-            continue;
-        }
-
-        let distribution = overlay
-            .distributions
-            .iter()
-            .copied()
-            .map(|distribution| {
-                distribution_strength(
-                    distribution,
-                    horizontal,
-                    biome_field.seed(),
-                    overlay.id.as_str(),
-                )
-            })
-            .fold(0.0_f32, f32::max);
-        let relative_strength = (distribution * overlay.weight).clamp(0.0, 1.0);
-        if relative_strength <= f32::EPSILON {
-            continue;
-        }
-
-        let parent_id = biome_field.surface_biome_id(overlay.parent_surface_index);
-        if let Some(parent) = column
-            .influences
-            .iter_mut()
-            .find(|influence| influence.biome.id == parent_id)
-        {
-            parent.weight *= 1.0 - relative_strength;
-        }
-
-        column.influences.push(ResolvedSurfaceInfluence {
-            biome: overlay_biome,
-            weight: parent_weight * relative_strength,
-        });
-    }
 }
 
 pub(crate) fn solid_block_id(
