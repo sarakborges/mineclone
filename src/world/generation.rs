@@ -164,7 +164,6 @@ pub(crate) fn generate_chunk(
             biome_field: context.biome_field,
             biomes: context.biomes,
             dimension: context.dimension,
-            sea_level: context.dimension.sea_level as f32,
         },
     );
     let mut chunk = VoxelChunk::empty();
