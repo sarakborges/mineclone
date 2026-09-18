@@ -20,7 +20,7 @@ use crate::{
         inventory::{InventoryCursor, InventoryState},
     },
     rendering::{block_model::BlockModel, block_tint::block_tint_at},
-    ui::{scrollbar, selectable, surface, theme, typography},
+    ui::{scrollbar, selectable, surface, text_input, theme, typography},
     world::biome_field::BiomeField,
 };
 
@@ -314,11 +314,6 @@ fn spawn_search_bar(
     localization: &UiLocalization,
     language: Language,
 ) {
-    let search_border = if creative_view.search_focused() {
-        selectable::SELECTED_BORDER_COLOR
-    } else {
-        selectable::BORDER_COLOR
-    };
     let placeholder_visible =
         creative_view.search_query().is_empty() && !creative_view.search_focused();
     let placeholder = localization.text(language, "inventory.searchPlaceholder");
@@ -331,7 +326,7 @@ fn spawn_search_bar(
                 max_characters: Some(128),
                 ..EditableText::new(creative_view.search_query())
             },
-            crate::ui::text_input::editor_style(17.0, FontWeight::NORMAL),
+            text_input::editor_style(17.0, FontWeight::NORMAL),
             Node {
                 width: px(creative_content_width()),
                 height: px(SEARCH_HEIGHT),
@@ -340,8 +335,7 @@ fn spawn_search_bar(
                 align_items: AlignItems::Center,
                 ..default()
             },
-            BackgroundColor(theme::SURFACE_INSET),
-            BorderColor::all(search_border),
+            text_input::frame_surface(creative_view.search_focused()),
         ))
         .with_children(|search| {
             search.spawn((
