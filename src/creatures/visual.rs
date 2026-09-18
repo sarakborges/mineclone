@@ -161,22 +161,12 @@ fn configure_loaded_scene(
     appearances: Query<&CreatureAppearance>,
     mesh_materials: Query<(&MeshMaterial3d<StandardMaterial>, &GltfMaterialName)>,
     mut players: Query<(Entity, &mut AnimationPlayer)>,
-    mut named_transforms: Query<(&Name, &mut Transform)>,
     mut tint_assets: CreatureTintAssets,
 ) {
     let Ok(appearance) = appearances.get(ready.entity) else {
         return;
     };
     for descendant in descendants.iter_descendants(ready.entity) {
-        if let Ok((name, mut transform)) = named_transforms.get_mut(descendant)
-            && name.as_str() == "Face"
-        {
-            // The Face mesh is authored in BodyPivot-local space. Reset the full
-            // local transform so legacy GLBs cannot leave it tilted or vertically offset.
-            transform.translation = Vec3::new(0.0, 0.0, 0.0);
-            transform.rotation = Quat::IDENTITY;
-            transform.scale = Vec3::ONE;
-        }
         if let Ok((original, material_name)) = mesh_materials.get(descendant) {
             let name = material_name.0.as_str();
             let tint = appearance.material_tints.get(name);
@@ -217,8 +207,13 @@ fn configure_loaded_scene(
                             material.thickness = 0.0;
                             material.emissive = LinearRgba::BLACK;
                             material.emissive_texture = None;
-                            material.base_color = material.base_color.with_alpha(1.0);
-                            material.alpha_mode = AlphaMode::Opaque;
+                            // Tinted body materials are deliberately opaque. Texture-only
+                            // materials keep the GLB's authored alpha mode so decals/cutouts
+                            // such as a creature face can use transparent pixels.
+                            if tint.is_some() {
+                                material.base_color = material.base_color.with_alpha(1.0);
+                                material.alpha_mode = AlphaMode::Opaque;
+                            }
                             let handle = tint_assets.materials.add(material);
                             tint_assets.cache.0.insert(cache_key, handle.clone());
                             handle
@@ -271,8 +266,6 @@ pub(super) fn sync_creature_facing(
     }
 }
 
-/// Keep the face mesh's authored local orientation stable even when an animation
-/// clip contains legacy transform tracks for the Face node.
 pub(super) fn sync_creature_animations(
     states: Query<&CreatureAnimationState, With<CreatureInstance>>,
     mut players: Query<(
