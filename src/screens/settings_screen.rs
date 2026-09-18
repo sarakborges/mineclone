@@ -60,6 +60,7 @@ pub struct SettingsScreenPlugin;
 impl Plugin for SettingsScreenPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<SettingsState>()
+            .init_resource::<crate::app::settings_state::SettingsScreenMode>()
             .init_resource::<SettingsSectionSelection>()
             .init_resource::<TicksPerSecondInputState>()
             .init_resource::<SeedInputState>()
