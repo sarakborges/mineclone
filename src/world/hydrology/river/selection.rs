@@ -292,7 +292,6 @@ fn keep_only_complete_downstream_paths<F>(
         let mut reaches_destination = false;
 
         for _ in 0..RIVER_FLOW_TRACE_STEPS {
-            path.push(current);
             let node = network.node(current);
 
             if network.is_wet_ocean(node) {
@@ -303,7 +302,11 @@ fn keep_only_complete_downstream_paths<F>(
                 reaches_destination = true;
                 break;
             }
+            if !node.biome_hydrology.can_generate_river {
+                break;
+            }
 
+            path.push(current);
             let Some(next) = network.downstream_cell(current) else {
                 break;
             };
