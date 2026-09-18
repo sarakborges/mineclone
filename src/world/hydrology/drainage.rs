@@ -63,6 +63,10 @@ where
         self.ocean_threshold
     }
 
+    pub fn ocean_weight(&self) -> f32 {
+        self.ocean_weight
+    }
+
     pub fn is_wet_ocean(&self, node: DrainageNode) -> bool {
         wet_ocean_floor(node, self.sea_level, self.ocean_weight)
             .is_some_and(|floor| floor <= self.sea_level - OCEAN_OUTLET_MINIMUM_WATER_DEPTH)
@@ -207,14 +211,42 @@ where
     }
 }
 
+pub(super) fn surface_sample_is_wet_ocean(
+    sample: HydrologySurfaceSample,
+    sea_level: f32,
+    ocean_weight: f32,
+) -> bool {
+    wet_ocean_floor_values(
+        sample.elevation,
+        sample.continentalness,
+        sea_level,
+        ocean_weight,
+    )
+    .is_some_and(|floor| floor <= sea_level - OCEAN_OUTLET_MINIMUM_WATER_DEPTH)
+}
+
 fn wet_ocean_floor(node: DrainageNode, sea_level: f32, ocean_weight: f32) -> Option<f32> {
-    let strength = ocean_strength(node.continentalness, ocean_weight);
+    wet_ocean_floor_values(
+        node.elevation,
+        node.continentalness,
+        sea_level,
+        ocean_weight,
+    )
+}
+
+fn wet_ocean_floor_values(
+    elevation: f32,
+    continentalness: f32,
+    sea_level: f32,
+    ocean_weight: f32,
+) -> Option<f32> {
+    let strength = ocean_strength(continentalness, ocean_weight);
     if strength <= 0.0 {
         return None;
     }
 
     let target_floor = sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength;
-    Some(lerp(node.elevation, target_floor, strength))
+    Some(lerp(elevation, target_floor, strength))
 }
 
 fn downstream_score(

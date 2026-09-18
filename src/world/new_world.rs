@@ -4,6 +4,17 @@ use crate::player::game_mode::GameMode;
 
 use super::{WorldSeed, game_rules::GameRules, world_names::DEFAULT_WORLD_NAME};
 
+const MIN_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 5;
+const MAX_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 50;
+const DEFAULT_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 10;
+
+pub(crate) const MIN_BIOME_SIZE_MULTIPLIER: f32 =
+    MIN_BIOME_SIZE_MULTIPLIER_TENTHS as f32 / 10.0;
+pub(crate) const MAX_BIOME_SIZE_MULTIPLIER: f32 =
+    MAX_BIOME_SIZE_MULTIPLIER_TENTHS as f32 / 10.0;
+pub(crate) const DEFAULT_BIOME_SIZE_MULTIPLIER: f32 =
+    DEFAULT_BIOME_SIZE_MULTIPLIER_TENTHS as f32 / 10.0;
+
 #[derive(Resource, Debug, Clone)]
 pub(crate) struct NewWorldConfig {
     name: String,
@@ -11,6 +22,7 @@ pub(crate) struct NewWorldConfig {
     game_mode: GameMode,
     game_rules: GameRules,
     spawn_biome: Option<String>,
+    biome_size_multiplier_tenths: u8,
 }
 
 impl Default for NewWorldConfig {
@@ -21,6 +33,7 @@ impl Default for NewWorldConfig {
             game_mode: GameMode::default(),
             game_rules: GameRules::default(),
             spawn_biome: None,
+            biome_size_multiplier_tenths: DEFAULT_BIOME_SIZE_MULTIPLIER_TENTHS,
         }
     }
 }
@@ -72,5 +85,74 @@ impl NewWorldConfig {
         if self.spawn_biome != spawn_biome {
             self.spawn_biome = spawn_biome;
         }
+    }
+
+    pub(crate) fn biome_size_multiplier(&self) -> f32 {
+        self.biome_size_multiplier_tenths as f32 / 10.0
+    }
+
+    pub(crate) fn set_biome_size_multiplier(&mut self, value: f32) {
+        self.biome_size_multiplier_tenths =
+            biome_size_multiplier_tenths(snap_biome_size_multiplier(value))
+                .expect("snapped biome size multiplier must be valid");
+    }
+}
+
+pub(crate) fn snap_biome_size_multiplier(value: f32) -> f32 {
+    if !value.is_finite() {
+        return DEFAULT_BIOME_SIZE_MULTIPLIER;
+    }
+
+    let tenths = (value * 10.0)
+        .round()
+        .clamp(
+            MIN_BIOME_SIZE_MULTIPLIER_TENTHS as f32,
+            MAX_BIOME_SIZE_MULTIPLIER_TENTHS as f32,
+        ) as u8;
+    tenths as f32 / 10.0
+}
+
+pub(crate) fn biome_size_multiplier_tenths(value: f32) -> Option<u8> {
+    if !value.is_finite() {
+        return None;
+    }
+
+    let scaled = value * 10.0;
+    let rounded = scaled.round();
+    if (scaled - rounded).abs() > 0.0001 {
+        return None;
+    }
+
+    let tenths = rounded as i32;
+    (i32::from(MIN_BIOME_SIZE_MULTIPLIER_TENTHS)
+        ..=i32::from(MAX_BIOME_SIZE_MULTIPLIER_TENTHS))
+        .contains(&tenths)
+        .then_some(tenths as u8)
+}
+
+pub(crate) fn is_valid_biome_size_multiplier(value: f32) -> bool {
+    biome_size_multiplier_tenths(value).is_some()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn biome_size_multiplier_defaults_to_one() {
+        assert_eq!(
+            NewWorldConfig::default().biome_size_multiplier(),
+            DEFAULT_BIOME_SIZE_MULTIPLIER
+        );
+    }
+
+    #[test]
+    fn biome_size_multiplier_snaps_and_clamps_to_tenths() {
+        assert_eq!(snap_biome_size_multiplier(0.1), 0.5);
+        assert_eq!(snap_biome_size_multiplier(1.04), 1.0);
+        assert_eq!(snap_biome_size_multiplier(1.06), 1.1);
+        assert_eq!(snap_biome_size_multiplier(6.0), 5.0);
+        assert!(is_valid_biome_size_multiplier(2.3));
+        assert!(!is_valid_biome_size_multiplier(2.34));
     }
 }

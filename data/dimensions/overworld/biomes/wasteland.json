@@ -1,72 +1,157 @@
 {
   "id": "asteria:overworld/wasteland",
-  "name": { "english": "Wasteland", "portuguese_brazil": "Terras Devastadas", "spanish": "Tierras Baldías" },
+  "name": {
+    "english": "Wasteland",
+    "portuguese_brazil": "Terras Devastadas",
+    "spanish": "Tierras Baldías"
+  },
   "terrain": {
     "type": "rolling",
-    "baseHeight": 4.0,
-    "amplitude": 3.0,
+    "baseHeight": 4,
+    "amplitude": 3,
     "scale": 0.012,
-    "detailAmplitude": 1.0,
+    "detailAmplitude": 1,
     "detailScale": 0.045
   },
+  "allowSurfaceCarvers": true,
   "surfaceLayers": [
-    { "block": "asteria:grass", "depth": 1 },
-    { "block": "asteria:dirt", "depth": 4 },
-    { "block": "asteria:stone" }
+    {
+      "block": "asteria:grass",
+      "depth": 1
+    },
+    {
+      "block": "asteria:dirt",
+      "depth": 4
+    },
+    {
+      "block": "asteria:stone"
+    }
   ],
   "hydrology": {
     "canGenerateLake": false,
     "canGenerateRiver": false,
-    "lakeChanceMultiplier": 1.0,
-    "riverWidthMultiplier": 1.0
+    "lakeChanceMultiplier": 1,
+    "riverWidthMultiplier": 1
   },
   "structures": [
     {
       "id": "asteria:boulder_small",
-      "placement": { "spacing": 24, "chance": 0.40, "jitter": 7 }
+      "placement": {
+        "spacing": 24,
+        "chance": 0.4,
+        "jitter": 7
+      }
     },
     {
       "id": "asteria:boulder_medium",
-      "placement": { "spacing": 40, "chance": 0.30, "jitter": 12 }
+      "placement": {
+        "spacing": 40,
+        "chance": 0.3,
+        "jitter": 12
+      }
     },
     {
       "id": "asteria:boulder_big",
-      "placement": { "spacing": 64, "chance": 0.20, "jitter": 20 }
+      "placement": {
+        "spacing": 64,
+        "chance": 0.2,
+        "jitter": 20
+      }
     },
     {
       "id": "asteria:boulder_huge",
-      "placement": { "spacing": 104, "chance": 0.10, "jitter": 32 }
+      "placement": {
+        "spacing": 104,
+        "chance": 0.1,
+        "jitter": 32
+      }
     }
   ],
   "visuals": {
     "skyColor": {
-      "dawn": { "hue": 16.6272, "saturation": 0.1618, "intensity": 0.4533 },
-      "day": { "hue": 106.1021, "saturation": 0.0305, "intensity": 0.5467 },
-      "dusk": { "hue": 16.8625, "saturation": 0.4803, "intensity": 0.4233 },
-      "night": { "hue": 0.0000, "saturation": 0.0217, "intensity": 0.0767 }
+      "dawn": {
+        "hue": 16.6272,
+        "saturation": 0.1618,
+        "intensity": 0.4533
+      },
+      "day": {
+        "hue": 106.1021,
+        "saturation": 0.0305,
+        "intensity": 0.5467
+      },
+      "dusk": {
+        "hue": 16.8625,
+        "saturation": 0.4803,
+        "intensity": 0.4233
+      },
+      "night": {
+        "hue": 0,
+        "saturation": 0.0217,
+        "intensity": 0.0767
+      }
     },
     "fogColor": {
-      "dawn": { "hue": 20.0340, "saturation": 0.1937, "intensity": 0.5333 },
-      "day": { "hue": 35.2087, "saturation": 0.1587, "intensity": 0.6300 },
-      "dusk": { "hue": 20.5308, "saturation": 0.4122, "intensity": 0.4933 },
-      "night": { "hue": 13.8979, "saturation": 0.0847, "intensity": 0.0983 }
+      "dawn": {
+        "hue": 20.034,
+        "saturation": 0.1937,
+        "intensity": 0.5333
+      },
+      "day": {
+        "hue": 35.2087,
+        "saturation": 0.1587,
+        "intensity": 0.63
+      },
+      "dusk": {
+        "hue": 20.5308,
+        "saturation": 0.4122,
+        "intensity": 0.4933
+      },
+      "night": {
+        "hue": 13.8979,
+        "saturation": 0.0847,
+        "intensity": 0.0983
+      }
     },
-    "grassColor": { "hue": 20.2604, "saturation": 0.4808, "intensity": 0.3467 },
-    "leafColor": { "hue": 20.2604, "saturation": 0.4808, "intensity": 0.3467 },
-    "foliageColor": { "hue": 20.2604, "saturation": 0.4808, "intensity": 0.3467 },
+    "grassColor": {
+      "hue": 20.2604,
+      "saturation": 0.4808,
+      "intensity": 0.3467
+    },
+    "leafColor": {
+      "hue": 20.2604,
+      "saturation": 0.4808,
+      "intensity": 0.3467
+    },
+    "foliageColor": {
+      "hue": 20.2604,
+      "saturation": 0.4808,
+      "intensity": 0.3467
+    },
     "underwaterTint": {
-      "color": { "hue": 34.7150, "saturation": 0.3143, "intensity": 0.2333 },
-      "opacity": 0.20
+      "color": {
+        "hue": 34.715,
+        "saturation": 0.3143,
+        "intensity": 0.2333
+      },
+      "opacity": 0.2
     },
     "stars": {
       "density": 0.35,
-      "color": { "hue": 34.7150, "saturation": 0.0902, "intensity": 0.8133 }
+      "color": {
+        "hue": 34.715,
+        "saturation": 0.0902,
+        "intensity": 0.8133
+      }
     },
     "clouds": {
       "density": 0.15,
-      "color": { "hue": 30.0000, "saturation": 0.0741, "intensity": 0.5400 }
+      "color": {
+        "hue": 30,
+        "saturation": 0.0741,
+        "intensity": 0.54
+      }
     },
     "terrainRoughness": 0.99,
-    "terrainMetallic": 0.0
+    "terrainMetallic": 0
   }
 }

@@ -256,7 +256,7 @@ mod tests {
         ))
         .unwrap();
         biomes.insert(plains);
-        let biome_field = BiomeField::from_dimension(&dimension, &biomes, 42);
+        let biome_field = BiomeField::from_dimension(&dimension, &biomes, 42, 1.0);
         let volume_region = VolumeBiomeRegion::default();
 
         let mut fluids = FluidRegistry::default();
@@ -299,7 +299,6 @@ mod tests {
                     biome_field: &biome_field,
                     biomes: &biomes,
                     dimension: &dimension,
-                    sea_level: dimension.sea_level as f32,
                 },
             );
             let density_index = voxel_index(local_x as usize, local_y as usize, local_z as usize);

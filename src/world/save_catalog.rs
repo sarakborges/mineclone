@@ -23,12 +23,22 @@ use crate::{
     voxel::{chunk_disk::DiskChunk, world::VoxelWorld},
 };
 
-use super::world_names::{WORLDS_DIRECTORY, available_world_name, validate_world_name};
+use super::{
+    new_world::{
+        DEFAULT_BIOME_SIZE_MULTIPLIER, biome_size_multiplier_tenths,
+        is_valid_biome_size_multiplier,
+    },
+    world_names::{WORLDS_DIRECTORY, available_world_name, validate_world_name},
+};
 
 const SAVE_FORMAT_VERSION: u32 = 1;
 const MAX_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
 /// Count only generations that can actually be loaded into the current game.
 const RETAINED_GENERATIONS: usize = 4;
+
+fn default_saved_biome_size_multiplier() -> f32 {
+    DEFAULT_BIOME_SIZE_MULTIPLIER
+}
 // The catalog mutex only looks up an Arc. Never hold it while touching disk.
 static WORLD_LOCKS: OnceLock<Mutex<HashMap<String, Arc<WorldGate>>>> = OnceLock::new();
 
@@ -147,6 +157,9 @@ fn validate_playable(
     if duration.is_none_or(|ticks| ticks == 0 || snapshot.tick_in_day >= ticks) {
         return Err(invalid_data("saved dimension or world clock is invalid"));
     }
+    if !is_valid_biome_size_multiplier(snapshot.biome_size_multiplier) {
+        return Err(invalid_data("saved biome size multiplier is invalid"));
+    }
     if snapshot.inventory.len() != INVENTORY_SLOT_COUNT {
         return Err(invalid_data("invalid inventory length"));
     }
@@ -164,6 +177,8 @@ struct WorldManifest {
     id: String,
     seed: u64,
     dimension_id: String,
+    #[serde(default = "default_saved_biome_size_multiplier")]
+    biome_size_multiplier: f32,
     ticks_per_second: u32,
     last_saved_unix_ms: u64,
     #[serde(default)]
@@ -192,6 +207,8 @@ pub(crate) struct WorldSnapshot {
     pub(crate) dimension_id: String,
     #[serde(default)]
     pub(crate) spawn_biome: Option<String>,
+    #[serde(default = "default_saved_biome_size_multiplier")]
+    pub(crate) biome_size_multiplier: f32,
     pub(crate) ticks_per_second: u32,
     pub(crate) player: Option<SavedPlayer>,
     pub(crate) day: u64,
@@ -205,6 +222,7 @@ pub(crate) struct SnapshotSource<'a> {
     pub(crate) seed: u64,
     pub(crate) dimension_id: &'a str,
     pub(crate) spawn_biome: Option<&'a str>,
+    pub(crate) biome_size_multiplier: f32,
     pub(crate) ticks_per_second: u32,
     pub(crate) player: Option<SavedPlayer>,
     pub(crate) day: u64,
@@ -220,6 +238,9 @@ impl WorldSnapshot {
         if source.ticks_per_second == 0 || source.dimension_id.is_empty() || source.day == 0 {
             return Err(invalid_data("incomplete world state"));
         }
+        if !is_valid_biome_size_multiplier(source.biome_size_multiplier) {
+            return Err(invalid_data("invalid biome size multiplier"));
+        }
         if source
             .player
             .as_ref()
@@ -233,6 +254,7 @@ impl WorldSnapshot {
             seed: source.seed,
             dimension_id: source.dimension_id.to_owned(),
             spawn_biome: source.spawn_biome.map(str::to_owned),
+            biome_size_multiplier: source.biome_size_multiplier,
             ticks_per_second: source.ticks_per_second,
             player: source.player,
             day: source.day,
@@ -249,12 +271,19 @@ pub(crate) fn create_new_world(
     requested_name: &str,
     seed: u64,
     dimension_id: &str,
+    biome_size_multiplier: f32,
     ticks_per_second: u32,
 ) -> io::Result<String> {
     if ticks_per_second == 0 || dimension_id.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "World seed metadata must include a dimension and a positive tick rate",
+        ));
+    }
+    if !is_valid_biome_size_multiplier(biome_size_multiplier) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Biome size multiplier must be between 0.5 and 5.0 in 0.1 increments",
         ));
     }
     let root = Path::new(WORLDS_DIRECTORY);
@@ -270,6 +299,7 @@ pub(crate) fn create_new_world(
                     id: candidate.clone(),
                     seed,
                     dimension_id: dimension_id.to_owned(),
+                    biome_size_multiplier,
                     ticks_per_second,
                     last_saved_unix_ms: now_unix_ms()?,
                     generation: 0,
@@ -319,6 +349,8 @@ pub(crate) fn save_world_owned(
     if initial.id != snapshot.id
         || initial.seed != snapshot.seed
         || initial.dimension_id != snapshot.dimension_id
+        || biome_size_multiplier_tenths(initial.biome_size_multiplier)
+            != biome_size_multiplier_tenths(snapshot.biome_size_multiplier)
         || initial.format_version != SAVE_FORMAT_VERSION
     {
         return Err(invalid_data("snapshot does not match reserved world identity"));
@@ -340,6 +372,7 @@ pub(crate) fn save_world_owned(
         id: snapshot.id.clone(),
         seed: snapshot.seed,
         dimension_id: snapshot.dimension_id.clone(),
+        biome_size_multiplier: snapshot.biome_size_multiplier,
         ticks_per_second: snapshot.ticks_per_second,
         last_saved_unix_ms: now_unix_ms()?,
         generation: next,
@@ -584,6 +617,9 @@ fn decode_snapshot(
         || snapshot.id != id
         || snapshot.seed != manifest.seed
         || snapshot.dimension_id != manifest.dimension_id
+        || biome_size_multiplier_tenths(snapshot.biome_size_multiplier)
+            != biome_size_multiplier_tenths(manifest.biome_size_multiplier)
+        || !is_valid_biome_size_multiplier(snapshot.biome_size_multiplier)
         || snapshot.ticks_per_second != manifest.ticks_per_second
         || snapshot.ticks_per_second == 0
         || snapshot.day == 0
@@ -603,6 +639,7 @@ fn valid_manifest(manifest: &WorldManifest, id: &str, generation: u64) -> bool {
     manifest.format_version == SAVE_FORMAT_VERSION
         && manifest.id == id
         && manifest.generation == generation
+        && is_valid_biome_size_multiplier(manifest.biome_size_multiplier)
         && manifest.ticks_per_second > 0
         && generation > 0
         && manifest.snapshot_file.as_deref() == Some(snapshot_name(generation).as_str())

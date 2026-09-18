@@ -131,6 +131,37 @@ pub(crate) fn numeric_input_field<I: Component, L: Component>(
     label_marker: L,
     sizing: NumericInputSizing,
 ) -> impl Bundle {
+    numeric_input_field_with_filter(
+        value,
+        input_marker,
+        label_marker,
+        sizing,
+        integer_input_character,
+    )
+}
+
+pub(crate) fn decimal_numeric_input_field<I: Component, L: Component>(
+    value: impl Into<String>,
+    input_marker: I,
+    label_marker: L,
+    sizing: NumericInputSizing,
+) -> impl Bundle {
+    numeric_input_field_with_filter(
+        value,
+        input_marker,
+        label_marker,
+        sizing,
+        decimal_input_character,
+    )
+}
+
+fn numeric_input_field_with_filter<I: Component, L: Component>(
+    value: impl Into<String>,
+    input_marker: I,
+    label_marker: L,
+    sizing: NumericInputSizing,
+    filter: fn(char) -> bool,
+) -> impl Bundle {
     let (width, flex_grow, min_width) = match sizing {
         NumericInputSizing::Fixed(width) => (px(width), 0.0, Val::Auto),
         NumericInputSizing::Flexible => (Val::Auto, 1.0, px(0)),
@@ -158,7 +189,7 @@ pub(crate) fn numeric_input_field<I: Component, L: Component>(
                 max_characters: Some(20),
                 ..EditableText::new(value.into())
             },
-            EditableTextFilter::new(|character| character.is_ascii_digit()),
+            EditableTextFilter::new(filter),
             text_input::editor_style(20.0, FontWeight::MEDIUM),
             Node {
                 width: percent(100),
@@ -171,6 +202,14 @@ pub(crate) fn numeric_input_field<I: Component, L: Component>(
             },
         )],
     )
+}
+
+fn integer_input_character(character: char) -> bool {
+    character.is_ascii_digit()
+}
+
+fn decimal_input_character(character: char) -> bool {
+    character.is_ascii_digit() || character == '.'
 }
 
 pub(crate) fn sync_numeric_input_view<M, I, L>(
@@ -214,5 +253,13 @@ mod tests {
         assert_eq!(editor.buffer(), "123");
         editor.reset();
         assert_eq!(editor.buffer(), "");
+    }
+
+    #[test]
+    fn decimal_filter_accepts_digits_and_decimal_point_only() {
+        assert!(decimal_input_character('0'));
+        assert!(decimal_input_character('.'));
+        assert!(!decimal_input_character('-'));
+        assert!(!decimal_input_character('x'));
     }
 }

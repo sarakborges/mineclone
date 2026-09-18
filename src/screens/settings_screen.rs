@@ -8,6 +8,11 @@ use game_rules_section::{
     TicksPerSecondInputState, handle_ticks_input, handle_ticks_keyboard, handle_ticks_step_buttons,
     sync_ticks_per_second_text,
 };
+use biome_size_multiplier_section::{
+    BiomeSizeMultiplierInputState, handle_biome_size_multiplier_input,
+    handle_biome_size_multiplier_keyboard, sync_biome_size_multiplier_input,
+    sync_biome_size_multiplier_slider_thumb,
+};
 use hud_section::{
     TargetBlockPositionDropdownState, close_target_block_position_dropdown_outside_hud,
     handle_display_tooltips_toggle, handle_target_block_position_dropdown_button,
@@ -27,7 +32,11 @@ use new_world_section::{
     handle_random_seed, handle_seed_focus, handle_seed_keyboard, reset_new_world_settings,
     sync_new_world_input_focus_to_section, sync_seed_text,
 };
-use render_distance_logic::{sync_render_distance_text, sync_slider_thumb};
+use render_distance_logic::{
+    handle_render_distance_input, handle_render_distance_keyboard,
+    sync_render_distance_input, sync_render_distance_slider_thumb, sync_render_distance_text,
+};
+use render_distance_section::{RenderDistanceInput, RenderDistanceInputState};
 use spawn_biome_section::{
     SpawnBiomeDropdownState, close_spawn_biome_dropdown_outside_general,
     focus_spawn_biome_search_frame, handle_spawn_biome_dropdown_button,
@@ -41,6 +50,7 @@ use world_name_section::{WorldNameFeedback, handle_world_name_focus, sync_world_
 use world_settings_section::{handle_game_mode_buttons, sync_game_mode_buttons};
 
 pub(crate) mod game_rules_section;
+mod biome_size_multiplier_section;
 mod hud_section;
 mod languages_section;
 mod layout;
@@ -66,6 +76,8 @@ impl Plugin for SettingsScreenPlugin {
             .init_resource::<crate::app::settings_state::SettingsScreenMode>()
             .init_resource::<SettingsSectionSelection>()
             .init_resource::<TicksPerSecondInputState>()
+            .init_resource::<RenderDistanceInputState>()
+            .init_resource::<BiomeSizeMultiplierInputState>()
             .init_resource::<SeedInputState>()
             .init_resource::<SpawnBiomeDropdownState>()
             .init_resource::<WorldNameFeedback>()
@@ -81,6 +93,7 @@ impl Plugin for SettingsScreenPlugin {
                 OnEnter(SettingsState::Open),
                 (
                     reset_resource::<TicksPerSecondInputState>,
+                    reset_resource::<RenderDistanceInputState>,
                     reset_resource::<TargetBlockPositionDropdownState>,
                     reset_resource::<LanguageDropdownState>,
                     spawn_settings_screen,
@@ -101,6 +114,9 @@ impl Plugin for SettingsScreenPlugin {
                         close_target_block_position_dropdown_outside_hud,
                         close_language_dropdown_outside,
                         handle_seed_focus,
+                        handle_biome_size_multiplier_input
+                            .run_if(in_state(GameState::NewWorld)),
+                        handle_render_distance_input,
                         handle_world_name_focus.run_if(in_state(GameState::NewWorld)),
                         handle_new_world_general_control_focus
                             .run_if(in_state(GameState::NewWorld)),
@@ -118,6 +134,9 @@ impl Plugin for SettingsScreenPlugin {
                         handle_new_world_footer,
                         handle_spawn_biome_search_keyboard.run_if(in_state(GameState::NewWorld)),
                         handle_seed_keyboard,
+                        handle_biome_size_multiplier_keyboard
+                            .run_if(in_state(GameState::NewWorld)),
+                        handle_render_distance_keyboard.run_if(has_render_distance_input),
                         handle_ticks_keyboard.run_if(has_ticks_input),
                         handle_language_dropdown_button,
                         handle_language_options,
@@ -147,9 +166,13 @@ impl Plugin for SettingsScreenPlugin {
                     sync_spawn_biome_options.run_if(in_state(GameState::NewWorld)),
                     sync_world_name_view.run_if(in_state(GameState::NewWorld)),
                     sync_seed_text,
+                    sync_biome_size_multiplier_input.run_if(in_state(GameState::NewWorld)),
+                    sync_biome_size_multiplier_slider_thumb
+                        .run_if(in_state(GameState::NewWorld)),
                     sync_ticks_per_second_text,
                     sync_render_distance_text,
-                    sync_slider_thumb,
+                    sync_render_distance_input,
+                    sync_render_distance_slider_thumb,
                 )
                     .chain()
                     .in_set(SettingsScreenSet::Sync),
@@ -181,5 +204,9 @@ fn settings_screen_active(
 }
 
 fn has_ticks_input(inputs: Query<(), With<game_rules_section::TicksPerSecondInput>>) -> bool {
+    !inputs.is_empty()
+}
+
+fn has_render_distance_input(inputs: Query<(), With<RenderDistanceInput>>) -> bool {
     !inputs.is_empty()
 }

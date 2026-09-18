@@ -66,7 +66,11 @@ use dimension::{CurrentDimension, DimensionEntityCounts};
 use fluid_updates::{PendingFluidUpdates, process_fluid_updates};
 use game_rules::GameRules;
 use lighting_updates::{pending_lighting_work, process_dynamic_lighting};
-pub(crate) use new_world::NewWorldConfig;
+pub(crate) use new_world::{
+    DEFAULT_BIOME_SIZE_MULTIPLIER,
+    MAX_BIOME_SIZE_MULTIPLIER, MIN_BIOME_SIZE_MULTIPLIER, NewWorldConfig,
+    is_valid_biome_size_multiplier, snap_biome_size_multiplier,
+};
 use render_diagnostics::{log_render_asset_pressure, render_diagnostics_due};
 use render_distance::RenderDistanceSettings;
 pub(crate) use save::{InMemoryWorldSave, WorldLoadMode};

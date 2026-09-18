@@ -185,6 +185,7 @@ where
                     seed,
                     sea_level,
                     ocean_threshold,
+                    ocean_weight: network.ocean_weight(),
                 },
                 |position| network.surface_sample_at(position),
             );

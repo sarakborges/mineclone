@@ -119,6 +119,8 @@ pub struct BiomeDefinition {
     #[serde(default)]
     pub terrain_modifiers: Vec<BiomeTerrainModifier>,
     #[serde(default)]
+    pub allow_surface_carvers: bool,
+    #[serde(default)]
     pub surface_carvers: Vec<BiomeSurfaceCarver>,
     #[serde(default)]
     pub surface_layers: Vec<BiomeMaterialLayer>,

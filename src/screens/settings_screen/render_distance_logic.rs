@@ -1,10 +1,16 @@
 use bevy::{
+    input_focus::InputFocus,
     prelude::*,
+    text::EditableText,
     ui_widgets::{SliderValue, ValueChange},
 };
 
 use crate::{
     localization::{ActiveLanguage, Language, UiLocalization},
+    ui::{
+        numeric_input::{NumericInputEvent, NumericInputFrame, sync_numeric_input_view},
+        slider,
+    },
     voxel::chunk::CHUNK_SIZE,
     world::render_distance::{
         MAX_RENDER_DISTANCE_CHUNKS, MIN_RENDER_DISTANCE_CHUNKS, RenderDistanceSettings,
@@ -12,6 +18,7 @@ use crate::{
 };
 
 use super::render_distance_section::{
+    RenderDistanceInput, RenderDistanceInputState, RenderDistanceInputText,
     RenderDistanceSlider, RenderDistanceSliderThumb, RenderDistanceValueText,
 };
 
@@ -19,12 +26,81 @@ pub(super) fn apply_render_distance(
     value_change: On<ValueChange<f32>>,
     mut commands: Commands,
     mut render_distance: ResMut<RenderDistanceSettings>,
+    mut input_state: ResMut<RenderDistanceInputState>,
 ) {
     let chunks = value_change.value.round() as i32;
     render_distance.set_chunks(chunks);
+    input_state.reset();
     commands
         .entity(value_change.source)
         .insert(SliderValue(render_distance.chunks() as f32));
+}
+
+pub(super) fn handle_render_distance_input(
+    interactions: Query<&Interaction, (Changed<Interaction>, With<RenderDistanceInput>)>,
+    render_distance: Res<RenderDistanceSettings>,
+    mut input_state: ResMut<RenderDistanceInputState>,
+) {
+    RenderDistanceInputState::begin_if_pressed(
+        &mut input_state,
+        interactions.iter(),
+        render_distance.chunks(),
+    );
+}
+
+pub(super) fn handle_render_distance_keyboard(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut focus: ResMut<InputFocus>,
+    mut render_distance: ResMut<RenderDistanceSettings>,
+    mut input_state: ResMut<RenderDistanceInputState>,
+    mut editor: Single<(Entity, &mut EditableText), With<RenderDistanceInput>>,
+    sliders: Query<Entity, With<RenderDistanceSlider>>,
+    mut commands: Commands,
+) {
+    let (entity, editable) = &mut *editor;
+    let event = RenderDistanceInputState::handle_keyboard(
+        &mut input_state,
+        &keys,
+        &mut focus,
+        *entity,
+        editable,
+        MAX_RENDER_DISTANCE_CHUNKS.to_string().len(),
+        valid_render_distance_buffer,
+    );
+    if event != NumericInputEvent::Changed {
+        return;
+    }
+
+    let Ok(chunks) = input_state.buffer().parse::<i32>() else {
+        return;
+    };
+    if !(MIN_RENDER_DISTANCE_CHUNKS..=MAX_RENDER_DISTANCE_CHUNKS).contains(&chunks) {
+        return;
+    }
+
+    render_distance.set_chunks(chunks);
+    let next = render_distance.chunks() as f32;
+    for slider in &sliders {
+        commands.entity(slider).insert(SliderValue(next));
+    }
+}
+
+pub(super) fn sync_render_distance_input(
+    render_distance: Res<RenderDistanceSettings>,
+    input_state: Res<RenderDistanceInputState>,
+    mut labels: Query<&mut EditableText, With<RenderDistanceInputText>>,
+    mut inputs: Query<&mut BorderColor, With<NumericInputFrame<RenderDistanceInput>>>,
+) {
+    if !render_distance.is_changed() && !input_state.is_changed() {
+        return;
+    }
+
+    sync_numeric_input_view(
+        &input_state,
+        render_distance.chunks(),
+        &mut labels,
+        &mut inputs,
+    );
 }
 
 pub(super) fn sync_render_distance_text(
@@ -45,7 +121,7 @@ pub(super) fn sync_render_distance_text(
     }
 }
 
-pub(super) fn sync_slider_thumb(
+pub(super) fn sync_render_distance_slider_thumb(
     sliders: Query<&SliderValue, (With<RenderDistanceSlider>, Changed<SliderValue>)>,
     mut thumbs: Query<&mut Node, With<RenderDistanceSliderThumb>>,
 ) {
@@ -54,17 +130,17 @@ pub(super) fn sync_slider_thumb(
     };
 
     for value in &sliders {
-        let next_left = percent(slider_position(value.0) * 100.0);
+        let next_left = percent(
+            slider::slider_position(
+                value.0,
+                MIN_RENDER_DISTANCE_CHUNKS as f32,
+                MAX_RENDER_DISTANCE_CHUNKS as f32,
+            ) * 100.0,
+        );
         if thumb.left != next_left {
             thumb.left = next_left;
         }
     }
-}
-
-pub(super) fn slider_position(value: f32) -> f32 {
-    let min = MIN_RENDER_DISTANCE_CHUNKS as f32;
-    let max = MAX_RENDER_DISTANCE_CHUNKS as f32;
-    ((value - min) / (max - min)).clamp(0.0, 1.0)
 }
 
 pub(super) fn render_distance_label(
@@ -76,4 +152,25 @@ pub(super) fn render_distance_label(
         .text(language, "settings.renderDistance.value")
         .replace("{chunks}", &chunks.to_string())
         .replace("{blocks}", &(chunks * CHUNK_SIZE as i32).to_string())
+}
+
+fn valid_render_distance_buffer(value: &str) -> bool {
+    value.is_empty()
+        || value
+            .parse::<i32>()
+            .is_ok_and(|chunks| chunks <= MAX_RENDER_DISTANCE_CHUNKS)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn render_distance_input_rejects_values_above_slider_range() {
+        assert!(valid_render_distance_buffer(""));
+        assert!(valid_render_distance_buffer("3"));
+        assert!(valid_render_distance_buffer("4"));
+        assert!(valid_render_distance_buffer("24"));
+        assert!(!valid_render_distance_buffer("25"));
+    }
 }

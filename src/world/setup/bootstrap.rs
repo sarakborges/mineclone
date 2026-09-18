@@ -77,11 +77,20 @@ pub(in crate::world) fn begin_world_loading(
         WorldLoadMode::New => persistence.new_world_config.spawn_biome().map(str::to_owned),
         WorldLoadMode::Load => persistence.save.spawn_biome().map(str::to_owned),
     };
+    let biome_size_multiplier = match *persistence.load_mode {
+        WorldLoadMode::New => persistence.new_world_config.biome_size_multiplier(),
+        WorldLoadMode::Load => persistence.save.biome_size_multiplier(),
+    };
     if let Some(biome_id) = forced_spawn_biome.as_deref() {
         validate_forced_spawn_biome(dimension, biomes, biome_id);
     }
 
-    let mut biome_field = BiomeField::from_dimension(dimension, biomes, config.seed.0);
+    let mut biome_field = BiomeField::from_dimension(
+        dimension,
+        biomes,
+        config.seed.0,
+        biome_size_multiplier,
+    );
     if let Some(biome_id) = forced_spawn_biome.as_deref() {
         biome_field.force_surface_biome(
             biome_id,
@@ -175,6 +184,7 @@ pub(in crate::world) fn begin_world_loading(
                 &config.current_dimension.id,
                 *config.game_rules,
                 forced_spawn_biome.as_deref(),
+                biome_size_multiplier,
             );
         }
         WorldLoadMode::Load => {
