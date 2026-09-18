@@ -34,17 +34,14 @@ const FOOTER_HEIGHT: f32 = 104.0;
 const COLUMN_GAP: f32 = 22.0;
 const SIDEBAR_BUTTON_GAP: f32 = 11.0;
 
-const START_SECTIONS: &[SettingsSection] = &[
+const GAME_SECTIONS: &[SettingsSection] = &[
     SettingsSection::Graphics,
     SettingsSection::Languages,
     SettingsSection::Hud,
 ];
-const IN_WORLD_SECTIONS: &[SettingsSection] = &[
+const WORLD_SECTIONS: &[SettingsSection] = &[
     SettingsSection::WorldSettings,
     SettingsSection::GameRules,
-    SettingsSection::Graphics,
-    SettingsSection::Languages,
-    SettingsSection::Hud,
 ];
 const CREATE_WORLD_SECTIONS: &[SettingsSection] =
     &[SettingsSection::General, SettingsSection::GameRules];
@@ -57,10 +54,13 @@ pub(crate) enum SettingsScreenContext {
 }
 
 impl SettingsScreenContext {
-    fn from_game_state(game_state: GameState) -> Self {
+    fn from_game_state(game_state: GameState, mode: SettingsScreenMode) -> Self {
         match game_state {
             GameState::NewWorld => Self::CreateWorld,
-            GameState::Gameplay => Self::InWorld,
+            GameState::Gameplay => match mode {
+                SettingsScreenMode::Game => Self::Start,
+                SettingsScreenMode::World => Self::InWorld,
+            },
             _ => Self::Start,
         }
     }
@@ -82,8 +82,8 @@ impl SettingsScreenContext {
 
     const fn sections(self) -> &'static [SettingsSection] {
         match self {
-            Self::Start => START_SECTIONS,
-            Self::InWorld => IN_WORLD_SECTIONS,
+            Self::Start => GAME_SECTIONS,
+            Self::InWorld => WORLD_SECTIONS,
             Self::CreateWorld => CREATE_WORLD_SECTIONS,
         }
     }
@@ -92,6 +92,7 @@ impl SettingsScreenContext {
 #[derive(SystemParam)]
 pub(super) struct SettingsScreenWorldContext<'w, 's> {
     game_state: Res<'w, State<GameState>>,
+    settings_mode: Res<'w, SettingsScreenMode>,
     game_rules: Res<'w, GameRules>,
     new_world: Res<'w, NewWorldConfig>,
     player: Query<'w, 's, &'static GameMode, With<GameplayCamera>>,
@@ -99,7 +100,7 @@ pub(super) struct SettingsScreenWorldContext<'w, 's> {
 
 impl SettingsScreenWorldContext<'_, '_> {
     fn screen_context(&self) -> SettingsScreenContext {
-        SettingsScreenContext::from_game_state(*self.game_state.get())
+        SettingsScreenContext::from_game_state(*self.game_state.get(), *self.settings_mode.get())
     }
 
     fn game_mode(&self, context: SettingsScreenContext) -> GameMode {
