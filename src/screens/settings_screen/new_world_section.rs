@@ -113,7 +113,7 @@ pub(super) fn new_world_general_section(
             width: percent(100),
             flex_direction: FlexDirection::Column,
             align_items: AlignItems::Stretch,
-            row_gap: px(18),
+            row_gap: px(12),
             ..default()
         },
         children![
