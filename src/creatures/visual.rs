@@ -208,9 +208,15 @@ fn configure_loaded_scene(
                             // specular/emissive settings as well as the texture so old binary
                             // assets cannot make it glow like polished glass.
                             material.metallic = 0.0;
-                            material.perceptual_roughness = 0.85;
+                            material.perceptual_roughness = 0.92;
                             material.reflectance = 0.0;
+                            material.specular_tint = Color::WHITE;
+                            material.clearcoat = 0.0;
+                            material.diffuse_transmission = 0.0;
+                            material.specular_transmission = 0.0;
+                            material.thickness = 0.0;
                             material.emissive = LinearRgba::BLACK;
+                            material.emissive_texture = None;
                             material.base_color = material.base_color.with_alpha(1.0);
                             material.alpha_mode = AlphaMode::Opaque;
                             let handle = tint_assets.materials.add(material);
