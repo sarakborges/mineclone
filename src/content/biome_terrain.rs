@@ -24,6 +24,8 @@ pub enum BiomeTerrain {
         base_height: f32,
         depth: f32,
         wall_height: f32,
+        floor_amplitude: f32,
+        floor_scale: f32,
     },
     Alps {
         base_height: f32,
@@ -66,8 +68,9 @@ impl BiomeTerrain {
             Self::Gorge {
                 base_height,
                 wall_height,
+                floor_amplitude,
                 ..
-            } => base_height + wall_height.max(0.0),
+            } => base_height + wall_height.max(0.0) + floor_amplitude.max(0.0),
             Self::Alps {
                 base_height,
                 amplitude,
@@ -136,12 +139,22 @@ impl BiomeTerrain {
             Self::Gorge {
                 depth,
                 wall_height,
+                floor_amplitude,
+                floor_scale,
                 ..
             } => {
                 assert!(depth >= 0.0, "biome {biome_id} gorge depth cannot be negative");
                 assert!(
                     wall_height >= 0.0,
                     "biome {biome_id} gorge wallHeight cannot be negative"
+                );
+                assert!(
+                    floor_amplitude >= 0.0,
+                    "biome {biome_id} gorge floorAmplitude cannot be negative"
+                );
+                assert!(
+                    floor_scale > 0.0,
+                    "biome {biome_id} gorge floorScale must be positive"
                 );
             }
             Self::Alps {
