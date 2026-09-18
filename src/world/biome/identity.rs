@@ -17,7 +17,12 @@ pub(super) fn resolve_surface_identity(
     hydrology_influences: &mut Vec<CurrentBiomeInfluence>,
     hydrology_id: &mut Option<String>,
 ) -> usize {
-    let influence_count = copy_influences(influences, &surface.influences);
+    let influence_count = if surface.identity_surface_index != surface.primary_surface_index {
+        replace_single_influence(influences, surface.primary_id, 1.0);
+        1
+    } else {
+        copy_influences(influences, &surface.influences)
+    };
     let Some(hydrology) = hydrology else {
         hydrology_influences.clear();
         replace_optional_string(hydrology_id, None);
