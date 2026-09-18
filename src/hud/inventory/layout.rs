@@ -246,6 +246,7 @@ fn spawn_creative_panel(
         panel
             .spawn((
                 Node {
+                    width: px(creative_content_width()),
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::FlexStart,
                     column_gap: px(CATEGORY_GAP),
