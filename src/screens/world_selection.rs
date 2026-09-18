@@ -614,8 +614,8 @@ fn sync_world_selection_entries(
                     *interaction,
                 ),
             ),
-            &mut background,
-            &mut border,
+            background,
+            border,
         );
     }
 }
