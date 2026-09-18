@@ -101,14 +101,16 @@ fn spawn_pause_menu(
                         button(
                             localization.text(language, "settings.section.worldSettings").to_owned(),
                             PauseMenuAction::WorldSettings,
-                            174.0,
-                            crate::ui::button::ButtonVariant::Normal,
+                            px(174),
+                            COMPACT_CONTROL_HEIGHT,
+                            ButtonVariant::Normal,
                         ),
                         button(
                             localization.text(language, "common.gameSettings").to_owned(),
                             PauseMenuAction::GameSettings,
-                            174.0,
-                            crate::ui::button::ButtonVariant::Normal,
+                            px(174),
+                            COMPACT_CONTROL_HEIGHT,
+                            ButtonVariant::Normal,
                         ),
                     ],
                 ));
