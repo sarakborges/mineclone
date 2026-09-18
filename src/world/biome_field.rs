@@ -55,12 +55,6 @@ pub(super) struct BiomeFieldEntry {
     pub avoid_near: Vec<String>,
 }
 
-impl BiomeFieldEntry {
-    pub(super) fn is_regional(&self) -> bool {
-        self.distributions.len() == 1 && self.distributions[0].is_regional()
-    }
-}
-
 #[derive(Resource, Clone)]
 pub struct BiomeField {
     pub(super) surface_biomes: Vec<BiomeFieldEntry>,
