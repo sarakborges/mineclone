@@ -77,7 +77,7 @@ fn display_tooltips_setting(
         Node {
             width: percent(100),
             flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Center,
+            align_items: AlignItems::FlexStart,
             justify_content: JustifyContent::SpaceBetween,
             column_gap: px(18),
             ..default()
