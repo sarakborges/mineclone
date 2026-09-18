@@ -45,26 +45,6 @@
     }
   ],
   "allowSurfaceCarvers": true,
-  "surfaceCarvers": [
-    {
-      "type": "tunnel",
-      "spacing": 190,
-      "chance": 0.55,
-      "length": {
-        "min": 90,
-        "max": 170
-      },
-      "radius": {
-        "min": 6,
-        "max": 10.5
-      },
-      "elevation": {
-        "min": 10,
-        "max": 46
-      },
-      "jitter": 65
-    }
-  ],
   "surfaceLayers": [
     {
       "block": "asteria:stone"
