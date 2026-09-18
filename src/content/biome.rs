@@ -21,6 +21,7 @@ mod validation;
 pub enum BiomeKind {
     #[default]
     Surface,
+    TerrainOverlay,
     Volume,
     Hydrology,
 }
@@ -106,6 +107,8 @@ pub struct BiomeDefinition {
     pub name: LocalizedText,
     #[serde(default)]
     pub kind: BiomeKind,
+    #[serde(default)]
+    pub parent_biome: Option<String>,
     #[serde(default = "default_biome_distributions")]
     pub distributions: Vec<BiomeDistribution>,
     #[serde(default)]
@@ -134,7 +137,8 @@ pub struct BiomeDefinition {
     pub structures: Vec<BiomeStructure>,
     #[serde(default)]
     pub creature_spawns: Vec<CreatureSpawnRule>,
-    pub visuals: BiomeVisuals,
+    #[serde(default)]
+    pub visuals: Option<BiomeVisuals>,
 }
 
 #[derive(Clone, Debug)]
@@ -168,6 +172,12 @@ impl BiomeRegistry {
 
     pub fn iter(&self) -> impl Iterator<Item = &BiomeDefinition> {
         self.definitions.values()
+    }
+
+    pub fn visuals<'a>(&self, biome: &'a BiomeDefinition) -> &'a BiomeVisuals {
+        biome.visuals
+            .as_ref()
+            .unwrap_or_else(|| panic!("biome {} must define visuals", biome.id))
     }
 
     pub fn has_volume_density_modifiers(&self) -> bool {
