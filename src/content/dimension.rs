@@ -240,16 +240,10 @@ impl DimensionDefinition {
             }
         }
 
-        for (field, biome_id) in [
-            ("hydrology.oceanBiome", self.hydrology.ocean_biome.as_deref()),
-            ("hydrology.coastBiome", self.hydrology.coast_biome.as_deref()),
-        ] {
-            let Some(biome_id) = biome_id else {
-                continue;
-            };
+        if let Some(biome_id) = self.hydrology.ocean_biome.as_deref() {
             assert!(
                 self.biomes.iter().any(|entry| entry.id == biome_id),
-                "dimension {} {field} must also be listed in biomes: {biome_id}",
+                "dimension {} hydrology.oceanBiome must also be listed in biomes: {biome_id}",
                 self.id
             );
         }
