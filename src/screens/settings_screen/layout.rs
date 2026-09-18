@@ -6,7 +6,7 @@ use crate::{
     localization::{ActiveLanguage, Language, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{
-        button::button,
+        button::standard_button,
         cosmic_background::{self, STAR_FIELD},
         scrollbar::vertical_scrollbar,
         surface, theme, typography,
@@ -285,12 +285,11 @@ pub(super) fn spawn_settings_screen(
                 spawn_new_world_footer(footer, &content.localization, language);
             }
             SettingsScreenContext::Start | SettingsScreenContext::InWorld => {
-                footer.spawn(menu_button(
-                    content
-                        .localization
-                        .text(language, "settings.return")
-                        .to_owned(),
+                footer.spawn(standard_button(
+                    content.localization.text(language, "settings.return").to_owned(),
                     SettingsBackButton,
+                    360.0,
+                    crate::ui::button::ButtonVariant::Normal,
                 ));
             }
         });
