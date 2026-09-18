@@ -37,6 +37,8 @@ pub struct DimensionBiome {
     pub size: Option<DimensionBiomeSize>,
     #[serde(default)]
     pub avoid_near: Vec<String>,
+    #[serde(default)]
+    pub require_near: Vec<String>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -142,6 +144,9 @@ impl DimensionDefinition {
         );
 
         for entry in &self.biomes {
+            let biome = biomes
+                .get(&entry.id)
+                .unwrap_or_else(|| panic!("dimension {} references missing biome: {}", self.id, entry.id));
             let mut avoided = HashSet::new();
             for avoided_id in &entry.avoid_near {
                 assert!(
@@ -163,6 +168,62 @@ impl DimensionDefinition {
                     self.id,
                     entry.id,
                     avoided_id
+                );
+            }
+
+            let mut required = HashSet::new();
+            if !entry.require_near.is_empty() {
+                assert_eq!(
+                    biome.kind,
+                    BiomeKind::Surface,
+                    "dimension {} biome {} requireNear is only valid for surface biomes",
+                    self.id,
+                    entry.id
+                );
+            }
+            for required_id in &entry.require_near {
+                assert!(
+                    required.insert(required_id.as_str()),
+                    "dimension {} biome {} requireNear cannot contain duplicates: {}",
+                    self.id,
+                    entry.id,
+                    required_id
+                );
+                assert!(
+                    required_id != &entry.id,
+                    "dimension {} biome {} cannot require itself nearby",
+                    self.id,
+                    entry.id
+                );
+                assert!(
+                    !avoided.contains(required_id.as_str()),
+                    "dimension {} biome {} cannot both avoidNear and requireNear {}",
+                    self.id,
+                    entry.id,
+                    required_id
+                );
+                let required_biome = biomes.get(required_id).unwrap_or_else(|| {
+                    panic!(
+                        "dimension {} biome {} requireNear references missing biome: {}",
+                        self.id,
+                        entry.id,
+                        required_id
+                    )
+                });
+                assert_eq!(
+                    required_biome.kind,
+                    BiomeKind::Surface,
+                    "dimension {} biome {} requireNear must reference a surface biome: {}",
+                    self.id,
+                    entry.id,
+                    required_id
+                );
+                assert!(
+                    self.biomes.iter().any(|candidate| candidate.id == *required_id),
+                    "dimension {} biome {} requireNear references biome outside this dimension: {}",
+                    self.id,
+                    entry.id,
+                    required_id
                 );
             }
         }
