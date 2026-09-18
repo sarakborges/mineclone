@@ -34,13 +34,6 @@ const BOOTSTRAP_VERTICAL_RADIUS_CHUNKS: i32 = 2;
 const DEFAULT_SPAWN_COLUMN: IVec2 = IVec2::new(8, 8);
 const SPAWN_SEARCH_STEP_BLOCKS: i32 = 8;
 const SPAWN_SEARCH_RADIUS_STEPS: i32 = 64;
-const FORCED_SPAWN_SEARCH_RADIUS_STEPS: i32 = 256;
-const FORCED_SPAWN_COARSE_STEP_BLOCKS: i32 = 64;
-const FORCED_SPAWN_COARSE_RADIUS_STEPS: i32 =
-    FORCED_SPAWN_SEARCH_RADIUS_STEPS * SPAWN_SEARCH_STEP_BLOCKS
-        / FORCED_SPAWN_COARSE_STEP_BLOCKS;
-const FORCED_SPAWN_LOCAL_RADIUS_STEPS: i32 =
-    FORCED_SPAWN_COARSE_STEP_BLOCKS / SPAWN_SEARCH_STEP_BLOCKS;
 
 pub(in crate::world) fn begin_world_loading(
     mut commands: Commands,
@@ -80,14 +73,19 @@ pub(in crate::world) fn begin_world_loading(
         .hydrology
         .validate_references(&dimension.id, biomes, blocks, fluids);
 
-    let forced_spawn_biome = (*persistence.load_mode == WorldLoadMode::New)
-        .then(|| persistence.new_world_config.spawn_biome().map(str::to_owned))
-        .flatten();
+    let forced_spawn_biome = match *persistence.load_mode {
+        WorldLoadMode::New => persistence.new_world_config.spawn_biome().map(str::to_owned),
+        WorldLoadMode::Load => persistence.save.spawn_biome().map(str::to_owned),
+    };
     if let Some(biome_id) = forced_spawn_biome.as_deref() {
         validate_forced_spawn_biome(dimension, biomes, biome_id);
     }
 
-    let biome_field = BiomeField::from_dimension(dimension, biomes, config.seed.0);
+    let mut biome_field = BiomeField::from_dimension(dimension, biomes, config.seed.0);
+    if let Some(biome_id) = forced_spawn_biome.as_deref() {
+        let (minimum, maximum) = initial_spawn_biome_bounds();
+        biome_field.force_surface_biome(biome_id, minimum, maximum);
+    }
     let coast_weight = dimension
         .hydrology
         .coast_biome
@@ -126,7 +124,7 @@ pub(in crate::world) fn begin_world_loading(
             biomes,
             &biome_field,
             &feature_fields,
-            forced_spawn_biome.as_deref(),
+            forced_spawn_biome.is_some(),
         )
     };
     let initial_center = if *persistence.load_mode == WorldLoadMode::Load {
@@ -167,6 +165,7 @@ pub(in crate::world) fn begin_world_loading(
                 *config.seed,
                 &config.current_dimension.id,
                 *config.game_rules,
+                forced_spawn_biome.as_deref(),
             );
         }
         WorldLoadMode::Load => {
@@ -231,120 +230,52 @@ fn validate_forced_spawn_biome(
     );
 }
 
+fn initial_spawn_biome_bounds() -> (Vec2, Vec2) {
+    let center_chunk = IVec2::new(
+        DEFAULT_SPAWN_COLUMN.x.div_euclid(CHUNK_SIZE as i32),
+        DEFAULT_SPAWN_COLUMN.y.div_euclid(CHUNK_SIZE as i32),
+    );
+    let minimum_chunk = center_chunk - IVec2::splat(BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS);
+    let maximum_chunk_exclusive =
+        center_chunk + IVec2::splat(BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS + 1);
+    let chunk_size = CHUNK_SIZE as f32;
+
+    (
+        minimum_chunk.as_vec2() * chunk_size,
+        maximum_chunk_exclusive.as_vec2() * chunk_size,
+    )
+}
+
 fn find_initial_spawn_column(
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     biome_field: &BiomeField,
     feature_fields: &WorldFeatureFields,
-    forced_spawn_biome: Option<&str>,
+    restrict_to_forced_region: bool,
 ) -> IVec2 {
-    if let Some(biome_id) = forced_spawn_biome {
-        return find_forced_spawn_column(
-            dimension,
-            biomes,
-            biome_field,
-            feature_fields,
-            biome_id,
-        )
-        .unwrap_or_else(|| {
-            panic!(
-                "could not find a dry spawn column in biome {biome_id} within {} blocks",
-                FORCED_SPAWN_SEARCH_RADIUS_STEPS * SPAWN_SEARCH_STEP_BLOCKS
-            )
-        });
-    }
-
     find_map_square_rings(
         DEFAULT_SPAWN_COLUMN,
         SPAWN_SEARCH_RADIUS_STEPS,
         SPAWN_SEARCH_STEP_BLOCKS,
         |candidate| {
+            let position = candidate.as_vec2() + Vec2::splat(0.5);
+            if restrict_to_forced_region && !biome_field.forced_surface_core_contains(position) {
+                return None;
+            }
+
             (!spawn_column_has_water(candidate, dimension, biomes, biome_field, feature_fields))
                 .then_some(candidate)
         },
     )
     .unwrap_or_else(|| {
+        if restrict_to_forced_region {
+            panic!("could not find a dry spawn column inside the forced initial biome region")
+        }
         panic!(
             "could not find a dry spawn column within {} blocks",
             SPAWN_SEARCH_RADIUS_STEPS * SPAWN_SEARCH_STEP_BLOCKS
         )
     })
-}
-
-fn find_forced_spawn_column(
-    dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
-    biome_field: &BiomeField,
-    feature_fields: &WorldFeatureFields,
-    biome_id: &str,
-) -> Option<IVec2> {
-    let coarse = find_map_square_rings(
-        DEFAULT_SPAWN_COLUMN,
-        FORCED_SPAWN_COARSE_RADIUS_STEPS,
-        FORCED_SPAWN_COARSE_STEP_BLOCKS,
-        |anchor| {
-            if !spawn_column_matches_biome(anchor, biome_field, biome_id) {
-                return None;
-            }
-
-            find_map_square_rings(
-                anchor,
-                FORCED_SPAWN_LOCAL_RADIUS_STEPS,
-                SPAWN_SEARCH_STEP_BLOCKS,
-                |candidate| {
-                    if !forced_spawn_candidate_in_bounds(candidate)
-                        || !spawn_column_matches_biome(candidate, biome_field, biome_id)
-                    {
-                        return None;
-                    }
-
-                    (!spawn_column_has_water(
-                        candidate,
-                        dimension,
-                        biomes,
-                        biome_field,
-                        feature_fields,
-                    ))
-                    .then_some(candidate)
-                },
-            )
-        },
-    );
-
-    coarse.or_else(|| {
-        find_map_square_rings(
-            DEFAULT_SPAWN_COLUMN,
-            FORCED_SPAWN_SEARCH_RADIUS_STEPS,
-            SPAWN_SEARCH_STEP_BLOCKS,
-            |candidate| {
-                if !spawn_column_matches_biome(candidate, biome_field, biome_id) {
-                    return None;
-                }
-
-                (!spawn_column_has_water(
-                    candidate,
-                    dimension,
-                    biomes,
-                    biome_field,
-                    feature_fields,
-                ))
-                .then_some(candidate)
-            },
-        )
-    })
-}
-
-fn forced_spawn_candidate_in_bounds(candidate: IVec2) -> bool {
-    let max_distance = FORCED_SPAWN_SEARCH_RADIUS_STEPS * SPAWN_SEARCH_STEP_BLOCKS;
-    let offset = candidate - DEFAULT_SPAWN_COLUMN;
-    offset.x.abs() <= max_distance && offset.y.abs() <= max_distance
-}
-
-fn spawn_column_matches_biome(column: IVec2, biome_field: &BiomeField, biome_id: &str) -> bool {
-    biome_field
-        .sample_surface(column.as_vec2() + Vec2::splat(0.5))
-        .primary_id
-        == biome_id
 }
 
 fn spawn_column_has_water(
