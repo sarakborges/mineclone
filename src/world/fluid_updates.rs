@@ -173,7 +173,7 @@ pub(super) fn reseed_loaded_fluid_frontiers(
 
     let loaded = world.loaded_chunk_coords().collect::<Vec<_>>();
     for coord in loaded {
-        pending.enqueue_loaded_fluid_frontier(&world, coord);
+        frontier::enqueue_resident_fluid_frontier(&mut pending, &world, coord);
     }
 }
 
