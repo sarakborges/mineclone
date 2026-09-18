@@ -627,7 +627,7 @@ fn spawn_player_inventory_panel(
 
 fn spawn_inventory_trash_button(parent: &mut ChildSpawnerCommands) {
     let (background, border) = surface::hud_danger_control_colors(Interaction::None);
-    let icon_color = Color::srgb(0.94, 0.40, 0.44);
+    let icon_color = theme::TEXT_PRIMARY;
 
     parent
         .spawn((
