@@ -36,14 +36,26 @@ pub(super) fn languages_section(
     (
         Node {
             width: percent(100),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Stretch,
-            row_gap: px(8),
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::SpaceBetween,
+            column_gap: px(18),
             ..default()
         },
         children![
-            typography::setting_title(localization.text(active_language, "settings.language").to_owned()),
-            typography::caption(localization.text(active_language, "settings.language.description").to_owned()),
+            (
+                Node {
+                    flex_grow: 1.0,
+                    min_width: px(0),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(5),
+                    ..default()
+                },
+                children![
+                    typography::setting_title(localization.text(active_language, "settings.language").to_owned()),
+                    typography::caption(localization.text(active_language, "settings.language.description").to_owned()),
+                ],
+            ),
             language_dropdown(active_language, localization),
         ],
     )
@@ -56,7 +68,7 @@ fn language_dropdown(selected: Language, localization: &UiLocalization) -> impl 
             position_type: PositionType::Relative,
             width: px(LANGUAGE_DROPDOWN_WIDTH),
             height: px(LANGUAGE_DROPDOWN_HEIGHT),
-            align_self: AlignSelf::FlexEnd,
+            flex_shrink: 0.0,
             ..default()
         },
         children![
