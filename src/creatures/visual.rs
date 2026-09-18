@@ -181,7 +181,7 @@ fn configure_loaded_scene(
             let name = material_name.0.as_str();
             let tint = appearance.material_tints.get(name);
             let texture = appearance.material_textures.get(name);
-            if tint.is_some() || texture.is_some() {
+            {
                 let rgb = tint.map(|color| color.to_srgb());
                 let cache_key = CreatureMaterialCacheKey {
                     material: original.id(),
@@ -267,6 +267,20 @@ pub(super) fn sync_creature_facing(
         let facing = Quat::from_rotation_y(motion.facing_yaw());
         if transform.rotation != facing {
             transform.rotation = facing;
+        }
+    }
+}
+
+/// Keep the face mesh's authored local orientation stable even when an animation
+/// clip contains legacy transform tracks for the Face node.
+pub(super) fn sync_creature_faces(
+    mut named_transforms: Query<(&Name, &mut Transform)>,
+) {
+    for (name, mut transform) in &mut named_transforms {
+        if name.as_str() == "Face" {
+            transform.translation = Vec3::ZERO;
+            transform.rotation = Quat::IDENTITY;
+            transform.scale = Vec3::ONE;
         }
     }
 }
