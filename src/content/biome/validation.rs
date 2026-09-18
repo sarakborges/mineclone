@@ -3,6 +3,7 @@ use super::{BiomeClimate, BiomeClimateRange, BiomeDefinition, BiomeKind};
 pub(super) fn validate_biome_definition(definition: &BiomeDefinition) {
     match definition.kind {
         BiomeKind::Surface => validate_surface_biome(definition),
+        BiomeKind::TerrainOverlay => validate_terrain_overlay_biome(definition),
         BiomeKind::Volume => validate_volume_biome(definition),
         BiomeKind::Hydrology => validate_hydrology_biome(definition),
     }
@@ -42,6 +43,16 @@ pub(super) fn validate_biome_definition(definition: &BiomeDefinition) {
 
 fn validate_surface_biome(definition: &BiomeDefinition) {
     assert!(
+        definition.parent_biome.is_none(),
+        "surface biome {} cannot define parentBiome",
+        definition.id
+    );
+    assert!(
+        definition.visuals.is_some(),
+        "surface biome {} must define visuals",
+        definition.id
+    );
+    assert!(
         definition.terrain.is_some(),
         "surface biome {} must define terrain",
         definition.id
@@ -70,7 +81,99 @@ fn validate_surface_biome(definition: &BiomeDefinition) {
     definition.validate_surface_materials();
 }
 
+fn validate_terrain_overlay_biome(definition: &BiomeDefinition) {
+    let parent = definition
+        .parent_biome
+        .as_deref()
+        .unwrap_or_else(|| panic!("terrain overlay biome {} must define parentBiome", definition.id));
+    assert!(
+        !parent.trim().is_empty(),
+        "terrain overlay biome {} parentBiome cannot be empty",
+        definition.id
+    );
+    assert!(
+        parent != definition.id,
+        "terrain overlay biome {} cannot parent itself",
+        definition.id
+    );
+    assert!(
+        definition.terrain.is_none(),
+        "terrain overlay biome {} cannot define base terrain; use terrainModifiers",
+        definition.id
+    );
+    assert!(
+        !definition.terrain_modifiers.is_empty(),
+        "terrain overlay biome {} must define at least one terrainModifier",
+        definition.id
+    );
+    assert!(
+        definition.distributions.iter().all(|distribution| !distribution.is_regional()),
+        "terrain overlay biome {} cannot use regional distribution",
+        definition.id
+    );
+    assert!(
+        definition.visuals.is_none(),
+        "terrain overlay biome {} inherits visuals from its parent",
+        definition.id
+    );
+    assert!(
+        !definition.allow_surface_carvers,
+        "terrain overlay biome {} cannot define allowSurfaceCarvers",
+        definition.id
+    );
+    assert!(
+        definition.surface_carvers.is_empty(),
+        "terrain overlay biome {} cannot define surfaceCarvers",
+        definition.id
+    );
+    assert!(
+        definition.surface_layers.is_empty(),
+        "terrain overlay biome {} inherits surfaceLayers from its parent",
+        definition.id
+    );
+    assert!(
+        definition.density_modifier.is_none(),
+        "terrain overlay biome {} cannot define densityModifier",
+        definition.id
+    );
+    assert!(
+        definition.solid_block.is_none(),
+        "terrain overlay biome {} cannot define solidBlock",
+        definition.id
+    );
+    assert!(
+        definition.structures.is_empty(),
+        "terrain overlay biome {} cannot define structures",
+        definition.id
+    );
+    assert!(
+        definition.creature_spawns.is_empty(),
+        "terrain overlay biome {} cannot define creatureSpawns",
+        definition.id
+    );
+    assert_eq!(
+        definition.priority, 0,
+        "terrain overlay biome {} cannot define volume priority",
+        definition.id
+    );
+    assert!(
+        definition.vertical_range.is_none(),
+        "terrain overlay biome {} cannot define verticalRange",
+        definition.id
+    );
+}
+
 fn validate_volume_biome(definition: &BiomeDefinition) {
+    assert!(
+        definition.parent_biome.is_none(),
+        "volume biome {} cannot define parentBiome",
+        definition.id
+    );
+    assert!(
+        definition.visuals.is_some(),
+        "volume biome {} must define visuals",
+        definition.id
+    );
     assert!(
         distributions_are_regional(definition),
         "volume biome {} cannot define a surface distribution",
@@ -103,6 +206,16 @@ fn validate_volume_biome(definition: &BiomeDefinition) {
 }
 
 fn validate_hydrology_biome(definition: &BiomeDefinition) {
+    assert!(
+        definition.parent_biome.is_none(),
+        "hydrology biome {} cannot define parentBiome",
+        definition.id
+    );
+    assert!(
+        definition.visuals.is_some(),
+        "hydrology biome {} must define visuals",
+        definition.id
+    );
     assert!(
         distributions_are_regional(definition),
         "hydrology biome {} cannot define a surface distribution",
@@ -189,18 +302,22 @@ fn distributions_are_regional(definition: &BiomeDefinition) -> bool {
 }
 
 fn validate_visuals(definition: &BiomeDefinition) {
+    let Some(visuals) = definition.visuals.as_ref() else {
+        return;
+    };
+
     assert!(
-        (0.0..=1.0).contains(&definition.visuals.stars.density),
+        (0.0..=1.0).contains(&visuals.stars.density),
         "biome {} stars density must be between 0 and 1",
         definition.id
     );
     assert!(
-        (0.0..=1.0).contains(&definition.visuals.clouds.density),
+        (0.0..=1.0).contains(&visuals.clouds.density),
         "biome {} clouds density must be between 0 and 1",
         definition.id
     );
     assert!(
-        (0.0..=1.0).contains(&definition.visuals.underwater_tint.opacity),
+        (0.0..=1.0).contains(&visuals.underwater_tint.opacity),
         "biome {} underwaterTint opacity must be between 0 and 1",
         definition.id
     );
