@@ -8,7 +8,7 @@ pub(crate) mod save;
 pub(crate) mod viewmodel;
 
 use bevy::{
-    camera::{CameraOutputMode, Hdr},
+    camera::{CameraOutputMode, Hdr, visibility::RenderLayers},
     core_pipeline::tonemapping::Tonemapping,
     prelude::*,
 };
@@ -17,7 +17,7 @@ use crate::{
     app::game_state::GameState,
     content::player::PlayerDefinition,
     entity::EntityHealth,
-    rendering::camera_stack::WORLD_CAMERA_ORDER,
+    rendering::camera_stack::{TARGET_HIGHLIGHT_CAMERA_ORDER, WORLD_CAMERA_ORDER},
     voxel::{spatial_search::find_map_square_rings, world::VoxelWorld},
 };
 use camera::GameplayCamera;
@@ -51,6 +51,16 @@ pub(crate) fn spawn_player_entity(
                 output_mode: CameraOutputMode::Skip,
                 ..default()
             },
+            // This child camera renders only the target overlay after the world
+            // camera. Its separate layer/depth buffer makes the highlight immune
+            // to terrain texture/parallax layers and ordinary z-fighting.
+            Camera3d::default(),
+            Camera {
+                order: TARGET_HIGHLIGHT_CAMERA_ORDER,
+                clear_color: ClearColorConfig::None,
+                ..default()
+            },
+            RenderLayers::layer(2),
             Hdr,
             Tonemapping::None,
             Msaa::Off,
