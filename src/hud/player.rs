@@ -4,7 +4,7 @@ use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     localization::{ActiveLanguage, UiLocalization},
     player::inventory::InventoryState,
-    ui::{typography, visibility::set_visibility},
+    ui::typography,
 };
 
 use super::{
@@ -19,26 +19,6 @@ pub struct PlayerHudPlugin;
 impl Plugin for PlayerHudPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_player_hud)
-            .add_systems(
-                OnEnter(PauseState::Paused),
-                set_visibility::<PlayerHudRoot, false>.run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
-                OnEnter(PauseState::Running),
-                set_visibility::<PlayerHudRoot, true>
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(SettingsState::Closed)),
-            )
-            .add_systems(
-                OnEnter(SettingsState::Open),
-                set_visibility::<PlayerHudRoot, false>.run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
-                OnEnter(SettingsState::Closed),
-                set_visibility::<PlayerHudRoot, true>
-                    .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running)),
-            )
             .add_systems(
                 Update,
                 (sync_player_hud_visibility, sync_inventory_hint)
