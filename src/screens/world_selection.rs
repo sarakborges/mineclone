@@ -310,8 +310,7 @@ fn spawn_world_selection(
                         localization.text(language.get(), "worldSelection.noRestorable").to_owned()
                     }),
                 ));
-                panel.spawn((
-                    let world_list = panel
+                let world_list = panel
                     .spawn((
                         WorldListContainer,
                         ScrollPosition(Vec2::ZERO),
