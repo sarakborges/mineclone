@@ -14,7 +14,7 @@ use crate::{
 };
 
 const GAME_MODE_BUTTON_HEIGHT: f32 = 44.0;
-const GAME_MODE_BUTTON_GAP: f32 = 12.0;
+const GAME_MODE_BUTTON_GAP: f32 = 8.0;
 
 #[derive(Component, Clone, Copy)]
 pub(crate) struct GameModeButton(pub(crate) GameMode);
