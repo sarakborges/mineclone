@@ -137,6 +137,12 @@ where
                 continue;
             };
             let downstream: DrainageNode = network.node(downstream_cell);
+            if !downstream.biome_hydrology.can_generate_river
+                && !network.is_wet_ocean(downstream)
+                && !connected_lakes.contains(&downstream_cell)
+            {
+                continue;
+            }
             if !valid_lake_outlet(
                 cell,
                 downstream_cell,
@@ -178,8 +184,9 @@ where
                     downstream_flow,
                     seed,
                     sea_level,
+                    ocean_threshold,
                 },
-                |position| network.surface_elevation_at(position),
+                |position| network.surface_sample_at(position),
             );
 
             if let Some(pool) = waterfall
