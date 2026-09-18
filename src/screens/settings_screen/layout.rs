@@ -1,7 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*, ui_widgets::ScrollArea};
 
 use crate::{
-    app::{game_state::GameState, settings_state::SettingsState},
+    app::{game_state::GameState, settings_state::{SettingsScreenMode, SettingsState}},
     hud::HudSettings,
     localization::{ActiveLanguage, Language, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
@@ -93,6 +93,7 @@ impl SettingsScreenContext {
 pub(super) struct SettingsScreenWorldContext<'w, 's> {
     game_state: Res<'w, State<GameState>>,
     settings_mode: Res<'w, SettingsScreenMode>,
+    _ttingsScreenMode>,
     game_rules: Res<'w, GameRules>,
     new_world: Res<'w, NewWorldConfig>,
     player: Query<'w, 's, &'static GameMode, With<GameplayCamera>>,
