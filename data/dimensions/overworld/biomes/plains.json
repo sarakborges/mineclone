@@ -18,7 +18,10 @@
     "canGenerateLake": true,
     "canGenerateRiver": true,
     "lakeChanceMultiplier": 1.0,
-    "riverWidthMultiplier": 1.0
+    "riverWidthMultiplier": 1.0,
+    "shoreBlock": "asteria:sand",
+    "riverBedBlock": "asteria:sand",
+    "lakeBedBlock": "asteria:sand"
   },
   "creatureSpawns": [
     {
