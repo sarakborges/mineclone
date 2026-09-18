@@ -130,6 +130,7 @@ fn supported_surface_ground_y(
             &mut surface_carver_cache,
             horizontal,
             raw_surface_height as f32,
+            surface.identity_surface_index,
             &influences,
             &SurfaceCarverResolveContext {
                 dimension: context.dimension,
