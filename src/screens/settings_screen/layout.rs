@@ -100,7 +100,7 @@ pub(super) struct SettingsScreenWorldContext<'w, 's> {
 
 impl SettingsScreenWorldContext<'_, '_> {
     fn screen_context(&self) -> SettingsScreenContext {
-        SettingsScreenContext::from_game_state(*self.game_state.get(), *self.settings_mode.get())
+        SettingsScreenContext::from_game_state(*self.game_state.get(), *self.settings_mode)
     }
 
     fn game_mode(&self, context: SettingsScreenContext) -> GameMode {
