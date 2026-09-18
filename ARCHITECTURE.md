@@ -63,8 +63,10 @@ Reusable UI behavior and appearance belong under `src/ui`.
 - Numeric fields use `numeric_input_field`, `NumericInputState`, and `sync_numeric_input_view`.
 - Editable fields reuse `ui::text_input` for input surface, cursor/text styling, padding, and focus-border rules while domain validation and focus lifecycle stay with the owning screen/HUD.
 - Selectable control states (normal, hover, pressed, selected, danger) belong to `ui::selectable`; `ui::surface` owns containers/panels and must not absorb interactive-control state again.
-- Dropdown shell geometry, option visuals, open/close state, chevron, and outside-click detection belong to `ui::dropdown`. Search/filter semantics, option data, and domain side effects remain with the owning screen.
+- Dropdown shell geometry, option visuals, open/close state, chevron, and outside-click detection belong to `ui::dropdown`. Every interactive descendant that belongs to an open dropdown — including search controls, option lists and scrollbars — must participate in the typed `DropdownInside<M>` area so internal clicks are never misclassified as outside clicks. Search/filter semantics, option data, and domain side effects remain with the owning screen.
 - Toggle geometry and visual states belong to `ui::toggle`; domain resources own the boolean value being toggled.
+- Shared screen header/body/footer geometry belongs to `ui::screen`; screens should compose their domain content inside that chrome instead of copying the same dimensions/padding locally.
+- Shared settings rhythm belongs to `ui::settings`: use the canonical gap between setting groups separately from the smaller gap inside one setting.
 - Shared typography, shadows, scrollbar behavior, transitions, and visibility helpers remain centralized.
 - New controls that repeat an existing visual/interaction invariant in two places should become a design-system primitive before a third copy appears.
 - Do not create a generic UI abstraction when the only similarity is a few `Node` fields and the controls have different behavior.
@@ -74,6 +76,7 @@ Reusable UI behavior and appearance belong under `src/ui`.
 Targeting has one raycast result and downstream consumers observe it.
 
 - `TargetedBlock` is the authoritative current block target.
+- A creature with dead `EntityHealth` is not a valid `TargetedCreature`; dead entities must leave interaction targeting immediately even if their despawn/death animation is still pending.
 - `BlockTargetingScene` is the shared read context for target, hotbar selection, player transform, and voxel world.
 - Placement orientation, interaction, highlight, placement preview, and target HUD must derive from the same target/selection sources rather than maintaining independent copies.
 - Shared block model/material/tint/orientation transforms belong in rendering/block-model utilities. Hotbar icons, held blocks, target icons, and placement previews may have different lifecycles but should reuse those transformations.
@@ -95,6 +98,8 @@ Time-sliced world work uses `FrameWorkBudget`.
 - Do not hand-roll additional `Instant::now() + processed + elapsed` loops when the same semantics are required.
 
 Natural hydrology is generated authoritatively with terrain/world generation. It must not be bulk-enqueued into the runtime dynamic-fluid solver. Dynamic fluid updates are for runtime topology/fluid changes.
+
+Surface-carver tunnels are subordinate to cave connectivity: a surface tunnel is generated only when its carved volume intersects the anchored cave connector graph. Disconnected surface tunnels/dead ends must be rejected before density rasterization, and structure-support sampling must use the same connectivity rule.
 
 ## 8. Rendering and color
 
