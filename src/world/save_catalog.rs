@@ -144,9 +144,6 @@ impl PruneRegistries {
         )
     }
 
-    pub(crate) fn fluids(&self) -> &FluidRegistry {
-        &self.fluids
-    }
 }
 
 fn validate_playable(
