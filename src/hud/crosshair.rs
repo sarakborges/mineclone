@@ -126,7 +126,6 @@ fn spawn_crosshair(mut commands: Commands) {
                         top: px(8),
                         width: px(14),
                         height: px(2),
-                        border_radius: BorderRadius::MAX,
                         ..default()
                     },
                     BackgroundColor(theme::TEXT_PRIMARY.with_alpha(0.92)),
@@ -138,7 +137,6 @@ fn spawn_crosshair(mut commands: Commands) {
                         top: px(2),
                         width: px(2),
                         height: px(14),
-                        border_radius: BorderRadius::MAX,
                         ..default()
                     },
                     BackgroundColor(theme::TEXT_PRIMARY.with_alpha(0.92)),
