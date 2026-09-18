@@ -16,13 +16,6 @@ pub(super) struct CreatureModel(pub Handle<Gltf>);
 #[derive(Component)]
 pub(super) struct VisualAttached;
 
-#[derive(Component, Clone, Copy)]
-struct CreatureFaceRestTransform {
-    translation: Vec3,
-    rotation: Quat,
-    scale: Vec3,
-}
-
 #[derive(Component)]
 pub(super) struct CreatureAppearance {
     owner: Entity,
@@ -175,23 +168,20 @@ fn configure_loaded_scene(
         return;
     };
     for descendant in descendants.iter_descendants(ready.entity) {
-        if let Ok((entity, name, transform)) = named_transforms.get_mut(descendant)
+        if let Ok((name, mut transform)) = named_transforms.get_mut(descendant)
             && name.as_str() == "Face"
         {
-            // Preserve the model-authored face pose. Animation clips may contain
-            // stale Face transform tracks, so the authored pose is restored after
-            // animation evaluation instead of forcing it to an arbitrary identity pose.
-            commands.entity(entity).insert(CreatureFaceRestTransform {
-                translation: transform.translation,
-                rotation: transform.rotation,
-                scale: transform.scale,
-            });
+            // The Face mesh is authored in BodyPivot-local space. Reset the full
+            // local transform so legacy GLBs cannot leave it tilted or vertically offset.
+            transform.translation = Vec3::new(0.0, 0.0, 0.0);
+            transform.rotation = Quat::IDENTITY;
+            transform.scale = Vec3::ONE;
         }
         if let Ok((original, material_name)) = mesh_materials.get(descendant) {
             let name = material_name.0.as_str();
             let tint = appearance.material_tints.get(name);
             let texture = appearance.material_textures.get(name);
-            {
+            if tint.is_some() || texture.is_some() {
                 let rgb = tint.map(|color| color.to_srgb());
                 let cache_key = CreatureMaterialCacheKey {
                     material: original.id(),
@@ -283,21 +273,6 @@ pub(super) fn sync_creature_facing(
 
 /// Keep the face mesh's authored local orientation stable even when an animation
 /// clip contains legacy transform tracks for the Face node.
-pub(super) fn sync_creature_faces(
-    mut faces: Query<(&CreatureFaceRestTransform, &mut Transform)>,
-) {
-    for (rest, mut transform) in &mut faces {
-        if transform.translation != rest.translation
-            || transform.rotation != rest.rotation
-            || transform.scale != rest.scale
-        {
-            transform.translation = rest.translation;
-            transform.rotation = rest.rotation;
-            transform.scale = rest.scale;
-        }
-    }
-}
-
 pub(super) fn sync_creature_animations(
     states: Query<&CreatureAnimationState, With<CreatureInstance>>,
     mut players: Query<(
