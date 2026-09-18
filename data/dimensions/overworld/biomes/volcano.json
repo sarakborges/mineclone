@@ -23,7 +23,7 @@
     "baseHeight": 12,
     "height": 72,
     "craterDepth": 38,
-    "craterRadius": 0.22
+    "craterRadius": 0.14
   },
   "allowSurfaceCarvers": true,
   "surfaceLayers": [
