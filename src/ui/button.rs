@@ -28,6 +28,20 @@ pub struct AsteriaButtonVisual { level: f32 }
 #[derive(Component, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ButtonVariant { #[default] Normal, Primary, Danger }
 
+type ButtonAnimationQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Interaction,
+        &'static ButtonVariant,
+        &'static mut AsteriaButtonVisual,
+        &'static mut BackgroundColor,
+        &'static mut BorderColor,
+        Option<&'static mut BoxShadow>,
+    ),
+    With<Button>,
+>;
+
 pub fn menu_button<A: Component>(label: impl Into<String>, action: A) -> impl Bundle {
     (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Normal, Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![typography::button_label(label)])
 }
@@ -50,16 +64,8 @@ pub(crate) fn compact_control_button<A: Component>(label: impl Into<String>, act
 
 pub fn animate_buttons(
     time: Res<Time<Real>>,
-    mut buttons: Query<(
-        &Interaction,
-        &ButtonVariant,
-        &mut AsteriaButtonVisual,
-        &mut BackgroundColor,
-        &mut BorderColor,
-        Option<&mut BoxShadow>,
-    ),
-    With<Button>,
->) {
+    mut buttons: ButtonAnimationQuery,
+) {
     let smoothing = 1.0 - (-14.0 * time.delta_secs()).exp();
     for (interaction, variant, mut visual, mut background, mut border, shadow) in &mut buttons {
         let target = match interaction { Interaction::None => 0.0, Interaction::Hovered => 1.0, Interaction::Pressed => 2.0 };
