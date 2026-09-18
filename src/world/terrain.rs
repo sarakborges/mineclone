@@ -68,8 +68,8 @@ pub(crate) fn surface_height_from_sample(
                 )
             })
             .fold(0.0_f32, f32::max);
-        let overlay_strength = (parent_weight * distribution * overlay.weight).clamp(0.0, 1.0);
-        if overlay_strength <= f32::EPSILON {
+        let overlay_weight = (parent_weight * overlay.weight).clamp(0.0, 1.0);
+        if overlay_weight <= f32::EPSILON || distribution <= f32::EPSILON {
             continue;
         }
 
@@ -79,16 +79,17 @@ pub(crate) fn surface_height_from_sample(
             .copied()
             .enumerate()
             .map(|(index, modifier)| {
-                terrain_modifier_height(
+                terrain_overlay_modifier_height(
                     horizontal,
                     overlay
                         .density_seed
                         .wrapping_add((index as u64 + 1).wrapping_mul(0x517c_c1b7_2722_0a95)),
                     modifier,
+                    distribution,
                 )
             })
             .sum::<f32>();
-        height += overlay_delta * overlay_strength;
+        height += overlay_delta * overlay_weight;
     }
 
     height.round().max(1.0) as i32
@@ -205,6 +206,30 @@ fn biome_surface_height(
             .sum::<f32>()
 }
 
+fn terrain_overlay_modifier_height(
+    position: Vec2,
+    seed: u64,
+    modifier: BiomeTerrainModifier,
+    distribution_strength: f32,
+) -> f32 {
+    let strength = distribution_strength.clamp(0.0, 1.0);
+
+    match modifier {
+        BiomeTerrainModifier::VolcanicCone {
+            height,
+            crater_depth,
+            crater_radius,
+        } => {
+            let crater_start = 1.0 - crater_radius;
+            let crater_strength =
+                smoothstep(((strength - crater_start) / crater_radius).clamp(0.0, 1.0));
+
+            height * strength - crater_depth * crater_strength
+        }
+        _ => terrain_modifier_height(position, seed, modifier) * strength,
+    }
+}
+
 fn terrain_modifier_height(position: Vec2, seed: u64, modifier: BiomeTerrainModifier) -> f32 {
     match modifier {
         BiomeTerrainModifier::HeightOffset { height } => height,
@@ -238,6 +263,9 @@ fn terrain_modifier_height(position: Vec2, seed: u64, modifier: BiomeTerrainModi
             };
 
             smoothstep(progress) * height
+        }
+        BiomeTerrainModifier::VolcanicCone { .. } => {
+            unreachable!("volcanicCone requires terrain overlay distribution strength")
         }
     }
 }
