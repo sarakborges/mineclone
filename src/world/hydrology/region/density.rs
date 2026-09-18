@@ -108,7 +108,7 @@ impl HydrologyRegion {
         let river_core = river_graph_sample.filter(|sample| {
             sample.normalized_distance < RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE
         });
-        let (river, river_opening) = river_core.map_or((None, 0.0), |sample| {
+        let (mut river, river_opening) = river_core.map_or((None, 0.0), |sample| {
             let profile = river_channel_profile(sample.normalized_distance);
             let bed = sample.height - self.river_carve_depth * profile;
             let river = (profile > 0.0).then_some(VerticalDensityDelta {
@@ -192,6 +192,14 @@ impl HydrologyRegion {
                 maximum_y: body.water_level + 0.5,
                 delta: -(body.carve_depth * 1.8 + 2.0) * strength,
             });
+        }
+
+        if let Some(channel) = river.as_mut() {
+            let lake_blend = 1.0 - water_body_opening.clamp(0.0, 1.0);
+            channel.delta *= lake_blend;
+            if lake_blend <= f32::EPSILON {
+                river = None;
+            }
         }
 
         let lake_shore_delta = lake_shore_delta.unwrap_or(0.0);
@@ -400,6 +408,34 @@ mod tests {
         assert_eq!(delta.at(10.0), -4.0);
         assert_eq!(delta.at(20.0), -4.0);
         assert_eq!(delta.at(20.1), 0.0);
+    }
+
+    #[test]
+    fn river_carve_fades_out_inside_lake_basin() {
+        let mut graph = FeatureGraph::default();
+        let from = graph.add_node(Vec3::new(-20.0, 90.0, 0.0));
+        let to = graph.add_node(Vec3::new(20.0, 90.0, 0.0));
+        graph.add_edge(from, to, 8.0, 8.0);
+        let body = WaterBody {
+            center: Vec2::ZERO,
+            radius: Vec2::splat(24.0),
+            rotation: 0.0,
+            shape_seed: 42,
+            water_level: 90.0,
+            carve_depth: 10.0,
+            fluid_id: "asteria:test/water".into(),
+        };
+        let with_river = test_region(graph, vec![body.clone()]);
+        let lake_only = test_region(FeatureGraph::default(), vec![body]);
+
+        let position = Vec2::ZERO;
+        let y = 84.5;
+        let river_lake =
+            with_river.density_deltas_for_column::<1>(position, y, 120.0)[0];
+        let lake =
+            lake_only.density_deltas_for_column::<1>(position, y, 120.0)[0];
+
+        assert!((river_lake - lake).abs() < 0.001);
     }
 
     #[test]
