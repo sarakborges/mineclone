@@ -9,7 +9,7 @@ use crate::{
     content::{biome::BiomeRegistry, creature::CreatureRegistry},
     localization::{ActiveLanguage, Language},
     player::camera::GameplayCamera,
-    world::biome::CurrentBiome,
+    world::{biome::CurrentBiome, dimension::{CurrentDimension, DimensionEntityCounts}},
     voxel::world::VoxelWorld,
 };
 
@@ -94,6 +94,9 @@ fn natural_spawn_creatures(
     asset_server: Res<AssetServer>,
     player: Single<&Transform, With<GameplayCamera>>,
     creatures: Query<(&CreatureInstance, &Transform)>,
+    current_dimension: Res<CurrentDimension>,
+    mut entity_counts: ResMut<DimensionEntityCounts>,
+    dimensions: Res<crate::content::dimension::DimensionRegistry>,
     mut commands: Commands,
     mut state: Local<(f32, u32)>,
 ) {
@@ -104,18 +107,17 @@ fn natural_spawn_creatures(
     state.0 = NATURAL_SPAWN_INTERVAL;
     if state.1 == 0 { state.1 = player.translation.x.to_bits() ^ player.translation.z.to_bits().rotate_left(13) ^ 0x9E37_79B9; }
 
-    let total = creatures.iter().count();
+    entity_counts.rebuild(creatures.iter().map(|(instance, _)| instance));
+    let Some(dimension_definition) = dimensions.get(&current_dimension.id) else { return; };
     let Some(biome_definition) = biomes.get(&biome.id) else { return; };
     let candidates: Vec<_> = biome_definition
         .creature_spawns
         .iter()
         .filter(|rule| rule.weight > 0.0 && definitions.get(&rule.creature).is_some())
+        .filter(|rule| entity_counts.total < dimension_definition.max_entities)
         .filter(|rule| {
-            let type_count = creatures
-                .iter()
-                .filter(|(instance, _)| instance.definition_id == rule.creature)
-                .count();
-            type_count < rule.max_per_type && total < rule.max_in_dimension
+            let Some(creature) = definitions.get(&rule.creature) else { return false; };
+            entity_counts.count(&rule.creature) < creature.max_per_type
         })
         .collect();
     if candidates.is_empty() { return; }
