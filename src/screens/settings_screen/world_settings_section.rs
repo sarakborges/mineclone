@@ -6,7 +6,7 @@ use crate::{
     player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{
         button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
-        typography,
+        settings as settings_layout, typography,
     },
     world::NewWorldConfig,
 };
@@ -40,13 +40,7 @@ pub(crate) fn world_settings_section(
     language: Language,
 ) -> impl Bundle {
     (
-        Node {
-            width: percent(100),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Stretch,
-            row_gap: px(8),
-            ..default()
-        },
+        settings_layout::setting_column(),
         children![
             typography::setting_title(localization.text(language, "settings.gameMode").to_owned()),
             typography::caption(
