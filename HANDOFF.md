@@ -306,3 +306,10 @@ Próximo passo imediato: consultar a CI do novo HEAD e corrigir qualquer erro ob
 - Não executei cargo test, cargo run nem QA Windows.
 
 Próximo passo imediato: aguardar a CI do HEAD 77b847822b6daa5ac5ba3018c0028e3f1ae655bb; depois validar em gameplay o deslocamento do slime, a remoção após Death e o knockback.
+
+## Checkpoint 83 — knockback 3x + face/material override do slime [CÓDIGO; CI PENDENTE]
+
+- O knockback do ataque foi multiplicado de 8x para 24x sobre a força configurada, deixando o mesmo ataque aproximadamente 3x mais forte sem alterar o JSON de gameplay.
+- A correção anterior da face aplicava Y=-0.5 no nó Face; isso contradizia o GLB gerado atualmente, em que Face já é filho de BodyPivot e sua geometria está centrada em Y=0. O runtime agora zera translation/rotation/scale do nó Face, eliminando deslocamento/inclinação residual de GLBs antigos.
+- O material do slime agora é forçado em runtime para metallic=0, roughness=0.85, reflectance=0, emissive preto, alpha 1 e AlphaMode::Opaque, inclusive quando o material vem do GLB antigo. A textura externa continua sendo aplicada normalmente.
+- Não executei cargo test/cargo run nem QA Windows. CI precisa validar a compilação; depois disso a validação visual local deve confirmar face e aspecto fosco.
