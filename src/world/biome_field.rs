@@ -53,6 +53,7 @@ pub(super) struct BiomeFieldEntry {
     pub solid_block: Option<String>,
     pub density_seed: u64,
     pub avoid_near: Vec<String>,
+    pub require_near: Vec<String>,
 }
 
 #[derive(Resource, Clone)]
@@ -189,6 +190,7 @@ impl BiomeField {
                 solid_block: biome.solid_block.clone(),
                 density_seed: biome_density_seed(seed, &biome.id),
                 avoid_near: dimension_biome.avoid_near.clone(),
+                require_near: dimension_biome.require_near.clone(),
             };
 
             match biome.kind {
