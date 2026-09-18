@@ -145,7 +145,12 @@ fn supported_surface_ground_y(
         let base_density = terrain_density(raw_surface_height, world_y);
         let sampled_density = sample_density(base_density, sample_position, None, &density_context);
         let carver_delta = if surface_carver_allowed {
-            surface_carver_density_delta(sampled_density, sample_position, &surface_carvers)
+            surface_carver_density_delta(
+                sampled_density,
+                sample_position,
+                raw_surface_height as f32,
+                &surface_carvers,
+            )
         } else {
             0.0
         };
