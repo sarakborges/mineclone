@@ -10,7 +10,11 @@ use crate::{
 
 const MAXIMUM_TUNNEL_SLOPE: f32 = 0.06;
 const TUNNEL_CURVE_STRENGTH: f32 = 0.38;
-const TUNNEL_PATH_SAMPLES: usize = 5;
+// Surface tunnels can span well over 100 blocks. Five samples left 30-40 block
+// straight capsules visible in the terrain; keep the authored Bezier visibly curved.
+const TUNNEL_PATH_SAMPLES: usize = 13;
+const TUNNEL_MOUTH_BLEND_DEPTH: f32 = 12.0;
+const TUNNEL_MOUTH_HORIZONTAL_FLARE: f32 = 0.85;
 
 #[derive(Clone, Copy, Debug)]
 struct ResolvedSurfaceTunnel {
@@ -88,6 +92,7 @@ pub(super) fn resolve_surface_carver_column(
 pub(super) fn surface_carver_density_delta(
     current_density: f32,
     position: Vec3,
+    surface_y: f32,
     column: &SurfaceCarverColumn,
 ) -> f32 {
     if current_density <= 0.0 || column.tunnels.is_empty() {
@@ -97,15 +102,23 @@ pub(super) fn surface_carver_density_delta(
     let mut strongest = 0.0_f32;
 
     for tunnel in &column.tunnels {
-        let distance = tunnel
+        let normalized_distance = tunnel
             .points
             .windows(2)
-            .map(|segment| distance_to_segment(position, segment[0], segment[1]))
+            .map(|segment| {
+                tunnel_normalized_distance(
+                    position,
+                    segment[0],
+                    segment[1],
+                    tunnel.radius,
+                    surface_y,
+                )
+            })
             .min_by(f32::total_cmp)
             .unwrap_or(f32::MAX);
 
-        if distance < tunnel.radius {
-            let strength = smoothstep(1.0 - distance / tunnel.radius) * tunnel.weight;
+        if normalized_distance < 1.0 {
+            let strength = smoothstep(1.0 - normalized_distance) * tunnel.weight;
             strongest = strongest.max(strength);
         }
     }
@@ -249,15 +262,38 @@ fn quadratic_bezier(start: Vec3, control: Vec3, end: Vec3, t: f32) -> Vec3 {
     start * inverse * inverse + control * (2.0 * inverse * t) + end * t * t
 }
 
-fn distance_to_segment(point: Vec3, start: Vec3, end: Vec3) -> f32 {
+fn tunnel_normalized_distance(
+    point: Vec3,
+    start: Vec3,
+    end: Vec3,
+    radius: f32,
+    surface_y: f32,
+) -> f32 {
     let segment = end - start;
     let length_squared = segment.length_squared();
-    if length_squared <= f32::EPSILON {
-        return point.distance(start);
-    }
+    let closest = if length_squared <= f32::EPSILON {
+        start
+    } else {
+        let progress = ((point - start).dot(segment) / length_squared).clamp(0.0, 1.0);
+        start + segment * progress
+    };
+    let delta = point - closest;
 
-    let progress = ((point - start).dot(segment) / length_squared).clamp(0.0, 1.0);
-    point.distance(start + segment * progress)
+    // Underground the profile remains circular. In the last few blocks below
+    // the terrain surface, widen only the horizontal axes. That turns an
+    // exposed tunnel mouth into a gradual cut through the hillside instead of
+    // carrying the cylinder's near-vertical side wall all the way to the top.
+    let depth_below_surface = (surface_y - point.y).max(0.0);
+    let mouth_progress =
+        (1.0 - depth_below_surface / TUNNEL_MOUTH_BLEND_DEPTH).clamp(0.0, 1.0);
+    let mouth_strength = smoothstep(mouth_progress);
+    let horizontal_radius =
+        radius * (1.0 + TUNNEL_MOUTH_HORIZONTAL_FLARE * mouth_strength);
+
+    let horizontal = Vec2::new(delta.x, delta.z).length() / horizontal_radius;
+    let vertical = delta.y / radius;
+
+    (horizontal * horizontal + vertical * vertical).sqrt()
 }
 
 fn sample_range(range: SurfaceCarverRange, hash: u64) -> f32 {
@@ -370,5 +406,56 @@ mod tests {
         assert_eq!(quadratic_bezier(start, control, end, 0.0), start);
         assert_eq!(quadratic_bezier(start, control, end, 1.0), end);
         assert_ne!(quadratic_bezier(start, control, end, 0.5).z, 0.0);
+    }
+
+    #[test]
+    fn tunnel_mouth_flares_horizontally_near_surface() {
+        let start = Vec3::new(-10.0, 50.0, 0.0);
+        let end = Vec3::new(10.0, 50.0, 0.0);
+        let radius = 6.0;
+        let offset = 7.0;
+
+        let deep = tunnel_normalized_distance(
+            Vec3::new(0.0, 50.0, offset),
+            start,
+            end,
+            radius,
+            70.0,
+        );
+        let near_surface = tunnel_normalized_distance(
+            Vec3::new(0.0, 50.0, offset),
+            start,
+            end,
+            radius,
+            52.0,
+        );
+
+        assert!(deep > 1.0);
+        assert!(near_surface < 1.0);
+    }
+
+    #[test]
+    fn deep_tunnel_profile_remains_circular() {
+        let start = Vec3::new(-10.0, 30.0, 0.0);
+        let end = Vec3::new(10.0, 30.0, 0.0);
+        let radius = 6.0;
+
+        let horizontal = tunnel_normalized_distance(
+            Vec3::new(0.0, 30.0, 3.0),
+            start,
+            end,
+            radius,
+            60.0,
+        );
+        let vertical = tunnel_normalized_distance(
+            Vec3::new(0.0, 33.0, 0.0),
+            start,
+            end,
+            radius,
+            60.0,
+        );
+
+        assert!((horizontal - 0.5).abs() <= f32::EPSILON);
+        assert!((vertical - 0.5).abs() <= f32::EPSILON);
     }
 }
