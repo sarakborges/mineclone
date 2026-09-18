@@ -16,7 +16,7 @@ use crate::{
     rendering::{block_model::BlockModel, block_visual_content::BlockVisualContent},
     targeting::{PlacementOrientation, block::BlockTargetingSet},
     tools::BrushMode,
-    ui::{surface, typography, visibility::set_visibility},
+    ui::{selectable, typography, visibility::set_visibility},
 };
 
 const SLOT_SIZE: f32 = 44.0;
@@ -185,7 +185,7 @@ fn spawn_hotbar(
             .with_children(|row| {
                 for index in 0..HOTBAR_SLOT_COUNT {
                     let selected = index == content.hotbar.selected_slot();
-                    let (background, border) = surface::hud_control_static(selected);
+                    let (background, border) = selectable::static_colors(selected);
                     let item = content.hotbar.item_at(index);
 
                     row.spawn((
@@ -251,7 +251,7 @@ fn sync_hotbar(
     };
     for (entity, mut slot, background, border, children) in &mut slots {
         let selected = slot.index == content.hotbar.selected_slot();
-        surface::apply_control_colors(surface::hud_control_static(selected), background, border);
+        selectable::apply_colors(selectable::static_colors(selected), background, border);
 
         let next_item = content.hotbar.item_at(slot.index);
         if slot.item == next_item && !language_changed {
