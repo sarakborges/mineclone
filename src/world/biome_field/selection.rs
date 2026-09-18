@@ -8,6 +8,7 @@ use crate::{
 use super::{
     BiomeField, BiomeFieldEntry,
     constants::{CLIMATE_BLEND_MARGIN, SITE_SEARCH_RADIUS},
+    distribution::distribution_strength,
     spatial::{cell_hash, hash_unit, surface_site_position},
 };
 
@@ -72,45 +73,82 @@ impl BiomeField {
             return raw_index;
         }
 
-        select_weighted_biome_index(&self.surface_biomes, climate, hash.rotate_left(9), |candidate| {
-            candidate.is_regional() && adjacency_allows(candidate, &adjacency)
-        })
+        self.select_weighted_surface_biome_index(
+            site,
+            climate,
+            hash.rotate_left(9),
+            |candidate| adjacency_allows(candidate, &adjacency),
+        )
         .unwrap_or_else(|| {
             panic!(
-                "surface biome site {cell:?} has no regional biome compatible with avoidNear borders"
+                "surface biome site {cell:?} has no biome compatible with avoidNear borders"
             )
         })
     }
 
     fn raw_surface_biome_index(&self, cell: IVec2, site: Vec2) -> usize {
-        let regional_count = self
-            .surface_biomes
-            .iter()
-            .filter(|biome| biome.is_regional() && biome.weight > f32::EPSILON)
-            .count();
-        assert!(
-            regional_count > 0,
-            "surface biome field has no active regional biomes"
-        );
-
         let climate = self.climate.sample(site);
         let hash = cell_hash(cell, self.seed);
 
-        select_weighted_biome_index(
-            &self.surface_biomes,
-            climate,
-            hash,
-            BiomeFieldEntry::is_regional,
-        )
-        .unwrap_or_else(|| {
-            self.surface_biomes
+        self.select_weighted_surface_biome_index(site, climate, hash, |_| true)
+            .unwrap_or_else(|| {
+                panic!("surface biome field has no active biome at site {cell:?}")
+            })
+    }
+
+    fn select_weighted_surface_biome_index(
+        &self,
+        site: Vec2,
+        climate: MacroClimateSample,
+        hash: u64,
+        predicate: impl Fn(&BiomeFieldEntry) -> bool,
+    ) -> Option<usize> {
+        let mut weighted = Vec::with_capacity(self.surface_biomes.len());
+        for (index, biome) in self.surface_biomes.iter().enumerate() {
+            if !predicate(biome) || biome.weight <= f32::EPSILON {
+                continue;
+            }
+
+            let distribution = biome
+                .distributions
                 .iter()
-                .enumerate()
-                .filter(|(_, biome)| biome.is_regional() && biome.weight > f32::EPSILON)
-                .nth(hash as usize % regional_count)
-                .expect("active regional biome fallback must exist")
-                .0
-        })
+                .copied()
+                .map(|distribution| {
+                    distribution_strength(distribution, site, self.seed, biome.id.as_str())
+                })
+                .fold(0.0_f32, f32::max)
+                .clamp(0.0, 1.0);
+            if distribution <= f32::EPSILON {
+                continue;
+            }
+
+            weighted.push((
+                index,
+                biome.weight * distribution * climate_suitability(biome.climate, climate),
+            ));
+        }
+
+        if weighted.is_empty() {
+            return None;
+        }
+        if let Some(index) = pick_weighted(&weighted, hash.rotate_left(17)) {
+            return Some(index);
+        }
+
+        for (index, weight) in &mut weighted {
+            let biome = &self.surface_biomes[*index];
+            let distribution = biome
+                .distributions
+                .iter()
+                .copied()
+                .map(|distribution| {
+                    distribution_strength(distribution, site, self.seed, biome.id.as_str())
+                })
+                .fold(0.0_f32, f32::max)
+                .clamp(0.0, 1.0);
+            *weight = biome.weight * distribution;
+        }
+        pick_weighted(&weighted, hash.rotate_left(29))
     }
 }
 
