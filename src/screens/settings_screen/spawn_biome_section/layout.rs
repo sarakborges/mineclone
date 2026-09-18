@@ -1,6 +1,6 @@
 use bevy::{
     prelude::*,
-    text::{EditableText, TextCursorStyle},
+    text::{EditableText, FontWeight},
     ui_widgets::ScrollArea,
 };
 
@@ -112,8 +112,7 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                                     overflow: Overflow::clip(),
                                     ..default()
                                 },
-                                BackgroundColor(text_input::INPUT_FILL),
-                                BorderColor::all(text_input::input_border(false)),
+                                text_input::frame_surface(false),
                                 children![
                                     (
                                         Button,
@@ -122,17 +121,7 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                                             max_characters: Some(128),
                                             ..default()
                                         },
-                                        TextCursorStyle {
-                                            color: theme::TEXT_PRIMARY,
-                                            ..default()
-                                        },
-                                        TextFont {
-                                            font: FontSource::SystemUi,
-                                            font_size: FontSize::Px(17.0),
-                                            ..default()
-                                        },
-                                        TextColor(theme::TEXT_PRIMARY),
-                                        TextLayout::no_wrap(),
+                                        text_input::editor_style(17.0, FontWeight::NORMAL),
                                         Node {
                                             width: percent(100),
                                             min_width: px(0),
