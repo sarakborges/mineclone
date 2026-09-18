@@ -46,7 +46,7 @@ pub(super) fn languages_section(
             width: percent(100),
             flex_direction: FlexDirection::Column,
             align_items: AlignItems::Stretch,
-            row_gap: px(10),
+            row_gap: px(18),
             ..default()
         },
         children![
@@ -98,9 +98,9 @@ fn language_button(
         Node {
             width: percent(100),
             height: px(LANGUAGE_BUTTON_HEIGHT),
+            border: UiRect::all(px(2)),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
-            border_radius: BorderRadius::all(px(7)),
             ..default()
         },
         BackgroundColor(selectable_button_background(active, Interaction::None)),
