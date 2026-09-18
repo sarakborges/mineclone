@@ -77,7 +77,6 @@ pub fn star(spec: StarSpec) -> impl Bundle {
             top: percent(spec.top),
             width: px(spec.size),
             height: px(spec.size),
-            border_radius: BorderRadius::MAX,
             ..default()
         },
         BackgroundColor(Color::srgba(
