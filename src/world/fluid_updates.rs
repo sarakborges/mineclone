@@ -56,6 +56,11 @@ impl PendingFluidUpdates {
         self.fluid_queue_mut(fluid_id).enqueue_priority(position);
     }
 
+    fn enqueue_fluid_voxel_edit(&mut self, fluid_id: FluidId, position: IVec3) {
+        self.fluid_queue_mut(fluid_id)
+            .enqueue_with_neighbors_priority(position);
+    }
+
     fn fluid_queue_mut(&mut self, fluid_id: FluidId) -> &mut VoxelUpdateQueue {
         let index = fluid_id as usize;
         if self.fluid_queues.len() <= index {
@@ -218,16 +223,16 @@ pub(super) fn process_fluid_updates(
                 break 'steps;
             }
 
-            let position = if let Some(position) = runtime
-                .pending
-                .pop_ready_fluid(&mut fluid_batch_remaining)
-            {
-                position
-            } else if generic_remaining > 0 {
+            let position = if generic_remaining > 0 {
                 generic_remaining -= 1;
                 let Some(position) = runtime.pending.pop() else {
                     break;
                 };
+                position
+            } else if let Some(position) = runtime
+                .pending
+                .pop_ready_fluid(&mut fluid_batch_remaining)
+            {
                 position
             } else {
                 break;
@@ -249,7 +254,7 @@ pub(super) fn process_fluid_updates(
 
             if fluid_ready_steps <= step_index {
                 if definition.spread_speed > f32::EPSILON {
-                    runtime.pending.enqueue_fluid(fluid_id, position);
+                    runtime.pending.enqueue_fluid_priority(fluid_id, position);
                 }
                 continue;
             }
@@ -263,7 +268,9 @@ pub(super) fn process_fluid_updates(
 
             runtime.lighting.enqueue_medium_edit(position);
             enqueue_remesh(position, &mut runtime.remesh_queue);
-            runtime.pending.enqueue_voxel_edit(position);
+            runtime
+                .pending
+                .enqueue_fluid_voxel_edit(fluid_id, position);
         }
     }
 }
