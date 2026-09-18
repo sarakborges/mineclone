@@ -468,19 +468,19 @@ const fn toggle_thumb_left(enabled: bool) -> f32 {
 
 fn toggle_border(enabled: bool) -> Color {
     if enabled {
-        Color::srgba(0.66, 0.52, 0.96, 0.86)
+        theme::BORDER_FOCUS
     } else {
-        Color::srgba(0.52, 0.50, 0.62, 0.46)
+        theme::BORDER
     }
 }
 
 fn toggle_background(enabled: bool, interaction: Interaction) -> Color {
     match (enabled, interaction) {
-        (true, Interaction::Pressed) => Color::srgba(0.38, 0.24, 0.68, 0.96),
-        (true, Interaction::Hovered) => Color::srgba(0.34, 0.22, 0.62, 0.92),
-        (true, Interaction::None) => Color::srgba(0.29, 0.19, 0.54, 0.86),
-        (false, Interaction::Pressed) => Color::srgba(0.13, 0.11, 0.20, 0.94),
-        (false, Interaction::Hovered) => Color::srgba(0.11, 0.09, 0.18, 0.90),
-        (false, Interaction::None) => Color::srgba(0.07, 0.06, 0.12, 0.82),
+        (true, Interaction::Pressed) => theme::PURPLE,
+        (true, Interaction::Hovered) => theme::PURPLE_HOVER,
+        (true, Interaction::None) => theme::PURPLE_SOFT,
+        (false, Interaction::Pressed) => theme::SURFACE_INSET,
+        (false, Interaction::Hovered) => theme::SURFACE_ELEVATED,
+        (false, Interaction::None) => theme::HUD_SURFACE,
     }
 }
