@@ -98,6 +98,7 @@ pub(super) fn sample_density_field(
                 &mut surface_carver_cache,
                 horizontal,
                 column.surface_height as f32,
+                column.identity_surface_index,
                 &column.surface_influences,
                 &surface_carver_context,
             );
