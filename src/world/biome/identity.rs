@@ -199,6 +199,8 @@ mod tests {
             primary_id: "surface",
             primary_surface_index: 0,
             nearest_boundary: None,
+            surface_margin_index: None,
+            identity_surface_index: 0,
             influences: [BiomeInfluence {
                 id: "surface",
                 weight: 1.0,
@@ -227,6 +229,44 @@ mod tests {
         assert_eq!(hydrology_influences.len(), 1);
         assert_eq!(influences.len(), 1);
         assert_eq!(influences[0].id, "surface");
+        assert_eq!(influences[0].weight, 1.0);
+    }
+
+    #[test]
+    fn surface_margin_replaces_regional_identity_with_margin_owner() {
+        let surface = BiomeFieldSample {
+            primary_id: "ocean",
+            primary_surface_index: 0,
+            nearest_boundary: Some(crate::world::biome_field::SurfaceBoundarySample {
+                neighbor_surface_index: 1,
+                distance: 8.0,
+            }),
+            surface_margin_index: Some(1),
+            identity_surface_index: 1,
+            influences: [BiomeInfluence {
+                id: "plains",
+                weight: 1.0,
+                surface_index: 0,
+                terrain_strength: 1.0,
+            }]
+            .into_iter()
+            .collect(),
+        };
+        let mut influences = Vec::new();
+        let mut hydrology_influences = Vec::new();
+        let mut hydrology_id = None;
+
+        let count = resolve_surface_identity(
+            &surface,
+            None,
+            &mut influences,
+            &mut hydrology_influences,
+            &mut hydrology_id,
+        );
+        influences.truncate(count);
+
+        assert_eq!(influences.len(), 1);
+        assert_eq!(influences[0].id, "ocean");
         assert_eq!(influences[0].weight, 1.0);
     }
 
