@@ -194,9 +194,10 @@ fn configure_loaded_scene(
                             if let Some(image) = texture {
                                 material.base_color_texture = Some(image.clone());
                             }
-                            // Slime is a matte, fully opaque creature. Override legacy GLB
-                            // specular/emissive settings as well as the texture so old binary
-                            // assets cannot make it glow like polished glass.
+                            // Creature override materials stay matte and non-emissive so legacy
+                            // GLB settings cannot make them glow like polished glass. Opacity is
+                            // handled below: tinted body materials are opaque, texture-only
+                            // cutouts preserve the model's authored alpha mode.
                             material.metallic = 0.0;
                             material.perceptual_roughness = 0.92;
                             material.reflectance = 0.0;
