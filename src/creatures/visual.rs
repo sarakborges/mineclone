@@ -16,6 +16,13 @@ pub(super) struct CreatureModel(pub Handle<Gltf>);
 #[derive(Component)]
 pub(super) struct VisualAttached;
 
+#[derive(Component, Clone, Copy)]
+struct CreatureFaceRestTransform {
+    translation: Vec3,
+    rotation: Quat,
+    scale: Vec3,
+}
+
 #[derive(Component)]
 pub(super) struct CreatureAppearance {
     owner: Entity,
@@ -168,14 +175,17 @@ fn configure_loaded_scene(
         return;
     };
     for descendant in descendants.iter_descendants(ready.entity) {
-        if let Ok((name, mut transform)) = named_transforms.get_mut(descendant)
+        if let Ok((entity, name, transform)) = named_transforms.get_mut(descendant)
             && name.as_str() == "Face"
         {
-            // The Face mesh is authored in BodyPivot-local space. Reset the full
-            // local transform so legacy GLBs cannot leave it tilted or vertically offset.
-            transform.translation = Vec3::new(0.0, 0.0, 0.0);
-            transform.rotation = Quat::IDENTITY;
-            transform.scale = Vec3::ONE;
+            // Preserve the model-authored face pose. Animation clips may contain
+            // stale Face transform tracks, so the authored pose is restored after
+            // animation evaluation instead of forcing it to an arbitrary identity pose.
+            commands.entity(entity).insert(CreatureFaceRestTransform {
+                translation: transform.translation,
+                rotation: transform.rotation,
+                scale: transform.scale,
+            });
         }
         if let Ok((original, material_name)) = mesh_materials.get(descendant) {
             let name = material_name.0.as_str();
@@ -274,13 +284,16 @@ pub(super) fn sync_creature_facing(
 /// Keep the face mesh's authored local orientation stable even when an animation
 /// clip contains legacy transform tracks for the Face node.
 pub(super) fn sync_creature_faces(
-    mut named_transforms: Query<(&Name, &mut Transform)>,
+    mut faces: Query<(&CreatureFaceRestTransform, &mut Transform)>,
 ) {
-    for (name, mut transform) in &mut named_transforms {
-        if name.as_str() == "Face" {
-            transform.translation = Vec3::ZERO;
-            transform.rotation = Quat::IDENTITY;
-            transform.scale = Vec3::ONE;
+    for (rest, mut transform) in &mut faces {
+        if transform.translation != rest.translation
+            || transform.rotation != rest.rotation
+            || transform.scale != rest.scale
+        {
+            transform.translation = rest.translation;
+            transform.rotation = rest.rotation;
+            transform.scale = rest.scale;
         }
     }
 }
