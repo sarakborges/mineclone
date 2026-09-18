@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.31.3`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado atual:** `0c35a080b6012c95e4da4b55fb071d0ecb28b22c`. O solver de fluidos mantém filas por `FluidId` e topology priority; o remesh background agora faz round-robin entre Fluid, Lighting e Geometry para impedir starvation visual. O commit funcional `e1399c96e5419af21501a8fce716f22b26ba560b` passou na CI `35401619817` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.32.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado atual:** `f0448359abe274a73f1c3d712d8839043df67202`. O runtime de fluidos reconstrói frontiers dos fluidos residentes ao entrar em Gameplay, sem depender de block edit do jogador, e o remesh de fluido pode publicar geometria de conteúdo atual mesmo durante churn de lighting, com follow-up para iluminação final. `surfaceMargin` agora pode possuir a identidade efetiva do biome; no Ocean, a faixa de shoreline é biome Ocean para `CurrentBiome`, comportamento e visuais, mantendo o terrain owner regional para a forma suave da costa. CI final `35403045031` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.29.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `e848e9e918a87527764ed79616ac3d8134c0830a`. A feature de lava + fluidos de superfície do Volcano passou na CI de push `35397447773` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
@@ -1903,4 +1903,166 @@ QA Windows prioritária:
 4. Se ainda não aparecer visualmente em `0.31.3`, o próximo passo NÃO é mais refatorar por hipótese:
    - adicionar diagnóstico runtime explícito para registrar, naquele voxel, `queued → desired → set_fluid_at result → chunk remesh scheduled/applied`;
    - usar o log do caso reproduzido para identificar a etapa exata que não acontece.
+
+## Checkpoint 112 — 2026-09-18: fluidos residentes acordam no Gameplay e fluid mesh tolera churn de lighting [FIX + CI VERDE; VERSION 0.31.4; QA WINDOWS PENDENTE]
+
+### Reprodução e conclusão
+
+- O usuário confirmou um sinal decisivo: ao remover manualmente o bloco abaixo de um fluido, o fluido finalmente propagava, porém com flicker.
+- Isso provou duas coisas:
+  - o solver e `set_fluid_at()` eram capazes de produzir propagação quando recebiam trabalho;
+  - depender de uma topology edit para acordar fluidos gerados era incorreto.
+- Requisito autoritativo reafirmado: **todo fluido residente deve começar/continuar sua simulação sem depender de o jogador alterar blocos próximos**.
+
+### Ativação determinística no lifecycle
+
+- Foi adicionado `reseed_loaded_fluid_frontiers()`.
+- Ao entrar em `GameState::Gameplay`:
+  - `PendingFluidUpdates` é reconstruído;
+  - todos os chunks já residentes são varridos uma única vez;
+  - cada fluido residente semeia seus targets vazios expostos;
+  - o resultado não depende mais da ordem em que os chunks terminaram geração/restauração durante Loading.
+- Streaming depois da entrada em Gameplay continua usando o caminho incremental:
+  - o chunk recém-residente semeia sua frontier;
+  - boundaries de vizinhos já carregados são revisitadas para liberar fluxo cross-chunk.
+- O reseed inicial usa um scan por chunk, sem repetir o scan de neighbors para todos os chunks do bootstrap.
+- Targets de frontier gerada entram como priority work na fila do próprio `FluidId`, evitando que o primeiro passo fique soterrado por backlog do mesmo fluido.
+
+### Flicker / freshness do remesh
+
+- O pipeline async de remesh antes tratava **freshness de conteúdo** e **freshness de lighting** como uma condição única.
+- Como cada mutação de fluido altera medium/lighting, um fluid mesh podia:
+  - capturar um estado de fluido válido;
+  - terminar o build;
+  - ser rejeitado só porque lighting mudou enquanto ele era construído;
+  - repetir esse ciclo durante propagação ativa.
+- `ChunkRemeshDependencies` agora separa:
+  - `content_is_current(world)`;
+  - `lighting_is_current()`.
+- Terrain/Lighting mesh continuam exigindo lighting atual.
+- Fluid mesh:
+  - **nunca publica conteúdo voxel/fluid stale**;
+  - pode publicar geometria quando o conteúdo capturado ainda é atual mesmo se lighting mudou durante o build;
+  - nesse caso, mantém/agende um follow-up fluid remesh para convergir a iluminação final.
+- Isso complementa o round-robin Fluid/Lighting/Geometry do checkpoint 111 e remove a dependência visual de a iluminação “parar de mudar” antes de o fluxo aparecer.
+
+### Commits principais
+
+- `00a56bf5b17aaa3c60d46a1de95782752cb5ce8f` — separa freshness de conteúdo e lighting.
+- `85ba190a7971276b0a5accec1b79f3b823f7fed2` — publica fluid geometry atual mesmo durante lighting churn.
+- `ff9eaf117c5582e17ed618b91556ce155b9ae2f3` — prioriza ativação de frontiers geradas.
+- `cba62583565db57b81ff33843eb811d1621ee56d` / `cd3567b3f4d9bd8f70ed02c1d7a0d49727001b7d` — reseed dos fluidos residentes na entrada de Gameplay.
+- `87a9704ee33b2040bc98eb4a13aa7db8a0a32895` / `cb616e32ce3c7e3a5d19448faba5e9cdc6473b0b` — scan inicial sem duplicar neighbor work.
+- `df43120627c21e4302a50181c8d70144991c31f9` — corrige wrapper recursivo introduzido durante a limpeza.
+- `1a760c9a076ce210a59a93c6ad0c224ae89aa6f4` / `f9fa39ab8a2720b2e0b9851bd007d2b56a8127fe` — limpeza e atualização do teste de freshness.
+- `632f03d7b8c7b5fb7443a4f3f68d639b879522b7` — arquitetura atualizada.
+- `bf6337fc13250374be668e8f6c52b70ce3665e22` — `VERSION 0.31.3 → 0.31.4`.
+
+### CI
+
+- Houve CI intermediária falhando apenas por helper morto/teste ainda usando a semântica antiga de freshness combinada; ambos foram corrigidos sem suppressions.
+- **CI funcional final do bloco: `35402331352` — success**:
+  - auditoria de localizações;
+  - Clippy `--locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+### QA obrigatória
+
+1. Entrar em mundo com lava de Volcano e **não tocar em nenhum bloco**: a frontier exposta deve começar a propagar sozinha.
+2. Repetir com água gerada.
+3. Quebrar o bloco imediatamente abaixo de uma source: deve reagir conforme `spreadSpeed`, sem depender disso para “iniciar” a simulação.
+4. Observar flicker durante queda/espalhamento; a geometria não deve desaparecer/reverter enquanto lighting converge.
+5. Se ainda não auto-iniciar em `0.32.0`, o próximo passo deve ser instrumentação runtime explícita `queued → desired → set_fluid_at → remesh scheduled → remesh applied`, não outro refactor por hipótese.
+
+## Checkpoint 113 — 2026-09-18: surfaceMargin do Ocean possui identidade efetiva Ocean [FEATURE + CI VERDE; VERSION 0.32.0; QA WINDOWS PENDENTE]
+
+### Regra alterada pelo usuário
+
+- O usuário definiu explicitamente: **“a margem do oceano precisa ser bioma oceano”**.
+- A regra anterior — shoreline material do Ocean sobre terreno que ainda reportava Plains/Witchwood/etc. — foi removida.
+- `surfaceMargin` continua não sendo uma segunda seleção territorial de terrain, mas agora pode possuir a **identidade superficial efetiva** dentro da largura authored.
+
+### Separação de terrain owner e identity owner
+
+- `BiomeFieldSample` agora distingue:
+  - `primary_surface_index`: owner regional usado pela forma/blend do terreno;
+  - `surface_margin_index`: biome que possui a margem ativa;
+  - `identity_surface_index`: biome efetivo daquela posição;
+  - `primary_id`: ID correspondente à identidade efetiva;
+  - `influences`: influências regionais de terreno, preservadas para continuidade geométrica.
+- `BiomeFieldEntry` mantém `surface_margin_width` em runtime para resolver a margem diretamente no sampling.
+- Quando a posição está do lado terrestre da boundary dentro de `Ocean.surfaceMargin.width`:
+  - terrain continua usando o blend/região de land para não criar um degrau artificial;
+  - identity passa a **Ocean**.
+
+### Propagação da identidade efetiva
+
+Dentro da margem do Ocean, agora usam Ocean:
+
+- `CurrentBiome.surface_id`;
+- `CurrentBiome.surface_influences`;
+- identidade final de `CurrentBiome` antes de volume biome;
+- grass/leaf/foliage/water visuals;
+- permissões de hydrology;
+- ownership de materiais de hydrology;
+- lookup de `surfaceFluid`;
+- `allowSurfaceCarvers` / surface-carver ownership;
+- structure candidate ownership, porque structures já validam `sample_surface().primary_id`;
+- structure-support carver sampling.
+
+A forma regional do terreno continua separada da identidade efetiva, para a shoreline permanecer suave.
+
+### Limpeza estrutural
+
+- O antigo `nearest_boundary` exposto no `BiomeFieldSample` deixou de ser necessário após a resolução direta de `surface_margin_index` e foi removido.
+- `GenerationColumnSample.primary_surface_index` também foi removido:
+  - terrain já usa `surface_influences` / o sample regional;
+  - comportamento usa `identity_surface_index`.
+- Comentários no `BiomeFieldSample` documentam explicitamente a diferença entre terrain owner e margin identity para evitar que os dois voltem a ser conflados.
+
+### Arquitetura
+
+- `ARCHITECTURE.md` foi corrigido:
+  - remove a afirmação histórica de que uma beach do Ocean continuava Plains/Witchwood;
+  - define `surfaceMargin` como boundary modifier que pode substituir identidade/comportamento dentro da width;
+  - deixa explícito que isso **não troca o terrain generator regional**.
+- Ocean shoreline passa a ser: **Ocean biome identity + shoreline boundary geometry/material**, não um pseudo-Coast nem land biome com areia.
+
+### Commits principais
+
+- `f574748668f959531fd36c1b331e83d60205f0de` / `a9077d6c6d96e4e041eef2cd7fc99da819ac83d2` — runtime metadata e resolução da identidade efetiva de margin.
+- `ca750c4fa77e574d016482d221cd211e421ac159` / `a999e28c7eed2df72e47cb591166a033481e5722` — CurrentBiome efetivo.
+- `204743a9d2dcc9471cabc24db6b741795d611eef` — visuais do margin owner.
+- `61db4b971cd99ef6c90a34ce5956990dae34aab7` — carrega identity owner no generation column.
+- `fa758f7f4670fec97b2c14dc5d61a60a43c5094a` — `surfaceFluid` obedece identidade efetiva.
+- `9f8cc1cef079501092fe7805b8b1a18f4943c407` / `b6bd7f080fa895ceff73780d3b97db8b3a28abb8` — materiais/permissões de hydrology.
+- `e232785ace04a7258d17af963004d137d1400d0b` / `331aa9a4f8a4c0bf347f5bcd5677e0dd4639fb4c` / `6ca4993a0c3cd86e99faca8b0464488377d4d8ab` — surface carvers e suporte de estruturas.
+- `09f7c642baa39b6e2a4c72083f99dcc2de1bf653` — contrato arquitetural atualizado.
+- `2cdc67a7c2dd5c71979d59e2438c1582be33ff3d` / `d3a7c287753f6b5b74e9e95b65bfc99ecb8881e1` — remoção de metadata redundante.
+- `0a4ec6077dfef0f4e4ca184d4a9703b888b67efd` — documentação inline da separação terrain/identity.
+- `1b40f1001c680496b7cdb1a5d01aeb70464212ab` — último fix funcional antes do bump.
+- `f0448359abe274a73f1c3d712d8839043df67202` — `VERSION 0.31.4 → 0.32.0`.
+
+### CI
+
+- CIs intermediárias localizaram:
+  - call site de surface-carver em structure support sem o novo identity index;
+  - metadata antiga que ficou dead code;
+  - uma referência local antiga a `primary_surface_index`.
+- Todos foram corrigidos sem suppressions.
+- CI funcional antes do bump: `35402981026` — success.
+- **CI final versionada: `35403045031` — success**:
+  - auditoria de localizações;
+  - Clippy `--locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+### QA obrigatória
+
+1. Caminhar da terra para a faixa de areia do Ocean: HUD/CurrentBiome deve mudar para **Ocean** já na margin.
+2. Confirmar que a costa continua geometricamente suave e não vira um degrau de Ocean terrain no início da margin.
+3. Confirmar visuais/cores do Ocean dentro da margin.
+4. Confirmar que Ocean `canGenerateRiver=false` / `canGenerateLake=false` e `allowSurfaceCarvers=false` são respeitados na faixa.
+5. Confirmar que structures de land não nascem dentro da margin Ocean.
 
