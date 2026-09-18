@@ -48,7 +48,6 @@ pub(super) struct SurfaceCarverResolveContext<'a> {
     pub(super) biomes: &'a BiomeRegistry,
     pub(super) biome_field: &'a BiomeField,
     pub(super) world_seed: u64,
-    pub(super) sea_level: f32,
     pub(super) minimum_y: f32,
     pub(super) maximum_y: f32,
     pub(super) cave_graph: Option<&'a FeatureGraph>,
