@@ -78,8 +78,8 @@ impl HydrologyField {
             ocean_weight = 0.0;
         }
 
+        let _ = surface_weight;
         HydrologyBiomeOverlay {
-            surface_weight,
             coast_biome,
             coast_weight,
             ocean_biome,
