@@ -3,9 +3,9 @@ use bevy::{prelude::*, ui::InteractionDisabled};
 use super::theme;
 
 pub(crate) fn sync_selectable_button(
-    entity: Entity,
+    _entity: Entity,
     active: bool,
-    disabled: bool,
+    _disabled: bool,
     interaction: Interaction,
     mut background: Mut<'_, BackgroundColor>,
     mut border: Mut<'_, BorderColor>,
