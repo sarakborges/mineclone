@@ -26,10 +26,6 @@ impl WorldTickClock {
     }
 }
 
-pub(crate) fn world_ticks_advanced(clock: Res<WorldTickClock>) -> bool {
-    clock.ticks_this_frame() > 0
-}
-
 pub(crate) fn advance_world_ticks(
     time: Res<Time<Real>>,
     game_rules: Res<GameRules>,
