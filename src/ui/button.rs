@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use super::{theme, typography};
+use super::typography;
 
 pub const MENU_BUTTON_WIDTH: f32 = 470.0;
 pub const MENU_BUTTON_HEIGHT: f32 = 54.0;
@@ -10,7 +10,6 @@ pub const COMPACT_CONTROL_HEIGHT: f32 = 44.0;
 const BUTTON_NORMAL: Color = Color::srgb(0.78, 0.79, 0.80);
 const BUTTON_HOVER: Color = Color::srgb(0.90, 0.91, 0.92);
 const BUTTON_PRESSED: Color = Color::srgb(0.64, 0.65, 0.66);
-const BUTTON_TEXT: Color = Color::srgb(0.08, 0.08, 0.08);
 const BUTTON_BORDER: Color = Color::srgb(0.36, 0.37, 0.38);
 const BUTTON_BORDER_STRONG: Color = Color::srgb(0.96, 0.96, 0.96);
 const BUTTON_SHADOW: Color = Color::srgba(0.02, 0.02, 0.02, 0.72);
@@ -34,11 +33,11 @@ pub fn menu_button<A: Component>(label: impl Into<String>, action: A) -> impl Bu
 }
 
 pub fn sidebar_menu_button<A: Component, L: Component>(label: impl Into<String>, action: A, label_marker: L) -> impl Bundle {
-    (Button, action, AsteriaButtonVisual::default(), Node { width: percent(100), height: px(SIDEBAR_MENU_BUTTON_HEIGHT), padding: UiRect::axes(px(14), px(0)), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![(typography::button_label(label), label_marker)])
+    (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Normal, Node { width: percent(100), height: px(SIDEBAR_MENU_BUTTON_HEIGHT), padding: UiRect::axes(px(14), px(0)), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![(typography::button_label(label), label_marker)])
 }
 
 pub fn primary_menu_button<A: Component>(label: impl Into<String>, action: A) -> impl Bundle {
-    (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Primary, Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_PRIMARY), BorderColor::all(BUTTON_BORDER_STRONG), children![typography::button_label(label)])
+    (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Primary, Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_PRIMARY), BorderColor::all(BUTTON_BORDER_STRONG), children![typography::button_label_light(label)])
 }
 
 pub(crate) fn compact_control_button<A: Component>(label: impl Into<String>, action: A, width: f32) -> impl Bundle {
