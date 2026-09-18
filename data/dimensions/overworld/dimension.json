@@ -194,24 +194,6 @@
       }
     },
     {
-      "id": "asteria:overworld/coast",
-      "weight": 1,
-      "size": {
-        "x": {
-          "min": 90,
-          "max": 220
-        },
-        "z": {
-          "min": 90,
-          "max": 220
-        },
-        "y": null
-      },
-      "requireNear": [
-        "asteria:overworld/ocean"
-      ]
-    },
-    {
       "id": "asteria:overworld/ocean",
       "weight": 1,
       "size": {
@@ -233,7 +215,6 @@
   "maxEntities": 128,
   "hydrology": {
     "waterFluid": "asteria:water",
-    "coastBiome": "asteria:overworld/coast",
     "oceanBiome": "asteria:overworld/ocean",
     "riverWeight": 1,
     "lakeWeight": 1
