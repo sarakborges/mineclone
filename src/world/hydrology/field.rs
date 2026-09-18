@@ -40,14 +40,14 @@ impl HydrologyField {
 
     pub fn biome_overlay(&self, continentalness: f32) -> HydrologyBiomeOverlay<'_> {
         let strength = ocean_strength(continentalness, self.ocean_weight);
-        let (mut surface_weight, mut coast_weight, mut ocean_weight) =
+        let (mut surface_share, mut coast_weight, mut ocean_weight) =
             hydrology_biome_weights(strength);
         let coast_biome = self.settings.coast_biome.as_deref();
         let ocean_biome = self.settings.ocean_biome.as_deref();
 
         if coast_biome.is_none() {
             if strength < 0.5 {
-                surface_weight += coast_weight;
+                surface_share += coast_weight;
             } else {
                 ocean_weight += coast_weight;
             }
@@ -60,20 +60,18 @@ impl HydrologyField {
             if coast_biome.is_some() {
                 coast_weight += ocean_weight;
             } else {
-                surface_weight += ocean_weight;
+                surface_share += ocean_weight;
             }
             ocean_weight = 0.0;
         } else {
             ocean_weight *= self.ocean_weight;
         }
 
-        let total = surface_weight + coast_weight + ocean_weight;
+        let total = surface_share + coast_weight + ocean_weight;
         if total > f32::EPSILON {
-            surface_weight /= total;
             coast_weight /= total;
             ocean_weight /= total;
         } else {
-            surface_weight = 1.0;
             coast_weight = 0.0;
             ocean_weight = 0.0;
         }
