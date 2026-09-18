@@ -41,7 +41,6 @@ pub(super) struct DensityPassContext<'a> {
     pub(super) biome_field: &'a BiomeField,
     pub(super) biomes: &'a BiomeRegistry,
     pub(super) dimension: &'a DimensionDefinition,
-    pub(super) sea_level: f32,
 }
 
 pub(super) fn sample_density_field(
