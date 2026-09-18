@@ -11,7 +11,7 @@ impl BiomeField {
             let biome = biomes
                 .get(influence.id)
                 .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
-            (biome.visuals.grass_color, influence.weight)
+            (biome.visuals().grass_color, influence.weight)
         }))
     }
 
@@ -21,7 +21,7 @@ impl BiomeField {
             let biome = biomes
                 .get(influence.id)
                 .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
-            (biome.visuals.leaf_color, influence.weight)
+            (biome.visuals().leaf_color, influence.weight)
         }))
     }
 
@@ -31,7 +31,7 @@ impl BiomeField {
             let biome = biomes
                 .get(influence.id)
                 .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
-            (biome.visuals.foliage_color, influence.weight)
+            (biome.visuals().foliage_color, influence.weight)
         }))
     }
 
@@ -42,7 +42,7 @@ impl BiomeField {
                 .get(influence.id)
                 .unwrap_or_else(|| panic!("missing biome definition: {}", influence.id));
             (
-                biome.visuals.water_color.unwrap_or(fallback),
+                biome.visuals().water_color.unwrap_or(fallback),
                 influence.weight,
             )
         }))
