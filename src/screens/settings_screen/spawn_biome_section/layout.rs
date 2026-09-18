@@ -6,7 +6,10 @@ use bevy::{
 
 use crate::{
     localization::{Language, UiLocalization},
-    ui::{dropdown::{self, PanelAnchor}, text_input, theme, typography},
+    ui::{
+        dropdown::{self, PanelAnchor},
+        settings as settings_layout, text_input, theme, typography,
+    },
 };
 
 use super::state::SpawnBiomeDropdownKind;
@@ -57,13 +60,7 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
     language: Language,
 ) -> impl Bundle {
     (
-        Node {
-            width: percent(100),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Stretch,
-            row_gap: px(8),
-            ..default()
-        },
+        settings_layout::setting_column(),
         children![
             typography::setting_title(
                 localization
