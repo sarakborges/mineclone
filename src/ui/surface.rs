@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use super::theme;
 
 pub const HUD_BORDER_COLOR: Color = theme::BORDER;
+const CONTROL_BORDER_WIDTH: f32 = 2.0;
 pub const HUD_HOVER_BORDER_COLOR: Color = theme::BORDER_STRONG;
 pub const HUD_SELECTED_BORDER_COLOR: Color = theme::BORDER_FOCUS;
 pub const HUD_DANGER_BORDER_COLOR: Color = theme::BORDER_STRONG;
