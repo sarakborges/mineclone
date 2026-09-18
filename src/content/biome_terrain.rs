@@ -48,6 +48,11 @@ pub enum BiomeTerrain {
         height: f32,
         crater_depth: f32,
         crater_radius: f32,
+        irregularity: f32,
+        irregularity_scale: f32,
+        detail_irregularity: f32,
+        detail_scale: f32,
+        crater_irregularity: f32,
     },
 }
 
@@ -210,6 +215,11 @@ impl BiomeTerrain {
                 height,
                 crater_depth,
                 crater_radius,
+                irregularity,
+                irregularity_scale,
+                detail_irregularity,
+                detail_scale,
+                crater_irregularity,
                 ..
             } => {
                 assert!(height > 0.0, "biome {biome_id} volcano height must be positive");
@@ -220,6 +230,26 @@ impl BiomeTerrain {
                 assert!(
                     (0.0..1.0).contains(&crater_radius),
                     "biome {biome_id} volcano craterRadius must be between 0 and 1"
+                );
+                assert!(
+                    irregularity >= 0.0,
+                    "biome {biome_id} volcano irregularity cannot be negative"
+                );
+                assert!(
+                    irregularity_scale > 0.0,
+                    "biome {biome_id} volcano irregularityScale must be positive"
+                );
+                assert!(
+                    detail_irregularity >= 0.0,
+                    "biome {biome_id} volcano detailIrregularity cannot be negative"
+                );
+                assert!(
+                    detail_scale > 0.0,
+                    "biome {biome_id} volcano detailScale must be positive"
+                );
+                assert!(
+                    crater_irregularity >= 0.0,
+                    "biome {biome_id} volcano craterIrregularity cannot be negative"
                 );
             }
         }
