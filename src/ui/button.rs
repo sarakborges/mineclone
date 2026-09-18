@@ -91,6 +91,7 @@ pub(crate) fn standard_button_with_marker<A: Component, M: Component>(
         variant,
         Node {
             width: px(width),
+            flex_grow: if width <= 0.0 { 1.0 } else { 0.0 },
             height: px(COMPACT_CONTROL_HEIGHT),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
