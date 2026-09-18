@@ -67,10 +67,6 @@
     "waterFluid": "asteria:water",
     "coastBiome": "asteria:overworld/coast",
     "oceanBiome": "asteria:overworld/ocean",
-    "shoreBlock": "asteria:sand",
-    "riverBedBlock": "asteria:sand",
-    "lakeBedBlock": "asteria:sand",
-    "oceanBedBlock": "asteria:sand",
     "riverWeight": 1.0,
     "lakeWeight": 1.0
   }
