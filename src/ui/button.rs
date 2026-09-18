@@ -6,21 +6,30 @@ pub const MENU_BUTTON_WIDTH: f32 = 470.0;
 pub const MENU_BUTTON_HEIGHT: f32 = 54.0;
 pub const SIDEBAR_MENU_BUTTON_HEIGHT: f32 = 54.0;
 pub const COMPACT_CONTROL_HEIGHT: f32 = 44.0;
+
+const BUTTON_NORMAL: Color = Color::srgb(0.78, 0.79, 0.80);
+const BUTTON_HOVER: Color = Color::srgb(0.90, 0.91, 0.92);
+const BUTTON_PRESSED: Color = Color::srgb(0.64, 0.65, 0.66);
+const BUTTON_TEXT: Color = Color::srgb(0.08, 0.08, 0.08);
+const BUTTON_BORDER: Color = Color::srgb(0.36, 0.37, 0.38);
+const BUTTON_BORDER_STRONG: Color = Color::srgb(0.96, 0.96, 0.96);
+const BUTTON_SHADOW: Color = Color::srgba(0.02, 0.02, 0.02, 0.72);
+
 const BUTTON_VISUAL_SETTLE_EPSILON: f32 = 0.001;
 
 #[derive(Component, Default)]
 pub struct AsteriaButtonVisual { level: f32 }
 
 pub fn menu_button<A: Component>(label: impl Into<String>, action: A) -> impl Bundle {
-    (Button, action, AsteriaButtonVisual::default(), Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(1)), ..default() }, BackgroundColor(theme::SURFACE_ELEVATED), BorderColor::all(theme::BORDER), children![typography::button_label(label)])
+    (Button, action, AsteriaButtonVisual::default(), Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![typography::button_label(label)])
 }
 
 pub fn sidebar_menu_button<A: Component, L: Component>(label: impl Into<String>, action: A, label_marker: L) -> impl Bundle {
-    (Button, action, AsteriaButtonVisual::default(), Node { width: percent(100), height: px(SIDEBAR_MENU_BUTTON_HEIGHT), padding: UiRect::axes(px(14), px(0)), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(1)), ..default() }, BackgroundColor(theme::SURFACE_ELEVATED), BorderColor::all(theme::BORDER), children![(typography::button_label(label), label_marker)])
+    (Button, action, AsteriaButtonVisual::default(), Node { width: percent(100), height: px(SIDEBAR_MENU_BUTTON_HEIGHT), padding: UiRect::axes(px(14), px(0)), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![(typography::button_label(label), label_marker)])
 }
 
 pub(crate) fn compact_control_button<A: Component>(label: impl Into<String>, action: A, width: f32) -> impl Bundle {
-    (Button, action, Node { width: px(width), height: px(COMPACT_CONTROL_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(1)), ..default() }, BackgroundColor(theme::SURFACE_ELEVATED), BorderColor::all(theme::BORDER), children![typography::button_label(label)])
+    (Button, action, Node { width: px(width), height: px(COMPACT_CONTROL_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![typography::button_label(label)])
 }
 
 pub fn animate_buttons(time: Res<Time<Real>>, mut buttons: Query<(&Interaction, &mut AsteriaButtonVisual, &mut BackgroundColor, &mut BorderColor, &mut BoxShadow), With<Button>>) {
@@ -40,10 +49,10 @@ pub fn animate_buttons(time: Res<Time<Real>>, mut buttons: Query<(&Interaction, 
 }
 
 fn button_colors(level: f32) -> (Color, Color) {
-    if level >= 1.5 { (theme::SURFACE_INSET, theme::BORDER_STRONG) } else if level >= 0.25 { (theme::SURFACE_ELEVATED, theme::BORDER_STRONG) } else { (theme::SURFACE_ELEVATED, theme::BORDER) }
+    if level >= 1.5 { (BUTTON_PRESSED, BUTTON_BORDER_STRONG) } else if level >= 0.25 { (BUTTON_HOVER, BUTTON_BORDER_STRONG) } else { (BUTTON_NORMAL, BUTTON_BORDER) }
 }
 
 fn button_shadow(level: f32) -> BoxShadow {
     let lift = level.clamp(0.0, 1.0);
-    BoxShadow(vec![ShadowStyle { color: Color::srgba(0.0, 0.0, 0.0, 0.24 + 0.10 * lift), x_offset: px(0), y_offset: px(2), spread_radius: px(0), blur_radius: px(5 + 3 * lift) }])
+    BoxShadow(vec![ShadowStyle { color: BUTTON_SHADOW, x_offset: px(0), y_offset: px(3 - lift), spread_radius: px(0), blur_radius: px(0) }])
 }
