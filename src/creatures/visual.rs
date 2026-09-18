@@ -171,9 +171,11 @@ fn configure_loaded_scene(
         if let Ok((name, mut transform)) = named_transforms.get_mut(descendant)
             && name.as_str() == "Face"
         {
-            // Face geometry is centered in its own mesh and must sit on the front of
-            // the opaque shell; BodyPivot supplies the complete vertical placement.
-            transform.translation = Vec3::new(0.0, -0.5, -0.02);
+            // The Face mesh is authored in BodyPivot-local space. Reset the full
+            // local transform so legacy GLBs cannot leave it tilted or vertically offset.
+            transform.translation = Vec3::new(0.0, 0.0, 0.0);
+            transform.rotation = Quat::IDENTITY;
+            transform.scale = Vec3::ONE;
         }
         if let Ok((original, material_name)) = mesh_materials.get(descendant) {
             let name = material_name.0.as_str();
@@ -202,6 +204,15 @@ fn configure_loaded_scene(
                             if let Some(image) = texture {
                                 material.base_color_texture = Some(image.clone());
                             }
+                            // Slime is a matte, fully opaque creature. Override legacy GLB
+                            // specular/emissive settings as well as the texture so old binary
+                            // assets cannot make it glow like polished glass.
+                            material.metallic = 0.0;
+                            material.perceptual_roughness = 0.85;
+                            material.reflectance = 0.0;
+                            material.emissive = LinearRgba::BLACK;
+                            material.base_color = material.base_color.with_alpha(1.0);
+                            material.alpha_mode = AlphaMode::Opaque;
                             let handle = tint_assets.materials.add(material);
                             tint_assets.cache.0.insert(cache_key, handle.clone());
                             handle
