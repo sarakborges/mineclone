@@ -25,7 +25,10 @@ use super::{
     day_night::DayNightClock,
     dimension::CurrentDimension,
     game_rules::GameRules,
-    save_catalog::{SaveRegistries, SavedPlayer, SnapshotSource, WorldSnapshot, save_world},
+    save_catalog::{
+        PruneRegistries, SaveRegistries, SavedPlayer, SnapshotSource, WorldSnapshot, save_world,
+        save_world_owned,
+    },
     seed::WorldSeed,
 };
 
@@ -86,11 +89,7 @@ struct OwnedWorldSaveCapture {
     tick_in_day: u64,
     inventory: Vec<Option<String>>,
     world: VoxelWorld,
-    blocks: BlockRegistry,
-    fluids: FluidRegistry,
-    tools: ToolRegistry,
-    dimensions: DimensionRegistry,
-    cycles: DayNightCycleRegistry,
+    registries: PruneRegistries,
 }
 
 impl OwnedWorldSaveCapture {
@@ -116,21 +115,9 @@ impl OwnedWorldSaveCapture {
             tick_in_day: self.tick_in_day,
             inventory: self.inventory,
             world: &self.world,
-            fluids: &self.fluids,
+            fluids: self.registries.fluids(),
         });
-        let result = snapshot.and_then(|snapshot| {
-            save_world(
-                &snapshot,
-                SaveRegistries {
-                    blocks: &self.blocks,
-                    fluids: &self.fluids,
-                    tools: &self.tools,
-                    dimensions: &self.dimensions,
-                    cycles: &self.cycles,
-                },
-            )
-            .map(|_| ())
-        });
+        let result = snapshot.and_then(|snapshot| save_world_owned(&snapshot, self.registries).map(|_| ()));
 
         AutosaveResult { state, result }
     }
@@ -254,11 +241,14 @@ impl WorldSaveContext<'_, '_> {
             tick_in_day: self.clock.tick_in_day(),
             inventory: self.inventory.saved_items(),
             world: self.world.as_ref().clone(),
-            blocks: BlockRegistry::clone(&self.blocks),
-            fluids: FluidRegistry::clone(&self.fluids),
-            tools: ToolRegistry::clone(&self.tools),
-            dimensions: DimensionRegistry::clone(&self.dimensions),
-            cycles: DayNightCycleRegistry::clone(&self.cycles),
+            registries: SaveRegistries {
+                blocks: &self.blocks,
+                fluids: &self.fluids,
+                tools: &self.tools,
+                dimensions: &self.dimensions,
+                cycles: &self.cycles,
+            }
+            .owned_for_pruning(),
         })
     }
 
