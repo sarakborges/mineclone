@@ -1,5 +1,7 @@
 # HANDOFF — Asteria / Mineclone
 
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.28.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `5acad2c8a2003b5c4f0e2143722908d3c3a36e11`. O bloco de adjacência obrigatória de surface biomes passou na CI de push `35396733423` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.27.1`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. O PR #14 já foi mergeado em `develop`. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `5e7dbdad861e4b8e877fcab47c039651525f4536`. O fix de validação Ocean/Coast está em `15b569b30a81c6c753cb76bcbe3d53bcb3fabaa7` e passou na CI de push `35395972922` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.27.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. O PR #14 já foi mergeado em `develop`. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `4778ac925d95074a0b2b8606f6c64b2da3e4a156`. CI canônica de push `35395484913` — **success** — cobrindo auditoria de localizações, Clippy com `-D warnings` e `cargo check --locked`, já com `VERSION 0.27.0`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
@@ -1250,3 +1252,37 @@ QA Windows em mundo novo, prioritariamente:
 - Não executei `cargo test`, `cargo run` nem QA Windows.
 
 Próximo passo imediato: repetir criação/entrada no Overworld e confirmar que o bootstrap passa da validação de `DimensionHydrology`. Depois continuar a QA do checkpoint 103: diversidade de surface biomes, Ocean/Coast, Gorge, Volcano, mountain `avoidNear` e exploração prolongada/autosave.
+
+
+## Checkpoint 105 — 2026-09-18: `requireNear` data-driven para adjacência obrigatória de surface biomes [FEATURE + CI VERDE; VERSION 0.28.0]
+
+- Novo campo em `DimensionBiome`: `requireNear: Vec<String>`.
+- Semântica: OR. Um surface biome com lista não vazia só pode ganhar uma região se compartilhar uma borda Voronoi real com pelo menos um dos biomes listados.
+- A mesma geometria de fronteira usada por `avoidNear` é reutilizada; não é distância aproximada nem raio.
+- Validação de conteúdo:
+  - `requireNear` só é permitido em `Surface`;
+  - IDs não podem repetir nem apontar para o próprio biome;
+  - alvo precisa existir, estar na mesma dimensão, ser `Surface` e ter `weight > 0`;
+  - o mesmo alvo não pode aparecer simultaneamente em `avoidNear`.
+- Overworld:
+  - Coast agora possui `requireNear: ["asteria:overworld/ocean"]`;
+  - portanto Coast só é válido se tocar Ocean diretamente.
+- Spawn Biome:
+  - biomes com `requireNear` deixam de aparecer como opção de spawn forçado;
+  - bootstrap também rejeita config/save que tente forçar isoladamente um biome com dependência de adjacência.
+- Commits principais:
+  - `2b353b60...` adiciona o campo/validação;
+  - `41c3af79...` leva a regra ao `BiomeField`;
+  - `e6f40ace...` aplica a borda obrigatória na seleção;
+  - `fac23e66...` configura Coast → Ocean;
+  - `a0e1e302...` / `5859ae19...` protegem Spawn Biome;
+  - `c409327e...` rejeita targets desativados;
+  - `74b7d6bf...` documenta a arquitetura;
+  - `5acad2c8...` sobe `VERSION 0.27.1 → 0.28.0`.
+- CI funcional: run de push `35396733423` — **success**:
+  - auditoria de localizações;
+  - Clippy `--locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+Próximo passo: criar fluido de lava como feature separada: emissivo, opaco, laranja, spread menor e mais lento que água.
