@@ -23,6 +23,15 @@ pub enum PanelAnchor {
     Right,
 }
 
+#[derive(Component)]
+pub struct DropdownInside<M: Send + Sync + 'static>(PhantomData<M>);
+
+impl<M: Send + Sync + 'static> Default for DropdownInside<M> {
+    fn default() -> Self {
+        Self(PhantomData)
+    }
+}
+
 #[derive(Resource)]
 pub struct DropdownState<M: Send + Sync + 'static> {
     open: bool,
@@ -70,9 +79,10 @@ pub fn root(width: Val) -> Node {
     }
 }
 
-pub fn control() -> impl Bundle {
+pub fn control<M: Send + Sync + 'static>() -> impl Bundle {
     let (background, border) = selectable::static_colors(false);
     (
+        DropdownInside::<M>::default(),
         Node {
             width: percent(100),
             height: percent(100),
@@ -114,16 +124,19 @@ pub fn panel_node(
     }
 }
 
-pub fn panel_surface() -> impl Bundle {
+pub fn panel_surface<M: Send + Sync + 'static>() -> impl Bundle {
     (
+        DropdownInside::<M>::default(),
+        Interaction::default(),
         BackgroundColor(theme::HUD_SURFACE),
         BorderColor::all(theme::BORDER),
     )
 }
 
-pub fn option(selected: bool, border_width: f32) -> impl Bundle {
+pub fn option<M: Send + Sync + 'static>(selected: bool, border_width: f32) -> impl Bundle {
     let (background, border) = selectable::static_colors(selected);
     (
+        DropdownInside::<M>::default(),
         Node {
             width: percent(100),
             height: px(OPTION_HEIGHT),
@@ -138,18 +151,18 @@ pub fn option(selected: bool, border_width: f32) -> impl Bundle {
     )
 }
 
-pub fn clicked_outside<'a, 'b>(
+pub fn inside<M: Send + Sync + 'static>() -> DropdownInside<M> {
+    DropdownInside::default()
+}
+
+pub fn clicked_outside<M: Send + Sync + 'static>(
     open: bool,
     mouse: &ButtonInput<MouseButton>,
-    mut triggers: impl Iterator<Item = &'a Interaction>,
-    mut options: impl Iterator<Item = &'b Interaction>,
+    inside: &Query<&Interaction, With<DropdownInside<M>>>,
 ) -> bool {
-    if !open || !mouse.just_pressed(MouseButton::Left) {
-        return false;
-    }
-
-    !triggers.any(|interaction| *interaction == Interaction::Pressed)
-        && !options.any(|interaction| *interaction == Interaction::Pressed)
+    open
+        && mouse.just_pressed(MouseButton::Left)
+        && !inside.iter().any(|interaction| *interaction == Interaction::Pressed)
 }
 
 pub fn indicator() -> impl Bundle {
