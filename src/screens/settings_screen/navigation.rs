@@ -83,7 +83,7 @@ pub(super) fn sync_section_ui(
     mut panels: Query<(&SettingsSectionPanel, &mut Node)>,
     mut labels: Query<(&SettingsSectionButtonLabel, &mut Text)>,
 ) {
-    if selection.is_changed() {
+    {
         for (panel, mut node) in &mut panels {
             let next_display = if panel.0 == selection.selected {
                 Display::Flex
