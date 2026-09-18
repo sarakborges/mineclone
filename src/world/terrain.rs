@@ -35,15 +35,13 @@ pub(crate) fn surface_height_from_sample(
     for influence in &sample.influences {
         let (terrain, modifiers, terrain_seed) =
             biome_field.surface_terrain(influence.surface_index);
-        let distribution_strength =
-            biome_field.surface_distribution_strength(influence.surface_index, horizontal);
         height += biome_surface_height(
             horizontal,
             dimension.sea_level,
             terrain_seed,
             terrain,
             modifiers,
-            distribution_strength,
+            influence.terrain_strength,
         ) * influence.weight;
     }
 
