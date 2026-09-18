@@ -58,17 +58,17 @@ pub(super) fn anchored_cave_region(
         let underground_anchors = anchors.clone();
         let mut water_source_anchors = Vec::new();
 
-        if region.coord.y == 0 {
-            if let Some(ocean_opening) = ocean_cave_entrance(
+        if region.coord.y == 0
+            && let Some(ocean_opening) = ocean_cave_entrance(
                 region,
                 &underground_anchors,
                 minimum,
                 maximum,
                 biome_field,
-            ) {
-                anchors.push(ocean_opening);
-                water_source_anchors.push(ocean_opening);
-            }
+            )
+        {
+            anchors.push(ocean_opening);
+            water_source_anchors.push(ocean_opening);
         }
 
         (!anchors.is_empty()).then(|| {
