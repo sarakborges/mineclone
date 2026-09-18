@@ -66,7 +66,7 @@ impl DimensionDefinition {
         );
 
         let mut ids = HashSet::new();
-        let mut has_active_regional_surface = false;
+        let mut has_active_surface = false;
 
         for entry in &self.biomes {
             assert!(
@@ -103,11 +103,8 @@ impl DimensionDefinition {
                         validate_size_axis(&self.id, &entry.id, "y", vertical_size);
                     }
 
-                    if entry.weight > 0.0
-                        && biome.distributions.len() == 1
-                        && biome.distributions[0].is_regional()
-                    {
-                        has_active_regional_surface = true;
+                    if entry.weight > 0.0 {
+                        has_active_surface = true;
                     }
                 }
                 BiomeKind::Volume => {
@@ -139,8 +136,8 @@ impl DimensionDefinition {
         }
 
         assert!(
-            has_active_regional_surface,
-            "dimension {} must define at least one regional surface biome with positive weight",
+            has_active_surface,
+            "dimension {} must define at least one surface biome with positive weight",
             self.id
         );
 
