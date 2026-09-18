@@ -37,7 +37,6 @@ fn scrollbar(target: Entity, initially_hidden: bool) -> impl Bundle {
             BorderColor::all(theme::TEXT_SUBTLE.with_alpha(0.24)),
             ScrollbarThumb {
                 border: UiRect::all(px(1)),
-                border_radius: BorderRadius::default(),
             },
         )],
     )
