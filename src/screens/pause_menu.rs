@@ -4,7 +4,7 @@ use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::{SettingsScreenMode, SettingsState}},
     localization::{ActiveLanguage, UiLocalization},
     ui::{
-        button::menu_button,
+        button::{menu_button, standard_button},
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
         visibility::set_visibility,
@@ -94,13 +94,17 @@ fn spawn_pause_menu(
                         ..default()
                     },
                     children![
-                        menu_button(
+                        standard_button(
                             localization.text(language, "settings.section.worldSettings").to_owned(),
                             PauseMenuAction::WorldSettings,
+                            174.0,
+                            crate::ui::button::ButtonVariant::Normal,
                         ),
-                        menu_button(
+                        standard_button(
                             localization.text(language, "common.settings").to_owned(),
                             PauseMenuAction::GameSettings,
+                            174.0,
+                            crate::ui::button::ButtonVariant::Normal,
                         ),
                     ],
                 ));
