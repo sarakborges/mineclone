@@ -42,15 +42,6 @@
       "edgeWidth": 0.12,
       "warpScale": 0.006,
       "warpStrength": 14
-    },
-    {
-      "type": "gorges",
-      "scale": 0.0025,
-      "width": 0.035,
-      "depth": 34,
-      "edgeWidth": 0.025,
-      "warpScale": 0.0012,
-      "warpStrength": 90
     }
   ],
   "allowSurfaceCarvers": true,
