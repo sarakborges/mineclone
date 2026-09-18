@@ -13,8 +13,6 @@ pub struct DimensionHydrology {
     pub water_fluid: String,
     #[serde(default)]
     pub ocean_biome: Option<String>,
-    #[serde(default)]
-    pub coast_biome: Option<String>,
     #[serde(default = "default_feature_weight")]
     pub river_weight: f32,
     #[serde(default = "default_feature_weight")]
@@ -26,7 +24,6 @@ impl Default for DimensionHydrology {
         Self {
             water_fluid: WATER_FLUID_ID.to_owned(),
             ocean_biome: None,
-            coast_biome: None,
             river_weight: default_feature_weight(),
             lake_weight: default_feature_weight(),
         }
@@ -56,21 +53,16 @@ impl DimensionHydrology {
             );
         }
 
-        for (field, biome_id) in [
-            ("oceanBiome", self.ocean_biome.as_deref()),
-            ("coastBiome", self.coast_biome.as_deref()),
-        ] {
-            let Some(biome_id) = biome_id else {
-                continue;
-            };
+        if let Some(biome_id) = self.ocean_biome.as_deref() {
             let biome = biomes.get(biome_id).unwrap_or_else(|| {
-                panic!("dimension {dimension_id} hydrology.{field} references missing biome: {biome_id}")
+                panic!(
+                    "dimension {dimension_id} hydrology.oceanBiome references missing biome: {biome_id}"
+                )
             });
-
             assert_eq!(
                 biome.kind,
                 BiomeKind::Surface,
-                "dimension {dimension_id} hydrology.{field} must reference a surface biome: {biome_id}"
+                "dimension {dimension_id} hydrology.oceanBiome must reference a surface biome: {biome_id}"
             );
         }
 
