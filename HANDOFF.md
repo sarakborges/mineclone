@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.10`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional validado desta atualização:** `3ebe9df95c784b3729ad6cb059168bcf02b56230`. CI `35381226764` (run 4052) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.11`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado validado desta atualização:** `368b805306190dc6d0655fd592f12f43f0f380fc`. CI `35384155361` (run 4139) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 ## Histórico integral obrigatório
 
@@ -657,4 +657,99 @@ Próximo passo imediato: QA Windows verificando (1) mouths de surface tunnels em
 - Ainda não implementada.
 - Ainda não há contrato fechado para frequência, altura, relação com bathymetry, Ocean/Coast, ilhas expostas ou integração com o sistema de terrain modifiers.
 - Ao iniciar essa feature, primeiro definir a arquitetura para que montanhas oceânicas participem do mesmo terrain/hydrology pipeline sem reintroduzir cortes abruptos entre fundo oceânico, costa e terreno elevado.
+
+## Checkpoint 98 — 2026-09-18: tunnel conectado de verdade + river/lake blend + hydrology materials por biome + diversidade regional [CÓDIGO + CI VERDE]
+
+### Surface tunnels: ownership e conexão reais
+
+- Relato consolidado: ainda existiam paredes flat e surface tunnels que apenas escavavam a superfície e morriam sem chegar a uma cave.
+- Causa arquitetural encontrada: havia **dois donos de abertura terrestre**.
+  - `surfaceCarver` criava a boca/tunnel.
+  - o `anchored cave connector graph` também adicionava `surface_cave_entrance` e podia abrir a superfície de forma independente.
+- Correção: em terra, **somente `surfaceCarver` pode abrir a superfície**.
+  - `surface_cave_entrance` foi removido do connector graph terrestre.
+  - Ocean cave opening continua como exceção hidrológica separada.
+- Um surface tunnel candidate não é mais aceito só porque “algum ponto toca o cave graph”.
+  - encontra uma boca real em relação à superfície do terrain;
+  - testa os dois sentidos do path;
+  - exige interseção com o connector graph com roof pelo menos **6 blocos abaixo da superfície**;
+  - escolhe o corredor válido/mais curto;
+  - **trunca no primeiro ponto de conexão profunda**;
+  - todo trecho depois da conexão é descartado.
+- Isso elimina o caso em que metade do tunnel raspava uma cave enquanto outro trecho solto continuava cortando a montanha e terminava em lugar nenhum.
+- Structure support usa o mesmo `DimensionDefinition`/surface geometry do resolver.
+- Commits principais: `a3d330fc...`, `5c635a15...`, `ea9e8bd4...`, `d6d643ff...`, `c25d4f78...`, `ddab4f25...`.
+
+### River entrando em Lake
+
+- River e lake estavam somando carve/headroom independentes; um river podia reescavar uma vala dentro do basin da lake.
+- O lake basin agora é autoritativo conforme sua opening strength cresce.
+- `density_deltas_for_column` multiplica o channel carve por `1 - lake_opening`; no interior forte da lake o river carve converge a zero.
+- `supported_river_surface_at` também atenua river headroom pela opening de lakes fisicamente suportadas.
+- Resultado esperado: river continua abrindo a entrada/saída da lake, mas não recorta o interior do basin com uma trench independente.
+- Commits: `66b2c491...`, `e6c6c695...`.
+
+### Hydrology block materials pertencem aos biomes
+
+- Pedido: `riverBedBlock`, `lakeBedBlock`, `oceanBedBlock` etc. não devem pertencer à Dimension.
+- `DimensionHydrology` agora contém somente estado global:
+  - `waterFluid`;
+  - IDs de `coastBiome` / `oceanBiome`;
+  - `riverWeight` / `lakeWeight`.
+- `BiomeHydrology` agora possui:
+  - `shoreBlock`;
+  - `riverBedBlock`;
+  - `lakeBedBlock`;
+  - `oceanBedBlock`;
+  além das regras/chances já existentes.
+- Para não carregar Strings no hot path de drainage, foi criado `BiomeHydrologyRules` (`Copy`) com apenas `canGenerateLake`, `canGenerateRiver`, `lakeChanceMultiplier` e `riverWidthMultiplier`.
+- Validação de referências de blocks migrou para o próprio biome.
+- Material pass resolve:
+  - river/lake/inland shore a partir do **surface biome dominante da coluna**;
+  - coast shore a partir do Coast biome configurado;
+  - ocean bed a partir do Ocean biome configurado.
+- O material do ocean floor passou a usar o mesmo `ocean_floor_target` bathymétrico de density/water, removendo mais uma fonte de divergência.
+- JSON do Overworld migrado:
+  - Dimension perdeu todos os block IDs hidrológicos;
+  - Plains, Witchwood, Enchanted Forest e Mountains receberam materiais inland;
+  - Coast recebeu `shoreBlock`;
+  - Ocean recebeu `shoreBlock` + `oceanBedBlock`.
+- Commits principais: `5409b3e6...`, `f2241093...`, `e3a2c71c...`, `e434de56...`, `1c1fa42d...`, `4721dd81...`, `ec2e9a5b...`, `deb782df...`, `53e2bc63...`, `0af45f0a...`, `ebc83dce...`, `20ce9d9e...` e migração dos JSONs subsequente.
+
+### Witchwood / Enchanted Forest / Wasteland / Plains
+
+- Relato: Witchwood e Enchanted Forest estavam muito raros; depois foi confirmado que até Wasteland era difícil de achar, com trechos de ~2k blocos praticamente só de Plains.
+- A tentativa intermediária de remover `avoidNear` do Wasteland foi **revertida**. O `avoidNear` Wasteland ↔ Witchwood/Enchanted continua sendo requisito.
+- Causa real: `avoidNear` era testado contra **qualquer um dos 8 raw neighbor site draws**.
+  - Wasteland conflita com dois biomas mágicos;
+  - com pesos regionais próximos, quase todo Wasteland candidate encontrava pelo menos um raw Witchwood/Enchanted entre 8 neighbors e era descartado;
+  - Witchwood/Enchanted também eram frequentemente descartados ao encontrar raw Wasteland;
+  - Plains não tinha conflito e virava o fallback estatístico dominante.
+- Correção: `avoidNear` agora é avaliado contra uma **região vizinha dominante**, usando a regra já existente de maioria real (>=5/8 neighbors), e não contra um raw site isolado.
+- Isso preserva a separação Wasteland↔mágicos sem transformar a constraint em um multiplicador oculto de raridade.
+- Pesos atuais foram mantidos:
+  - Plains 1.0;
+  - Wasteland 1.30;
+  - Witchwood 1.25;
+  - Enchanted Forest 1.25.
+- Commits principais: `736986f0...` (restaura `avoidNear`), `fb7eabc0...` (semântica dominante), `d7f28da2...` (integração/test compile), `5f86cc02...` (arquitetura).
+
+### Estado dos pedidos desta sequência
+
+- **Tunnel paredes flat / dead-end:** código corrigido estruturalmente; QA Windows ainda necessário.
+- **River em Wasteland:** já corrigido no checkpoint 97; continua valendo.
+- **River carving dentro de lake:** corrigido neste checkpoint; QA visual pendente.
+- **Witchwood/Enchanted muito raros + Plains dominante:** causa de seleção corrigida sem remover `avoidNear`; QA de distribuição pendente.
+- **Hydrology bed/shore blocks na Dimension:** migrados para biomes.
+- **Ocean Mountains:** permanece **feature futura planejada**, ainda não implementada neste bloco.
+
+### Validação
+
+- CI funcional antes da consolidação: run `35384008079` (4136) — **success**.
+- HEAD funcional/versionado/documentado: `368b805306190dc6d0655fd592f12f43f0f380fc`.
+- CI canônica: `35384155361` / run 4139 — **success**.
+- Passaram: auditoria de localizações, `cargo clippy --locked --all-targets --all-features -- -D warnings`, `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+Próximo passo imediato: QA Windows focado em (1) surface tunnel com boca → cave real sem parede flat/dead-end; (2) river entrando/saindo de lake sem trench no basin; (3) navegar alguns quilômetros e confirmar frequência saudável de Wasteland/Witchwood/Enchanted preservando `avoidNear`; (4) confirmar materiais de river/lake/coast/ocean após a migração de ownership. Ocean Mountains continua no backlog logo após estabilizar esses itens.
 
