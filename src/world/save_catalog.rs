@@ -375,6 +375,20 @@ fn schedule_backup_prune(id: String, registries: SaveRegistries<'_>) {
     }
 }
 
+
+/// Permanently delete a saved world after validating that its directory is a real directory.
+pub(crate) fn delete_world(id: &str) -> io::Result<()> {
+    validate_world_name(id)?;
+    let gate = world_lock(id)?;
+    let _lock = gate.write.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+    let directory = Path::new(WORLDS_DIRECTORY).join(id);
+    let metadata = fs::symlink_metadata(&directory)?;
+    if !metadata.file_type().is_dir() {
+        return Err(invalid_data("world directory cannot be a symbolic link"));
+    }
+    fs::remove_dir_all(directory)
+}
+
 /// Enumerate only fully published generations. Missing or temporary snapshots
 /// never become selectable worlds. Metadata-only; never assert restorable here.
 pub(crate) fn list_worlds() -> io::Result<Vec<WorldSummary>> {
