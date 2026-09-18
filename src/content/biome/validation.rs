@@ -77,6 +77,17 @@ fn validate_surface_biome(definition: &BiomeDefinition) {
         "surface biome {} cannot define surfaceCarvers; use allowSurfaceCarvers to permit cavern entrances",
         definition.id
     );
+    assert!(
+        definition
+            .terrain_modifiers
+            .iter()
+            .all(|modifier| !matches!(
+                modifier,
+                crate::content::biome_terrain_modifier::BiomeTerrainModifier::VolcanicCone { .. }
+            )),
+        "surface biome {} cannot define volcanicCone; use a terrain overlay biome",
+        definition.id
+    );
 
     definition.validate_surface_materials();
 }
