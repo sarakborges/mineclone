@@ -33,6 +33,8 @@
   "newWorld.spawnBiome.description": "Hace que el jugador aparezca en el bioma seleccionado.",
   "newWorld.spawnBiome.random": "Aleatorio",
   "newWorld.spawnBiome.search": "Buscar biomas...",
+  "newWorld.biomeSizeMultiplier": "Multiplicador de Tamaño de Biomas",
+  "newWorld.biomeSizeMultiplier.description": "Multiplica los tamaños mínimo y máximo configurados de todos los biomas durante la generación del mundo.",
   "loading.world": "Cargando mundo...",
   "loading.progress": "{generated} de {total} chunks generados",
   "pause.title": "EN PAUSA",
