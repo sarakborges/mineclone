@@ -1,12 +1,12 @@
 use bevy::{
     input::mouse::{MouseScrollUnit, MouseWheel},
     prelude::*,
-    text::{EditableText, TextCursorStyle},
+    text::{EditableText, FontWeight},
 };
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
-    ui::{scrollbar, text_input, theme, typography},
+    ui::{scrollbar, text_input, typography},
 };
 
 use super::{CHAT_TIMEOUT_SECS, ChatState, MAX_INPUT_CHARS, autocomplete::ChatAutocomplete};
@@ -125,8 +125,7 @@ pub(super) fn spawn_chat_ui(mut commands: Commands) {
                     overflow: Overflow::clip(),
                     ..default()
                 },
-                BackgroundColor(text_input::INPUT_FILL),
-                BorderColor::all(text_input::input_border(true)),
+                text_input::frame_surface(true),
                 Visibility::Hidden,
                 Pickable::IGNORE,
             ))
@@ -138,17 +137,7 @@ pub(super) fn spawn_chat_ui(mut commands: Commands) {
                         max_characters: Some(MAX_INPUT_CHARS),
                         ..default()
                     },
-                    TextCursorStyle {
-                        color: theme::TEXT_PRIMARY,
-                        ..default()
-                    },
-                    TextFont {
-                        font: FontSource::SystemUi,
-                        font_size: FontSize::Px(17.0),
-                        ..default()
-                    },
-                    TextColor(theme::TEXT_PRIMARY),
-                    TextLayout::no_wrap(),
+                    text_input::editor_style(17.0, FontWeight::NORMAL),
                     Node {
                         flex_grow: 1.0,
                         min_width: px(0),
