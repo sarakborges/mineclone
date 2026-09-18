@@ -14,7 +14,6 @@ use crate::{
     },
 };
 
-const MAXIMUM_TUNNEL_SLOPE: f32 = 0.06;
 const TUNNEL_CURVE_STRENGTH: f32 = 0.38;
 // Surface tunnels can span well over 100 blocks. Five samples left 30-40 block
 // straight capsules visible in the terrain; keep the authored Bezier visibly curved.
@@ -116,7 +115,7 @@ pub(super) fn resolve_surface_carver_column(
         for (index, carver) in biome.surface_carvers.iter().copied().enumerate() {
             if !carver_intersects_vertical_range(
                 carver,
-                context.sea_level,
+                surface_y,
                 context.minimum_y,
                 context.maximum_y,
             ) {
@@ -186,23 +185,16 @@ pub(super) fn surface_carver_density_delta(
 
 fn carver_intersects_vertical_range(
     carver: BiomeSurfaceCarver,
-    sea_level: f32,
+    surface_y: f32,
     minimum_y: f32,
     maximum_y: f32,
 ) -> bool {
     let BiomeSurfaceCarver::Tunnel {
-        length,
-        radius,
-        elevation,
-        ..
+        radius, elevation, ..
     } = carver;
-    let maximum_vertical_half_span = length.max * 0.5 * MAXIMUM_TUNNEL_SLOPE;
-    let carver_minimum = sea_level + elevation.min - radius.max - maximum_vertical_half_span;
-    let carver_maximum = sea_level
-        + elevation.max
-        + radius.max
-        + maximum_vertical_half_span
-        + TUNNEL_MOUTH_BLEND_DEPTH;
+    let carver_minimum = elevation.min - radius.max;
+    let carver_maximum =
+        surface_y + TUNNEL_MOUTH_SURFACE_OVERSHOOT + TUNNEL_MOUTH_BLEND_DEPTH;
 
     carver_maximum >= minimum_y && carver_minimum <= maximum_y
 }
@@ -234,7 +226,7 @@ fn resolve_tunnel_candidates(
     let maximum_mouth_radius =
         radius.max * (1.0 + TUNNEL_MOUTH_HORIZONTAL_FLARE);
     let maximum_reach =
-        length.max * 0.5 + maximum_mouth_radius + TUNNEL_MARGIN_OUTER_DISTANCE + jitter;
+        length.max + maximum_mouth_radius + TUNNEL_MARGIN_OUTER_DISTANCE + jitter;
     let search_radius = (maximum_reach / spacing).ceil() as i32 + 1;
     let seed = mix_seed(
         context.world_seed
@@ -259,28 +251,29 @@ fn resolve_tunnel_candidates(
             let angle = hash_unit(hash.rotate_left(47)) * std::f32::consts::TAU;
             let direction = Vec2::new(angle.cos(), angle.sin());
             let perpendicular = Vec2::new(-direction.y, direction.x);
-            let half_length = sample_range(length, hash.rotate_left(7)) * 0.5;
+            let tunnel_length = sample_range(length, hash.rotate_left(7));
             let tunnel_radius = sample_range(radius, hash.rotate_left(23));
-            let center_y = context.sea_level + sample_range(elevation, hash.rotate_left(41));
-            let vertical_half_span =
-                signed_unit(hash.rotate_left(59)) * half_length * MAXIMUM_TUNNEL_SLOPE;
-            let start_horizontal = anchor - direction * half_length;
-            let end_horizontal = anchor + direction * half_length;
+            let underground_y = sample_range(elevation, hash.rotate_left(41));
+            let mouth_block = IVec2::new(anchor.x.floor() as i32, anchor.y.floor() as i32);
+            let mouth_surface =
+                surface_height(mouth_block, context.dimension, context.biomes, context.biome_field)
+                    as f32;
+            let mouth_y =
+                mouth_surface + TUNNEL_MOUTH_SURFACE_OVERSHOOT - tunnel_radius;
+            if underground_y >= mouth_y - TUNNEL_CAVE_CONNECTION_MIN_ROOF_DEPTH {
+                continue;
+            }
+
+            let end_horizontal = anchor + direction * tunnel_length;
             let curve_offset =
-                signed_unit(hash.rotate_left(17)) * half_length * TUNNEL_CURVE_STRENGTH;
-            let control_horizontal = anchor + perpendicular * curve_offset;
-            let control_y = center_y + signed_unit(hash.rotate_left(37)) * tunnel_radius * 0.8;
-            let start = Vec3::new(
-                start_horizontal.x,
-                center_y - vertical_half_span,
-                start_horizontal.y,
-            );
+                signed_unit(hash.rotate_left(17)) * tunnel_length * TUNNEL_CURVE_STRENGTH;
+            let control_horizontal =
+                anchor + direction * (tunnel_length * 0.5) + perpendicular * curve_offset;
+            let control_y = lerp(mouth_y, underground_y, 0.45)
+                + signed_unit(hash.rotate_left(37)) * tunnel_radius * 0.5;
+            let start = Vec3::new(anchor.x, mouth_y, anchor.y);
             let control = Vec3::new(control_horizontal.x, control_y, control_horizontal.y);
-            let end = Vec3::new(
-                end_horizontal.x,
-                center_y + vertical_half_span,
-                end_horizontal.y,
-            );
+            let end = Vec3::new(end_horizontal.x, underground_y, end_horizontal.y);
             let points = (0..TUNNEL_PATH_SAMPLES)
                 .map(|index| {
                     let t = index as f32 / (TUNNEL_PATH_SAMPLES - 1) as f32;
@@ -610,8 +603,9 @@ mod tests {
             jitter: 20.0,
         };
 
-        assert!(!carver_intersects_vertical_range(carver, 64.0, 0.0, 31.0));
-        assert!(carver_intersects_vertical_range(carver, 64.0, 64.0, 111.0));
+        assert!(carver_intersects_vertical_range(carver, 96.0, 0.0, 31.0));
+        assert!(carver_intersects_vertical_range(carver, 96.0, 64.0, 111.0));
+        assert!(!carver_intersects_vertical_range(carver, 96.0, 112.0, 143.0));
     }
 
     #[test]
