@@ -148,7 +148,6 @@ pub(crate) fn numeric_input_field<I: Component, L: Component>(
             align_items: AlignItems::Center,
             justify_content: JustifyContent::FlexStart,
             overflow: Overflow::clip(),
-            border_radius: BorderRadius::all(px(text_input::INPUT_RADIUS)),
             ..default()
         },
         BackgroundColor(text_input::INPUT_FILL),
