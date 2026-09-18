@@ -16,7 +16,7 @@ use crate::{
     localization::{ActiveLanguage, UiLocalization},
     player::{game_mode::GameMode, hotbar::PlayerHotbar, player_id::LOCAL_PLAYER_ID},
     ui::{
-        button::{danger_menu_button, menu_button, primary_menu_button, standard_button_with_marker, ButtonVariant}, theme,
+        button::{danger_button, menu_button, primary_button, standard_button_with_marker, ButtonVariant}, theme,
         transition::{ScreenTransition, ScreenTransitionTarget}, typography,
     },
     voxel::world::VoxelWorld,
@@ -396,7 +396,7 @@ fn spawn_world_selection(
                     localization.text(language.get(), "newWorld.return").to_owned(),
                     WorldSelectionAction::Back,
                 ),
-                danger_menu_button(
+                danger_button(
                     localization.text(language.get(), "worldSelection.delete").to_owned(),
                     WorldSelectionAction::Delete,
                 ),
