@@ -11,7 +11,7 @@ use super::navigation::{SettingsSection, SettingsSectionSelection};
 const TOGGLE_WIDTH: f32 = 52.0;
 const TOGGLE_HEIGHT: f32 = 30.0;
 const TOGGLE_THUMB_SIZE: f32 = 20.0;
-const TOGGLE_THUMB_INSET: f32 = 4.0;
+const TOGGLE_THUMB_INSET: f32 = 3.0;
 const TOGGLE_THUMB_ENABLED_LEFT: f32 = TOGGLE_WIDTH - TOGGLE_THUMB_SIZE - TOGGLE_THUMB_INSET;
 const DROPDOWN_WIDTH: f32 = 240.0;
 const DROPDOWN_HEIGHT: f32 = 44.0;
