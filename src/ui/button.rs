@@ -14,32 +14,45 @@ const BUTTON_TEXT: Color = Color::srgb(0.08, 0.08, 0.08);
 const BUTTON_BORDER: Color = Color::srgb(0.36, 0.37, 0.38);
 const BUTTON_BORDER_STRONG: Color = Color::srgb(0.96, 0.96, 0.96);
 const BUTTON_SHADOW: Color = Color::srgba(0.02, 0.02, 0.02, 0.72);
+const BUTTON_PRIMARY: Color = Color::srgb(0.26, 0.68, 0.16);
+const BUTTON_PRIMARY_HOVER: Color = Color::srgb(0.34, 0.78, 0.20);
+const BUTTON_PRIMARY_PRESSED: Color = Color::srgb(0.20, 0.54, 0.12);
+const BUTTON_DANGER: Color = Color::srgb(0.72, 0.18, 0.18);
+const BUTTON_DANGER_HOVER: Color = Color::srgb(0.82, 0.24, 0.24);
+const BUTTON_DANGER_PRESSED: Color = Color::srgb(0.58, 0.12, 0.12);
 
 const BUTTON_VISUAL_SETTLE_EPSILON: f32 = 0.001;
 
 #[derive(Component, Default)]
 pub struct AsteriaButtonVisual { level: f32 }
 
+#[derive(Component, Clone, Copy, Default)]
+enum ButtonVariant { #[default] Normal, Primary, Danger }
+
 pub fn menu_button<A: Component>(label: impl Into<String>, action: A) -> impl Bundle {
-    (Button, action, AsteriaButtonVisual::default(), Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![typography::button_label(label)])
+    (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Normal, Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![typography::button_label(label)])
 }
 
 pub fn sidebar_menu_button<A: Component, L: Component>(label: impl Into<String>, action: A, label_marker: L) -> impl Bundle {
     (Button, action, AsteriaButtonVisual::default(), Node { width: percent(100), height: px(SIDEBAR_MENU_BUTTON_HEIGHT), padding: UiRect::axes(px(14), px(0)), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![(typography::button_label(label), label_marker)])
 }
 
-pub(crate) fn compact_control_button<A: Component>(label: impl Into<String>, action: A, width: f32) -> impl Bundle {
-    (Button, action, Node { width: px(width), height: px(COMPACT_CONTROL_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![typography::button_label(label)])
+pub fn primary_menu_button<A: Component>(label: impl Into<String>, action: A) -> impl Bundle {
+    (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Primary, Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_PRIMARY), BorderColor::all(BUTTON_BORDER_STRONG), children![typography::button_label(label)])
 }
 
-pub fn animate_buttons(time: Res<Time<Real>>, mut buttons: Query<(&Interaction, &mut AsteriaButtonVisual, &mut BackgroundColor, &mut BorderColor, &mut BoxShadow), With<Button>>) {
+pub(crate) fn compact_control_button<A: Component>(label: impl Into<String>, action: A, width: f32) -> impl Bundle {
+    (Button, action, ButtonVariant::Normal, Node { width: px(width), height: px(COMPACT_CONTROL_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![typography::button_label(label)])
+}
+
+pub fn animate_buttons(time: Res<Time<Real>>, mut buttons: Query<(&Interaction, &ButtonVariant, &mut AsteriaButtonVisual, &mut BackgroundColor, &mut BorderColor, &mut BoxShadow), With<Button>>) {
     let smoothing = 1.0 - (-14.0 * time.delta_secs()).exp();
-    for (interaction, mut visual, mut background, mut border, mut shadow) in &mut buttons {
+    for (interaction, variant, mut visual, mut background, mut border, mut shadow) in &mut buttons {
         let target = match interaction { Interaction::None => 0.0, Interaction::Hovered => 1.0, Interaction::Pressed => 2.0 };
         let delta = target - visual.level;
         if delta.abs() > BUTTON_VISUAL_SETTLE_EPSILON { visual.level += delta * smoothing; } else { visual.level = target; }
         let level = visual.level.clamp(0.0, 2.0);
-        let (next_background, next_border) = button_colors(level);
+        let (next_background, next_border) = button_colors(level, *variant);
         if background.0 != next_background { background.0 = next_background; }
         let next_border = BorderColor::all(next_border);
         if *border != next_border { *border = next_border; }
@@ -48,8 +61,12 @@ pub fn animate_buttons(time: Res<Time<Real>>, mut buttons: Query<(&Interaction, 
     }
 }
 
-fn button_colors(level: f32) -> (Color, Color) {
-    if level >= 1.5 { (BUTTON_PRESSED, BUTTON_BORDER_STRONG) } else if level >= 0.25 { (BUTTON_HOVER, BUTTON_BORDER_STRONG) } else { (BUTTON_NORMAL, BUTTON_BORDER) }
+fn button_colors(level: f32, variant: ButtonVariant) -> (Color, Color) {
+    match variant {
+        ButtonVariant::Normal => if level >= 1.5 { (BUTTON_PRESSED, BUTTON_BORDER_STRONG) } else if level >= 0.25 { (BUTTON_HOVER, BUTTON_BORDER_STRONG) } else { (BUTTON_NORMAL, BUTTON_BORDER) },
+        ButtonVariant::Primary => if level >= 1.5 { (BUTTON_PRIMARY_PRESSED, BUTTON_BORDER_STRONG) } else if level >= 0.25 { (BUTTON_PRIMARY_HOVER, BUTTON_BORDER_STRONG) } else { (BUTTON_PRIMARY, BUTTON_BORDER_STRONG) },
+        ButtonVariant::Danger => if level >= 1.5 { (BUTTON_DANGER_PRESSED, BUTTON_BORDER_STRONG) } else if level >= 0.25 { (BUTTON_DANGER_HOVER, BUTTON_BORDER_STRONG) } else { (BUTTON_DANGER, BUTTON_BORDER_STRONG) },
+    }
 }
 
 fn button_shadow(level: f32) -> BoxShadow {
