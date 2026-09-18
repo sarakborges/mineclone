@@ -8,19 +8,18 @@ use crate::voxel::{chunk_archive::ArchivedChunk, chunk_disk::DiskChunk};
 use super::VoxelWorld;
 
 impl VoxelWorld {
-    /// Monotonic revision of authoritative persistent world content. Generating
-    /// a chunk for the first time and block/fluid mutations advance it;
-    /// archiving, restoring and lighting do not.
+    /// Monotonic revision of authoritative persistent world content.
+    /// Deterministic worldgen does not advance it; block/fluid mutations do.
+    /// Archiving, restoring and lighting do not.
     pub(crate) fn save_content_revision(&self) -> u64 {
         self.save_revision
     }
 
-    /// Captures every chunk that has ever been generated in this world,
-    /// including chunks currently archived out of resident storage. Generated
-    /// terrain is authoritative state after first creation and must never be
-    /// reconstructed from the seed once it exists.
+    /// Captures only chunks with persistent mutations. Untouched deterministic
+    /// terrain is reconstructed from the seed after load instead of being kept
+    /// in RAM and copied into every save.
     pub(crate) fn save_generated_chunks(&self, fluids: &FluidRegistry) -> io::Result<Vec<DiskChunk>> {
-        let mut coords = self.generated_chunks.iter().copied().collect::<Vec<_>>();
+        let mut coords = self.persistent_chunks.iter().copied().collect::<Vec<_>>();
         coords.sort_unstable_by_key(|coord| (coord.x, coord.y, coord.z));
         coords
             .into_iter()
@@ -32,7 +31,7 @@ impl VoxelWorld {
                 } else {
                     Err(io::Error::new(
                         io::ErrorKind::InvalidData,
-                        format!("generated chunk {coord:?} has neither loaded nor archived content"),
+                        format!("persistent chunk {coord:?} has neither loaded nor archived content"),
                     ))
                 }
             })
@@ -50,7 +49,7 @@ impl VoxelWorld {
         let mut world = Self::default();
         for entry in saved {
             let coord = IVec3::from_array(entry.coord);
-            if world.generated_chunks.contains(&coord) {
+            if world.persistent_chunks.contains(&coord) {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     format!("duplicate saved chunk coordinate: {coord:?}"),
@@ -58,7 +57,7 @@ impl VoxelWorld {
             }
             let (coord, chunk) = entry.into_chunk(blocks, fluids)?;
             let archived = Arc::new(ArchivedChunk::from_chunk(&chunk));
-            world.generated_chunks.insert(coord);
+            world.persistent_chunks.insert(coord);
             world.archived_chunks.insert(coord, archived);
         }
         Ok(world)
