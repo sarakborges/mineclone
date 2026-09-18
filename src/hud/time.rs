@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
     localization::{ActiveLanguage, UiLocalization},
-    ui::typography,
+    ui::{typography, visibility::set_visibility},
     world::current_context::DayNightContext,
 };
 
@@ -11,8 +11,10 @@ pub struct TimeHudPlugin;
 
 impl Plugin for TimeHudPlugin {
     fn build(&self, app: &mut App) {
-        appaadd_systems(OnEnter(GameState::Gameplay), spawn_time_hud)
-            aadd_systems(
+        app.add_systems(OnEnter(GameState::Gameplay), spawn_time_hud)
+            .add_systems(OnEnter(PauseState::Paused), set_visibility::<TimeHudText, false>.run_if(in_state(GameState::Gameplay)))
+            .add_systems(OnEnter(PauseState::Running), set_visibility::<TimeHudText, true>.run_if(in_state(GameState::Gameplay)))
+            .add_systems(
                 Update,
                 update_time_hud.run_if(in_state(GameState::Gameplay)),
             );
