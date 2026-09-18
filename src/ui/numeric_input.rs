@@ -3,13 +3,12 @@ use std::{fmt::Display, marker::PhantomData};
 use bevy::{
     input_focus::InputFocus,
     prelude::*,
-    text::{EditableText, EditableTextFilter, FontWeight, TextCursorStyle},
+    text::{EditableText, EditableTextFilter, FontWeight},
 };
 
 use super::{
     button::COMPACT_CONTROL_HEIGHT,
     text_input::{self, editable_value},
-    theme,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -150,8 +149,7 @@ pub(crate) fn numeric_input_field<I: Component, L: Component>(
             overflow: Overflow::clip(),
             ..default()
         },
-        BackgroundColor(text_input::INPUT_FILL),
-        BorderColor::all(text_input::input_border(false)),
+        text_input::frame_surface(false),
         children![(
             Button,
             input_marker,
@@ -161,18 +159,7 @@ pub(crate) fn numeric_input_field<I: Component, L: Component>(
                 ..EditableText::new(value.into())
             },
             EditableTextFilter::new(|character| character.is_ascii_digit()),
-            TextLayout::no_wrap(),
-            TextFont {
-                font: FontSource::SystemUi,
-                font_size: FontSize::Px(20.0),
-                weight: FontWeight::MEDIUM,
-                ..default()
-            },
-            TextColor(theme::TEXT_PRIMARY),
-            TextCursorStyle {
-                color: theme::TEXT_PRIMARY,
-                ..default()
-            },
+            text_input::editor_style(20.0, FontWeight::MEDIUM),
             Node {
                 width: percent(100),
                 min_width: px(0),
