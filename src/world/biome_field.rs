@@ -1,6 +1,8 @@
 mod constants;
+mod distribution;
 mod mountain_belt;
 mod mountain_peak;
+mod noise_band;
 mod selection;
 mod spatial;
 mod surface;
