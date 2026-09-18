@@ -20,7 +20,7 @@ use crate::{
         inventory::{InventoryCursor, InventoryState},
     },
     rendering::{block_model::BlockModel, block_tint::block_tint_at},
-    ui::{scrollbar, surface, theme, typography},
+    ui::{scrollbar, selectable, surface, theme, typography},
     world::biome_field::BiomeField,
 };
 
@@ -315,9 +315,9 @@ fn spawn_search_bar(
     language: Language,
 ) {
     let search_border = if creative_view.search_focused() {
-        surface::HUD_SELECTED_BORDER_COLOR
+        selectable::SELECTED_BORDER_COLOR
     } else {
-        surface::HUD_BORDER_COLOR
+        selectable::BORDER_COLOR
     };
     let placeholder_visible =
         creative_view.search_query().is_empty() && !creative_view.search_focused();
@@ -442,7 +442,7 @@ fn spawn_category_button(
         Some(category) => category.display_name.text(items.language),
         None => localization.text(items.language, "inventory.everything"),
     };
-    let (background, border) = surface::hud_control_static(selected);
+    let (background, border) = selectable::static_colors(selected);
 
     parent
         .spawn((
@@ -626,7 +626,7 @@ fn spawn_player_inventory_panel(
 }
 
 fn spawn_inventory_trash_button(parent: &mut ChildSpawnerCommands) {
-    let (background, border) = surface::hud_danger_control_colors(Interaction::None);
+    let (background, border) = selectable::danger_colors(Interaction::None);
     let icon_color = theme::TEXT_PRIMARY;
 
     parent
@@ -701,7 +701,7 @@ fn spawn_creative_slot(
 ) {
     let item_id = item.map(CreativeCatalogItem::interned_id);
     let selected = item_id.is_some() && item_id == selected_item;
-    let (background, border) = surface::hud_control_static(selected);
+    let (background, border) = selectable::static_colors(selected);
 
     parent
         .spawn((
@@ -773,7 +773,7 @@ fn spawn_slot(
     hotbar: &PlayerHotbar,
     items: &mut InventoryItemView<'_>,
 ) {
-    let (background, border) = surface::hud_control_static(selected);
+    let (background, border) = selectable::static_colors(selected);
     let item = hotbar.inventory_item_at(index);
 
     parent
