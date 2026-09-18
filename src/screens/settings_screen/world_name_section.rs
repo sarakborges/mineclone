@@ -1,12 +1,12 @@
 use bevy::{
     input_focus::{FocusCause, InputFocus},
     prelude::*,
-    text::{EditableText, TextCursorStyle},
+    text::{EditableText, FontWeight},
 };
 
 use crate::{
     localization::{Language, UiLocalization},
-    ui::{text_input, theme, typography},
+    ui::{text_input, typography},
     world::NewWorldConfig,
 };
 
@@ -66,8 +66,7 @@ pub(super) fn world_name_setting(
                     overflow: Overflow::clip(),
                     ..default()
                 },
-                BackgroundColor(text_input::INPUT_FILL),
-                BorderColor::all(text_input::input_border(false)),
+                text_input::frame_surface(false),
                 children![(
                     Button,
                     WorldNameInput,
@@ -75,17 +74,7 @@ pub(super) fn world_name_setting(
                         max_characters: Some(200),
                         ..EditableText::new(config.name())
                     },
-                    TextFont {
-                        font: FontSource::SystemUi,
-                        font_size: FontSize::Px(20.0),
-                        ..default()
-                    },
-                    TextColor(theme::TEXT_PRIMARY),
-                    TextCursorStyle {
-                        color: theme::TEXT_PRIMARY,
-                        ..default()
-                    },
-                    TextLayout::no_wrap(),
+                    text_input::editor_style(20.0, FontWeight::NORMAL),
                     Node {
                         width: percent(100),
                         min_width: px(0),
