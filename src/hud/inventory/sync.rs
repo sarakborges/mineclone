@@ -14,7 +14,7 @@ use crate::{
     },
     rendering::block_visual_content::BlockVisualContent,
     tools::BrushMode,
-    ui::surface,
+    ui::selectable,
 };
 
 use crate::hud::block_icon::BlockIconMaterial;
@@ -300,9 +300,9 @@ pub(super) fn style_search_bar(
     }
 
     let color = if creative_view.search_focused() {
-        surface::HUD_SELECTED_BORDER_COLOR
+        selectable::SELECTED_BORDER_COLOR
     } else {
-        surface::HUD_BORDER_COLOR
+        selectable::BORDER_COLOR
     };
     let next_border = BorderColor::all(color);
     for mut border in &mut search_bars {
@@ -332,8 +332,8 @@ pub(super) fn style_category_buttons(
         }
 
         let selected = creative_view.selected_category() == category.id.as_deref();
-        surface::apply_control_colors(
-            surface::hud_control_colors(*interaction, selected),
+        selectable::apply_colors(
+            selectable::colors(*interaction, selected),
             background,
             border,
         );
@@ -360,8 +360,8 @@ pub(super) fn style_creative_slots(
         }
 
         let selected = slot.item.is_some() && slot.item == cursor.item();
-        surface::apply_control_colors(
-            surface::hud_control_colors(*interaction, selected),
+        selectable::apply_colors(
+            selectable::colors(*interaction, selected),
             background,
             border,
         );
@@ -388,8 +388,8 @@ pub(super) fn style_inventory_slots(
             continue;
         }
 
-        surface::apply_control_colors(
-            surface::hud_control_colors(*interaction, slot.index == selected_index),
+        selectable::apply_colors(
+            selectable::colors(*interaction, slot.index == selected_index),
             background,
             border,
         );
@@ -398,8 +398,8 @@ pub(super) fn style_inventory_slots(
 
 pub(super) fn style_inventory_trash_button(mut buttons: InventoryTrashButtonQuery) {
     for (interaction, background, border) in &mut buttons {
-        surface::apply_control_colors(
-            surface::hud_danger_control_colors(*interaction),
+        selectable::apply_colors(
+            selectable::danger_colors(*interaction),
             background,
             border,
         );
