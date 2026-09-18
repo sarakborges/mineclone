@@ -8,7 +8,6 @@ pub const SIDEBAR_MENU_BUTTON_HEIGHT: f32 = 54.0;
 pub const COMPACT_CONTROL_HEIGHT: f32 = 44.0;
 
 const BUTTON_NORMAL: Color = Color::srgb(0.78, 0.79, 0.80);
-const BUTTON_HOVER: Color = Color::srgb(0.90, 0.91, 0.92);
 const BUTTON_PRESSED: Color = Color::srgb(0.64, 0.65, 0.66);
 const BUTTON_BORDER: Color = Color::srgb(0.36, 0.37, 0.38);
 const BUTTON_BORDER_STRONG: Color = Color::srgb(0.96, 0.96, 0.96);
@@ -161,7 +160,7 @@ pub fn animate_buttons(
 
 fn button_colors(level: f32, variant: ButtonVariant) -> (Color, Color) {
     match variant {
-        ButtonVariant::Normal => if level >= 1.5 { (BUTTON_PRESSED, BUTTON_BORDER_STRONG) } else if level >= 0.25 { (BUTTON_HOVER, BUTTON_BORDER_STRONG) } else { (BUTTON_NORMAL, BUTTON_BORDER) },
+        ButtonVariant::Normal => if level >= 1.5 { (BUTTON_PRESSED, BUTTON_BORDER_STRONG) } else if level >= 0.25 { (BUTTON_PRIMARY, BUTTON_BORDER_STRONG) } else { (BUTTON_NORMAL, BUTTON_BORDER) },
         ButtonVariant::Primary => if level >= 1.5 { (BUTTON_PRIMARY_PRESSED, BUTTON_BORDER_STRONG) } else if level >= 0.25 { (BUTTON_PRIMARY_HOVER, BUTTON_BORDER_STRONG) } else { (BUTTON_PRIMARY, BUTTON_BORDER_STRONG) },
         ButtonVariant::Danger => if level >= 1.5 { (BUTTON_DANGER_PRESSED, BUTTON_BORDER_STRONG) } else if level >= 0.25 { (BUTTON_DANGER_HOVER, BUTTON_BORDER_STRONG) } else { (BUTTON_DANGER, BUTTON_BORDER_STRONG) },
     }
