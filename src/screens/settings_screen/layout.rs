@@ -6,7 +6,7 @@ use crate::{
     localization::{ActiveLanguage, Language, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{
-        button::standard_button,
+        button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
         cosmic_background::{self, STAR_FIELD},
         scrollbar::vertical_scrollbar,
         surface, theme, typography,
@@ -36,8 +36,8 @@ const SIDEBAR_BUTTON_GAP: f32 = 11.0;
 
 const GAME_SECTIONS: &[SettingsSection] = &[
     SettingsSection::Graphics,
-    SettingsSection::Languages,
     SettingsSection::Hud,
+    SettingsSection::Languages,
 ];
 const WORLD_SECTIONS: &[SettingsSection] = &[
     SettingsSection::WorldSettings,
@@ -285,11 +285,12 @@ pub(super) fn spawn_settings_screen(
                 spawn_new_world_footer(footer, &content.localization, language);
             }
             SettingsScreenContext::Start | SettingsScreenContext::InWorld => {
-                footer.spawn(standard_button(
+                footer.spawn(button(
                     content.localization.text(language, "settings.return").to_owned(),
                     SettingsBackButton,
-                    360.0,
-                    crate::ui::button::ButtonVariant::Normal,
+                    px(360),
+                    COMPACT_CONTROL_HEIGHT,
+                    ButtonVariant::Normal,
                 ));
             }
         });
@@ -489,17 +490,17 @@ fn spawn_global_settings_panels(
 
     panels
         .spawn((
-            SettingsSectionPanel(SettingsSection::Languages),
-            section_panel_node(selected == SettingsSection::Languages),
-        ))
-        .with_child(languages_section(localization, language));
-
-    panels
-        .spawn((
             SettingsSectionPanel(SettingsSection::Hud),
             section_panel_node(selected == SettingsSection::Hud),
         ))
         .with_child(hud_section(hud_settings, localization, language));
+
+    panels
+        .spawn((
+            SettingsSectionPanel(SettingsSection::Languages),
+            section_panel_node(selected == SettingsSection::Languages),
+        ))
+        .with_child(languages_section(localization, language));
 }
 
 fn spawn_section_button(
