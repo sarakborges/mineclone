@@ -14,6 +14,8 @@
   "worldSelection.loadingSelected": "Lendo mundo salvo...",
   "worldSelection.stillLoading": "Um mundo salvo ainda está sendo carregado. Aguarde a conclusão.",
   "worldSelection.inventoryError": "Não foi possível carregar o inventário",
+  "worldSelection.delete": "Excluir mundo",
+  "worldSelection.deleteError": "Não foi possível excluir o mundo",
   "worldSelection.selected": "Selecionado",
   "common.settings": "Configurações",
   "common.exitGame": "Sair do Jogo",
