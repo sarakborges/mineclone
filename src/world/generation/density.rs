@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::biome::BiomeRegistry,
+    content::{biome::BiomeRegistry, dimension::DimensionDefinition},
     voxel::chunk::{CHUNK_SIZE, CHUNK_VOLUME},
     world::{
         biome_field::{BiomeField, VolumeBiomeRegion, VolumeBiomeSelection},
@@ -40,6 +40,7 @@ pub(super) struct DensityPassContext<'a> {
     pub(super) anchored_caves: Option<&'a CaveConnectivityRegion>,
     pub(super) biome_field: &'a BiomeField,
     pub(super) biomes: &'a BiomeRegistry,
+    pub(super) dimension: &'a DimensionDefinition,
     pub(super) sea_level: f32,
 }
 
@@ -56,6 +57,7 @@ pub(super) fn sample_density_field(
     let chunk_minimum_y = chunk_origin.y as f32 + 0.5;
     let chunk_maximum_y = chunk_origin.y as f32 + CHUNK_SIZE as f32 - 0.5;
     let surface_carver_context = SurfaceCarverResolveContext {
+        dimension: pass.dimension,
         biomes: pass.biomes,
         biome_field: pass.biome_field,
         world_seed: pass.biome_field.seed(),
