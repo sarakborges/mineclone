@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.11`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado validado desta atualização:** `368b805306190dc6d0655fd592f12f43f0f380fc`. CI `35384155361` (run 4139) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.12`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado validado desta atualização:** `abe31483e2a7886d02d1b222f94df1b2e21b43b9`. CI `35385314155` (run 4152) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 ## Histórico integral obrigatório
 
@@ -752,4 +752,32 @@ Próximo passo imediato: QA Windows verificando (1) mouths de surface tunnels em
 - Não executei `cargo test`, `cargo run` nem QA Windows.
 
 Próximo passo imediato: QA Windows focado em (1) surface tunnel com boca → cave real sem parede flat/dead-end; (2) river entrando/saindo de lake sem trench no basin; (3) navegar alguns quilômetros e confirmar frequência saudável de Wasteland/Witchwood/Enchanted preservando `avoidNear`; (4) confirmar materiais de river/lake/coast/ocean após a migração de ownership. Ocean Mountains continua no backlog logo após estabilizar esses itens.
+
+## Checkpoint 99 — 2026-09-18: avoidNear bloqueia somente fronteira real entre biomas [CÓDIGO + CI VERDE]
+
+- Correção de semântica solicitada pelo usuário: `avoidNear` **não significa distância mínima, raio de exclusão, vizinho dominante ou região proibida ao redor de outro biome**.
+- Significado canônico agora: dois biomas conflitantes via `avoidNear` podem existir próximos, mas **não podem compartilhar uma fronteira de região**.
+- Implementação:
+  - cada site mantém normalmente o biome sorteado pelo peso/climate;
+  - os 8 sites imediatos ainda são usados apenas como candidatos geométricos de possível contato, não como veto por proximidade;
+  - para um par conflitante, `surface_sites_share_border(...)` verifica geometricamente se os dois sites realmente possuem uma aresta Voronoi compartilhada;
+  - a checagem usa a interseção das restrições lineares na bissetriz entre os dois sites, considerando os sites relevantes ao redor;
+  - se não há aresta compartilhada, `avoidNear` não interfere, mesmo que o outro biome esteja relativamente perto;
+  - se há fronteira compartilhada e os biomas conflitam simetricamente, somente então o raw biome é rejeitado e o site é rerrolado entre biomas permitidos.
+- O raw biome é preservado sempre que sua fronteira é válida; isso evita que `avoidNear` distorça frequência regional por simples presença de neighbors.
+- A implementação anterior intermediária baseada em “dominant neighbor >=5/8” foi removida por ainda representar uma heurística de proximidade/região ao redor, diferente da intenção do usuário.
+- `ocean_biome_id` foi removido do `BiomeField` porque existia apenas para a antiga lógica de proximidade do selector; `ocean_weight` continua para hydrology/Spawn Biome.
+- `ARCHITECTURE.md` registra explicitamente: `avoidNear` = **não compartilhar boundary**, nunca exclusion radius.
+- Commits principais:
+  - `c7b8bda4...` — detecção de fronteira Voronoi;
+  - `93edbcde...` — preserva raw biome salvo conflito real;
+  - `ca685354...` / `b48cf39e...` / `b3912fb3...` — limpeza de integração/Clippy;
+  - `f3d6a926...` — contrato arquitetural;
+  - `abe31483...` — `VERSION 0.24.12`.
+- Validação funcional pré-bump: run `35385205233` (4149) — **success**.
+- HEAD funcional/versionado canônico: `abe31483e2a7886d02d1b222f94df1b2e21b43b9`.
+- CI canônica: `35385314155` / run 4152 — **success**.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+Próximo passo imediato: QA Windows de distribuição regional, navegando vários quilômetros e confirmando simultaneamente (1) Plains não domina trechos absurdos, (2) Wasteland/Witchwood/Enchanted aparecem com frequência compatível com os pesos atuais e (3) Wasteland nunca compartilha fronteira direta com Witchwood/Enchanted, embora possam existir próximos separados por outro biome.
 
