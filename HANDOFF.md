@@ -825,7 +825,7 @@ Próximo passo imediato: QA Windows de distribuição regional, navegando vário
   - Mountains: `true`;
   - Witchwood: `true`;
   - Enchanted Forest: `true`;
-  - Wasteland: `false`.
+  - Wasteland: `true`.
 - O tunnel carver que antes estava em Mountains foi movido para `asteria:overworld/caverns`.
 - Validação de conteúdo impede surface biomes de serem donos de `surfaceCarvers` e impede volume/hydrology biomes de habilitarem `allowSurfaceCarvers`; volume carvers só são permitidos em volume biome com `densityModifier=cavern`.
 - A tentativa intermediária de criar uma entrada terrestre diretamente no connector graph foi **revertida** antes do estado final. O contrato anterior permanece: em terra, somente `surfaceCarver` pode abrir a superfície; ocean cave openings continuam sendo a exceção hidrológica separada.
@@ -873,4 +873,4 @@ Próximo passo imediato: QA Windows de distribuição regional, navegando vário
   - `cargo check --locked`.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
 
-Próximo passo imediato: QA Windows em mundo novo verificando (1) Biome Size Multiplier em 0.5/1.0/5.0 e persistência após reload; (2) number inputs de ambos sliders; (3) rivers terminando na primeira entrada física no oceano; (4) entradas de caverna aparecendo em Plains/Mountains/Witchwood/Enchanted Forest e nunca em Wasteland; (5) mouth gradual sem parede reta e conexão real com Caverns; (6) Player HUD completamente oculto durante Pause e Settings.
+Próximo passo imediato: QA Windows em mundo novo verificando (1) Biome Size Multiplier em 0.5/1.0/5.0 e persistência após reload; (2) number inputs de ambos sliders; (3) rivers terminando na primeira entrada física no oceano; (4) entradas de caverna aparecendo em todos os surface biomes atualmente habilitados, incluindo Wasteland; (5) mouth gradual sem parede reta e conexão real com Caverns; (6) Player HUD completamente oculto durante Pause e Settings.
