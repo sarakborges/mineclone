@@ -22,12 +22,11 @@ pub struct VoxelWorld {
     loaded_chunk_columns: HashMap<IVec2, BTreeSet<i32>>,
     archived_chunks: HashMap<IVec3, ArchivedChunk>,
     generated_chunks: HashSet<IVec3>,
-    dirty_chunks: HashSet<IVec3>,
     chunk_content_revisions: HashMap<IVec3, u64>,
     next_chunk_content_revision: u64,
-    // Only actual block/fluid changes trigger a new autosave. Worldgen,
-    // lighting, archiving and restoring chunks must not advance this counter.
-    save_edit_revision: u64,
+    // Any newly generated chunk or block/fluid mutation changes persistent
+    // world state. Lighting, archiving and restoring do not.
+    save_revision: u64,
     chunk_mesh_revisions: HashMap<IVec3, u64>,
     next_chunk_mesh_revision: u64,
     block_content_revision: u64,
@@ -42,6 +41,7 @@ impl VoxelWorld {
         );
 
         self.generated_chunks.insert(coord);
+        self.bump_save_revision();
         self.chunks.insert(coord, chunk);
         self.track_loaded_chunk(coord);
         self.bump_block_content_revision();
@@ -108,12 +108,8 @@ impl VoxelWorld {
         );
         self.bump_block_content_revision();
 
-        if self.dirty_chunks.contains(&coord) {
-            self.archived_chunks
-                .insert(coord, ArchivedChunk::from_chunk(&chunk));
-        } else {
-            self.generated_chunks.remove(&coord);
-        }
+        self.archived_chunks
+            .insert(coord, ArchivedChunk::from_chunk(&chunk));
     }
 
     pub fn restore_chunk(&mut self, coord: IVec3) -> bool {
@@ -331,8 +327,7 @@ impl VoxelWorld {
             }
         }
 
-        self.dirty_chunks.insert(chunk_coord);
-        self.bump_save_edit_revision();
+        self.bump_save_revision();
         if block_changed {
             self.bump_block_content_revision();
         }
@@ -369,8 +364,7 @@ impl VoxelWorld {
 
             chunk.set_fluid(x, y, z, fluid);
         }
-        self.dirty_chunks.insert(chunk_coord);
-        self.bump_save_edit_revision();
+        self.bump_save_revision();
         self.bump_chunk_content_revision(chunk_coord);
         self.bump_chunk_mesh_revision(chunk_coord);
         Some(chunk_coord)
@@ -391,11 +385,11 @@ impl VoxelWorld {
             .expect("block content revision counter exhausted");
     }
 
-    fn bump_save_edit_revision(&mut self) {
-        self.save_edit_revision = self
-            .save_edit_revision
+    fn bump_save_revision(&mut self) {
+        self.save_revision = self
+            .save_revision
             .checked_add(1)
-            .expect("world save edit revision counter exhausted");
+            .expect("world save revision counter exhausted");
     }
 
     fn bump_chunk_content_revision(&mut self, coord: IVec3) {
