@@ -11,8 +11,10 @@ use super::navigation::{SettingsSection, SettingsSectionSelection};
 const TOGGLE_WIDTH: f32 = 52.0;
 const TOGGLE_HEIGHT: f32 = 30.0;
 const TOGGLE_THUMB_SIZE: f32 = 20.0;
+const TOGGLE_BORDER_WIDTH: f32 = 2.0;
 const TOGGLE_THUMB_INSET: f32 = 3.0;
-const TOGGLE_THUMB_ENABLED_LEFT: f32 = TOGGLE_WIDTH - TOGGLE_THUMB_SIZE - TOGGLE_THUMB_INSET;
+const TOGGLE_THUMB_ENABLED_LEFT: f32 =
+    TOGGLE_WIDTH - TOGGLE_THUMB_SIZE - (TOGGLE_BORDER_WIDTH * 2.0) - TOGGLE_THUMB_INSET;
 const DROPDOWN_WIDTH: f32 = 240.0;
 const DROPDOWN_HEIGHT: f32 = 44.0;
 const DROPDOWN_GAP: f32 = 6.0;
@@ -141,7 +143,7 @@ fn display_tooltips_toggle(enabled: bool) -> impl Bundle {
             height: px(TOGGLE_HEIGHT),
             flex_shrink: 0.0,
             position_type: PositionType::Relative,
-            border: UiRect::all(px(2)),
+            border: UiRect::all(px(TOGGLE_BORDER_WIDTH)),
             ..default()
         },
         BackgroundColor(toggle_background(enabled, Interaction::None)),
