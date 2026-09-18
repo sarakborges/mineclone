@@ -24,7 +24,7 @@ use super::{
         SpawnBiomeOption, SpawnBiomeOptionLabel, SpawnBiomeOptionsFrame, SpawnBiomeOptionsList,
         SpawnBiomeSearchBar, SpawnBiomeSearchText,
     },
-    state::SpawnBiomeDropdownState,
+    state::{SpawnBiomeDropdownKind, SpawnBiomeDropdownState},
 };
 use crate::screens::settings_screen::{
     game_rules_section::TicksPerSecondInputState,
@@ -119,7 +119,9 @@ pub(in crate::screens::settings_screen) fn populate_spawn_biome_options(
     });
 
     commands.entity(frame_entity).with_children(|frame| {
-        frame.spawn(vertical_scrollbar(list_entity));
+        frame
+            .spawn(vertical_scrollbar(list_entity))
+            .insert(dropdown::inside::<SpawnBiomeDropdownKind>());
     });
 }
 
@@ -134,7 +136,7 @@ fn spawn_option(
     list.spawn((
         Button,
         SpawnBiomeOption { biome_id },
-        dropdown::option(selected, 2.0),
+        dropdown::option::<SpawnBiomeDropdownKind>(selected, 2.0),
         children![(
             SpawnBiomeOptionLabel {
                 biome_id: label_biome_id,
@@ -175,15 +177,17 @@ pub(in crate::screens::settings_screen) fn handle_spawn_biome_dropdown_button(
 pub(in crate::screens::settings_screen) fn close_spawn_biome_dropdown_outside_general(
     selection: Res<SettingsSectionSelection>,
     mouse: Res<ButtonInput<MouseButton>>,
-    button: Query<&Interaction, With<SpawnBiomeDropdownButton>>,
-    options: Query<&Interaction, With<SpawnBiomeOption>>,
+    inside: Query<
+        &Interaction,
+        With<dropdown::DropdownInside<SpawnBiomeDropdownKind>>,
+    >,
     mut state: ResMut<SpawnBiomeDropdownState>,
 ) {
     if selection.is_changed() && selection.selected != SettingsSection::General && state.is_open() {
         state.close();
         return;
     }
-    if dropdown::clicked_outside(state.is_open(), &mouse, button.iter(), options.iter()) {
+    if dropdown::clicked_outside(state.is_open(), &mouse, &inside) {
         state.close();
     }
 }
