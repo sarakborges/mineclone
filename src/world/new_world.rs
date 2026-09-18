@@ -14,7 +14,6 @@ pub(crate) const MAX_BIOME_SIZE_MULTIPLIER: f32 =
     MAX_BIOME_SIZE_MULTIPLIER_TENTHS as f32 / 10.0;
 pub(crate) const DEFAULT_BIOME_SIZE_MULTIPLIER: f32 =
     DEFAULT_BIOME_SIZE_MULTIPLIER_TENTHS as f32 / 10.0;
-pub(crate) const BIOME_SIZE_MULTIPLIER_STEP: f32 = 0.1;
 
 #[derive(Resource, Debug, Clone)]
 pub(crate) struct NewWorldConfig {
