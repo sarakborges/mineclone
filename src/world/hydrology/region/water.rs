@@ -62,9 +62,26 @@ impl HydrologyRegion {
         surface_height: Option<f32>,
     ) -> Option<HydrologyRiverSurfaceSample> {
         let river = self.river_water_with_margin(position, 0.0, surface_height)?;
-        Some(HydrologyRiverSurfaceSample {
+        let lake_opening = self
+            .water_bodies
+            .iter()
+            .filter_map(|body| {
+                let strength = body.horizontal_strength(position);
+                if strength <= 0.0
+                    || !bed_has_support(
+                        surface_height,
+                        body.water_level - body.carve_depth * strength,
+                    )
+                {
+                    return None;
+                }
+                Some(strength)
+            })
+            .fold(0.0_f32, f32::max);
+        let strength = river.strength * (1.0 - lake_opening.clamp(0.0, 1.0));
+        (strength > f32::EPSILON).then_some(HydrologyRiverSurfaceSample {
             water_level: river.water_level,
-            strength: river.strength,
+            strength,
         })
     }
 
