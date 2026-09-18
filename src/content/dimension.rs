@@ -110,39 +110,6 @@ impl DimensionDefinition {
                         has_active_regional_surface = true;
                     }
                 }
-                BiomeKind::TerrainOverlay => {
-                    assert!(
-                        entry.size.is_none(),
-                        "dimension {} terrain overlay biome {} cannot define size",
-                        self.id,
-                        entry.id
-                    );
-                    let parent = biome
-                        .parent_biome
-                        .as_deref()
-                        .expect("terrain overlay validation must require parentBiome");
-                    assert!(
-                        self.biomes.iter().any(|candidate| candidate.id == parent),
-                        "dimension {} terrain overlay biome {} requires parent biome {} to also be listed",
-                        self.id,
-                        entry.id,
-                        parent
-                    );
-                    let parent_definition = biomes.get(parent).unwrap_or_else(|| {
-                        panic!(
-                            "dimension {} terrain overlay biome {} references missing parent biome {}",
-                            self.id, entry.id, parent
-                        )
-                    });
-                    assert_eq!(
-                        parent_definition.kind,
-                        BiomeKind::Surface,
-                        "dimension {} terrain overlay biome {} parent {} must be a surface biome",
-                        self.id,
-                        entry.id,
-                        parent
-                    );
-                }
                 BiomeKind::Volume => {
                     let size = entry.size.unwrap_or_else(|| {
                         panic!(
