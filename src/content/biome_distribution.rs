@@ -32,7 +32,8 @@ pub enum BiomeDistribution {
     },
     NoiseBand {
         scale: f32,
-        width: f32,
+        core_width: f32,
+        edge_width: f32,
         warp_scale: f32,
         warp_strength: f32,
     },
@@ -112,7 +113,8 @@ impl BiomeDistribution {
             }
             Self::NoiseBand {
                 scale,
-                width,
+                core_width,
+                edge_width,
                 warp_scale,
                 warp_strength,
             } => {
@@ -121,8 +123,12 @@ impl BiomeDistribution {
                     "biome {biome_id} noise band scale must be positive"
                 );
                 assert!(
-                    width > 0.0 && width <= 1.0,
-                    "biome {biome_id} noise band width must be between 0 and 1"
+                    core_width >= 0.0 && core_width < 1.0,
+                    "biome {biome_id} noise band coreWidth must be between 0 (inclusive) and 1"
+                );
+                assert!(
+                    edge_width > 0.0 && core_width + edge_width <= 1.0,
+                    "biome {biome_id} noise band edgeWidth must be positive and keep coreWidth + edgeWidth at or below 1"
                 );
                 assert!(
                     warp_scale > 0.0,
