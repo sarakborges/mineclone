@@ -41,6 +41,7 @@ pub(crate) struct ChunkRemeshQueue {
     fluid_scan_miss: Option<RenderableScanKey>,
     immediate_geometry_scan_miss: Option<RenderableScanKey>,
     lighting_scan_miss: Option<RenderableScanKey>,
+    next_background_kind: usize,
 }
 
 impl ChunkRemeshQueue {
@@ -154,6 +155,36 @@ impl ChunkRemeshQueue {
         )?;
         self.coalesce_geometry_into_lighting(coord);
         Some(coord)
+    }
+
+    fn pop_renderable_background(
+        &mut self,
+        render_pool: &ChunkRenderPool,
+    ) -> Option<(IVec3, ChunkRemeshTaskKind)> {
+        const KIND_COUNT: usize = 3;
+
+        for offset in 0..KIND_COUNT {
+            let kind_index = (self.next_background_kind + offset) % KIND_COUNT;
+            let next = match kind_index {
+                0 => self
+                    .pop_renderable_fluid(render_pool)
+                    .map(|coord| (coord, ChunkRemeshTaskKind::Fluid)),
+                1 => self
+                    .pop_renderable_lighting(render_pool)
+                    .map(|coord| (coord, ChunkRemeshTaskKind::Lighting)),
+                2 => self
+                    .pop_renderable(render_pool)
+                    .map(|coord| (coord, ChunkRemeshTaskKind::Geometry)),
+                _ => unreachable!("background remesh kind index must stay in range"),
+            };
+
+            if next.is_some() {
+                self.next_background_kind = (kind_index + 1) % KIND_COUNT;
+                return next;
+            }
+        }
+
+        None
     }
 
     #[cfg(test)]
@@ -331,16 +362,7 @@ fn dispatch_remesh_tasks(
             break;
         }
 
-        let next = if let Some(coord) = queue.pop_renderable_lighting(render_pool) {
-            Some((coord, ChunkRemeshTaskKind::Lighting))
-        } else if let Some(coord) = queue.pop_renderable(render_pool) {
-            Some((coord, ChunkRemeshTaskKind::Geometry))
-        } else {
-            queue
-                .pop_renderable_fluid(render_pool)
-                .map(|coord| (coord, ChunkRemeshTaskKind::Fluid))
-        };
-        let Some((coord, kind)) = next else {
+        let Some((coord, kind)) = queue.pop_renderable_background(render_pool) else {
             break;
         };
 
