@@ -133,7 +133,6 @@ fn supported_surface_ground_y(
                 biomes: context.biomes,
                 biome_field: context.biome_field,
                 world_seed: context.biome_field.seed(),
-                sea_level: context.dimension.sea_level as f32,
                 minimum_y: surface_carver_minimum_y,
                 maximum_y: surface_carver_maximum_y,
                 cave_graph: anchored_caves.map(|caves| &caves.connector_graph),
