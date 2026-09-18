@@ -28,6 +28,13 @@ impl VoxelUpdateQueue {
         self.queue.enqueue_front(position);
     }
 
+    pub(crate) fn enqueue_with_neighbors(&mut self, position: IVec3) {
+        self.enqueue(position);
+        for offset in CARDINAL_NEIGHBORS {
+            self.enqueue(position + offset);
+        }
+    }
+
     pub(crate) fn enqueue_with_neighbors_priority(&mut self, position: IVec3) {
         for offset in CARDINAL_NEIGHBORS {
             self.enqueue_priority(position + offset);
