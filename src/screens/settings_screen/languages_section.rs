@@ -1,4 +1,4 @@
-use bevy::{prelude::*, ui::InteractionDisabled};
+use bevy::prelude::*;
 
 use crate::{
     localization::{ActiveLanguage, Language, UiLocalization},
@@ -32,8 +32,8 @@ type LanguageButtonSyncQuery<'w, 's> = Query<
         Entity,
         &'static LanguageButton,
         Ref<'static, Interaction>,
-        Has<InteractionDisabled>,
         &'static mut BackgroundColor,
+        &'static mut BorderColor,
     ),
 >;
 
@@ -123,7 +123,6 @@ pub(super) fn handle_language_buttons(
 }
 
 pub(super) fn sync_language_buttons(
-    mut commands: Commands,
     localization: Res<UiLocalization>,
     active_language: Res<ActiveLanguage>,
     mut buttons: LanguageButtonSyncQuery,
@@ -132,18 +131,18 @@ pub(super) fn sync_language_buttons(
     let language_changed = active_language.is_changed() || localization.is_changed();
     let active_language = active_language.get();
 
-    for (entity, button, interaction, disabled, background) in &mut buttons {
+    for (entity, button, interaction, background, border) in &mut buttons {
         if !language_changed && !interaction.is_changed() {
             continue;
         }
 
         sync_selectable_button(
-            &mut commands,
             entity,
             button.0 == active_language,
-            disabled,
+            false,
             *interaction,
             background,
+            border,
         );
     }
 
