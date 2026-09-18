@@ -79,7 +79,7 @@ pub(crate) use seed::WorldSeed;
 pub(crate) use setup::WorldLoadingState;
 use setup::{begin_world_loading, setup_world};
 use streaming::{ChunkStreamingState, stream_chunks};
-use tick::{WorldTickClock, WorldTickSet, advance_world_ticks, world_ticks_advanced};
+use tick::{WorldTickClock, WorldTickSet, advance_world_ticks};
 use world_feature_fields::WorldFeatureFields;
 
 pub(crate) struct WorldPlugin;
@@ -167,7 +167,7 @@ impl Plugin for WorldPlugin {
                 PostUpdate,
                 (
                     process_immediate_geometry_remesh,
-                    process_fluid_updates.run_if(world_ticks_advanced),
+                    process_fluid_updates,
                     process_dynamic_lighting.run_if(pending_lighting_work),
                     process_chunk_remesh_queue,
                     sync_chunk_visibility,
