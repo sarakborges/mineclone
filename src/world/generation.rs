@@ -207,6 +207,9 @@ pub(crate) fn generate_chunk(
         &density.values,
         &FluidPassContext {
             fluids: context.fluids,
+            biomes: context.biomes,
+            biome_field: context.biome_field,
+            sea_level: context.dimension.sea_level,
             region: region.as_ref(),
             anchored_caves: anchored_caves.as_deref(),
             underground_water_fluid: &context.dimension.hydrology.water_fluid,
