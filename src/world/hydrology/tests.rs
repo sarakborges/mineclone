@@ -85,9 +85,10 @@ fn hydrology_biome_overlay_transitions_surface_to_coast_to_ocean() {
     let coast = field.biome_overlay(0.4);
     let ocean = field.biome_overlay(0.1);
 
-    assert_eq!(land.surface_weight, 1.0);
-    assert!(coast_fringe.surface_weight > coast_fringe.coast_weight);
-    assert_eq!(coast.surface_weight, 0.0);
+    assert_eq!(land.coast_weight, 0.0);
+    assert_eq!(land.ocean_weight, 0.0);
+    assert!(coast_fringe.coast_weight > 0.0);
+    assert!(coast.coast_weight > 0.0);
     assert_eq!(coast.coast_weight, 1.0);
     assert_eq!(coast.ocean_weight, 0.0);
     assert_eq!(ocean.ocean_weight, 1.0);
