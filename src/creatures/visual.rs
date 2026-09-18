@@ -171,9 +171,9 @@ fn configure_loaded_scene(
         if let Ok((name, mut transform)) = named_transforms.get_mut(descendant)
             && name.as_str() == "Face"
         {
-            // The current generated mesh stores the face geometry around local Y=.5;
-            // BodyPivot already supplies the vertical offset, so cancel that duplicate offset.
-            transform.translation.y = -0.5;
+            // Face geometry is centered in its own mesh and must sit on the front of
+            // the opaque shell; BodyPivot supplies the complete vertical placement.
+            transform.translation = Vec3::new(0.0, 0.0, -0.015);
         }
         if let Ok((original, material_name)) = mesh_materials.get(descendant) {
             let name = material_name.0.as_str();
