@@ -193,11 +193,11 @@ pub(super) struct EntityCardSubjects<'w, 's> {
 pub(super) fn sync_entity_cards(
     subjects: EntityCardSubjects,
     mut cards: Query<(&mut EntityCard, &mut Visibility)>,
-    mut names: Query<(&EntityCardName, &mut Text)>,
+    mut names: Query<(&EntityCardName, &mut Text, Without<EntityCardHealthLabel>)>,
     health: Query<&EntityHealth>,
     mut fills: Query<(&EntityCardHealthFill, &Children)>,
-    mut fill_nodes: Query<&mut Node>,
-    mut labels: Query<(&EntityCardHealthLabel, &mut Text)>,
+    mut fill_nodes: Query<&mut Node, Without<EntityCardHealthFill>>,
+    mut labels: Query<(&EntityCardHealthLabel, &mut Text, Without<EntityCardName>)>,
 ) {
     let player_entity = subjects.player.iter().next();
     let target_entity = if subjects.settings.target_block_position() == TargetBlockPosition::Hidden {
@@ -248,7 +248,7 @@ pub(super) fn sync_entity_cards(
         }
     }
 
-    for (marker, mut text) in &mut labels {
+    for (marker, mut text, _) in &mut labels {
         let entity = match marker.0 {
             EntityCardSource::LocalPlayer => player_entity,
             EntityCardSource::Target => target_entity,
@@ -262,7 +262,7 @@ pub(super) fn sync_entity_cards(
         }
     }
 
-    for (marker, mut text) in &mut names {
+    for (marker, mut text, _) in &mut names {
         let desired = match marker.0 {
             EntityCardSource::LocalPlayer if player_entity.is_some() => "Yogg'Sara",
             EntityCardSource::Target => target_name,
