@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.31.1`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado atual:** `0db60e4cfa7f78aa6b72e73cf0490890f406c3c9`. Todo fluido residente, inclusive gerado por hydrology ou `surfaceFluid`, agora pode semear destinos vazios no solver runtime. CI final `35400470376` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.31.2`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado atual:** `9e81d703743e69fc3a9d64115da67709dfead14f`. O runtime de fluidos agora isola trabalho por `FluidId`, preserva prioridade de topology edits através da cadência do fluido e toda mutação runtime de bloco notifica o solver. CI final `35401298308` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.29.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `e848e9e918a87527764ed79616ac3d8134c0830a`. A feature de lava + fluidos de superfície do Volcano passou na CI de push `35397447773` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
@@ -1739,4 +1739,98 @@ QA Windows prioritária:
 4. Atravessar boundary de chunk com fluido e confirmar que o fluxo continua quando o chunk vizinho fica residente.
 5. Confirmar diferenças authored: água `spreadSpeed=12/maxSpread=7`; lava `spreadSpeed=2/maxSpread=3`.
 6. Observar custo de integração em chunks com grandes volumes de Ocean; somente targets vazios entram na fila, mas o scan de fluidos ocorre uma vez por residência de chunk e deve ser avaliado em QA runtime.
+
+## Checkpoint 110 — 2026-09-18: corrigida starvation de fluidos e perda de prioridade entre cadências [FIX + CI VERDE; VERSION 0.31.2; QA WINDOWS PENDENTE]
+
+### Reprodução que revelou o problema
+
+- Após o checkpoint 109, o usuário confirmou que:
+  - fluido gerado continuava sem fluir;
+  - remover manualmente o bloco diretamente abaixo de um fluido também não fazia o fluido cair.
+- O caminho de topology edit foi rastreado:
+  - left-click normal usa `VoxelTopologyRuntime::set_block()`;
+  - a remoção realmente chegava a `PendingFluidUpdates::enqueue_voxel_edit()`;
+  - `process_fluid_updates` estava registrado em Gameplay e condicionado a ticks reais;
+  - `desired_fluid()` já tinha a regra correta para queda vertical.
+- Portanto o problema estava no scheduling da fila, não na regra de gravidade.
+
+### Causa real
+
+- Havia **uma única fila compartilhada** para trabalho de todos os fluidos.
+- `update_ready_steps()` mantém cadência separada por definição:
+  - água: `spreadSpeed=12`;
+  - lava: `spreadSpeed=2`.
+- Porém, quando qualquer fluido rápido ficava ready, a fila global era consumida.
+- Se um target de lava fosse retirado num step em que lava ainda não estava ready:
+  - o solver identificava corretamente que o target pertencia à lava;
+  - mas re-enfileirava esse target no **fim da mesma fila global**.
+- Com muitos targets gerados, especialmente água/hydrology, isso destruía a prioridade:
+  - um bloco recém-quebrado abaixo de lava podia ser promovido para a frente;
+  - um tick de água o retirava;
+  - como lava ainda não estava ready, ele voltava para o fim;
+  - quando chegava o tick da lava, o target já estava soterrado por grande backlog.
+- Frontiers geradas sofriam o mesmo problema.
+
+### Nova estrutura de scheduling
+
+- `PendingFluidUpdates` agora possui:
+  - uma fila genérica de **topology edits** cujo fluido ainda precisa ser resolvido pelo estado atual do mundo;
+  - filas separadas por `FluidId` para frontiers e continuação da propagação;
+  - acumuladores de `spreadSpeed` continuam separados por fluido;
+  - cursor round-robin evita que uma fila ready monopolize as demais dentro do mesmo step/frame.
+- Frontiers de chunk agora conhecem o `fluid_id` da célula doadora e semeiam diretamente a fila daquele fluido.
+- Se um topology target for avaliado antes do seu fluido estar ready:
+  - ele é promovido para a **fila prioritária daquele fluido**;
+  - não perde prioridade para água/lava de outra cadência.
+- Topology edits genéricos são avaliados antes do backlog normal de frontiers.
+- Quando uma mutação de fluido acontece, seus vizinhos/centro continuam diretamente na fila do mesmo fluido, respeitando o próximo step authored.
+
+### Block edits
+
+- A notificação do solver saiu do wrapper específico `VoxelTopologyRuntime` e foi movida para `VoxelMutationRuntime::set_block()`.
+- Consequência: **toda mutação runtime de bloco** que usa o runtime comum notifica fluidos.
+- Isso inclui o caminho normal de quebrar/colocar bloco e também Chisel, que antes usava `VoxelMutationRuntime` sem ativar fluidos.
+- `VoxelTopologyRuntime` permanece como wrapper de API, mas não possui uma segunda `PendingFluidUpdates`; não há enqueue duplicado.
+
+### Worldgen / hydrology
+
+- Todo fluido gerado continua elegível para runtime, independente da origem.
+- O volume preenchido pelo worldgen continua autoritativo como estado inicial.
+- Não se bulk-enqueue todos os voxels preenchidos.
+- Apenas targets vazios expostos abaixo/laterais são semeados.
+- `ARCHITECTURE.md` foi corrigido para remover a antiga interpretação de que natural hydrology era sempre runtime-static.
+- Work de frontier/cadência é data-driven e não contém IDs hard-coded de água/lava.
+
+### Commits principais
+
+- `c893d145b5cbbbaa7c61b23c00f94b7226454aad` — separa pending work por cadência/`FluidId`.
+- `ee69b43ab81e83abcfa78fcbe05ee07dd5e4d7bc` — frontiers geradas são roteadas pela identidade do fluido.
+- `8b5460d44cc9133c5604f6f30879b9af5af8ad86` — toda mutação runtime de bloco notifica fluidos.
+- `43510ac833303059362ff62349a6243c3256b6a5` — topology priority é preservada através da espera pela cadência.
+- `bb32dc62c7732baa3876436b0f19d087d6a9345c` — completa passagem de `fluid_id` em todos os scans de frontier.
+- `6532d29a7ed990188d38fc2c150bfc9802c50606` — ajuste Clippy-clean da snapshot de filas ready.
+- `f2e733cc941eba2d0a5608e22c419815e65b5360` — contrato arquitetural atualizado.
+- `9e81d703743e69fc3a9d64115da67709dfead14f` — `VERSION 0.31.1 → 0.31.2`.
+
+### CI
+
+- CI intermediária `35401168767` falhou porque dois call sites de frontier ainda chamavam o helper sem o novo argumento `fluid_id`.
+- Corrigido em `bb32dc62...`.
+- **CI final `35401298308` — success**:
+  - auditoria de localizações;
+  - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+### QA imediata obrigatória
+
+1. Com uma source de lava apoiada em um bloco, quebrar **o bloco diretamente abaixo**.
+   - Esperado: em no máximo um step de lava (~0,5 s com `spreadSpeed=2`), a célula vazia abaixo recebe lava e a coluna continua descendo.
+2. Repetir com água.
+   - Esperado: reação perceptivelmente mais rápida conforme `spreadSpeed=12`.
+3. Observar lava gerada no Volcano sem nenhuma edição manual.
+   - Targets expostos devem iniciar fluxo mesmo com hydrology/water presente em outros chunks.
+4. Confirmar que fluxo de água e lava simultâneos não fazem a lava “sumir” da agenda quando água está ready.
+5. Confirmar Chisel: remover suporte/topologia perto de fluido deve acordar o solver.
+6. Se world state mudar mas mesh ainda parecer estático, o próximo alvo é starvation no `ChunkRemeshQueue`; este checkpoint corrige especificamente scheduling/mutação do solver.
 
