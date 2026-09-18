@@ -30,12 +30,30 @@ pub(super) struct CreatureAnimationLink {
     owner: Entity,
     nodes: HashMap<String, AnimationNodeIndex>,
     current_state: String,
+    current_revision: u64,
 }
 
 /// A gameplay system may change this on the physics root. Clip names are
 /// resolved solely from the corresponding creature JSON, not from Rust.
 #[derive(Component)]
-pub(crate) struct CreatureAnimationState(pub String);
+pub(crate) struct CreatureAnimationState {
+    pub(crate) name: String,
+    pub(crate) revision: u64,
+}
+
+impl CreatureAnimationState {
+    pub(crate) fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            revision: 0,
+        }
+    }
+
+    pub(crate) fn trigger(&mut self, name: &str) {
+        self.name = name.to_owned();
+        self.revision = self.revision.wrapping_add(1);
+    }
+}
 
 /// The same glTF material may need a different texture and/or tint per species.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -110,7 +128,7 @@ pub(super) fn attach_loaded_models(
             .collect();
         commands
             .entity(root)
-            .insert((VisualAttached, CreatureAnimationState("idle".to_owned())));
+            .insert((VisualAttached, CreatureAnimationState::new("idle")));
         commands.entity(root).with_children(|parent| {
             parent
                 .spawn((
@@ -203,6 +221,7 @@ fn configure_loaded_scene(
                     owner: appearance.owner,
                     nodes: appearance.nodes.clone(),
                     current_state: "idle".to_owned(),
+                    current_revision: 0,
                 },
             ));
         }
@@ -238,18 +257,19 @@ pub(super) fn sync_creature_animations(
         let Ok(state) = states.get(link.owner) else {
             continue;
         };
-        if link.current_state == state.0 {
+        if link.current_state == state.name && link.current_revision == state.revision {
             continue;
         }
-        let Some(index) = link.nodes.get(&state.0).copied() else {
+        let Some(index) = link.nodes.get(&state.name).copied() else {
             continue;
         };
         let animation = transitions.play(&mut player, index, Duration::from_millis(80));
-        if state.0 == "idle" || state.0 == "airborne" {
+        if state.name == "idle" || state.name == "airborne" {
             animation.repeat();
         } else {
             animation.set_repeat(RepeatAnimation::Count(1));
         }
-        link.current_state.clone_from(&state.0);
+        link.current_state.clone_from(&state.name);
+        link.current_revision = state.revision;
     }
 }
