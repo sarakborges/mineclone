@@ -61,9 +61,20 @@ impl BiomeFieldEntry {
     }
 }
 
+#[derive(Clone)]
+pub(crate) struct TerrainOverlayEntry {
+    pub(crate) id: String,
+    pub(crate) parent_surface_index: usize,
+    pub(crate) distributions: Vec<BiomeDistribution>,
+    pub(crate) weight: f32,
+    pub(crate) terrain_modifiers: Vec<BiomeTerrainModifier>,
+    pub(crate) density_seed: u64,
+}
+
 #[derive(Resource, Clone)]
 pub struct BiomeField {
     pub(super) surface_biomes: Vec<BiomeFieldEntry>,
+    pub(super) terrain_overlays: Vec<TerrainOverlayEntry>,
     pub(super) volume_biomes: Vec<BiomeFieldEntry>,
     pub(super) surface_site_spacing: Vec2,
     pub(super) volume_site_spacing: Option<Vec3>,
@@ -166,7 +177,7 @@ impl BiomeField {
                 .get(biome_id)
                 .unwrap_or_else(|| panic!("missing biome definition: {biome_id}"));
 
-            if biome.kind == BiomeKind::Hydrology {
+            if matches!(biome.kind, BiomeKind::Hydrology | BiomeKind::TerrainOverlay) {
                 continue;
             }
 
@@ -214,9 +225,45 @@ impl BiomeField {
                     }
                     volume_biomes.push(entry);
                 }
-                BiomeKind::Hydrology => unreachable!(),
+                BiomeKind::TerrainOverlay | BiomeKind::Hydrology => unreachable!(),
             }
         }
+
+        let terrain_overlays = dimension
+            .biomes
+            .iter()
+            .filter_map(|dimension_biome| {
+                let biome = biomes
+                    .get(&dimension_biome.id)
+                    .unwrap_or_else(|| panic!("missing biome definition: {}", dimension_biome.id));
+                if biome.kind != BiomeKind::TerrainOverlay {
+                    return None;
+                }
+
+                let parent_id = biome
+                    .parent_biome
+                    .as_deref()
+                    .expect("terrain overlay validation must require parentBiome");
+                let parent_surface_index = surface_biomes
+                    .iter()
+                    .position(|surface| surface.id == parent_id)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "terrain overlay biome {} parent {} is not an active surface biome",
+                            biome.id, parent_id
+                        )
+                    });
+
+                Some(TerrainOverlayEntry {
+                    id: biome.id.clone(),
+                    parent_surface_index,
+                    distributions: biome.distributions.clone(),
+                    weight: dimension_biome.weight,
+                    terrain_modifiers: biome.terrain_modifiers.clone(),
+                    density_seed: biome_density_seed(seed, &biome.id),
+                })
+            })
+            .collect();
 
         assert!(
             surface_biomes
@@ -237,6 +284,7 @@ impl BiomeField {
 
         Self {
             surface_biomes,
+            terrain_overlays,
             volume_biomes,
             surface_site_spacing,
             volume_site_spacing,
@@ -331,6 +379,10 @@ impl BiomeField {
             .unwrap_or_else(|| panic!("surface biome {} must define terrain", biome.id));
 
         (terrain, &biome.terrain_modifiers, biome.density_seed)
+    }
+
+    pub(crate) fn terrain_overlays(&self) -> &[TerrainOverlayEntry] {
+        &self.terrain_overlays
     }
 
     pub(crate) fn volume_biome_id(&self, selection: VolumeBiomeSelection) -> &str {
