@@ -178,8 +178,7 @@ pub(super) fn process_fluid_updates(
                 continue;
             }
 
-            let lighting_medium_changed = current.map(|fluid| fluid.fluid_id)
-                != desired.map(|fluid| fluid.fluid_id);
+            let lighting_medium_changed = current != desired;
 
             if runtime.world.set_fluid_at(position, desired).is_none() {
                 continue;
