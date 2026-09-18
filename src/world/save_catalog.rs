@@ -234,7 +234,7 @@ impl WorldSnapshot {
             day: source.day,
             tick_in_day: source.tick_in_day,
             inventory: source.inventory,
-            chunks: source.world.save_modified_chunks(source.fluids)?,
+            chunks: source.world.save_generated_chunks(source.fluids)?,
         })
     }
 }
