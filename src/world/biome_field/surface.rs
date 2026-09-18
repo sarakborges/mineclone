@@ -163,10 +163,18 @@ impl BiomeField {
         let mut influences = weights[..weight_count]
             .iter()
             .filter(|(_, weight)| *weight > 0.0)
-            .map(|(index, weight)| BiomeInfluence {
-                id: self.surface_biomes[*index].id.as_str(),
-                weight: *weight / total_weight,
-                surface_index: *index,
+            .map(|(index, weight)| {
+                let terrain_strength = strongest_macro
+                    .filter(|(macro_index, _)| *macro_index == *index)
+                    .map(|(_, strength)| strength)
+                    .unwrap_or(1.0);
+
+                BiomeInfluence {
+                    id: self.surface_biomes[*index].id.as_str(),
+                    weight: *weight / total_weight,
+                    surface_index: *index,
+                    terrain_strength,
+                }
             })
             .collect::<ArrayVec<_, MAX_SURFACE_INFLUENCES>>();
 
@@ -179,11 +187,13 @@ impl BiomeField {
                 .find(|influence| influence.surface_index == forced_index)
             {
                 existing.weight += forced_weight;
+                existing.terrain_strength = existing.terrain_strength.max(forced_weight);
             } else {
                 influences.push(BiomeInfluence {
                     id: self.surface_biomes[forced_index].id.as_str(),
                     weight: forced_weight,
                     surface_index: forced_index,
+                    terrain_strength: forced_weight,
                 });
             }
 
