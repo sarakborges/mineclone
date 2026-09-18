@@ -65,6 +65,17 @@ impl BiomeDefinition {
             );
         }
 
+        if let Some(margin) = &self.surface_margin {
+            for layer in &margin.surface_layers {
+                assert!(
+                    blocks.get(&layer.block).is_some(),
+                    "biome {} surface margin references missing block: {}",
+                    self.id,
+                    layer.block
+                );
+            }
+        }
+
         if let Some(block_id) = self.solid_block.as_deref() {
             assert!(
                 blocks.get(block_id).is_some(),
