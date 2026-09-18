@@ -65,20 +65,6 @@ impl BiomeTerrainModifier {
                     warp_strength >= 0.0,
                     "biome {biome_id} cliffs warpStrength cannot be negative"
                 );
-            },
- => {
-                assert!(
-                    height.is_finite() && height > 0.0,
-                    "biome {biome_id} volcanicCone height must be positive and finite"
-                );
-                assert!(
-                    crater_depth.is_finite() && crater_depth >= 0.0,
-                    "biome {biome_id} volcanicCone craterDepth cannot be negative"
-                );
-                assert!(
-                    crater_radius.is_finite() && crater_radius > 0.0 && crater_radius < 1.0,
-                    "biome {biome_id} volcanicCone craterRadius must be between 0 and 1"
-                );
             }
         }
     }
