@@ -72,6 +72,37 @@ pub(crate) fn danger_menu_button<A: Component>(label: impl Into<String>, action:
     (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Danger, Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_DANGER), BorderColor::all(BUTTON_BORDER_STRONG), children![typography::button_label_light(label)])
 }
 
+pub(crate) fn standard_button_with_marker<A: Component, M: Component>(
+    label: impl Into<String>,
+    action: A,
+    width: f32,
+    variant: ButtonVariant,
+    marker: M,
+) -> impl Bundle {
+    let (background, border) = match variant {
+        ButtonVariant::Normal => (BUTTON_NORMAL, BUTTON_BORDER),
+        ButtonVariant::Primary => (BUTTON_PRIMARY, BUTTON_BORDER_STRONG),
+        ButtonVariant::Danger => (BUTTON_DANGER, BUTTON_BORDER_STRONG),
+    };
+    (
+        Button,
+        action,
+        AsteriaButtonVisual::default(),
+        variant,
+        Node {
+            width: px(width),
+            height: px(COMPACT_CONTROL_HEIGHT),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            border: UiRect::all(px(2)),
+            ..default()
+        },
+        BackgroundColor(background),
+        BorderColor::all(border),
+        children![(typography::button_label_light(label), marker)],
+    )
+}
+
 pub(crate) fn standard_button<A: Component>(
     label: impl Into<String>,
     action: A,
