@@ -19,7 +19,8 @@ use super::super::{
     ChunkGenerationContext,
     caves::anchored_cave_region,
     surface_carvers::{
-        SurfaceCarverColumn, SurfaceCarverResolveContext, resolve_surface_carver_column,
+        SurfaceCarverColumn, SurfaceCarverResolveCache, SurfaceCarverResolveContext,
+        resolve_surface_carver_column,
         surface_carver_density_delta,
     },
 };
@@ -122,9 +123,11 @@ fn supported_surface_ground_y(
         .water_near(horizontal, SURFACE_CARVER_WATER_CLEARANCE)
         .is_none();
     let mut surface_carvers = SurfaceCarverColumn::default();
+    let mut surface_carver_cache = SurfaceCarverResolveCache::default();
     if surface_carver_allowed {
         resolve_surface_carver_column(
             &mut surface_carvers,
+            &mut surface_carver_cache,
             horizontal,
             raw_surface_height as f32,
             &influences,
