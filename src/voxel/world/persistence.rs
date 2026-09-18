@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, sync::Arc};
 
 use bevy::prelude::IVec3;
 
@@ -57,7 +57,7 @@ impl VoxelWorld {
                 ));
             }
             let (coord, chunk) = entry.into_chunk(blocks, fluids)?;
-            let archived = ArchivedChunk::from_chunk(&chunk);
+            let archived = Arc::new(ArchivedChunk::from_chunk(&chunk));
             world.generated_chunks.insert(coord);
             world.archived_chunks.insert(coord, archived);
         }
