@@ -62,7 +62,7 @@ use chunk_rendering::{
 use chunk_unloading::{ChunkUnloadState, unload_chunk_meshes};
 use chunk_visibility::{sync_chunk_visibility, sync_new_chunk_visibility};
 use day_night::DayNightPlugin;
-use dimension::CurrentDimension;
+use dimension::{CurrentDimension, DimensionEntityCounts};
 use fluid_updates::{PendingFluidUpdates, process_fluid_updates};
 use game_rules::GameRules;
 use lighting_updates::{pending_lighting_work, process_dynamic_lighting};
@@ -83,6 +83,7 @@ pub(crate) struct WorldPlugin;
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CurrentDimension>()
+            .init_resource::<DimensionEntityCounts>()
             .init_resource::<CurrentBiome>()
             .init_resource::<WorldSeed>()
             .init_resource::<WorldLoadMode>()
