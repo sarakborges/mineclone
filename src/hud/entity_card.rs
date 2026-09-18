@@ -234,14 +234,24 @@ pub(super) fn sync_entity_cards(
         }
     }
 
+    let player_health = player_entity
+        .and_then(|entity| queries.p2().get(entity).ok())
+        .map(|value| (value.current(), value.max()));
+    let target_health = target_entity
+        .and_then(|entity| queries.p2().get(entity).ok())
+        .map(|value| (value.current(), value.max()));
+
     for (marker, children) in &mut queries.p3() {
         let entity = match marker.0 {
             EntityCardSource::LocalPlayer => player_entity,
             EntityCardSource::Target => target_entity,
         };
-        let fraction = entity
-            .and_then(|entity| queries.p2().get(entity).ok())
-            .map(|value| (value.current() / value.max()).clamp(0.0, 1.0))
+        let health = match marker.0 {
+            EntityCardSource::LocalPlayer => player_health,
+            EntityCardSource::Target => target_health,
+        };
+        let fraction = health
+            .map(|(current, max)| (current / max).clamp(0.0, 1.0))
             .unwrap_or(0.0);
         if let Some(&fill_entity) = children.first()
             && let Ok(mut node) = queries.p4().get_mut(fill_entity)
@@ -255,10 +265,12 @@ pub(super) fn sync_entity_cards(
             EntityCardSource::LocalPlayer => player_entity,
             EntityCardSource::Target => target_entity,
         };
-        let desired = entity
-            .and_then(|entity| queries.p2().get(entity).ok())
-            .map(|value| format!("{:.0} / {:.0}", value.current(), value.max()))
-            .unwrap_or_default();
+        let desired = match marker.0 {
+            EntityCardSource::LocalPlayer => player_health,
+            EntityCardSource::Target => target_health,
+        }
+        .map(|(current, max)| format!("{current:.0} / {max:.0}"))
+        .unwrap_or_default();
         if text.0 != desired {
             text.0 = desired;
         }
