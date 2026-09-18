@@ -8,7 +8,7 @@ use crate::{
     ui::{
         button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
         cosmic_background::{self, STAR_FIELD},
-        scrollbar::vertical_scrollbar,
+        screen, scrollbar::vertical_scrollbar,
         surface, theme, typography,
     },
     world::{NewWorldConfig, game_rules::GameRules, render_distance::RenderDistanceSettings},
@@ -27,10 +27,7 @@ use super::{
     world_settings_section::world_settings_section,
 };
 
-const CONTENT_WIDTH: f32 = 1120.0;
 const SIDEBAR_WIDTH: f32 = 280.0;
-const HEADER_HEIGHT: f32 = 116.0;
-const FOOTER_HEIGHT: f32 = 104.0;
 const COLUMN_GAP: f32 = 22.0;
 const SIDEBAR_BUTTON_GAP: f32 = 11.0;
 
@@ -206,16 +203,7 @@ pub(super) fn spawn_settings_screen(
             root.spawn(cosmic_background::star(spec));
         }
 
-        root.spawn(Node {
-            position_type: PositionType::Absolute,
-            top: px(0),
-            left: px(0),
-            right: px(0),
-            height: px(HEADER_HEIGHT),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            ..default()
-        })
+        root.spawn(screen::header())
         .with_children(|header| {
             header.spawn(typography::title(
                 content
@@ -225,29 +213,9 @@ pub(super) fn spawn_settings_screen(
             ));
         });
 
-        root.spawn(Node {
-            position_type: PositionType::Absolute,
-            top: px(HEADER_HEIGHT),
-            bottom: px(FOOTER_HEIGHT),
-            left: px(0),
-            right: px(0),
-            padding: UiRect::axes(px(32), px(18)),
-            align_items: AlignItems::Stretch,
-            justify_content: JustifyContent::Center,
-            min_height: px(0),
-            ..default()
-        })
+        root.spawn(screen::body())
         .with_children(|body| {
-            body.spawn(Node {
-                width: px(CONTENT_WIDTH),
-                max_width: percent(100),
-                height: percent(100),
-                min_height: px(0),
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Stretch,
-                column_gap: px(COLUMN_GAP),
-                ..default()
-            })
+            body.spawn(screen::content_row(COLUMN_GAP))
             .with_children(|columns| {
                 spawn_sidebar(columns, context, &content.localization, language);
                 spawn_content(
@@ -268,18 +236,7 @@ pub(super) fn spawn_settings_screen(
             });
         });
 
-        root.spawn(Node {
-            position_type: PositionType::Absolute,
-            left: px(0),
-            right: px(0),
-            bottom: px(0),
-            height: px(FOOTER_HEIGHT),
-            flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            column_gap: px(18),
-            ..default()
-        })
+        root.spawn(screen::footer())
         .with_children(|footer| match context {
             SettingsScreenContext::CreateWorld => {
                 spawn_new_world_footer(footer, &content.localization, language);
