@@ -22,7 +22,7 @@ use crate::{
     },
 };
 
-const HIGHLIGHT_SCALE: f32 = 1.01;
+const HIGHLIGHT_SCALE: f32 = 1.025;
 const BRUSH_GHOST_SCALE: f32 = 1.012;
 const BRUSH_GHOST_ALPHA: f32 = 0.30;
 const BRUSH_CLEAR_GHOST_ALPHA: f32 = 0.12;
@@ -123,7 +123,7 @@ fn spawn_highlight(
             alpha_mode: AlphaMode::Blend,
             // Keep the translucent selection shell in front of near-coplanar
             // texture/parallax layers without making it win over distant geometry.
-            depth_bias: 0.01,
+            depth_bias: 0.1,
             unlit: true,
             ..default()
         })),
