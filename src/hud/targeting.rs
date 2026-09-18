@@ -138,7 +138,6 @@ fn spawn_target_hud(
                         min_width: px(TARGET_SLOT_SIZE),
                         min_height: px(TARGET_SLOT_SIZE),
                         border: UiRect::all(px(2)),
-                        border_radius: BorderRadius::all(px(4)),
                         align_items: AlignItems::Center,
                         justify_content: JustifyContent::Center,
                         ..default()
