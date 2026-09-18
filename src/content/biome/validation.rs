@@ -75,15 +75,29 @@ fn validate_surface_biome(definition: &BiomeDefinition) {
         definition.id
     );
 
-    if definition.surface_fluid.is_some() {
-        assert!(
-            matches!(
-                definition.terrain,
-                Some(crate::content::biome_terrain::BiomeTerrain::Volcano { .. })
-            ),
-            "surface biome {} surfaceFluid currently requires volcano terrain",
-            definition.id
-        );
+    if let Some(surface_fluid) = &definition.surface_fluid {
+        let Some(crate::content::biome_terrain::BiomeTerrain::Volcano {
+            crater_depth,
+            ..
+        }) = definition.terrain
+        else {
+            panic!(
+                "surface biome {} surfaceFluid currently requires volcano terrain",
+                definition.id
+            );
+        };
+        match surface_fluid {
+            crate::content::biome_surface_fluid::BiomeSurfaceFluid::VolcanoCrater {
+                level_offset,
+                ..
+            } => {
+                assert!(
+                    *level_offset < crater_depth,
+                    "surface biome {} volcano crater levelOffset must stay below craterDepth",
+                    definition.id
+                );
+            }
+        }
     }
 
     definition.validate_surface_materials();
