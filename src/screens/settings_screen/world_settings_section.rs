@@ -11,7 +11,6 @@ use crate::{
     world::NewWorldConfig,
 };
 
-const GAME_MODE_BUTTON_HEIGHT: f32 = 44.0;
 const GAME_MODE_BUTTON_GAP: f32 = 8.0;
 
 #[derive(Component, Clone, Copy)]
