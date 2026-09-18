@@ -42,10 +42,6 @@ pub(crate) fn initial_button_border(active: bool) -> Color {
     if active { BUTTON_BORDER_STRONG } else { BUTTON_BORDER }
 }
 
-pub(crate) fn button_label_for_variant(label: impl Into<String>, active: bool) -> impl Bundle {
-    if active { typography::button_label_light(label) } else { typography::button_label(label) }
-}
-
 type ButtonAnimationQuery<'w, 's> = Query<
     'w,
     's,
