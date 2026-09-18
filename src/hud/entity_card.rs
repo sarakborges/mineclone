@@ -2,6 +2,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
     content::creature::CreatureRegistry,
+    entity::EntityHealth,
     creatures::CreatureInstance,
     localization::ActiveLanguage,
     player::camera::GameplayCamera,
@@ -15,7 +16,6 @@ const AVATAR_SIZE: f32 = 64.0;
 const AVATAR_IMAGE_SIZE: f32 = 54.0;
 const INFO_WIDTH: f32 = 180.0;
 const HEALTH_BAR_HEIGHT: f32 = 22.0;
-const PLACEHOLDER_HEALTH_PERCENT: f32 = 50.0;
 const HEALTH_FILL_COLOR: Color = Color::srgba(0.78, 0.16, 0.25, 0.94);
 
 /// The card itself receives an ECS Entity, not a copy of player or creature UI.
@@ -34,6 +34,12 @@ pub(super) struct EntityCard {
 
 #[derive(Component)]
 pub(super) struct EntityCardName(EntityCardSource);
+
+#[derive(Component)]
+struct EntityCardHealthFill(EntityCardSource);
+
+#[derive(Component)]
+struct EntityCardHealthLabel(EntityCardSource);
 
 /// Shared avatar, name and optional health layout used by both HUD placements.
 /// The local player has no world avatar asset yet, so its existing '?' remains.
@@ -113,17 +119,14 @@ pub(super) fn spawn_entity_card(
                     Pickable::IGNORE,
                 ));
 
-                // No creature health data exists yet: never display invented values.
-                // Keep the player's existing placeholder until health is implemented.
-                if source == EntityCardSource::LocalPlayer {
-                    spawn_player_health_placeholder(info);
-                }
+                spawn_entity_health_bar(info, source);
             });
         });
 }
 
-fn spawn_player_health_placeholder(info: &mut ChildSpawnerCommands) {
+fn spawn_entity_health_bar(info: &mut ChildSpawnerCommands, source: EntityCardSource) {
     info.spawn((
+        EntityCardHealthFill(source),
         Node {
             position_type: PositionType::Relative,
             width: percent(100),
@@ -142,7 +145,7 @@ fn spawn_player_health_placeholder(info: &mut ChildSpawnerCommands) {
                 position_type: PositionType::Absolute,
                 left: px(0),
                 top: px(0),
-                width: percent(PLACEHOLDER_HEALTH_PERCENT),
+                width: percent(100),
                 height: percent(100),
                 border_radius: BorderRadius::all(px(3)),
                 ..default()
@@ -150,28 +153,28 @@ fn spawn_player_health_placeholder(info: &mut ChildSpawnerCommands) {
             BackgroundColor(HEALTH_FILL_COLOR),
             Pickable::IGNORE,
         ));
-        health
-            .spawn((
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: px(0),
-                    top: px(0),
-                    width: percent(100),
-                    height: percent(100),
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::Center,
-                    ..default()
-                },
+        health.spawn((
+            EntityCardHealthLabel(source),
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(0),
+                top: px(0),
+                width: percent(100),
+                height: percent(100),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
+        .with_children(|label| {
+            label.spawn((
+                typography::inventory_category(""),
+                typography::tooltip_shadow(),
+                TextLayout::justify(Justify::Center),
                 Pickable::IGNORE,
-            ))
-            .with_children(|label| {
-                label.spawn((
-                    typography::inventory_category("50 / 100"),
-                    typography::tooltip_shadow(),
-                    TextLayout::justify(Justify::Center),
-                    Pickable::IGNORE,
-                ));
-            });
+            ));
+        });
     });
 }
 
@@ -191,6 +194,10 @@ pub(super) fn sync_entity_cards(
     subjects: EntityCardSubjects,
     mut cards: Query<(&mut EntityCard, &mut Visibility)>,
     mut names: Query<(&EntityCardName, &mut Text)>,
+    health: Query<&EntityHealth>,
+    mut fills: Query<(&EntityCardHealthFill, &Children)>,
+    mut fill_nodes: Query<&mut Node>,
+    mut labels: Query<(&EntityCardHealthLabel, &mut Text)>,
 ) {
     let player_entity = subjects.player.iter().next();
     let target_entity = if subjects.settings.target_block_position() == TargetBlockPosition::Hidden {
@@ -222,6 +229,36 @@ pub(super) fn sync_entity_cards(
         };
         if *visibility != desired {
             *visibility = desired;
+        }
+    }
+
+    for (marker, children) in &mut fills {
+        let entity = match marker.0 {
+            EntityCardSource::LocalPlayer => player_entity,
+            EntityCardSource::Target => target_entity,
+        };
+        let fraction = entity
+            .and_then(|entity| health.get(entity).ok())
+            .map(|value| (value.current() / value.max()).clamp(0.0, 1.0))
+            .unwrap_or(0.0);
+        if let Some(&fill_entity) = children.first() {
+            if let Ok(mut node) = fill_nodes.get_mut(fill_entity) {
+                node.width = percent(fraction * 100.0);
+            }
+        }
+    }
+
+    for (marker, mut text) in &mut labels {
+        let entity = match marker.0 {
+            EntityCardSource::LocalPlayer => player_entity,
+            EntityCardSource::Target => target_entity,
+        };
+        let desired = entity
+            .and_then(|entity| health.get(entity).ok())
+            .map(|value| format!("{:.0} / {:.0}", value.current(), value.max()))
+            .unwrap_or_default();
+        if text.0 != desired {
+            text.0 = desired;
         }
     }
 
