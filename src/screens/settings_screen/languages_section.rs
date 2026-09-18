@@ -169,7 +169,7 @@ pub(super) fn sync_language_dropdown(
         for mut text in &mut labels { text.0 = language_label(active_language.get(), &localization); }
     }
     if !open_changed && !language_changed && options.iter().next().is_none() { return; }
-    for (option, interaction, mut background, mut border) in &mut options {
+    for (option, interaction, background, border) in &mut options {
         surface::apply_control_colors(
             surface::hud_control_colors(*interaction, option.0 == active_language.get()),
             background,
