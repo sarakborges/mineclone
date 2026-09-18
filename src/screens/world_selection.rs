@@ -16,7 +16,7 @@ use crate::{
     localization::{ActiveLanguage, UiLocalization},
     player::{game_mode::GameMode, hotbar::PlayerHotbar, player_id::LOCAL_PLAYER_ID},
     ui::{
-        button::menu_button, scrollbar, surface, theme,
+        button::{menu_button, primary_menu_button}, scrollbar, surface, theme,
         transition::{ScreenTransition, ScreenTransitionTarget}, typography,
     },
     voxel::world::VoxelWorld,
@@ -328,7 +328,7 @@ fn spawn_world_selection(
                 panel.spawn(scrollbar::vertical_scrollbar(world_list));
                 panel.spawn((SelectionFeedback, typography::caption(String::new())));
                 panel.spawn((SelectionError, typography::caption(state.error.clone())));
-                panel.spawn(menu_button(
+                panel.spawn(primary_menu_button(
                     localization.text(language.get(), "worldSelection.load").to_owned(),
                     WorldSelectionAction::Load,
                 ));
