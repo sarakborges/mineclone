@@ -153,6 +153,7 @@ struct CreatureTintAssets<'w> {
     cache: ResMut<'w, TintedCreatureMaterials>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn configure_loaded_scene(
     ready: On<WorldInstanceReady>,
     mut commands: Commands,
