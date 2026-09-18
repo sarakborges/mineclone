@@ -57,4 +57,8 @@ impl AttackRegistry {
     pub fn get(&self, id: &str) -> Option<&AttackDefinition> {
         self.definitions.get(id)
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &AttackDefinition> {
+        self.definitions.values()
+    }
 }
