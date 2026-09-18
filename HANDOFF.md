@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.27.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. O PR #14 já foi mergeado em `develop`. **HEAD versionado imediatamente anterior a esta atualização documental:** `27e6249f1390bf0401fbc739b0d499be27869112`. O bloco funcional de surface-biome ownership/persistência passou na CI de push `35395177274` em `004068bd7be914afa85081cc7a10b2a2c89506b3`. O bump `0.27.0` está na run de push `35395333221`, ainda em execução no momento desta atualização. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.27.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. O PR #14 já foi mergeado em `develop`. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `4778ac925d95074a0b2b8606f6c64b2da3e4a156`. CI canônica de push `35395484913` — **success** — cobrindo auditoria de localizações, Clippy com `-D warnings` e `cargo check --locked`, já com `VERSION 0.27.0`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.26.1`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. O PR #14 já foi mergeado em `develop`. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `9367da25dc6b15b4ddcd1175fd5ae3dbb0a1909c`. O fix funcional de terrain forçado está em `db05e21ed9a28f25b23202c5b5dbfe1741194319` e passou na CI de push `35393716818`; o bump `0.26.1` está em `9367da25dc6b15b4ddcd1175fd5ae3dbb0a1909c`, com run de push `35393788708` ainda enfileirada no momento desta atualização. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
@@ -1204,8 +1204,13 @@ Correção:
   - auditoria de localizações;
   - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
   - `cargo check --locked`.
-- Cleanup posterior `8b4a0d44...` remove apenas uma linha redundante da construção do overlay.
-- `VERSION 0.27.0` em `27e6249f...`; run de push `35395333221` estava em execução no momento desta escrita.
+- O cleanup `8b4a0d44...` expôs duas assignments mortas de `surface_weight` no Clippy; esse estado intermediário falhou.
+- `4778ac925d95074a0b2b8606f6c64b2da3e4a156` corrige a normalização diagnóstica sem writes mortos.
+- `VERSION 0.27.0` está em `27e6249f1390bf0401fbc739b0d499be27869112`.
+- CI canônica final: run de push `35395484913` — **success**:
+  - auditoria de localizações;
+  - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
 
 ### Próximo passo imediato
