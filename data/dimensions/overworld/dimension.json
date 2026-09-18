@@ -66,6 +66,7 @@
   "dayNightCycle": "asteria:overworld/day_night_cycle",
   "sky": "asteria:overworld/sky",
   "seaLevel": 90,
+  "maxEntities": 128,
   "hydrology": {
     "waterFluid": "asteria:water",
     "coastBiome": "asteria:overworld/coast",
