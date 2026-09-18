@@ -162,7 +162,9 @@ pub fn clicked_outside<M: Send + Sync + 'static>(
 ) -> bool {
     open
         && mouse.just_pressed(MouseButton::Left)
-        && !inside.iter().any(|interaction| *interaction == Interaction::Pressed)
+        && !inside
+            .iter()
+            .any(|interaction| *interaction != Interaction::None)
 }
 
 pub fn indicator() -> impl Bundle {
