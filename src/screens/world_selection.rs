@@ -553,15 +553,20 @@ fn abandon_world_load(state: Res<WorldSelectionState>) {
     }
 }
 
+#[derive(SystemParam)]
+struct WorldSelectionActionContext<'w, 's> {
+    content: WorldSelectionScanContent<'w>,
+    entries: Query<'w, 's, (Entity, &'static WorldListEntry)>,
+    localization: Res<'w, UiLocalization>,
+    language: Res<'w, ActiveLanguage>,
+}
+
 fn handle_world_selection(
     mut commands: Commands,
     interactions: Query<(&Interaction, &WorldSelectionAction), Changed<Interaction>>,
-    entries: Query<(Entity, &WorldListEntry)>,
     mut state: ResMut<WorldSelectionState>,
-    content: WorldSelectionScanContent,
     mut transition: ResMut<ScreenTransition>,
-    localization: Res<UiLocalization>,
-    language: Res<ActiveLanguage>,
+    context: WorldSelectionActionContext,
 ) {
     if transition.is_active() {
         return;
@@ -597,7 +602,7 @@ fn handle_world_selection(
                         state.worlds.retain(|world| world.id != *id);
                         state.error.clear();
                         if let Some((entity, _)) =
-                            entries.iter().find(|(_, entry)| entry.0 == *id)
+                            context.entries.iter().find(|(_, entry)| entry.0 == *id)
                         {
                             commands.entity(entity).despawn();
                         }
@@ -605,7 +610,7 @@ fn handle_world_selection(
                     Err(error) => {
                         state.error = format!(
                             "{} {id}: {error}",
-                            localization.text(language.get(), "worldSelection.deleteError")
+                            context.localization.text(context.language.get(), "worldSelection.deleteError")
                         );
                     }
                 }
@@ -621,7 +626,7 @@ fn handle_world_selection(
 
                 let id = id.clone();
                 let copy_started = Instant::now();
-                let owned = content.owned_for_loading();
+                let owned = context.content.owned_for_loading();
                 info!(
                     "World {id} load definitions copied on main thread: {:?}",
                     copy_started.elapsed()
@@ -666,7 +671,7 @@ fn handle_world_selection(
                     Err(error) => {
                         state.error = format!(
                             "{}: {error}",
-                            localization.text(language.get(), "worldSelection.loadStartError")
+                            context.localization.text(context.language.get(), "worldSelection.loadStartError")
                         );
                     }
                 }
