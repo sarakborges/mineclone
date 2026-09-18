@@ -4,7 +4,7 @@ use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::{SettingsScreenMode, SettingsState}},
     localization::{ActiveLanguage, UiLocalization},
     ui::{
-        button::{button, standard_button},
+        button::standard_button,
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
         visibility::set_visibility,
@@ -82,13 +82,13 @@ fn spawn_pause_menu(
                 ..default()
             })
             .with_children(|menu| {
-                menu.spawn(menu_button(
+                menu.spawn(standard_button(
                     localization.text(language, "pause.resume").to_owned(),
-                    PauseMenuAction::Resume,
+                    PauseMenuAction::Resume, 360.0, crate::ui::button::ButtonVariant::Normal,
                 ));
-                menu.spawn(menu_button(
+                menu.spawn(standard_button(
                     localization.text(language, "pause.leaveWorld").to_owned(),
-                    PauseMenuAction::LeaveWorld,
+                    PauseMenuAction::LeaveWorld, 360.0, crate::ui::button::ButtonVariant::Normal,
                 ));
                 menu.spawn((
                     Node {
@@ -112,9 +112,9 @@ fn spawn_pause_menu(
                         ),
                     ],
                 ));
-                menu.spawn(menu_button(
+                menu.spawn(standard_button(
                     localization.text(language, "common.exitGame").to_owned(),
-                    PauseMenuAction::ExitGame,
+                    PauseMenuAction::ExitGame, 360.0, crate::ui::button::ButtonVariant::Danger,
                 ));
                 menu.spawn((PauseSaveFeedback, typography::caption(String::new())));
             });
