@@ -124,6 +124,7 @@ impl HydrologyField {
         );
 
         HydrologyRegion {
+            seed: self.seed,
             coord,
             river_graph: rivers.graph,
             river_carve_depth: RIVER_CARVE_DEPTH,
