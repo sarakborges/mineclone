@@ -40,10 +40,6 @@ impl PendingFluidUpdates {
         frontier::enqueue_loaded_fluid_frontier(self, world, coord);
     }
 
-    fn reserve(&mut self, additional: usize) {
-        self.queue.reserve(additional);
-    }
-
     fn enqueue(&mut self, position: IVec3) {
         self.queue.enqueue(position);
     }
