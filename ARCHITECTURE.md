@@ -104,6 +104,8 @@ Surface-carver tunnels are subordinate to cave connectivity: a surface tunnel is
 
 Spawn-column dryness must use the same physically supported hydrology as terrain generation. When actual terrain surface height is available, bootstrap/spawn selection must use `supported_water_at(...)` rather than unfiltered `water_at(...)`, so unsupported lake/ocean candidates cannot make genuinely dry terrain impossible to select.
 
+A user-selected Spawn Biome is not a request to search the seed for a distant natural occurrence. It is a deterministic initial-region override owned by `BiomeField`: the canonical 9×9 bootstrap chunks around the default spawn are forced to the selected surface biome, with the same override feeding terrain sampling, biome identity and continentalness/hydrology so Coast/Ocean cannot supersede it. Only dry-column placement is searched inside that already-forced core. The selected spawn biome is persisted in world snapshots and restored on load so regenerated/queried initial terrain keeps the same identity across sessions.
+
 ## 8. Rendering and color
 
 Semantic/internal color is HSI-first.
