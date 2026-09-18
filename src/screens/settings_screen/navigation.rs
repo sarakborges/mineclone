@@ -58,7 +58,7 @@ pub(super) struct SettingsSectionPanel(pub(super) SettingsSection);
 pub(super) struct SettingsBackButton;
 
 pub(super) fn section_button(section: SettingsSection, label: impl Into<String>) -> impl Bundle {
-    sidebar_menu_button(
+    button_with_marker(
         label,
         SettingsSectionButton(section),
         SettingsSectionButtonLabel(section),
