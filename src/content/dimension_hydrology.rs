@@ -2,7 +2,6 @@ use serde::Deserialize;
 
 use super::{
     biome::{BiomeKind, BiomeRegistry},
-    block::BlockRegistry,
     builtin_ids::WATER_FLUID_ID,
     fluid::FluidRegistry,
 };
@@ -16,14 +15,6 @@ pub struct DimensionHydrology {
     pub ocean_biome: Option<String>,
     #[serde(default)]
     pub coast_biome: Option<String>,
-    #[serde(default)]
-    pub ocean_bed_block: Option<String>,
-    #[serde(default)]
-    pub river_bed_block: Option<String>,
-    #[serde(default)]
-    pub lake_bed_block: Option<String>,
-    #[serde(default)]
-    pub shore_block: Option<String>,
     #[serde(default = "default_feature_weight")]
     pub river_weight: f32,
     #[serde(default = "default_feature_weight")]
@@ -36,10 +27,6 @@ impl Default for DimensionHydrology {
             water_fluid: WATER_FLUID_ID.to_owned(),
             ocean_biome: None,
             coast_biome: None,
-            ocean_bed_block: None,
-            river_bed_block: None,
-            lake_bed_block: None,
-            shore_block: None,
             river_weight: default_feature_weight(),
             lake_weight: default_feature_weight(),
         }
@@ -51,7 +38,6 @@ impl DimensionHydrology {
         &self,
         dimension_id: &str,
         biomes: &BiomeRegistry,
-        blocks: &BlockRegistry,
         fluids: &FluidRegistry,
     ) {
         assert!(
@@ -88,21 +74,6 @@ impl DimensionHydrology {
             );
         }
 
-        for (field, block_id) in [
-            ("oceanBedBlock", self.ocean_bed_block.as_deref()),
-            ("riverBedBlock", self.river_bed_block.as_deref()),
-            ("lakeBedBlock", self.lake_bed_block.as_deref()),
-            ("shoreBlock", self.shore_block.as_deref()),
-        ] {
-            let Some(block_id) = block_id else {
-                continue;
-            };
-
-            assert!(
-                blocks.get(block_id).is_some(),
-                "dimension {dimension_id} hydrology.{field} references missing block: {block_id}"
-            );
-        }
     }
 }
 
