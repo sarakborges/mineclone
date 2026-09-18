@@ -15,7 +15,10 @@ use crate::voxel::{
 
 use super::{
     context::LightingContext,
-    medium::{block_emission_for_cell, light_transmission, medium_dampening_for_cells},
+    medium::{
+        block_emission_for_cell, fluid_emission_for_cell, light_transmission,
+        medium_dampening_for_cells,
+    },
     queue::{LightingLane, LightingQueue},
 };
 
@@ -174,11 +177,10 @@ fn desired_light(
         registries.secondary_properties,
         position,
     );
-    let emitted = block_emission_for_cell(
-        cell,
-        registries.blocks,
-        registries.secondary_properties,
-    );
+    let emitted = mix_strongest_block_lights([
+        block_emission_for_cell(cell, registries.blocks, registries.secondary_properties),
+        fluid_emission_for_cell(fluid, registries.fluids),
+    ]);
 
     if blocks_light {
         return VoxelLight::new_hsi(0, emitted);
