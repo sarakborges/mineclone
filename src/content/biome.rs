@@ -141,6 +141,14 @@ pub struct BiomeDefinition {
     pub visuals: Option<BiomeVisuals>,
 }
 
+impl BiomeDefinition {
+    pub fn visuals(&self) -> &BiomeVisuals {
+        self.visuals
+            .as_ref()
+            .unwrap_or_else(|| panic!("biome {} does not define visuals", self.id))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct BiomeStructurePlacement {
     pub(crate) biome_id: String,
@@ -172,12 +180,6 @@ impl BiomeRegistry {
 
     pub fn iter(&self) -> impl Iterator<Item = &BiomeDefinition> {
         self.definitions.values()
-    }
-
-    pub fn visuals<'a>(&self, biome: &'a BiomeDefinition) -> &'a BiomeVisuals {
-        biome.visuals
-            .as_ref()
-            .unwrap_or_else(|| panic!("biome {} must define visuals", biome.id))
     }
 
     pub fn has_volume_density_modifiers(&self) -> bool {
