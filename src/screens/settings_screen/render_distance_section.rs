@@ -88,7 +88,6 @@ fn render_distance_slider(chunks: i32) -> impl Bundle {
                     right: px(0),
                     top: px(13),
                     height: px(6),
-                    border_radius: BorderRadius::all(px(3)),
                     ..default()
                 },
                 BackgroundColor(theme::SLIDER_TRACK),
@@ -102,17 +101,9 @@ fn render_distance_slider(chunks: i32) -> impl Bundle {
                     height: px(SLIDER_THUMB_SIZE),
                     left: percent(initial_position * 100.0),
                     top: px(8),
-                    border_radius: BorderRadius::MAX,
                     ..default()
                 },
                 BackgroundColor(theme::SLIDER_THUMB),
-                BoxShadow(vec![ShadowStyle {
-                    color: theme::CYAN_GLOW,
-                    x_offset: px(0),
-                    y_offset: px(0),
-                    spread_radius: px(0),
-                    blur_radius: px(12),
-                }]),
             ),
         ],
     )
