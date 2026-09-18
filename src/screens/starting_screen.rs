@@ -109,11 +109,11 @@ fn setup_starting_screen(
                         localization.text(language, "starting.loadWorlds").to_owned(),
                         StartingScreenAction::LoadWorlds,
                     ));
-                    content.spawn(menu_button(
+                    content.spawn(button(
                         localization.text(language, "common.settings").to_owned(),
                         StartingScreenAction::Settings,
                     ));
-                    content.spawn(menu_button(
+                    content.spawn(button(
                         localization.text(language, "common.exitGame").to_owned(),
                         StartingScreenAction::ExitGame,
                     ));
