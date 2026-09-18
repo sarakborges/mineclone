@@ -84,11 +84,10 @@ fn spawn_pause_menu(
             .with_children(|menu| {
                 menu.spawn(button(
                     localization.text(language, "pause.resume").to_owned(),
-                    PauseMenuAction::Resume, px(360), COMPACT_CONTROL_HEIGHT, ButtonVariant::Normal,
-                ));
-                menu.spawn(button(
-                    localization.text(language, "pause.leaveWorld").to_owned(),
-                    PauseMenuAction::LeaveWorld, px(360), COMPACT_CONTROL_HEIGHT, ButtonVariant::Normal,
+                    PauseMenuAction::Resume,
+                    px(360),
+                    COMPACT_CONTROL_HEIGHT,
+                    ButtonVariant::Normal,
                 ));
                 menu.spawn((
                     Node {
@@ -115,8 +114,18 @@ fn spawn_pause_menu(
                     ],
                 ));
                 menu.spawn(button(
+                    localization.text(language, "pause.leaveWorld").to_owned(),
+                    PauseMenuAction::LeaveWorld,
+                    px(360),
+                    COMPACT_CONTROL_HEIGHT,
+                    ButtonVariant::Normal,
+                ));
+                menu.spawn(button(
                     localization.text(language, "common.exitGame").to_owned(),
-                    PauseMenuAction::ExitGame, px(360), COMPACT_CONTROL_HEIGHT, ButtonVariant::Danger,
+                    PauseMenuAction::ExitGame,
+                    px(360),
+                    COMPACT_CONTROL_HEIGHT,
+                    ButtonVariant::Danger,
                 ));
                 menu.spawn((PauseSaveFeedback, typography::caption(String::new())));
             });
