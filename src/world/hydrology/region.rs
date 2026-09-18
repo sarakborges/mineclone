@@ -11,6 +11,7 @@ use super::types::{HydrologyMacroSample, WaterBody};
 
 #[derive(Clone, Debug)]
 pub struct HydrologyRegion {
+    pub(super) seed: u64,
     // GenerationRegion and its hydrology must identify the same region at
     // chunk seams; allow the generation layer to check this invariant.
     pub(crate) coord: IVec2,
