@@ -18,6 +18,7 @@
   "worldSelection.deleteError": "Cannot delete world",
   "worldSelection.selected": "Selected",
   "common.settings": "Settings",
+  "common.gameSettings": "Game Settings",
   "common.exitGame": "Exit Game",
   "newWorld.title": "NEW WORLD",
   "newWorld.return": "Return",
