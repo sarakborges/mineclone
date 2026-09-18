@@ -231,7 +231,6 @@ fn poll_world_scan(
     mut commands: Commands,
     mut state: ResMut<WorldSelectionState>,
     list: Query<Entity, With<WorldListContainer>>,
-    mut statuses: Query<&mut Text, With<WorldListStatus>>,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
 ) {
@@ -260,15 +259,6 @@ fn poll_world_scan(
                 localization.text(language.get(), "worldSelection.scanError")
             );
         }
-    }
-    for mut status in &mut statuses {
-        status.0 = if state.worlds.is_empty() {
-            localization
-                .text(language.get(), "worldSelection.noRestorable")
-                .to_owned()
-        } else {
-            String::new()
-        };
     }
 }
 
@@ -439,6 +429,14 @@ fn spawn_world_selection(
                                     column.spawn((
                                         SelectionError,
                                         typography::caption(state.error.clone()),
+                                        Node {
+                                            display: if state.error.is_empty() {
+                                                Display::None
+                                            } else {
+                                                Display::Flex
+                                            },
+                                            ..default()
+                                        },
                                     ));
                                 });
                         });
@@ -684,8 +682,11 @@ fn handle_world_selection(
 
 fn sync_world_selection_feedback(
     state: Res<WorldSelectionState>,
-    mut statuses: Query<&mut Text, (With<WorldListStatus>, Without<SelectionError>)>,
-    mut errors: Query<&mut Text, With<SelectionError>>,
+    mut statuses: Query<
+        (&mut Text, &mut Node),
+        (With<WorldListStatus>, Without<SelectionError>),
+    >,
+    mut errors: Query<(&mut Text, &mut Node), With<SelectionError>>,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
 ) {
@@ -704,14 +705,30 @@ fn sync_world_selection_feedback(
     } else {
         String::new()
     };
-    for mut text in &mut statuses {
+    for (mut text, mut node) in &mut statuses {
         if text.0 != status {
             text.0 = status.clone();
         }
+        let display = if status.is_empty() {
+            Display::None
+        } else {
+            Display::Flex
+        };
+        if node.display != display {
+            node.display = display;
+        }
     }
-    for mut text in &mut errors {
+    for (mut text, mut node) in &mut errors {
         if text.0 != state.error {
             text.0.clone_from(&state.error);
+        }
+        let display = if state.error.is_empty() {
+            Display::None
+        } else {
+            Display::Flex
+        };
+        if node.display != display {
+            node.display = display;
         }
     }
 }
