@@ -93,7 +93,7 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                             width: percent(100),
                             height: percent(100),
                             padding: UiRect::horizontal(px(12)),
-                            border: UiRect::all(px(1)),
+                            border: UiRect::all(px(2)),
                             align_items: AlignItems::Center,
                             justify_content: JustifyContent::SpaceBetween,
                             ..default()
