@@ -74,7 +74,21 @@ pub(crate) fn spawn_player_entity(
             SwimmingState::default(),
             DespawnOnExit(GameState::Gameplay),
         ))
-        .insert((Name::new("Player"), EntityHealth::new(definition.health)));
+.insert((Name::new("Player"), EntityHealth::new(definition.health)))
+        .with_children(|player| {
+            player.spawn((
+                // This child camera renders only the target overlay after the world
+                // camera. Its separate layer/depth buffer makes the highlight immune
+                // to terrain texture/parallax layers and ordinary z-fighting.
+                Camera3d::default(),
+                Camera {
+                    order: TARGET_HIGHLIGHT_CAMERA_ORDER,
+                    clear_color: ClearColorConfig::None,
+                    ..default()
+                },
+                RenderLayers::layer(2),
+            ));
+        });
 }
 
 pub(crate) fn player_position_is_clear(world: &VoxelWorld, translation: Vec3) -> bool {
