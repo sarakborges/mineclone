@@ -122,6 +122,7 @@ pub(super) fn sample_density_field(
                 let carver_delta = surface_carver_density_delta(
                     sampled_density,
                     sample_position,
+                    column.surface_height as f32,
                     &surface_carvers,
                 );
                 let protected_carver_delta = apply_carver_water_protection(
