@@ -20,13 +20,13 @@ const GAME_MODE_BUTTON_GAP: f32 = 8.0;
 pub(crate) struct GameModeButton(pub(crate) GameMode);
 
 #[derive(Component, Clone, Copy)]
-pub(crate) struct GameModeButtonLabel(GameMode);
+struct GameModeButtonLabel(GameMode);
 
 pub(crate) type GameModeButtonInteractions<'w, 's> = Query<
     'w,
     's,
     (&'static Interaction, &'static GameModeButton),
-    (Changed<Interaction>, Without<InteractionDisabled>),
+    Changed<Interaction>,
 >;
 
 type GameModeButtonSyncQuery<'w, 's> = Query<
@@ -108,7 +108,10 @@ fn game_mode_button(
             ..default()
         },
         BackgroundColor(selectable_button_background(active, Interaction::None)),
-        BorderColor::all(crate::ui::selectable::selectable_button_border(active, Interaction::None)),
+        BorderColor::all(crate::ui::selectable::selectable_button_border(
+            active,
+            Interaction::None,
+        )),
         children![(typography::button_label(label), GameModeButtonLabel(mode))],
     )
 }
