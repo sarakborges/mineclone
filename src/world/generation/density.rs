@@ -94,6 +94,7 @@ pub(super) fn sample_density_field(
             resolve_surface_carver_column(
                 &mut surface_carvers,
                 horizontal,
+                column.surface_height as f32,
                 &column.surface_influences,
                 &surface_carver_context,
             );
