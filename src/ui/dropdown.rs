@@ -26,7 +26,6 @@ pub(crate) fn indicator() -> impl Bundle {
                     top: px(2),
                     width: px(CHEVRON_STROKE_WIDTH),
                     height: px(CHEVRON_STROKE_HEIGHT),
-                    border_radius: BorderRadius::MAX,
                     ..default()
                 },
                 BackgroundColor(theme::TEXT_MUTED),
@@ -39,7 +38,6 @@ pub(crate) fn indicator() -> impl Bundle {
                     top: px(2),
                     width: px(CHEVRON_STROKE_WIDTH),
                     height: px(CHEVRON_STROKE_HEIGHT),
-                    border_radius: BorderRadius::MAX,
                     ..default()
                 },
                 BackgroundColor(theme::TEXT_MUTED),
