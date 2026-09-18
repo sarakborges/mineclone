@@ -1,0 +1,26 @@
+{
+  "id": "asteria:overworld/gorge",
+  "name": {
+    "english": "Gorge",
+    "portuguese_brazil": "Desfiladeiro",
+    "spanish": "Desfiladero"
+  },
+  "kind": "terrain_overlay",
+  "parentBiome": "asteria:overworld/mountains",
+  "distributions": [
+    {
+      "type": "noise_band",
+      "scale": 0.0025,
+      "coreWidth": 0.035,
+      "edgeWidth": 0.025,
+      "warpScale": 0.0012,
+      "warpStrength": 90
+    }
+  ],
+  "terrainModifiers": [
+    {
+      "type": "height_offset",
+      "height": -34
+    }
+  ]
+}
