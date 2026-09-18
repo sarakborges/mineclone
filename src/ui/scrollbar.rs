@@ -13,11 +13,23 @@ pub(crate) struct AutoScrollbar {
 /// For capped-height scroll areas: start hidden and reveal only when the
 /// laid-out content is taller than the available viewport.
 pub(crate) fn vertical_scrollbar(target: Entity) -> impl Bundle {
-    (AutoScrollbar { target }, scrollbar(target, true))
+    scrollbar(target, true)
+}
+
+pub(crate) fn vertical_scrollbar_marked<M>(target: Entity) -> impl Bundle
+where
+    M: Component + Default,
+{
+    (
+        M::default(),
+        Interaction::default(),
+        scrollbar_marked::<M>(target, true),
+    )
 }
 
 fn scrollbar(target: Entity, initially_hidden: bool) -> impl Bundle {
     (
+        AutoScrollbar { target },
         Interaction::default(),
         Node {
             display: if initially_hidden { Display::None } else { Display::Flex },
@@ -33,6 +45,38 @@ fn scrollbar(target: Entity, initially_hidden: bool) -> impl Bundle {
             min_thumb_length: 28.0,
         },
         children![(
+            BackgroundColor(theme::TEXT_SUBTLE.with_alpha(0.38)),
+            BorderColor::all(theme::TEXT_SUBTLE.with_alpha(0.24)),
+            ScrollbarThumb {
+                border: UiRect::all(px(1)),
+                border_radius: BorderRadius::ZERO,
+            },
+        )],
+    )
+}
+
+fn scrollbar_marked<M>(target: Entity, initially_hidden: bool) -> impl Bundle
+where
+    M: Component + Default,
+{
+    (
+        AutoScrollbar { target },
+        Node {
+            display: if initially_hidden { Display::None } else { Display::Flex },
+            min_width: px(8),
+            margin: UiRect::left(px(6)),
+            grid_column: GridPlacement::start(2),
+            grid_row: GridPlacement::start(1),
+            ..default()
+        },
+        Scrollbar {
+            target,
+            orientation: ControlOrientation::Vertical,
+            min_thumb_length: 28.0,
+        },
+        children![(
+            M::default(),
+            Interaction::default(),
             BackgroundColor(theme::TEXT_SUBTLE.with_alpha(0.38)),
             BorderColor::all(theme::TEXT_SUBTLE.with_alpha(0.24)),
             ScrollbarThumb {
