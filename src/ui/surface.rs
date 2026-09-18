@@ -13,7 +13,7 @@ pub fn modal_panel() -> impl Bundle {
 }
 
 pub fn settings_content() -> impl Bundle {
-    frosted_surface(Node { flex_grow: 1.0, height: percent(100), min_width: px(0), min_height: px(0), padding: UiRect::all(px(18)), flex_direction: FlexDirection::Column, align_items: AlignItems::Stretch, border: UiRect::all(px(1)), ..default() })
+    frosted_surface(Node { flex_grow: 1.0, height: percent(100), min_width: px(0), min_height: px(0), padding: UiRect::all(px(18)), flex_direction: FlexDirection::Column, align_items: AlignItems::Stretch, border: UiRect::all(px(2)), ..default() })
 }
 
 pub fn hud_container(node: Node) -> impl Bundle { hud_surface(node) }
@@ -24,7 +24,7 @@ pub fn hud_control_static(selected: bool) -> (Color, Color) {
 
 pub fn hud_control_colors(interaction: Interaction, selected: bool) -> (Color, Color) {
     match (interaction, selected) {
-        (Interaction::Pressed, true) | (Interaction::Hovered, true) => (theme::SURFACE_INSET, HUD_SELECTED_BORDER_COLOR),
+        (Interaction::Pressed, true) | (Interaction::Hovered, true) => (theme::PURPLE_SOFT, HUD_SELECTED_BORDER_COLOR),
         (Interaction::None, true) => hud_control_static(true),
         (Interaction::Pressed, false) => (theme::SURFACE_INSET, HUD_SELECTED_BORDER_COLOR.with_alpha(0.78)),
         (Interaction::Hovered, false) => (theme::SURFACE_ELEVATED, HUD_HOVER_BORDER_COLOR),
