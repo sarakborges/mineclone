@@ -25,7 +25,7 @@ pub(crate) struct CreatureInstance {
 }
 
 #[derive(Component)]
-pub(crate) struct CreatureDeathTimer(Timer);
+pub(crate) struct CreatureDeathTimer(pub(crate) Timer);
 
 pub(crate) struct CreaturesPlugin;
 
