@@ -155,9 +155,9 @@ pub(super) fn sync_language_dropdown(
     active_language: Res<ActiveLanguage>,
     localization: Res<UiLocalization>,
     mut panels: Query<&mut Node, With<LanguageDropdownPanel>>,
-    mut labels: Query<&mut Text, With<LanguageDropdownLabel>>,
+    mut labels: Query<&mut Text, (With<LanguageDropdownLabel>, Without<LanguageOptionLabel>)>,
     mut options: Query<(&LanguageOption, &Interaction, &mut BackgroundColor, &mut BorderColor)>,
-    mut option_labels: Query<(&LanguageOptionLabel, &mut Text)>,
+    mut option_labels: Query<(&LanguageOptionLabel, &mut Text), Without<LanguageDropdownLabel>>,
 ) {
     let open_changed = state.is_changed();
     if open_changed {
