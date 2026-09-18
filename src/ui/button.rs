@@ -46,73 +46,25 @@ type ButtonAnimationQuery<'w, 's> = Query<
     With<Button>,
 >;
 
-pub fn button<A: Component>(label: impl Into<String>, action: A) -> impl Bundle {
-    (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Normal, Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![typography::button_label_light(label)])
-}
-
-pub fn button_with_marker<A: Component, L: Component>(label: impl Into<String>, action: A, label_marker: L) -> impl Bundle {
-    (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Normal, Node { width: percent(100), height: px(MENU_BUTTON_HEIGHT), padding: UiRect::axes(px(14), px(0)), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![(typography::button_label(label), label_marker)])
-}
-
-pub fn primary_button<A: Component>(label: impl Into<String>, action: A) -> impl Bundle {
-    (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Primary, Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_PRIMARY), BorderColor::all(BUTTON_BORDER_STRONG), children![typography::button_label_light(label)])
-}
-
-pub(crate) fn danger_button<A: Component>(label: impl Into<String>, action: A) -> impl Bundle {
-    (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Danger, Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_DANGER), BorderColor::all(BUTTON_BORDER_STRONG), children![typography::button_label_light(label)])
-}
-
-pub(crate) fn standard_button_with_marker<A: Component, M: Component>(
+pub fn button<A: Component>(
     label: impl Into<String>,
     action: A,
-    width: f32,
+    width: Val,
+    height: f32,
     variant: ButtonVariant,
-    marker: M,
 ) -> impl Bundle {
-    let (background, border) = match variant {
-        ButtonVariant::Normal => (BUTTON_NORMAL, BUTTON_BORDER),
-        ButtonVariant::Primary => (BUTTON_PRIMARY, BUTTON_BORDER_STRONG),
-        ButtonVariant::Danger => (BUTTON_DANGER, BUTTON_BORDER_STRONG),
-    };
+    let flex_grow = if matches!(&width, Val::Auto) { 1.0 } else { 0.0 };
+    let (background, border) = button_static_colors(variant);
+
     (
         Button,
         action,
         AsteriaButtonVisual::default(),
         variant,
         Node {
-            width: px(width),
-            flex_grow: if width <= 0.0 { 1.0 } else { 0.0 },
-            height: px(COMPACT_CONTROL_HEIGHT),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            border: UiRect::all(px(2)),
-            ..default()
-        },
-        BackgroundColor(background),
-        BorderColor::all(border),
-        children![(typography::button_label_light(label), marker)],
-    )
-}
-
-pub(crate) fn standard_button<A: Component>(
-    label: impl Into<String>,
-    action: A,
-    width: f32,
-    variant: ButtonVariant,
-) -> impl Bundle {
-    let (background, border) = match variant {
-        ButtonVariant::Normal => (BUTTON_NORMAL, BUTTON_BORDER),
-        ButtonVariant::Primary => (BUTTON_PRIMARY, BUTTON_BORDER_STRONG),
-        ButtonVariant::Danger => (BUTTON_DANGER, BUTTON_BORDER_STRONG),
-    };
-    (
-        Button,
-        action,
-        AsteriaButtonVisual::default(),
-        variant,
-        Node {
-            width: px(width),
-            height: px(COMPACT_CONTROL_HEIGHT),
+            width,
+            flex_grow,
+            height: px(height),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
             border: UiRect::all(px(2)),
@@ -124,8 +76,12 @@ pub(crate) fn standard_button<A: Component>(
     )
 }
 
-pub(crate) fn compact_control_button<A: Component>(label: impl Into<String>, action: A, width: f32) -> impl Bundle {
-    (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Normal, Node { width: px(width), height: px(COMPACT_CONTROL_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![typography::button_label(label)])
+fn button_static_colors(variant: ButtonVariant) -> (Color, Color) {
+    match variant {
+        ButtonVariant::Normal => (BUTTON_NORMAL, BUTTON_BORDER),
+        ButtonVariant::Primary => (BUTTON_PRIMARY, BUTTON_BORDER_STRONG),
+        ButtonVariant::Danger => (BUTTON_DANGER, BUTTON_BORDER_STRONG),
+    }
 }
 
 pub fn animate_buttons(
