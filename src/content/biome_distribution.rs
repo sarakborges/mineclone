@@ -123,7 +123,7 @@ impl BiomeDistribution {
                     "biome {biome_id} noise band scale must be positive"
                 );
                 assert!(
-                    core_width >= 0.0 && core_width < 1.0,
+                    (0.0..1.0).contains(&core_width),
                     "biome {biome_id} noise band coreWidth must be between 0 (inclusive) and 1"
                 );
                 assert!(
