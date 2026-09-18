@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.32.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado atual:** `f0448359abe274a73f1c3d712d8839043df67202`. O runtime de fluidos reconstrói frontiers dos fluidos residentes ao entrar em Gameplay, sem depender de block edit do jogador, e o remesh de fluido pode publicar geometria de conteúdo atual mesmo durante churn de lighting, com follow-up para iluminação final. `surfaceMargin` agora pode possuir a identidade efetiva do biome; no Ocean, a faixa de shoreline é biome Ocean para `CurrentBiome`, comportamento e visuais, mantendo o terrain owner regional para a forma suave da costa. CI final `35403045031` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.32.1`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado do fix de fluidos:** `fa0b7d6dbe9ee6c7e7028fbe8e9738f05c10449d`; contrato arquitetural final em `c65120f064b97a77bab3868f0dc97331146ff76b`. A investigação profunda do runtime encontrou que a antiga “frontier congelada” não era realmente congelada: mutações inseriam vizinhos com prioridade dentro do mesmo batch, o frame budget descartava o progresso lógico de steps incompletos, a identidade da lane era perdida no pop e o pathfinder esquecia uma queda depois que a própria coluna de fluido a preenchia. O scheduler agora mantém lanes persistentes por `FluidId`, batches inacabados continuam em frames seguintes sem esperar outro tick, trabalho produzido por uma mutação fica para o próximo logical step, transições são executadas na cadência do fluido de destino e downhill routing mantém waterfalls/lower pools como sinks estáveis. CI funcional final `35404758584` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.29.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `e848e9e918a87527764ed79616ac3d8134c0830a`. A feature de lava + fluidos de superfície do Volcano passou na CI de push `35397447773` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
@@ -2065,4 +2065,168 @@ A forma regional do terreno continua separada da identidade efetiva, para a shor
 3. Confirmar visuais/cores do Ocean dentro da margin.
 4. Confirmar que Ocean `canGenerateRiver=false` / `canGenerateLake=false` e `allowSurfaceCarvers=false` são respeitados na faixa.
 5. Confirmar que structures de land não nascem dentro da margin Ocean.
+
+## Checkpoint 114 — 2026-09-18: investigação profunda e correção estrutural do scheduler de fluidos [FIX + CI VERDE; VERSION 0.32.1; QA WINDOWS PENDENTE]
+
+### Por que os fixes anteriores ainda produziam comportamento errado
+
+Após o usuário confirmar novamente que fluidos ainda não funcionavam corretamente e pedir investigação profunda antes de qualquer nova resposta, o pipeline completo foi auditado de novo: geração/source → frontier → cadence → queue → solver → mutation → requeue → downhill routing → remesh.
+
+Foram encontrados **quatro bugs reais e independentes** no runtime, todos capazes de produzir os sintomas já observados — fluido que parece parado até uma edição, propagação aos trancos e comportamento/flicker estranho.
+
+#### 1. A “frontier congelada” não estava congelada
+
+O código fazia snapshot do **tamanho** da fila no início de um fluid step, mas após cada mutação chamava `enqueue_with_neighbors_priority()`.
+
+Isso colocava centro/vizinhos recém-descobertos **na frente da mesma fila que ainda estava sendo processada**.
+
+Consequência:
+
+- um batch iniciado com N posições não processava necessariamente aquelas N posições;
+- o primeiro voxel que mudava podia inserir novos targets no front;
+- esses targets novos eram processados ainda no **mesmo logical step**;
+- uma única frente podia avançar vários blocos num tick, enquanto targets originais eram empurrados para depois;
+- a ordem da fila passava a alterar a física visível.
+
+O contrato agora é real:
+
+- cada lane inicia um batch com `batch_remaining = queue.len()`;
+- trabalho produzido durante aquele batch entra **no final** da fila;
+- priority work recebido enquanto um batch está ativo também é degradado para enqueue normal;
+- nada descoberto depois do snapshot entra no logical step atual;
+- só o batch seguinte pode consumir esse trabalho.
+
+Foi adicionado `VoxelUpdateQueue::enqueue_with_neighbors()` sem promoção para suportar isso.
+
+#### 2. O frame budget consumia o step, mas não preservava o batch
+
+O sistema anterior guardava `fluid_batch_remaining` em `Local<Vec<usize>>` recalculado a cada execução.
+
+Quando o budget de 1 ms / 512 items acabava no meio de um fluid step:
+
+- parte da frontier ficava na fila;
+- o crédito temporal daquele step já tinha sido consumido pelo accumulator;
+- o sistema só rodava quando `world_ticks_advanced`;
+- para fluidos lentos, especialmente lava, o resto do **mesmo** logical step podia ficar esperando outro intervalo de `spreadSpeed`;
+- com uma frontier gerada grande, isso transformava backlog em pausas artificiais;
+- um block edit funcionava melhor porque era promovido para o front, explicando por que interação manual parecia “acordar” o fluido.
+
+Agora cada `FluidUpdateLane` possui estado persistente:
+
+- `queue`;
+- `accumulated_steps`;
+- `ready_steps`;
+- `batch_remaining`.
+
+Se o frame budget acaba:
+
+- `batch_remaining` permanece;
+- o sistema de fluidos continua executando nos frames seguintes mesmo quando não houve novo world tick;
+- o batch em andamento termina antes de iniciar outro logical step;
+- `spreadSpeed` continua apenas criando créditos de novos steps;
+- até 4 steps podem ficar acumulados para catch-up, sem liberar propagação recursiva dentro do mesmo step.
+
+O sistema portanto roda todo PostUpdate em Gameplay, mas a **cadência física** continua vindo somente de `WorldTickClock`.
+
+#### 3. A queue por fluido perdia o próprio FluidId ao fazer pop
+
+As lanes eram separadas por `FluidId`, porém `pop_ready_fluid()` retornava somente `IVec3`.
+
+Depois o código recalculava o fluido pelo estado atual e usava:
+
+`current.or(desired)`
+
+Isso tinha duas falhas:
+
+- o scheduler não sabia mais de qual lane aquela posição veio;
+- numa substituição de fluido, `current.or(desired)` escolhia o fluido **antigo**, podendo aplicar/re-enfileirar uma transição usando a cadência errada.
+
+Agora:
+
+- `pop_runnable_fluid()` retorna `(FluidId, IVec3)`;
+- a mutação calcula o fluido que realmente governa a **transição**:
+  - se há desired, a cadência é do fluido de destino;
+  - se é remoção, a cadência é do fluido atual;
+- se o FluidId da transição não corresponde à lane que fez o pop, a posição é reroteada e **não é mutada naquele tick**;
+- quando uma mudança troca IDs, as vizinhanças dos fluidos antigo e novo são invalidadas separadamente.
+
+Isso remove dependência acidental de água/lava compartilharem uma posição e impede um fluido rápido de executar estado de outro fluido.
+
+#### 4. O downhill pathfinder esquecia a queda assim que ela era preenchida
+
+`can_fall_from()` considerava queda apenas quando a célula abaixo estava totalmente vazia.
+
+Então:
+
+1. a BFS encontrava uma abertura;
+2. o fluxo seguia até ela;
+3. a coluna vertical começava a ser preenchida;
+4. no step seguinte a célula abaixo já continha fluido;
+5. a BFS concluía que a queda “sumiu”;
+6. o fluxo podia voltar ao fallback radial ou mudar de direção.
+
+Isso explicava rota instável/pulsante mesmo quando o scheduler chegava a mutar corretamente.
+
+Agora uma queda continua sendo reconhecida quando:
+
+- abaixo está vazio; ou
+- abaixo contém o **mesmo fluido dinâmico vertical**, identificado por `!source && spread_distance == 0`; ou
+- o node atual está vazio e abaixo já existe o mesmo fluido, permitindo reconhecer um ledge que desemboca em um lower pool já preenchido.
+
+Ao mesmo tempo, source columns já preenchidas dentro de Ocean/Lake não viram falsos “drops” só por terem source do mesmo fluido embaixo.
+
+### Frontier gerada
+
+- Reseed ao entrar em Gameplay continua autoritativo e independente de block edit.
+- Ordem dos chunks residentes agora é determinística antes do scan.
+- Target diretamente abaixo de source continua priority.
+- Targets horizontais gerados voltaram a enqueue normal:
+  - gravity continua favorecida;
+  - scan de muitas sources não transforma todos os targets horizontais em uma pilha LIFO arbitrária.
+- Streaming continua reativando seams quando o chunk vizinho fica residente.
+
+### Cobertura adicionada
+
+Sem executar `cargo test`, foram adicionados testes compilados por `cargo clippy --all-targets` para as invariantes novas:
+
+- trabalho descoberto por uma mutação não entra no logical step já congelado;
+- priority work recebido durante um batch ativo também espera o próximo step;
+- batch incompleto continua runnable sem exigir novo cadence credit;
+- replacement escolhe a lane do fluido de destino;
+- downhill continua preferindo uma waterfall depois que a coluna vertical já foi preenchida;
+- empty ledge sobre lower pool do mesmo fluido continua sendo reconhecido como drop.
+
+### Commits principais
+
+- `bf26360f81973d53b88099f9119f7de383512153` — enqueue de vizinhança sem priority.
+- `a61413d88db5e7d2751e2e0151afca670526e4af` — lanes persistentes, batch state, transition ownership e continuation across frames.
+- `89a207cc411787141ff3d36b8295a53921e6549d` — generated frontier: downward priority / horizontal normal.
+- `5d02f18b4e1ace9a906acf1141c901d0413db074` / `d8c13a029a5f0d4687127008abe0e76d035c2fe1` — fluid processor continua batches entre frames; condição antiga de world-tick removida.
+- `afb778cf32a1ee7128da1576bec334540231a9a5` — waterfall preenchida permanece um downhill sink.
+- `d8f3bfbdb01982f4f39026f87e0301a800ebb660` — cobertura da freeze semântica inclusive com priority work.
+- `2fa2d66d5176515b75254bb2fddb97250a4a83ac` — contrato arquitetural do scheduler.
+- `3912620010c6c1aee6b849f5377f6ddc7e39ee4e` — `VERSION 0.32.0 → 0.32.1`.
+- `fa0b7d6dbe9ee6c7e7028fbe8e9738f05c10449d` — lower same-fluid pool também permanece downhill destination.
+- `c65120f064b97a77bab3868f0dc97331146ff76b` — contrato final de persistent downhill sinks.
+
+### CI
+
+- O scheduler principal já ficou green em `35404415710`.
+- A cobertura extra da frozen frontier ficou green em `35404524994`.
+- **CI funcional final após o último ajuste do solver: `35404758584` — success**:
+  - auditoria de localizações;
+  - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows, conforme restrição permanente.
+
+### QA que valida este fix
+
+1. **Sem editar blocos:** entrar em mundo com lava/água gerada e observar uma frontier exposta. O primeiro movimento deve ocorrer pelo próprio `spreadSpeed`.
+2. Source sobre um buraco: água cai; lava cai com cadência menor; nenhuma precisa de topology edit para iniciar.
+3. Plataforma com cliff dentro de `maxSpread`: o fluxo deve escolher a borda, formar waterfall e **continuar preferindo a mesma borda depois que a coluna vertical existir**.
+4. Sem drop dentro do range: spread radial normal.
+5. Durante uma única onda de água/lava, a frente deve avançar **um logical step por cadence**, sem cascata recursiva de vários blocos causada por enqueue priority.
+6. Sob carga/frontier grande: se o budget cortar o frame, o restante da mesma onda deve continuar no frame seguinte, sem congelar até o próximo intervalo do fluido.
+7. Água e lava simultâneas: cada uma deve manter sua própria cadence; posição reroteada para outro fluido não pode ser executada pela lane errada.
+8. Observar mesh: a propagação não deve mais oscilar por mudança de rota quando a waterfall é preenchida; o anti-flicker/remesh dos checkpoints 111/112 permanece ativo.
 
