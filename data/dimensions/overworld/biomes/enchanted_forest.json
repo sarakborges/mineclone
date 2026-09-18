@@ -145,5 +145,11 @@
     },
     "terrainRoughness": 0.9,
     "terrainMetallic": 0
+  },
+  "climate": {
+    "continentalness": {
+      "min": 0.36,
+      "max": 1
+    }
   }
 }
