@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{
     content::{
-        biome_hydrology::BiomeHydrology, builtin_ids::WATER_FLUID_ID,
+        biome_hydrology::BiomeHydrologyRules, builtin_ids::WATER_FLUID_ID,
         dimension_hydrology::DimensionHydrology,
     },
     world::macro_climate::MacroClimateField,
@@ -30,7 +30,7 @@ fn surface(elevation: f32, continentalness: f32) -> HydrologySurfaceSample {
     HydrologySurfaceSample {
         elevation,
         continentalness,
-        biome_hydrology: BiomeHydrology::default(),
+        biome_hydrology: BiomeHydrologyRules::default(),
     }
 }
 
@@ -124,7 +124,7 @@ fn biome_can_disable_lake_generation() {
         position: Vec2::ZERO,
         elevation: 80.0,
         continentalness: 0.8,
-        biome_hydrology: BiomeHydrology {
+        biome_hydrology: BiomeHydrologyRules {
             can_generate_lake: false,
             lake_chance_multiplier: 10.0,
             ..default()
@@ -134,7 +134,7 @@ fn biome_can_disable_lake_generation() {
         position: Vec2::X,
         elevation: 84.0,
         continentalness: 0.8,
-        biome_hydrology: BiomeHydrology::default(),
+        biome_hydrology: BiomeHydrologyRules::default(),
     }];
 
     assert!(
