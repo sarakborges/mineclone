@@ -71,6 +71,7 @@ fn spawn_pause_menu(
                 ..default()
             },
             BackgroundColor(theme::OVERLAY),
+            GlobalZIndex(1000),
         ))
         .with_children(|root| {
             root.spawn(surface::modal_panel()).with_children(|panel| {
