@@ -6,7 +6,7 @@ use crate::{
     player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{
         button::{
-            button_label_for_variant, initial_button_background, initial_button_border,
+            initial_button_background, initial_button_border,
             AsteriaButtonVisual, ButtonVariant,
         },
         typography,
@@ -111,7 +111,7 @@ fn game_mode_button(
         ButtonVariant::from_active(active),
         BackgroundColor(initial_button_background(active)),
         BorderColor::all(initial_button_border(active)),
-        children![(button_label_for_variant(label, active), GameModeButtonLabel(mode))],
+        children![(typography::button_label_light(label), GameModeButtonLabel(mode))],
     )
 }
 
