@@ -172,8 +172,8 @@ pub(super) fn sync_language_dropdown(
     for (option, interaction, mut background, mut border) in &mut options {
         surface::apply_control_colors(
             surface::hud_control_colors(*interaction, option.0 == active_language.get()),
-            &mut background,
-            &mut border,
+            background,
+            border,
         );
     }
     if localization.is_changed() {
