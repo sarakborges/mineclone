@@ -14,7 +14,7 @@ use hud_section::{
     handle_target_block_position_options, sync_display_tooltips_toggle,
     sync_target_block_position_dropdown, sync_target_block_position_options,
 };
-use languages_section::{handle_language_buttons, sync_language_buttons};
+use languages_section::{LanguageDropdownState, handle_language_dropdown_button, handle_language_options, sync_language_dropdown};
 use layout::spawn_settings_screen;
 use navigation::{
     SettingsSectionSelection, handle_close_requests, handle_section_buttons, sync_section_ui,
@@ -66,6 +66,7 @@ impl Plugin for SettingsScreenPlugin {
             .init_resource::<SpawnBiomeDropdownState>()
             .init_resource::<WorldNameFeedback>()
             .init_resource::<TargetBlockPositionDropdownState>()
+            .init_resource::<LanguageDropdownState>()
             .configure_sets(
                 Update,
                 (SettingsScreenSet::Input, SettingsScreenSet::Sync)
@@ -77,6 +78,7 @@ impl Plugin for SettingsScreenPlugin {
                 (
                     reset_resource::<TicksPerSecondInputState>,
                     reset_resource::<TargetBlockPositionDropdownState>,
+                    reset_resource::<LanguageDropdownState>,
                     spawn_settings_screen,
                 )
                     .chain(),
@@ -112,7 +114,8 @@ impl Plugin for SettingsScreenPlugin {
                         handle_spawn_biome_search_keyboard.run_if(in_state(GameState::NewWorld)),
                         handle_seed_keyboard,
                         handle_ticks_keyboard.run_if(has_ticks_input),
-                        handle_language_buttons,
+                        handle_language_dropdown_button,
+                        handle_language_options,
                         handle_display_tooltips_toggle,
                         handle_target_block_position_dropdown_button,
                         handle_target_block_position_options,
@@ -128,7 +131,7 @@ impl Plugin for SettingsScreenPlugin {
                     populate_spawn_biome_options,
                     sync_section_ui,
                     sync_game_mode_buttons,
-                    sync_language_buttons,
+                    sync_language_dropdown,
                     sync_display_tooltips_toggle,
                     sync_target_block_position_dropdown,
                     sync_target_block_position_options,
