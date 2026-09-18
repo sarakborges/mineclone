@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use super::{theme, typography};
+use super::typography;
 
 pub const MENU_BUTTON_WIDTH: f32 = 470.0;
 pub const MENU_BUTTON_HEIGHT: f32 = 54.0;
@@ -54,5 +54,5 @@ fn button_colors(level: f32) -> (Color, Color) {
 
 fn button_shadow(level: f32) -> BoxShadow {
     let lift = level.clamp(0.0, 1.0);
-    BoxShadow(vec![ShadowStyle { color: BUTTON_SHADOW, x_offset: px(0), y_offset: px(3 - lift), spread_radius: px(0), blur_radius: px(0) }])
+    BoxShadow(vec![ShadowStyle { color: BUTTON_SHADOW, x_offset: px(0), y_offset: px(3.0 - lift), spread_radius: px(0), blur_radius: px(0) }])
 }
