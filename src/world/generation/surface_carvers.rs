@@ -344,7 +344,7 @@ fn resolve_tunnel_candidates(
 }
 
 fn connected_surface_tunnel(
-    mut points: Vec<Vec3>,
+    points: Vec<Vec3>,
     radius: f32,
     context: &SurfaceCarverResolveContext<'_>,
 ) -> Option<Vec<Vec3>> {
@@ -360,53 +360,10 @@ fn connected_surface_tunnel(
         ) as f32
     };
 
-    let (mouth_index, mouth_surface) = points
-        .iter()
-        .enumerate()
-        .filter_map(|(index, point)| {
-            let horizontal = Vec2::new(point.x, point.z);
-            let surface = surface_at(horizontal);
-            let roof_gap = surface - (point.y + radius);
-            (roof_gap.abs() <= TUNNEL_MOUTH_BLEND_DEPTH)
-                .then_some((index, surface, roof_gap.abs()))
-        })
-        .min_by(|left, right| {
-            left.2
-                .total_cmp(&right.2)
-                .then_with(|| left.0.cmp(&right.0))
-        })
-        .map(|(index, surface, _)| (index, surface))?;
-
-    points[mouth_index].y = mouth_surface + TUNNEL_MOUTH_SURFACE_OVERSHOOT - radius;
-
-    let forward = tunnel_branch_to_cave(
-        &points,
-        mouth_index,
-        1,
-        radius,
-        cave_graph,
-        &mut surface_at,
-    );
-    let backward = tunnel_branch_to_cave(
-        &points,
-        mouth_index,
-        -1,
-        radius,
-        cave_graph,
-        &mut surface_at,
-    );
-
-    match (forward, backward) {
-        (Some(left), Some(right)) => {
-            if polyline_length(&left) <= polyline_length(&right) {
-                Some(left)
-            } else {
-                Some(right)
-            }
-        }
-        (Some(path), None) | (None, Some(path)) => Some(path),
-        (None, None) => None,
-    }
+    // Descending surface tunnels are authored from the terrain mouth toward
+    // the underground target. The first point is therefore authoritative;
+    // do not rescan the full path looking for another surface intersection.
+    tunnel_branch_to_cave(&points, 0, 1, radius, cave_graph, &mut surface_at)
 }
 
 fn tunnel_branch_to_cave(
@@ -434,11 +391,13 @@ fn tunnel_branch_to_cave(
         for sample_index in 1..=TUNNEL_CONNECTION_SAMPLES_PER_SEGMENT {
             let t = sample_index as f32 / TUNNEL_CONNECTION_SAMPLES_PER_SEGMENT as f32;
             let position = start.lerp(end, t);
+            if cave_graph.sample_with_margin(position, radius).is_none() {
+                continue;
+            }
+
             let horizontal = Vec2::new(position.x, position.z);
             let roof_depth = surface_at(horizontal) - (position.y + radius);
-            if roof_depth >= TUNNEL_CAVE_CONNECTION_MIN_ROOF_DEPTH
-                && cave_graph.sample_with_margin(position, radius).is_some()
-            {
+            if roof_depth >= TUNNEL_CAVE_CONNECTION_MIN_ROOF_DEPTH {
                 branch.push(position);
                 return Some(branch);
             }
@@ -447,13 +406,6 @@ fn tunnel_branch_to_cave(
         branch.push(end);
         index = next;
     }
-}
-
-fn polyline_length(points: &[Vec3]) -> f32 {
-    points
-        .windows(2)
-        .map(|segment| segment[0].distance(segment[1]))
-        .sum()
 }
 
 fn quadratic_bezier(start: Vec3, control: Vec3, end: Vec3, t: f32) -> Vec3 {
