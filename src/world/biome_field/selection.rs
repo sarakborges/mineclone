@@ -7,24 +7,24 @@ use crate::{
 
 use super::{
     BiomeField, BiomeFieldEntry,
-    constants::CLIMATE_BLEND_MARGIN,
+    constants::{CLIMATE_BLEND_MARGIN, SITE_SEARCH_RADIUS},
     spatial::{cell_hash, hash_unit, surface_site_position},
 };
 
 const PROXIMITY_SITE_RADIUS: i32 = 1;
 const PROXIMITY_NEIGHBOR_COUNT: usize =
     ((PROXIMITY_SITE_RADIUS * 2 + 1) * (PROXIMITY_SITE_RADIUS * 2 + 1) - 1) as usize;
-const DOMINANT_NEIGHBOR_LIMIT: usize = 5;
 
 impl BiomeField {
     pub(super) fn select_surface_biome_index(&self, cell: IVec2, site: Vec2) -> usize {
-        // The neighborhood is fixed at eight sites. A stack array avoids a
-        // heap allocation whenever an uncached biome site is first resolved.
+        // avoidNear means "these biome regions may not share a border", not
+        // "there must be an exclusion radius". Keep the immediate neighboring
+        // sites, then test which of them actually share a Voronoi edge with
+        // this site before applying the symmetric conflict rule.
+        let mut nearby_cells = [IVec2::ZERO; PROXIMITY_NEIGHBOR_COUNT];
+        let mut nearby_sites = [Vec2::ZERO; PROXIMITY_NEIGHBOR_COUNT];
         let mut nearby_biomes = [0; PROXIMITY_NEIGHBOR_COUNT];
         let mut nearby_count = 0;
-        let mut near_ocean = self.ocean_biome_id.is_some()
-            && ocean_strength(self.climate.sample(site).continentalness, self.ocean_weight)
-                > f32::EPSILON;
 
         for z in -PROXIMITY_SITE_RADIUS..=PROXIMITY_SITE_RADIUS {
             for x in -PROXIMITY_SITE_RADIUS..=PROXIMITY_SITE_RADIUS {
@@ -35,38 +35,54 @@ impl BiomeField {
                 let neighbor_cell = cell + IVec2::new(x, z);
                 let neighbor_site =
                     surface_site_position(neighbor_cell, self.surface_site_spacing, self.seed);
+                nearby_cells[nearby_count] = neighbor_cell;
+                nearby_sites[nearby_count] = neighbor_site;
                 nearby_biomes[nearby_count] =
                     self.raw_surface_biome_index(neighbor_cell, neighbor_site);
                 nearby_count += 1;
-
-                if self.ocean_biome_id.is_some()
-                    && ocean_strength(
-                        self.climate.sample(neighbor_site).continentalness,
-                        self.ocean_weight,
-                    ) > f32::EPSILON
-                {
-                    near_ocean = true;
-                }
             }
         }
         debug_assert_eq!(nearby_count, nearby_biomes.len());
 
-        let dominant_neighbor = dominant_neighbor_biome(&nearby_biomes);
         let climate = self.climate.sample(site);
         let hash = cell_hash(cell, self.seed);
-        select_weighted_biome_index(&self.surface_biomes, climate, hash, |candidate| {
+        let allows = |candidate: &BiomeFieldEntry| {
             candidate.is_regional()
-                && dominant_neighbor
-                    .is_none_or(|index| candidate.id != self.surface_biomes[index].id)
-                && proximity_allows(
+                && adjacency_allows(
                     candidate,
-                    dominant_neighbor,
+                    cell,
+                    site,
+                    &nearby_cells,
+                    &nearby_sites,
+                    &nearby_biomes,
                     &self.surface_biomes,
-                    self.ocean_biome_id.as_deref(),
-                    near_ocean,
+                    self.surface_site_spacing,
+                    self.seed,
                 )
-        })
-        .unwrap_or_else(|| self.raw_surface_biome_index(cell, site))
+        };
+
+        select_weighted_biome_index(&self.surface_biomes, climate, hash, allows)
+            .or_else(|| {
+                select_weighted_biome_index(&self.surface_biomes, climate, hash.rotate_left(9), |candidate| {
+                    candidate.is_regional()
+                        && adjacency_allows(
+                            candidate,
+                            cell,
+                            site,
+                            &nearby_cells,
+                            &nearby_sites,
+                            &nearby_biomes,
+                            &self.surface_biomes,
+                            self.surface_site_spacing,
+                            self.seed,
+                        )
+                })
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "surface biome site {cell:?} has no regional biome compatible with avoidNear borders"
+                )
+            })
     }
 
     fn raw_surface_biome_index(&self, cell: IVec2, site: Vec2) -> usize {
@@ -101,45 +117,87 @@ impl BiomeField {
     }
 }
 
-fn dominant_neighbor_biome(nearby_biomes: &[usize]) -> Option<usize> {
-    let mut dominant = None;
-    let mut dominant_count = 0;
-
-    for &candidate in nearby_biomes {
-        let count = nearby_biomes
-            .iter()
-            .filter(|&&neighbor| neighbor == candidate)
-            .count();
-        if count >= DOMINANT_NEIGHBOR_LIMIT && count > dominant_count {
-            dominant = Some(candidate);
-            dominant_count = count;
-        }
-    }
-
-    dominant
+fn adjacency_allows(
+    candidate: &BiomeFieldEntry,
+    cell: IVec2,
+    site: Vec2,
+    nearby_cells: &[IVec2; PROXIMITY_NEIGHBOR_COUNT],
+    nearby_sites: &[Vec2; PROXIMITY_NEIGHBOR_COUNT],
+    nearby_biomes: &[usize; PROXIMITY_NEIGHBOR_COUNT],
+    biomes: &[BiomeFieldEntry],
+    spacing: Vec2,
+    seed: u64,
+) -> bool {
+    nearby_cells
+        .iter()
+        .zip(nearby_sites)
+        .zip(nearby_biomes)
+        .all(|((&neighbor_cell, &neighbor_site), &neighbor_index)| {
+            let neighbor = &biomes[neighbor_index];
+            !biomes_conflict(candidate, neighbor)
+                || !surface_sites_share_border(
+                    cell,
+                    site,
+                    neighbor_cell,
+                    neighbor_site,
+                    spacing,
+                    seed,
+                )
+        })
 }
 
-fn proximity_allows(
-    candidate: &BiomeFieldEntry,
-    dominant_neighbor: Option<usize>,
-    biomes: &[BiomeFieldEntry],
-    ocean_biome_id: Option<&str>,
-    near_ocean: bool,
+fn surface_sites_share_border(
+    left_cell: IVec2,
+    left_site: Vec2,
+    right_cell: IVec2,
+    right_site: Vec2,
+    spacing: Vec2,
+    seed: u64,
 ) -> bool {
-    if near_ocean
-        && ocean_biome_id.is_some_and(|ocean_id| {
-            candidate
-                .avoid_near
-                .iter()
-                .any(|avoided| avoided == ocean_id)
-        })
-    {
+    let separation = right_site - left_site;
+    let length = separation.length();
+    if length <= f32::EPSILON {
         return false;
     }
 
-    dominant_neighbor
-        .map(|neighbor_index| &biomes[neighbor_index])
-        .is_none_or(|neighbor| !biomes_conflict(candidate, neighbor))
+    let midpoint = (left_site + right_site) * 0.5;
+    let normal = Vec2::new(-separation.y, separation.x) / length;
+    let left_from_midpoint = left_site - midpoint;
+    let mut minimum_t = f32::NEG_INFINITY;
+    let mut maximum_t = f32::INFINITY;
+
+    let minimum_cell = left_cell.min(right_cell) - IVec2::splat(SITE_SEARCH_RADIUS);
+    let maximum_cell = left_cell.max(right_cell) + IVec2::splat(SITE_SEARCH_RADIUS);
+
+    for z in minimum_cell.y..=maximum_cell.y {
+        for x in minimum_cell.x..=maximum_cell.x {
+            let other_cell = IVec2::new(x, z);
+            if other_cell == left_cell || other_cell == right_cell {
+                continue;
+            }
+
+            let other_site = surface_site_position(other_cell, spacing, seed);
+            let other_from_midpoint = other_site - midpoint;
+            let coefficient =
+                2.0 * normal.dot(other_from_midpoint - left_from_midpoint);
+            let bound = other_from_midpoint.length_squared()
+                - left_from_midpoint.length_squared();
+
+            if coefficient > 1e-5 {
+                maximum_t = maximum_t.min(bound / coefficient);
+            } else if coefficient < -1e-5 {
+                minimum_t = minimum_t.max(bound / coefficient);
+            } else if bound < -1e-4 {
+                return false;
+            }
+
+            if minimum_t > maximum_t + 1e-4 {
+                return false;
+            }
+        }
+    }
+
+    minimum_t <= maximum_t + 1e-4
 }
 
 fn biomes_conflict(left: &BiomeFieldEntry, right: &BiomeFieldEntry) -> bool {
@@ -254,52 +312,30 @@ mod tests {
     }
 
     #[test]
-    fn dominant_neighbor_detection_requires_a_real_majority() {
-        assert_eq!(dominant_neighbor_biome(&[1, 1, 1, 1, 1, 2, 3, 4]), Some(1));
-        assert_eq!(dominant_neighbor_biome(&[1, 1, 1, 1, 2, 2, 3, 4]), None);
+    fn direct_grid_neighbors_share_a_surface_border() {
+        let spacing = Vec2::splat(360.0);
+        assert!(surface_sites_share_border(
+            IVec2::ZERO,
+            surface_site_position(IVec2::ZERO, spacing, 42),
+            IVec2::X,
+            surface_site_position(IVec2::X, spacing, 42),
+            spacing,
+            42,
+        ));
     }
 
     #[test]
-    fn proximity_conflict_requires_a_dominant_neighbor_region() {
-        let biome = |id: &str, avoid_near: &[&str]| BiomeFieldEntry {
-            id: id.to_owned(),
-            distributions: vec![crate::content::biome_distribution::BiomeDistribution::Regional],
-            size: crate::content::dimension::DimensionBiomeSize {
-                x: crate::content::dimension::DimensionBiomeSizeAxis { min: 120.0, max: 420.0 },
-                z: crate::content::dimension::DimensionBiomeSizeAxis { min: 120.0, max: 420.0 },
-                y: None,
-            },
-            weight: 1.0,
-            climate: Default::default(),
-            vertical_range: None,
-            priority: 0,
-            terrain: None,
-            terrain_modifiers: Vec::new(),
-            hydrology: Default::default(),
-            density_modifier: None,
-            solid_block: None,
-            density_seed: 0,
-            avoid_near: avoid_near.iter().map(|id| (*id).to_owned()).collect(),
-        };
-        let biomes = vec![
-            biome("plains", &[]),
-            biome("wasteland", &["witchwood", "enchanted"]),
-            biome("witchwood", &[]),
-        ];
-
-        assert!(proximity_allows(
-            &biomes[1],
-            None,
-            &biomes,
-            None,
-            false,
-        ));
-        assert!(!proximity_allows(
-            &biomes[1],
-            Some(2),
-            &biomes,
-            None,
-            false,
+    fn distant_sites_do_not_trigger_avoid_near() {
+        let spacing = Vec2::splat(360.0);
+        let left = IVec2::ZERO;
+        let right = IVec2::new(2, 0);
+        assert!(!surface_sites_share_border(
+            left,
+            surface_site_position(left, spacing, 42),
+            right,
+            surface_site_position(right, spacing, 42),
+            spacing,
+            42,
         ));
     }
 
