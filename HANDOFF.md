@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.8`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. Revisão retroativa de versionamento em 2026-09-18: `0.22.8` foi o último bump antes dos blocos de combate/entidades e UI; o bloco de health/hurt/death/knockback é registrado retrospectivamente como linha `0.23.x`, sem reescrever o histórico Git; a unificação inicial do design system/settings foi `0.24.0`, a auditoria/refatoração estrutural fechou em `0.24.1`, o pacote priorizado de UI/interação/worldgen fechou em `0.24.2`, dropdown/spawn/hidrologia em `0.24.3`, a correção estrutural da face da slime em `0.24.4`, o primeiro override determinístico de Spawn Biome em `0.24.5`, persistência autoritativa de chunks + shape correto do Spawn Biome + casing canônico de botões em `0.24.6`, HUD/persistência compacta-assíncrona/ocean bathymetry em `0.24.7`, e suavização geométrica dos surface tunnels em `0.24.8`. **HEAD funcional validado desta atualização:** `c7cfd172c6302341006850c7bf583ce872a84dc8`. CI `35379295792` (run 4022) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.9`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. Revisão retroativa de versionamento em 2026-09-18: `0.22.8` foi o último bump antes dos blocos de combate/entidades e UI; o bloco de health/hurt/death/knockback é registrado retrospectivamente como linha `0.23.x`, sem reescrever o histórico Git; a unificação inicial do design system/settings foi `0.24.0`, a auditoria/refatoração estrutural fechou em `0.24.1`, o pacote priorizado de UI/interação/worldgen fechou em `0.24.2`, dropdown/spawn/hidrologia em `0.24.3`, a correção estrutural da face da slime em `0.24.4`, o primeiro override determinístico de Spawn Biome em `0.24.5`, persistência autoritativa de chunks + shape correto do Spawn Biome + casing canônico de botões em `0.24.6`, HUD/persistência compacta-assíncrona/ocean bathymetry em `0.24.7`, suavização geométrica dos surface tunnels em `0.24.8`, e margens graduais lake-style para surface tunnels em `0.24.9`. **HEAD funcional validado desta atualização:** `b271d4db080ef3e6c6d156cb05a2a31c3cc24d6e`. CI `35379845621` (run 4033) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 ## Histórico integral obrigatório
 
@@ -576,4 +576,44 @@ Próximo passo imediato: QA Windows focado em (1) abrir Pause e confirmar Player
 - Não executei `cargo test`, `cargo run` nem QA Windows.
 
 Próximo passo imediato: QA visual Windows em Mountains, procurando entradas de surface tunnels em encostas altas e baixas para confirmar (1) ausência de trechos longos retos, (2) boca com talude suave sem parede cilíndrica vertical, (3) subterrâneo mantendo seção circular e (4) conectividade com caves preservada.
+
+## Checkpoint 96 — 2026-09-18: surface tunnels com margem gradual lake-style [CÓDIGO + CI VERDE]
+
+- Bug reportado após `0.24.8`: apesar de curva mais densa e flare da boca, surface tunnels ainda podiam produzir paredes retas porque o terreno intacto começava imediatamente fora do core escavado.
+- Diagnóstico comparando com lakes:
+  - lakes possuem um **core** de carve;
+  - depois possuem uma **margem externa de grading**;
+  - nessa margem, a altura do terreno é gradualmente aproximada da borda do feature e a força cai com `smoothstep` até zero.
+- O surface tunnel agora segue o mesmo modelo em duas fases:
+  1. **core 3D** continua sendo escavado pelo perfil tubular/flare já existente;
+  2. **margem horizontal externa seca** gradua o terreno da boca até o terreno natural.
+- `SurfaceCarverColumn` agora guarda `margin_density_delta` resolvido uma vez por coluna, em vez de recalcular a margem para cada voxel.
+- Para cada tunnel próximo da superfície:
+  - calcula a distância horizontal da coluna até o eixo amostrado do tunnel;
+  - interpola a altura `path_y` do eixo no ponto horizontal mais próximo;
+  - calcula quão próximo o topo do tunnel está da superfície;
+  - se estiver dentro de `TUNNEL_MOUTH_BLEND_DEPTH = 12`, ativa a margem proporcionalmente com `smoothstep`;
+  - o core horizontal considera o flare atual da boca;
+  - a margem começa em normalized distance `1.0` e termina em `1.35`.
+- Dentro do core, a própria abertura reduz a contribuição da margem via `(1 - opening)`, equivalente ao princípio usado por lake shore grading: o carve domina o centro; a margem domina a borda.
+- Na borda do core, o alvo de superfície é `path_y + 0.5`. Assim o terreno externo desce em talude em direção ao eixo do tunnel em vez de terminar numa parede vertical.
+- Fora da normalized distance `1.35`, o delta da margem é exatamente zero e o terreno natural permanece intacto.
+- A margem nunca eleva terreno: `height_delta` é limitado a valores negativos, servindo apenas para suavizar/cortar a encosta.
+- O candidate reach horizontal foi ampliado para considerar **flare máximo × margem externa**, evitando truncar o grading em fronteiras de células/chunks.
+- O culling vertical também foi expandido pelo `TUNNEL_MOUTH_BLEND_DEPTH`, para que chunks superiores onde só a margem atua não sejam descartados antes do grading.
+- `resolve_surface_carver_column` agora recebe a altura real da superfície. Tanto `generation/density.rs` quanto `structures/support.rs` passam a mesma altura usada pelo terrain/support sampling, mantendo a geometria consistente.
+- O perfil anterior de `0.24.8` permanece:
+  - 13 amostras na curva;
+  - flare horizontal perto da superfície;
+  - seção circular no subterrâneo profundo;
+  - conectividade obrigatória com cave graph.
+- `ARCHITECTURE.md` registra agora explicitamente **core + margem externa gradual**, proibindo voltar ao modelo em que terreno intacto começa imediatamente após o carve.
+- Commits principais: `a517bc34...` (grading lake-style), `3831b082...` / `53b3377d...` (surface height nos consumidores), `fd72bd2c...` (contrato arquitetural), `b271d4db...` (`VERSION 0.24.9`).
+- Validação funcional: run `35379735852` (4029) — **success**.
+- HEAD funcional/versionado canônico: `b271d4db080ef3e6c6d156cb05a2a31c3cc24d6e`.
+- CI canônica: `35379845621` / run 4033 — **success**.
+- Passaram: auditoria de localizações, `cargo clippy --locked --all-targets --all-features -- -D warnings`, `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+Próximo passo imediato: QA visual Windows em Mountains, verificando principalmente as laterais externas da boca dos surface tunnels. A transição esperada agora é: tunnel core -> talude/margem gradual -> terreno natural, sem parede reta entre core e terreno intacto.
 
