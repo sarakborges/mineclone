@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.29.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `e848e9e918a87527764ed79616ac3d8134c0830a`. O bloco funcional de lava + crater surface fluid passou na CI de push `35397375586` em `bfc41995f85aeddb54a45d762a40750b7d3291ae` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. A run específica do bump `0.29.0` é `35397447773` e ainda estava em execução no momento desta atualização documental. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.29.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `e848e9e918a87527764ed79616ac3d8134c0830a`. O bloco funcional de lava + crater surface fluid passou na CI de push `35397375586` em `bfc41995f85aeddb54a45d762a40750b7d3291ae` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. A run específica do bump `0.29.0` é `35397447773` — **success** — com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.28.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `5acad2c8a2003b5c4f0e2143722908d3c3a36e11`. O bloco de adjacência obrigatória de surface biomes passou na CI de push `35396733423` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
@@ -1387,7 +1387,7 @@ Comportamento:
   - auditoria de localizações;
   - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
   - `cargo check --locked`.
-- `VERSION 0.29.0` em `e848e9e9...`; run `35397447773` estava em execução no momento desta escrita.
+- `VERSION 0.29.0` em `e848e9e9...`; run de push `35397447773` — **success**.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
 
 ### QA imediata
