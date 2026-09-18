@@ -1,14 +1,19 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::fluid::FluidRegistry,
+    content::{
+        biome::BiomeRegistry, biome_surface_fluid::BiomeSurfaceFluid,
+        biome_terrain::BiomeTerrain, fluid::{FluidId, FluidRegistry},
+    },
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         fluid::{FluidCell, MAX_FLUID_LEVEL},
     },
     world::{
-        cave_connectivity::CaveConnectivityRegion, generation::GenerationColumnSample,
+        biome_field::BiomeField, cave_connectivity::CaveConnectivityRegion,
+        deterministic::{hash_string, mix_seed}, generation::GenerationColumnSample,
         generation_region::GenerationRegion, hydrology::HydrologyWaterSample,
+        noise::fractal_noise_2d,
     },
 };
 
@@ -16,6 +21,9 @@ use super::index::{column_index, voxel_index};
 
 pub(super) struct FluidPassContext<'a> {
     pub(super) fluids: &'a FluidRegistry,
+    pub(super) biomes: &'a BiomeRegistry,
+    pub(super) biome_field: &'a BiomeField,
+    pub(super) sea_level: i32,
     pub(super) region: &'a GenerationRegion,
     pub(super) anchored_caves: Option<&'a CaveConnectivityRegion>,
     pub(super) underground_water_fluid: &'a str,
@@ -45,7 +53,8 @@ pub(super) fn rasterize_fluid_pass(
                 let world_x = chunk_origin.x + local_x as i32;
                 let world_z = chunk_origin.z + local_z as i32;
                 let horizontal = Vec2::new(world_x as f32 + 0.5, world_z as f32 + 0.5);
-                let surface_height = columns[column_index(local_x, local_z)].surface_height as f32;
+                let column = &columns[column_index(local_x, local_z)];
+                let surface_height = column.surface_height as f32;
                 // Rank only candidates with a plausible original floor. A
                 // higher unsupported lake previously won water_at(), then got
                 // rejected here, hiding an otherwise supported river below.
@@ -66,6 +75,13 @@ pub(super) fn rasterize_fluid_pass(
                     }
 
                     let world_y = chunk_origin.y + local_y as i32;
+                    if let Some(authored) =
+                        authored_surface_fluid_at(horizontal, world_y, column, pass)
+                    {
+                        chunk.set_fluid(local_x, local_y, local_z, Some(authored));
+                        continue;
+                    }
+
                     if let (Some(water), Some(fluid_id)) = (surface_water.as_ref(), surface_fluid_id)
                         && world_y as f32 + 1.0 > water.bed_level
                         && let Some(level) = fluid_level_for_surface(water.water_level, world_y)
@@ -108,6 +124,95 @@ pub(super) fn rasterize_fluid_pass(
             }
         }
     });
+}
+
+fn authored_surface_fluid_at(
+    horizontal: Vec2,
+    world_y: i32,
+    column: &GenerationColumnSample,
+    pass: &FluidPassContext<'_>,
+) -> Option<FluidCell> {
+    let biome_id = pass
+        .biome_field
+        .surface_biome_id(column.primary_surface_index);
+    let biome = pass
+        .biomes
+        .get(biome_id)
+        .unwrap_or_else(|| panic!("missing surface biome definition: {biome_id}"));
+    let rule = biome.surface_fluid.as_ref()?;
+
+    match rule {
+        BiomeSurfaceFluid::VolcanoCrater {
+            fluid,
+            minimum_strength,
+            level_offset,
+            spill_minimum_strength,
+            spill_maximum_strength,
+            spill_scale,
+            spill_width,
+            spill_level,
+        } => {
+            let BiomeTerrain::Volcano {
+                base_height,
+                height,
+                crater_depth,
+                ..
+            } = biome
+                .terrain
+                .expect("validated volcano crater surface fluid requires volcano terrain")
+            else {
+                unreachable!("validated volcano crater surface fluid requires volcano terrain");
+            };
+            let fluid_id = resolve_authored_fluid_id(pass.fluids, fluid, biome_id);
+            let strength = column.primary_terrain_strength.clamp(0.0, 1.0);
+            let crater_level =
+                pass.sea_level as f32 + base_height + height - crater_depth + level_offset;
+
+            if strength >= *minimum_strength
+                && world_y >= column.surface_height
+                && let Some(level) = fluid_level_for_surface(crater_level, world_y)
+            {
+                return Some(FluidCell::source(fluid_id, level));
+            }
+
+            if strength >= *spill_minimum_strength
+                && strength <= *spill_maximum_strength
+                && world_y == column.surface_height
+                && volcano_spill_channel(
+                    horizontal,
+                    *spill_scale,
+                    *spill_width,
+                    pass.biome_field.seed(),
+                    biome_id,
+                )
+            {
+                return Some(FluidCell::source(fluid_id, *spill_level));
+            }
+
+            None
+        }
+    }
+}
+
+fn resolve_authored_fluid_id(
+    fluids: &FluidRegistry,
+    fluid: &str,
+    biome_id: &str,
+) -> FluidId {
+    fluids.id_of(fluid).unwrap_or_else(|| {
+        panic!("biome {biome_id} surfaceFluid references missing fluid {fluid}")
+    })
+}
+
+fn volcano_spill_channel(
+    horizontal: Vec2,
+    scale: f32,
+    width: f32,
+    world_seed: u64,
+    biome_id: &str,
+) -> bool {
+    let seed = mix_seed(world_seed ^ hash_string(biome_id) ^ 0x6c61_7661_7370_696c);
+    fractal_noise_2d(horizontal * scale, seed, 3).abs() <= width
 }
 
 fn surface_water_is_supported(water: HydrologyWaterSample<'_>, surface_height: f32) -> bool {
