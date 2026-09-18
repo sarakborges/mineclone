@@ -1,9 +1,12 @@
 use bevy::prelude::*;
 
-use crate::voxel::{
-    chunk::CHUNK_SIZE,
-    neighbors::CARDINAL_NEIGHBORS,
-    world::VoxelWorld,
+use crate::{
+    content::fluid::FluidId,
+    voxel::{
+        chunk::CHUNK_SIZE,
+        neighbors::CARDINAL_NEIGHBORS,
+        world::VoxelWorld,
+    },
 };
 
 use super::PendingFluidUpdates;
@@ -92,13 +95,14 @@ fn enqueue_neighbor_boundary_spread_targets(
         let local_x = if direction.x < 0 { 0 } else { size - 1 };
         for local_y in 0..size {
             for local_z in 0..size {
-                if chunk.fluid_at(local_x, local_y, local_z).is_none() {
+                let Some(fluid) = chunk.fluid_at(local_x, local_y, local_z) else {
                     continue;
-                }
+                };
                 enqueue_spread_targets_from_fluid(
                     pending,
                     world,
                     origin + IVec3::new(local_x, local_y, local_z),
+                    fluid.fluid_id,
                 );
             }
         }
@@ -109,13 +113,14 @@ fn enqueue_neighbor_boundary_spread_targets(
         let local_y = if direction.y < 0 { 0 } else { size - 1 };
         for local_z in 0..size {
             for local_x in 0..size {
-                if chunk.fluid_at(local_x, local_y, local_z).is_none() {
+                let Some(fluid) = chunk.fluid_at(local_x, local_y, local_z) else {
                     continue;
-                }
+                };
                 enqueue_spread_targets_from_fluid(
                     pending,
                     world,
                     origin + IVec3::new(local_x, local_y, local_z),
+                    fluid.fluid_id,
                 );
             }
         }
@@ -141,6 +146,7 @@ fn enqueue_spread_targets_from_fluid(
     pending: &mut PendingFluidUpdates,
     world: &VoxelWorld,
     position: IVec3,
+    fluid_id: FluidId,
 ) {
     for offset in FLUID_SPREAD_TARGETS {
         let target = position + offset;
@@ -152,9 +158,9 @@ fn enqueue_spread_targets_from_fluid(
         }
 
         if offset == IVec3::NEG_Y {
-            pending.enqueue_priority(target);
+            pending.enqueue_fluid_priority(fluid_id, target);
         } else {
-            pending.enqueue(target);
+            pending.enqueue_fluid(fluid_id, target);
         }
     }
 }
