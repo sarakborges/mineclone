@@ -65,7 +65,6 @@ pub(crate) fn spawn_player_entity(
             DespawnOnExit(GameState::Gameplay),
         ))
         .insert((Name::new("Player"), EntityHealth::new(definition.health)))
-        ;
 }
 
 pub(crate) fn player_position_is_clear(world: &VoxelWorld, translation: Vec3) -> bool {
