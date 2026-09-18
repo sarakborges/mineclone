@@ -13,8 +13,8 @@ use crate::{
     voxel::world::VoxelWorld,
 };
 
-use motion::{CreatureMotion, move_creatures};
-pub(crate) use motion::CreatureMotion as CreatureMotionComponent;
+pub(crate) use motion::CreatureMotion;
+use motion::move_creatures;
 use visual::{CreatureModel, attach_loaded_models, sync_creature_animations, sync_creature_facing};
 pub(crate) use visual::CreatureAnimationState;
 
