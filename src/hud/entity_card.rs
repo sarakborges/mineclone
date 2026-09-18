@@ -283,7 +283,7 @@ pub(super) fn sync_entity_cards(
             }
             .map(|(current, max)| format!("{current:.0} / {max:.0}"))
             .unwrap_or_default();
-            children.iter().find_map(|&child| {
+            children.iter().find_map(|child| {
                 queries.p1().get(child).ok().map(|(_, _)| (child, desired.clone()))
             })
         })
