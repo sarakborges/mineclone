@@ -12,6 +12,15 @@ pub fn modal_panel() -> impl Bundle {
     frosted_surface(Node { width: px(560), padding: UiRect::all(px(28)), flex_direction: FlexDirection::Column, align_items: AlignItems::Center, row_gap: px(18), border: UiRect::all(px(CONTROL_BORDER_WIDTH)), ..default() })
 }
 
+pub fn pause_panel() -> impl Bundle {
+    (
+        Node { width: px(560), padding: UiRect::all(px(28)), flex_direction: FlexDirection::Column, align_items: AlignItems::Center, row_gap: px(18), border: UiRect::all(px(CONTROL_BORDER_WIDTH)), ..default() },
+        BackgroundColor(theme::FROSTED_SURFACE.with_alpha(0.72)),
+        BorderColor::all(theme::BORDER),
+        BoxShadow(vec![ShadowStyle { color: Color::srgba(0.0, 0.0, 0.0, 0.30), x_offset: px(0), y_offset: px(8), spread_radius: px(0), blur_radius: px(18) }]),
+    )
+}
+
 pub fn settings_content() -> impl Bundle {
     frosted_surface(Node { flex_grow: 1.0, height: percent(100), min_width: px(0), min_height: px(0), padding: UiRect::all(px(18)), flex_direction: FlexDirection::Column, align_items: AlignItems::Stretch, border: UiRect::all(px(2)), ..default() })
 }
