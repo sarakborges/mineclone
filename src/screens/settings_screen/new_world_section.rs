@@ -75,7 +75,7 @@ impl NewWorldDraft<'_, '_> {
     fn input_editing(&self) -> bool {
         self.seed_input.editing()
             || self.ticks_input.editing()
-            || self.spawn_biome_dropdown.input_editing()
+            || self.spawn_biome_dropdown.is_open()
     }
 
     fn commit_seed_input(&mut self) {
