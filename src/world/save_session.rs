@@ -80,50 +80,19 @@ struct AutosaveResult {
 }
 
 struct OwnedWorldSaveCapture {
-    id: String,
-    seed: u64,
-    dimension_id: String,
-    spawn_biome: Option<String>,
-    biome_size_multiplier: f32,
-    ticks_per_second: u32,
-    player: SavedPlayer,
-    day: u64,
-    tick_in_day: u64,
-    inventory: Vec<Option<String>>,
-    world: VoxelWorld,
+    snapshot: WorldSnapshot,
+    state: SavedWorldState,
     registries: PruneRegistries,
 }
 
 impl OwnedWorldSaveCapture {
     fn persist(self) -> AutosaveResult {
-        let state = SavedWorldState {
-            seed: self.seed,
-            dimension_id: self.dimension_id.clone(),
-            spawn_biome: self.spawn_biome.clone(),
-            biome_size_multiplier: self.biome_size_multiplier,
-            ticks_per_second: self.ticks_per_second,
-            world_revision: self.world.save_content_revision(),
-            position: self.player.position,
-            creative: self.player.creative,
-            inventory: self.inventory.clone(),
-        };
-        let snapshot = WorldSnapshot::capture(SnapshotSource {
-            id: &self.id,
-            seed: self.seed,
-            dimension_id: &self.dimension_id,
-            spawn_biome: self.spawn_biome.as_deref(),
-            biome_size_multiplier: self.biome_size_multiplier,
-            ticks_per_second: self.ticks_per_second,
-            player: Some(self.player),
-            day: self.day,
-            tick_in_day: self.tick_in_day,
-            inventory: self.inventory,
-            world: &self.world,
-            fluids: self.registries.fluids(),
-        });
-        let result = snapshot.and_then(|snapshot| save_world_owned(&snapshot, self.registries).map(|_| ()));
+        let result = save_world_owned(&self.snapshot, self.registries).map(|_| ());
 
-        AutosaveResult { state, result }
+        AutosaveResult {
+            state: self.state,
+            result,
+        }
     }
 }
 
@@ -232,22 +201,40 @@ impl WorldSaveContext<'_, '_> {
             io::Error::other(format!("cannot save world without exactly one player: {error}"))
         })?;
         let position = transform.translation;
-
-        Ok(OwnedWorldSaveCapture {
-            id: id.to_owned(),
+        let player = SavedPlayer {
+            position: [position.x, position.y, position.z],
+            creative: *mode == GameMode::Creative,
+        };
+        let inventory = self.inventory.saved_items();
+        let snapshot = WorldSnapshot::capture(SnapshotSource {
+            id,
+            seed: self.seed.0,
+            dimension_id: &self.dimension.id,
+            spawn_biome: self.save.spawn_biome(),
+            biome_size_multiplier: self.save.biome_size_multiplier(),
+            ticks_per_second: self.rules.ticks_per_second(),
+            player: Some(player.clone()),
+            day: self.clock.day,
+            tick_in_day: self.clock.tick_in_day(),
+            inventory: inventory.clone(),
+            world: &self.world,
+            fluids: &self.fluids,
+        })?;
+        let state = SavedWorldState {
             seed: self.seed.0,
             dimension_id: self.dimension.id.clone(),
             spawn_biome: self.save.spawn_biome().map(str::to_owned),
             biome_size_multiplier: self.save.biome_size_multiplier(),
             ticks_per_second: self.rules.ticks_per_second(),
-            player: SavedPlayer {
-                position: [position.x, position.y, position.z],
-                creative: *mode == GameMode::Creative,
-            },
-            day: self.clock.day,
-            tick_in_day: self.clock.tick_in_day(),
-            inventory: self.inventory.saved_items(),
-            world: self.world.as_ref().clone(),
+            world_revision: self.world.save_content_revision(),
+            position: player.position,
+            creative: player.creative,
+            inventory,
+        };
+
+        Ok(OwnedWorldSaveCapture {
+            snapshot,
+            state,
             registries: SaveRegistries {
                 blocks: &self.blocks,
                 fluids: &self.fluids,
