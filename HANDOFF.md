@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.6`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. Revisão retroativa de versionamento em 2026-09-18: `0.22.8` foi o último bump antes dos blocos de combate/entidades e UI; o bloco de health/hurt/death/knockback é registrado retrospectivamente como linha `0.23.x`, sem reescrever o histórico Git; a unificação inicial do design system/settings foi `0.24.0`, a auditoria/refatoração estrutural fechou em `0.24.1`, o pacote priorizado de UI/interação/worldgen fechou em `0.24.2`, dropdown/spawn/hidrologia em `0.24.3`, a correção estrutural da face da slime em `0.24.4`, o primeiro override determinístico de Spawn Biome em `0.24.5` e a persistência autoritativa de chunks + shape correto do Spawn Biome + casing canônico de botões em `0.24.6`. **HEAD funcional validado desta atualização:** `7b924a2648360a0c7a354480452f5d9d994fc386`. CI `35376804377` (run 3966) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.7`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. Revisão retroativa de versionamento em 2026-09-18: `0.22.8` foi o último bump antes dos blocos de combate/entidades e UI; o bloco de health/hurt/death/knockback é registrado retrospectivamente como linha `0.23.x`, sem reescrever o histórico Git; a unificação inicial do design system/settings foi `0.24.0`, a auditoria/refatoração estrutural fechou em `0.24.1`, o pacote priorizado de UI/interação/worldgen fechou em `0.24.2`, dropdown/spawn/hidrologia em `0.24.3`, a correção estrutural da face da slime em `0.24.4`, o primeiro override determinístico de Spawn Biome em `0.24.5`, persistência autoritativa de chunks + shape correto do Spawn Biome + casing canônico de botões em `0.24.6`, e HUD/persistência compacta-assíncrona/ocean bathymetry em `0.24.7`. **HEAD funcional validado desta atualização:** `1a7126de97fd9982553d718b133f46e4b0da754b`. CI `35378340083` (run 4010) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 ## Histórico integral obrigatório
 
@@ -481,4 +481,72 @@ Próximo passo imediato: QA Windows criando mundos com Wasteland, Plains e outro
 - Não executei `cargo test`, `cargo run` nem QA Windows.
 
 Próximo passo imediato: QA Windows focado em (1) gerar área, sair do range e voltar sem worldgen/recriação; (2) salvar/sair/carregar e confirmar que apenas chunks registrados são restaurados; (3) explorar chunk realmente novo e confirmar persistência posterior; (4) criar Wasteland e observar a região além do render inicial para validar raios/shape/transição; (5) verificar Title Case em todos os action buttons.
+
+## Checkpoint 94 — 2026-09-18: Player HUD no Pause + save compacto/assíncrono + ocean bathymetry [CÓDIGO + CI VERDE]
+
+### Player HUD / Pause
+
+- Bug reportado: o Player HUD continuava aparecendo sobre o Pause Menu apesar do sync anterior.
+- Causa arquitetural: `sync_player_hud_visibility` dependia de `State<PauseState>::is_changed()` / `SettingsState::is_changed()` e de `Single<PlayerHudRoot>`. Isso tornava a reconciliação sensível ao timing de state transition e à cardinalidade do root.
+- Correção: enquanto `GameState::Gameplay` está ativo, o sistema calcula a visibilidade autoritativa a cada frame a partir de `PauseState` + `SettingsState` e aplica a todos os `PlayerHudRoot` via `Query`.
+- Não existe handler paralelo OnEnter/OnExit; o dono continua sendo um único sync idempotente.
+- Commit principal: `d3282178...`.
+
+### Persistência / tamanho de save / autosave
+
+- Após tornar todo chunk gerado autoritativo em `0.24.6`, Leave World expôs a limitação do formato antigo: `DiskChunk` repetia ID/rotation/orientation/properties em um objeto JSON por voxel ocupado e o snapshot rapidamente atingia o limite de tamanho.
+- Novo encoding de `DiskChunk`: **palette de estados + runs contíguos** para blocos e fluidos.
+  - Estados repetidos são descritos uma vez na palette.
+  - Ocupação é gravada como `start/len/state`.
+  - Chunks vazios continuam persistidos apenas pela coordenada/registro.
+  - Campos legacy `blocks`/`fluids` continuam desserializáveis com `serde(default)`; snapshots antigos permanecem legíveis.
+- `VoxelWorld` passou a ser clonável de forma shallow para save: `VoxelChunk` já compartilha arrays por `Arc`; `archived_chunks` agora usa `Arc<ArchivedChunk>`. Tirar um snapshot estrutural não duplica milhares de voxels no frame.
+- O autosave periódico de 60 s não executa mais compactação, serialização JSON e `fsync` no main thread.
+  - Main thread captura metadados + clone estrutural compartilhado.
+  - `AsyncComputeTaskPool` faz `WorldSnapshot::capture`, compactação dos chunks e publicação em disco.
+  - Apenas uma task de autosave pode ficar em voo; se ela ainda estiver gravando, outra não é iniciada.
+  - Ao concluir, o baseline é atualizado com exatamente o estado salvo. Falha não avança baseline.
+- O worker não força `Clone` em `ToolRegistry`, `DimensionRegistry` ou `DayNightCycleRegistry`. Ele usa o `PruneRegistries` owned já existente, contendo apenas os dados necessários para validação/publicação/limpeza.
+- Leave World/Exit continuam fazendo commit final síncrono para não abandonar o mundo antes de uma publicação durável. O encoding compacto reduz fortemente o custo/tamanho desse commit, mas QA runtime ainda é necessário para medir latência real em mundos grandes.
+- Commits principais: `4d0eea57...` (palette+runs), `b3464ef5...` / `f03f66e0...` (archives compartilhados), `2e7452ad...` (autosave fora do main thread), `87ebb0e9...` / `1aff3e84...` (owned validation data).
+
+### Ocean / transição com Spawn Biome
+
+- Bug reportado: oceano adjacente a Plains/Wasteland produziu faixa de terreno “cortado”.
+- Causa encontrada no override de Spawn Biome: `BiomeField::climate_at` empurrava continentalness até 1.0 conforme o peso forçado. Ao encontrar oceano natural na borda, o gradiente era artificialmente comprimido.
+- Correção: o override agora **suprime apenas a força do oceano necessária**. `suppress_ocean_continentalness` mantém continentalness natural quando já é terra e, em água, move o valor apenas em direção ao threshold oceânico conforme o peso do Spawn Biome. Não existe mais “continente máximo” artificial na região forçada.
+- Commits principais: `ef59978e...`, `1eada322...`, `e39060bf...`.
+
+### Ocean floor bathymetry
+
+- Bug reportado: fundo do oceano era praticamente flat; variação visual vinha quase só de caves/tunnels.
+- Causa: em mar aberto `ocean_strength -> 1`, o floor target convergia para `sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH`, esmagando a variação de altura original.
+- Correção: open ocean possui bathymetry determinística própria:
+  - broad noise scale `0.012`,
+  - detail noise scale `0.041`,
+  - variação máxima configurada em `8.0` blocos,
+  - amplitude multiplicada por `ocean_strength`, portanto o relevo nasce suavemente a partir da costa e fica completo em mar aberto.
+- `HydrologyRegion::ocean_floor_target` é agora a única fonte de verdade do fundo oceânico.
+  - density carving usa esse target;
+  - `supported_water_at` / água física usam o mesmo target;
+  - o bed físico e o terreno cavado não podem divergir.
+- `HydrologyRegion` agora carrega seed para bathymetry determinística; fixtures de hydrology foram atualizadas.
+- Commits principais: `c83a7fb7...`, `a8cb2259...`, `8a9a616d...`, `4f9be32d...`, `3f8457d7...`, `aff18721...`, `bd07812b...`.
+
+### Contrato arquitetural
+
+- Modal HUD visibility deve reconciliar diretamente states autoritativos; não depender de `is_changed()`/handler episódico.
+- Chunk persistence usa formato compacto e autosave periódico fora do main thread, uma task por sessão.
+- Spawn Biome não maximiza continentalness; atenua apenas ocean strength conforme influência.
+- Ocean floor deve possuir relevo bathymétrico determinístico e density/water devem compartilhar exatamente o mesmo target.
+- `ARCHITECTURE.md` atualizado em `4fc4d36b...`.
+
+### Validação
+
+- HEAD funcional/versionado canônico: `1a7126de97fd9982553d718b133f46e4b0da754b`.
+- CI canônica: `35378340083` / run 4010 — **success**.
+- Passaram: auditoria de localizações, `cargo clippy --locked --all-targets --all-features -- -D warnings`, `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+Próximo passo imediato: QA Windows focado em (1) abrir Pause e confirmar Player HUD invisível; (2) deixar autosave de 60 s acontecer sem hitch perceptível e verificar criação de snapshot válido; (3) Leave World num mundo com vários chunks e conferir tamanho/tempo do save compacto; (4) explorar costa entre Spawn Biome e oceano natural para verificar ausência da faixa cortada; (5) observar fundo de oceano em mar aberto para validar bathymetry sem depender de tunnels.
 
