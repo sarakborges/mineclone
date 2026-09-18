@@ -2,7 +2,7 @@
   "starting.newWorld": "Novo Mundo",
   "starting.loadWorlds": "Carregar Mundos",
   "worldSelection.empty": "Nenhum mundo salvo e concluído foi encontrado.",
-  "worldSelection.load": "Carregar mundo selecionado",
+  "worldSelection.load": "Carregar mundo",
   "worldSelection.verifying": "Verificando mundos salvos...",
   "worldSelection.noRestorable": "Nenhum mundo salvo recuperável foi encontrado.",
   "worldSelection.scanStartError": "Não foi possível iniciar a verificação dos mundos salvos",
