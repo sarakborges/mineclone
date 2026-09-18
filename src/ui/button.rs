@@ -70,8 +70,10 @@ pub fn animate_buttons(
         if background.0 != next_background { background.0 = next_background; }
         let next_border = BorderColor::all(next_border);
         if *border != next_border { *border = next_border; }
-        let next_shadow = button_shadow(level);
-        if *shadow != next_shadow { *shadow = next_shadow; }
+        if let Some(mut shadow) = shadow {
+            let next_shadow = button_shadow(level);
+            if *shadow != next_shadow { *shadow = next_shadow; }
+        }
     }
 }
 
