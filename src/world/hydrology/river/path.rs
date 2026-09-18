@@ -22,7 +22,7 @@ use super::super::{
         OCEAN_CONTINENTALNESS_THRESHOLD, RIVER_FLOW_FOR_MAX_WIDTH, RIVER_MAXIMUM_RADIUS,
         RIVER_MINIMUM_FLOW, RIVER_MINIMUM_RADIUS,
     },
-    drainage::DrainageNode,
+    drainage::{DrainageNode, surface_sample_is_wet_ocean},
     math::lerp,
 };
 
@@ -41,6 +41,7 @@ pub(super) struct RiverEdgeSpec {
     pub(super) seed: u64,
     pub(super) sea_level: f32,
     pub(super) ocean_threshold: f32,
+    pub(super) ocean_weight: f32,
 }
 
 pub(super) struct RiverPath {
@@ -75,6 +76,12 @@ where
         spec.source_water_level,
         spec.downstream_water_level,
     );
+    truncate_river_at_ocean_mouth(
+        &mut path,
+        spec.sea_level,
+        spec.ocean_weight,
+        &mut surface_sample_at,
+    );
     if river_path_crosses_disabled_biome(
         &path.points,
         spec.ocean_threshold,
@@ -93,6 +100,85 @@ where
     add_path_to_graph(graph, spec.region_coord, &mut path, start_radius, end_radius);
 
     path.waterfall
+}
+
+fn truncate_river_at_ocean_mouth(
+    path: &mut RiverPath,
+    sea_level: f32,
+    ocean_weight: f32,
+    sample_at: &mut impl FnMut(Vec2) -> HydrologySurfaceSample,
+) {
+    const SAMPLES_PER_SEGMENT: usize = 8;
+    const BOUNDARY_REFINEMENT_STEPS: usize = 8;
+
+    if path.points.len() < 2 {
+        return;
+    }
+
+    let waterfall_index = path.waterfall.map(|waterfall| {
+        let target = Vec2::new(waterfall.position.x, waterfall.position.z);
+        path.points
+            .iter()
+            .enumerate()
+            .min_by(|(_, left), (_, right)| {
+                Vec2::new(left.x, left.z)
+                    .distance_squared(target)
+                    .total_cmp(&Vec2::new(right.x, right.z).distance_squared(target))
+            })
+            .map(|(index, _)| index)
+            .unwrap_or(0)
+    });
+
+    let mut mouth = None;
+    for (segment_index, segment) in path.points.windows(2).enumerate() {
+        let [from, to] = segment else {
+            continue;
+        };
+        let mut previous_t = 0.0;
+
+        for sample_index in 1..=SAMPLES_PER_SEGMENT {
+            let t = sample_index as f32 / SAMPLES_PER_SEGMENT as f32;
+            let point = from.lerp(*to, t);
+            let sample = sample_at(Vec2::new(point.x, point.z));
+            if !surface_sample_is_wet_ocean(sample, sea_level, ocean_weight) {
+                previous_t = t;
+                continue;
+            }
+
+            let mut dry_t = previous_t;
+            let mut wet_t = t;
+            for _ in 0..BOUNDARY_REFINEMENT_STEPS {
+                let midpoint_t = (dry_t + wet_t) * 0.5;
+                let midpoint = from.lerp(*to, midpoint_t);
+                let midpoint_sample = sample_at(Vec2::new(midpoint.x, midpoint.z));
+                if surface_sample_is_wet_ocean(midpoint_sample, sea_level, ocean_weight) {
+                    wet_t = midpoint_t;
+                } else {
+                    dry_t = midpoint_t;
+                }
+            }
+
+            let mut endpoint = from.lerp(*to, wet_t);
+            endpoint.y = sea_level;
+            mouth = Some((segment_index, endpoint));
+            break;
+        }
+
+        if mouth.is_some() {
+            break;
+        }
+    }
+
+    let Some((segment_index, endpoint)) = mouth else {
+        return;
+    };
+
+    path.points.truncate(segment_index + 1);
+    path.points.push(endpoint);
+
+    if waterfall_index.is_some_and(|index| index > segment_index) {
+        path.waterfall = None;
+    }
 }
 
 fn river_path_crosses_disabled_biome(
@@ -181,6 +267,30 @@ mod tests {
     }
 
     #[test]
+    fn river_stops_at_first_physical_ocean_water() {
+        let mut path = RiverPath {
+            points: vec![
+                Vec3::new(0.0, 70.0, 0.0),
+                Vec3::new(10.0, 68.0, 0.0),
+                Vec3::new(20.0, 64.0, 0.0),
+            ],
+            waterfall: None,
+        };
+        let mut sample = |position: Vec2| HydrologySurfaceSample {
+            elevation: if position.x < 12.0 { 70.0 } else { 40.0 },
+            continentalness: if position.x < 12.0 { 0.8 } else { 0.1 },
+            biome_hydrology: BiomeHydrologyRules::default(),
+        };
+
+        truncate_river_at_ocean_mouth(&mut path, 64.0, 1.0, &mut sample);
+
+        let mouth = path.points.last().expect("river should keep an ocean mouth");
+        assert!(mouth.x >= 11.9 && mouth.x <= 12.1);
+        assert_eq!(mouth.y, 64.0);
+        assert!(path.points.iter().all(|point| point.x <= mouth.x));
+    }
+
+    #[test]
     fn disabled_underlying_biome_does_not_block_ocean_destination() {
         let points = [Vec3::ZERO, Vec3::new(20.0, 0.0, 0.0)];
         let mut sample = |_position: Vec2| HydrologySurfaceSample {
@@ -230,6 +340,7 @@ mod tests {
                     seed: 42,
                     sea_level: 64.0,
                     ocean_threshold: 0.45,
+                    ocean_weight: 1.0,
                 },
                 |_| HydrologySurfaceSample {
                     elevation: 120.0,
