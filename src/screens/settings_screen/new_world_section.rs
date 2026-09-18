@@ -4,7 +4,7 @@ use crate::{
     app::game_state::GameState,
     localization::{Language, UiLocalization},
     ui::{
-        button::{compact_control_button, menu_button, primary_menu_button},
+        button::{compact_control_button, button, primary_button},
         numeric_input::{
             NumericInputEvent, NumericInputFrame, NumericInputSizing, NumericInputState,
             numeric_input_field, sync_numeric_input_view,
