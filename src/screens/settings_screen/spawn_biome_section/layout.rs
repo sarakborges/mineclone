@@ -6,17 +6,14 @@ use bevy::{
 
 use crate::{
     localization::{Language, UiLocalization},
-    ui::{dropdown, selectable, text_input, theme, typography},
+    ui::{dropdown::{self, PanelAnchor}, text_input, theme, typography},
 };
 
-pub(super) const OPTION_HEIGHT: f32 = 40.0;
 pub(super) const OPTION_GAP: f32 = 4.0;
-const CONTROL_HEIGHT: f32 = 44.0;
-const PANEL_GAP: f32 = 6.0;
 const SEARCH_HEIGHT: f32 = 40.0;
 const VISIBLE_OPTION_COUNT: f32 = 5.0;
 const OPTIONS_VIEWPORT_HEIGHT: f32 =
-    OPTION_HEIGHT * VISIBLE_OPTION_COUNT + OPTION_GAP * (VISIBLE_OPTION_COUNT - 1.0);
+    dropdown::OPTION_HEIGHT * VISIBLE_OPTION_COUNT + OPTION_GAP * (VISIBLE_OPTION_COUNT - 1.0);
 
 #[derive(Component)]
 pub(in crate::screens::settings_screen) struct SpawnBiomeDropdownButton;
@@ -57,8 +54,6 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
     localization: &UiLocalization,
     language: Language,
 ) -> impl Bundle {
-    let (control_background, control_border) = selectable::static_colors(false);
-
     (
         Node {
             width: percent(100),
@@ -79,27 +74,12 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                     .to_owned(),
             ),
             (
-                Node {
-                    position_type: PositionType::Relative,
-                    width: percent(100),
-                    height: px(CONTROL_HEIGHT),
-                    ..default()
-                },
+                dropdown::root(percent(100)),
                 children![
                     (
                         Button,
                         SpawnBiomeDropdownButton,
-                        Node {
-                            width: percent(100),
-                            height: percent(100),
-                            padding: UiRect::horizontal(px(12)),
-                            border: UiRect::all(px(2)),
-                            align_items: AlignItems::Center,
-                            justify_content: JustifyContent::SpaceBetween,
-                            ..default()
-                        },
-                        BackgroundColor(control_background),
-                        BorderColor::all(control_border),
+                        dropdown::control(),
                         children![
                             (
                                 SpawnBiomeDropdownLabel,
@@ -115,21 +95,8 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                     ),
                     (
                         SpawnBiomeDropdownPanel,
-                        Node {
-                            display: Display::None,
-                            position_type: PositionType::Absolute,
-                            top: px(CONTROL_HEIGHT + PANEL_GAP),
-                            left: px(0),
-                            width: percent(100),
-                            flex_direction: FlexDirection::Column,
-                            align_items: AlignItems::Stretch,
-                            row_gap: px(8),
-                            padding: UiRect::all(px(8)),
-                            border: UiRect::all(px(1)),
-                            ..default()
-                        },
-                        BackgroundColor(theme::HUD_SURFACE),
-                        BorderColor::all(selectable::BORDER_COLOR),
+                        dropdown::panel_node(percent(100), 8.0, 8.0, 1.0, PanelAnchor::Left),
+                        dropdown::panel_surface(),
                         GlobalZIndex(610),
                         children![
                             (
