@@ -9,7 +9,6 @@ use crate::{
 
 pub(crate) struct GenerationColumnSample {
     pub(crate) surface_height: i32,
-    pub(crate) primary_surface_index: usize,
     pub(crate) identity_surface_index: usize,
     pub(crate) primary_terrain_strength: f32,
     pub(crate) surface_margin_index: Option<usize>,
@@ -33,7 +32,6 @@ pub(crate) fn sample_generation_columns(
             let surface = biome_field.sample_surface(position.as_vec2() + Vec2::splat(0.5));
             let surface_height =
                 surface_height_from_sample(position, dimension, biome_field, &surface);
-            let primary_surface_index = surface.primary_surface_index;
             let identity_surface_index = surface.identity_surface_index;
             let primary_terrain_strength = surface
                 .influences
@@ -49,7 +47,6 @@ pub(crate) fn sample_generation_columns(
 
             columns.push(GenerationColumnSample {
                 surface_height,
-                primary_surface_index,
                 identity_surface_index,
                 primary_terrain_strength,
                 surface_margin_index,
