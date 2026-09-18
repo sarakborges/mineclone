@@ -589,8 +589,8 @@ fn handle_world_selection(
         }
 
         if state.loading.is_some() {
-            state.error = localization
-                .text(language.get(), "worldSelection.stillLoading")
+            state.error = context.localization
+                .text(context.language.get(), "worldSelection.stillLoading")
                 .to_owned();
             return;
         }
@@ -618,8 +618,8 @@ fn handle_world_selection(
             }
             WorldSelectionAction::Load(id) => {
                 if state.scan.is_some() {
-                    state.error = localization
-                        .text(language.get(), "worldSelection.stillVerifying")
+                    state.error = context.localization
+                        .text(context.language.get(), "worldSelection.stillVerifying")
                         .to_owned();
                     return;
                 }
