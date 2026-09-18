@@ -1,3 +1,4 @@
+pub(crate) mod attack;
 pub(crate) mod biome;
 pub(crate) mod biome_density;
 pub(crate) mod biome_distribution;
