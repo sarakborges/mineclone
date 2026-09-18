@@ -7,6 +7,7 @@ pub(crate) mod selectable;
 pub(crate) mod surface;
 pub(crate) mod text_input;
 pub(crate) mod theme;
+pub(crate) mod toggle;
 pub(crate) mod transition;
 pub(crate) mod typography;
 pub(crate) mod visibility;
