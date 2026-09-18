@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. Revisão retroativa de versionamento em 2026-09-18: `0.22.8` foi o último bump antes dos blocos de combate/entidades e UI; o bloco de health/hurt/death/knockback é registrado retrospectivamente como linha `0.23.x`, sem reescrever o histórico Git, e o bloco atual de unificação do design system/settings passa a `0.24.0`. **HEAD de código no momento desta atualização:** `06a5662853108641f331a22ef66bc70f9d5ea1d7`. A CI do HEAD está em andamento no run `35369262539` (run 3764); o último run verde conhecido antes deste bloco é `35367711925` (run 3739), commit `474fc669c58268f93e6b3b506327b25dd834cbf0`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. Revisão retroativa de versionamento em 2026-09-18: `0.22.8` foi o último bump antes dos blocos de combate/entidades e UI; o bloco de health/hurt/death/knockback é registrado retrospectivamente como linha `0.23.x`, sem reescrever o histórico Git, e o bloco atual de unificação do design system/settings passa a `0.24.0`. **HEAD funcional validado desta atualização:** `06a5662853108641f331a22ef66bc70f9d5ea1d7`. CI `35369262539` (run 3764, push) e `35369266427` (run 3765, PR) concluíram **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. O commit posterior `cc5ee8fc504c13ee6a7824d06eea31d49165f142` altera apenas este handoff. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 ## Histórico integral obrigatório
 
@@ -349,7 +349,7 @@ Próximo passo imediato: aguardar a CI do HEAD 77b847822b6daa5ac5ba3018c0028e3f1
 - Não executei cargo test/cargo run nem QA Windows.
 
 
-## Checkpoint 88 — 2026-09-18: unificação do design system, settings e correção de versionamento [CÓDIGO; CI EM ANDAMENTO]
+## Checkpoint 88 — 2026-09-18: unificação do design system, settings e correção de versionamento [CÓDIGO + CI VERDE]
 
 - O toggle de HUD teve o thumb corrigido para manter espaçamento interno simétrico entre esquerda e direita considerando a borda de 2 px; a geometria não usa mais o erro anterior que deixava o thumb colado à direita.
 - O card principal de settings voltou a usar padding simétrico de 18 px em todos os lados; a remoção anterior isolada do padding direito foi revertida.
@@ -361,7 +361,7 @@ Próximo passo imediato: aguardar a CI do HEAD 77b847822b6daa5ac5ba3018c0028e3f1
 - A auditoria de telas identificou que os botões de ação estavam fragmentados em vários helpers locais/semânticos apesar de pertencerem ao mesmo componente visual; esse é o motivo da consolidação. Controles que não são botões de ação — dropdowns, text/numeric inputs, sliders e toggle — permanecem componentes próprios do design system ou candidatos a extração quando ainda estiverem implementados localmente.
 - Revisão retroativa de versão: `0.22.8` cobria o último bloco de Chisel/fluidos. Os checkpoints posteriores de EntityHealth, hurt/death, HUD de vida, knockback e cleanup de criaturas formam o bloco funcional `0.23.x`. Como esses bumps não foram feitos na época, o histórico não foi reescrito; o handoff registra a lacuna e a versão atual avança diretamente para `0.24.0` para o bloco de unificação de UI/design system.
 - `06a5662853108641f331a22ef66bc70f9d5ea1d7` atualiza `VERSION` para `0.24.0`. `Cargo.toml` continua em `0.10.16` por design para não invalidar fingerprints do Cargo em bumps funcionais.
-- CI: runs 3756/3758 expuseram erros objetivos da migração (assinaturas antigas no pause menu e depois símbolos mortos do botão antigo), corrigidos em `aa6fa75d...`, `4be35a6a...` e `05e6eb2a...`. No momento deste checkpoint, run 3764 do HEAD `06a56628...` está em andamento. Não marcar este bloco como CI verde até confirmação explícita.
+- CI: runs 3756/3758 expuseram erros objetivos da migração (assinaturas antigas no pause menu e depois símbolos mortos do botão antigo), corrigidos em `aa6fa75d...`, `4be35a6a...` e `05e6eb2a...`. O HEAD funcional `06a56628...` foi validado com **success** no run 3764 (push, `35369262539`) e no run 3765 (PR, `35369266427`).
 - **Regra operacional adicionada ao handoff:** a cada novo passo, o usuário deve receber feedback imediato do que está acontecendo e do que será verificado; não trabalhar em silêncio durante uma sequência longa.
 
-Próximo passo imediato: confirmar a CI do HEAD `0.24.0`; se falhar, corrigir somente os erros objetivos. Depois concluir a auditoria das telas/HUD procurando componentes visuais locais que duplicam primitives existentes em `src/ui`, com feedback ao usuário antes de cada novo passo.
+Próximo passo imediato: concluir a auditoria das telas/HUD procurando componentes visuais locais que duplicam primitives existentes em `src/ui`, com feedback ao usuário antes de cada novo passo.
