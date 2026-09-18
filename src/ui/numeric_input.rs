@@ -143,7 +143,7 @@ pub(crate) fn numeric_input_field<I: Component, L: Component>(
             flex_grow,
             min_width,
             height: px(COMPACT_CONTROL_HEIGHT),
-            border: UiRect::all(px(1)),
+            border: UiRect::all(px(2)),
             padding: UiRect::horizontal(px(text_input::INPUT_PADDING_X)),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::FlexStart,
