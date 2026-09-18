@@ -160,8 +160,8 @@ pub(super) fn move_creatures(
 }
 
 fn set_animation(state: &mut CreatureAnimationState, next: &str) {
-    if state.0 != next {
-        state.0 = next.to_owned();
+    if state.name != next {
+        state.name = next.to_owned();
     }
 }
 
