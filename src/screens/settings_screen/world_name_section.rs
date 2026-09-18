@@ -78,7 +78,14 @@ pub(super) fn world_name_setting(
                     },
                 )],
             ),
-            (WorldNameError, typography::caption(String::new())),
+            (
+                WorldNameError,
+                typography::caption(String::new()),
+                Node {
+                    display: Display::None,
+                    ..default()
+                },
+            ),
         ],
     )
 }
@@ -99,14 +106,22 @@ pub(super) fn sync_world_name_view(
     focus: Res<InputFocus>,
     input: Query<Entity, With<WorldNameInput>>,
     mut frames: Query<&mut BorderColor, With<WorldNameFrame>>,
-    mut errors: Query<&mut Text, With<WorldNameError>>,
+    mut errors: Query<(&mut Text, &mut Node), With<WorldNameError>>,
 ) {
     if !feedback.is_changed() && !focus.is_changed() {
         return;
     }
-    for mut text in &mut errors {
+    for (mut text, mut node) in &mut errors {
         if text.0 != feedback.message {
             text.0.clone_from(&feedback.message);
+        }
+        let display = if feedback.message.is_empty() {
+            Display::None
+        } else {
+            Display::Flex
+        };
+        if node.display != display {
+            node.display = display;
         }
     }
     let focused = input
