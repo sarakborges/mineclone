@@ -4,8 +4,7 @@ use bevy::prelude::*;
 use super::{
     BiomeField, BiomeFieldSample, BiomeInfluence, MAX_SURFACE_INFLUENCES,
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS},
-    mountain_belt::mountain_belt_strength,
-    mountain_peak::mountain_peak_strength,
+    distribution::distribution_strength,
     spatial::{smoothstep, surface_site_position, warp_surface_position},
 };
 
@@ -116,13 +115,12 @@ impl BiomeField {
                     .iter()
                     .copied()
                     .map(|distribution| {
-                        mountain_belt_strength(distribution, position, self.seed, biome.id.as_str())
-                            .max(mountain_peak_strength(
-                                distribution,
-                                position,
-                                self.seed,
-                                biome.id.as_str(),
-                            ))
+                        distribution_strength(
+                            distribution,
+                            position,
+                            self.seed,
+                            biome.id.as_str(),
+                        )
                     })
                     .fold(0.0_f32, f32::max)
                     * biome.weight;
