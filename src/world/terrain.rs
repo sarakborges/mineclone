@@ -171,13 +171,37 @@ fn biome_surface_height(
             height,
             crater_depth,
             crater_radius,
+            irregularity,
+            irregularity_scale,
+            detail_irregularity,
+            detail_scale,
+            crater_irregularity,
         } => {
             let strength = distribution_strength.clamp(0.0, 1.0);
-            let crater_start = 1.0 - crater_radius;
-            let crater_strength =
-                smoothstep(((strength - crater_start) / crater_radius).clamp(0.0, 1.0));
+            let broad = fractal_noise(position * irregularity_scale, seed.rotate_left(11));
+            let detail = fractal_noise(position * detail_scale, seed.rotate_left(37));
+            let slope_band = 4.0 * strength * (1.0 - strength);
+            let distorted_strength = (
+                strength
+                    + (broad * irregularity + detail * detail_irregularity) * slope_band
+            )
+                .clamp(0.0, 1.0);
 
-            sea_level + base_height + height * strength - crater_depth * crater_strength
+            let crater_noise = fractal_noise(
+                position * (irregularity_scale * 1.7),
+                seed.rotate_left(53),
+            );
+            let crater_start =
+                (1.0 - crater_radius + crater_noise * crater_irregularity).clamp(0.0, 0.99);
+            let crater_width = (1.0 - crater_start).max(0.01);
+            let crater_strength = smoothstep(
+                ((distorted_strength - crater_start) / crater_width).clamp(0.0, 1.0),
+            );
+
+            sea_level
+                + base_height
+                + height * distorted_strength
+                - crater_depth * crater_strength
         }
     };
 
