@@ -143,7 +143,8 @@ pub(super) fn handle_biome_size_multiplier_keyboard(
     mut config: ResMut<NewWorldConfig>,
     mut input_state: ResMut<BiomeSizeMultiplierInputState>,
     mut editor: Single<(Entity, &mut EditableText), With<BiomeSizeMultiplierInput>>,
-    mut sliders: Query<&mut SliderValue, With<BiomeSizeMultiplierSlider>>,
+    sliders: Query<Entity, With<BiomeSizeMultiplierSlider>>,
+    mut commands: Commands,
 ) {
     let (entity, editable) = &mut *editor;
     let event = BiomeSizeMultiplierInputState::handle_keyboard(
@@ -168,10 +169,8 @@ pub(super) fn handle_biome_size_multiplier_keyboard(
 
     config.set_biome_size_multiplier(value);
     let value = config.biome_size_multiplier();
-    for mut slider_value in &mut sliders {
-        if slider_value.0 != value {
-            slider_value.0 = value;
-        }
+    for slider in &sliders {
+        commands.entity(slider).insert(SliderValue(value));
     }
 }
 
