@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.26.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. O PR #14 já foi mergeado em `develop`. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `8ebf13a4db55ff20ccc03f31fc869e7cf1131107`. O código do checkpoint 101 em `b696cfe5738911729f566feb58dd8588849cbc9f` foi validado pela CI de push `35392816751` com sucesso; o commit isolado de bump para `0.26.0` ainda não tinha run observável pelos checks disponíveis nesta sessão. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.26.1`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. O PR #14 já foi mergeado em `develop`. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `9367da25dc6b15b4ddcd1175fd5ae3dbb0a1909c`. O fix funcional de terrain forçado está em `db05e21ed9a28f25b23202c5b5dbfe1741194319` e passou na CI de push `35393716818`; o bump `0.26.1` está em `9367da25dc6b15b4ddcd1175fd5ae3dbb0a1909c`, com run de push `35393788708` ainda enfileirada no momento desta atualização. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 ## Histórico integral obrigatório
 
@@ -1024,3 +1024,30 @@ Foram removidos do caminho final:
    - confirmar ausência de rivers/lakes em Volcano;
    - avaliar frequência/tamanho dos quatro biomes e ajustar tuning sem alterar a arquitetura.
 
+
+
+## Checkpoint 102 — 2026-09-18: Volcano e Gorge não ficam flat quando o spawn biome é forçado [CÓDIGO + CI VERDE; VERSION 0.26.1; QA WINDOWS PENDENTE]
+
+- Relato do usuário: terrain generation de Volcano estava totalmente flat; Gorge apresentava o mesmo problema.
+- Causa objetiva:
+  - o fluxo de New World pode forçar o surface biome inicial para o biome escolhido;
+  - dentro do core da região forçada, `forced_weight` é 1.0 constante;
+  - `sample_surface()` usava esse mesmo valor também como `BiomeInfluence.terrain_strength`;
+  - `BiomeTerrain::Volcano` e `BiomeTerrain::Gorge` dependem diretamente de `terrain_strength` para formar cone/cratera e parede/fundo;
+  - portanto o biome era corretamente Volcano/Gorge em identidade/material, mas sua força geométrica virava constante em toda a região forçada, achatando o terrain.
+- Correção em `db05e21ed9a28f25b23202c5b5dbfe1741194319`:
+  - separa definitivamente **peso/seleção do biome** de **força geométrica do terrain**;
+  - macro-biome selection ainda usa `distribution_strength * biome.weight` para competição/frequência, mas `terrain_strength` passa a preservar a força crua da distribution sem ser distorcida pelo weight;
+  - forced `mountain_peak` recebe perfil radial dentro da região forçada, permitindo Volcano formar cone e cratera;
+  - forced `noise_band` recebe perfil transversal pelo eixo curto da região, permitindo Gorge formar paredes e fundo em vez de um plano;
+  - forced `mountain_belt` também recebe perfil transversal coerente para não carregar a mesma armadilha caso passe a consumir terrain strength no futuro;
+  - biomes regionais mantêm strength 1.0; Alps/Mountain Belt atuais continuam usando seus próprios noises e não dependem desse strength para a altura.
+- A correção é genérica no caminho de `BiomeField::sample_surface()`; não há branch hardcoded por ID de Volcano ou Gorge.
+- CI funcional: run de push `35393716818` — **success**:
+  - auditoria de localizações;
+  - Clippy `--locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- `9367da25dc6b15b4ddcd1175fd5ae3dbb0a1909c` sobe `VERSION 0.26.0 → 0.26.1` por bugfix de worldgen. Run de push do bump `35393788708` estava **queued** no momento deste registro.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+Próximo passo imediato: QA Windows criando mundo com Spawn Biome = Volcano e Spawn Biome = Gorge. Confirmar que Volcano possui slope radial + cratera visível e que Gorge possui seção transversal com paredes/fundo, sem regressão de identidade, material `asteria:bassalt`, hydrology ou transição para biomes vizinhos. Também validar um Volcano/Gorge natural fora da região forçada para confirmar equivalência visual aproximada entre spawn forçado e ocorrência natural.
