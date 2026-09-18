@@ -90,10 +90,19 @@ impl FeatureGraph {
     }
 
     pub(crate) fn sample(&self, position: Vec3) -> Option<FeatureGraphSample> {
+        self.sample_with_margin(position, 0.0)
+    }
+
+    pub(crate) fn sample_with_margin(
+        &self,
+        position: Vec3,
+        margin: f32,
+    ) -> Option<FeatureGraphSample> {
+        let margin = margin.max(0.0);
         let mut strongest: Option<FeatureGraphSample> = None;
 
         for edge in &self.edges {
-            if !edge_contains_position(edge, position) {
+            if !edge_contains_position_with_margin(edge, position, margin) {
                 continue;
             }
 
@@ -110,7 +119,9 @@ impl FeatureGraph {
             let progress = (relative.dot(segment) / length_squared).clamp(0.0, 1.0);
             let closest = from + segment * progress;
             let distance = position.distance(closest);
-            let radius = edge.start_radius + (edge.end_radius - edge.start_radius) * progress;
+            let base_radius =
+                edge.start_radius + (edge.end_radius - edge.start_radius) * progress;
+            let radius = base_radius + margin;
             let strength = 1.0 - (distance / radius).clamp(0.0, 1.0);
 
             if strength <= 0.0 {
@@ -229,13 +240,17 @@ impl FeatureGraph {
     }
 }
 
-fn edge_contains_position(edge: &FeatureEdge, position: Vec3) -> bool {
-    position.x >= edge.minimum.x
-        && position.x <= edge.maximum.x
-        && position.y >= edge.minimum.y
-        && position.y <= edge.maximum.y
-        && position.z >= edge.minimum.z
-        && position.z <= edge.maximum.z
+fn edge_contains_position_with_margin(
+    edge: &FeatureEdge,
+    position: Vec3,
+    margin: f32,
+) -> bool {
+    position.x >= edge.minimum.x - margin
+        && position.x <= edge.maximum.x + margin
+        && position.y >= edge.minimum.y - margin
+        && position.y <= edge.maximum.y + margin
+        && position.z >= edge.minimum.z - margin
+        && position.z <= edge.maximum.z + margin
 }
 
 #[cfg(test)]
@@ -255,6 +270,18 @@ mod tests {
         assert_eq!(center.strength, 1.0);
         assert!(edge.strength > 0.0 && edge.strength < 1.0);
         assert!(graph.sample(Vec3::new(5.0, 3.0, 0.0)).is_none());
+    }
+
+    #[test]
+    fn three_dimensional_margin_detects_touching_feature_volume() {
+        let mut graph = FeatureGraph::default();
+        let from = graph.add_node(Vec3::ZERO);
+        let to = graph.add_node(Vec3::new(10.0, 0.0, 0.0));
+        graph.add_edge(from, to, 2.0, 2.0);
+
+        let nearby = Vec3::new(5.0, 4.5, 0.0);
+        assert!(graph.sample(nearby).is_none());
+        assert!(graph.sample_with_margin(nearby, 3.0).is_some());
     }
 
     #[test]
