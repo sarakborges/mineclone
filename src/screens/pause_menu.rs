@@ -98,7 +98,6 @@ fn spawn_pause_menu(
                         ..default()
                     },
                     children![
-                    children![
                         standard_button(
                             localization.text(language, "settings.section.worldSettings").to_owned(),
                             PauseMenuAction::WorldSettings,
