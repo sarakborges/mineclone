@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
+    app::{game_state::GameState, pause_state::PauseState, settings_state::{SettingsScreenMode, SettingsState}},
     localization::{ActiveLanguage, UiLocalization},
     ui::{
         button::menu_button,
@@ -43,7 +43,8 @@ struct PauseSaveFeedback;
 #[derive(Component, Clone, Copy)]
 enum PauseMenuAction {
     Resume,
-    Settings,
+    WorldSettings,
+    GameSettings,
     LeaveWorld,
     ExitGame,
 }
@@ -85,9 +86,23 @@ fn spawn_pause_menu(
                     localization.text(language, "pause.resume").to_owned(),
                     PauseMenuAction::Resume,
                 ));
-                menu.spawn(menu_button(
-                    localization.text(language, "common.settings").to_owned(),
-                    PauseMenuAction::Settings,
+                menu.spawn((
+                    Node {
+                        width: px(360),
+                        flex_direction: FlexDirection::Row,
+                        column_gap: px(12),
+                        ..default()
+                    },
+                    children![
+                        menu_button(
+                            localization.text(language, "settings.section.worldSettings").to_owned(),
+                            PauseMenuAction::WorldSettings,
+                        ),
+                        menu_button(
+                            localization.text(language, "common.settings").to_owned(),
+                            PauseMenuAction::GameSettings,
+                        ),
+                    ],
                 ));
                 menu.spawn(menu_button(
                     localization.text(language, "pause.leaveWorld").to_owned(),
@@ -106,6 +121,7 @@ fn handle_pause_menu_buttons(
     interactions: Query<(&Interaction, &PauseMenuAction), Changed<Interaction>>,
     snapshot: WorldSaveContext,
     mut session: ResMut<WorldSession>,
+    mut settings_mode: ResMut<SettingsScreenMode>,
     mut feedback: Query<&mut Text, With<PauseSaveFeedback>>,
     mut transition: ResMut<ScreenTransition>,
     mut app_exit: MessageWriter<AppExit>,
@@ -121,7 +137,12 @@ fn handle_pause_menu_buttons(
             PauseMenuAction::Resume => {
                 transition.request(ScreenTransitionTarget::pause(PauseState::Running));
             }
-            PauseMenuAction::Settings => {
+            PauseMenuAction::WorldSettings => {
+                *settings_mode = SettingsScreenMode::World;
+                transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
+            }
+            PauseMenuAction::GameSettings => {
+                *settings_mode = SettingsScreenMode::Game;
                 transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
             }
             PauseMenuAction::LeaveWorld | PauseMenuAction::ExitGame => {
