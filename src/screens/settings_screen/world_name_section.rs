@@ -6,7 +6,7 @@ use bevy::{
 
 use crate::{
     localization::{Language, UiLocalization},
-    ui::{text_input, typography},
+    ui::{settings as settings_layout, text_input, typography},
     world::NewWorldConfig,
 };
 
@@ -45,13 +45,7 @@ pub(super) fn world_name_setting(
     language: Language,
 ) -> impl Bundle {
     (
-        Node {
-            width: percent(100),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Stretch,
-            row_gap: px(8),
-            ..default()
-        },
+        settings_layout::setting_column(),
         children![
             typography::setting_title(localization.text(language, "newWorld.name").to_owned()),
             typography::caption(localization.text(language, "newWorld.name.description").to_owned()),
