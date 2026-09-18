@@ -12,7 +12,7 @@ mod types;
 mod tests;
 
 pub(crate) use field::HydrologyField;
-pub(crate) use math::ocean_strength;
+pub(crate) use math::{ocean_strength, suppress_ocean_continentalness};
 pub(crate) use region::HydrologyRegion;
 pub(crate) use types::{HydrologyBiomeOverlay, HydrologySurfaceSample};
 pub(crate) use types::{
