@@ -156,23 +156,40 @@ fn adjacency_allows(
     candidate: &BiomeFieldEntry,
     context: &SurfaceAdjacencyContext<'_>,
 ) -> bool {
-    context
+    let mut required_neighbor_found = candidate.require_near.is_empty();
+
+    for ((&neighbor_cell, &neighbor_site), &neighbor_index) in context
         .nearby_cells
         .iter()
         .zip(context.nearby_sites)
         .zip(context.nearby_biomes)
-        .all(|((&neighbor_cell, &neighbor_site), &neighbor_index)| {
-            let neighbor = &context.biomes[neighbor_index];
-            !biomes_conflict(candidate, neighbor)
-                || !surface_sites_share_border(
-                    context.cell,
-                    context.site,
-                    neighbor_cell,
-                    neighbor_site,
-                    context.spacing,
-                    context.seed,
-                )
-        })
+    {
+        let neighbor = &context.biomes[neighbor_index];
+        let shares_border = surface_sites_share_border(
+            context.cell,
+            context.site,
+            neighbor_cell,
+            neighbor_site,
+            context.spacing,
+            context.seed,
+        );
+        if !shares_border {
+            continue;
+        }
+
+        if biomes_conflict(candidate, neighbor) {
+            return false;
+        }
+        if candidate
+            .require_near
+            .iter()
+            .any(|required| required == &neighbor.id)
+        {
+            required_neighbor_found = true;
+        }
+    }
+
+    required_neighbor_found
 }
 
 fn surface_sites_share_border(
