@@ -28,6 +28,24 @@ pub struct AsteriaButtonVisual { level: f32 }
 #[derive(Component, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ButtonVariant { #[default] Normal, Primary, Danger }
 
+impl ButtonVariant {
+    pub(crate) fn from_active(active: bool) -> Self {
+        if active { Self::Primary } else { Self::Normal }
+    }
+}
+
+pub(crate) fn initial_button_background(active: bool) -> Color {
+    if active { BUTTON_PRIMARY } else { BUTTON_NORMAL }
+}
+
+pub(crate) fn initial_button_border(active: bool) -> Color {
+    if active { BUTTON_BORDER_STRONG } else { BUTTON_BORDER }
+}
+
+pub(crate) fn button_label_for_variant(label: impl Into<String>, active: bool) -> impl Bundle {
+    if active { typography::button_label_light(label) } else { typography::button_label(label) }
+}
+
 type ButtonAnimationQuery<'w, 's> = Query<
     'w,
     's,
