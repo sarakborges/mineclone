@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use super::typography;
+use super::{theme, typography};
 
 pub const MENU_BUTTON_WIDTH: f32 = 470.0;
 pub const MENU_BUTTON_HEIGHT: f32 = 54.0;
