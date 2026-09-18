@@ -60,7 +60,7 @@ impl BiomeField {
                     .is_none_or(|index| candidate.id != self.surface_biomes[index].id)
                 && proximity_allows(
                     candidate,
-                    &nearby_biomes,
+                    dominant_neighbor,
                     &self.surface_biomes,
                     self.ocean_biome_id.as_deref(),
                     near_ocean,
@@ -121,7 +121,7 @@ fn dominant_neighbor_biome(nearby_biomes: &[usize]) -> Option<usize> {
 
 fn proximity_allows(
     candidate: &BiomeFieldEntry,
-    nearby_biomes: &[usize],
+    dominant_neighbor: Option<usize>,
     biomes: &[BiomeFieldEntry],
     ocean_biome_id: Option<&str>,
     near_ocean: bool,
@@ -137,10 +137,9 @@ fn proximity_allows(
         return false;
     }
 
-    nearby_biomes.iter().all(|&neighbor_index| {
-        let neighbor = &biomes[neighbor_index];
-        !biomes_conflict(candidate, neighbor)
-    })
+    dominant_neighbor
+        .map(|neighbor_index| &biomes[neighbor_index])
+        .is_none_or(|neighbor| !biomes_conflict(candidate, neighbor))
 }
 
 fn biomes_conflict(left: &BiomeFieldEntry, right: &BiomeFieldEntry) -> bool {
@@ -258,6 +257,50 @@ mod tests {
     fn dominant_neighbor_detection_requires_a_real_majority() {
         assert_eq!(dominant_neighbor_biome(&[1, 1, 1, 1, 1, 2, 3, 4]), Some(1));
         assert_eq!(dominant_neighbor_biome(&[1, 1, 1, 1, 2, 2, 3, 4]), None);
+    }
+
+    #[test]
+    fn proximity_conflict_requires_a_dominant_neighbor_region() {
+        let biome = |id: &str, avoid_near: &[&str]| BiomeFieldEntry {
+            id: id.to_owned(),
+            distributions: vec![crate::content::biome_distribution::BiomeDistribution::Regional],
+            size: crate::content::dimension::DimensionBiomeSize {
+                x: crate::content::dimension::DimensionBiomeAxisSize { min: 120.0, max: 420.0 },
+                z: crate::content::dimension::DimensionBiomeAxisSize { min: 120.0, max: 420.0 },
+                y: None,
+            },
+            weight: 1.0,
+            climate: Default::default(),
+            vertical_range: None,
+            priority: 0,
+            terrain: None,
+            terrain_modifiers: Vec::new(),
+            hydrology: Default::default(),
+            density_modifier: None,
+            solid_block: None,
+            density_seed: 0,
+            avoid_near: avoid_near.iter().map(|id| (*id).to_owned()).collect(),
+        };
+        let biomes = vec![
+            biome("plains", &[]),
+            biome("wasteland", &["witchwood", "enchanted"]),
+            biome("witchwood", &[]),
+        ];
+
+        assert!(proximity_allows(
+            &biomes[1],
+            None,
+            &biomes,
+            None,
+            false,
+        ));
+        assert!(!proximity_allows(
+            &biomes[1],
+            Some(2),
+            &biomes,
+            None,
+            false,
+        ));
     }
 
     #[test]
