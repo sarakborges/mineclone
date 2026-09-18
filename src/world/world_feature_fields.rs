@@ -30,7 +30,6 @@ impl WorldFeatureFields {
         seed: u64,
         sea_level: i32,
         hydrology: DimensionHydrology,
-        coast_weight: f32,
         ocean_weight: f32,
     ) -> Self {
         Self {
@@ -38,7 +37,6 @@ impl WorldFeatureFields {
                 seed.rotate_left(7),
                 sea_level,
                 hydrology,
-                coast_weight,
                 ocean_weight,
             ),
             cave_connectivity: CaveConnectivityField::new(seed.rotate_left(23)),
@@ -159,7 +157,7 @@ mod tests {
     };
 
     fn test_fields() -> WorldFeatureFields {
-        WorldFeatureFields::new(42, 64, DimensionHydrology::default(), 1.0, 1.0)
+        WorldFeatureFields::new(42, 64, DimensionHydrology::default(), 1.0)
     }
 
     #[test]
