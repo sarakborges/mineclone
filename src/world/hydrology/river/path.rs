@@ -5,7 +5,10 @@ mod waterfall;
 
 use bevy::prelude::*;
 
-use crate::world::feature_graph::FeatureGraph;
+use crate::world::{
+    feature_graph::FeatureGraph,
+    hydrology::types::HydrologySurfaceSample,
+};
 
 use self::{
     confluence::add_path_to_graph,
@@ -37,6 +40,7 @@ pub(super) struct RiverEdgeSpec {
     pub(super) downstream_flow: u32,
     pub(super) seed: u64,
     pub(super) sea_level: f32,
+    pub(super) ocean_threshold: f32,
 }
 
 pub(super) struct RiverPath {
@@ -47,10 +51,10 @@ pub(super) struct RiverPath {
 pub(super) fn add_curved_river_edge<F>(
     graph: &mut FeatureGraph,
     spec: RiverEdgeSpec,
-    mut surface_elevation_at: F,
+    mut surface_sample_at: F,
 ) -> Option<WaterfallLanding>
 where
-    F: FnMut(Vec2) -> f32,
+    F: FnMut(Vec2) -> HydrologySurfaceSample,
 {
     let width_multiplier = (spec.source.biome_hydrology.river_width_multiplier
         + spec.downstream.biome_hydrology.river_width_multiplier)
@@ -71,16 +75,41 @@ where
         spec.source_water_level,
         spec.downstream_water_level,
     );
+    if river_path_crosses_disabled_biome(
+        &path.points,
+        spec.ocean_threshold,
+        &mut surface_sample_at,
+    ) {
+        return None;
+    }
     constrain_river_path_to_terrain(
         &mut path.points,
         start_radius,
         end_radius,
-        &mut surface_elevation_at,
+        |position| surface_sample_at(position).elevation,
     );
     align_waterfall_landing_to_path(&mut path);
     add_path_to_graph(graph, spec.region_coord, &mut path, start_radius, end_radius);
 
     path.waterfall
+}
+
+fn river_path_crosses_disabled_biome(
+    points: &[Vec3],
+    ocean_threshold: f32,
+    sample_at: &mut impl FnMut(Vec2) -> HydrologySurfaceSample,
+) -> bool {
+    const SAMPLES_PER_SEGMENT: usize = 4;
+
+    points.windows(2).any(|segment| {
+        (0..=SAMPLES_PER_SEGMENT).any(|index| {
+            let t = index as f32 / SAMPLES_PER_SEGMENT as f32;
+            let point = segment[0].lerp(segment[1], t);
+            let sample = sample_at(Vec2::new(point.x, point.z));
+            !sample.biome_hydrology.can_generate_river
+                && sample.continentalness > ocean_threshold
+        })
+    })
 }
 
 fn river_radius(flow: u32) -> f32 {
@@ -132,6 +161,44 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn river_path_rejects_disabled_surface_biome() {
+        let points = [Vec3::ZERO, Vec3::new(20.0, 0.0, 0.0)];
+        let mut sample = |position: Vec2| HydrologySurfaceSample {
+            elevation: 80.0,
+            continentalness: 0.8,
+            biome_hydrology: BiomeHydrology {
+                can_generate_river: position.x < 8.0 || position.x > 12.0,
+                ..Default::default()
+            },
+        };
+
+        assert!(river_path_crosses_disabled_biome(
+            &points,
+            0.45,
+            &mut sample
+        ));
+    }
+
+    #[test]
+    fn disabled_underlying_biome_does_not_block_ocean_destination() {
+        let points = [Vec3::ZERO, Vec3::new(20.0, 0.0, 0.0)];
+        let mut sample = |_position: Vec2| HydrologySurfaceSample {
+            elevation: 60.0,
+            continentalness: 0.2,
+            biome_hydrology: BiomeHydrology {
+                can_generate_river: false,
+                ..Default::default()
+            },
+        };
+
+        assert!(!river_path_crosses_disabled_biome(
+            &points,
+            0.45,
+            &mut sample
+        ));
+    }
+
     fn neighboring_regions_reproduce_identical_water_height_at_the_same_river_crossing() {
         let source = node(Vec2::new(64.0, 64.0), 100.0);
         let downstream = node(Vec2::new(192.0, 64.0), 90.0);
@@ -161,8 +228,13 @@ mod tests {
                     downstream_flow: 4,
                     seed: 42,
                     sea_level: 64.0,
+                    ocean_threshold: 0.45,
                 },
-                |_| 120.0,
+                |_| HydrologySurfaceSample {
+                    elevation: 120.0,
+                    continentalness: 0.8,
+                    biome_hydrology: BiomeHydrology::default(),
+                },
             );
         }
 
