@@ -79,9 +79,16 @@ pub struct BiomeInfluence<'a> {
     pub(crate) terrain_strength: f32,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct SurfaceBoundarySample {
+    pub(crate) neighbor_surface_index: usize,
+    pub(crate) distance: f32,
+}
+
 pub struct BiomeFieldSample<'a> {
     pub primary_id: &'a str,
     pub(crate) primary_surface_index: usize,
+    pub(crate) nearest_boundary: Option<SurfaceBoundarySample>,
     pub influences: ArrayVec<BiomeInfluence<'a>, MAX_SURFACE_INFLUENCES>,
 }
 
