@@ -69,8 +69,8 @@ impl DimensionHydrology {
 
             assert_eq!(
                 biome.kind,
-                BiomeKind::Hydrology,
-                "dimension {dimension_id} hydrology.{field} must reference a hydrology biome: {biome_id}"
+                BiomeKind::Surface,
+                "dimension {dimension_id} hydrology.{field} must reference a surface biome: {biome_id}"
             );
         }
 
