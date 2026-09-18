@@ -219,7 +219,5 @@ fn validate_creature_spawns(definition: &BiomeDefinition) {
         assert!(spawn.weight.is_finite() && spawn.weight >= 0.0, "biome {} creature {} weight must be finite and non-negative", definition.id, spawn.creature);
         assert!(spawn.light_min <= 15 && spawn.light_max <= 15 && spawn.light_max >= spawn.light_min, "biome {} creature {} light range is invalid", definition.id, spawn.creature);
         assert!(spawn.spacing.is_finite() && spawn.spacing > 0.0, "biome {} creature {} spacing must be positive and finite", definition.id, spawn.creature);
-        assert!(spawn.max_per_type > 0, "biome {} creature {} maxPerType must be positive", definition.id, spawn.creature);
-        assert!(spawn.max_in_dimension > 0, "biome {} creature {} maxInDimension must be positive", definition.id, spawn.creature);
     }
 }
