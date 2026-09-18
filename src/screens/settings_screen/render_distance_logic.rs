@@ -54,7 +54,8 @@ pub(super) fn handle_render_distance_keyboard(
     mut render_distance: ResMut<RenderDistanceSettings>,
     mut input_state: ResMut<RenderDistanceInputState>,
     mut editor: Single<(Entity, &mut EditableText), With<RenderDistanceInput>>,
-    mut sliders: Query<&mut SliderValue, With<RenderDistanceSlider>>,
+    sliders: Query<Entity, With<RenderDistanceSlider>>,
+    mut commands: Commands,
 ) {
     let (entity, editable) = &mut *editor;
     let event = RenderDistanceInputState::handle_keyboard(
@@ -78,11 +79,9 @@ pub(super) fn handle_render_distance_keyboard(
     }
 
     render_distance.set_chunks(chunks);
-    for mut slider_value in &mut sliders {
-        let next = render_distance.chunks() as f32;
-        if slider_value.0 != next {
-            slider_value.0 = next;
-        }
+    let next = render_distance.chunks() as f32;
+    for slider in &sliders {
+        commands.entity(slider).insert(SliderValue(next));
     }
 }
 
