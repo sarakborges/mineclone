@@ -4,7 +4,7 @@ use crate::{
     content::{attack::AttackRegistry, block::BlockRegistry, tool::ToolRegistry},
     gameplay::availability::world_interaction_available,
     creatures::{CreatureAnimationState, CreatureInstance},
-    creatures::motion::CreatureMotion,
+    creatures::CreatureMotionComponent,
     entity::EntityHealth,
     player::{camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar, viewmodel::ViewModelAnimation},
     voxel::{
@@ -68,7 +68,7 @@ fn edit_targeted_block(
     mut runtime: VoxelTopologyRuntime,
     mut tool_uses: MessageWriter<ToolUse>,
     mut viewmodel_animation: ResMut<ViewModelAnimation>,
-    mut creature_health: Query<(&mut EntityHealth, &mut CreatureAnimationState, &mut CreatureMotion, &Transform), With<CreatureInstance>>,
+    mut creature_health: Query<(&mut EntityHealth, &mut CreatureAnimationState, &mut CreatureMotionComponent, &Transform), With<CreatureInstance>>,
     mut random_state: Local<u32>,
 ) {
     let left_pressed = input.buttons.just_pressed(MouseButton::Left);
