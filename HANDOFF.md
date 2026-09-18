@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte ativa deste checkpoint:** `sarakborges/mineclone`, branch `feature/biome-size-multiplier`, baseada em `develop`, Rust + Bevy 0.19.1. **Versão raiz atual da branch `VERSION`: `0.25.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional validado deste checkpoint:** `92f557060a6e2a9185b2854c66aeeaea1ddec74f`. CI `35388784039` concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco. A base `develop` continua em `0.24.12` até merge desta branch.
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.25.1`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. O PR #14 já foi mergeado em `develop`. **HEAD de código imediatamente anterior a esta atualização documental:** `b696cfe5738911729f566feb58dd8588849cbc9f`. O CI de push `35392816751` estava **em execução** neste ponto; portanto o bloco 101 abaixo NÃO deve ser tratado como CI verde até nova confirmação. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 ## Histórico integral obrigatório
 
@@ -874,3 +874,151 @@ Próximo passo imediato: QA Windows de distribuição regional, navegando vário
 - Não executei `cargo test`, `cargo run` nem QA Windows.
 
 Próximo passo imediato: QA Windows em mundo novo verificando (1) Biome Size Multiplier em 0.5/1.0/5.0 e persistência após reload; (2) number inputs de ambos sliders; (3) rivers terminando na primeira entrada física no oceano; (4) entradas de caverna aparecendo em todos os surface biomes atualmente habilitados, incluindo Wasteland; (5) mouth gradual sem parede reta e conexão real com Caverns; (6) Player HUD completamente oculto durante Pause e Settings.
+
+
+
+## Checkpoint 101 — 2026-09-18: performance do worldgen + biomas independentes Gorge / Alps / Mountain Belt / Volcano [CÓDIGO EM ANDAMENTO; CI PENDENTE]
+
+### Correção de performance após surface carvers data-driven
+
+- Relato do usuário: geração de mundo ficou **extremamente lenta** após as mudanças recentes.
+- Causa estrutural encontrada no hot path:
+  - o surface carver de Caverns passou a poder ser avaliado em praticamente todo surface biome habilitado;
+  - os mesmos tunnel candidates eram reconstruídos/conectados repetidamente para cada coluna do chunk;
+  - o path descendente novo ainda carregava rescans legados da versão antiga do tunnel.
+- Correções aplicadas:
+  - cache determinístico de surface tunnel candidate por célula durante o density pass do chunk;
+  - candidates fora do alcance da coluna são descartados antes da resolução cara;
+  - geometria/conexão do mesmo tunnel é reutilizada pelas colunas do chunk;
+  - path descendente considera o primeiro ponto como mouth autoritativa e não procura novamente a boca ao longo dos 25 samples;
+  - `surface_height()` para validar profundidade de conexão só é calculado depois de um sample realmente tocar o cave graph.
+- O objetivo é preservar exatamente a frequência/semântica das entradas, removendo recomputação redundante.
+- Commits principais da correção: `58ab3fe4...` e sequência anterior do cache/rescan.
+- Um CI intermediário da correção de performance fechou verde antes da sequência de biomas; depois o bloco foi reaberto pelas mudanças arquiteturais abaixo.
+
+### Correção de arquitetura: Mountain-family são biomas próprios
+
+- Solicitação corrigida pelo usuário: **Gorge, Alps, Mountain Belt e Volcano NÃO devem herdar Mountains nem existir como overlays/modifiers do biome Mountains**.
+- A tentativa intermediária de introduzir `BiomeKind::TerrainOverlay` + `parentBiome` foi **abandonada e removida**.
+- Contrato atual:
+  - `Mountains`, `Gorge`, `Alps`, `Mountain Belt` e `Volcano` são **surface biomes independentes**;
+  - cada um possui sua própria distribution;
+  - cada um possui seu próprio `BiomeTerrain`;
+  - cada um possui seus próprios `surfaceLayers`;
+  - cada um possui sua própria hydrology;
+  - cada um possui suas próprias structures/visuals/allowSurfaceCarvers explicitamente;
+  - nenhuma regra de geração pode depender de branch hardcoded pelo ID do biome.
+- Novos terrain generators no enum `BiomeTerrain`:
+  - `gorge`;
+  - `alps`;
+  - `mountain_belt`;
+  - `volcano`.
+- A força já calculada pela macro-distribution passa junto na `BiomeInfluence.terrain_strength` para os terrains cuja forma depende diretamente da distribuição.
+  - Gorge usa essa força para graduar parede → fundo;
+  - Volcano usa essa força para formar cone → cratera.
+- Essa força é **reutilizada** do `sample_surface()`; o terrain não reamostra a macro-distribution por coluna, evitando reintroduzir custo desnecessário no worldgen.
+
+### Gorge
+
+- `asteria:overworld/gorge` é surface biome completo.
+- Distribution: `noise_band`.
+- Terrain próprio `type: "gorge"`:
+  - `baseHeight: 18`;
+  - `depth: 42`;
+  - `wallHeight: 20`.
+- Surface material atual: stone.
+- `allowSurfaceCarvers=true`.
+- Hydrology é declarada no próprio JSON; nenhuma permissão é herdada de Mountains.
+- Possui placement próprio de boulders.
+
+### Alps
+
+- `asteria:overworld/alps` é surface biome completo.
+- Distribution: `mountain_peak`.
+- Terrain próprio `type: "alps"`:
+  - base elevada;
+  - ridge principal mais alto/agudo;
+  - detalhe secundário jagged próprio.
+- Surface material atual: stone.
+- `allowSurfaceCarvers=true`.
+- Hydrology e boulders são declarados explicitamente no próprio biome.
+- Não depende de `Mountains.terrainModifiers`.
+
+### Mountain Belt
+
+- `asteria:overworld/mountain_belt` é surface biome completo.
+- Distribution: `mountain_belt`.
+- Terrain próprio `type: "mountain_belt"`, com ridge broad + detalhe condicionado ao ridge.
+- Surface material atual: stone.
+- `allowSurfaceCarvers=true`.
+- Hydrology e structures são declarados explicitamente.
+
+### Volcano
+
+- `asteria:overworld/volcano` é surface biome completo.
+- Distribution: `mountain_peak`, mais rara/espaçada.
+- Terrain próprio `type: "volcano"` com cone e cratera:
+  - `baseHeight: 12`;
+  - `height: 72`;
+  - `craterDepth: 38`;
+  - `craterRadius: 0.22`.
+- Material autoral existente confirmado no content registry: **`asteria:bassalt`** (ID possui dois “s” e deve ser preservado).
+- Surface layers:
+  - 6 blocos de `asteria:bassalt`;
+  - stone abaixo.
+- Regra explicitamente solicitada/confirmada:
+  - `canGenerateRiver=false`;
+  - `canGenerateLake=false`;
+  - multipliers de river/lake = 0.
+- Portanto Volcano **não herda** a hydrology de Mountains.
+
+### Dimension / tamanhos
+
+Os quatro novos surface biomes estão registrados no Overworld com sizes próprios, portanto participam da seleção normal de surface biome e também respondem ao Biome Size Multiplier:
+
+- Gorge: X 80–180 / Z 140–360;
+- Alps: X/Z 140–320;
+- Mountain Belt: X/Z 160–380;
+- Volcano: X/Z 120–260.
+
+Esses valores ainda são tuning inicial e precisam de QA visual/distributiva em jogo.
+
+### Limpeza da arquitetura intermediária
+
+Foram removidos do caminho final:
+
+- `BiomeKind::TerrainOverlay`;
+- `parentBiome`;
+- runtime `TerrainOverlayEntry`;
+- aplicação aditiva de terrain overlay no `surface_height`;
+- material blending de overlay;
+- validações de parent overlay;
+- modifier intermediário `volcanicCone`.
+
+`ARCHITECTURE.md` foi corrigido para registrar que a família montanhosa é composta por **surface biomes independentes**, sem herança implícita de Mountains.
+
+### Estado de CI / versionamento neste ponto
+
+- `VERSION` atual permanece **0.25.1** enquanto este bloco está sendo estabilizado.
+- HEAD de código antes desta atualização do handoff: `b696cfe5738911729f566feb58dd8588849cbc9f`.
+- CI de push associado: `35392816751` — **em execução no momento desta atualização**.
+- Failures anteriores desta sequência foram estados intermediários da refatoração e incluíram:
+  - referência residual a `TerrainOverlay/parentBiome`;
+  - fixtures de `BiomeInfluence` sem o novo campo `terrain_strength`;
+  - ambos já foram corrigidos no HEAD acima.
+- **Não marcar este checkpoint como CI verde até o run atual concluir success.**
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+### Próximo passo imediato
+
+1. Confirmar Clippy + `cargo check --locked` no HEAD atual.
+2. Se verde, revisar/bump de `VERSION` conforme o bloco funcional e atualizar este checkpoint com a CI canônica.
+3. QA Windows/worldgen necessária para:
+   - confirmar que a regressão severa de velocidade foi eliminada;
+   - confirmar Gorge com paredes abruptas/desfiladeiro reconhecível;
+   - confirmar Alps visualmente mais altos/agudos;
+   - confirmar Mountain Belt formando cadeias coerentes;
+   - confirmar Volcano com cone/cratera e `bassalt`;
+   - confirmar ausência de rivers/lakes em Volcano;
+   - avaliar frequência/tamanho dos quatro biomes e ajustar tuning sem alterar a arquitetura.
+
