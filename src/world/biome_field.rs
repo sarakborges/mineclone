@@ -65,6 +65,8 @@ pub struct BiomeField {
     pub(super) seed: u64,
     pub(super) surface_site_biomes: Arc<RwLock<HashMap<IVec2, usize>>>,
     forced_surface_biome: Option<ForcedSurfaceBiome>,
+    ocean_surface_index: Option<usize>,
+    coast_surface_index: Option<usize>,
     pub(super) ocean_weight: f32,
 }
 
@@ -223,10 +225,17 @@ impl BiomeField {
         let volume_site_spacing = has_active_volume_biome
             .then_some(volume_minimum_radius * 2.0 + Vec3::splat(VOLUME_SITE_GAP));
         let ocean_biome_id = dimension.hydrology.ocean_biome.clone();
+        let coast_biome_id = dimension.hydrology.coast_biome.clone();
         let ocean_weight = ocean_biome_id
             .as_deref()
             .map(|id| dimension.biome_weight(id))
             .unwrap_or(0.0);
+        let ocean_surface_index = ocean_biome_id
+            .as_deref()
+            .and_then(|id| surface_biomes.iter().position(|biome| biome.id == id));
+        let coast_surface_index = coast_biome_id
+            .as_deref()
+            .and_then(|id| surface_biomes.iter().position(|biome| biome.id == id));
 
         Self {
             surface_biomes,
@@ -237,6 +246,8 @@ impl BiomeField {
             seed,
             surface_site_biomes: Arc::new(RwLock::new(HashMap::new())),
             forced_surface_biome: None,
+            ocean_surface_index,
+            coast_surface_index,
             ocean_weight,
         }
     }
@@ -247,7 +258,10 @@ impl BiomeField {
 
     pub(crate) fn climate_at(&self, position: Vec2) -> MacroClimateSample {
         let mut climate = self.climate.sample(position);
-        if let Some((_, weight)) = self.forced_surface_biome_at(position) {
+        if let Some((index, weight)) = self.forced_surface_biome_at(position)
+            && Some(index) != self.ocean_surface_index
+            && Some(index) != self.coast_surface_index
+        {
             climate.continentalness = suppress_ocean_continentalness(
                 climate.continentalness,
                 self.ocean_weight,
