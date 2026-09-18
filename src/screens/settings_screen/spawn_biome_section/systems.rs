@@ -11,13 +11,16 @@ use crate::{
         dimension::DimensionRegistry,
     },
     localization::{ActiveLanguage, UiLocalization},
-    ui::{scrollbar::vertical_scrollbar, selectable, text_input::{self, editable_value}, typography},
+    ui::{
+        dropdown, scrollbar::vertical_scrollbar, selectable,
+        text_input::{self, editable_value}, typography,
+    },
     world::{NewWorldConfig, dimension::DEFAULT_DIMENSION_ID},
 };
 
 use super::{
     layout::{
-        OPTION_HEIGHT, SpawnBiomeDropdownButton, SpawnBiomeDropdownLabel, SpawnBiomeDropdownPanel,
+        SpawnBiomeDropdownButton, SpawnBiomeDropdownLabel, SpawnBiomeDropdownPanel,
         SpawnBiomeOption, SpawnBiomeOptionLabel, SpawnBiomeOptionsFrame, SpawnBiomeOptionsList,
         SpawnBiomeSearchBar, SpawnBiomeSearchText,
     },
@@ -126,23 +129,12 @@ fn spawn_option(
     label: String,
     selected: bool,
 ) {
-    let (background, border) = selectable::static_colors(selected);
     let label_biome_id = biome_id.clone();
 
     list.spawn((
         Button,
         SpawnBiomeOption { biome_id },
-        Node {
-            width: percent(100),
-            height: px(OPTION_HEIGHT),
-            min_height: px(OPTION_HEIGHT),
-            padding: UiRect::horizontal(px(10)),
-            border: UiRect::all(px(2)),
-            align_items: AlignItems::Center,
-            ..default()
-        },
-        BackgroundColor(background),
-        BorderColor::all(border),
+        dropdown::option(selected, 2.0),
         children![(
             SpawnBiomeOptionLabel {
                 biome_id: label_biome_id,
@@ -165,7 +157,7 @@ pub(in crate::screens::settings_screen) fn handle_spawn_biome_dropdown_button(
         return;
     }
     let (entity, editor) = &mut *search;
-    if state.open {
+    if state.is_open() {
         state.close();
         editor.clear();
         if focus.get() == Some(*entity) {
@@ -187,16 +179,11 @@ pub(in crate::screens::settings_screen) fn close_spawn_biome_dropdown_outside_ge
     options: Query<&Interaction, With<SpawnBiomeOption>>,
     mut state: ResMut<SpawnBiomeDropdownState>,
 ) {
-    if selection.is_changed() && selection.selected != SettingsSection::General && state.open {
+    if selection.is_changed() && selection.selected != SettingsSection::General && state.is_open() {
         state.close();
         return;
     }
-    if !state.open || !mouse.just_pressed(MouseButton::Left) {
-        return;
-    }
-    let clicked_inside = button.iter().any(|i| *i == Interaction::Pressed)
-        || options.iter().any(|i| *i == Interaction::Pressed);
-    if !clicked_inside {
+    if dropdown::clicked_outside(state.is_open(), &mouse, button.iter(), options.iter()) {
         state.close();
     }
 }
@@ -287,7 +274,7 @@ pub(in crate::screens::settings_screen) fn sync_spawn_biome_dropdown_state(
             *visibility = next;
         }
     }
-    let next_display = if state.open {
+    let next_display = if state.is_open() {
         Display::Flex
     } else {
         Display::None
@@ -364,7 +351,7 @@ pub(in crate::screens::settings_screen) fn sync_spawn_biome_options(
     };
     let query = editable_value(editor);
     let query_changed = previous_query.as_str() != query;
-    let _dropdown_open = search.state.open;
+    let _dropdown_open = search.state.is_open();
     let filter_changed = query_changed || content.inputs_changed();
     let style_changed = config.is_changed() || !changed_interactions.is_empty();
     if !filter_changed && !style_changed {
