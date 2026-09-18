@@ -107,45 +107,6 @@ impl BiomeField {
             }
         }
 
-        let strongest_macro = self
-            .surface_biomes
-            .iter()
-            .enumerate()
-            .filter_map(|(index, biome)| {
-                let terrain_strength = biome
-                    .distributions
-                    .iter()
-                    .copied()
-                    .map(|distribution| {
-                        distribution_strength(
-                            distribution,
-                            position,
-                            self.seed,
-                            biome.id.as_str(),
-                        )
-                    })
-                    .fold(0.0_f32, f32::max)
-                    .clamp(0.0, 1.0);
-                let selection_strength = (terrain_strength * biome.weight).clamp(0.0, 1.0);
-
-                (selection_strength > 0.0)
-                    .then_some((index, selection_strength, terrain_strength))
-            })
-            .max_by(|left, right| left.1.total_cmp(&right.1));
-
-        if let Some((macro_index, macro_strength, _)) = strongest_macro {
-            let retained_regional_weight = 1.0 - macro_strength;
-            for (_, weight) in &mut weights[..weight_count] {
-                *weight *= retained_regional_weight;
-            }
-            add_weight(
-                &mut weights,
-                &mut weight_count,
-                macro_index,
-                macro_strength,
-            );
-        }
-
         if let Some((index, _)) = weights[..weight_count]
             .iter()
             .copied()
@@ -167,10 +128,21 @@ impl BiomeField {
             .iter()
             .filter(|(_, weight)| *weight > 0.0)
             .map(|(index, weight)| {
-                let terrain_strength = strongest_macro
-                    .filter(|(macro_index, _, _)| *macro_index == *index)
-                    .map(|(_, _, strength)| strength)
-                    .unwrap_or(1.0);
+                let biome = &self.surface_biomes[*index];
+                let terrain_strength = biome
+                    .distributions
+                    .iter()
+                    .copied()
+                    .map(|distribution| {
+                        distribution_strength(
+                            distribution,
+                            position,
+                            self.seed,
+                            biome.id.as_str(),
+                        )
+                    })
+                    .fold(0.0_f32, f32::max)
+                    .clamp(0.0, 1.0);
 
                 BiomeInfluence {
                     id: self.surface_biomes[*index].id.as_str(),
@@ -284,23 +256,6 @@ fn set_max_weight(
     push_weight(weights, weight_count, index, weight);
 }
 
-fn add_weight(
-    weights: &mut [(usize, f32); MAX_WEIGHT_ENTRIES],
-    weight_count: &mut usize,
-    index: usize,
-    weight: f32,
-) {
-    if let Some((_, existing)) = weights[..*weight_count]
-        .iter_mut()
-        .find(|(candidate, _)| *candidate == index)
-    {
-        *existing += weight;
-        return;
-    }
-
-    push_weight(weights, weight_count, index, weight);
-}
-
 fn push_weight(
     weights: &mut [(usize, f32); MAX_WEIGHT_ENTRIES],
     weight_count: &mut usize,
@@ -317,18 +272,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn compact_weights_keep_maximum_per_biome_and_add_macro_weight() {
+    fn compact_weights_keep_maximum_per_biome() {
         let mut weights = [(usize::MAX, 0.0_f32); MAX_WEIGHT_ENTRIES];
         let mut count = 0;
 
         set_max_weight(&mut weights, &mut count, 4, 0.25);
         set_max_weight(&mut weights, &mut count, 4, 0.75);
         set_max_weight(&mut weights, &mut count, 2, 0.50);
-        add_weight(&mut weights, &mut count, 4, 0.10);
-        add_weight(&mut weights, &mut count, 7, 0.20);
+        set_max_weight(&mut weights, &mut count, 7, 0.20);
 
         assert_eq!(count, 3);
-        assert_eq!(weights[0], (4, 0.85));
+        assert_eq!(weights[0], (4, 0.75));
         assert_eq!(weights[1], (2, 0.50));
         assert_eq!(weights[2], (7, 0.20));
     }
