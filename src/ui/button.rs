@@ -13,12 +13,12 @@ const BUTTON_PRESSED: Color = Color::srgb(0.64, 0.65, 0.66);
 const BUTTON_BORDER: Color = Color::srgb(0.36, 0.37, 0.38);
 const BUTTON_BORDER_STRONG: Color = Color::srgb(0.96, 0.96, 0.96);
 const BUTTON_SHADOW: Color = Color::srgba(0.02, 0.02, 0.02, 0.72);
-const BUTTON_PRIMARY: Color = Color::srgb(0.26, 0.68, 0.16);
-const BUTTON_PRIMARY_HOVER: Color = Color::srgb(0.34, 0.78, 0.20);
-const BUTTON_PRIMARY_PRESSED: Color = Color::srgb(0.20, 0.54, 0.12);
-const BUTTON_DANGER: Color = Color::srgb(0.72, 0.18, 0.18);
-const BUTTON_DANGER_HOVER: Color = Color::srgb(0.82, 0.24, 0.24);
-const BUTTON_DANGER_PRESSED: Color = Color::srgb(0.58, 0.12, 0.12);
+const BUTTON_PRIMARY: Color = theme::PURPLE;
+const BUTTON_PRIMARY_HOVER: Color = theme::PURPLE_HOVER;
+const BUTTON_PRIMARY_PRESSED: Color = Color::srgb(0.38, 0.22, 0.58);
+const BUTTON_DANGER: Color = theme::DANGER;
+const BUTTON_DANGER_HOVER: Color = Color::srgb(0.86, 0.28, 0.28);
+const BUTTON_DANGER_PRESSED: Color = Color::srgb(0.62, 0.14, 0.14);
 
 const BUTTON_VISUAL_SETTLE_EPSILON: f32 = 0.001;
 
