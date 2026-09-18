@@ -16,7 +16,10 @@ use crate::{
     localization::{ActiveLanguage, UiLocalization},
     player::{game_mode::GameMode, hotbar::PlayerHotbar, player_id::LOCAL_PLAYER_ID},
     ui::{
-        button::{button, danger_button, primary_button, standard_button_with_marker, ButtonVariant}, theme,
+        button::{
+            button, ButtonVariant, COMPACT_CONTROL_HEIGHT, MENU_BUTTON_HEIGHT, MENU_BUTTON_WIDTH,
+        },
+        theme,
         transition::{ScreenTransition, ScreenTransitionTarget}, typography,
     },
     voxel::world::VoxelWorld,
@@ -255,13 +258,18 @@ fn poll_world_scan(
                     for world in &state.worlds {
                         let selected = state.selected.as_deref() == Some(world.id.as_str());
                         parent.spawn((
-                            standard_button_with_marker(
-                                format!("{} — {}", world.id, format_save_time(world.last_saved_unix_ms)),
+                            button(
+                                format!(
+                                    "{} — {}",
+                                    world.id,
+                                    format_save_time(world.last_saved_unix_ms)
+                                ),
                                 WorldSelectionAction::Select(world.id.clone()),
-                                0.0,
+                                Val::Auto,
+                                COMPACT_CONTROL_HEIGHT,
                                 ButtonVariant::from_active(selected),
-                                WorldListEntry(world.id.clone()),
                             ),
+                            WorldListEntry(world.id.clone()),
                         ));
                     }
                 });
@@ -388,17 +396,26 @@ fn spawn_world_selection(
                 ..default()
             },
             children![
-                primary_button(
+                button(
                     localization.text(language.get(), "worldSelection.load").to_owned(),
                     WorldSelectionAction::Load,
+                    px(MENU_BUTTON_WIDTH),
+                    MENU_BUTTON_HEIGHT,
+                    ButtonVariant::Primary,
                 ),
                 button(
                     localization.text(language.get(), "newWorld.return").to_owned(),
                     WorldSelectionAction::Back,
+                    px(MENU_BUTTON_WIDTH),
+                    MENU_BUTTON_HEIGHT,
+                    ButtonVariant::Normal,
                 ),
-                danger_button(
+                button(
                     localization.text(language.get(), "worldSelection.delete").to_owned(),
                     WorldSelectionAction::Delete,
+                    px(MENU_BUTTON_WIDTH),
+                    MENU_BUTTON_HEIGHT,
+                    ButtonVariant::Danger,
                 ),
             ],
         ));
