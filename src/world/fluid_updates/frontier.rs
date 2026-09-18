@@ -58,14 +58,15 @@ fn enqueue_chunk_fluid_spread_targets(
     for local_y in 0..size {
         for local_z in 0..size {
             for local_x in 0..size {
-                if chunk.fluid_at(local_x, local_y, local_z).is_none() {
+                let Some(fluid) = chunk.fluid_at(local_x, local_y, local_z) else {
                     continue;
-                }
+                };
 
                 enqueue_spread_targets_from_fluid(
                     pending,
                     world,
                     origin + IVec3::new(local_x, local_y, local_z),
+                    fluid.fluid_id,
                 );
             }
         }
@@ -130,13 +131,14 @@ fn enqueue_neighbor_boundary_spread_targets(
     let local_z = if direction.z < 0 { 0 } else { size - 1 };
     for local_y in 0..size {
         for local_x in 0..size {
-            if chunk.fluid_at(local_x, local_y, local_z).is_none() {
+            let Some(fluid) = chunk.fluid_at(local_x, local_y, local_z) else {
                 continue;
-            }
+            };
             enqueue_spread_targets_from_fluid(
                 pending,
                 world,
                 origin + IVec3::new(local_x, local_y, local_z),
+                fluid.fluid_id,
             );
         }
     }
