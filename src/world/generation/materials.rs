@@ -106,6 +106,7 @@ pub(super) fn rasterize_material_pass(
                     );
                 resolve_surface_material_column(
                     &column.surface_influences,
+                    column.surface_margin_index,
                     context.biome_field,
                     context.biomes,
                     &mut surface_materials,
