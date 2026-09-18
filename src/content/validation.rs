@@ -56,6 +56,14 @@ pub(super) fn validate_content(content: &LoadedContent) {
             );
         }
         biome.validate_structure_references(&content.structures);
+        if let Some(surface_fluid) = &biome.surface_fluid {
+            assert!(
+                content.fluids.id_of(surface_fluid.fluid_id()).is_some(),
+                "biome {} surfaceFluid references missing fluid {}",
+                biome.id,
+                surface_fluid.fluid_id()
+            );
+        }
     }
 
     for dimension in content.dimensions.iter() {
