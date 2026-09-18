@@ -25,6 +25,7 @@ const ITEM_ICON_SIZE: f32 = 34.0;
 #[derive(Component)]
 struct HotbarHudRoot;
 
+
 #[derive(Component)]
 struct HotbarSelectedName;
 
