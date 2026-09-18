@@ -102,9 +102,6 @@ impl ChunkRemeshDependencies {
         self.lighting.is_current()
     }
 
-    pub(crate) fn is_current(&self, world: &VoxelWorld) -> bool {
-        self.content_is_current(world) && self.lighting_is_current()
-    }
 }
 
 pub(crate) struct ChunkRemeshTaskOutput {
