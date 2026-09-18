@@ -1,5 +1,7 @@
 # HANDOFF — Asteria / Mineclone
 
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.29.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `e848e9e918a87527764ed79616ac3d8134c0830a`. O bloco funcional de lava + crater surface fluid passou na CI de push `35397375586` em `bfc41995f85aeddb54a45d762a40750b7d3291ae` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. A run específica do bump `0.29.0` é `35397447773` e ainda estava em execução no momento desta atualização documental. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.28.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `5acad2c8a2003b5c4f0e2143722908d3c3a36e11`. O bloco de adjacência obrigatória de surface biomes passou na CI de push `35396733423` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.27.1`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. O PR #14 já foi mergeado em `develop`. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `5e7dbdad861e4b8e877fcab47c039651525f4536`. O fix de validação Ocean/Coast está em `15b569b30a81c6c753cb76bcbe3d53bcb3fabaa7` e passou na CI de push `35395972922` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
@@ -1286,3 +1288,113 @@ Próximo passo imediato: repetir criação/entrada no Overworld e confirmar que 
 - Não executei `cargo test`, `cargo run` nem QA Windows.
 
 Próximo passo: criar fluido de lava como feature separada: emissivo, opaco, laranja, spread menor e mais lento que água.
+
+
+## Checkpoint 106 — 2026-09-18: lava emissiva + crater lake/spill channels no Volcano [FEATURE + CI VERDE; VERSION 0.29.0]
+
+### Fluido lava
+
+- Novo fluido: `asteria:lava` em `data/fluids/lava.json`.
+- Autoramento atual:
+  - HSI laranja: hue 28, saturation 0.96, intensity 0.72;
+  - opacity 1.0;
+  - roughness 0.34;
+  - metallic 0.0;
+  - lightDampening 15;
+  - lightEmission 15;
+  - spreadSpeed 2.0;
+  - maxSpread 3.
+- Comparação com água atual:
+  - água: `spreadSpeed=12.0`, `maxSpread=7`;
+  - lava portanto espalha bem mais devagar e por menos blocos.
+
+### Emissão de luz de fluidos
+
+- `FluidDefinition` ganhou `lightEmission`, default 0.
+- Validação exige 0..15.
+- Emissão usa a própria cor HSI do fluido.
+- Intensidade luminosa escala com o nível da célula de fluido:
+  - camada fina emite menos;
+  - célula cheia emite o valor authored completo.
+- Luz de fluido entra no mesmo pipeline de block light colorido usado pelos blocos.
+- Alteração de nível do fluido agora também invalida lighting, não apenas troca de fluid ID.
+- Fluido com `opacity >= 1.0` usa material `AlphaMode::Opaque`; fluidos translúcidos continuam `Blend`.
+
+### `surfaceFluid` data-driven em biome
+
+- Novo autoramento opcional em `BiomeDefinition`: `surfaceFluid`.
+- Regra atual implementada: `type: "volcano_crater"`.
+- Não existe branch por biome ID; a geração decide pela regra + terrain type.
+- Validação:
+  - só surface biome pode possuir `surfaceFluid`;
+  - `volcano_crater` exige terrain `Volcano`;
+  - fluid referenciado precisa existir;
+  - `minimumStrength`, spill strengths/width/level e scale são validados;
+  - spillMaximumStrength não pode invadir a faixa do crater lake;
+  - crater `levelOffset` deve ficar abaixo de `craterDepth`.
+
+### Volcano lava lake + spills
+
+`asteria:overworld/volcano` agora declara:
+
+- `fluid = asteria:lava`;
+- `minimumStrength = 0.91`;
+- `levelOffset = 8`;
+- `spillMinimumStrength = 0.56`;
+- `spillMaximumStrength = 0.90`;
+- `spillScale = 0.012`;
+- `spillWidth = 0.055`;
+- `spillLevel = 6`.
+
+Comportamento:
+
+- O lago da cratera usa nível horizontal derivado da geometria authored do Volcano:
+  `seaLevel + baseHeight + height - craterDepth + levelOffset`.
+- Só colunas internas com terrain strength suficiente recebem o crater lake.
+- Spill channels ficam fora do lago, na faixa de strength da encosta.
+- Os spill points/canais vêm de contornos determinísticos de noise; não existe lava uniformemente vazando por toda a borda.
+- O passe de geração mantém `primary_surface_index` e `primary_terrain_strength` por coluna para fazer essa decisão sem resample extra do biome field.
+- O fluido authored do terrain tem prioridade no passe de fluidos daquela coluna; hydrology continua independente.
+
+### Arquitetura
+
+- `ARCHITECTURE.md` registra:
+  - comportamento de fluidos pertence a `FluidDefinition`;
+  - emissão colorida é HSI/data-driven;
+  - opacity 1 usa material opaco;
+  - `surfaceFluid` é feature do surface biome, não overlay hidrológico;
+  - Volcano crater fluid não pode depender de biome ID hardcoded.
+
+### Commits principais
+
+- `19841e28...` — `FluidDefinition.lightEmission`.
+- `d98ce251...` — material opaco para fluidos opacos.
+- `6862ca6e...` — relight em mudança de nível.
+- `2c0e20f2...` / `125f8253...` — emissão HSI de fluidos e propagação.
+- `c62becd8...` — `asteria:lava`.
+- `64be6654...`, `4597cc2b...`, `716999ff...`, `bd5e551d...` — infraestrutura/validação `surfaceFluid`.
+- `be41aaf4...` — terrain strength primário por generation column.
+- `388ceb37...` / `a85b3918...` — rasterização de crater fluid/spill channels.
+- `2b26d71f...` — Volcano passa a usar lava.
+- `a4444c37...` — fixture final de lighting.
+- `14172b88...` / `bfc41995...` — invariantes finais crater/spills.
+- `54350ffc...` — contrato arquitetural.
+- `e848e9e918a87527764ed79616ac3d8134c0830a` — `VERSION 0.28.0 → 0.29.0`.
+
+### CI / validação
+
+- CI funcional final: push run `35397375586` em `bfc41995...` — **success**:
+  - auditoria de localizações;
+  - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- `VERSION 0.29.0` em `e848e9e9...`; run `35397447773` estava em execução no momento desta escrita.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+### QA imediata
+
+1. Spawn Biome = Volcano em mundo novo.
+2. Confirmar crater lake laranja/opaco dentro da cratera.
+3. Confirmar emissão de luz laranja à noite/interior sombreado.
+4. Confirmar alguns spill channels na encosta, sem vazamento uniforme em todo o rim.
+5. Confirmar que a lava, quando entra no solver dinâmico, espalha mais devagar e menos longe que água.
+6. Verificar visual das transições de mesh em degraus fortes da encosta; os spills são rasterizados sobre a superfície e podem precisar de tuning visual após QA Windows.
