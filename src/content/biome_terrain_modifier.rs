@@ -18,11 +18,6 @@ pub enum BiomeTerrainModifier {
         warp_scale: f32,
         warp_strength: f32,
     },
-    VolcanicCone {
-        height: f32,
-        crater_depth: f32,
-        crater_radius: f32,
-    },
 }
 
 impl BiomeTerrainModifier {
@@ -30,7 +25,6 @@ impl BiomeTerrainModifier {
         match self {
             Self::HeightOffset { height } => height.max(0.0),
             Self::Cliffs { height, .. } => height.max(0.0),
-            Self::VolcanicCone { height, .. } => height.max(0.0),
         }
     }
 
@@ -72,11 +66,7 @@ impl BiomeTerrainModifier {
                     "biome {biome_id} cliffs warpStrength cannot be negative"
                 );
             },
-            Self::VolcanicCone {
-                height,
-                crater_depth,
-                crater_radius,
-            } => {
+ => {
                 assert!(
                     height.is_finite() && height > 0.0,
                     "biome {biome_id} volcanicCone height must be positive and finite"
