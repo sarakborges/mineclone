@@ -149,13 +149,13 @@ def material(name, color, alpha=1., rough=.36, emission=None):
 
 
 materials = [
-    material('SlimeShell', [.50,.91,.78], .76, .23),
-    material('SlimeCore', [.18,.70,.57], 1., .32, [.025,.08,.06]),
+    material('SlimeShell', [.50,.91,.78], 1., .85),
+    material('SlimeCore', [.18,.70,.57], 1., .85),
     material('SlimeFace', [1.,1.,1.], 1., .30),
 ]
 shell = make_mesh('square_translucent_shell', [([.96,.90,.96], (0,0,0))], 0, (0,0))
 core = make_mesh('square_nucleus', [([.58,.62,.58], (0,0,0))], 1, (0,0))
-face = make_mesh('square_pixel_face', [([.42,.28,.02], (0,0,-.49))], 2, (0,0))
+face = make_mesh('square_pixel_face', [([.42,.28,.02], (0,0,-.505))], 2, (0,0))
 
 
 def node(name, mesh=None, children=None, translation=None, scale=None, extras=None):
