@@ -109,7 +109,7 @@ impl HydrologyRegion {
 
             let material = if strength <= SHORE_STRENGTH {
                 materials
-                    .coast_shore_block
+                    .ocean_shore_block
                     .or(materials.ocean_bed_block)
             } else {
                 materials
