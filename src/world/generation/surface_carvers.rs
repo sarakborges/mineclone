@@ -85,20 +85,16 @@ pub(super) fn resolve_surface_carver_column(
     cache: &mut SurfaceCarverResolveCache,
     horizontal: Vec2,
     surface_y: f32,
+    identity_surface_index: usize,
     surface_influences: &[(usize, f32)],
     context: &SurfaceCarverResolveContext<'_>,
 ) {
     column.tunnels.clear();
     column.margin_density_delta = 0.0;
 
-    let Some((primary_index, _)) = surface_influences
-        .iter()
-        .copied()
-        .max_by(|left, right| left.1.total_cmp(&right.1))
-    else {
-        return;
-    };
-    let primary_id = context.biome_field.surface_biome_id(primary_index);
+    let primary_id = context
+        .biome_field
+        .surface_biome_id(identity_surface_index);
     let primary = context
         .biomes
         .get(primary_id)
