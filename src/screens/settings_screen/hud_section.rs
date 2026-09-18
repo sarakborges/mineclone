@@ -5,19 +5,12 @@ use crate::{
     localization::{ActiveLanguage, Language, UiLocalization},
     ui::{
         dropdown::{self, DropdownState, PanelAnchor},
-        selectable, theme, typography,
+        selectable, toggle, typography,
     },
 };
 
 use super::navigation::{SettingsSection, SettingsSectionSelection};
 
-const TOGGLE_WIDTH: f32 = 52.0;
-const TOGGLE_HEIGHT: f32 = 30.0;
-const TOGGLE_THUMB_SIZE: f32 = 20.0;
-const TOGGLE_BORDER_WIDTH: f32 = 2.0;
-const TOGGLE_THUMB_INSET: f32 = 3.0;
-const TOGGLE_THUMB_ENABLED_LEFT: f32 =
-    TOGGLE_WIDTH - TOGGLE_THUMB_SIZE - (TOGGLE_BORDER_WIDTH * 2.0) - TOGGLE_THUMB_INSET;
 const DROPDOWN_WIDTH: f32 = 240.0;
 
 pub(super) struct TargetBlockPositionDropdownKind;
@@ -137,29 +130,8 @@ fn display_tooltips_toggle(enabled: bool) -> impl Bundle {
     (
         Button,
         DisplayTooltipsToggle,
-        Node {
-            width: px(TOGGLE_WIDTH),
-            height: px(TOGGLE_HEIGHT),
-            flex_shrink: 0.0,
-            position_type: PositionType::Relative,
-            border: UiRect::all(px(TOGGLE_BORDER_WIDTH)),
-            ..default()
-        },
-        BackgroundColor(toggle_background(enabled, Interaction::None)),
-        BorderColor::all(toggle_border(enabled)),
-        children![(
-            DisplayTooltipsToggleThumb,
-            Node {
-                position_type: PositionType::Absolute,
-                left: px(toggle_thumb_left(enabled)),
-                top: px(TOGGLE_THUMB_INSET),
-                width: px(TOGGLE_THUMB_SIZE),
-                height: px(TOGGLE_THUMB_SIZE),
-                ..default()
-            },
-            BackgroundColor(theme::TEXT_PRIMARY),
-            Pickable::IGNORE,
-        )],
+        toggle::control(enabled),
+        children![(DisplayTooltipsToggleThumb, toggle::thumb(enabled))],
     )
 }
 
@@ -331,7 +303,7 @@ pub(super) fn sync_display_tooltips_toggle(
         }
 
         selectable::apply_colors(
-            (toggle_background(enabled, *interaction), toggle_border(enabled)),
+            toggle::colors(enabled, *interaction),
             background,
             border,
         );
@@ -341,7 +313,7 @@ pub(super) fn sync_display_tooltips_toggle(
         return;
     }
 
-    let next_left = px(toggle_thumb_left(enabled));
+    let next_left = px(toggle::thumb_left(enabled));
     for mut thumb in &mut thumbs {
         if thumb.left != next_left {
             thumb.left = next_left;
@@ -422,29 +394,3 @@ pub(super) fn sync_target_block_position_options(
     }
 }
 
-const fn toggle_thumb_left(enabled: bool) -> f32 {
-    if enabled {
-        TOGGLE_THUMB_ENABLED_LEFT
-    } else {
-        TOGGLE_THUMB_INSET
-    }
-}
-
-fn toggle_border(enabled: bool) -> Color {
-    if enabled {
-        theme::BORDER_FOCUS
-    } else {
-        theme::BORDER
-    }
-}
-
-fn toggle_background(enabled: bool, interaction: Interaction) -> Color {
-    match (enabled, interaction) {
-        (true, Interaction::Pressed) => theme::PURPLE,
-        (true, Interaction::Hovered) => theme::PURPLE_HOVER,
-        (true, Interaction::None) => theme::PURPLE_SOFT,
-        (false, Interaction::Pressed) => theme::SURFACE_INSET,
-        (false, Interaction::Hovered) => theme::SURFACE_ELEVATED,
-        (false, Interaction::None) => theme::HUD_SURFACE,
-    }
-}
