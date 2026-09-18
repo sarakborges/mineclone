@@ -174,11 +174,11 @@ pub(super) fn spawn_new_world_footer(
     localization: &UiLocalization,
     language: Language,
 ) {
-    footer.spawn(menu_button(
+    footer.spawn(button(
         localization.text(language, "newWorld.return").to_owned(),
         NewWorldFooterAction::Return,
     ));
-    footer.spawn(primary_menu_button(
+    footer.spawn(primary_button(
         localization
             .text(language, "newWorld.createWorld")
             .to_owned(),
