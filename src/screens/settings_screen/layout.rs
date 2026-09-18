@@ -6,7 +6,7 @@ use crate::{
     localization::{ActiveLanguage, Language, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{
-        button::menu_button,
+        button::button,
         cosmic_background::{self, STAR_FIELD},
         scrollbar::vertical_scrollbar,
         surface, theme, typography,
