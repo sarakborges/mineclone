@@ -1,7 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    app::game_state::GameState,
+    app::{game_state::GameState, pause_state::PauseState},
     content::{
         block::BlockRegistry, block_orientation::BlockOrientation,
         secondary_property::SecondaryPropertyRegistry, tool::ToolRegistry,
@@ -92,6 +92,14 @@ pub struct HotbarHudPlugin;
 impl Plugin for HotbarHudPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_hotbar)
+            .add_systems(
+                OnEnter(PauseState::Paused),
+                set_visibility::<HotbarHudRoot, false>.run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                OnEnter(PauseState::Running),
+                set_visibility::<HotbarHudRoot, true>.run_if(in_state(GameState::Gameplay)),
+            )
             .add_systems(Update, sync_hotbar.run_if(in_state(GameState::Gameplay)))
             .add_systems(
                 Update,
