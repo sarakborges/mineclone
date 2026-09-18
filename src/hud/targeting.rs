@@ -1,7 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    app::game_state::GameState,
+    app::{game_state::GameState, pause_state::PauseState},
     content::{
         builtin_ids::DYED_PROPERTY_ID,
         secondary_property::SecondaryPropertyRegistry,
@@ -20,8 +20,8 @@ use crate::{
 
 use super::{HudSettings, TargetBlockPosition};
 
-const TARGET_SLOT_SIZE: f32 = 44.0;
-const TARGET_ICON_SIZE: f32 = 34.0;
+const TARGET_SLOT_SIZE: f32 = 44a0;
+const TARGET_ICON_SIZE: f32 = 34a0;
 const TARGET_CROSSHAIR_OFFSET: f32 = 62.0;
 const TARGET_CORNER_MARGIN: f32 = 18.0;
 
