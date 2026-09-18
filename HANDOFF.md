@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.31.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado atual:** `b6f685c237737ff6331f738cf1f1733aa743a206`. O solver runtime de fluidos gravity-first/downhill passou na CI final `35399569196` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.31.1`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado atual:** `0db60e4cfa7f78aa6b72e73cf0490890f406c3c9`. Todo fluido residente, inclusive gerado por hydrology ou `surfaceFluid`, agora pode semear destinos vazios no solver runtime. CI final `35400470376` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.29.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `e848e9e918a87527764ed79616ac3d8134c0830a`. A feature de lava + fluidos de superfície do Volcano passou na CI de push `35397447773` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
@@ -1679,4 +1679,64 @@ QA Windows prioritária:
 5. Repetir com lava e confirmar a mesma geometria usando somente seus parâmetros authored: spread bem mais lento e no máximo 3 blocos por patamar.
 6. Em Volcano, provocar topology update perto da lava/surface fluid e observar se o solver dinâmico acompanha a encosta sem interferir na rasterização determinística inicial.
 7. Observar frame time em um cenário com várias frentes simultâneas; a BFS é limitada por `maxSpread`, mas QA runtime ainda precisa validar custo real.
+
+## Checkpoint 109 — 2026-09-18: todo fluido gerado ativa o solver runtime [FIX + CI VERDE; VERSION 0.31.1; QA WINDOWS PENDENTE]
+
+### Correção de contrato
+
+- Após QA do checkpoint 108, o usuário confirmou que os fluidos não estavam fluindo.
+- Causa: o solver gravity-first/downhill estava implementado, porém o caminho de carregamento de chunks só retomava fluido **dinâmico** já existente em bordas. Fluidos gerados como `FluidCell::source` — Ocean, River, Lake, água subterrânea, crater lake e spill channels de Volcano — não recebiam o primeiro trabalho no solver.
+- Regra autoritativa corrigida: **todo fluido gerado deve poder fluir depois de gerado, independentemente de biome ou sistema de origem**.
+- Não existe distinção de ativação entre água de hydrology e lava de `surfaceFluid`.
+
+### Ativação genérica
+
+- `PendingFluidUpdates::enqueue_loaded_fluid_frontier()` agora:
+  - varre o conteúdo fluido do chunk que acaba de ficar residente;
+  - para cada célula de fluido, semeia apenas destinos adjacentes atualmente vazios;
+  - prioriza o destino abaixo e também considera os quatro horizontais;
+  - não coloca voxels já preenchidos de fluido na fila como trabalho redundante.
+- Quando um chunk novo chega, as faces de chunks vizinhos já residentes também são revisitadas.
+  - Isso permite que qualquer source ou fluxo dinâmico atravesse uma seam que antes estava descarregada.
+  - A regra vale igualmente para Ocean/River/Lake/Volcano e futuros geradores.
+- O solver continua responsável por decidir se o alvo realmente recebe fluido; a etapa de load apenas torna o alvo elegível para processamento.
+
+### Limpeza arquitetural
+
+- A otimização antiga `boundary_dynamic_fluid_count` foi removida.
+- Ela codificava a distinção “somente dynamic fluid pode retomar/atravessar boundary”, que deixou de ser válida.
+- `PendingFluidUpdates::reserve()`, usado apenas por esse caminho antigo, também foi removido.
+- O chunk continua mantendo metadata geral de occupancy/fluid boundary, que serve ao novo caminho universal.
+- `ARCHITECTURE.md` agora define fluidos gerados como **estado inicial de fluido**, não decoração estática:
+  - hydrology, `surfaceFluid` e futuros geradores podem todos alimentar o mesmo solver;
+  - somente targets vazios expostos são semeados, evitando bulk-enqueue do volume preenchido inteiro.
+
+### Commits
+
+- `b0f7e17958a0582f4be13db12df2c0c328897fd5` — ativa frontiers de todos os fluidos residentes.
+- `a65762da5711735061529daeb4aa9b2ed365ed5d` — atualiza o contrato arquitetural.
+- `1fda89c7263b16d696de0958526907c3fac978f2` — `VERSION 0.31.0 → 0.31.1`.
+- `fda74f7c...` / `03119e95...` / `0db60e4cfa7f78aa6b72e73cf0490890f406c3c9` — limpeza de import/helper/metadata dinâmica obsoleta.
+
+### CI
+
+- CI intermediária `35400293204` falhou em Clippy apenas por código morto/unused deixado pela remoção da antiga otimização:
+  - import `VoxelChunk`;
+  - `PendingFluidUpdates::reserve()`;
+  - `VoxelChunk::boundary_dynamic_fluid_count()`.
+- O código morto foi removido em vez de receber suppressions.
+- **CI final `35400470376` — success**:
+  - auditoria de localizações;
+  - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+### QA imediata
+
+1. Mundo novo ou chunk recém-gerado com Volcano: confirmar que crater/spill lava começa a escorrer sem nenhuma edição manual.
+2. Confirmar que água de Ocean/River/Lake também reage a espaço vazio adjacente e flui pelo mesmo solver.
+3. Quebrar terreno ao lado/abaixo de qualquer fluido gerado e confirmar que a atualização continua propagando.
+4. Atravessar boundary de chunk com fluido e confirmar que o fluxo continua quando o chunk vizinho fica residente.
+5. Confirmar diferenças authored: água `spreadSpeed=12/maxSpread=7`; lava `spreadSpeed=2/maxSpread=3`.
+6. Observar custo de integração em chunks com grandes volumes de Ocean; somente targets vazios entram na fila, mas o scan de fluidos ocorre uma vez por residência de chunk e deve ser avaliado em QA runtime.
 
