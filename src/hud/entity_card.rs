@@ -223,7 +223,7 @@ pub(super) fn sync_entity_cards(
             card.entity = selected_entity;
         }
         let desired = if selected_entity.is_some() {
-            Visibility::Visible
+            Visibility::Inherited
         } else {
             Visibility::Hidden
         };
