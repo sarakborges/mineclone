@@ -16,7 +16,7 @@ use crate::{
     localization::{ActiveLanguage, UiLocalization},
     player::{game_mode::GameMode, hotbar::PlayerHotbar, player_id::LOCAL_PLAYER_ID},
     ui::{
-        button::{danger_menu_button, menu_button, primary_menu_button}, scrollbar, selectable, surface, theme,
+        button::{danger_menu_button, menu_button, primary_menu_button}, selectable, surface, theme,
         transition::{ScreenTransition, ScreenTransitionTarget}, typography,
     },
     voxel::world::VoxelWorld,
