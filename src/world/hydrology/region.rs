@@ -1,5 +1,6 @@
 mod density;
 mod material;
+pub(crate) use material::HydrologyMaterialSet;
 mod sampling;
 mod water;
 
