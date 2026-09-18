@@ -24,7 +24,7 @@ pub(super) fn enqueue_resident_fluid_frontier(
     world: &VoxelWorld,
     coord: IVec3,
 ) {
-    enqueue_resident_fluid_frontier(pending, world, coord);
+    enqueue_chunk_fluid_spread_targets(pending, world, coord);
 }
 
 pub(super) fn enqueue_loaded_fluid_frontier(
