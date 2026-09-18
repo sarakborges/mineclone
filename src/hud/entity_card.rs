@@ -290,10 +290,10 @@ pub(super) fn sync_entity_cards(
     };
 
     for (label_entity, desired) in health_label_updates {
-        if let Ok((_, mut text)) = queries.p1().get_mut(label_entity) {
-            if text.0 != desired {
-                text.0 = desired;
-            }
+        if let Ok((_, mut text)) = queries.p1().get_mut(label_entity)
+            && text.0 != desired
+        {
+            text.0 = desired;
         }
     }
 
