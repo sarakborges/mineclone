@@ -23,6 +23,9 @@ use crate::{
 };
 
 use super::{
+    biome_size_multiplier_section::{
+        BiomeSizeMultiplierInputState, biome_size_multiplier_setting,
+    },
     game_rules_section::TicksPerSecondInputState,
     navigation::{SettingsSection, SettingsSectionSelection},
     spawn_biome_section::{SpawnBiomeDropdownState, spawn_biome_setting},
@@ -66,6 +69,7 @@ pub(super) struct NewWorldDraft<'w, 's> {
     config: ResMut<'w, NewWorldConfig>,
     seed_input: Res<'w, SeedInputState>,
     ticks_input: Res<'w, TicksPerSecondInputState>,
+    biome_size_input: Res<'w, BiomeSizeMultiplierInputState>,
     spawn_biome_dropdown: Res<'w, SpawnBiomeDropdownState>,
     name_input: Query<'w, 's, (Entity, &'static EditableText), With<WorldNameInput>>,
     focus: ResMut<'w, InputFocus>,
@@ -76,6 +80,7 @@ impl NewWorldDraft<'_, '_> {
     fn input_editing(&self) -> bool {
         self.seed_input.editing()
             || self.ticks_input.editing()
+            || self.biome_size_input.editing()
             || self.spawn_biome_dropdown.is_open()
     }
 
@@ -95,6 +100,7 @@ pub(super) fn reset_new_world_settings(
     mut selection: ResMut<SettingsSectionSelection>,
     mut seed_input: ResMut<SeedInputState>,
     mut ticks_input: ResMut<TicksPerSecondInputState>,
+    mut biome_size_input: ResMut<BiomeSizeMultiplierInputState>,
     mut spawn_biome_dropdown: ResMut<SpawnBiomeDropdownState>,
     mut name_feedback: ResMut<WorldNameFeedback>,
 ) {
@@ -102,6 +108,7 @@ pub(super) fn reset_new_world_settings(
     selection.selected = SettingsSection::General;
     seed_input.reset();
     ticks_input.reset();
+    biome_size_input.reset();
     spawn_biome_dropdown.reset();
     name_feedback.set(String::new());
 }
@@ -117,6 +124,7 @@ pub(super) fn new_world_general_section(
             world_name_setting(config, localization, language),
             seed_setting(config.seed().0, localization, language),
             spawn_biome_setting(localization, language),
+            biome_size_multiplier_setting(config, localization, language),
             world_settings_section(config.game_mode(), localization, language),
         ],
     )
@@ -189,6 +197,7 @@ pub(super) fn sync_new_world_input_focus_to_section(
     selection: Res<SettingsSectionSelection>,
     mut seed_input: ResMut<SeedInputState>,
     mut ticks_input: ResMut<TicksPerSecondInputState>,
+    mut biome_size_input: ResMut<BiomeSizeMultiplierInputState>,
     mut spawn_biome_dropdown: ResMut<SpawnBiomeDropdownState>,
 ) {
     if !selection.is_changed() {
@@ -199,11 +208,13 @@ pub(super) fn sync_new_world_input_focus_to_section(
         SettingsSection::General => ticks_input.reset(),
         SettingsSection::GameRules => {
             seed_input.reset();
+            biome_size_input.reset();
             spawn_biome_dropdown.close();
         }
         _ => {
             seed_input.reset();
             ticks_input.reset();
+            biome_size_input.reset();
             spawn_biome_dropdown.close();
         }
     }
@@ -212,6 +223,7 @@ pub(super) fn sync_new_world_input_focus_to_section(
 pub(super) fn handle_new_world_general_control_focus(
     interactions: NewWorldGeneralControlInteractions,
     mut seed_input: ResMut<SeedInputState>,
+    mut biome_size_input: ResMut<BiomeSizeMultiplierInputState>,
     mut spawn_biome_dropdown: ResMut<SpawnBiomeDropdownState>,
 ) {
     if !interactions
@@ -222,6 +234,7 @@ pub(super) fn handle_new_world_general_control_focus(
     }
 
     seed_input.reset();
+    biome_size_input.reset();
     spawn_biome_dropdown.close();
 }
 
@@ -323,6 +336,7 @@ pub(super) fn handle_new_world_footer(
         &requested,
         seed,
         &dimension.id,
+        draft.config.biome_size_multiplier(),
         rules.ticks_per_second(),
     ) {
         Ok(name) => name,
