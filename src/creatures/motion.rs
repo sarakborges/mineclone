@@ -32,6 +32,7 @@ pub(crate) struct CreatureMotion {
     facing_yaw: f32,
     random_state: u32,
     knockback: Vec3,
+    knockback_time: f32,
 }
 
 impl Default for CreatureMotion {
@@ -44,6 +45,7 @@ impl Default for CreatureMotion {
             facing_yaw: 0.0,
             random_state: 0,
             knockback: Vec3::ZERO,
+            knockback_time: 0.0,
         }
     }
 }
@@ -59,6 +61,7 @@ impl CreatureMotion {
             let impulse = horizontal.normalize() * strength * 8.0;
             self.knockback.x += impulse.x;
             self.knockback.z += impulse.y;
+            self.knockback_time = 0.28;
         }
     }
 
@@ -109,16 +112,19 @@ pub(super) fn move_creatures(
         if !world.is_loaded_at(transform.translation.floor().as_ivec3()) {
             continue;
         }
-        if motion.knockback.x != 0.0 || motion.knockback.z != 0.0 {
-            let knockback = motion.knockback;
-            if advance_horizontal(&world, *collider, &mut transform.translation, Vec2::new(knockback.x, knockback.z) * dt) {
+        if motion.knockback_time > 0.0 {
+            let travel = motion.knockback * dt;
+            if advance_horizontal(&world, *collider, &mut transform.translation, Vec2::new(travel.x, travel.z)) {
                 motion.knockback = Vec3::ZERO;
+                motion.knockback_time = 0.0;
             } else {
-                let damping = (1.0 - 8.0 * dt).max(0.0);
-                motion.knockback.x *= damping;
-                motion.knockback.z *= damping;
-                if motion.knockback.x.abs() < 0.01 { motion.knockback.x = 0.0; }
-                if motion.knockback.z.abs() < 0.01 { motion.knockback.z = 0.0; }
+                motion.knockback_time = (motion.knockback_time - dt).max(0.0);
+                let damping = (1.0 - 10.0 * dt).max(0.0);
+                motion.knockback *= damping;
+                if motion.knockback_time == 0.0 || motion.knockback.length_squared() < 0.01 {
+                    motion.knockback = Vec3::ZERO;
+                    motion.knockback_time = 0.0;
+                }
             }
         }
         if motion.phase != HopPhase::Airborne && !on_ground(&world, *collider, transform.translation) {
