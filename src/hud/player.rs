@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{game_state::GameState, pause_state::PauseState},
+    app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     localization::{ActiveLanguage, UiLocalization},
     player::inventory::InventoryState,
-    ui::{typography, visibility::set_visibility},
+    ui::typography,
 };
 
 use super::{
@@ -20,16 +20,9 @@ impl Plugin for PlayerHudPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_player_hud)
             .add_systems(
-                OnEnter(PauseState::Paused),
-                set_visibility::<PlayerHudRoot, false>.run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
-                OnEnter(PauseState::Running),
-                set_visibility::<PlayerHudRoot, true>.run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
                 Update,
-                sync_inventory_hint.run_if(in_state(GameState::Gameplay)),
+                (sync_player_hud_visibility, sync_inventory_hint)
+                    .run_if(in_state(GameState::Gameplay)),
             );
     }
 }
@@ -47,6 +40,8 @@ fn spawn_player_hud(
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
     inventory_state: Res<State<InventoryState>>,
+    pause_state: Res<State<PauseState>>,
+    settings_state: Res<State<SettingsState>>,
 ) {
     let hint_visibility = if settings.display_tooltips() {
         Visibility::Inherited
@@ -67,6 +62,7 @@ fn spawn_player_hud(
                 row_gap: px(8),
                 ..default()
             },
+            player_hud_visibility(*pause_state.get(), *settings_state.get()),
             GlobalZIndex(10),
             Pickable::IGNORE,
             DespawnOnExit(GameState::Gameplay),
@@ -80,6 +76,28 @@ fn spawn_player_hud(
                 Pickable::IGNORE,
             ));
         });
+}
+
+fn player_hud_visibility(pause: PauseState, settings: SettingsState) -> Visibility {
+    if pause == PauseState::Paused || settings == SettingsState::Open {
+        Visibility::Hidden
+    } else {
+        Visibility::Visible
+    }
+}
+
+fn sync_player_hud_visibility(
+    pause: Res<State<PauseState>>,
+    settings: Res<State<SettingsState>>,
+    mut root: Single<&mut Visibility, With<PlayerHudRoot>>,
+) {
+    if !pause.is_changed() && !settings.is_changed() {
+        return;
+    }
+    let next = player_hud_visibility(*pause.get(), *settings.get());
+    if **root != next {
+        **root = next;
+    }
 }
 
 fn sync_inventory_hint(
