@@ -110,10 +110,10 @@ pub(crate) fn standard_button<A: Component>(
     width: f32,
     variant: ButtonVariant,
 ) -> impl Bundle {
-    let (background, border, label) = match variant {
-        ButtonVariant::Normal => (BUTTON_NORMAL, BUTTON_BORDER, typography::button_label(label)),
-        ButtonVariant::Primary => (BUTTON_PRIMARY, BUTTON_BORDER_STRONG, typography::button_label_light(label)),
-        ButtonVariant::Danger => (BUTTON_DANGER, BUTTON_BORDER_STRONG, typography::button_label_light(label)),
+    let (background, border) = match variant {
+        ButtonVariant::Normal => (BUTTON_NORMAL, BUTTON_BORDER),
+        ButtonVariant::Primary => (BUTTON_PRIMARY, BUTTON_BORDER_STRONG),
+        ButtonVariant::Danger => (BUTTON_DANGER, BUTTON_BORDER_STRONG),
     };
     (
         Button,
@@ -130,7 +130,7 @@ pub(crate) fn standard_button<A: Component>(
         },
         BackgroundColor(background),
         BorderColor::all(border),
-        children![label],
+        children![typography::button_label_light(label)],
     )
 }
 
