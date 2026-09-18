@@ -159,10 +159,6 @@ fn enqueue_spread_targets_from_fluid(
             continue;
         }
 
-        if offset == IVec3::NEG_Y {
-            pending.enqueue_fluid_priority(fluid_id, target);
-        } else {
-            pending.enqueue_fluid(fluid_id, target);
-        }
+        pending.enqueue_fluid_priority(fluid_id, target);
     }
 }
