@@ -71,7 +71,7 @@ pub(in crate::world) fn begin_world_loading(
     dimension.validate_biomes(biomes);
     dimension
         .hydrology
-        .validate_references(&dimension.id, biomes, blocks, fluids);
+        .validate_references(&dimension.id, biomes, fluids);
 
     let forced_spawn_biome = match *persistence.load_mode {
         WorldLoadMode::New => persistence.new_world_config.spawn_biome().map(str::to_owned),
@@ -302,7 +302,7 @@ fn spawn_column_has_water(
             HydrologySurfaceSample {
                 elevation,
                 continentalness,
-                biome_hydrology: primary.hydrology,
+                biome_hydrology: primary.hydrology.rules(),
             }
         })
     });
