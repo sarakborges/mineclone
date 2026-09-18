@@ -83,8 +83,10 @@ pub(in crate::world) fn begin_world_loading(
 
     let mut biome_field = BiomeField::from_dimension(dimension, biomes, config.seed.0);
     if let Some(biome_id) = forced_spawn_biome.as_deref() {
-        let (minimum, maximum) = initial_spawn_biome_bounds();
-        biome_field.force_surface_biome(biome_id, minimum, maximum);
+        biome_field.force_surface_biome(
+            biome_id,
+            DEFAULT_SPAWN_COLUMN.as_vec2() + Vec2::splat(0.5),
+        );
     }
     let coast_weight = dimension
         .hydrology
@@ -228,22 +230,6 @@ fn validate_forced_spawn_biome(
         "requested spawn biome is not part of dimension {}: {biome_id}",
         dimension.id
     );
-}
-
-fn initial_spawn_biome_bounds() -> (Vec2, Vec2) {
-    let center_chunk = IVec2::new(
-        DEFAULT_SPAWN_COLUMN.x.div_euclid(CHUNK_SIZE as i32),
-        DEFAULT_SPAWN_COLUMN.y.div_euclid(CHUNK_SIZE as i32),
-    );
-    let minimum_chunk = center_chunk - IVec2::splat(BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS);
-    let maximum_chunk_exclusive =
-        center_chunk + IVec2::splat(BOOTSTRAP_HORIZONTAL_RADIUS_CHUNKS + 1);
-    let chunk_size = CHUNK_SIZE as f32;
-
-    (
-        minimum_chunk.as_vec2() * chunk_size,
-        maximum_chunk_exclusive.as_vec2() * chunk_size,
-    )
 }
 
 fn find_initial_spawn_column(
