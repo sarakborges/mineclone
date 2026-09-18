@@ -255,14 +255,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::content::biome_hydrology::BiomeHydrology;
+    use crate::content::biome_hydrology::BiomeHydrologyRules;
 
     #[test]
     fn receiving_lake_does_not_emit_an_outlet_into_a_dry_dead_end() {
         let mut sample = |_position| HydrologySurfaceSample {
             elevation: 100.0,
             continentalness: 0.8,
-            biome_hydrology: BiomeHydrology::default(),
+            biome_hydrology: BiomeHydrologyRules::default(),
         };
         let mut network = DrainageNetwork::new(42, 0.45, 90.0, 1.0, &mut sample);
         let source = IVec2::ZERO;
