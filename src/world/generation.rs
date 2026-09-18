@@ -83,7 +83,7 @@ impl ChunkGenerationContext<'_> {
                         + (raw_continentalness - 1.0) * ocean_surface_factor;
                     let biome_hydrology = self
                         .biome_field
-                        .surface_biome_hydrology(surface.primary_surface_index);
+                        .surface_biome_hydrology(surface.identity_surface_index);
 
                     HydrologySurfaceSample {
                         elevation,
