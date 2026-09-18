@@ -1,24 +1,37 @@
 {
   "id": "asteria:overworld/witchwood",
-  "name": { "english": "Witchwood", "portuguese_brazil": "Bosque das Bruxas", "spanish": "Bosque de las Brujas" },
+  "name": {
+    "english": "Witchwood",
+    "portuguese_brazil": "Bosque das Bruxas",
+    "spanish": "Bosque de las Brujas"
+  },
   "terrain": {
     "type": "rolling",
-    "baseHeight": 4.0,
-    "amplitude": 3.0,
+    "baseHeight": 4,
+    "amplitude": 3,
     "scale": 0.012,
-    "detailAmplitude": 1.0,
+    "detailAmplitude": 1,
     "detailScale": 0.045
   },
+  "allowSurfaceCarvers": true,
   "surfaceLayers": [
-    { "block": "asteria:grass", "depth": 1 },
-    { "block": "asteria:dirt", "depth": 4 },
-    { "block": "asteria:stone" }
+    {
+      "block": "asteria:grass",
+      "depth": 1
+    },
+    {
+      "block": "asteria:dirt",
+      "depth": 4
+    },
+    {
+      "block": "asteria:stone"
+    }
   ],
   "hydrology": {
     "canGenerateLake": true,
     "canGenerateRiver": true,
-    "lakeChanceMultiplier": 1.0,
-    "riverWidthMultiplier": 1.0,
+    "lakeChanceMultiplier": 1,
+    "riverWidthMultiplier": 1,
     "shoreBlock": "asteria:sand",
     "riverBedBlock": "asteria:sand",
     "lakeBedBlock": "asteria:sand"
@@ -26,43 +39,111 @@
   "structures": [
     {
       "id": "asteria:tree_oak",
-      "placement": { "spacing": 12, "chance": 0.66, "jitter": 3 }
+      "placement": {
+        "spacing": 12,
+        "chance": 0.66,
+        "jitter": 3
+      }
     },
     {
       "id": "asteria:boulder_small",
-      "placement": { "spacing": 48, "chance": 0.20, "jitter": 14 }
+      "placement": {
+        "spacing": 48,
+        "chance": 0.2,
+        "jitter": 14
+      }
     }
   ],
   "visuals": {
     "skyColor": {
-      "dawn": { "hue": 340.1181, "saturation": 0.7327, "intensity": 0.1683 },
-      "day": { "hue": 343.3728, "saturation": 0.7857, "intensity": 0.1867 },
-      "dusk": { "hue": 345.4361, "saturation": 0.8286, "intensity": 0.1167 },
-      "night": { "hue": 343.4129, "saturation": 0.8322, "intensity": 0.0477 }
+      "dawn": {
+        "hue": 340.1181,
+        "saturation": 0.7327,
+        "intensity": 0.1683
+      },
+      "day": {
+        "hue": 343.3728,
+        "saturation": 0.7857,
+        "intensity": 0.1867
+      },
+      "dusk": {
+        "hue": 345.4361,
+        "saturation": 0.8286,
+        "intensity": 0.1167
+      },
+      "night": {
+        "hue": 343.4129,
+        "saturation": 0.8322,
+        "intensity": 0.0477
+      }
     },
     "fogColor": {
-      "dawn": { "hue": 340.8934, "saturation": 0.6667, "intensity": 0.1200 },
-      "day": { "hue": 342.7305, "saturation": 0.7143, "intensity": 0.1400 },
-      "dusk": { "hue": 343.6102, "saturation": 0.7273, "intensity": 0.0917 },
-      "night": { "hue": 340.8934, "saturation": 0.7273, "intensity": 0.0367 }
+      "dawn": {
+        "hue": 340.8934,
+        "saturation": 0.6667,
+        "intensity": 0.12
+      },
+      "day": {
+        "hue": 342.7305,
+        "saturation": 0.7143,
+        "intensity": 0.14
+      },
+      "dusk": {
+        "hue": 343.6102,
+        "saturation": 0.7273,
+        "intensity": 0.0917
+      },
+      "night": {
+        "hue": 340.8934,
+        "saturation": 0.7273,
+        "intensity": 0.0367
+      }
     },
-    "grassColor": { "hue": 263.6082, "saturation": 0.8624, "intensity": 0.3633 },
-    "leafColor": { "hue": 276.9302, "saturation": 0.7722, "intensity": 0.5267 },
-    "foliageColor": { "hue": 282.5845, "saturation": 0.6791, "intensity": 0.6233 },
-    "waterColor": { "hue": 128.6391, "saturation": 0.4615, "intensity": 0.5200 },
+    "grassColor": {
+      "hue": 263.6082,
+      "saturation": 0.8624,
+      "intensity": 0.3633
+    },
+    "leafColor": {
+      "hue": 276.9302,
+      "saturation": 0.7722,
+      "intensity": 0.5267
+    },
+    "foliageColor": {
+      "hue": 282.5845,
+      "saturation": 0.6791,
+      "intensity": 0.6233
+    },
+    "waterColor": {
+      "hue": 128.6391,
+      "saturation": 0.4615,
+      "intensity": 0.52
+    },
     "underwaterTint": {
-      "color": { "hue": 128.9483, "saturation": 0.5932, "intensity": 0.1967 },
-      "opacity": 0.20
+      "color": {
+        "hue": 128.9483,
+        "saturation": 0.5932,
+        "intensity": 0.1967
+      },
+      "opacity": 0.2
     },
     "stars": {
       "density": 0.82,
-      "color": { "hue": 248.2132, "saturation": 0.2941, "intensity": 0.6800 }
+      "color": {
+        "hue": 248.2132,
+        "saturation": 0.2941,
+        "intensity": 0.68
+      }
     },
     "clouds": {
       "density": 0.08,
-      "color": { "hue": 270.0000, "saturation": 0.5000, "intensity": 0.2400 }
+      "color": {
+        "hue": 270,
+        "saturation": 0.5,
+        "intensity": 0.24
+      }
     },
     "terrainRoughness": 0.94,
-    "terrainMetallic": 0.0
+    "terrainMetallic": 0
   }
 }
