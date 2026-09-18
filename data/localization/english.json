@@ -14,6 +14,8 @@
   "worldSelection.loadingSelected": "Reading saved world...",
   "worldSelection.stillLoading": "A saved world is still loading. Please wait until it finishes.",
   "worldSelection.inventoryError": "Cannot load inventory",
+  "worldSelection.delete": "Delete World",
+  "worldSelection.deleteError": "Cannot delete world",
   "worldSelection.selected": "Selected",
   "common.settings": "Settings",
   "common.exitGame": "Exit Game",
