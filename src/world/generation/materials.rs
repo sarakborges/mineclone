@@ -37,22 +37,15 @@ fn hydrology_materials<'a>(
     column: &GenerationColumnSample,
     context: &'a MaterialPassContext<'a>,
 ) -> HydrologyMaterialSet<'a> {
-    let surface = column
-        .surface_influences
-        .iter()
-        .copied()
-        .max_by(|left, right| {
-            left.1
-                .total_cmp(&right.1)
-                .then_with(|| left.0.cmp(&right.0))
-        })
-        .map(|(index, _)| {
-            let biome_id = context.biome_field.surface_biome_id(index);
-            context
-                .biomes
-                .get(biome_id)
-                .unwrap_or_else(|| panic!("missing surface biome definition: {biome_id}"))
-        });
+    let surface_biome_id = context
+        .biome_field
+        .surface_biome_id(column.identity_surface_index);
+    let surface = Some(
+        context
+            .biomes
+            .get(surface_biome_id)
+            .unwrap_or_else(|| panic!("missing surface biome definition: {surface_biome_id}")),
+    );
 
     let ocean = context
         .dimension
