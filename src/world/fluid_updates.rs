@@ -82,11 +82,14 @@ impl PendingFluidUpdates {
     ) {
         remaining.clear();
         remaining.extend(self.fluid_queues.iter().enumerate().map(|(index, queue)| {
-            ready_steps
+            if ready_steps
                 .get(index)
                 .is_some_and(|steps| *steps > step_index)
-                .then(|| queue.len())
-                .unwrap_or(0)
+            {
+                queue.len()
+            } else {
+                0
+            }
         }));
     }
 
