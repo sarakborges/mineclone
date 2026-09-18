@@ -302,7 +302,7 @@ mod tests {
         // synthetic slope. Search only inside each region's own Z bounds:
         // scanning distant coordinates against a region at Z=0 would test
         // the wrong region and could produce a false seam regression.
-        let field = HydrologyField::new(42, 64, DimensionHydrology::default(), 1.0, 1.0);
+        let field = HydrologyField::new(42, 64, DimensionHydrology::default(), 1.0);
         let terrain = |position: Vec2| HydrologySurfaceSample {
             elevation: if position.x >= 256.0 {
                 40.0
@@ -352,7 +352,6 @@ mod tests {
         ))
         .unwrap();
         dimension.biomes.retain(|biome| biome.id == "asteria:overworld/plains");
-        dimension.hydrology.coast_biome = None;
         dimension.hydrology.ocean_biome = None;
         dimension.sea_level = 64;
         let mut biomes = BiomeRegistry::default();
@@ -377,6 +376,7 @@ mod tests {
                     surface_height: original_surface as i32,
                     primary_surface_index: 0,
                     primary_terrain_strength: 1.0,
+                    surface_margin_index: None,
                     surface_influences,
                 }
             })
