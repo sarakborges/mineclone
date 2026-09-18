@@ -66,6 +66,29 @@ pub(super) fn block_emission_for_cell(
     )
 }
 
+pub(super) fn fluid_emission_for_cell(
+    cell: Option<FluidCell>,
+    fluids: &FluidRegistry,
+) -> BlockLight {
+    let Some(cell) = cell else {
+        return BlockLight::DARK;
+    };
+    let definition = fluids
+        .get(cell.fluid_id)
+        .unwrap_or_else(|| panic!("missing fluid definition for id {}", cell.fluid_id));
+    if definition.light_emission == 0 {
+        return BlockLight::DARK;
+    }
+
+    let level = scale_emission(definition.light_emission, cell.level);
+    BlockLight::from_hsi(definition.color, level)
+}
+
+fn scale_emission(full_emission: u8, level: u8) -> u8 {
+    (u16::from(full_emission) * u16::from(level))
+        .div_ceil(u16::from(crate::voxel::fluid::MAX_FLUID_LEVEL)) as u8
+}
+
 pub(super) fn light_transmission(
     _world: &VoxelWorld,
     _blocks: &BlockRegistry,
@@ -110,12 +133,19 @@ fn scale_dampening(full_dampening: u8, level: u8) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::scale_dampening;
+    use super::{scale_dampening, scale_emission};
 
     #[test]
     fn fluid_dampening_tracks_fill_level() {
         assert_eq!(scale_dampening(15, 1), 2);
         assert_eq!(scale_dampening(15, 4), 8);
         assert_eq!(scale_dampening(15, 8), 15);
+    }
+
+    #[test]
+    fn fluid_emission_tracks_fill_level() {
+        assert_eq!(scale_emission(15, 1), 2);
+        assert_eq!(scale_emission(15, 4), 8);
+        assert_eq!(scale_emission(15, 8), 15);
     }
 }
