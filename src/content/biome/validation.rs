@@ -137,11 +137,9 @@ fn validate_terrain_overlay_biome(definition: &BiomeDefinition) {
         "terrain overlay biome {} cannot define surfaceCarvers",
         definition.id
     );
-    assert!(
-        definition.surface_layers.is_empty(),
-        "terrain overlay biome {} inherits surfaceLayers from its parent",
-        definition.id
-    );
+    if !definition.surface_layers.is_empty() {
+        definition.validate_surface_materials();
+    }
     assert!(
         definition.density_modifier.is_none(),
         "terrain overlay biome {} cannot define densityModifier",
