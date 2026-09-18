@@ -234,27 +234,41 @@ pub(super) fn sync_entity_cards(
         }
     }
 
-    let player_health = player_entity
-        .and_then(|entity| queries.p2().get(entity).ok())
-        .map(|value| (value.current(), value.max()));
-    let target_health = target_entity
-        .and_then(|entity| queries.p2().get(entity).ok())
-        .map(|value| (value.current(), value.max()));
+    let player_health = player_entity.map(|entity| {
+        queries
+            .p2()
+            .get(entity)
+            .map(|value| (value.current(), value.max()))
+            .ok()
+    }).flatten();
+    let target_health = target_entity.map(|entity| {
+        queries
+            .p2()
+            .get(entity)
+            .map(|value| (value.current(), value.max()))
+            .ok()
+    }).flatten();
 
-    for (marker, children) in &mut queries.p3() {
-        let health = match marker.0 {
-            EntityCardSource::LocalPlayer => player_health,
-            EntityCardSource::Target => target_health,
-        };
-        let fraction = health
-            .map(|(current, max)| (current / max).clamp(0.0, 1.0))
-            .unwrap_or(0.0);
-        if let Some(&fill_entity) = children.first() {
-            let width = percent(fraction * 100.0);
-            drop(children);
-            if let Ok(mut node) = queries.p4().get_mut(fill_entity) {
-                node.width = width;
+    let health_fill_updates: Vec<(Entity, Val)> = {
+        let mut updates = Vec::new();
+        for (marker, children) in queries.p3().iter() {
+            let health = match marker.0 {
+                EntityCardSource::LocalPlayer => player_health,
+                EntityCardSource::Target => target_health,
+            };
+            let fraction = health
+                .map(|(current, max)| (current / max).clamp(0.0, 1.0))
+                .unwrap_or(0.0);
+            if let Some(&fill_entity) = children.first() {
+                updates.push((fill_entity, percent(fraction * 100.0)));
             }
+        }
+        updates
+    };
+
+    for (fill_entity, width) in health_fill_updates {
+        if let Ok(mut node) = queries.p4().get_mut(fill_entity) {
+            node.width = width;
         }
     }
 
