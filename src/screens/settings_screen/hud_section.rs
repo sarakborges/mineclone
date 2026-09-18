@@ -140,6 +140,7 @@ fn display_tooltips_toggle(enabled: bool) -> impl Bundle {
             width: px(TOGGLE_WIDTH),
             height: px(TOGGLE_HEIGHT),
             flex_shrink: 0.0,
+            margin: UiRect::right(px(8)),
             position_type: PositionType::Relative,
             border: UiRect::all(px(2)),
             ..default()
