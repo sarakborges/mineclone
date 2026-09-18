@@ -15,7 +15,7 @@ use crate::{
 
 pub(crate) use motion::CreatureMotion;
 use motion::move_creatures;
-use visual::{CreatureModel, attach_loaded_models, sync_creature_animations, sync_creature_faces, sync_creature_facing};
+use visual::{CreatureModel, attach_loaded_models, sync_creature_animations, sync_creature_facing};
 pub(crate) use visual::CreatureAnimationState;
 
 /// The entity root owns position and collision; only its visual child is animated or rotated.
@@ -44,7 +44,7 @@ impl Plugin for CreaturesPlugin {
             )
             .add_systems(
                 PostUpdate,
-                (sync_creature_facing, sync_creature_animations, sync_creature_faces)
+                (sync_creature_facing, sync_creature_animations)
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
             );
