@@ -101,10 +101,11 @@ fn edit_targeted_block(
             let dead = health.damage(attack.damage);
             let direction = creature_transform.translation - player_transform.translation;
             for effect in &attack.effects {
-                if effect.chance >= 1.0 || next_random(&mut random_state) as f32 / u32::MAX as f32 <= effect.chance {
-                    if effect.effect == "knockback" {
-                        motion.apply_knockback(direction, effect.strength);
-                    }
+                if (effect.chance >= 1.0
+                    || next_random(&mut random_state) as f32 / u32::MAX as f32 <= effect.chance)
+                    && effect.effect == "knockback"
+                {
+                    motion.apply_knockback(direction, effect.strength);
                 }
             }
             viewmodel_animation.play_break();
