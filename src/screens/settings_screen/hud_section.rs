@@ -3,7 +3,10 @@ use bevy::prelude::*;
 use crate::{
     hud::{HudSettings, TargetBlockPosition},
     localization::{ActiveLanguage, Language, UiLocalization},
-    ui::{dropdown, selectable, theme, typography},
+    ui::{
+        dropdown::{self, DropdownState, PanelAnchor},
+        selectable, theme, typography,
+    },
 };
 
 use super::navigation::{SettingsSection, SettingsSectionSelection};
@@ -16,14 +19,10 @@ const TOGGLE_THUMB_INSET: f32 = 3.0;
 const TOGGLE_THUMB_ENABLED_LEFT: f32 =
     TOGGLE_WIDTH - TOGGLE_THUMB_SIZE - (TOGGLE_BORDER_WIDTH * 2.0) - TOGGLE_THUMB_INSET;
 const DROPDOWN_WIDTH: f32 = 240.0;
-const DROPDOWN_HEIGHT: f32 = 44.0;
-const DROPDOWN_GAP: f32 = 6.0;
-const OPTION_HEIGHT: f32 = 40.0;
 
-#[derive(Resource, Default)]
-pub(super) struct TargetBlockPositionDropdownState {
-    open: bool,
-}
+pub(super) struct TargetBlockPositionDropdownKind;
+pub(super) type TargetBlockPositionDropdownState =
+    DropdownState<TargetBlockPositionDropdownKind>;
 
 #[derive(Component)]
 pub(super) struct DisplayTooltipsToggle;
@@ -169,31 +168,13 @@ fn target_position_dropdown(
     localization: &UiLocalization,
     language: Language,
 ) -> impl Bundle {
-    let (background, border) = selectable::static_colors(false);
-
     (
-        Node {
-            position_type: PositionType::Relative,
-            width: px(DROPDOWN_WIDTH),
-            height: px(DROPDOWN_HEIGHT),
-            flex_shrink: 0.0,
-            ..default()
-        },
+        dropdown::root(px(DROPDOWN_WIDTH)),
         children![
             (
                 Button,
                 TargetBlockPositionDropdownButton,
-                Node {
-                    width: percent(100),
-                    height: percent(100),
-                    padding: UiRect::horizontal(px(12)),
-                    border: UiRect::all(px(2)),
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::SpaceBetween,
-                    ..default()
-                },
-                BackgroundColor(background),
-                BorderColor::all(border),
+                dropdown::control(),
                 children![
                     (
                         TargetBlockPositionDropdownLabel,
@@ -205,21 +186,8 @@ fn target_position_dropdown(
             ),
             (
                 TargetBlockPositionDropdownPanel,
-                Node {
-                    display: Display::None,
-                    position_type: PositionType::Absolute,
-                    top: px(DROPDOWN_HEIGHT + DROPDOWN_GAP),
-                    left: px(0),
-                    width: percent(100),
-                    padding: UiRect::all(px(6)),
-                    flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::Stretch,
-                    row_gap: px(4),
-                    border: UiRect::all(px(1)),
-                    ..default()
-                },
-                BackgroundColor(theme::HUD_SURFACE),
-                BorderColor::all(selectable::BORDER_COLOR),
+                dropdown::panel_node(percent(100), 6.0, 4.0, 1.0, PanelAnchor::Left),
+                dropdown::panel_surface(),
                 GlobalZIndex(620),
                 children![
                     target_position_option(
@@ -252,22 +220,10 @@ fn target_position_option(
     localization: &UiLocalization,
     language: Language,
 ) -> impl Bundle {
-    let (background, border) = selectable::static_colors(position == selected);
-
     (
         Button,
         TargetBlockPositionOption(position),
-        Node {
-            width: percent(100),
-            height: px(OPTION_HEIGHT),
-            min_height: px(OPTION_HEIGHT),
-            padding: UiRect::horizontal(px(10)),
-            border: UiRect::all(px(1)),
-            align_items: AlignItems::Center,
-            ..default()
-        },
-        BackgroundColor(background),
-        BorderColor::all(border),
+        dropdown::option(position == selected, 1.0),
         children![(
             TargetBlockPositionOptionLabel(position),
             typography::hud(target_position_label(position, localization, language)),
@@ -317,7 +273,7 @@ pub(super) fn handle_target_block_position_dropdown_button(
         .iter()
         .any(|interaction| *interaction == Interaction::Pressed)
     {
-        state.open = !state.open;
+        state.toggle();
     }
 }
 
@@ -337,7 +293,7 @@ pub(super) fn handle_target_block_position_options(
         if settings.target_block_position() != option.0 {
             settings.set_target_block_position(option.0);
         }
-        state.open = false;
+        state.close();
         break;
     }
 }
@@ -349,7 +305,7 @@ pub(super) fn close_target_block_position_dropdown_outside_hud(
     options: Query<&Interaction, With<TargetBlockPositionOption>>,
     mut state: ResMut<TargetBlockPositionDropdownState>,
 ) {
-    if selection.is_changed() && selection.selected != SettingsSection::Hud && state.open {
+    if selection.is_changed() && selection.selected != SettingsSection::Hud && state.is_open() {
         state.open = false;
         return;
     }
@@ -412,7 +368,7 @@ pub(super) fn sync_target_block_position_dropdown(
 ) {
     let localization_changed = localization.is_changed() || language.is_changed();
     if state.is_changed() {
-        let next_display = if state.open {
+        let next_display = if state.is_open() {
             Display::Flex
         } else {
             Display::None
