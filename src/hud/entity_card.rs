@@ -72,7 +72,6 @@ pub(super) fn spawn_entity_card(
                     min_width: px(AVATAR_SIZE),
                     min_height: px(AVATAR_SIZE),
                     border: UiRect::all(px(2)),
-                    border_radius: BorderRadius::all(px(4)),
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::Center,
                     ..default()
@@ -132,7 +131,6 @@ fn spawn_entity_health_bar(info: &mut ChildSpawnerCommands, source: EntityCardSo
             width: percent(100),
             height: px(HEALTH_BAR_HEIGHT),
             border: UiRect::all(px(1)),
-            border_radius: BorderRadius::all(px(4)),
             ..default()
         },
         BackgroundColor(theme::SLIDER_TRACK),
@@ -147,7 +145,6 @@ fn spawn_entity_health_bar(info: &mut ChildSpawnerCommands, source: EntityCardSo
                 top: px(0),
                 width: percent(100),
                 height: percent(100),
-                border_radius: BorderRadius::all(px(3)),
                 ..default()
             },
             BackgroundColor(HEALTH_FILL_COLOR),
