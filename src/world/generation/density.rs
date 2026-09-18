@@ -19,7 +19,8 @@ use super::{
     columns::GenerationColumnSample,
     index::{column_index, voxel_index},
     surface_carvers::{
-        SurfaceCarverColumn, SurfaceCarverResolveContext, resolve_surface_carver_column,
+        SurfaceCarverColumn, SurfaceCarverResolveCache, SurfaceCarverResolveContext,
+        resolve_surface_carver_column,
         surface_carver_density_delta,
     },
 };
@@ -67,6 +68,7 @@ pub(super) fn sample_density_field(
             .map(|caves| &caves.connector_graph),
     };
     let mut surface_carvers = SurfaceCarverColumn::default();
+    let mut surface_carver_cache = SurfaceCarverResolveCache::default();
 
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
@@ -93,6 +95,7 @@ pub(super) fn sample_density_field(
             // expensive lake/river/ocean sampling even in carver-free terrain.
             resolve_surface_carver_column(
                 &mut surface_carvers,
+                &mut surface_carver_cache,
                 horizontal,
                 column.surface_height as f32,
                 &column.surface_influences,
