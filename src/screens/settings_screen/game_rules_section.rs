@@ -4,7 +4,7 @@ use crate::{
     app::game_state::GameState,
     localization::{Language, UiLocalization},
     ui::{
-        button::compact_control_button,
+        button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
         numeric_input::{
             NumericInputEvent, NumericInputFrame, NumericInputSizing, NumericInputState,
             numeric_input_field, sync_numeric_input_view,
@@ -141,14 +141,26 @@ pub(super) fn game_rules_section(
                     ..default()
                 },
                 children![
-                    compact_control_button("−", TicksPerSecondStep::Decrement, STEP_BUTTON_SIZE,),
+                    button(
+                        "−",
+                        TicksPerSecondStep::Decrement,
+                        px(STEP_BUTTON_SIZE),
+                        COMPACT_CONTROL_HEIGHT,
+                        ButtonVariant::Normal,
+                    ),
                     numeric_input_field(
                         ticks_per_second.to_string(),
                         TicksPerSecondInput,
                         TicksPerSecondValueText,
                         NumericInputSizing::Fixed(INPUT_WIDTH),
                     ),
-                    compact_control_button("+", TicksPerSecondStep::Increment, STEP_BUTTON_SIZE,),
+                    button(
+                        "+",
+                        TicksPerSecondStep::Increment,
+                        px(STEP_BUTTON_SIZE),
+                        COMPACT_CONTROL_HEIGHT,
+                        ButtonVariant::Normal,
+                    ),
                 ],
             ),
         ],
