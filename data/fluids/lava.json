@@ -1,0 +1,20 @@
+{
+  "id": "asteria:lava",
+  "name": {
+    "english": "Lava",
+    "portuguese_brazil": "Lava",
+    "spanish": "Lava"
+  },
+  "color": {
+    "hue": 28.0,
+    "saturation": 0.96,
+    "intensity": 0.72
+  },
+  "opacity": 1.0,
+  "roughness": 0.34,
+  "metallic": 0.0,
+  "lightDampening": 15,
+  "lightEmission": 15,
+  "spreadSpeed": 2.0,
+  "maxSpread": 3
+}
