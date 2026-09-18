@@ -4,7 +4,7 @@ use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::{SettingsScreenMode, SettingsState}},
     localization::{ActiveLanguage, UiLocalization},
     ui::{
-        button::{menu_button, standard_button},
+        button::{button, standard_button},
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
         visibility::set_visibility,
