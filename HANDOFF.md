@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.25.1`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. O PR #14 já foi mergeado em `develop`. **HEAD de código imediatamente anterior a esta atualização documental:** `b696cfe5738911729f566feb58dd8588849cbc9f`. O CI de push `35392816751` estava **em execução** neste ponto; portanto o bloco 101 abaixo NÃO deve ser tratado como CI verde até nova confirmação. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.26.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. O PR #14 já foi mergeado em `develop`. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `8ebf13a4db55ff20ccc03f31fc869e7cf1131107`. O código do checkpoint 101 em `b696cfe5738911729f566feb58dd8588849cbc9f` foi validado pela CI de push `35392816751` com sucesso; o commit isolado de bump para `0.26.0` ainda não tinha run observável pelos checks disponíveis nesta sessão. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 ## Histórico integral obrigatório
 
@@ -877,7 +877,7 @@ Próximo passo imediato: QA Windows em mundo novo verificando (1) Biome Size Mul
 
 
 
-## Checkpoint 101 — 2026-09-18: performance do worldgen + biomas independentes Gorge / Alps / Mountain Belt / Volcano [CÓDIGO EM ANDAMENTO; CI PENDENTE]
+## Checkpoint 101 — 2026-09-18: performance do worldgen + biomas independentes Gorge / Alps / Mountain Belt / Volcano [CÓDIGO VALIDADO; VERSION 0.26.0; QA WINDOWS PENDENTE]
 
 ### Correção de performance após surface carvers data-driven
 
@@ -999,21 +999,23 @@ Foram removidos do caminho final:
 
 ### Estado de CI / versionamento neste ponto
 
-- `VERSION` atual permanece **0.25.1** enquanto este bloco está sendo estabilizado.
-- HEAD de código antes desta atualização do handoff: `b696cfe5738911729f566feb58dd8588849cbc9f`.
-- CI de push associado: `35392816751` — **em execução no momento desta atualização**.
+- O código funcional do bloco ficou em `b696cfe5738911729f566feb58dd8588849cbc9f`.
+- CI de push `35392816751` — **success**:
+  - auditoria de localizações;
+  - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- `8ebf13a4db55ff20ccc03f31fc869e7cf1131107` sobe `VERSION 0.25.1 → 0.26.0` pelo novo bloco funcional de biomas/terrains montanhosos independentes.
+- No momento desta atualização, o commit isolado de bump ainda não tinha workflow observável pelos checks disponíveis; portanto a evidência canônica de compilação continua sendo a run verde do código imediatamente anterior.
 - Failures anteriores desta sequência foram estados intermediários da refatoração e incluíram:
   - referência residual a `TerrainOverlay/parentBiome`;
   - fixtures de `BiomeInfluence` sem o novo campo `terrain_strength`;
-  - ambos já foram corrigidos no HEAD acima.
-- **Não marcar este checkpoint como CI verde até o run atual concluir success.**
+  - ambos já foram corrigidos antes da run verde.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
 
 ### Próximo passo imediato
 
-1. Confirmar Clippy + `cargo check --locked` no HEAD atual.
-2. Se verde, revisar/bump de `VERSION` conforme o bloco funcional e atualizar este checkpoint com a CI canônica.
-3. QA Windows/worldgen necessária para:
+1. Confirmar a CI do commit de bump `8ebf13a4...` quando a run ficar observável e, se verde, tratá-lo como HEAD canônico versionado.
+2. QA Windows/worldgen necessária para:
    - confirmar que a regressão severa de velocidade foi eliminada;
    - confirmar Gorge com paredes abruptas/desfiladeiro reconhecível;
    - confirmar Alps visualmente mais altos/agudos;
