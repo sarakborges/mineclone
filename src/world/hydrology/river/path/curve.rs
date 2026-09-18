@@ -136,14 +136,14 @@ fn river_path_points(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::content::biome_hydrology::BiomeHydrology;
+    use crate::content::biome_hydrology::BiomeHydrologyRules;
 
     fn node(position: Vec2, elevation: f32) -> DrainageNode {
         DrainageNode {
             position,
             elevation,
             continentalness: 0.8,
-            biome_hydrology: BiomeHydrology::default(),
+            biome_hydrology: BiomeHydrologyRules::default(),
         }
     }
 
