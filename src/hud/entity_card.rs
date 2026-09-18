@@ -273,21 +273,21 @@ pub(super) fn sync_entity_cards(
         }
     }
 
-    let health_label_updates: Vec<(Entity, String)> = queries
-        .p5()
-        .iter()
-        .filter_map(|(marker, children)| {
+    let health_label_updates: Vec<(Entity, String)> = {
+        let mut updates = Vec::new();
+        for (marker, children) in queries.p5().iter() {
             let desired = match marker.0 {
                 EntityCardSource::LocalPlayer => player_health,
                 EntityCardSource::Target => target_health,
             }
             .map(|(current, max)| format!("{current:.0} / {max:.0}"))
             .unwrap_or_default();
-            children.iter().find_map(|child| {
-                queries.p1().get(child).ok().map(|(_, _)| (child, desired.clone()))
-            })
-        })
-        .collect();
+            if let Some(&label_entity) = children.first() {
+                updates.push((label_entity, desired));
+            }
+        }
+        updates
+    };
 
     for (label_entity, desired) in health_label_updates {
         if let Ok((_, mut text)) = queries.p1().get_mut(label_entity) {
