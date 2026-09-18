@@ -24,12 +24,16 @@ pub(crate) struct CreatureInstance {
     pub definition_id: String,
 }
 
+#[derive(Component)]
+pub(crate) struct CreatureDeathTimer(Timer);
+
 pub(crate) struct CreaturesPlugin;
 
 impl Plugin for CreaturesPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<visual::TintedCreatureMaterials>()
             .add_systems(Update, natural_spawn_creatures.run_if(in_state(GameState::Gameplay)).run_if(in_state(PauseState::Running)))
+            .add_systems(Update, despawn_dead_creatures.run_if(in_state(GameState::Gameplay)))
             .add_systems(Update, attach_loaded_models.run_if(in_state(GameState::Gameplay)))
 
             .add_systems(
@@ -165,4 +169,18 @@ fn next_random(state: &mut u32) -> u32 {
     *state ^= *state >> 17;
     *state ^= *state << 5;
     *state
+}
+
+
+fn despawn_dead_creatures(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut dead: Query<(Entity, &mut CreatureDeathTimer)>,
+) {
+    for (entity, mut timer) in &mut dead {
+        timer.0.tick(time.delta());
+        if timer.0.just_finished() {
+            commands.entity(entity).despawn();
+        }
+    }
 }
