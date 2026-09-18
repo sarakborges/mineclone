@@ -194,19 +194,27 @@ pub(crate) fn autosave_world(
     if session.id.is_none() {
         return;
     }
-    // Loading has already restored the disk state before entering Gameplay.
-    // Capture its baseline on the first gameplay frame, not after a full minute:
-    // otherwise genuine edits made during that minute could be skipped.
+    // Loading restores disk state with world revision zero. Streaming runs before
+    // this Last-stage system, so a newly generated chunk on the first gameplay
+    // frame can already have advanced the persistent revision. Never absorb that
+    // new chunk into the disk baseline: persist it immediately instead.
     if session.baseline_loaded_save {
-        match snapshot.saved_state() {
-            Ok(state) => {
-                session.last_saved_state = Some(state);
-                session.baseline_loaded_save = false;
-            }
+        let state = match snapshot.saved_state() {
+            Ok(state) => state,
             Err(error) => {
                 error!("Cannot initialize loaded save state: {error}");
                 return;
             }
+        };
+        session.baseline_loaded_save = false;
+        if state.world_revision == 0 {
+            session.last_saved_state = Some(state);
+        } else {
+            if let Err(error) = session.persist(&snapshot) {
+                error!("World autosave failed while recording newly generated loaded-world chunks: {error}");
+                session.timer.reset();
+            }
+            return;
         }
     }
     if session.first_save_done && !session.timer.tick(time.delta()).just_finished() {
