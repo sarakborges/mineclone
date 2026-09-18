@@ -1,5 +1,7 @@
 # HANDOFF — Asteria / Mineclone
 
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.30.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional imediatamente anterior ao bump/documentação:** `50ebf9454ac17ac49e6c030fa5eba5fbf1ada397`. A migração de Coast-biome para Ocean `surfaceMargin` passou na CI de push `35398588362` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Bump `0.29.0 → 0.30.0` em `c0794cb00c1ceea02ca5ba9d56446dfeedc90c4b`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.29.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `e848e9e918a87527764ed79616ac3d8134c0830a`. A feature de lava + fluidos de superfície do Volcano passou na CI de push `35397447773` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.29.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `e848e9e918a87527764ed79616ac3d8134c0830a`. O bloco funcional de lava + crater surface fluid passou na CI de push `35397375586` em `bfc41995f85aeddb54a45d762a40750b7d3291ae` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. A run específica do bump `0.29.0` é `35397447773` — **success** — com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
@@ -1502,3 +1504,100 @@ QA Windows prioritária:
 4. Forçar/encontrar Volcano e verificar lago de lava dentro da cratera, abaixo do rim.
 5. Verificar poucos derrames/canais na encosta, sem cobrir o Volcano inteiro e sem nascer dentro do lago.
 6. Confirmar que Volcano continua sem river/lake natural e mantém superfície de `asteria:bassalt`.
+
+
+## Checkpoint 107 — 2026-09-18: Coast deixa de ser biome; Ocean ganha `surfaceMargin` data-driven [FEATURE + CI VERDE; VERSION 0.30.0]
+
+### Mudança conceitual
+
+- `asteria:overworld/coast` deixou de ser um `Surface` biome.
+- O arquivo `data/dimensions/overworld/biomes/coast.json` foi removido.
+- `DimensionHydrology` não possui mais `coastBiome`.
+- `Coast` não disputa mais `weight`, `size`, clima ou território no grafo de surface biomes.
+- `Ocean` continua sendo um `Surface` biome real.
+- A faixa costeira passa a ser uma margem de borda do Ocean, sem identidade própria.
+
+### Novo `surfaceMargin`
+
+- `BiomeDefinition` ganhou `surfaceMargin` opcional.
+- Estrutura atual:
+  - `width`: largura física da margem;
+  - `surfaceLayers`: materiais aplicados nessa faixa.
+- `surfaceMargin`:
+  - só é permitido em `Surface` biomes;
+  - exige `width > 0` finito;
+  - exige layers válidas;
+  - valida referências de blocos no carregamento.
+- A margem é resolvida pela distância até a **fronteira Voronoi real** entre o surface biome atual e um vizinho que declara `surfaceMargin`.
+- Ela não é baseada em proximidade genérica, clima ou peso de blend.
+- A margem só atua quando o vizinho que define a fronteira efetiva é o biome proprietário da margem.
+
+### Overworld / Ocean
+
+`asteria:overworld/ocean` agora declara:
+
+- `surfaceMargin.width = 32`;
+- layers da margem:
+  - `asteria:sand`, depth 4;
+  - `asteria:stone` como fallback profundo.
+- O `continentalness.max` do Ocean foi ajustado de `0.32` para `0.38` para eliminar a lacuna climática que antes era coberta pelo Coast biome e permitir competição/transição direta Ocean ↔ terra.
+
+### Identidade e materiais
+
+- A margem **não substitui `CurrentBiome`**.
+- Praia junto de Plains continua Plains.
+- Praia junto de Witchwood continua Witchwood.
+- A coluna terrestre dentro da margem usa as `surfaceLayers` authored pelo Ocean.
+- Fora da margem, volta integralmente às layers do biome terrestre.
+- No lado oceânico, o próprio Ocean continua fornecendo seus materiais normais.
+- `HydrologyMaterialSet.coast_shore_block` foi renomeado para `ocean_shore_block`.
+- O material de shoreline oceânico agora é resolvido diretamente do `BiomeHydrology` do Ocean.
+
+### Hydrology
+
+- `HydrologyBiomeOverlay` agora expõe apenas Ocean; Coast deixou de existir como camada diagnóstica.
+- `HydrologyField` e `WorldFeatureFields` não recebem mais `coast_weight`.
+- O fator físico de ocean no generation path depende apenas da influência do surface biome Ocean.
+- Baixa continentalness sozinha continua proibida de cavar Ocean fora do ownership/transição do Ocean.
+- `Spawn Biome` não possui mais exceção para Coast; somente forced Ocean preserva continentalness oceânica.
+
+### `requireNear`
+
+- A infraestrutura `requireNear` permanece disponível e válida para futuros surface biomes que realmente precisem de adjacência territorial obrigatória.
+- Shoreline não usa mais `requireNear`; essa relação é modelada por `surfaceMargin`.
+
+### Commits principais
+
+- `abf8c558...`: tipo data-driven `BiomeSurfaceMargin`.
+- `9d9057fa...` / `be4c18b3...`: registro/autoria em `BiomeDefinition`.
+- `1f857968...` / `c58cc3c4...`: validação de margin e referências de blocos.
+- `de83e774...` / `54604011...`: amostra de fronteira real e distância Voronoi.
+- `95059cc7...`: resolução de margem por coluna.
+- `06805d07...` / `8e17c217...`: aplicação da margem no material pass.
+- `843699cf...` / `f777bd7f...`: remoção de `coastBiome` e special-case de Coast no `BiomeField`.
+- `76c5fbe9...` / `c9085acc...` / `c53915c0...`: hydrology identity Ocean-only.
+- `453b6799...` / `ae1bf724...` / `3e54d7f6...`: remoção de `coast_weight` e gating físico somente por Ocean.
+- `475a407e...` / `6aa1aee7...` / `50ebf945...`: shoreline material vem do Ocean e naming interno atualizado.
+- `2f939922...`: Coast removido da dimensão.
+- `669dee8b...`: Ocean recebe `surfaceMargin`.
+- `06bb39ba...`: `coast.json` removido.
+- `2427ab82...` / `a7477504...` / `42b24360...`: fixtures/test compilation atualizados.
+- `2a4da3a2...`: validação da dimensão deixa de referenciar Coast.
+- `1624730c...`: arquitetura atualizada para shoreline margin.
+- `c0794cb0...`: `VERSION 0.29.0 → 0.30.0`.
+
+### CI / QA
+
+- CI funcional canônica: push run `35398588362` — **success**:
+  - auditoria de localizações;
+  - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+QA Windows prioritária:
+1. Gerar mundo novo e localizar Ocean.
+2. Confirmar transição Ocean ↔ Plains/Witchwood/Enchanted/etc. sem uma região identificada como Coast.
+3. Confirmar faixa de areia de aproximadamente 32 blocos no lado terrestre da fronteira oceânica.
+4. Confirmar que `CurrentBiome` continua reportando o biome terrestre na praia.
+5. Confirmar que a água/floor do Ocean permanece restrita ao ownership/transição do Ocean e não invade terra distante.
+6. Confirmar que rios continuam podendo desembocar no Ocean e que shoreline material continua coerente.
