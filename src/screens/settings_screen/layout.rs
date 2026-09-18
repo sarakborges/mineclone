@@ -93,7 +93,6 @@ impl SettingsScreenContext {
 pub(super) struct SettingsScreenWorldContext<'w, 's> {
     game_state: Res<'w, State<GameState>>,
     settings_mode: Res<'w, SettingsScreenMode>,
-    _ttingsScreenMode>,
     game_rules: Res<'w, GameRules>,
     new_world: Res<'w, NewWorldConfig>,
     player: Query<'w, 's, &'static GameMode, With<GameplayCamera>>,
