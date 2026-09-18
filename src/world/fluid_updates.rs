@@ -334,6 +334,27 @@ mod tests {
     }
 
     #[test]
+    fn priority_work_does_not_enter_an_already_frozen_step() {
+        let mut pending = PendingFluidUpdates::default();
+        let fluid_id = 0;
+        let first = IVec3::new(1, 2, 3);
+        let second = IVec3::new(2, 2, 3);
+        let urgent = IVec3::new(9, 2, 3);
+
+        pending.enqueue_fluid(fluid_id, first);
+        pending.enqueue_fluid(fluid_id, second);
+        pending.fluid_lane_mut(fluid_id).ready_steps = 1;
+
+        assert_eq!(pending.pop_runnable_fluid(), Some((fluid_id, first)));
+        pending.enqueue_fluid_priority(fluid_id, urgent);
+        assert_eq!(pending.pop_runnable_fluid(), Some((fluid_id, second)));
+        assert_eq!(pending.pop_runnable_fluid(), None);
+
+        pending.fluid_lane_mut(fluid_id).ready_steps = 1;
+        assert_eq!(pending.pop_runnable_fluid(), Some((fluid_id, urgent)));
+    }
+
+    #[test]
     fn fluid_lane_keeps_unfinished_step_runnable_across_frames() {
         let mut pending = PendingFluidUpdates::default();
         let fluid_id = 0;
