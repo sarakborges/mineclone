@@ -329,7 +329,7 @@ mod tests {
         assert!(!can_spread_horizontally_from(
             &exposed_world,
             position,
-            FluidCell::spreading(0, MAX_FLUID_LEVEL, 0),
+            FluidCell::flowing(0, MAX_FLUID_LEVEL),
         ));
 
         let mut covered_world = VoxelWorld::default();
