@@ -21,7 +21,6 @@ mod validation;
 pub enum BiomeKind {
     #[default]
     Surface,
-    TerrainOverlay,
     Volume,
     Hydrology,
 }
@@ -107,8 +106,6 @@ pub struct BiomeDefinition {
     pub name: LocalizedText,
     #[serde(default)]
     pub kind: BiomeKind,
-    #[serde(default)]
-    pub parent_biome: Option<String>,
     #[serde(default = "default_biome_distributions")]
     pub distributions: Vec<BiomeDistribution>,
     #[serde(default)]
