@@ -97,11 +97,6 @@ pub(in crate::world) fn begin_world_loading(
             DEFAULT_SPAWN_COLUMN.as_vec2() + Vec2::splat(0.5),
         );
     }
-    let coast_weight = dimension
-        .hydrology
-        .coast_biome
-        .as_deref()
-        .map_or(1.0, |biome_id| dimension.biome_weight(biome_id));
     let ocean_weight = dimension
         .hydrology
         .ocean_biome
@@ -111,7 +106,6 @@ pub(in crate::world) fn begin_world_loading(
         config.seed.0,
         dimension.sea_level,
         dimension.hydrology.clone(),
-        coast_weight,
         ocean_weight,
     );
     let (roughness, metallic) = average_terrain_material(dimension, biomes);
