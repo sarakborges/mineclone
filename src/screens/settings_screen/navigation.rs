@@ -84,11 +84,8 @@ pub(super) fn sync_section_ui(
     mut labels: Query<(&SettingsSectionButtonLabel, &mut Text)>,
     mut buttons: Query<(&SettingsSectionButton, &mut ButtonVariant, &mut BackgroundColor, &mut BorderColor)>,
 ) {
-    for (section, mut variant, mut background, mut border) in &mut buttons {
-        let active = section.0 == selection.selected;
-        *variant = ButtonVariant::from_active(active);
-        background.0 = if active { crate::ui::theme::PURPLE } else { Color::srgb(0.78, 0.79, 0.80) };
-        *border = BorderColor::all(if active { crate::ui::theme::BORDER_STRONG } else { Color::srgb(0.36, 0.37, 0.38) });
+    for (section, mut variant, _background, _border) in &mut buttons {
+        *variant = ButtonVariant::from_active(section.0 == selection.selected);
     }
 
     {
