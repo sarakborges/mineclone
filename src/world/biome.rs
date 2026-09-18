@@ -105,7 +105,11 @@ pub fn track_current_biome(
 
     let next = &mut *next_biome;
     replace_string(&mut next.surface_id, surface.primary_id);
-    replace_influences(&mut next.surface_influences, &surface.influences);
+    if surface.identity_surface_index != surface.primary_surface_index {
+        replace_single_influence(&mut next.surface_influences, surface.primary_id, 1.0);
+    } else {
+        replace_influences(&mut next.surface_influences, &surface.influences);
+    }
 
     let resolved_surface_count = resolve_surface_identity(
         &surface,
