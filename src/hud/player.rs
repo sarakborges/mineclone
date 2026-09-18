@@ -30,8 +30,7 @@ impl Plugin for PlayerHudPlugin {
             .add_systems(
                 Update,
                 sync_inventory_hint.run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(Update, sync_player_hud_pause_visibility.run_if(in_state(GameState::Gameplay)));
+            );
     }
 }
 
