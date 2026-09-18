@@ -528,6 +528,7 @@ fn poll_world_load(
         WorldSeed(snapshot.seed),
         &snapshot.dimension_id,
         rules,
+        snapshot.spawn_biome.as_deref(),
     );
     if let Some(player) = snapshot.player {
         context.save.save_player_state(
