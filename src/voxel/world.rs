@@ -1,6 +1,6 @@
 mod persistence;
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, sync::Arc};
 
 use bevy::{
     platform::collections::{HashMap, HashSet},
@@ -16,11 +16,11 @@ use super::{
     light::VoxelLight,
 };
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 pub struct VoxelWorld {
     chunks: HashMap<IVec3, VoxelChunk>,
     loaded_chunk_columns: HashMap<IVec2, BTreeSet<i32>>,
-    archived_chunks: HashMap<IVec3, ArchivedChunk>,
+    archived_chunks: HashMap<IVec3, Arc<ArchivedChunk>>,
     generated_chunks: HashSet<IVec3>,
     chunk_content_revisions: HashMap<IVec3, u64>,
     next_chunk_content_revision: u64,
@@ -109,7 +109,7 @@ impl VoxelWorld {
         self.bump_block_content_revision();
 
         self.archived_chunks
-            .insert(coord, ArchivedChunk::from_chunk(&chunk));
+            .insert(coord, Arc::new(ArchivedChunk::from_chunk(&chunk)));
     }
 
     pub fn restore_chunk(&mut self, coord: IVec3) -> bool {
