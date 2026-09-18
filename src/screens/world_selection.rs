@@ -16,10 +16,9 @@ use crate::{
     localization::{ActiveLanguage, UiLocalization},
     player::{game_mode::GameMode, hotbar::PlayerHotbar, player_id::LOCAL_PLAYER_ID},
     ui::{
-        button::{
-            button, ButtonVariant, COMPACT_CONTROL_HEIGHT, MENU_BUTTON_HEIGHT, MENU_BUTTON_WIDTH,
-        },
-        theme,
+        button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
+        cosmic_background::{self, STAR_FIELD},
+        screen, surface, theme,
         transition::{ScreenTransition, ScreenTransitionTarget}, typography,
     },
     voxel::world::VoxelWorld,
@@ -45,7 +44,7 @@ impl Plugin for WorldSelectionPlugin {
                 Update,
                 // Consume Back before a worker result. A completed load in the
                 // same frame as Back must never activate the discarded world.
-                (poll_world_scan, handle_world_selection, poll_world_load, sync_world_selection_entries, sync_world_selection_feedback)
+                (poll_world_scan, handle_world_selection, poll_world_load, sync_world_selection_feedback)
                     .chain()
                     .run_if(in_state(GameState::WorldSelection)),
             );
@@ -92,7 +91,6 @@ impl PendingWorldLoad {
 #[derive(Resource, Default)]
 struct WorldSelectionState {
     worlds: Vec<WorldSummary>,
-    selected: Option<String>,
     error: String,
     scan: Option<WorldScanResult>,
     loading: Option<PendingWorldLoad>,
@@ -100,17 +98,13 @@ struct WorldSelectionState {
 
 #[derive(Component, Clone)]
 enum WorldSelectionAction {
-    Select(String),
-    Load,
-    Delete,
+    Load(String),
+    Delete(String),
     Back,
 }
 
 #[derive(Component)]
 struct WorldListEntry(String);
-
-#[derive(Component)]
-struct SelectionFeedback;
 
 #[derive(Component)]
 struct SelectionError;
@@ -184,7 +178,6 @@ fn refresh_world_list(
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
 ) {
-    state.selected = None;
     state.worlds.clear();
     state.error.clear();
     // Reuse an unfinished scan after a return to the menu. An abandoned load
