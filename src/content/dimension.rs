@@ -48,12 +48,17 @@ pub struct DimensionDefinition {
     pub day_night_cycle: String,
     pub sky: String,
     pub sea_level: i32,
+    #[serde(default = "default_max_entities")]
+    pub max_entities: usize,
     #[serde(default)]
     pub hydrology: DimensionHydrology,
 }
 
+fn default_max_entities() -> usize { 128 }
+
 impl DimensionDefinition {
     pub fn validate_biomes(&self, biomes: &BiomeRegistry) {
+        assert!(self.max_entities > 0, "dimension {} maxEntities must be positive", self.id);
         assert!(
             !self.biomes.is_empty(),
             "dimension {} must define at least one biome",
