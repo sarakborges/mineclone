@@ -87,19 +87,63 @@
     },
     {
       "id": "asteria:overworld/gorge",
-      "weight": 1
+      "weight": 1,
+      "size": {
+        "x": {
+          "min": 80,
+          "max": 180
+        },
+        "z": {
+          "min": 140,
+          "max": 360
+        },
+        "y": null
+      }
     },
     {
       "id": "asteria:overworld/alps",
-      "weight": 1
+      "weight": 1,
+      "size": {
+        "x": {
+          "min": 140,
+          "max": 320
+        },
+        "z": {
+          "min": 140,
+          "max": 320
+        },
+        "y": null
+      }
     },
     {
       "id": "asteria:overworld/mountain_belt",
-      "weight": 1
+      "weight": 1,
+      "size": {
+        "x": {
+          "min": 160,
+          "max": 380
+        },
+        "z": {
+          "min": 160,
+          "max": 380
+        },
+        "y": null
+      }
     },
     {
       "id": "asteria:overworld/volcano",
-      "weight": 1
+      "weight": 1,
+      "size": {
+        "x": {
+          "min": 120,
+          "max": 260
+        },
+        "z": {
+          "min": 120,
+          "max": 260
+        },
+        "y": null
+      }
     },
     {
       "id": "asteria:overworld/caverns",
