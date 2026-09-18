@@ -1,8 +1,8 @@
 use std::{
     env,
-    fs::{File, OpenOptions, create_dir_all},
+    fs::{self, File, OpenOptions, create_dir_all},
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::OnceLock,
     time::SystemTime,
 };
@@ -24,6 +24,7 @@ pub(super) fn initialize_session_log() {
     let preferred_path = log_directory.join(format!("{}.txt", timestamp.file_name));
 
     let path = if create_dir_all(&log_directory).is_ok() {
+        mark_previous_unclean_session(&log_directory);
         preferred_path
     } else {
         root.join(format!("asteria-crash-{}.txt", timestamp.file_name))
@@ -52,6 +53,46 @@ pub(super) fn initialize_session_log() {
     }
 
     let _ = SESSION_LOG_PATH.set(path);
+}
+
+fn mark_previous_unclean_session(log_directory: &Path) {
+    let Ok(entries) = fs::read_dir(log_directory) else {
+        return;
+    };
+    let Some(previous_path) = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("txt"))
+        })
+        .max()
+    else {
+        return;
+    };
+    let Ok(contents) = fs::read_to_string(&previous_path) else {
+        return;
+    };
+    if contents.contains("CLEAN SHUTDOWN")
+        || contents.contains("RUST PANIC")
+        || contents.contains("WINDOWS NATIVE EXCEPTION")
+        || contents.contains("UNCLEAN SHUTDOWN DETECTED")
+    {
+        return;
+    }
+
+    if let Ok(mut file) = OpenOptions::new().append(true).open(previous_path) {
+        let timestamp = format_timestamp(SystemTime::now());
+        let _ = writeln!(file, "UNCLEAN SHUTDOWN DETECTED");
+        let _ = writeln!(
+            file,
+            "The next startup found no clean-shutdown, Rust-panic, or native-exception marker."
+        );
+        let _ = writeln!(file, "Detected (UTC): {}", timestamp.display);
+        let _ = writeln!(file);
+        let _ = file.flush();
+    }
 }
 
 pub(super) fn append_session_line(line: &str) -> bool {
