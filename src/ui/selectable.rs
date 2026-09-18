@@ -24,13 +24,17 @@ pub(crate) fn sync_selectable_button(
 
 pub(crate) fn selectable_button_background(active: bool, interaction: Interaction) -> Color {
     if active {
-        return theme::SURFACE_INSET;
+        return match interaction {
+            Interaction::Pressed => theme::PURPLE_HOVER,
+            Interaction::Hovered => theme::PURPLE_HOVER,
+            Interaction::None => theme::PURPLE,
+        };
     }
 
     match interaction {
-        Interaction::Pressed => theme::PURPLE_HOVER,
-        Interaction::Hovered => theme::PURPLE,
-        Interaction::None => theme::PURPLE_SOFT,
+        Interaction::Pressed => theme::SURFACE_ELEVATED,
+        Interaction::Hovered => theme::PURPLE_SOFT,
+        Interaction::None => theme::SURFACE_INSET,
     }
 }
 
