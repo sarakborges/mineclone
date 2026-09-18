@@ -18,7 +18,7 @@ pub(crate) struct GenerationColumnSample {
 pub(crate) fn sample_generation_columns(
     horizontal_chunk: IVec2,
     dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
+    _biomes: &BiomeRegistry,
     biome_field: &BiomeField,
 ) -> Vec<GenerationColumnSample> {
     let mut columns = Vec::with_capacity(CHUNK_SIZE * CHUNK_SIZE);
@@ -38,18 +38,7 @@ pub(crate) fn sample_generation_columns(
                 .iter()
                 .find(|influence| influence.surface_index == primary_surface_index)
                 .map_or(1.0, |influence| influence.terrain_strength);
-            let surface_margin_index = surface.nearest_boundary.and_then(|boundary| {
-                let margin_biome_id =
-                    biome_field.surface_biome_id(boundary.neighbor_surface_index);
-                let margin_biome = biomes
-                    .get(margin_biome_id)
-                    .unwrap_or_else(|| panic!("missing surface biome definition: {margin_biome_id}"));
-                margin_biome
-                    .surface_margin
-                    .as_ref()
-                    .filter(|margin| boundary.distance <= margin.width)
-                    .map(|_| boundary.neighbor_surface_index)
-            });
+            let surface_margin_index = surface.surface_margin_index;
             let surface_influences = surface
                 .influences
                 .iter()
