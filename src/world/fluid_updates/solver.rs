@@ -232,6 +232,7 @@ fn can_fall_from(world: &VoxelWorld, position: IVec3, fluid_id: FluidId) -> bool
         return false;
     }
 
+    let current_is_empty = world.fluid_at(position).is_none();
     world
         .sample_at(position - IVec3::Y)
         .is_some_and(|(cell, fluid, _)| {
@@ -241,8 +242,8 @@ fn can_fall_from(world: &VoxelWorld, position: IVec3, fluid_id: FluidId) -> bool
 
             fluid.is_none_or(|fluid| {
                 fluid.fluid_id == fluid_id
-                    && !fluid.is_source()
-                    && fluid.spread_distance() == 0
+                    && (current_is_empty
+                        || (!fluid.is_source() && fluid.spread_distance() == 0))
             })
         })
 }
@@ -389,6 +390,33 @@ mod tests {
         ));
         assert!(!horizontal_spread_is_preferred(
             &world, origin, north, 0, 7,
+        ));
+    }
+
+    #[test]
+    fn empty_ledge_above_same_fluid_pool_is_still_a_drop() {
+        let origin = IVec3::new(6, 2, 6);
+        let east = origin + IVec3::X;
+        let drop = origin + IVec3::new(2, 0, 0);
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
+
+        for z in 0..16 {
+            for x in 0..16 {
+                world.set_block_at(
+                    IVec3::new(x, 1, z),
+                    Some(VoxelCell::new("stone", Default::default())),
+                );
+            }
+        }
+        world.set_block_at(drop - IVec3::Y, None);
+        world.set_fluid_at(
+            drop - IVec3::Y,
+            Some(FluidCell::source(0, MAX_FLUID_LEVEL)),
+        );
+
+        assert!(horizontal_spread_is_preferred(
+            &world, origin, east, 0, 7,
         ));
     }
 
