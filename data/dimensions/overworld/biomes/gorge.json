@@ -19,7 +19,9 @@
     "type": "gorge",
     "baseHeight": 18,
     "depth": 42,
-    "wallHeight": 20
+    "wallHeight": 20,
+    "floorAmplitude": 6,
+    "floorScale": 0.032
   },
   "allowSurfaceCarvers": true,
   "surfaceLayers": [
