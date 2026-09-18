@@ -9,6 +9,7 @@ pub(crate) struct VoxelMutationRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
     lighting: ResMut<'w, PendingLightingUpdates>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
+    fluid_updates: ResMut<'w, PendingFluidUpdates>,
 }
 
 impl VoxelMutationRuntime<'_> {
@@ -31,6 +32,7 @@ impl VoxelMutationRuntime<'_> {
         self.lighting
             .enqueue_voxel_edit(world_position, previous_cell);
         self.remesh_queue.enqueue_voxel_edit(chunk);
+        self.fluid_updates.enqueue_voxel_edit(world_position);
         Some(chunk)
     }
 }
@@ -38,7 +40,6 @@ impl VoxelMutationRuntime<'_> {
 #[derive(SystemParam)]
 pub(crate) struct VoxelTopologyRuntime<'w> {
     mutation: VoxelMutationRuntime<'w>,
-    fluid_updates: ResMut<'w, PendingFluidUpdates>,
 }
 
 impl VoxelTopologyRuntime<'_> {
@@ -51,8 +52,6 @@ impl VoxelTopologyRuntime<'_> {
         world_position: IVec3,
         block: Option<VoxelCell>,
     ) -> Option<IVec3> {
-        let chunk = self.mutation.set_block(world_position, block)?;
-        self.fluid_updates.enqueue_voxel_edit(world_position);
-        Some(chunk)
+        self.mutation.set_block(world_position, block)
     }
 }
