@@ -5,7 +5,6 @@ use crate::{
     localization::{ActiveLanguage, UiLocalization},
     ui::{
         button::menu_button,
-        surface,
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
         visibility::set_visibility,
@@ -70,27 +69,35 @@ fn spawn_pause_menu(
                 justify_content: JustifyContent::Center,
                 ..default()
             },
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.68)),
             GlobalZIndex(1000),
         ))
         .with_children(|root| {
-            root.spawn(surface::pause_panel()).with_children(|panel| {
-                panel.spawn(menu_button(
+            root.spawn(Node {
+                width: px(360),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                row_gap: px(12),
+                ..default()
+            })
+            .with_children(|menu| {
+                menu.spawn(menu_button(
                     localization.text(language, "pause.resume").to_owned(),
                     PauseMenuAction::Resume,
                 ));
-                panel.spawn(menu_button(
+                menu.spawn(menu_button(
                     localization.text(language, "common.settings").to_owned(),
                     PauseMenuAction::Settings,
                 ));
-                panel.spawn(menu_button(
+                menu.spawn(menu_button(
                     localization.text(language, "pause.leaveWorld").to_owned(),
                     PauseMenuAction::LeaveWorld,
                 ));
-                panel.spawn(menu_button(
+                menu.spawn(menu_button(
                     localization.text(language, "common.exitGame").to_owned(),
                     PauseMenuAction::ExitGame,
                 ));
-                panel.spawn((PauseSaveFeedback, typography::caption(String::new())));
+                menu.spawn((PauseSaveFeedback, typography::caption(String::new())));
             });
         });
 }
