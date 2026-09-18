@@ -49,8 +49,7 @@ pub(super) fn frame_inventory_search_field(
                     overflow: Overflow::clip(),
                     ..default()
                 },
-                BackgroundColor(text_input::INPUT_FILL),
-                BorderColor::all(text_input::input_border(false)),
+                text_input::frame_surface(false),
             ))
             .id();
         commands.entity(parent_entity).insert_children(index, &[frame]);
