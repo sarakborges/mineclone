@@ -17,6 +17,7 @@ pub enum WorldLoadMode {
 pub struct InMemoryWorldSave {
     seed: Option<u64>,
     dimension_id: Option<String>,
+    spawn_biome: Option<String>,
     game_rules: GameRules,
     players: HashMap<PlayerId, PlayerSaveData>,
 }
@@ -28,6 +29,10 @@ impl InMemoryWorldSave {
 
     pub(crate) fn game_rules(&self) -> GameRules {
         self.game_rules
+    }
+
+    pub(crate) fn spawn_biome(&self) -> Option<&str> {
+        self.spawn_biome.as_deref()
     }
 
     pub fn player_position(&self, player_id: PlayerId) -> Option<Vec3> {
@@ -46,9 +51,11 @@ impl InMemoryWorldSave {
         seed: WorldSeed,
         dimension_id: &str,
         game_rules: GameRules,
+        spawn_biome: Option<&str>,
     ) {
         self.seed = Some(seed.0);
         self.dimension_id = Some(dimension_id.to_owned());
+        self.spawn_biome = spawn_biome.map(str::to_owned);
         self.game_rules = game_rules;
         self.players.clear();
     }
