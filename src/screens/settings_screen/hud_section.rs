@@ -146,7 +146,7 @@ fn target_position_dropdown(
             (
                 Button,
                 TargetBlockPositionDropdownButton,
-                dropdown::control(),
+                dropdown::control::<TargetBlockPositionDropdownKind>(),
                 children![
                     (
                         TargetBlockPositionDropdownLabel,
@@ -159,7 +159,7 @@ fn target_position_dropdown(
             (
                 TargetBlockPositionDropdownPanel,
                 dropdown::panel_node(percent(100), 6.0, 4.0, 1.0, PanelAnchor::Left),
-                dropdown::panel_surface(),
+                dropdown::panel_surface::<TargetBlockPositionDropdownKind>(),
                 GlobalZIndex(620),
                 children![
                     target_position_option(
@@ -195,7 +195,7 @@ fn target_position_option(
     (
         Button,
         TargetBlockPositionOption(position),
-        dropdown::option(position == selected, 1.0),
+        dropdown::option::<TargetBlockPositionDropdownKind>(position == selected, 1.0),
         children![(
             TargetBlockPositionOptionLabel(position),
             typography::hud(target_position_label(position, localization, language)),
@@ -273,15 +273,17 @@ pub(super) fn handle_target_block_position_options(
 pub(super) fn close_target_block_position_dropdown_outside_hud(
     selection: Res<SettingsSectionSelection>,
     mouse: Res<ButtonInput<MouseButton>>,
-    button: Query<&Interaction, With<TargetBlockPositionDropdownButton>>,
-    options: Query<&Interaction, With<TargetBlockPositionOption>>,
+    inside: Query<
+        &Interaction,
+        With<dropdown::DropdownInside<TargetBlockPositionDropdownKind>>,
+    >,
     mut state: ResMut<TargetBlockPositionDropdownState>,
 ) {
     if selection.is_changed() && selection.selected != SettingsSection::Hud && state.is_open() {
         state.close();
         return;
     }
-    if dropdown::clicked_outside(state.is_open(), &mouse, button.iter(), options.iter()) {
+    if dropdown::clicked_outside(state.is_open(), &mouse, &inside) {
         state.close();
     }
 }
