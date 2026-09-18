@@ -2,7 +2,6 @@ use bevy::prelude::*;
 
 pub const GROUP_GAP: f32 = 18.0;
 pub const SETTING_GAP: f32 = 8.0;
-pub const COPY_GAP: f32 = 5.0;
 
 pub fn group_column() -> Node {
     Node {
@@ -20,16 +19,6 @@ pub fn setting_column() -> Node {
         flex_direction: FlexDirection::Column,
         align_items: AlignItems::Stretch,
         row_gap: px(SETTING_GAP),
-        ..default()
-    }
-}
-
-pub fn copy_column() -> Node {
-    Node {
-        flex_grow: 1.0,
-        min_width: px(0),
-        flex_direction: FlexDirection::Column,
-        row_gap: px(COPY_GAP),
         ..default()
     }
 }
