@@ -1,0 +1,49 @@
+{
+  "id": "asteria:overworld/volcano",
+  "name": {
+    "english": "Volcano",
+    "portuguese_brazil": "Vulcão",
+    "spanish": "Volcán"
+  },
+  "kind": "terrain_overlay",
+  "parentBiome": "asteria:overworld/mountains",
+  "distributions": [
+    {
+      "type": "mountain_peak",
+      "spacing": 1900,
+      "chance": 0.2,
+      "radius": {
+        "min": 150,
+        "max": 245
+      },
+      "warpScale": 0.002,
+      "warpStrength": 28
+    }
+  ],
+  "terrainModifiers": [
+    {
+      "type": "volcanic_cone",
+      "height": 58,
+      "craterDepth": 31,
+      "craterRadius": 0.2
+    },
+    {
+      "type": "cliffs",
+      "scale": 0.018,
+      "threshold": 0.68,
+      "height": 9,
+      "edgeWidth": 0.08,
+      "warpScale": 0.005,
+      "warpStrength": 12
+    }
+  ],
+  "surfaceLayers": [
+    {
+      "block": "asteria:bassalt",
+      "depth": 6
+    },
+    {
+      "block": "asteria:stone"
+    }
+  ]
+}
