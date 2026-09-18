@@ -229,6 +229,7 @@ mod tests {
                 id: "surface",
                 weight: 1.0,
                 surface_index: 0,
+                terrain_strength: 1.0,
             }]
             .into_iter()
             .collect(),
@@ -278,6 +279,7 @@ mod tests {
             id: "new",
             weight: 1.0,
             surface_index: 0,
+            terrain_strength: 1.0,
         }];
 
         replace_influences(&mut target, &source);
