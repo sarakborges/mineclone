@@ -82,11 +82,12 @@ where
     ) {
         return None;
     }
+    let mut surface_elevation_at = |position| surface_sample_at(position).elevation;
     constrain_river_path_to_terrain(
         &mut path.points,
         start_radius,
         end_radius,
-        |position| surface_sample_at(position).elevation,
+        &mut surface_elevation_at,
     );
     align_waterfall_landing_to_path(&mut path);
     add_path_to_graph(graph, spec.region_coord, &mut path, start_radius, end_radius);
@@ -161,7 +162,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn river_path_rejects_disabled_surface_biome() {
         let points = [Vec3::ZERO, Vec3::new(20.0, 0.0, 0.0)];
         let mut sample = |position: Vec2| HydrologySurfaceSample {
@@ -199,6 +199,7 @@ mod tests {
         ));
     }
 
+    #[test]
     fn neighboring_regions_reproduce_identical_water_height_at_the_same_river_crossing() {
         let source = node(Vec2::new(64.0, 64.0), 100.0);
         let downstream = node(Vec2::new(192.0, 64.0), 90.0);
