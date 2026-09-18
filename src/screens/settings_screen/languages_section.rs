@@ -69,7 +69,7 @@ pub(super) fn languages_section(
 }
 
 fn language_dropdown(selected: Language, localization: &UiLocalization) -> impl Bundle {
-    let mut panel_node = dropdown::panel_node(
+    let panel_node = dropdown::panel_node(
         px(LANGUAGE_DROPDOWN_WIDTH),
         6.0,
         4.0,
