@@ -33,6 +33,8 @@
   "newWorld.spawnBiome.description": "Forces the player to spawn in the selected biome.",
   "newWorld.spawnBiome.random": "Random",
   "newWorld.spawnBiome.search": "Search biomes...",
+  "newWorld.biomeSizeMultiplier": "Biome Size Multiplier",
+  "newWorld.biomeSizeMultiplier.description": "Scales every biome's configured minimum and maximum size during world generation.",
   "loading.world": "Loading world...",
   "loading.progress": "{generated} out {total} chunks generated",
   "pause.title": "PAUSED",
