@@ -55,6 +55,7 @@ pub fn button<A: Component>(
 ) -> impl Bundle {
     let flex_grow = if matches!(&width, Val::Auto) { 1.0 } else { 0.0 };
     let (background, border) = button_static_colors(variant);
+    let label = button_title_case(label.into());
 
     (
         Button,
@@ -74,6 +75,28 @@ pub fn button<A: Component>(
         BorderColor::all(border),
         children![typography::button_label_light(label)],
     )
+}
+
+fn button_title_case(label: String) -> String {
+    let mut result = String::with_capacity(label.len());
+    let mut capitalize_next = true;
+
+    for character in label.chars() {
+        if character.is_whitespace() {
+            capitalize_next = true;
+            result.push(character);
+            continue;
+        }
+
+        if capitalize_next {
+            result.extend(character.to_uppercase());
+            capitalize_next = false;
+        } else {
+            result.push(character);
+        }
+    }
+
+    result
 }
 
 fn button_static_colors(variant: ButtonVariant) -> (Color, Color) {
