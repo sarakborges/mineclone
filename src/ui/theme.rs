@@ -16,7 +16,6 @@ pub const TEXT_PRIMARY: Color = Color::srgb(0.94, 0.94, 0.96);
 pub const TEXT_MUTED: Color = Color::srgb(0.70, 0.68, 0.76);
 pub const TEXT_SUBTLE: Color = Color::srgba(0.70, 0.68, 0.76, 0.68);
 pub const ACCENT: Color = Color::srgb(0.30, 0.78, 0.18);
-pub const ACCENT_SOFT: Color = Color::srgba(0.30, 0.78, 0.18, 0.20);
 pub const PURPLE: Color = Color::srgb(0.48, 0.30, 0.72);
 pub const PURPLE_HOVER: Color = Color::srgb(0.58, 0.38, 0.84);
 pub const PURPLE_SOFT: Color = Color::srgba(0.42, 0.27, 0.62, 0.72);
