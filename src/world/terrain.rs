@@ -147,15 +147,8 @@ fn terrain_modifier_height(position: Vec2, seed: u64, modifier: BiomeTerrainModi
             warp_scale,
             warp_strength,
         } => {
-            let warp_position = position * warp_scale;
-            let warp = Vec2::new(
-                fractal_noise(warp_position, seed ^ 0x9e37_79b9_7f4a_7c15),
-                fractal_noise(
-                    warp_position + Vec2::new(-23.1, 41.9),
-                    seed ^ 0xc2b2_ae3d_27d4_eb4f,
-                ),
-            ) * warp_strength;
-            let value = ((fractal_noise((position + warp) * scale, seed) + 1.0) * 0.5)
+            let warped = terrain_modifier_warp(position, seed, warp_scale, warp_strength);
+            let value = ((fractal_noise(warped * scale, seed) + 1.0) * 0.5)
                 .clamp(0.0, 1.0);
             let half_edge = edge_width * 0.5;
             let lower = (threshold - half_edge).clamp(0.0, 1.0);
@@ -170,7 +163,52 @@ fn terrain_modifier_height(position: Vec2, seed: u64, modifier: BiomeTerrainModi
 
             smoothstep(progress) * height
         }
+        BiomeTerrainModifier::Gorges {
+            scale,
+            width,
+            depth,
+            edge_width,
+            warp_scale,
+            warp_strength,
+        } => {
+            let warped = terrain_modifier_warp(position, seed, warp_scale, warp_strength);
+            let center_distance = fractal_noise(warped * scale, seed).abs().clamp(0.0, 1.0);
+            let strength = gorge_strength(center_distance, width, edge_width);
+
+            -smoothstep(strength) * depth
+        }
     }
+}
+
+fn terrain_modifier_warp(
+    position: Vec2,
+    seed: u64,
+    warp_scale: f32,
+    warp_strength: f32,
+) -> Vec2 {
+    let warp_position = position * warp_scale;
+    let warp = Vec2::new(
+        fractal_noise(warp_position, seed ^ 0x9e37_79b9_7f4a_7c15),
+        fractal_noise(
+            warp_position + Vec2::new(-23.1, 41.9),
+            seed ^ 0xc2b2_ae3d_27d4_eb4f,
+        ),
+    ) * warp_strength;
+
+    position + warp
+}
+
+fn gorge_strength(center_distance: f32, width: f32, edge_width: f32) -> f32 {
+    if center_distance <= width {
+        return 1.0;
+    }
+
+    let outer = width + edge_width;
+    if center_distance >= outer {
+        return 0.0;
+    }
+
+    1.0 - ((center_distance - width) / edge_width).clamp(0.0, 1.0)
 }
 
 fn fractal_noise(position: Vec2, seed: u64) -> f32 {
