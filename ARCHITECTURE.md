@@ -123,6 +123,8 @@ A user-selected Spawn Biome is not a request to search the seed for a distant na
 
 Surface-biome `avoidNear` means exactly that two conflicting surface regions may not share a boundary. It applies equally to ordinary regional biomes and non-regional mountain formations after both participate in the same site-selection graph. It is not an exclusion radius, distance check, dominant-neighbor heuristic, overlay suppression, or rarity control. Site selection keeps the normal raw weighted biome whenever its Voronoi region does not share an edge with a conflicting raw neighbor; only a real shared Voronoi border may trigger a replacement. The rule is symmetric through `biomes_conflict`, and replacement must never reintroduce a forbidden shared border. Frequency remains controlled by weights/climate/distribution parameters.
 
+Surface-biome `requireNear` is the complementary data-driven adjacency rule. A biome with a non-empty list may win a surface region only when that region shares a real Voronoi border with at least one listed surface biome (OR semantics). It is not a radius or climate hint. Required targets must exist in the same dimension, be active `Surface` biomes, and may not simultaneously appear in `avoidNear`. Biomes that require another biome cannot be selected as a standalone forced Spawn Biome, because that override would violate their authored adjacency contract. Coast uses `requireNear: ["asteria:overworld/ocean"]`, so Coast ownership is only valid when directly adjacent to Ocean.
+
 ## 8. Rendering and color
 
 Semantic/internal color is HSI-first.
