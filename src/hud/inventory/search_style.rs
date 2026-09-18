@@ -45,7 +45,6 @@ pub(super) fn frame_inventory_search_field(
                     height: px(SEARCH_HEIGHT),
                     padding: UiRect::horizontal(px(text_input::INPUT_PADDING_X)),
                     border: UiRect::all(px(1)),
-                    border_radius: BorderRadius::all(px(text_input::INPUT_RADIUS)),
                     align_items: AlignItems::Center,
                     overflow: Overflow::clip(),
                     ..default()
@@ -67,7 +66,6 @@ pub(super) fn frame_inventory_search_field(
             editor_node.height = px(text_input::INPUT_EDITOR_HEIGHT);
             editor_node.padding = UiRect::default();
             editor_node.border = UiRect::default();
-            editor_node.border_radius = BorderRadius::default();
             editor_node.align_items = AlignItems::Center;
             editor_node.overflow = Overflow::clip();
         }
