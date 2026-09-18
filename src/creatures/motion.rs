@@ -31,6 +31,7 @@ pub(super) struct CreatureMotion {
     direction: Vec2,
     facing_yaw: f32,
     random_state: u32,
+    knockback: Vec3,
 }
 
 impl Default for CreatureMotion {
@@ -42,6 +43,7 @@ impl Default for CreatureMotion {
             direction: Vec2::ZERO,
             facing_yaw: 0.0,
             random_state: 0,
+            knockback: Vec3::ZERO,
         }
     }
 }
@@ -49,6 +51,15 @@ impl Default for CreatureMotion {
 impl CreatureMotion {
     pub(super) fn facing_yaw(&self) -> f32 {
         self.facing_yaw
+    }
+
+    pub(super) fn apply_knockback(&mut self, direction: Vec3, strength: f32) {
+        let horizontal = Vec2::new(direction.x, direction.z);
+        if horizontal.length_squared() > 0.0 && strength > 0.0 {
+            let impulse = horizontal.normalize() * strength;
+            self.knockback.x += impulse.x;
+            self.knockback.z += impulse.y;
+        }
     }
 
     /// Each creature has its own pseudorandom stream, seeded by its spawn slot.
@@ -97,6 +108,18 @@ pub(super) fn move_creatures(
         };
         if !world.is_loaded_at(transform.translation.floor().as_ivec3()) {
             continue;
+        }
+        if motion.knockback.x != 0.0 || motion.knockback.z != 0.0 {
+            let knockback = motion.knockback;
+            if advance_horizontal(&world, *collider, &mut transform.translation, Vec2::new(knockback.x, knockback.z) * dt) {
+                motion.knockback = Vec3::ZERO;
+            } else {
+                let damping = (1.0 - 8.0 * dt).max(0.0);
+                motion.knockback.x *= damping;
+                motion.knockback.z *= damping;
+                if motion.knockback.x.abs() < 0.01 { motion.knockback.x = 0.0; }
+                if motion.knockback.z.abs() < 0.01 { motion.knockback.z = 0.0; }
+            }
         }
         if motion.phase != HopPhase::Airborne && !on_ground(&world, *collider, transform.translation) {
             motion.phase = HopPhase::Airborne;
