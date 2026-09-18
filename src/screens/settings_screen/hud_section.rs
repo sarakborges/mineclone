@@ -54,7 +54,7 @@ pub(super) fn hud_section(
             width: percent(100),
             flex_direction: FlexDirection::Column,
             align_items: AlignItems::Stretch,
-            row_gap: px(28),
+            row_gap: px(18),
             ..default()
         },
         children![
@@ -141,8 +141,7 @@ fn display_tooltips_toggle(enabled: bool) -> impl Bundle {
             height: px(TOGGLE_HEIGHT),
             flex_shrink: 0.0,
             position_type: PositionType::Relative,
-            border: UiRect::all(px(1)),
-            border_radius: BorderRadius::MAX,
+            border: UiRect::all(px(2)),
             ..default()
         },
         BackgroundColor(toggle_background(enabled, Interaction::None)),
@@ -155,7 +154,6 @@ fn display_tooltips_toggle(enabled: bool) -> impl Bundle {
                 top: px(TOGGLE_THUMB_INSET),
                 width: px(TOGGLE_THUMB_SIZE),
                 height: px(TOGGLE_THUMB_SIZE),
-                border_radius: BorderRadius::MAX,
                 ..default()
             },
             BackgroundColor(theme::TEXT_PRIMARY),
@@ -188,7 +186,6 @@ fn target_position_dropdown(
                     height: percent(100),
                     padding: UiRect::horizontal(px(12)),
                     border: UiRect::all(px(1)),
-                    border_radius: BorderRadius::all(px(6)),
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::SpaceBetween,
                     ..default()
@@ -217,7 +214,6 @@ fn target_position_dropdown(
                     align_items: AlignItems::Stretch,
                     row_gap: px(4),
                     border: UiRect::all(px(1)),
-                    border_radius: BorderRadius::all(px(6)),
                     ..default()
                 },
                 BackgroundColor(theme::HUD_SURFACE),
@@ -265,7 +261,6 @@ fn target_position_option(
             min_height: px(OPTION_HEIGHT),
             padding: UiRect::horizontal(px(10)),
             border: UiRect::all(px(1)),
-            border_radius: BorderRadius::all(px(5)),
             align_items: AlignItems::Center,
             ..default()
         },
