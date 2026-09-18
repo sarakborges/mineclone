@@ -42,7 +42,7 @@ impl Plugin for WorldSelectionPlugin {
                 Update,
                 // Consume Back before a worker result. A completed load in the
                 // same frame as Back must never activate the discarded world.
-                (poll_world_scan, handle_world_selection, poll_world_load, sync_world_selection_feedback)
+                (poll_world_scan, handle_world_selection, poll_world_load, sync_world_selection_entries, sync_world_selection_feedback)
                     .chain()
                     .run_if(in_state(GameState::WorldSelection)),
             );
