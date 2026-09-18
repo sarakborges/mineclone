@@ -313,3 +313,11 @@ Próximo passo imediato: aguardar a CI do HEAD 77b847822b6daa5ac5ba3018c0028e3f1
 - A correção anterior da face aplicava Y=-0.5 no nó Face; isso contradizia o GLB gerado atualmente, em que Face já é filho de BodyPivot e sua geometria está centrada em Y=0. O runtime agora zera translation/rotation/scale do nó Face, eliminando deslocamento/inclinação residual de GLBs antigos.
 - O material do slime agora é forçado em runtime para metallic=0, roughness=0.85, reflectance=0, emissive preto, alpha 1 e AlphaMode::Opaque, inclusive quando o material vem do GLB antigo. A textura externa continua sendo aplicada normalmente.
 - Não executei cargo test/cargo run nem QA Windows. CI precisa validar a compilação; depois disso a validação visual local deve confirmar face e aspecto fosco.
+
+
+## Checkpoint 84 — target highlight vence layers de textura [CÓDIGO; CI PENDENTE]
+
+- `303bc3d32633121976f0311398f8617c9c515d4a` aumenta o `StandardMaterial.depth_bias` do highlight de `0.1` para `4.0`.
+- O objetivo é superar diferenças reais de profundidade introduzidas por texture/parallax layers, não apenas evitar z-fighting. No Bevy 0.19, `depth_bias` positivo aproxima a profundidade do mesh da câmera e pode ser usado para forçar a ordem de renderização entre superfícies próximas.
+- Mantida a escala `1.025` e o depth test: o highlight continua respeitando geometria realmente distante, mas passa a ficar à frente de layers muito próximas da face selecionada.
+- Não executei `cargo test`, `cargo run` ou QA Windows. CI/validação visual local ainda pendentes.
