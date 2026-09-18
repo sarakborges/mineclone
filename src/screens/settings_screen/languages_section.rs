@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     localization::{ActiveLanguage, Language, UiLocalization},
-    ui::{dropdown, surface, theme, typography},
+    ui::{dropdown, selectable, theme, typography},
 };
 
 const LANGUAGE_DROPDOWN_WIDTH: f32 = 240.0;
@@ -62,7 +62,7 @@ pub(super) fn languages_section(
 }
 
 fn language_dropdown(selected: Language, localization: &UiLocalization) -> impl Bundle {
-    let (background, border) = surface::hud_control_static(false);
+    let (background, border) = selectable::static_colors(false);
     (
         Node {
             position_type: PositionType::Relative,
@@ -119,7 +119,7 @@ fn language_dropdown(selected: Language, localization: &UiLocalization) -> impl 
 }
 
 fn language_option(language: Language, selected: Language, localization: &UiLocalization) -> impl Bundle {
-    let (background, border) = surface::hud_control_static(language == selected);
+    let (background, border) = selectable::static_colors(language == selected);
     (
         Button,
         LanguageOption(language),
@@ -182,8 +182,8 @@ pub(super) fn sync_language_dropdown(
     }
     if !open_changed && !language_changed && options.iter().next().is_none() { return; }
     for (option, interaction, background, border) in &mut options {
-        surface::apply_control_colors(
-            surface::hud_control_colors(*interaction, option.0 == active_language.get()),
+        selectable::apply_colors(
+            selectable::colors(*interaction, option.0 == active_language.get()),
             background,
             border,
         );
