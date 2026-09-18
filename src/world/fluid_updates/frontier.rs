@@ -19,6 +19,14 @@ const FLUID_SPREAD_TARGETS: [IVec3; 5] = [
     IVec3::NEG_Z,
 ];
 
+pub(super) fn enqueue_resident_fluid_frontier(
+    pending: &mut PendingFluidUpdates,
+    world: &VoxelWorld,
+    coord: IVec3,
+) {
+    enqueue_resident_fluid_frontier(pending, world, coord);
+}
+
 pub(super) fn enqueue_loaded_fluid_frontier(
     pending: &mut PendingFluidUpdates,
     world: &VoxelWorld,
