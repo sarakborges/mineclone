@@ -16,15 +16,28 @@ struct ResolvedSurfaceInfluence<'a> {
 #[derive(Default)]
 pub(crate) struct SurfaceMaterialColumn<'a> {
     influences: Vec<ResolvedSurfaceInfluence<'a>>,
+    margin: Option<&'a BiomeDefinition>,
 }
 
 pub(crate) fn resolve_surface_material_column<'a>(
     surface_influences: &[(usize, f32)],
+    surface_margin_index: Option<usize>,
     biome_field: &BiomeField,
     biomes: &'a BiomeRegistry,
     column: &mut SurfaceMaterialColumn<'a>,
 ) {
     column.influences.clear();
+    column.margin = surface_margin_index.map(|biome_index| {
+        let biome_id = biome_field.surface_biome_id(biome_index);
+        let biome = biomes
+            .get(biome_id)
+            .unwrap_or_else(|| panic!("missing surface margin biome definition: {biome_id}"));
+        assert!(
+            biome.surface_margin.is_some(),
+            "resolved surface margin biome does not define surfaceMargin: {biome_id}"
+        );
+        biome
+    });
     column
         .influences
         .extend(surface_influences.iter().map(|(biome_index, weight)| {
@@ -77,6 +90,14 @@ fn strongest_surface_material<'a>(
     surface_materials: &SurfaceMaterialColumn<'a>,
     depth: u32,
 ) -> Option<&'a str> {
+    if let Some(block_id) = surface_materials
+        .margin
+        .and_then(|biome| biome.surface_margin.as_ref())
+        .and_then(|margin| margin.block_at_depth(depth))
+    {
+        return Some(block_id);
+    }
+
     surface_materials
         .influences
         .iter()
