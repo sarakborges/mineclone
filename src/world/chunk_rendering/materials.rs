@@ -173,7 +173,11 @@ impl FluidMaterials {
                         base_color: Color::srgba(1.0, 1.0, 1.0, definition.opacity),
                         perceptual_roughness: definition.roughness,
                         metallic: definition.metallic,
-                        alpha_mode: AlphaMode::Blend,
+                        alpha_mode: if definition.opacity >= 1.0 {
+                            AlphaMode::Opaque
+                        } else {
+                            AlphaMode::Blend
+                        },
                         double_sided: true,
                         cull_mode: None,
                         fog_enabled: true,
