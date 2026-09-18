@@ -94,7 +94,6 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                             height: percent(100),
                             padding: UiRect::horizontal(px(12)),
                             border: UiRect::all(px(1)),
-                            border_radius: BorderRadius::all(px(6)),
                             align_items: AlignItems::Center,
                             justify_content: JustifyContent::SpaceBetween,
                             ..default()
@@ -127,7 +126,6 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                             row_gap: px(8),
                             padding: UiRect::all(px(8)),
                             border: UiRect::all(px(1)),
-                            border_radius: BorderRadius::all(px(6)),
                             ..default()
                         },
                         BackgroundColor(theme::HUD_SURFACE),
@@ -143,7 +141,6 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                                     height: px(SEARCH_HEIGHT),
                                     padding: UiRect::horizontal(px(text_input::INPUT_PADDING_X)),
                                     border: UiRect::all(px(1)),
-                                    border_radius: BorderRadius::all(px(text_input::INPUT_RADIUS)),
                                     align_items: AlignItems::Center,
                                     overflow: Overflow::clip(),
                                     ..default()
