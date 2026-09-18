@@ -212,7 +212,6 @@ impl BiomeField {
         BiomeFieldSample {
             primary_id: self.surface_biomes[identity_surface_index].id.as_str(),
             primary_surface_index: primary_index,
-            nearest_boundary,
             surface_margin_index,
             identity_surface_index,
             influences,
