@@ -306,16 +306,11 @@ pub(super) fn close_target_block_position_dropdown_outside_hud(
     mut state: ResMut<TargetBlockPositionDropdownState>,
 ) {
     if selection.is_changed() && selection.selected != SettingsSection::Hud && state.is_open() {
-        state.open = false;
+        state.close();
         return;
     }
-    if !state.open || !mouse.just_pressed(MouseButton::Left) {
-        return;
-    }
-    let clicked_inside = button.iter().any(|i| *i == Interaction::Pressed)
-        || options.iter().any(|i| *i == Interaction::Pressed);
-    if !clicked_inside {
-        state.open = false;
+    if dropdown::clicked_outside(state.is_open(), &mouse, button.iter(), options.iter()) {
+        state.close();
     }
 }
 
