@@ -17,10 +17,7 @@ use crate::{
     },
 };
 
-use self::{
-    anchors::resolve_open_cavern_anchor,
-    entrances::{ocean_cave_entrance, surface_cave_entrance},
-};
+use self::{anchors::resolve_open_cavern_anchor, entrances::ocean_cave_entrance};
 
 pub(super) fn anchored_cave_region(
     region: &GenerationRegion,
@@ -62,18 +59,6 @@ pub(super) fn anchored_cave_region(
         let mut water_source_anchors = Vec::new();
 
         if region.coord.y == 0 {
-            if let Some(entrance) = surface_cave_entrance(
-                region,
-                &underground_anchors,
-                minimum,
-                maximum,
-                dimension,
-                biomes,
-                biome_field,
-            ) {
-                anchors.push(entrance);
-            }
-
             if let Some(ocean_opening) = ocean_cave_entrance(
                 region,
                 &underground_anchors,
