@@ -154,7 +154,6 @@ fn spawn_entity_health_bar(info: &mut ChildSpawnerCommands, source: EntityCardSo
             Pickable::IGNORE,
         ));
         health.spawn((
-            EntityCardHealthLabel(source),
             Node {
                 position_type: PositionType::Absolute,
                 left: px(0),
@@ -166,6 +165,7 @@ fn spawn_entity_health_bar(info: &mut ChildSpawnerCommands, source: EntityCardSo
                 ..default()
             },
             Pickable::IGNORE,
+            EntityCardHealthLabel(source),
         ))
         .with_children(|label| {
             label.spawn((
@@ -199,7 +199,7 @@ pub(super) fn sync_entity_cards(
         Query<&EntityHealth>,
         Query<(&EntityCardHealthFill, &Children)>,
         Query<&mut Node, Without<EntityCardHealthFill>>,
-        Query<(&EntityCardHealthLabel, &Children), Without<EntityCardName>>,
+        Query<(&EntityCardHealthLabel, &mut Text), Without<EntityCardName>>,
     )>,
 ) {
     let player_entity = subjects.player.iter().next();
@@ -273,26 +273,14 @@ pub(super) fn sync_entity_cards(
         }
     }
 
-    let health_label_updates: Vec<(Entity, String)> = {
-        let mut updates = Vec::new();
-        for (marker, children) in queries.p5().iter() {
-            let desired = match marker.0 {
-                EntityCardSource::LocalPlayer => player_health,
-                EntityCardSource::Target => target_health,
-            }
-            .map(|(current, max)| format!("{current:.0} / {max:.0}"))
-            .unwrap_or_default();
-            if let Some(&label_entity) = children.first() {
-                updates.push((label_entity, desired));
-            }
+    for (marker, mut text) in queries.p5().iter_mut() {
+        let desired = match marker.0 {
+            EntityCardSource::LocalPlayer => player_health,
+            EntityCardSource::Target => target_health,
         }
-        updates
-    };
-
-    for (label_entity, desired) in health_label_updates {
-        if let Ok((_, mut text)) = queries.p1().get_mut(label_entity)
-            && text.0 != desired
-        {
+        .map(|(current, max)| format!("{current:.0} / {max:.0}"))
+        .unwrap_or_default();
+        if text.0 != desired {
             text.0 = desired;
         }
     }
