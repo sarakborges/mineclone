@@ -85,10 +85,6 @@ where
             .collect()
     }
 
-    pub fn surface_elevation_at(&mut self, position: Vec2) -> f32 {
-        (self.sample)(position).elevation
-    }
-
     pub fn surface_sample_at(&mut self, position: Vec2) -> HydrologySurfaceSample {
         (self.sample)(position)
     }
