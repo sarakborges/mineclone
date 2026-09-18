@@ -1,5 +1,4 @@
 use bevy::{
-    camera::visibility::RenderLayers,
     ecs::system::SystemParam,
     light::NotShadowCaster,
     prelude::*,
@@ -27,8 +26,8 @@ use crate::{
     },
 };
 
-const HIGHLIGHT_SCALE: f32 = 1.025;
-const TARGET_HIGHLIGHT_RENDER_LAYER: usize = 2;
+const HIGHLIGHT_SCALE: f32 = 1.02;
+const HIGHLIGHT_SURFACE_OFFSET: f32 = 0.02;
 const BRUSH_GHOST_SCALE: f32 = 1.012;
 const BRUSH_GHOST_ALPHA: f32 = 0.30;
 const BRUSH_CLEAR_GHOST_ALPHA: f32 = 0.12;
@@ -127,16 +126,12 @@ fn spawn_highlight(
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgba(1.0, 1.0, 1.0, 0.18),
             alpha_mode: AlphaMode::Blend,
-            // Keep the translucent selection shell in front of near-coplanar
-            // texture/parallax layers without making it win over distant geometry.
-            depth_bias: 4.0,
             unlit: true,
             ..default()
         })),
         Transform::default(),
         Visibility::Hidden,
         NotShadowCaster,
-        RenderLayers::layer(TARGET_HIGHLIGHT_RENDER_LAYER),
         TargetHighlight,
         DespawnOnExit(GameState::Gameplay),
     ));
@@ -167,7 +162,6 @@ fn spawn_highlight(
         Transform::default(),
         Visibility::Hidden,
         NotShadowCaster,
-        RenderLayers::layer(TARGET_HIGHLIGHT_RENDER_LAYER),
         ChiselPlacementGhost,
         DespawnOnExit(GameState::Gameplay),
     ));
@@ -218,7 +212,7 @@ fn update_highlight(
         let width = input.chisel_resolution.cell_width() as i32;
         let (translation, edge) = snapped_preview(precise.fine, width);
         if view.highlight.0.translation != translation {
-            view.highlight.0.translation = translation;
+            view.highlight.0.translation = translation + precise.normal.as_vec3() * HIGHLIGHT_SURFACE_OFFSET;
         }
         if view.highlight.0.scale != Vec3::splat(edge) {
             view.highlight.0.scale = Vec3::splat(edge);
@@ -321,7 +315,7 @@ fn update_highlight(
         return;
     }
 
-    let translation = hit.voxel.as_vec3() + Vec3::splat(0.5);
+    let translation = hit.voxel.as_vec3() + Vec3::splat(0.5) + hit.normal.as_vec3() * HIGHLIGHT_SURFACE_OFFSET;
     if view.highlight.0.translation != translation {
         view.highlight.0.translation = translation;
     }
