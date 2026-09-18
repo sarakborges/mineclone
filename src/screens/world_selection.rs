@@ -554,7 +554,9 @@ fn abandon_world_load(state: Res<WorldSelectionState>) {
 }
 
 fn handle_world_selection(
+    mut commands: Commands,
     interactions: Query<(&Interaction, &WorldSelectionAction), Changed<Interaction>>,
+    entries: Query<(Entity, &WorldListEntry)>,
     mut state: ResMut<WorldSelectionState>,
     content: WorldSelectionScanContent,
     mut transition: ResMut<ScreenTransition>,
@@ -564,8 +566,8 @@ fn handle_world_selection(
     if transition.is_active() {
         return;
     }
-    // Back takes precedence even if Load and Back both changed to Pressed in
-    // one frame; do not depend on entity iteration order to cancel a load.
+
+    // Back takes precedence even if another action changed in the same frame.
     if interactions.iter().any(|(interaction, action)| {
         *interaction == Interaction::Pressed && matches!(action, WorldSelectionAction::Back)
     }) {
@@ -575,33 +577,30 @@ fn handle_world_selection(
         transition.request(ScreenTransitionTarget::game(GameState::StartingScreen));
         return;
     }
+
     for (interaction, action) in &interactions {
         if *interaction != Interaction::Pressed {
             continue;
         }
-        // Never start a second loader while an existing or abandoned worker
-        // still owns its result. Its completion will be consumed, not applied.
+
         if state.loading.is_some() {
             state.error = localization
                 .text(language.get(), "worldSelection.stillLoading")
                 .to_owned();
             return;
         }
+
         match action {
-            WorldSelectionAction::Select(id) => {
-                state.selected = Some(id.clone());
-                state.error.clear();
-            }
-            WorldSelectionAction::Delete => {
-                let Some(id) = state.selected.clone() else {
-                    state.error = localization.text(language.get(), "worldSelection.selectFirst").to_owned();
-                    return;
-                };
-                match delete_world(&id) {
+            WorldSelectionAction::Delete(id) => {
+                match delete_world(id) {
                     Ok(()) => {
-                        state.worlds.retain(|world| world.id != id);
-                        state.selected = None;
+                        state.worlds.retain(|world| world.id != *id);
                         state.error.clear();
+                        if let Some((entity, _)) =
+                            entries.iter().find(|(_, entry)| entry.0 == *id)
+                        {
+                            commands.entity(entity).despawn();
+                        }
                     }
                     Err(error) => {
                         state.error = format!(
@@ -612,22 +611,21 @@ fn handle_world_selection(
                 }
                 return;
             }
-            WorldSelectionAction::Load => {
+            WorldSelectionAction::Load(id) => {
                 if state.scan.is_some() {
                     state.error = localization
                         .text(language.get(), "worldSelection.stillVerifying")
                         .to_owned();
                     return;
                 }
-                let Some(id) = state.selected.clone() else {
-                    state.error = localization
-                        .text(language.get(), "worldSelection.selectFirst")
-                        .to_owned();
-                    return;
-                };
+
+                let id = id.clone();
                 let copy_started = Instant::now();
                 let owned = content.owned_for_loading();
-                info!("World {id} load definitions copied on main thread: {:?}", copy_started.elapsed());
+                info!(
+                    "World {id} load definitions copied on main thread: {:?}",
+                    copy_started.elapsed()
+                );
                 let result: WorldLoadResult = Arc::new(Mutex::new(WorldLoadSlot::default()));
                 let worker_result = Arc::clone(&result);
                 let worker_id = id.clone();
@@ -638,7 +636,9 @@ fn handle_world_selection(
                         let loaded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                             load_world(&worker_id, owned.registries())
                         }))
-                        .unwrap_or_else(|_| Err(io::Error::other("saved-world loading worker panicked")));
+                        .unwrap_or_else(|_| {
+                            Err(io::Error::other("saved-world loading worker panicked"))
+                        });
                         info!(
                             "World {worker_id} load worker: duration={:?}, successful={}",
                             load_started.elapsed(),
@@ -646,14 +646,14 @@ fn handle_world_selection(
                         );
                         let mut loaded = Some(loaded);
                         {
-                            let mut slot = worker_result.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                            let mut slot = worker_result
+                                .lock()
+                                .unwrap_or_else(|poisoned| poisoned.into_inner());
                             slot.complete = true;
                             if !slot.abandoned {
                                 slot.result = loaded.take();
                             }
                         }
-                        // If Back won, the original worker owns and drops its
-                        // discarded VoxelWorld here, never on the Bevy frame.
                         drop(loaded);
                     })
                 {
@@ -677,33 +677,37 @@ fn handle_world_selection(
     }
 }
 
-fn sync_world_selection_entries(
-    state: Res<WorldSelectionState>,
-    mut entries: Query<(&WorldListEntry, &mut ButtonVariant)>,
-) {
-    if !state.is_changed() { return; }
-    for (entry, mut variant) in &mut entries {
-        *variant = ButtonVariant::from_active(state.selected.as_deref() == Some(entry.0.as_str()));
-    }
-}
-
 fn sync_world_selection_feedback(
     state: Res<WorldSelectionState>,
-    mut selected: Query<&mut Text, (With<SelectionFeedback>, Without<SelectionError>)>,
+    mut statuses: Query<&mut Text, (With<WorldListStatus>, Without<SelectionError>)>,
     mut errors: Query<&mut Text, With<SelectionError>>,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
 ) {
-    if !state.is_changed() {
+    if !state.is_changed() && !localization.is_changed() && !language.is_changed() {
         return;
     }
-    for mut text in &mut selected {
-        text.0 = state.selected.as_deref().map_or_else(String::new, |id| {
-            format!("{}: {id}", localization.text(language.get(), "worldSelection.selected"))
-        });
+
+    let status = if state.scan.is_some() {
+        localization
+            .text(language.get(), "worldSelection.verifying")
+            .to_owned()
+    } else if state.worlds.is_empty() {
+        localization
+            .text(language.get(), "worldSelection.noRestorable")
+            .to_owned()
+    } else {
+        String::new()
+    };
+    for mut text in &mut statuses {
+        if text.0 != status {
+            text.0 = status.clone();
+        }
     }
     for mut text in &mut errors {
-        text.0.clone_from(&state.error);
+        if text.0 != state.error {
+            text.0.clone_from(&state.error);
+        }
     }
 }
 
