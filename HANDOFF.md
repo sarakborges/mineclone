@@ -651,3 +651,10 @@ Próximo passo imediato: QA visual Windows em Mountains, verificando principalme
 
 Próximo passo imediato: QA Windows verificando (1) mouths de surface tunnels em Mountains para confirmar transição basin -> margem -> terreno natural sem parede reta; (2) Wasteland adjacente a Plains/Mountains para confirmar que rivers param/contornam e não atravessam o biome.
 
+## Próxima feature planejada — Ocean Mountains
+
+- Feature futura a trabalhar em breve: **geração de montanhas no oceano**.
+- Ainda não implementada.
+- Ainda não há contrato fechado para frequência, altura, relação com bathymetry, Ocean/Coast, ilhas expostas ou integração com o sistema de terrain modifiers.
+- Ao iniciar essa feature, primeiro definir a arquitetura para que montanhas oceânicas participem do mesmo terrain/hydrology pipeline sem reintroduzir cortes abruptos entre fundo oceânico, costa e terreno elevado.
+
