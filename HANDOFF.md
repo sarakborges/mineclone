@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.4`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. Revisão retroativa de versionamento em 2026-09-18: `0.22.8` foi o último bump antes dos blocos de combate/entidades e UI; o bloco de health/hurt/death/knockback é registrado retrospectivamente como linha `0.23.x`, sem reescrever o histórico Git; a unificação inicial do design system/settings foi `0.24.0`, a auditoria/refatoração estrutural fechou em `0.24.1`, o pacote priorizado de UI/interação/worldgen fechou em `0.24.2`, dropdown/spawn/hidrologia em `0.24.3` e a correção estrutural da face da slime em `0.24.4`. **HEAD funcional validado desta atualização:** `1fe68fa6da76658adf1a8933498ece6638f8be1f`. CI `35374517912` (run 3921) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.5`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. Revisão retroativa de versionamento em 2026-09-18: `0.22.8` foi o último bump antes dos blocos de combate/entidades e UI; o bloco de health/hurt/death/knockback é registrado retrospectivamente como linha `0.23.x`, sem reescrever o histórico Git; a unificação inicial do design system/settings foi `0.24.0`, a auditoria/refatoração estrutural fechou em `0.24.1`, o pacote priorizado de UI/interação/worldgen fechou em `0.24.2`, dropdown/spawn/hidrologia em `0.24.3`, a correção estrutural da face da slime em `0.24.4` e o override determinístico de Spawn Biome em `0.24.5`. **HEAD funcional validado desta atualização:** `58e2a2efaa1d829f4fd645ec6acb2ecebd619b9f`. CI `35375607533` (run 3939) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 ## Histórico integral obrigatório
 
@@ -416,4 +416,25 @@ Próximo passo imediato: QA Windows focado em Load World (cards/scroll/delete/lo
 - Não executei `cargo test`, `cargo run` nem QA Windows.
 
 Próximo passo imediato: QA visual Windows da slime para confirmar posição, orientação, recorte da textura e ausência de placa/reflectance residual durante idle, jump, hurt e death.
+
+## Checkpoint 92 — 2026-09-18: Spawn Biome força região inicial em vez de procurar ocorrência natural [CÓDIGO + CI VERDE]
+
+- O panic reportado em `world/setup/bootstrap.rs` ao escolher `asteria:overworld/wasteland` confirmou que procurar uma ocorrência natural seca do biome dentro de um raio arbitrário era o modelo errado para a feature.
+- Decisão funcional: **Spawn Biome significa que a região inicial do mundo deve nascer naquele biome**, e não que o bootstrap deve percorrer o seed procurando uma ocorrência distante.
+- `BiomeField` agora possui um override opcional de surface biome para uma região retangular inicial. Dentro do core, o biome selecionado recebe peso 1.0; fora do core há transição usando a largura canônica de borda do biome field, em vez de um corte completamente desconectado do sistema de influences.
+- A mesma região força continentalness em direção a terreno continental via `BiomeField::climate_at`. Com isso, Coast/Ocean não podem substituir o biome selecionado dentro dos chunks iniciais e a hydrology usa a mesma identidade terrestre que terrain/visuals.
+- O core forçado corresponde aos **9×9 chunks horizontais canônicos do bootstrap** em torno do spawn padrão (raio 4 chunks). A região é fixa e não depende da render distance do usuário, para que o mesmo seed/save tenha a mesma identidade inicial em qualquer sessão.
+- `find_forced_spawn_column`, coarse search, local search e o raio de 2048 blocos foram removidos. O bootstrap não compara mais candidatos contra `sample_surface.primary_id` para localizar o biome selecionado.
+- A única busca restante é por **uma coluna fisicamente seca dentro da região que já foi forçada ao biome escolhido**. Ela continua usando `supported_water_at(...)`, portanto o player não é colocado dentro de água real.
+- Para mundos sem Spawn Biome selecionado, o comportamento de procurar uma coluna seca perto do spawn padrão permanece.
+- `spawnBiome` agora é metadado persistente do mundo: `InMemoryWorldSave` guarda o valor; `WorldSnapshot` serializa `spawn_biome` com `serde(default)` para manter compatibilidade com saves antigos; `WorldSaveContext` captura o valor; Load World restaura o valor antes do bootstrap.
+- Ao carregar um save que possui `spawnBiome`, o `BiomeField` reconstrói o mesmo override inicial. Isso evita que chunks iniciais já gerados sejam identificados visual/hidrologicamente como outro biome após reload.
+- Wasteland continua com `canGenerateLake=false` e `canGenerateRiver=false`; Caverns continua com ambos `true`. Os nomes do schema permaneceram `canGenerateLake` / `canGenerateRiver`.
+- `ARCHITECTURE.md` registra agora que Spawn Biome é um override determinístico da região inicial e nunca uma busca por ocorrência natural distante.
+- Commits principais: `4ab5b583...` (override no BiomeField), `5f20bee4...` (blend no surface sampling), `1072db5f...` / `242bfaac...` / `ff2d2ff5...` / `38db5ee0...` (persistência/restauração), `df12b6d3...` (bootstrap sem busca forçada), `6e92f37d...` (arquitetura) e `58e2a2ef...` (`VERSION 0.24.5`).
+- Validação intermediária do código funcional: run `35375472761` (3936) **success**.
+- Validação canônica do HEAD versionado `58e2a2efaa1d829f4fd645ec6acb2ecebd619b9f`: run `35375607533` (3939) **success**, incluindo auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+Próximo passo imediato: QA Windows criando mundos com Wasteland, Plains e outro biome selecionado, confirmando spawn dentro dos chunks iniciais forçados, ausência do panic e persistência da identidade do biome após salvar/sair/carregar.
 
