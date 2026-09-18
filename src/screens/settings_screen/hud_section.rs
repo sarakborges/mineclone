@@ -12,7 +12,7 @@ const TOGGLE_WIDTH: f32 = 52.0;
 const TOGGLE_HEIGHT: f32 = 30.0;
 const TOGGLE_THUMB_SIZE: f32 = 20.0;
 const TOGGLE_THUMB_INSET: f32 = 3.0;
-const TOGGLE_THUMB_ENABLED_LEFT: f32 = TOGGLE_WIDTH - TOGGLE_THUMB_SIZE - TOGGLE_THUMB_INSET;
+const TOGGLE_THUMB_RIGHT: f32 = 0.0;
 const DROPDOWN_WIDTH: f32 = 240.0;
 const DROPDOWN_HEIGHT: f32 = 44.0;
 const DROPDOWN_GAP: f32 = 6.0;
@@ -150,7 +150,7 @@ fn display_tooltips_toggle(enabled: bool) -> impl Bundle {
             DisplayTooltipsToggleThumb,
             Node {
                 position_type: PositionType::Absolute,
-                left: px(toggle_thumb_left(enabled)),
+                right: px(TOGGLE_THUMB_RIGHT),
                 top: px(TOGGLE_THUMB_INSET),
                 width: px(TOGGLE_THUMB_SIZE),
                 height: px(TOGGLE_THUMB_SIZE),
@@ -342,9 +342,21 @@ pub(super) fn handle_target_block_position_options(
 
 pub(super) fn close_target_block_position_dropdown_outside_hud(
     selection: Res<SettingsSectionSelection>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    button: Query<&Interaction, With<TargetBlockPositionDropdownButton>>,
+    options: Query<&Interaction, With<TargetBlockPositionOption>>,
     mut state: ResMut<TargetBlockPositionDropdownState>,
 ) {
     if selection.is_changed() && selection.selected != SettingsSection::Hud && state.open {
+        state.open = false;
+        return;
+    }
+    if !state.open || !mouse.just_pressed(MouseButton::Left) {
+        return;
+    }
+    let clicked_inside = button.iter().any(|i| *i == Interaction::Pressed)
+        || options.iter().any(|i| *i == Interaction::Pressed);
+    if !clicked_inside {
         state.open = false;
     }
 }
@@ -376,10 +388,10 @@ pub(super) fn sync_display_tooltips_toggle(
         return;
     }
 
-    let next_left = px(toggle_thumb_left(enabled));
+    let next_right = px(TOGGLE_THUMB_RIGHT);
     for mut thumb in &mut thumbs {
-        if thumb.left != next_left {
-            thumb.left = next_left;
+        if thumb.right != next_right {
+            thumb.right = next_right;
         }
     }
 }
@@ -457,12 +469,8 @@ pub(super) fn sync_target_block_position_options(
     }
 }
 
-const fn toggle_thumb_left(enabled: bool) -> f32 {
-    if enabled {
-        TOGGLE_THUMB_ENABLED_LEFT
-    } else {
-        TOGGLE_THUMB_INSET
-    }
+const fn toggle_thumb_left(_enabled: bool) -> f32 {
+    TOGGLE_WIDTH - TOGGLE_THUMB_SIZE - TOGGLE_THUMB_RIGHT
 }
 
 fn toggle_border(enabled: bool) -> Color {
