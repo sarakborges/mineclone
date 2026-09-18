@@ -198,7 +198,6 @@ mod tests {
         let surface = BiomeFieldSample {
             primary_id: "surface",
             primary_surface_index: 0,
-            nearest_boundary: None,
             surface_margin_index: None,
             identity_surface_index: 0,
             influences: [BiomeInfluence {
@@ -237,10 +236,6 @@ mod tests {
         let surface = BiomeFieldSample {
             primary_id: "ocean",
             primary_surface_index: 0,
-            nearest_boundary: Some(crate::world::biome_field::SurfaceBoundarySample {
-                neighbor_surface_index: 1,
-                distance: 8.0,
-            }),
             surface_margin_index: Some(1),
             identity_surface_index: 1,
             influences: [BiomeInfluence {
