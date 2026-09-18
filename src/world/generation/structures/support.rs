@@ -129,6 +129,7 @@ fn supported_surface_ground_y(
             raw_surface_height as f32,
             &influences,
             &SurfaceCarverResolveContext {
+                dimension: context.dimension,
                 biomes: context.biomes,
                 biome_field: context.biome_field,
                 world_seed: context.biome_field.seed(),
