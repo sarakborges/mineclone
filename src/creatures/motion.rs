@@ -58,7 +58,7 @@ impl CreatureMotion {
     pub(crate) fn apply_knockback(&mut self, direction: Vec3, strength: f32) {
         let horizontal = Vec2::new(direction.x, direction.z);
         if horizontal.length_squared() > 0.0 && strength > 0.0 {
-            let impulse = horizontal.normalize() * strength * 8.0;
+            let impulse = horizontal.normalize() * strength * 24.0;
             self.knockback.x += impulse.x;
             self.knockback.z += impulse.y;
             self.knockback_time = 0.28;
