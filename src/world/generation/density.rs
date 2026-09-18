@@ -62,6 +62,9 @@ pub(super) fn sample_density_field(
         sea_level: pass.sea_level,
         minimum_y: chunk_minimum_y,
         maximum_y: chunk_maximum_y,
+        cave_graph: pass
+            .anchored_caves
+            .map(|caves| &caves.connector_graph),
     };
     let mut surface_carvers = SurfaceCarverColumn::default();
 
