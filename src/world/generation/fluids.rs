@@ -374,7 +374,6 @@ mod tests {
                 surface_influences.push((0, 1.0));
                 GenerationColumnSample {
                     surface_height: original_surface as i32,
-                    primary_surface_index: 0,
                     identity_surface_index: 0,
                     primary_terrain_strength: 1.0,
                     surface_margin_index: None,
