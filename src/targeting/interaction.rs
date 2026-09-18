@@ -63,6 +63,7 @@ struct BlockEditDefinitions<'w> {
     player: Res<'w, PlayerDefinition>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn edit_targeted_block(
     mut input: BlockEditInput,
     definitions: BlockEditDefinitions,
