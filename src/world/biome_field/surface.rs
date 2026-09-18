@@ -162,7 +162,7 @@ impl BiomeField {
             .iter()
             .map(|(_, weight)| *weight)
             .sum();
-        let influences = weights[..weight_count]
+        let mut influences = weights[..weight_count]
             .iter()
             .filter(|(_, weight)| *weight > 0.0)
             .map(|(index, weight)| BiomeInfluence {
@@ -171,6 +171,35 @@ impl BiomeField {
                 surface_index: *index,
             })
             .collect::<ArrayVec<_, MAX_SURFACE_INFLUENCES>>();
+
+        if let Some((forced_index, forced_weight)) = self.forced_surface_biome_at(position) {
+            for influence in &mut influences {
+                influence.weight *= 1.0 - forced_weight;
+            }
+            if let Some(existing) = influences
+                .iter_mut()
+                .find(|influence| influence.surface_index == forced_index)
+            {
+                existing.weight += forced_weight;
+            } else {
+                influences.push(BiomeInfluence {
+                    id: self.surface_biomes[forced_index].id.as_str(),
+                    weight: forced_weight,
+                    surface_index: forced_index,
+                });
+            }
+
+            primary_index = influences
+                .iter()
+                .filter(|influence| influence.weight > 0.0)
+                .max_by(|left, right| {
+                    left.weight
+                        .total_cmp(&right.weight)
+                        .then_with(|| left.surface_index.cmp(&right.surface_index))
+                })
+                .map(|influence| influence.surface_index)
+                .unwrap_or(forced_index);
+        }
 
         BiomeFieldSample {
             primary_id: self.surface_biomes[primary_index].id.as_str(),
