@@ -5,6 +5,7 @@ use crate::content::biome_distribution::BiomeDistribution;
 
 use super::{
     BiomeField, BiomeFieldSample, BiomeInfluence, MAX_SURFACE_INFLUENCES,
+    SurfaceBoundarySample,
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS},
     distribution::distribution_strength,
     spatial::{smoothstep, surface_site_position, warp_surface_position},
@@ -72,14 +73,23 @@ impl BiomeField {
         }
 
         let mut nearest_distance = f32::MAX;
+        let mut nearest_site = Vec2::ZERO;
         let mut primary_index = 0;
-        for (_, _, distance, candidate_index) in &sampled_sites[..sample_count] {
+        for (_, site, distance, candidate_index) in &sampled_sites[..sample_count] {
             let candidate_index = candidate_index.expect("surface biome site must be resolved");
             if *distance < nearest_distance {
                 nearest_distance = *distance;
+                nearest_site = *site;
                 primary_index = candidate_index;
             }
         }
+        let geometric_primary_index = primary_index;
+        let geometric_boundary = nearest_surface_boundary(
+            nearest_site,
+            nearest_distance,
+            geometric_primary_index,
+            &sampled_sites[..sample_count],
+        );
 
         let mut weights = [(usize::MAX, 0.0_f32); MAX_WEIGHT_ENTRIES];
         let mut weight_count = 0;
@@ -187,9 +197,14 @@ impl BiomeField {
                 .unwrap_or(forced_index);
         }
 
+        let nearest_boundary = (primary_index == geometric_primary_index)
+            .then_some(geometric_boundary)
+            .flatten();
+
         BiomeFieldSample {
             primary_id: self.surface_biomes[primary_index].id.as_str(),
             primary_surface_index: primary_index,
+            nearest_boundary,
             influences,
         }
     }
@@ -237,6 +252,39 @@ fn forced_distribution_strength(
             smoothstep((1.0 - lateral_distance).clamp(0.0, 1.0))
         }
     }
+}
+
+
+fn nearest_surface_boundary(
+    primary_site: Vec2,
+    primary_distance: f32,
+    primary_index: usize,
+    sampled_sites: &[(IVec2, Vec2, f32, Option<usize>)],
+) -> Option<SurfaceBoundarySample> {
+    sampled_sites
+        .iter()
+        .filter_map(|(_, site, distance, candidate_index)| {
+            let candidate_index =
+                candidate_index.expect("surface biome site must be resolved");
+            if candidate_index == primary_index {
+                return None;
+            }
+
+            let site_distance = primary_site.distance(*site);
+            if site_distance <= f32::EPSILON {
+                return None;
+            }
+
+            let boundary_distance =
+                ((distance * distance - primary_distance * primary_distance)
+                    / (2.0 * site_distance))
+                    .max(0.0);
+            Some(SurfaceBoundarySample {
+                neighbor_surface_index: candidate_index,
+                distance: boundary_distance,
+            })
+        })
+        .min_by(|left, right| left.distance.total_cmp(&right.distance))
 }
 
 fn set_max_weight(
