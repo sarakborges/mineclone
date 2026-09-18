@@ -1,7 +1,7 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    content::{attack::AttackRegistry, block::BlockRegistry, tool::ToolRegistry},
+    content::{attack::AttackRegistry, block::BlockRegistry, player::PlayerDefinition, tool::ToolRegistry},
     gameplay::availability::world_interaction_available,
     creatures::{CreatureAnimationState, CreatureInstance},
     creatures::CreatureMotion,
@@ -60,6 +60,7 @@ struct BlockEditDefinitions<'w> {
     blocks: Res<'w, BlockRegistry>,
     tools: Res<'w, ToolRegistry>,
     attacks: Res<'w, AttackRegistry>,
+    player: Res<'w, PlayerDefinition>,
 }
 
 fn edit_targeted_block(
@@ -93,7 +94,7 @@ fn edit_targeted_block(
     let selected_item = input.hotbar.item_at(selected_slot);
 
     if left_pressed && let Some(entity) = input.creature_target.0 {
-        let Some(attack) = definitions.attacks.get("asteria:punch") else {
+        let Some(attack) = definitions.attacks.get(&definitions.player.attack) else {
             return;
         };
         if let Ok((mut health, mut animation, mut motion, creature_transform)) = creature_health.get_mut(entity) {
