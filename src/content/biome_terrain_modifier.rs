@@ -7,6 +7,9 @@ use serde::Deserialize;
     rename_all_fields = "camelCase"
 )]
 pub enum BiomeTerrainModifier {
+    HeightOffset {
+        height: f32,
+    },
     Cliffs {
         scale: f32,
         threshold: f32,
@@ -20,12 +23,19 @@ pub enum BiomeTerrainModifier {
 impl BiomeTerrainModifier {
     pub fn maximum_height_offset(self) -> f32 {
         match self {
+            Self::HeightOffset { height } => height.max(0.0),
             Self::Cliffs { height, .. } => height.max(0.0),
         }
     }
 
     pub fn validate(self, biome_id: &str) {
         match self {
+            Self::HeightOffset { height } => {
+                assert!(
+                    height.is_finite(),
+                    "biome {biome_id} heightOffset height must be finite"
+                );
+            }
             Self::Cliffs {
                 scale,
                 threshold,
