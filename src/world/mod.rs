@@ -67,7 +67,7 @@ use fluid_updates::{PendingFluidUpdates, process_fluid_updates};
 use game_rules::GameRules;
 use lighting_updates::{pending_lighting_work, process_dynamic_lighting};
 pub(crate) use new_world::{
-    BIOME_SIZE_MULTIPLIER_STEP, DEFAULT_BIOME_SIZE_MULTIPLIER,
+    DEFAULT_BIOME_SIZE_MULTIPLIER,
     MAX_BIOME_SIZE_MULTIPLIER, MIN_BIOME_SIZE_MULTIPLIER, NewWorldConfig,
     biome_size_multiplier_tenths, is_valid_biome_size_multiplier,
     snap_biome_size_multiplier,
