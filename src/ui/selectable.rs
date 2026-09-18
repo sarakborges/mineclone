@@ -24,19 +24,19 @@ pub(crate) fn sync_selectable_button(
 
 pub(crate) fn selectable_button_background(active: bool, interaction: Interaction) -> Color {
     if active {
-        return Color::srgba(0.08, 0.07, 0.12, 0.62);
+        return theme::SURFACE_INSET;
     }
 
     match interaction {
-        Interaction::Pressed => Color::srgba(0.34, 0.22, 0.62, 0.92),
-        Interaction::Hovered => Color::srgba(0.29, 0.19, 0.54, 0.82),
-        Interaction::None => Color::srgba(0.20, 0.14, 0.38, 0.72),
+        Interaction::Pressed => theme::PURPLE_HOVER,
+        Interaction::Hovered => theme::PURPLE,
+        Interaction::None => theme::PURPLE_SOFT,
     }
 }
 
 pub(crate) fn selectable_label_color(active: bool) -> Color {
     if active {
-        theme::TEXT_SUBTLE
+        theme::TEXT_MUTED
     } else {
         theme::TEXT_PRIMARY
     }
