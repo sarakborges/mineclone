@@ -770,8 +770,13 @@ mod tests {
             weight: 1.0,
         };
 
-        let center = surface_tunnel_margin_density_delta(Vec2::ZERO, 58.0, &[tunnel]);
-        let boundary = surface_tunnel_margin_density_delta(Vec2::new(0.0, 10.0), 58.0, &[tunnel]);
+        let center =
+            surface_tunnel_margin_density_delta(Vec2::ZERO, 58.0, std::slice::from_ref(&tunnel));
+        let boundary = surface_tunnel_margin_density_delta(
+            Vec2::new(0.0, 10.0),
+            58.0,
+            std::slice::from_ref(&tunnel),
+        );
 
         assert!(center < 0.0);
         assert!(center <= boundary);
