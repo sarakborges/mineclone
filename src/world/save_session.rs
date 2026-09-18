@@ -16,6 +16,7 @@ use crate::{
 };
 
 use super::{
+    InMemoryWorldSave,
     current_context::CurrentDimensionContext,
     day_night::DayNightClock,
     dimension::CurrentDimension,
@@ -32,6 +33,7 @@ const AUTOSAVE_SECONDS: f32 = 60.0;
 struct SavedWorldState {
     seed: u64,
     dimension_id: String,
+    spawn_biome: Option<String>,
     ticks_per_second: u32,
     world_revision: u64,
     position: [f32; 3],
@@ -92,6 +94,7 @@ impl WorldSession {
         let state = SavedWorldState {
             seed: captured.seed,
             dimension_id: captured.dimension_id.clone(),
+            spawn_biome: captured.spawn_biome.clone(),
             ticks_per_second: captured.ticks_per_second,
             world_revision: snapshot.world.save_content_revision(),
             position: player.position,
@@ -129,6 +132,7 @@ pub(crate) struct WorldSaveContext<'w, 's> {
     seed: Res<'w, WorldSeed>,
     dimension: Res<'w, CurrentDimension>,
     rules: Res<'w, GameRules>,
+    save: Res<'w, InMemoryWorldSave>,
     clock: Res<'w, DayNightClock>,
     inventory: Res<'w, PlayerHotbar>,
     world: Res<'w, VoxelWorld>,
@@ -149,6 +153,7 @@ impl WorldSaveContext<'_, '_> {
         Ok(SavedWorldState {
             seed: self.seed.0,
             dimension_id: self.dimension.id.clone(),
+            spawn_biome: self.save.spawn_biome().map(str::to_owned),
             ticks_per_second: self.rules.ticks_per_second(),
             world_revision: self.world.save_content_revision(),
             position: [position.x, position.y, position.z],
@@ -166,6 +171,7 @@ impl WorldSaveContext<'_, '_> {
             id,
             seed: self.seed.0,
             dimension_id: &self.dimension.id,
+            spawn_biome: self.save.spawn_biome(),
             ticks_per_second: self.rules.ticks_per_second(),
             player: Some(SavedPlayer {
                 position: [position.x, position.y, position.z],
