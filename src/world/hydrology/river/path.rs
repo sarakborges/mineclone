@@ -175,6 +175,7 @@ mod tests {
         // The graph alone is not enough: a seam may share path height yet lose
         // physical water or carving when the two regions select their sources.
         let physical_region = |coord, graph| HydrologyRegion {
+            seed: 42,
             coord,
             river_graph: graph,
             river_carve_depth: 7.0,
