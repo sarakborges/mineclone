@@ -604,7 +604,16 @@ fn sync_world_selection_entries(
     if !state.is_changed() { return; }
     for (entry, interaction, mut background, mut border) in &mut entries {
         surface::apply_control_colors(
-            selectable::hud_style(*interaction, state.selected.as_deref() == Some(entry.0.as_str())),
+            (
+                selectable::selectable_button_background(
+                    state.selected.as_deref() == Some(entry.0.as_str()),
+                    *interaction,
+                ),
+                selectable::selectable_button_border(
+                    state.selected.as_deref() == Some(entry.0.as_str()),
+                    *interaction,
+                ),
+            ),
             &mut background,
             &mut border,
         );
