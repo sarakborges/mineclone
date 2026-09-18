@@ -4,7 +4,7 @@ use crate::{
     app::settings_state::SettingsState,
     localization::{ActiveLanguage, UiLocalization},
     ui::{
-        button::{sidebar_button, ButtonVariant},
+        button::{button_with_marker, ButtonVariant},
         transition::{ScreenTransition, ScreenTransitionTarget},
     },
 };
