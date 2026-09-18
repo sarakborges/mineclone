@@ -141,14 +141,15 @@ pub fn option(selected: bool, border_width: f32) -> impl Bundle {
 pub fn clicked_outside<'a, 'b>(
     open: bool,
     mouse: &ButtonInput<MouseButton>,
-    triggers: impl Iterator<Item = &'a Interaction>,
-    options: impl Iterator<Item = &'b Interaction>,
+    mut triggers: impl Iterator<Item = &'a Interaction>,
+    mut options: impl Iterator<Item = &'b Interaction>,
 ) -> bool {
     if !open || !mouse.just_pressed(MouseButton::Left) {
         return false;
     }
 
-    !triggers.chain(options).any(|interaction| *interaction == Interaction::Pressed)
+    !triggers.any(|interaction| *interaction == Interaction::Pressed)
+        && !options.any(|interaction| *interaction == Interaction::Pressed)
 }
 
 pub fn indicator() -> impl Bundle {
