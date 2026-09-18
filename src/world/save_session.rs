@@ -1,6 +1,10 @@
 use std::{io, time::Instant};
 
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{
+    ecs::system::SystemParam,
+    prelude::*,
+    tasks::{AsyncComputeTaskPool, Task, futures::check_ready},
+};
 
 use crate::{
     app::game_state::GameState,
@@ -49,6 +53,7 @@ pub(crate) struct WorldSession {
     first_save_done: bool,
     baseline_loaded_save: bool,
     last_saved_state: Option<SavedWorldState>,
+    autosave_task: Option<Task<AutosaveResult>>,
 }
 
 impl Default for WorldSession {
@@ -60,7 +65,74 @@ impl Default for WorldSession {
             first_save_done: false,
             baseline_loaded_save: false,
             last_saved_state: None,
+            autosave_task: None,
         }
+    }
+}
+
+struct AutosaveResult {
+    state: SavedWorldState,
+    result: io::Result<()>,
+}
+
+struct OwnedWorldSaveCapture {
+    id: String,
+    seed: u64,
+    dimension_id: String,
+    spawn_biome: Option<String>,
+    ticks_per_second: u32,
+    player: SavedPlayer,
+    day: u64,
+    tick_in_day: u64,
+    inventory: Vec<Option<String>>,
+    world: VoxelWorld,
+    blocks: BlockRegistry,
+    fluids: FluidRegistry,
+    tools: ToolRegistry,
+    dimensions: DimensionRegistry,
+    cycles: DayNightCycleRegistry,
+}
+
+impl OwnedWorldSaveCapture {
+    fn persist(self) -> AutosaveResult {
+        let state = SavedWorldState {
+            seed: self.seed,
+            dimension_id: self.dimension_id.clone(),
+            spawn_biome: self.spawn_biome.clone(),
+            ticks_per_second: self.ticks_per_second,
+            world_revision: self.world.save_content_revision(),
+            position: self.player.position,
+            creative: self.player.creative,
+            inventory: self.inventory.clone(),
+        };
+        let snapshot = WorldSnapshot::capture(SnapshotSource {
+            id: &self.id,
+            seed: self.seed,
+            dimension_id: &self.dimension_id,
+            spawn_biome: self.spawn_biome.as_deref(),
+            ticks_per_second: self.ticks_per_second,
+            player: Some(self.player),
+            day: self.day,
+            tick_in_day: self.tick_in_day,
+            inventory: self.inventory,
+            world: &self.world,
+            fluids: &self.fluids,
+        });
+        let result = snapshot.and_then(|snapshot| {
+            save_world(
+                &snapshot,
+                SaveRegistries {
+                    blocks: &self.blocks,
+                    fluids: &self.fluids,
+                    tools: &self.tools,
+                    dimensions: &self.dimensions,
+                    cycles: &self.cycles,
+                },
+            )
+            .map(|_| ())
+        });
+
+        AutosaveResult { state, result }
     }
 }
 
@@ -162,6 +234,34 @@ impl WorldSaveContext<'_, '_> {
         })
     }
 
+    fn capture_owned(&self, id: &str) -> io::Result<OwnedWorldSaveCapture> {
+        let (_, transform, mode) = self.player.single().map_err(|error| {
+            io::Error::other(format!("cannot save world without exactly one player: {error}"))
+        })?;
+        let position = transform.translation;
+
+        Ok(OwnedWorldSaveCapture {
+            id: id.to_owned(),
+            seed: self.seed.0,
+            dimension_id: self.dimension.id.clone(),
+            spawn_biome: self.save.spawn_biome().map(str::to_owned),
+            ticks_per_second: self.rules.ticks_per_second(),
+            player: SavedPlayer {
+                position: [position.x, position.y, position.z],
+                creative: *mode == GameMode::Creative,
+            },
+            day: self.clock.day,
+            tick_in_day: self.clock.tick_in_day(),
+            inventory: self.inventory.saved_items(),
+            world: self.world.as_ref().clone(),
+            blocks: BlockRegistry::clone(&self.blocks),
+            fluids: FluidRegistry::clone(&self.fluids),
+            tools: ToolRegistry::clone(&self.tools),
+            dimensions: DimensionRegistry::clone(&self.dimensions),
+            cycles: DayNightCycleRegistry::clone(&self.cycles),
+        })
+    }
+
     fn capture(&self, id: &str) -> io::Result<WorldSnapshot> {
         let (_, transform, mode) = self.player.single().map_err(|error| {
             io::Error::other(format!("cannot save world without exactly one player: {error}"))
@@ -194,10 +294,32 @@ pub(crate) fn autosave_world(
     if session.id.is_none() {
         return;
     }
+
+    let completed = session
+        .autosave_task
+        .as_mut()
+        .and_then(check_ready);
+    if let Some(completed) = completed {
+        session.autosave_task = None;
+        match completed.result {
+            Ok(()) => {
+                session.last_saved_state = Some(completed.state);
+                session.first_save_done = true;
+            }
+            Err(error) => {
+                error!("World autosave failed; the world stays loaded: {error}");
+            }
+        }
+        session.timer.reset();
+    }
+    if session.autosave_task.is_some() {
+        return;
+    }
+
     // Loading restores disk state with world revision zero. Streaming runs before
     // this Last-stage system, so a newly generated chunk on the first gameplay
     // frame can already have advanced the persistent revision. Never absorb that
-    // new chunk into the disk baseline: persist it immediately instead.
+    // new chunk into the disk baseline.
     if session.baseline_loaded_save {
         let state = match snapshot.saved_state() {
             Ok(state) => state,
@@ -209,17 +331,14 @@ pub(crate) fn autosave_world(
         session.baseline_loaded_save = false;
         if state.world_revision == 0 {
             session.last_saved_state = Some(state);
-        } else {
-            if let Err(error) = session.persist(&snapshot) {
-                error!("World autosave failed while recording newly generated loaded-world chunks: {error}");
-                session.timer.reset();
-            }
             return;
         }
     }
+
     if session.first_save_done && !session.timer.tick(time.delta()).just_finished() {
         return;
     }
+
     if let Some(previous) = &session.last_saved_state {
         match snapshot.saved_state() {
             Ok(current) if current == *previous => return,
@@ -230,13 +349,26 @@ pub(crate) fn autosave_world(
             }
         }
     }
-    if let Err(error) = session.persist(&snapshot) {
-        error!("World autosave failed; the world stays loaded: {error}");
-        // Retry on the next interval, not every frame. A failed first save has
-        // no successful baseline, so it cannot be silently classified as clean.
-        session.first_save_done = true;
-        session.timer.reset();
-    }
+
+    let id = session
+        .id
+        .as_deref()
+        .expect("active world ID checked above");
+    let captured = match snapshot.capture_owned(id) {
+        Ok(captured) => captured,
+        Err(error) => {
+            error!("Cannot capture world autosave state: {error}");
+            session.first_save_done = true;
+            session.timer.reset();
+            return;
+        }
+    };
+
+    session.autosave_task = Some(AsyncComputeTaskPool::get().spawn(async move {
+        captured.persist()
+    }));
+    session.first_save_done = true;
+    session.timer.reset();
 }
 
 pub(crate) fn restore_loaded_clock(
