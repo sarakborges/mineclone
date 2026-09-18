@@ -20,7 +20,7 @@ const GAME_MODE_BUTTON_GAP: f32 = 8.0;
 pub(crate) struct GameModeButton(pub(crate) GameMode);
 
 #[derive(Component, Clone, Copy)]
-struct GameModeButtonLabel(GameMode);
+pub(crate) struct GameModeButtonLabel(GameMode);
 
 pub(crate) type GameModeButtonInteractions<'w, 's> = Query<
     'w,
