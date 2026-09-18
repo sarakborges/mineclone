@@ -200,11 +200,21 @@ impl BiomeField {
         let nearest_boundary = (primary_index == geometric_primary_index)
             .then_some(geometric_boundary)
             .flatten();
+        let surface_margin_index = nearest_boundary.and_then(|boundary| {
+            let margin_owner = &self.surface_biomes[boundary.neighbor_surface_index];
+            margin_owner
+                .surface_margin_width
+                .filter(|width| boundary.distance <= *width)
+                .map(|_| boundary.neighbor_surface_index)
+        });
+        let identity_surface_index = surface_margin_index.unwrap_or(primary_index);
 
         BiomeFieldSample {
-            primary_id: self.surface_biomes[primary_index].id.as_str(),
+            primary_id: self.surface_biomes[identity_surface_index].id.as_str(),
             primary_surface_index: primary_index,
             nearest_boundary,
+            surface_margin_index,
+            identity_surface_index,
             influences,
         }
     }
