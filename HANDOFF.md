@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.9`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. Revisão retroativa de versionamento em 2026-09-18: `0.22.8` foi o último bump antes dos blocos de combate/entidades e UI; o bloco de health/hurt/death/knockback é registrado retrospectivamente como linha `0.23.x`, sem reescrever o histórico Git; a unificação inicial do design system/settings foi `0.24.0`, a auditoria/refatoração estrutural fechou em `0.24.1`, o pacote priorizado de UI/interação/worldgen fechou em `0.24.2`, dropdown/spawn/hidrologia em `0.24.3`, a correção estrutural da face da slime em `0.24.4`, o primeiro override determinístico de Spawn Biome em `0.24.5`, persistência autoritativa de chunks + shape correto do Spawn Biome + casing canônico de botões em `0.24.6`, HUD/persistência compacta-assíncrona/ocean bathymetry em `0.24.7`, suavização geométrica dos surface tunnels em `0.24.8`, e margens graduais lake-style para surface tunnels em `0.24.9`. **HEAD funcional validado desta atualização:** `b271d4db080ef3e6c6d156cb05a2a31c3cc24d6e`. CI `35379845621` (run 4033) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.10`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional validado desta atualização:** `3ebe9df95c784b3729ad6cb059168bcf02b56230`. CI `35381226764` (run 4052) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 ## Histórico integral obrigatório
 
@@ -616,4 +616,38 @@ Próximo passo imediato: QA visual Windows em Mountains, procurando entradas de 
 - Não executei `cargo test`, `cargo run` nem QA Windows.
 
 Próximo passo imediato: QA visual Windows em Mountains, verificando principalmente as laterais externas da boca dos surface tunnels. A transição esperada agora é: tunnel core -> talude/margem gradual -> terreno natural, sem parede reta entre core e terreno intacto.
+
+## Checkpoint 97 — 2026-09-18: tunnel mouth basin + river proibido em Wasteland [CÓDIGO + CI VERDE]
+
+- Surface tunnels ainda produziam paredes retas porque, mesmo com flare e margem externa, o **core da superfície** continuava dependendo do carve 3D tubular. A encosta podia continuar herdando a lateral do cylinder.
+- Correção estrutural: a boca do tunnel agora usa um **surface basin 2D lake-style**.
+  - `TUNNEL_PATH_SAMPLES`: 13 -> **25**.
+  - O centro do core gradua a superfície em direção ao interior do tunnel.
+  - A borda do core converge para o **roof/topo do tunnel**, não para o eixo.
+  - Fora do core existe margem externa fixa de **14 blocos** com `smoothstep` até terreno natural.
+  - O grading de superfície é somado independentemente do carve 3D; o carve continua responsável pelo vazio subterrâneo, não pela forma da encosta.
+  - Deep underground continua circular.
+- Isso substitui a abordagem anterior em que a margem era estreita/proporcional ao raio e mirava o eixo do tunnel, que ainda podia criar taludes agressivos ou paredes.
+
+- River em Wasteland: o conteúdo já tinha `canGenerateRiver=false`, mas a regra era aplicada apenas na **seleção de source cells**.
+- `keep_only_complete_downstream_paths()` agora encerra/rejeita qualquer river path que atravesse land cell com `canGenerateRiver=false`.
+- A geração de edge possui defesa adicional: downstream land cell com river desabilitado é rejeitado.
+- A curva contínua final também é amostrada ao longo dos segmentos. Se qualquer ponto atravessar biome de superfície com `canGenerateRiver=false`, a edge é rejeitada.
+- Oceano físico continua sendo destino válido mesmo se o biome de superfície subjacente tiver rivers desabilitados.
+- Isso garante que Wasteland não funcione só como “não nasce river aqui”; ele passa a ser **barreira física para river channel**.
+
+- Commits principais:
+  - `bafaff52...` — tunnel mouth como graded surface basin;
+  - `59ff805c...` — bloqueio de downstream path por biome;
+  - `ecf941e9...` — validação contínua da curva;
+  - `0a512eb4...` — edge guard;
+  - `6d969fce...` — integração final;
+  - `1a659a99...` — arquitetura;
+  - `3ebe9df9...` — `VERSION 0.24.10`.
+- Validação funcional anterior: run `35381097948` (4048) — **success**.
+- HEAD funcional/versionado canônico: `3ebe9df95c784b3729ad6cb059168bcf02b56230`.
+- CI canônica: `35381226764` / run 4052 — **success**.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+Próximo passo imediato: QA Windows verificando (1) mouths de surface tunnels em Mountains para confirmar transição basin -> margem -> terreno natural sem parede reta; (2) Wasteland adjacente a Plains/Mountains para confirmar que rivers param/contornam e não atravessam o biome.
 
