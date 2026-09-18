@@ -5,7 +5,7 @@ use std::{
     time::Instant,
 };
 
-use bevy::{ecs::system::SystemParam, log::warn, prelude::*};
+use bevy::{ecs::system::SystemParam, log::warn, prelude::*, ui_widgets::ScrollArea};
 
 use crate::{
     app::game_state::GameState,
@@ -18,7 +18,7 @@ use crate::{
     ui::{
         button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
         cosmic_background::{self, STAR_FIELD},
-        screen, surface, theme,
+        screen, scrollbar, surface, theme,
         transition::{ScreenTransition, ScreenTransitionTarget}, typography,
     },
     voxel::world::VoxelWorld,
@@ -249,21 +249,7 @@ fn poll_world_scan(
             for list_entity in &list {
                 commands.entity(list_entity).with_children(|parent| {
                     for world in &state.worlds {
-                        let selected = state.selected.as_deref() == Some(world.id.as_str());
-                        parent.spawn((
-                            button(
-                                format!(
-                                    "{} — {}",
-                                    world.id,
-                                    format_save_time(world.last_saved_unix_ms)
-                                ),
-                                WorldSelectionAction::Select(world.id.clone()),
-                                Val::Auto,
-                                COMPACT_CONTROL_HEIGHT,
-                                ButtonVariant::from_active(selected),
-                            ),
-                            WorldListEntry(world.id.clone()),
-                        ));
+                        spawn_world_entry(parent, world, &localization, language.get());
                     }
                 });
             }
@@ -277,11 +263,67 @@ fn poll_world_scan(
     }
     for mut status in &mut statuses {
         status.0 = if state.worlds.is_empty() {
-            localization.text(language.get(), "worldSelection.noRestorable").to_owned()
+            localization
+                .text(language.get(), "worldSelection.noRestorable")
+                .to_owned()
         } else {
             String::new()
         };
     }
+}
+
+fn spawn_world_entry(
+    parent: &mut ChildSpawnerCommands,
+    world: &WorldSummary,
+    localization: &UiLocalization,
+    language: crate::localization::Language,
+) {
+    let id = world.id.clone();
+    parent
+        .spawn((
+            WorldListEntry(id.clone()),
+            Node {
+                width: percent(100),
+                min_height: px(68),
+                padding: UiRect::all(px(10)),
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                column_gap: px(12),
+                border: UiRect::all(px(2)),
+                ..default()
+            },
+            BackgroundColor(theme::SURFACE_INSET),
+            BorderColor::all(theme::BORDER),
+        ))
+        .with_children(|row| {
+            row.spawn((
+                Node {
+                    flex_grow: 1.0,
+                    min_width: px(0),
+                    flex_direction: FlexDirection::Column,
+                    row_gap: px(4),
+                    ..default()
+                },
+                children![
+                    typography::setting_title(world.id.clone()),
+                    typography::caption(format_save_time(world.last_saved_unix_ms)),
+                ],
+            ));
+            row.spawn(button(
+                localization.text(language, "worldSelection.load").to_owned(),
+                WorldSelectionAction::Load(id.clone()),
+                px(160),
+                COMPACT_CONTROL_HEIGHT,
+                ButtonVariant::Primary,
+            ));
+            row.spawn(button(
+                localization.text(language, "worldSelection.delete").to_owned(),
+                WorldSelectionAction::Delete(id),
+                px(160),
+                COMPACT_CONTROL_HEIGHT,
+                ButtonVariant::Danger,
+            ));
+        });
 }
 
 fn spawn_world_selection(
@@ -290,7 +332,11 @@ fn spawn_world_selection(
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
 ) {
-    commands.spawn((Camera2d, DespawnOnExit(GameState::WorldSelection)));
+    commands.spawn((
+        Camera2d,
+        BoxShadowSamples(8),
+        DespawnOnExit(GameState::WorldSelection),
+    ));
     let mut root = commands.spawn((
         DespawnOnExit(GameState::WorldSelection),
         Node {
@@ -301,8 +347,6 @@ fn spawn_world_selection(
             bottom: px(0),
             width: percent(100),
             height: percent(100),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Center,
             ..default()
         },
         BackgroundColor(theme::SCREEN_BACKGROUND),
@@ -310,108 +354,106 @@ fn spawn_world_selection(
     ));
 
     root.with_children(|root| {
-        root.spawn((
-            Node {
-                width: percent(100),
-                height: px(116),
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                ..default()
-            },
-            children![typography::title(
-                localization.text(language.get(), "starting.loadWorlds").to_owned(),
-            )],
-        ));
+        for &spec in STAR_FIELD {
+            root.spawn(cosmic_background::star(spec));
+        }
 
-        root.spawn((
-            Node {
-                width: px(1120),
-                max_width: percent(100),
-                flex_grow: 1.0,
-                min_height: px(0),
-                padding: UiRect::axes(px(18), px(32)),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Stretch,
-                row_gap: px(12),
-                ..default()
-            },
-            children![
-                (
-                    WorldListStatus,
-                    typography::caption(if state.scan.is_some() {
-                        localization.text(language.get(), "worldSelection.verifying").to_owned()
-                    } else {
-                        localization.text(language.get(), "worldSelection.noRestorable").to_owned()
-                    }),
-                ),
-                (
-                    Node {
-                        flex_grow: 1.0,
-                        min_height: px(0),
-                        width: percent(100),
-                        position_type: PositionType::Relative,
-                        ..default()
-                    },
-                    children![
-                        (
-                            WorldListContainer,
-                            ScrollPosition(Vec2::ZERO),
-                            Node {
-                                width: percent(100),
-                                height: percent(100),
-                                min_height: px(0),
-                                flex_direction: FlexDirection::Column,
-                                align_items: AlignItems::Stretch,
-                                row_gap: px(8),
-                                overflow: Overflow::scroll_y(),
-                                padding: UiRect::all(px(10)),
-                                border: UiRect::all(px(2)),
-                                ..default()
-                            },
-                            BackgroundColor(theme::SURFACE_INSET),
-                            BorderColor::all(theme::BORDER),
-                        ),
-                    ],
-                ),
-                (SelectionFeedback, typography::caption(String::new())),
-                (SelectionError, typography::caption(state.error.clone())),
-            ],
-        ));
+        root.spawn(screen::header()).with_children(|header| {
+            header.spawn(typography::title(
+                localization
+                    .text(language.get(), "starting.loadWorlds")
+                    .to_owned(),
+            ));
+        });
 
-        root.spawn((
-            Node {
-                width: percent(100),
-                height: px(104),
-                flex_direction: FlexDirection::Row,
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                column_gap: px(18),
-                ..default()
-            },
-            children![
-                button(
-                    localization.text(language.get(), "worldSelection.load").to_owned(),
-                    WorldSelectionAction::Load,
-                    px(MENU_BUTTON_WIDTH),
-                    MENU_BUTTON_HEIGHT,
-                    ButtonVariant::Primary,
-                ),
-                button(
-                    localization.text(language.get(), "newWorld.return").to_owned(),
-                    WorldSelectionAction::Back,
-                    px(MENU_BUTTON_WIDTH),
-                    MENU_BUTTON_HEIGHT,
-                    ButtonVariant::Normal,
-                ),
-                button(
-                    localization.text(language.get(), "worldSelection.delete").to_owned(),
-                    WorldSelectionAction::Delete,
-                    px(MENU_BUTTON_WIDTH),
-                    MENU_BUTTON_HEIGHT,
-                    ButtonVariant::Danger,
-                ),
-            ],
-        ));
+        root.spawn(screen::body()).with_children(|body| {
+            body.spawn(screen::content_column(12.0))
+                .with_children(|content| {
+                    content
+                        .spawn(surface::settings_content())
+                        .with_children(|panel| {
+                            panel
+                                .spawn(Node {
+                                    width: percent(100),
+                                    height: percent(100),
+                                    min_height: px(0),
+                                    flex_direction: FlexDirection::Column,
+                                    align_items: AlignItems::Stretch,
+                                    row_gap: px(12),
+                                    ..default()
+                                })
+                                .with_children(|column| {
+                                    column.spawn((
+                                        WorldListStatus,
+                                        typography::caption(if state.scan.is_some() {
+                                            localization
+                                                .text(
+                                                    language.get(),
+                                                    "worldSelection.verifying",
+                                                )
+                                                .to_owned()
+                                        } else {
+                                            localization
+                                                .text(
+                                                    language.get(),
+                                                    "worldSelection.noRestorable",
+                                                )
+                                                .to_owned()
+                                        }),
+                                    ));
+
+                                    column
+                                        .spawn(Node {
+                                            display: Display::Grid,
+                                            flex_grow: 1.0,
+                                            min_height: px(0),
+                                            width: percent(100),
+                                            grid_template_columns: vec![
+                                                RepeatedGridTrack::flex(1, 1.0),
+                                                RepeatedGridTrack::auto(1),
+                                            ],
+                                            ..default()
+                                        })
+                                        .with_children(|frame| {
+                                            let list_id = frame
+                                                .spawn((
+                                                    WorldListContainer,
+                                                    ScrollPosition(Vec2::ZERO),
+                                                    ScrollArea,
+                                                    Node {
+                                                        width: percent(100),
+                                                        height: percent(100),
+                                                        min_height: px(0),
+                                                        padding: UiRect::right(px(12)),
+                                                        flex_direction: FlexDirection::Column,
+                                                        align_items: AlignItems::Stretch,
+                                                        row_gap: px(10),
+                                                        overflow: Overflow::scroll_y(),
+                                                        ..default()
+                                                    },
+                                                ))
+                                                .id();
+                                            frame.spawn(scrollbar::vertical_scrollbar(list_id));
+                                        });
+
+                                    column.spawn((
+                                        SelectionError,
+                                        typography::caption(state.error.clone()),
+                                    ));
+                                });
+                        });
+                });
+        });
+
+        root.spawn(screen::footer()).with_children(|footer| {
+            footer.spawn(button(
+                localization.text(language.get(), "newWorld.return").to_owned(),
+                WorldSelectionAction::Back,
+                px(360),
+                COMPACT_CONTROL_HEIGHT,
+                ButtonVariant::Normal,
+            ));
+        });
     });
 }
 
