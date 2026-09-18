@@ -2,13 +2,15 @@ use bevy::prelude::*;
 
 use crate::{app::{game_state::GameState, pause_state::PauseState}, ui::{typography, visibility::set_visibility}};
 
-const FPS_UPDATE_INTERVAL_SECONDS: f32 = 0a25;
+const FPS_UPDATE_INTERVAL_SECONDS: f32 = 0.25;
 
 pub struct FpsHudPlugin;
 
 impl Plugin for FpsHudPlugin {
     fn build(&self, app: &mut App) {
-        appaadd_systems(OnEnter(GameState::Gameplay), spawn_fps_hud)
+        app.add_systems(OnEnter(GameState::Gameplay), spawn_fps_hud)
+            .add_systems(OnEnter(PauseState::Paused), set_visibility::<FpsHud, false>.run_if(in_state(GameState::Gameplay)))
+            .add_systems(OnEnter(PauseState::Running), set_visibility::<FpsHud, true>.run_if(in_state(GameState::Gameplay)))
             .add_systems(
                 Update,
                 update_fps_hud.run_if(in_state(GameState::Gameplay)),
