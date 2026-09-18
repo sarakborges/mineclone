@@ -383,8 +383,12 @@ fn spawn_column_has_water(
         })
     });
     let position = column.as_vec2() + Vec2::splat(0.5);
+    let surface_height = surface_height(column, dimension, biomes, biome_field) as f32;
 
-    region.hydrology.water_at(position).is_some()
+    region
+        .hydrology
+        .supported_water_at(position, surface_height)
+        .is_some()
 }
 
 fn average_terrain_material(dimension: &DimensionDefinition, biomes: &BiomeRegistry) -> (f32, f32) {
