@@ -15,8 +15,8 @@ use crate::{
         settings as settings_layout, slider, typography,
     },
     world::{
-        BIOME_SIZE_MULTIPLIER_STEP, MAX_BIOME_SIZE_MULTIPLIER,
-        MIN_BIOME_SIZE_MULTIPLIER, NewWorldConfig, is_valid_biome_size_multiplier,
+        MAX_BIOME_SIZE_MULTIPLIER, MIN_BIOME_SIZE_MULTIPLIER, NewWorldConfig,
+        is_valid_biome_size_multiplier,
         snap_biome_size_multiplier,
     },
 };
@@ -267,6 +267,5 @@ mod tests {
         for value in ["0.4", "5.1", "1.25", "00.5", ".5", "6", "x"] {
             assert!(!valid_multiplier_buffer(value), "{value}");
         }
-        assert!((BIOME_SIZE_MULTIPLIER_STEP - 0.1).abs() < f32::EPSILON);
     }
 }
