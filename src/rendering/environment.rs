@@ -61,14 +61,14 @@ fn update_environment_visuals(
     // and the terminal fog must agree until a sky-gradient renderer exists.
     let next = EnvironmentVisualState {
         sky_color: scene.biome_visuals.blend_hsi(|biome| {
-            biome.visuals.sky_color.get(sample.phase).lerp(
-                *biome.visuals.sky_color.get(sample.next_phase),
+            biome.visuals().sky_color.get(sample.phase).lerp(
+                *biome.visuals().sky_color.get(sample.next_phase),
                 sample.transition,
             )
         }),
         fog_color: scene.biome_visuals.blend_hsi(|biome| {
-            biome.visuals.fog_color.get(sample.phase).lerp(
-                *biome.visuals.fog_color.get(sample.next_phase),
+            biome.visuals().fog_color.get(sample.phase).lerp(
+                *biome.visuals().fog_color.get(sample.next_phase),
                 sample.transition,
             )
         }),
