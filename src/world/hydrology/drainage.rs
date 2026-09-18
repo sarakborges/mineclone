@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use crate::content::biome_hydrology::BiomeHydrology;
+use crate::content::biome_hydrology::BiomeHydrologyRules;
 
 use super::{
     constants::{
@@ -21,7 +21,7 @@ pub(super) struct DrainageNode {
     pub position: Vec2,
     pub elevation: f32,
     pub continentalness: f32,
-    pub biome_hydrology: BiomeHydrology,
+    pub biome_hydrology: BiomeHydrologyRules,
 }
 
 pub(super) struct DrainageNetwork<'a, F>
@@ -300,7 +300,7 @@ mod tests {
                     110.0
                 },
                 continentalness: if cell == ocean_cell { 0.0 } else { 0.8 },
-                biome_hydrology: BiomeHydrology::default(),
+                biome_hydrology: BiomeHydrologyRules::default(),
             }
         };
         let mut network = DrainageNetwork::new(42, 0.45, 90.0, 1.0, &mut sample);
@@ -318,7 +318,7 @@ mod tests {
             position: Vec2::ZERO,
             elevation: 100.0,
             continentalness: 0.44,
-            biome_hydrology: BiomeHydrology::default(),
+            biome_hydrology: BiomeHydrologyRules::default(),
         };
         assert!(wet_ocean_floor(node, 90.0, 1.0).unwrap() > 90.0);
     }
@@ -329,7 +329,7 @@ mod tests {
             position: Vec2::ZERO,
             elevation: 100.0,
             continentalness: 0.10,
-            biome_hydrology: BiomeHydrology::default(),
+            biome_hydrology: BiomeHydrologyRules::default(),
         };
         assert!(wet_ocean_floor(node, 90.0, 1.0).unwrap() <= 86.0);
     }
