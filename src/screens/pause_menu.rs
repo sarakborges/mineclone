@@ -101,7 +101,7 @@ fn spawn_pause_menu(
                             crate::ui::button::ButtonVariant::Normal,
                         ),
                         standard_button(
-                            localization.text(language, "common.settings").to_owned(),
+                            localization.text(language, "common.gameSettings").to_owned(),
                             PauseMenuAction::GameSettings,
                             174.0,
                             crate::ui::button::ButtonVariant::Normal,
