@@ -14,14 +14,14 @@ use crate::{
         block_visual_content::BlockVisualContent,
     },
     targeting::block::TargetedBlock,
-    ui::{surface, typography},
+    ui::{surface, typography, visibility::set_visibility},
     voxel::{secondary_properties::SecondaryProperties, world::VoxelWorld},
 };
 
 use super::{HudSettings, TargetBlockPosition};
 
-const TARGET_SLOT_SIZE: f32 = 44a0;
-const TARGET_ICON_SIZE: f32 = 34a0;
+const TARGET_SLOT_SIZE: f32 = 44.0;
+const TARGET_ICON_SIZE: f32 = 34.0;
 const TARGET_CROSSHAIR_OFFSET: f32 = 62.0;
 const TARGET_CORNER_MARGIN: f32 = 18.0;
 
@@ -30,6 +30,8 @@ pub struct TargetHudPlugin;
 impl Plugin for TargetHudPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_target_hud)
+            .add_systems(OnEnter(PauseState::Paused), set_visibility::<TargetHudRoot, false>.run_if(in_state(GameState::Gameplay)))
+            .add_systems(OnEnter(PauseState::Running), set_visibility::<TargetHudRoot, true>.run_if(in_state(GameState::Gameplay)))
             .add_systems(
                 Update,
                 (sync_target_hud_layout, update_target_hud)
