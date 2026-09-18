@@ -7,7 +7,7 @@ use crate::content::{
     dimension::DimensionDefinition,
 };
 
-use super::biome_field::{BiomeField, BiomeFieldSample};
+use super::biome_field::{BiomeField, BiomeFieldSample, distribution::distribution_strength};
 
 const TERRAIN_MIN_CHUNK_Y: i32 = 0;
 const NOISE_OCTAVES: usize = 4;
@@ -30,17 +30,65 @@ pub(crate) fn surface_height_from_sample(
     sample: &BiomeFieldSample<'_>,
 ) -> i32 {
     let mut height = 0.0;
+    let horizontal = position.as_vec2();
 
     for influence in &sample.influences {
         let (terrain, modifiers, terrain_seed) =
             biome_field.surface_terrain(influence.surface_index);
         height += biome_surface_height(
-            position.as_vec2(),
+            horizontal,
             dimension.sea_level,
             terrain_seed,
             terrain,
             modifiers,
         ) * influence.weight;
+    }
+
+    for overlay in biome_field.terrain_overlays() {
+        let parent_weight = sample
+            .influences
+            .iter()
+            .find(|influence| influence.surface_index == overlay.parent_surface_index)
+            .map(|influence| influence.weight)
+            .unwrap_or(0.0);
+        if parent_weight <= f32::EPSILON || overlay.weight <= f32::EPSILON {
+            continue;
+        }
+
+        let distribution = overlay
+            .distributions
+            .iter()
+            .copied()
+            .map(|distribution| {
+                distribution_strength(
+                    distribution,
+                    horizontal,
+                    biome_field.seed(),
+                    overlay.id.as_str(),
+                )
+            })
+            .fold(0.0_f32, f32::max);
+        let overlay_strength = (parent_weight * distribution * overlay.weight).clamp(0.0, 1.0);
+        if overlay_strength <= f32::EPSILON {
+            continue;
+        }
+
+        let overlay_delta = overlay
+            .terrain_modifiers
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(index, modifier)| {
+                terrain_modifier_height(
+                    horizontal,
+                    overlay
+                        .density_seed
+                        .wrapping_add((index as u64 + 1).wrapping_mul(0x517c_c1b7_2722_0a95)),
+                    modifier,
+                )
+            })
+            .sum::<f32>();
+        height += overlay_delta * overlay_strength;
     }
 
     height.round().max(1.0) as i32
@@ -78,8 +126,28 @@ pub(crate) fn chunk_y_bounds(
                 .copied()
                 .map(BiomeTerrainModifier::maximum_height_offset)
                 .sum();
+            let overlay_offset: f32 = dimension
+                .biomes
+                .iter()
+                .filter_map(|overlay_entry| {
+                    let overlay = biomes
+                        .get(&overlay_entry.id)
+                        .unwrap_or_else(|| panic!("missing biome definition: {}", overlay_entry.id));
+                    (overlay.kind == BiomeKind::TerrainOverlay
+                        && overlay_entry.weight > f32::EPSILON
+                        && overlay.parent_biome.as_deref() == Some(biome.id.as_str()))
+                    .then_some(
+                        overlay
+                            .terrain_modifiers
+                            .iter()
+                            .copied()
+                            .map(BiomeTerrainModifier::maximum_height_offset)
+                            .sum::<f32>(),
+                    )
+                })
+                .sum();
 
-            Some(terrain_offset + modifier_offset)
+            Some(terrain_offset + modifier_offset + overlay_offset)
         })
         .fold(0.0_f32, f32::max)
         .max(0.0);
@@ -139,6 +207,7 @@ fn biome_surface_height(
 
 fn terrain_modifier_height(position: Vec2, seed: u64, modifier: BiomeTerrainModifier) -> f32 {
     match modifier {
+        BiomeTerrainModifier::HeightOffset { height } => height,
         BiomeTerrainModifier::Cliffs {
             scale,
             threshold,
