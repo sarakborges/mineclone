@@ -1,0 +1,35 @@
+{
+  "id": "asteria:overworld/mountain_belt",
+  "name": {
+    "english": "Mountain Belt",
+    "portuguese_brazil": "Cinturão de Montanhas",
+    "spanish": "Cinturón Montañoso"
+  },
+  "kind": "terrain_overlay",
+  "parentBiome": "asteria:overworld/mountains",
+  "distributions": [
+    {
+      "type": "mountain_belt",
+      "scale": 0.00115,
+      "threshold": 0.94,
+      "width": 0.11,
+      "warpScale": 0.0018,
+      "warpStrength": 110
+    }
+  ],
+  "terrainModifiers": [
+    {
+      "type": "height_offset",
+      "height": 22
+    },
+    {
+      "type": "cliffs",
+      "scale": 0.013,
+      "threshold": 0.64,
+      "height": 11,
+      "edgeWidth": 0.1,
+      "warpScale": 0.004,
+      "warpStrength": 20
+    }
+  ]
+}
