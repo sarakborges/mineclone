@@ -230,7 +230,7 @@ pub(in crate::screens::settings_screen) fn handle_spawn_biome_search_keyboard(
     mut search: Single<(Entity, &mut EditableText), With<SpawnBiomeSearchBar>>,
 ) {
     let (entity, editor) = &mut *search;
-    if !state.open {
+    if !state.is_open() {
         if focus.get() == Some(*entity) {
             focus.clear();
         }
