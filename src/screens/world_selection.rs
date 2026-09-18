@@ -328,24 +328,27 @@ fn spawn_world_selection(
                     localization.text(language.get(), "worldSelection.noRestorable").to_owned()
                 }),
             ));
-            root.spawn((
-                WorldListContainer,
-                ScrollPosition(Vec2::ZERO),
-                Node {
-                    flex_grow: 1.0,
-                    min_height: px(0),
-                    width: percent(100),
-                    flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::Stretch,
-                    row_gap: px(8),
-                    overflow: Overflow::scroll_y(),
-                    padding: UiRect::right(px(10)),
-                    border: UiRect::all(px(2)),
-                    ..default()
-                },
-                BackgroundColor(theme::SURFACE_INSET),
-                BorderColor::all(theme::BORDER),
-            ));
+            let world_list = root
+                .spawn((
+                    WorldListContainer,
+                    ScrollPosition(Vec2::ZERO),
+                    Node {
+                        flex_grow: 1.0,
+                        min_height: px(0),
+                        width: percent(100),
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Stretch,
+                        row_gap: px(8),
+                        overflow: Overflow::scroll_y(),
+                        padding: UiRect::right(px(10)),
+                        border: UiRect::all(px(2)),
+                        ..default()
+                    },
+                    BackgroundColor(theme::SURFACE_INSET),
+                    BorderColor::all(theme::BORDER),
+                ))
+                .id();
+            root.spawn(scrollbar::vertical_scrollbar(world_list));
             root.spawn((SelectionFeedback, typography::caption(String::new())));
             root.spawn((SelectionError, typography::caption(state.error.clone())));
             root.spawn((
@@ -509,6 +512,26 @@ fn handle_world_selection(
                 state.selected = Some(id.clone());
                 state.error.clear();
             }
+            WorldSelectionAction::Delete => {
+                let Some(id) = state.selected.clone() else {
+                    state.error = localization.text(language.get(), "worldSelection.selectFirst").to_owned();
+                    return;
+                };
+                match delete_world(&id) {
+                    Ok(()) => {
+                        state.worlds.retain(|world| world.id != id);
+                        state.selected = None;
+                        state.error.clear();
+                    }
+                    Err(error) => {
+                        state.error = format!(
+                            "{} {id}: {error}",
+                            localization.text(language.get(), "worldSelection.deleteError")
+                        );
+                    }
+                }
+                return;
+            }
             WorldSelectionAction::Load => {
                 if state.scan.is_some() {
                     state.error = localization
@@ -571,6 +594,20 @@ fn handle_world_selection(
             }
             WorldSelectionAction::Back => unreachable!("Back was handled above"),
         }
+    }
+}
+
+fn sync_world_selection_entries(
+    state: Res<WorldSelectionState>,
+    mut entries: Query<(&WorldListEntry, &Interaction, &mut BackgroundColor, &mut BorderColor)>,
+) {
+    if !state.is_changed() { return; }
+    for (entry, interaction, mut background, mut border) in &mut entries {
+        surface::apply_control_colors(
+            selectable::hud_style(*interaction, state.selected.as_deref() == Some(entry.0.as_str())),
+            &mut background,
+            &mut border,
+        );
     }
 }
 
