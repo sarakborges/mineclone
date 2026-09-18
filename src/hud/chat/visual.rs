@@ -58,7 +58,6 @@ pub(super) fn spawn_chat_ui(mut commands: Commands) {
                 max_width: percent(92),
                 padding: UiRect::all(px(10)),
                 border: UiRect::all(px(1)),
-                border_radius: BorderRadius::all(px(5)),
                 flex_direction: FlexDirection::Column,
                 row_gap: px(7),
                 ..default()
@@ -107,7 +106,6 @@ pub(super) fn spawn_chat_ui(mut commands: Commands) {
                     padding: UiRect::all(px(5)),
                     flex_direction: FlexDirection::Column,
                     row_gap: px(2),
-                    border_radius: BorderRadius::all(px(4)),
                     ..default()
                 },
                 BackgroundColor(Color::srgba(0.045, 0.04, 0.105, 0.96)),
@@ -123,7 +121,6 @@ pub(super) fn spawn_chat_ui(mut commands: Commands) {
                     min_width: px(0),
                     padding: UiRect::axes(px(text_input::INPUT_PADDING_X), px(7)),
                     border: UiRect::all(px(1)),
-                    border_radius: BorderRadius::all(px(text_input::INPUT_RADIUS)),
                     align_items: AlignItems::Center,
                     overflow: Overflow::clip(),
                     ..default()
@@ -233,7 +230,6 @@ pub(super) fn render_autocomplete(
                     width: percent(100),
                     min_height: px(42),
                     padding: UiRect::axes(px(8), px(5)),
-                    border_radius: BorderRadius::all(px(3)),
                     flex_direction: FlexDirection::Column,
                     row_gap: px(2),
                     ..default()
