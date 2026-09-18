@@ -101,7 +101,7 @@ fn target_block_position_setting(
         Node {
             width: percent(100),
             flex_direction: FlexDirection::Row,
-            align_items: AlignItems::FlexStart,
+            align_items: AlignItems::Center,
             justify_content: JustifyContent::SpaceBetween,
             column_gap: px(18),
             ..default()
@@ -185,7 +185,7 @@ fn target_position_dropdown(
                     width: percent(100),
                     height: percent(100),
                     padding: UiRect::horizontal(px(12)),
-                    border: UiRect::all(px(1)),
+                    border: UiRect::all(px(2)),
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::SpaceBetween,
                     ..default()
