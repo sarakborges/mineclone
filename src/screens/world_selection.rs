@@ -680,13 +680,20 @@ fn handle_world_selection(
     }
 }
 
+type WorldListStatusQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Text, &'static mut Node),
+    (With<WorldListStatus>, Without<SelectionError>),
+>;
+
+type WorldListErrorQuery<'w, 's> =
+    Query<'w, 's, (&'static mut Text, &'static mut Node), With<SelectionError>>;
+
 fn sync_world_selection_feedback(
     state: Res<WorldSelectionState>,
-    mut statuses: Query<
-        (&mut Text, &mut Node),
-        (With<WorldListStatus>, Without<SelectionError>),
-    >,
-    mut errors: Query<(&mut Text, &mut Node), With<SelectionError>>,
+    mut statuses: WorldListStatusQuery,
+    mut errors: WorldListErrorQuery,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
 ) {
