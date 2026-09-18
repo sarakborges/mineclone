@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::biome_hydrology::BiomeHydrology,
+    content::biome_hydrology::BiomeHydrologyRules,
     world::deterministic::{avalanche_u64, hash_signed},
 };
 
@@ -113,7 +113,7 @@ pub(crate) struct HydrologyRiverSurfaceSample {
 pub struct HydrologySurfaceSample {
     pub elevation: f32,
     pub continentalness: f32,
-    pub biome_hydrology: BiomeHydrology,
+    pub biome_hydrology: BiomeHydrologyRules,
 }
 
 #[derive(Clone, Copy, Debug)]
