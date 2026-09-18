@@ -7,17 +7,17 @@ pub const MENU_BUTTON_HEIGHT: f32 = 54.0;
 pub const SIDEBAR_MENU_BUTTON_HEIGHT: f32 = 54.0;
 pub const COMPACT_CONTROL_HEIGHT: f32 = 44.0;
 
-const BUTTON_NORMAL: Color = Color::srgb(0.78, 0.79, 0.80);
-const BUTTON_PRESSED: Color = Color::srgb(0.64, 0.65, 0.66);
-const BUTTON_BORDER: Color = Color::srgb(0.36, 0.37, 0.38);
-const BUTTON_BORDER_STRONG: Color = Color::srgb(0.96, 0.96, 0.96);
+const BUTTON_NORMAL: Color = theme::SURFACE_ELEVATED;
+const BUTTON_PRESSED: Color = theme::PURPLE;
+const BUTTON_BORDER: Color = theme::BORDER;
+const BUTTON_BORDER_STRONG: Color = theme::BORDER_STRONG;
 const BUTTON_SHADOW: Color = Color::srgba(0.02, 0.02, 0.02, 0.72);
 const BUTTON_PRIMARY: Color = theme::PURPLE;
 const BUTTON_PRIMARY_HOVER: Color = theme::PURPLE_HOVER;
 const BUTTON_PRIMARY_PRESSED: Color = Color::srgb(0.38, 0.22, 0.58);
 const BUTTON_DANGER: Color = theme::DANGER;
-const BUTTON_DANGER_HOVER: Color = Color::srgb(0.86, 0.28, 0.28);
-const BUTTON_DANGER_PRESSED: Color = Color::srgb(0.62, 0.14, 0.14);
+const BUTTON_DANGER_HOVER: Color = theme::DANGER_HOVER;
+const BUTTON_DANGER_PRESSED: Color = theme::DANGER_PRESSED;
 
 const BUTTON_VISUAL_SETTLE_EPSILON: f32 = 0.001;
 
@@ -56,7 +56,7 @@ type ButtonAnimationQuery<'w, 's> = Query<
 >;
 
 pub fn menu_button<A: Component>(label: impl Into<String>, action: A) -> impl Bundle {
-    (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Normal, Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![typography::button_label(label)])
+    (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Normal, Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![typography::button_label_light(label)])
 }
 
 pub fn sidebar_menu_button<A: Component, L: Component>(label: impl Into<String>, action: A, label_marker: L) -> impl Bundle {
