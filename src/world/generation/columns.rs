@@ -36,7 +36,7 @@ pub(crate) fn sample_generation_columns(
             let primary_terrain_strength = surface
                 .influences
                 .iter()
-                .find(|influence| influence.surface_index == primary_surface_index)
+                .find(|influence| influence.surface_index == surface.primary_surface_index)
                 .map_or(1.0, |influence| influence.terrain_strength);
             let surface_margin_index = surface.surface_margin_index;
             let surface_influences = surface
