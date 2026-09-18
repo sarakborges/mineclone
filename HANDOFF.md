@@ -330,3 +330,13 @@ Próximo passo imediato: aguardar a CI do HEAD 77b847822b6daa5ac5ba3018c0028e3f1
 - `e86b2a784541ba3c0241b9e6e5397b50dfc135ad` coloca o TargetHighlight e o ChiselPlacementGhost no RenderLayer 2. Assim o overlay é composto depois do mundo, em câmera separada, sem depender de `depth_bias` para atravessar layers de textura/parallax.
 - A abordagem anterior (`depth_bias = 4.0`) não resolveu o problema visual reportado; por isso o mecanismo foi trocado para composição por câmera/layer, que é mais determinístico para overlay.
 - Não executei `cargo test`, `cargo run` ou QA Windows. CI/validação visual local pendentes.
+
+
+## Checkpoint 86 — 2026-09-18: rollback da câmera de overlay e ajuste somente do highlight
+
+- Removida a câmera adicional de highlight; o player voltou ao modelo de uma única câmera de gameplay. O viewmodel continua usando sua câmera própria já existente.
+- Removidos também o RenderLayer exclusivo e a ordem de câmera reservada para o highlight.
+- O TargetHighlight voltou a ser renderizado pela câmera principal, como antes.
+- O ajuste ficou isolado no próprio highlight: escala 1.02 e deslocamento de 0.02 na normal da face atingida, para colocar o shell ligeiramente à frente da superfície/layer selecionada sem criar outra câmera.
+- O ChiselPlacementGhost também voltou ao layer normal; sua lógica de posicionamento não foi alterada.
+- Não executei cargo test, cargo run nem QA Windows. A CI do novo HEAD ainda precisa validar a compilação.
