@@ -171,7 +171,7 @@ mod tests {
                 super::super::hydrology::HydrologySurfaceSample {
                     elevation: 64.0,
                     continentalness: 0.5,
-                    biome_hydrology: crate::content::biome_hydrology::BiomeHydrology::default(),
+                    biome_hydrology: crate::content::biome_hydrology::BiomeHydrologyRules::default(),
                 }
             })
         });
@@ -279,7 +279,7 @@ mod tests {
                 super::super::hydrology::HydrologySurfaceSample {
                     elevation: 64.0,
                     continentalness: 0.5,
-                    biome_hydrology: crate::content::biome_hydrology::BiomeHydrology::default(),
+                    biome_hydrology: crate::content::biome_hydrology::BiomeHydrologyRules::default(),
                 }
             })
         });
@@ -288,7 +288,7 @@ mod tests {
                 super::super::hydrology::HydrologySurfaceSample {
                     elevation: 64.0,
                     continentalness: 0.5,
-                    biome_hydrology: crate::content::biome_hydrology::BiomeHydrology::default(),
+                    biome_hydrology: crate::content::biome_hydrology::BiomeHydrologyRules::default(),
                 }
             })
         });
