@@ -239,7 +239,7 @@ fn resolve_tunnel_candidates(
 }
 
 fn tunnel_connects_to_cave(
-    points: &[Vec3; TUNNEL_PATH_SAMPLES],
+    points: &[Vec3],
     radius: f32,
     cave_graph: Option<&FeatureGraph>,
 ) -> bool {
