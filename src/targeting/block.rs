@@ -8,6 +8,7 @@ use crate::{
     app::game_state::GameState,
     content::creature::CreatureCollider,
     creatures::CreatureInstance,
+    entity::EntityHealth,
     gameplay::availability::WorldInteractionState,
     player::camera::GameplayCamera,
     voxel::{raycast::{VoxelHit, raycast_voxels}, world::VoxelWorld},
@@ -66,7 +67,7 @@ fn update_targets(
     camera: Single<&GlobalTransform, With<GameplayCamera>>,
     world: Res<VoxelWorld>,
     interaction: WorldInteractionState,
-    creatures: Query<(Entity, &Transform, &CreatureCollider), With<CreatureInstance>>,
+    creatures: Query<(Entity, &Transform, &CreatureCollider, &EntityHealth), With<CreatureInstance>>,
     mut targeted_block: ResMut<TargetedBlock>,
     mut targeted_creature: ResMut<TargetedCreature>,
 ) {
@@ -96,7 +97,10 @@ fn update_targets(
     // alone would leave stale targets when only a creature moves.
     let creature_hit = creatures
         .iter()
-        .filter_map(|(entity, transform, collider)| {
+        .filter_map(|(entity, transform, collider, health)| {
+            if health.is_dead() {
+                return None;
+            }
             let (min, max) = collider.bounds(transform.translation);
             ray_box_distance(origin, direction, min, max)
                 .filter(|distance| *distance <= TARGET_RANGE && *distance <= block_distance)
