@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     hud::{HudSettings, TargetBlockPosition},
     localization::{ActiveLanguage, Language, UiLocalization},
-    ui::{dropdown, surface, theme, typography},
+    ui::{dropdown, selectable, theme, typography},
 };
 
 use super::navigation::{SettingsSection, SettingsSectionSelection};
@@ -169,7 +169,7 @@ fn target_position_dropdown(
     localization: &UiLocalization,
     language: Language,
 ) -> impl Bundle {
-    let (background, border) = surface::hud_control_static(false);
+    let (background, border) = selectable::static_colors(false);
 
     (
         Node {
@@ -219,7 +219,7 @@ fn target_position_dropdown(
                     ..default()
                 },
                 BackgroundColor(theme::HUD_SURFACE),
-                BorderColor::all(surface::HUD_BORDER_COLOR),
+                BorderColor::all(selectable::BORDER_COLOR),
                 GlobalZIndex(620),
                 children![
                     target_position_option(
@@ -252,7 +252,7 @@ fn target_position_option(
     localization: &UiLocalization,
     language: Language,
 ) -> impl Bundle {
-    let (background, border) = surface::hud_control_static(position == selected);
+    let (background, border) = selectable::static_colors(position == selected);
 
     (
         Button,
@@ -379,7 +379,7 @@ pub(super) fn sync_display_tooltips_toggle(
             continue;
         }
 
-        surface::apply_control_colors(
+        selectable::apply_colors(
             (toggle_background(enabled, *interaction), toggle_border(enabled)),
             background,
             border,
@@ -463,8 +463,8 @@ pub(super) fn sync_target_block_position_options(
 
     for (option, interaction, background, border) in &mut options {
         let selected = option.0 == settings.target_block_position();
-        surface::apply_control_colors(
-            surface::hud_control_colors(*interaction, selected),
+        selectable::apply_colors(
+            selectable::colors(*interaction, selected),
             background,
             border,
         );
