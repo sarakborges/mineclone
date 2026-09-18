@@ -5,7 +5,7 @@ use crate::{
     localization::{Language, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{
-        button::{standard_button_with_marker, ButtonVariant},
+        button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
         typography,
     },
     world::NewWorldConfig,
@@ -15,9 +15,6 @@ const GAME_MODE_BUTTON_GAP: f32 = 8.0;
 
 #[derive(Component, Clone, Copy)]
 pub(crate) struct GameModeButton(pub(crate) GameMode);
-
-#[derive(Component, Clone, Copy)]
-pub(crate) struct GameModeButtonLabel(GameMode);
 
 pub(crate) type GameModeButtonInteractions<'w, 's> = Query<
     'w,
@@ -90,12 +87,12 @@ fn game_mode_button(
     mode: GameMode,
     current_game_mode: GameMode,
 ) -> impl Bundle {
-    standard_button_with_marker(
+    button(
         label,
         GameModeButton(mode),
-        0.0,
+        Val::Auto,
+        COMPACT_CONTROL_HEIGHT,
         ButtonVariant::from_active(mode == current_game_mode),
-        GameModeButtonLabel(mode),
     )
 }
 
@@ -132,7 +129,6 @@ pub(crate) fn sync_game_mode_buttons(
     new_world: Res<NewWorldConfig>,
     player: Query<Ref<GameMode>, With<GameplayCamera>>,
     mut buttons: GameModeButtonSyncQuery,
-    mut labels: Query<(&GameModeButtonLabel, &mut TextColor)>,
 ) {
     let (current_game_mode, mode_changed) = if *game_state.get() == GameState::NewWorld {
         (
@@ -158,14 +154,4 @@ pub(crate) fn sync_game_mode_buttons(
         *variant = ButtonVariant::from_active(active);
     }
 
-    if !mode_changed {
-        return;
-    }
-
-    for (label, mut color) in &mut labels {
-        let next_color = TextColor(if label.0 == current_game_mode { crate::ui::theme::TEXT_PRIMARY } else { crate::ui::theme::TEXT_MUTED });
-        if *color != next_color {
-            *color = next_color;
-        }
-    }
 }
