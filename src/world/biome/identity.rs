@@ -17,47 +17,24 @@ pub(super) fn resolve_surface_identity(
     hydrology_influences: &mut Vec<CurrentBiomeInfluence>,
     hydrology_id: &mut Option<String>,
 ) -> usize {
+    let influence_count = copy_influences(influences, &surface.influences);
     let Some(hydrology) = hydrology else {
         hydrology_influences.clear();
         replace_optional_string(hydrology_id, None);
-        return copy_influences(influences, &surface.influences);
+        return influence_count;
     };
 
-    let mut influence_count = 0;
     let mut hydrology_count = 0;
-
-    for influence in &surface.influences {
-        push_influence(
-            influences,
-            &mut influence_count,
-            influence.id,
-            influence.weight * hydrology.surface_weight,
-        );
-    }
-
     if let Some(coast_id) = hydrology.coast_biome {
         push_influence(
-            influences,
-            &mut influence_count,
-            coast_id,
-            hydrology.coast_weight,
-        );
-        push_influence(
             hydrology_influences,
             &mut hydrology_count,
             coast_id,
             hydrology.coast_weight,
         );
     }
-
     if let Some(ocean_id) = hydrology.ocean_biome {
         push_influence(
-            influences,
-            &mut influence_count,
-            ocean_id,
-            hydrology.ocean_weight,
-        );
-        push_influence(
             hydrology_influences,
             &mut hydrology_count,
             ocean_id,
@@ -65,7 +42,6 @@ pub(super) fn resolve_surface_identity(
         );
     }
 
-    normalize_influences(&mut influences[..influence_count]);
     normalize_influences(&mut hydrology_influences[..hydrology_count]);
     hydrology_influences.truncate(hydrology_count);
 
@@ -254,7 +230,9 @@ mod tests {
 
         assert_eq!(hydrology_id.as_deref(), Some("coast"));
         assert_eq!(hydrology_influences.len(), 1);
-        assert_eq!(influences.len(), 2);
+        assert_eq!(influences.len(), 1);
+        assert_eq!(influences[0].id, "surface");
+        assert_eq!(influences[0].weight, 1.0);
     }
 
     #[test]
