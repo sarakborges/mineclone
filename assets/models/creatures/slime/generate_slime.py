@@ -155,7 +155,7 @@ materials = [
 ]
 shell = make_mesh('square_translucent_shell', [([.96,.90,.96], (0,0,0))], 0, (0,0))
 core = make_mesh('square_nucleus', [([.58,.62,.58], (0,0,0))], 1, (0,0))
-face = make_mesh('square_pixel_face', [([.42,.28,.02], (0,.50,-.49))], 2, (0,0))
+face = make_mesh('square_pixel_face', [([.42,.28,.02], (0,0,-.49))], 2, (0,0))
 
 
 def node(name, mesh=None, children=None, translation=None, scale=None, extras=None):
