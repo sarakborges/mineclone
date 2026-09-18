@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.2`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. Revisão retroativa de versionamento em 2026-09-18: `0.22.8` foi o último bump antes dos blocos de combate/entidades e UI; o bloco de health/hurt/death/knockback é registrado retrospectivamente como linha `0.23.x`, sem reescrever o histórico Git; a unificação inicial do design system/settings foi `0.24.0`, a auditoria/refatoração estrutural fechou em `0.24.1`, e o pacote atual de correções de UI/interação/worldgen fecha em `0.24.2`. **HEAD funcional validado desta atualização:** `2ebe1324ad690e9a198ee39fb830e103ae485528`. CI `35372599722` (run 3891) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.4`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. Revisão retroativa de versionamento em 2026-09-18: `0.22.8` foi o último bump antes dos blocos de combate/entidades e UI; o bloco de health/hurt/death/knockback é registrado retrospectivamente como linha `0.23.x`, sem reescrever o histórico Git; a unificação inicial do design system/settings foi `0.24.0`, a auditoria/refatoração estrutural fechou em `0.24.1`, o pacote priorizado de UI/interação/worldgen fechou em `0.24.2`, dropdown/spawn/hidrologia em `0.24.3` e a correção estrutural da face da slime em `0.24.4`. **HEAD funcional validado desta atualização:** `1fe68fa6da76658adf1a8933498ece6638f8be1f`. CI `35374517912` (run 3921) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 ## Histórico integral obrigatório
 
@@ -399,4 +399,21 @@ Próximo passo imediato: QA visual Windows das telas afetadas (Settings dropdown
 - Não executei `cargo test`, `cargo run` nem QA Windows.
 
 Próximo passo imediato: QA Windows focado em Load World (cards/scroll/delete/load), dropdown de Spawn Biome (busca + scrollbar sem fechar), Create World spacing, Pause Menu/HUD e targeting durante death timer; também validar visualmente em seed nova que surface tunnels isolados deixaram de aparecer.
+
+## Checkpoint 91 — 2026-09-18: correção estrutural da face da slime [CÓDIGO/ASSET + CI VERDE]
+
+- Investigação do GLB confirmou que o problema não era o binding JSON: `data/creatures/slime.json` já mapeava corretamente `SlimeFace -> textures/creatures/slime/face.png`.
+- Causa 1: a mesh `square_pixel_face` usava UVs apenas no intervalo aproximado `0.008..0.242` em ambos os eixos. O `face.png` 64×64 possui olhos/boca em aproximadamente x=8..55/y=20..39, então o mesh amostrava essencialmente uma região branca da textura; sob iluminação isso aparecia como a placa clara/amarelada.
+- Causa 2: a face havia sido exportada como uma caixa fina de 24 vértices/36 índices, com seis faces, em vez de uma quad frontal. Isso criava volume lateral visível e reforçava o aspecto de placa.
+- Causa 3: a geometria do Face ficava em y local 0.36..0.64 dentro de `BodyPivot`, cujo shell ocupa -0.45..0.45. O node precisava de translation y=-0.5 para centralizar a quad no corpo.
+- Causa 4: `configure_loaded_scene` zerava à força o `Transform` de todo node chamado `Face`, anulando qualquer posição autorada correta no GLB.
+- O `slime.glb` foi corrigido diretamente: Face usa 4 vértices e 6 índices da face frontal, UVs completos `(0,1) (1,1) (1,0) (0,0)`, node translation `[0,-0.5,0]` e material `SlimeFace` em `MASK` com cutoff 0.5.
+- `face.png` agora mantém olhos/boca e torna transparente o fundo branco, eliminando a placa retangular sobre o shell.
+- O visual loader deixou de resetar transforms autorados do node Face. Materiais tintados de corpo continuam forçados a opaco; materiais apenas texturizados preservam o alpha mode definido pelo GLB, permitindo decals/cutouts.
+- `ARCHITECTURE.md` registra agora que transforms de nodes GLB pertencem ao asset autorado e não devem ser sobrescritos pelo loader genérico; overrides texture-only preservam alpha mode.
+- Commits principais: `47aaa863...` (runtime respeita transform/alpha), `34f4f156...` (GLB + face.png corrigidos), `b6daa99d...` (comentário alinhado), `9ec5a52b...` (contrato arquitetural) e `1fe68fa6...` (`VERSION 0.24.4`).
+- Validação: HEAD funcional/versionado `1fe68fa6da76658adf1a8933498ece6638f8be1f` passou no run `35374517912` (3921), incluindo auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+Próximo passo imediato: QA visual Windows da slime para confirmar posição, orientação, recorte da textura e ausência de placa/reflectance residual durante idle, jump, hurt e death.
 
