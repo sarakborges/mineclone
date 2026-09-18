@@ -83,7 +83,7 @@ fn language_dropdown(selected: Language, localization: &UiLocalization) -> impl 
             (
                 Button,
                 LanguageDropdownButton,
-                dropdown::control(),
+                dropdown::control::<LanguageDropdownKind>(),
                 children![
                     (
                         LanguageDropdownLabel,
@@ -96,7 +96,7 @@ fn language_dropdown(selected: Language, localization: &UiLocalization) -> impl 
             (
                 LanguageDropdownPanel,
                 panel_node,
-                dropdown::panel_surface(),
+                dropdown::panel_surface::<LanguageDropdownKind>(),
                 GlobalZIndex(620),
                 children![
                     language_option(Language::English, selected, localization),
@@ -116,7 +116,7 @@ fn language_option(
     (
         Button,
         LanguageOption(language),
-        dropdown::option(language == selected, 2.0),
+        dropdown::option::<LanguageDropdownKind>(language == selected, 2.0),
         children![(
             LanguageOptionLabel(language),
             typography::hud(language_label(language, localization)),
@@ -213,11 +213,10 @@ pub(super) fn sync_language_dropdown(
 
 pub(super) fn close_language_dropdown_outside(
     mouse: Res<ButtonInput<MouseButton>>,
-    button: Query<&Interaction, With<LanguageDropdownButton>>,
-    options: Query<&Interaction, With<LanguageOption>>,
+    inside: Query<&Interaction, With<dropdown::DropdownInside<LanguageDropdownKind>>>,
     mut state: ResMut<LanguageDropdownState>,
 ) {
-    if dropdown::clicked_outside(state.is_open(), &mouse, button.iter(), options.iter()) {
+    if dropdown::clicked_outside(state.is_open(), &mouse, &inside) {
         state.close();
     }
 }
