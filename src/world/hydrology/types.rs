@@ -118,7 +118,6 @@ pub struct HydrologySurfaceSample {
 
 #[derive(Clone, Copy, Debug)]
 pub struct HydrologyBiomeOverlay<'a> {
-    pub surface_weight: f32,
     pub coast_biome: Option<&'a str>,
     pub coast_weight: f32,
     pub ocean_biome: Option<&'a str>,
