@@ -7,7 +7,7 @@ use crate::content::{
     dimension::DimensionDefinition,
 };
 
-use super::biome_field::{BiomeField, BiomeFieldSample, distribution::distribution_strength};
+use super::biome_field::{BiomeField, BiomeFieldSample};
 
 const TERRAIN_MIN_CHUNK_Y: i32 = 0;
 const NOISE_OCTAVES: usize = 4;
@@ -35,61 +35,16 @@ pub(crate) fn surface_height_from_sample(
     for influence in &sample.influences {
         let (terrain, modifiers, terrain_seed) =
             biome_field.surface_terrain(influence.surface_index);
+        let distribution_strength =
+            biome_field.surface_distribution_strength(influence.surface_index, horizontal);
         height += biome_surface_height(
             horizontal,
             dimension.sea_level,
             terrain_seed,
             terrain,
             modifiers,
+            distribution_strength,
         ) * influence.weight;
-    }
-
-    for overlay in biome_field.terrain_overlays() {
-        let parent_weight = sample
-            .influences
-            .iter()
-            .find(|influence| influence.surface_index == overlay.parent_surface_index)
-            .map(|influence| influence.weight)
-            .unwrap_or(0.0);
-        if parent_weight <= f32::EPSILON || overlay.weight <= f32::EPSILON {
-            continue;
-        }
-
-        let distribution = overlay
-            .distributions
-            .iter()
-            .copied()
-            .map(|distribution| {
-                distribution_strength(
-                    distribution,
-                    horizontal,
-                    biome_field.seed(),
-                    overlay.id.as_str(),
-                )
-            })
-            .fold(0.0_f32, f32::max);
-        let overlay_weight = (parent_weight * overlay.weight).clamp(0.0, 1.0);
-        if overlay_weight <= f32::EPSILON || distribution <= f32::EPSILON {
-            continue;
-        }
-
-        let overlay_delta = overlay
-            .terrain_modifiers
-            .iter()
-            .copied()
-            .enumerate()
-            .map(|(index, modifier)| {
-                terrain_overlay_modifier_height(
-                    horizontal,
-                    overlay
-                        .density_seed
-                        .wrapping_add((index as u64 + 1).wrapping_mul(0x517c_c1b7_2722_0a95)),
-                    modifier,
-                    distribution,
-                )
-            })
-            .sum::<f32>();
-        height += overlay_delta * overlay_weight;
     }
 
     height.round().max(1.0) as i32
@@ -127,28 +82,7 @@ pub(crate) fn chunk_y_bounds(
                 .copied()
                 .map(BiomeTerrainModifier::maximum_height_offset)
                 .sum();
-            let overlay_offset: f32 = dimension
-                .biomes
-                .iter()
-                .filter_map(|overlay_entry| {
-                    let overlay = biomes
-                        .get(&overlay_entry.id)
-                        .unwrap_or_else(|| panic!("missing biome definition: {}", overlay_entry.id));
-                    (overlay.kind == BiomeKind::TerrainOverlay
-                        && overlay_entry.weight > f32::EPSILON
-                        && overlay.parent_biome.as_deref() == Some(biome.id.as_str()))
-                    .then_some(
-                        overlay
-                            .terrain_modifiers
-                            .iter()
-                            .copied()
-                            .map(BiomeTerrainModifier::maximum_height_offset)
-                            .sum::<f32>(),
-                    )
-                })
-                .sum();
-
-            Some(terrain_offset + modifier_offset + overlay_offset)
+            Some(terrain_offset + modifier_offset)
         })
         .fold(0.0_f32, f32::max)
         .max(0.0);
@@ -165,6 +99,7 @@ fn biome_surface_height(
     seed: u64,
     terrain: BiomeTerrain,
     modifiers: &[BiomeTerrainModifier],
+    distribution_strength: f32,
 ) -> f32 {
     let sea_level = sea_level as f32;
 
@@ -190,6 +125,54 @@ fn biome_surface_height(
             let ridge = (1.0 - noise.abs()).clamp(0.0, 1.0).powf(sharpness);
             sea_level + base_height + ridge * amplitude
         }
+        BiomeTerrain::Gorge {
+            base_height,
+            depth,
+            wall_height,
+        } => {
+            let strength = smoothstep(distribution_strength.clamp(0.0, 1.0));
+            sea_level + base_height + wall_height * (1.0 - strength) - depth * strength
+        }
+        BiomeTerrain::Alps {
+            base_height,
+            amplitude,
+            scale,
+            sharpness,
+            detail_amplitude,
+            detail_scale,
+        } => {
+            let broad = fractal_noise(position * scale, seed);
+            let ridge = (1.0 - broad.abs()).clamp(0.0, 1.0).powf(sharpness);
+            let detail = fractal_noise(position * detail_scale, seed.rotate_left(29));
+            let jagged = (1.0 - detail.abs()).clamp(0.0, 1.0).powf(1.35);
+            sea_level + base_height + ridge * amplitude + jagged * detail_amplitude
+        }
+        BiomeTerrain::MountainBelt {
+            base_height,
+            amplitude,
+            scale,
+            sharpness,
+            detail_amplitude,
+            detail_scale,
+        } => {
+            let broad = fractal_noise(position * scale, seed);
+            let ridge = (1.0 - broad.abs()).clamp(0.0, 1.0).powf(sharpness);
+            let detail = fractal_noise(position * detail_scale, seed.rotate_left(17));
+            sea_level + base_height + ridge * amplitude + detail * detail_amplitude * ridge
+        }
+        BiomeTerrain::Volcano {
+            base_height,
+            height,
+            crater_depth,
+            crater_radius,
+        } => {
+            let strength = distribution_strength.clamp(0.0, 1.0);
+            let crater_start = 1.0 - crater_radius;
+            let crater_strength =
+                smoothstep(((strength - crater_start) / crater_radius).clamp(0.0, 1.0));
+
+            sea_level + base_height + height * strength - crater_depth * crater_strength
+        }
     };
 
     base_height
@@ -204,30 +187,6 @@ fn biome_surface_height(
                 )
             })
             .sum::<f32>()
-}
-
-fn terrain_overlay_modifier_height(
-    position: Vec2,
-    seed: u64,
-    modifier: BiomeTerrainModifier,
-    distribution_strength: f32,
-) -> f32 {
-    let strength = distribution_strength.clamp(0.0, 1.0);
-
-    match modifier {
-        BiomeTerrainModifier::VolcanicCone {
-            height,
-            crater_depth,
-            crater_radius,
-        } => {
-            let crater_start = 1.0 - crater_radius;
-            let crater_strength =
-                smoothstep(((strength - crater_start) / crater_radius).clamp(0.0, 1.0));
-
-            height * strength - crater_depth * crater_strength
-        }
-        _ => terrain_modifier_height(position, seed, modifier) * strength,
-    }
 }
 
 fn terrain_modifier_height(position: Vec2, seed: u64, modifier: BiomeTerrainModifier) -> f32 {
@@ -263,9 +222,6 @@ fn terrain_modifier_height(position: Vec2, seed: u64, modifier: BiomeTerrainModi
             };
 
             smoothstep(progress) * height
-        }
-        BiomeTerrainModifier::VolcanicCone { .. } => {
-            unreachable!("volcanicCone requires terrain overlay distribution strength")
         }
     }
 }
