@@ -242,10 +242,6 @@ pub(super) fn sync_entity_cards(
         .map(|value| (value.current(), value.max()));
 
     for (marker, children) in &mut queries.p3() {
-        let entity = match marker.0 {
-            EntityCardSource::LocalPlayer => player_entity,
-            EntityCardSource::Target => target_entity,
-        };
         let health = match marker.0 {
             EntityCardSource::LocalPlayer => player_health,
             EntityCardSource::Target => target_health,
@@ -253,18 +249,16 @@ pub(super) fn sync_entity_cards(
         let fraction = health
             .map(|(current, max)| (current / max).clamp(0.0, 1.0))
             .unwrap_or(0.0);
-        if let Some(&fill_entity) = children.first()
-            && let Ok(mut node) = queries.p4().get_mut(fill_entity)
-        {
-            node.width = percent(fraction * 100.0);
+        if let Some(&fill_entity) = children.first() {
+            let width = percent(fraction * 100.0);
+            drop(children);
+            if let Ok(mut node) = queries.p4().get_mut(fill_entity) {
+                node.width = width;
+            }
         }
     }
 
     for (marker, mut text) in &mut queries.p5() {
-        let entity = match marker.0 {
-            EntityCardSource::LocalPlayer => player_entity,
-            EntityCardSource::Target => target_entity,
-        };
         let desired = match marker.0 {
             EntityCardSource::LocalPlayer => player_health,
             EntityCardSource::Target => target_health,
