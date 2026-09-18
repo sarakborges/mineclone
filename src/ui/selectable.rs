@@ -1,4 +1,4 @@
-use bevy::{prelude::*, ui::InteractionDisabled};
+use bevy::prelude::*;
 
 use super::theme;
 
