@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use super::typography;
+use super::{theme, typography};
 
 pub const MENU_BUTTON_WIDTH: f32 = 470.0;
 pub const MENU_BUTTON_HEIGHT: f32 = 54.0;
@@ -23,12 +23,12 @@ pub fn menu_button<A: Component>(label: impl Into<String>, action: A) -> impl Bu
             height: px(MENU_BUTTON_HEIGHT),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
-            border_radius: BorderRadius::all(px(8)),
+            border: UiRect::all(px(1)),
+            border_radius: BorderRadius::all(px(4)),
             ..default()
         },
-        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
-        button_gradient(0.0),
-        button_shadow(0.0),
+        BackgroundColor(theme::SURFACE_ELEVATED),
+        BorderColor::all(theme::BORDER),
         children![typography::button_label(label)],
     )
 }
@@ -48,12 +48,12 @@ pub fn sidebar_menu_button<A: Component, L: Component>(
             padding: UiRect::axes(px(14), px(0)),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
-            border_radius: BorderRadius::all(px(8)),
+            border: UiRect::all(px(1)),
+            border_radius: BorderRadius::all(px(4)),
             ..default()
         },
-        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
-        button_gradient(0.0),
-        button_shadow(0.0),
+        BackgroundColor(theme::SURFACE_ELEVATED),
+        BorderColor::all(theme::BORDER),
         children![(typography::button_label(label), label_marker)],
     )
 }
@@ -71,10 +71,12 @@ pub(crate) fn compact_control_button<A: Component>(
             height: px(COMPACT_CONTROL_HEIGHT),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
-            border_radius: BorderRadius::all(px(7)),
+            border: UiRect::all(px(1)),
+            border_radius: BorderRadius::all(px(4)),
             ..default()
         },
-        BackgroundColor(Color::srgba(0.20, 0.14, 0.38, 0.72)),
+        BackgroundColor(theme::SURFACE_ELEVATED),
+        BorderColor::all(theme::BORDER),
         children![typography::button_label(label)],
     )
 }
@@ -85,94 +87,63 @@ pub fn animate_buttons(
         (
             &Interaction,
             &mut AsteriaButtonVisual,
-            &mut BackgroundGradient,
+            &mut BackgroundColor,
+            &mut BorderColor,
             &mut BoxShadow,
         ),
         With<Button>,
     >,
 ) {
-    let smoothing = 1.0 - (-10.0 * time.delta_secs()).exp();
+    let smoothing = 1.0 - (-14.0 * time.delta_secs()).exp();
 
-    for (interaction, mut visual, mut gradient, mut shadow) in &mut buttons {
+    for (interaction, mut visual, mut background, mut border, mut shadow) in &mut buttons {
         let target = match interaction {
             Interaction::None => 0.0,
             Interaction::Hovered => 1.0,
-            Interaction::Pressed => 1.25,
+            Interaction::Pressed => 2.0,
         };
-        let delta = target - visual.level;
 
-        if delta.abs() <= BUTTON_VISUAL_SETTLE_EPSILON {
-            if visual.level != target {
-                visual.level = target;
-                *gradient = button_gradient(target);
-                *shadow = button_shadow(target);
-            }
-            continue;
+        let delta = target - visual.level;
+        if delta.abs() > BUTTON_VISUAL_SETTLE_EPSILON {
+            visual.level += delta * smoothing;
+        } else {
+            visual.level = target;
         }
 
-        visual.level += delta * smoothing;
-        *gradient = button_gradient(visual.level);
-        *shadow = button_shadow(visual.level);
+        let level = visual.level.clamp(0.0, 2.0);
+        let (next_background, next_border) = button_colors(level);
+        if background.0 != next_background {
+            background.0 = next_background;
+        }
+        let next_border = BorderColor::all(next_border);
+        if *border != next_border {
+            *border = next_border;
+        }
+
+        let next_shadow = button_shadow(level);
+        if *shadow != next_shadow {
+            *shadow = next_shadow;
+        }
     }
 }
 
-fn button_gradient(level: f32) -> BackgroundGradient {
-    let lift = level.clamp(0.0, 1.25);
-
-    BackgroundGradient::from(LinearGradient::to_right(vec![
-        ColorStop::percent(Color::srgba(0.35, 0.12, 0.70, 0.0), 0.0),
-        ColorStop::percent(
-            Color::srgba(0.38 + 0.04 * lift, 0.11, 0.72, 0.08 + 0.04 * lift),
-            13.0,
-        ),
-        ColorStop::percent(
-            Color::srgba(0.40 + 0.05 * lift, 0.13, 0.75, 0.34 + 0.10 * lift),
-            29.0,
-        ),
-        ColorStop::percent(
-            Color::srgba(
-                0.35 + 0.07 * lift,
-                0.14,
-                0.72 + 0.04 * lift,
-                0.72 + 0.12 * lift,
-            ),
-            49.0,
-        ),
-        ColorStop::percent(
-            Color::srgba(
-                0.26 + 0.06 * lift,
-                0.20,
-                0.62 + 0.08 * lift,
-                0.68 + 0.14 * lift,
-            ),
-            58.0,
-        ),
-        ColorStop::percent(
-            Color::srgba(
-                0.18,
-                0.28 + 0.05 * lift,
-                0.58 + 0.08 * lift,
-                0.30 + 0.10 * lift,
-            ),
-            76.0,
-        ),
-        ColorStop::percent(Color::srgba(0.14, 0.35, 0.62, 0.06 + 0.04 * lift), 90.0),
-        ColorStop::percent(Color::srgba(0.14, 0.35, 0.62, 0.0), 100.0),
-    ]))
+fn button_colors(level: f32) -> (Color, Color) {
+    if level >= 1.5 {
+        (theme::SURFACE_INSET, theme::BORDER_STRONG)
+    } else if level >= 0.25 {
+        (theme::SURFACE_ELEVATED, theme::BORDER_STRONG)
+    } else {
+        (theme::SURFACE_ELEVATED, theme::BORDER)
+    }
 }
 
 fn button_shadow(level: f32) -> BoxShadow {
-    let lift = level.clamp(0.0, 1.25);
+    let lift = level.clamp(0.0, 1.0);
     BoxShadow(vec![ShadowStyle {
-        color: Color::srgba(
-            0.40 - 0.08 * lift,
-            0.20 + 0.06 * lift,
-            1.0,
-            0.10 + 0.16 * lift,
-        ),
+        color: Color::srgba(0.0, 0.0, 0.0, 0.24 + 0.10 * lift),
         x_offset: px(0),
-        y_offset: px(0),
-        spread_radius: px(-4),
-        blur_radius: px(18.0 + 6.0 * lift),
+        y_offset: px(2),
+        spread_radius: px(0),
+        blur_radius: px(5 + 3 * lift),
     }])
 }
