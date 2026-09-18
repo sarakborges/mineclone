@@ -69,8 +69,7 @@ use lighting_updates::{pending_lighting_work, process_dynamic_lighting};
 pub(crate) use new_world::{
     DEFAULT_BIOME_SIZE_MULTIPLIER,
     MAX_BIOME_SIZE_MULTIPLIER, MIN_BIOME_SIZE_MULTIPLIER, NewWorldConfig,
-    biome_size_multiplier_tenths, is_valid_biome_size_multiplier,
-    snap_biome_size_multiplier,
+    is_valid_biome_size_multiplier, snap_biome_size_multiplier,
 };
 use render_diagnostics::{log_render_asset_pressure, render_diagnostics_due};
 use render_distance::RenderDistanceSettings;
