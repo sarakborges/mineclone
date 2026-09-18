@@ -11,7 +11,7 @@ use crate::{
         dimension::DimensionRegistry,
     },
     localization::{ActiveLanguage, UiLocalization},
-    ui::{scrollbar::vertical_scrollbar, surface, text_input::{self, editable_value}, typography},
+    ui::{scrollbar::vertical_scrollbar, selectable, text_input::{self, editable_value}, typography},
     world::{NewWorldConfig, dimension::DEFAULT_DIMENSION_ID},
 };
 
@@ -126,7 +126,7 @@ fn spawn_option(
     label: String,
     selected: bool,
 ) {
-    let (background, border) = surface::hud_control_static(selected);
+    let (background, border) = selectable::static_colors(selected);
     let label_biome_id = biome_id.clone();
 
     list.spawn((
@@ -400,8 +400,8 @@ pub(in crate::screens::settings_screen) fn sync_spawn_biome_options(
             continue;
         }
         let selected = config.spawn_biome() == option.biome_id.as_deref();
-        surface::apply_control_colors(
-            surface::hud_control_colors(*interaction, selected),
+        selectable::apply_colors(
+            selectable::colors(*interaction, selected),
             background,
             border,
         );
