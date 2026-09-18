@@ -5,7 +5,7 @@ use std::{
     time::Instant,
 };
 
-use bevy::{ecs::system::SystemParam, log::warn, prelude::*};
+use bevy::{ecs::system::SystemParam, log::warn, prelude::*, ui_widgets::ScrollArea};
 
 use crate::{
     app::game_state::GameState,
