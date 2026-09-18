@@ -136,7 +136,7 @@ pub(super) fn river_height(node: DrainageNode, sea_level: f32) -> f32 {
 mod tests {
     use super::*;
     use crate::{
-        content::biome_hydrology::BiomeHydrology,
+        content::biome_hydrology::BiomeHydrologyRules,
         world::hydrology::HydrologyRegion,
     };
 
@@ -145,7 +145,7 @@ mod tests {
             position,
             elevation,
             continentalness: 0.8,
-            biome_hydrology: BiomeHydrology::default(),
+            biome_hydrology: BiomeHydrologyRules::default(),
         }
     }
 
@@ -167,7 +167,7 @@ mod tests {
         let mut sample = |position: Vec2| HydrologySurfaceSample {
             elevation: 80.0,
             continentalness: 0.8,
-            biome_hydrology: BiomeHydrology {
+            biome_hydrology: BiomeHydrologyRules {
                 can_generate_river: position.x < 8.0 || position.x > 12.0,
                 ..Default::default()
             },
@@ -186,7 +186,7 @@ mod tests {
         let mut sample = |_position: Vec2| HydrologySurfaceSample {
             elevation: 60.0,
             continentalness: 0.2,
-            biome_hydrology: BiomeHydrology {
+            biome_hydrology: BiomeHydrologyRules {
                 can_generate_river: false,
                 ..Default::default()
             },
@@ -234,7 +234,7 @@ mod tests {
                 |_| HydrologySurfaceSample {
                     elevation: 120.0,
                     continentalness: 0.8,
-                    biome_hydrology: BiomeHydrology::default(),
+                    biome_hydrology: BiomeHydrologyRules::default(),
                 },
             );
         }
