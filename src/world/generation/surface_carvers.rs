@@ -12,13 +12,15 @@ const MAXIMUM_TUNNEL_SLOPE: f32 = 0.06;
 const TUNNEL_CURVE_STRENGTH: f32 = 0.38;
 // Surface tunnels can span well over 100 blocks. Five samples left 30-40 block
 // straight capsules visible in the terrain; keep the authored Bezier visibly curved.
-const TUNNEL_PATH_SAMPLES: usize = 13;
+const TUNNEL_PATH_SAMPLES: usize = 25;
 const TUNNEL_MOUTH_BLEND_DEPTH: f32 = 12.0;
 const TUNNEL_MOUTH_HORIZONTAL_FLARE: f32 = 0.85;
 // Like lake shores, surface-tunnel mouths own a dry outer grading margin.
-// 1.0 is the tunnel core boundary; this is where grading reaches zero.
-const TUNNEL_MARGIN_OUTER_NORMALIZED_DISTANCE: f32 = 1.35;
+// Keep this in world blocks rather than a radius multiplier so small tunnels
+// still receive a broad enough hillside transition.
+const TUNNEL_MARGIN_OUTER_DISTANCE: f32 = 14.0;
 const TUNNEL_MARGIN_SURFACE_OFFSET: f32 = 0.5;
+const TUNNEL_MOUTH_CENTER_HEIGHT_FRACTION: f32 = 0.25;
 
 #[derive(Clone, Copy, Debug)]
 struct ResolvedSurfaceTunnel {
@@ -139,7 +141,7 @@ pub(super) fn surface_carver_density_delta(
         0.0
     };
 
-    carve_delta + column.margin_density_delta * (1.0 - strongest.clamp(0.0, 1.0))
+    carve_delta + column.margin_density_delta
 }
 
 fn carver_intersects_vertical_range(
@@ -191,9 +193,8 @@ fn resolve_tunnel_candidates(
     );
     let maximum_mouth_radius =
         radius.max * (1.0 + TUNNEL_MOUTH_HORIZONTAL_FLARE);
-    let maximum_reach = length.max * 0.5
-        + maximum_mouth_radius * TUNNEL_MARGIN_OUTER_NORMALIZED_DISTANCE
-        + jitter;
+    let maximum_reach =
+        length.max * 0.5 + maximum_mouth_radius + TUNNEL_MARGIN_OUTER_DISTANCE + jitter;
     let search_radius = (maximum_reach / spacing).ceil() as i32 + 1;
     let seed = mix_seed(
         context.world_seed
@@ -345,23 +346,27 @@ fn surface_tunnel_margin_density_delta(
         let core_radius =
             tunnel.radius * (1.0 + TUNNEL_MOUTH_HORIZONTAL_FLARE * exposure);
         let normalized_distance = horizontal_distance / core_radius.max(f32::EPSILON);
-        let margin_strength = tunnel_margin_strength(normalized_distance);
+        let margin_strength = tunnel_margin_strength(horizontal_distance, core_radius);
         if margin_strength <= 0.0 {
             continue;
         }
 
-        // Match lake-shore semantics: the opening owns the core, while the
-        // grading margin becomes strongest at the core boundary and then fades
-        // smoothly to untouched terrain outside it.
-        let opening =
+        // Lake-style basin semantics for the tunnel mouth:
+        // - center of the core lowers the terrain toward the tunnel interior;
+        // - core boundary converges to the tunnel roof;
+        // - outer dry margin fades from that roof back to natural terrain.
+        let core_opening =
             smoothstep(1.0 - normalized_distance.clamp(0.0, 1.0));
-        let target_surface = path_y + TUNNEL_MARGIN_SURFACE_OFFSET;
+        let roof_surface = tunnel_top + TUNNEL_MARGIN_SURFACE_OFFSET;
+        let center_surface =
+            path_y + tunnel.radius * TUNNEL_MOUTH_CENTER_HEIGHT_FRACTION;
+        let target_surface = if normalized_distance <= 1.0 {
+            lerp(roof_surface, center_surface, core_opening)
+        } else {
+            roof_surface
+        };
         let height_delta = (target_surface - surface_y).min(0.0);
-        let delta = height_delta
-            * margin_strength
-            * (1.0 - opening)
-            * exposure
-            * tunnel.weight;
+        let delta = height_delta * margin_strength * exposure * tunnel.weight;
 
         if delta.abs() > strongest_delta.abs() {
             strongest_delta = delta;
@@ -387,17 +392,17 @@ fn horizontal_distance_to_segment(point: Vec2, start: Vec3, end: Vec3) -> (f32, 
     (point.distance(closest), path_y)
 }
 
-fn tunnel_margin_strength(normalized_distance: f32) -> f32 {
-    if normalized_distance <= 1.0 {
+fn tunnel_margin_strength(horizontal_distance: f32, core_radius: f32) -> f32 {
+    if horizontal_distance <= core_radius {
         return 1.0;
     }
-    if normalized_distance >= TUNNEL_MARGIN_OUTER_NORMALIZED_DISTANCE {
+    let outer_radius = core_radius + TUNNEL_MARGIN_OUTER_DISTANCE;
+    if horizontal_distance >= outer_radius {
         return 0.0;
     }
 
-    let progress = 1.0
-        - (normalized_distance - 1.0)
-            / (TUNNEL_MARGIN_OUTER_NORMALIZED_DISTANCE - 1.0).max(f32::EPSILON);
+    let progress =
+        1.0 - (horizontal_distance - core_radius) / TUNNEL_MARGIN_OUTER_DISTANCE;
     smoothstep(progress.clamp(0.0, 1.0))
 }
 
@@ -436,6 +441,10 @@ fn mix_seed(mut seed: u64) -> u64 {
     seed = seed.wrapping_mul(0xc4ce_b9fe_1a85_ec53);
     seed ^= seed >> 33;
     seed
+}
+
+fn lerp(from: f32, to: f32, amount: f32) -> f32 {
+    from + (to - from) * amount
 }
 
 fn smoothstep(value: f32) -> f32 {
@@ -566,14 +575,21 @@ mod tests {
 
     #[test]
     fn tunnel_margin_matches_lake_style_falloff() {
-        assert_eq!(tunnel_margin_strength(1.0), 1.0);
-        assert!(tunnel_margin_strength(1.1) > 0.0);
+        let core_radius = 10.0;
+        assert_eq!(tunnel_margin_strength(core_radius, core_radius), 1.0);
+        assert!(tunnel_margin_strength(core_radius + 2.0, core_radius) > 0.0);
         assert!(
-            tunnel_margin_strength(1.1)
-                > tunnel_margin_strength(TUNNEL_MARGIN_OUTER_NORMALIZED_DISTANCE - 0.05)
+            tunnel_margin_strength(core_radius + 2.0, core_radius)
+                > tunnel_margin_strength(
+                    core_radius + TUNNEL_MARGIN_OUTER_DISTANCE - 2.0,
+                    core_radius,
+                )
         );
         assert_eq!(
-            tunnel_margin_strength(TUNNEL_MARGIN_OUTER_NORMALIZED_DISTANCE),
+            tunnel_margin_strength(
+                core_radius + TUNNEL_MARGIN_OUTER_DISTANCE,
+                core_radius,
+            ),
             0.0
         );
     }
@@ -589,7 +605,7 @@ mod tests {
             weight: 1.0,
         };
         let core_radius = 6.0 * (1.0 + TUNNEL_MOUTH_HORIZONTAL_FLARE);
-        let horizontal = Vec2::new(0.0, core_radius * 1.1);
+        let horizontal = Vec2::new(0.0, core_radius + 4.0);
         let delta = surface_tunnel_margin_density_delta(horizontal, 58.0, &[tunnel]);
 
         assert!(delta < 0.0);
@@ -599,7 +615,7 @@ mod tests {
     fn deep_tunnel_has_no_surface_margin() {
         let tunnel = ResolvedSurfaceTunnel {
             points: std::array::from_fn(|index| {
-                let x = -12.0 + index as f32 * 2.0;
+                let x = -12.0 + index as f32 * 1.0;
                 Vec3::new(x, 30.0, 0.0)
             }),
             radius: 6.0,
@@ -610,5 +626,23 @@ mod tests {
             surface_tunnel_margin_density_delta(Vec2::new(0.0, 8.0), 60.0, &[tunnel]),
             0.0
         );
+    }
+
+    #[test]
+    fn tunnel_core_surface_is_graded_before_3d_carve() {
+        let tunnel = ResolvedSurfaceTunnel {
+            points: std::array::from_fn(|index| {
+                let x = -12.0 + index as f32 * 1.0;
+                Vec3::new(x, 50.0, 0.0)
+            }),
+            radius: 6.0,
+            weight: 1.0,
+        };
+
+        let center = surface_tunnel_margin_density_delta(Vec2::ZERO, 58.0, &[tunnel]);
+        let boundary = surface_tunnel_margin_density_delta(Vec2::new(0.0, 10.0), 58.0, &[tunnel]);
+
+        assert!(center < 0.0);
+        assert!(center <= boundary);
     }
 }
