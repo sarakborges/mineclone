@@ -315,7 +315,15 @@ fn collect_completed_remesh_tasks(
         if !renderer.pool.contains(coord) || world.chunk(coord).is_none() {
             continue;
         }
-        if completed.revision != current_revision || !output.dependencies.is_current(world) {
+        if completed.revision != current_revision
+            || !output.dependencies.content_is_current(world)
+        {
+            queue.enqueue_task_priority(coord, output.kind);
+            continue;
+        }
+
+        let lighting_is_current = output.dependencies.lighting_is_current();
+        if output.kind != ChunkRemeshTaskKind::Fluid && !lighting_is_current {
             queue.enqueue_task_priority(coord, output.kind);
             continue;
         }
@@ -334,14 +342,19 @@ fn collect_completed_remesh_tasks(
                 meshes,
                 &render_context,
             ),
-            ChunkRemeshTaskMeshes::Fluid(meshes) => apply_built_chunk_fluid_meshes(
-                &mut renderer.commands,
-                &mut renderer.meshes,
-                &mut renderer.pool,
-                coord,
-                meshes,
-                &render_context,
-            ),
+            ChunkRemeshTaskMeshes::Fluid(meshes) => {
+                apply_built_chunk_fluid_meshes(
+                    &mut renderer.commands,
+                    &mut renderer.meshes,
+                    &mut renderer.pool,
+                    coord,
+                    meshes,
+                    &render_context,
+                );
+                if !lighting_is_current {
+                    queue.enqueue_fluid_priority(coord);
+                }
+            }
         }
     }
 }
