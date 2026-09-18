@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.7`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. Revisão retroativa de versionamento em 2026-09-18: `0.22.8` foi o último bump antes dos blocos de combate/entidades e UI; o bloco de health/hurt/death/knockback é registrado retrospectivamente como linha `0.23.x`, sem reescrever o histórico Git; a unificação inicial do design system/settings foi `0.24.0`, a auditoria/refatoração estrutural fechou em `0.24.1`, o pacote priorizado de UI/interação/worldgen fechou em `0.24.2`, dropdown/spawn/hidrologia em `0.24.3`, a correção estrutural da face da slime em `0.24.4`, o primeiro override determinístico de Spawn Biome em `0.24.5`, persistência autoritativa de chunks + shape correto do Spawn Biome + casing canônico de botões em `0.24.6`, e HUD/persistência compacta-assíncrona/ocean bathymetry em `0.24.7`. **HEAD funcional validado desta atualização:** `1a7126de97fd9982553d718b133f46e4b0da754b`. CI `35378340083` (run 4010) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.8`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. Revisão retroativa de versionamento em 2026-09-18: `0.22.8` foi o último bump antes dos blocos de combate/entidades e UI; o bloco de health/hurt/death/knockback é registrado retrospectivamente como linha `0.23.x`, sem reescrever o histórico Git; a unificação inicial do design system/settings foi `0.24.0`, a auditoria/refatoração estrutural fechou em `0.24.1`, o pacote priorizado de UI/interação/worldgen fechou em `0.24.2`, dropdown/spawn/hidrologia em `0.24.3`, a correção estrutural da face da slime em `0.24.4`, o primeiro override determinístico de Spawn Biome em `0.24.5`, persistência autoritativa de chunks + shape correto do Spawn Biome + casing canônico de botões em `0.24.6`, HUD/persistência compacta-assíncrona/ocean bathymetry em `0.24.7`, e suavização geométrica dos surface tunnels em `0.24.8`. **HEAD funcional validado desta atualização:** `c7cfd172c6302341006850c7bf583ce872a84dc8`. CI `35379295792` (run 4022) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 ## Histórico integral obrigatório
 
@@ -549,4 +549,31 @@ Próximo passo imediato: QA Windows focado em (1) gerar área, sair do range e v
 - Não executei `cargo test`, `cargo run` nem QA Windows.
 
 Próximo passo imediato: QA Windows focado em (1) abrir Pause e confirmar Player HUD invisível; (2) deixar autosave de 60 s acontecer sem hitch perceptível e verificar criação de snapshot válido; (3) Leave World num mundo com vários chunks e conferir tamanho/tempo do save compacto; (4) explorar costa entre Spawn Biome e oceano natural para verificar ausência da faixa cortada; (5) observar fundo de oceano em mar aberto para validar bathymetry sem depender de tunnels.
+
+## Checkpoint 95 — 2026-09-18: surface tunnels sem paredes retas no terreno [CÓDIGO + CI VERDE]
+
+- Bug reportado: surface tunnels ainda podiam produzir paredes visualmente retas/verticais ao cortar o terreno.
+- Causa 1: o Bezier do tunnel era discretizado com apenas **5 pontos**. Com lengths de até ~170 blocos, isso transformava a curva em cápsulas retas de dezenas de blocos, deixando laterais/trechos claramente lineares.
+- Correção: `TUNNEL_PATH_SAMPLES` passou de 5 para **13**, reduzindo o comprimento dos segmentos e preservando a curvatura visível do path sem trocar o modelo de conectividade.
+- Causa 2: o perfil circular do tubo era levado intacto até a superfície. Quando a seção intersectava uma encosta, a lateral cilíndrica podia chegar ao topo como parede quase vertical.
+- Correção: `surface_carver_density_delta` agora recebe a altura real da superfície da coluna.
+- Nos últimos **12 blocos abaixo da superfície**, o perfil ganha um **flare horizontal suave**:
+  - o raio vertical permanece o raio autorado do tunnel;
+  - somente o raio horizontal cresce progressivamente;
+  - flare máximo atual = **0.85 × radius** adicional;
+  - o fator usa smoothstep por profundidade;
+  - abaixo dessa faixa o perfil continua circular exatamente como antes.
+- A distância do tunnel deixou de ser apenas distância Euclidiana/radius e passou a usar distância normalizada anisotrópica perto da boca: horizontal dividido pelo raio flareado, vertical dividido pelo raio original.
+- `structures/support.rs` usa o mesmo `raw_surface_height` ao avaliar carvers, mantendo suporte de estruturas consistente com a geometria realmente gerada.
+- `tunnel_connects_to_cave` agora aceita slice de pontos em vez de array fixo de `TUNNEL_PATH_SAMPLES`, evitando acoplamento dos testes/conectividade a um número específico de amostras.
+- O requisito anterior continua valendo: surface tunnel só existe se intersectar o cave connector graph; esse fix altera apenas shape/rasterização, não a regra de conectividade.
+- `ARCHITECTURE.md` agora proíbe discretizar tunnels longos em poucos segmentos retos e exige flare suave da boca ao encontrar a superfície.
+- Commits principais: `8a75f95b...` (curva + mouth flare), `cb05c63e...` (surface height no density pass), `d625332a...` (structure support), `1f3c84ef...` (connectivity slice), `223093e4...` (contrato arquitetural), `c7cfd172...` (`VERSION 0.24.8`).
+- Primeira validação 4015 expôs apenas integrações mecânicas faltantes (call de structure support e arrays de teste fixos), corrigidas antes da validação final.
+- HEAD funcional/versionado canônico: `c7cfd172c6302341006850c7bf583ce872a84dc8`.
+- CI canônica: `35379295792` / run 4022 — **success**.
+- Passaram: auditoria de localizações, `cargo clippy --locked --all-targets --all-features -- -D warnings`, `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+Próximo passo imediato: QA visual Windows em Mountains, procurando entradas de surface tunnels em encostas altas e baixas para confirmar (1) ausência de trechos longos retos, (2) boca com talude suave sem parede cilíndrica vertical, (3) subterrâneo mantendo seção circular e (4) conectividade com caves preservada.
 
