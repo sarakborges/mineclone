@@ -1,9 +1,10 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    content::{block::BlockRegistry, tool::ToolRegistry},
+    content::{attack::AttackRegistry, block::BlockRegistry, tool::ToolRegistry},
     gameplay::availability::world_interaction_available,
     creatures::{CreatureAnimationState, CreatureInstance},
+    creatures::motion::CreatureMotion,
     entity::EntityHealth,
     player::{camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar, viewmodel::ViewModelAnimation},
     voxel::{
@@ -58,6 +59,7 @@ struct BlockEditInput<'w, 's> {
 struct BlockEditDefinitions<'w> {
     blocks: Res<'w, BlockRegistry>,
     tools: Res<'w, ToolRegistry>,
+    attacks: Res<'w, AttackRegistry>,
 }
 
 fn edit_targeted_block(
@@ -66,7 +68,8 @@ fn edit_targeted_block(
     mut runtime: VoxelTopologyRuntime,
     mut tool_uses: MessageWriter<ToolUse>,
     mut viewmodel_animation: ResMut<ViewModelAnimation>,
-    mut creature_health: Query<(&mut EntityHealth, &mut CreatureAnimationState), With<CreatureInstance>>,
+    mut creature_health: Query<(&mut EntityHealth, &mut CreatureAnimationState, &mut CreatureMotion, &Transform), With<CreatureInstance>>,
+    mut random_state: Local<u32>,
 ) {
     let left_pressed = input.buttons.just_pressed(MouseButton::Left);
     let right_pressed = input.buttons.just_pressed(MouseButton::Right);
@@ -90,8 +93,19 @@ fn edit_targeted_block(
     let selected_item = input.hotbar.item_at(selected_slot);
 
     if left_pressed && let Some(entity) = input.creature_target.0 {
-        if let Ok((mut health, mut animation)) = creature_health.get_mut(entity) {
-            let dead = health.damage(1.0);
+        let Some(attack) = definitions.attacks.get("asteria:punch") else {
+            return;
+        };
+        if let Ok((mut health, mut animation, mut motion, creature_transform)) = creature_health.get_mut(entity) {
+            let dead = health.damage(attack.damage);
+            let direction = creature_transform.translation - player_transform.translation;
+            for effect in &attack.effects {
+                if effect.chance >= 1.0 || next_random(&mut random_state) as f32 / u32::MAX as f32 <= effect.chance {
+                    if effect.effect == "knockback" {
+                        motion.apply_knockback(direction, effect.strength);
+                    }
+                }
+            }
             viewmodel_animation.play_break();
             animation.trigger(if dead { "death" } else { "hurt" });
         }
@@ -150,4 +164,12 @@ fn edit_targeted_block(
     }
 
     input.targeted.0 = None;
+}
+
+fn next_random(state: &mut u32) -> u32 {
+    if *state == 0 { *state = 0x9E37_79B9; }
+    *state ^= *state << 13;
+    *state ^= *state >> 17;
+    *state ^= *state << 5;
+    *state
 }
