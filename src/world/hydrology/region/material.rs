@@ -2,12 +2,18 @@ use bevy::prelude::*;
 
 use super::HydrologyRegion;
 use crate::world::hydrology::{
-    constants::{
-        BED_MATERIAL_DEPTH, COAST_MAXIMUM_SURFACE_HEIGHT, OCEAN_EXTRA_DEPTH,
-        OCEAN_MINIMUM_DEPTH, SHORE_STRENGTH,
-    },
+    constants::{BED_MATERIAL_DEPTH, COAST_MAXIMUM_SURFACE_HEIGHT, SHORE_STRENGTH},
     math::{hydrology_dominates_surface, lerp, ocean_strength, smoothstep},
 };
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct HydrologyMaterialSet<'a> {
+    pub(crate) river_bed_block: Option<&'a str>,
+    pub(crate) lake_bed_block: Option<&'a str>,
+    pub(crate) inland_shore_block: Option<&'a str>,
+    pub(crate) ocean_bed_block: Option<&'a str>,
+    pub(crate) coast_shore_block: Option<&'a str>,
+}
 
 #[derive(Clone, Copy, Debug)]
 struct BedMaterial<'a> {
@@ -42,17 +48,22 @@ impl<'a> MaterialColumnProfile<'a> {
 }
 
 impl HydrologyRegion {
-    pub(crate) fn solid_blocks_for_column<const N: usize>(
+    pub(crate) fn solid_blocks_for_column<'a, const N: usize>(
         &self,
         horizontal: Vec2,
         first_y: f32,
-    ) -> [Option<&str>; N] {
-        let profile = self.material_column_profile(horizontal);
+        materials: HydrologyMaterialSet<'a>,
+    ) -> [Option<&'a str>; N] {
+        let profile = self.material_column_profile(horizontal, materials);
 
         std::array::from_fn(|index| profile.material_at(first_y + index as f32))
     }
 
-    fn material_column_profile(&self, horizontal: Vec2) -> MaterialColumnProfile<'_> {
+    fn material_column_profile<'a>(
+        &self,
+        horizontal: Vec2,
+        materials: HydrologyMaterialSet<'a>,
+    ) -> MaterialColumnProfile<'a> {
         let water_body = self
             .water_bodies
             .iter()
@@ -63,21 +74,19 @@ impl HydrologyRegion {
             .max_by(|(_, left), (_, right)| left.total_cmp(right))
             .map(|(body, strength)| BedMaterial {
                 bed: body.water_level - body.carve_depth * strength,
-                material: self.lake_bed_material(strength),
+                material: lake_bed_material(strength, materials),
             });
 
         let river = self.river_graph.sample_horizontal(horizontal).map(|river| {
             let profile = smoothstep(river.strength);
             let material = if river.strength <= SHORE_STRENGTH {
-                self.settings
-                    .shore_block
-                    .as_deref()
-                    .or(self.settings.river_bed_block.as_deref())
+                materials
+                    .inland_shore_block
+                    .or(materials.river_bed_block)
             } else {
-                self.settings
+                materials
                     .river_bed_block
-                    .as_deref()
-                    .or(self.settings.shore_block.as_deref())
+                    .or(materials.inland_shore_block)
             };
 
             BedMaterial {
@@ -92,23 +101,20 @@ impl HydrologyRegion {
                 return None;
             }
 
-            let target_floor =
-                self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength;
+            let target_floor = self.ocean_floor_target(horizontal, strength);
             let floor = lerp(sample.elevation, target_floor, strength);
             if floor > self.sea_level + COAST_MAXIMUM_SURFACE_HEIGHT {
                 return None;
             }
 
             let material = if strength <= SHORE_STRENGTH {
-                self.settings
-                    .shore_block
-                    .as_deref()
-                    .or(self.settings.ocean_bed_block.as_deref())
+                materials
+                    .coast_shore_block
+                    .or(materials.ocean_bed_block)
             } else {
-                self.settings
+                materials
                     .ocean_bed_block
-                    .as_deref()
-                    .or(self.settings.shore_block.as_deref())
+                    .or(materials.coast_shore_block)
             };
 
             Some(BedMaterial {
@@ -123,15 +129,17 @@ impl HydrologyRegion {
             ocean,
         }
     }
+}
 
-    fn lake_bed_material(&self, strength: f32) -> Option<&str> {
-        let bed = self.settings.lake_bed_block.as_deref();
-
-        if strength <= SHORE_STRENGTH {
-            self.settings.shore_block.as_deref().or(bed)
-        } else {
-            bed.or(self.settings.shore_block.as_deref())
-        }
+fn lake_bed_material(strength: f32, materials: HydrologyMaterialSet<'_>) -> Option<&str> {
+    if strength <= SHORE_STRENGTH {
+        materials
+            .inland_shore_block
+            .or(materials.lake_bed_block)
+    } else {
+        materials
+            .lake_bed_block
+            .or(materials.inland_shore_block)
     }
 }
 
