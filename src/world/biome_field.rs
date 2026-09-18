@@ -86,10 +86,17 @@ pub(crate) struct SurfaceBoundarySample {
 }
 
 pub struct BiomeFieldSample<'a> {
+    /// Effective surface identity at this position. A source biome's
+    /// surfaceMargin may own this identity across the regional boundary.
     pub primary_id: &'a str,
+    /// Regional terrain owner used by the blended terrain field.
     pub(crate) primary_surface_index: usize,
+    /// Source biome whose authored margin owns this position, if any.
     pub(crate) surface_margin_index: Option<usize>,
+    /// Index matching primary_id; equals primary_surface_index outside margins.
     pub(crate) identity_surface_index: usize,
+    /// Regional terrain influences. These intentionally remain independent
+    /// from an effective margin identity so shoreline shape stays continuous.
     pub influences: ArrayVec<BiomeInfluence<'a>, MAX_SURFACE_INFLUENCES>,
 }
 
