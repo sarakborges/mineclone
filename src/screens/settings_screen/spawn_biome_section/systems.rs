@@ -182,9 +182,21 @@ pub(in crate::screens::settings_screen) fn handle_spawn_biome_dropdown_button(
 
 pub(in crate::screens::settings_screen) fn close_spawn_biome_dropdown_outside_general(
     selection: Res<SettingsSectionSelection>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    button: Query<&Interaction, With<SpawnBiomeDropdownButton>>,
+    options: Query<&Interaction, With<SpawnBiomeOption>>,
     mut state: ResMut<SpawnBiomeDropdownState>,
 ) {
     if selection.is_changed() && selection.selected != SettingsSection::General && state.open {
+        state.close();
+        return;
+    }
+    if !state.open || !mouse.just_pressed(MouseButton::Left) {
+        return;
+    }
+    let clicked_inside = button.iter().any(|i| *i == Interaction::Pressed)
+        || options.iter().any(|i| *i == Interaction::Pressed);
+    if !clicked_inside {
         state.close();
     }
 }
