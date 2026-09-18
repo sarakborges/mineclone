@@ -1,5 +1,5 @@
 mod constants;
-mod distribution;
+pub(crate) mod distribution;
 mod mountain_belt;
 mod mountain_peak;
 mod noise_band;
