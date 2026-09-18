@@ -72,9 +72,9 @@ fn update_underwater_tint(
 
     let entering_underwater = *visibility != Visibility::Visible;
     if entering_underwater || biome_visuals.inputs_changed() {
-        let color = biome_visuals.blend_hsi(|biome| biome.visuals.underwater_tint.color);
+        let color = biome_visuals.blend_hsi(|biome| biome.visuals().underwater_tint.color);
         let opacity = biome_visuals
-            .weighted_scalar(|biome| biome.visuals.underwater_tint.opacity)
+            .weighted_scalar(|biome| biome.visuals().underwater_tint.opacity)
             .clamp(0.0, 1.0);
         let [red, green, blue] = color.to_srgb();
         background.0 = Color::srgba(red, green, blue, opacity);
