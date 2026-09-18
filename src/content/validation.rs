@@ -4,6 +4,7 @@ pub(super) fn validate_content(content: &LoadedContent) {
     for attack in content.attacks.iter() {
         attack.validate();
     }
+    assert!(content.attacks.get(&content.player.attack).is_some(), "player references missing attack {}", content.player.attack);
 
     for category in content.inventory_categories.iter() {
         category.validate_references(&content.blocks);
