@@ -163,6 +163,7 @@ pub(crate) fn generate_chunk(
             anchored_caves: anchored_caves.as_deref(),
             biome_field: context.biome_field,
             biomes: context.biomes,
+            dimension: context.dimension,
             sea_level: context.dimension.sea_level as f32,
         },
     );
