@@ -16,7 +16,7 @@ use crate::{
     localization::{ActiveLanguage, UiLocalization},
     player::{game_mode::GameMode, hotbar::PlayerHotbar, player_id::LOCAL_PLAYER_ID},
     ui::{
-        button::menu_button, surface, theme,
+        button::menu_button, scrollbar, surface, theme,
         transition::{ScreenTransition, ScreenTransitionTarget}, typography,
     },
     voxel::world::VoxelWorld,
@@ -311,13 +311,22 @@ fn spawn_world_selection(
                     }),
                 ));
                 panel.spawn((
-                    WorldListContainer,
-                    Node {
-                        width: percent(100),
-                        flex_direction: FlexDirection::Column,
-                        ..default()
-                    },
-                ));
+                    let world_list = panel
+                    .spawn((
+                        WorldListContainer,
+                        ScrollPosition(Vec2::ZERO),
+                        Node {
+                            width: percent(100),
+                            max_height: px(260),
+                            min_height: px(0),
+                            flex_direction: FlexDirection::Column,
+                            row_gap: px(8),
+                            overflow: Overflow::scroll_y(),
+                            ..default()
+                        },
+                    ))
+                    .id();
+                panel.spawn(scrollbar::vertical_scrollbar(world_list));
                 panel.spawn((SelectionFeedback, typography::caption(String::new())));
                 panel.spawn((SelectionError, typography::caption(state.error.clone())));
                 panel.spawn(menu_button(
