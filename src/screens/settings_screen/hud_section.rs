@@ -87,7 +87,10 @@ fn display_tooltips_setting(
                 localization.text(language, "settings.displayTooltips"),
                 localization.text(language, "settings.displayTooltips.description"),
             ),
-            display_tooltips_toggle(display_tooltips),
+            (
+                Node { margin: UiRect::top(px(2)), ..default() },
+                display_tooltips_toggle(display_tooltips),
+            ),
         ],
     )
 }
