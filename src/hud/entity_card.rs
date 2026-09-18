@@ -36,10 +36,10 @@ pub(super) struct EntityCard {
 pub(super) struct EntityCardName(EntityCardSource);
 
 #[derive(Component)]
-struct EntityCardHealthFill(EntityCardSource);
+pub(super) struct EntityCardHealthFill(EntityCardSource);
 
 #[derive(Component)]
-struct EntityCardHealthLabel(EntityCardSource);
+pub(super) struct EntityCardHealthLabel(EntityCardSource);
 
 /// Shared avatar, name and optional health layout used by both HUD placements.
 /// The local player has no world avatar asset yet, so its existing '?' remains.
@@ -241,10 +241,10 @@ pub(super) fn sync_entity_cards(
             .and_then(|entity| health.get(entity).ok())
             .map(|value| (value.current() / value.max()).clamp(0.0, 1.0))
             .unwrap_or(0.0);
-        if let Some(&fill_entity) = children.first() {
-            if let Ok(mut node) = fill_nodes.get_mut(fill_entity) {
-                node.width = percent(fraction * 100.0);
-            }
+        if let Some(&fill_entity) = children.first()
+            && let Ok(mut node) = fill_nodes.get_mut(fill_entity)
+        {
+            node.width = percent(fraction * 100.0);
         }
     }
 
