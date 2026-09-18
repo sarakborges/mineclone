@@ -23,7 +23,12 @@
     "baseHeight": 12,
     "height": 72,
     "craterDepth": 38,
-    "craterRadius": 0.14
+    "craterRadius": 0.14,
+    "irregularity": 0.13,
+    "irregularityScale": 0.009,
+    "detailIrregularity": 0.055,
+    "detailScale": 0.031,
+    "craterIrregularity": 0.08
   },
   "allowSurfaceCarvers": true,
   "surfaceLayers": [
@@ -113,5 +118,11 @@
     },
     "terrainRoughness": 1,
     "terrainMetallic": 0
+  },
+  "climate": {
+    "continentalness": {
+      "min": 0.36,
+      "max": 1
+    }
   }
 }
