@@ -61,7 +61,7 @@ pub(super) fn world_name_setting(
                     width: percent(100),
                     height: px(44),
                     padding: UiRect::horizontal(px(text_input::INPUT_PADDING_X)),
-                    border: UiRect::all(px(1)),
+                    border: UiRect::all(px(2)),
                     align_items: AlignItems::Center,
                     overflow: Overflow::clip(),
                     ..default()
