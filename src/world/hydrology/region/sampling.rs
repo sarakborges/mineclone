@@ -1,13 +1,36 @@
 use bevy::prelude::*;
 
 use super::HydrologyRegion;
-use crate::world::hydrology::{
-    constants::{HYDROLOGY_REGION_SIZE, MACRO_SAMPLE_GRID},
-    math::{lerp, ocean_strength, smoothstep},
-    types::HydrologyMacroSample,
+use crate::world::{
+    hydrology::{
+        constants::{
+            HYDROLOGY_REGION_SIZE, MACRO_SAMPLE_GRID, OCEAN_EXTRA_DEPTH,
+            OCEAN_FLOOR_DETAIL_SCALE, OCEAN_FLOOR_NOISE_SCALE, OCEAN_FLOOR_VARIATION,
+            OCEAN_MINIMUM_DEPTH,
+        },
+        math::{lerp, ocean_strength, smoothstep},
+        types::HydrologyMacroSample,
+    },
+    noise::fractal_noise_2d,
 };
 
 impl HydrologyRegion {
+    pub(super) fn ocean_floor_target(&self, position: Vec2, strength: f32) -> f32 {
+        let broad = fractal_noise_2d(
+            position * OCEAN_FLOOR_NOISE_SCALE,
+            self.seed ^ 0x7f4a_7c15_d6e8_feb8,
+            4,
+        );
+        let detail = fractal_noise_2d(
+            position * OCEAN_FLOOR_DETAIL_SCALE,
+            self.seed ^ 0x94d0_49bb_1331_11eb,
+            3,
+        );
+        let relief = (broad * 0.72 + detail * 0.28) * OCEAN_FLOOR_VARIATION * strength;
+
+        self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength + relief
+    }
+
     pub fn ocean_strength_at(&self, position: Vec2) -> f32 {
         self.macro_sample_at(position).map_or(0.0, |sample| {
             ocean_strength(sample.continentalness, self.ocean_weight)
