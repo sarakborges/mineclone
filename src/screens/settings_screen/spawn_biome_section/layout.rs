@@ -6,7 +6,7 @@ use bevy::{
 
 use crate::{
     localization::{Language, UiLocalization},
-    ui::{dropdown, surface, text_input, theme, typography},
+    ui::{dropdown, selectable, text_input, theme, typography},
 };
 
 pub(super) const OPTION_HEIGHT: f32 = 40.0;
@@ -57,7 +57,7 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
     localization: &UiLocalization,
     language: Language,
 ) -> impl Bundle {
-    let (control_background, control_border) = surface::hud_control_static(false);
+    let (control_background, control_border) = selectable::static_colors(false);
 
     (
         Node {
@@ -129,7 +129,7 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                             ..default()
                         },
                         BackgroundColor(theme::HUD_SURFACE),
-                        BorderColor::all(surface::HUD_BORDER_COLOR),
+                        BorderColor::all(selectable::BORDER_COLOR),
                         GlobalZIndex(610),
                         children![
                             (
