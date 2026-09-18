@@ -25,14 +25,6 @@ pub(super) fn resolve_surface_identity(
     };
 
     let mut hydrology_count = 0;
-    if let Some(coast_id) = hydrology.coast_biome {
-        push_influence(
-            hydrology_influences,
-            &mut hydrology_count,
-            coast_id,
-            hydrology.coast_weight,
-        );
-    }
     if let Some(ocean_id) = hydrology.ocean_biome {
         push_influence(
             hydrology_influences,
@@ -216,10 +208,8 @@ mod tests {
         let count = resolve_surface_identity(
             &surface,
             Some(HydrologyBiomeOverlay {
-                coast_biome: Some("coast"),
-                coast_weight: 0.75,
                 ocean_biome: Some("ocean"),
-                ocean_weight: 0.0,
+                ocean_weight: 0.75,
             }),
             &mut influences,
             &mut hydrology_influences,
@@ -227,7 +217,7 @@ mod tests {
         );
         influences.truncate(count);
 
-        assert_eq!(hydrology_id.as_deref(), Some("coast"));
+        assert_eq!(hydrology_id.as_deref(), Some("ocean"));
         assert_eq!(hydrology_influences.len(), 1);
         assert_eq!(influences.len(), 1);
         assert_eq!(influences[0].id, "surface");
