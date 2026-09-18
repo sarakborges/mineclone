@@ -89,14 +89,13 @@ fn player_hud_visibility(pause: PauseState, settings: SettingsState) -> Visibili
 fn sync_player_hud_visibility(
     pause: Res<State<PauseState>>,
     settings: Res<State<SettingsState>>,
-    mut root: Single<&mut Visibility, With<PlayerHudRoot>>,
+    mut roots: Query<&mut Visibility, With<PlayerHudRoot>>,
 ) {
-    if !pause.is_changed() && !settings.is_changed() {
-        return;
-    }
     let next = player_hud_visibility(*pause.get(), *settings.get());
-    if **root != next {
-        **root = next;
+    for mut visibility in &mut roots {
+        if *visibility != next {
+            *visibility = next;
+        }
     }
 }
 
