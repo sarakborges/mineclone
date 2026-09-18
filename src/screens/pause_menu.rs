@@ -4,7 +4,7 @@ use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::{SettingsScreenMode, SettingsState}},
     localization::{ActiveLanguage, UiLocalization},
     ui::{
-        button::standard_button,
+        button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
         visibility::set_visibility,
@@ -82,13 +82,13 @@ fn spawn_pause_menu(
                 ..default()
             })
             .with_children(|menu| {
-                menu.spawn(standard_button(
+                menu.spawn(button(
                     localization.text(language, "pause.resume").to_owned(),
-                    PauseMenuAction::Resume, 360.0, crate::ui::button::ButtonVariant::Normal,
+                    PauseMenuAction::Resume, px(360), COMPACT_CONTROL_HEIGHT, ButtonVariant::Normal,
                 ));
-                menu.spawn(standard_button(
+                menu.spawn(button(
                     localization.text(language, "pause.leaveWorld").to_owned(),
-                    PauseMenuAction::LeaveWorld, 360.0, crate::ui::button::ButtonVariant::Normal,
+                    PauseMenuAction::LeaveWorld, px(360), COMPACT_CONTROL_HEIGHT, ButtonVariant::Normal,
                 ));
                 menu.spawn((
                     Node {
@@ -98,13 +98,13 @@ fn spawn_pause_menu(
                         ..default()
                     },
                     children![
-                        standard_button(
+                        button(
                             localization.text(language, "settings.section.worldSettings").to_owned(),
                             PauseMenuAction::WorldSettings,
                             174.0,
                             crate::ui::button::ButtonVariant::Normal,
                         ),
-                        standard_button(
+                        button(
                             localization.text(language, "common.gameSettings").to_owned(),
                             PauseMenuAction::GameSettings,
                             174.0,
@@ -112,9 +112,9 @@ fn spawn_pause_menu(
                         ),
                     ],
                 ));
-                menu.spawn(standard_button(
+                menu.spawn(button(
                     localization.text(language, "common.exitGame").to_owned(),
-                    PauseMenuAction::ExitGame, 360.0, crate::ui::button::ButtonVariant::Danger,
+                    PauseMenuAction::ExitGame, px(360), COMPACT_CONTROL_HEIGHT, ButtonVariant::Danger,
                 ));
                 menu.spawn((PauseSaveFeedback, typography::caption(String::new())));
             });
