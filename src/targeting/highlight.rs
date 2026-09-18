@@ -123,7 +123,7 @@ fn spawn_highlight(
             alpha_mode: AlphaMode::Blend,
             // Keep the translucent selection shell in front of near-coplanar
             // texture/parallax layers without making it win over distant geometry.
-            depth_bias: 0.1,
+            depth_bias: 4.0,
             unlit: true,
             ..default()
         })),
