@@ -93,7 +93,7 @@ fn edit_targeted_block(
         if let Ok((mut health, mut animation)) = creature_health.get_mut(entity) {
             let dead = health.damage(1.0);
             viewmodel_animation.play_break();
-            animation.0 = if dead { "death".to_owned() } else { "hurt".to_owned() };
+            animation.trigger(if dead { "death" } else { "hurt" });
         }
         return;
     }
