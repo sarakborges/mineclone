@@ -89,7 +89,7 @@ pub(in crate::screens::settings_screen) fn populate_spawn_biome_options(
                 .biomes
                 .get(&entry.id)
                 .unwrap_or_else(|| panic!("missing biome definition: {}", entry.id));
-            (biome.kind == BiomeKind::Surface)
+            (biome.kind == BiomeKind::Surface && entry.require_near.is_empty())
                 .then_some((biome.id.clone(), biome.name.text(language).to_owned()))
         })
         .collect::<Vec<_>>();
