@@ -5,7 +5,7 @@ use crate::content::dimension_hydrology::DimensionHydrology;
 use super::{
     constants::{MACRO_SAMPLE_GRID, RIVER_CARVE_DEPTH},
     drainage::DrainageNetwork,
-    math::{hydrology_biome_weights, ocean_continentalness_threshold, ocean_strength},
+    math::{ocean_continentalness_threshold, ocean_strength},
     region::HydrologyRegion,
     river::build_river_system,
     spatial::macro_sample_position,
@@ -17,7 +17,6 @@ pub struct HydrologyField {
     seed: u64,
     sea_level: i32,
     settings: DimensionHydrology,
-    coast_weight: f32,
     ocean_weight: f32,
 }
 
@@ -26,59 +25,25 @@ impl HydrologyField {
         seed: u64,
         sea_level: i32,
         settings: DimensionHydrology,
-        coast_weight: f32,
         ocean_weight: f32,
     ) -> Self {
         Self {
             seed,
             sea_level,
             settings,
-            coast_weight,
             ocean_weight,
         }
     }
 
     pub fn biome_overlay(&self, continentalness: f32) -> HydrologyBiomeOverlay<'_> {
-        let strength = ocean_strength(continentalness, self.ocean_weight);
-        let (mut surface_share, mut coast_weight, mut ocean_weight) =
-            hydrology_biome_weights(strength);
-        let coast_biome = self.settings.coast_biome.as_deref();
         let ocean_biome = self.settings.ocean_biome.as_deref();
-
-        if coast_biome.is_none() {
-            if strength < 0.5 {
-                surface_share += coast_weight;
-            } else {
-                ocean_weight += coast_weight;
-            }
-            coast_weight = 0.0;
+        let ocean_weight = if ocean_biome.is_some() {
+            ocean_strength(continentalness, self.ocean_weight)
         } else {
-            coast_weight *= self.coast_weight;
-        }
-
-        if ocean_biome.is_none() {
-            if coast_biome.is_some() {
-                coast_weight += ocean_weight;
-            } else {
-                surface_share += ocean_weight;
-            }
-            ocean_weight = 0.0;
-        } else {
-            ocean_weight *= self.ocean_weight;
-        }
-
-        let total = surface_share + coast_weight + ocean_weight;
-        if total > f32::EPSILON {
-            coast_weight /= total;
-            ocean_weight /= total;
-        } else {
-            coast_weight = 0.0;
-            ocean_weight = 0.0;
-        }
+            0.0
+        };
 
         HydrologyBiomeOverlay {
-            coast_biome,
-            coast_weight,
             ocean_biome,
             ocean_weight,
         }
