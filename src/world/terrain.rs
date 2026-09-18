@@ -127,9 +127,17 @@ fn biome_surface_height(
             base_height,
             depth,
             wall_height,
+            floor_amplitude,
+            floor_scale,
         } => {
             let strength = smoothstep(distribution_strength.clamp(0.0, 1.0));
-            sea_level + base_height + wall_height * (1.0 - strength) - depth * strength
+            let floor_noise = fractal_noise(position * floor_scale, seed.rotate_left(41));
+            let floor_shape = strength.powf(1.35);
+            sea_level
+                + base_height
+                + wall_height * (1.0 - strength)
+                - depth * strength
+                + floor_noise * floor_amplitude * floor_shape
         }
         BiomeTerrain::Alps {
             base_height,
