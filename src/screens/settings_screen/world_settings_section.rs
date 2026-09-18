@@ -5,8 +5,9 @@ use crate::{
     localization::{Language, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{
-        selectable::{
-            selectable_button_background, selectable_label_color, sync_selectable_button,
+        button::{
+            button_label_for_variant, initial_button_background, initial_button_border,
+            AsteriaButtonVisual, ButtonVariant,
         },
         typography,
     },
@@ -36,8 +37,7 @@ type GameModeButtonSyncQuery<'w, 's> = Query<
         Entity,
         &'static GameModeButton,
         Ref<'static, Interaction>,
-        &'static mut BackgroundColor,
-        &'static mut BorderColor,
+        &'static mut ButtonVariant,
     ),
 >;
 
@@ -107,12 +107,11 @@ fn game_mode_button(
             justify_content: JustifyContent::Center,
             ..default()
         },
-        BackgroundColor(selectable_button_background(active, Interaction::None)),
-        BorderColor::all(crate::ui::selectable::selectable_button_border(
-            active,
-            Interaction::None,
-        )),
-        children![(typography::button_label(label), GameModeButtonLabel(mode))],
+        AsteriaButtonVisual::default(),
+        ButtonVariant::from_active(active),
+        BackgroundColor(initial_button_background(active)),
+        BorderColor::all(initial_button_border(active)),
+        children![(button_label_for_variant(label, active), GameModeButtonLabel(mode))],
     )
 }
 
@@ -165,19 +164,13 @@ pub(crate) fn sync_game_mode_buttons(
         )
     };
 
-    for (entity, button, interaction, background, border) in &mut buttons {
+    for (_entity, button, interaction, mut variant) in &mut buttons {
         if !mode_changed && !interaction.is_changed() {
             continue;
         }
 
-        sync_selectable_button(
-            entity,
-            button.0 == current_game_mode,
-            false,
-            *interaction,
-            background,
-            border,
-        );
+        let active = button.0 == current_game_mode;
+        *variant = ButtonVariant::from_active(active);
     }
 
     if !mode_changed {
@@ -185,7 +178,7 @@ pub(crate) fn sync_game_mode_buttons(
     }
 
     for (label, mut color) in &mut labels {
-        let next_color = TextColor(selectable_label_color(label.0 == current_game_mode));
+        let next_color = TextColor(if label.0 == current_game_mode { crate::ui::theme::TEXT_PRIMARY } else { crate::ui::theme::TEXT_MUTED });
         if *color != next_color {
             *color = next_color;
         }
