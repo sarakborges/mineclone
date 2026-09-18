@@ -2,16 +2,20 @@ use bevy::prelude::*;
 use smallvec::SmallVec;
 
 use super::{water::bed_has_support, HydrologyRegion};
-use crate::world::hydrology::{
-    constants::{
-        LAKE_SHORE_OUTER_DISTANCE, LAKE_SHORE_SURFACE_OFFSET, OCEAN_EXTRA_DEPTH,
-        OCEAN_MINIMUM_DEPTH, RIVER_BANK_OUTER_NORMALIZED_DISTANCE, RIVER_CARVE_STRENGTH,
-    },
+use crate::world::{
+    hydrology::{
+        constants::{
+            LAKE_SHORE_OUTER_DISTANCE, LAKE_SHORE_SURFACE_OFFSET, OCEAN_EXTRA_DEPTH,
+            OCEAN_FLOOR_DETAIL_SCALE, OCEAN_FLOOR_NOISE_SCALE, OCEAN_FLOOR_VARIATION,
+            OCEAN_MINIMUM_DEPTH, RIVER_BANK_OUTER_NORMALIZED_DISTANCE, RIVER_CARVE_STRENGTH,
+        },
     math::{
         lerp, ocean_strength, river_channel_profile, smoothstep,
         RIVER_WATER_BOUNDARY_NORMALIZED_DISTANCE,
     },
-    types::WaterBody,
+        types::WaterBody,
+    },
+    noise::fractal_noise_2d,
 };
 
 const INLINE_WATER_BODY_DELTAS: usize = 4;
@@ -130,11 +134,22 @@ impl HydrologyRegion {
                 return 0.0;
             }
 
+            let broad = fractal_noise_2d(
+                horizontal * OCEAN_FLOOR_NOISE_SCALE,
+                self.seed ^ 0x7f4a_7c15_d6e8_feb8,
+                4,
+            );
+            let detail = fractal_noise_2d(
+                horizontal * OCEAN_FLOOR_DETAIL_SCALE,
+                self.seed ^ 0x94d0_49bb_1331_11eb,
+                3,
+            );
+            let relief = (broad * 0.72 + detail * 0.28) * OCEAN_FLOOR_VARIATION * strength;
             let target_floor =
-                self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength;
-            // Keep the existing ocean blend relative to the exact column's
-            // starting height. Subtracting a macro floor from an exact surface
-            // would create an abrupt jump at the first nonzero ocean strength.
+                self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * strength + relief;
+            // Blend from the exact terrain column so the coastline remains
+            // continuous. Bathymetric relief fades with ocean strength and
+            // reaches full amplitude only in open water.
             let base = surface_elevation.unwrap_or(sample.elevation);
             let floor = lerp(base, target_floor, strength);
             floor - base
@@ -288,6 +303,7 @@ mod tests {
 
     fn test_region(river_graph: FeatureGraph, water_bodies: Vec<WaterBody>) -> HydrologyRegion {
         HydrologyRegion {
+            seed: 42,
             coord: IVec2::ZERO,
             river_graph,
             river_carve_depth: 7.0,
