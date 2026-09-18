@@ -22,14 +22,14 @@ use crate::content::{
 
 pub(crate) use self::volume::{VolumeBiomeRegion, VolumeBiomeSelection};
 use self::{
-    constants::{SITE_SEARCH_RADIUS, VOLUME_SITE_GAP},
+    constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS, VOLUME_SITE_GAP},
     spatial::surface_minimum_spacing,
 };
 use super::macro_climate::{MacroClimateField, MacroClimateSample};
 
 const SURFACE_SITE_SEARCH_DIAMETER: usize = (SITE_SEARCH_RADIUS * 2 + 1) as usize;
 pub(crate) const MAX_SURFACE_INFLUENCES: usize =
-    SURFACE_SITE_SEARCH_DIAMETER * SURFACE_SITE_SEARCH_DIAMETER + 1;
+    SURFACE_SITE_SEARCH_DIAMETER * SURFACE_SITE_SEARCH_DIAMETER + 2;
 
 #[derive(Clone)]
 pub(super) struct BiomeFieldEntry {
@@ -64,6 +64,7 @@ pub struct BiomeField {
     pub(super) climate: MacroClimateField,
     pub(super) seed: u64,
     pub(super) surface_site_biomes: Arc<RwLock<HashMap<IVec2, usize>>>,
+    forced_surface_biome: Option<ForcedSurfaceBiome>,
     pub(super) ocean_biome_id: Option<String>,
     pub(super) ocean_weight: f32,
 }
@@ -79,6 +80,48 @@ pub struct BiomeFieldSample<'a> {
     pub primary_id: &'a str,
     pub(crate) primary_surface_index: usize,
     pub influences: ArrayVec<BiomeInfluence<'a>, MAX_SURFACE_INFLUENCES>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ForcedSurfaceBiome {
+    biome_index: usize,
+    minimum: Vec2,
+    maximum: Vec2,
+}
+
+impl ForcedSurfaceBiome {
+    fn core_contains(self, position: Vec2) -> bool {
+        position.x >= self.minimum.x
+            && position.x < self.maximum.x
+            && position.y >= self.minimum.y
+            && position.y < self.maximum.y
+    }
+
+    fn weight(self, position: Vec2) -> f32 {
+        let dx = if position.x < self.minimum.x {
+            self.minimum.x - position.x
+        } else if position.x > self.maximum.x {
+            position.x - self.maximum.x
+        } else {
+            0.0
+        };
+        let dz = if position.y < self.minimum.y {
+            self.minimum.y - position.y
+        } else if position.y > self.maximum.y {
+            position.y - self.maximum.y
+        } else {
+            0.0
+        };
+        let distance = dx.max(dz);
+        if distance <= 0.0 {
+            return 1.0;
+        }
+        if distance >= BORDER_TRANSITION_WIDTH {
+            return 0.0;
+        }
+        let t = 1.0 - distance / BORDER_TRANSITION_WIDTH;
+        t * t * (3.0 - 2.0 * t)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -187,6 +230,7 @@ impl BiomeField {
             climate: MacroClimateField::new(seed),
             seed,
             surface_site_biomes: Arc::new(RwLock::new(HashMap::new())),
+            forced_surface_biome: None,
             ocean_biome_id,
             ocean_weight,
         }
@@ -197,7 +241,44 @@ impl BiomeField {
     }
 
     pub(crate) fn climate_at(&self, position: Vec2) -> MacroClimateSample {
-        self.climate.sample(position)
+        let mut climate = self.climate.sample(position);
+        if let Some((_, weight)) = self.forced_surface_biome_at(position) {
+            climate.continentalness += (1.0 - climate.continentalness) * weight;
+        }
+        climate
+    }
+
+    pub(crate) fn force_surface_biome(
+        &mut self,
+        biome_id: &str,
+        minimum: Vec2,
+        maximum: Vec2,
+    ) {
+        assert!(
+            minimum.x < maximum.x && minimum.y < maximum.y,
+            "forced surface biome bounds must have positive area"
+        );
+        let biome_index = self
+            .surface_biomes
+            .iter()
+            .position(|biome| biome.id == biome_id)
+            .unwrap_or_else(|| panic!("forced surface biome is not a surface biome: {biome_id}"));
+        self.forced_surface_biome = Some(ForcedSurfaceBiome {
+            biome_index,
+            minimum,
+            maximum,
+        });
+    }
+
+    pub(crate) fn forced_surface_core_contains(&self, position: Vec2) -> bool {
+        self.forced_surface_biome
+            .is_some_and(|forced| forced.core_contains(position))
+    }
+
+    pub(super) fn forced_surface_biome_at(&self, position: Vec2) -> Option<(usize, f32)> {
+        let forced = self.forced_surface_biome?;
+        let weight = forced.weight(position);
+        (weight > 0.0).then_some((forced.biome_index, weight))
     }
 
     pub(crate) fn surface_biome_id(&self, index: usize) -> &str {
