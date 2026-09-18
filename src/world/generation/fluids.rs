@@ -256,7 +256,7 @@ mod tests {
         ))
         .unwrap();
         biomes.insert(plains);
-        let biome_field = BiomeField::from_dimension(&dimension, &biomes, 42);
+        let biome_field = BiomeField::from_dimension(&dimension, &biomes, 42, 1.0);
         let volume_region = VolumeBiomeRegion::default();
 
         let mut fluids = FluidRegistry::default();
