@@ -20,7 +20,7 @@ pub(crate) fn sync_selectable_button(
     }
 }
 
-pub(crate) fn selectable_button_border(active: bool, interaction: Interaction) -> Color {
+fn selectable_button_border(active: bool, interaction: Interaction) -> Color {
     if active {
         return match interaction {
             Interaction::Pressed => theme::BORDER_STRONG,
@@ -35,7 +35,7 @@ pub(crate) fn selectable_button_border(active: bool, interaction: Interaction) -
     }
 }
 
-pub(crate) fn selectable_button_background(active: bool, interaction: Interaction) -> Color {
+fn selectable_button_background(active: bool, interaction: Interaction) -> Color {
     if active {
         return match interaction {
             Interaction::Pressed => theme::PURPLE_HOVER,
@@ -51,6 +51,6 @@ pub(crate) fn selectable_button_background(active: bool, interaction: Interactio
     }
 }
 
-pub(crate) fn selectable_label_color(active: bool) -> Color {
+fn selectable_label_color(active: bool) -> Color {
     if active { theme::TEXT_PRIMARY } else { theme::TEXT_MUTED }
 }
