@@ -12,7 +12,7 @@ use crate::{
     },
     localization::{ActiveLanguage, UiLocalization},
     ui::{
-        dropdown, scrollbar::vertical_scrollbar, selectable,
+        dropdown, scrollbar, selectable,
         text_input::{self, editable_value}, typography,
     },
     world::{NewWorldConfig, dimension::DEFAULT_DIMENSION_ID},
@@ -119,9 +119,11 @@ pub(in crate::screens::settings_screen) fn populate_spawn_biome_options(
     });
 
     commands.entity(frame_entity).with_children(|frame| {
-        frame
-            .spawn(vertical_scrollbar(list_entity))
-            .insert(dropdown::inside::<SpawnBiomeDropdownKind>());
+        frame.spawn(
+            scrollbar::vertical_scrollbar_marked::<
+                dropdown::DropdownInside<SpawnBiomeDropdownKind>,
+            >(list_entity),
+        );
     });
 }
 
