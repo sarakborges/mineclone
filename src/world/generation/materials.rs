@@ -105,7 +105,6 @@ pub(super) fn rasterize_material_pass(
                         hydrology_materials,
                     );
                 resolve_surface_material_column(
-                    horizontal,
                     &column.surface_influences,
                     context.biome_field,
                     context.biomes,
