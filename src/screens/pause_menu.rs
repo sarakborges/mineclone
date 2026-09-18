@@ -86,13 +86,17 @@ fn spawn_pause_menu(
                     localization.text(language, "pause.resume").to_owned(),
                     PauseMenuAction::Resume,
                 ));
+                menu.spawn(menu_button(
+                    localization.text(language, "pause.leaveWorld").to_owned(),
+                    PauseMenuAction::LeaveWorld,
+                ));
                 menu.spawn((
                     Node {
                         width: px(360),
                         flex_direction: FlexDirection::Row,
                         column_gap: px(12),
                         ..default()
-                    },
+                    ),
                     children![
                         standard_button(
                             localization.text(language, "settings.section.worldSettings").to_owned(),
@@ -107,10 +111,6 @@ fn spawn_pause_menu(
                             crate::ui::button::ButtonVariant::Normal,
                         ),
                     ],
-                ));
-                menu.spawn(menu_button(
-                    localization.text(language, "pause.leaveWorld").to_owned(),
-                    PauseMenuAction::LeaveWorld,
                 ));
                 menu.spawn(menu_button(
                     localization.text(language, "common.exitGame").to_owned(),
