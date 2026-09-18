@@ -105,6 +105,8 @@ Biome hydrology permissions apply to the full physical feature, not only to its 
 
 Hydrology material ownership is biome-local. `riverBedBlock`, `lakeBedBlock`, `shoreBlock`, and `oceanBedBlock` belong to `BiomeHydrology`, not `DimensionHydrology`. Surface river/lake materials resolve from the dominant surface biome; Coast/Ocean materials resolve from the configured hydrology biomes. A dimension may own global water fluid IDs, overlay biome IDs, and generation weights, but it must not own terrain block materials.
 
+Biome-local terrain exceptions belong in `terrainModifiers`, not in hardcoded checks for a specific biome ID. The base `BiomeTerrain` describes the ordinary height field; modifiers may add or subtract local geometry such as cliffs and gorges. A gorge is a 2D terrain-height exception with a narrow full-depth core and a short smooth edge into surrounding terrain; it must remain deterministic, biome-weighted, and data-driven. Negative-only modifiers do not increase vertical chunk bounds.
+
 Ocean floor elevation is authoritative hydrology geometry, not a flat sea-level offset. Open ocean must receive deterministic multi-scale bathymetric relief that fades in with ocean strength at the coast. Density carving and physical-water queries must call the same ocean-floor target so the carved bed and reported water bed can never diverge.
 
 Lake geometry is authoritative where a river enters or crosses a lake. River channel carve and river headroom must fade continuously toward zero as supported lake opening strength approaches 1, so the lake basin is not re-cut by an independent river trench. River banks may still open the lake shore at the transition, but lake interior density owns the final basin shape.
