@@ -82,6 +82,7 @@ const NATURAL_SPAWN_INTERVAL: f32 = 1.0;
 const NATURAL_SPAWN_MIN_DISTANCE: f32 = 8.0;
 const NATURAL_SPAWN_MAX_DISTANCE: f32 = 32.0;
 
+#[allow(clippy::too_many_arguments)]
 fn natural_spawn_creatures(
     time: Res<Time>,
     world: Res<VoxelWorld>,
