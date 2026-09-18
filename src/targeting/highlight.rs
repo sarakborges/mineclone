@@ -1,4 +1,9 @@
-use bevy::{ecs::system::SystemParam, light::NotShadowCaster, prelude::*};
+use bevy::{
+    camera::visibility::RenderLayers,
+    ecs::system::SystemParam,
+    light::NotShadowCaster,
+    prelude::*,
+};
 
 use super::{
     BlockTargetingScene, BlockTargetingVisualSnapshot,
@@ -23,6 +28,7 @@ use crate::{
 };
 
 const HIGHLIGHT_SCALE: f32 = 1.025;
+const TARGET_HIGHLIGHT_RENDER_LAYER: usize = 2;
 const BRUSH_GHOST_SCALE: f32 = 1.012;
 const BRUSH_GHOST_ALPHA: f32 = 0.30;
 const BRUSH_CLEAR_GHOST_ALPHA: f32 = 0.12;
@@ -130,6 +136,7 @@ fn spawn_highlight(
         Transform::default(),
         Visibility::Hidden,
         NotShadowCaster,
+        RenderLayers::layer(TARGET_HIGHLIGHT_RENDER_LAYER),
         TargetHighlight,
         DespawnOnExit(GameState::Gameplay),
     ));
@@ -160,6 +167,7 @@ fn spawn_highlight(
         Transform::default(),
         Visibility::Hidden,
         NotShadowCaster,
+        RenderLayers::layer(TARGET_HIGHLIGHT_RENDER_LAYER),
         ChiselPlacementGhost,
         DespawnOnExit(GameState::Gameplay),
     ));
