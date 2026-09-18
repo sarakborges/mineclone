@@ -23,7 +23,7 @@ use crate::content::{
 pub(crate) use self::volume::{VolumeBiomeRegion, VolumeBiomeSelection};
 use self::{
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS, VOLUME_SITE_GAP},
-    spatial::surface_minimum_spacing,
+    spatial::{hash_unit, lerp, smoothstep, surface_minimum_spacing, warp_surface_position},
 };
 use super::macro_climate::{MacroClimateField, MacroClimateSample};
 
@@ -85,42 +85,42 @@ pub struct BiomeFieldSample<'a> {
 #[derive(Clone, Copy, Debug)]
 struct ForcedSurfaceBiome {
     biome_index: usize,
-    minimum: Vec2,
-    maximum: Vec2,
+    center: Vec2,
+    radii: Vec2,
+    warp_seed: u64,
 }
 
 impl ForcedSurfaceBiome {
+    fn warped_delta(self, position: Vec2) -> Vec2 {
+        let warped = warp_surface_position(position, self.warp_seed);
+        let warped_center = warp_surface_position(self.center, self.warp_seed);
+        warped - warped_center
+    }
+
+    fn normalized_distance(self, position: Vec2) -> f32 {
+        let delta = self.warped_delta(position);
+        Vec2::new(delta.x / self.radii.x, delta.y / self.radii.y).length()
+    }
+
     fn core_contains(self, position: Vec2) -> bool {
-        position.x >= self.minimum.x
-            && position.x < self.maximum.x
-            && position.y >= self.minimum.y
-            && position.y < self.maximum.y
+        self.normalized_distance(position) <= 1.0
     }
 
     fn weight(self, position: Vec2) -> f32 {
-        let dx = if position.x < self.minimum.x {
-            self.minimum.x - position.x
-        } else if position.x > self.maximum.x {
-            position.x - self.maximum.x
-        } else {
-            0.0
-        };
-        let dz = if position.y < self.minimum.y {
-            self.minimum.y - position.y
-        } else if position.y > self.maximum.y {
-            position.y - self.maximum.y
-        } else {
-            0.0
-        };
-        let distance = dx.max(dz);
-        if distance <= 0.0 {
+        let delta = self.warped_delta(position);
+        let normalized = Vec2::new(delta.x / self.radii.x, delta.y / self.radii.y).length();
+        if normalized <= 1.0 {
             return 1.0;
         }
-        if distance >= BORDER_TRANSITION_WIDTH {
+
+        let radial_distance = delta.length();
+        let boundary_distance = radial_distance / normalized;
+        let outside_distance = (radial_distance - boundary_distance).max(0.0);
+        if outside_distance >= BORDER_TRANSITION_WIDTH {
             return 0.0;
         }
-        let t = 1.0 - distance / BORDER_TRANSITION_WIDTH;
-        t * t * (3.0 - 2.0 * t)
+
+        smoothstep(1.0 - outside_distance / BORDER_TRANSITION_WIDTH)
     }
 }
 
@@ -248,25 +248,31 @@ impl BiomeField {
         climate
     }
 
-    pub(crate) fn force_surface_biome(
-        &mut self,
-        biome_id: &str,
-        minimum: Vec2,
-        maximum: Vec2,
-    ) {
-        assert!(
-            minimum.x < maximum.x && minimum.y < maximum.y,
-            "forced surface biome bounds must have positive area"
-        );
+    pub(crate) fn force_surface_biome(&mut self, biome_id: &str, center: Vec2) {
         let biome_index = self
             .surface_biomes
             .iter()
             .position(|biome| biome.id == biome_id)
             .unwrap_or_else(|| panic!("forced surface biome is not a surface biome: {biome_id}"));
+        let biome = &self.surface_biomes[biome_index];
+        let hash = biome_density_seed(self.seed ^ 0x6a09_e667_f3bc_c909, biome_id);
+        let radii = Vec2::new(
+            lerp(
+                biome.size.x.min,
+                biome.size.x.max,
+                hash_unit(hash.rotate_left(11)),
+            ),
+            lerp(
+                biome.size.z.min,
+                biome.size.z.max,
+                hash_unit(hash.rotate_left(37)),
+            ),
+        );
         self.forced_surface_biome = Some(ForcedSurfaceBiome {
             biome_index,
-            minimum,
-            maximum,
+            center,
+            radii,
+            warp_seed: self.seed ^ hash.rotate_left(23),
         });
     }
 
