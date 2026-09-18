@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.31.2`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado atual:** `9e81d703743e69fc3a9d64115da67709dfead14f`. O runtime de fluidos agora isola trabalho por `FluidId`, preserva prioridade de topology edits através da cadência do fluido e toda mutação runtime de bloco notifica o solver. CI final `35401298308` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.31.3`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado atual:** `0c35a080b6012c95e4da4b55fb071d0ecb28b22c`. O solver de fluidos mantém filas por `FluidId` e topology priority; o remesh background agora faz round-robin entre Fluid, Lighting e Geometry para impedir starvation visual. O commit funcional `e1399c96e5419af21501a8fce716f22b26ba560b` passou na CI `35401619817` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.29.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `e848e9e918a87527764ed79616ac3d8134c0830a`. A feature de lava + fluidos de superfície do Volcano passou na CI de push `35397447773` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
@@ -1833,4 +1833,74 @@ QA Windows prioritária:
 4. Confirmar que fluxo de água e lava simultâneos não fazem a lava “sumir” da agenda quando água está ready.
 5. Confirmar Chisel: remover suporte/topologia perto de fluido deve acordar o solver.
 6. Se world state mudar mas mesh ainda parecer estático, o próximo alvo é starvation no `ChunkRemeshQueue`; este checkpoint corrige especificamente scheduling/mutação do solver.
+
+## Checkpoint 111 — 2026-09-18: impedir starvation visual do remesh de fluidos [FIX; VERSION 0.31.3; RETESTE VISUAL OBRIGATÓRIO]
+
+### Contexto
+
+- Após o checkpoint 110, o usuário confirmou novamente que o fluido ainda parecia não fluir, inclusive ao remover um bloco diretamente abaixo de um fluido estático.
+- O caminho de world state foi rechecado:
+  - fluidos gerados por hydrology e `surfaceFluid` são `FluidCell` reais armazenados no `VoxelWorld`;
+  - não existe uma camada visual separada/fake para água/lava geradas;
+  - topology edit chega na fila de fluidos;
+  - `desired_fluid()` tem queda vertical direta quando há fluido acima;
+  - `set_fluid_at()` é o único mutation path runtime.
+- Isso deixou uma segunda classe de falha possível: **estado mutando, mas mesh de fluido não acompanhando visualmente**.
+
+### Causa encontrada no pipeline visual
+
+- `ChunkRemeshQueue::dispatch_remesh_tasks()` tinha prioridade fixa:
+  1. Lighting
+  2. Geometry
+  3. Fluid
+- Toda mutação de fluido chama `PendingLightingUpdates::enqueue_medium_edit()`.
+- `process_dynamic_lighting()` pode continuar produzindo lighting work e também re-enfileira fluid remeshes para atualizar iluminação de faces.
+- Com fluxo ativo, especialmente lava emissiva, isso permite starvation:
+  - cada nova célula de fluido gera lighting;
+  - Lighting sempre ganha do Fluid;
+  - o estado do `VoxelWorld` pode avançar enquanto o mesh exibido continua representando a source antiga.
+- Água sofre a mesma classe de problema porque mudança de medium também afeta iluminação/dampening, mesmo sem emissão.
+
+### Correção
+
+- Background remesh agora usa **round-robin** entre:
+  1. Fluid
+  2. Lighting
+  3. Geometry
+- `next_background_kind` preserva o próximo tipo entre frames/dispatches.
+- Se um tipo não tem trabalho renderizável, o dispatcher tenta os demais no mesmo ciclo.
+- Fluid recebe oportunidade garantida mesmo com lighting contínuo.
+- Lighting não é descartado:
+  - o fluid mesh pode aparecer com a geometria/estado atual enquanto lighting ainda converge;
+  - a própria convergência de lighting continua podendo agendar follow-up fluid remesh para iluminação final correta.
+- Immediate geometry de block edit continua separado e não foi alterado.
+
+### Arquitetura
+
+- `ARCHITECTURE.md` agora explicita:
+  - background remesh deve ser fair entre Fluid/Lighting/Geometry;
+  - lighting contínuo não pode impedir mudança de estado de fluido de se tornar visualmente observável.
+
+### Commits
+
+- `e1399c96e5419af21501a8fce716f22b26ba560b` — round-robin de background remesh; remove prioridade fixa Lighting→Geometry→Fluid.
+- `3324880065560c26fc3c2fac5fb6a3da5f916544` — contrato arquitetural de remesh fairness.
+- `0c35a080b6012c95e4da4b55fb071d0ecb28b22c` — `VERSION 0.31.2 → 0.31.3`.
+
+### CI
+
+- Commit funcional `e1399c96...`: **CI `35401619817` success**:
+  - auditoria de localizações;
+  - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+### Reteste que decide o próximo passo
+
+1. Pegar uma source de água/lava visível.
+2. Remover o bloco diretamente abaixo.
+3. Observar se uma nova célula de fluido aparece abaixo.
+4. Se ainda não aparecer visualmente em `0.31.3`, o próximo passo NÃO é mais refatorar por hipótese:
+   - adicionar diagnóstico runtime explícito para registrar, naquele voxel, `queued → desired → set_fluid_at result → chunk remesh scheduled/applied`;
+   - usar o log do caso reproduzido para identificar a etapa exata que não acontece.
 
