@@ -31,13 +31,13 @@ pub(super) fn update_sky_layer_visuals(
 
     let next = SkyLayerVisualState {
         star_density: biome_visuals
-            .weighted_scalar(|biome| biome.visuals.stars.density)
+            .weighted_scalar(|biome| biome.visuals().stars.density)
             .clamp(0.0, 1.0),
         cloud_density: biome_visuals
-            .weighted_scalar(|biome| biome.visuals.clouds.density)
+            .weighted_scalar(|biome| biome.visuals().clouds.density)
             .clamp(0.0, 1.0),
-        star_color: biome_visuals.blend_hsi(|biome| biome.visuals.stars.color),
-        cloud_color: biome_visuals.blend_hsi(|biome| biome.visuals.clouds.color),
+        star_color: biome_visuals.blend_hsi(|biome| biome.visuals().stars.color),
+        cloud_color: biome_visuals.blend_hsi(|biome| biome.visuals().clouds.color),
     };
 
     if *visuals != next {
