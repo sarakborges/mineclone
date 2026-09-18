@@ -340,8 +340,8 @@ fn average_terrain_material(dimension: &DimensionDefinition, biomes: &BiomeRegis
             continue;
         }
 
-        roughness += biome.visuals.terrain_roughness;
-        metallic += biome.visuals.terrain_metallic;
+        roughness += biome.visuals().terrain_roughness;
+        metallic += biome.visuals().terrain_metallic;
         count += 1.0;
     }
 
