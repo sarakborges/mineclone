@@ -722,10 +722,12 @@ mod tests {
     #[test]
     fn surface_tunnel_margin_grades_high_terrain_outside_core() {
         let tunnel = ResolvedSurfaceTunnel {
-            points: std::array::from_fn(|index| {
-                let x = -12.0 + index as f32 * 2.0;
-                Vec3::new(x, 50.0, 0.0)
-            }),
+            points: (0..TUNNEL_PATH_SAMPLES)
+                .map(|index| {
+                    let x = -12.0 + index as f32 * 2.0;
+                    Vec3::new(x, 50.0, 0.0)
+                })
+                .collect(),
             radius: 6.0,
             weight: 1.0,
         };
@@ -739,10 +741,12 @@ mod tests {
     #[test]
     fn deep_tunnel_has_no_surface_margin() {
         let tunnel = ResolvedSurfaceTunnel {
-            points: std::array::from_fn(|index| {
-                let x = -12.0 + index as f32 * 1.0;
-                Vec3::new(x, 30.0, 0.0)
-            }),
+            points: (0..TUNNEL_PATH_SAMPLES)
+                .map(|index| {
+                    let x = -12.0 + index as f32 * 1.0;
+                    Vec3::new(x, 30.0, 0.0)
+                })
+                .collect(),
             radius: 6.0,
             weight: 1.0,
         };
@@ -756,10 +760,12 @@ mod tests {
     #[test]
     fn tunnel_core_surface_is_graded_before_3d_carve() {
         let tunnel = ResolvedSurfaceTunnel {
-            points: std::array::from_fn(|index| {
-                let x = -12.0 + index as f32 * 1.0;
-                Vec3::new(x, 50.0, 0.0)
-            }),
+            points: (0..TUNNEL_PATH_SAMPLES)
+                .map(|index| {
+                    let x = -12.0 + index as f32 * 1.0;
+                    Vec3::new(x, 50.0, 0.0)
+                })
+                .collect(),
             radius: 6.0,
             weight: 1.0,
         };
