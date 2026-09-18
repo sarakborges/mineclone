@@ -35,6 +35,9 @@ pub(super) fn validate_biome_definition(definition: &BiomeDefinition) {
     for carver in &definition.surface_carvers {
         carver.validate(&definition.id);
     }
+    if let Some(surface_fluid) = &definition.surface_fluid {
+        surface_fluid.validate(&definition.id);
+    }
     if let Some(modifier) = &definition.density_modifier {
         modifier.validate(&definition.id);
     }
@@ -71,6 +74,17 @@ fn validate_surface_biome(definition: &BiomeDefinition) {
         "surface biome {} cannot define surfaceCarvers; use allowSurfaceCarvers to permit cavern entrances",
         definition.id
     );
+
+    if definition.surface_fluid.is_some() {
+        assert!(
+            matches!(
+                definition.terrain,
+                Some(crate::content::biome_terrain::BiomeTerrain::Volcano { .. })
+            ),
+            "surface biome {} surfaceFluid currently requires volcano terrain",
+            definition.id
+        );
+    }
 
     definition.validate_surface_materials();
 }
@@ -110,6 +124,11 @@ fn validate_volume_biome(definition: &BiomeDefinition) {
         "volume biome {} cannot define surfaceLayers",
         definition.id
     );
+    assert!(
+        definition.surface_fluid.is_none(),
+        "volume biome {} cannot define surfaceFluid",
+        definition.id
+    );
 }
 
 fn validate_hydrology_biome(definition: &BiomeDefinition) {
@@ -146,6 +165,11 @@ fn validate_hydrology_biome(definition: &BiomeDefinition) {
     assert!(
         definition.surface_layers.is_empty(),
         "hydrology biome {} cannot define surfaceLayers",
+        definition.id
+    );
+    assert!(
+        definition.surface_fluid.is_none(),
+        "hydrology biome {} cannot define surfaceFluid",
         definition.id
     );
     assert!(
