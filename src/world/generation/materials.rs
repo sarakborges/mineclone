@@ -54,12 +54,6 @@ fn hydrology_materials<'a>(
                 .unwrap_or_else(|| panic!("missing surface biome definition: {biome_id}"))
         });
 
-    let coast = context
-        .dimension
-        .hydrology
-        .coast_biome
-        .as_deref()
-        .and_then(|id| context.biomes.get(id));
     let ocean = context
         .dimension
         .hydrology
@@ -72,9 +66,7 @@ fn hydrology_materials<'a>(
         lake_bed_block: surface.and_then(|biome| biome.hydrology.lake_bed_block.as_deref()),
         inland_shore_block: surface.and_then(|biome| biome.hydrology.shore_block.as_deref()),
         ocean_bed_block: ocean.and_then(|biome| biome.hydrology.ocean_bed_block.as_deref()),
-        coast_shore_block: coast
-            .and_then(|biome| biome.hydrology.shore_block.as_deref())
-            .or_else(|| ocean.and_then(|biome| biome.hydrology.shore_block.as_deref())),
+        ocean_shore_block: ocean.and_then(|biome| biome.hydrology.shore_block.as_deref()),
     }
 }
 
