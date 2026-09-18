@@ -177,6 +177,7 @@ pub(crate) fn generate_chunk(
         &MaterialPassContext {
             blocks: context.blocks,
             biomes: context.biomes,
+            dimension: context.dimension,
             biome_field: context.biome_field,
             region: region.as_ref(),
         },
