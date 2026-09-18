@@ -61,7 +61,6 @@ pub(super) fn sample_density_field(
         biomes: pass.biomes,
         biome_field: pass.biome_field,
         world_seed: pass.biome_field.seed(),
-        sea_level: pass.sea_level,
         minimum_y: chunk_minimum_y,
         maximum_y: chunk_maximum_y,
         cave_graph: pass
