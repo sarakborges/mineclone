@@ -6,6 +6,7 @@ pub(crate) mod scrollbar;
 pub(crate) mod screen;
 pub(crate) mod selectable;
 pub(crate) mod settings;
+pub(crate) mod slider;
 pub(crate) mod surface;
 pub(crate) mod text_input;
 pub(crate) mod theme;
