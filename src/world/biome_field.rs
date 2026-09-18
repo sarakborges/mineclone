@@ -15,7 +15,7 @@ use bevy::{platform::collections::HashMap, prelude::*};
 use crate::content::{
     biome::{BiomeClimate, BiomeKind, BiomeRegistry, BiomeVerticalRange},
     biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
-    biome_hydrology::BiomeHydrology, biome_terrain::BiomeTerrain,
+    biome_hydrology::BiomeHydrologyRules, biome_terrain::BiomeTerrain,
     biome_terrain_modifier::BiomeTerrainModifier,
     dimension::{DimensionBiomeSize, DimensionDefinition},
 };
@@ -45,7 +45,7 @@ pub(super) struct BiomeFieldEntry {
     pub priority: i32,
     pub terrain: Option<BiomeTerrain>,
     pub terrain_modifiers: Vec<BiomeTerrainModifier>,
-    pub hydrology: BiomeHydrology,
+    pub hydrology: BiomeHydrologyRules,
     pub density_modifier: Option<BiomeDensityModifier>,
     pub solid_block: Option<String>,
     pub density_seed: u64,
@@ -177,7 +177,7 @@ impl BiomeField {
                 priority: biome.priority,
                 terrain: biome.terrain,
                 terrain_modifiers: biome.terrain_modifiers.clone(),
-                hydrology: biome.hydrology,
+                hydrology: biome.hydrology.rules(),
                 density_modifier: biome.density_modifier,
                 solid_block: biome.solid_block.clone(),
                 density_seed: biome_density_seed(seed, &biome.id),
@@ -302,7 +302,7 @@ impl BiomeField {
             .as_str()
     }
 
-    pub(crate) fn surface_biome_hydrology(&self, index: usize) -> BiomeHydrology {
+    pub(crate) fn surface_biome_hydrology(&self, index: usize) -> BiomeHydrologyRules {
         self.surface_biomes
             .get(index)
             .unwrap_or_else(|| panic!("surface biome index out of bounds: {index}"))
