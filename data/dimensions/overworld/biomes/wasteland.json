@@ -13,7 +13,7 @@
     "detailAmplitude": 1,
     "detailScale": 0.045
   },
-  "allowSurfaceCarvers": false,
+  "allowSurfaceCarvers": true,
   "surfaceLayers": [
     {
       "block": "asteria:grass",
