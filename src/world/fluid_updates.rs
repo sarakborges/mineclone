@@ -48,10 +48,6 @@ impl PendingFluidUpdates {
         frontier::enqueue_loaded_fluid_frontier(self, world, coord);
     }
 
-    fn enqueue_fluid(&mut self, fluid_id: FluidId, position: IVec3) {
-        self.fluid_queue_mut(fluid_id).enqueue(position);
-    }
-
     fn enqueue_fluid_priority(&mut self, fluid_id: FluidId, position: IVec3) {
         self.fluid_queue_mut(fluid_id).enqueue_priority(position);
     }
@@ -166,6 +162,18 @@ impl PendingFluidUpdates {
         }
 
         max_steps
+    }
+}
+
+pub(super) fn reseed_loaded_fluid_frontiers(
+    world: Res<VoxelWorld>,
+    mut pending: ResMut<PendingFluidUpdates>,
+) {
+    *pending = PendingFluidUpdates::default();
+
+    let loaded = world.loaded_chunk_coords().collect::<Vec<_>>();
+    for coord in loaded {
+        pending.enqueue_loaded_fluid_frontier(&world, coord);
     }
 }
 
