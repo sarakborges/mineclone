@@ -7,7 +7,7 @@ use crate::{
     localization::ActiveLanguage,
     player::camera::GameplayCamera,
     targeting::block::TargetedCreature,
-    ui::{surface, theme, typography},
+    ui::{selectable, theme, typography},
 };
 
 use super::{HudSettings, TargetBlockPosition};
@@ -48,7 +48,7 @@ pub(super) fn spawn_entity_card(
     source: EntityCardSource,
     portrait: Option<Handle<Image>>,
 ) {
-    let (avatar_background, avatar_border) = surface::hud_control_static(false);
+    let (avatar_background, avatar_border) = selectable::static_colors(false);
     parent
         .spawn((
             EntityCard {
@@ -134,7 +134,7 @@ fn spawn_entity_health_bar(info: &mut ChildSpawnerCommands, source: EntityCardSo
             ..default()
         },
         BackgroundColor(theme::SLIDER_TRACK),
-        BorderColor::all(surface::HUD_BORDER_COLOR),
+        BorderColor::all(selectable::BORDER_COLOR),
         Pickable::IGNORE,
     ))
     .with_children(|health| {
