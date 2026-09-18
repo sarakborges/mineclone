@@ -62,8 +62,8 @@ fn validate_surface_biome(definition: &BiomeDefinition) {
         definition.id
     );
     assert!(
-        definition.allow_surface_carvers || definition.surface_carvers.is_empty(),
-        "surface biome {} defines surfaceCarvers but allowSurfaceCarvers is false",
+        definition.surface_carvers.is_empty(),
+        "surface biome {} cannot define surfaceCarvers; use allowSurfaceCarvers to permit cavern entrances",
         definition.id
     );
 
@@ -82,13 +82,17 @@ fn validate_volume_biome(definition: &BiomeDefinition) {
         definition.id
     );
     assert!(
-        definition.surface_carvers.is_empty(),
-        "volume biome {} cannot define surfaceCarvers",
+        !definition.allow_surface_carvers,
+        "volume biome {} cannot enable allowSurfaceCarvers",
         definition.id
     );
     assert!(
-        !definition.allow_surface_carvers,
-        "volume biome {} cannot enable allowSurfaceCarvers",
+        definition.surface_carvers.is_empty()
+            || matches!(
+                definition.density_modifier,
+                Some(crate::content::biome_density::BiomeDensityModifier::Cavern { .. })
+            ),
+        "volume biome {} can define surfaceCarvers only with a cavern densityModifier",
         definition.id
     );
     assert!(
