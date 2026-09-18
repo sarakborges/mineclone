@@ -256,7 +256,7 @@ pub(super) fn sync_entity_cards(
             EntityCardSource::Target => target_entity,
         };
         let desired = entity
-            .and_then(|entity| health.get(entity).ok())
+            .and_then(|entity| queries.p2().get(entity).ok())
             .map(|value| format!("{:.0} / {:.0}", value.current(), value.max()))
             .unwrap_or_default();
         if text.0 != desired {
