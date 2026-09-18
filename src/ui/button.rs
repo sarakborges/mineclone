@@ -25,7 +25,7 @@ const BUTTON_VISUAL_SETTLE_EPSILON: f32 = 0.001;
 #[derive(Component, Default)]
 pub struct AsteriaButtonVisual { level: f32 }
 
-#[derive(Component, Clone, Copy, Default)]
+#[derive(Component, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ButtonVariant { #[default] Normal, Primary, Danger }
 
 pub fn menu_button<A: Component>(label: impl Into<String>, action: A) -> impl Bundle {
