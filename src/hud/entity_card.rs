@@ -166,7 +166,6 @@ fn spawn_entity_health_bar(info: &mut ChildSpawnerCommands, source: EntityCardSo
         .with_children(|label| {
             label.spawn((
                 EntityCardHealthLabel(source),
-                GlobalZIndex(2),
                 typography::inventory_category(""),
                 typography::tooltip_shadow(),
                 TextLayout::justify(Justify::Center),
