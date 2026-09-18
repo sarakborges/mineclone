@@ -190,6 +190,7 @@ pub(super) struct EntityCardSubjects<'w, 's> {
 
 /// Resolve both HUD slots to real entities, then update their common card view.
 /// A missing/despawned target clears its name and hides its card immediately.
+#[allow(clippy::type_complexity)]
 pub(super) fn sync_entity_cards(
     subjects: EntityCardSubjects,
     mut queries: ParamSet<(
@@ -234,20 +235,20 @@ pub(super) fn sync_entity_cards(
         }
     }
 
-    let player_health = player_entity.map(|entity| {
+    let player_health = player_entity.and_then(|entity| {
         queries
             .p2()
             .get(entity)
             .map(|value| (value.current(), value.max()))
             .ok()
-    }).flatten();
-    let target_health = target_entity.map(|entity| {
+    });
+    let target_health = target_entity.and_then(|entity| {
         queries
             .p2()
             .get(entity)
             .map(|value| (value.current(), value.max()))
             .ok()
-    }).flatten();
+    });
 
     let health_fill_updates: Vec<(Entity, Val)> = {
         let mut updates = Vec::new();
