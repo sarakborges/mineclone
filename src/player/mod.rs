@@ -54,7 +54,7 @@ pub(crate) fn spawn_player_entity(
             // This child camera renders only the target overlay after the world
             // camera. Its separate layer/depth buffer makes the highlight immune
             // to terrain texture/parallax layers and ordinary z-fighting.
-            Camera3d::default(),
+            
             Camera {
                 order: TARGET_HIGHLIGHT_CAMERA_ORDER,
                 clear_color: ClearColorConfig::None,
