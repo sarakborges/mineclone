@@ -3,15 +3,16 @@ use bevy::prelude::*;
 use super::theme;
 
 pub const HUD_BORDER_COLOR: Color = theme::BORDER;
-const CONTROL_BORDER_WIDTH: f32 = 2.0;
 pub const HUD_HOVER_BORDER_COLOR: Color = theme::BORDER_STRONG;
 pub const HUD_SELECTED_BORDER_COLOR: Color = theme::BORDER_FOCUS;
 pub const HUD_DANGER_BORDER_COLOR: Color = theme::BORDER_STRONG;
 
+#[allow(dead_code)]
 pub fn modal_panel() -> impl Bundle {
     frosted_surface(Node { width: px(560), padding: UiRect::all(px(28)), flex_direction: FlexDirection::Column, align_items: AlignItems::Center, row_gap: px(18), border: UiRect::all(px(CONTROL_BORDER_WIDTH)), ..default() })
 }
 
+#[allow(dead_code)]
 pub fn pause_panel() -> impl Bundle {
     (
         Node { width: px(560), padding: UiRect::all(px(28)), flex_direction: FlexDirection::Column, align_items: AlignItems::Center, row_gap: px(18), border: UiRect::all(px(CONTROL_BORDER_WIDTH)), ..default() },
