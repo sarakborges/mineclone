@@ -3,7 +3,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     content::{attack::AttackRegistry, block::BlockRegistry, player::PlayerDefinition, tool::ToolRegistry},
     gameplay::availability::world_interaction_available,
-    creatures::{CreatureAnimationState, CreatureInstance},
+    creatures::{CreatureAnimationState, CreatureDeathTimer, CreatureInstance},
     creatures::CreatureMotion,
     entity::EntityHealth,
     player::{camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar, viewmodel::ViewModelAnimation},
@@ -69,6 +69,7 @@ fn edit_targeted_block(
     mut runtime: VoxelTopologyRuntime,
     mut tool_uses: MessageWriter<ToolUse>,
     mut viewmodel_animation: ResMut<ViewModelAnimation>,
+    mut commands: Commands,
     mut creature_health: Query<(&mut EntityHealth, &mut CreatureAnimationState, &mut CreatureMotion, &Transform), With<CreatureInstance>>,
     mut random_state: Local<u32>,
 ) {
@@ -110,6 +111,9 @@ fn edit_targeted_block(
             }
             viewmodel_animation.play_break();
             animation.trigger(if dead { "death" } else { "hurt" });
+            if dead {
+                commands.entity(entity).insert(CreatureDeathTimer(Timer::from_seconds(0.75, TimerMode::Once)));
+            }
         }
         return;
     }
