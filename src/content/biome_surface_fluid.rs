@@ -56,8 +56,9 @@ impl BiomeSurfaceFluid {
                 );
                 assert!(
                     (0.0..=1.0).contains(spill_maximum_strength)
-                        && spill_maximum_strength >= spill_minimum_strength,
-                    "biome {biome_id} volcano crater spillMaximumStrength must be between spillMinimumStrength and 1"
+                        && spill_maximum_strength >= spill_minimum_strength
+                        && spill_maximum_strength <= minimum_strength,
+                    "biome {biome_id} volcano crater spillMaximumStrength must be between spillMinimumStrength and minimumStrength"
                 );
                 assert!(
                     *spill_scale > 0.0 && spill_scale.is_finite(),
