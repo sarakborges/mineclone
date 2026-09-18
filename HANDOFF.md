@@ -1,5 +1,7 @@
 # HANDOFF — Asteria / Mineclone
 
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.27.1`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. O PR #14 já foi mergeado em `develop`. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `5e7dbdad861e4b8e877fcab47c039651525f4536`. O fix de validação Ocean/Coast está em `15b569b30a81c6c753cb76bcbe3d53bcb3fabaa7` e passou na CI de push `35395972922` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.27.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. O PR #14 já foi mergeado em `develop`. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `4778ac925d95074a0b2b8606f6c64b2da3e4a156`. CI canônica de push `35395484913` — **success** — cobrindo auditoria de localizações, Clippy com `-D warnings` e `cargo check --locked`, já com `VERSION 0.27.0`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.26.1`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. O PR #14 já foi mergeado em `develop`. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `9367da25dc6b15b4ddcd1175fd5ae3dbb0a1909c`. O fix funcional de terrain forçado está em `db05e21ed9a28f25b23202c5b5dbfe1741194319` e passou na CI de push `35393716818`; o bump `0.26.1` está em `9367da25dc6b15b4ddcd1175fd5ae3dbb0a1909c`, com run de push `35393788708` ainda enfileirada no momento desta atualização. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
@@ -1224,3 +1226,27 @@ QA Windows em mundo novo, prioritariamente:
 5. Gorge: fundo visivelmente irregular, mantendo paredes/desfiladeiro.
 6. Volcano: cone não circular perfeito, cratera menor porém ainda grande, irregularidade natural e `bassalt`.
 7. Reabrir/revisitar chunks não editados e confirmar regeneração determinística; editar um chunk, sair da área, voltar e confirmar que a edição persiste.
+
+
+## Checkpoint 104 — 2026-09-18: crash ao iniciar mundo após Ocean/Coast virarem Surface [FIX + CI VERDE; VERSION 0.27.1]
+
+- Crash reportado:
+  - panic em `src/content/dimension_hydrology.rs:70`;
+  - mensagem: `hydrology.oceanBiome must reference a hydrology biome`;
+  - `asteria:overworld/ocean` já era corretamente `BiomeKind::Surface` após o checkpoint 103.
+- Causa:
+  - a migração de Ocean/Coast para surface biome real foi feita no conteúdo/runtime;
+  - `DimensionHydrology::validate_references()` manteve a invariância antiga que exigia `BiomeKind::Hydrology`;
+  - portanto o conteúdo novo era rejeitado antes do worldgen iniciar.
+- Correção em `15b569b30a81c6c753cb76bcbe3d53bcb3fabaa7`:
+  - `hydrology.oceanBiome` e `hydrology.coastBiome` agora **devem referenciar `BiomeKind::Surface`**;
+  - a mensagem de validação foi atualizada para refletir o contrato arquitetural novo;
+  - a validação continua estrita: referência ausente ou biome de kind incorreto ainda produz erro explícito.
+- CI funcional: run de push `35395972922` — **success**:
+  - auditoria de localizações;
+  - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- `5e7dbdad861e4b8e877fcab47c039651525f4536` sobe `VERSION 0.27.0 → 0.27.1`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+Próximo passo imediato: repetir criação/entrada no Overworld e confirmar que o bootstrap passa da validação de `DimensionHydrology`. Depois continuar a QA do checkpoint 103: diversidade de surface biomes, Ocean/Coast, Gorge, Volcano, mountain `avoidNear` e exploração prolongada/autosave.
