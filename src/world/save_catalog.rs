@@ -126,12 +126,16 @@ pub(crate) struct PruneRegistries {
 }
 
 impl PruneRegistries {
-    fn validate_playable(&self, snapshot: &WorldSnapshot) -> io::Result<()> {
+    pub(crate) fn validate_playable(&self, snapshot: &WorldSnapshot) -> io::Result<()> {
         validate_playable(
             snapshot,
             self.day_lengths.get(&snapshot.dimension_id).copied(),
             |id| self.valid_items.contains(id),
         )
+    }
+
+    pub(crate) fn fluids(&self) -> &FluidRegistry {
+        &self.fluids
     }
 }
 
@@ -288,7 +292,18 @@ pub(crate) fn create_new_world(
 
 /// Publish the immutable snapshot before its manifest commit marker. The
 /// worker only removes backups AFTER publication, never during the write.
-pub(crate) fn save_world(snapshot: &WorldSnapshot, registries: SaveRegistries<'_>) -> io::Result<u64> {
+pub(crate) fn save_world(
+    snapshot: &WorldSnapshot,
+    registries: SaveRegistries<'_>,
+) -> io::Result<u64> {
+    registries.validate_playable(snapshot)?;
+    save_world_owned(snapshot, registries.owned_for_pruning())
+}
+
+pub(crate) fn save_world_owned(
+    snapshot: &WorldSnapshot,
+    registries: PruneRegistries,
+) -> io::Result<u64> {
     validate_world_name(&snapshot.id)?;
     let gate = world_lock(&snapshot.id)?;
     let lock = gate.write.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
@@ -344,7 +359,7 @@ pub(crate) fn save_world(snapshot: &WorldSnapshot, registries: SaveRegistries<'_
     Ok(saved_at)
 }
 
-fn schedule_backup_prune(id: String, registries: SaveRegistries<'_>) {
+fn schedule_backup_prune(id: String, owned: PruneRegistries) {
     let gate = match world_lock(&id) {
         Ok(gate) => gate,
         Err(error) => {
@@ -356,7 +371,6 @@ fn schedule_backup_prune(id: String, registries: SaveRegistries<'_>) {
     if gate.prune_running.swap(true, Ordering::AcqRel) {
         return;
     }
-    let owned = registries.owned_for_pruning();
     let worker_gate = Arc::clone(&gate);
     let spawned = thread::Builder::new()
         .name("asteria-save-prune".to_owned())
