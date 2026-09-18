@@ -46,6 +46,26 @@ pub(super) fn validate_content(content: &LoadedContent) {
     }
 
     for biome in content.biomes.iter() {
+        if biome.kind == super::biome::BiomeKind::TerrainOverlay {
+            let parent_id = biome
+                .parent_biome
+                .as_deref()
+                .expect("terrain overlay validation must require parentBiome");
+            let parent = content.biomes.get(parent_id).unwrap_or_else(|| {
+                panic!(
+                    "terrain overlay biome {} references missing parent biome {}",
+                    biome.id, parent_id
+                )
+            });
+            assert_eq!(
+                parent.kind,
+                super::biome::BiomeKind::Surface,
+                "terrain overlay biome {} parent {} must be a surface biome",
+                biome.id,
+                parent_id
+            );
+        }
+
         biome.validate_material_references(&content.blocks);
         for spawn in &biome.creature_spawns {
             assert!(
