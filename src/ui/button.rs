@@ -61,7 +61,7 @@ pub fn animate_buttons(
     With<Button>,
 >) {
     let smoothing = 1.0 - (-14.0 * time.delta_secs()).exp();
-    for (interaction, variant, mut visual, mut background, mut border, mut shadow) in &mut buttons {
+    for (interaction, variant, mut visual, mut background, mut border, shadow) in &mut buttons {
         let target = match interaction { Interaction::None => 0.0, Interaction::Hovered => 1.0, Interaction::Pressed => 2.0 };
         let delta = target - visual.level;
         if delta.abs() > BUTTON_VISUAL_SETTLE_EPSILON { visual.level += delta * smoothing; } else { visual.level = target; }
