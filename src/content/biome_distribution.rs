@@ -30,6 +30,12 @@ pub enum BiomeDistribution {
         warp_scale: f32,
         warp_strength: f32,
     },
+    NoiseBand {
+        scale: f32,
+        width: f32,
+        warp_scale: f32,
+        warp_strength: f32,
+    },
 }
 
 impl BiomeDistribution {
@@ -102,6 +108,29 @@ impl BiomeDistribution {
                 assert!(
                     warp_strength >= 0.0,
                     "biome {biome_id} mountain peak warpStrength cannot be negative"
+                );
+            }
+            Self::NoiseBand {
+                scale,
+                width,
+                warp_scale,
+                warp_strength,
+            } => {
+                assert!(
+                    scale > 0.0,
+                    "biome {biome_id} noise band scale must be positive"
+                );
+                assert!(
+                    width > 0.0 && width <= 1.0,
+                    "biome {biome_id} noise band width must be between 0 and 1"
+                );
+                assert!(
+                    warp_scale > 0.0,
+                    "biome {biome_id} noise band warpScale must be positive"
+                );
+                assert!(
+                    warp_strength >= 0.0,
+                    "biome {biome_id} noise band warpStrength cannot be negative"
                 );
             }
         }
