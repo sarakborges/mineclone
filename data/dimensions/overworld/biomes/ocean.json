@@ -2,6 +2,10 @@
   "id": "asteria:overworld/ocean",
   "name": { "english": "Ocean", "portuguese_brazil": "Oceano", "spanish": "Océano" },
   "kind": "hydrology",
+  "hydrology": {
+    "shoreBlock": "asteria:sand",
+    "oceanBedBlock": "asteria:sand"
+  },
   "visuals": {
     "skyColor": { "dawn": { "hue": 214.5016, "saturation": 0.3043, "intensity": 0.6900 }, "day": { "hue": 211.7405, "saturation": 0.6512, "intensity": 0.5733 }, "dusk": { "hue": 265.2850, "saturation": 0.1724, "intensity": 0.5800 }, "night": { "hue": 227.7837, "saturation": 0.6471, "intensity": 0.0567 } },
     "fogColor": { "dawn": { "hue": 204.1825, "saturation": 0.2727, "intensity": 0.6600 }, "day": { "hue": 204.5036, "saturation": 0.3762, "intensity": 0.6733 }, "dusk": { "hue": 240.0000, "saturation": 0.0769, "intensity": 0.5633 }, "night": { "hue": 216.5868, "saturation": 0.5833, "intensity": 0.0600 } },
