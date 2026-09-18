@@ -60,11 +60,8 @@ pub(super) fn validate_content(content: &LoadedContent) {
 
     for dimension in content.dimensions.iter() {
         dimension.validate_biomes(&content.biomes);
-        dimension.hydrology.validate_references(
-            &dimension.id,
-            &content.biomes,
-            &content.blocks,
-            &content.fluids,
-        );
+        dimension
+            .hydrology
+            .validate_references(&dimension.id, &content.biomes, &content.fluids);
     }
 }
