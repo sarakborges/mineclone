@@ -165,10 +165,10 @@ fn spawn_entity_health_bar(info: &mut ChildSpawnerCommands, source: EntityCardSo
                 ..default()
             },
             Pickable::IGNORE,
-            EntityCardHealthLabel(source),
         ))
         .with_children(|label| {
             label.spawn((
+                EntityCardHealthLabel(source),
                 typography::inventory_category(""),
                 typography::tooltip_shadow(),
                 TextLayout::justify(Justify::Center),
