@@ -10,7 +10,6 @@ pub const SURFACE_INSET: Color = Color::srgb(0.038, 0.034, 0.052);
 pub const BORDER: Color = Color::srgba(0.55, 0.50, 0.66, 0.62);
 pub const BORDER_STRONG: Color = Color::srgba(0.82, 0.78, 0.90, 0.88);
 pub const BORDER_FOCUS: Color = Color::srgba(0.72, 0.58, 0.98, 0.98);
-pub const BUTTON_TEXT: Color = Color::srgb(0.08, 0.08, 0.08);
 pub const TEXT_PRIMARY: Color = Color::srgb(0.94, 0.94, 0.96);
 pub const TEXT_MUTED: Color = Color::srgb(0.70, 0.68, 0.76);
 pub const TEXT_SUBTLE: Color = Color::srgba(0.70, 0.68, 0.76, 0.68);
