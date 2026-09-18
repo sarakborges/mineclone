@@ -5,7 +5,7 @@ use std::{
     time::Instant,
 };
 
-use bevy::{ecs::system::SystemParam, log::warn, prelude::*, ui_widgets::ScrollArea};
+use bevy::{ecs::system::SystemParam, log::warn, prelude::*};
 
 use crate::{
     app::game_state::GameState,
@@ -602,7 +602,7 @@ fn sync_world_selection_entries(
     mut entries: Query<(&WorldListEntry, &Interaction, &mut BackgroundColor, &mut BorderColor)>,
 ) {
     if !state.is_changed() { return; }
-    for (entry, interaction, mut background, mut border) in &mut entries {
+    for (entry, interaction, background, border) in &mut entries {
         surface::apply_control_colors(
             (
                 selectable::selectable_button_background(
