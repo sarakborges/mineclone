@@ -17,7 +17,7 @@ use crate::content::{
     biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
     biome_hydrology::BiomeHydrologyRules, biome_terrain::BiomeTerrain,
     biome_terrain_modifier::BiomeTerrainModifier,
-    dimension::{DimensionBiomeSize, DimensionDefinition},
+    dimension::{DimensionBiomeSize, DimensionBiomeSizeAxis, DimensionDefinition},
 };
 
 pub(crate) use self::volume::{VolumeBiomeRegion, VolumeBiomeSelection};
@@ -28,6 +28,7 @@ use self::{
 use super::{
     hydrology::suppress_ocean_continentalness,
     macro_climate::{MacroClimateField, MacroClimateSample},
+    new_world::biome_size_multiplier_tenths,
 };
 
 const SURFACE_SITE_SEARCH_DIAMETER: usize = (SITE_SEARCH_RADIUS * 2 + 1) as usize;
@@ -137,12 +138,19 @@ impl BiomeField {
         dimension: &DimensionDefinition,
         biomes: &BiomeRegistry,
         seed: u64,
+        biome_size_multiplier: f32,
     ) -> Self {
         assert!(
             !dimension.biomes.is_empty(),
             "dimension {} must define at least one biome",
             dimension.id
         );
+        let multiplier_tenths = biome_size_multiplier_tenths(biome_size_multiplier)
+            .unwrap_or_else(|| {
+                panic!(
+                    "biome size multiplier must be between 0.5 and 5.0 in 0.1 increments: {biome_size_multiplier}"
+                )
+            });
 
         let mut surface_biomes = Vec::new();
         let mut volume_biomes = Vec::new();
@@ -166,6 +174,7 @@ impl BiomeField {
                     dimension.id, biome.id
                 )
             });
+            let size = scaled_biome_size(size, multiplier_tenths);
             let entry = BiomeFieldEntry {
                 id: biome.id.clone(),
                 distributions: biome.distributions.clone(),
@@ -336,6 +345,30 @@ impl BiomeField {
     }
 }
 
+fn scaled_biome_size(size: DimensionBiomeSize, multiplier_tenths: u8) -> DimensionBiomeSize {
+    DimensionBiomeSize {
+        x: scaled_biome_size_axis(size.x, multiplier_tenths),
+        z: scaled_biome_size_axis(size.z, multiplier_tenths),
+        y: size
+            .y
+            .map(|axis| scaled_biome_size_axis(axis, multiplier_tenths)),
+    }
+}
+
+fn scaled_biome_size_axis(
+    size: DimensionBiomeSizeAxis,
+    multiplier_tenths: u8,
+) -> DimensionBiomeSizeAxis {
+    let scale = |value: f32| {
+        (value * f32::from(multiplier_tenths) / 10.0)
+            .round()
+            .max(1.0)
+    };
+    let min = scale(size.min);
+    let max = scale(size.max).max(min);
+    DimensionBiomeSizeAxis { min, max }
+}
+
 fn biome_density_seed(seed: u64, biome_id: &str) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
 
@@ -351,4 +384,30 @@ fn biome_density_seed(seed: u64, biome_id: &str) -> u64 {
     mixed = mixed.wrapping_mul(0xc4ce_b9fe_1a85_ec53);
     mixed ^= mixed >> 33;
     mixed
+}
+
+
+#[cfg(test)]
+mod biome_size_multiplier_tests {
+    use super::*;
+
+    #[test]
+    fn biome_size_multiplier_scales_and_rounds_every_axis() {
+        let scaled = scaled_biome_size(
+            DimensionBiomeSize {
+                x: DimensionBiomeSizeAxis { min: 75.0, max: 125.0 },
+                z: DimensionBiomeSizeAxis { min: 41.0, max: 99.0 },
+                y: Some(DimensionBiomeSizeAxis { min: 15.0, max: 35.0 }),
+            },
+            5,
+        );
+
+        assert_eq!(scaled.x.min, 38.0);
+        assert_eq!(scaled.x.max, 63.0);
+        assert_eq!(scaled.z.min, 21.0);
+        assert_eq!(scaled.z.max, 50.0);
+        let y = scaled.y.expect("scaled vertical size should remain defined");
+        assert_eq!(y.min, 8.0);
+        assert_eq!(y.max, 18.0);
+    }
 }
