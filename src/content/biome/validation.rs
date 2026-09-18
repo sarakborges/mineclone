@@ -61,6 +61,11 @@ fn validate_surface_biome(definition: &BiomeDefinition) {
         "surface biome {} cannot define volume overlap priority",
         definition.id
     );
+    assert!(
+        definition.allow_surface_carvers || definition.surface_carvers.is_empty(),
+        "surface biome {} defines surfaceCarvers but allowSurfaceCarvers is false",
+        definition.id
+    );
 
     definition.validate_surface_materials();
 }
@@ -79,6 +84,11 @@ fn validate_volume_biome(definition: &BiomeDefinition) {
     assert!(
         definition.surface_carvers.is_empty(),
         "volume biome {} cannot define surfaceCarvers",
+        definition.id
+    );
+    assert!(
+        !definition.allow_surface_carvers,
+        "volume biome {} cannot enable allowSurfaceCarvers",
         definition.id
     );
     assert!(
@@ -107,6 +117,11 @@ fn validate_hydrology_biome(definition: &BiomeDefinition) {
     assert!(
         definition.surface_carvers.is_empty(),
         "hydrology biome {} cannot define surfaceCarvers",
+        definition.id
+    );
+    assert!(
+        !definition.allow_surface_carvers,
+        "hydrology biome {} cannot enable allowSurfaceCarvers",
         definition.id
     );
     assert!(
