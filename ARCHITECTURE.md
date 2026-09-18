@@ -50,6 +50,7 @@ Gameplay-input systems must use the canonical availability rule instead of rebui
 - When a new modal state blocks world interaction, update the canonical availability context first rather than patching every consumer independently.
 - Systems that must keep draining input/events while blocked may run outside that condition, but must explicitly avoid applying gameplay effects. Mouse-look event draining is the canonical example.
 - Systems that own stale derived state must clear it when interaction becomes unavailable. Targeting must clear `TargetedBlock`, not merely skip raycasting.
+- Modal HUD visibility must derive directly from authoritative states, not from one-shot transition handlers or `State::is_changed()` shortcuts. Gameplay HUD roots that must disappear under Pause/Settings should reconcile their `Visibility` idempotently while Gameplay is active, and must tolerate zero or multiple matching roots during lifecycle edges.
 
 Use schedule sets to express ordering between domains. Prefer named sets over chains that only exist to compensate for hidden side effects.
 
@@ -100,13 +101,17 @@ Time-sliced world work uses `FrameWorkBudget`.
 
 Natural hydrology is generated authoritatively with terrain/world generation. It must not be bulk-enqueued into the runtime dynamic-fluid solver. Dynamic fluid updates are for runtime topology/fluid changes.
 
+Ocean floor elevation is authoritative hydrology geometry, not a flat sea-level offset. Open ocean must receive deterministic multi-scale bathymetric relief that fades in with ocean strength at the coast. Density carving and physical-water queries must call the same ocean-floor target so the carved bed and reported water bed can never diverge.
+
 Chunk generation is a one-time creation event per world coordinate. Once a chunk has been generated, its voxel/fluid/property result becomes authoritative world state: runtime unloading may archive it but must never forget its generated coordinate or regenerate it from the seed. Saves serialize every generated chunk, including empty and currently archived chunks. Loading reconstructs only registered saved chunks; seed-based worldgen is reserved exclusively for coordinates that have never existed in that world. Meshes and lighting remain derived and may be rebuilt from saved chunk content.
+
+Chunk persistence must scale with authoritative-world size. Disk chunks use state palettes plus contiguous voxel runs rather than repeating full block/fluid state per occupied voxel; legacy per-voxel snapshots remain readable. Periodic autosave must not serialize or fsync the world on the Bevy main thread: it may take a shallow/shared snapshot there, then compact/serialize/publish in a detached task. Only one autosave publication may be in flight per world session. Final Leave World/Exit commits remain synchronous so the world is not abandoned before durable publication.
 
 Surface-carver tunnels are subordinate to cave connectivity: a surface tunnel is generated only when its carved volume intersects the anchored cave connector graph. Disconnected surface tunnels/dead ends must be rejected before density rasterization, and structure-support sampling must use the same connectivity rule.
 
 Spawn-column dryness must use the same physically supported hydrology as terrain generation. When actual terrain surface height is available, bootstrap/spawn selection must use `supported_water_at(...)` rather than unfiltered `water_at(...)`, so unsupported lake/ocean candidates cannot make genuinely dry terrain impossible to select.
 
-A user-selected Spawn Biome is not a request to search the seed for a distant natural occurrence. It is a deterministic initial-region override owned by `BiomeField`, centered on the default spawn. The forced region must respect the selected dimension biome's authored `size.x/z.min..max`: deterministic radii are chosen inside those ranges, the core is elliptical rather than chunk-aligned, and the border uses the same surface warp/fade machinery as biome sampling. The same override feeds terrain sampling, biome identity and continentalness/hydrology so Coast/Ocean cannot supersede it inside the forced region. Only dry-column placement is searched inside that already-forced core. The selected spawn biome is persisted in world snapshots and restored on load so the same region is reconstructed across sessions.
+A user-selected Spawn Biome is not a request to search the seed for a distant natural occurrence. It is a deterministic initial-region override owned by `BiomeField`, centered on the default spawn. The forced region must respect the selected dimension biome's authored `size.x/z.min..max`: deterministic radii are chosen inside those ranges, the core is elliptical rather than chunk-aligned, and the border uses the same surface warp/fade machinery as biome sampling. The override feeds terrain sampling and biome identity, while hydrology suppresses ocean strength only as much as the forced-biome weight requires; it must not push continentalness to an artificial maximum, which creates cut coast bands at the override edge. Only dry-column placement is searched inside that already-forced core. The selected spawn biome is persisted in world snapshots and restored on load so the same region is reconstructed across sessions.
 
 ## 8. Rendering and color
 
