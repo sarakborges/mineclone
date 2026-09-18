@@ -8,7 +8,7 @@ use super::{
     noise_band::noise_band_strength,
 };
 
-pub(super) fn distribution_strength(
+pub(crate) fn distribution_strength(
     distribution: BiomeDistribution,
     position: Vec2,
     world_seed: u64,
