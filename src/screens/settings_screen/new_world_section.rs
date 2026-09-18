@@ -4,7 +4,9 @@ use crate::{
     app::game_state::GameState,
     localization::{Language, UiLocalization},
     ui::{
-        button::{compact_control_button, button, primary_button},
+        button::{
+            button, ButtonVariant, COMPACT_CONTROL_HEIGHT, MENU_BUTTON_HEIGHT, MENU_BUTTON_WIDTH,
+        },
         numeric_input::{
             NumericInputEvent, NumericInputFrame, NumericInputSizing, NumericInputState,
             numeric_input_field, sync_numeric_input_view,
@@ -156,12 +158,14 @@ fn seed_setting(seed: u64, localization: &UiLocalization, language: Language) ->
                         SeedValueText,
                         NumericInputSizing::Flexible,
                     ),
-                    compact_control_button(
+                    button(
                         localization
                             .text(language, "newWorld.randomSeed")
                             .to_owned(),
                         RandomSeedButton,
-                        RANDOM_SEED_BUTTON_WIDTH,
+                        px(RANDOM_SEED_BUTTON_WIDTH),
+                        COMPACT_CONTROL_HEIGHT,
+                        ButtonVariant::Normal,
                     ),
                 ],
             ),
@@ -177,12 +181,18 @@ pub(super) fn spawn_new_world_footer(
     footer.spawn(button(
         localization.text(language, "newWorld.return").to_owned(),
         NewWorldFooterAction::Return,
+        px(MENU_BUTTON_WIDTH),
+        MENU_BUTTON_HEIGHT,
+        ButtonVariant::Normal,
     ));
-    footer.spawn(primary_button(
+    footer.spawn(button(
         localization
             .text(language, "newWorld.createWorld")
             .to_owned(),
         NewWorldFooterAction::CreateWorld,
+        px(MENU_BUTTON_WIDTH),
+        MENU_BUTTON_HEIGHT,
+        ButtonVariant::Primary,
     ));
 }
 
