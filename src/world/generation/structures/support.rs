@@ -126,6 +126,7 @@ fn supported_surface_ground_y(
         resolve_surface_carver_column(
             &mut surface_carvers,
             horizontal,
+            raw_surface_height as f32,
             &influences,
             &SurfaceCarverResolveContext {
                 biomes: context.biomes,
