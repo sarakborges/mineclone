@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.30.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional imediatamente anterior ao bump/documentação:** `50ebf9454ac17ac49e6c030fa5eba5fbf1ada397`. A migração de Coast-biome para Ocean `surfaceMargin` passou na CI de push `35398588362` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Bump `0.29.0 → 0.30.0` em `c0794cb00c1ceea02ca5ba9d56446dfeedc90c4b`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.31.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado atual:** `b6f685c237737ff6331f738cf1f1733aa743a206`. O solver runtime de fluidos gravity-first/downhill passou na CI final `35399569196` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.29.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `e848e9e918a87527764ed79616ac3d8134c0830a`. A feature de lava + fluidos de superfície do Volcano passou na CI de push `35397447773` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
@@ -1601,3 +1601,82 @@ QA Windows prioritária:
 4. Confirmar que `CurrentBiome` continua reportando o biome terrestre na praia.
 5. Confirmar que a água/floor do Ocean permanece restrita ao ownership/transição do Ocean e não invade terra distante.
 6. Confirmar que rios continuam podendo desembocar no Ocean e que shoreline material continua coerente.
+
+## Checkpoint 108 — 2026-09-18: fluidos runtime gravity-first com busca downhill [FEATURE + CI VERDE; VERSION 0.31.0; QA WINDOWS PENDENTE]
+
+### Objetivo
+
+- Solicitação do usuário: fazer água/lava **fluírem de forma correta**, adotando essencialmente o modelo discreto de fluidos do Minecraft, sem simulação volumétrica/pressão real.
+- O solver continua único e data-driven para todos os fluidos. Não existe branch por ID de água ou lava.
+- `spreadSpeed` continua controlando a cadência temporal e `maxSpread` continua controlando o alcance horizontal authored de cada fluido.
+
+### Gravidade e alcance horizontal
+
+- Queda vertical tem prioridade.
+- Quando uma célula recebe fluido vindo de cima, ela vira uma célula dinâmica cheia e seu `spread_distance` é resetado para **0**.
+- Consequência: cada queda vertical inicia um novo trecho horizontal.
+  - Água pode percorrer até seu `maxSpread=7`, cair, e voltar a ter até 7 blocos de alcance no novo patamar.
+  - Lava pode percorrer até seu `maxSpread=3`, cair, e voltar a ter até 3 blocos no novo patamar.
+- Isso permite escorrer por encostas longas sem aumentar artificialmente `maxSpread`.
+
+### Cachoeiras não abrem lateralmente no ar
+
+- Célula dinâmica em queda não pode iniciar spread horizontal enquanto estiver sem apoio sólido.
+- Ela continua descendo até alcançar terreno.
+- Uma source exposta no topo de uma coluna ainda pode derramar pela borda, preservando o comportamento de fonte.
+
+### Busca da queda mais próxima
+
+- Em terreno suportado, antes de espalhar radialmente, o solver procura uma abertura para queda dentro do **alcance horizontal restante** daquela célula.
+- A busca usa BFS curta e limitada por `maxSpread - spread_distance`.
+- Se houver queda alcançável:
+  - o solver mantém apenas as direções iniciais que pertencem a um caminho horizontal mínimo até a queda mais próxima;
+  - empates preservam todas as direções de menor distância.
+- Se não houver queda alcançável dentro do range, o comportamento volta ao spread radial normal.
+- A busca não atravessa blocos sólidos, fluidos de outro tipo ou chunks não carregados.
+- O caminho não pode voltar pelo próprio voxel de origem para fabricar atalhos.
+
+### Arquitetura / persistência
+
+- `ARCHITECTURE.md` registra o contrato gravity-first/downhill em `5cf52abedff0b4288aece2503d82b6538d9ec847`.
+- Hidrologia natural determinística continua fora do solver runtime; Ocean/River/Lake não são bulk-enqueued.
+- Não houve mudança no schema de `FluidDefinition`.
+- Não houve mudança no formato de save: `FluidCell` já persistia `spread_distance`.
+- Worldgen de crater lake/spill channels continua separado da simulação dinâmica.
+
+### Cobertura e commits
+
+- `34221ecce2dae814b35bf06f995d7390189ef24b` — implementação principal:
+  - queda vertical reseta distância;
+  - bloqueio de lateral em células dinâmicas airborne;
+  - BFS downhill por range restante;
+  - fallback radial quando não há queda.
+- Cobertura de regressão adicionada no próprio solver para:
+  - range horizontal independente de level;
+  - reset de distância após queda;
+  - cachoeira dinâmica sem spread lateral;
+  - preferência pela queda alcançável mais próxima;
+  - spread radial em superfície sem queda.
+- `b6f685c237737ff6331f738cf1f1733aa743a206` — corrige apenas o Clippy do helper `FluidCell::flowing` usando-o novamente na cobertura de regressão.
+- `f272b6cc89aff06a04ddd77a461c2a8faf221306` — `VERSION 0.30.0 → 0.31.0`.
+
+### CI
+
+- CI intermediária `35399480357` falhou somente em Clippy por `FluidCell::flowing` ter ficado sem uso após a troca do teste antigo; nenhuma falha funcional/typing do solver foi reportada.
+- Correção: `b6f685c2...`, sem mudança de semântica.
+- **CI final `35399569196` — success**:
+  - auditoria de localizações;
+  - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+### QA imediata
+
+1. Criar/usar uma fonte dinâmica de água sobre plataforma com uma queda próxima e confirmar que o fluxo prefere a borda em vez de abrir igualmente para todos os lados.
+2. Confirmar que, sem queda dentro de `maxSpread`, água continua abrindo radialmente.
+3. Confirmar waterfall: coluna cai verticalmente sem “asas” laterais no meio do ar.
+4. Confirmar landing: depois de tocar o chão, a água recebe novamente até 7 blocos de alcance horizontal.
+5. Repetir com lava e confirmar a mesma geometria usando somente seus parâmetros authored: spread bem mais lento e no máximo 3 blocos por patamar.
+6. Em Volcano, provocar topology update perto da lava/surface fluid e observar se o solver dinâmico acompanha a encosta sem interferir na rasterização determinística inicial.
+7. Observar frame time em um cenário com várias frentes simultâneas; a BFS é limitada por `maxSpread`, mas QA runtime ainda precisa validar custo real.
+
