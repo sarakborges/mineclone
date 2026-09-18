@@ -1,0 +1,38 @@
+{
+  "id": "asteria:overworld/alps",
+  "name": {
+    "english": "Alps",
+    "portuguese_brazil": "Alpes",
+    "spanish": "Alpes"
+  },
+  "kind": "terrain_overlay",
+  "parentBiome": "asteria:overworld/mountains",
+  "distributions": [
+    {
+      "type": "mountain_peak",
+      "spacing": 1200,
+      "chance": 0.34,
+      "radius": {
+        "min": 190,
+        "max": 340
+      },
+      "warpScale": 0.0028,
+      "warpStrength": 55
+    }
+  ],
+  "terrainModifiers": [
+    {
+      "type": "height_offset",
+      "height": 30
+    },
+    {
+      "type": "cliffs",
+      "scale": 0.021,
+      "threshold": 0.58,
+      "height": 18,
+      "edgeWidth": 0.09,
+      "warpScale": 0.005,
+      "warpStrength": 18
+    }
+  ]
+}
