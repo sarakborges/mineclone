@@ -48,7 +48,18 @@ pub(crate) fn compact_control_button<A: Component>(label: impl Into<String>, act
     (Button, action, ButtonVariant::Normal, Node { width: px(width), height: px(COMPACT_CONTROL_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![typography::button_label(label)])
 }
 
-pub fn animate_buttons(time: Res<Time<Real>>, mut buttons: Query<(&Interaction, &ButtonVariant, &mut AsteriaButtonVisual, &mut BackgroundColor, &mut BorderColor, &mut BoxShadow), With<Button>>) {
+pub fn animate_buttons(
+    time: Res<Time<Real>>,
+    mut buttons: Query<(
+        &Interaction,
+        &ButtonVariant,
+        &mut AsteriaButtonVisual,
+        &mut BackgroundColor,
+        &mut BorderColor,
+        Option<&mut BoxShadow>,
+    ),
+    With<Button>,
+>) {
     let smoothing = 1.0 - (-14.0 * time.delta_secs()).exp();
     for (interaction, variant, mut visual, mut background, mut border, mut shadow) in &mut buttons {
         let target = match interaction { Interaction::None => 0.0, Interaction::Hovered => 1.0, Interaction::Pressed => 2.0 };
