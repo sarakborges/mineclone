@@ -25,7 +25,10 @@ use self::{
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS, VOLUME_SITE_GAP},
     spatial::{hash_unit, lerp, smoothstep, surface_minimum_spacing, warp_surface_position},
 };
-use super::macro_climate::{MacroClimateField, MacroClimateSample};
+use super::{
+    hydrology::suppress_ocean_continentalness,
+    macro_climate::{MacroClimateField, MacroClimateSample},
+};
 
 const SURFACE_SITE_SEARCH_DIAMETER: usize = (SITE_SEARCH_RADIUS * 2 + 1) as usize;
 pub(crate) const MAX_SURFACE_INFLUENCES: usize =
@@ -243,7 +246,11 @@ impl BiomeField {
     pub(crate) fn climate_at(&self, position: Vec2) -> MacroClimateSample {
         let mut climate = self.climate.sample(position);
         if let Some((_, weight)) = self.forced_surface_biome_at(position) {
-            climate.continentalness += (1.0 - climate.continentalness) * weight;
+            climate.continentalness = suppress_ocean_continentalness(
+                climate.continentalness,
+                self.ocean_weight,
+                weight,
+            );
         }
         climate
     }
