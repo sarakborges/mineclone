@@ -26,7 +26,7 @@ const BUTTON_VISUAL_SETTLE_EPSILON: f32 = 0.001;
 pub struct AsteriaButtonVisual { level: f32 }
 
 #[derive(Component, Clone, Copy, Default)]
-enum ButtonVariant { #[default] Normal, Primary, Danger }
+pub enum ButtonVariant { #[default] Normal, Primary, Danger }
 
 pub fn menu_button<A: Component>(label: impl Into<String>, action: A) -> impl Bundle {
     (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Normal, Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![typography::button_label(label)])
@@ -40,7 +40,7 @@ pub fn primary_menu_button<A: Component>(label: impl Into<String>, action: A) ->
     (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Primary, Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_PRIMARY), BorderColor::all(BUTTON_BORDER_STRONG), children![typography::button_label_light(label)])
 }
 
-pub fn danger_menu_button<A: Component>(label: impl Into<String>, action: A) -> impl Bundle {
+pub(crate) fn danger_menu_button<A: Component>(label: impl Into<String>, action: A) -> impl Bundle {
     (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Danger, Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_DANGER), BorderColor::all(BUTTON_BORDER_STRONG), children![typography::button_label_light(label)])
 }
 
