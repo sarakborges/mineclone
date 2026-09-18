@@ -469,10 +469,6 @@ pub(super) fn sync_target_block_position_options(
     }
 }
 
-const fn toggle_thumb_left(_enabled: bool) -> f32 {
-    TOGGLE_WIDTH - TOGGLE_THUMB_SIZE - TOGGLE_THUMB_RIGHT
-}
-
 fn toggle_border(enabled: bool) -> Color {
     if enabled {
         theme::BORDER_FOCUS
