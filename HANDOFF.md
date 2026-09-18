@@ -340,3 +340,10 @@ Próximo passo imediato: aguardar a CI do HEAD 77b847822b6daa5ac5ba3018c0028e3f1
 - O ajuste ficou isolado no próprio highlight: escala 1.02 e deslocamento de 0.02 na normal da face atingida, para colocar o shell ligeiramente à frente da superfície/layer selecionada sem criar outra câmera.
 - O ChiselPlacementGhost também voltou ao layer normal; sua lógica de posicionamento não foi alterada.
 - Não executei cargo test, cargo run nem QA Windows. A CI do novo HEAD ainda precisa validar a compilação.
+
+
+## Checkpoint 87 — 2026-09-18: correção do erro de compilação do rollback
+
+- CI 35295095691 (run 3377) falhou em `src/player/mod.rs` porque o rollback deixou `.insert(...)` como expressão final da função, retornando `&mut EntityCommands` em vez de `()`.
+- Corrigido adicionando o ponto-e-vírgula no `.insert(...)`.
+- Não executei cargo test/cargo run nem QA Windows.
