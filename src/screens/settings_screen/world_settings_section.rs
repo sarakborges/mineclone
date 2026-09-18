@@ -108,6 +108,7 @@ fn game_mode_button(
             ..default()
         },
         BackgroundColor(selectable_button_background(active, Interaction::None)),
+        BorderColor::all(crate::ui::selectable::selectable_button_border(active, Interaction::None)),
         children![(typography::button_label(label), GameModeButtonLabel(mode))],
     )
 }
