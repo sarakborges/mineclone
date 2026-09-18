@@ -68,7 +68,6 @@ pub struct BiomeField {
     pub(super) seed: u64,
     pub(super) surface_site_biomes: Arc<RwLock<HashMap<IVec2, usize>>>,
     forced_surface_biome: Option<ForcedSurfaceBiome>,
-    pub(super) ocean_biome_id: Option<String>,
     pub(super) ocean_weight: f32,
 }
 
@@ -234,7 +233,6 @@ impl BiomeField {
             seed,
             surface_site_biomes: Arc::new(RwLock::new(HashMap::new())),
             forced_surface_biome: None,
-            ocean_biome_id,
             ocean_weight,
         }
     }
