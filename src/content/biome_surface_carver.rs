@@ -19,6 +19,8 @@ pub enum BiomeSurfaceCarver {
         chance: f32,
         length: SurfaceCarverRange,
         radius: SurfaceCarverRange,
+        /// Absolute world-Y range for the underground end of the entrance tunnel.
+        /// The visible mouth is resolved from the actual surface height.
         elevation: SurfaceCarverRange,
         jitter: f32,
     },
