@@ -193,11 +193,11 @@ pub(super) struct EntityCardSubjects<'w, 's> {
 pub(super) fn sync_entity_cards(
     subjects: EntityCardSubjects,
     mut cards: Query<(&mut EntityCard, &mut Visibility)>,
-    mut names: Query<(&EntityCardName, &mut Text, Without<EntityCardHealthLabel>)>,
+    mut names: Query<(&EntityCardName, &mut Text), Without<EntityCardHealthLabel>>,
     health: Query<&EntityHealth>,
     mut fills: Query<(&EntityCardHealthFill, &Children)>,
     mut fill_nodes: Query<&mut Node, Without<EntityCardHealthFill>>,
-    mut labels: Query<(&EntityCardHealthLabel, &mut Text, Without<EntityCardName>)>,
+    mut labels: Query<(&EntityCardHealthLabel, &mut Text), Without<EntityCardName>>,
 ) {
     let player_entity = subjects.player.iter().next();
     let target_entity = if subjects.settings.target_block_position() == TargetBlockPosition::Hidden {
