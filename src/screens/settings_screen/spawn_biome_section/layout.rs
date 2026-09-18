@@ -9,6 +9,8 @@ use crate::{
     ui::{dropdown::{self, PanelAnchor}, text_input, theme, typography},
 };
 
+use super::state::SpawnBiomeDropdownKind;
+
 pub(super) const OPTION_GAP: f32 = 4.0;
 const SEARCH_HEIGHT: f32 = 40.0;
 const VISIBLE_OPTION_COUNT: f32 = 5.0;
@@ -79,7 +81,7 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                     (
                         Button,
                         SpawnBiomeDropdownButton,
-                        dropdown::control(),
+                        dropdown::control::<SpawnBiomeDropdownKind>(),
                         children![
                             (
                                 SpawnBiomeDropdownLabel,
@@ -96,12 +98,13 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                     (
                         SpawnBiomeDropdownPanel,
                         dropdown::panel_node(percent(100), 8.0, 8.0, 1.0, PanelAnchor::Left),
-                        dropdown::panel_surface(),
+                        dropdown::panel_surface::<SpawnBiomeDropdownKind>(),
                         GlobalZIndex(610),
                         children![
                             (
                                 Button,
                                 SpawnBiomeSearchFrame,
+                                dropdown::inside::<SpawnBiomeDropdownKind>(),
                                 Node {
                                     position_type: PositionType::Relative,
                                     width: percent(100),
@@ -117,6 +120,7 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                                     (
                                         Button,
                                         SpawnBiomeSearchBar,
+                                        dropdown::inside::<SpawnBiomeDropdownKind>(),
                                         EditableText {
                                             max_characters: Some(128),
                                             ..default()
@@ -159,6 +163,8 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                             ),
                             (
                                 SpawnBiomeOptionsFrame,
+                                dropdown::inside::<SpawnBiomeDropdownKind>(),
+                                Interaction::default(),
                                 Node {
                                     display: Display::Grid,
                                     width: percent(100),
@@ -172,6 +178,8 @@ pub(in crate::screens::settings_screen) fn spawn_biome_setting(
                                 },
                                 children![(
                                     SpawnBiomeOptionsList,
+                                    dropdown::inside::<SpawnBiomeDropdownKind>(),
+                                    Interaction::default(),
                                     ScrollPosition(Vec2::ZERO),
                                     ScrollArea,
                                     Node {
