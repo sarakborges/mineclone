@@ -5,8 +5,6 @@
     "portuguese_brazil": "Alpes",
     "spanish": "Alpes"
   },
-  "kind": "terrain_overlay",
-  "parentBiome": "asteria:overworld/mountains",
   "distributions": [
     {
       "type": "mountain_peak",
@@ -20,19 +18,126 @@
       "warpStrength": 55
     }
   ],
-  "terrainModifiers": [
+  "terrain": {
+    "type": "alps",
+    "baseHeight": 14,
+    "amplitude": 68,
+    "scale": 0.0075,
+    "sharpness": 2.25,
+    "detailAmplitude": 24,
+    "detailScale": 0.025
+  },
+  "allowSurfaceCarvers": true,
+  "surfaceLayers": [
     {
-      "type": "height_offset",
-      "height": 30
+      "block": "asteria:stone"
+    }
+  ],
+  "hydrology": {
+    "canGenerateLake": true,
+    "canGenerateRiver": true,
+    "lakeChanceMultiplier": 0.65,
+    "riverWidthMultiplier": 0.7,
+    "shoreBlock": "asteria:sand",
+    "riverBedBlock": "asteria:sand",
+    "lakeBedBlock": "asteria:sand"
+  },
+  "structures": [
+    {
+      "id": "asteria:boulder_medium",
+      "placement": {
+        "spacing": 42,
+        "chance": 0.25,
+        "jitter": 13
+      }
     },
     {
-      "type": "cliffs",
-      "scale": 0.021,
-      "threshold": 0.58,
-      "height": 18,
-      "edgeWidth": 0.09,
-      "warpScale": 0.005,
-      "warpStrength": 18
+      "id": "asteria:boulder_big",
+      "placement": {
+        "spacing": 64,
+        "chance": 0.19,
+        "jitter": 20
+      }
+    },
+    {
+      "id": "asteria:boulder_huge",
+      "placement": {
+        "spacing": 102,
+        "chance": 0.11,
+        "jitter": 31
+      }
     }
-  ]
+  ],
+  "visuals": {
+    "skyColor": {
+      "dawn": {
+        "hue": 214.4019,
+        "saturation": 0.2299,
+        "intensity": 0.6233
+      },
+      "day": {
+        "hue": 208.677,
+        "saturation": 0.413,
+        "intensity": 0.6133
+      },
+      "dusk": {
+        "hue": 252.7305,
+        "saturation": 0.0982,
+        "intensity": 0.5433
+      },
+      "night": {
+        "hue": 227.2695,
+        "saturation": 0.5161,
+        "intensity": 0.0517
+      }
+    },
+    "fogColor": {
+      "dawn": {
+        "hue": 208.0549,
+        "saturation": 0.132,
+        "intensity": 0.6567
+      },
+      "day": {
+        "hue": 204.1825,
+        "saturation": 0.125,
+        "intensity": 0.72
+      },
+      "dusk": {
+        "hue": 270,
+        "saturation": 0.0517,
+        "intensity": 0.58
+      },
+      "night": {
+        "hue": 223.0039,
+        "saturation": 0.3514,
+        "intensity": 0.0617
+      }
+    },
+    "underwaterTint": {
+      "color": {
+        "hue": 206.0368,
+        "saturation": 0.7222,
+        "intensity": 0.36
+      },
+      "opacity": 0.22
+    },
+    "stars": {
+      "density": 0.76,
+      "color": {
+        "hue": 216.5868,
+        "saturation": 0.0493,
+        "intensity": 0.9467
+      }
+    },
+    "clouds": {
+      "density": 0.62,
+      "color": {
+        "hue": 210,
+        "saturation": 0.0337,
+        "intensity": 0.89
+      }
+    },
+    "terrainRoughness": 1,
+    "terrainMetallic": 0
+  }
 }
