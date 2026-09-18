@@ -265,8 +265,8 @@ mod tests {
             id: id.to_owned(),
             distributions: vec![crate::content::biome_distribution::BiomeDistribution::Regional],
             size: crate::content::dimension::DimensionBiomeSize {
-                x: crate::content::dimension::DimensionBiomeAxisSize { min: 120.0, max: 420.0 },
-                z: crate::content::dimension::DimensionBiomeAxisSize { min: 120.0, max: 420.0 },
+                x: crate::content::dimension::DimensionBiomeSizeAxis { min: 120.0, max: 420.0 },
+                z: crate::content::dimension::DimensionBiomeSizeAxis { min: 120.0, max: 420.0 },
                 y: None,
             },
             weight: 1.0,
