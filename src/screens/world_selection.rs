@@ -301,80 +301,119 @@ fn spawn_world_selection(
     language: Res<ActiveLanguage>,
 ) {
     commands.spawn((Camera2d, DespawnOnExit(GameState::WorldSelection)));
-    commands
-        .spawn((
-            DespawnOnExit(GameState::WorldSelection),
+    let mut root = commands.spawn((
+        DespawnOnExit(GameState::WorldSelection),
+        Node {
+            position_type: PositionType::Absolute,
+            left: px(0),
+            right: px(0),
+            top: px(0),
+            bottom: px(0),
+            width: percent(100),
+            height: percent(100),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        BackgroundColor(theme::SCREEN_BACKGROUND),
+        theme::cosmic_background_gradient(),
+    ));
+
+    root.with_children(|root| {
+        root.spawn((
             Node {
                 width: percent(100),
-                height: percent(100),
-                padding: UiRect::all(px(36)),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Stretch,
-                row_gap: px(16),
+                height: px(116),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
                 ..default()
             },
-            BackgroundColor(theme::SCREEN_BACKGROUND),
-            theme::cosmic_background_gradient(),
-        ))
-        .with_children(|root| {
-            root.spawn(typography::title(
+            children![typography::title(
                 localization.text(language.get(), "starting.loadWorlds").to_owned(),
-            ));
-            root.spawn((
-                WorldListStatus,
-                typography::caption(if state.scan.is_some() {
-                    localization.text(language.get(), "worldSelection.verifying").to_owned()
-                } else {
-                    localization.text(language.get(), "worldSelection.noRestorable").to_owned()
-                }),
-            ));
-            let world_list = root
-                .spawn((
-                    WorldListContainer,
-                    ScrollPosition(Vec2::ZERO),
+            )],
+        ));
+
+        root.spawn((
+            Node {
+                width: px(1120),
+                max_width: percent(100),
+                flex_grow: 1.0,
+                min_height: px(0),
+                padding: UiRect::axes(px(18), px(32)),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Stretch,
+                row_gap: px(12),
+                ..default()
+            },
+            children![
+                (
+                    WorldListStatus,
+                    typography::caption(if state.scan.is_some() {
+                        localization.text(language.get(), "worldSelection.verifying").to_owned()
+                    } else {
+                        localization.text(language.get(), "worldSelection.noRestorable").to_owned()
+                    }),
+                ),
+                (
                     Node {
                         flex_grow: 1.0,
                         min_height: px(0),
                         width: percent(100),
-                        flex_direction: FlexDirection::Column,
-                        align_items: AlignItems::Stretch,
-                        row_gap: px(8),
-                        overflow: Overflow::scroll_y(),
-                        padding: UiRect::right(px(10)),
-                        border: UiRect::all(px(2)),
+                        position_type: PositionType::Relative,
                         ..default()
                     },
-                    BackgroundColor(theme::SURFACE_INSET),
-                    BorderColor::all(theme::BORDER),
-                ))
-                .id();
-            root.spawn(scrollbar::vertical_scrollbar(world_list));
-            root.spawn((SelectionFeedback, typography::caption(String::new())));
-            root.spawn((SelectionError, typography::caption(state.error.clone())));
-            root.spawn((
-                Node {
-                    width: percent(100),
-                    flex_direction: FlexDirection::Row,
-                    justify_content: JustifyContent::Center,
-                    column_gap: px(12),
-                    ..default()
-                },
-                children![
-                    menu_button(
-                        localization.text(language.get(), "newWorld.return").to_owned(),
-                        WorldSelectionAction::Back,
-                    ),
-                    primary_menu_button(
-                        localization.text(language.get(), "worldSelection.load").to_owned(),
-                        WorldSelectionAction::Load,
-                    ),
-                    danger_menu_button(
-                        localization.text(language.get(), "worldSelection.delete").to_owned(),
-                        WorldSelectionAction::Delete,
-                    ),
-                ],
-            ));
-        });
+                    children![
+                        (
+                            WorldListContainer,
+                            ScrollPosition(Vec2::ZERO),
+                            Node {
+                                width: percent(100),
+                                height: percent(100),
+                                min_height: px(0),
+                                flex_direction: FlexDirection::Column,
+                                align_items: AlignItems::Stretch,
+                                row_gap: px(8),
+                                overflow: Overflow::scroll_y(),
+                                padding: UiRect::all(px(10)),
+                                border: UiRect::all(px(2)),
+                                ..default()
+                            },
+                            BackgroundColor(theme::SURFACE_INSET),
+                            BorderColor::all(theme::BORDER),
+                        ),
+                    ],
+                ),
+                (SelectionFeedback, typography::caption(String::new())),
+                (SelectionError, typography::caption(state.error.clone())),
+            ],
+        ));
+
+        root.spawn((
+            Node {
+                width: percent(100),
+                height: px(104),
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                column_gap: px(18),
+                ..default()
+            },
+            children![
+                primary_menu_button(
+                    localization.text(language.get(), "worldSelection.load").to_owned(),
+                    WorldSelectionAction::Load,
+                ),
+                menu_button(
+                    localization.text(language.get(), "newWorld.return").to_owned(),
+                    WorldSelectionAction::Back,
+                ),
+                danger_menu_button(
+                    localization.text(language.get(), "worldSelection.delete").to_owned(),
+                    WorldSelectionAction::Delete,
+                ),
+            ],
+        ));
+    });
 }
 
 #[derive(SystemParam)]
