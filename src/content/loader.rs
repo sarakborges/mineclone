@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use crate::app::runtime_paths::data_root;
 
 use super::{
+    attack::{AttackDefinition, AttackRegistry},
     biome::{BiomeDefinition, BiomeRegistry},
     block::{BlockDefinition, BlockRegistry},
     creature::{CreatureDefinition, CreatureRegistry},
@@ -23,6 +24,7 @@ use super::{
 
 #[derive(Default)]
 pub(crate) struct LoadedContent {
+    pub attacks: AttackRegistry,
     pub biomes: BiomeRegistry,
     pub blocks: BlockRegistry,
     pub creatures: CreatureRegistry,
@@ -39,6 +41,7 @@ pub(crate) struct LoadedContent {
 
 impl LoadedContent {
     pub fn insert(self, commands: &mut Commands) {
+        commands.insert_resource(self.attacks);
         commands.insert_resource(self.biomes);
         commands.insert_resource(self.blocks);
         commands.insert_resource(self.creatures);
@@ -82,6 +85,8 @@ fn load_definition(path: &Path, content: &mut LoadedContent) {
     if file_name == "player.json" && path_has_component(path, "entities") {
         content.player = read_json_definition::<PlayerDefinition>(path);
         content.player.validate();
+    } else if path_has_component(path, "attacks") {
+        content.attacks.insert(read_json_definition::<AttackDefinition>(path));
     } else if file_name == "dimension.json" {
         content
             .dimensions
