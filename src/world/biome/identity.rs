@@ -216,7 +216,6 @@ mod tests {
         let count = resolve_surface_identity(
             &surface,
             Some(HydrologyBiomeOverlay {
-                surface_weight: 0.25,
                 coast_biome: Some("coast"),
                 coast_weight: 0.75,
                 ocean_biome: Some("ocean"),
