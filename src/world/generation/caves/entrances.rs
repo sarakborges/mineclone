@@ -60,6 +60,13 @@ pub(super) fn surface_cave_entrance(
             if region.hydrology.water_at(horizontal).is_some() {
                 return None;
             }
+            let surface_biome_id = biome_field.sample_surface(horizontal).primary_id;
+            let surface_biome = biomes
+                .get(surface_biome_id)
+                .unwrap_or_else(|| panic!("missing biome definition: {surface_biome_id}"));
+            if !surface_biome.allow_surface_carvers {
+                return None;
+            }
 
             let block_position =
                 IVec2::new(horizontal.x.floor() as i32, horizontal.y.floor() as i32);
