@@ -16,7 +16,7 @@ use crate::{
     localization::{ActiveLanguage, UiLocalization},
     player::{game_mode::GameMode, hotbar::PlayerHotbar, player_id::LOCAL_PLAYER_ID},
     ui::{
-        button::{danger_menu_button, menu_button, primary_menu_button}, selectable, surface, theme,
+        button::{danger_menu_button, menu_button, primary_menu_button, standard_button_with_marker, ButtonVariant}, theme,
         transition::{ScreenTransition, ScreenTransitionTarget}, typography,
     },
     voxel::world::VoxelWorld,
@@ -255,24 +255,13 @@ fn poll_world_scan(
                     for world in &state.worlds {
                         let selected = state.selected.as_deref() == Some(world.id.as_str());
                         parent.spawn((
-                            Button,
-                            WorldSelectionAction::Select(world.id.clone()),
-                            WorldListEntry(world.id.clone()),
-                            Node {
-                                width: percent(100),
-                                min_height: px(54),
-                                border: UiRect::all(px(2)),
-                                padding: UiRect::horizontal(px(14)),
-                                align_items: AlignItems::Center,
-                                ..default()
-                            },
-                            BackgroundColor(selectable::selectable_button_background(selected, Interaction::None)),
-                            BorderColor::all(selectable::selectable_button_border(selected, Interaction::None)),
-                            children![typography::button_label(format!(
-                                "{} — {}",
-                                world.id,
-                                format_save_time(world.last_saved_unix_ms)
-                            ))],
+                            standard_button_with_marker(
+                                format!("{} — {}", world.id, format_save_time(world.last_saved_unix_ms)),
+                                WorldSelectionAction::Select(world.id.clone()),
+                                0.0,
+                                ButtonVariant::from_active(selected),
+                                WorldListEntry(world.id.clone()),
+                            ),
                         ));
                     }
                 });
@@ -638,24 +627,11 @@ fn handle_world_selection(
 
 fn sync_world_selection_entries(
     state: Res<WorldSelectionState>,
-    mut entries: Query<(&WorldListEntry, &Interaction, &mut BackgroundColor, &mut BorderColor)>,
+    mut entries: Query<(&WorldListEntry, &mut ButtonVariant)>,
 ) {
     if !state.is_changed() { return; }
-    for (entry, interaction, background, border) in &mut entries {
-        surface::apply_control_colors(
-            (
-                selectable::selectable_button_background(
-                    state.selected.as_deref() == Some(entry.0.as_str()),
-                    *interaction,
-                ),
-                selectable::selectable_button_border(
-                    state.selected.as_deref() == Some(entry.0.as_str()),
-                    *interaction,
-                ),
-            ),
-            background,
-            border,
-        );
+    for (entry, mut variant) in &mut entries {
+        *variant = ButtonVariant::from_active(state.selected.as_deref() == Some(entry.0.as_str()));
     }
 }
 
