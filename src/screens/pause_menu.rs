@@ -5,7 +5,7 @@ use crate::{
     localization::{ActiveLanguage, UiLocalization},
     ui::{
         button::menu_button,
-        surface, theme,
+        surface,
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
         visibility::set_visibility,
@@ -70,18 +70,10 @@ fn spawn_pause_menu(
                 justify_content: JustifyContent::Center,
                 ..default()
             },
-            BackgroundColor(theme::OVERLAY),
             GlobalZIndex(1000),
         ))
         .with_children(|root| {
             root.spawn(surface::modal_panel()).with_children(|panel| {
-                panel.spawn((
-                    typography::title(localization.text(language, "pause.title").to_owned()),
-                    Node {
-                        margin: UiRect::bottom(px(10)),
-                        ..default()
-                    },
-                ));
                 panel.spawn(menu_button(
                     localization.text(language, "pause.resume").to_owned(),
                     PauseMenuAction::Resume,
