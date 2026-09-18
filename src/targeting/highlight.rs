@@ -127,7 +127,7 @@ fn spawn_highlight(
             base_color: Color::srgba(1.0, 1.0, 1.0, 0.18),
             alpha_mode: AlphaMode::Blend,
             unlit: true,
-            depth_bias: 1000.0,
+            depth_bias: 100.0,
             ..default()
         })),
         Transform::default(),
@@ -143,7 +143,7 @@ fn spawn_highlight(
             base_color: Color::srgba(1.0, 1.0, 1.0, BRUSH_GHOST_ALPHA),
             alpha_mode: AlphaMode::Blend,
             unlit: true,
-            depth_bias: 100.0,
+            depth_bias: -10.0,
             ..default()
         })),
         Transform::default(),
