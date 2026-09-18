@@ -80,6 +80,7 @@ Targeting has one raycast result and downstream consumers observe it.
 - `BlockTargetingScene` is the shared read context for target, hotbar selection, player transform, and voxel world.
 - Placement orientation, interaction, highlight, placement preview, and target HUD must derive from the same target/selection sources rather than maintaining independent copies.
 - Shared block model/material/tint/orientation transforms belong in rendering/block-model utilities. Hotbar icons, held blocks, target icons, and placement previews may have different lifecycles but should reuse those transformations.
+- Creature GLB node transforms are authored asset data and must not be reset by the generic visual loader. JSON texture/tint overrides may replace material inputs, but texture-only materials must preserve the GLB's authored alpha mode; only explicitly tinted body materials are forced opaque.
 - Block display consumers that need asset, block, biome, and biome-field reads should reuse `BlockVisualContent` instead of redeclaring that cluster locally.
 
 ## 7. World queues and frame budgets
