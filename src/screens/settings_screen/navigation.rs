@@ -2,9 +2,8 @@ use bevy::prelude::*;
 
 use crate::{
     app::settings_state::SettingsState,
-    localization::{ActiveLanguage, UiLocalization},
     ui::{
-        button::{button_with_marker, ButtonVariant},
+        button::{button, ButtonVariant, MENU_BUTTON_HEIGHT},
         transition::{ScreenTransition, ScreenTransitionTarget},
     },
 };
@@ -49,19 +48,18 @@ impl SettingsSection {
 pub(super) struct SettingsSectionButton(pub(super) SettingsSection);
 
 #[derive(Component, Clone, Copy)]
-pub(super) struct SettingsSectionButtonLabel(pub(super) SettingsSection);
-
-#[derive(Component, Clone, Copy)]
 pub(super) struct SettingsSectionPanel(pub(super) SettingsSection);
 
 #[derive(Component)]
 pub(super) struct SettingsBackButton;
 
 pub(super) fn section_button(section: SettingsSection, label: impl Into<String>) -> impl Bundle {
-    button_with_marker(
+    button(
         label,
         SettingsSectionButton(section),
-        SettingsSectionButtonLabel(section),
+        percent(100),
+        MENU_BUTTON_HEIGHT,
+        ButtonVariant::Normal,
     )
 }
 
@@ -78,37 +76,21 @@ pub(super) fn handle_section_buttons(
 
 pub(super) fn sync_section_ui(
     selection: Res<SettingsSectionSelection>,
-    localization: Res<UiLocalization>,
-    language: Res<ActiveLanguage>,
     mut panels: Query<(&SettingsSectionPanel, &mut Node)>,
-    mut labels: Query<(&SettingsSectionButtonLabel, &mut Text)>,
-    mut buttons: Query<(&SettingsSectionButton, &mut ButtonVariant, &mut BackgroundColor, &mut BorderColor)>,
+    mut buttons: Query<(&SettingsSectionButton, &mut ButtonVariant)>,
 ) {
-    for (section, mut variant, _background, _border) in &mut buttons {
+    for (section, mut variant) in &mut buttons {
         *variant = ButtonVariant::from_active(section.0 == selection.selected);
     }
 
-    {
-        for (panel, mut node) in &mut panels {
-            let next_display = if panel.0 == selection.selected {
-                Display::Flex
-            } else {
-                Display::None
-            };
-            if node.display != next_display {
-                node.display = next_display;
-            }
-        }
-    }
-
-    if !language.is_changed() && !localization.is_changed() {
-        return;
-    }
-
-    for (label, mut text) in &mut labels {
-        let next = localization.text(language.get(), label.0.localization_key());
-        if text.0 != next {
-            text.0 = next.to_owned();
+    for (panel, mut node) in &mut panels {
+        let next_display = if panel.0 == selection.selected {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        if node.display != next_display {
+            node.display = next_display;
         }
     }
 }
