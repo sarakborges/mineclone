@@ -296,3 +296,13 @@ Próximo passo imediato: consultar a CI do novo HEAD e corrigir qualquer erro ob
 - Replaced the HUD's placeholder player health bar with live EntityHealth data and added the same live health bar to the targeted-creature card. Both show current/max values and update as health changes.
 - Current branch head before this handoff commit: 4df1c97efb16fc517fd64f66e785551dabf9aa3a.
 - CI for the current code is running; no local Cargo test/run was executed.
+
+## Checkpoint 82 — 2026-09-18: knockback, death cleanup and slime face alignment [CÓDIGO + CI VERDE]
+
+- O ataque data-driven agora aplica knockback com impulso visível: a força configurada é convertida em velocidade horizontal inicial e amortecida pelo movimento da criatura, sem atravessar AABB sólido.
+- Criaturas que chegam a zero de vida continuam tocando a animação Death por 0,75s e então são despawnadas do ECS. Isso elimina o estado anterior em que o visual sumia mas o root da entidade permanecia contado como spawn.
+- O mesh Face do slime estava com deslocamento vertical duplicado: o centro da geometria já continha Y=0,5 enquanto o BodyPivot também fornecia Y=0,5. O gerador foi corrigido para usar centro Y=0; como o GLB binário existente ainda pode conter a versão antiga, o carregamento também normaliza o Transform do node Face para Y=-0,5, corrigindo o asset atual sem sobrescrever arte autoral.
+- CI 35292988076 (run 3332), no HEAD a4ac9989eaa2b7921d2b6507929b6b9ccd598dee, concluiu success em auditoria de localizações, Clippy rigoroso e cargo check --locked. O commit posterior 77b847822b6daa5ac5ba3018c0028e3f1ae655bb teve a mesma correção de visibilidade do construtor do timer e está com CI em andamento; a run verde confirmada ainda é a anterior ao último ajuste de visibilidade.
+- Não executei cargo test, cargo run nem QA Windows.
+
+Próximo passo imediato: aguardar a CI do HEAD 77b847822b6daa5ac5ba3018c0028e3f1ae655bb; depois validar em gameplay o deslocamento do slime, a remoção após Death e o knockback.
