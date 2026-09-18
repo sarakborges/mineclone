@@ -289,3 +289,10 @@ Próximo passo imediato: consultar a CI do novo HEAD e corrigir qualquer erro ob
 - Slime material textures are now data-driven per mesh material: `SlimeShell -> textures/creatures/slime/shell.png`, `SlimeCore -> .../core.png`, and `SlimeFace -> .../face.png`.
 - Updated `assets/models/creatures/slime/generate_slime.py` to generate/use the three standalone skins and add a dedicated `SlimeFace` mesh/material to newly generated GLBs.
 - The checked-in `slime.glb` is binary and was not regenerated through the GitHub text-file API in this checkpoint; the generator is the source of truth for the updated GLB layout.
+
+
+## Checkpoint 81 — 2026-09-18
+- Fixed creature hit animation retriggering: CreatureAnimationState now carries a revision counter, so repeated hurt hits restart the non-looping clip even when the state name remains hurt.
+- Replaced the HUD's placeholder player health bar with live EntityHealth data and added the same live health bar to the targeted-creature card. Both show current/max values and update as health changes.
+- Current branch head before this handoff commit: 4df1c97efb16fc517fd64f66e785551dabf9aa3a.
+- CI for the current code is running; no local Cargo test/run was executed.
