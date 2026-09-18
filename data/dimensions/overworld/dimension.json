@@ -18,7 +18,11 @@
         "x": { "min": 120.0, "max": 420.0 },
         "z": { "min": 120.0, "max": 420.0 },
         "y": null
-      }
+      },
+      "avoidNear": [
+        "asteria:overworld/witchwood",
+        "asteria:overworld/enchanted_forest"
+      ]
     },
     {
       "id": "asteria:overworld/witchwood",
