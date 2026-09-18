@@ -4,7 +4,6 @@ use super::{theme, typography};
 
 pub const MENU_BUTTON_WIDTH: f32 = 470.0;
 pub const MENU_BUTTON_HEIGHT: f32 = 54.0;
-pub const SIDEBAR_MENU_BUTTON_HEIGHT: f32 = 54.0;
 pub const COMPACT_CONTROL_HEIGHT: f32 = 44.0;
 
 const BUTTON_NORMAL: Color = theme::SURFACE_ELEVATED;
@@ -59,7 +58,7 @@ pub fn button<A: Component>(label: impl Into<String>, action: A) -> impl Bundle 
     (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Normal, Node { width: px(MENU_BUTTON_WIDTH), height: px(MENU_BUTTON_HEIGHT), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![typography::button_label_light(label)])
 }
 
-pub fn sidebar_button<A: Component, L: Component>(label: impl Into<String>, action: A, label_marker: L) -> impl Bundle {
+pub fn button_with_marker<A: Component, L: Component>(label: impl Into<String>, action: A, label_marker: L) -> impl Bundle {
     (Button, action, AsteriaButtonVisual::default(), ButtonVariant::Normal, Node { width: percent(100), height: px(SIDEBAR_MENU_BUTTON_HEIGHT), padding: UiRect::axes(px(14), px(0)), align_items: AlignItems::Center, justify_content: JustifyContent::Center, border: UiRect::all(px(2)), ..default() }, BackgroundColor(BUTTON_NORMAL), BorderColor::all(BUTTON_BORDER), children![(typography::button_label(label), label_marker)])
 }
 
