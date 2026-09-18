@@ -46,7 +46,22 @@ impl BiomeField {
 
         let climate = self.climate.sample(site);
         let hash = cell_hash(cell, self.seed);
-        let allows = |candidate: &BiomeFieldEntry| {
+        let raw_index = self.raw_surface_biome_index(cell, site);
+        if adjacency_allows(
+            &self.surface_biomes[raw_index],
+            cell,
+            site,
+            &nearby_cells,
+            &nearby_sites,
+            &nearby_biomes,
+            &self.surface_biomes,
+            self.surface_site_spacing,
+            self.seed,
+        ) {
+            return raw_index;
+        }
+
+        select_weighted_biome_index(&self.surface_biomes, climate, hash.rotate_left(9), |candidate| {
             candidate.is_regional()
                 && adjacency_allows(
                     candidate,
@@ -59,30 +74,12 @@ impl BiomeField {
                     self.surface_site_spacing,
                     self.seed,
                 )
-        };
-
-        select_weighted_biome_index(&self.surface_biomes, climate, hash, allows)
-            .or_else(|| {
-                select_weighted_biome_index(&self.surface_biomes, climate, hash.rotate_left(9), |candidate| {
-                    candidate.is_regional()
-                        && adjacency_allows(
-                            candidate,
-                            cell,
-                            site,
-                            &nearby_cells,
-                            &nearby_sites,
-                            &nearby_biomes,
-                            &self.surface_biomes,
-                            self.surface_site_spacing,
-                            self.seed,
-                        )
-                })
-            })
-            .unwrap_or_else(|| {
-                panic!(
-                    "surface biome site {cell:?} has no regional biome compatible with avoidNear borders"
-                )
-            })
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "surface biome site {cell:?} has no regional biome compatible with avoidNear borders"
+            )
+        })
     }
 
     fn raw_surface_biome_index(&self, cell: IVec2, site: Vec2) -> usize {
