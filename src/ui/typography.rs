@@ -85,6 +85,15 @@ pub fn button_label(label: impl Into<String>) -> impl Bundle {
     )
 }
 
+pub fn button_label_light(label: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(label),
+        ui_font(18.0, FontWeight::MEDIUM),
+        LetterSpacing::Px(0.0),
+        TextColor(theme::TEXT_PRIMARY),
+    )
+}
+
 pub fn hud(label: impl Into<String>) -> impl Bundle {
     (
         Text::new(label),
