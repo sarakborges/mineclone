@@ -137,7 +137,7 @@ mod tests {
 
     use crate::{
         content::{
-            biome::{BiomeDefinition, BiomeRegistry}, biome_hydrology::BiomeHydrology,
+            biome::{BiomeDefinition, BiomeRegistry}, biome_hydrology::BiomeHydrologyRules,
             builtin_ids::WATER_FLUID_ID, dimension::DimensionDefinition,
             dimension_hydrology::DimensionHydrology, fluid::FluidDefinition,
         },
@@ -205,7 +205,7 @@ mod tests {
                 110.0 - position.x * 0.04
             },
             continentalness: if position.x >= 256.0 { 0.0 } else { 0.8 },
-            biome_hydrology: BiomeHydrology::default(),
+            biome_hydrology: BiomeHydrologyRules::default(),
         };
         let original_surface = 104.0;
         let crossing = (-2..=2).find_map(|region_z: i32| {
@@ -298,6 +298,7 @@ mod tests {
                     anchored_caves: None,
                     biome_field: &biome_field,
                     biomes: &biomes,
+                    dimension: &dimension,
                     sea_level: dimension.sea_level as f32,
                 },
             );
