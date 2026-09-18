@@ -12,7 +12,7 @@ pub(crate) struct HydrologyMaterialSet<'a> {
     pub(crate) lake_bed_block: Option<&'a str>,
     pub(crate) inland_shore_block: Option<&'a str>,
     pub(crate) ocean_bed_block: Option<&'a str>,
-    pub(crate) coast_shore_block: Option<&'a str>,
+    pub(crate) ocean_shore_block: Option<&'a str>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -114,7 +114,7 @@ impl HydrologyRegion {
             } else {
                 materials
                     .ocean_bed_block
-                    .or(materials.coast_shore_block)
+                    .or(materials.ocean_shore_block)
             };
 
             Some(BedMaterial {
