@@ -20,6 +20,8 @@ pub struct CreatureDefinition {
     pub collider: CreatureCollider,
     #[serde(default = "default_creature_health")]
     pub health: f32,
+    #[serde(default = "default_creature_max_per_type")]
+    pub max_per_type: usize,
     #[serde(default)]
     pub material_tints: std::collections::HashMap<String, Hsi>,
     #[serde(default)]
@@ -38,6 +40,10 @@ pub struct CreatureDefinition {
 
 fn default_creature_health() -> f32 {
     10.0
+}
+
+fn default_creature_max_per_type() -> usize {
+    4
 }
 
 fn default_jump_speed() -> f32 {
@@ -105,6 +111,11 @@ impl CreatureRegistry {
             );
         }
         definition.collider.validate(&definition.id);
+        assert!(
+            definition.max_per_type > 0,
+            "creature {} maxPerType must be positive",
+            definition.id
+        );
         assert!(
             definition.health.is_finite() && definition.health > 0.0,
             "creature {} health must be positive and finite",
