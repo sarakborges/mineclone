@@ -8,17 +8,19 @@ use crate::voxel::{chunk_archive::ArchivedChunk, chunk_disk::DiskChunk};
 use super::VoxelWorld;
 
 impl VoxelWorld {
-    /// Monotonic revision of actual block/fluid mutations only. Generating,
-    /// archiving, restoring and lighting chunks must not force a disk autosave.
-    /// The first new-world save still happens independently of this counter.
+    /// Monotonic revision of authoritative persistent world content. Generating
+    /// a chunk for the first time and block/fluid mutations advance it;
+    /// archiving, restoring and lighting do not.
     pub(crate) fn save_content_revision(&self) -> u64 {
-        self.save_edit_revision
+        self.save_revision
     }
 
-    /// Captures only modified chunks, including ones unloaded from RAM-facing
-    /// resident storage. Generated but unmodified terrain is seed-derived.
-    pub(crate) fn save_modified_chunks(&self, fluids: &FluidRegistry) -> io::Result<Vec<DiskChunk>> {
-        let mut coords = self.dirty_chunks.iter().copied().collect::<Vec<_>>();
+    /// Captures every chunk that has ever been generated in this world,
+    /// including chunks currently archived out of resident storage. Generated
+    /// terrain is authoritative state after first creation and must never be
+    /// reconstructed from the seed once it exists.
+    pub(crate) fn save_generated_chunks(&self, fluids: &FluidRegistry) -> io::Result<Vec<DiskChunk>> {
+        let mut coords = self.generated_chunks.iter().copied().collect::<Vec<_>>();
         coords.sort_unstable_by_key(|coord| (coord.x, coord.y, coord.z));
         coords
             .into_iter()
@@ -30,7 +32,7 @@ impl VoxelWorld {
                 } else {
                     Err(io::Error::new(
                         io::ErrorKind::InvalidData,
-                        format!("modified chunk {coord:?} has neither loaded nor archived content"),
+                        format!("generated chunk {coord:?} has neither loaded nor archived content"),
                     ))
                 }
             })
@@ -57,7 +59,6 @@ impl VoxelWorld {
             let (coord, chunk) = entry.into_chunk(blocks, fluids)?;
             let archived = ArchivedChunk::from_chunk(&chunk);
             world.generated_chunks.insert(coord);
-            world.dirty_chunks.insert(coord);
             world.archived_chunks.insert(coord, archived);
         }
         Ok(world)
