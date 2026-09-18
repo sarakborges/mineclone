@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use super::HydrologyRegion;
 use crate::world::hydrology::{
-    constants::{OCEAN_EXTRA_DEPTH, OCEAN_MINIMUM_DEPTH, SHORE_STRENGTH},
+    constants::SHORE_STRENGTH,
     math::{lerp, river_channel_profile},
     types::{HydrologyRiverSurfaceSample, HydrologyWaterKind, HydrologyWaterSample},
 };
@@ -136,8 +136,7 @@ impl HydrologyRegion {
 
         let ocean_strength = self.ocean_strength_at(position);
         if ocean_strength > 0.0 {
-            let target_floor =
-                self.sea_level - OCEAN_MINIMUM_DEPTH - OCEAN_EXTRA_DEPTH * ocean_strength;
+            let target_floor = self.ocean_floor_target(position, ocean_strength);
             // Density uses the original terrain column as the starting height
             // whenever it is known. Using the interpolated macro elevation
             // here instead could classify that same carved column as dry and
