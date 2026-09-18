@@ -7,6 +7,7 @@
   },
   "model": "models/creatures/slime/slime.glb",
   "health": 10.0,
+  "maxPerType": 4,
   "collider": {
     "size": [0.78, 0.84, 0.78],
     "centerOffset": [0.0, 0.42, 0.0]
