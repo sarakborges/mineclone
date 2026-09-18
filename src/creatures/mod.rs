@@ -114,7 +114,7 @@ fn natural_spawn_creatures(
         .creature_spawns
         .iter()
         .filter(|rule| rule.weight > 0.0 && definitions.get(&rule.creature).is_some())
-        .filter(|rule| entity_counts.total < dimension_definition.max_entities)
+        .filter(|_| entity_counts.total < dimension_definition.max_entities)
         .filter(|rule| {
             let Some(creature) = definitions.get(&rule.creature) else { return false; };
             entity_counts.count(&rule.creature) < creature.max_per_type
