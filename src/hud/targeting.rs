@@ -14,7 +14,7 @@ use crate::{
         block_visual_content::BlockVisualContent,
     },
     targeting::block::TargetedBlock,
-    ui::{surface, typography, visibility::set_visibility},
+    ui::{selectable, typography, visibility::set_visibility},
     voxel::{secondary_properties::SecondaryProperties, world::VoxelWorld},
 };
 
@@ -113,7 +113,7 @@ fn spawn_target_hud(
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
     let icon_material = icon_materials.add(BlockIconMaterial::empty());
-    let (slot_background, slot_border) = surface::hud_control_static(false);
+    let (slot_background, slot_border) = selectable::static_colors(false);
     let position = settings.target_block_position();
 
     commands
