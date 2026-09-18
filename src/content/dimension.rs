@@ -218,9 +218,21 @@ impl DimensionDefinition {
                     entry.id,
                     required_id
                 );
+                let required_entry = self
+                    .biomes
+                    .iter()
+                    .find(|candidate| candidate.id == *required_id)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "dimension {} biome {} requireNear references biome outside this dimension: {}",
+                            self.id,
+                            entry.id,
+                            required_id
+                        )
+                    });
                 assert!(
-                    self.biomes.iter().any(|candidate| candidate.id == *required_id),
-                    "dimension {} biome {} requireNear references biome outside this dimension: {}",
+                    required_entry.weight > 0.0,
+                    "dimension {} biome {} requireNear references disabled biome {}",
                     self.id,
                     entry.id,
                     required_id
