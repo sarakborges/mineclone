@@ -1,4 +1,4 @@
-use bevy::{prelude::*, ui::InteractionDisabled};
+use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
@@ -36,8 +36,8 @@ type GameModeButtonSyncQuery<'w, 's> = Query<
         Entity,
         &'static GameModeButton,
         Ref<'static, Interaction>,
-        Has<InteractionDisabled>,
         &'static mut BackgroundColor,
+        &'static mut BorderColor,
     ),
 >;
 
@@ -140,7 +140,6 @@ pub(crate) fn handle_game_mode_buttons(
 }
 
 pub(crate) fn sync_game_mode_buttons(
-    mut commands: Commands,
     game_state: Res<State<GameState>>,
     new_world: Res<NewWorldConfig>,
     player: Query<Ref<GameMode>, With<GameplayCamera>>,
@@ -162,18 +161,18 @@ pub(crate) fn sync_game_mode_buttons(
         )
     };
 
-    for (entity, button, interaction, disabled, background) in &mut buttons {
+    for (entity, button, interaction, background, border) in &mut buttons {
         if !mode_changed && !interaction.is_changed() {
             continue;
         }
 
         sync_selectable_button(
-            &mut commands,
             entity,
             button.0 == current_game_mode,
-            disabled,
+            false,
             *interaction,
             background,
+            border,
         );
     }
 
