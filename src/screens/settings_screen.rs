@@ -14,7 +14,10 @@ use hud_section::{
     handle_target_block_position_options, sync_display_tooltips_toggle,
     sync_target_block_position_dropdown, sync_target_block_position_options,
 };
-use languages_section::{LanguageDropdownState, handle_language_dropdown_button, handle_language_options, sync_language_dropdown};
+use languages_section::{
+    LanguageDropdownState, close_language_dropdown_outside, handle_language_dropdown_button,
+    handle_language_options, sync_language_dropdown,
+};
 use layout::spawn_settings_screen;
 use navigation::{
     SettingsSectionSelection, handle_close_requests, handle_section_buttons, sync_section_ui,
@@ -96,6 +99,7 @@ impl Plugin for SettingsScreenPlugin {
                         sync_new_world_input_focus_to_section.run_if(in_state(GameState::NewWorld)),
                         close_spawn_biome_dropdown_outside_general,
                         close_target_block_position_dropdown_outside_hud,
+                        close_language_dropdown_outside,
                         handle_seed_focus,
                         handle_world_name_focus.run_if(in_state(GameState::NewWorld)),
                         handle_new_world_general_control_focus
