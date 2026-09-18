@@ -72,5 +72,21 @@ impl BiomeDefinition {
                 self.id
             );
         }
+
+        for (field, block_id) in [
+            ("hydrology.oceanBedBlock", self.hydrology.ocean_bed_block.as_deref()),
+            ("hydrology.riverBedBlock", self.hydrology.river_bed_block.as_deref()),
+            ("hydrology.lakeBedBlock", self.hydrology.lake_bed_block.as_deref()),
+            ("hydrology.shoreBlock", self.hydrology.shore_block.as_deref()),
+        ] {
+            let Some(block_id) = block_id else {
+                continue;
+            };
+            assert!(
+                blocks.get(block_id).is_some(),
+                "biome {} {field} references missing block: {block_id}",
+                self.id
+            );
+        }
     }
 }
