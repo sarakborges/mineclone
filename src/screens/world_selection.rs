@@ -664,8 +664,8 @@ fn handle_world_selection(
                 {
                     Ok(_) => {
                         state.loading = Some(PendingWorldLoad { id, result });
-                        state.error = localization
-                            .text(language.get(), "worldSelection.loadingSelected")
+                        state.error = context.localization
+                            .text(context.language.get(), "worldSelection.loadingSelected")
                             .to_owned();
                     }
                     Err(error) => {
