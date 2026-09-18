@@ -54,6 +54,7 @@ pub(super) struct BiomeFieldEntry {
     pub density_seed: u64,
     pub avoid_near: Vec<String>,
     pub require_near: Vec<String>,
+    pub surface_margin_width: Option<f32>,
 }
 
 #[derive(Resource, Clone)]
@@ -88,6 +89,8 @@ pub struct BiomeFieldSample<'a> {
     pub primary_id: &'a str,
     pub(crate) primary_surface_index: usize,
     pub(crate) nearest_boundary: Option<SurfaceBoundarySample>,
+    pub(crate) surface_margin_index: Option<usize>,
+    pub(crate) identity_surface_index: usize,
     pub influences: ArrayVec<BiomeInfluence<'a>, MAX_SURFACE_INFLUENCES>,
 }
 
@@ -197,6 +200,7 @@ impl BiomeField {
                 density_seed: biome_density_seed(seed, &biome.id),
                 avoid_near: dimension_biome.avoid_near.clone(),
                 require_near: dimension_biome.require_near.clone(),
+                surface_margin_width: biome.surface_margin.as_ref().map(|margin| margin.width),
             };
 
             match biome.kind {
