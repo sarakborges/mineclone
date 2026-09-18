@@ -137,8 +137,7 @@ fn spawn_option(
             height: px(OPTION_HEIGHT),
             min_height: px(OPTION_HEIGHT),
             padding: UiRect::horizontal(px(10)),
-            border: UiRect::all(px(1)),
-            border_radius: BorderRadius::all(px(5)),
+            border: UiRect::all(px(2)),
             align_items: AlignItems::Center,
             ..default()
         },
