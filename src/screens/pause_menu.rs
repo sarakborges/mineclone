@@ -73,7 +73,7 @@ fn spawn_pause_menu(
             GlobalZIndex(1000),
         ))
         .with_children(|root| {
-            root.spawn(surface::modal_panel()).with_children(|panel| {
+            root.spawn(surface::pause_panel()).with_children(|panel| {
                 panel.spawn(menu_button(
                     localization.text(language, "pause.resume").to_owned(),
                     PauseMenuAction::Resume,
