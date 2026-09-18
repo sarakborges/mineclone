@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.5`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. Revisão retroativa de versionamento em 2026-09-18: `0.22.8` foi o último bump antes dos blocos de combate/entidades e UI; o bloco de health/hurt/death/knockback é registrado retrospectivamente como linha `0.23.x`, sem reescrever o histórico Git; a unificação inicial do design system/settings foi `0.24.0`, a auditoria/refatoração estrutural fechou em `0.24.1`, o pacote priorizado de UI/interação/worldgen fechou em `0.24.2`, dropdown/spawn/hidrologia em `0.24.3`, a correção estrutural da face da slime em `0.24.4` e o override determinístico de Spawn Biome em `0.24.5`. **HEAD funcional validado desta atualização:** `58e2a2efaa1d829f4fd645ec6acb2ecebd619b9f`. CI `35375607533` (run 3939) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.6`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. Revisão retroativa de versionamento em 2026-09-18: `0.22.8` foi o último bump antes dos blocos de combate/entidades e UI; o bloco de health/hurt/death/knockback é registrado retrospectivamente como linha `0.23.x`, sem reescrever o histórico Git; a unificação inicial do design system/settings foi `0.24.0`, a auditoria/refatoração estrutural fechou em `0.24.1`, o pacote priorizado de UI/interação/worldgen fechou em `0.24.2`, dropdown/spawn/hidrologia em `0.24.3`, a correção estrutural da face da slime em `0.24.4`, o primeiro override determinístico de Spawn Biome em `0.24.5` e a persistência autoritativa de chunks + shape correto do Spawn Biome + casing canônico de botões em `0.24.6`. **HEAD funcional validado desta atualização:** `7b924a2648360a0c7a354480452f5d9d994fc386`. CI `35376804377` (run 3966) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 ## Histórico integral obrigatório
 
@@ -437,4 +437,48 @@ Próximo passo imediato: QA visual Windows da slime para confirmar posição, or
 - Não executei `cargo test`, `cargo run` nem QA Windows.
 
 Próximo passo imediato: QA Windows criando mundos com Wasteland, Plains e outro biome selecionado, confirmando spawn dentro dos chunks iniciais forçados, ausência do panic e persistência da identidade do biome após salvar/sair/carregar.
+
+## Checkpoint 93 — 2026-09-18: chunks são estado autoritativo + Spawn Biome com shape válido + Button Title Case [CÓDIGO + CI VERDE]
+
+### Persistência/runtime de chunks
+
+- Auditoria confirmou o problema: o modelo anterior gravava apenas `dirty_chunks` e assumia que terreno gerado mas não editado era derivável do seed. `archive_chunk()` inclusive esquecia chunks não editados, removendo-os de `generated_chunks`; revisitar uma área podia rodar worldgen novamente.
+- Novo contrato: **worldgen é um evento de criação única por coordenada**. Depois que um chunk foi gerado uma vez, blocos/fluidos/propriedades daquele resultado passam a ser estado autoritativo do mundo.
+- `VoxelWorld::archive_chunk()` agora sempre arquiva o chunk e mantém sua coordenada em `generated_chunks`. Runtime unload deixa de apagar a existência do chunk.
+- Ao revisitar a área na mesma sessão, `has_generated_chunk()` leva obrigatoriamente a `restore_chunk()`; worldgen não é disparado novamente para aquela coordenada.
+- `dirty_chunks` foi removido. A revisão persistente do mundo agora avança tanto ao gerar um chunk pela primeira vez quanto em mutações de bloco/fluid. Lighting, archive e restore continuam derivados/não persistentes e não avançam essa revisão.
+- `save_modified_chunks()` foi substituído por `save_generated_chunks()`: o snapshot serializa **todo chunk já gerado**, residente ou arquivado, inclusive chunks vazios. Chunk vazio registrado também é resultado autoritativo e não pode ser esquecido.
+- `VoxelWorld::from_saved_chunks()` reconstrói o registro de chunks gerados em estado arquivado. Esses chunks só são restaurados quando necessários; não são recriados do seed.
+- Durante `WorldLoadMode::Load`, o bootstrap agora filtra sua lista para coordenadas que já estão em `existing_world.has_generated_chunk(...)`. **Loading não gera chunks ausentes.** Coordenadas nunca existentes só podem entrar em worldgen depois, pelo streaming normal em Gameplay.
+- Corrigido race do primeiro frame de um mundo carregado: como streaming roda antes do autosave em `Last`, um chunk realmente novo poderia ser gerado e absorvido como “baseline já salvo”. Agora, se a revisão persistente já avançou nesse primeiro frame, o snapshot é persistido imediatamente.
+- Meshes e lighting permanecem derivados e são reconstruídos a partir do conteúdo salvo do chunk; isso não é worldgen.
+- Limitação histórica inevitável: snapshots anteriores a este modelo só continham chunks modificados e **não registraram as coordenadas de chunks gerados mas nunca editados**. Esses dados ausentes não podem ser recuperados retroativamente. A garantia integral “gerou uma vez, nunca regenera” vale para chunks registrados/salvos pelo novo modelo.
+
+### Spawn Biome
+
+- O override 9×9 quadrado introduzido no checkpoint anterior foi removido por não respeitar o contrato de tamanho/forma do biome.
+- `DimensionBiomeSize.x/z.min..max` são tratados como raios autorados. O Spawn Biome agora escolhe deterministicamente `radiusX` e `radiusZ` dentro desses intervalos usando seed + biome ID.
+- A região forçada é uma elipse centrada no spawn padrão, não um retângulo alinhado a chunks.
+- A borda passa pelo mesmo `warp_surface_position`/smooth fade do `BiomeField`, evitando contorno quadrado/artificial.
+- Dentro do core a influência do biome selecionado é 1.0; na borda ela transiciona para o campo natural.
+- Continentalness/hydrology continuam lendo o mesmo override, portanto Coast/Ocean não sobrescrevem o Spawn Biome dentro da região forçada.
+- A busca restante continua sendo apenas por coluna seca dentro desse core já criado; não existe busca por ocorrência natural distante.
+- O override continua determinístico a partir de seed + `spawnBiome`, portanto reload reconstrói a mesma região sem persistir uma geometria paralela.
+- Observação para próxima auditoria: o gerador **natural** de surface biomes ainda usa `size.min` principalmente para site spacing e não aplica `size.max` como limite explícito da região. Isso não foi alterado silenciosamente neste patch; o Spawn Biome passa a respeitar min/max explicitamente.
+
+### UI Button Title Case
+
+- `ui::button::button(...)` agora centraliza a regra de casing: labels são exibidos em **Title Case**, com inicial maiúscula para cada palavra separada por whitespace.
+- A regra pertence ao design system; screens não devem implementar casing local.
+- `worldSelection.load` foi alinhado na fonte para `Load World`, `Carregar Mundo` e `Cargar Mundo`.
+- `ARCHITECTURE.md` registra que action buttons usam exclusivamente o primitive canônico e que o casing também pertence a ele.
+
+### Validação
+
+- Run funcional/documentado antes do bump: `35376713700` (3964) **success**.
+- HEAD funcional/versionado canônico: `7b924a2648360a0c7a354480452f5d9d994fc386`.
+- Run canônico: `35376804377` (3966) **success**, incluindo auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+Próximo passo imediato: QA Windows focado em (1) gerar área, sair do range e voltar sem worldgen/recriação; (2) salvar/sair/carregar e confirmar que apenas chunks registrados são restaurados; (3) explorar chunk realmente novo e confirmar persistência posterior; (4) criar Wasteland e observar a região além do render inicial para validar raios/shape/transição; (5) verificar Title Case em todos os action buttons.
 
