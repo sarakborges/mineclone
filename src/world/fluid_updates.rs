@@ -6,7 +6,7 @@ use std::time::Duration;
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    content::fluid::FluidRegistry,
+    content::fluid::{FluidId, FluidRegistry},
     voxel::{
         lighting::PendingLightingUpdates, update_queue::VoxelUpdateQueue, world::VoxelWorld,
     },
@@ -27,8 +27,16 @@ const MAX_FLUID_STEPS_PER_FRAME: usize = 4;
 
 #[derive(Resource, Default)]
 pub(crate) struct PendingFluidUpdates {
+    // Topology edits do not know which neighboring fluid will win, so they
+    // enter this generic queue and are classified when the solver inspects the
+    // current world state.
     queue: VoxelUpdateQueue,
+    // Generated/frontier work and generic positions waiting for a slower fluid
+    // live in per-fluid queues. A faster fluid must never push a slower one to
+    // the back of one global queue.
+    fluid_queues: Vec<VoxelUpdateQueue>,
     accumulated_steps: Vec<f32>,
+    next_fluid_queue: usize,
 }
 
 impl PendingFluidUpdates {
@@ -40,16 +48,69 @@ impl PendingFluidUpdates {
         frontier::enqueue_loaded_fluid_frontier(self, world, coord);
     }
 
-    fn enqueue(&mut self, position: IVec3) {
-        self.queue.enqueue(position);
+    fn enqueue_fluid(&mut self, fluid_id: FluidId, position: IVec3) {
+        self.fluid_queue_mut(fluid_id).enqueue(position);
     }
 
-    fn enqueue_priority(&mut self, position: IVec3) {
-        self.queue.enqueue_priority(position);
+    fn enqueue_fluid_priority(&mut self, fluid_id: FluidId, position: IVec3) {
+        self.fluid_queue_mut(fluid_id).enqueue_priority(position);
+    }
+
+    fn fluid_queue_mut(&mut self, fluid_id: FluidId) -> &mut VoxelUpdateQueue {
+        let index = fluid_id as usize;
+        if self.fluid_queues.len() <= index {
+            self.fluid_queues
+                .resize_with(index + 1, VoxelUpdateQueue::default);
+        }
+        &mut self.fluid_queues[index]
     }
 
     fn pop(&mut self) -> Option<IVec3> {
         self.queue.pop()
+    }
+
+    fn snapshot_ready_fluid_work(
+        &self,
+        ready_steps: &[usize],
+        step_index: usize,
+        remaining: &mut Vec<usize>,
+    ) {
+        remaining.clear();
+        remaining.extend(self.fluid_queues.iter().enumerate().map(|(index, queue)| {
+            ready_steps
+                .get(index)
+                .is_some_and(|steps| *steps > step_index)
+                .then(|| queue.len())
+                .unwrap_or(0)
+        }));
+    }
+
+    fn pop_ready_fluid(&mut self, remaining: &mut [usize]) -> Option<IVec3> {
+        let queue_count = remaining.len();
+        if queue_count == 0 {
+            return None;
+        }
+
+        for offset in 0..queue_count {
+            let index = (self.next_fluid_queue + offset) % queue_count;
+            if remaining[index] == 0 {
+                continue;
+            }
+
+            remaining[index] -= 1;
+            self.next_fluid_queue = (index + 1) % queue_count;
+            let position = self
+                .fluid_queues
+                .get_mut(index)
+                .and_then(VoxelUpdateQueue::pop);
+            if position.is_some() {
+                return position;
+            }
+
+            remaining[index] = 0;
+        }
+
+        None
     }
 
     fn update_ready_steps(
@@ -70,6 +131,10 @@ impl PendingFluidUpdates {
             let index = fluid_id as usize;
             if self.accumulated_steps.len() <= index {
                 self.accumulated_steps.resize(index + 1, 0.0);
+            }
+            if self.fluid_queues.len() <= index {
+                self.fluid_queues
+                    .resize_with(index + 1, VoxelUpdateQueue::default);
             }
 
             let accumulator = &mut self.accumulated_steps[index];
@@ -109,6 +174,7 @@ pub(super) fn process_fluid_updates(
     game_rules: Res<GameRules>,
     fluids: Res<FluidRegistry>,
     mut ready_steps: Local<Vec<usize>>,
+    mut fluid_batch_remaining: Local<Vec<usize>>,
     mut runtime: FluidSimulationRuntime,
 ) {
     let elapsed_ticks = world_ticks.ticks_this_frame();
@@ -137,16 +203,33 @@ pub(super) fn process_fluid_updates(
             break;
         }
 
-        // Freeze the current frontier for this fluid step. Positions enqueued while
-        // processing this batch belong to the next step, matching the previous solver
-        // semantics even when the temporal budget ends the frame early.
-        let batch_len = runtime.pending.queue.len();
-        for _ in 0..batch_len {
+        // Freeze both the generic topology frontier and each ready fluid
+        // frontier for this simulation step. Work produced while solving the
+        // batch belongs to the next step.
+        let mut generic_remaining = runtime.pending.queue.len();
+        runtime.pending.snapshot_ready_fluid_work(
+            &ready_steps,
+            step_index,
+            &mut fluid_batch_remaining,
+        );
+
+        loop {
             if budget.exhausted() {
                 break 'steps;
             }
 
-            let Some(position) = runtime.pending.pop() else {
+            let position = if let Some(position) = runtime
+                .pending
+                .pop_ready_fluid(&mut fluid_batch_remaining)
+            {
+                position
+            } else if generic_remaining > 0 {
+                generic_remaining -= 1;
+                let Some(position) = runtime.pending.pop() else {
+                    break;
+                };
+                position
+            } else {
                 break;
             };
             budget.record(1);
@@ -166,7 +249,7 @@ pub(super) fn process_fluid_updates(
 
             if fluid_ready_steps <= step_index {
                 if definition.spread_speed > f32::EPSILON {
-                    runtime.pending.enqueue(position);
+                    runtime.pending.enqueue_fluid(fluid_id, position);
                 }
                 continue;
             }
@@ -174,15 +257,11 @@ pub(super) fn process_fluid_updates(
                 continue;
             }
 
-            let lighting_medium_changed = current != desired;
-
             if runtime.world.set_fluid_at(position, desired).is_none() {
                 continue;
             }
 
-            if lighting_medium_changed {
-                runtime.lighting.enqueue_medium_edit(position);
-            }
+            runtime.lighting.enqueue_medium_edit(position);
             enqueue_remesh(position, &mut runtime.remesh_queue);
             runtime.pending.enqueue_voxel_edit(position);
         }
