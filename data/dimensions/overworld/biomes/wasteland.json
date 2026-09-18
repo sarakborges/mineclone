@@ -15,8 +15,8 @@
     { "block": "asteria:stone" }
   ],
   "hydrology": {
-    "canGenerateLake": true,
-    "canGenerateRiver": true,
+    "canGenerateLake": false,
+    "canGenerateRiver": false,
     "lakeChanceMultiplier": 1.0,
     "riverWidthMultiplier": 1.0
   },
