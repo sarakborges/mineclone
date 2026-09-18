@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte canônica:** `sarakborges/mineclone`, branch `develop`, Rust + Bevy 0.19.1. **Versão raiz canônica `VERSION`: `0.24.12`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado validado desta atualização:** `abe31483e2a7886d02d1b222f94df1b2e21b43b9`. CI `35385314155` (run 4152) concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte ativa deste checkpoint:** `sarakborges/mineclone`, branch `feature/biome-size-multiplier`, baseada em `develop`, Rust + Bevy 0.19.1. **Versão raiz atual da branch `VERSION`: `0.25.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional validado deste checkpoint:** `92f557060a6e2a9185b2854c66aeeaea1ddec74f`. CI `35388784039` concluiu **success** com auditoria de localizações, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco. A base `develop` continua em `0.24.12` até merge desta branch.
 
 ## Histórico integral obrigatório
 
@@ -781,3 +781,96 @@ Próximo passo imediato: QA Windows focado em (1) surface tunnel com boca → ca
 
 Próximo passo imediato: QA Windows de distribuição regional, navegando vários quilômetros e confirmando simultaneamente (1) Plains não domina trechos absurdos, (2) Wasteland/Witchwood/Enchanted aparecem com frequência compatível com os pesos atuais e (3) Wasteland nunca compartilha fronteira direta com Witchwood/Enchanted, embora possam existir próximos separados por outro biome.
 
+
+
+## Checkpoint 100 — 2026-09-18: Biome Size Multiplier, sliders editáveis, rios no oceano, surface carvers data-driven e HUD no Pause [CÓDIGO + CI VERDE]
+
+### Biome Size Multiplier
+
+- Novo campo no fluxo **New World**: `Biome Size Multiplier`.
+- Faixa válida: **0.5x até 5.0x**, em passos exatos de **0.1**.
+- Default: **1.0x**.
+- O valor é mantido internamente em décimos inteiros para evitar drift de ponto flutuante na regra de passo.
+- Durante a construção do `BiomeField`, os `size.x/z/y.min/max` definidos pela Dimension são multiplicados pelo valor configurado e **arredondados** antes de serem usados pelo worldgen.
+- O multiplicador é persistido em snapshot/manifest/in-memory save e restaurado no load. Saves antigos que não possuem o campo usam **1.0x** via default compatível.
+- O multiplicador participa da identidade do snapshot para impedir que um mundo carregado volte silenciosamente a outro tamanho de biome ao gerar chunks novos.
+- O `SAVE_FORMAT_VERSION` não foi alterado; a compatibilidade é mantida por campo serde defaultado.
+
+### Regra de UI para sliders
+
+- Foi criado um primitive compartilhado em `src/ui/slider.rs`.
+- Todo slider existente agora possui **number input ao lado**, sincronizado nos dois sentidos.
+- Hoje isso cobre:
+  - Render Distance;
+  - Biome Size Multiplier.
+- Render Distance mantém sua faixa inteira original.
+- Biome Size Multiplier aceita somente o domínio 0.5–5.0 em décimos; estados parciais de digitação podem existir apenas enquanto o usuário compõe o valor, sem aplicar configuração inválida.
+- O numeric input ganhou suporte decimal reutilizável sem duplicar o design system.
+
+### Rivers não continuam dentro do oceano
+
+- Bug observado em QA exploratória: river edges podiam continuar sendo rasterizadas depois de entrar em água oceânica física.
+- O oceano continua sendo um **destino válido** para o rio, mas agora funciona como destino terminal.
+- O path é amostrado até encontrar a primeira entrada em oceano físico; a fronteira é refinada e o rio termina ali, com a mouth no nível do mar.
+- A água depois desse ponto pertence somente ao oceano; não existe mais channel de river atravessando o fundo oceânico.
+
+### Surface carvers / entradas de cavernas data-driven
+
+- `BiomeDefinition` agora possui `allowSurfaceCarvers`.
+- Semântica canônica:
+  - o **volume biome cavernoso** é dono das definições `surfaceCarvers`;
+  - o **surface biome** decide apenas se aceita ou não ser perfurado por esses carvers.
+- Configuração atual do Overworld:
+  - Plains: `allowSurfaceCarvers=true`;
+  - Mountains: `true`;
+  - Witchwood: `true`;
+  - Enchanted Forest: `true`;
+  - Wasteland: `false`.
+- O tunnel carver que antes estava em Mountains foi movido para `asteria:overworld/caverns`.
+- Validação de conteúdo impede surface biomes de serem donos de `surfaceCarvers` e impede volume/hydrology biomes de habilitarem `allowSurfaceCarvers`; volume carvers só são permitidos em volume biome com `densityModifier=cavern`.
+- A tentativa intermediária de criar uma entrada terrestre diretamente no connector graph foi **revertida** antes do estado final. O contrato anterior permanece: em terra, somente `surfaceCarver` pode abrir a superfície; ocean cave openings continuam sendo a exceção hidrológica separada.
+
+### Correção estrutural da entrada de cavernas
+
+- A investigação mostrou por que o jogador podia explorar longas distâncias sem achar entrada:
+  - `seaLevel` do Overworld é **90**;
+  - o carver tinha `elevation = 10..46`;
+  - o código antigo calculava `sea_level + elevation`, posicionando o eixo em **Y 100..136**;
+  - Caverns existe em **Y 8..64**.
+- Isso tornava a conexão real com o cave graph subterrâneo praticamente impossível.
+- Semântica corrigida:
+  - `elevation` é agora um **Y absoluto subterrâneo alvo**;
+  - a mouth nasce na **altura real do terreno**;
+  - o path usa Bezier curvo da superfície até o alvo subterrâneo;
+  - o candidate só sobrevive se encontrar o connector graph com profundidade de teto suficiente;
+  - o path é truncado na primeira conexão subterrânea válida.
+- A regra visual gradual foi preservada:
+  - o tunnel profundo continua circular;
+  - perto da superfície a boca usa o basin 2D lake-style existente;
+  - a borda converge para o roof do tunnel;
+  - a margem externa fixa de **14 blocos** usa `smoothstep` até o terreno natural;
+  - portanto a entrada não deve voltar a produzir uma parede reta/cilíndrica na encosta.
+- `ARCHITECTURE.md` registra tanto o ownership data-driven quanto a nova semântica absoluta de `elevation`.
+
+### Player HUD no Pause
+
+- Causa real encontrada: `EntityCard` ativo usava `Visibility::Visible`, podendo furar a visibilidade herdada do `PlayerHudRoot`.
+- Correção: card ativo usa `Visibility::Inherited`; card sem entidade continua `Hidden`.
+- O `PlayerHudRoot` continua derivando sua visibilidade diretamente de `PauseState` e `SettingsState`, de forma idempotente no Update.
+- Handlers one-shot redundantes de Pause/Settings que foram tentados durante a investigação foram removidos antes do estado final, preservando o contrato arquitetural de visibilidade state-driven.
+
+### Versionamento e validação
+
+- `VERSION`: **0.24.12 → 0.25.0** por introdução de nova configuração persistente de worldgen e novo contrato data-driven de surface carvers.
+- Commit de bump: `cb1a70b363bbffc2a41d06e109f31a5eb64d1fbd`.
+- O ajuste do HUD já havia passado no run `35388452658`.
+- A sequência do carver descendente expôs apenas integrações mecânicas antigas de campos `sea_level` em structure support e fixture de fluids; ambas foram removidas.
+- HEAD funcional validado: `92f557060a6e2a9185b2854c66aeeaea1ddec74f`.
+- CI final: `35388784039` — **success**.
+- Passaram:
+  - auditoria de localizações EN/PT-BR/ES;
+  - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+Próximo passo imediato: QA Windows em mundo novo verificando (1) Biome Size Multiplier em 0.5/1.0/5.0 e persistência após reload; (2) number inputs de ambos sliders; (3) rivers terminando na primeira entrada física no oceano; (4) entradas de caverna aparecendo em Plains/Mountains/Witchwood/Enchanted Forest e nunca em Wasteland; (5) mouth gradual sem parede reta e conexão real com Caverns; (6) Player HUD completamente oculto durante Pause e Settings.
