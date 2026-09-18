@@ -206,7 +206,10 @@
           "max": 220
         },
         "y": null
-      }
+      },
+      "requireNear": [
+        "asteria:overworld/ocean"
+      ]
     },
     {
       "id": "asteria:overworld/ocean",
