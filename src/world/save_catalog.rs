@@ -16,9 +16,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     content::{
-        block::BlockRegistry, day_night_cycle::DayNightCycleRegistry,
-        dimension::DimensionRegistry, fluid::FluidRegistry, tool::ToolRegistry,
+        block::BlockRegistry, creature::CreatureRegistry,
+        day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
+        fluid::FluidRegistry, tool::ToolRegistry,
     },
+    creatures::SavedCreature,
     player::hotbar::INVENTORY_SLOT_COUNT,
     voxel::{chunk_disk::DiskChunk, world::VoxelWorld},
 };
@@ -86,6 +88,7 @@ pub(crate) struct SaveRegistries<'a> {
     pub(crate) blocks: &'a BlockRegistry,
     pub(crate) fluids: &'a FluidRegistry,
     pub(crate) tools: &'a ToolRegistry,
+    pub(crate) creatures: &'a CreatureRegistry,
     pub(crate) dimensions: &'a DimensionRegistry,
     pub(crate) cycles: &'a DayNightCycleRegistry,
 }
@@ -101,6 +104,9 @@ impl SaveRegistries<'_> {
             self.blocks.get(id).is_some() || self.tools.get(id).is_some()
         })?;
         PendingFluidUpdates::from_saved(&snapshot.fluid_updates, self.fluids)?;
+        for creature in &snapshot.creatures {
+            creature.validate(self.creatures)?;
+        }
         Ok(())
     }
 
@@ -121,9 +127,14 @@ impl SaveRegistries<'_> {
                     .map(|cycle| (dimension.id.clone(), cycle.day_duration_ticks))
             })
             .collect();
+        let mut creatures = CreatureRegistry::default();
+        for definition in self.creatures.iter() {
+            creatures.insert(definition.clone());
+        }
         PruneRegistries {
             blocks: self.blocks.clone(),
             fluids: self.fluids.clone(),
+            creatures,
             valid_items,
             day_lengths,
         }
@@ -134,6 +145,7 @@ impl SaveRegistries<'_> {
 pub(crate) struct PruneRegistries {
     blocks: BlockRegistry,
     fluids: FluidRegistry,
+    creatures: CreatureRegistry,
     valid_items: HashSet<String>,
     day_lengths: HashMap<String, u64>,
 }
@@ -146,6 +158,9 @@ impl PruneRegistries {
             |id| self.valid_items.contains(id),
         )?;
         PendingFluidUpdates::from_saved(&snapshot.fluid_updates, &self.fluids)?;
+        for creature in &snapshot.creatures {
+            creature.validate(&self.creatures)?;
+        }
         Ok(())
     }
 
@@ -228,6 +243,8 @@ pub(crate) struct WorldSnapshot {
     pub(crate) inventory: Vec<Option<String>>,
     #[serde(default)]
     pub(crate) fluid_updates: SavedFluidUpdates,
+    #[serde(default)]
+    pub(crate) creatures: Vec<SavedCreature>,
     chunks: Vec<DiskChunk>,
 }
 
@@ -246,6 +263,7 @@ pub(crate) struct SnapshotSource<'a> {
     pub(crate) fluids: &'a FluidRegistry,
     pub(crate) pending_fluids: &'a PendingFluidUpdates,
     pub(crate) world_tick: u64,
+    pub(crate) creatures: Vec<SavedCreature>,
 }
 
 impl WorldSnapshot {
@@ -279,6 +297,7 @@ impl WorldSnapshot {
             fluid_updates: source
                 .pending_fluids
                 .capture_saved(source.world_tick, source.fluids)?,
+            creatures: source.creatures,
             chunks: source.world.save_generated_chunks(source.fluids)?,
         })
     }
