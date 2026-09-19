@@ -275,7 +275,7 @@ mod tests {
 
     #[test]
     fn fluid_and_terrain_remeshes_can_share_a_chunk_in_flight() {
-        let mut tasks = ChunkRemeshTasks::default();
+        let tasks = ChunkRemeshTasks::default();
         let coord = IVec3::new(3, 2, 5);
 
         assert!(!tasks.contains(coord, ChunkRemeshTaskKind::Fluid));
