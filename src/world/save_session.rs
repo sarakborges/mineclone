@@ -52,6 +52,8 @@ struct SavedWorldState {
     position: [f32; 3],
     creative: bool,
     health: f32,
+    yaw: f32,
+    pitch: f32,
     inventory: Vec<Option<String>>,
     selected_hotbar_slot: usize,
     creatures: Vec<SavedCreature>,
@@ -141,6 +143,8 @@ impl WorldSession {
             position: player.position,
             creative: player.creative,
             health: player.health.unwrap_or_default(),
+            yaw: player.yaw,
+            pitch: player.pitch,
             inventory: captured.inventory.clone(),
             selected_hotbar_slot: captured.selected_hotbar_slot,
             creatures: captured.creatures.clone(),
@@ -197,6 +201,7 @@ pub(crate) struct WorldSaveContext<'w, 's> {
             &'static Transform,
             &'static GameMode,
             &'static EntityHealth,
+            &'static GameplayCamera,
         ),
         With<GameplayCamera>,
     >,
@@ -232,7 +237,7 @@ impl WorldSaveContext<'_, '_> {
     }
 
     fn saved_state(&self) -> io::Result<SavedWorldState> {
-        let (_, transform, mode, health) = self.player.single().map_err(|error| {
+        let (_, transform, mode, health, camera) = self.player.single().map_err(|error| {
             io::Error::other(format!("cannot save world without exactly one player: {error}"))
         })?;
         let position = transform.translation;
@@ -246,6 +251,8 @@ impl WorldSaveContext<'_, '_> {
             position: [position.x, position.y, position.z],
             creative: *mode == GameMode::Creative,
             health: health.current(),
+            yaw: camera.yaw,
+            pitch: camera.pitch,
             inventory: self.inventory.saved_items(),
             selected_hotbar_slot: self.inventory.selected_slot(),
             creatures: self.saved_creatures(),
@@ -261,6 +268,8 @@ impl WorldSaveContext<'_, '_> {
             position: [position.x, position.y, position.z],
             creative: *mode == GameMode::Creative,
             health: Some(health.current()),
+            yaw: camera.yaw,
+            pitch: camera.pitch,
         };
         let inventory = self.inventory.saved_items();
         let selected_hotbar_slot = self.inventory.selected_slot();
@@ -293,6 +302,8 @@ impl WorldSaveContext<'_, '_> {
             position: player.position,
             creative: player.creative,
             health: player.health.unwrap_or(health.current()),
+            yaw: player.yaw,
+            pitch: player.pitch,
             inventory,
             selected_hotbar_slot,
             creatures,
@@ -329,6 +340,8 @@ impl WorldSaveContext<'_, '_> {
                 position: [position.x, position.y, position.z],
                 creative: *mode == GameMode::Creative,
                 health: Some(health.current()),
+                yaw: camera.yaw,
+                pitch: camera.pitch,
             }),
             day: self.clock.day,
             tick_in_day: self.clock.tick_in_day(),
