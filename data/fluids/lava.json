@@ -15,6 +15,6 @@
   "metallic": 0.0,
   "lightDampening": 15,
   "lightEmission": 15,
-  "spreadSpeed": 2.0,
+  "spreadSpeed": 4.0,
   "maxSpread": 3
 }
