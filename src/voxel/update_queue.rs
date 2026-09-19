@@ -50,6 +50,10 @@ impl VoxelUpdateQueue {
     pub(crate) fn len(&self) -> usize {
         self.queue.len()
     }
+
+    pub(crate) fn values(&self) -> impl Iterator<Item = IVec3> + '_ {
+        self.queue.values()
+    }
 }
 
 #[cfg(test)]
