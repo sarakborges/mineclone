@@ -45,10 +45,12 @@ impl VoxelMeshBuffer {
             return None;
         }
 
+        // Chunk remeshes mutate these Mesh assets in place. Keep CPU-side mesh data
+        // resident so Assets<Mesh>::get_mut remains valid after render extraction.
         Some(
             Mesh::new(
                 PrimitiveTopology::TriangleList,
-                RenderAssetUsages::RENDER_WORLD,
+                RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
             )
             .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
             .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
