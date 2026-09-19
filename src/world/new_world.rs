@@ -169,4 +169,10 @@ mod tests {
         assert!(is_valid_biome_size_multiplier(2.3));
         assert!(!is_valid_biome_size_multiplier(2.34));
     }
+
+    #[test]
+    fn legacy_worldgen_identity_stays_pinned_to_v1() {
+        assert_eq!(LEGACY_WORLDGEN_VERSION, 1);
+        assert!(WORLDGEN_VERSION >= LEGACY_WORLDGEN_VERSION);
+    }
 }
