@@ -1,21 +1,24 @@
 mod frontier;
 mod solver;
 
-use std::time::Duration;
+use std::{
+    collections::{BTreeMap, VecDeque},
+    time::Duration,
+};
 
 use bevy::{
     ecs::system::SystemParam,
-    platform::collections::HashSet,
+    platform::collections::HashMap,
     prelude::*,
 };
 
 use crate::{
-    content::fluid::{FluidId, FluidRegistry},
+    content::fluid::{FluidDefinition, FluidId, FluidRegistry},
     voxel::{
-        coordinates::chunk_coord_from_world,
+        deduplicated_queue::DeduplicatedQueue,
         fluid::FluidCell,
         lighting::PendingLightingUpdates,
-        neighbors::CARDINAL_NEIGHBORS,
+        neighbors::HORIZONTAL_NEIGHBORS,
         update_queue::VoxelUpdateQueue,
         world::VoxelWorld,
     },
@@ -36,23 +39,24 @@ const MAX_FLUID_UPDATES_PER_FRAME: usize = 512;
 const MAX_FLUID_CATCHUP_UPDATES_PER_FRAME: usize = 2_048;
 const FLUID_CATCHUP_QUEUE_THRESHOLD: usize = 512;
 
-#[derive(Debug, Default)]
-struct FluidUpdateLane {
-    queue: VoxelUpdateQueue,
-    accumulated_steps: f32,
-    ready_steps: usize,
-    batch_remaining: usize,
-    changed_positions: HashSet<IVec3>,
-    unpublished_chunks: HashSet<IVec3>,
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct FluidTickKey {
+    fluid_id: FluidId,
+    position: IVec3,
 }
 
 #[derive(Resource, Default)]
 pub(crate) struct PendingFluidUpdates {
-    // Runtime block edits are classified against the current voxel state before
-    // they enter a fluid-specific cadence lane.
+    // Runtime block edits are topology wake-ups. They are resolved against the
+    // current world state and converted into scheduled fluid ticks.
     topology_queue: VoxelUpdateQueue,
-    fluid_lanes: Vec<FluidUpdateLane>,
-    next_fluid_lane: usize,
+    // Generated/streamed fluid frontiers arrive here without a due time. The
+    // runtime scheduler assigns the authored fluid delay on the next update.
+    wake_queue: DeduplicatedQueue<FluidTickKey>,
+    // Minecraft-style scheduled ticks: one due world tick per (fluid, voxel).
+    // Earlier reschedules replace later ones; stale bucket records are ignored.
+    scheduled: BTreeMap<u64, VecDeque<FluidTickKey>>,
+    scheduled_due: HashMap<FluidTickKey, u64>,
 }
 
 impl PendingFluidUpdates {
@@ -66,168 +70,102 @@ impl PendingFluidUpdates {
     }
 
     fn enqueue_fluid(&mut self, fluid_id: FluidId, position: IVec3) {
-        self.fluid_lane_mut(fluid_id).queue.enqueue(position);
+        if position.y < 0 {
+            return;
+        }
+        self.wake_queue.enqueue(FluidTickKey { fluid_id, position });
     }
 
     fn enqueue_fluid_priority(&mut self, fluid_id: FluidId, position: IVec3) {
-        let lane = self.fluid_lane_mut(fluid_id);
-        if lane.batch_remaining == 0 {
-            lane.queue.enqueue_priority(position);
-        } else {
-            // A logical fluid step freezes its frontier. Work discovered after
-            // that snapshot belongs to the next step even when it is urgent.
-            lane.queue.enqueue(position);
+        if position.y < 0 {
+            return;
         }
+        self.wake_queue
+            .enqueue_front(FluidTickKey { fluid_id, position });
     }
 
-    fn enqueue_fluid_neighborhood(&mut self, fluid_id: FluidId, position: IVec3) {
-        self.enqueue_fluid(fluid_id, position);
-        self.enqueue_fluid(fluid_id, position - IVec3::Y);
-        for offset in crate::voxel::neighbors::HORIZONTAL_NEIGHBORS {
-            self.enqueue_fluid(fluid_id, position + offset);
-        }
-    }
-
-    fn fluid_lane_mut(&mut self, fluid_id: FluidId) -> &mut FluidUpdateLane {
-        let index = fluid_id as usize;
-        if self.fluid_lanes.len() <= index {
-            self.fluid_lanes
-                .resize_with(index + 1, FluidUpdateLane::default);
-        }
-        &mut self.fluid_lanes[index]
+    fn pop_wake(&mut self) -> Option<FluidTickKey> {
+        self.wake_queue.pop()
     }
 
     fn pop_topology(&mut self) -> Option<IVec3> {
         self.topology_queue.pop()
     }
 
-    fn advance_cadence(
-        &mut self,
-        elapsed_ticks: u32,
-        ticks_per_second: u32,
-        fluids: &FluidRegistry,
-    ) {
-        if elapsed_ticks == 0 {
+    fn schedule_at(&mut self, key: FluidTickKey, due_tick: u64) {
+        if key.position.y < 0 {
             return;
         }
 
-        for (fluid_id, definition) in fluids.iter() {
-            let lane = self.fluid_lane_mut(fluid_id);
-            if definition.spread_speed <= f32::EPSILON {
-                lane.accumulated_steps = 0.0;
-                lane.ready_steps = 0;
-                lane.batch_remaining = 0;
-                continue;
-            }
-
-            let steps_per_tick = definition.spread_speed / ticks_per_second as f32;
-            lane.accumulated_steps += elapsed_ticks as f32 * steps_per_tick;
-            let elapsed_steps = lane.accumulated_steps.floor() as usize;
-            if elapsed_steps == 0 {
-                continue;
-            }
-
-            lane.accumulated_steps -= elapsed_steps as f32;
-
-            // Presentation is part of fluid cadence. If a logical step is
-            // still being computed, elapsed cadence intervals are intentionally
-            // dropped instead of becoming visual catch-up debt. A later step
-            // may start only on a future cadence boundary.
-            if lane.batch_remaining == 0 && lane.queue.len() > 0 {
-                lane.ready_steps = 1;
-            }
+        if self
+            .scheduled_due
+            .get(&key)
+            .is_some_and(|existing| *existing <= due_tick)
+        {
+            return;
         }
+
+        self.scheduled_due.insert(key, due_tick);
+        self.scheduled.entry(due_tick).or_default().push_back(key);
     }
 
-    fn pop_runnable_fluid(&mut self) -> Option<(FluidId, IVec3, bool)> {
-        let lane_count = self.fluid_lanes.len();
-        if lane_count == 0 {
-            return None;
-        }
-
-        for offset in 0..lane_count {
-            let index = (self.next_fluid_lane + offset) % lane_count;
-            let lane = &mut self.fluid_lanes[index];
-
-            if lane.batch_remaining == 0 {
-                if lane.ready_steps == 0 {
-                    continue;
-                }
-                if lane.queue.len() == 0 {
-                    lane.ready_steps = 0;
-                    continue;
-                }
-
-                lane.batch_remaining = lane.queue.len();
-                lane.ready_steps -= 1;
+    fn pop_due(&mut self, current_tick: u64) -> Option<(FluidTickKey, u64)> {
+        loop {
+            let due_tick = *self.scheduled.first_key_value()?.0;
+            if due_tick > current_tick {
+                return None;
             }
 
-            let Some(position) = lane.queue.pop() else {
-                lane.batch_remaining = 0;
+            let (key, bucket_empty) = {
+                let bucket = self
+                    .scheduled
+                    .get_mut(&due_tick)
+                    .expect("first scheduled fluid bucket must exist");
+                let key = bucket.pop_front();
+                (key, bucket.is_empty())
+            };
+            if bucket_empty {
+                self.scheduled.remove(&due_tick);
+            }
+
+            let Some(key) = key else {
                 continue;
             };
-
-            lane.batch_remaining -= 1;
-            let completes_batch = lane.batch_remaining == 0;
-            self.next_fluid_lane = (index + 1) % lane_count;
-            return Some((index as FluidId, position, completes_batch));
-        }
-
-        None
-    }
-
-    fn discard_idle_step_credit(&mut self) {
-        for lane in &mut self.fluid_lanes {
-            if lane.batch_remaining == 0 && lane.queue.len() == 0 {
-                lane.ready_steps = 0;
+            if self.scheduled_due.get(&key).copied() != Some(due_tick) {
+                continue;
             }
+
+            self.scheduled_due.remove(&key);
+            return Some((key, due_tick));
         }
     }
 
-    fn record_batch_change(&mut self, fluid_id: FluidId, position: IVec3) {
-        let lane = self.fluid_lane_mut(fluid_id);
-        lane.changed_positions.insert(position);
-
-        let center = chunk_coord_from_world(position);
-        if center.y >= 0 {
-            lane.unpublished_chunks.insert(center);
-        }
-        for offset in CARDINAL_NEIGHBORS {
-            let neighbor = chunk_coord_from_world(position + offset);
-            if neighbor.y >= 0 && neighbor != center {
-                lane.unpublished_chunks.insert(neighbor);
-            }
-        }
-    }
-
-    fn take_completed_batch_changes(&mut self, fluid_id: FluidId) -> Vec<IVec3> {
-        let lane = self.fluid_lane_mut(fluid_id);
-        debug_assert_eq!(
-            lane.batch_remaining, 0,
-            "fluid presentation may only publish a completed logical batch"
+    fn schedule_neighborhood(&mut self, fluid_id: FluidId, position: IVec3, due_tick: u64) {
+        self.schedule_at(FluidTickKey { fluid_id, position }, due_tick);
+        self.schedule_at(
+            FluidTickKey {
+                fluid_id,
+                position: position - IVec3::Y,
+            },
+            due_tick,
         );
-        lane.unpublished_chunks.clear();
-
-        let mut changed = lane.changed_positions.drain().collect::<Vec<_>>();
-        changed.sort_unstable_by_key(|position| (position.y, position.z, position.x));
-        changed
-    }
-
-    pub(crate) fn has_unpublished_fluid_chunk(&self, coord: IVec3) -> bool {
-        self.fluid_lanes
-            .iter()
-            .any(|lane| lane.unpublished_chunks.contains(&coord))
+        for offset in HORIZONTAL_NEIGHBORS {
+            self.schedule_at(
+                FluidTickKey {
+                    fluid_id,
+                    position: position + offset,
+                },
+                due_tick,
+            );
+        }
     }
 
     fn should_catch_up(&self) -> bool {
-        let queued = self
-            .fluid_lanes
-            .iter()
-            .map(|lane| lane.queue.len())
-            .sum::<usize>()
-            .saturating_add(self.topology_queue.len());
-
-        queued >= FLUID_CATCHUP_QUEUE_THRESHOLD
+        self.topology_queue
+            .len()
+            .saturating_add(self.wake_queue.len())
+            .saturating_add(self.scheduled_due.len())
+            >= FLUID_CATCHUP_QUEUE_THRESHOLD
     }
 }
 
@@ -259,11 +197,8 @@ pub(super) fn process_fluid_updates(
     mut solver_scratch: Local<FluidSolverScratch>,
     mut runtime: FluidSimulationRuntime,
 ) {
-    runtime.pending.advance_cadence(
-        world_ticks.ticks_this_frame(),
-        game_rules.ticks_per_second(),
-        &fluids,
-    );
+    let current_tick = world_ticks.current_tick();
+    let ticks_per_second = game_rules.ticks_per_second();
 
     let catch_up = runtime.pending.should_catch_up();
     let mut budget = if catch_up {
@@ -280,89 +215,39 @@ pub(super) fn process_fluid_updates(
         .with_maximum_items(MAX_FLUID_UPDATES_PER_FRAME)
     };
 
-    classify_topology_updates(&mut runtime, &fluids, &mut solver_scratch, &mut budget);
-
-    while !budget.exhausted() {
-        let Some((scheduled_fluid_id, position, completes_batch)) =
-            runtime.pending.pop_runnable_fluid()
-        else {
-            break;
-        };
-        budget.record(1);
-
-        process_fluid_target(
-            &mut runtime,
-            &fluids,
-            &mut solver_scratch,
-            scheduled_fluid_id,
-            position,
-        );
-
-        if completes_batch {
-            publish_completed_fluid_step(&mut runtime, scheduled_fluid_id);
-        }
-    }
-
-    runtime.pending.discard_idle_step_credit();
-}
-
-fn process_fluid_target(
-    runtime: &mut FluidSimulationRuntime<'_>,
-    fluids: &FluidRegistry,
-    solver_scratch: &mut FluidSolverScratch,
-    scheduled_fluid_id: FluidId,
-    position: IVec3,
-) {
-    let Some((cell, current, _)) = runtime.world.sample_at(position) else {
-        return;
-    };
-    let desired = desired_fluid_with_scratch(
-        &runtime.world,
-        position,
-        cell,
-        current,
-        fluids,
-        solver_scratch,
+    classify_topology_updates(
+        &mut runtime,
+        &fluids,
+        &mut solver_scratch,
+        current_tick,
+        ticks_per_second,
+        &mut budget,
     );
-    if current == desired {
-        return;
-    }
 
-    let Some(transition_fluid_id) = transition_fluid_id(current, desired) else {
-        return;
-    };
+    process_due_fluid_ticks(
+        &mut runtime,
+        &fluids,
+        &mut solver_scratch,
+        current_tick,
+        ticks_per_second,
+        &mut budget,
+    );
 
-    if transition_fluid_id != scheduled_fluid_id {
-        runtime
-            .pending
-            .enqueue_fluid_priority(transition_fluid_id, position);
-        return;
-    }
-
-    if runtime.world.set_fluid_at(position, desired).is_none() {
-        return;
-    }
-
-    runtime
-        .pending
-        .record_batch_change(scheduled_fluid_id, position);
-    enqueue_changed_fluid_neighborhood(&mut runtime.pending, position, current, desired);
-}
-
-fn publish_completed_fluid_step(
-    runtime: &mut FluidSimulationRuntime<'_>,
-    fluid_id: FluidId,
-) {
-    for position in runtime.pending.take_completed_batch_changes(fluid_id) {
-        runtime.lighting.enqueue_medium_edit(position);
-        enqueue_remesh(position, &mut runtime.remesh_queue);
-    }
+    schedule_frontier_wakes(
+        &mut runtime.pending,
+        &fluids,
+        current_tick,
+        ticks_per_second,
+        &mut budget,
+    );
 }
 
 fn classify_topology_updates(
     runtime: &mut FluidSimulationRuntime<'_>,
     fluids: &FluidRegistry,
     solver_scratch: &mut FluidSolverScratch,
+    current_tick: u64,
+    ticks_per_second: u32,
     budget: &mut FrameWorkBudget,
 ) {
     let batch_len = runtime.pending.topology_queue.len();
@@ -394,8 +279,194 @@ fn classify_topology_updates(
         let Some(fluid_id) = transition_fluid_id(current, desired) else {
             continue;
         };
-        runtime.pending.enqueue_fluid_priority(fluid_id, position);
+        schedule_fluid_tick_after_delay(
+            &mut runtime.pending,
+            fluids,
+            fluid_id,
+            position,
+            current_tick,
+            ticks_per_second,
+        );
     }
+}
+
+fn process_due_fluid_ticks(
+    runtime: &mut FluidSimulationRuntime<'_>,
+    fluids: &FluidRegistry,
+    solver_scratch: &mut FluidSolverScratch,
+    current_tick: u64,
+    ticks_per_second: u32,
+    budget: &mut FrameWorkBudget,
+) {
+    while !budget.exhausted() {
+        let Some((scheduled, _due_tick)) = runtime.pending.pop_due(current_tick) else {
+            break;
+        };
+        budget.record(1);
+
+        let position = scheduled.position;
+        let Some((cell, current, _)) = runtime.world.sample_at(position) else {
+            continue;
+        };
+        let desired = desired_fluid_with_scratch(
+            &runtime.world,
+            position,
+            cell,
+            current,
+            fluids,
+            solver_scratch,
+        );
+        if current == desired {
+            continue;
+        }
+
+        let Some(transition_fluid_id) = transition_fluid_id(current, desired) else {
+            continue;
+        };
+
+        if transition_fluid_id != scheduled.fluid_id {
+            schedule_fluid_tick_after_delay(
+                &mut runtime.pending,
+                fluids,
+                transition_fluid_id,
+                position,
+                current_tick,
+                ticks_per_second,
+            );
+            continue;
+        }
+
+        if runtime.world.set_fluid_at(position, desired).is_none() {
+            continue;
+        }
+
+        runtime.lighting.enqueue_medium_edit(position);
+        enqueue_remesh(position, &mut runtime.remesh_queue);
+        schedule_changed_fluid_neighborhood(
+            &mut runtime.pending,
+            fluids,
+            position,
+            current,
+            desired,
+            current_tick,
+            ticks_per_second,
+        );
+    }
+}
+
+fn schedule_frontier_wakes(
+    pending: &mut PendingFluidUpdates,
+    fluids: &FluidRegistry,
+    current_tick: u64,
+    ticks_per_second: u32,
+    budget: &mut FrameWorkBudget,
+) {
+    while !budget.exhausted() {
+        let Some(wake) = pending.pop_wake() else {
+            break;
+        };
+        budget.record(1);
+        schedule_fluid_tick_after_delay(
+            pending,
+            fluids,
+            wake.fluid_id,
+            wake.position,
+            current_tick,
+            ticks_per_second,
+        );
+    }
+}
+
+fn schedule_changed_fluid_neighborhood(
+    pending: &mut PendingFluidUpdates,
+    fluids: &FluidRegistry,
+    position: IVec3,
+    current: Option<FluidCell>,
+    desired: Option<FluidCell>,
+    current_tick: u64,
+    ticks_per_second: u32,
+) {
+    let current_id = current.map(|fluid| fluid.fluid_id);
+    let desired_id = desired.map(|fluid| fluid.fluid_id);
+
+    if let Some(fluid_id) = current_id {
+        schedule_fluid_neighborhood_after_delay(
+            pending,
+            fluids,
+            fluid_id,
+            position,
+            current_tick,
+            ticks_per_second,
+        );
+    }
+    if let Some(fluid_id) = desired_id
+        && Some(fluid_id) != current_id
+    {
+        schedule_fluid_neighborhood_after_delay(
+            pending,
+            fluids,
+            fluid_id,
+            position,
+            current_tick,
+            ticks_per_second,
+        );
+    }
+}
+
+fn schedule_fluid_neighborhood_after_delay(
+    pending: &mut PendingFluidUpdates,
+    fluids: &FluidRegistry,
+    fluid_id: FluidId,
+    position: IVec3,
+    current_tick: u64,
+    ticks_per_second: u32,
+) {
+    let Some(delay) = fluid_tick_delay_for_id(fluids, fluid_id, ticks_per_second) else {
+        return;
+    };
+    pending.schedule_neighborhood(fluid_id, position, current_tick.saturating_add(delay));
+}
+
+fn schedule_fluid_tick_after_delay(
+    pending: &mut PendingFluidUpdates,
+    fluids: &FluidRegistry,
+    fluid_id: FluidId,
+    position: IVec3,
+    current_tick: u64,
+    ticks_per_second: u32,
+) {
+    let Some(delay) = fluid_tick_delay_for_id(fluids, fluid_id, ticks_per_second) else {
+        return;
+    };
+    pending.schedule_at(
+        FluidTickKey { fluid_id, position },
+        current_tick.saturating_add(delay),
+    );
+}
+
+fn fluid_tick_delay_for_id(
+    fluids: &FluidRegistry,
+    fluid_id: FluidId,
+    ticks_per_second: u32,
+) -> Option<u64> {
+    let definition = fluids
+        .get(fluid_id)
+        .unwrap_or_else(|| panic!("missing fluid definition for id {fluid_id}"));
+    fluid_tick_delay_ticks(definition, ticks_per_second)
+}
+
+fn fluid_tick_delay_ticks(
+    definition: &FluidDefinition,
+    ticks_per_second: u32,
+) -> Option<u64> {
+    if definition.spread_speed <= f32::EPSILON || ticks_per_second == 0 {
+        return None;
+    }
+
+    let ticks = (ticks_per_second as f64 / f64::from(definition.spread_speed))
+        .round()
+        .max(1.0);
+    Some(ticks as u64)
 }
 
 fn transition_fluid_id(
@@ -407,135 +478,60 @@ fn transition_fluid_id(
         .or_else(|| current.map(|fluid| fluid.fluid_id))
 }
 
-fn enqueue_changed_fluid_neighborhood(
-    pending: &mut PendingFluidUpdates,
-    position: IVec3,
-    current: Option<FluidCell>,
-    desired: Option<FluidCell>,
-) {
-    let current_id = current.map(|fluid| fluid.fluid_id);
-    let desired_id = desired.map(|fluid| fluid.fluid_id);
-
-    if let Some(fluid_id) = current_id {
-        pending.enqueue_fluid_neighborhood(fluid_id, position);
-    }
-    if let Some(fluid_id) = desired_id
-        && Some(fluid_id) != current_id
-    {
-        pending.enqueue_fluid_neighborhood(fluid_id, position);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn fluid_lane_freezes_newly_enqueued_work_until_the_next_step() {
-        let mut pending = PendingFluidUpdates::default();
-        let fluid_id = 0;
-
-        pending.enqueue_fluid(fluid_id, IVec3::new(1, 2, 3));
-        {
-            let lane = pending.fluid_lane_mut(fluid_id);
-            lane.ready_steps = 1;
+    fn test_definition(spread_speed: f32) -> FluidDefinition {
+        FluidDefinition {
+            id: "asteria:test".to_owned(),
+            color: Default::default(),
+            opacity: 1.0,
+            roughness: 0.0,
+            metallic: 0.0,
+            light_dampening: 0,
+            light_emission: 0,
+            spread_speed,
+            max_spread: 7,
         }
-
-        assert_eq!(
-            pending.pop_runnable_fluid(),
-            Some((fluid_id, IVec3::new(1, 2, 3), true))
-        );
-
-        pending.enqueue_fluid_neighborhood(fluid_id, IVec3::new(1, 2, 3));
-        assert_eq!(pending.pop_runnable_fluid(), None);
-
-        {
-            let lane = pending.fluid_lane_mut(fluid_id);
-            lane.ready_steps = 1;
-        }
-        assert!(pending.pop_runnable_fluid().is_some());
     }
 
     #[test]
-    fn priority_work_does_not_enter_an_already_frozen_step() {
+    fn scheduled_fluid_tick_keeps_the_earliest_due_time() {
         let mut pending = PendingFluidUpdates::default();
-        let fluid_id = 0;
-        let first = IVec3::new(1, 2, 3);
-        let second = IVec3::new(2, 2, 3);
-        let urgent = IVec3::new(9, 2, 3);
+        let key = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(4, 5, 6),
+        };
 
-        pending.enqueue_fluid(fluid_id, first);
-        pending.enqueue_fluid(fluid_id, second);
-        pending.fluid_lane_mut(fluid_id).ready_steps = 1;
+        pending.schedule_at(key, 10);
+        pending.schedule_at(key, 12);
+        pending.schedule_at(key, 8);
 
-        assert_eq!(pending.pop_runnable_fluid(), Some((fluid_id, first, false)));
-        pending.enqueue_fluid_priority(fluid_id, urgent);
-        assert_eq!(pending.pop_runnable_fluid(), Some((fluid_id, second, true)));
-        assert_eq!(pending.pop_runnable_fluid(), None);
-
-        pending.fluid_lane_mut(fluid_id).ready_steps = 1;
-        assert_eq!(pending.pop_runnable_fluid(), Some((fluid_id, urgent, true)));
+        assert_eq!(pending.pop_due(7), None);
+        assert_eq!(pending.pop_due(8), Some((key, 8)));
+        assert_eq!(pending.pop_due(20), None);
     }
 
     #[test]
-    fn fluid_lane_keeps_unfinished_step_runnable_across_frames() {
+    fn future_fluid_tick_is_never_popped_early() {
         let mut pending = PendingFluidUpdates::default();
-        let fluid_id = 0;
+        let key = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(2, 3, 4),
+        };
+        pending.schedule_at(key, 25);
 
-        pending.enqueue_fluid(fluid_id, IVec3::new(1, 2, 3));
-        pending.enqueue_fluid(fluid_id, IVec3::new(2, 2, 3));
-        {
-            let lane = pending.fluid_lane_mut(fluid_id);
-            lane.ready_steps = 1;
-        }
-
-        assert!(pending.pop_runnable_fluid().is_some());
-        assert_eq!(pending.fluid_lanes[0].batch_remaining, 1);
-        assert!(pending.pop_runnable_fluid().is_some());
-        assert_eq!(pending.fluid_lanes[0].batch_remaining, 0);
+        assert_eq!(pending.pop_due(24), None);
+        assert_eq!(pending.pop_due(25), Some((key, 25)));
     }
 
     #[test]
-    fn unfinished_batch_drops_elapsed_visual_step_debt() {
-        let mut pending = PendingFluidUpdates::default();
-        let fluid_id = 0;
-        let lane = pending.fluid_lane_mut(fluid_id);
-        lane.accumulated_steps = 3.75;
-        lane.ready_steps = 0;
-        lane.batch_remaining = 1;
-
-        // The cadence helper's invariant is represented directly here: an
-        // active batch may retain only the fractional phase, never step debt.
-        let elapsed_steps = lane.accumulated_steps.floor() as usize;
-        lane.accumulated_steps -= elapsed_steps as f32;
-        if elapsed_steps > 0 && lane.batch_remaining == 0 && lane.queue.len() > 0 {
-            lane.ready_steps = 1;
-        }
-
-        assert_eq!(lane.ready_steps, 0);
-        assert!(lane.accumulated_steps < 1.0);
-    }
-
-    #[test]
-    fn batch_changes_lock_affected_fluid_chunks_until_publish() {
-        let mut pending = PendingFluidUpdates::default();
-        let fluid_id = 0;
-        let position = IVec3::new(15, 4, 3);
-        pending.fluid_lane_mut(fluid_id).batch_remaining = 0;
-
-        pending.record_batch_change(fluid_id, position);
-
-        let center = chunk_coord_from_world(position);
-        let east = chunk_coord_from_world(position + IVec3::X);
-        assert!(pending.has_unpublished_fluid_chunk(center));
-        assert!(pending.has_unpublished_fluid_chunk(east));
-
-        assert_eq!(
-            pending.take_completed_batch_changes(fluid_id),
-            vec![position]
-        );
-        assert!(!pending.has_unpublished_fluid_chunk(center));
-        assert!(!pending.has_unpublished_fluid_chunk(east));
+    fn spread_speed_quantizes_to_world_tick_delay() {
+        assert_eq!(fluid_tick_delay_ticks(&test_definition(16.0), 40), Some(3));
+        assert_eq!(fluid_tick_delay_ticks(&test_definition(4.0), 40), Some(10));
+        assert_eq!(fluid_tick_delay_ticks(&test_definition(80.0), 40), Some(1));
+        assert_eq!(fluid_tick_delay_ticks(&test_definition(0.0), 40), None);
     }
 
     #[test]
