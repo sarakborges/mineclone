@@ -25,6 +25,13 @@ pub(crate) fn legacy_worldgen_version() -> u32 {
     LEGACY_WORLDGEN_VERSION
 }
 
+/// A save may only generate untouched terrain when it was created with the
+/// exact deterministic generator implemented by this build. Keep this strict:
+/// accepting older/newer identities would silently mix terrain algorithms.
+pub(crate) fn is_compatible_worldgen_version(version: u32) -> bool {
+    version == WORLDGEN_VERSION
+}
+
 const MIN_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 5;
 const MAX_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 50;
 const DEFAULT_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 10;
@@ -182,5 +189,14 @@ mod tests {
         assert_eq!(LEGACY_WORLDGEN_VERSION, 1);
         assert_eq!(legacy_worldgen_version(), LEGACY_WORLDGEN_VERSION);
         assert!(WORLDGEN_VERSION >= LEGACY_WORLDGEN_VERSION);
+    }
+
+    #[test]
+    fn worldgen_compatibility_requires_exact_current_identity() {
+        assert!(is_compatible_worldgen_version(WORLDGEN_VERSION));
+        assert!(!is_compatible_worldgen_version(0));
+        assert!(!is_compatible_worldgen_version(
+            WORLDGEN_VERSION.saturating_add(1)
+        ));
     }
 }
