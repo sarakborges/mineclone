@@ -63,6 +63,7 @@ fn acquire_world_directory_lock(directory: &Path) -> io::Result<WorldDirectoryLo
         .read(true)
         .write(true)
         .create(true)
+        .truncate(false)
         .open(&path)?;
     if !file.metadata()?.is_file() {
         return Err(invalid_data("opened world session lock is not a regular file"));
