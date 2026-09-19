@@ -260,7 +260,7 @@ impl WorldSaveContext<'_, '_> {
     }
 
     fn capture_owned(&self, id: &str) -> io::Result<OwnedWorldSaveCapture> {
-        let (_, transform, mode, health) = self.player.single().map_err(|error| {
+        let (_, transform, mode, health, camera) = self.player.single().map_err(|error| {
             io::Error::other(format!("cannot save world without exactly one player: {error}"))
         })?;
         let position = transform.translation;
@@ -325,7 +325,7 @@ impl WorldSaveContext<'_, '_> {
     }
 
     fn capture(&self, id: &str) -> io::Result<WorldSnapshot> {
-        let (_, transform, mode, health) = self.player.single().map_err(|error| {
+        let (_, transform, mode, health, camera) = self.player.single().map_err(|error| {
             io::Error::other(format!("cannot save world without exactly one player: {error}"))
         })?;
         let position = transform.translation;
