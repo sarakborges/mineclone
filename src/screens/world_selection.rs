@@ -542,8 +542,9 @@ fn poll_world_load(
     // Content or files might have changed since the catalog scan. The worker
     // revalidated its own immutable content; the live inventory is changed
     // only once that result has been accepted on the Bevy thread.
-    if let Err(error) = context.inventory.restore_items(
+    if let Err(error) = context.inventory.restore_items_and_selection(
         &snapshot.inventory,
+        snapshot.selected_hotbar_slot,
         &context.content.blocks,
         &context.content.tools,
     ) {
