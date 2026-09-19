@@ -3,7 +3,6 @@ use std::io;
 use bevy::prelude::*;
 
 use crate::{
-    app::game_state::GameState,
     content::{
         block::BlockRegistry, block_id::intern_block_id, tool::ToolRegistry,
         tool_id::intern_tool_id,
