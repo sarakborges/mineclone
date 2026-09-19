@@ -1,5 +1,7 @@
 # HANDOFF — Asteria / Mineclone
 
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.34.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **Estado mais recente em `develop`: comparação/correção do save game em andamento; HEAD funcional ainda não versionado `bd713963b9bbb8f69eeeb6df6b7bf7aa2773152f`.** CI `35413383474` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Já foram corrigidas persistência de scheduled fluid work, health do player, creatures e lock cross-process do diretório do mundo. Ainda NÃO foram implementados selected hotbar slot, rotação/look do player, autosave disparado somente pela passagem do clock, nem a migração do snapshot global para storage incremental por chunk/region. **Não houve bump de VERSION neste checkpoint porque o bloco de save foi interrompido antes do fechamento completo.** Não houve `cargo test`, `cargo run` ou QA Windows.
+
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.34.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado atual:** `b6e67ff852a3e0f021948537e596263ec05a69bd`. O runtime de chunks/lighting agora separa residência de conteúdo, readiness de iluminação e render dirtiness, inspirado na separação `INITIALIZE_LIGHT → LIGHT → FULL` e no dirty-state de render sections do Minecraft. A fila de luz rastreia work pendente por section 16³; o primeiro mesh aguarda o halo 3×3×3 estabilizar; background terrain/lighting remesh não captura halo ainda em propagação; light changes são coalescidas antes de rebuild; load/unload vertical invalida skylight das sections residentes abaixo na mesma coluna. Fluid remesh e geometry edits interativos continuam responsivos/independentes. CI final `35412334182` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. O CSM direcional do sol (1024, 3 cascades, ~8 chunks) foi identificado como um sistema extra em relação ao modelo de terreno/lightmap do Minecraft, mas NÃO foi alterado neste bloco. Não houve `cargo test`, `cargo run` ou QA Windows.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.29.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `e848e9e918a87527764ed79616ac3d8134c0830a`. A feature de lava + fluidos de superfície do Volcano passou na CI de push `35397447773` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
@@ -2785,4 +2787,285 @@ Não foi desligado nem alterado neste bloco porque isso muda a direção visual 
 6. Se restar shadow shimmer/pop:
    - observar se acompanha câmera/sol e o limite de distância;
    - se sim, investigar/remover/segmentar CSM de terrain separadamente, sem mexer novamente no voxel light engine.
+
+
+
+## Checkpoint 118 — 2026-09-19: comparação do save game com Minecraft + correções de estado persistente [WIP; VERSION ainda 0.34.0; CI VERDE]
+
+### Pedido / direção
+
+O usuário pediu comparar o sistema de save game porque suspeitava que o Asteria ainda tinha peculiaridades que não funcionavam.
+
+A comparação foi feita olhando principalmente para:
+
+- ownership de chunk gerado vs chunk salvo;
+- chunk streaming/unload;
+- scheduled simulation state;
+- player state;
+- creature/entity state;
+- atomicidade/recovery;
+- concorrência entre processos;
+- custo estrutural do snapshot global.
+
+### Divergência arquitetural principal encontrada — snapshot global força trade-off errado
+
+O contrato atual de `ARCHITECTURE.md` diz que:
+
+- worldgen determinístico é estado derivado até o primeiro block/fluid mutation persistente;
+- chunk gerado e não editado pode ser descartado e regenerado do seed;
+- somente chunks persistentes/editados entram no snapshot.
+
+Isso apareceu historicamente para resolver crescimento de RAM/IO e autosave pesado.
+
+Comparação com Minecraft:
+
+- chunk gerado é armazenamento autoritativo depois de existir;
+- chunk pode sair da RAM sem depender de reexecutar worldgen;
+- persistência de chunk é incremental/segmentada, não um único snapshot completo de todos os chunks persistentes;
+- metadata/player/chunks/scheduled work não precisam ser reescritos como um blob global único.
+
+Conclusão importante para o próximo passo arquitetural:
+
+- o problema não deveria ser resolvido escolhendo entre:
+  - “salvar todo chunk gerado e explodir snapshot/RAM/IO”; ou
+  - “não salvar chunk intacto e regenerar do seed”.
+- O caminho correto é separar storage incremental de chunk/region do snapshot global de metadata.
+- **Essa migração NÃO foi implementada neste checkpoint.**
+- Portanto, chunk gerado não editado ainda pode ser regenerado conforme o contrato atual.
+- Consequência prática: mudança de worldgen entre versões ainda pode alterar áreas já exploradas mas nunca editadas.
+
+### Scheduled fluid work agora persiste
+
+Problema anterior:
+
+- `PendingFluidUpdates` era completamente runtime-only;
+- salvar entre um topology edit e seu processamento podia perder a atualização;
+- scheduled fluid ticks desapareciam no reload;
+- `WorldTickClock.tick` absoluto também não era persistido, então salvar `due_tick` bruto seria incorreto.
+
+Implementação atual:
+
+- `SavedFluidUpdates` foi adicionado ao `WorldSnapshot` com `#[serde(default)]` para compatibilidade com saves antigos.
+- Persiste:
+  - topology wake-ups pendentes;
+  - frontier wakes ainda sem due time;
+  - scheduled fluid ticks.
+- Fluid IDs são salvos como **IDs textuais**, nunca como `FluidId` runtime.
+- Scheduled tick é salvo como **`remaining_ticks`**, não `due_tick` absoluto.
+- No load:
+  - o scheduler novo começa no tick 0;
+  - cada evento é reconstruído para o delay restante equivalente.
+- Saves antigos sem `fluid_updates` continuam carregando com vazio.
+
+### Bug adjacente corrigido — due tick em chunk descarregado não pode sumir
+
+Foi encontrado um bug independente no scheduler:
+
+- se um scheduled fluid tick vencia quando `world.sample_at(position)` não tinha chunk residente;
+- o tick era removido da fila e simplesmente descartado.
+
+Agora:
+
+- ticks vencidos de chunks não residentes entram em `dormant_scheduled` por chunk coord;
+- quando o chunk volta a ficar residente:
+  - o work dormente é reativado;
+  - processa sem ter sido perdido.
+- Esse estado dormente também entra no save como scheduled work com delay imediato.
+
+Isso aproxima o lifecycle do modelo esperado de chunk simulation: unload não apaga trabalho autoritativo.
+
+### Player health agora persiste
+
+Problema anterior:
+
+- `SavedPlayer` tinha apenas posição e `creative`;
+- `spawn_player_entity()` sempre usava `EntityHealth::new(definition.health)`;
+- reload curava o player para max health.
+
+Agora:
+
+- `SavedPlayer.health: Option<f32>` com `#[serde(default)]`;
+- saves antigos sem health continuam válidos;
+- health salva participa do dirty-state de autosave;
+- load restaura health com clamp ao novo max da definition;
+- valor inválido/não finito/negativo invalida o snapshot;
+- `EntityHealth::restored(max, current)` centraliza restore seguro.
+
+### Creatures agora persistem
+
+Problema anterior:
+
+- `CreatureInstance` era ECS temporária;
+- nenhuma creature aparecia no `WorldSnapshot`;
+- sair/recarregar o mundo removia todas;
+- natural spawner criava uma nova população.
+
+Agora `SavedCreature` persiste:
+
+- `definition_id`;
+- posição;
+- health.
+
+Semântica deliberada:
+
+- creature morta não entra no snapshot;
+- visual/animation/knockback não são persistidos;
+- ao voltar, a creature continua no mesmo lugar e com a mesma vida, retomando motion normal;
+- IDs desconhecidos ou valores inválidos invalidam aquele snapshot durante validation/fallback;
+- saves antigos sem `creatures` continuam válidos por `#[serde(default)]`.
+
+### Creatures fora de chunks residentes ficam dormentes
+
+Uma primeira versão restaurava todas as creatures diretamente no ECS ao entrar em Gameplay.
+
+Isso foi corrigido antes de fechar o bloco:
+
+- `PendingCreatureRestores` mantém creatures cujo voxel/chunk ainda não está carregado;
+- `restore_saved_creatures` roda em Gameplay e só materializa a entity quando `VoxelWorld::is_loaded_at(...)` for verdadeiro;
+- autosave inclui:
+  - creatures ECS ativas;
+  - creatures ainda dormentes.
+- Assim salvar antes de revisitar uma área não apaga entities daquele local.
+
+### Lock cross-process do diretório do mundo
+
+Problema anterior:
+
+- `WORLD_LOCKS` / `WorldGate` protegia writers/readers apenas **dentro do processo**;
+- duas instâncias do Asteria podiam abrir o mesmo mundo e gravar gerações concorrentes no mesmo diretório.
+
+Agora:
+
+- cada world directory possui `session.lock`;
+- `WorldDirectoryLock` mantém um `std::fs::File` aberto e bloqueado via `File::try_lock()`;
+- o lock é do SO:
+  - não depende de flag manual;
+  - cai automaticamente quando processo/handle morre;
+  - o arquivo pode permanecer sem representar stale ownership.
+- create world:
+  - cria o diretório;
+  - adquire lock antes de entregar a sessão;
+  - mantém o handle como Bevy Resource.
+- load world:
+  - adquire lock antes de decodificar/ativar o mundo;
+  - outra instância recebe `WouldBlock`.
+- delete world:
+  - só prossegue se conseguir adquirir o lock;
+  - mundo aberto em outra instância não pode ser deletado.
+- `release_world_session` remove `WorldDirectoryLock`, liberando o lock quando volta ao menu.
+
+### Atomicidade/recovery que já estava boa e foi preservada
+
+O sistema atual já tinha pontos fortes:
+
+- snapshot e manifest são publicados como gerações imutáveis;
+- snapshot é escrito/syncado antes do manifest commit marker;
+- loader tenta gerações mais novas e faz fallback para backups restorable;
+- prune só remove gerações antigas depois de validar backups;
+- limite de snapshot é aplicado durante serialization;
+- load pesado ocorre em worker;
+- autosave publication ocorre em worker;
+- Leave World/Exit continuam com commit síncrono.
+
+Nada disso foi removido neste bloco.
+
+### Peculiaridades ainda pendentes, já identificadas
+
+1. **Selected hotbar slot**
+   - `PlayerHotbar::restore_items()` força `selected_slot = 0`.
+   - Minecraft persiste o slot selecionado.
+   - Ainda NÃO corrigido.
+
+2. **Player rotation / look direction**
+   - snapshot salva position mas não orientation.
+   - player/camera é recriado com rotation default.
+   - Ainda NÃO corrigido.
+
+3. **Clock-only autosave**
+   - `SavedWorldState` deliberadamente exclui clock para não criar full snapshot apenas pela passagem de ticks/tempo.
+   - day/tick-in-day são gravados quando outro save acontece, mas passagem de tempo sozinha não torna o save dirty.
+   - Esse trade-off é sintoma do snapshot global.
+   - Ainda NÃO corrigido.
+
+4. **Generated chunks intactos**
+   - ainda são derivados/regeneráveis;
+   - mudança de worldgen pode alterar área explorada sem edição.
+   - Precisa da migração para chunk/region storage incremental.
+
+5. **Snapshot global**
+   - metadata + player + persistent chunks + entities + scheduled work ainda vivem no mesmo documento JSON.
+   - Cada autosave relevante reserializa todos os chunks persistentes.
+   - Escalabilidade continua inferior ao modelo incremental por chunk/region.
+
+6. **Outros entity state**
+   - motion phase, velocity, animation e knockback não são persistidos neste primeiro passo.
+   - Isso foi deliberado; não é necessário para preservar identidade/posição/vida básica da creature.
+
+### Commits principais deste checkpoint
+
+Fluid scheduler persistence:
+
+- `6e94d155a911ad8e81918f37d9dd548c9beb6558` — expõe pending deduplicated queue values para persistência.
+- `456c881c328753c53c5b4a815ea3fa5a5a2b2cfa` — expõe pending voxel updates.
+- `820e99f6c118fc7c9f7dfde44e19bb3b0b0175c5` — persiste scheduled fluid updates + dormant unloaded ticks.
+- `8e3b00e7650b56bc6d00409cfd497bc73f3dfb6a` — inclui fluid scheduler no snapshot.
+- `c792c1eea7bde2760b13a23e4281989e9f9576ab` — captura fluid ticks com world save.
+- `bef3ee36fe73757eae63e10c1d1fc3ad982efc53` — restore no load.
+- `0db860153a5198fba81fc3c19c65dea9af0d2419` — correção de integração encontrada pela CI.
+
+Player/creatures:
+
+- `b455036ce306474313c94b070bc7f212ca94df9e` — restore de EntityHealth.
+- `dc2185fa48a877f232eef532d077378eb1ef12c3` — health no `SavedPlayer`.
+- `017f5abbb81cd24117642efb29d81af4d282962a` — health restaurada no load.
+- `3b39447b0d6b311c963a64e322d23ffd1bcc3b37` — modelo + restore de creatures.
+- `d8dd9b9259f34f6d64f2aa9b86ce0b9c79511284` — creatures no snapshot/validation.
+- `d0ab94b752e1528a1d3861015fae5d329b3d52fe` — creatures dormentes até chunk carregar.
+- `9f9e8865046c4d1bf7ba89bb2645173f94b2e326` — autosave preserva também creatures dormentes.
+
+World directory locking:
+
+- `537d40a86ffe80f2a560fedb30d1bf2bc80ef7ed` — storage layer ganha `WorldDirectoryLock`.
+- `59fc7e630f2710a29aad8e15b19f52eff8990dfc` — new world mantém lock pela sessão.
+- `fbed5ef22c392ae856746231479ba238499b9dbb` — loaded world mantém lock pela sessão.
+- `49ff56f79875f55bc615654db94bf324091f0bd4` — release do lock ao sair da sessão.
+- `bd713963b9bbb8f69eeeb6df6b7bf7aa2773152f` — cleanup final do `OpenOptions` do lock.
+
+### CI
+
+Runs intermediárias importantes:
+
+- `35413056069` — falhou por `IVec3::to_array` usado como function pointer com assinatura incompatível.
+- `35413103158` — falhou somente por APIs antigas de save que ficaram dead code.
+- `35413207481` — **success** para fluid ticks + player health + creature persistence/dormancy.
+- `35413324281` — falhou somente por import não usado + `OpenOptions` sem truncate policy explícita.
+- **`35413383474` — success no HEAD atual `bd713963...`**:
+  - auditoria de localizações;
+  - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+
+Não executei `cargo test` (proibido sem autorização explícita), `cargo run` nem QA Windows.
+
+### Estado/versionamento
+
+- `VERSION` permanece **0.34.0**.
+- Não houve bump neste checkpoint porque o usuário interrompeu o bloco pedindo atualização do handoff antes de finalizar toda a comparação.
+- HEAD funcional atual não versionado: `bd713963b9bbb8f69eeeb6df6b7bf7aa2773152f`.
+
+### Próximo passo quando retomar
+
+Continuar exatamente daqui, sem refazer a investigação:
+
+1. persistir selected hotbar slot;
+2. persistir player/camera rotation/look;
+3. decidir o tratamento correto de clock-only dirty state sem voltar a full snapshot a cada passagem de tempo;
+4. desenhar a migração de chunk persistence:
+   - chunk gerado passa a ser autoritativo depois de existir;
+   - unload escreve/retém chunk em storage incremental;
+   - metadata/player continuam commitados separadamente;
+   - region/chunk files devem permitir atualização parcial;
+   - recovery/backup generation precisa continuar atômico;
+   - não reter todos os chunks explorados em RAM;
+   - não reserializar todos os chunks persistentes a cada autosave.
+5. Só depois fechar o bloco com bump de versão apropriado e QA de roundtrip.
 
