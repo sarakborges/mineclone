@@ -67,6 +67,10 @@ impl PendingCreatureRestores {
     pub(crate) fn new(creatures: Vec<SavedCreature>) -> Self {
         Self { creatures }
     }
+
+    pub(crate) fn saved(&self) -> &[SavedCreature] {
+        &self.creatures
+    }
 }
 
 pub(crate) struct CreaturesPlugin;
@@ -75,7 +79,12 @@ impl Plugin for CreaturesPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<visual::TintedCreatureMaterials>()
             .init_resource::<PendingCreatureRestores>()
-            .add_systems(OnEnter(GameState::Gameplay), restore_saved_creatures)
+            .add_systems(
+                Update,
+                restore_saved_creatures
+                    .run_if(in_state(GameState::Gameplay))
+                    .before(natural_spawn_creatures),
+            )
             .add_systems(Update, natural_spawn_creatures.run_if(in_state(GameState::Gameplay)).run_if(in_state(PauseState::Running)))
             .add_systems(Update, despawn_dead_creatures.run_if(in_state(GameState::Gameplay)))
             .add_systems(Update, attach_loaded_models.run_if(in_state(GameState::Gameplay)))
@@ -151,22 +160,37 @@ fn spawn_creature_with_health(
 
 fn restore_saved_creatures(
     mut commands: Commands,
+    world: Res<VoxelWorld>,
     definitions: Res<CreatureRegistry>,
     asset_server: Res<AssetServer>,
     language: Res<ActiveLanguage>,
     mut pending: ResMut<PendingCreatureRestores>,
 ) {
-    for saved in pending.creatures.drain(..) {
+    if pending.creatures.is_empty() {
+        return;
+    }
+
+    let saved = std::mem::take(&mut pending.creatures);
+    for creature in saved {
+        let feet = Vec3::from_array(creature.position);
+        if !world.is_loaded_at(feet.floor().as_ivec3()) {
+            pending.creatures.push(creature);
+            continue;
+        }
+
         if let Err(error) = spawn_creature_with_health(
             &mut commands,
             &definitions,
             &asset_server,
             language.get(),
-            &saved.definition_id,
-            Vec3::from_array(saved.position),
-            Some(saved.health),
+            &creature.definition_id,
+            feet,
+            Some(creature.health),
         ) {
-            warn!("Could not restore creature {}: {error}", saved.definition_id);
+            warn!(
+                "Could not restore creature {}: {error}",
+                creature.definition_id
+            );
         }
     }
 }
