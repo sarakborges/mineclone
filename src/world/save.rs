@@ -78,20 +78,6 @@ impl InMemoryWorldSave {
         }
     }
 
-    pub fn save_player_state(
-        &mut self,
-        player_id: PlayerId,
-        position: Vec3,
-        game_mode: GameMode,
-    ) {
-        if self.has_world() {
-            self.players
-                .entry(player_id)
-                .or_default()
-                .save(position, game_mode);
-        }
-    }
-
     pub(crate) fn save_player_state_with_health(
         &mut self,
         player_id: PlayerId,
