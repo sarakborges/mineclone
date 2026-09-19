@@ -12,6 +12,7 @@ use crate::{
         block::BlockRegistry, day_night_cycle::DayNightCycleRegistry,
         dimension::DimensionRegistry, fluid::FluidRegistry, tool::ToolRegistry,
     },
+    entity::EntityHealth,
     player::{
         camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar,
         player_id::PlayerId,
@@ -48,6 +49,7 @@ struct SavedWorldState {
     world_revision: u64,
     position: [f32; 3],
     creative: bool,
+    health: f32,
     inventory: Vec<Option<String>>,
 }
 
@@ -134,6 +136,7 @@ impl WorldSession {
             world_revision: snapshot.world.save_content_revision(),
             position: player.position,
             creative: player.creative,
+            health: player.health.unwrap_or_default(),
             inventory: captured.inventory.clone(),
         };
         let publication_started = Instant::now();
@@ -178,12 +181,22 @@ pub(crate) struct WorldSaveContext<'w, 's> {
     tools: Res<'w, ToolRegistry>,
     dimensions: Res<'w, DimensionRegistry>,
     cycles: Res<'w, DayNightCycleRegistry>,
-    player: Query<'w, 's, (&'static PlayerId, &'static Transform, &'static GameMode), With<GameplayCamera>>,
+    player: Query<
+        'w,
+        's,
+        (
+            &'static PlayerId,
+            &'static Transform,
+            &'static GameMode,
+            &'static EntityHealth,
+        ),
+        With<GameplayCamera>,
+    >,
 }
 
 impl WorldSaveContext<'_, '_> {
     fn saved_state(&self) -> io::Result<SavedWorldState> {
-        let (_, transform, mode) = self.player.single().map_err(|error| {
+        let (_, transform, mode, health) = self.player.single().map_err(|error| {
             io::Error::other(format!("cannot save world without exactly one player: {error}"))
         })?;
         let position = transform.translation;
@@ -196,6 +209,7 @@ impl WorldSaveContext<'_, '_> {
             world_revision: self.world.save_content_revision(),
             position: [position.x, position.y, position.z],
             creative: *mode == GameMode::Creative,
+            health: health.current(),
             inventory: self.inventory.saved_items(),
         })
     }
@@ -208,6 +222,7 @@ impl WorldSaveContext<'_, '_> {
         let player = SavedPlayer {
             position: [position.x, position.y, position.z],
             creative: *mode == GameMode::Creative,
+            health: Some(health.current()),
         };
         let inventory = self.inventory.saved_items();
         let snapshot = WorldSnapshot::capture(SnapshotSource {
@@ -235,6 +250,7 @@ impl WorldSaveContext<'_, '_> {
             world_revision: self.world.save_content_revision(),
             position: player.position,
             creative: player.creative,
+            health: player.health.unwrap_or(health.current()),
             inventory,
         };
 
@@ -267,6 +283,7 @@ impl WorldSaveContext<'_, '_> {
             player: Some(SavedPlayer {
                 position: [position.x, position.y, position.z],
                 creative: *mode == GameMode::Creative,
+                health: Some(health.current()),
             }),
             day: self.clock.day,
             tick_in_day: self.clock.tick_in_day(),
