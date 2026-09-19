@@ -12,6 +12,7 @@ enum WorldLoadingPhase {
     Generating,
     Lighting,
     Meshing,
+    Textures,
     Spawning,
 }
 
