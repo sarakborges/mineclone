@@ -1,3 +1,4 @@
+mod asset_upload;
 pub(crate) mod biome_visuals;
 pub(crate) mod block_display;
 pub(crate) mod block_model;
@@ -19,6 +20,7 @@ mod sky;
 mod sky_layers;
 pub(crate) mod terrain_material;
 
+use asset_upload::AssetUploadPlugin;
 use bevy::prelude::*;
 use block_model::setup_block_model_assets;
 use block_model_material::BlockModelMaterial;
@@ -43,6 +45,7 @@ impl Plugin for RenderingPlugin {
         ))
         .add_systems(Startup, setup_block_model_assets)
         .add_plugins((
+            AssetUploadPlugin,
             MeshAllocatorDiagnosticsPlugin,
             EnvironmentPlugin,
             LightingPlugin,
