@@ -145,19 +145,13 @@ pub struct PlayerHotbarPlugin;
 
 impl Plugin for PlayerHotbarPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<PlayerHotbar>()
-            .add_systems(OnEnter(GameState::Gameplay), reset_hotbar_selection)
-            .add_systems(
-                Update,
-                select_hotbar_slot
-                    .in_set(PlayerHotbarSet::Selection)
-                    .run_if(world_interaction_available),
-            );
+        app.init_resource::<PlayerHotbar>().add_systems(
+            Update,
+            select_hotbar_slot
+                .in_set(PlayerHotbarSet::Selection)
+                .run_if(world_interaction_available),
+        );
     }
-}
-
-fn reset_hotbar_selection(mut hotbar: ResMut<PlayerHotbar>) {
-    hotbar.select(0);
 }
 
 fn select_hotbar_slot(keys: Res<ButtonInput<KeyCode>>, mut hotbar: ResMut<PlayerHotbar>) {
