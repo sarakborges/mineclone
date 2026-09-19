@@ -17,7 +17,7 @@ use crate::{
 use crate::world::chunk_remesh::ChunkRemeshQueue;
 
 #[derive(Default)]
-pub(super) struct FluidSolverScratch {
+pub(in crate::world) struct FluidSolverScratch {
     queue: VecDeque<(IVec3, u16)>,
     visited: HashMap<IVec3, (u16, u8)>,
 }
