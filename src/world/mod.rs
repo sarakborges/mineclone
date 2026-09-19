@@ -74,6 +74,7 @@ pub(crate) use new_world::{
 use render_diagnostics::{log_render_asset_pressure, render_diagnostics_due};
 use render_distance::RenderDistanceSettings;
 pub(crate) use save::{InMemoryWorldSave, WorldLoadMode};
+use save_catalog::WorldDirectoryLock;
 use save_session::{WorldSession, autosave_only_in_gameplay, autosave_world, restore_loaded_clock};
 pub(crate) use seed::WorldSeed;
 pub(crate) use setup::WorldLoadingState;
@@ -201,6 +202,7 @@ fn release_world_session(mut commands: Commands) {
     commands.remove_resource::<TerrainMaterials>();
     commands.remove_resource::<FluidMaterials>();
     commands.remove_resource::<WorldLoadingState>();
+    commands.remove_resource::<WorldDirectoryLock>();
     commands.insert_resource(InMemoryWorldSave::default());
     commands.insert_resource(WorldSession::default());
     commands.insert_resource(PlayerHotbar::default());
