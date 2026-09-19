@@ -1,6 +1,7 @@
 use std::io;
 
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::player::game_mode::GameMode;
 
@@ -19,6 +20,38 @@ pub(crate) const WORLDGEN_VERSION: u32 = 1;
 /// defaulting legacy saves to `WORLDGEN_VERSION` would silently reinterpret
 /// them after a future generator bump.
 pub(crate) const LEGACY_WORLDGEN_VERSION: u32 = 1;
+
+/// Persisted deterministic-generator identity. The transparent representation
+/// keeps manifests/snapshots human-readable while making it harder for save
+/// boundaries to accidentally confuse this compatibility identity with an
+/// unrelated format/generation counter.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(transparent)]
+pub(crate) struct WorldgenVersion(u32);
+
+impl WorldgenVersion {
+    pub(crate) const fn current() -> Self {
+        Self(WORLDGEN_VERSION)
+    }
+
+    pub(crate) const fn get(self) -> u32 {
+        self.0
+    }
+
+    pub(crate) fn validate(self) -> io::Result<()> {
+        validate_worldgen_version(self.0)
+    }
+
+    pub(crate) fn validate_matches(self, snapshot: Self) -> io::Result<()> {
+        validate_matching_worldgen_versions(self.0, snapshot.0)
+    }
+}
+
+impl Default for WorldgenVersion {
+    fn default() -> Self {
+        Self(LEGACY_WORLDGEN_VERSION)
+    }
+}
 
 /// Serde default for manifests/snapshots written before worldgen identity was
 /// persisted. Keep this function tied to the fixed legacy value, never the
@@ -222,6 +255,7 @@ mod tests {
     fn legacy_worldgen_identity_stays_pinned_to_v1() {
         assert_eq!(LEGACY_WORLDGEN_VERSION, 1);
         assert_eq!(legacy_worldgen_version(), LEGACY_WORLDGEN_VERSION);
+        assert_eq!(WorldgenVersion::default().get(), LEGACY_WORLDGEN_VERSION);
         assert!(WORLDGEN_VERSION >= LEGACY_WORLDGEN_VERSION);
     }
 
@@ -233,6 +267,7 @@ mod tests {
             WORLDGEN_VERSION.saturating_add(1)
         ));
         assert!(validate_worldgen_version(WORLDGEN_VERSION).is_ok());
+        assert!(WorldgenVersion::current().validate().is_ok());
         let error = validate_worldgen_version(WORLDGEN_VERSION.saturating_add(1))
             .expect_err("future worldgen identity must be rejected");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
@@ -245,6 +280,9 @@ mod tests {
     #[test]
     fn persisted_worldgen_identities_must_match_each_other_and_this_build() {
         assert!(validate_matching_worldgen_versions(WORLDGEN_VERSION, WORLDGEN_VERSION).is_ok());
+        assert!(WorldgenVersion::current()
+            .validate_matches(WorldgenVersion::current())
+            .is_ok());
 
         let mismatched = validate_matching_worldgen_versions(
             WORLDGEN_VERSION,
