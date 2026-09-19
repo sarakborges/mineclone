@@ -24,6 +24,7 @@ use crate::{
 };
 
 use super::{
+    fluid_updates::{PendingFluidUpdates, SavedFluidUpdates},
     new_world::{
         DEFAULT_BIOME_SIZE_MULTIPLIER, biome_size_multiplier_tenths,
         is_valid_biome_size_multiplier,
@@ -98,7 +99,9 @@ impl SaveRegistries<'_> {
             .map(|cycle| cycle.day_duration_ticks);
         validate_playable(snapshot, duration, |id| {
             self.blocks.get(id).is_some() || self.tools.get(id).is_some()
-        })
+        })?;
+        PendingFluidUpdates::from_saved(&snapshot.fluid_updates, self.fluids)?;
+        Ok(())
     }
 
     /// Copy content lookups before starting a worker, without decoding chunks.
@@ -141,7 +144,9 @@ impl PruneRegistries {
             snapshot,
             self.day_lengths.get(&snapshot.dimension_id).copied(),
             |id| self.valid_items.contains(id),
-        )
+        )?;
+        PendingFluidUpdates::from_saved(&snapshot.fluid_updates, &self.fluids)?;
+        Ok(())
     }
 
 }
@@ -211,6 +216,8 @@ pub(crate) struct WorldSnapshot {
     pub(crate) day: u64,
     pub(crate) tick_in_day: u64,
     pub(crate) inventory: Vec<Option<String>>,
+    #[serde(default)]
+    pub(crate) fluid_updates: SavedFluidUpdates,
     chunks: Vec<DiskChunk>,
 }
 
@@ -227,6 +234,8 @@ pub(crate) struct SnapshotSource<'a> {
     pub(crate) inventory: Vec<Option<String>>,
     pub(crate) world: &'a VoxelWorld,
     pub(crate) fluids: &'a FluidRegistry,
+    pub(crate) pending_fluids: &'a PendingFluidUpdates,
+    pub(crate) world_tick: u64,
 }
 
 impl WorldSnapshot {
@@ -257,6 +266,9 @@ impl WorldSnapshot {
             day: source.day,
             tick_in_day: source.tick_in_day,
             inventory: source.inventory,
+            fluid_updates: source
+                .pending_fluids
+                .capture_saved(source.world_tick, source.fluids)?,
             chunks: source.world.save_generated_chunks(source.fluids)?,
         })
     }
