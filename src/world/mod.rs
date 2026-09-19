@@ -10,6 +10,7 @@ pub(crate) mod chunk_system_params;
 mod chunk_task_queue;
 mod chunk_unloading;
 mod chunk_visibility;
+mod clock_persistence;
 pub(crate) mod current_context;
 pub(crate) mod day_night;
 mod density_sampling;
