@@ -162,6 +162,10 @@ where
         self.queued.len()
     }
 
+    pub(crate) fn values(&self) -> impl Iterator<Item = T> + '_ {
+        self.queued.keys().copied()
+    }
+
     pub(crate) fn revision(&self) -> u64 {
         self.revision
     }
