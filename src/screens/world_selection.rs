@@ -25,6 +25,7 @@ use crate::{
     world::{
         InMemoryWorldSave, WorldLoadMode, WorldSeed,
         dimension::CurrentDimension, game_rules::GameRules,
+        fluid_updates::PendingFluidUpdates,
         save_catalog::{SaveRegistries, WorldSnapshot, WorldSummary, delete_world, list_verified_worlds, load_world},
         save_session::WorldSession,
     },
@@ -508,6 +509,22 @@ fn poll_world_load(
             return;
         }
     };
+    // Rebuild scheduled runtime fluid work before mutating any live resources.
+    // Saved ticks use textual fluid IDs, so a content change cannot silently
+    // reinterpret a runtime FluidId.
+    let pending_fluid_updates =
+        match PendingFluidUpdates::from_saved(&snapshot.fluid_updates, &context.content.fluids) {
+            Ok(pending) => pending,
+            Err(error) => {
+                state.error = format!(
+                    "{} {}: {error}",
+                    localization.text(language.get(), "worldSelection.loadError"),
+                    pending.id
+                );
+                return;
+            }
+        };
+
     // Content or files might have changed since the catalog scan. The worker
     // revalidated its own immutable content; the live inventory is changed
     // only once that result has been accepted on the Bevy thread.
@@ -538,6 +555,7 @@ fn poll_world_load(
             if player.creative { GameMode::Creative } else { GameMode::Survival },
         );
     }
+    commands.insert_resource(pending_fluid_updates);
     commands.insert_resource(WorldSeed(snapshot.seed));
     commands.insert_resource(CurrentDimension { id: snapshot.dimension_id });
     commands.insert_resource(rules);
