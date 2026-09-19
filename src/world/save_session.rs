@@ -25,11 +25,13 @@ use super::{
     day_night::DayNightClock,
     dimension::CurrentDimension,
     game_rules::GameRules,
+    fluid_updates::PendingFluidUpdates,
     save_catalog::{
         PruneRegistries, SaveRegistries, SavedPlayer, SnapshotSource, WorldSnapshot, save_world,
         save_world_owned,
     },
     seed::WorldSeed,
+    tick::WorldTickClock,
 };
 
 const AUTOSAVE_SECONDS: f32 = 60.0;
@@ -169,6 +171,8 @@ pub(crate) struct WorldSaveContext<'w, 's> {
     clock: Res<'w, DayNightClock>,
     inventory: Res<'w, PlayerHotbar>,
     world: Res<'w, VoxelWorld>,
+    pending_fluids: Res<'w, PendingFluidUpdates>,
+    world_ticks: Res<'w, WorldTickClock>,
     blocks: Res<'w, BlockRegistry>,
     fluids: Res<'w, FluidRegistry>,
     tools: Res<'w, ToolRegistry>,
@@ -219,6 +223,8 @@ impl WorldSaveContext<'_, '_> {
             inventory: inventory.clone(),
             world: &self.world,
             fluids: &self.fluids,
+            pending_fluids: &self.pending_fluids,
+            world_tick: self.world_ticks.current_tick(),
         })?;
         let state = SavedWorldState {
             seed: self.seed.0,
@@ -267,6 +273,8 @@ impl WorldSaveContext<'_, '_> {
             inventory: self.inventory.saved_items(),
             world: &self.world,
             fluids: &self.fluids,
+            pending_fluids: &self.pending_fluids,
+            world_tick: self.world_ticks.current_tick(),
         })
     }
 }
