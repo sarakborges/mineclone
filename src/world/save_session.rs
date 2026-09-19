@@ -13,7 +13,7 @@ use crate::{
         day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
         fluid::FluidRegistry, tool::ToolRegistry,
     },
-    creatures::{CreatureInstance, SavedCreature},
+    creatures::{CreatureInstance, PendingCreatureRestores, SavedCreature},
     entity::EntityHealth,
     player::{
         camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar,
@@ -203,20 +203,22 @@ pub(crate) struct WorldSaveContext<'w, 's> {
         's,
         (&'static CreatureInstance, &'static Transform, &'static EntityHealth),
     >,
+    pending_creatures: Res<'w, PendingCreatureRestores>,
 }
 
 impl WorldSaveContext<'_, '_> {
     fn saved_creatures(&self) -> Vec<SavedCreature> {
-        let mut creatures = self
-            .creatures
-            .iter()
-            .filter(|(_, _, health)| !health.is_dead())
-            .map(|(instance, transform, health)| SavedCreature {
-                definition_id: instance.definition_id.clone(),
-                position: transform.translation.to_array(),
-                health: health.current(),
-            })
-            .collect::<Vec<_>>();
+        let mut creatures = self.pending_creatures.saved().to_vec();
+        creatures.extend(
+            self.creatures
+                .iter()
+                .filter(|(_, _, health)| !health.is_dead())
+                .map(|(instance, transform, health)| SavedCreature {
+                    definition_id: instance.definition_id.clone(),
+                    position: transform.translation.to_array(),
+                    health: health.current(),
+                }),
+        );
         creatures.sort_unstable_by(|left, right| {
             left.definition_id
                 .cmp(&right.definition_id)
