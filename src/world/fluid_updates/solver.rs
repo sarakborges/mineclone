@@ -132,7 +132,7 @@ pub(super) fn desired_fluid_with_scratch(
     })
 }
 
-fn can_spread_horizontally_from(
+pub(super) fn can_spread_horizontally_from(
     world: &VoxelWorld,
     position: IVec3,
     fluid: FluidCell,
