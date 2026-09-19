@@ -6,10 +6,9 @@ use bevy::{
 
 use crate::app::pause_state::PauseState;
 
-use super::GameplayCamera;
+use super::{GameplayCamera, MAX_CAMERA_PITCH};
 
 const MOUSE_SENSITIVITY: f32 = 0.003;
-const MAX_PITCH: f32 = 1.54;
 
 #[derive(Resource, Default)]
 pub(crate) struct MouseLookInputState {
@@ -40,6 +39,6 @@ pub(super) fn drain_or_apply_mouse_look(
     }
 
     camera.1.yaw -= delta.x * MOUSE_SENSITIVITY;
-    camera.1.pitch = (camera.1.pitch - delta.y * MOUSE_SENSITIVITY).clamp(-MAX_PITCH, MAX_PITCH);
-    camera.0.rotation = Quat::from_euler(EulerRot::YXZ, camera.1.yaw, camera.1.pitch, 0.0);
+    camera.1.pitch = (camera.1.pitch - delta.y * MOUSE_SENSITIVITY).clamp(-MAX_CAMERA_PITCH, MAX_CAMERA_PITCH);
+    camera.0.rotation = camera.1.rotation();
 }
