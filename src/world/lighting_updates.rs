@@ -22,7 +22,7 @@ const MIN_LIGHTING_VOXELS_BEFORE_BUDGET_CHECK: usize = 256;
 const MAX_LIGHTING_VOXELS_PER_FRAME: usize = 4_096;
 
 #[derive(Default)]
-struct LightingRemeshState {
+pub(super) struct LightingRemeshState {
     dirty: HashSet<IVec3>,
     ready: Vec<IVec3>,
 }
