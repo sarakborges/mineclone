@@ -40,10 +40,8 @@ pub(crate) struct ChunkRemeshQueue {
     fluid: DeduplicatedQueue<IVec3>,
     immediate_geometry: DeduplicatedQueue<IVec3>,
     lighting: DeduplicatedQueue<IVec3>,
-    geometry_scan_miss: Option<RenderableScanKey>,
     fluid_scan_miss: Option<RenderableScanKey>,
     immediate_geometry_scan_miss: Option<RenderableScanKey>,
-    lighting_scan_miss: Option<RenderableScanKey>,
     next_background_kind: usize,
 }
 
@@ -551,22 +549,22 @@ mod tests {
     }
 
     #[test]
-    fn renderable_scan_miss_retries_only_after_queue_change() {
+    fn fluid_renderable_scan_miss_retries_only_after_queue_change() {
         let mut queue = ChunkRemeshQueue::default();
         let render_pool = ChunkRenderPool::default();
         let first = IVec3::new(1, 1, 1);
         let second = IVec3::new(2, 1, 2);
-        queue.enqueue(first);
+        queue.enqueue_fluid_priority(first);
 
-        assert_eq!(queue.pop_renderable(&render_pool), None);
-        let first_miss = queue.geometry_scan_miss;
+        assert_eq!(queue.pop_renderable_fluid(&render_pool), None);
+        let first_miss = queue.fluid_scan_miss;
         assert!(first_miss.is_some());
 
-        assert_eq!(queue.pop_renderable(&render_pool), None);
-        assert_eq!(queue.geometry_scan_miss, first_miss);
+        assert_eq!(queue.pop_renderable_fluid(&render_pool), None);
+        assert_eq!(queue.fluid_scan_miss, first_miss);
 
-        queue.enqueue(second);
-        assert_eq!(queue.pop_renderable(&render_pool), None);
-        assert_ne!(queue.geometry_scan_miss, first_miss);
+        queue.enqueue_fluid_priority(second);
+        assert_eq!(queue.pop_renderable_fluid(&render_pool), None);
+        assert_ne!(queue.fluid_scan_miss, first_miss);
     }
 }
