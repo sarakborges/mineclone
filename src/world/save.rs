@@ -52,6 +52,10 @@ impl InMemoryWorldSave {
             .unwrap_or_default()
     }
 
+    pub(crate) fn player_health(&self, player_id: PlayerId) -> Option<f32> {
+        self.players.get(&player_id).and_then(PlayerSaveData::health)
+    }
+
     pub fn begin_new_world(
         &mut self,
         seed: WorldSeed,
@@ -85,6 +89,21 @@ impl InMemoryWorldSave {
                 .entry(player_id)
                 .or_default()
                 .save(position, game_mode);
+        }
+    }
+
+    pub(crate) fn save_player_state_with_health(
+        &mut self,
+        player_id: PlayerId,
+        position: Vec3,
+        game_mode: GameMode,
+        health: Option<f32>,
+    ) {
+        if self.has_world() {
+            self.players
+                .entry(player_id)
+                .or_default()
+                .save_with_health(position, game_mode, health);
         }
     }
 }
