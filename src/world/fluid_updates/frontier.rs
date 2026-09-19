@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::fluid::FluidId,
     voxel::{
         chunk::CHUNK_SIZE,
         neighbors::CARDINAL_NEIGHBORS,
@@ -9,7 +8,7 @@ use crate::{
     },
 };
 
-use super::PendingFluidUpdates;
+use super::{PendingFluidUpdates, solver::can_spread_horizontally_from};
 
 const FLUID_SPREAD_TARGETS: [IVec3; 5] = [
     IVec3::NEG_Y,
@@ -74,7 +73,7 @@ fn enqueue_chunk_fluid_spread_targets(
                     pending,
                     world,
                     origin + IVec3::new(local_x, local_y, local_z),
-                    fluid.fluid_id,
+                    fluid,
                 );
             }
         }
@@ -146,7 +145,7 @@ fn enqueue_neighbor_boundary_spread_targets(
                 pending,
                 world,
                 origin + IVec3::new(local_x, local_y, local_z),
-                fluid.fluid_id,
+                fluid,
             );
         }
     }
@@ -156,9 +155,14 @@ fn enqueue_spread_targets_from_fluid(
     pending: &mut PendingFluidUpdates,
     world: &VoxelWorld,
     position: IVec3,
-    fluid_id: FluidId,
+    fluid: crate::voxel::fluid::FluidCell,
 ) {
     for offset in FLUID_SPREAD_TARGETS {
+        if offset != IVec3::NEG_Y
+            && !can_spread_horizontally_from(world, position, fluid)
+        {
+            continue;
+        }
         let target = position + offset;
         let Some((cell, fluid, _)) = world.sample_at(target) else {
             continue;
@@ -168,9 +172,9 @@ fn enqueue_spread_targets_from_fluid(
         }
 
         if offset == IVec3::NEG_Y {
-            pending.enqueue_fluid_priority(fluid_id, target);
+            pending.enqueue_fluid_priority(fluid.fluid_id, target);
         } else {
-            pending.enqueue_fluid(fluid_id, target);
+            pending.enqueue_fluid(fluid.fluid_id, target);
         }
     }
 }
