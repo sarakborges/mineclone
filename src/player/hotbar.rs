@@ -81,15 +81,6 @@ impl PlayerHotbar {
             .collect()
     }
 
-    pub(crate) fn restore_items(
-        &mut self,
-        items: &[Option<String>],
-        blocks: &BlockRegistry,
-        tools: &ToolRegistry,
-    ) -> io::Result<()> {
-        self.restore_items_and_selection(items, 0, blocks, tools)
-    }
-
     pub(crate) fn restore_items_and_selection(
         &mut self,
         items: &[Option<String>],
