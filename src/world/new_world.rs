@@ -18,6 +18,13 @@ pub(crate) const WORLDGEN_VERSION: u32 = 1;
 /// them after a future generator bump.
 pub(crate) const LEGACY_WORLDGEN_VERSION: u32 = 1;
 
+/// Serde default for manifests/snapshots written before worldgen identity was
+/// persisted. Keep this function tied to the fixed legacy value, never the
+/// current generator version.
+pub(crate) fn legacy_worldgen_version() -> u32 {
+    LEGACY_WORLDGEN_VERSION
+}
+
 const MIN_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 5;
 const MAX_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 50;
 const DEFAULT_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 10;
@@ -173,6 +180,7 @@ mod tests {
     #[test]
     fn legacy_worldgen_identity_stays_pinned_to_v1() {
         assert_eq!(LEGACY_WORLDGEN_VERSION, 1);
+        assert_eq!(legacy_worldgen_version(), LEGACY_WORLDGEN_VERSION);
         assert!(WORLDGEN_VERSION >= LEGACY_WORLDGEN_VERSION);
     }
 }
