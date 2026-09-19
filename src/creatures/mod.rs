@@ -1,7 +1,10 @@
 mod motion;
 mod visual;
 
+use std::io;
+
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     entity::EntityHealth,
@@ -27,11 +30,52 @@ pub(crate) struct CreatureInstance {
 #[derive(Component)]
 pub(crate) struct CreatureDeathTimer(pub(crate) Timer);
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub(crate) struct SavedCreature {
+    pub(crate) definition_id: String,
+    pub(crate) position: [f32; 3],
+    pub(crate) health: f32,
+}
+
+impl SavedCreature {
+    pub(crate) fn validate(&self, definitions: &CreatureRegistry) -> io::Result<()> {
+        if definitions.get(&self.definition_id).is_none() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unknown saved creature definition: {}", self.definition_id),
+            ));
+        }
+        if self.position.iter().any(|value| !value.is_finite())
+            || !self.health.is_finite()
+            || self.health <= 0.0
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "saved creature position or health is invalid",
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Resource, Default)]
+pub(crate) struct PendingCreatureRestores {
+    creatures: Vec<SavedCreature>,
+}
+
+impl PendingCreatureRestores {
+    pub(crate) fn new(creatures: Vec<SavedCreature>) -> Self {
+        Self { creatures }
+    }
+}
+
 pub(crate) struct CreaturesPlugin;
 
 impl Plugin for CreaturesPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<visual::TintedCreatureMaterials>()
+            .init_resource::<PendingCreatureRestores>()
+            .add_systems(OnEnter(GameState::Gameplay), restore_saved_creatures)
             .add_systems(Update, natural_spawn_creatures.run_if(in_state(GameState::Gameplay)).run_if(in_state(PauseState::Running)))
             .add_systems(Update, despawn_dead_creatures.run_if(in_state(GameState::Gameplay)))
             .add_systems(Update, attach_loaded_models.run_if(in_state(GameState::Gameplay)))
@@ -62,6 +106,26 @@ pub(crate) fn spawn_creature_at(
     id: &str,
     feet: Vec3,
 ) -> Result<String, String> {
+    spawn_creature_with_health(
+        commands,
+        definitions,
+        asset_server,
+        language,
+        id,
+        feet,
+        None,
+    )
+}
+
+fn spawn_creature_with_health(
+    commands: &mut Commands,
+    definitions: &CreatureRegistry,
+    asset_server: &AssetServer,
+    language: Language,
+    id: &str,
+    feet: Vec3,
+    saved_health: Option<f32>,
+) -> Result<String, String> {
     let definition = definitions
         .get(id)
         .ok_or_else(|| format!("Unknown creature id: {id}"))?;
@@ -73,13 +137,38 @@ pub(crate) fn spawn_creature_at(
         },
         CreatureModel(asset_server.load(definition.model.clone())),
         CreatureMotion::default(),
-        EntityHealth::new(definition.health),
+        saved_health.map_or_else(
+            || EntityHealth::new(definition.health),
+            |health| EntityHealth::restored(definition.health, health),
+        ),
         definition.collider,
         Transform::from_translation(feet),
         Visibility::default(),
         DespawnOnExit(GameState::Gameplay),
     ));
     Ok(name)
+}
+
+fn restore_saved_creatures(
+    mut commands: Commands,
+    definitions: Res<CreatureRegistry>,
+    asset_server: Res<AssetServer>,
+    language: Res<ActiveLanguage>,
+    mut pending: ResMut<PendingCreatureRestores>,
+) {
+    for saved in pending.creatures.drain(..) {
+        if let Err(error) = spawn_creature_with_health(
+            &mut commands,
+            &definitions,
+            &asset_server,
+            language.get(),
+            &saved.definition_id,
+            Vec3::from_array(saved.position),
+            Some(saved.health),
+        ) {
+            warn!("Could not restore creature {}: {error}", saved.definition_id);
+        }
+    }
 }
 
 
