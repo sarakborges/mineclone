@@ -53,6 +53,7 @@ struct SavedWorldState {
     creative: bool,
     health: f32,
     inventory: Vec<Option<String>>,
+    selected_hotbar_slot: usize,
     creatures: Vec<SavedCreature>,
 }
 
@@ -141,6 +142,7 @@ impl WorldSession {
             creative: player.creative,
             health: player.health.unwrap_or_default(),
             inventory: captured.inventory.clone(),
+            selected_hotbar_slot: captured.selected_hotbar_slot,
             creatures: captured.creatures.clone(),
         };
         let publication_started = Instant::now();
@@ -245,6 +247,7 @@ impl WorldSaveContext<'_, '_> {
             creative: *mode == GameMode::Creative,
             health: health.current(),
             inventory: self.inventory.saved_items(),
+            selected_hotbar_slot: self.inventory.selected_slot(),
             creatures: self.saved_creatures(),
         })
     }
@@ -260,6 +263,7 @@ impl WorldSaveContext<'_, '_> {
             health: Some(health.current()),
         };
         let inventory = self.inventory.saved_items();
+        let selected_hotbar_slot = self.inventory.selected_slot();
         let creatures = self.saved_creatures();
         let snapshot = WorldSnapshot::capture(SnapshotSource {
             id,
@@ -272,6 +276,7 @@ impl WorldSaveContext<'_, '_> {
             day: self.clock.day,
             tick_in_day: self.clock.tick_in_day(),
             inventory: inventory.clone(),
+            selected_hotbar_slot,
             world: &self.world,
             fluids: &self.fluids,
             pending_fluids: &self.pending_fluids,
@@ -289,6 +294,7 @@ impl WorldSaveContext<'_, '_> {
             creative: player.creative,
             health: player.health.unwrap_or(health.current()),
             inventory,
+            selected_hotbar_slot,
             creatures,
         };
 
@@ -327,6 +333,7 @@ impl WorldSaveContext<'_, '_> {
             day: self.clock.day,
             tick_in_day: self.clock.tick_in_day(),
             inventory: self.inventory.saved_items(),
+            selected_hotbar_slot: self.inventory.selected_slot(),
             world: &self.world,
             fluids: &self.fluids,
             pending_fluids: &self.pending_fluids,
