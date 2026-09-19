@@ -11,7 +11,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use bevy::log::warn;
+use bevy::{log::warn, prelude::Resource};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -38,12 +38,45 @@ const SAVE_FORMAT_VERSION: u32 = 1;
 const MAX_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
 /// Count only generations that can actually be loaded into the current game.
 const RETAINED_GENERATIONS: usize = 4;
+const SESSION_LOCK_FILE: &str = "session.lock";
 
 fn default_saved_biome_size_multiplier() -> f32 {
     DEFAULT_BIOME_SIZE_MULTIPLIER
 }
 // The catalog mutex only looks up an Arc. Never hold it while touching disk.
 static WORLD_LOCKS: OnceLock<Mutex<HashMap<String, Arc<WorldGate>>>> = OnceLock::new();
+
+#[derive(Resource)]
+pub(crate) struct WorldDirectoryLock {
+    _file: fs::File,
+}
+
+fn acquire_world_directory_lock(directory: &Path) -> io::Result<WorldDirectoryLock> {
+    let path = directory.join(SESSION_LOCK_FILE);
+    if let Ok(metadata) = fs::symlink_metadata(&path)
+        && (!metadata.file_type().is_file() || metadata.file_type().is_symlink())
+    {
+        return Err(invalid_data("world session lock must be a regular file"));
+    }
+
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(&path)?;
+    if !file.metadata()?.is_file() {
+        return Err(invalid_data("opened world session lock is not a regular file"));
+    }
+
+    match file.try_lock() {
+        Ok(()) => Ok(WorldDirectoryLock { _file: file }),
+        Err(fs::TryLockError::WouldBlock) => Err(io::Error::new(
+            io::ErrorKind::WouldBlock,
+            "world is already open in another Asteria process",
+        )),
+        Err(fs::TryLockError::Error(error)) => Err(error),
+    }
+}
 
 /// Save publication and prune deletion are serialized for each world. Active
 /// readers hold a lease, not a mutex, during expensive JSON/chunk decoding.
@@ -311,7 +344,7 @@ pub(crate) fn create_new_world(
     dimension_id: &str,
     biome_size_multiplier: f32,
     ticks_per_second: u32,
-) -> io::Result<String> {
+) -> io::Result<(String, WorldDirectoryLock)> {
     if ticks_per_second == 0 || dimension_id.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -332,6 +365,14 @@ pub(crate) fn create_new_world(
         let directory = root.join(&candidate);
         match fs::create_dir(&directory) {
             Ok(()) => {
+                let session_lock = match acquire_world_directory_lock(&directory) {
+                    Ok(lock) => lock,
+                    Err(error) => {
+                        let _ = fs::remove_file(directory.join(SESSION_LOCK_FILE));
+                        let _ = fs::remove_dir(&directory);
+                        return Err(error);
+                    }
+                };
                 let manifest = WorldManifest {
                     format_version: SAVE_FORMAT_VERSION,
                     id: candidate.clone(),
@@ -344,11 +385,13 @@ pub(crate) fn create_new_world(
                     snapshot_file: None,
                 };
                 if let Err(error) = publish_json(&directory, &manifest_name(0), &manifest) {
+                    drop(session_lock);
                     let _ = fs::remove_file(directory.join(format!("{}.tmp", manifest_name(0))));
+                    let _ = fs::remove_file(directory.join(SESSION_LOCK_FILE));
                     let _ = fs::remove_dir(&directory);
                     return Err(error);
                 }
-                return Ok(candidate);
+                return Ok((candidate, session_lock));
             }
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                 candidate = available_world_name(requested_name)?;
@@ -475,7 +518,10 @@ pub(crate) fn delete_world(id: &str) -> io::Result<()> {
     if !metadata.file_type().is_dir() {
         return Err(invalid_data("world directory cannot be a symbolic link"));
     }
-    fs::remove_dir_all(directory)
+    let session_lock = acquire_world_directory_lock(&directory)?;
+    fs::remove_dir_all(&directory)?;
+    drop(session_lock);
+    Ok(())
 }
 
 /// Enumerate only fully published generations. Missing or temporary snapshots
@@ -591,7 +637,13 @@ fn newest_restorable_timestamp(id: &str, registries: &PruneRegistries) -> io::Re
 pub(crate) fn load_world(
     id: &str,
     registries: SaveRegistries<'_>,
-) -> io::Result<(WorldSnapshot, VoxelWorld)> {
+) -> io::Result<(WorldSnapshot, VoxelWorld, WorldDirectoryLock)> {
+    validate_world_name(id)?;
+    let directory = Path::new(WORLDS_DIRECTORY).join(id);
+    if !fs::symlink_metadata(&directory)?.file_type().is_dir() {
+        return Err(invalid_data("world directory cannot be a symbolic link"));
+    }
+    let session_lock = acquire_world_directory_lock(&directory)?;
     let pinned = snapshot_candidates(id)?;
     let mut last_error = None;
     for candidate in &pinned.candidates {
@@ -601,7 +653,7 @@ pub(crate) fn load_world(
             })
         });
         match loaded {
-            Ok(loaded) => return Ok(loaded),
+            Ok((snapshot, world)) => return Ok((snapshot, world, session_lock)),
             Err(error) => {
                 warn!("Skipping damaged save for world {id}, generation {}: {error}", candidate.generation);
                 last_error = Some(error);
