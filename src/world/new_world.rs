@@ -12,6 +12,12 @@ use super::{WorldSeed, game_rules::GameRules, world_names::DEFAULT_WORLD_NAME};
 /// never silently mixes two world-generation algorithms in one world.
 pub(crate) const WORLDGEN_VERSION: u32 = 1;
 
+/// Saves created before the worldgen identity field existed used the same
+/// generator now identified as version 1. Keep this fallback fixed forever:
+/// defaulting legacy saves to `WORLDGEN_VERSION` would silently reinterpret
+/// them after a future generator bump.
+pub(crate) const LEGACY_WORLDGEN_VERSION: u32 = 1;
+
 const MIN_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 5;
 const MAX_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 50;
 const DEFAULT_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 10;
