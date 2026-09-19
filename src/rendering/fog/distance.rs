@@ -33,9 +33,8 @@ pub(super) fn update_fog_distance(
     // Fog follows the configured render envelope. Chunk mesh readiness is
     // transient streaming state and must never collapse atmospheric visibility
     // toward the player because of isolated or short-lived publication gaps.
-    let falloff = fog_falloff(render_distance.chunks());
     for mut fog in &mut fogs {
-        fog.falloff = falloff.clone();
+        fog.falloff = fog_falloff(render_distance.chunks());
     }
 }
 
