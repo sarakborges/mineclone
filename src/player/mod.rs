@@ -42,7 +42,10 @@ pub(crate) fn spawn_player_entity(
     game_mode: GameMode,
     definition: &PlayerDefinition,
     saved_health: Option<f32>,
+    saved_look: Option<(f32, f32)>,
 ) {
+    let gameplay_camera = saved_look.map_or_else(GameplayCamera::default, |(yaw, pitch)| GameplayCamera::restored(yaw, pitch));
+    let transform = Transform::from_translation(translation).with_rotation(gameplay_camera.rotation());
     commands
         .spawn((
             PlayerEntity,
@@ -55,8 +58,8 @@ pub(crate) fn spawn_player_entity(
             Hdr,
             Tonemapping::None,
             Msaa::Off,
-            Transform::from_translation(translation),
-            GameplayCamera::default(),
+            transform,
+            gameplay_camera,
             LOCAL_PLAYER_ID,
             game_mode,
             WalkingState::default(),
