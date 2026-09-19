@@ -7,6 +7,7 @@ pub(crate) struct PlayerSaveData {
     position: Option<Vec3>,
     game_mode: GameMode,
     health: Option<f32>,
+    look: Option<(f32, f32)>,
 }
 
 impl PlayerSaveData {
@@ -22,14 +23,20 @@ impl PlayerSaveData {
         self.health
     }
 
+    pub(crate) fn look(&self) -> Option<(f32, f32)> {
+        self.look
+    }
+
     pub(crate) fn save_with_health(
         &mut self,
         position: Vec3,
         game_mode: GameMode,
         health: Option<f32>,
+        look: Option<(f32, f32)>,
     ) {
         self.position = Some(position);
         self.game_mode = game_mode;
         self.health = health;
+        self.look = look;
     }
 }
