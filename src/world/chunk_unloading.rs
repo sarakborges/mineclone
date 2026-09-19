@@ -102,6 +102,13 @@ pub(super) fn unload_chunk_meshes(
         runtime.remesh_queue.remove(coord);
         runtime.remesh_tasks.remove_lighting_revision(coord);
         runtime.world.archive_chunk(coord);
+
+        // Removing a 16³ section can reopen direct skylight for every
+        // resident section below it in the same x/z column.
+        runtime
+            .lighting
+            .enqueue_loaded_column_below(&runtime.world, coord);
+
         // Restored or newly generated chunks need a fresh direct-light seed,
         // but an obsolete mesh retry while still resident must not reseed.
         streaming.forget_initial_lighting_seeded(coord);
