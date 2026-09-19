@@ -233,6 +233,12 @@ pub(crate) fn is_valid_biome_size_multiplier(value: f32) -> bool {
 mod tests {
     use super::*;
 
+    #[derive(Debug, Deserialize, Serialize)]
+    struct PersistedWorldgenIdentity {
+        #[serde(default = "legacy_worldgen_version")]
+        worldgen_version: WorldgenVersion,
+    }
+
     #[test]
     fn biome_size_multiplier_defaults_to_one() {
         assert_eq!(
@@ -257,6 +263,19 @@ mod tests {
         assert_eq!(legacy_worldgen_version().get(), LEGACY_WORLDGEN_VERSION);
         assert_eq!(WorldgenVersion::default().get(), LEGACY_WORLDGEN_VERSION);
         assert!(WORLDGEN_VERSION >= LEGACY_WORLDGEN_VERSION);
+    }
+
+    #[test]
+    fn worldgen_identity_serde_defaults_legacy_and_stays_numeric() {
+        let legacy: PersistedWorldgenIdentity =
+            serde_json::from_str("{}").expect("legacy metadata must deserialize");
+        assert_eq!(legacy.worldgen_version.get(), LEGACY_WORLDGEN_VERSION);
+
+        let current = PersistedWorldgenIdentity {
+            worldgen_version: WorldgenVersion::current(),
+        };
+        let json = serde_json::to_string(&current).expect("worldgen identity must serialize");
+        assert_eq!(json, format!("{{\"worldgen_version\":{WORLDGEN_VERSION}}}"));
     }
 
     #[test]
