@@ -367,7 +367,16 @@ fn spawn_loaded_world(
         persistence.new_world_config.game_mode()
     };
 
-    spawn_player_entity(&mut renderer.commands, translation, game_mode, player_definition);
+    let saved_health = (*persistence.load_mode == WorldLoadMode::Load)
+        .then(|| persistence.save.player_health(LOCAL_PLAYER_ID))
+        .flatten();
+    spawn_player_entity(
+        &mut renderer.commands,
+        translation,
+        game_mode,
+        player_definition,
+        saved_health,
+    );
     progress.loading_state.transition_requested = true;
     transition.request(ScreenTransitionTarget::game(GameState::Gameplay));
 }
