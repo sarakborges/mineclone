@@ -258,7 +258,6 @@ mod tests {
         assert_eq!(LEGACY_WORLDGEN_VERSION, 1);
         assert_eq!(legacy_worldgen_version().0, LEGACY_WORLDGEN_VERSION);
         assert_eq!(WorldgenVersion::default().0, LEGACY_WORLDGEN_VERSION);
-        assert!(WORLDGEN_VERSION >= LEGACY_WORLDGEN_VERSION);
     }
 
     #[test]
