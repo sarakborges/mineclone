@@ -62,6 +62,9 @@ use chunk_rendering::{
 };
 use chunk_unloading::{ChunkUnloadState, unload_chunk_meshes};
 use chunk_visibility::{sync_chunk_visibility, sync_new_chunk_visibility};
+use clock_persistence::{
+    ClockPersistence, persist_clock_periodically, reset_clock_persistence, restore_persisted_clock,
+};
 use day_night::DayNightPlugin;
 use dimension::{CurrentDimension, DimensionEntityCounts};
 use fluid_updates::{PendingFluidUpdates, process_fluid_updates, reseed_loaded_fluid_frontiers};
@@ -95,6 +98,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<WorldLoadMode>()
             .init_resource::<InMemoryWorldSave>()
             .init_resource::<WorldSession>()
+            .init_resource::<ClockPersistence>()
             .init_resource::<NewWorldConfig>()
             .init_resource::<GameRules>()
             .init_resource::<WorldTickClock>()
@@ -131,6 +135,8 @@ impl Plugin for WorldPlugin {
                     reset_resource::<ChunkUnloadState>,
                     reset_resource::<WorldTickClock>,
                     restore_loaded_clock,
+                    restore_persisted_clock,
+                    reset_clock_persistence,
                     reseed_loaded_fluid_frontiers,
                 )
                     .chain(),
@@ -179,7 +185,12 @@ impl Plugin for WorldPlugin {
                     .run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(Last, log_render_asset_pressure.run_if(render_diagnostics_due))
-            .add_systems(Last, autosave_world.run_if(autosave_only_in_gameplay));
+            .add_systems(
+                Last,
+                (persist_clock_periodically, autosave_world)
+                    .chain()
+                    .run_if(autosave_only_in_gameplay),
+            );
     }
 }
 
