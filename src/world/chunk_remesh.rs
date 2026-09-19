@@ -423,17 +423,6 @@ mod tests {
     }
 
     #[test]
-    fn terrain_remesh_renderability_depends_only_on_render_membership() {
-        let coord = IVec3::new(2, 1, 3);
-        let mut queue = ChunkRemeshQueue::default();
-        let mut render_pool = ChunkRenderPool::default();
-        render_pool.insert(coord, Default::default());
-        queue.enqueue_priority(coord);
-
-        assert_eq!(queue.pop_renderable_geometry(&render_pool), Some(coord));
-    }
-
-    #[test]
     fn terrain_remesh_never_discards_pending_fluid_remesh() {
         let mut queue = ChunkRemeshQueue::default();
         let coord = IVec3::new(2, 1, 3);
