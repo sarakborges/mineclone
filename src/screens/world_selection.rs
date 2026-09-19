@@ -569,6 +569,7 @@ fn poll_world_load(
             Vec3::from_array(player.position),
             if player.creative { GameMode::Creative } else { GameMode::Survival },
             player.health,
+            Some((player.yaw, player.pitch)),
         );
     }
     commands.insert_resource(session_lock);
