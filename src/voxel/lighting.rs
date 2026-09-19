@@ -68,18 +68,6 @@ impl PendingLightingUpdates {
         }
     }
 
-    pub(crate) fn has_pending_in_halo(&self, coord: IVec3) -> bool {
-        if self.queue.has_pending_in_halo(coord) {
-            return true;
-        }
-
-        self.emission_edit_previous_cells.keys().any(|position| {
-            let edit_coord = super::coordinates::chunk_coord_from_world(*position);
-            let delta = edit_coord - coord;
-            delta.x.abs() <= 1 && delta.y.abs() <= 1 && delta.z.abs() <= 1
-        })
-    }
-
     pub(crate) fn enqueue_empty_chunk_relaxation(&mut self, coord: IVec3) {
         let origin = chunk_origin(coord);
         self.queue.enqueue_chunk_boundary_voxels(origin);
