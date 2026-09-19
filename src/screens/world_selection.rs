@@ -549,10 +549,11 @@ fn poll_world_load(
         snapshot.biome_size_multiplier,
     );
     if let Some(player) = snapshot.player {
-        context.save.save_player_state(
+        context.save.save_player_state_with_health(
             LOCAL_PLAYER_ID,
             Vec3::from_array(player.position),
             if player.creative { GameMode::Creative } else { GameMode::Survival },
+            player.health,
         );
     }
     commands.insert_resource(pending_fluid_updates);
