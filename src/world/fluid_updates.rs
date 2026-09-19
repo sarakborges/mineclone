@@ -3,6 +3,7 @@ mod solver;
 
 use std::{
     collections::{BTreeMap, VecDeque},
+    io,
     time::Duration,
 };
 
@@ -11,10 +12,12 @@ use bevy::{
     platform::collections::HashMap,
     prelude::*,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::{
     content::fluid::{FluidId, FluidRegistry},
     voxel::{
+        coordinates::chunk_coord_from_world,
         deduplicated_queue::DeduplicatedQueue,
         fluid::FluidCell,
         lighting::PendingLightingUpdates,
@@ -29,6 +32,7 @@ use super::{
     chunk_remesh::ChunkRemeshQueue,
     game_rules::GameRules,
     tick::WorldTickClock,
+    WorldLoadMode,
     work_budget::FrameWorkBudget,
 };
 
@@ -45,6 +49,30 @@ struct FluidTickKey {
     position: IVec3,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub(crate) struct SavedFluidUpdates {
+    #[serde(default)]
+    topology: Vec<[i32; 3]>,
+    #[serde(default)]
+    wakes: Vec<SavedFluidWake>,
+    #[serde(default)]
+    scheduled: Vec<SavedScheduledFluidTick>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct SavedFluidWake {
+    fluid: String,
+    position: [i32; 3],
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct SavedScheduledFluidTick {
+    fluid: String,
+    position: [i32; 3],
+    remaining_ticks: u64,
+}
+
+
 #[derive(Resource, Default)]
 pub(crate) struct PendingFluidUpdates {
     // Runtime block edits are topology wake-ups. They are resolved against the
@@ -57,12 +85,137 @@ pub(crate) struct PendingFluidUpdates {
     // Earlier reschedules replace later ones; stale bucket records are ignored.
     scheduled: BTreeMap<u64, VecDeque<FluidTickKey>>,
     scheduled_due: HashMap<FluidTickKey, u64>,
+    // Due work whose chunk is currently not resident. It is reactivated when
+    // streaming brings that chunk back instead of being silently discarded.
+    dormant_scheduled: HashMap<IVec3, Vec<FluidTickKey>>,
 }
 
 impl PendingFluidUpdates {
     pub(crate) fn enqueue_voxel_edit(&mut self, position: IVec3) {
         self.topology_queue
             .enqueue_with_neighbors_priority(position);
+    }
+
+    pub(crate) fn capture_saved(
+        &self,
+        current_tick: u64,
+        fluids: &FluidRegistry,
+    ) -> io::Result<SavedFluidUpdates> {
+        let mut topology = self
+            .topology_queue
+            .values()
+            .map(IVec3::to_array)
+            .collect::<Vec<_>>();
+        topology.sort_unstable();
+
+        let mut wakes = self
+            .wake_queue
+            .values()
+            .map(|key| {
+                Ok(SavedFluidWake {
+                    fluid: fluid_name(fluids, key.fluid_id)?.to_owned(),
+                    position: key.position.to_array(),
+                })
+            })
+            .collect::<io::Result<Vec<_>>>()?;
+        wakes.sort_unstable_by(|left, right| {
+            left.position
+                .cmp(&right.position)
+                .then_with(|| left.fluid.cmp(&right.fluid))
+        });
+
+        let mut scheduled = self
+            .scheduled_due
+            .iter()
+            .map(|(key, due_tick)| {
+                Ok(SavedScheduledFluidTick {
+                    fluid: fluid_name(fluids, key.fluid_id)?.to_owned(),
+                    position: key.position.to_array(),
+                    remaining_ticks: due_tick.saturating_sub(current_tick),
+                })
+            })
+            .collect::<io::Result<Vec<_>>>()?;
+        for keys in self.dormant_scheduled.values() {
+            for key in keys {
+                scheduled.push(SavedScheduledFluidTick {
+                    fluid: fluid_name(fluids, key.fluid_id)?.to_owned(),
+                    position: key.position.to_array(),
+                    remaining_ticks: 0,
+                });
+            }
+        }
+        scheduled.sort_unstable_by(|left, right| {
+            left.position
+                .cmp(&right.position)
+                .then_with(|| left.fluid.cmp(&right.fluid))
+                .then_with(|| left.remaining_ticks.cmp(&right.remaining_ticks))
+        });
+        scheduled.dedup_by(|left, right| {
+            left.position == right.position && left.fluid == right.fluid
+        });
+
+        Ok(SavedFluidUpdates {
+            topology,
+            wakes,
+            scheduled,
+        })
+    }
+
+    pub(crate) fn from_saved(
+        saved: &SavedFluidUpdates,
+        fluids: &FluidRegistry,
+    ) -> io::Result<Self> {
+        let mut pending = Self::default();
+
+        for position in &saved.topology {
+            let position = IVec3::from_array(*position);
+            validate_saved_position(position)?;
+            pending.topology_queue.enqueue(position);
+        }
+        for wake in &saved.wakes {
+            let position = IVec3::from_array(wake.position);
+            validate_saved_position(position)?;
+            let fluid_id = saved_fluid_id(fluids, &wake.fluid)?;
+            pending.enqueue_fluid(fluid_id, position);
+        }
+        for tick in &saved.scheduled {
+            let position = IVec3::from_array(tick.position);
+            validate_saved_position(position)?;
+            let fluid_id = saved_fluid_id(fluids, &tick.fluid)?;
+            pending.schedule_at(
+                FluidTickKey { fluid_id, position },
+                tick.remaining_ticks,
+            );
+        }
+
+        Ok(pending)
+    }
+
+    fn reactivate_loaded_dormant(&mut self, world: &VoxelWorld, current_tick: u64) {
+        let mut loaded = self
+            .dormant_scheduled
+            .keys()
+            .copied()
+            .filter(|coord| world.chunk(*coord).is_some())
+            .collect::<Vec<_>>();
+        loaded.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
+
+        for coord in loaded {
+            let Some(keys) = self.dormant_scheduled.remove(&coord) else {
+                continue;
+            };
+            for key in keys {
+                self.schedule_at(key, current_tick);
+            }
+        }
+    }
+
+    fn defer_unloaded(&mut self, key: FluidTickKey) {
+        let coord = chunk_coord_from_world(key.position);
+        let entries = self.dormant_scheduled.entry(coord).or_default();
+        if !entries.contains(&key) {
+            entries.push(key);
+        }
     }
 
     pub(crate) fn enqueue_loaded_fluid_frontier(&mut self, world: &VoxelWorld, coord: IVec3) {
@@ -171,9 +324,12 @@ impl PendingFluidUpdates {
 
 pub(super) fn reseed_loaded_fluid_frontiers(
     world: Res<VoxelWorld>,
+    load_mode: Res<WorldLoadMode>,
     mut pending: ResMut<PendingFluidUpdates>,
 ) {
-    *pending = PendingFluidUpdates::default();
+    if *load_mode == WorldLoadMode::New {
+        *pending = PendingFluidUpdates::default();
+    }
 
     let mut loaded = world.loaded_chunk_coords().collect::<Vec<_>>();
     loaded.sort_by_key(|coord| (coord.y, coord.z, coord.x));
@@ -199,6 +355,10 @@ pub(super) fn process_fluid_updates(
 ) {
     let current_tick = world_ticks.current_tick();
     let ticks_per_second = game_rules.ticks_per_second();
+
+    runtime
+        .pending
+        .reactivate_loaded_dormant(&runtime.world, current_tick);
 
     let catch_up = runtime.pending.should_catch_up();
     let mut budget = if catch_up {
@@ -306,6 +466,7 @@ fn process_due_fluid_ticks(
 
         let position = scheduled.position;
         let Some((cell, current, _)) = runtime.world.sample_at(position) else {
+            runtime.pending.defer_unloaded(scheduled);
             continue;
         };
         let desired = desired_fluid_with_scratch(
@@ -444,6 +605,35 @@ fn schedule_fluid_tick_after_delay(
     );
 }
 
+fn fluid_name(fluids: &FluidRegistry, fluid_id: FluidId) -> io::Result<&str> {
+    fluids
+        .get(fluid_id)
+        .map(|definition| definition.id.as_str())
+        .ok_or_else(|| io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("missing fluid definition for saved runtime id {fluid_id}"),
+        ))
+}
+
+fn saved_fluid_id(fluids: &FluidRegistry, fluid: &str) -> io::Result<FluidId> {
+    fluids.id_of(fluid).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("unknown saved fluid tick definition: {fluid}"),
+        )
+    })
+}
+
+fn validate_saved_position(position: IVec3) -> io::Result<()> {
+    if position.y < 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "saved fluid update position cannot be below world floor",
+        ));
+    }
+    Ok(())
+}
+
 fn fluid_tick_delay_for_id(
     fluids: &FluidRegistry,
     fluid_id: FluidId,
@@ -515,6 +705,24 @@ mod tests {
         assert_eq!(fluid_tick_delay_ticks(4.0, 40), Some(10));
         assert_eq!(fluid_tick_delay_ticks(80.0, 40), Some(1));
         assert_eq!(fluid_tick_delay_ticks(0.0, 40), None);
+    }
+
+    #[test]
+    fn unloaded_due_tick_is_deferred_and_reactivated() {
+        let mut pending = PendingFluidUpdates::default();
+        let key = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(1, 2, 3),
+        };
+        pending.defer_unloaded(key);
+
+        let mut world = VoxelWorld::default();
+        pending.reactivate_loaded_dormant(&world, 9);
+        assert_eq!(pending.pop_due(9), None);
+
+        world.insert_chunk(IVec3::ZERO, crate::voxel::chunk::VoxelChunk::empty());
+        pending.reactivate_loaded_dormant(&world, 9);
+        assert_eq!(pending.pop_due(9), Some((key, 9)));
     }
 
     #[test]
