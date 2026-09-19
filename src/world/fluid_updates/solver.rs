@@ -1,6 +1,4 @@
-use std::collections::{HashMap, VecDeque};
-
-use bevy::prelude::*;
+use bevy::{platform::collections::HashMap, prelude::*};
 use smallvec::SmallVec;
 
 use crate::{
@@ -18,7 +16,7 @@ use crate::world::chunk_remesh::ChunkRemeshQueue;
 
 #[derive(Default)]
 pub(in crate::world) struct FluidSolverScratch {
-    queue: VecDeque<(IVec3, u16)>,
+    queue: Vec<(IVec3, u16)>,
     visited: HashMap<IVec3, (u16, u8)>,
 }
 
@@ -226,7 +224,11 @@ fn preferred_horizontal_directions(
     let mut nearest_drop = None;
     let mut preferred = 0_u8;
 
-    while let Some((position, distance)) = queue.pop_front() {
+    let mut queue_index = 0;
+    while queue_index < queue.len() {
+        let (position, distance) = queue[queue_index];
+        queue_index += 1;
+
         if nearest_drop.is_some_and(|best| distance > best) {
             break;
         }
@@ -266,13 +268,13 @@ fn preferred_horizontal_directions(
                     let merged = *known_directions | direction_mask;
                     if merged != *known_directions {
                         *known_directions = merged;
-                        queue.push_back((next, next_distance));
+                        queue.push((next, next_distance));
                     }
                 }
                 Some(_) => {}
                 None => {
                     visited.insert(next, (next_distance, direction_mask));
-                    queue.push_back((next, next_distance));
+                    queue.push((next, next_distance));
                 }
             }
         }
