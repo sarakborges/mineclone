@@ -162,6 +162,14 @@ fn validate_playable(
     if !is_valid_biome_size_multiplier(snapshot.biome_size_multiplier) {
         return Err(invalid_data("saved biome size multiplier is invalid"));
     }
+    if snapshot
+        .player
+        .as_ref()
+        .and_then(|player| player.health)
+        .is_some_and(|health| !health.is_finite() || health < 0.0)
+    {
+        return Err(invalid_data("saved player health is invalid"));
+    }
     if snapshot.inventory.len() != INVENTORY_SLOT_COUNT {
         return Err(invalid_data("invalid inventory length"));
     }
@@ -199,6 +207,8 @@ pub(crate) struct WorldSummary {
 pub(crate) struct SavedPlayer {
     pub(crate) position: [f32; 3],
     pub(crate) creative: bool,
+    #[serde(default)]
+    pub(crate) health: Option<f32>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
