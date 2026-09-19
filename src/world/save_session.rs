@@ -9,9 +9,11 @@ use bevy::{
 use crate::{
     app::game_state::GameState,
     content::{
-        block::BlockRegistry, day_night_cycle::DayNightCycleRegistry,
-        dimension::DimensionRegistry, fluid::FluidRegistry, tool::ToolRegistry,
+        block::BlockRegistry, creature::CreatureRegistry,
+        day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
+        fluid::FluidRegistry, tool::ToolRegistry,
     },
+    creatures::{CreatureInstance, SavedCreature},
     entity::EntityHealth,
     player::{
         camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar,
@@ -51,6 +53,7 @@ struct SavedWorldState {
     creative: bool,
     health: f32,
     inventory: Vec<Option<String>>,
+    creatures: Vec<SavedCreature>,
 }
 
 #[derive(Resource)]
@@ -138,6 +141,7 @@ impl WorldSession {
             creative: player.creative,
             health: player.health.unwrap_or_default(),
             inventory: captured.inventory.clone(),
+            creatures: captured.creatures.clone(),
         };
         let publication_started = Instant::now();
         save_world(
@@ -179,6 +183,7 @@ pub(crate) struct WorldSaveContext<'w, 's> {
     blocks: Res<'w, BlockRegistry>,
     fluids: Res<'w, FluidRegistry>,
     tools: Res<'w, ToolRegistry>,
+    creature_definitions: Res<'w, CreatureRegistry>,
     dimensions: Res<'w, DimensionRegistry>,
     cycles: Res<'w, DayNightCycleRegistry>,
     player: Query<
@@ -192,9 +197,35 @@ pub(crate) struct WorldSaveContext<'w, 's> {
         ),
         With<GameplayCamera>,
     >,
+    creatures: Query<
+        'w,
+        's,
+        (&'static CreatureInstance, &'static Transform, &'static EntityHealth),
+    >,
 }
 
 impl WorldSaveContext<'_, '_> {
+    fn saved_creatures(&self) -> Vec<SavedCreature> {
+        let mut creatures = self
+            .creatures
+            .iter()
+            .filter(|(_, _, health)| !health.is_dead())
+            .map(|(instance, transform, health)| SavedCreature {
+                definition_id: instance.definition_id.clone(),
+                position: transform.translation.to_array(),
+                health: health.current(),
+            })
+            .collect::<Vec<_>>();
+        creatures.sort_unstable_by(|left, right| {
+            left.definition_id
+                .cmp(&right.definition_id)
+                .then_with(|| left.position[0].total_cmp(&right.position[0]))
+                .then_with(|| left.position[1].total_cmp(&right.position[1]))
+                .then_with(|| left.position[2].total_cmp(&right.position[2]))
+        });
+        creatures
+    }
+
     fn saved_state(&self) -> io::Result<SavedWorldState> {
         let (_, transform, mode, health) = self.player.single().map_err(|error| {
             io::Error::other(format!("cannot save world without exactly one player: {error}"))
@@ -211,6 +242,7 @@ impl WorldSaveContext<'_, '_> {
             creative: *mode == GameMode::Creative,
             health: health.current(),
             inventory: self.inventory.saved_items(),
+            creatures: self.saved_creatures(),
         })
     }
 
@@ -225,6 +257,7 @@ impl WorldSaveContext<'_, '_> {
             health: Some(health.current()),
         };
         let inventory = self.inventory.saved_items();
+        let creatures = self.saved_creatures();
         let snapshot = WorldSnapshot::capture(SnapshotSource {
             id,
             seed: self.seed.0,
@@ -240,6 +273,7 @@ impl WorldSaveContext<'_, '_> {
             fluids: &self.fluids,
             pending_fluids: &self.pending_fluids,
             world_tick: self.world_ticks.current_tick(),
+            creatures: creatures.clone(),
         })?;
         let state = SavedWorldState {
             seed: self.seed.0,
@@ -252,6 +286,7 @@ impl WorldSaveContext<'_, '_> {
             creative: player.creative,
             health: player.health.unwrap_or(health.current()),
             inventory,
+            creatures,
         };
 
         Ok(OwnedWorldSaveCapture {
@@ -261,6 +296,7 @@ impl WorldSaveContext<'_, '_> {
                 blocks: &self.blocks,
                 fluids: &self.fluids,
                 tools: &self.tools,
+                creatures: &self.creature_definitions,
                 dimensions: &self.dimensions,
                 cycles: &self.cycles,
             }
@@ -292,6 +328,7 @@ impl WorldSaveContext<'_, '_> {
             fluids: &self.fluids,
             pending_fluids: &self.pending_fluids,
             world_tick: self.world_ticks.current_tick(),
+            creatures: self.saved_creatures(),
         })
     }
 }
