@@ -458,15 +458,6 @@ fn dispatch_initial_mesh_tasks(
         // than generated-result integration. No mesh may capture it as DARK.
         seed_loaded_chunk_lighting(coord, content, work, queues);
 
-        // Mirror Minecraft's INITIALIZE_LIGHT -> LIGHT -> FULL lifecycle at
-        // our section granularity. Do not publish a first mesh while the
-        // section's 3x3x3 lighting halo is still converging.
-        if queues.lighting.has_pending_in_halo(coord) {
-            work.state.mark_ready(coord);
-            budget.record(1);
-            continue;
-        }
-
         if !chunk_is_empty && work.mesh_tasks.pending_count() >= MAX_MESH_TASKS_IN_FLIGHT {
             let Some(center) = work.state.center else {
                 work.state.defer_ready(coord);
