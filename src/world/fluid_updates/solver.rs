@@ -1,6 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use bevy::prelude::*;
+use smallvec::SmallVec;
 
 use crate::{
     content::fluid::{FluidId, FluidRegistry},
@@ -15,12 +16,46 @@ use crate::{
 
 use crate::world::chunk_remesh::ChunkRemeshQueue;
 
+#[derive(Default)]
+pub(super) struct FluidSolverScratch {
+    queue: VecDeque<(IVec3, u16)>,
+    visited: HashMap<IVec3, (u16, u8)>,
+}
+
+#[derive(Clone, Copy)]
+struct HorizontalCandidate {
+    origin: IVec3,
+    fluid_id: FluidId,
+    level: u8,
+    spread_distance: u16,
+    remaining_steps: u16,
+}
+
+#[cfg(test)]
 pub(super) fn desired_fluid(
     world: &VoxelWorld,
     position: IVec3,
     target_cell: Option<VoxelCell>,
     current: Option<FluidCell>,
     fluids: &FluidRegistry,
+) -> Option<FluidCell> {
+    desired_fluid_with_scratch(
+        world,
+        position,
+        target_cell,
+        current,
+        fluids,
+        &mut FluidSolverScratch::default(),
+    )
+}
+
+pub(super) fn desired_fluid_with_scratch(
+    world: &VoxelWorld,
+    position: IVec3,
+    target_cell: Option<VoxelCell>,
+    current: Option<FluidCell>,
+    fluids: &FluidRegistry,
+    scratch: &mut FluidSolverScratch,
 ) -> Option<FluidCell> {
     if target_cell.is_some() {
         return None;
@@ -39,14 +74,14 @@ pub(super) fn desired_fluid(
         ));
     }
 
-    let mut strongest: Option<(u8, u16, FluidId)> = None;
+    let mut candidates = SmallVec::<[HorizontalCandidate; 4]>::new();
 
     for offset in HORIZONTAL_NEIGHBORS {
-        let neighbor_position = position + offset;
-        let Some(neighbor) = world.fluid_at(neighbor_position) else {
+        let origin = position + offset;
+        let Some(neighbor) = world.fluid_at(origin) else {
             continue;
         };
-        if !can_spread_horizontally_from(world, neighbor_position, neighbor) {
+        if !can_spread_horizontally_from(world, origin, neighbor) {
             continue;
         }
 
@@ -59,33 +94,41 @@ pub(super) fn desired_fluid(
             continue;
         };
 
-        let remaining_steps = definition
-            .max_spread
-            .saturating_sub(neighbor.spread_distance());
-        if !horizontal_spread_is_preferred(
-            world,
-            neighbor_position,
-            position,
-            neighbor.fluid_id,
-            remaining_steps,
-        ) {
-            continue;
-        }
-
-        let candidate = (level, spread_distance, neighbor.fluid_id);
-        if strongest.is_none_or(|current| {
-            candidate.0 > current.0
-                || (candidate.0 == current.0 && candidate.1 < current.1)
-                || (candidate.0 == current.0
-                    && candidate.1 == current.1
-                    && candidate.2 < current.2)
-        }) {
-            strongest = Some(candidate);
-        }
+        candidates.push(HorizontalCandidate {
+            origin,
+            fluid_id: neighbor.fluid_id,
+            level,
+            spread_distance,
+            remaining_steps: definition
+                .max_spread
+                .saturating_sub(neighbor.spread_distance()),
+        });
     }
 
-    strongest.map(|(level, spread_distance, fluid_id)| {
-        FluidCell::spreading(fluid_id, level, spread_distance)
+    candidates.sort_unstable_by(|left, right| {
+        right
+            .level
+            .cmp(&left.level)
+            .then_with(|| left.spread_distance.cmp(&right.spread_distance))
+            .then_with(|| left.fluid_id.cmp(&right.fluid_id))
+    });
+
+    candidates.into_iter().find_map(|candidate| {
+        horizontal_spread_is_preferred_with_scratch(
+            world,
+            candidate.origin,
+            position,
+            candidate.fluid_id,
+            candidate.remaining_steps,
+            scratch,
+        )
+        .then(|| {
+            FluidCell::spreading(
+                candidate.fluid_id,
+                candidate.level,
+                candidate.spread_distance,
+            )
+        })
     })
 }
 
@@ -113,6 +156,7 @@ fn horizontal_spread_state(neighbor: FluidCell, max_spread: u16) -> Option<(u8, 
     Some((level, spread_distance))
 }
 
+#[cfg(test)]
 fn horizontal_spread_is_preferred(
     world: &VoxelWorld,
     origin: IVec3,
@@ -120,8 +164,26 @@ fn horizontal_spread_is_preferred(
     fluid_id: FluidId,
     remaining_steps: u16,
 ) -> bool {
+    horizontal_spread_is_preferred_with_scratch(
+        world,
+        origin,
+        target,
+        fluid_id,
+        remaining_steps,
+        &mut FluidSolverScratch::default(),
+    )
+}
+
+fn horizontal_spread_is_preferred_with_scratch(
+    world: &VoxelWorld,
+    origin: IVec3,
+    target: IVec3,
+    fluid_id: FluidId,
+    remaining_steps: u16,
+    scratch: &mut FluidSolverScratch,
+) -> bool {
     let Some(preferred) =
-        preferred_horizontal_directions(world, origin, fluid_id, remaining_steps)
+        preferred_horizontal_directions(world, origin, fluid_id, remaining_steps, scratch)
     else {
         // No reachable drop within this horizontal run: spread normally.
         return true;
@@ -139,13 +201,15 @@ fn preferred_horizontal_directions(
     origin: IVec3,
     fluid_id: FluidId,
     remaining_steps: u16,
+    scratch: &mut FluidSolverScratch,
 ) -> Option<u8> {
     if remaining_steps == 0 {
         return None;
     }
 
-    let mut queue = VecDeque::<(IVec3, u16)>::new();
-    let mut visited = HashMap::<IVec3, (u16, u8)>::new();
+    let FluidSolverScratch { queue, visited } = scratch;
+    queue.clear();
+    visited.clear();
     visited.insert(origin, (0, 0));
 
     for (index, offset) in HORIZONTAL_NEIGHBORS.into_iter().enumerate() {
