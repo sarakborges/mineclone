@@ -4,6 +4,14 @@ use crate::player::game_mode::GameMode;
 
 use super::{WorldSeed, game_rules::GameRules, world_names::DEFAULT_WORLD_NAME};
 
+/// Compatibility identity for deterministic terrain generation.
+///
+/// Increment this whenever an algorithm change can make an untouched chunk
+/// generate differently for the same world seed/configuration. Saved worlds
+/// pin this value in their immutable generation-zero manifest so a newer game
+/// never silently mixes two world-generation algorithms in one world.
+pub(crate) const WORLDGEN_VERSION: u32 = 1;
+
 const MIN_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 5;
 const MAX_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 50;
 const DEFAULT_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 10;
