@@ -4,7 +4,6 @@ use bevy::prelude::*;
 
 use crate::voxel::{
     deduplicated_queue::DeduplicatedQueue,
-    lighting::PendingLightingUpdates,
     mesh_snapshot::ChunkMeshSnapshot,
     neighbors::CARDINAL_NEIGHBORS,
     world::VoxelWorld,
@@ -121,14 +120,8 @@ impl ChunkRemeshQueue {
         self.queue.len() > 0 || self.fluid.len() > 0 || self.lighting.len() > 0
     }
 
-    fn pop_renderable_stable_geometry(
-        &mut self,
-        render_pool: &ChunkRenderPool,
-        lighting: &PendingLightingUpdates,
-    ) -> Option<IVec3> {
-        self.queue.pop_where(|coord| {
-            render_pool.contains(coord) && !lighting.has_pending_in_halo(coord)
-        })
+    fn pop_renderable_geometry(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
+        self.queue.pop_where(|coord| render_pool.contains(coord))
     }
 
     fn pop_renderable_fluid(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
@@ -154,14 +147,10 @@ impl ChunkRemeshQueue {
         self.queue.remove(coord);
     }
 
-    fn pop_renderable_stable_lighting(
-        &mut self,
-        render_pool: &ChunkRenderPool,
-        lighting: &PendingLightingUpdates,
-    ) -> Option<IVec3> {
-        let coord = self.lighting.pop_where(|coord| {
-            render_pool.contains(coord) && !lighting.has_pending_in_halo(coord)
-        })?;
+    fn pop_renderable_lighting(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
+        let coord = self
+            .lighting
+            .pop_where(|coord| render_pool.contains(coord))?;
         self.coalesce_geometry_into_lighting(coord);
         Some(coord)
     }
@@ -169,7 +158,6 @@ impl ChunkRemeshQueue {
     fn pop_renderable_background(
         &mut self,
         render_pool: &ChunkRenderPool,
-        lighting: &PendingLightingUpdates,
     ) -> Option<(IVec3, ChunkRemeshTaskKind)> {
         const KIND_COUNT: usize = 3;
 
@@ -180,10 +168,10 @@ impl ChunkRemeshQueue {
                     .pop_renderable_fluid(render_pool)
                     .map(|coord| (coord, ChunkRemeshTaskKind::Fluid)),
                 1 => self
-                    .pop_renderable_stable_lighting(render_pool, lighting)
+                    .pop_renderable_lighting(render_pool)
                     .map(|coord| (coord, ChunkRemeshTaskKind::Lighting)),
                 2 => self
-                    .pop_renderable_stable_geometry(render_pool, lighting)
+                    .pop_renderable_geometry(render_pool)
                     .map(|coord| (coord, ChunkRemeshTaskKind::Geometry)),
                 _ => unreachable!("background remesh kind index must stay in range"),
             };
@@ -271,7 +259,6 @@ pub(super) fn process_chunk_remesh_queue(
     mut renderer: ChunkRenderer,
     world: Res<VoxelWorld>,
     mut queue: ResMut<ChunkRemeshQueue>,
-    lighting: Res<PendingLightingUpdates>,
     mut tasks: ResMut<ChunkRemeshTasks>,
     mut deferred: Local<Vec<(IVec3, ChunkRemeshTaskKind)>>,
 ) {
@@ -294,7 +281,6 @@ pub(super) fn process_chunk_remesh_queue(
     dispatch_remesh_tasks(
         &world,
         &renderer.pool,
-        &lighting,
         &mut queue,
         &mut tasks,
         &mut deferred,
@@ -374,7 +360,6 @@ fn collect_completed_remesh_tasks(
 fn dispatch_remesh_tasks(
     world: &VoxelWorld,
     render_pool: &ChunkRenderPool,
-    lighting: &PendingLightingUpdates,
     queue: &mut ChunkRemeshQueue,
     tasks: &mut ChunkRemeshTasks,
     deferred: &mut Vec<(IVec3, ChunkRemeshTaskKind)>,
@@ -388,7 +373,7 @@ fn dispatch_remesh_tasks(
             break;
         }
 
-        let Some((coord, kind)) = queue.pop_renderable_background(render_pool, lighting) else {
+        let Some((coord, kind)) = queue.pop_renderable_background(render_pool) else {
             break;
         };
 
