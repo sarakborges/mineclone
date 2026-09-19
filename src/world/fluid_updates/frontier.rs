@@ -157,20 +157,24 @@ fn enqueue_spread_targets_from_fluid(
     position: IVec3,
     source_fluid: crate::voxel::fluid::FluidCell,
 ) {
-    let can_spread_horizontally =
-        can_spread_horizontally_from(world, position, source_fluid);
+    let mut can_spread_horizontally = None;
 
     for offset in FLUID_SPREAD_TARGETS {
-        if offset != IVec3::NEG_Y && !can_spread_horizontally {
-            continue;
-        }
-
         let target = position + offset;
         let Some((cell, target_fluid, _)) = world.sample_at(target) else {
             continue;
         };
         if cell.is_some() || target_fluid.is_some() {
             continue;
+        }
+
+        if offset != IVec3::NEG_Y {
+            let eligible = *can_spread_horizontally.get_or_insert_with(|| {
+                can_spread_horizontally_from(world, position, source_fluid)
+            });
+            if !eligible {
+                continue;
+            }
         }
 
         if offset == IVec3::NEG_Y {
