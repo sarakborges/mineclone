@@ -1,8 +1,99 @@
+use std::io;
+
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::player::game_mode::GameMode;
 
 use super::{WorldSeed, game_rules::GameRules, world_names::DEFAULT_WORLD_NAME};
+
+/// Compatibility identity for deterministic terrain generation.
+///
+/// Increment this whenever an algorithm change can make an untouched chunk
+/// generate differently for the same world seed/configuration. Saved worlds
+/// pin this value in their immutable generation-zero manifest so a newer game
+/// never silently mixes two world-generation algorithms in one world.
+pub(crate) const WORLDGEN_VERSION: u32 = 1;
+
+/// Saves created before the worldgen identity field existed used the same
+/// generator now identified as version 1. Keep this fallback fixed forever:
+/// defaulting legacy saves to `WORLDGEN_VERSION` would silently reinterpret
+/// them after a future generator bump.
+pub(crate) const LEGACY_WORLDGEN_VERSION: u32 = 1;
+
+/// Persisted deterministic-generator identity. The transparent representation
+/// keeps manifests/snapshots human-readable while making it harder for save
+/// boundaries to accidentally confuse this compatibility identity with an
+/// unrelated format/generation counter.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(transparent)]
+pub(crate) struct WorldgenVersion(u32);
+
+impl WorldgenVersion {
+    pub(crate) const fn current() -> Self {
+        Self(WORLDGEN_VERSION)
+    }
+
+    pub(crate) fn validate(self) -> io::Result<()> {
+        validate_worldgen_version(self.0)
+    }
+
+    pub(crate) fn validate_matches(self, snapshot: Self) -> io::Result<()> {
+        validate_matching_worldgen_versions(self.0, snapshot.0)
+    }
+}
+
+impl Default for WorldgenVersion {
+    fn default() -> Self {
+        legacy_worldgen_version()
+    }
+}
+
+/// Serde default for manifests/snapshots written before worldgen identity was
+/// persisted. Keep this function tied to the fixed legacy value, never the
+/// current generator version.
+pub(crate) const fn legacy_worldgen_version() -> WorldgenVersion {
+    WorldgenVersion(LEGACY_WORLDGEN_VERSION)
+}
+
+/// A save may only generate untouched terrain when it was created with the
+/// exact deterministic generator implemented by this build. Keep this strict:
+/// accepting older/newer identities would silently mix terrain algorithms.
+pub(crate) fn is_compatible_worldgen_version(version: u32) -> bool {
+    version == WORLDGEN_VERSION
+}
+
+/// Shared validation used by persistence boundaries before a save is allowed
+/// to regenerate untouched terrain. Return the persistence layer's native
+/// error type so every boundary can propagate the same diagnostic unchanged.
+pub(crate) fn validate_worldgen_version(version: u32) -> io::Result<()> {
+    if is_compatible_worldgen_version(version) {
+        Ok(())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "saved world uses an incompatible world-generation version",
+        ))
+    }
+}
+
+/// A snapshot must agree with the world's immutable generation-zero identity,
+/// and that identity must be supported by this build before untouched chunks
+/// may be regenerated. Keep both checks here so save/load boundaries cannot
+/// accidentally validate only one side of the invariant.
+pub(crate) fn validate_matching_worldgen_versions(
+    reserved_version: u32,
+    snapshot_version: u32,
+) -> io::Result<()> {
+    validate_worldgen_version(reserved_version)?;
+    if snapshot_version != reserved_version {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "snapshot does not match reserved world-generation identity",
+        ));
+    }
+    Ok(())
+}
 
 const MIN_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 5;
 const MAX_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 50;
@@ -138,6 +229,12 @@ pub(crate) fn is_valid_biome_size_multiplier(value: f32) -> bool {
 mod tests {
     use super::*;
 
+    #[derive(Debug, Deserialize, Serialize)]
+    struct PersistedWorldgenIdentity {
+        #[serde(default = "legacy_worldgen_version")]
+        worldgen_version: WorldgenVersion,
+    }
+
     #[test]
     fn biome_size_multiplier_defaults_to_one() {
         assert_eq!(
@@ -154,5 +251,73 @@ mod tests {
         assert_eq!(snap_biome_size_multiplier(6.0), 5.0);
         assert!(is_valid_biome_size_multiplier(2.3));
         assert!(!is_valid_biome_size_multiplier(2.34));
+    }
+
+    #[test]
+    fn legacy_worldgen_identity_stays_pinned_to_v1() {
+        assert_eq!(LEGACY_WORLDGEN_VERSION, 1);
+        assert_eq!(legacy_worldgen_version().0, LEGACY_WORLDGEN_VERSION);
+        assert_eq!(WorldgenVersion::default().0, LEGACY_WORLDGEN_VERSION);
+    }
+
+    #[test]
+    fn worldgen_identity_serde_defaults_legacy_and_stays_numeric() {
+        let legacy: PersistedWorldgenIdentity =
+            serde_json::from_str("{}").expect("legacy metadata must deserialize");
+        assert_eq!(legacy.worldgen_version.0, LEGACY_WORLDGEN_VERSION);
+
+        let current = PersistedWorldgenIdentity {
+            worldgen_version: WorldgenVersion::current(),
+        };
+        let json = serde_json::to_string(&current).expect("worldgen identity must serialize");
+        assert_eq!(json, format!("{{\"worldgen_version\":{WORLDGEN_VERSION}}}"));
+    }
+
+    #[test]
+    fn worldgen_compatibility_requires_exact_current_identity() {
+        assert!(is_compatible_worldgen_version(WORLDGEN_VERSION));
+        assert!(!is_compatible_worldgen_version(0));
+        assert!(!is_compatible_worldgen_version(
+            WORLDGEN_VERSION.saturating_add(1)
+        ));
+        assert!(validate_worldgen_version(WORLDGEN_VERSION).is_ok());
+        assert!(WorldgenVersion::current().validate().is_ok());
+        let error = validate_worldgen_version(WORLDGEN_VERSION.saturating_add(1))
+            .expect_err("future worldgen identity must be rejected");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(
+            error.to_string(),
+            "saved world uses an incompatible world-generation version"
+        );
+    }
+
+    #[test]
+    fn persisted_worldgen_identities_must_match_each_other_and_this_build() {
+        assert!(validate_matching_worldgen_versions(WORLDGEN_VERSION, WORLDGEN_VERSION).is_ok());
+        assert!(WorldgenVersion::current()
+            .validate_matches(WorldgenVersion::current())
+            .is_ok());
+
+        let mismatched = validate_matching_worldgen_versions(
+            WORLDGEN_VERSION,
+            WORLDGEN_VERSION.saturating_add(1),
+        )
+        .expect_err("snapshot identity must match generation-zero reservation");
+        assert_eq!(mismatched.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(
+            mismatched.to_string(),
+            "snapshot does not match reserved world-generation identity"
+        );
+
+        let unsupported = validate_matching_worldgen_versions(
+            WORLDGEN_VERSION.saturating_add(1),
+            WORLDGEN_VERSION.saturating_add(1),
+        )
+        .expect_err("matching persisted identities still require build compatibility");
+        assert_eq!(unsupported.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(
+            unsupported.to_string(),
+            "saved world uses an incompatible world-generation version"
+        );
     }
 }
