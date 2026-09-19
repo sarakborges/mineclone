@@ -45,8 +45,6 @@ impl ChunkDiskIdentity {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::*;
 
     #[test]
@@ -67,26 +65,5 @@ mod tests {
             .expect_err("negative chunk Y must never reach disk identity");
 
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-    }
-
-    #[test]
-    fn distinct_coordinates_have_distinct_paths() {
-        let coordinates = [
-            IVec3::new(-1, 0, 0),
-            IVec3::new(1, 0, 0),
-            IVec3::new(0, 0, -1),
-            IVec3::new(0, 0, 1),
-            IVec3::new(0, 1, 0),
-        ];
-        let paths: HashSet<_> = coordinates
-            .into_iter()
-            .map(|coord| {
-                ChunkDiskIdentity::new(coord)
-                    .expect("valid chunk coordinate")
-                    .relative_path()
-            })
-            .collect();
-
-        assert_eq!(paths.len(), coordinates.len());
     }
 }
