@@ -5,12 +5,21 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use super::world_names::{WORLDS_DIRECTORY, validate_world_name};
+use crate::content::day_night_cycle::DayNightCycleRegistry;
+
+use super::{
+    current_context::CurrentDimensionContext,
+    day_night::DayNightClock,
+    save_session::WorldSession,
+    world_names::{WORLDS_DIRECTORY, validate_world_name},
+};
 
 const CLOCK_PREFIX: &str = "clock-";
 const CLOCK_SUFFIX: &str = ".json";
+const CLOCK_SAVE_SECONDS: f32 = 60.0;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct SavedClock {
@@ -19,7 +28,69 @@ struct SavedClock {
     tick_in_day: u64,
 }
 
-pub(crate) fn save_clock(id: &str, day: u64, tick_in_day: u64) -> io::Result<()> {
+#[derive(Resource)]
+pub(crate) struct ClockPersistence {
+    timer: Timer,
+}
+
+impl Default for ClockPersistence {
+    fn default() -> Self {
+        Self { timer: Timer::from_seconds(CLOCK_SAVE_SECONDS, TimerMode::Repeating) }
+    }
+}
+
+pub(crate) fn reset_clock_persistence(mut persistence: ResMut<ClockPersistence>) {
+    persistence.timer.reset();
+}
+
+pub(crate) fn persist_clock_periodically(
+    time: Res<Time<Real>>,
+    mut persistence: ResMut<ClockPersistence>,
+    session: Res<WorldSession>,
+    clock: Res<DayNightClock>,
+) {
+    if !persistence.timer.tick(time.delta()).just_finished() {
+        return;
+    }
+    let Some(id) = session.id.as_deref() else { return };
+    if let Err(error) = save_clock(id, clock.day, clock.tick_in_day()) {
+        warn!("World clock checkpoint failed; full world saves remain valid: {error}");
+    }
+}
+
+/// Apply a lightweight clock checkpoint only when it is both valid for the
+/// active cycle and later than the clock restored from the immutable snapshot.
+/// A stale checkpoint can therefore never roll a newer full save backwards.
+pub(crate) fn restore_persisted_clock(
+    session: Res<WorldSession>,
+    dimension: CurrentDimensionContext,
+    cycles: Res<DayNightCycleRegistry>,
+    mut clock: ResMut<DayNightClock>,
+) {
+    let Some(id) = session.id.as_deref() else { return };
+    let saved = match load_clock(id) {
+        Ok(Some(saved)) => saved,
+        Ok(None) => return,
+        Err(error) => {
+            warn!("Ignoring unreadable world clock checkpoint: {error}");
+            return;
+        }
+    };
+    if saved <= (clock.day, clock.tick_in_day()) {
+        return;
+    }
+    let definition = dimension
+        .definition()
+        .expect("loaded dimension must exist in content registry");
+    let cycle = cycles
+        .get(&definition.day_night_cycle)
+        .expect("loaded day-night cycle must exist in content registry");
+    if !clock.restore(saved.0, saved.1, cycle.day_duration_ticks) {
+        warn!("Ignoring world clock checkpoint that is invalid for the active day-night cycle");
+    }
+}
+
+fn save_clock(id: &str, day: u64, tick_in_day: u64) -> io::Result<()> {
     validate_world_name(id)?;
     if day == 0 {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "saved clock day must be positive"));
@@ -66,7 +137,7 @@ pub(crate) fn save_clock(id: &str, day: u64, tick_in_day: u64) -> io::Result<()>
     Ok(())
 }
 
-pub(crate) fn load_clock(id: &str) -> io::Result<Option<(u64, u64)>> {
+fn load_clock(id: &str) -> io::Result<Option<(u64, u64)>> {
     validate_world_name(id)?;
     let directory = Path::new(WORLDS_DIRECTORY).join(id);
     if !fs::symlink_metadata(&directory)?.file_type().is_dir() {
