@@ -12,7 +12,6 @@ use crate::voxel::{
 use super::{
     chunk_remesh_tasks::{
         ChunkRemeshTaskKind, ChunkRemeshTaskMeshes, ChunkRemeshTasks,
-        MAX_REMESH_TASKS_IN_FLIGHT,
     },
     chunk_rendering::{
         ChunkRenderPool, apply_built_chunk_fluid_meshes, apply_built_chunk_geometry_meshes,
@@ -24,8 +23,8 @@ use super::{
 
 const REMESH_TASK_DISPATCH_BUDGET: Duration = Duration::from_millis(1);
 const REMESH_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
-const MAX_REMESH_TASKS_DISPATCHED_PER_FRAME: usize = 2;
-const MAX_REMESH_RESULTS_COLLECTED_PER_FRAME: usize = 2;
+const MAX_REMESH_TASKS_DISPATCHED_PER_FRAME: usize = 4;
+const MAX_REMESH_RESULTS_COLLECTED_PER_FRAME: usize = 4;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct RenderableScanKey {
@@ -56,6 +55,12 @@ impl ChunkRemeshQueue {
         if coord.y >= 0 {
             // Terrain-only remesh cannot satisfy an independent fluid remesh.
             self.queue.enqueue_front(coord);
+        }
+    }
+
+    pub(crate) fn enqueue_fluid(&mut self, coord: IVec3) {
+        if coord.y >= 0 {
+            self.fluid.enqueue(coord);
         }
     }
 
@@ -158,21 +163,24 @@ impl ChunkRemeshQueue {
     fn pop_renderable_background(
         &mut self,
         render_pool: &ChunkRenderPool,
+        allow_terrain: bool,
+        allow_fluid: bool,
     ) -> Option<(IVec3, ChunkRemeshTaskKind)> {
         const KIND_COUNT: usize = 3;
 
         for offset in 0..KIND_COUNT {
             let kind_index = (self.next_background_kind + offset) % KIND_COUNT;
             let next = match kind_index {
-                0 => self
+                0 if allow_fluid => self
                     .pop_renderable_fluid(render_pool)
                     .map(|coord| (coord, ChunkRemeshTaskKind::Fluid)),
-                1 => self
+                1 if allow_terrain => self
                     .pop_renderable_lighting(render_pool)
                     .map(|coord| (coord, ChunkRemeshTaskKind::Lighting)),
-                2 => self
+                2 if allow_terrain => self
                     .pop_renderable_geometry(render_pool)
                     .map(|coord| (coord, ChunkRemeshTaskKind::Geometry)),
+                0..=2 => None,
                 _ => unreachable!("background remesh kind index must stay in range"),
             };
 
@@ -274,7 +282,7 @@ pub(super) fn process_chunk_remesh_queue(
         );
     }
 
-    if tasks.pending_count() >= MAX_REMESH_TASKS_IN_FLIGHT || !queue.has_background_work() {
+    if !queue.has_background_work() {
         return;
     }
 
@@ -368,16 +376,24 @@ fn dispatch_remesh_tasks(
         .with_maximum_items(MAX_REMESH_TASKS_DISPATCHED_PER_FRAME);
     deferred.clear();
 
-    while tasks.pending_count() < MAX_REMESH_TASKS_IN_FLIGHT {
+    loop {
         if budget.exhausted() {
             break;
         }
 
-        let Some((coord, kind)) = queue.pop_renderable_background(render_pool) else {
+        let allow_terrain = tasks.can_schedule(ChunkRemeshTaskKind::Geometry);
+        let allow_fluid = tasks.can_schedule(ChunkRemeshTaskKind::Fluid);
+        if !allow_terrain && !allow_fluid {
+            break;
+        }
+
+        let Some((coord, kind)) =
+            queue.pop_renderable_background(render_pool, allow_terrain, allow_fluid)
+        else {
             break;
         };
 
-        if tasks.contains(coord) {
+        if tasks.contains(coord, kind) {
             deferred.push((coord, kind));
             continue;
         }
@@ -386,7 +402,7 @@ fn dispatch_remesh_tasks(
         };
         if !tasks.schedule(coord, kind, snapshot) {
             deferred.push((coord, kind));
-            break;
+            continue;
         }
         budget.record(1);
     }

@@ -49,6 +49,122 @@ struct FluidTickKey {
     position: IVec3,
 }
 
+#[derive(Default)]
+struct ChunkFairFluidQueue {
+    by_chunk: HashMap<IVec3, DeduplicatedQueue<FluidTickKey>>,
+    active_chunks: DeduplicatedQueue<IVec3>,
+    len: usize,
+}
+
+impl ChunkFairFluidQueue {
+    fn enqueue(&mut self, key: FluidTickKey) {
+        let coord = chunk_coord_from_world(key.position);
+        let queue = self.by_chunk.entry(coord).or_default();
+        if !queue.enqueue(key) {
+            return;
+        }
+
+        self.len += 1;
+        self.active_chunks.enqueue(coord);
+    }
+
+    fn enqueue_front(&mut self, key: FluidTickKey) {
+        let coord = chunk_coord_from_world(key.position);
+        let queue = self.by_chunk.entry(coord).or_default();
+        let already_queued = queue.contains(key);
+        queue.enqueue_front(key);
+        if !already_queued {
+            self.len += 1;
+        }
+
+        // Priority is local to the chunk. Re-promoting an active chunk globally
+        // would let a busy fluid section starve every neighboring section.
+        self.active_chunks.enqueue(coord);
+    }
+
+    fn pop(&mut self) -> Option<FluidTickKey> {
+        loop {
+            let coord = self.active_chunks.pop()?;
+            let (key, has_more) = {
+                let queue = self
+                    .by_chunk
+                    .get_mut(&coord)
+                    .expect("active fluid wake chunk must have a queue");
+                let key = queue.pop();
+                (key, queue.len() > 0)
+            };
+
+            if has_more {
+                self.active_chunks.enqueue(coord);
+            } else {
+                self.by_chunk.remove(&coord);
+            }
+
+            let Some(key) = key else {
+                continue;
+            };
+            self.len = self
+                .len
+                .checked_sub(1)
+                .expect("fluid wake queue length cannot underflow");
+            return Some(key);
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn values(&self) -> impl Iterator<Item = FluidTickKey> + '_ {
+        self.by_chunk.values().flat_map(|queue| queue.values())
+    }
+}
+
+#[derive(Default)]
+struct ScheduledFluidBucket {
+    by_chunk: HashMap<IVec3, VecDeque<FluidTickKey>>,
+    active_chunks: VecDeque<IVec3>,
+}
+
+impl ScheduledFluidBucket {
+    fn push(&mut self, key: FluidTickKey) {
+        let coord = chunk_coord_from_world(key.position);
+        let queue = self.by_chunk.entry(coord).or_default();
+        if queue.is_empty() {
+            self.active_chunks.push_back(coord);
+        }
+        queue.push_back(key);
+    }
+
+    fn pop(&mut self) -> Option<FluidTickKey> {
+        loop {
+            let coord = self.active_chunks.pop_front()?;
+            let (key, has_more) = {
+                let queue = self
+                    .by_chunk
+                    .get_mut(&coord)
+                    .expect("active scheduled fluid chunk must have a queue");
+                let key = queue.pop_front();
+                (key, !queue.is_empty())
+            };
+
+            if has_more {
+                self.active_chunks.push_back(coord);
+            } else {
+                self.by_chunk.remove(&coord);
+            }
+
+            if let Some(key) = key {
+                return Some(key);
+            }
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.active_chunks.is_empty()
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub(crate) struct SavedFluidUpdates {
     #[serde(default)]
@@ -80,10 +196,12 @@ pub(crate) struct PendingFluidUpdates {
     topology_queue: VoxelUpdateQueue,
     // Generated/streamed fluid frontiers arrive here without a due time. The
     // runtime scheduler assigns the authored fluid delay on the next update.
-    wake_queue: DeduplicatedQueue<FluidTickKey>,
+    wake_queue: ChunkFairFluidQueue,
     // Minecraft-style scheduled ticks: one due world tick per (fluid, voxel).
     // Earlier reschedules replace later ones; stale bucket records are ignored.
-    scheduled: BTreeMap<u64, VecDeque<FluidTickKey>>,
+    // Equal-due work is round-robin by chunk so frame budgets cannot turn
+    // spatial iteration order into visible chunk-by-chunk propagation.
+    scheduled: BTreeMap<u64, ScheduledFluidBucket>,
     scheduled_due: HashMap<FluidTickKey, u64>,
     // Due work whose chunk is currently not resident. It is reactivated when
     // streaming brings that chunk back instead of being silently discarded.
@@ -259,7 +377,7 @@ impl PendingFluidUpdates {
         }
 
         self.scheduled_due.insert(key, due_tick);
-        self.scheduled.entry(due_tick).or_default().push_back(key);
+        self.scheduled.entry(due_tick).or_default().push(key);
     }
 
     fn pop_due(&mut self, current_tick: u64) -> Option<(FluidTickKey, u64)> {
@@ -274,7 +392,7 @@ impl PendingFluidUpdates {
                     .scheduled
                     .get_mut(&due_tick)
                     .expect("first scheduled fluid bucket must exist");
-                let key = bucket.pop_front();
+                let key = bucket.pop();
                 (key, bucket.is_empty())
             };
             if bucket_empty {
@@ -668,6 +786,63 @@ fn transition_fluid_id(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wake_queue_round_robins_chunks_and_keeps_local_priority() {
+        let mut queue = ChunkFairFluidQueue::default();
+        let a1 = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(1, 2, 3),
+        };
+        let a2 = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(2, 2, 3),
+        };
+        let b1 = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(17, 2, 3),
+        };
+
+        queue.enqueue(a1);
+        queue.enqueue(a2);
+        queue.enqueue(b1);
+        queue.enqueue_front(a2);
+
+        assert_eq!(queue.pop(), Some(a2));
+        assert_eq!(queue.pop(), Some(b1));
+        assert_eq!(queue.pop(), Some(a1));
+        assert_eq!(queue.pop(), None);
+    }
+
+    #[test]
+    fn equal_due_fluid_ticks_round_robin_between_chunks() {
+        let mut pending = PendingFluidUpdates::default();
+        let a1 = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(1, 2, 3),
+        };
+        let a2 = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(2, 2, 3),
+        };
+        let b1 = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(17, 2, 3),
+        };
+        let b2 = FluidTickKey {
+            fluid_id: 0,
+            position: IVec3::new(18, 2, 3),
+        };
+
+        for key in [a1, a2, b1, b2] {
+            pending.schedule_at(key, 10);
+        }
+
+        assert_eq!(pending.pop_due(10), Some((a1, 10)));
+        assert_eq!(pending.pop_due(10), Some((b1, 10)));
+        assert_eq!(pending.pop_due(10), Some((a2, 10)));
+        assert_eq!(pending.pop_due(10), Some((b2, 10)));
+    }
 
     #[test]
     fn scheduled_fluid_tick_keeps_the_earliest_due_time() {

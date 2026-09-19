@@ -19,7 +19,8 @@ use super::{
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
 };
 
-pub(crate) const MAX_REMESH_TASKS_IN_FLIGHT: usize = 4;
+const MAX_TERRAIN_REMESH_TASKS_IN_FLIGHT: usize = 4;
+const MAX_FLUID_REMESH_TASKS_IN_FLIGHT: usize = 4;
 
 type SharedLightingRevisions = Arc<RwLock<HashMap<IVec3, u64>>>;
 
@@ -114,7 +115,9 @@ pub(crate) struct ChunkRemeshTaskOutput {
 pub(crate) struct ChunkRemeshTasks {
     revision: u64,
     snapshot: Option<Arc<MeshContentSnapshot>>,
-    pending: ChunkTaskQueue<ChunkRemeshTaskOutput>,
+    terrain_pending: ChunkTaskQueue<ChunkRemeshTaskOutput>,
+    fluid_pending: ChunkTaskQueue<ChunkRemeshTaskOutput>,
+    poll_fluid_first: bool,
     lighting_revisions: SharedLightingRevisions,
 }
 
@@ -123,7 +126,9 @@ impl Default for ChunkRemeshTasks {
         Self {
             revision: 0,
             snapshot: None,
-            pending: ChunkTaskQueue::default(),
+            terrain_pending: ChunkTaskQueue::default(),
+            fluid_pending: ChunkTaskQueue::default(),
+            poll_fluid_first: true,
             lighting_revisions: Arc::new(RwLock::new(HashMap::default())),
         }
     }
@@ -144,11 +149,27 @@ impl ChunkRemeshTasks {
     }
 
     pub(crate) fn pending_count(&self) -> usize {
-        self.pending.len()
+        self.terrain_pending.len() + self.fluid_pending.len()
     }
 
-    pub(crate) fn contains(&self, coord: IVec3) -> bool {
-        self.pending.contains(coord)
+    pub(crate) fn can_schedule(&self, kind: ChunkRemeshTaskKind) -> bool {
+        match kind {
+            ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
+                self.terrain_pending.len() < MAX_TERRAIN_REMESH_TASKS_IN_FLIGHT
+            }
+            ChunkRemeshTaskKind::Fluid => {
+                self.fluid_pending.len() < MAX_FLUID_REMESH_TASKS_IN_FLIGHT
+            }
+        }
+    }
+
+    pub(crate) fn contains(&self, coord: IVec3, kind: ChunkRemeshTaskKind) -> bool {
+        match kind {
+            ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
+                self.terrain_pending.contains(coord)
+            }
+            ChunkRemeshTaskKind::Fluid => self.fluid_pending.contains(coord),
+        }
     }
 
     pub(crate) fn bump_lighting_revisions(
@@ -183,7 +204,7 @@ impl ChunkRemeshTasks {
         kind: ChunkRemeshTaskKind,
         world: ChunkMeshSnapshot,
     ) -> bool {
-        if self.pending.len() >= MAX_REMESH_TASKS_IN_FLIGHT || self.pending.contains(coord) {
+        if !self.can_schedule(kind) || self.contains(coord, kind) {
             return false;
         }
 
@@ -221,11 +242,29 @@ impl ChunkRemeshTasks {
             }
         });
 
-        self.pending.insert(coord, revision, task)
+        match kind {
+            ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
+                self.terrain_pending.insert(coord, revision, task)
+            }
+            ChunkRemeshTaskKind::Fluid => self.fluid_pending.insert(coord, revision, task),
+        }
     }
 
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<ChunkRemeshTaskOutput>> {
-        self.pending.poll_ready()
+        let fluid_first = self.poll_fluid_first;
+        let ready = if fluid_first {
+            self.fluid_pending
+                .poll_ready()
+                .or_else(|| self.terrain_pending.poll_ready())
+        } else {
+            self.terrain_pending
+                .poll_ready()
+                .or_else(|| self.fluid_pending.poll_ready())
+        };
+        if ready.is_some() {
+            self.poll_fluid_first = !fluid_first;
+        }
+        ready
     }
 }
 
@@ -233,6 +272,17 @@ impl ChunkRemeshTasks {
 mod tests {
     use super::*;
     use crate::voxel::chunk::VoxelChunk;
+
+    #[test]
+    fn fluid_and_terrain_remeshes_can_share_a_chunk_in_flight() {
+        let mut tasks = ChunkRemeshTasks::default();
+        let coord = IVec3::new(3, 2, 5);
+
+        assert!(!tasks.contains(coord, ChunkRemeshTaskKind::Fluid));
+        assert!(!tasks.contains(coord, ChunkRemeshTaskKind::Geometry));
+        assert!(tasks.can_schedule(ChunkRemeshTaskKind::Fluid));
+        assert!(tasks.can_schedule(ChunkRemeshTaskKind::Geometry));
+    }
 
     #[test]
     fn lighting_dependencies_detect_halo_revision_changes() {
