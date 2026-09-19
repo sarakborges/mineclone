@@ -295,6 +295,14 @@ fn seed_loaded_chunk_lighting(
     } else {
         queues.lighting.enqueue_chunk_relaxation(coord);
     }
+
+    // Loading any 16³ section can change direct skylight for every resident
+    // section below it in the same x/z column. Minecraft's light engine tracks
+    // this through section/column status; Asteria explicitly invalidates the
+    // lower resident sections so they converge against the new occluder.
+    queues
+        .lighting
+        .enqueue_loaded_column_below(&work.world, coord);
 }
 
 fn collect_generated_chunks(
@@ -449,6 +457,15 @@ fn dispatch_initial_mesh_tasks(
         // Also covers a resident chunk that reached `ready` by a path other
         // than generated-result integration. No mesh may capture it as DARK.
         seed_loaded_chunk_lighting(coord, content, work, queues);
+
+        // Mirror Minecraft's INITIALIZE_LIGHT -> LIGHT -> FULL lifecycle at
+        // our section granularity. Do not publish a first mesh while the
+        // section's 3x3x3 lighting halo is still converging.
+        if queues.lighting.has_pending_in_halo(coord) {
+            work.state.mark_ready(coord);
+            budget.record(1);
+            continue;
+        }
 
         if !chunk_is_empty && work.mesh_tasks.pending_count() >= MAX_MESH_TASKS_IN_FLIGHT {
             let Some(center) = work.state.center else {
