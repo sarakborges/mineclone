@@ -110,7 +110,7 @@ fn enqueue_neighbor_boundary_spread_targets(
                     pending,
                     world,
                     origin + IVec3::new(local_x, local_y, local_z),
-                    fluid.fluid_id,
+                    fluid,
                 );
             }
         }
@@ -128,7 +128,7 @@ fn enqueue_neighbor_boundary_spread_targets(
                     pending,
                     world,
                     origin + IVec3::new(local_x, local_y, local_z),
-                    fluid.fluid_id,
+                    fluid,
                 );
             }
         }
@@ -155,26 +155,28 @@ fn enqueue_spread_targets_from_fluid(
     pending: &mut PendingFluidUpdates,
     world: &VoxelWorld,
     position: IVec3,
-    fluid: crate::voxel::fluid::FluidCell,
+    source_fluid: crate::voxel::fluid::FluidCell,
 ) {
+    let can_spread_horizontally =
+        can_spread_horizontally_from(world, position, source_fluid);
+
     for offset in FLUID_SPREAD_TARGETS {
-        if offset != IVec3::NEG_Y
-            && !can_spread_horizontally_from(world, position, fluid)
-        {
+        if offset != IVec3::NEG_Y && !can_spread_horizontally {
             continue;
         }
+
         let target = position + offset;
-        let Some((cell, fluid, _)) = world.sample_at(target) else {
+        let Some((cell, target_fluid, _)) = world.sample_at(target) else {
             continue;
         };
-        if cell.is_some() || fluid.is_some() {
+        if cell.is_some() || target_fluid.is_some() {
             continue;
         }
 
         if offset == IVec3::NEG_Y {
-            pending.enqueue_fluid_priority(fluid.fluid_id, target);
+            pending.enqueue_fluid_priority(source_fluid.fluid_id, target);
         } else {
-            pending.enqueue_fluid(fluid.fluid_id, target);
+            pending.enqueue_fluid(source_fluid.fluid_id, target);
         }
     }
 }
