@@ -1,0 +1,18 @@
+{
+  "id": "asteria:glass",
+  "name": { "english": "Glass", "portuguese_brazil": "Vidro", "spanish": "Vidrio" },
+  "category": "crafted_blocks",
+  "secondaryProperties": ["dyed"],
+  "textures": {
+    "top": [{ "texture": "textures/blocks/glass.png", "dyable": true }],
+    "bottom": [{ "texture": "textures/blocks/glass.png", "dyable": true }],
+    "left": [{ "texture": "textures/blocks/glass.png", "dyable": true }],
+    "right": [{ "texture": "textures/blocks/glass.png", "dyable": true }],
+    "front": [{ "texture": "textures/blocks/glass.png", "dyable": true }],
+    "back": [{ "texture": "textures/blocks/glass.png", "dyable": true }]
+  },
+  "rotateTexture": { "top": false, "bottom": false, "left": false, "right": false, "front": false, "back": false },
+  "alphaBlend": true,
+  "lightDampening": 0,
+  "castsShadow": false
+}

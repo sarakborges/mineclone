@@ -1,14 +1,222 @@
 {
-  "id": "mineclone:overworld",
-  "name": "The Overworld",
+  "id": "asteria:overworld",
+  "name": {
+    "english": "The Overworld",
+    "portuguese_brazil": "Mundo da Superfície",
+    "spanish": "Mundo de la Superficie"
+  },
   "biomes": [
-    "mineclone:overworld/plains",
-    "mineclone:overworld/wasteland",
-    "mineclone:overworld/wicked_realm",
-    "mineclone:overworld/enchanted_realm",
-    "mineclone:overworld/ocean"
+    {
+      "id": "asteria:overworld/plains",
+      "weight": 1,
+      "size": {
+        "x": {
+          "min": 120,
+          "max": 420
+        },
+        "z": {
+          "min": 120,
+          "max": 420
+        },
+        "y": null
+      }
+    },
+    {
+      "id": "asteria:overworld/wasteland",
+      "weight": 1.3,
+      "size": {
+        "x": {
+          "min": 120,
+          "max": 420
+        },
+        "z": {
+          "min": 120,
+          "max": 420
+        },
+        "y": null
+      },
+      "avoidNear": [
+        "asteria:overworld/witchwood",
+        "asteria:overworld/enchanted_forest"
+      ]
+    },
+    {
+      "id": "asteria:overworld/witchwood",
+      "weight": 1.25,
+      "size": {
+        "x": {
+          "min": 140,
+          "max": 460
+        },
+        "z": {
+          "min": 140,
+          "max": 460
+        },
+        "y": null
+      }
+    },
+    {
+      "id": "asteria:overworld/enchanted_forest",
+      "weight": 1.25,
+      "size": {
+        "x": {
+          "min": 140,
+          "max": 460
+        },
+        "z": {
+          "min": 140,
+          "max": 460
+        },
+        "y": null
+      }
+    },
+    {
+      "id": "asteria:overworld/mountains",
+      "weight": 0.85,
+      "size": {
+        "x": {
+          "min": 90,
+          "max": 260
+        },
+        "z": {
+          "min": 90,
+          "max": 260
+        },
+        "y": null
+      },
+      "avoidNear": [
+        "asteria:overworld/gorge",
+        "asteria:overworld/alps",
+        "asteria:overworld/mountain_belt",
+        "asteria:overworld/volcano"
+      ]
+    },
+    {
+      "id": "asteria:overworld/gorge",
+      "weight": 1,
+      "size": {
+        "x": {
+          "min": 80,
+          "max": 180
+        },
+        "z": {
+          "min": 140,
+          "max": 360
+        },
+        "y": null
+      },
+      "avoidNear": [
+        "asteria:overworld/mountains",
+        "asteria:overworld/alps",
+        "asteria:overworld/mountain_belt",
+        "asteria:overworld/volcano"
+      ]
+    },
+    {
+      "id": "asteria:overworld/alps",
+      "weight": 1,
+      "size": {
+        "x": {
+          "min": 140,
+          "max": 320
+        },
+        "z": {
+          "min": 140,
+          "max": 320
+        },
+        "y": null
+      },
+      "avoidNear": [
+        "asteria:overworld/mountains",
+        "asteria:overworld/gorge",
+        "asteria:overworld/mountain_belt",
+        "asteria:overworld/volcano"
+      ]
+    },
+    {
+      "id": "asteria:overworld/mountain_belt",
+      "weight": 1,
+      "size": {
+        "x": {
+          "min": 160,
+          "max": 380
+        },
+        "z": {
+          "min": 160,
+          "max": 380
+        },
+        "y": null
+      },
+      "avoidNear": [
+        "asteria:overworld/mountains",
+        "asteria:overworld/gorge",
+        "asteria:overworld/alps",
+        "asteria:overworld/volcano"
+      ]
+    },
+    {
+      "id": "asteria:overworld/volcano",
+      "weight": 1,
+      "size": {
+        "x": {
+          "min": 120,
+          "max": 260
+        },
+        "z": {
+          "min": 120,
+          "max": 260
+        },
+        "y": null
+      },
+      "avoidNear": [
+        "asteria:overworld/mountains",
+        "asteria:overworld/gorge",
+        "asteria:overworld/alps",
+        "asteria:overworld/mountain_belt"
+      ]
+    },
+    {
+      "id": "asteria:overworld/caverns",
+      "weight": 1,
+      "size": {
+        "x": {
+          "min": 48,
+          "max": 96
+        },
+        "z": {
+          "min": 48,
+          "max": 96
+        },
+        "y": {
+          "min": 18,
+          "max": 34
+        }
+      }
+    },
+    {
+      "id": "asteria:overworld/ocean",
+      "weight": 1,
+      "size": {
+        "x": {
+          "min": 180,
+          "max": 520
+        },
+        "z": {
+          "min": 180,
+          "max": 520
+        },
+        "y": null
+      }
+    }
   ],
-  "day_night_cycle": "mineclone:overworld/day_night_cycle",
-  "sky": "mineclone:overworld/sky",
-  "sea_level": 90
+  "dayNightCycle": "asteria:overworld/day_night_cycle",
+  "sky": "asteria:overworld/sky",
+  "seaLevel": 90,
+  "maxEntities": 128,
+  "hydrology": {
+    "waterFluid": "asteria:water",
+    "oceanBiome": "asteria:overworld/ocean",
+    "riverWeight": 1,
+    "lakeWeight": 1
+  }
 }

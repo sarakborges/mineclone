@@ -6,3 +6,10 @@ pub enum SettingsState {
     Closed,
     Open,
 }
+
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SettingsScreenMode {
+    #[default]
+    Game,
+    World,
+}

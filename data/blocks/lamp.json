@@ -1,0 +1,36 @@
+{
+  "id": "asteria:lamp",
+  "name": { "english": "Lamp", "portuguese_brazil": "Lâmpada", "spanish": "Lámpara" },
+  "category": "light_sources",
+  "secondaryProperties": ["dyed"],
+  "textures": {
+    "top": [
+      { "texture": "textures/blocks/lamp/base.png", "dyable": true },
+      { "texture": "textures/blocks/lamp/frame.png", "dyable": false }
+    ],
+    "bottom": [
+      { "texture": "textures/blocks/lamp/base.png", "dyable": true },
+      { "texture": "textures/blocks/lamp/frame.png", "dyable": false }
+    ],
+    "left": [
+      { "texture": "textures/blocks/lamp/base.png", "dyable": true },
+      { "texture": "textures/blocks/lamp/frame.png", "dyable": false }
+    ],
+    "right": [
+      { "texture": "textures/blocks/lamp/base.png", "dyable": true },
+      { "texture": "textures/blocks/lamp/frame.png", "dyable": false }
+    ],
+    "front": [
+      { "texture": "textures/blocks/lamp/base.png", "dyable": true },
+      { "texture": "textures/blocks/lamp/frame.png", "dyable": false }
+    ],
+    "back": [
+      { "texture": "textures/blocks/lamp/base.png", "dyable": true },
+      { "texture": "textures/blocks/lamp/frame.png", "dyable": false }
+    ]
+  },
+  "rotateTexture": { "top": false, "bottom": false, "left": false, "right": false, "front": false, "back": false },
+  "lightEmission": 15,
+  "lightDampening": 15,
+  "castsShadow": true
+}

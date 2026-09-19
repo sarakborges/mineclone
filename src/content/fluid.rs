@@ -3,22 +3,31 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::color::Rgb;
+use crate::localization::LocalizedText;
+
+use super::color::Hsi;
 
 pub type FluidId = u16;
 
 #[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FluidDefinition {
     pub id: String,
-    pub name: String,
-    pub color: Rgb,
+    pub name: LocalizedText,
+    pub color: Hsi,
     pub opacity: f32,
     pub roughness: f32,
     #[serde(default)]
     pub metallic: f32,
+    #[serde(default)]
+    pub light_dampening: u8,
+    #[serde(default)]
+    pub light_emission: u8,
+    pub spread_speed: f32,
+    pub max_spread: u16,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 pub struct FluidRegistry {
     definitions: Vec<FluidDefinition>,
     ids: HashMap<String, FluidId>,
@@ -26,6 +35,10 @@ pub struct FluidRegistry {
 
 impl FluidRegistry {
     pub fn insert(&mut self, definition: FluidDefinition) {
+        definition
+            .name
+            .validate(&format!("fluid {} name", definition.id));
+        assert!(definition.color.is_valid(), "fluid {} HSI color is invalid", definition.id);
         assert!(
             (0.0..=1.0).contains(&definition.opacity),
             "fluid {} opacity must be between 0 and 1",
@@ -39,6 +52,21 @@ impl FluidRegistry {
         assert!(
             (0.0..=1.0).contains(&definition.metallic),
             "fluid {} metallic must be between 0 and 1",
+            definition.id
+        );
+        assert!(
+            definition.light_dampening <= 15,
+            "fluid {} light dampening must be between 0 and 15",
+            definition.id
+        );
+        assert!(
+            definition.light_emission <= 15,
+            "fluid {} light emission must be between 0 and 15",
+            definition.id
+        );
+        assert!(
+            definition.spread_speed.is_finite() && definition.spread_speed >= 0.0,
+            "fluid {} spread speed must be finite and non-negative",
             definition.id
         );
 

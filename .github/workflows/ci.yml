@@ -1,0 +1,83 @@
+name: Rust validation
+
+on:
+  pull_request:
+    paths-ignore:
+      - HANDOFF.md
+  push:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      - HANDOFF.md
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    # Keep the OS fixed: native package archives and compiler outputs are
+    # specific to the runner distribution and Rust toolchain.
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # Fail early on untranslated player-facing content, mismatched UI keys
+      # or broken placeholders. Do not spend time restoring Bevy for bad JSON.
+      - name: Audit localizations
+        run: python3 tools/check_localizations.py
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      # The first run installs the Bevy system libraries; subsequent runs
+      # restore their installed files instead of repeating apt-get install.
+      - name: Cache Linux dependencies
+        uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
+        with:
+          packages: >-
+            libasound2-dev libfontconfig1-dev libudev-dev libwayland-dev
+            libx11-dev libxkbcommon-dev libxcursor-dev libxi-dev libxrandr-dev
+          version: ubuntu-24.04-bevy-0.19-v1
+
+      # Cargo.lock is intentionally gitignored. Without restoring it BEFORE
+      # rust-cache, every fresh runner resolves hundreds of dependencies again,
+      # potentially downloading newer crates and invalidating compiled artifacts
+      # even when the Cargo cache reports an exact hit.
+      - name: Cache CI Cargo.lock
+        id: cargo-lock
+        uses: actions/cache@v5
+        with:
+          path: Cargo.lock
+          key: ubuntu-24.04-cargo-lock-v1-${{ hashFiles('Cargo.toml', '.cargo/config.toml') }}
+
+      # On a cold cache only: generate the lock before rust-cache computes its
+      # dependency key; the cache action saves this file at the end of the job.
+      - name: Resolve dependencies on cache miss
+        if: steps.cargo-lock.outputs.cache-hit != 'true'
+        run: cargo generate-lockfile
+
+      # Provide auditable evidence that the lockfile and crate versions remain
+      # stable across commits. A true cache hit skips dependency resolution.
+      - name: Report dependency cache
+        run: |
+          echo "Cargo.lock restored from cache: ${{ steps.cargo-lock.outputs.cache-hit }}"
+          sha256sum Cargo.lock
+
+      # Cache downloaded crates and compiled dependency artifacts. The key
+      # now sees the restored lockfile, keeping crate versions stable across
+      # successive commits instead of repeatedly rebuilding Bevy.
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Check
+        run: cargo check --locked

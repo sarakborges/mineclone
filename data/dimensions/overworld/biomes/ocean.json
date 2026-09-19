@@ -1,45 +1,135 @@
 {
-  "id": "mineclone:overworld/ocean",
-  "name": "Ocean",
-  "size": {
-    "x": { "min": 90.0, "max": 450.0 },
-    "z": { "min": 90.0, "max": 450.0 },
-    "y": null
+  "id": "asteria:overworld/ocean",
+  "name": {
+    "english": "Ocean",
+    "portuguese_brazil": "Oceano",
+    "spanish": "Océano"
   },
-  "terrain": {
-    "type": "ocean",
-    "floor_depth": 16.0,
-    "amplitude": 4.0,
-    "scale": 0.01
+  "kind": "surface",
+  "hydrology": {
+    "canGenerateLake": false,
+    "canGenerateRiver": false,
+    "lakeChanceMultiplier": 0,
+    "riverWidthMultiplier": 1,
+    "shoreBlock": "asteria:sand",
+    "oceanBedBlock": "asteria:sand"
   },
-  "surface_fluid": "mineclone:water",
   "visuals": {
-    "sky_color": {
-      "dawn": { "r": 0.48, "g": 0.68, "b": 0.90 },
-      "day": { "r": 0.20, "g": 0.58, "b": 0.96 },
-      "dusk": { "r": 0.58, "g": 0.48, "b": 0.70 },
-      "night": { "r": 0.02, "g": 0.04, "b": 0.11 }
+    "skyColor": {
+      "dawn": {
+        "hue": 214.5016,
+        "saturation": 0.3043,
+        "intensity": 0.69
+      },
+      "day": {
+        "hue": 211.7405,
+        "saturation": 0.6512,
+        "intensity": 0.5733
+      },
+      "dusk": {
+        "hue": 265.285,
+        "saturation": 0.1724,
+        "intensity": 0.58
+      },
+      "night": {
+        "hue": 227.7837,
+        "saturation": 0.6471,
+        "intensity": 0.0567
+      }
     },
-    "fog_color": {
-      "dawn": { "r": 0.52, "g": 0.72, "b": 0.86 },
-      "day": { "r": 0.48, "g": 0.72, "b": 0.90 },
-      "dusk": { "r": 0.56, "g": 0.52, "b": 0.68 },
-      "night": { "r": 0.03, "g": 0.06, "b": 0.12 }
+    "fogColor": {
+      "dawn": {
+        "hue": 204.1825,
+        "saturation": 0.2727,
+        "intensity": 0.66
+      },
+      "day": {
+        "hue": 204.5036,
+        "saturation": 0.3762,
+        "intensity": 0.6733
+      },
+      "dusk": {
+        "hue": 240,
+        "saturation": 0.0769,
+        "intensity": 0.5633
+      },
+      "night": {
+        "hue": 216.5868,
+        "saturation": 0.5833,
+        "intensity": 0.06
+      }
     },
-    "grass_color": { "r": 0.18, "g": 0.48, "b": 0.34 },
-    "underwater_tint": {
-      "color": { "r": 0.05, "g": 0.32, "b": 0.68 },
-      "opacity": 0.20
+    "grassColor": {
+      "hue": 114.7913,
+      "saturation": 0.449,
+      "intensity": 0.3267
+    },
+    "foliageColor": {
+      "hue": 114.7913,
+      "saturation": 0.449,
+      "intensity": 0.3267
+    },
+    "underwaterTint": {
+      "color": {
+        "hue": 212.3615,
+        "saturation": 0.82,
+        "intensity": 0.3333
+      },
+      "opacity": 0.32
     },
     "stars": {
-      "density": 0.60,
-      "color": { "r": 0.88, "g": 0.93, "b": 1.0 }
+      "density": 0.68,
+      "color": {
+        "hue": 215.4964,
+        "saturation": 0.0605,
+        "intensity": 0.9367
+      }
     },
     "clouds": {
-      "density": 0.50,
-      "color": { "r": 0.88, "g": 0.92, "b": 0.98 }
+      "density": 0.38,
+      "color": {
+        "hue": 210,
+        "saturation": 0.0426,
+        "intensity": 0.94
+      }
     },
-    "terrain_roughness": 0.96,
-    "terrain_metallic": 0.0
+    "terrainRoughness": 0.94,
+    "terrainMetallic": 0
+  },
+  "climate": {
+    "continentalness": {
+      "min": 0,
+      "max": 0.38
+    }
+  },
+  "terrain": {
+    "type": "rolling",
+    "baseHeight": -4,
+    "amplitude": 3,
+    "scale": 0.006,
+    "detailAmplitude": 1.5,
+    "detailScale": 0.026
+  },
+  "allowSurfaceCarvers": false,
+  "surfaceLayers": [
+    {
+      "block": "asteria:sand",
+      "depth": 5
+    },
+    {
+      "block": "asteria:stone"
+    }
+  ],
+  "surfaceMargin": {
+    "width": 32,
+    "surfaceLayers": [
+      {
+        "block": "asteria:sand",
+        "depth": 4
+      },
+      {
+        "block": "asteria:stone"
+      }
+    ]
   }
 }

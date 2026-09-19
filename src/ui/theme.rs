@@ -1,45 +1,37 @@
 use bevy::prelude::*;
 
-pub const SCREEN_BACKGROUND: Color = Color::srgb(0.018, 0.014, 0.036);
-pub const OVERLAY: Color = Color::srgba(0.012, 0.010, 0.028, 0.72);
-pub const FROSTED_SURFACE: Color = Color::srgba(0.035, 0.027, 0.072, 0.82);
-pub const HUD_SURFACE: Color = Color::srgba(0.025, 0.020, 0.055, 0.78);
-
-pub const TEXT_PRIMARY: Color = Color::srgb(0.95, 0.96, 1.0);
-pub const TEXT_MUTED: Color = Color::srgb(0.68, 0.66, 0.78);
-pub const TEXT_SUBTLE: Color = Color::srgba(0.73, 0.75, 0.86, 0.58);
-
-pub const CYAN_GLOW: Color = Color::srgba(0.25, 0.76, 1.0, 0.20);
-
-pub const SLIDER_TRACK: Color = Color::srgba(0.12, 0.09, 0.22, 0.90);
-pub const SLIDER_THUMB: Color = Color::srgb(0.78, 0.83, 0.98);
+// Asteria/Ore-UI tokens: dark violet surfaces, crisp rectangular controls,
+// restrained purple framing, and Minecraft-style green/red semantic states.
+pub const SCREEN_BACKGROUND: Color = Color::srgb(0.045, 0.043, 0.060);
+pub const FROSTED_SURFACE: Color = Color::srgb(0.115, 0.105, 0.145);
+pub const HUD_SURFACE: Color = Color::srgba(0.070, 0.064, 0.090, 0.96);
+pub const SURFACE_ELEVATED: Color = Color::srgb(0.155, 0.140, 0.190);
+pub const SURFACE_INSET: Color = Color::srgb(0.038, 0.034, 0.052);
+pub const BORDER: Color = Color::srgba(0.55, 0.50, 0.66, 0.62);
+pub const BORDER_STRONG: Color = Color::srgba(0.82, 0.78, 0.90, 0.88);
+pub const BORDER_FOCUS: Color = Color::srgba(0.72, 0.58, 0.98, 0.98);
+pub const TEXT_PRIMARY: Color = Color::srgb(0.94, 0.94, 0.96);
+pub const TEXT_MUTED: Color = Color::srgb(0.70, 0.68, 0.76);
+pub const TEXT_SUBTLE: Color = Color::srgba(0.70, 0.68, 0.76, 0.68);
+pub const PURPLE: Color = Color::srgb(0.48, 0.30, 0.72);
+pub const PURPLE_HOVER: Color = Color::srgb(0.58, 0.38, 0.84);
+pub const PURPLE_SOFT: Color = Color::srgba(0.42, 0.27, 0.62, 0.72);
+pub const DANGER: Color = Color::srgb(0.78, 0.20, 0.20);
+pub const DANGER_HOVER: Color = Color::srgb(0.86, 0.28, 0.28);
+pub const DANGER_PRESSED: Color = Color::srgb(0.62, 0.14, 0.14);
+pub const SLIDER_TRACK: Color = Color::srgb(0.20, 0.18, 0.24);
+pub const SLIDER_THUMB: Color = Color::srgb(0.88, 0.88, 0.90);
 
 pub fn cosmic_background_gradient() -> BackgroundGradient {
-    BackgroundGradient(vec![
-        RadialGradient {
-            position: UiPosition::CENTER,
-            shape: RadialGradientShape::Circle(vh(72)),
-            stops: vec![
-                ColorStop::auto(Color::srgba(0.30, 0.12, 0.62, 0.28)),
-                ColorStop::auto(Color::srgba(0.18, 0.08, 0.40, 0.14)),
-                ColorStop::auto(Color::srgba(0.08, 0.03, 0.18, 0.0)),
-            ],
-            ..default()
-        }
-        .into(),
-        LinearGradient::to_top_right(vec![
-            ColorStop::auto(Color::srgba(0.04, 0.24, 0.34, 0.14)),
-            ColorStop::auto(Color::srgba(0.02, 0.06, 0.12, 0.0)),
-            ColorStop::auto(Color::srgba(0.20, 0.05, 0.30, 0.10)),
-        ])
-        .into(),
-    ])
-}
-
-pub fn frosted_surface_gradient() -> BackgroundGradient {
     BackgroundGradient::from(LinearGradient::to_bottom_right(vec![
-        ColorStop::auto(Color::srgba(0.43, 0.24, 0.78, 0.12)),
-        ColorStop::auto(Color::srgba(0.08, 0.07, 0.15, 0.02)),
-        ColorStop::auto(Color::srgba(0.20, 0.55, 0.68, 0.07)),
+        ColorStop::auto(Color::srgba(0.34, 0.22, 0.52, 0.10)),
+        ColorStop::auto(Color::srgba(0.34, 0.22, 0.52, 0.0)),
+    ]))
+}
+pub fn frosted_surface_gradient() -> BackgroundGradient {
+    BackgroundGradient::from(LinearGradient::to_bottom(vec![
+        ColorStop::percent(Color::srgba(0.58, 0.42, 0.78, 0.08), 0.0),
+        ColorStop::percent(Color::srgba(0.58, 0.42, 0.78, 0.0), 20.0),
+        ColorStop::percent(Color::srgba(0.0, 0.0, 0.0, 0.035), 100.0),
     ]))
 }

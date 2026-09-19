@@ -1,18 +1,20 @@
 use bevy::{
     prelude::*,
-    ui_widgets::{observe, Slider, SliderRange, SliderThumb, SliderValue, TrackClick},
+    ui_widgets::observe,
 };
 
 use crate::{
-    ui::{surface, theme, typography},
+    localization::{Language, UiLocalization},
+    ui::{
+        numeric_input::{
+            NumericInputSizing, NumericInputState, numeric_input_field,
+        },
+        slider, typography,
+    },
     world::render_distance::{MAX_RENDER_DISTANCE_CHUNKS, MIN_RENDER_DISTANCE_CHUNKS},
 };
 
-use super::render_distance_logic::{
-    apply_render_distance, render_distance_label, slider_position,
-};
-
-const SLIDER_THUMB_SIZE: f32 = 16.0;
+use super::render_distance_logic::{apply_render_distance, render_distance_label};
 
 #[derive(Component)]
 pub(super) struct RenderDistanceSlider;
@@ -23,77 +25,73 @@ pub(super) struct RenderDistanceSliderThumb;
 #[derive(Component)]
 pub(super) struct RenderDistanceValueText;
 
-pub(super) fn render_distance_section(chunks: i32) -> impl Bundle {
-    (
-        surface::settings_section(),
-        children![
-            typography::heading("Render Distance"),
-            (
-                typography::muted(render_distance_label(chunks)),
-                RenderDistanceValueText,
-            ),
-            render_distance_slider(chunks),
-            typography::caption(
-                "Controls how far terrain is generated and rendered around the player.",
-            ),
-        ],
-    )
-}
+#[derive(Component)]
+pub(super) struct RenderDistanceInput;
 
-fn render_distance_slider(chunks: i32) -> impl Bundle {
-    let initial_position = slider_position(chunks as f32);
+#[derive(Component)]
+pub(super) struct RenderDistanceInputText;
 
+pub(super) struct RenderDistanceInputKind;
+pub(super) type RenderDistanceInputState = NumericInputState<RenderDistanceInputKind>;
+
+pub(super) fn graphics_section(
+    chunks: i32,
+    localization: &UiLocalization,
+    language: Language,
+) -> impl Bundle {
     (
-        RenderDistanceSlider,
-        Slider {
-            track_click: TrackClick::Snap,
-            ..default()
-        },
-        SliderValue(chunks as f32),
-        SliderRange::new(
-            MIN_RENDER_DISTANCE_CHUNKS as f32,
-            MAX_RENDER_DISTANCE_CHUNKS as f32,
-        ),
         Node {
             width: percent(100),
-            height: px(32),
-            position_type: PositionType::Relative,
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Stretch,
+            row_gap: px(12),
             ..default()
         },
-        observe(apply_render_distance),
         children![
-            (
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: px(0),
-                    right: px(0),
-                    top: px(13),
-                    height: px(6),
-                    border_radius: BorderRadius::all(px(3)),
-                    ..default()
-                },
-                BackgroundColor(theme::SLIDER_TRACK),
+            typography::setting_title(
+                localization
+                    .text(language, "settings.renderDistance")
+                    .to_owned(),
+            ),
+            typography::caption(
+                localization
+                    .text(language, "settings.renderDistance.description")
+                    .to_owned(),
             ),
             (
-                SliderThumb,
-                RenderDistanceSliderThumb,
+                typography::muted(render_distance_label(
+                    chunks,
+                    localization,
+                    language,
+                )),
+                RenderDistanceValueText,
+            ),
+            (
                 Node {
-                    position_type: PositionType::Absolute,
-                    width: px(SLIDER_THUMB_SIZE),
-                    height: px(SLIDER_THUMB_SIZE),
-                    left: percent(initial_position * 100.0),
-                    top: px(8),
-                    border_radius: BorderRadius::MAX,
+                    width: percent(100),
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    column_gap: px(12),
                     ..default()
                 },
-                BackgroundColor(theme::SLIDER_THUMB),
-                BoxShadow(vec![ShadowStyle {
-                    color: theme::CYAN_GLOW,
-                    x_offset: px(0),
-                    y_offset: px(0),
-                    spread_radius: px(0),
-                    blur_radius: px(12),
-                }]),
+                children![
+                    (
+                        slider::slider_track(
+                            chunks as f32,
+                            MIN_RENDER_DISTANCE_CHUNKS as f32,
+                            MAX_RENDER_DISTANCE_CHUNKS as f32,
+                            RenderDistanceSlider,
+                            RenderDistanceSliderThumb,
+                        ),
+                        observe(apply_render_distance),
+                    ),
+                    numeric_input_field(
+                        chunks.to_string(),
+                        RenderDistanceInput,
+                        RenderDistanceInputText,
+                        NumericInputSizing::Fixed(slider::SLIDER_NUMBER_INPUT_WIDTH),
+                    ),
+                ],
             ),
         ],
     )

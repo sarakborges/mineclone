@@ -26,6 +26,10 @@ pub fn prepare_runtime_directory() {
 
 pub fn data_root() -> PathBuf {
     let path = Path::new(DATA_DIRECTORY);
-    assert!(path.is_dir(), "data directory not found at {}", path.display());
+    assert!(
+        path.is_dir(),
+        "data directory not found at {}",
+        path.display()
+    );
     path.to_path_buf()
 }

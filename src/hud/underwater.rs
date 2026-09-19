@@ -2,10 +2,9 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
-    content::biome::BiomeRegistry,
     player::camera::GameplayCamera,
+    rendering::biome_visuals::CurrentBiomeVisuals,
     voxel::world::VoxelWorld,
-    world::biome_field::BiomeField,
 };
 
 #[derive(Component)]
@@ -45,9 +44,8 @@ fn spawn_underwater_tint(mut commands: Commands) {
 fn update_underwater_tint(
     camera: Single<&Transform, With<GameplayCamera>>,
     world: Res<VoxelWorld>,
-    biomes: Res<BiomeRegistry>,
-    biome_field: Res<BiomeField>,
-    mut tint: Single<(&mut BackgroundColor, &mut Visibility), With<UnderwaterTint>>,
+    biome_visuals: CurrentBiomeVisuals,
+    tint: Single<(&mut BackgroundColor, &mut Visibility), With<UnderwaterTint>>,
 ) {
     let eye = camera.translation;
     let voxel = IVec3::new(
@@ -56,24 +54,33 @@ fn update_underwater_tint(
         eye.z.floor() as i32,
     );
     let local_height = eye.y - voxel.y as f32;
+    let (mut background, mut visibility) = tint.into_inner();
 
     let Some(cell) = world.fluid_at(voxel) else {
-        *tint.1 = Visibility::Hidden;
+        if *visibility != Visibility::Hidden {
+            *visibility = Visibility::Hidden;
+        }
         return;
     };
 
     if local_height >= cell.height() {
-        *tint.1 = Visibility::Hidden;
+        if *visibility != Visibility::Hidden {
+            *visibility = Visibility::Hidden;
+        }
         return;
     }
 
-    let biome_tint = biome_field.underwater_tint(Vec2::new(eye.x, eye.z), &biomes);
+    let entering_underwater = *visibility != Visibility::Visible;
+    if entering_underwater || biome_visuals.inputs_changed() {
+        let color = biome_visuals.blend_hsi(|biome| biome.visuals().underwater_tint.color);
+        let opacity = biome_visuals
+            .weighted_scalar(|biome| biome.visuals().underwater_tint.opacity)
+            .clamp(0.0, 1.0);
+        let [red, green, blue] = color.to_srgb();
+        background.0 = Color::srgba(red, green, blue, opacity);
+    }
 
-    tint.0.0 = Color::srgba(
-        biome_tint.color.r,
-        biome_tint.color.g,
-        biome_tint.color.b,
-        biome_tint.opacity,
-    );
-    *tint.1 = Visibility::Visible;
+    if entering_underwater {
+        *visibility = Visibility::Visible;
+    }
 }

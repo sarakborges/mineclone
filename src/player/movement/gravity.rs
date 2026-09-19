@@ -1,12 +1,16 @@
 use bevy::prelude::*;
 
-use crate::{player::camera::GameplayCamera, voxel::world::VoxelWorld};
+use crate::{
+    player::PlayerEntity,
+    voxel::world::VoxelWorld,
+};
 
 use super::{
-    collision::{move_axis, player_collides, Axis},
+    collision::{Axis, MoveAxisResult, move_axis, player_collides},
     config::{GRAVITY, GROUND_PROBE, JUMP_SPEED},
     flight::FlightState,
     swimming::SwimmingState,
+    vertical::VerticalMovementContext,
 };
 
 #[derive(Component)]
@@ -25,10 +29,8 @@ impl Default for GravityState {
 }
 
 pub(super) fn apply_gravity(
-    time: Res<Time>,
-    keys: Res<ButtonInput<KeyCode>>,
-    world: Res<VoxelWorld>,
-    mut transform: Single<&mut Transform, With<GameplayCamera>>,
+    context: VerticalMovementContext,
+    mut transform: Single<&mut Transform, With<PlayerEntity>>,
     flight: Single<&FlightState>,
     swimming: Single<&SwimmingState>,
     mut gravity: Single<&mut GravityState>,
@@ -37,20 +39,33 @@ pub(super) fn apply_gravity(
         return;
     }
 
-    if gravity.grounded && !has_ground_support(&transform, &world) {
-        gravity.grounded = false;
+    if gravity.grounded {
+        if !has_ground_support(&transform, &context.world) {
+            gravity.grounded = false;
+        } else if context.keys.just_pressed(KeyCode::Space) {
+            gravity.vertical_velocity = JUMP_SPEED;
+            gravity.grounded = false;
+        } else {
+            return;
+        }
     }
 
-    if keys.just_pressed(KeyCode::Space) && gravity.grounded {
-        gravity.vertical_velocity = JUMP_SPEED;
-        gravity.grounded = false;
+    let delta_seconds = context.delta_seconds();
+    if delta_seconds <= 0.0 {
+        return;
     }
 
-    gravity.vertical_velocity += GRAVITY * time.delta_secs();
-    let vertical_delta = gravity.vertical_velocity * time.delta_secs();
-    let hit_vertical_surface = move_axis(&mut transform, &world, vertical_delta, Axis::Y);
+    gravity.vertical_velocity += GRAVITY * delta_seconds;
+    let vertical_delta = gravity.vertical_velocity * delta_seconds;
+    let hit_vertical_surface = move_axis(
+        &mut transform,
+        &context.world,
+        vertical_delta,
+        Axis::Y,
+        None,
+    );
 
-    if hit_vertical_surface {
+    if matches!(hit_vertical_surface, MoveAxisResult::Blocked | MoveAxisResult::Stepped(_)) {
         if gravity.vertical_velocity < 0.0 {
             gravity.grounded = true;
         }

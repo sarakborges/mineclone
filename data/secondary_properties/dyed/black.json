@@ -1,0 +1,5 @@
+{
+  "id": "black",
+  "name": { "english": "Black", "portuguese_brazil": "Preto", "spanish": "Negro" },
+  "color": { "hue": 240.000000, "saturation": 0.043958, "intensity": 0.118954 }
+}

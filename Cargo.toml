@@ -1,17 +1,32 @@
 [package]
-name = "mineclone"
-version = "0.1.1"
+name = "asteria"
+version = "0.10.16"
 edition = "2024"
 build = "build.rs"
-default-run = "mineclone"
+default-run = "asteria"
 
 [dependencies]
-bevy = { version = "0.19.1", features = ["system_font_discovery"] }
+arrayvec = "0.7"
+bevy = { version = "0.19.1", features = ["system_font_discovery", "system_clipboard"] }
+bevy_dylib = { version = "0.19.1", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+smallvec = "1"
 winit = { version = "0.30", default-features = false }
 
 [build-dependencies]
 image = { version = "0.25", default-features = false, features = ["png"] }
 winresource = "0.1.31"
+
+# Keep development builds fast to iterate on without making runtime-heavy
+# world generation and rendering effectively unoptimized. Dependency debug
+# info is also disabled below. The app itself uses no debug info so MSVC does
+# not spend the final link producing a large development PDB on every run.
+[profile.dev]
+opt-level = 1
+debug = false
+
+[profile.dev.package."*"]
+opt-level = 3
+debug = false

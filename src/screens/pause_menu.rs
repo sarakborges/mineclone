@@ -1,20 +1,15 @@
 use bevy::prelude::*;
 
 use crate::{
-    app::{
-        game_state::GameState,
-        pause_state::PauseState,
-        settings_state::SettingsState,
-    },
-    player::camera::GameplayCamera,
+    app::{game_state::GameState, pause_state::PauseState, settings_state::{SettingsScreenMode, SettingsState}},
+    localization::{ActiveLanguage, UiLocalization},
     ui::{
-        button::menu_button,
-        surface,
-        theme,
+        button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
+        visibility::set_visibility,
     },
-    world::InMemoryWorldSave,
+    world::save_session::{WorldSaveContext, WorldSession},
 };
 
 pub struct PauseMenuPlugin;
@@ -22,10 +17,13 @@ pub struct PauseMenuPlugin;
 impl Plugin for PauseMenuPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(PauseState::Paused), spawn_pause_menu)
-            .add_systems(OnEnter(SettingsState::Open), hide_pause_menu)
+            .add_systems(
+                OnEnter(SettingsState::Open),
+                set_visibility::<PauseMenuRoot, false>,
+            )
             .add_systems(
                 OnEnter(SettingsState::Closed),
-                show_pause_menu.run_if(in_state(PauseState::Paused)),
+                set_visibility::<PauseMenuRoot, true>.run_if(in_state(PauseState::Paused)),
             )
             .add_systems(
                 Update,
@@ -39,15 +37,25 @@ impl Plugin for PauseMenuPlugin {
 #[derive(Component)]
 struct PauseMenuRoot;
 
+#[derive(Component)]
+struct PauseSaveFeedback;
+
 #[derive(Component, Clone, Copy)]
 enum PauseMenuAction {
     Resume,
-    Settings,
+    WorldSettings,
+    GameSettings,
     LeaveWorld,
     ExitGame,
 }
 
-fn spawn_pause_menu(mut commands: Commands) {
+fn spawn_pause_menu(
+    mut commands: Commands,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
+) {
+    let language = language.get();
+
     commands
         .spawn((
             DespawnOnExit(PauseState::Paused),
@@ -62,68 +70,113 @@ fn spawn_pause_menu(mut commands: Commands) {
                 justify_content: JustifyContent::Center,
                 ..default()
             },
-            BackgroundColor(theme::OVERLAY),
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.68)),
+            GlobalZIndex(1000),
         ))
         .with_children(|root| {
-            root.spawn(surface::modal_panel()).with_children(|panel| {
-                panel.spawn((
-                    typography::title("PAUSED"),
+            root.spawn(Node {
+                width: px(360),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                row_gap: px(12),
+                ..default()
+            })
+            .with_children(|menu| {
+                menu.spawn(button(
+                    localization.text(language, "pause.resume").to_owned(),
+                    PauseMenuAction::Resume,
+                    px(360),
+                    COMPACT_CONTROL_HEIGHT,
+                    ButtonVariant::Normal,
+                ));
+                menu.spawn((
                     Node {
-                        margin: UiRect::bottom(px(10)),
+                        width: px(360),
+                        flex_direction: FlexDirection::Row,
+                        column_gap: px(12),
                         ..default()
                     },
+                    children![
+                        button(
+                            localization.text(language, "settings.section.worldSettings").to_owned(),
+                            PauseMenuAction::WorldSettings,
+                            px(174),
+                            COMPACT_CONTROL_HEIGHT,
+                            ButtonVariant::Normal,
+                        ),
+                        button(
+                            localization.text(language, "common.gameSettings").to_owned(),
+                            PauseMenuAction::GameSettings,
+                            px(174),
+                            COMPACT_CONTROL_HEIGHT,
+                            ButtonVariant::Normal,
+                        ),
+                    ],
                 ));
-                panel.spawn(menu_button("Resume", PauseMenuAction::Resume));
-                panel.spawn(menu_button("Settings", PauseMenuAction::Settings));
-                panel.spawn(menu_button("Leave World", PauseMenuAction::LeaveWorld));
-                panel.spawn(menu_button("Exit Game", PauseMenuAction::ExitGame));
+                menu.spawn(button(
+                    localization.text(language, "pause.leaveWorld").to_owned(),
+                    PauseMenuAction::LeaveWorld,
+                    px(360),
+                    COMPACT_CONTROL_HEIGHT,
+                    ButtonVariant::Normal,
+                ));
+                menu.spawn(button(
+                    localization.text(language, "common.exitGame").to_owned(),
+                    PauseMenuAction::ExitGame,
+                    px(360),
+                    COMPACT_CONTROL_HEIGHT,
+                    ButtonVariant::Danger,
+                ));
+                menu.spawn((PauseSaveFeedback, typography::caption(String::new())));
             });
         });
 }
 
-fn hide_pause_menu(mut roots: Query<&mut Visibility, With<PauseMenuRoot>>) {
-    for mut visibility in &mut roots {
-        *visibility = Visibility::Hidden;
-    }
-}
-
-fn show_pause_menu(mut roots: Query<&mut Visibility, With<PauseMenuRoot>>) {
-    for mut visibility in &mut roots {
-        *visibility = Visibility::Visible;
-    }
-}
-
 fn handle_pause_menu_buttons(
     interactions: Query<(&Interaction, &PauseMenuAction), Changed<Interaction>>,
-    player: Query<&Transform, With<GameplayCamera>>,
-    mut save: ResMut<InMemoryWorldSave>,
+    snapshot: WorldSaveContext,
+    mut session: ResMut<WorldSession>,
+    mut settings_mode: ResMut<SettingsScreenMode>,
+    mut feedback: Query<&mut Text, With<PauseSaveFeedback>>,
     mut transition: ResMut<ScreenTransition>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
+    if transition.is_active() {
+        return;
+    }
     for (interaction, action) in &interactions {
         if *interaction != Interaction::Pressed {
             continue;
         }
-
         match action {
             PauseMenuAction::Resume => {
                 transition.request(ScreenTransitionTarget::pause(PauseState::Running));
             }
-            PauseMenuAction::Settings => {
+            PauseMenuAction::WorldSettings => {
+                *settings_mode = SettingsScreenMode::World;
                 transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
             }
-            PauseMenuAction::LeaveWorld => {
-                if let Ok(transform) = player.single() {
-                    save.save_player_position(transform.translation);
-                }
-
-                transition.request(
-                    ScreenTransitionTarget::game(GameState::StartingScreen)
-                        .with_pause(PauseState::Running),
-                );
+            PauseMenuAction::GameSettings => {
+                *settings_mode = SettingsScreenMode::Game;
+                transition.request(ScreenTransitionTarget::settings(SettingsState::Open));
             }
-            PauseMenuAction::ExitGame => {
-                app_exit.write(AppExit::Success);
+            PauseMenuAction::LeaveWorld | PauseMenuAction::ExitGame => {
+                if let Err(error) = session.persist(&snapshot) {
+                    error!("World save failed; keeping current world loaded: {error}");
+                    if let Ok(mut label) = feedback.single_mut() {
+                        label.0 = format!("Save failed: {error}. World kept open.");
+                    }
+                    return;
+                }
+                if matches!(action, PauseMenuAction::LeaveWorld) {
+                    transition.request(
+                        ScreenTransitionTarget::game(GameState::StartingScreen)
+                            .with_pause(PauseState::Running),
+                    );
+                } else {
+                    app_exit.write(AppExit::Success);
+                }
+                return;
             }
         }
     }

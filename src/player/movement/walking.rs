@@ -1,30 +1,63 @@
 use bevy::prelude::*;
 
-use crate::{player::camera::GameplayCamera, voxel::world::VoxelWorld};
+use crate::{
+    player::{PlayerEntity, camera::GameplayCamera},
+    voxel::{collision::ENTITY_STEP_HEIGHT, world::VoxelWorld},
+    world::{game_rules::GameRules, tick::WorldTickClock},
+};
 
 use super::{
-    collision::{move_axis, Axis},
-    config::{WALK_ACCELERATION, WALK_DECELERATION, WALK_SPEED},
+    collision::{Axis, MoveAxisResult, move_axis},
+    config::{STEP_SMOOTH_SPEED, WALK_ACCELERATION, WALK_DECELERATION, WALK_SPEED},
     flight::FlightState,
+    gravity::GravityState,
     smoothing::approach_velocity,
 };
 
 #[derive(Component, Default)]
 pub struct WalkingState {
     velocity: Vec3,
+    step_target_y: Option<f32>,
 }
 
 pub(super) fn walk(
-    time: Res<Time>,
+    game_rules: Res<GameRules>,
+    world_ticks: Res<WorldTickClock>,
     keys: Res<ButtonInput<KeyCode>>,
     world: Res<VoxelWorld>,
-    player: Single<(&mut Transform, &GameplayCamera, &FlightState, &mut WalkingState)>,
+    camera: Single<&GameplayCamera>,
+    player: Single<
+        (&mut Transform, &FlightState, &mut GravityState, &mut WalkingState),
+        With<PlayerEntity>,
+    >,
 ) {
-    let (mut transform, camera, flight, mut walking) = player.into_inner();
+    let camera = camera.into_inner();
+    let (mut transform, flight, mut gravity, mut walking) = player.into_inner();
 
     if flight.active {
-        walking.velocity = Vec3::ZERO;
+        if walking.velocity != Vec3::ZERO {
+            walking.velocity = Vec3::ZERO;
+        }
         return;
+    }
+
+    let delta_seconds = world_ticks.delta_seconds(&game_rules);
+    if delta_seconds <= 0.0 {
+        return;
+    }
+
+    if let Some(target_y) = walking.step_target_y {
+        gravity.grounded = true;
+        gravity.vertical_velocity = 0.0;
+        transform.translation.y = approach_step_height(
+            transform.translation.y,
+            target_y,
+            STEP_SMOOTH_SPEED * delta_seconds,
+        );
+        if (transform.translation.y - target_y).abs() <= f32::EPSILON {
+            transform.translation.y = target_y;
+            walking.step_target_y = None;
+        }
     }
 
     let yaw_rotation = Quat::from_rotation_y(camera.yaw);
@@ -55,18 +88,92 @@ pub(super) fn walk(
     } else {
         WALK_ACCELERATION
     };
-
-    walking.velocity = approach_velocity(
+    let next_velocity = approach_velocity(
         walking.velocity,
         target_velocity,
-        acceleration * time.delta_secs(),
+        acceleration * delta_seconds,
     );
 
+    if walking.velocity != next_velocity {
+        walking.velocity = next_velocity;
+    }
+
+    let step_up_height = gravity.grounded.then_some(ENTITY_STEP_HEIGHT);
     let velocity = walking.velocity;
-    if move_axis(&mut transform, &world, velocity.x * time.delta_secs(), Axis::X) {
+    if velocity.x != 0.0
+        && !move_horizontal_axis(
+            &mut transform,
+            &world,
+            velocity.x * delta_seconds,
+            Axis::X,
+            step_up_height,
+            &mut walking.step_target_y,
+        )
+    {
         walking.velocity.x = 0.0;
     }
-    if move_axis(&mut transform, &world, velocity.z * time.delta_secs(), Axis::Z) {
+    if velocity.z != 0.0
+        && !move_horizontal_axis(
+            &mut transform,
+            &world,
+            velocity.z * delta_seconds,
+            Axis::Z,
+            step_up_height,
+            &mut walking.step_target_y,
+        )
+    {
         walking.velocity.z = 0.0;
+    }
+}
+
+fn move_horizontal_axis(
+    transform: &mut Transform,
+    world: &VoxelWorld,
+    delta: f32,
+    axis: Axis,
+    step_up_height: Option<f32>,
+    step_target_y: &mut Option<f32>,
+) -> bool {
+    let visual_y = transform.translation.y;
+    if let Some(target_y) = *step_target_y {
+        transform.translation.y = target_y;
+    }
+
+    let result = move_axis(transform, world, delta, axis, step_up_height);
+    match result {
+        MoveAxisResult::Clear => {
+            transform.translation.y = visual_y;
+            true
+        }
+        MoveAxisResult::Blocked => {
+            transform.translation.y = visual_y;
+            false
+        }
+        MoveAxisResult::Stepped(position) => {
+            *step_target_y = Some(position.y);
+            transform.translation.y = visual_y;
+            true
+        }
+    }
+}
+
+fn approach_step_height(current: f32, target: f32, max_delta: f32) -> f32 {
+    let delta = target - current;
+    if delta.abs() <= max_delta || max_delta <= 0.0 {
+        target
+    } else {
+        current + delta.signum() * max_delta
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::approach_step_height;
+
+    #[test]
+    fn step_height_moves_toward_target_without_overshoot() {
+        assert_eq!(approach_step_height(1.0, 2.0, 0.25), 1.25);
+        assert_eq!(approach_step_height(1.9, 2.0, 0.25), 2.0);
+        assert_eq!(approach_step_height(2.0, 1.0, 0.25), 1.75);
     }
 }

@@ -17,8 +17,8 @@ fn ui_font(size: f32, weight: FontWeight) -> TextFont {
 pub fn title(label: impl Into<String>) -> impl Bundle {
     (
         Text::new(label),
-        ui_font(42.0, FontWeight::SEMIBOLD),
-        LetterSpacing::Px(1.4),
+        ui_font(36.0, FontWeight::SEMIBOLD),
+        LetterSpacing::Px(0.2),
         TextColor(theme::TEXT_PRIMARY),
     )
 }
@@ -26,8 +26,17 @@ pub fn title(label: impl Into<String>) -> impl Bundle {
 pub fn heading(label: impl Into<String>) -> impl Bundle {
     (
         Text::new(label),
-        ui_font(28.0, FontWeight::MEDIUM),
-        LetterSpacing::Px(0.8),
+        ui_font(26.0, FontWeight::MEDIUM),
+        LetterSpacing::Px(0.1),
+        TextColor(theme::TEXT_PRIMARY),
+    )
+}
+
+pub fn setting_title(label: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(label),
+        ui_font(19.0, FontWeight::SEMIBOLD),
+        LetterSpacing::Px(0.0),
         TextColor(theme::TEXT_PRIMARY),
     )
 }
@@ -35,8 +44,8 @@ pub fn heading(label: impl Into<String>) -> impl Bundle {
 pub fn muted(label: impl Into<String>) -> impl Bundle {
     (
         Text::new(label),
-        ui_font(16.0, FontWeight::NORMAL),
-        LetterSpacing::Px(0.35),
+        ui_font(15.0, FontWeight::NORMAL),
+        LetterSpacing::Px(0.0),
         TextColor(theme::TEXT_MUTED),
     )
 }
@@ -44,17 +53,34 @@ pub fn muted(label: impl Into<String>) -> impl Bundle {
 pub fn caption(label: impl Into<String>) -> impl Bundle {
     (
         Text::new(label),
-        ui_font(14.0, FontWeight::NORMAL),
-        LetterSpacing::Px(0.8),
+        ui_font(13.0, FontWeight::NORMAL),
+        LetterSpacing::Px(0.1),
         TextColor(theme::TEXT_SUBTLE),
     )
 }
 
-pub fn button_label(label: impl Into<String>) -> impl Bundle {
+pub fn tooltip_shadow() -> TextShadow {
+    TextShadow {
+        offset: Vec2::new(1.0, 1.0),
+        color: Color::BLACK,
+    }
+}
+
+pub fn crosshair_hint(label: impl Into<String>) -> impl Bundle {
     (
         Text::new(label),
-        ui_font(20.0, FontWeight::MEDIUM),
-        LetterSpacing::Px(0.9),
+        ui_font(13.0, FontWeight::MEDIUM),
+        LetterSpacing::Px(0.1),
+        TextColor(Color::WHITE),
+        tooltip_shadow(),
+    )
+}
+
+pub fn button_label_light(label: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(label),
+        ui_font(18.0, FontWeight::MEDIUM),
+        LetterSpacing::Px(0.0),
         TextColor(theme::TEXT_PRIMARY),
     )
 }
@@ -62,8 +88,17 @@ pub fn button_label(label: impl Into<String>) -> impl Bundle {
 pub fn hud(label: impl Into<String>) -> impl Bundle {
     (
         Text::new(label),
-        ui_font(17.0, FontWeight::NORMAL),
-        LetterSpacing::Px(0.25),
+        ui_font(16.0, FontWeight::NORMAL),
+        LetterSpacing::Px(0.0),
+        TextColor(theme::TEXT_PRIMARY),
+    )
+}
+
+pub fn inventory_category(label: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(label),
+        ui_font(13.0, FontWeight::MEDIUM),
+        LetterSpacing::Px(0.0),
         TextColor(theme::TEXT_PRIMARY),
     )
 }
@@ -71,8 +106,8 @@ pub fn hud(label: impl Into<String>) -> impl Bundle {
 pub fn hud_heading(label: impl Into<String>) -> impl Bundle {
     (
         Text::new(label),
-        ui_font(27.0, FontWeight::SEMIBOLD),
-        LetterSpacing::Px(0.9),
+        ui_font(24.0, FontWeight::SEMIBOLD),
+        LetterSpacing::Px(0.1),
         TextColor(theme::TEXT_PRIMARY),
     )
 }
@@ -80,8 +115,8 @@ pub fn hud_heading(label: impl Into<String>) -> impl Bundle {
 pub fn hud_subheading(label: impl Into<String>) -> impl Bundle {
     (
         Text::new(label),
-        ui_font(21.0, FontWeight::MEDIUM),
-        LetterSpacing::Px(0.6),
+        ui_font(19.0, FontWeight::MEDIUM),
+        LetterSpacing::Px(0.0),
         TextColor(theme::TEXT_PRIMARY),
     )
 }

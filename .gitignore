@@ -1,4 +1,6 @@
 /target
 /build
 /logs
+/worlds
 /tools/dist/target
+/Cargo.lock

@@ -1,9 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{
-    player::camera::GameplayCamera,
-    world::render_distance::RenderDistanceSettings,
-};
+use crate::{player::camera::GameplayCamera, world::render_distance::RenderDistanceSettings};
 
 use super::distance::fog_falloff;
 use crate::rendering::environment::EnvironmentVisualState;
@@ -16,7 +13,10 @@ pub(super) fn attach_fog(
 ) {
     for entity in &cameras {
         commands.entity(entity).insert(DistanceFog {
-            color: visuals.fog_color,
+            // The terminal fog color must match the flat sky background. Otherwise a
+            // fully fogged chunk and an absent chunk resolve to different colors and
+            // distant geometry churn becomes visible as flicker behind the fog.
+            color: visuals.sky_color.to_color(),
             falloff: fog_falloff(render_distance.chunks()),
             ..default()
         });

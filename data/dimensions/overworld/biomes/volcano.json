@@ -1,0 +1,139 @@
+{
+  "id": "asteria:overworld/volcano",
+  "name": {
+    "english": "Volcano",
+    "portuguese_brazil": "Vulcão",
+    "spanish": "Volcán"
+  },
+  "distributions": [
+    {
+      "type": "mountain_peak",
+      "spacing": 1900,
+      "chance": 0.2,
+      "radius": {
+        "min": 150,
+        "max": 245
+      },
+      "warpScale": 0.002,
+      "warpStrength": 28
+    }
+  ],
+  "terrain": {
+    "type": "volcano",
+    "baseHeight": 12,
+    "height": 72,
+    "craterDepth": 38,
+    "craterRadius": 0.14,
+    "irregularity": 0.13,
+    "irregularityScale": 0.009,
+    "detailIrregularity": 0.055,
+    "detailScale": 0.031,
+    "craterIrregularity": 0.08
+  },
+  "allowSurfaceCarvers": true,
+  "surfaceLayers": [
+    {
+      "block": "asteria:bassalt",
+      "depth": 6
+    },
+    {
+      "block": "asteria:stone"
+    }
+  ],
+  "hydrology": {
+    "canGenerateLake": false,
+    "canGenerateRiver": false,
+    "lakeChanceMultiplier": 0,
+    "riverWidthMultiplier": 0
+  },
+  "structures": [],
+  "visuals": {
+    "skyColor": {
+      "dawn": {
+        "hue": 214.4019,
+        "saturation": 0.2299,
+        "intensity": 0.6233
+      },
+      "day": {
+        "hue": 208.677,
+        "saturation": 0.413,
+        "intensity": 0.6133
+      },
+      "dusk": {
+        "hue": 252.7305,
+        "saturation": 0.0982,
+        "intensity": 0.5433
+      },
+      "night": {
+        "hue": 227.2695,
+        "saturation": 0.5161,
+        "intensity": 0.0517
+      }
+    },
+    "fogColor": {
+      "dawn": {
+        "hue": 208.0549,
+        "saturation": 0.132,
+        "intensity": 0.6567
+      },
+      "day": {
+        "hue": 204.1825,
+        "saturation": 0.125,
+        "intensity": 0.72
+      },
+      "dusk": {
+        "hue": 270,
+        "saturation": 0.0517,
+        "intensity": 0.58
+      },
+      "night": {
+        "hue": 223.0039,
+        "saturation": 0.3514,
+        "intensity": 0.0617
+      }
+    },
+    "underwaterTint": {
+      "color": {
+        "hue": 206.0368,
+        "saturation": 0.7222,
+        "intensity": 0.36
+      },
+      "opacity": 0.22
+    },
+    "stars": {
+      "density": 0.76,
+      "color": {
+        "hue": 216.5868,
+        "saturation": 0.0493,
+        "intensity": 0.9467
+      }
+    },
+    "clouds": {
+      "density": 0.62,
+      "color": {
+        "hue": 210,
+        "saturation": 0.0337,
+        "intensity": 0.89
+      }
+    },
+    "terrainRoughness": 1,
+    "terrainMetallic": 0
+  },
+  "climate": {
+    "continentalness": {
+      "min": 0.36,
+      "max": 1
+    }
+  },
+  "surfaceFluid": {
+    "type": "volcano_crater",
+    "fluid": "asteria:lava",
+    "minimumStrength": 0.91,
+    "levelOffset": 8,
+    "spillMinimumStrength": 0.56,
+    "spillMaximumStrength": 0.9,
+    "spillScale": 0.012,
+    "spillWidth": 0.055,
+    "spillLevel": 6
+  }
+}

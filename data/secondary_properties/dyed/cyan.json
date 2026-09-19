@@ -1,0 +1,5 @@
+{
+  "id": "cyan",
+  "name": { "english": "Cyan", "portuguese_brazil": "Ciano", "spanish": "Cian" },
+  "color": { "hue": 180.000000, "saturation": 0.802394, "intensity": 0.436602 }
+}

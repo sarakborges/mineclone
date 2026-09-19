@@ -1,0 +1,128 @@
+{
+  "id": "asteria:overworld/caverns",
+  "name": {
+    "english": "Caverns",
+    "portuguese_brazil": "Cavernas",
+    "spanish": "Cavernas"
+  },
+  "kind": "volume",
+  "verticalRange": {
+    "min": 8,
+    "max": 64
+  },
+  "priority": 0,
+  "densityModifier": {
+    "type": "cavern",
+    "carveStrength": 4,
+    "noiseScale": 0.045,
+    "openness": 0.34
+  },
+  "hydrology": {
+    "canGenerateLake": true,
+    "canGenerateRiver": true,
+    "lakeChanceMultiplier": 1,
+    "riverWidthMultiplier": 1
+  },
+  "visuals": {
+    "skyColor": {
+      "dawn": {
+        "hue": 214.5016,
+        "saturation": 0.2958,
+        "intensity": 0.71
+      },
+      "day": {
+        "hue": 210.8481,
+        "saturation": 0.6374,
+        "intensity": 0.6067
+      },
+      "dusk": {
+        "hue": 273.0045,
+        "saturation": 0.1848,
+        "intensity": 0.6133
+      },
+      "night": {
+        "hue": 228.4825,
+        "saturation": 0.6053,
+        "intensity": 0.0633
+      }
+    },
+    "fogColor": {
+      "dawn": {
+        "hue": 210,
+        "saturation": 0.1842,
+        "intensity": 0.76
+      },
+      "day": {
+        "hue": 206.9955,
+        "saturation": 0.2073,
+        "intensity": 0.82
+      },
+      "dusk": {
+        "hue": 289.1066,
+        "saturation": 0.0938,
+        "intensity": 0.64
+      },
+      "night": {
+        "hue": 223.8979,
+        "saturation": 0.4286,
+        "intensity": 0.07
+      }
+    },
+    "grassColor": {
+      "hue": 112.1111,
+      "saturation": 0.5636,
+      "intensity": 0.3667
+    },
+    "foliageColor": {
+      "hue": 112.1111,
+      "saturation": 0.5636,
+      "intensity": 0.3667
+    },
+    "underwaterTint": {
+      "color": {
+        "hue": 207.7958,
+        "saturation": 0.7188,
+        "intensity": 0.4267
+      },
+      "opacity": 0.2
+    },
+    "stars": {
+      "density": 0,
+      "color": {
+        "hue": 215.4964,
+        "saturation": 0.0605,
+        "intensity": 0.9367
+      }
+    },
+    "clouds": {
+      "density": 0,
+      "color": {
+        "hue": 220.8934,
+        "saturation": 0.0282,
+        "intensity": 0.9467
+      }
+    },
+    "terrainRoughness": 0.98,
+    "terrainMetallic": 0
+  },
+  "surfaceCarvers": [
+    {
+      "type": "tunnel",
+      "spacing": 190,
+      "chance": 0.55,
+      "length": {
+        "min": 90,
+        "max": 170
+      },
+      "radius": {
+        "min": 6,
+        "max": 10.5
+      },
+      "elevation": {
+        "min": 10,
+        "max": 46
+      },
+      "jitter": 65
+    }
+  ]
+}

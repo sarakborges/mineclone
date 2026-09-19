@@ -1,13 +1,18 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::day_night_phase::{DayNightPhase, DayNightPhases};
+use super::{
+    day_night_phase::{DayNightPhase, DayNightPhases},
+    registry::DefinitionMap,
+};
 
 #[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DayNightPhaseTiming {
-    pub duration_seconds: f32,
+    pub duration_ticks: u64,
+    pub sky_light_factor: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -15,12 +20,14 @@ pub struct DayNightSample {
     pub phase: DayNightPhase,
     pub next_phase: DayNightPhase,
     pub transition: f32,
+    pub sky_light_factor: f32,
 }
 
 #[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DayNightCycleDefinition {
     pub id: String,
-    pub day_duration_seconds: f32,
+    pub day_duration_ticks: u64,
     pub initial_time: f32,
     pub world_time_start_hour: f32,
     pub sequence: [DayNightPhase; 4],
@@ -29,20 +36,26 @@ pub struct DayNightCycleDefinition {
 
 impl DayNightCycleDefinition {
     pub fn sample(&self, time: f32) -> DayNightSample {
-        let elapsed_seconds = time.rem_euclid(1.0) * self.day_duration_seconds;
-        let (phase, phase_elapsed_seconds) = self.phase_at_elapsed(elapsed_seconds);
+        let elapsed_ticks = time.rem_euclid(1.0) * self.day_duration_ticks as f32;
+        let (phase, phase_elapsed_ticks) = self.phase_at_elapsed(elapsed_ticks);
         let next_phase = self.next_phase(phase);
         let current = self.phases.get(phase);
-        let transition = if current.duration_seconds <= f32::EPSILON {
+        let next = self.phases.get(next_phase);
+        let transition = if current.duration_ticks == 0 {
             0.0
         } else {
-            (phase_elapsed_seconds / current.duration_seconds).clamp(0.0, 1.0)
+            (phase_elapsed_ticks / current.duration_ticks as f32).clamp(0.0, 1.0)
         };
 
         DayNightSample {
             phase,
             next_phase,
             transition,
+            sky_light_factor: lerp_scalar(
+                current.sky_light_factor,
+                next.sky_light_factor,
+                transition,
+            ),
         }
     }
 
@@ -61,40 +74,40 @@ impl DayNightCycleDefinition {
         start_phase: DayNightPhase,
         end_phase: DayNightPhase,
     ) -> Option<f32> {
-        let start_seconds = self.phase_start_seconds(start_phase)?;
-        let mut end_seconds = self.phase_start_seconds(end_phase)?
-            + self.phases.get(end_phase).duration_seconds;
-        let mut current_seconds = normalized_time.rem_euclid(1.0) * self.day_duration_seconds;
+        let start_ticks = self.phase_start_ticks(start_phase)? as f32;
+        let mut end_ticks = self.phase_start_ticks(end_phase)? as f32
+            + self.phases.get(end_phase).duration_ticks as f32;
+        let mut current_ticks = normalized_time.rem_euclid(1.0) * self.day_duration_ticks as f32;
 
-        if end_seconds <= start_seconds {
-            end_seconds += self.day_duration_seconds;
+        if end_ticks <= start_ticks {
+            end_ticks += self.day_duration_ticks as f32;
         }
-        if current_seconds < start_seconds {
-            current_seconds += self.day_duration_seconds;
+        if current_ticks < start_ticks {
+            current_ticks += self.day_duration_ticks as f32;
         }
-        if current_seconds < start_seconds || current_seconds > end_seconds {
+        if current_ticks < start_ticks || current_ticks > end_ticks {
             return None;
         }
 
-        Some(((current_seconds - start_seconds) / (end_seconds - start_seconds)).clamp(0.0, 1.0))
+        Some(((current_ticks - start_ticks) / (end_ticks - start_ticks)).clamp(0.0, 1.0))
     }
 
-    fn phase_at_elapsed(&self, elapsed_seconds: f32) -> (DayNightPhase, f32) {
+    fn phase_at_elapsed(&self, elapsed_ticks: f32) -> (DayNightPhase, f32) {
         let mut cursor = 0.0;
 
         for phase in self.sequence {
-            let duration = self.phases.get(phase).duration_seconds;
+            let duration = self.phases.get(phase).duration_ticks as f32;
             let end = cursor + duration;
 
-            if elapsed_seconds < end {
-                return (phase, elapsed_seconds - cursor);
+            if elapsed_ticks < end {
+                return (phase, elapsed_ticks - cursor);
             }
 
             cursor = end;
         }
 
         let phase = self.sequence[3];
-        (phase, self.phases.get(phase).duration_seconds)
+        (phase, self.phases.get(phase).duration_ticks as f32)
     }
 
     fn next_phase(&self, phase: DayNightPhase) -> DayNightPhase {
@@ -107,15 +120,15 @@ impl DayNightCycleDefinition {
         self.sequence[(index + 1) % self.sequence.len()]
     }
 
-    fn phase_start_seconds(&self, target: DayNightPhase) -> Option<f32> {
-        let mut cursor = 0.0;
+    fn phase_start_ticks(&self, target: DayNightPhase) -> Option<u64> {
+        let mut cursor = 0;
 
         for phase in self.sequence {
             if phase == target {
                 return Some(cursor);
             }
 
-            cursor += self.phases.get(phase).duration_seconds;
+            cursor += self.phases.get(phase).duration_ticks;
         }
 
         None
@@ -124,28 +137,42 @@ impl DayNightCycleDefinition {
 
 #[derive(Resource, Default)]
 pub struct DayNightCycleRegistry {
-    definitions: HashMap<String, DayNightCycleDefinition>,
+    definitions: DefinitionMap<DayNightCycleDefinition>,
 }
 
 impl DayNightCycleRegistry {
     pub fn insert(&mut self, definition: DayNightCycleDefinition) {
         assert!(
-            definition.day_duration_seconds > 0.0,
+            definition.day_duration_ticks > 0,
             "day-night cycle {} day duration must be positive",
             definition.id
         );
 
-        let phase_duration = definition.phases.dawn.duration_seconds
-            + definition.phases.day.duration_seconds
-            + definition.phases.dusk.duration_seconds
-            + definition.phases.night.duration_seconds;
+        let phase_duration = definition.phases.dawn.duration_ticks
+            + definition.phases.day.duration_ticks
+            + definition.phases.dusk.duration_ticks
+            + definition.phases.night.duration_ticks;
 
-        assert!(
-            (phase_duration - definition.day_duration_seconds).abs() <= 0.001,
+        assert_eq!(
+            phase_duration,
+            definition.day_duration_ticks,
             "day-night cycle {} phase durations ({phase_duration}) must equal day duration ({})",
             definition.id,
-            definition.day_duration_seconds
+            definition.day_duration_ticks
         );
+
+        for phase in [
+            definition.phases.dawn,
+            definition.phases.day,
+            definition.phases.dusk,
+            definition.phases.night,
+        ] {
+            assert!(
+                (0.0..=1.0).contains(&phase.sky_light_factor),
+                "day-night cycle {} sky light factors must be between 0 and 1",
+                definition.id
+            );
+        }
 
         let unique_phases = definition.sequence.iter().copied().collect::<HashSet<_>>();
         assert!(
@@ -160,4 +187,8 @@ impl DayNightCycleRegistry {
     pub fn get(&self, id: &str) -> Option<&DayNightCycleDefinition> {
         self.definitions.get(id)
     }
+}
+
+fn lerp_scalar(start: f32, end: f32, t: f32) -> f32 {
+    start + (end - start) * t
 }

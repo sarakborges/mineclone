@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     app::game_state::GameState,
+    localization::{ActiveLanguage, Language, UiLocalization},
     ui::{theme, typography},
     world::WorldLoadingState,
 };
@@ -21,8 +22,14 @@ impl Plugin for LoadingScreenPlugin {
 #[derive(Component)]
 struct LoadingProgressText;
 
-fn setup_loading_screen(mut commands: Commands) {
+fn setup_loading_screen(
+    mut commands: Commands,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
+) {
     commands.spawn((Camera2d, DespawnOnExit(GameState::Loading)));
+    let language = language.get();
+    let progress = format_loading_progress(&localization, language, 0, 0);
 
     commands.spawn((
         DespawnOnExit(GameState::Loading),
@@ -38,17 +45,16 @@ fn setup_loading_screen(mut commands: Commands) {
         BackgroundColor(theme::SCREEN_BACKGROUND),
         theme::cosmic_background_gradient(),
         children![
-            typography::heading("Loading world..."),
-            (
-                typography::muted("0 out 0 chunks generated"),
-                LoadingProgressText,
-            ),
+            typography::heading(localization.text(language, "loading.world").to_owned()),
+            (typography::muted(progress), LoadingProgressText),
         ],
     ));
 }
 
 fn update_loading_progress(
     loading_state: Option<Res<WorldLoadingState>>,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
     mut labels: Query<&mut Text, With<LoadingProgressText>>,
 ) {
     let Some(loading_state) = loading_state else {
@@ -59,9 +65,22 @@ fn update_loading_progress(
         return;
     };
 
-    **label = format!(
-        "{} out {} chunks generated",
+    **label = format_loading_progress(
+        &localization,
+        language.get(),
         loading_state.generated(),
         loading_state.total(),
     );
+}
+
+fn format_loading_progress(
+    localization: &UiLocalization,
+    language: Language,
+    generated: usize,
+    total: usize,
+) -> String {
+    localization
+        .text(language, "loading.progress")
+        .replace("{generated}", &generated.to_string())
+        .replace("{total}", &total.to_string())
 }

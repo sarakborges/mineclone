@@ -1,0 +1,5 @@
+{
+  "id": "gray",
+  "name": { "english": "Gray", "portuguese_brazil": "Cinza", "spanish": "Gris" },
+  "color": { "hue": 195.295475, "saturation": 0.081898, "intensity": 0.303268 }
+}
