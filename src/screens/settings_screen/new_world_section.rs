@@ -18,7 +18,7 @@ use crate::{
     },
     world::{
         NewWorldConfig, WorldLoadMode, WorldSeed, biome::CurrentBiome, dimension::CurrentDimension,
-        save_catalog::{WorldDirectoryLock, create_new_world},
+        save_catalog::create_new_world,
     },
 };
 
