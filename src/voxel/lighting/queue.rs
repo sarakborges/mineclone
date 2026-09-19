@@ -1,8 +1,7 @@
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::prelude::*;
 
 use crate::voxel::{
     chunk::{CHUNK_SIZE, CHUNK_VOLUME},
-    coordinates::chunk_coord_from_world,
     neighbors::CARDINAL_NEIGHBORS,
     update_queue::VoxelUpdateQueue,
 };
@@ -22,7 +21,6 @@ pub(super) enum LightingLane {
 pub(super) struct LightingQueue {
     interactive: VoxelUpdateQueue,
     background: VoxelUpdateQueue,
-    pending_by_chunk: HashMap<IVec3, usize>,
 }
 
 impl LightingQueue {
@@ -30,25 +28,17 @@ impl LightingQueue {
         if self.interactive.contains(position) {
             return;
         }
-        if self.background.enqueue(position) {
-            self.track_new_position(position);
-        }
+        self.background.enqueue(position);
     }
 
     pub(super) fn enqueue_interactive(&mut self, position: IVec3) {
-        let promoted = self.background.remove(position);
-        if self.interactive.enqueue(position) && !promoted {
-            self.track_new_position(position);
-        }
+        self.background.remove(position);
+        self.interactive.enqueue(position);
     }
 
     fn enqueue_interactive_priority(&mut self, position: IVec3) {
-        let promoted = self.background.remove(position);
-        let already_interactive = self.interactive.contains(position);
+        self.background.remove(position);
         self.interactive.enqueue_priority(position);
-        if !promoted && !already_interactive && position.y >= 0 {
-            self.track_new_position(position);
-        }
     }
 
     pub fn enqueue_with_neighbors(&mut self, position: IVec3) {
@@ -148,12 +138,11 @@ impl LightingQueue {
 
     pub fn pop(&mut self) -> Option<(IVec3, LightingLane)> {
         if let Some(position) = self.interactive.pop() {
-            self.track_popped_position(position);
             return Some((position, LightingLane::Interactive));
         }
-        let position = self.background.pop()?;
-        self.track_popped_position(position);
-        Some((position, LightingLane::Background))
+        self.background
+            .pop()
+            .map(|position| (position, LightingLane::Background))
     }
 
     pub(super) fn has_interactive_work(&self) -> bool {
@@ -164,81 +153,14 @@ impl LightingQueue {
         self.interactive.len() == 0 && self.background.len() == 0
     }
 
-    pub(super) fn has_pending_in_chunk(&self, coord: IVec3) -> bool {
-        self.pending_by_chunk.get(&coord).copied().unwrap_or(0) > 0
-    }
 
-    pub(super) fn has_pending_in_halo(&self, coord: IVec3) -> bool {
-        for y in -1..=1 {
-            for z in -1..=1 {
-                for x in -1..=1 {
-                    if self.has_pending_in_chunk(coord + IVec3::new(x, y, z)) {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
-    }
-
-    fn track_new_position(&mut self, position: IVec3) {
-        if position.y < 0 {
-            return;
-        }
-        let coord = chunk_coord_from_world(position);
-        *self.pending_by_chunk.entry(coord).or_insert(0) += 1;
-    }
-
-    fn track_popped_position(&mut self, position: IVec3) {
-        if position.y < 0 {
-            return;
-        }
-        let coord = chunk_coord_from_world(position);
-        let Some(count) = self.pending_by_chunk.get_mut(&coord) else {
-            debug_assert!(false, "popped lighting position must be tracked by chunk");
-            return;
-        };
-        *count = count
-            .checked_sub(1)
-            .expect("lighting pending chunk count cannot underflow");
-        if *count == 0 {
-            self.pending_by_chunk.remove(&coord);
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn pending_chunk_counts_follow_enqueue_promotion_and_pop() {
-        let mut queue = LightingQueue::default();
-        let position = IVec3::new(CHUNK_SIZE as i32, 3, 4);
-        let coord = IVec3::X;
 
-        queue.enqueue(position);
-        assert!(queue.has_pending_in_chunk(coord));
-        queue.enqueue_interactive(position);
-        assert!(queue.has_pending_in_chunk(coord));
-
-        assert_eq!(queue.pop(), Some((position, LightingLane::Interactive)));
-        assert!(!queue.has_pending_in_chunk(coord));
-    }
-
-    #[test]
-    fn pending_halo_detects_neighbor_section_work() {
-        let mut queue = LightingQueue::default();
-        let center = IVec3::new(4, 2, 7);
-        let neighbor = center + IVec3::X;
-        let position = neighbor * CHUNK_SIZE as i32 + IVec3::new(2, 3, 4);
-
-        queue.enqueue(position);
-
-        assert!(queue.has_pending_in_halo(center));
-        while queue.pop().is_some() {}
-        assert!(!queue.has_pending_in_halo(center));
-    }
 
     #[test]
     fn boundary_voxels_enqueue_only_chunk_shell() {
