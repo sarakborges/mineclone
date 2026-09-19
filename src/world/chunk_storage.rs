@@ -16,10 +16,10 @@ const CHUNK_DIRECTORY: &str = "chunks";
 const CHUNK_FILE_EXTENSION: &str = "json";
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ChunkDiskIdentity(IVec3);
+pub(crate) struct ChunkDiskIdentity(IVec3);
 
 impl ChunkDiskIdentity {
-    pub fn new(coord: IVec3) -> io::Result<Self> {
+    pub(crate) fn new(coord: IVec3) -> io::Result<Self> {
         if coord.y < 0 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -29,13 +29,13 @@ impl ChunkDiskIdentity {
         Ok(Self(coord))
     }
 
-    pub fn coord(self) -> IVec3 {
+    pub(crate) fn coord(self) -> IVec3 {
         self.0
     }
 
     /// Stable relative path for one authoritative chunk. Signed X/Z are kept
     /// explicit in the filename; Y is validated non-negative before this point.
-    pub fn relative_path(self) -> PathBuf {
+    pub(crate) fn relative_path(self) -> PathBuf {
         Path::new(CHUNK_DIRECTORY).join(format!(
             "x{}_y{}_z{}.{}",
             self.0.x, self.0.y, self.0.z, CHUNK_FILE_EXTENSION
