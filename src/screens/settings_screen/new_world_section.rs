@@ -18,7 +18,7 @@ use crate::{
     },
     world::{
         NewWorldConfig, WorldLoadMode, WorldSeed, biome::CurrentBiome, dimension::CurrentDimension,
-        save_catalog::create_new_world,
+        save_catalog::{WorldDirectoryLock, create_new_world},
     },
 };
 
@@ -332,14 +332,14 @@ pub(super) fn handle_new_world_footer(
     let dimension = CurrentDimension::default();
     let seed = draft.config.seed().0;
     let rules = draft.config.game_rules();
-    let name = match create_new_world(
+    let (name, session_lock) = match create_new_world(
         &requested,
         seed,
         &dimension.id,
         draft.config.biome_size_multiplier(),
         rules.ticks_per_second(),
     ) {
-        Ok(name) => name,
+        Ok(created) => created,
         Err(error) => {
             draft.name_feedback.set(error.to_string());
             return;
@@ -348,6 +348,7 @@ pub(super) fn handle_new_world_footer(
     draft.config.set_name(name);
     draft.name_feedback.set(String::new());
 
+    commands.insert_resource(session_lock);
     commands.insert_resource(dimension);
     commands.insert_resource(CurrentBiome::default());
     commands.insert_resource(WorldSeed(seed));
