@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.32.2`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional atual:** `ba8efed288924714ebc3c854c22a537eae8ae50e`. Após o scheduler correto do checkpoint 114, o gargalo de velocidade foi investigado no hot path: downhill search fazia BFS demais por target, alocava/hasheava excessivamente, frontiers geradas enfileiravam side-flow impossível e o budget fixo de 1 ms não recuperava backlog. O solver agora ordena candidatos antes da BFS, reutiliza scratch, usa fila vetorial reutilizada + HashMap de plataforma, reduz invalidation de vizinhança, filtra frontier gerada pela própria regra de spread horizontal e usa catch-up adaptativo de até 3 ms/2048 updates quando há backlog/step debt. Cadência authored também foi ajustada para água 16/s e lava 4/s. CI final `35410401754` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.33.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado atual:** `d2747fa68c89ef593a6e9e58d03a1f6590486f2d`. O runtime de fluidos abandonou waves/lanes globais por `FluidId` e agora usa scheduled ticks por `(FluidId, voxel)`, inspirado no modelo `FlowingFluid`/fluid tick scheduler do Minecraft: cada posição tem um due world tick, recalcula estado quando vence, publica remesh/lighting naquele step e agenda descendentes apenas para `current_tick + delay`. Catch-up pode drenar posições independentes já vencidas, mas nunca atravessa vários steps da mesma cadeia no mesmo frame. O solver gravity-first/BFS downhill, `maxSpread`, source state, water 16/s e lava 4/s permanecem. CI final `35411527300` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.29.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `e848e9e918a87527764ed79616ac3d8134c0830a`. A feature de lava + fluidos de superfície do Volcano passou na CI de push `35397447773` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
@@ -2400,4 +2400,182 @@ Consequência sem backlog:
 5. Cenário com várias frontiers: confirmar que backlog entra em catch-up sem hitch perceptível.
 6. Observar frame time durante flow pesado. O catch-up pode usar até 3 ms de CPU no sistema de fluidos somente quando há backlog.
 7. Se ainda houver slowdown apenas com **muitas frontiers independentes em muitos chunks**, o próximo gargalo arquitetural é a barreira global por `FluidId`; nesse caso o próximo passo é shard espacial/chunk-local das lanes, não aumentar mais `spreadSpeed` ou budget.
+
+## Checkpoint 116 — 2026-09-19: scheduler de fluidos por voxel inspirado no Minecraft [ARCHITECTURE + FIX; VERSION 0.33.0; CI VERDE; QA WINDOWS PENDENTE]
+
+### Sintoma que motivou a troca
+
+- Após o checkpoint 115, throughput melhorou, mas o usuário reportou que o fluxo ainda não apresentava visualmente cada step:
+  - o fluido “piscava”;
+  - depois aparecia já avançado;
+  - o requisito correto é que cada propagation step seja observável dentro da própria cadência.
+- A causa arquitetural era que Asteria ainda organizava simulação como **waves globais por `FluidId`**:
+  - uma lane acumulava cadence credit;
+  - processava uma frontier/batch inteira;
+  - backlog/catch-up e remesh async podiam coalescer estados intermediários.
+
+### Investigação do Minecraft
+
+Foi examinado o modelo moderno de Minecraft Java por mappings/Javadocs Yarn + NeoForge:
+
+- `FlowingFluid` / Yarn `FlowableFluid` possui estado local de fluido:
+  - `LEVEL`;
+  - `FALLING`;
+  - source/still vs flowing.
+- O fluxo é organizado por **scheduled fluid ticks do mundo**, não por uma frontier global de “toda água”:
+  - `FluidState.tick(...)`;
+  - `FlowingFluid.tick(...)`;
+  - `getNewLiquid(...)`;
+  - `spread(...)`;
+  - `spreadToSides(...)`;
+  - `getSpread(...)`;
+  - `getSlopeDistance(...)`;
+  - `getSpreadDelay(...)` / fluid tick delay;
+  - `scheduleFluidTick(pos, fluid, delay)`.
+- Cada posição atualiza quando o seu tick vence e novos trabalhos são agendados para ticks futuros.
+- Water/Lava especializam delay/drop-off/slope distance/source rules, mas o scheduler é genérico.
+- Asteria NÃO copiou:
+  - infinite-source creation da água;
+  - regras dimensionais específicas de delay/drop-off de lava;
+  - still/flowing como registros de fluidos separados.
+- Asteria manteve seus próprios contratos data-driven (`spreadSpeed`, `maxSpread`, `FluidCell::source/spreading`) e adotou **o modelo de scheduling**, que é a parte relevante para apresentação step-by-step.
+
+### Implementação nova
+
+`PendingFluidUpdates` agora possui:
+
+- `topology_queue: VoxelUpdateQueue`
+  - block edits entram aqui como wake-ups de topologia;
+- `wake_queue: DeduplicatedQueue<FluidTickKey>`
+  - generated/streamed frontiers entram aqui antes de receber due time;
+- `scheduled: BTreeMap<u64, VecDeque<FluidTickKey>>`
+  - buckets por absolute world tick;
+- `scheduled_due: HashMap<FluidTickKey, u64>`
+  - dedup/autorização do due tick atual;
+- `FluidTickKey = (FluidId, IVec3)`.
+
+As antigas estruturas foram removidas:
+
+- `FluidUpdateLane`;
+- `accumulated_steps`;
+- `ready_steps`;
+- `batch_remaining`;
+- global round-robin por fluid lane;
+- frozen wave/batch como unidade de cadence.
+
+### Semântica de scheduling
+
+1. Um generated frontier ou topology edit identifica `FluidId + target position`.
+2. O target recebe:
+   - `due_tick = current_tick + fluid_delay`.
+3. `fluid_delay` é derivado data-driven:
+   - `round(ticksPerSecond / spreadSpeed)`;
+   - mínimo 1 world tick;
+   - `spreadSpeed <= 0` não agenda runtime propagation.
+4. Quando `due_tick <= current_tick`:
+   - target é retirado do scheduler;
+   - `desired_fluid()` é recalculado contra o **estado atual**;
+   - se não houver mudança, o tick termina;
+   - se a transição pertencer a outro `FluidId`, ela é re-agendada sob o fluido correto;
+   - se houver mutação:
+     - `set_fluid_at`;
+     - lighting medium edit;
+     - fluid remesh;
+     - center/down/4 horizontais são agendados para um **tick futuro**.
+5. Descendentes são sempre agendados usando o world tick em que o parent foi **realmente processado**, não o due tick antigo.
+
+Consequência crítica:
+
+- mesmo se um tick ficou atrasado por budget/frame stall, o solver NÃO tenta “recuperar” a cadeia fazendo:
+  - step 1;
+  - step 2;
+  - step 3;
+  - tudo no mesmo frame.
+- O parent processado em `current_tick=N` só pode criar descendente em `N + delay`.
+- Catch-up pode processar vários eventos independentes já vencidos, mas não pula estados intermediários da mesma propagação.
+
+### Deduplicação / ordering
+
+- Scheduler é deduplicado por `(FluidId, position)`.
+- Re-agendar mais tarde não altera um tick anterior já pendente.
+- Re-agendar mais cedo substitui logicamente o due time;
+  - eventual registro stale no bucket antigo é ignorado quando chegar nele.
+- Generated frontier continua:
+  - abaixo como priority wake;
+  - horizontais como normal wake;
+  - side-flow impossível filtrado pela mesma eligibility do solver.
+- O solver continua gravity-first e a queue futura preserva down-before-horizontal ao semear neighborhoods.
+
+### Física preservada
+
+Não foi alterado:
+
+- source cells permanentes;
+- vertical fall reseta `spread_distance`;
+- falling dynamic cells não espalham lateralmente no ar;
+- nearest-drop BFS;
+- waterfall/lower-pool persistence;
+- `maxSpread` data-driven;
+- candidate ranking antes da BFS;
+- scratch reutilizável;
+- água `spreadSpeed = 16`;
+- lava `spreadSpeed = 4`;
+- água `maxSpread = 7`;
+- lava `maxSpread = 3`.
+
+Com world tick atual de 40 TPS:
+
+- água 16/s quantiza para **3 ticks** por step;
+- lava 4/s quantiza para **10 ticks** por step.
+
+### Experimento descartado
+
+Antes da investigação do Minecraft houve um experimento curto:
+
+- `9ce067e5...` — publish atômico de wave;
+- `7d46ea63...` — presentation lock por chunk.
+
+Após confirmar o modelo do Minecraft, esse caminho foi descartado:
+
+- `e9fcba79a63576d601fbebf5763df699986f5dc9` restaura o remesh pipeline anterior;
+- a solução final não depende de bloquear chunks esperando uma wave global terminar.
+
+Isso é intencional: presentation lock tratava o sintoma de uma abstração errada; scheduled voxel ticks removem a abstração errada.
+
+### Commits finais
+
+- `e9fcba79a63576d601fbebf5763df699986f5dc9` — remove presentation-lock experiment e restaura remesh pipeline.
+- `bb17e7244edc734f869be5711b71031871d3011c` — scheduled propagation por voxel/due tick.
+- `44bfbe14c7f4aeb0bcc9baceda74438e189e4795` — delay desacoplado de fixture/definition inteira; scheduler depende somente de `spreadSpeed` + TPS.
+- `ba4238b288a1993f2614a5f661ea144d16669b60` — `ARCHITECTURE.md` migra contrato de lanes para scheduled voxel ticks.
+- `d2747fa68c89ef593a6e9e58d03a1f6590486f2d` — `VERSION 0.32.2 → 0.33.0`.
+
+### CI
+
+- Scheduler funcional em `44bfbe14...`: CI `35411423074` — success.
+- **CI final versionada `35411527300` — success**:
+  - auditoria de localizações;
+  - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+### QA prioritária
+
+1. Água em superfície plana:
+   - cada avanço deve aparecer como um step separado;
+   - não deve haver “pisca e aparece vários blocos à frente”.
+2. Waterfall:
+   - horizontal routing encontra cliff;
+   - próxima descida acontece somente no próximo scheduled interval;
+   - coluna continua usando o mesmo downhill sink.
+3. Lava:
+   - cada step deve permanecer claramente observável;
+   - intervalo nominal é 10 world ticks.
+4. Block edit abaixo de source:
+   - não reage recursivamente no mesmo frame;
+   - target recebe scheduled tick e cai no devido intervalo.
+5. Frame stall/backlog:
+   - posições independentes podem fazer catch-up;
+   - uma única cadeia nunca pode atravessar dois propagation steps no mesmo frame por causa do atraso.
+6. Se o world state estiver step-by-step correto mas o mesh ainda omitir algum step sob carga extrema, o próximo alvo é exclusivamente **latência do async fluid remesh**, não o scheduler de física. Nesse caso adicionar acknowledgment/version de apresentação por chunk, sem reintroduzir global fluid waves.
 
