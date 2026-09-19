@@ -48,6 +48,24 @@ pub(crate) fn validate_worldgen_version(version: u32) -> io::Result<()> {
     }
 }
 
+/// A snapshot must agree with the world's immutable generation-zero identity,
+/// and that identity must be supported by this build before untouched chunks
+/// may be regenerated. Keep both checks here so save/load boundaries cannot
+/// accidentally validate only one side of the invariant.
+pub(crate) fn validate_matching_worldgen_versions(
+    reserved_version: u32,
+    snapshot_version: u32,
+) -> io::Result<()> {
+    validate_worldgen_version(reserved_version)?;
+    if snapshot_version != reserved_version {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "snapshot does not match reserved world-generation identity",
+        ));
+    }
+    Ok(())
+}
+
 const MIN_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 5;
 const MAX_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 50;
 const DEFAULT_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 10;
@@ -220,6 +238,33 @@ mod tests {
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert_eq!(
             error.to_string(),
+            "saved world uses an incompatible world-generation version"
+        );
+    }
+
+    #[test]
+    fn persisted_worldgen_identities_must_match_each_other_and_this_build() {
+        assert!(validate_matching_worldgen_versions(WORLDGEN_VERSION, WORLDGEN_VERSION).is_ok());
+
+        let mismatched = validate_matching_worldgen_versions(
+            WORLDGEN_VERSION,
+            WORLDGEN_VERSION.saturating_add(1),
+        )
+        .expect_err("snapshot identity must match generation-zero reservation");
+        assert_eq!(mismatched.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(
+            mismatched.to_string(),
+            "snapshot does not match reserved world-generation identity"
+        );
+
+        let unsupported = validate_matching_worldgen_versions(
+            WORLDGEN_VERSION.saturating_add(1),
+            WORLDGEN_VERSION.saturating_add(1),
+        )
+        .expect_err("matching persisted identities still require build compatibility");
+        assert_eq!(unsupported.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(
+            unsupported.to_string(),
             "saved world uses an incompatible world-generation version"
         );
     }
