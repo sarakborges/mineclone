@@ -88,8 +88,24 @@ impl PlayerHotbar {
         blocks: &BlockRegistry,
         tools: &ToolRegistry,
     ) -> io::Result<()> {
+        self.restore_items_and_selection(items, 0, blocks, tools)
+    }
+
+    pub(crate) fn restore_items_and_selection(
+        &mut self,
+        items: &[Option<String>],
+        selected_slot: usize,
+        blocks: &BlockRegistry,
+        tools: &ToolRegistry,
+    ) -> io::Result<()> {
         if items.len() != INVENTORY_SLOT_COUNT {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid inventory length"));
+        }
+        if selected_slot >= HOTBAR_SLOT_COUNT {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "invalid selected hotbar slot",
+            ));
         }
         let mut restored = Vec::with_capacity(INVENTORY_SLOT_COUNT);
         for item in items {
@@ -108,7 +124,7 @@ impl PlayerHotbar {
         }
         self.backpack.copy_from_slice(&restored[..BACKPACK_SLOT_COUNT]);
         self.slots.copy_from_slice(&restored[BACKPACK_SLOT_COUNT..]);
-        self.selected_slot = 0;
+        self.selected_slot = selected_slot;
         Ok(())
     }
 
