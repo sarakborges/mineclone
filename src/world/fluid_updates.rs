@@ -104,7 +104,7 @@ impl PendingFluidUpdates {
         let mut topology = self
             .topology_queue
             .values()
-            .map(IVec3::to_array)
+            .map(|position| position.to_array())
             .collect::<Vec<_>>();
         topology.sort_unstable();
 
