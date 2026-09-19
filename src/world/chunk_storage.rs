@@ -42,3 +42,48 @@ impl ChunkDiskIdentity {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn identity_round_trips_coordinate_and_uses_canonical_path() {
+        let coord = IVec3::new(-12, 3, 45);
+        let identity = ChunkDiskIdentity::new(coord).expect("valid chunk coordinate");
+
+        assert_eq!(identity.coord(), coord);
+        assert_eq!(
+            identity.relative_path(),
+            Path::new("chunks").join("x-12_y3_z45.json")
+        );
+    }
+
+    #[test]
+    fn identity_rejects_negative_vertical_coordinate() {
+        let error = ChunkDiskIdentity::new(IVec3::new(0, -1, 0))
+            .expect_err("negative chunk Y must never reach disk identity");
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn distinct_coordinates_have_distinct_paths() {
+        let coordinates = [
+            IVec3::new(-1, 0, 0),
+            IVec3::new(1, 0, 0),
+            IVec3::new(0, 0, -1),
+            IVec3::new(0, 0, 1),
+            IVec3::new(0, 1, 0),
+        ];
+        let paths = coordinates.map(|coord| {
+            ChunkDiskIdentity::new(coord)
+                .expect("valid chunk coordinate")
+                .relative_path()
+        });
+
+        for (index, path) in paths.iter().enumerate() {
+            assert!(paths[..index].iter().all(|previous| previous != path));
+        }
+    }
+}
