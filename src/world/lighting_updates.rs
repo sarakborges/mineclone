@@ -71,19 +71,18 @@ pub(super) fn process_dynamic_lighting(
         .bump_lighting_revisions(changed_chunks.iter().copied());
     remesh_state.dirty.extend(changed_chunks.drain());
 
-    remesh_state.ready.clear();
-    remesh_state.ready.extend(
-        remesh_state
-            .dirty
-            .iter()
-            .copied()
-            .filter(|coord| {
-                runtime.world.chunk(*coord).is_none()
-                    || !runtime.lighting.has_pending_in_halo(*coord)
-            }),
-    );
+    remesh_state.ready = remesh_state
+        .dirty
+        .iter()
+        .copied()
+        .filter(|coord| {
+            runtime.world.chunk(*coord).is_none()
+                || !runtime.lighting.has_pending_in_halo(*coord)
+        })
+        .collect();
 
-    for coord in remesh_state.ready.drain(..) {
+    let ready = std::mem::take(&mut remesh_state.ready);
+    for coord in ready {
         remesh_state.dirty.remove(&coord);
         if runtime.world.chunk(coord).is_none() {
             continue;
