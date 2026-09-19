@@ -49,15 +49,15 @@ impl WorldgenVersion {
 
 impl Default for WorldgenVersion {
     fn default() -> Self {
-        Self(LEGACY_WORLDGEN_VERSION)
+        legacy_worldgen_version()
     }
 }
 
 /// Serde default for manifests/snapshots written before worldgen identity was
 /// persisted. Keep this function tied to the fixed legacy value, never the
 /// current generator version.
-pub(crate) fn legacy_worldgen_version() -> u32 {
-    LEGACY_WORLDGEN_VERSION
+pub(crate) const fn legacy_worldgen_version() -> WorldgenVersion {
+    WorldgenVersion(LEGACY_WORLDGEN_VERSION)
 }
 
 /// A save may only generate untouched terrain when it was created with the
@@ -254,7 +254,7 @@ mod tests {
     #[test]
     fn legacy_worldgen_identity_stays_pinned_to_v1() {
         assert_eq!(LEGACY_WORLDGEN_VERSION, 1);
-        assert_eq!(legacy_worldgen_version(), LEGACY_WORLDGEN_VERSION);
+        assert_eq!(legacy_worldgen_version().get(), LEGACY_WORLDGEN_VERSION);
         assert_eq!(WorldgenVersion::default().get(), LEGACY_WORLDGEN_VERSION);
         assert!(WORLDGEN_VERSION >= LEGACY_WORLDGEN_VERSION);
     }
