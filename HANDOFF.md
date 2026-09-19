@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.33.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado atual:** `d2747fa68c89ef593a6e9e58d03a1f6590486f2d`. O runtime de fluidos abandonou waves/lanes globais por `FluidId` e agora usa scheduled ticks por `(FluidId, voxel)`, inspirado no modelo `FlowingFluid`/fluid tick scheduler do Minecraft: cada posição tem um due world tick, recalcula estado quando vence, publica remesh/lighting naquele step e agenda descendentes apenas para `current_tick + delay`. Catch-up pode drenar posições independentes já vencidas, mas nunca atravessa vários steps da mesma cadeia no mesmo frame. O solver gravity-first/BFS downhill, `maxSpread`, source state, water 16/s e lava 4/s permanecem. CI final `35411527300` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.34.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado atual:** `b6e67ff852a3e0f021948537e596263ec05a69bd`. O runtime de chunks/lighting agora separa residência de conteúdo, readiness de iluminação e render dirtiness, inspirado na separação `INITIALIZE_LIGHT → LIGHT → FULL` e no dirty-state de render sections do Minecraft. A fila de luz rastreia work pendente por section 16³; o primeiro mesh aguarda o halo 3×3×3 estabilizar; background terrain/lighting remesh não captura halo ainda em propagação; light changes são coalescidas antes de rebuild; load/unload vertical invalida skylight das sections residentes abaixo na mesma coluna. Fluid remesh e geometry edits interativos continuam responsivos/independentes. CI final `35412334182` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. O CSM direcional do sol (1024, 3 cascades, ~8 chunks) foi identificado como um sistema extra em relação ao modelo de terreno/lightmap do Minecraft, mas NÃO foi alterado neste bloco. Não houve `cargo test`, `cargo run` ou QA Windows.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.29.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `e848e9e918a87527764ed79616ac3d8134c0830a`. A feature de lava + fluidos de superfície do Volcano passou na CI de push `35397447773` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
@@ -2578,4 +2578,211 @@ Isso é intencional: presentation lock tratava o sintoma de uma abstração erra
    - posições independentes podem fazer catch-up;
    - uma única cadeia nunca pode atravessar dois propagation steps no mesmo frame por causa do atraso.
 6. Se o world state estiver step-by-step correto mas o mesh ainda omitir algum step sob carga extrema, o próximo alvo é exclusivamente **latência do async fluid remesh**, não o scheduler de física. Nesse caso adicionar acknowledgment/version de apresentação por chunk, sem reintroduzir global fluid waves.
+
+## Checkpoint 117 — 2026-09-19: chunk/light section lifecycle inspirado no Minecraft [ARCHITECTURE + FIX; VERSION 0.34.0; CI VERDE; QA WINDOWS PENDENTE]
+
+### Comparação arquitetural com Minecraft
+
+A comparação foi feita sobre três partes independentes do Minecraft Java moderno:
+
+1. **Chunk lifecycle**
+   - Minecraft possui estágios explícitos de chunk incluindo `INITIALIZE_LIGHT`, `LIGHT` e `FULL`.
+   - A consequência útil para Asteria não é copiar a coluna inteira de chunk, e sim tratar iluminação pronta como um estado separado de conteúdo gerado/residente.
+
+2. **Light engine**
+   - O engine mantém estado e work de iluminação por section/coluna, com APIs de section status, column enable e propagation.
+   - Asteria já usa `CHUNK_SIZE = 16`, portanto um `VoxelChunk` 16³ corresponde naturalmente à granularidade de uma Minecraft light/render section.
+   - Não foi adotada a representação nibble/scalar do Minecraft porque Asteria possui block light HSI colorida. Foi adotada a ideia de readiness/dirty state por section.
+
+3. **Render sections**
+   - Minecraft mantém render sections explicitamente dirty e só agenda rebuild através do dispatcher; rebuild/upload são separados do estado do mundo.
+   - Asteria já possuía async remesh + revisions, mas disparava rebuilds enquanto a luz ainda convergia, criando trabalho descartado e estados visuais intermediários.
+
+### Bug real encontrado — skylight vertical stale
+
+`seed_chunk_direct_lighting()` calcula céu direto usando as sections atualmente carregadas acima.
+
+Antes:
+
+- section baixa podia carregar e receber céu;
+- depois uma section mais alta da mesma coluna carregava com terreno que bloqueava esse céu;
+- a section baixa **não era automaticamente re-relaxada como parte da mudança da coluna**;
+- inversamente, descarregar uma section superior podia abrir céu e deixar inferiores com lighting antigo.
+
+Isso não é tuning: era uma invalidation ausente.
+
+Agora:
+
+- `VoxelWorld::loaded_chunk_coords_below(coord)` expõe sections residentes abaixo na mesma coluna x/z;
+- load/restore de section chama `enqueue_loaded_column_below()`;
+- unload também chama `enqueue_loaded_column_below()` depois de remover a section;
+- todas as sections inferiores residentes são reavaliadas contra a nova coluna de céu.
+
+### Pending lighting por section
+
+`LightingQueue` agora mantém `pending_by_chunk: HashMap<IVec3, usize>`.
+
+A contagem acompanha:
+
+- enqueue background;
+- promoção background → interactive sem dupla contagem;
+- priority interactive;
+- pop;
+- deduplicação já existente.
+
+Novas consultas:
+
+- `has_pending_in_chunk(coord)`;
+- `has_pending_in_halo(coord)`, cobrindo o halo 3×3×3 usado pelo vertex lighting/AO/meshing.
+
+`PendingLightingUpdates::has_pending_in_halo()` também considera emission edits ainda não materializados na queue.
+
+Isso permite perguntar se uma section está realmente visualmente pronta sem escanear a fila global.
+
+### Initial mesh: lighting antes de FULL/render
+
+Antes:
+
+1. chunk era gerado/restaurado;
+2. recebia direct-light seed;
+3. full/background relaxation era enfileirada;
+4. chunk já podia ser enviado para mesh;
+5. propagação terminava depois e disparava remesh.
+
+Agora:
+
+1. chunk fica residente;
+2. direct-light seed ocorre;
+3. relaxation inicial e invalidation de coluna são enfileiradas;
+4. o chunk permanece na ready queue enquanto seu halo 3×3×3 tiver lighting pendente;
+5. só depois é criada a primeira mesh task.
+
+Isso elimina a publicação inicial de uma section com lighting apenas parcialmente convergido.
+
+Importante:
+
+- initial/streaming lighting permanece background;
+- block edits interativos continuam preemptando background lighting;
+- não foi criada uma lane “streaming critical” neste bloco.
+
+### Coalescência de lighting remesh
+
+Antes cada slice de até 2 ms de propagação podia:
+
+- alterar voxels;
+- bump revision;
+- imediatamente pedir terrain/lighting/fluid remesh;
+- no slice seguinte alterar mais luz;
+- invalidar ou substituir o resultado anterior.
+
+Agora:
+
+- lighting revisions continuam sendo bumped imediatamente para impedir publicação stale;
+- chunks que mudaram entram em `LightingRemeshState.dirty`;
+- a notificação de remesh só é publicada quando o halo 3×3×3 daquela section não possui mais work de lighting pendente;
+- diagonal AO/face-lighting invalidation continua seletiva por boundary metadata;
+- dirty state é coalescido: muitos slices de propagação resultam em um rebuild estável.
+
+### Dispatcher de remesh
+
+Background `Geometry` e `Lighting` remesh agora também verificam section-light readiness **antes de capturar o snapshot**.
+
+Isso evita:
+
+- construir mesh com lighting conhecido como transitório;
+- gastar worker;
+- terminar task;
+- rejeitar por lighting revision stale;
+- repetir até convergência.
+
+Exceções deliberadas:
+
+- **Immediate geometry** de edição do jogador continua imediato.
+- **Fluid remesh** continua independente do gate de iluminação, preservando a regra de fluid steps visíveis; se a iluminação do fluid mesh estiver stale, o mecanismo existente agenda follow-up para convergir vertex lighting.
+
+### Chunk/render pool
+
+Asteria já tinha boas equivalências ao Minecraft:
+
+- section/chunk de 16³;
+- geração/mesh async;
+- prioridades de streaming perto do player;
+- visibilidade com hysteresis;
+- render allocation por section;
+- dirty/revision validation.
+
+Minecraft vai além com storage fixo/reutilizado de render sections ao redor da câmera. Asteria ainda cria/destrói allocations ao unload/reload; o retention radius reduz churn, mas isso **não foi migrado** neste checkpoint porque exigiria outra mudança arquitetural e não era a causa direta do lighting/shadow stale identificado.
+
+### Sombras — diferença importante ainda não alterada
+
+A comparação mostrou que Asteria adiciona um sistema de sombra de terreno que não corresponde ao caminho principal de iluminação do Minecraft:
+
+- `DirectionalLight` real para o sol;
+- shadow map 1024;
+- 3 cascades;
+- distância de sombra limitada a ~8 chunks;
+- terrain recebe essas sombras além de:
+  - voxel skylight;
+  - colored block light;
+  - AO/face lighting.
+
+Portanto Asteria atualmente soma:
+
+**voxel light/AO + real-time cascaded directional shadows**.
+
+Esse CSM pode produzir:
+
+- cascade transition;
+- shimmer ao mover a câmera;
+- shadow popping na distância;
+- artefatos independentes do chunk/light lifecycle.
+
+Não foi desligado nem alterado neste bloco porque isso muda a direção visual do jogo. O diagnóstico agora fica separado:
+
+- artefato que aparece junto de **chunk load/unload / iluminação convergindo** → section-light lifecycle;
+- artefato que acompanha **movimento da câmera, sol ou limite de ~8 chunks** → CSM direcional é o próximo alvo.
+
+### Commits principais
+
+- `b31eae5218bcf0342512018d6c5daedf09431f70` — pending lighting por section.
+- `68f1f4deea63dc97ad7e088984e5ab1493272fc3` — sections residentes abaixo na mesma coluna.
+- `f6ccb20267daff0de9478b75d328048ac83f83c2` — readiness de halo + column relight.
+- `7b865ec55bfe8b75491231dea13cd2169b4224f1` — coalescência de lighting remesh.
+- `90234a2c92d3b509e2e3f7def236ab45449b3fcd` — initial mesh aguarda halo iluminado.
+- `b8de63524f078abd558220ced694ca2d10b0e078` — skylight inferior invalidado no unload.
+- `b6bd23e82e0d1ab792b2a8a18ab02b364f585558` / `792b9b8e6e9abdddc243fddf6962344b0f968a90` — correções de borrow/visibility encontradas pelo CI.
+- `3c27834cd5de92aa688d2b98c4ff1fcc1a3d887b` — background remesh espera lighting halo estável.
+- `1b3ddf5737739bfb71c0811fb02d2e7e2653675f` — cleanup do scan cache após gating.
+- `dbfebbf44a0bc6a6a81a33e9a10ad4dd3439c25e` — contrato arquitetural de section lighting.
+- `b6e67ff852a3e0f021948537e596263ec05a69bd` — `VERSION 0.33.0 → 0.34.0`.
+
+### CI
+
+- `35412036134`: falhou apenas por borrow-check no novo estado de coalescência.
+- `35412126836`: falhou apenas por visibilidade privada do tipo usado no system signature.
+- `35412222407`: **success** no HEAD funcional antes de docs/version.
+- **`35412334182`: success no `0.34.0` versionado**:
+  - auditoria de localizações;
+  - Clippy `--locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+### QA prioritária
+
+1. Aproximar-se de terreno novo:
+   - chunk não deve aparecer escuro/claríssimo e depois corrigir;
+   - primeira publicação já deve usar lighting local convergido.
+2. Voar verticalmente / carregar terrain acima de sections já visíveis:
+   - sections inferiores devem atualizar skylight;
+   - não devem manter sombras antigas da coluna.
+3. Afastar-se até sections superiores descarregarem:
+   - céu inferior deve reabrir corretamente.
+4. Colocar/remover bloco emissivo ou opaco:
+   - geometria interativa deve responder imediatamente;
+   - lighting final deve convergir sem múltiplos rebuilds visuais intermediários.
+5. Observar fluidos simultaneamente:
+   - gating de terrain/lighting não deve atrasar fluid remesh.
+6. Se restar shadow shimmer/pop:
+   - observar se acompanha câmera/sol e o limite de distância;
+   - se sim, investigar/remover/segmentar CSM de terrain separadamente, sem mexer novamente no voxel light engine.
 
