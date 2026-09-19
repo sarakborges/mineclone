@@ -22,8 +22,12 @@ use super::{
 };
 
 const FLUID_UPDATE_BUDGET: Duration = Duration::from_millis(1);
+const FLUID_CATCHUP_BUDGET: Duration = Duration::from_millis(3);
 const MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK: usize = 64;
+const MIN_FLUID_CATCHUP_UPDATES_BEFORE_BUDGET_CHECK: usize = 128;
 const MAX_FLUID_UPDATES_PER_FRAME: usize = 512;
+const MAX_FLUID_CATCHUP_UPDATES_PER_FRAME: usize = 2_048;
+const FLUID_CATCHUP_QUEUE_THRESHOLD: usize = 512;
 const MAX_QUEUED_FLUID_STEPS: usize = 4;
 
 #[derive(Debug, Default)]
@@ -69,9 +73,11 @@ impl PendingFluidUpdates {
     }
 
     fn enqueue_fluid_neighborhood(&mut self, fluid_id: FluidId, position: IVec3) {
-        self.fluid_lane_mut(fluid_id)
-            .queue
-            .enqueue_with_neighbors(position);
+        self.enqueue_fluid(fluid_id, position);
+        self.enqueue_fluid(fluid_id, position - IVec3::Y);
+        for offset in crate::voxel::neighbors::HORIZONTAL_NEIGHBORS {
+            self.enqueue_fluid(fluid_id, position + offset);
+        }
     }
 
     fn fluid_lane_mut(&mut self, fluid_id: FluidId) -> &mut FluidUpdateLane {
@@ -164,6 +170,21 @@ impl PendingFluidUpdates {
             }
         }
     }
+
+    fn should_catch_up(&self) -> bool {
+        let queued = self
+            .fluid_lanes
+            .iter()
+            .map(|lane| lane.queue.len())
+            .sum::<usize>()
+            .saturating_add(self.topology_queue.len());
+
+        queued >= FLUID_CATCHUP_QUEUE_THRESHOLD
+            || self
+                .fluid_lanes
+                .iter()
+                .any(|lane| lane.ready_steps > 1)
+    }
 }
 
 pub(super) fn reseed_loaded_fluid_frontiers(
@@ -200,11 +221,20 @@ pub(super) fn process_fluid_updates(
         &fluids,
     );
 
-    let mut budget = FrameWorkBudget::new(
-        FLUID_UPDATE_BUDGET,
-        MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK,
-    )
-    .with_maximum_items(MAX_FLUID_UPDATES_PER_FRAME);
+    let catch_up = runtime.pending.should_catch_up();
+    let mut budget = if catch_up {
+        FrameWorkBudget::new(
+            FLUID_CATCHUP_BUDGET,
+            MIN_FLUID_CATCHUP_UPDATES_BEFORE_BUDGET_CHECK,
+        )
+        .with_maximum_items(MAX_FLUID_CATCHUP_UPDATES_PER_FRAME)
+    } else {
+        FrameWorkBudget::new(
+            FLUID_UPDATE_BUDGET,
+            MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK,
+        )
+        .with_maximum_items(MAX_FLUID_UPDATES_PER_FRAME)
+    };
 
     classify_topology_updates(&mut runtime, &fluids, &mut solver_scratch, &mut budget);
 
