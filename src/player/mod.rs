@@ -41,6 +41,7 @@ pub(crate) fn spawn_player_entity(
     translation: Vec3,
     game_mode: GameMode,
     definition: &PlayerDefinition,
+    saved_health: Option<f32>,
 ) {
     commands
         .spawn((
@@ -64,7 +65,13 @@ pub(crate) fn spawn_player_entity(
             SwimmingState::default(),
             DespawnOnExit(GameState::Gameplay),
         ))
-        .insert((Name::new("Player"), EntityHealth::new(definition.health)));
+        .insert((
+            Name::new("Player"),
+            saved_health.map_or_else(
+                || EntityHealth::new(definition.health),
+                |health| EntityHealth::restored(definition.health, health),
+            ),
+        ));
 }
 
 pub(crate) fn player_position_is_clear(world: &VoxelWorld, translation: Vec3) -> bool {
