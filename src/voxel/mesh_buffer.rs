@@ -78,3 +78,33 @@ fn encode_tint_tangent(tint: [f32; 3]) -> [f32; 4] {
     let direction = color / magnitude;
     [direction.x, direction.y, direction.z, magnitude]
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remeshable_meshes_stay_cpu_accessible() {
+        let mut buffer = VoxelMeshBuffer::default();
+        buffer.push_quad(VoxelMeshQuad {
+            vertices: [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [1.0, 1.0, 0.0],
+                [0.0, 1.0, 0.0],
+            ],
+            normal: [0.0, 0.0, 1.0],
+            uvs: [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
+            light_uvs: [[1.0, 0.0]; 4],
+            tint: [1.0; 3],
+            colors: [[1.0; 4]; 4],
+            flip_diagonal: false,
+        });
+
+        let mesh = buffer.into_mesh().expect("quad should produce a mesh");
+
+        assert!(mesh.asset_usage.contains(RenderAssetUsages::MAIN_WORLD));
+        assert!(mesh.asset_usage.contains(RenderAssetUsages::RENDER_WORLD));
+    }
+}
