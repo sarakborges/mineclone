@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.32.1`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado do fix de fluidos:** `fa0b7d6dbe9ee6c7e7028fbe8e9738f05c10449d`; contrato arquitetural final em `c65120f064b97a77bab3868f0dc97331146ff76b`. A investigação profunda do runtime encontrou que a antiga “frontier congelada” não era realmente congelada: mutações inseriam vizinhos com prioridade dentro do mesmo batch, o frame budget descartava o progresso lógico de steps incompletos, a identidade da lane era perdida no pop e o pathfinder esquecia uma queda depois que a própria coluna de fluido a preenchia. O scheduler agora mantém lanes persistentes por `FluidId`, batches inacabados continuam em frames seguintes sem esperar outro tick, trabalho produzido por uma mutação fica para o próximo logical step, transições são executadas na cadência do fluido de destino e downhill routing mantém waterfalls/lower pools como sinks estáveis. CI funcional final `35404758584` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
+**Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.32.2`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional atual:** `ba8efed288924714ebc3c854c22a537eae8ae50e`. Após o scheduler correto do checkpoint 114, o gargalo de velocidade foi investigado no hot path: downhill search fazia BFS demais por target, alocava/hasheava excessivamente, frontiers geradas enfileiravam side-flow impossível e o budget fixo de 1 ms não recuperava backlog. O solver agora ordena candidatos antes da BFS, reutiliza scratch, usa fila vetorial reutilizada + HashMap de plataforma, reduz invalidation de vizinhança, filtra frontier gerada pela própria regra de spread horizontal e usa catch-up adaptativo de até 3 ms/2048 updates quando há backlog/step debt. Cadência authored também foi ajustada para água 16/s e lava 4/s. CI final `35410401754` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.29.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado imediatamente anterior a esta atualização documental:** `e848e9e918a87527764ed79616ac3d8134c0830a`. A feature de lava + fluidos de superfície do Volcano passou na CI de push `35397447773` com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` ou QA Windows neste bloco.
 
@@ -2229,4 +2229,175 @@ Sem executar `cargo test`, foram adicionados testes compilados por `cargo clippy
 6. Sob carga/frontier grande: se o budget cortar o frame, o restante da mesma onda deve continuar no frame seguinte, sem congelar até o próximo intervalo do fluido.
 7. Água e lava simultâneas: cada uma deve manter sua própria cadence; posição reroteada para outro fluido não pode ser executada pela lane errada.
 8. Observar mesh: a propagação não deve mais oscilar por mudança de rota quando a waterfall é preenchida; o anti-flicker/remesh dos checkpoints 111/112 permanece ativo.
+
+## Checkpoint 115 — 2026-09-19: throughput de fluidos + tuning de cadência [PERFORMANCE + TUNING + CI VERDE; VERSION 0.32.2; QA WINDOWS PENDENTE]
+
+### Sintoma
+
+- Após o checkpoint 114, o usuário confirmou que os fluidos finalmente fluíam corretamente.
+- Novo problema: a propagação estava **visivelmente lenta demais**.
+- Investigação separou duas causas:
+  1. throughput real do solver não conseguia acompanhar a cadência authored quando havia frontier grande;
+  2. a cadência authored da lava também estava conservadora demais mesmo sem backlog.
+
+### Gargalo 1 — BFS demais por target
+
+Antes:
+
+- cada target horizontal inspecionava até 4 vizinhos fluidos;
+- para **cada candidato**, o solver podia executar uma BFS downhill completa;
+- só depois da BFS comparava força/level/spread distance/fluid ID;
+- no pior caso eram até 4 searches para decidir um único target.
+
+Agora:
+
+1. candidatos baratos são coletados primeiro;
+2. ordenados pela mesma regra que já definia o vencedor:
+   - maior level;
+   - menor spread distance;
+   - menor `FluidId` em empate;
+3. a BFS é executada nessa ordem;
+4. o primeiro candidato que passa no routing downhill é o resultado.
+
+Como a ordenação é a mesma da seleção antiga, a semântica não muda. No caso normal, cai de múltiplas BFS para **uma BFS por target**.
+
+### Gargalo 2 — alocação e queue overhead da BFS
+
+Antes cada search criava:
+
+- novo `HashMap<IVec3, ...>`;
+- novo `VecDeque`.
+
+Agora existe `FluidSolverScratch` persistente como `Local` do sistema:
+
+- `visited` é limpo e reutiliza capacidade;
+- queue de BFS é uma `Vec` reutilizada com cursor, em vez de `VecDeque::pop_front()`;
+- usa `bevy::platform::collections::HashMap` em vez do `std::HashMap` genérico;
+- topology classification e runtime propagation compartilham o mesmo scratch no frame.
+
+Isso remove alocação repetitiva no hot path e reduz overhead de queue/hash.
+
+### Gargalo 3 — generated frontier colocava trabalho impossível na fila
+
+A ativação universal continuava correta, mas o seeding inicial era mais largo do que o solver real.
+
+Exemplo crítico: parede vertical de Ocean/Lake.
+
+- várias source layers podem estar expostas lateralmente;
+- uma layer coberta por fluido acima e sem apoio sólido **não pode espalhar lateralmente** pela regra do solver;
+- mesmo assim a frontier antiga colocava seus targets vazios na queue;
+- depois o solver gastava budget só para rejeitá-los.
+
+Agora frontier e solver compartilham `can_spread_horizontally_from()`:
+
+- target abaixo continua considerado independentemente;
+- target horizontal só é seeded se a source realmente puder fazer side-flow;
+- a checagem de eligibility é **lazy**: interior de Ocean com todos os vizinhos preenchidos não paga essa consulta;
+- isso reduz especialmente backlog de Ocean/Lake sem transformar hidrologia em estática.
+
+### Gargalo 4 — invalidation maior que o necessário
+
+Após cada mutação o solver re-enfileirava:
+
+- centro;
+- 6 cardinais.
+
+Para uma **mudança de fluido**, o voxel acima não depende do fluido abaixo para nenhuma regra que precise ser recalculada.
+
+Agora runtime fluid mutation invalida somente:
+
+- centro;
+- abaixo;
+- 4 horizontais.
+
+Block/topology edits continuam usando o caminho amplo/prioritário, porque alteração de bloco pode mudar apoio e outras condições.
+
+### Catch-up adaptativo
+
+Budget normal continua conservador:
+
+- 1 ms;
+- mínimo de 64 items antes de consultar relógio;
+- máximo 512 updates/frame.
+
+Quando existe backlog real:
+
+- queue total >= 512; **ou**
+- alguma lane acumulou mais de um logical step de debt;
+
+o sistema usa catch-up:
+
+- até 3 ms;
+- mesmo mínimo seguro de 64;
+- máximo 2048 updates/frame.
+
+Importante:
+
+- catch-up aumenta **throughput**, não `spreadSpeed`;
+- logical step/cadence continuam iguais;
+- batch freeze do checkpoint 114 permanece;
+- o limite mínimo não foi aumentado para 128, evitando obrigar um frame a processar trabalho caro demais antes de respeitar o relógio.
+
+### Cadência authored
+
+Depois de corrigir performance, a velocidade nominal também foi ajustada separadamente:
+
+- água: `spreadSpeed 12 → 16`;
+- lava: `spreadSpeed 2 → 4`;
+- `maxSpread` permanece:
+  - água 7;
+  - lava 3.
+
+Consequência sem backlog:
+
+- água: ~62,5 ms por logical step;
+- lava: ~250 ms por logical step;
+- lava continua 4× mais lenta e com alcance horizontal menor, mas não leva mais ~500 ms por voxel.
+
+### O que NÃO foi alterado
+
+- gravity-first;
+- reset de `spread_distance` após queda;
+- BFS para nearest reachable drop;
+- fallback radial sem drop;
+- waterfall/lower-pool sink persistence;
+- lane ownership por `FluidId`;
+- frozen logical batches;
+- remesh/lighting semantics;
+- universal activation de fluidos gerados.
+
+### Commits principais
+
+- `1d90a12fcf6448f027bbc226b4ce80e7b82ed7ed` — candidate ranking antes da BFS + scratch reutilizável.
+- `a4d0d47ccc2bd099e12bb5ff198cbf0187f36c36` / `b14d09bb37ac3047f6078a7a1bf2d1b6aa3f92ea` — scratch integrado ao runtime/visibilidade corrigida.
+- `70d93eb9332fec9ff91358e1dcfb9819f4a83b5c` — catch-up adaptativo + vizinhança de recompute menor.
+- `452163891e3545cf1f01be023e14d5db040ddc45` — remove helper genérico que deixou de ser necessário.
+- `deef998a201b6087bfd2395f794d6dc505bf6428` / `863f0c26471aadbbf0d2d821f6603ff4caa516b4` / `37e3f2316f0bc700b4c40ad4539f8e7b09080861` / `296984f8f0ab164e876575bb99b3f4eab27b0dc7` — frontier gerada filtra side-flow impossível e faz eligibility lazy.
+- `de8e88a1fa51d012f4f4fb01b4c4dc9f0ce31683` — catch-up mantém o mínimo de 64 para proteger frame time.
+- `208542ed165c35a0ec7340eccd5fbef8109b89e8` — contrato arquitetural de throughput.
+- `abca44a6d9db7588d4ba512fbe206276dcf7200a` — `VERSION 0.32.1 → 0.32.2`.
+- `0ba1e9d6bedd2b0b23f817f518bc8d6a24570b8d` — água `12 → 16`.
+- `d8a3fc1b22f612f11fcd94e49019e11467975455` — lava `2 → 4`.
+- `4912aeeff5213609638de12c1404a766ef7b83bc` / `ba8efed288924714ebc3c854c22a537eae8ae50e` — BFS usa HashMap de plataforma + Vec/cursor reutilizável.
+
+### CI
+
+- CI do bloco principal antes do micro-opt final: `35410125356` — success.
+- CI com tuning de água/lava: `35410249991` — success.
+- A primeira tentativa da queue vetorial falhou apenas porque um seed ainda usava `push_back`; corrigido sem mudança semântica.
+- **CI final `35410401754` — success**:
+  - auditoria de localizações;
+  - `cargo clippy --locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+### QA prioritária
+
+1. Água em terreno plano sem drop: a frente deve abrir perceptivelmente mais rápido, mantendo alcance 7.
+2. Água procurando cliff: routing downhill deve continuar igual, só com menor latência.
+3. Lava no Volcano: deve continuar claramente mais lenta que água, mas sem pausas de ~0,5 s por voxel.
+4. Ocean/Lake carregados: confirmar que não há atraso grande causado por side targets impossíveis das camadas internas.
+5. Cenário com várias frontiers: confirmar que backlog entra em catch-up sem hitch perceptível.
+6. Observar frame time durante flow pesado. O catch-up pode usar até 3 ms de CPU no sistema de fluidos somente quando há backlog.
+7. Se ainda houver slowdown apenas com **muitas frontiers independentes em muitos chunks**, o próximo gargalo arquitetural é a barreira global por `FluidId`; nesse caso o próximo passo é shard espacial/chunk-local das lanes, não aumentar mais `spreadSpeed` ou budget.
 
