@@ -83,7 +83,7 @@ mod tests {
         });
 
         for (index, path) in paths.iter().enumerate() {
-            assert!(paths[..index].iter().all(|previous| previous != path));
+            assert!(!paths[..index].contains(path));
         }
     }
 }
