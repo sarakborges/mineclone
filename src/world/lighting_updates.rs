@@ -21,12 +21,6 @@ const LIGHTING_BUDGET: Duration = Duration::from_millis(2);
 const MIN_LIGHTING_VOXELS_BEFORE_BUDGET_CHECK: usize = 256;
 const MAX_LIGHTING_VOXELS_PER_FRAME: usize = 4_096;
 
-#[derive(Default)]
-pub(super) struct LightingRemeshState {
-    dirty: HashSet<IVec3>,
-    ready: Vec<IVec3>,
-}
-
 #[derive(SystemParam)]
 pub(super) struct DynamicLightingRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
@@ -42,7 +36,6 @@ pub(super) fn pending_lighting_work(lighting: Res<PendingLightingUpdates>) -> bo
 pub(super) fn process_dynamic_lighting(
     content: VoxelContent,
     mut changed_chunks: Local<HashSet<IVec3>>,
-    mut remesh_state: Local<LightingRemeshState>,
     mut runtime: DynamicLightingRuntime,
 ) {
     if runtime.lighting.is_empty() {
@@ -69,29 +62,16 @@ pub(super) fn process_dynamic_lighting(
     runtime
         .remesh_tasks
         .bump_lighting_revisions(changed_chunks.iter().copied());
-    remesh_state.dirty.extend(changed_chunks.drain());
 
-    remesh_state.ready = remesh_state
-        .dirty
-        .iter()
-        .copied()
-        .filter(|coord| {
-            runtime.world.chunk(*coord).is_none()
-                || !runtime.lighting.has_pending_in_halo(*coord)
-        })
-        .collect();
-
-    let ready = std::mem::take(&mut remesh_state.ready);
-    for coord in ready {
-        remesh_state.dirty.remove(&coord);
+    for coord in changed_chunks.drain() {
         if runtime.world.chunk(coord).is_none() {
             continue;
         }
-        enqueue_stable_lighting_remesh(coord, &mut runtime);
+        enqueue_lighting_remesh(coord, &mut runtime);
     }
 }
 
-fn enqueue_stable_lighting_remesh(
+fn enqueue_lighting_remesh(
     coord: IVec3,
     runtime: &mut DynamicLightingRuntime<'_>,
 ) {
@@ -99,10 +79,9 @@ fn enqueue_stable_lighting_remesh(
         .remesh_queue
         .enqueue_lighting_change(coord, &runtime.world);
 
-    // Face lighting/AO samples the complete 3x3x3 one-voxel halo.
-    // Wait until that halo has no queued lighting work, then notify the
-    // rendered section and only the diagonal neighbors whose toward-source
-    // boundaries can actually sample this section.
+    // Face lighting/AO samples the complete 3x3x3 one-voxel halo. Publish
+    // revisions immediately; async remesh dependency checks reject stale
+    // captures if lighting changes again while the task is in flight.
     for y in -1..=1 {
         for z in -1..=1 {
             for x in -1..=1 {
