@@ -34,10 +34,6 @@ impl WorldgenVersion {
         Self(WORLDGEN_VERSION)
     }
 
-    pub(crate) const fn get(self) -> u32 {
-        self.0
-    }
-
     pub(crate) fn validate(self) -> io::Result<()> {
         validate_worldgen_version(self.0)
     }
@@ -260,8 +256,8 @@ mod tests {
     #[test]
     fn legacy_worldgen_identity_stays_pinned_to_v1() {
         assert_eq!(LEGACY_WORLDGEN_VERSION, 1);
-        assert_eq!(legacy_worldgen_version().get(), LEGACY_WORLDGEN_VERSION);
-        assert_eq!(WorldgenVersion::default().get(), LEGACY_WORLDGEN_VERSION);
+        assert_eq!(legacy_worldgen_version().0, LEGACY_WORLDGEN_VERSION);
+        assert_eq!(WorldgenVersion::default().0, LEGACY_WORLDGEN_VERSION);
         assert!(WORLDGEN_VERSION >= LEGACY_WORLDGEN_VERSION);
     }
 
@@ -269,7 +265,7 @@ mod tests {
     fn worldgen_identity_serde_defaults_legacy_and_stays_numeric() {
         let legacy: PersistedWorldgenIdentity =
             serde_json::from_str("{}").expect("legacy metadata must deserialize");
-        assert_eq!(legacy.worldgen_version.get(), LEGACY_WORLDGEN_VERSION);
+        assert_eq!(legacy.worldgen_version.0, LEGACY_WORLDGEN_VERSION);
 
         let current = PersistedWorldgenIdentity {
             worldgen_version: WorldgenVersion::current(),
