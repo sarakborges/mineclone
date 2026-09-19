@@ -61,8 +61,20 @@ impl Plugin for PlayerCameraPlugin {
     }
 }
 
-#[derive(Component, Default)]
+pub(crate) const MAX_CAMERA_PITCH: f32 = 1.54;
+
+#[derive(Component, Default, Clone, Copy)]
 pub struct GameplayCamera {
     pub yaw: f32,
     pub pitch: f32,
+}
+
+impl GameplayCamera {
+    pub(crate) fn restored(yaw: f32, pitch: f32) -> Self {
+        Self { yaw, pitch: pitch.clamp(-MAX_CAMERA_PITCH, MAX_CAMERA_PITCH) }
+    }
+
+    pub(crate) fn rotation(self) -> Quat {
+        Quat::from_euler(EulerRot::YXZ, self.yaw, self.pitch, 0.0)
+    }
 }
