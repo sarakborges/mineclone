@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-use self::solver::{desired_fluid, enqueue_remesh};
+use self::solver::{FluidSolverScratch, desired_fluid_with_scratch, enqueue_remesh};
 use super::{
     chunk_remesh::ChunkRemeshQueue,
     game_rules::GameRules,
@@ -191,6 +191,7 @@ pub(super) fn process_fluid_updates(
     world_ticks: Res<WorldTickClock>,
     game_rules: Res<GameRules>,
     fluids: Res<FluidRegistry>,
+    mut solver_scratch: Local<FluidSolverScratch>,
     mut runtime: FluidSimulationRuntime,
 ) {
     runtime.pending.advance_cadence(
@@ -205,7 +206,7 @@ pub(super) fn process_fluid_updates(
     )
     .with_maximum_items(MAX_FLUID_UPDATES_PER_FRAME);
 
-    classify_topology_updates(&mut runtime, &fluids, &mut budget);
+    classify_topology_updates(&mut runtime, &fluids, &mut solver_scratch, &mut budget);
 
     while !budget.exhausted() {
         let Some((scheduled_fluid_id, position)) = runtime.pending.pop_runnable_fluid() else {
@@ -216,7 +217,14 @@ pub(super) fn process_fluid_updates(
         let Some((cell, current, _)) = runtime.world.sample_at(position) else {
             continue;
         };
-        let desired = desired_fluid(&runtime.world, position, cell, current, &fluids);
+        let desired = desired_fluid_with_scratch(
+            &runtime.world,
+            position,
+            cell,
+            current,
+            &fluids,
+            &mut solver_scratch,
+        );
         if current == desired {
             continue;
         }
@@ -247,6 +255,7 @@ pub(super) fn process_fluid_updates(
 fn classify_topology_updates(
     runtime: &mut FluidSimulationRuntime<'_>,
     fluids: &FluidRegistry,
+    solver_scratch: &mut FluidSolverScratch,
     budget: &mut FrameWorkBudget,
 ) {
     let batch_len = runtime.pending.topology_queue.len();
@@ -263,7 +272,14 @@ fn classify_topology_updates(
         let Some((cell, current, _)) = runtime.world.sample_at(position) else {
             continue;
         };
-        let desired = desired_fluid(&runtime.world, position, cell, current, fluids);
+        let desired = desired_fluid_with_scratch(
+            &runtime.world,
+            position,
+            cell,
+            current,
+            fluids,
+            solver_scratch,
+        );
         if current == desired {
             continue;
         }
