@@ -24,7 +24,6 @@ use super::{
 const FLUID_UPDATE_BUDGET: Duration = Duration::from_millis(1);
 const FLUID_CATCHUP_BUDGET: Duration = Duration::from_millis(3);
 const MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK: usize = 64;
-const MIN_FLUID_CATCHUP_UPDATES_BEFORE_BUDGET_CHECK: usize = 128;
 const MAX_FLUID_UPDATES_PER_FRAME: usize = 512;
 const MAX_FLUID_CATCHUP_UPDATES_PER_FRAME: usize = 2_048;
 const FLUID_CATCHUP_QUEUE_THRESHOLD: usize = 512;
@@ -225,7 +224,7 @@ pub(super) fn process_fluid_updates(
     let mut budget = if catch_up {
         FrameWorkBudget::new(
             FLUID_CATCHUP_BUDGET,
-            MIN_FLUID_CATCHUP_UPDATES_BEFORE_BUDGET_CHECK,
+            MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK,
         )
         .with_maximum_items(MAX_FLUID_CATCHUP_UPDATES_PER_FRAME)
     } else {
