@@ -45,6 +45,8 @@ impl ChunkDiskIdentity {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
 
     #[test]
@@ -76,14 +78,15 @@ mod tests {
             IVec3::new(0, 0, 1),
             IVec3::new(0, 1, 0),
         ];
-        let paths = coordinates.map(|coord| {
-            ChunkDiskIdentity::new(coord)
-                .expect("valid chunk coordinate")
-                .relative_path()
-        });
+        let paths: HashSet<_> = coordinates
+            .into_iter()
+            .map(|coord| {
+                ChunkDiskIdentity::new(coord)
+                    .expect("valid chunk coordinate")
+                    .relative_path()
+            })
+            .collect();
 
-        for (index, path) in paths.iter().enumerate() {
-            assert!(!paths[..index].contains(path));
-        }
+        assert_eq!(paths.len(), coordinates.len());
     }
 }
