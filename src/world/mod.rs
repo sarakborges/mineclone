@@ -6,6 +6,7 @@ mod chunk_mesh_tasks;
 pub(crate) mod chunk_remesh;
 mod chunk_remesh_tasks;
 pub(crate) mod chunk_rendering;
+pub(crate) mod chunk_storage;
 pub(crate) mod chunk_system_params;
 mod chunk_task_queue;
 mod chunk_unloading;
