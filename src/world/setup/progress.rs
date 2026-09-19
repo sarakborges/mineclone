@@ -20,7 +20,7 @@ use crate::world::{
     WorldLoadMode,
     chunk_generation_tasks::{ChunkGenerationTasks, MAX_GENERATION_TASKS_IN_FLIGHT},
     chunk_mesh_tasks::{ChunkMeshTasks, MAX_MESH_TASKS_IN_FLIGHT},
-    chunk_rendering::{TerrainMaterials, spawn_built_chunk_meshes},
+    chunk_rendering::spawn_built_chunk_meshes,
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
     fluid_updates::PendingFluidUpdates,
     work_budget::FrameWorkBudget,
@@ -44,7 +44,6 @@ pub(in crate::world) fn setup_world(
     mut mesh_tasks: ResMut<ChunkMeshTasks>,
     persistence: WorldSetupPersistence,
     player_definition: Res<crate::content::player::PlayerDefinition>,
-    images: Res<Assets<Image>>,
 ) {
     if transition.is_active() {
         return;
@@ -67,11 +66,6 @@ pub(in crate::world) fn setup_world(
         WorldLoadingPhase::Meshing => {
             mesh_initial_chunks(&content, &mut renderer, &mut progress, &mut mesh_tasks)
         }
-        WorldLoadingPhase::Textures => wait_for_terrain_textures(
-            &renderer.terrain_materials,
-            &images,
-            &mut progress,
-        ),
         WorldLoadingPhase::Spawning => spawn_loaded_world(
             &content,
             &mut renderer,
@@ -234,7 +228,7 @@ fn mesh_initial_chunks(
         && progress.loading_state.meshed >= progress.loading_state.coords.len()
         && mesh_tasks.pending_count() == 0
     {
-        progress.loading_state.phase = WorldLoadingPhase::Textures;
+        progress.loading_state.phase = WorldLoadingPhase::Spawning;
     }
 }
 
@@ -346,16 +340,6 @@ fn dispatch_mesh_tasks(
 
         progress.loading_state.mesh_cursor += 1;
         budget.record(1);
-    }
-}
-
-fn wait_for_terrain_textures(
-    terrain_materials: &TerrainMaterials,
-    images: &Assets<Image>,
-    progress: &mut WorldSetupProgress<'_>,
-) {
-    if terrain_materials.textures_ready(images) {
-        progress.loading_state.phase = WorldLoadingPhase::Spawning;
     }
 }
 
