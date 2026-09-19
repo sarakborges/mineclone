@@ -13,7 +13,7 @@ use bevy::{
 };
 
 use crate::{
-    content::fluid::{FluidDefinition, FluidId, FluidRegistry},
+    content::fluid::{FluidId, FluidRegistry},
     voxel::{
         deduplicated_queue::DeduplicatedQueue,
         fluid::FluidCell,
@@ -452,18 +452,15 @@ fn fluid_tick_delay_for_id(
     let definition = fluids
         .get(fluid_id)
         .unwrap_or_else(|| panic!("missing fluid definition for id {fluid_id}"));
-    fluid_tick_delay_ticks(definition, ticks_per_second)
+    fluid_tick_delay_ticks(definition.spread_speed, ticks_per_second)
 }
 
-fn fluid_tick_delay_ticks(
-    definition: &FluidDefinition,
-    ticks_per_second: u32,
-) -> Option<u64> {
-    if definition.spread_speed <= f32::EPSILON || ticks_per_second == 0 {
+fn fluid_tick_delay_ticks(spread_speed: f32, ticks_per_second: u32) -> Option<u64> {
+    if spread_speed <= f32::EPSILON || ticks_per_second == 0 {
         return None;
     }
 
-    let ticks = (ticks_per_second as f64 / f64::from(definition.spread_speed))
+    let ticks = (ticks_per_second as f64 / f64::from(spread_speed))
         .round()
         .max(1.0);
     Some(ticks as u64)
@@ -481,20 +478,6 @@ fn transition_fluid_id(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn test_definition(spread_speed: f32) -> FluidDefinition {
-        FluidDefinition {
-            id: "asteria:test".to_owned(),
-            color: Default::default(),
-            opacity: 1.0,
-            roughness: 0.0,
-            metallic: 0.0,
-            light_dampening: 0,
-            light_emission: 0,
-            spread_speed,
-            max_spread: 7,
-        }
-    }
 
     #[test]
     fn scheduled_fluid_tick_keeps_the_earliest_due_time() {
@@ -528,10 +511,10 @@ mod tests {
 
     #[test]
     fn spread_speed_quantizes_to_world_tick_delay() {
-        assert_eq!(fluid_tick_delay_ticks(&test_definition(16.0), 40), Some(3));
-        assert_eq!(fluid_tick_delay_ticks(&test_definition(4.0), 40), Some(10));
-        assert_eq!(fluid_tick_delay_ticks(&test_definition(80.0), 40), Some(1));
-        assert_eq!(fluid_tick_delay_ticks(&test_definition(0.0), 40), None);
+        assert_eq!(fluid_tick_delay_ticks(16.0, 40), Some(3));
+        assert_eq!(fluid_tick_delay_ticks(4.0, 40), Some(10));
+        assert_eq!(fluid_tick_delay_ticks(80.0, 40), Some(1));
+        assert_eq!(fluid_tick_delay_ticks(0.0, 40), None);
     }
 
     #[test]
