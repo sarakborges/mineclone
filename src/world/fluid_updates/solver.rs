@@ -218,7 +218,7 @@ fn preferred_horizontal_directions(
 
         let direction = 1_u8 << index;
         visited.insert(position, (1, direction));
-        queue.push_back((position, 1));
+        queue.push((position, 1));
     }
 
     let mut nearest_drop = None;
