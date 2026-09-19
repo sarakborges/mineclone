@@ -32,6 +32,17 @@ pub(crate) fn is_compatible_worldgen_version(version: u32) -> bool {
     version == WORLDGEN_VERSION
 }
 
+/// Shared validation used by persistence boundaries before a save is allowed
+/// to regenerate untouched terrain. Keep the diagnostic stable enough to make
+/// incompatible-world failures distinguishable from generic save corruption.
+pub(crate) fn validate_worldgen_version(version: u32) -> Result<(), &'static str> {
+    if is_compatible_worldgen_version(version) {
+        Ok(())
+    } else {
+        Err("saved world uses an incompatible world-generation version")
+    }
+}
+
 const MIN_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 5;
 const MAX_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 50;
 const DEFAULT_BIOME_SIZE_MULTIPLIER_TENTHS: u8 = 10;
@@ -198,5 +209,10 @@ mod tests {
         assert!(!is_compatible_worldgen_version(
             WORLDGEN_VERSION.saturating_add(1)
         ));
+        assert_eq!(validate_worldgen_version(WORLDGEN_VERSION), Ok(()));
+        assert_eq!(
+            validate_worldgen_version(WORLDGEN_VERSION.saturating_add(1)),
+            Err("saved world uses an incompatible world-generation version")
+        );
     }
 }
