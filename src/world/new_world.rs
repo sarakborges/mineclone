@@ -1,3 +1,5 @@
+use std::io;
+
 use bevy::prelude::*;
 
 use crate::player::game_mode::GameMode;
@@ -33,13 +35,16 @@ pub(crate) fn is_compatible_worldgen_version(version: u32) -> bool {
 }
 
 /// Shared validation used by persistence boundaries before a save is allowed
-/// to regenerate untouched terrain. Keep the diagnostic stable enough to make
-/// incompatible-world failures distinguishable from generic save corruption.
-pub(crate) fn validate_worldgen_version(version: u32) -> Result<(), &'static str> {
+/// to regenerate untouched terrain. Return the persistence layer's native
+/// error type so every boundary can propagate the same diagnostic unchanged.
+pub(crate) fn validate_worldgen_version(version: u32) -> io::Result<()> {
     if is_compatible_worldgen_version(version) {
         Ok(())
     } else {
-        Err("saved world uses an incompatible world-generation version")
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "saved world uses an incompatible world-generation version",
+        ))
     }
 }
 
@@ -209,10 +214,13 @@ mod tests {
         assert!(!is_compatible_worldgen_version(
             WORLDGEN_VERSION.saturating_add(1)
         ));
-        assert_eq!(validate_worldgen_version(WORLDGEN_VERSION), Ok(()));
+        assert!(validate_worldgen_version(WORLDGEN_VERSION).is_ok());
+        let error = validate_worldgen_version(WORLDGEN_VERSION.saturating_add(1))
+            .expect_err("future worldgen identity must be rejected");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert_eq!(
-            validate_worldgen_version(WORLDGEN_VERSION.saturating_add(1)),
-            Err("saved world uses an incompatible world-generation version")
+            error.to_string(),
+            "saved world uses an incompatible world-generation version"
         );
     }
 }
