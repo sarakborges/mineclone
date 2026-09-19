@@ -28,7 +28,10 @@ use crate::{
         InMemoryWorldSave, WorldLoadMode, WorldSeed,
         dimension::CurrentDimension, game_rules::GameRules,
         fluid_updates::PendingFluidUpdates,
-        save_catalog::{SaveRegistries, WorldSnapshot, WorldSummary, delete_world, list_verified_worlds, load_world},
+        save_catalog::{
+            SaveRegistries, WorldDirectoryLock, WorldSnapshot, WorldSummary, delete_world,
+            list_verified_worlds, load_world,
+        },
         save_session::WorldSession,
     },
 };
@@ -62,7 +65,7 @@ type WorldLoadResult = Arc<Mutex<WorldLoadSlot>>;
 struct WorldLoadSlot {
     abandoned: bool,
     complete: bool,
-    result: Option<io::Result<(WorldSnapshot, VoxelWorld)>>,
+    result: Option<io::Result<(WorldSnapshot, VoxelWorld, WorldDirectoryLock)>>,
 }
 
 struct PendingWorldLoad {
@@ -509,7 +512,7 @@ fn poll_world_load(
         );
         return;
     };
-    let (mut snapshot, world) = match result {
+    let (mut snapshot, world, session_lock) = match result {
         Ok(loaded) => loaded,
         Err(error) => {
             state.error = format!(
@@ -567,6 +570,7 @@ fn poll_world_load(
             player.health,
         );
     }
+    commands.insert_resource(session_lock);
     commands.insert_resource(pending_fluid_updates);
     commands.insert_resource(PendingCreatureRestores::new(std::mem::take(
         &mut snapshot.creatures,
