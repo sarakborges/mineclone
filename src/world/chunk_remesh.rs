@@ -17,6 +17,7 @@ use super::{
         refresh_chunk_geometry_mesh,
     },
     chunk_system_params::{ChunkContent, ChunkRenderer},
+    fluid_updates::PendingFluidUpdates,
     work_budget::FrameWorkBudget,
 };
 
@@ -124,8 +125,29 @@ impl ChunkRemeshQueue {
         pop_renderable_from(&mut self.queue, &mut self.geometry_scan_miss, render_pool)
     }
 
-    fn pop_renderable_fluid(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
-        pop_renderable_from(&mut self.fluid, &mut self.fluid_scan_miss, render_pool)
+    fn pop_renderable_fluid(
+        &mut self,
+        render_pool: &ChunkRenderPool,
+        pending_fluids: &PendingFluidUpdates,
+    ) -> Option<IVec3> {
+        let scan_key = RenderableScanKey {
+            queue_revision: self.fluid.revision(),
+            pool_revision: render_pool.membership_revision(),
+        };
+        if self.fluid_scan_miss == Some(scan_key) {
+            return None;
+        }
+
+        let coord = self.fluid.pop_where(|coord| {
+            render_pool.contains(coord)
+                && !pending_fluids.has_unpublished_fluid_chunk(coord)
+        });
+        if coord.is_some() {
+            self.fluid_scan_miss = None;
+        } else {
+            self.fluid_scan_miss = Some(scan_key);
+        }
+        coord
     }
 
     fn pop_renderable_immediate_geometry(
@@ -160,6 +182,7 @@ impl ChunkRemeshQueue {
     fn pop_renderable_background(
         &mut self,
         render_pool: &ChunkRenderPool,
+        pending_fluids: &PendingFluidUpdates,
     ) -> Option<(IVec3, ChunkRemeshTaskKind)> {
         const KIND_COUNT: usize = 3;
 
@@ -167,7 +190,7 @@ impl ChunkRemeshQueue {
             let kind_index = (self.next_background_kind + offset) % KIND_COUNT;
             let next = match kind_index {
                 0 => self
-                    .pop_renderable_fluid(render_pool)
+                    .pop_renderable_fluid(render_pool, pending_fluids)
                     .map(|coord| (coord, ChunkRemeshTaskKind::Fluid)),
                 1 => self
                     .pop_renderable_lighting(render_pool)
@@ -262,6 +285,7 @@ pub(super) fn process_chunk_remesh_queue(
     world: Res<VoxelWorld>,
     mut queue: ResMut<ChunkRemeshQueue>,
     mut tasks: ResMut<ChunkRemeshTasks>,
+    pending_fluids: Res<PendingFluidUpdates>,
     mut deferred: Local<Vec<(IVec3, ChunkRemeshTaskKind)>>,
 ) {
     tasks.sync_snapshot(&content);
@@ -273,6 +297,7 @@ pub(super) fn process_chunk_remesh_queue(
             &world,
             &mut queue,
             &mut tasks,
+            &pending_fluids,
         );
     }
 
@@ -285,6 +310,7 @@ pub(super) fn process_chunk_remesh_queue(
         &renderer.pool,
         &mut queue,
         &mut tasks,
+        &pending_fluids,
         &mut deferred,
     );
 }
@@ -295,6 +321,7 @@ fn collect_completed_remesh_tasks(
     world: &VoxelWorld,
     queue: &mut ChunkRemeshQueue,
     tasks: &mut ChunkRemeshTasks,
+    pending_fluids: &PendingFluidUpdates,
 ) {
     let current_revision = tasks.revision();
     let mut budget = FrameWorkBudget::new(REMESH_RESULT_INTEGRATION_BUDGET, 1)
@@ -319,6 +346,13 @@ fn collect_completed_remesh_tasks(
             || !output.dependencies.content_is_current(world)
         {
             queue.enqueue_task_priority(coord, output.kind);
+            continue;
+        }
+
+        if output.kind == ChunkRemeshTaskKind::Fluid
+            && pending_fluids.has_unpublished_fluid_chunk(coord)
+        {
+            queue.enqueue_fluid_priority(coord);
             continue;
         }
 
@@ -364,6 +398,7 @@ fn dispatch_remesh_tasks(
     render_pool: &ChunkRenderPool,
     queue: &mut ChunkRemeshQueue,
     tasks: &mut ChunkRemeshTasks,
+    pending_fluids: &PendingFluidUpdates,
     deferred: &mut Vec<(IVec3, ChunkRemeshTaskKind)>,
 ) {
     let mut budget = FrameWorkBudget::new(REMESH_TASK_DISPATCH_BUDGET, 1)
@@ -375,7 +410,9 @@ fn dispatch_remesh_tasks(
             break;
         }
 
-        let Some((coord, kind)) = queue.pop_renderable_background(render_pool) else {
+        let Some((coord, kind)) =
+            queue.pop_renderable_background(render_pool, pending_fluids)
+        else {
             break;
         };
 
