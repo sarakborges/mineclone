@@ -88,6 +88,20 @@ impl VoxelWorld {
         self.chunks.keys().copied()
     }
 
+    pub(crate) fn loaded_chunk_coords_below(
+        &self,
+        coord: IVec3,
+    ) -> impl Iterator<Item = IVec3> + '_ {
+        self.loaded_chunk_columns
+            .get(&coord.xz())
+            .into_iter()
+            .flat_map(move |ys| {
+                ys.range(..coord.y)
+                    .copied()
+                    .map(move |y| IVec3::new(coord.x, y, coord.z))
+            })
+    }
+
     pub fn archive_chunk(&mut self, coord: IVec3) {
         let Some(chunk) = self.chunks.remove(&coord) else {
             return;
@@ -467,6 +481,26 @@ mod tests {
 
         world.archive_chunk(low);
         assert_eq!(world.highest_loaded_world_y_in_column(world_x, world_z), None);
+    }
+
+    #[test]
+    fn loaded_chunk_coords_below_are_column_local_and_sorted() {
+        let mut world = VoxelWorld::default();
+        for coord in [
+            IVec3::new(2, 0, -3),
+            IVec3::new(2, 2, -3),
+            IVec3::new(2, 4, -3),
+            IVec3::new(3, 1, -3),
+        ] {
+            world.insert_chunk(coord, VoxelChunk::empty());
+        }
+
+        assert_eq!(
+            world
+                .loaded_chunk_coords_below(IVec3::new(2, 4, -3))
+                .collect::<Vec<_>>(),
+            vec![IVec3::new(2, 0, -3), IVec3::new(2, 2, -3)]
+        );
     }
 
     #[test]
