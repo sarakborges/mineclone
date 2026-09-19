@@ -21,7 +21,7 @@ use crate::{
         fluid::FluidRegistry, tool::ToolRegistry,
     },
     creatures::SavedCreature,
-    player::hotbar::INVENTORY_SLOT_COUNT,
+    player::hotbar::{HOTBAR_SLOT_COUNT, INVENTORY_SLOT_COUNT},
     voxel::{chunk_disk::DiskChunk, world::VoxelWorld},
 };
 
@@ -222,6 +222,9 @@ fn validate_playable(
     if snapshot.inventory.len() != INVENTORY_SLOT_COUNT {
         return Err(invalid_data("invalid inventory length"));
     }
+    if snapshot.selected_hotbar_slot >= HOTBAR_SLOT_COUNT {
+        return Err(invalid_data("invalid selected hotbar slot"));
+    }
     for id in snapshot.inventory.iter().flatten() {
         if !valid_item(id) {
             return Err(invalid_data(format!("unknown inventory item ID: {id}")));
@@ -276,6 +279,8 @@ pub(crate) struct WorldSnapshot {
     pub(crate) tick_in_day: u64,
     pub(crate) inventory: Vec<Option<String>>,
     #[serde(default)]
+    pub(crate) selected_hotbar_slot: usize,
+    #[serde(default)]
     pub(crate) fluid_updates: SavedFluidUpdates,
     #[serde(default)]
     pub(crate) creatures: Vec<SavedCreature>,
@@ -293,6 +298,7 @@ pub(crate) struct SnapshotSource<'a> {
     pub(crate) day: u64,
     pub(crate) tick_in_day: u64,
     pub(crate) inventory: Vec<Option<String>>,
+    pub(crate) selected_hotbar_slot: usize,
     pub(crate) world: &'a VoxelWorld,
     pub(crate) fluids: &'a FluidRegistry,
     pub(crate) pending_fluids: &'a PendingFluidUpdates,
@@ -328,6 +334,7 @@ impl WorldSnapshot {
             day: source.day,
             tick_in_day: source.tick_in_day,
             inventory: source.inventory,
+            selected_hotbar_slot: source.selected_hotbar_slot,
             fluid_updates: source
                 .pending_fluids
                 .capture_saved(source.world_tick, source.fluids)?,
