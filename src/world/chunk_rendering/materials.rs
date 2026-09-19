@@ -71,6 +71,12 @@ impl TerrainMaterials {
         }
     }
 
+    pub(crate) fn textures_ready(&self, images: &Assets<Image>) -> bool {
+        self._texture_preloads
+            .iter()
+            .all(|handle| images.contains(handle))
+    }
+
     pub(super) fn for_face(
         &self,
         block_id: &str,
