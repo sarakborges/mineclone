@@ -10,9 +10,11 @@ use bevy::{ecs::system::SystemParam, log::warn, prelude::*, ui_widgets::ScrollAr
 use crate::{
     app::game_state::GameState,
     content::{
-        block::BlockRegistry, day_night_cycle::DayNightCycleRegistry,
-        dimension::DimensionRegistry, fluid::FluidRegistry, tool::ToolRegistry,
+        block::BlockRegistry, creature::CreatureRegistry,
+        day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
+        fluid::FluidRegistry, tool::ToolRegistry,
     },
+    creatures::PendingCreatureRestores,
     localization::{ActiveLanguage, UiLocalization},
     player::{game_mode::GameMode, hotbar::PlayerHotbar, player_id::LOCAL_PLAYER_ID},
     ui::{
@@ -123,6 +125,7 @@ struct WorldSelectionScanContent<'w> {
     blocks: Res<'w, BlockRegistry>,
     fluids: Res<'w, FluidRegistry>,
     tools: Res<'w, ToolRegistry>,
+    creatures: Res<'w, CreatureRegistry>,
     dimensions: Res<'w, DimensionRegistry>,
     cycles: Res<'w, DayNightCycleRegistry>,
 }
@@ -133,6 +136,7 @@ struct OwnedLoadContent {
     blocks: BlockRegistry,
     fluids: FluidRegistry,
     tools: ToolRegistry,
+    creatures: CreatureRegistry,
     dimensions: DimensionRegistry,
     cycles: DayNightCycleRegistry,
 }
@@ -142,6 +146,10 @@ impl WorldSelectionScanContent<'_> {
         let mut tools = ToolRegistry::default();
         for definition in self.tools.iter() {
             tools.insert(definition.clone());
+        }
+        let mut creatures = CreatureRegistry::default();
+        for definition in self.creatures.iter() {
+            creatures.insert(definition.clone());
         }
         let mut dimensions = DimensionRegistry::default();
         let mut cycles = DayNightCycleRegistry::default();
@@ -155,6 +163,7 @@ impl WorldSelectionScanContent<'_> {
             blocks: self.blocks.clone(),
             fluids: self.fluids.clone(),
             tools,
+            creatures,
             dimensions,
             cycles,
         }
@@ -167,6 +176,7 @@ impl OwnedLoadContent {
             blocks: &self.blocks,
             fluids: &self.fluids,
             tools: &self.tools,
+            creatures: &self.creatures,
             dimensions: &self.dimensions,
             cycles: &self.cycles,
         }
@@ -192,6 +202,7 @@ fn refresh_world_list(
         blocks: &content.blocks,
         fluids: &content.fluids,
         tools: &content.tools,
+        creatures: &content.creatures,
         dimensions: &content.dimensions,
         cycles: &content.cycles,
     }
@@ -498,7 +509,7 @@ fn poll_world_load(
         );
         return;
     };
-    let (snapshot, world) = match result {
+    let (mut snapshot, world) = match result {
         Ok(loaded) => loaded,
         Err(error) => {
             state.error = format!(
@@ -557,6 +568,9 @@ fn poll_world_load(
         );
     }
     commands.insert_resource(pending_fluid_updates);
+    commands.insert_resource(PendingCreatureRestores::new(std::mem::take(
+        &mut snapshot.creatures,
+    )));
     commands.insert_resource(WorldSeed(snapshot.seed));
     commands.insert_resource(CurrentDimension { id: snapshot.dimension_id });
     commands.insert_resource(rules);
