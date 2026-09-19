@@ -150,6 +150,7 @@ impl WorldSession {
                 blocks: &snapshot.blocks,
                 fluids: &snapshot.fluids,
                 tools: &snapshot.tools,
+                creatures: &snapshot.creature_definitions,
                 dimensions: &snapshot.dimensions,
                 cycles: &snapshot.cycles,
             },
