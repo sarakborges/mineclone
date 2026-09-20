@@ -42,6 +42,13 @@ struct StructureCandidate<'a> {
     maximum: IVec2,
 }
 
+#[derive(Clone, Copy)]
+struct StructurePlacementContext<'a> {
+    biome_id: &'a str,
+    placement_id: &'a str,
+    placement: StructurePlacementRules,
+}
+
 struct StructureRasterizationContext<'a> {
     base_chunk: &'a VoxelChunk,
     blocks: &'a BlockRegistry,
@@ -130,9 +137,11 @@ fn resolved_structure_candidates_matching<'a>(
             chunk_min,
             chunk_max,
             context,
-            &biome_structure.biome_id,
-            &biome_structure.structure_id,
-            biome_structure.placement,
+            StructurePlacementContext {
+                biome_id: &biome_structure.biome_id,
+                placement_id: &biome_structure.structure_id,
+                placement: biome_structure.placement,
+            },
             only_structure_id,
             &mut direct_candidates,
         );
@@ -158,9 +167,11 @@ fn resolved_structure_candidates_matching<'a>(
                 direct.minimum,
                 direct.maximum,
                 context,
-                &biome_structure.biome_id,
-                &biome_structure.structure_id,
-                biome_structure.placement,
+                StructurePlacementContext {
+                    biome_id: &biome_structure.biome_id,
+                    placement_id: &biome_structure.structure_id,
+                    placement: biome_structure.placement,
+                },
                 None,
                 &mut overlapping,
             );
@@ -219,10 +230,12 @@ pub(super) fn maximum_potential_structure_height_for_chunk(
             chunk_min,
             chunk_max,
             biome_field.seed(),
-            &biome_structure.biome_id,
-            &biome_structure.structure_id,
+            StructurePlacementContext {
+                biome_id: &biome_structure.biome_id,
+                placement_id: &biome_structure.structure_id,
+                placement: biome_structure.placement,
+            },
             bounds,
-            biome_structure.placement,
             |anchor| {
                 if biome_field
                     .sample_surface(anchor.as_vec2() + Vec2::splat(0.5))
@@ -242,12 +255,15 @@ fn collect_structure_candidates<'a>(
     target_min: IVec2,
     target_max: IVec2,
     context: &'a ChunkGenerationContext<'_>,
-    biome_id: &'a str,
-    placement_id: &'a str,
-    placement: StructurePlacementRules,
+    placement_context: StructurePlacementContext<'a>,
     only_structure_id: Option<&str>,
     candidates: &mut Vec<StructureCandidate<'a>>,
 ) {
+    let StructurePlacementContext {
+        biome_id,
+        placement_id,
+        placement,
+    } = placement_context;
     let bounds = context
         .structures
         .bounds_for_reference(placement_id)
@@ -261,10 +277,8 @@ fn collect_structure_candidates<'a>(
         target_min,
         target_max,
         context.biome_field.seed(),
-        biome_id,
-        placement_id,
+        placement_context,
         bounds,
-        placement,
         |anchor| {
             let member_hash = structure_member_hash(
                 context.biome_field.seed(),
@@ -333,12 +347,15 @@ fn visit_candidate_anchors_intersecting(
     target_min: IVec2,
     target_max: IVec2,
     world_seed: u64,
-    biome_id: &str,
-    structure_reference: &str,
+    placement_context: StructurePlacementContext<'_>,
     bounds: (IVec2, IVec2),
-    placement: StructurePlacementRules,
     mut visit: impl FnMut(IVec2),
 ) {
+    let StructurePlacementContext {
+        biome_id,
+        placement_id: structure_reference,
+        placement,
+    } = placement_context;
     let (minimum_offset, maximum_offset) = bounds;
     let minimum_candidate = target_min - maximum_offset;
     let maximum_candidate = target_max - minimum_offset;
