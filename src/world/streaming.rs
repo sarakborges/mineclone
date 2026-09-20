@@ -455,7 +455,7 @@ fn seed_loaded_chunk_lighting(
         .is_empty();
     queues.fluid.reactivate_loaded_chunk(coord, current_tick);
     queues.fluid.enqueue_loaded_fluid_frontier(&work.world, coord);
-    queues.lighting.seed_chunk_direct_lighting(
+    let requires_lighting_relaxation = queues.lighting.seed_chunk_direct_lighting(
         &mut work.world,
         coord,
         content.blocks(),
@@ -482,7 +482,7 @@ fn seed_loaded_chunk_lighting(
 
     if chunk_is_empty {
         queues.lighting.enqueue_empty_chunk_relaxation(coord);
-    } else {
+    } else if requires_lighting_relaxation {
         queues.lighting.enqueue_chunk_relaxation(coord);
     }
 
