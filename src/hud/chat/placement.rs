@@ -223,9 +223,12 @@ impl ChatPlacementContext<'_, '_> {
         // Reuse the world generator's footprint and slope-fitting rule. Unlike
         // worldgen's density-based ground voxel, the live-world sample returns
         // the first empty level above terrain so existing blocks are preserved.
-        let Some(origin_y) = fit_structure_to_ground(anchor, voxels, |position| {
-            loaded_surface_level(world, position)
-        }) else {
+        let Some(origin_y) = fit_structure_to_ground(
+            anchor,
+            voxels,
+            structure.restrictions.max_slope,
+            |position| loaded_surface_level(world, position),
+        ) else {
             return format!("not enough space to place {id}");
         };
         let origin = IVec3::new(anchor.x, origin_y, anchor.y);
