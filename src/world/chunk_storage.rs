@@ -41,8 +41,8 @@ impl ChunkDiskIdentity {
 pub(crate) fn publish_generation_chunks(world_directory: &Path, generation: u64, chunks: &[DiskChunk]) -> io::Result<()> {
     let published_relative = PathBuf::from(generation_directory_name(generation));
     let staging_relative = PathBuf::from(staging_generation_directory_name(generation));
-    let published = checked_directory_slot(world_directory, &published_relative)?;
-    let staging = checked_directory_slot(world_directory, &staging_relative)?;
+    let published = checked_directory_slot(world_directory, published_relative.as_path())?;
+    let staging = checked_directory_slot(world_directory, staging_relative.as_path())?;
     if published.exists() || staging.exists() {
         return Err(io::Error::new(io::ErrorKind::AlreadyExists, format!("chunk generation {generation} already has a storage slot")));
     }
@@ -77,7 +77,7 @@ fn write_generation_chunks_to_staging(staging: &Path, chunks: &[DiskChunk]) -> i
 
 pub(crate) fn remove_generation_chunks(world_directory: &Path, generation: u64) -> io::Result<()> {
     let relative = PathBuf::from(generation_directory_name(generation));
-    let path = checked_directory_slot(world_directory, &relative)?;
+    let path = checked_directory_slot(world_directory, relative.as_path())?;
     match fs::symlink_metadata(path.as_path()) {
         Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => { fs::remove_dir_all(path)?; sync_directory(world_directory) }
         Ok(_) => Err(io::Error::new(io::ErrorKind::InvalidData, "chunk generation storage must be a real directory")),
@@ -91,7 +91,7 @@ fn sync_directory_tree(directory: &Path) -> io::Result<()> {
     let mut index = 0;
     while index < directories.len() {
         let current = directories[index].clone(); index += 1;
-        for entry in fs::read_dir(&current)? { let entry = entry?; if entry.file_type()?.is_dir() { directories.push(entry.path()); } }
+        for entry in fs::read_dir(current.as_path())? { let entry = entry?; if entry.file_type()?.is_dir() { directories.push(entry.path()); } }
     }
     for directory in directories.into_iter().rev() { sync_directory(directory.as_path())?; }
     Ok(())
