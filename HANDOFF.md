@@ -4226,3 +4226,12 @@ Em vez de suppression ou heap indirection artificial:
 - o parent continua decidindo se aceita/ignora o resultado;
 - nenhuma allocation adicional foi introduzida;
 - `VERSION` permanece `0.34.24`.
+
+
+### Terceira correção de integração do checkpoint 135
+
+A CI seguinte encontrou apenas um import obsoleto após a troca do completion enum por struct:
+
+- removido `WorldLoadCompletion` do import do parent;
+- nenhum comportamento alterado;
+- `VERSION` permanece `0.34.24`.

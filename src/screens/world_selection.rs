@@ -27,9 +27,7 @@ use self::layout::{
     SelectionError, WorldListContainer, WorldListEntry, WorldListStatus, spawn_world_entry,
     spawn_world_selection,
 };
-use self::tasks::{
-    PendingWorldLoad, PendingWorldScan, WorldLoadCompletion,
-};
+use self::tasks::{PendingWorldLoad, PendingWorldScan};
 
 pub(crate) struct WorldSelectionPlugin;
 
