@@ -4698,3 +4698,56 @@ O teste de empate agora prova ordenação por coordenada estável em vez de pres
 - `ARCHITECTURE.md` proíbe HashSet iteration como tie-break de streaming.
 - `VERSION`: **0.34.31 → 0.34.32**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 143
+
+- Push CI `35518845006`: **success**.
+- PR CI `35518847380`: **success**.
+- O topo `a79e9bacfb475119d4d1c2b4021355f2b5302f35` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.32`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 144 — 2026-09-20: validated generation-chunk read path [CÓDIGO APLICADO; CI PENDENTE]
+
+### Objetivo
+
+Preparar a migração real para chunk storage por geração sem fazer manifest/snapshot depender de um writer que ainda não possuía reader simétrico.
+
+### Implementação
+
+`chunk_storage.rs` agora possui `load_generation_chunks(world_directory, generation)`.
+
+A leitura valida a estrutura canônica:
+
+`generation-N/chunks/<x>/<y>/<z>.chunk.json`
+
+Regras:
+
+- generation slot precisa ser diretório real;
+- `chunks` ausente significa generation sem persistent chunks;
+- níveis x/y precisam ser diretórios reais;
+- leaf z precisa ser arquivo real;
+- componentes x/y/z precisam ser `i32` em representação decimal canônica;
+- Y negativo é rejeitado;
+- symlink/arquivo/diretório em nível inesperado é rejeitado;
+- `DiskChunk::coord()` precisa coincidir exatamente com o path;
+- resultado é ordenado deterministicamente por `(y,z,x)`.
+
+### Testes de invariantes adicionados/estendidos
+
+Sem execução manual:
+
+- publish existente agora também faz generation read round-trip;
+- empty generation round-trip;
+- payload coord divergente do path é rejeitado.
+
+### Importante
+
+Este checkpoint NÃO muda o save format e NÃO conecta manifests ao chunk directory ainda. Ele completa a storage boundary necessária para que o próximo migration slice possa fazer isso sem introduzir write-only persistence.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` exige reader/writer simétricos antes da migração.
+- `VERSION`: **0.34.32 → 0.34.33**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
