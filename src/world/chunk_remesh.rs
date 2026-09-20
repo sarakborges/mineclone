@@ -38,8 +38,10 @@ pub(crate) struct ChunkRemeshQueue {
     fluid: DeduplicatedQueue<IVec3>,
     immediate_geometry: DeduplicatedQueue<IVec3>,
     lighting: DeduplicatedQueue<IVec3>,
+    geometry_scan_miss: Option<RenderableScanKey>,
     fluid_scan_miss: Option<RenderableScanKey>,
     immediate_geometry_scan_miss: Option<RenderableScanKey>,
+    lighting_scan_miss: Option<RenderableScanKey>,
     next_background_kind: usize,
 }
 
@@ -126,7 +128,11 @@ impl ChunkRemeshQueue {
     }
 
     fn pop_renderable_geometry(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
-        self.queue.pop_where(|coord| render_pool.contains(coord))
+        pop_renderable_from(
+            &mut self.queue,
+            &mut self.geometry_scan_miss,
+            render_pool,
+        )
     }
 
     fn pop_renderable_fluid(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
@@ -153,9 +159,11 @@ impl ChunkRemeshQueue {
     }
 
     fn pop_renderable_lighting(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
-        let coord = self
-            .lighting
-            .pop_where(|coord| render_pool.contains(coord))?;
+        let coord = pop_renderable_from(
+            &mut self.lighting,
+            &mut self.lighting_scan_miss,
+            render_pool,
+        )?;
         self.coalesce_geometry_into_lighting(coord);
         Some(coord)
     }
@@ -547,6 +555,46 @@ mod tests {
         assert_eq!(queue.pop_fluid(), None);
         assert_eq!(queue.pop_immediate_geometry(), None);
         assert_eq!(queue.pop_lighting(), None);
+    }
+
+    #[test]
+    fn geometry_renderable_scan_miss_retries_only_after_queue_change() {
+        let mut queue = ChunkRemeshQueue::default();
+        let render_pool = ChunkRenderPool::default();
+        let first = IVec3::new(1, 1, 1);
+        let second = IVec3::new(2, 1, 2);
+        queue.enqueue_priority(first);
+
+        assert_eq!(queue.pop_renderable_geometry(&render_pool), None);
+        let first_miss = queue.geometry_scan_miss;
+        assert!(first_miss.is_some());
+
+        assert_eq!(queue.pop_renderable_geometry(&render_pool), None);
+        assert_eq!(queue.geometry_scan_miss, first_miss);
+
+        queue.enqueue_priority(second);
+        assert_eq!(queue.pop_renderable_geometry(&render_pool), None);
+        assert_ne!(queue.geometry_scan_miss, first_miss);
+    }
+
+    #[test]
+    fn lighting_renderable_scan_miss_retries_only_after_queue_change() {
+        let mut queue = ChunkRemeshQueue::default();
+        let render_pool = ChunkRenderPool::default();
+        let first = IVec3::new(1, 1, 1);
+        let second = IVec3::new(2, 1, 2);
+        queue.enqueue_lighting_priority(first);
+
+        assert_eq!(queue.pop_renderable_lighting(&render_pool), None);
+        let first_miss = queue.lighting_scan_miss;
+        assert!(first_miss.is_some());
+
+        assert_eq!(queue.pop_renderable_lighting(&render_pool), None);
+        assert_eq!(queue.lighting_scan_miss, first_miss);
+
+        queue.enqueue_lighting_priority(second);
+        assert_eq!(queue.pop_renderable_lighting(&render_pool), None);
+        assert_ne!(queue.lighting_scan_miss, first_miss);
     }
 
     #[test]

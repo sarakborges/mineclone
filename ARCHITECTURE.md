@@ -94,6 +94,7 @@ Queue mechanics must be layered rather than copied.
 - `VoxelUpdateQueue` adds voxel-domain rules such as nonnegative Y and neighbor expansion.
 - Lighting/fluid/remesh queues add only their domain-specific behavior on top.
 - Do not implement another `VecDeque + HashSet` pair locally for the same semantics.
+- Predicate-filtered remesh queues must cache a no-renderable-result by queue revision plus render-pool membership revision; repeated frames must not linearly rescan an unchanged queue/pool pair.
 
 Time-sliced world work uses `FrameWorkBudget`.
 

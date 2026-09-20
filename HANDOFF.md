@@ -3359,3 +3359,34 @@ Mesmo após remover o polling global de fluid work dormente, a entrada de qualqu
 - `ARCHITECTURE.md` documenta o cache e seu contrato.
 - `VERSION`: **0.34.11 → 0.34.12**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+## Checkpoint 124 — 2026-09-20: scan-miss cache cobre todas as remesh queues [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`ChunkRemeshQueue` já evitava repetir scans sem resultado em `fluid` e `immediate_geometry`, mas `geometry` e `lighting` ainda executavam `DeduplicatedQueue::pop_where()` linear novamente mesmo quando nem a fila nem o membership do render pool haviam mudado.
+
+### Implementação
+
+- Adicionados `geometry_scan_miss` e `lighting_scan_miss`.
+- Geometry e lighting agora reutilizam o mesmo `pop_renderable_from()` já usado pelas outras filas.
+- A validade continua sendo exatamente:
+  - `queue.revision()`;
+  - `render_pool.membership_revision()`.
+- Qualquer enqueue/remove/promotion ou mudança no pool invalida naturalmente a miss anterior.
+- Scheduling, coalescing, prioridade e round-robin entre Fluid/Lighting/Geometry não mudaram.
+- Adicionados testes de invariantes equivalentes para geometry e lighting; não executados manualmente.
+
+### Práticas aplicadas
+
+- reuse invariants, not superficial similarity;
+- specialized collection mechanics centralizadas;
+- change-driven work;
+- nenhuma nova abstraction/wrapper;
+- nenhuma alteração semântica de rendering.
+
+### Versionamento
+
+- `VERSION`: **0.34.12 → 0.34.13**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
