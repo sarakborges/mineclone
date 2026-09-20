@@ -5165,3 +5165,64 @@ Não há `Vec<u8>` intermediária.
 
 - `VERSION`: **0.35.3 → 0.35.4**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 149
+
+- Push CI `35522392558`: **success**.
+- PR CI `35522395734`: **success**.
+- O topo `7d59e79460f1f5d425758a169e0b78b633387c24` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.35.4`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 150 — 2026-09-20: generation recovery/retention extraído do save catalog facade [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+Após o format v2, `save_catalog.rs` voltou a concentrar duas responsabilidades:
+
+- facade/publication de world catalog;
+- lifecycle de generations publicadas: candidate discovery, fallback load, decode v1/v2, completeness e retention/prune.
+
+Esses blocos mudam por motivos diferentes e carregam dependências distintas.
+
+### Implementação
+
+Novo `save_catalog/generations.rs` possui:
+
+- `RETAINED_GENERATIONS`;
+- candidate enumeration + read lease;
+- newest restorable timestamp;
+- `load_world()`;
+- snapshot open/decode;
+- v1 inline vs v2 external chunk selection;
+- manifest validity/completeness;
+- latest complete generation;
+- retention cutoff e prune de manifest/snapshot/chunk generation.
+
+`save_catalog.rs` continua owner de:
+
+- create world reservation;
+- current-format save publication;
+- rollback de unpublished generation;
+- prune worker scheduling;
+- delete;
+- list/list_verified facade;
+- wall-clock boundary;
+- public reexports.
+
+`load_world()` é reexportado pelo facade, portanto os callers externos não conhecem o submódulo novo.
+
+### Semântica preservada
+
+- v1/v2 compatibility não mudou;
+- fallback newest→older não mudou;
+- reader lease/write gate não mudou;
+- retention count continua 4 restorable generations;
+- save publication/rollback não mudou;
+- save continua final-only.
+
+### Versionamento
+
+- `VERSION`: **0.35.4 → 0.35.5**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
