@@ -229,9 +229,13 @@ fn write_generation_chunks_to_staging(staging: &Path, chunks: &[DiskChunk]) -> i
         let path = staging.join(identity.relative_path());
         let parent = path.parent().ok_or(io::Error::other("chunk storage path has no parent"))?;
         fs::create_dir_all(parent)?;
-        let payload = serde_json::to_vec(chunk).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
         let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
-        file.write_all(&payload)?;
+        {
+            let mut buffered = io::BufWriter::new(&mut file);
+            serde_json::to_writer(&mut buffered, chunk)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            buffered.flush()?;
+        }
         file.sync_all()?;
     }
     sync_directory_tree(staging)

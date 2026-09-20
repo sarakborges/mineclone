@@ -5116,3 +5116,52 @@ O caller continua vendo a mesma capability: `Ok` significa published/durable; `E
 
 - `VERSION`: **0.35.2 → 0.35.3**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 148
+
+- Push CI `35522284424`: **success**.
+- PR CI `35522286937`: **success**.
+- O topo `975f3d81544b185d15ad3465bea67c1e49ee127d` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.35.3`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 149 — 2026-09-20: chunk storage serializa direto para arquivo [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`write_generation_chunks_to_staging()` fazia, para cada persistent chunk:
+
+1. `serde_json::to_vec(chunk)`;
+2. alocava um buffer do tamanho completo do JSON;
+3. abria o arquivo;
+4. copiava o buffer inteiro para o arquivo;
+5. `sync_all()`.
+
+No format v2 isso adicionava uma allocation temporária proporcional ao payload de cada chunk durante o save final.
+
+### Implementação
+
+Cada `DiskChunk` agora é serializado diretamente para `io::BufWriter<&mut File>` via `serde_json::to_writer()`.
+
+Sequência:
+
+1. abre arquivo com `create_new`;
+2. serialize diretamente no writer;
+3. `flush()`;
+4. `file.sync_all()`.
+
+Não há `Vec<u8>` intermediária.
+
+### Semântica
+
+- JSON produzido permanece o mesmo shape;
+- canonical path/identity validation não mudou;
+- per-file fsync continua igual;
+- generation directory fsync/rename publication continua igual;
+- save continua final-only.
+
+### Versionamento
+
+- `VERSION`: **0.35.3 → 0.35.4**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
