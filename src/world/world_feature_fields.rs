@@ -81,6 +81,14 @@ impl WorldFeatureFields {
             .cave_region(coord, || factory(&self.cave_connectivity))
     }
 
+    pub(crate) fn structure_vertical_extent(
+        &self,
+        coord: IVec2,
+        factory: impl FnOnce() -> i32,
+    ) -> i32 {
+        self.caches.structure_vertical_extent(coord, factory)
+    }
+
     pub(crate) fn structure_origin_y(
         &self,
         structure_id: &str,
@@ -136,6 +144,11 @@ impl WorldFeatureFields {
     #[cfg(test)]
     fn cached_cave_region_count(&self) -> usize {
         self.caches.cave_region_count()
+    }
+
+    #[cfg(test)]
+    fn cached_structure_vertical_extent_count(&self) -> usize {
+        self.caches.structure_vertical_extent_count()
     }
 
     #[cfg(test)]
