@@ -141,6 +141,6 @@ fn intersects_surface_fluid(
         let structure_min = origin_y + span.min_y_offset;
         let structure_max = origin_y + span.max_y_offset;
         structure_max as f32 + 1.0 > water.bed_level
-            && structure_min as f32 < water.water_level
+            && (structure_min as f32) < water.water_level
     })
 }
