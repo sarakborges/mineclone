@@ -47,7 +47,7 @@ pub(crate) fn publish_generation_chunks(world_directory: &Path, generation: u64,
         return Err(io::Error::new(io::ErrorKind::AlreadyExists, format!("chunk generation {generation} already has a storage slot")));
     }
     fs::create_dir(staging.as_path())?;
-    if let Err(error) = write_generation_chunks_to_staging(&staging, chunks) {
+    if let Err(error) = write_generation_chunks_to_staging(staging.as_path(), chunks) {
         if fs::symlink_metadata(staging.as_path()).is_ok_and(|metadata| metadata.file_type().is_dir() && !metadata.file_type().is_symlink()) {
             let _ = fs::remove_dir_all(staging.as_path());
         }
