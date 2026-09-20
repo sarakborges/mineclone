@@ -5302,3 +5302,16 @@ A granularidade de budget agora existe **dentro** da propagação, com checks do
 - `VERSION`: **0.35.5 → 0.35.6**.
 - CI pendente.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### Correção de integração CI do checkpoint 151
+
+A primeira CI do bootstrap-lighting budget falhou porque três helpers de generation em `setup/progress.rs` continuam recebendo `&mut PendingFluidUpdates` diretamente, enquanto o import desse tipo foi removido ao introduzir `WorldSetupSimulation`.
+
+Correção:
+
+- restaurado somente o import de `PendingFluidUpdates`;
+- `WorldSetupSimulation` continua owner do agrupamento de resources no system principal;
+- os helpers mantêm dependências estreitas em vez de receber o context inteiro;
+- nenhum comportamento de lighting/fluid/loading mudou;
+- `VERSION` permanece `0.35.6`.

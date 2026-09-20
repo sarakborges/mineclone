@@ -20,7 +20,7 @@ use super::{
     system_params::{WorldSetupPersistence, WorldSetupProgress, WorldSetupSimulation},
 };
 use crate::world::{
-    WorldLoadMode,
+    PendingFluidUpdates, WorldLoadMode,
     chunk_generation_tasks::{ChunkGenerationTasks, MAX_GENERATION_TASKS_IN_FLIGHT},
     chunk_mesh_tasks::{ChunkMeshTasks, MAX_MESH_TASKS_IN_FLIGHT},
     chunk_rendering::spawn_built_chunk_meshes,
