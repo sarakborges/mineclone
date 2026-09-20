@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 use serde::Deserialize;
@@ -8,6 +8,7 @@ use crate::localization::LocalizedText;
 use super::{
     block::BlockRegistry, block_id::intern_block_id, block_orientation::BlockOrientation,
     registry::DefinitionMap,
+    structure_rules::{StructureGenerationRules, StructureRestrictions},
 };
 
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
@@ -41,6 +42,10 @@ struct StructureRuntime {
     voxels: Vec<StructureVoxel>,
     horizontal_minimum: IVec2,
     horizontal_maximum: IVec2,
+    horizontal_footprint: Vec<IVec2>,
+    support_offsets: Vec<IVec2>,
+    column_spans: Vec<StructureColumnSpan>,
+    min_y_offset: i32,
     max_y_offset: i32,
 }
 
@@ -49,6 +54,14 @@ struct StructureRuntime {
 pub struct StructureDefinition {
     pub id: String,
     pub name: LocalizedText,
+    #[serde(default)]
+    pub priority: i32,
+    #[serde(default)]
+    pub conflict_groups: Vec<String>,
+    #[serde(default)]
+    pub restrictions: StructureRestrictions,
+    #[serde(default)]
+    pub generation: StructureGenerationRules,
     #[serde(default)]
     pub anchor: StructureAnchor,
     pub palette: HashMap<String, StructurePaletteEntry>,
@@ -64,8 +77,17 @@ pub(crate) struct StructureVoxel {
     pub orientation: BlockOrientation,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct StructureColumnSpan {
+    pub offset: IVec2,
+    pub min_y_offset: i32,
+    pub max_y_offset: i32,
+}
+
 impl StructureDefinition {
     pub(crate) fn validate_references(&self, blocks: &BlockRegistry) {
+        self.restrictions.validate_references(&self.id, blocks);
+
         for entry in self.palette.values() {
             assert!(
                 blocks.get(&entry.block).is_some(),
@@ -89,6 +111,22 @@ impl StructureDefinition {
 
     pub(crate) fn max_y_offset(&self) -> i32 {
         self.runtime.max_y_offset
+    }
+
+    pub(crate) fn min_y_offset(&self) -> i32 {
+        self.runtime.min_y_offset
+    }
+
+    pub(crate) fn horizontal_footprint(&self) -> &[IVec2] {
+        &self.runtime.horizontal_footprint
+    }
+
+    pub(crate) fn support_offsets(&self) -> &[IVec2] {
+        &self.runtime.support_offsets
+    }
+
+    pub(crate) fn column_spans(&self) -> &[StructureColumnSpan] {
+        &self.runtime.column_spans
     }
 
     fn rebuild_runtime(&mut self) {
@@ -128,21 +166,85 @@ impl StructureDefinition {
             }
         }
 
-        self.runtime = if voxels.is_empty() {
-            StructureRuntime::default()
-        } else {
-            StructureRuntime {
-                voxels,
-                horizontal_minimum,
-                horizontal_maximum,
-                max_y_offset,
+        if voxels.is_empty() {
+            self.runtime = StructureRuntime::default();
+            return;
+        }
+
+        let min_y_offset = voxels
+            .iter()
+            .map(|voxel| voxel.offset.y)
+            .min()
+            .expect("non-empty structure must have a minimum y offset");
+        let mut footprint = HashSet::new();
+        let mut supports = HashSet::new();
+        let mut spans = HashMap::<(i32, i32), (i32, i32)>::new();
+
+        for voxel in &voxels {
+            let horizontal = (voxel.offset.x, voxel.offset.z);
+            footprint.insert(horizontal);
+            if voxel.offset.y == min_y_offset {
+                supports.insert(horizontal);
             }
+            spans
+                .entry(horizontal)
+                .and_modify(|span| {
+                    span.0 = span.0.min(voxel.offset.y);
+                    span.1 = span.1.max(voxel.offset.y);
+                })
+                .or_insert((voxel.offset.y, voxel.offset.y));
+        }
+
+        let mut horizontal_footprint = footprint
+            .into_iter()
+            .map(|(x, z)| IVec2::new(x, z))
+            .collect::<Vec<_>>();
+        horizontal_footprint.sort_by_key(|offset| (offset.y, offset.x));
+
+        let mut support_offsets = supports
+            .into_iter()
+            .map(|(x, z)| IVec2::new(x, z))
+            .collect::<Vec<_>>();
+        support_offsets.sort_by_key(|offset| (offset.y, offset.x));
+
+        let mut column_spans = spans
+            .into_iter()
+            .map(|((x, z), (min_y_offset, max_y_offset))| StructureColumnSpan {
+                offset: IVec2::new(x, z),
+                min_y_offset,
+                max_y_offset,
+            })
+            .collect::<Vec<_>>();
+        column_spans.sort_by_key(|span| (span.offset.y, span.offset.x));
+
+        self.runtime = StructureRuntime {
+            voxels,
+            horizontal_minimum,
+            horizontal_maximum,
+            horizontal_footprint,
+            support_offsets,
+            column_spans,
+            min_y_offset,
+            max_y_offset,
         };
     }
 
     fn validate_layout(&self) {
         assert!(!self.id.trim().is_empty(), "structure id cannot be empty");
         self.name.validate(&format!("structure {} name", self.id));
+        self.restrictions.validate(&self.id);
+        for (index, group) in self.conflict_groups.iter().enumerate() {
+            assert!(
+                !group.trim().is_empty(),
+                "structure {} conflictGroups cannot contain empty values",
+                self.id
+            );
+            assert!(
+                !self.conflict_groups[..index].contains(group),
+                "structure {} conflictGroups cannot contain duplicates",
+                self.id
+            );
+        }
         assert!(
             !self.palette.is_empty(),
             "structure {} palette cannot be empty",
