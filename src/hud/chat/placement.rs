@@ -225,7 +225,8 @@ impl ChatPlacementContext<'_, '_> {
         // the first empty level above terrain so existing blocks are preserved.
         let Some(origin_y) = fit_structure_to_ground(
             anchor,
-            voxels,
+            structure.support_offsets(),
+            structure.min_y_offset(),
             structure.restrictions.max_slope,
             |position| loaded_surface_level(world, position),
         ) else {
