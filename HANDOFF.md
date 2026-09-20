@@ -4821,3 +4821,141 @@ Contrato planejado:
 - Fluid solver BFS: diagnostics de downhill searches/nodes já estão instrumentados; não alterar algoritmo/cache sem capturar números reais.
 - Shared `TerrainLightingBuffer`: Rust CI verde no checkpoint 137, mas WGSL/bind-group runtime ainda precisa de execução do renderer.
 - CSM/shadow budget: manter como profiling/A-B item; não reduzir qualidade por análise estática.
+
+
+## Checkpoint 145 — 2026-09-20: save format v2 com chunks externos por generation [CÓDIGO APLICADO; CI PENDENTE]
+
+### Objetivo
+
+Executar como um protocolo único a migração preparada nos checkpoints anteriores:
+
+- novos saves deixam de duplicar chunks dentro de `snapshot-N.json`;
+- persistent chunks passam a usar o `chunk_storage` já validado;
+- saves v1 continuam legíveis;
+- save continua exclusivamente no leave/exit lifecycle.
+
+### Formato
+
+`SAVE_FORMAT_VERSION`: **1 → 2**.
+
+Format v1 (legacy read-only):
+
+- `manifest-N.json` com `format_version: 1`;
+- `snapshot-N.json` contém `chunks: [...]` inline;
+- não requer `generation-N/`.
+
+Format v2 (current writer):
+
+- `generation-N/chunks/<x>/<y>/<z>.chunk.json` contém os persistent `DiskChunk`;
+- `snapshot-N.json` contém apenas metadata/runtime state, sem field `chunks`;
+- `manifest-N.json` com `format_version: 2` é publicado por último e continua sendo o único commit marker.
+
+### DTOs e uma única fonte autoritativa
+
+`WorldSnapshot` continua sendo o snapshot autoritativo em memória e ainda possui `SavedChunkCatalog`.
+
+Novo boundary em `save_catalog::snapshot`:
+
+- `StoredWorldSnapshot` — reader compatível v1/v2;
+- `WorldSnapshotV2<'_>` — writer metadata-only para v2;
+- `is_supported_save_format()`;
+- `LEGACY_SAVE_FORMAT_VERSION = 1`;
+- `SAVE_FORMAT_VERSION = 2`.
+
+Regras:
+
+- v1 exige inline chunks;
+- v2 rejeita inline chunks;
+- snapshot/manifest precisam declarar a mesma format version;
+- após load válido, o runtime `WorldSnapshot` é promovido para format atual 2;
+- não existem dois catálogos mutáveis para a mesma generation.
+
+`SavedChunkCatalog` ganhou capabilities estreitas:
+
+- `disk_chunks()` para publication;
+- `from_disk_chunks()` para restore externo.
+
+### Publication v2
+
+`save_world_owned()` agora publica na ordem:
+
+1. `publish_generation_chunks(directory, N, ...)`;
+2. `snapshot-N.json` via `snapshot.disk_v2()`;
+3. `manifest-N.json` por último.
+
+A busca do próximo generation ID também considera published/staging generation-directory slots, além de snapshot/manifest files.
+
+### Rollback
+
+Se chunk publication falhar:
+
+- best-effort cleanup do generation slot.
+
+Se snapshot publication falhar:
+
+- remove snapshot parcial/temp pelo existing storage mechanism;
+- remove `generation-N/`.
+
+Se manifest publication falhar:
+
+- remove snapshot ainda não committed;
+- remove `generation-N/`.
+
+Nenhum manifest é publicado apontando para payload conhecido como parcial.
+
+### Compatibilidade / load
+
+Reservation manifest generation 0 pode ser v1 ou v2; ele não bloqueia migração desde que world identity/worldgen metadata sejam válidos.
+
+`valid_manifest()` aceita v1 e v2.
+
+Load:
+
+1. abre/limita snapshot file;
+2. desserializa `StoredWorldSnapshot`;
+3. exige snapshot format == manifest format;
+4. valida world/player metadata;
+5. converte para runtime snapshot e executa registry/playable validation;
+6. v1 usa inline `SavedChunkCatalog`;
+7. v2 chama `load_generation_chunks(directory, manifest.generation)`;
+8. chunks viram `VoxelWorld` pelo existing owner.
+
+Assim metadata inválida é rejeitada antes de ler a árvore externa de chunks.
+
+### Listing / recovery
+
+- newest→older fallback continua igual;
+- v1 generation é complete com snapshot publicado;
+- v2 generation só é complete quando snapshot + `generation-N/` existem;
+- generation v2 danificada/missing cai para backup anterior;
+- path↔payload chunk identity continua validado por `chunk_storage`.
+
+### Prune
+
+Sob o mesmo reader-drain/write gate, generations abaixo do cutoff removem:
+
+- manifest;
+- snapshot;
+- `generation-N/` se existir.
+
+Para v1 a remoção do diretório é no-op.
+
+### Storage boundary
+
+`save_catalog::storage` ganhou `read_json_file()`, removendo do policy parent o último `serde_json::from_reader` direto para snapshots.
+
+`chunk_storage` ganhou:
+
+- `generation_storage_slot_exists()`;
+- `generation_chunks_published()`.
+
+Essas capabilities mantêm directory/path policy no owner correto.
+
+### Validação / versionamento
+
+- aplicação: **0.34.33 → 0.35.0** por ser uma evolução backward-compatible de formato/persistence;
+- save format interno: **1 → 2**;
+- CI pendente;
+- testes de regressão foram adicionados/ajustados, mas NÃO executei `cargo test`;
+- NÃO executei `cargo run` nem QA Windows;
+- runtime save→exit→load e renderer shader validation continuam explicitamente pendentes sem evidência de execução.

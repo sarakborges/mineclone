@@ -15,6 +15,40 @@ const CHUNK_FILE_EXTENSION: &str = "chunk.json";
 pub(crate) fn generation_directory_name(generation: u64) -> String { format!("generation-{generation}") }
 pub(crate) fn staging_generation_directory_name(generation: u64) -> String { format!(".generation-{generation}.tmp") }
 
+fn checked_directory_slot_exists(world_directory: &Path, relative: &Path) -> io::Result<bool> {
+    let path = checked_directory_slot(world_directory, relative)?;
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => Ok(metadata.is_dir()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+pub(crate) fn generation_storage_slot_exists(
+    world_directory: &Path,
+    generation: u64,
+) -> io::Result<bool> {
+    Ok(
+        checked_directory_slot_exists(
+            world_directory,
+            Path::new(&generation_directory_name(generation)),
+        )? || checked_directory_slot_exists(
+            world_directory,
+            Path::new(&staging_generation_directory_name(generation)),
+        )?,
+    )
+}
+
+pub(crate) fn generation_chunks_published(
+    world_directory: &Path,
+    generation: u64,
+) -> io::Result<bool> {
+    checked_directory_slot_exists(
+        world_directory,
+        Path::new(&generation_directory_name(generation)),
+    )
+}
+
 fn checked_directory_slot(world_directory: &Path, relative: &Path) -> io::Result<PathBuf> {
     let path = world_directory.join(relative);
     match fs::symlink_metadata(path.as_path()) {

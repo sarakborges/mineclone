@@ -16,6 +16,14 @@ impl SavedChunkCatalog {
         Ok(Self(world.save_persistent_chunks(fluids)?))
     }
 
+    pub(super) fn from_disk_chunks(chunks: Vec<DiskChunk>) -> Self {
+        Self(chunks)
+    }
+
+    pub(super) fn disk_chunks(&self) -> &[DiskChunk] {
+        &self.0
+    }
+
     pub(super) fn into_world(
         self,
         blocks: &BlockRegistry,

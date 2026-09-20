@@ -146,8 +146,12 @@ pub(super) fn publish_json<T: Serialize>(
     result
 }
 
+pub(super) fn read_json_file<T: for<'de> Deserialize<'de>>(file: fs::File) -> io::Result<T> {
+    serde_json::from_reader(io::BufReader::new(file)).map_err(io::Error::other)
+}
+
 pub(super) fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> io::Result<T> {
-    serde_json::from_reader(io::BufReader::new(fs::File::open(path)?)).map_err(io::Error::other)
+    read_json_file(fs::File::open(path)?)
 }
 
 #[cfg(test)]
