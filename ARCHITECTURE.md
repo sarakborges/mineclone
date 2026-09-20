@@ -208,6 +208,7 @@ Asteria targets stable 60 FPS and world streaming must protect frame time.
 
 - Expensive work must not be repeated every frame without a demonstrated need.
 - Streaming/generation/remesh/lighting work that remains synchronous must be explicitly budgeted.
+- Streaming selection rebuilds may scan O(radius²) horizontal candidates. Values invariant for the rebuild — normalized movement direction, squared radii, center projections, and similar transforms — must be computed once outside nested candidate loops rather than rediscovered per coordinate.
 - Prefer change-driven updates and caches for UI/model/material refreshes.
 - Rebuild only the smallest stable UI/render subtree whose authoritative inputs changed; preserve unaffected roots, controls, slots, and materials.
 - Derived metadata from loaded definitions belongs to the owning definition or registry. Precompute immutable voxel expansions, bounds, capability flags, sorted lookup lists, and similar summaries during load/insert instead of rescanning or reparsing definitions in generation, rendering, or UI hot paths.

@@ -5606,3 +5606,55 @@ Correção alinhada à regra de public surface mínima:
 - nenhum lint suppression foi adicionado;
 - restauração continua atômica e sem `Vec` temporário;
 - `VERSION` permanece `0.35.9`.
+
+
+### CI verde do checkpoint 154
+
+- Push CI `35530587637`: **success**.
+- PR CI `35530590065`: **success**.
+- O topo `51c5b890dc2759e78f1cbf67dadee05d81295491` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.35.9`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 155 — 2026-09-20: streaming selection remove trabalho loop-invariant [CÓDIGO APLICADO; CI PENDENTE]
+
+### Hot path
+
+`rebuild_desired_chunk_coords()` percorre uma área horizontal O(radius²) quando a seleção de streaming é reconstruída.
+
+Dentro desse loop, `inside_forward_preload()` normalizava o MESMO `movement_direction` para cada coordenada candidata, executando conversão + normalização/sqrt repetidamente.
+
+Também eram recalculados em cada iteração:
+
+- `horizontal_radius * horizontal_radius`;
+- `center.xz()`.
+
+### Implementação
+
+Agora, uma vez por rebuild:
+
+- `movement_direction` é convertido/normalizado para `Option<Vec2>`;
+- o raio² é calculado;
+- a projeção horizontal do center é calculada.
+
+O nested loop recebe/reusa esses valores.
+
+`inside_forward_preload()` agora exige um `Vec2` já normalizado, deixando explícito que a transformação é responsabilidade do caller de rebuild e não da avaliação por coordenada.
+
+### Semântica preservada
+
+- shape do forward preload não mudou;
+- movement direction ZERO continua sem forward preload;
+- diagonal directions continuam normalizadas;
+- desired/retained/pending priority não mudou;
+- nenhum cache/invalidation state foi criado.
+
+### Performance / arquitetura
+
+É remoção de trabalho repetido no owner do custo, sem nova allocation, estado duplicado ou cache.
+
+### Versionamento
+
+- `VERSION`: **0.35.9 → 0.35.10**.
+- CI pendente.
+- Não executei `cargo test`, `cargo run` nem QA Windows.

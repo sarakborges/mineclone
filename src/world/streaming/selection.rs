@@ -296,15 +296,10 @@ fn pending_priority(
 fn inside_forward_preload(
     offset: IVec2,
     horizontal_radius: i32,
-    movement_direction: IVec2,
+    forward_direction: Vec2,
 ) -> bool {
-    if movement_direction == IVec2::ZERO {
-        return false;
-    }
-
-    let direction = movement_direction.as_vec2().normalize();
     let offset = offset.as_vec2();
-    let forward = offset.dot(direction);
+    let forward = offset.dot(forward_direction);
     let base = horizontal_radius as f32;
     let limit = base + FORWARD_PRELOAD_CHUNKS as f32;
     if forward <= base || forward > limit {
@@ -357,24 +352,29 @@ fn rebuild_desired_chunk_coords(
         }
     }
 
+    let forward_direction = (movement_direction != IVec2::ZERO)
+        .then(|| movement_direction.as_vec2().normalize());
     let search_radius = horizontal_radius
-        + if movement_direction == IVec2::ZERO {
-            0
-        } else {
+        + if forward_direction.is_some() {
             FORWARD_PRELOAD_CHUNKS
+        } else {
+            0
         };
+    let horizontal_radius_squared = horizontal_radius * horizontal_radius;
+    let center_horizontal = center.xz();
+
     for z in -search_radius..=search_radius {
         for x in -search_radius..=search_radius {
             let offset = IVec2::new(x, z);
             let horizontal_distance_squared = offset.length_squared();
-            let inside_base = horizontal_distance_squared <= horizontal_radius * horizontal_radius;
-            let inside_forward_preload =
-                inside_forward_preload(offset, horizontal_radius, movement_direction);
-            if !inside_base && !inside_forward_preload {
+            let inside_base = horizontal_distance_squared <= horizontal_radius_squared;
+            let inside_forward = forward_direction
+                .is_some_and(|direction| inside_forward_preload(offset, horizontal_radius, direction));
+            if !inside_base && !inside_forward {
                 continue;
             }
 
-            let horizontal = center.xz() + offset;
+            let horizontal = center_horizontal + offset;
             let (own_minimum, own_maximum) = cached_surface_range(
                 surface_ranges,
                 horizontal,
@@ -577,17 +577,17 @@ mod tests {
         assert!(inside_forward_preload(
             IVec2::new(20, 0),
             base_radius,
-            IVec2::X
+            Vec2::X
         ));
         assert!(!inside_forward_preload(
             IVec2::new(-20, 0),
             base_radius,
-            IVec2::X
+            Vec2::X
         ));
         assert!(!inside_forward_preload(
             IVec2::new(22, 12),
             base_radius,
-            IVec2::X
+            Vec2::X
         ));
     }
 
