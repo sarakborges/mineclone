@@ -47,6 +47,10 @@ impl ChunkRenderPool {
         self.membership_revision
     }
 
+    pub(crate) fn active_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
+        self.active.keys().copied()
+    }
+
     pub(crate) fn active_count(&self) -> usize {
         self.active.len()
     }
