@@ -4,13 +4,11 @@ use crate::world::{
     chunk_generation_tasks::MAX_GENERATION_TASKS_IN_FLIGHT,
     chunk_rendering::ChunkRenderPool,
     chunk_system_params::ChunkContent,
+    generation_region::generation_region_coord,
     work_budget::FrameWorkBudget,
 };
 
-use super::{
-    ChunkStreamingQueues, ChunkStreamingWork, is_critical_streaming_coord,
-    seed_loaded_chunk_lighting,
-};
+use super::{ChunkStreamingQueues, ChunkStreamingWork, seed_loaded_chunk_lighting};
 
 const MAX_GENERATION_DISPATCH_WORK_PER_FRAME: usize = 16;
 const MAX_GENERATION_TASKS_WITH_MESH_BACKLOG: usize = 4;
@@ -32,12 +30,12 @@ pub(super) fn collect_generated_chunks(
             return;
         }
         publish_settled_chunks(content, work, queues, current_tick);
+        work.state.finish_generation_region();
     }
 
     let current_revision = work.generation_tasks.revision();
     let mut budget = FrameWorkBudget::new(GENERATION_RESULT_INTEGRATION_BUDGET, 1)
         .with_maximum_items(MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME);
-    let mut generated_coords = Vec::new();
 
     loop {
         if budget.exhausted() {
@@ -53,6 +51,15 @@ pub(super) fn collect_generated_chunks(
             work.state.requeue(completed.coord);
             continue;
         }
+
+        if let Some(region) = work.state.active_generation_region() {
+            debug_assert_eq!(
+                generation_region_coord(completed.coord),
+                region,
+                "completed streaming generation task must belong to the active region cohort"
+            );
+        }
+
         if !work.state.keeps_loaded(completed.coord) {
             continue;
         }
@@ -70,20 +77,30 @@ pub(super) fn collect_generated_chunks(
         }
 
         work.world.insert_chunk(completed.coord, completed.output);
-        generated_coords.push(completed.coord);
+        work.state.stage_generated_chunk(completed.coord);
     }
 
-    if generated_coords.is_empty() {
+    let Some(region) = work.state.active_generation_region() else {
+        return;
+    };
+    if work.generation_tasks.contains_generation_region(region)
+        || work.state.generation_region_has_pending(region)
+    {
+        return;
+    }
+
+    let staged = work.state.take_staged_generated_chunks();
+    if staged.is_empty() {
+        work.state.finish_generation_region();
         return;
     }
 
     let world = &work.world;
-    work.state
-        .fluid_settling
-        .begin(world, generated_coords);
+    work.state.fluid_settling.begin(world, staged);
 
     if process_streaming_fluid_settling(content, work) {
         publish_settled_chunks(content, work, queues, current_tick);
+        work.state.finish_generation_region();
     }
 }
 
@@ -140,14 +157,19 @@ pub(super) fn dispatch_generation_tasks(
     let mut budget = FrameWorkBudget::new(GENERATION_DISPATCH_BUDGET, 1)
         .with_maximum_items(MAX_GENERATION_DISPATCH_WORK_PER_FRAME);
 
+    if work.state.fluid_settling.is_active() {
+        return;
+    }
+
     loop {
-        if budget.exhausted() {
+        if budget.exhausted() || work.generation_tasks.pending_count() >= max_in_flight {
             break;
         }
 
-        let at_capacity = work.generation_tasks.pending_count() >= max_in_flight;
-        let coord = if at_capacity {
-            work.state.pop_critical_pending()
+        let coord = if let Some(region) = work.state.active_generation_region() {
+            work.state
+                .pending
+                .pop_where(|coord| generation_region_coord(coord) == region)
         } else {
             work.state.pending.pop()
         };
@@ -164,10 +186,7 @@ pub(super) fn dispatch_generation_tasks(
         if work.generation_tasks.contains(coord) {
             continue;
         }
-        if work.state.generated_chunk_is_settling(coord) {
-            // Selection can change while a generated chunk is resident but
-            // still unpublished. Settling, not the generic resident path,
-            // owns its transition to ready.
+        if work.state.generated_chunk_is_unpublished(coord) {
             budget.record(1);
             continue;
         }
@@ -183,22 +202,8 @@ pub(super) fn dispatch_generation_tasks(
             continue;
         }
 
-        if work.generation_tasks.pending_count() >= max_in_flight {
-            let Some(center) = work.state.center else {
-                work.state.requeue(coord);
-                break;
-            };
-            let Some(preempted) = work
-                .generation_tasks
-                .cancel_farthest_where(center, |task_coord| {
-                    !is_critical_streaming_coord(task_coord, center)
-                })
-            else {
-                work.state.requeue(coord);
-                break;
-            };
-            work.state.defer_pending(preempted);
-        }
+        let region = work.state.begin_generation_region(coord);
+        debug_assert_eq!(generation_region_coord(coord), region);
 
         if work.generation_tasks.schedule(coord) {
             budget.record(1);

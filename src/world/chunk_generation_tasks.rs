@@ -97,6 +97,11 @@ impl ChunkGenerationTasks {
         self.pending.contains(coord)
     }
 
+    pub(crate) fn contains_generation_region(&self, region: IVec3) -> bool {
+        self.pending
+            .any_coord(|coord| generation_region_coord(coord) == region)
+    }
+
     pub(crate) fn schedule(&mut self, coord: IVec3) -> bool {
         if self.pending.len() >= MAX_GENERATION_TASKS_IN_FLIGHT || self.pending.contains(coord) {
             return false;

@@ -113,7 +113,7 @@ pub(super) fn rebuild_queue(
             .copied()
             .filter(|coord| {
                 !context.render_pool.contains(*coord)
-                    && !streaming.generated_chunk_is_settling(*coord)
+                    && !streaming.generated_chunk_is_unpublished(*coord)
             })
             .map(|coord| PendingEntry {
                 coord,
