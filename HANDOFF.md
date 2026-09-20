@@ -4651,3 +4651,15 @@ Novo `fluid_updates/diagnostics.rs` possui:
 - `ARCHITECTURE.md` fixa diagnostics como observabilidade separada do authoritative state.
 - `VERSION`: **0.34.30 → 0.34.31**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### Correção de integração CI do checkpoint 142
+
+A primeira CI do diagnostics split falhou por `private_interfaces`: `process_fluid_updates` é visível em `crate::world`, enquanto o tipo usado no `Local<FluidPerformanceDiagnostics>` estava restrito ao parent imediato `fluid_updates`.
+
+Correção:
+
+- `FluidPerformanceDiagnostics` passou a `pub(in crate::world)`;
+- fields e mutation API continuam privados ao módulo de diagnostics;
+- nenhum lint suppression foi adicionado;
+- `VERSION` permanece `0.34.31`.

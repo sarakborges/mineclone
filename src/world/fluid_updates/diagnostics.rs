@@ -10,7 +10,7 @@ use super::{
 const FLUID_DIAGNOSTIC_INTERVAL_SECONDS: f32 = 10.0;
 
 #[derive(Default)]
-pub(super) struct FluidPerformanceDiagnostics {
+pub(in crate::world) struct FluidPerformanceDiagnostics {
     timer: Option<Timer>,
     totals: FluidSolverMetrics,
     active_frames: u64,
