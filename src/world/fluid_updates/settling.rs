@@ -211,9 +211,7 @@ impl GeneratedFluidSettling {
         position: IVec3,
     ) {
         let coord = chunk_coord_from_world(position);
-        if !self.mutable_chunks.contains(&coord) {
-            return;
-        }
+        let already_mutable = self.mutable_chunks.contains(&coord);
 
         let Some((cell, current, _)) = world.sample_at(position) else {
             return;
@@ -227,6 +225,13 @@ impl GeneratedFluidSettling {
             &mut self.scratch,
         );
         if current == desired {
+            return;
+        }
+
+        if !already_mutable && !world.derived_fluid_chunk_is_mutable(coord) {
+            return;
+        }
+        if !already_mutable && !self.include_mutable_chunk(world, coord, false) {
             return;
         }
 
@@ -269,17 +274,8 @@ impl GeneratedFluidSettling {
         true
     }
 
-    fn ensure_target_mutable(&mut self, world: &VoxelWorld, target: IVec3) -> bool {
-        if target.y < 0 {
-            return false;
-        }
-        let coord = chunk_coord_from_world(target);
-        self.mutable_chunks.contains(&coord)
-            || self.include_mutable_chunk(world, coord, false)
-    }
-
     fn enqueue_work_target(&mut self, world: &VoxelWorld, target: IVec3, priority: bool) {
-        if !self.ensure_target_mutable(world, target) {
+        if target.y < 0 || world.sample_at(target).is_none() {
             return;
         }
         if priority {
@@ -329,7 +325,7 @@ impl GeneratedFluidSettling {
         );
 
         for (target, priority) in targets {
-            if !self.ensure_target_mutable(world, target) {
+            if target.y < 0 || world.sample_at(target).is_none() {
                 continue;
             }
             if priority {
