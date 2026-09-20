@@ -59,7 +59,7 @@ pub(crate) struct SavedPlayer {
     pub(crate) pitch: f32,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub(crate) struct WorldSnapshot {
     pub(super) format_version: u32,
     pub(crate) id: String,

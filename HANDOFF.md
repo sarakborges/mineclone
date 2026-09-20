@@ -5010,3 +5010,37 @@ Se o system clock falhasse nesse ponto, o operador `?` retornava sem executar o 
 
 - `VERSION`: **0.35.0 → 0.35.1**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 146
+
+- Push CI `35521850495`: **success**.
+- PR CI `35521852808`: **success**.
+- O topo `8b24c067c6da7cb27dc37b529dae370c2eca05c9` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.35.1`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 147 — 2026-09-20: runtime snapshot não é mais serializable [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+Após a migração v2, `WorldSnapshot` ainda derivava `Serialize`/`Deserialize`.
+
+Mesmo que o save path correto já usasse `WorldSnapshotV2`, isso deixava uma capability perigosa disponível: um future caller poderia serializar o runtime snapshot diretamente e reintroduzir `chunks: [...]` em format v2.
+
+### Correção
+
+- removidos `Serialize` e `Deserialize` de `WorldSnapshot`;
+- runtime snapshot permanece `Clone + Debug`;
+- `StoredWorldSnapshot` é o único DTO de leitura;
+- `WorldSnapshotV2<'_>` é o único DTO de escrita atual;
+- `WorldManifest` e `SavedPlayer` continuam serde porque são formatos de boundary reais.
+
+### Invariant
+
+A regra “v2 nunca serializa chunks inline” deixa de depender apenas do call site correto: o tipo runtime não possui mais a capability de serialização.
+
+### Versionamento
+
+- `VERSION`: **0.35.1 → 0.35.2**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
