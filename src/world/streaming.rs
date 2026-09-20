@@ -43,12 +43,6 @@ use super::{
 const CRITICAL_PLAYER_RADIUS_CHUNKS: i32 = 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct CriticalPendingScanKey {
-    queue_revision: u64,
-    center: IVec3,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct RetiredScanKey {
     queue_revision: u64,
     selection_revision: u64,
@@ -74,7 +68,6 @@ pub(super) struct ChunkStreamingState {
     active_generation_region: Option<IVec3>,
     staged_generated_chunks: HashSet<IVec3>,
     selection_revision: u64,
-    pending_critical_scan_miss: Option<CriticalPendingScanKey>,
     retired_scan_miss: Option<RetiredScanKey>,
 }
 
@@ -134,27 +127,6 @@ impl ChunkStreamingState {
         if self.keeps_loaded(coord) && !self.pending.contains(coord) && !self.ready.contains(coord) {
             self.pending.enqueue(coord);
         }
-    }
-
-    fn pop_critical_pending(&mut self) -> Option<IVec3> {
-        let center = self.center?;
-        let scan_key = CriticalPendingScanKey {
-            queue_revision: self.pending.revision(),
-            center,
-        };
-        if self.pending_critical_scan_miss == Some(scan_key) {
-            return None;
-        }
-
-        let coord = self
-            .pending
-            .pop_where(|coord| is_critical_streaming_coord(coord, center));
-        if coord.is_some() {
-            self.pending_critical_scan_miss = None;
-        } else {
-            self.pending_critical_scan_miss = Some(scan_key);
-        }
-        coord
     }
 
     fn active_generation_region(&self) -> Option<IVec3> {
@@ -461,30 +433,6 @@ mod tests {
         assert_eq!(state.pop_ready(), Some(forward));
         assert_eq!(state.pop_ready(), Some(background));
         assert_eq!(state.pop_ready(), None);
-    }
-
-    #[test]
-    fn critical_pending_scan_miss_retries_only_after_queue_or_center_change() {
-        let far = IVec3::new(8, 0, 0);
-        let critical = IVec3::new(1, 0, 0);
-        let mut state = ChunkStreamingState {
-            center: Some(IVec3::ZERO),
-            ..default()
-        };
-        state.pending.enqueue(far);
-
-        assert_eq!(state.pop_critical_pending(), None);
-        let first_miss = state.pending_critical_scan_miss;
-        assert!(first_miss.is_some());
-
-        assert_eq!(state.pop_critical_pending(), None);
-        assert_eq!(state.pending_critical_scan_miss, first_miss);
-
-        state.pending.enqueue(critical);
-        assert_eq!(state.pop_critical_pending(), Some(critical));
-
-        state.center = Some(IVec3::new(8, 0, 0));
-        assert_eq!(state.pop_critical_pending(), Some(far));
     }
 
     #[test]
