@@ -3141,3 +3141,68 @@ Seguir a auditoria de performance pela prioridade já definida:
 1. remover o scan global por-frame de `dormant_scheduled` nos fluidos e reativar trabalho por evento de chunk carregado;
 2. depois otimizar o custo de seed/frontier/lighting no integration path;
 3. manter este handoff atualizado a cada bloco antes de avançar.
+
+
+## Checkpoint 120 — 2026-09-20: fluid dormant work reativado por residency event [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`process_fluid_updates()` chamava `reactivate_loaded_dormant()` em todo frame. Essa rotina:
+
+- percorria todas as chaves de `dormant_scheduled`;
+- consultava o `VoxelWorld` para descobrir quais chunks haviam voltado;
+- alocava um `Vec`;
+- ordenava os coords;
+- só então reativava os ticks daquele chunk.
+
+O custo crescia com a quantidade histórica de chunks com fluid work dormente, apesar de o streaming já conhecer exatamente o momento em que um chunk volta a ficar residente.
+
+### Implementação
+
+Commit funcional:
+
+- `9b59188fa7e98b5cf093f5463f972036d0eaef63` — `perf: reactivate dormant fluid work on chunk load`.
+
+Mudanças:
+
+- `PendingFluidUpdates::reactivate_loaded_dormant(world, tick)` foi removido.
+- Novo `reactivate_loaded_chunk(coord, current_tick)`:
+  - faz lookup direto por coord;
+  - remove apenas a lista daquele chunk;
+  - reagenda seus ticks para o tick atual.
+- `process_fluid_updates()` não faz mais scan global de chunks dormentes.
+- O streaming passa `WorldTickClock.current_tick()` pelo integration path.
+- `seed_loaded_chunk_lighting()`, que já é o ponto comum de primeira integração de um chunk residente durante Gameplay, reativa o fluid work daquele coord antes de semear a frontier.
+- Bootstrap/Loading não ganhou polling nem reativação artificial:
+  - a simulação de fluidos não roda nessa fase;
+  - `dormant_scheduled` só surge quando um due tick é processado enquanto seu chunk não está residente em Gameplay.
+- A regressão unitária interna foi atualizada para testar reativação explícita por residency event; ela NÃO foi executada.
+
+### Arquitetura
+
+`ARCHITECTURE.md` agora registra explicitamente:
+
+- due fluid work dormente é indexado por chunk;
+- reativação pertence à transição de residência daquele chunk;
+- o loop por-frame da simulação não pode redescobrir chunks carregados via scan global do mapa dormente.
+
+### Versionamento
+
+- `VERSION`: **0.34.8 → 0.34.9**.
+- `Cargo.toml` permanece `0.10.16`.
+
+### Validação
+
+Neste ponto:
+
+- código aplicado em `develop`;
+- CI do bloco ainda não verificada;
+- não executei `cargo test`, `cargo run` nem QA Windows.
+
+### Próximo passo
+
+Próxima prioridade de performance:
+
+1. reduzir o custo de `enqueue_loaded_fluid_frontier()` em chunks com grandes volumes de fluido;
+2. revisar o custo de direct skylight seed no integration path;
+3. só depois avançar para solver/remesh/streaming queue refinements.
