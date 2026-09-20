@@ -3390,3 +3390,12 @@ Mesmo após remover o polling global de fluid work dormente, a entrada de qualqu
 
 - `VERSION`: **0.34.12 → 0.34.13**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### Correção de integração CI dos checkpoints 123–124
+
+A CI do cache de skylight falhou por uma call site mecânica restante após renomear `LightingContext::clear()` para `reset_query_scratch()`:
+
+- `src/voxel/lighting/propagation.rs` ainda chamava o nome antigo.
+- Correção aplicada no topo atual, sem mudança de comportamento.
+- `VERSION` permanece `0.34.13`, pois é correção de integração dos blocos 123–124 ainda não validados em conjunto.

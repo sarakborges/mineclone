@@ -86,7 +86,7 @@ pub(super) fn relax_budgeted(
     mut budget_exhausted: impl FnMut(usize) -> bool,
 ) {
     changed_chunks.clear();
-    context.clear();
+    context.reset_query_scratch();
     let processing_interactive = queue.has_interactive_work();
     let mut processed = 0;
 
