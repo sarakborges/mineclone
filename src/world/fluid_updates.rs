@@ -22,10 +22,8 @@ use self::{
     solver::{FluidSolverScratch, desired_fluid_with_scratch, enqueue_remesh},
     state::FluidTickKey,
 };
-pub(crate) use self::{
-    settling::GeneratedFluidSettling,
-    state::{PendingFluidUpdates, SavedFluidUpdates},
-};
+pub(in crate::world) use self::settling::GeneratedFluidSettling;
+pub(crate) use self::state::{PendingFluidUpdates, SavedFluidUpdates};
 use super::{
     chunk_remesh::ChunkRemeshQueue,
     game_rules::GameRules,
