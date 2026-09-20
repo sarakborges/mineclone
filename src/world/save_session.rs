@@ -64,17 +64,7 @@ impl WorldSession {
         let captured = snapshot.capture(id)?;
         let capture_elapsed = capture_started.elapsed();
         let publication_started = Instant::now();
-        save_world(
-            &captured,
-            SaveRegistries {
-                blocks: &snapshot.blocks,
-                fluids: &snapshot.fluids,
-                tools: &snapshot.tools,
-                creatures: &snapshot.creature_definitions,
-                dimensions: &snapshot.dimensions,
-                cycles: &snapshot.cycles,
-            },
-        )?;
+        save_world(&captured, snapshot.registries.for_validation())?;
         let publication_elapsed = publication_started.elapsed();
         // Measured on the machine running the game, not inferred from CI.
         // Publication includes JSON serialization, fsync and cleanup dispatch;
@@ -87,7 +77,7 @@ impl WorldSession {
 }
 
 #[derive(SystemParam)]
-pub(crate) struct WorldSaveContext<'w, 's> {
+struct WorldSnapshotState<'w> {
     seed: Res<'w, WorldSeed>,
     dimension: Res<'w, CurrentDimension>,
     rules: Res<'w, GameRules>,
@@ -97,23 +87,20 @@ pub(crate) struct WorldSaveContext<'w, 's> {
     world: Res<'w, VoxelWorld>,
     pending_fluids: Res<'w, PendingFluidUpdates>,
     world_ticks: Res<'w, WorldTickClock>,
-    blocks: Res<'w, BlockRegistry>,
-    fluids: Res<'w, FluidRegistry>,
-    tools: Res<'w, ToolRegistry>,
-    creature_definitions: Res<'w, CreatureRegistry>,
-    dimensions: Res<'w, DimensionRegistry>,
-    cycles: Res<'w, DayNightCycleRegistry>,
+}
+
+#[derive(SystemParam)]
+struct WorldSaveEntities<'w, 's> {
     player: Query<
         'w,
         's,
         (
-            &'static PlayerId,
             &'static Transform,
             &'static GameMode,
             &'static EntityHealth,
             &'static GameplayCamera,
         ),
-        With<GameplayCamera>,
+        (With<GameplayCamera>, With<PlayerId>),
     >,
     creatures: Query<
         'w,
@@ -127,7 +114,23 @@ pub(crate) struct WorldSaveContext<'w, 's> {
     pending_creatures: Res<'w, PendingCreatureRestores>,
 }
 
-impl WorldSaveContext<'_, '_> {
+impl WorldSaveEntities<'_, '_> {
+    fn saved_player(&self) -> io::Result<SavedPlayer> {
+        let (transform, mode, health, camera) = self.player.single().map_err(|error| {
+            io::Error::other(format!(
+                "cannot save world without exactly one player: {error}"
+            ))
+        })?;
+        let position = transform.translation;
+        Ok(SavedPlayer {
+            position: [position.x, position.y, position.z],
+            creative: *mode == GameMode::Creative,
+            health: Some(health.current()),
+            yaw: camera.yaw,
+            pitch: camera.pitch,
+        })
+    }
+
     fn saved_creatures(&self) -> Vec<SavedCreature> {
         let mut creatures = self.pending_creatures.saved().to_vec();
         creatures.extend(
@@ -149,37 +152,57 @@ impl WorldSaveContext<'_, '_> {
         });
         creatures
     }
+}
 
+#[derive(SystemParam)]
+struct WorldSaveRegistries<'w> {
+    blocks: Res<'w, BlockRegistry>,
+    fluids: Res<'w, FluidRegistry>,
+    tools: Res<'w, ToolRegistry>,
+    creature_definitions: Res<'w, CreatureRegistry>,
+    dimensions: Res<'w, DimensionRegistry>,
+    cycles: Res<'w, DayNightCycleRegistry>,
+}
+
+impl WorldSaveRegistries<'_> {
+    fn for_validation(&self) -> SaveRegistries<'_> {
+        SaveRegistries {
+            blocks: &self.blocks,
+            fluids: &self.fluids,
+            tools: &self.tools,
+            creatures: &self.creature_definitions,
+            dimensions: &self.dimensions,
+            cycles: &self.cycles,
+        }
+    }
+}
+
+#[derive(SystemParam)]
+pub(crate) struct WorldSaveContext<'w, 's> {
+    state: WorldSnapshotState<'w>,
+    entities: WorldSaveEntities<'w, 's>,
+    registries: WorldSaveRegistries<'w>,
+}
+
+impl WorldSaveContext<'_, '_> {
     fn capture(&self, id: &str) -> io::Result<WorldSnapshot> {
-        let (_, transform, mode, health, camera) = self.player.single().map_err(|error| {
-            io::Error::other(format!(
-                "cannot save world without exactly one player: {error}"
-            ))
-        })?;
-        let position = transform.translation;
         WorldSnapshot::capture(SnapshotSource {
             id,
-            seed: self.seed.0,
-            dimension_id: &self.dimension.id,
-            spawn_biome: self.save.spawn_biome(),
-            biome_size_multiplier: self.save.biome_size_multiplier(),
-            ticks_per_second: self.rules.ticks_per_second(),
-            player: Some(SavedPlayer {
-                position: [position.x, position.y, position.z],
-                creative: *mode == GameMode::Creative,
-                health: Some(health.current()),
-                yaw: camera.yaw,
-                pitch: camera.pitch,
-            }),
-            day: self.clock.day,
-            tick_in_day: self.clock.tick_in_day(),
-            inventory: self.inventory.saved_items(),
-            selected_hotbar_slot: self.inventory.selected_slot(),
-            world: &self.world,
-            fluids: &self.fluids,
-            pending_fluids: &self.pending_fluids,
-            world_tick: self.world_ticks.current_tick(),
-            creatures: self.saved_creatures(),
+            seed: self.state.seed.0,
+            dimension_id: &self.state.dimension.id,
+            spawn_biome: self.state.save.spawn_biome(),
+            biome_size_multiplier: self.state.save.biome_size_multiplier(),
+            ticks_per_second: self.state.rules.ticks_per_second(),
+            player: Some(self.entities.saved_player()?),
+            day: self.state.clock.day,
+            tick_in_day: self.state.clock.tick_in_day(),
+            inventory: self.state.inventory.saved_items(),
+            selected_hotbar_slot: self.state.inventory.selected_slot(),
+            world: &self.state.world,
+            fluids: &self.registries.fluids,
+            pending_fluids: &self.state.pending_fluids,
+            world_tick: self.state.world_ticks.current_tick(),
+            creatures: self.entities.saved_creatures(),
         })
     }
 }

@@ -34,7 +34,7 @@ Avoid wrappers that only call another helper without adding domain semantics.
 Use `SystemParam` to name coherent read/write contexts and to keep Bevy system signatures below practical limits.
 
 - A context should represent one domain concern, not a generic bag of unrelated resources.
-- Compose smaller contexts when one context is a strict subset of another. `ChunkContent` composing `VoxelContent` is the model to follow.
+- Compose smaller contexts when one context is a strict subset of another. `ChunkContent` composing `VoxelContent`, and `WorldSaveContext` composing snapshot-state, entity, and validation-registry contexts, are models to follow.
 - Reuse existing contexts such as `CurrentDimensionContext`, `BlockTargetingScene`, `BlockVisualContent`, and the chunk contexts instead of redeclaring the same resource cluster.
 - Keep mutable contexts narrow. Broad mutable access makes scheduling conflicts harder to reason about.
 - Bevy 0.19 systems have a technical limit of 16 system parameters, but code should keep comfortable architectural margin instead of treating 16 as a target.

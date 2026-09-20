@@ -3470,3 +3470,69 @@ Correção:
 - nenhuma field/mutation API interna foi exposta;
 - nenhuma suppression de lint foi adicionada;
 - `VERSION` permanece `0.34.14`.
+
+
+### CI verde do checkpoint 125
+
+- Push CI `35511440972`: **success** no topo `05f29c69a7a9af2cf6055a451f0a7c19bab2cb08`.
+- Passou localization audit, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`.
+- A instrumentação agregada do solver está compilando/validando sem participar do estado autoritativo.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 126 — 2026-09-20: WorldSaveContext decomposto por responsabilidade [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`WorldSaveContext` concentrava 18 dependências de três naturezas distintas:
+
+- estado autoritativo necessário para construir o snapshot;
+- queries/runtime state de player e creatures;
+- registries usados para validação/serialization.
+
+Isso contrariava a regra de contextos estreitos e escondia as fronteiras reais de save.
+
+### Implementação
+
+`WorldSaveContext` agora compõe três `SystemParam`s privados e coesos:
+
+1. `WorldSnapshotState`
+   - seed;
+   - current dimension;
+   - game rules;
+   - new/load metadata;
+   - day/night clock;
+   - inventory;
+   - voxel world;
+   - pending fluid updates;
+   - world tick clock.
+
+2. `WorldSaveEntities`
+   - player query;
+   - creature query;
+   - pending creature restores.
+   - também concentra `saved_player()` e `saved_creatures()`, mantendo entity snapshot logic perto do owner.
+
+3. `WorldSaveRegistries`
+   - block/fluid/tool/creature/dimension/day-night registries;
+   - expõe somente `for_validation()`, que constrói o `SaveRegistries` exigido pela boundary de persistence.
+
+Outros ajustes:
+
+- player query agora expressa a identidade via filters `With<GameplayCamera> + With<PlayerId>` em vez de carregar `PlayerId` no tuple e ignorar o valor;
+- `WorldSession::persist` pede os registries pela capability do contexto, sem conhecer seus fields internos;
+- formato de `WorldSnapshot`, validação, publicação atômica e save-only-on-exit não mudaram.
+
+### Práticas aplicadas
+
+- single responsibility;
+- narrow abstractions;
+- composition over monolithic objects;
+- explicit boundaries;
+- refactor when parameters/dependencies grow;
+- nenhuma generic/everything context.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` passa a citar `WorldSaveContext` como exemplo canônico de composição de contexts.
+- `VERSION`: **0.34.14 → 0.34.15**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
