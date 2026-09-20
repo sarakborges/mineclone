@@ -1,18 +1,15 @@
 use bevy::prelude::*;
 
-use crate::content::{
-    biome_structure::StructurePlacementRules,
-    structure::StructureDefinition,
-};
+use crate::content::biome_structure::StructurePlacementRules;
 
 pub(super) fn candidate_anchor(
     world_seed: u64,
     biome_id: &str,
-    structure: &StructureDefinition,
+    structure_reference: &str,
     placement: StructurePlacementRules,
     cell: IVec2,
 ) -> Option<IVec2> {
-    let hash = placement_hash(world_seed, biome_id, &structure.id, cell);
+    let hash = placement_hash(world_seed, biome_id, structure_reference, cell);
     let chance = unit_interval(hash);
     if chance >= placement.chance {
         return None;
@@ -28,13 +25,14 @@ pub(super) fn candidate_anchor(
 }
 
 
-pub(super) fn structure_variant_hash(
+pub(super) fn structure_member_hash(
     world_seed: u64,
     biome_id: &str,
-    structure_id: &str,
+    structure_reference: &str,
     anchor: IVec2,
 ) -> u64 {
-    let mut hash = world_seed.rotate_left(17) ^ string_hash(structure_id).rotate_left(7);
+    let mut hash =
+        world_seed.rotate_left(17) ^ string_hash(structure_reference).rotate_left(7);
     hash ^= string_hash(biome_id).rotate_left(37);
     hash ^= (anchor.x as i64 as u64).wrapping_mul(0xd6e8_feb8_6659_fd93);
     hash ^= (anchor.y as i64 as u64).wrapping_mul(0xa5a3_58d5_33f6_8d21);

@@ -227,19 +227,15 @@ impl ChatPlacementContext<'_, '_> {
         };
         let feet = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
         let anchor = feet.floor().as_ivec3().xz();
-        let variant_hash = (anchor.x as i64 as u64)
-            .wrapping_mul(0xd6e8_feb8_6659_fd93)
-            ^ (anchor.y as i64 as u64).wrapping_mul(0xa5a3_58d5_33f6_8d21);
-        let variant_index = structure.variant_index_for_hash(variant_hash);
-        let voxels = structure.variant_voxels(variant_index);
+        let voxels = structure.voxels();
         let world = self.runtime.world();
         // Reuse the world generator's footprint and slope-fitting rule. Unlike
         // worldgen's density-based ground voxel, the live-world sample returns
         // the first empty level above terrain so existing blocks are preserved.
         let Some(origin_y) = fit_structure_to_ground(
             anchor,
-            structure.variant_support_offsets(variant_index),
-            structure.variant_min_y_offset(variant_index),
+            structure.support_offsets(),
+            structure.min_y_offset(),
             structure.restrictions.max_slope,
             |position| loaded_surface_level(world, position),
         ) else {

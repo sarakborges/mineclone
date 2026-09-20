@@ -1,0 +1,180 @@
+{
+  "id": "asteria:tree_oak_02",
+  "group_id": "tree_oak",
+  "name": {
+    "english": "Oak Tree",
+    "portuguese_brazil": "Carvalho",
+    "spanish": "Roble"
+  },
+  "locatable": false,
+  "priority": 0,
+  "conflictGroups": [
+    "tree"
+  ],
+  "restrictions": {
+    "groundBlocks": [
+      "asteria:grass",
+      "asteria:dirt"
+    ],
+    "maxSlope": 1,
+    "requiresDryGround": true
+  },
+  "generation": {
+    "replacePolicy": "terrain",
+    "fluidPolicy": "forbid",
+    "reserveSpace": false
+  },
+  "anchor": {
+    "x": 4,
+    "y": 0,
+    "z": 4
+  },
+  "palette": {
+    "G": {
+      "block": "asteria:grass"
+    },
+    "W": {
+      "block": "asteria:oak_log",
+      "orientation": "y"
+    },
+    "X": {
+      "block": "asteria:oak_log",
+      "orientation": "x"
+    },
+    "Z": {
+      "block": "asteria:oak_log",
+      "orientation": "z"
+    },
+    "F": {
+      "block": "asteria:oak_leaf"
+    }
+  },
+  "layers": [
+    {
+      "y": 0,
+      "rows": [
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        "....G....",
+        ".........",
+        ".........",
+        ".........",
+        "........."
+      ]
+    },
+    {
+      "y": 1,
+      "rows": [
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        "....W....",
+        ".........",
+        ".........",
+        ".........",
+        "........."
+      ]
+    },
+    {
+      "y": 2,
+      "rows": [
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        "....W....",
+        ".........",
+        ".........",
+        ".........",
+        "........."
+      ]
+    },
+    {
+      "y": 3,
+      "rows": [
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        "....W....",
+        ".........",
+        ".........",
+        ".........",
+        "........."
+      ]
+    },
+    {
+      "y": 4,
+      "rows": [
+        ".........",
+        ".........",
+        ".........",
+        "..FF.....",
+        ".FFXWX...",
+        "..FFFZF..",
+        "...FFZFF.",
+        "....FFF..",
+        "........."
+      ]
+    },
+    {
+      "y": 5,
+      "rows": [
+        ".........",
+        "....FFF..",
+        "..FFFZFF.",
+        ".FFFFZFF.",
+        ".FFFFWXF.",
+        ".FFFFFFF.",
+        "..FFFFFF.",
+        "...FFFFF.",
+        "........."
+      ]
+    },
+    {
+      "y": 6,
+      "rows": [
+        ".........",
+        "...FFFFF.",
+        "...FFFFF.",
+        "..FFFFFF.",
+        ".FFFFWFF.",
+        "..FFFFF..",
+        "...FFFFF.",
+        "....FFF..",
+        "........."
+      ]
+    },
+    {
+      "y": 7,
+      "rows": [
+        ".........",
+        ".....FF..",
+        "...FFFFF.",
+        "...FFFFF.",
+        "...FFFFF.",
+        "...FFFFF.",
+        "....FFF..",
+        ".........",
+        "........."
+      ]
+    },
+    {
+      "y": 8,
+      "rows": [
+        ".........",
+        ".........",
+        ".....F...",
+        "....FFF..",
+        "...FFFFF.",
+        "....FFF..",
+        ".....F...",
+        ".........",
+        "........."
+      ]
+    }
+  ]
+}

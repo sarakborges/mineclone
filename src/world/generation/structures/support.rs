@@ -57,14 +57,13 @@ pub(crate) fn fit_structure_to_ground(
 pub(super) fn compute_structure_origin_y(
     anchor: IVec2,
     structure: &StructureDefinition,
-    variant_index: usize,
     context: &ChunkGenerationContext<'_>,
 ) -> Option<i32> {
     let (region, anchored_caves) = structure_support_context(anchor, context);
     fit_structure_to_ground(
         anchor,
-        structure.variant_support_offsets(variant_index),
-        structure.variant_min_y_offset(variant_index),
+        structure.support_offsets(),
+        structure.min_y_offset(),
         structure.restrictions.max_slope,
         |position| {
             let sample_position = position.as_vec2() + Vec2::splat(0.5);

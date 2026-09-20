@@ -39,8 +39,8 @@ impl BiomeDefinition {
     pub(crate) fn validate_structure_references(&self, structures: &StructureRegistry) {
         for (index, structure) in self.structures.iter().enumerate() {
             assert!(
-                structures.get(&structure.id).is_some(),
-                "biome {} references missing structure: {}",
+                structures.resolves_reference(&structure.id),
+                "biome {} references missing structure or structure group: {}",
                 self.id,
                 structure.id
             );

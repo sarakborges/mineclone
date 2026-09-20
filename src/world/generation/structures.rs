@@ -23,7 +23,7 @@ use crate::{
 
 pub(crate) use self::support::fit_structure_to_ground;
 use self::{
-    placement::{candidate_anchor, structure_variant_hash},
+    placement::{candidate_anchor, structure_member_hash},
     restrictions::candidate_satisfies_restrictions,
     support::compute_structure_origin_y,
 };
@@ -34,8 +34,8 @@ const COLUMN_INDEX_MIN_VOXELS: usize = 512;
 #[derive(Clone, Copy)]
 struct StructureCandidate<'a> {
     biome_id: &'a str,
+    placement_id: &'a str,
     structure: &'a StructureDefinition,
-    variant_index: usize,
     anchor: IVec2,
     origin_y: i32,
     minimum: IVec2,
@@ -71,7 +71,6 @@ pub(super) fn rasterize_structures(
                     chunk_origin,
                 },
                 candidate.structure,
-                candidate.variant_index,
                 IVec3::new(candidate.anchor.x, candidate.origin_y, candidate.anchor.y),
             );
         }
@@ -120,19 +119,21 @@ fn resolved_structure_candidates_matching<'a>(
     let mut direct_candidates = Vec::new();
 
     for biome_structure in context.biomes.structure_placements() {
-        if only_structure_id
-            .is_some_and(|structure_id| biome_structure.structure_id != structure_id)
-        {
+        if only_structure_id.is_some_and(|structure_id| {
+            !context
+                .structures
+                .reference_contains_structure(&biome_structure.structure_id, structure_id)
+        }) {
             continue;
         }
-        let structure = structure_for_placement(context.structures, biome_structure);
         collect_structure_candidates(
             chunk_min,
             chunk_max,
             context,
             &biome_structure.biome_id,
-            structure,
+            &biome_structure.structure_id,
             biome_structure.placement,
+            only_structure_id,
             &mut direct_candidates,
         );
     }
@@ -152,24 +153,23 @@ fn resolved_structure_candidates_matching<'a>(
         .collect::<HashSet<_>>();
     for direct in direct_candidates.iter().copied() {
         for biome_structure in context.biomes.structure_placements() {
-            let structure = structure_for_placement(context.structures, biome_structure);
-            if structure.priority < direct.structure.priority
-                || !structures_may_conflict(structure, direct.structure)
-            {
-                continue;
-            }
-
             let mut overlapping = Vec::new();
             collect_structure_candidates(
                 direct.minimum,
                 direct.maximum,
                 context,
                 &biome_structure.biome_id,
-                structure,
+                &biome_structure.structure_id,
                 biome_structure.placement,
+                None,
                 &mut overlapping,
             );
             for candidate in overlapping {
+                if candidate.structure.priority < direct.structure.priority
+                    || !structures_may_conflict(candidate.structure, direct.structure)
+                {
+                    continue;
+                }
                 if seen.insert(candidate_identity(&candidate)) {
                     competitors.push(candidate);
                 }
@@ -203,21 +203,25 @@ pub(super) fn maximum_potential_structure_height_for_chunk(
     let mut maximum_height = 0;
 
     for biome_structure in biomes.structure_placements() {
-        let structure = structures
-            .get(&biome_structure.structure_id)
+        let bounds = structures
+            .bounds_for_reference(&biome_structure.structure_id)
             .unwrap_or_else(|| {
                 panic!(
-                    "biome {} references missing structure: {}",
+                    "biome {} references missing structure or structure group: {}",
                     biome_structure.biome_id, biome_structure.structure_id
                 )
             });
+        let reference_max_y = structures
+            .max_y_offset_for_reference(&biome_structure.structure_id)
+            .unwrap_or(0);
 
         visit_candidate_anchors_intersecting(
             chunk_min,
             chunk_max,
             biome_field.seed(),
             &biome_structure.biome_id,
-            structure,
+            &biome_structure.structure_id,
+            bounds,
             biome_structure.placement,
             |anchor| {
                 if biome_field
@@ -225,7 +229,7 @@ pub(super) fn maximum_potential_structure_height_for_chunk(
                     .primary_id
                     == biome_structure.biome_id
                 {
-                    maximum_height = maximum_height.max(structure.max_y_offset().max(0));
+                    maximum_height = maximum_height.max(reference_max_y.max(0));
                 }
             },
         );
@@ -234,45 +238,55 @@ pub(super) fn maximum_potential_structure_height_for_chunk(
     maximum_height
 }
 
-fn structure_for_placement<'a>(
-    structures: &'a StructureRegistry,
-    placement: &crate::content::biome::BiomeStructurePlacement,
-) -> &'a StructureDefinition {
-    structures.get(&placement.structure_id).unwrap_or_else(|| {
-        panic!(
-            "biome {} references missing structure: {}",
-            placement.biome_id, placement.structure_id
-        )
-    })
-}
-
 fn collect_structure_candidates<'a>(
     target_min: IVec2,
     target_max: IVec2,
     context: &'a ChunkGenerationContext<'_>,
     biome_id: &'a str,
-    structure: &'a StructureDefinition,
+    placement_id: &'a str,
     placement: StructurePlacementRules,
+    only_structure_id: Option<&str>,
     candidates: &mut Vec<StructureCandidate<'a>>,
 ) {
+    let bounds = context
+        .structures
+        .bounds_for_reference(placement_id)
+        .unwrap_or_else(|| {
+            panic!(
+                "biome {biome_id} references missing structure or structure group: {placement_id}"
+            )
+        });
+
     visit_candidate_anchors_intersecting(
         target_min,
         target_max,
         context.biome_field.seed(),
         biome_id,
-        structure,
+        placement_id,
+        bounds,
         placement,
         |anchor| {
-            let variant_index = structure.variant_index_for_hash(structure_variant_hash(
+            let member_hash = structure_member_hash(
                 context.biome_field.seed(),
                 biome_id,
-                &structure.id,
+                placement_id,
                 anchor,
-            ));
-            let (variant_minimum_offset, variant_maximum_offset) =
-                structure.variant_horizontal_bounds(variant_index);
-            let minimum = anchor + variant_minimum_offset;
-            let maximum = anchor + variant_maximum_offset;
+            );
+            let structure = context
+                .structures
+                .select_for_reference(placement_id, member_hash)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "biome {biome_id} references empty structure group: {placement_id}"
+                    )
+                });
+            if only_structure_id.is_some_and(|structure_id| structure.id != structure_id) {
+                return;
+            }
+
+            let (minimum_offset, maximum_offset) = structure.horizontal_bounds();
+            let minimum = anchor + minimum_offset;
+            let maximum = anchor + maximum_offset;
             if !rectangles_overlap(minimum, maximum, target_min, target_max) {
                 return;
             }
@@ -288,12 +302,10 @@ fn collect_structure_candidates<'a>(
                 &structure.id,
                 anchor,
                 || {
-                    let origin_y =
-                        compute_structure_origin_y(anchor, structure, variant_index, context)?;
+                    let origin_y = compute_structure_origin_y(anchor, structure, context)?;
                     candidate_satisfies_restrictions(
                         biome_id,
                         structure,
-                        variant_index,
                         anchor,
                         origin_y,
                         context,
@@ -306,8 +318,8 @@ fn collect_structure_candidates<'a>(
 
             candidates.push(StructureCandidate {
                 biome_id,
+                placement_id,
                 structure,
-                variant_index,
                 anchor,
                 origin_y,
                 minimum,
@@ -322,11 +334,12 @@ fn visit_candidate_anchors_intersecting(
     target_max: IVec2,
     world_seed: u64,
     biome_id: &str,
-    structure: &StructureDefinition,
+    structure_reference: &str,
+    bounds: (IVec2, IVec2),
     placement: StructurePlacementRules,
     mut visit: impl FnMut(IVec2),
 ) {
-    let (minimum_offset, maximum_offset) = structure.horizontal_bounds();
+    let (minimum_offset, maximum_offset) = bounds;
     let minimum_candidate = target_min - maximum_offset;
     let maximum_candidate = target_max - minimum_offset;
     let spacing = placement.spacing;
@@ -342,8 +355,13 @@ fn visit_candidate_anchors_intersecting(
     for cell_z in minimum_cell.y..=maximum_cell.y {
         for cell_x in minimum_cell.x..=maximum_cell.x {
             let cell = IVec2::new(cell_x, cell_z);
-            let Some(anchor) =
-                candidate_anchor(world_seed, biome_id, structure, placement, cell)
+            let Some(anchor) = candidate_anchor(
+                world_seed,
+                biome_id,
+                structure_reference,
+                placement,
+                cell,
+            )
             else {
                 continue;
             };
@@ -359,7 +377,7 @@ fn visit_candidate_anchors_intersecting(
 fn candidate_identity<'a>(
     candidate: &StructureCandidate<'a>,
 ) -> (&'a str, &'a str, IVec2) {
-    (candidate.biome_id, candidate.structure.id.as_str(), candidate.anchor)
+    (candidate.biome_id, candidate.placement_id, candidate.anchor)
 }
 
 fn structures_may_conflict(
@@ -384,11 +402,6 @@ fn candidate_order(
         .priority
         .cmp(&left.structure.priority)
         .then_with(|| left.structure.id.cmp(&right.structure.id))
-        .then_with(|| {
-            left.structure
-                .variant_id(left.variant_index)
-                .cmp(right.structure.variant_id(right.variant_index))
-        })
         .then_with(|| left.biome_id.cmp(right.biome_id))
         .then_with(|| left.anchor.x.cmp(&right.anchor.x))
         .then_with(|| left.anchor.y.cmp(&right.anchor.y))
@@ -405,7 +418,7 @@ fn same_candidate(
     left: &StructureCandidate<'_>,
     right: &StructureCandidate<'_>,
 ) -> bool {
-    left.structure.id == right.structure.id
+    left.placement_id == right.placement_id
         && left.biome_id == right.biome_id
         && left.anchor == right.anchor
 }
@@ -450,12 +463,10 @@ fn rasterize_structure(
     claimed: &mut [bool],
     context: &StructureRasterizationContext<'_>,
     structure: &StructureDefinition,
-    variant_index: usize,
     origin: IVec3,
 ) {
     visit_structure_voxels_in_chunk(
         structure,
-        variant_index,
         origin,
         context.chunk_origin,
         |voxel, world_position, local| {
@@ -508,14 +519,13 @@ fn rasterize_structure(
 
 fn visit_structure_voxels_in_chunk(
     structure: &StructureDefinition,
-    variant_index: usize,
     origin: IVec3,
     chunk_origin: IVec3,
     mut visit: impl FnMut(&StructureVoxel, IVec3, IVec3) -> bool,
 ) -> bool {
     let chunk_size = CHUNK_SIZE as i32;
-    if structure.variant_voxels(variant_index).len() < COLUMN_INDEX_MIN_VOXELS {
-        for voxel in structure.variant_voxels(variant_index) {
+    if structure.voxels().len() < COLUMN_INDEX_MIN_VOXELS {
+        for voxel in structure.voxels() {
             let world_position = origin + voxel.offset;
             let local = world_position - chunk_origin;
             if local.x < 0
@@ -541,7 +551,7 @@ fn visit_structure_voxels_in_chunk(
         for local_x in 0..chunk_size {
             let world_horizontal = chunk_horizontal + IVec2::new(local_x, local_z);
             let structure_offset = world_horizontal - origin_horizontal;
-            for voxel in structure.variant_column_voxels(variant_index, structure_offset) {
+            for voxel in structure.column_voxels(structure_offset) {
                 let world_y = origin.y + voxel.offset.y;
                 let local_y = world_y - chunk_origin.y;
                 if local_y < 0 {

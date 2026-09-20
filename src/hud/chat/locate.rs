@@ -124,7 +124,12 @@ impl ChatLocateContext<'_> {
                 let generated_here = dimension.biomes.iter().any(|dimension_biome| {
                     self.biomes
                         .get(&dimension_biome.id)
-                        .is_some_and(|biome| biome.structures.iter().any(|entry| entry.id == id))
+                        .is_some_and(|biome| {
+                            biome.structures.iter().any(|entry| {
+                                self.structures
+                                    .reference_contains_structure(&entry.id, id)
+                            })
+                        })
                 });
                 if !generated_here {
                     return format!("Structure is not generated in this dimension: {id}");
