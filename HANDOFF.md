@@ -4035,3 +4035,21 @@ Foi adicionado teste de shape transparente (`SavedChunkCatalog::default()` seria
 - `ARCHITECTURE.md` documenta `SavedChunkCatalog` como boundary para evolução futura de storage e reafirma que isso não permite gameplay-time disk writes.
 - `VERSION`: **0.34.21 → 0.34.22**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### Correção de integração CI do checkpoint 133
+
+A primeira CI revelou um consumidor pré-existente relevante: `world/chunk_storage.rs` já possui `ChunkDiskIdentity` e publication física por generation directory.
+
+O encapsulamento de `DiskChunk.coord` expôs que `ChunkDiskIdentity::from_disk_chunk()` ainda reinterpretava o array diretamente.
+
+Correção:
+
+- `ChunkDiskIdentity::from_disk_chunk()` agora retorna `io::Result<Self>`;
+- usa exclusivamente `DiskChunk::coord()`;
+- negative-Y/identity validation fica centralizada no `DiskChunk`;
+- generation chunk publication propaga o erro;
+- fixtures/testes internos foram atualizados para exigir identidade válida;
+- `VERSION` permanece `0.34.22`.
+
+Também fica registrado que `chunk_storage.rs` já existe como primeira peça de per-generation chunk storage; próximos slices devem integrá-lo ao catálogo existente, não criar um segundo mecanismo paralelo.
