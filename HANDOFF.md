@@ -3763,3 +3763,71 @@ Os testes NÃO foram executados manualmente, conforme regra do projeto.
 - O topo `91ea8b8e349145caa9b54fcf3d9f43ec686e030e` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
 - `VERSION` permanece `0.34.18`.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+## Checkpoint 130 — 2026-09-20: save snapshot + validation owners extracted [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+Após o locking ser extraído, `save_catalog.rs` ainda misturava:
+
+- serialized world/player/snapshot/manifest shapes;
+- snapshot capture validation;
+- content-registry-backed playable validation;
+- filesystem catalog/publication/load/recovery/prune orchestration.
+
+O arquivo continuava sendo alterado por responsabilidades independentes.
+
+### Implementação
+
+Novo `save_catalog/snapshot.rs` possui:
+
+- `WorldManifest`;
+- `SavedPlayer`;
+- `WorldSnapshot`;
+- `SnapshotSource`;
+- `SAVE_FORMAT_VERSION`;
+- defaults serde ligados ao snapshot;
+- `WorldSnapshot::capture()` e suas invariantes intrínsecas.
+
+Novo `save_catalog/validation.rs` possui:
+
+- `SaveRegistries`;
+- `PruneRegistries`;
+- validação de clock/biome-size/player/inventory;
+- validação de fluid updates;
+- validação de creature definitions;
+- construção do registry snapshot owned usado pelo background prune.
+
+`save_catalog.rs` agora:
+
+- reexporta somente os tipos que os consumidores externos precisam;
+- mantém filesystem catalog;
+- atomic publication;
+- generation manifests/candidates;
+- load/fallback recovery;
+- backup pruning orchestration.
+
+### Semântica preservada
+
+- `SAVE_FORMAT_VERSION` continua **1**;
+- nomes/campos serde não mudaram;
+- defaults legacy não mudaram;
+- capture continua serializando o mesmo conjunto de persistent chunks;
+- validation rules não mudaram;
+- fallback entre gerações não mudou;
+- save continua somente no lifecycle de saída.
+
+### Práticas aplicadas
+
+- split by responsibility, not file size;
+- explicit persistence boundaries;
+- serialization outside orchestration;
+- validation near the owner of the invariant;
+- small public surface via reexports;
+- nenhuma generic utils layer.
+
+### Versionamento
+
+- `VERSION`: **0.34.18 → 0.34.19**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.

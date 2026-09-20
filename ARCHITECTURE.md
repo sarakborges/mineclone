@@ -179,6 +179,7 @@ A module boundary should own meaningful semantics.
 - Keep modules that define a domain lifecycle, invariant, data model, or substantial transformation even if their code is small.
 - Shared primitives should live at the lowest layer that understands their semantics. Do not move domain policy into generic utility modules.
 - Save-catalog concurrency belongs to `save_catalog::locking`: session file locks, per-world write gates, pinned read leases, prune leases, and reader-drain waiting are one persistence-locking invariant. Catalog/schema/publication code must use those capabilities rather than mutate mutexes or atomics directly.
+- Save serialization ownership is split by semantics: `save_catalog::snapshot` owns serialized manifest/snapshot/player shapes plus capture-time intrinsic validation, while `save_catalog::validation` owns registry-backed playable-content validation and the owned validation snapshot used by backup pruning. `save_catalog.rs` owns filesystem catalog, publication, load/recovery, and pruning orchestration.
 - Avoid circular ownership: UI reads gameplay state; gameplay should not depend on HUD implementation details. Rendering utilities may be reused by HUD/viewmodel/preview, but should not know those consumers.
 
 ## 11. Performance expectations

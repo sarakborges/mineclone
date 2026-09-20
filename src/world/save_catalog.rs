@@ -1,7 +1,8 @@
 mod locking;
+mod snapshot;
+mod validation;
 
 use std::{
-    collections::{HashMap, HashSet},
     fs::{self, OpenOptions},
     io::{self, Write},
     path::{Path, PathBuf},
@@ -13,152 +14,31 @@ use bevy::log::warn;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    content::{
-        block::BlockRegistry, creature::CreatureRegistry,
-        day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
-        fluid::FluidRegistry, tool::ToolRegistry,
-    },
-    creatures::SavedCreature,
-    player::hotbar::{HOTBAR_SLOT_COUNT, INVENTORY_SLOT_COUNT},
-    voxel::{chunk_disk::DiskChunk, world::VoxelWorld},
+    content::{block::BlockRegistry, fluid::FluidRegistry},
+    voxel::world::VoxelWorld,
 };
 
-use self::locking::{
-    ReadLease, acquire_world_directory_lock, remove_world_directory_lock_file, world_lock,
+use self::{
+    locking::{
+        ReadLease, acquire_world_directory_lock, remove_world_directory_lock_file, world_lock,
+    },
+    snapshot::{SAVE_FORMAT_VERSION, WorldManifest},
 };
-pub(crate) use self::locking::WorldDirectoryLock;
+pub(crate) use self::{
+    locking::WorldDirectoryLock,
+    snapshot::{SavedPlayer, SnapshotSource, WorldSnapshot},
+    validation::{PruneRegistries, SaveRegistries},
+};
 
 use super::{
-    fluid_updates::{PendingFluidUpdates, SavedFluidUpdates},
     new_world::{
-        DEFAULT_BIOME_SIZE_MULTIPLIER, WorldgenVersion, biome_size_multiplier_tenths,
-        is_valid_biome_size_multiplier, legacy_worldgen_version,
+        WorldgenVersion, biome_size_multiplier_tenths, is_valid_biome_size_multiplier,
     },
     world_names::{WORLDS_DIRECTORY, available_world_name, validate_world_name},
 };
 
-const SAVE_FORMAT_VERSION: u32 = 1;
 const MAX_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
 const RETAINED_GENERATIONS: usize = 4;
-
-fn default_saved_biome_size_multiplier() -> f32 {
-    DEFAULT_BIOME_SIZE_MULTIPLIER
-}
-#[derive(Clone, Copy)]
-pub(crate) struct SaveRegistries<'a> {
-    pub(crate) blocks: &'a BlockRegistry, pub(crate) fluids: &'a FluidRegistry,
-    pub(crate) tools: &'a ToolRegistry, pub(crate) creatures: &'a CreatureRegistry,
-    pub(crate) dimensions: &'a DimensionRegistry, pub(crate) cycles: &'a DayNightCycleRegistry,
-}
-impl SaveRegistries<'_> {
-    fn validate_playable(self, snapshot: &WorldSnapshot) -> io::Result<()> {
-        let duration = self.dimensions.get(&snapshot.dimension_id)
-            .and_then(|dimension| self.cycles.get(&dimension.day_night_cycle))
-            .map(|cycle| cycle.day_duration_ticks);
-        validate_playable(snapshot, duration, |id| self.blocks.get(id).is_some() || self.tools.get(id).is_some())?;
-        PendingFluidUpdates::from_saved(&snapshot.fluid_updates, self.fluids)?;
-        for creature in &snapshot.creatures { creature.validate(self.creatures)?; }
-        Ok(())
-    }
-    pub(crate) fn owned_for_pruning(self) -> PruneRegistries {
-        let valid_items = self.blocks.iter().map(|block| block.id.clone())
-            .chain(self.tools.iter().map(|tool| tool.id.clone())).collect();
-        let day_lengths = self.dimensions.iter().filter_map(|dimension| {
-            self.cycles.get(&dimension.day_night_cycle).map(|cycle| (dimension.id.clone(), cycle.day_duration_ticks))
-        }).collect();
-        let mut creatures = CreatureRegistry::default();
-        for definition in self.creatures.iter() { creatures.insert(definition.clone()); }
-        PruneRegistries { blocks: self.blocks.clone(), fluids: self.fluids.clone(), creatures, valid_items, day_lengths }
-    }
-}
-pub(crate) struct PruneRegistries {
-    blocks: BlockRegistry, fluids: FluidRegistry, creatures: CreatureRegistry,
-    valid_items: HashSet<String>, day_lengths: HashMap<String, u64>,
-}
-impl PruneRegistries {
-    pub(crate) fn validate_playable(&self, snapshot: &WorldSnapshot) -> io::Result<()> {
-        validate_playable(snapshot, self.day_lengths.get(&snapshot.dimension_id).copied(), |id| self.valid_items.contains(id))?;
-        PendingFluidUpdates::from_saved(&snapshot.fluid_updates, &self.fluids)?;
-        for creature in &snapshot.creatures { creature.validate(&self.creatures)?; }
-        Ok(())
-    }
-}
-fn validate_playable(snapshot: &WorldSnapshot, duration: Option<u64>, valid_item: impl Fn(&str) -> bool) -> io::Result<()> {
-    if duration.is_none_or(|ticks| ticks == 0 || snapshot.tick_in_day >= ticks) { return Err(invalid_data("saved dimension or world clock is invalid")); }
-    if !is_valid_biome_size_multiplier(snapshot.biome_size_multiplier) { return Err(invalid_data("saved biome size multiplier is invalid")); }
-    if let Some(player) = snapshot.player.as_ref() {
-        if player.health.is_some_and(|health| !health.is_finite() || health < 0.0) { return Err(invalid_data("saved player health is invalid")); }
-        if !player.yaw.is_finite() || !player.pitch.is_finite() { return Err(invalid_data("saved player look is invalid")); }
-    }
-    if snapshot.inventory.len() != INVENTORY_SLOT_COUNT { return Err(invalid_data("invalid inventory length")); }
-    if snapshot.selected_hotbar_slot >= HOTBAR_SLOT_COUNT { return Err(invalid_data("invalid selected hotbar slot")); }
-    for id in snapshot.inventory.iter().flatten() { if !valid_item(id) { return Err(invalid_data(format!("unknown inventory item ID: {id}"))); } }
-    Ok(())
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct WorldManifest {
-    format_version: u32, id: String, seed: u64, dimension_id: String,
-    #[serde(default = "legacy_worldgen_version")]
-    worldgen_version: WorldgenVersion,
-    #[serde(default = "default_saved_biome_size_multiplier")]
-    biome_size_multiplier: f32,
-    ticks_per_second: u32, last_saved_unix_ms: u64,
-    #[serde(default)] generation: u64,
-    #[serde(default)] snapshot_file: Option<String>,
-}
-#[derive(Clone, Debug)]
-pub(crate) struct WorldSummary { pub(crate) id: String, pub(crate) last_saved_unix_ms: u64 }
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct SavedPlayer {
-    pub(crate) position: [f32; 3], pub(crate) creative: bool,
-    #[serde(default)] pub(crate) health: Option<f32>,
-    #[serde(default)] pub(crate) yaw: f32,
-    #[serde(default)] pub(crate) pitch: f32,
-}
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct WorldSnapshot {
-    format_version: u32, pub(crate) id: String, pub(crate) seed: u64, pub(crate) dimension_id: String,
-    #[serde(default = "legacy_worldgen_version")]
-    worldgen_version: WorldgenVersion,
-    #[serde(default)] pub(crate) spawn_biome: Option<String>,
-    #[serde(default = "default_saved_biome_size_multiplier")] pub(crate) biome_size_multiplier: f32,
-    pub(crate) ticks_per_second: u32, pub(crate) player: Option<SavedPlayer>, pub(crate) day: u64,
-    pub(crate) tick_in_day: u64, pub(crate) inventory: Vec<Option<String>>,
-    #[serde(default)] pub(crate) selected_hotbar_slot: usize,
-    #[serde(default)] pub(crate) fluid_updates: SavedFluidUpdates,
-    #[serde(default)] pub(crate) creatures: Vec<SavedCreature>,
-    chunks: Vec<DiskChunk>,
-}
-pub(crate) struct SnapshotSource<'a> {
-    pub(crate) id: &'a str, pub(crate) seed: u64, pub(crate) dimension_id: &'a str,
-    pub(crate) spawn_biome: Option<&'a str>, pub(crate) biome_size_multiplier: f32,
-    pub(crate) ticks_per_second: u32, pub(crate) player: Option<SavedPlayer>, pub(crate) day: u64,
-    pub(crate) tick_in_day: u64, pub(crate) inventory: Vec<Option<String>>,
-    pub(crate) selected_hotbar_slot: usize, pub(crate) world: &'a VoxelWorld,
-    pub(crate) fluids: &'a FluidRegistry, pub(crate) pending_fluids: &'a PendingFluidUpdates,
-    pub(crate) world_tick: u64, pub(crate) creatures: Vec<SavedCreature>,
-}
-impl WorldSnapshot {
-    pub(crate) fn capture(source: SnapshotSource<'_>) -> io::Result<Self> {
-        validate_world_name(source.id)?;
-        if source.ticks_per_second == 0 || source.dimension_id.is_empty() || source.day == 0 { return Err(invalid_data("incomplete world state")); }
-        if !is_valid_biome_size_multiplier(source.biome_size_multiplier) { return Err(invalid_data("invalid biome size multiplier")); }
-        if let Some(player) = source.player.as_ref() {
-            if player.position.iter().any(|coord| !coord.is_finite()) { return Err(invalid_data("player position must be finite")); }
-            if !player.yaw.is_finite() || !player.pitch.is_finite() { return Err(invalid_data("player look must be finite")); }
-        }
-        Ok(Self {
-            format_version: SAVE_FORMAT_VERSION, id: source.id.to_owned(), seed: source.seed,
-            dimension_id: source.dimension_id.to_owned(), worldgen_version: WorldgenVersion::current(),
-            spawn_biome: source.spawn_biome.map(str::to_owned), biome_size_multiplier: source.biome_size_multiplier,
-            ticks_per_second: source.ticks_per_second, player: source.player, day: source.day,
-            tick_in_day: source.tick_in_day, inventory: source.inventory, selected_hotbar_slot: source.selected_hotbar_slot,
-            fluid_updates: source.pending_fluids.capture_saved(source.world_tick, source.fluids)?,
-            creatures: source.creatures, chunks: source.world.save_generated_chunks(source.fluids)?,
-        })
-    }
-}
 
 pub(crate) fn create_new_world(requested_name: &str, seed: u64, dimension_id: &str, biome_size_multiplier: f32, ticks_per_second: u32) -> io::Result<(String, WorldDirectoryLock)> {
     if ticks_per_second == 0 || dimension_id.is_empty() { return Err(io::Error::new(io::ErrorKind::InvalidInput, "World seed metadata must include a dimension and a positive tick rate")); }
