@@ -124,12 +124,6 @@ impl ChunkStreamingState {
         }
     }
 
-    fn defer_pending(&mut self, coord: IVec3) {
-        if self.keeps_loaded(coord) && !self.pending.contains(coord) && !self.ready.contains(coord) {
-            self.pending.enqueue(coord);
-        }
-    }
-
     fn start_generation_wave_target(&mut self, coord: IVec3) {
         if self.generation_wave_targets.insert(coord) {
             self.generation_wave_pending.enqueue(coord);
