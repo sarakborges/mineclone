@@ -69,7 +69,7 @@ fn write_generation_chunks_to_staging(staging: &Path, chunks: &[DiskChunk]) -> i
             return Err(io::Error::new(io::ErrorKind::InvalidData, format!("duplicate persisted chunk coordinate: {position:?}")));
         }
         let path = staging.join(identity.relative_path());
-        let parent = path.parent().ok_or_else(|| io::Error::other("chunk storage path has no parent"))?;
+        let parent = path.parent().ok_or(io::Error::other("chunk storage path has no parent"))?;
         fs::create_dir_all(parent)?;
         let payload = serde_json::to_vec(chunk).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
         let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
