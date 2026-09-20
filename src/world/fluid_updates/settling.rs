@@ -43,6 +43,7 @@ pub(in crate::world) struct GeneratedFluidSettling {
     generated_chunks: HashSet<IVec3>,
     mutable_chunks: HashSet<IVec3>,
     changed_existing_positions: HashSet<IVec3>,
+    dependency_positions: HashSet<IVec3>,
     work_queue: DeduplicatedQueue<IVec3>,
     verification_queue: DeduplicatedQueue<IVec3>,
     verification_chunks: Vec<IVec3>,
@@ -183,6 +184,7 @@ impl GeneratedFluidSettling {
         self.generated_chunks.clear();
         self.mutable_chunks.clear();
         self.changed_existing_positions.clear();
+        self.dependency_positions.clear();
         self.work_queue.clear();
         self.verification_queue.clear();
         self.verification_chunks.clear();
@@ -209,6 +211,20 @@ impl GeneratedFluidSettling {
             if let Some(revision) = world.chunk_content_revision(coord) {
                 self.verification_revisions.insert(coord, revision);
             }
+        }
+
+        let mut dependencies = self.dependency_positions.iter().copied().collect::<Vec<_>>();
+        dependencies.sort_unstable_by_key(|position| {
+            let coord = chunk_coord_from_world(*position);
+            (coord.y, coord.z, coord.x, position.y, position.z, position.x)
+        });
+        for position in dependencies {
+            let coord = chunk_coord_from_world(position);
+            let Some(revision) = world.chunk_content_revision(coord) else {
+                continue;
+            };
+            self.verification_revisions.entry(coord).or_insert(revision);
+            self.verification_queue.enqueue(position);
         }
 
         self.verification_active = true;
@@ -295,6 +311,12 @@ impl GeneratedFluidSettling {
         if target.y < 0 || world.sample_at(target).is_none() {
             return;
         }
+        if !self
+            .mutable_chunks
+            .contains(&chunk_coord_from_world(target))
+        {
+            self.dependency_positions.insert(target);
+        }
         if priority {
             self.work_queue.enqueue_front(target);
         } else {
@@ -345,7 +367,7 @@ impl GeneratedFluidSettling {
                             generated_coord,
                             y,
                         ) {
-                            self.work_queue.enqueue(position);
+                            self.enqueue_work_target(world, position, false);
                         }
                     });
 
