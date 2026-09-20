@@ -5417,3 +5417,65 @@ Novos owners:
 - `VERSION`: **0.35.6 → 0.35.7**.
 - CI pendente.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 152
+
+- Push CI `35526772483`: **success**.
+- PR CI `35526774395`: **success**.
+- O topo `cf68195effcb2d69fe3ff3ca3c43de37c6bbd193` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.35.7`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 153 — 2026-09-20: inventory layout dividido por view ownership [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`hud/inventory/layout.rs` possuía ~879 linhas e quatro responsabilidades de view distintas:
+
+- composition root do HUD;
+- creative catalog/search/categories;
+- player backpack/hotbar/trash;
+- rendering de item/cursor.
+
+Essas áreas mudam por motivos diferentes e já tinham consumers externos estreitos em `sync.rs`.
+
+### Implementação
+
+`inventory/layout.rs` agora possui somente:
+
+- `InventoryItemView`;
+- `InventoryLayoutState`;
+- `spawn_inventory_root()`;
+- reexports internos das capabilities consumidas por `sync.rs`.
+
+Novos owners:
+
+- `layout/creative.rs`: creative panel, search field, category list/buttons, catalog filtering/sorting/grid/slots;
+- `layout/player.rs`: player inventory panel, backpack, hotbar, trash button e inventory slots;
+- `layout/item.rs`: cursor icon e item rendering compartilhado.
+
+### API interna preservada
+
+`sync.rs` continua importando exatamente de `layout`:
+
+- `spawn_inventory_root`;
+- `spawn_cursor_icon`;
+- `spawn_creative_catalog_rows`;
+- `spawn_inventory_item`.
+
+Os submódulos novos não vazam para o restante do HUD.
+
+### Semântica preservada
+
+- UI tree, sizing, spacing e markers não mudaram;
+- creative filtering/sorting não mudou;
+- item tint/icon behavior não mudou;
+- hotbar/backpack/trash behavior não mudou;
+- nenhuma interaction/sync/style policy foi movida para layout.
+
+### Versionamento
+
+- `VERSION`: **0.35.7 → 0.35.8**.
+- CI pendente.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
