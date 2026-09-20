@@ -28,6 +28,12 @@ fn checked_directory_slot(world_directory: &Path, relative: &Path) -> io::Result
     }
 }
 
+pub(crate) fn generation_slot_occupied(world_directory: &Path, generation: u64) -> io::Result<bool> {
+    let published = checked_directory_slot(world_directory, Path::new(&generation_directory_name(generation)))?;
+    let staging = checked_directory_slot(world_directory, Path::new(&staging_generation_directory_name(generation)))?;
+    Ok(published.exists() || staging.exists())
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct ChunkDiskIdentity { chunk_position: IVec3 }
 impl ChunkDiskIdentity {
@@ -178,6 +184,17 @@ mod tests {
     fn generation_directory_identity_is_canonical() { assert_eq!(generation_directory_name(42), "generation-42"); }
     #[test]
     fn staging_generation_directory_identity_is_distinct() { assert_eq!(staging_generation_directory_name(42), ".generation-42.tmp"); assert_ne!(staging_generation_directory_name(42), generation_directory_name(42)); }
+    #[test]
+    fn generation_slot_detects_published_and_staging_directories() {
+        let root = temp_directory("chunk-slot-occupied"); fs::create_dir_all(root.as_path()).expect("temp root must be created");
+        assert!(!generation_slot_occupied(root.as_path(), 7).expect("empty slot must be readable"));
+        fs::create_dir(root.join(generation_directory_name(7))).expect("published fixture must be created");
+        assert!(generation_slot_occupied(root.as_path(), 7).expect("published slot must be readable"));
+        fs::remove_dir(root.join(generation_directory_name(7))).expect("published fixture must be removed");
+        fs::create_dir(root.join(staging_generation_directory_name(7))).expect("staging fixture must be created");
+        assert!(generation_slot_occupied(root.as_path(), 7).expect("staging slot must be readable"));
+        fs::remove_dir_all(root).expect("temp root must be removed");
+    }
     #[test]
     fn directory_slot_rejects_regular_files() {
         let root = temp_directory("chunk-slot-file"); fs::create_dir_all(root.as_path()).expect("temp root must be created"); let slot = PathBuf::from(generation_directory_name(5)); fs::write(root.join(slot.as_path()), b"not a directory").expect("fixture file must be written");
