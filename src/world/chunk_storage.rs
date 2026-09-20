@@ -23,7 +23,7 @@ const GENERATION_DIRECTORY_PREFIX: &str = "generation-";
 const STAGING_DIRECTORY_PREFIX: &str = ".generation-";
 const STAGING_DIRECTORY_SUFFIX: &str = ".tmp";
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct ChunkDiskIdentity(IVec3);
 
 impl ChunkDiskIdentity {
