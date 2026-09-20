@@ -163,7 +163,7 @@ fn dispatch_generation_tasks(
             continue;
         }
 
-        if progress.world.has_generated_chunk(coord) {
+        if progress.world.has_resident_or_persisted_chunk(coord) {
             assert!(
                 progress.world.restore_chunk(coord),
                 "generated bootstrap chunk must be resident or archived: {coord:?}"

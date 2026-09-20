@@ -3892,3 +3892,13 @@ Assertions/comments também foram ajustados para falar em resident/persisted, n�
 - `ARCHITECTURE.md` agora fixa a nomenclatura de persistence.
 - `VERSION`: **0.34.19 → 0.34.20**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### Correção de integração CI do checkpoint 131
+
+A primeira CI do rename encontrou dois call sites adicionais que a busca de código do connector não havia indexado:
+
+- `world/setup/bootstrap.rs`;
+- `world/setup/progress.rs`.
+
+Ambos agora usam `has_resident_or_persisted_chunk()`. Nenhuma semântica mudou e `VERSION` permanece `0.34.20`.

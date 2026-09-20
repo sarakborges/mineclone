@@ -162,7 +162,7 @@ pub(in crate::world) fn begin_world_loading(
             .existing_world
             .as_ref()
             .expect("loaded world voxel state must exist before bootstrap");
-        coords.retain(|coord| saved_world.has_generated_chunk(*coord));
+        coords.retain(|coord| saved_world.has_resident_or_persisted_chunk(*coord));
     }
     let bootstrap_chunks = coords
         .iter()
