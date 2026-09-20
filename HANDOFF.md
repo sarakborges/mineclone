@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.40.0`. HEAD funcional `7311587a3157cd6c5d6cbde0643df3a551128276`. CI push `35536185243` e PR `35536186909`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Streaming de chunks novos agora usa coorte coerente por `generation_region`: integra todos os chunks desejados daquela region, mantém-os staged/invisíveis, só então executa full fluid settling até fixed point, seguido de lighting/ready/primeiro mesh. Ordem de conclusão das async generation tasks não decide mais quais vizinhos existiam durante o spread inicial. World Selection mantém botão para abrir a pasta canônica `worlds` no Explorer. Não houve `cargo test`, `cargo run` nem QA Windows.
+**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.41.0`. HEAD funcional `3eba0bb5aee39af8fe136fd9280fc7df7c815447`. CI push `35537427631` e PR `35537429561`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. A barreira de `generation_region` do 0.40.0 foi descartada após QA reportar hitch severo e chunks ainda nascendo sem spread completo. Streaming agora usa waves pequenas de no máximo 8 chunks, full fluid settling com verificação explícita de fixed point, closure causal através de seams para chunks residentes não-persistentes, proteção contra runtime/unload tocar chunks unpublished, e metadata esparsa de dynamic fluids para evitar scans 16³. World Selection mantém botão para abrir `worlds` no Explorer. Não houve `cargo test`, `cargo run` nem QA Windows.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.34.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **Estado mais recente em `develop`: comparação/correção do save game em andamento; HEAD funcional ainda não versionado `bd713963b9bbb8f69eeeb6df6b7bf7aa2773152f`.** CI `35413383474` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Já foram corrigidas persistência de scheduled fluid work, health do player, creatures e lock cross-process do diretório do mundo. Ainda NÃO foram implementados selected hotbar slot, rotação/look do player, autosave disparado somente pela passagem do clock, nem a migração do snapshot global para storage incremental por chunk/region. **Não houve bump de VERSION neste checkpoint porque o bloco de save foi interrompido antes do fechamento completo.** Não houve `cargo test`, `cargo run` ou QA Windows.
 
@@ -6898,3 +6898,303 @@ Não houve `cargo test`, `cargo run` nem QA Windows.
 4. Testar movimento contínuo atravessando boundary de generation region.
    - próxima region deve aguardar a anterior publicar;
    - não deve haver fluid correction visível causada apenas pela ordem de conclusão das generation tasks.
+
+
+## Checkpoint 170 — 2026-09-20: investigação profunda do settling em streaming; falso fixed point, seam assimétrica e region barrier removidos [ROOT CAUSE + ARCHITECTURE FIX; VERSION 0.41.0; CI VERDE]
+
+### Sintomas reportados
+
+Após o pipeline de `0.40.0` por `generation_region`:
+
+- streaming passou a travar/engasgar muito;
+- alguns chunks ainda apareciam sem ter concluído o spread;
+- Gameplay continuava corrigindo fluidos depois da publicação.
+
+Foi feita investigação do lifecycle completo:
+
+`pending → generation task → resident/staged → settling → lighting → ready → mesh`
+
+e das dependências reais de `desired_fluid_with_scratch()`.
+
+### Causa 1 — queue vazia NÃO era prova de fixed point
+
+O settling chamava “fixed point” quando a queue local zerava.
+
+Depois de cada mutation eram re-enfileirados apenas:
+
+- posição alterada;
+- posição abaixo;
+- 4 horizontais.
+
+Isso é insuficiente porque o solver usa downhill routing com BFS até `maxSpread`.
+
+Uma mutation pode:
+
+- mudar qual queda é a mais próxima;
+- mudar preferência de uma rota vários blocos distante;
+- sem alterar imediatamente nenhum dos 5 voxels re-enfileirados.
+
+Logo:
+
+`work_queue.len() == 0`
+
+não implicava:
+
+`desired_fluid(position) == current(position)` para todo candidato relevante.
+
+Esse era um **falso fixed point** e explica chunks publicados com trabalho de fluid ainda pendente.
+
+### Correção — verification round explícito
+
+`GeneratedFluidSettling` agora tem dois estágios internos:
+
+1. **fast propagation queue**
+   - propaga consequências locais rapidamente;
+2. **sparse fixed-point verification**
+   - quando a local queue zera, revisita:
+     - todas as células de fluido dinâmico (não-source) do domínio;
+     - todos os frontier targets vazios expostos;
+   - qualquer mutation volta a alimentar local work;
+   - somente um verification round inteiro sem mutation aceita convergência.
+
+Assim completion agora significa verificação real, não apenas fila local vazia.
+
+### Causa 2 — seam dependia da direção do flow
+
+O domínio antigo de settling permitia mutation apenas nos chunks novos.
+
+Consequência:
+
+- fluido de chunk velho → target em chunk novo: podia ser resolvido;
+- source/flow novo → target em chunk velho já publicado: era rejeitado pelo settling e ficava para Gameplay.
+
+Portanto a correção dependia da ordem/direção da geração.
+
+### Correção — closure causal em halo residente
+
+O domínio começa com os chunks novos da wave.
+
+Ele pode expandir para um chunk residente antigo somente quando:
+
+- o target realmente tem `desired != current`;
+- o chunk está residente;
+- o chunk NÃO é persistent.
+
+Só então aquele chunk entra no mutable closure.
+
+Chunks persistent/player-authored continuam hard boundary do generated settling e permanecem runtime-owned.
+
+Isso permite resolver:
+
+- velho → novo;
+- novo → velho;
+
+antes de publicar os chunks novos.
+
+### Causa 3 — `generation_region` 8×8×8 foi uma unidade errada de publicação
+
+`generation_region` é útil como owner/cache de hydrology/feature generation, mas não como publication barrier.
+
+Uma region tem até 8×8×8 chunks e, mesmo limitando aos desired chunks, podia manter dezenas/centenas de chunks:
+
+- resident;
+- invisíveis;
+- esperando a última generation task;
+- depois esperando todo fluid settling.
+
+Isso serializou streaming demais e produziu hitch/pop-in.
+
+### Correção — bounded generation waves
+
+Streaming agora usa waves de no máximo:
+
+`MAX_GENERATION_TASKS_IN_FLIGHT = 8`
+
+Fluxo:
+
+`selecionar até 8 targets pela prioridade atual`
+→ `gerar toda a wave async`
+→ `integrar todos os outputs como resident/unpublished`
+→ `não adicionar novos targets à wave`
+→ `full verified settling`
+→ `lighting + runtime frontier`
+→ `ready + first mesh`
+→ `próxima wave`
+
+Isso preserva a ideia correta “generation first, fluid layer after” sem segurar uma `generation_region` inteira.
+
+### Causa 4 — runtime scheduler conseguia tocar chunks staged
+
+Ordem de sistemas:
+
+- `stream_chunks` roda em `Update`;
+- `process_fluid_updates` roda em `PostUpdate`.
+
+Logo um output recém-integrado já estava no `VoxelWorld` no mesmo frame, apesar de ainda unpublished.
+
+Um due tick runtime podia:
+
+1. enxergar o staged chunk;
+2. chamar `set_fluid_at()`;
+3. promover o chunk para persistent;
+4. fazer `set_derived_fluid_at()` do generated settling passar a rejeitar mutations posteriores.
+
+Isso quebrava ownership e podia interromper settling antes da publicação.
+
+### Correção — unpublished residency é privada do worldgen pipeline
+
+`ChunkStreamingState::generated_chunk_is_unpublished(coord)` é agora gate compartilhado.
+
+Runtime due ticks cujo target está unpublished:
+
+- NÃO mutam o voxel;
+- entram no caminho existente `defer_unloaded()`;
+- são reativados pelo publication path através de `reactivate_loaded_chunk()`.
+
+Não foi criada segunda fila paralela.
+
+### Causa 5 — generic unload podia arquivar staged chunk
+
+Selection pode mudar enquanto uma wave está em generation/settling.
+
+O generic unload podia retirar um coord da retired queue e chamar `archive_chunk()` enquanto `GeneratedFluidSettling` ainda era o owner.
+
+Agora:
+
+- unload genérico ignora unpublished generated chunks;
+- ao final da wave, `publish_settled_wave()` decide:
+  - `ready` se ainda deve ficar loaded;
+  - `archive_chunk` se saiu da seleção.
+
+### Causa 6 — verification atravessa frames; inputs podiam mudar
+
+Um verification round pode durar vários frames.
+
+Runtime ou outra mutation legítima em chunk halo poderia acontecer depois daquele chunk já ter sido verificado.
+
+Agora cada verification round captura:
+
+`chunk_content_revision(coord)`
+
+para o domínio.
+
+Antes de declarar fixed point:
+
+- revisions são comparadas novamente;
+- qualquer diferença externa reinicia um verification round completo.
+
+### Causa 7 — scan 16³ era desperdício
+
+O primeiro verification correto varria todos os 4096 fluid slots do chunk para encontrar dynamic fluids.
+
+Isso seria caro justamente no caminho adicionado para evitar falsos fixed points.
+
+`VoxelChunk` agora possui metadata incremental adicional:
+
+- `fluid_frontier_sources` — já existente;
+- `dynamic_fluid_cells` — novo bitset.
+
+O dynamic bitset:
+
+- é atualizado atomicamente em todo `set_fluid_in_storage()`;
+- contém somente fluid cells não-source;
+- worldgen, runtime, deserialization/reconstruction e derived mutations usam o mesmo owner;
+- não precisa ser persistido separadamente;
+- permite sparse iteration por bits setados.
+
+### Indirect downhill dependency perto de seam
+
+A simples closure por targets cruzando a seam ainda não cobriria um caso:
+
+- um chunk novo aparece;
+- nenhuma célula cruzou a seam ainda;
+- mas sua geometria/queda nova altera o resultado da BFS downhill de um fluid dinâmico no chunk vizinho.
+
+Ao iniciar settling de uma wave, cada chunk novo agora consulta seus 8 vizinhos horizontais.
+
+Usando a metadata esparsa:
+
+- dynamic fluid cells próximas;
+- frontier targets próximos;
+
+são reavaliados somente quando sua distância horizontal ao chunk novo é <= `maxSpread + 1` do fluido authored.
+
+Assim topology nova pode invalidar uma rota antiga sem scan 16³ e sem puxar fluidos distantes/irrelevantes para a closure.
+
+### Performance / budgets
+
+Streaming settling:
+
+- budget: 1 ms/frame;
+- mínimo antes de checar clock: **1 evaluation**;
+- máximo: 128 evaluations/frame.
+
+Antes o mínimo era 8. Uma única `desired_fluid` pode disparar várias BFS com `maxSpread=7`; portanto 8 avaliações obrigatórias podiam furar o budget significativamente.
+
+Bootstrap continua com budget maior porque não há Gameplay frame para proteger no mesmo sentido.
+
+### Existing published halo reconciliation
+
+Se generated settling altera fluid em chunk antigo já publicado:
+
+- `PendingLightingUpdates::enqueue_medium_edit(position)`;
+- fluid remesh priority no chunk alterado;
+- fluid remesh nos cardinais;
+- frontier do chunk alterado é re-enfileirada para runtime reconciliation após completion.
+
+### Commits
+
+Bloco funcional `0.41.0`:
+
+- `11353d692c0c0f422d6dbbfaff24d2c10d8a150d` — generation waves + verified settling + seam closure; bump 0.41.0;
+- `1cb39dd5dcb06076f6363f8f8aa7d2bc6f5e8f36` — verification lê dynamic state atual;
+- `ea95580afc4862771947a13b87425a782b453ed3` — completion ownership/export;
+- `3bd687b63b09b091b863be27c87a5ce75deffff9` — separa wave reservation de publication gate;
+- `285093bd4ff1741f0239410c8eddd04ebd3406d7` — halo só expande por mutation real;
+- `f9cbe2f898c9f13ae540a45de6b58743a94879f1` — revision-aware verification;
+- `949b220ed831328b05102acfae3bbcedf005f5a2` — remove defer path obsoleto;
+- `a49834d79c921da719d1cda2ea128088d140762a` — isola unpublished chunks de runtime fluid/unload;
+- `c5b6aa5dcc93c2ccef9b20c9759c09e57fd5199d` — coordinate gate import;
+- `3eba0bb5aee39af8fe136fd9280fc7df7c815447` — sparse dynamic-fluid metadata + maxSpread seam dependency halo; HEAD funcional final antes deste handoff.
+
+### CI intermediária e correções
+
+Não esconder regressões intermediárias:
+
+- `11353d...` push CI `35536859930`: **failure**
+  - missing re-export de `GeneratedFluidSettlingCompletion`;
+- `f9cbe2...` push CI `35537046698`: **failure**
+  - helper `defer_pending` ficou dead após remoção da preemption;
+- ambos foram corrigidos nos commits seguintes.
+
+### CI final
+
+HEAD funcional `3eba0bb5aee39af8fe136fd9280fc7df7c815447`:
+
+- push CI `35537427631`: **success**;
+- PR CI `35537429561`: **success**;
+- localization audit: success;
+- Clippy `--locked --all-targets --all-features -- -D warnings`: success;
+- `cargo check --locked`: success.
+
+Não houve `cargo test`, `cargo run` nem QA Windows/runtime.
+
+### QA prioritária
+
+1. Reproduzir exatamente o movimento que no 0.40 causava hitch:
+   - geração deve continuar em waves pequenas;
+   - não deve haver pausa longa esperando uma generation region inteira.
+2. Água/lava cruzando seam entre waves:
+   - velho → novo;
+   - novo → velho;
+   - chunk novo não pode aparecer antes da verified convergence.
+3. Downhill route próximo de seam sem flow já cruzando:
+   - chunk novo deve provocar reavaliação do dynamic fluid vizinho antes da publicação.
+4. Movimento rápido para longe durante generation:
+   - staged/unpublished chunk não pode ser generic-unloaded no meio do settling;
+   - publish deve decidir ready vs archive.
+5. Runtime fluid tick apontando para chunk staged:
+   - deve ficar dormant;
+   - não deve promover chunk staged para persistent;
+   - deve reativar após publicação.
+6. Confirmar que chunks aparecem sem spread adicional imediatamente após first mesh, salvo topology/runtime event posterior legítimo.
