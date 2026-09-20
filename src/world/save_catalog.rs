@@ -40,6 +40,12 @@ use super::{
 const MAX_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
 const RETAINED_GENERATIONS: usize = 4;
 
+#[derive(Clone, Debug)]
+pub(crate) struct WorldSummary {
+    pub(crate) id: String,
+    pub(crate) last_saved_unix_ms: u64,
+}
+
 pub(crate) fn create_new_world(requested_name: &str, seed: u64, dimension_id: &str, biome_size_multiplier: f32, ticks_per_second: u32) -> io::Result<(String, WorldDirectoryLock)> {
     if ticks_per_second == 0 || dimension_id.is_empty() { return Err(io::Error::new(io::ErrorKind::InvalidInput, "World seed metadata must include a dimension and a positive tick rate")); }
     if !is_valid_biome_size_multiplier(biome_size_multiplier) { return Err(io::Error::new(io::ErrorKind::InvalidInput, "Biome size multiplier must be between 0.5 and 5.0 in 0.1 increments")); }

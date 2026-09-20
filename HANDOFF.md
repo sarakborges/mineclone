@@ -3831,3 +3831,15 @@ Novo `save_catalog/validation.rs` possui:
 
 - `VERSION`: **0.34.18 → 0.34.19**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### Correção de integração CI do checkpoint 130
+
+A primeira CI do split falhou porque `WorldSummary`, que é read-model do catálogo, foi removido junto do bloco antigo de schema.
+
+Correção:
+
+- `WorldSummary` foi restaurado em `save_catalog.rs`;
+- ele permanece com o owner correto: listagem/catalog read model, não serialized snapshot;
+- nenhum campo/formato persistido mudou;
+- `VERSION` permanece `0.34.19`.
