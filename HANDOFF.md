@@ -5853,7 +5853,7 @@ Este checkpoint consolida o estado real do `develop` após os checkpoints 145–
 
 - branch: `develop`;
 - commit funcional atual: `bd03b50c9ad716b593938064da0712d7ac497b10`;
-- `VERSION`: **0.36.0**;
+- `VERSION`: **0.36.1**;
 - CI do topo: **verde** em push + PR;
 - `Cargo.toml` continua com a versão deliberadamente independente do app;
 - não houve `cargo test`, `cargo run` nem QA Windows nesta sequência.
@@ -6045,3 +6045,37 @@ Qualquer save histórico que dependa de defaults, chunks inline ou encoding per-
 ### Versionamento
 
 - `VERSION 0.35.13 → 0.36.0` por mudança incompatível no contrato de persistência.
+
+
+## Checkpoint 161 — 2026-09-20: durability de save portátil no Windows [FIX; VERSION 0.36.1]
+
+### Sintoma observado
+
+Ao criar um mundo no Windows, a publicação do manifest falhava após o rename com:
+
+`Acesso negado. (os error 5), rollback of published file failed: Acesso negado. (os error 5)`
+
+O arquivo temporário já havia sido flushado/sincronizado e renomeado. A falha vinha de `File::open(directory).sync_all()`, usado como se fosse um directory fsync portátil. Em Windows esse padrão não é suportado pela std e retorna `ERROR_ACCESS_DENIED` para diretórios normais. O rollback repetia o mesmo sync e produzia a segunda mensagem de acesso negado.
+
+### Correção
+
+Novo owner `world::storage_durability` centraliza a semântica:
+
+- arquivos continuam usando `sync_all()` antes de publication/rename;
+- Unix mantém fsync do diretório após rename/rollback;
+- plataformas sem directory sync portátil pela std, incluindo Windows, tratam esse passo como no-op;
+- `chunk_storage` usa o mesmo owner;
+- no Windows, `sync_directory_tree` também deixa de percorrer toda a árvore de chunk directories apenas para executar operações que não eram suportadas.
+
+Isso corrige tanto:
+
+- criação/publicação de `manifest-N.json` e `snapshot-N.json`;
+- publicação/remoção de `generation-N/`.
+
+### Arquitetura
+
+`ARCHITECTURE.md` agora deixa explícito que file fsync é obrigatório antes do rename, enquanto directory-entry fsync é uma capability de plataforma e não pode ser emulado com `File::open(directory).sync_all()` no Windows.
+
+### Versionamento
+
+- `VERSION 0.36.0 → 0.36.1`.
