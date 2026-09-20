@@ -54,6 +54,7 @@ impl<'a> LightingRegistries<'a> {
     }
 }
 
+#[cfg(test)]
 pub(super) fn relax(
     world: &mut VoxelWorld,
     blocks: &BlockRegistry,

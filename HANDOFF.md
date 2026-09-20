@@ -5342,3 +5342,16 @@ Correção:
 - `relax` agora é importado apenas sob `#[cfg(test)]`;
 - runtime continua sem path de lighting inicial não-budgeted;
 - `VERSION` permanece `0.35.6`.
+
+
+### Quarta correção de integração CI do checkpoint 151
+
+Com a runtime API antiga removida, `propagation::relax()` também ficou exclusivamente test-only.
+
+Correção:
+
+- `relax()` agora é compilado somente sob `#[cfg(test)]`;
+- `relax_budgeted()` é a única propagation entrypoint no build runtime;
+- testes existentes continuam podendo usar a wrapper síncrona;
+- nenhuma lógica de iluminação mudou;
+- `VERSION` permanece `0.35.6`.
