@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.38.0`. HEAD funcional `c504e2c5a13098a8332930c49722e09d4882d458`. CI push `35535128155` e PR `35535130905`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Fog adaptativa esconde a frontier ainda não publicada; Volcano usa sky/fog neutros em cinza; Witchwood e Enchanted Forest são mutuamente `avoidNear`; fluidos authored de chunks novos agora fazem **full settling até fixed point** antes de lighting/primeiro mesh, usando o mesmo solver runtime, budgetado entre frames, sem promover chunks derivados a persistentes. `source` não flui em `source` e source pool não conta como downhill drop. Não houve `cargo test`, `cargo run` nem QA Windows.
+**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.39.0`. HEAD funcional `45e273970231e64e9b9044d4c0ca98a288a87214`. CI push `35535600959` e PR `35535603233`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Todo chunk recém-gerado, inclusive streaming em Gameplay, permanece atrás do gate de full fluid settling até fixed point antes de lighting/ready/primeiro mesh; selection rebuild não pode contornar esse gate. World Selection possui botão ao lado de Return para abrir a pasta canônica `worlds` no Explorer. Fog adaptativa, Volcano sky/fog cinza e Witchwood↔Enchanted Forest avoidNear permanecem ativos. Não houve `cargo test`, `cargo run` nem QA Windows.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.34.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **Estado mais recente em `develop`: comparação/correção do save game em andamento; HEAD funcional ainda não versionado `bd713963b9bbb8f69eeeb6df6b7bf7aa2773152f`.** CI `35413383474` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Já foram corrigidas persistência de scheduled fluid work, health do player, creatures e lock cross-process do diretório do mundo. Ainda NÃO foram implementados selected hotbar slot, rotação/look do player, autosave disparado somente pela passagem do clock, nem a migração do snapshot global para storage incremental por chunk/region. **Não houve bump de VERSION neste checkpoint porque o bloco de save foi interrompido antes do fechamento completo.** Não houve `cargo test`, `cargo run` ou QA Windows.
 
@@ -6686,3 +6686,95 @@ Não houve `cargo test`, `cargo run` nem QA Windows.
    - não deve ocorrer hitch longo porque settling continua budgetado.
 5. Topology posterior em Gameplay:
    - quebrar suporte/abrir passagem deve reativar o solver e permitir novo spread.
+
+
+## Checkpoint 168 — 2026-09-20: settling obrigatório em todo chunk gerado + botão para abrir pasta dos saves [FEATURE/FIX; VERSION 0.39.0; CI VERDE]
+
+### Full settling em todo chunk recém-gerado
+
+O requisito foi reafirmado: fluid settling não é apenas parte do bootstrap inicial. **Toda saída nova de worldgen precisa estabilizar seus fluidos antes da primeira publicação**, inclusive chunks gerados durante streaming em Gameplay.
+
+Auditoria dos owners mostrou dois caminhos normais que integram `ChunkGenerationTasks`:
+
+1. bootstrap em `setup::progress::generation`;
+2. streaming em `streaming::generation`.
+
+Bootstrap já passa por:
+
+`Generating → SettlingFluids → Lighting → Meshing → Spawning`.
+
+Streaming já passa por:
+
+`generation result → insert resident chunk → GeneratedFluidSettling → seed lighting/runtime frontier → ready → initial mesh`.
+
+Chunks apenas restaurados/persistidos não são worldgen novo e portanto não rerodam settling.
+
+### Bypass encontrado em selection rebuild
+
+A auditoria encontrou um edge case real que podia quebrar a garantia durante Gameplay:
+
+- um generation result era integrado ao `VoxelWorld` e ficava residente enquanto `GeneratedFluidSettling` ainda o possuía;
+- antes da publicação, o player podia mover/alterar a seleção;
+- `rebuild_queue()` incluía todo coord sem render entity novamente em `pending`;
+- o dispatcher genérico via o chunk como resident/persisted;
+- esse caminho podia chamar lighting + `mark_ready()` antes do settling terminar.
+
+Correção:
+
+- `GeneratedFluidSettling::contains(coord)` expõe ownership do gate;
+- selection rebuild exclui coords ainda owned pelo settling;
+- dispatcher também ignora defensivamente uma entrada stale de pending que ainda pertença ao settling;
+- `ChunkStreamingState::mark_ready()` contém assert que proíbe publicar um chunk enquanto settling ainda o possui.
+
+Assim o invariant agora existe no código, não apenas na ordem feliz do pipeline.
+
+### Botão Abrir Pasta dos Saves
+
+Na tela World Selection / Load Worlds:
+
+- footer agora tem `Return` e `Open Saves Folder` lado a lado, usando o button padrão do design system;
+- novas traduções EN/PT-BR/ES:
+  - `worldSelection.openSavesFolder`;
+  - `worldSelection.openSavesFolderError`;
+- ação `WorldSelectionAction::OpenSavesFolder` funciona independentemente de uma load task estar em andamento;
+- falha de abertura aparece no feedback/error existente da tela.
+
+Owner de filesystem:
+
+- `save_catalog::open_worlds_directory()` reutiliza `WORLDS_DIRECTORY`;
+- cria a pasta se ela ainda não existir;
+- resolve caminho absoluto normal por `current_dir().join(WORLDS_DIRECTORY)`;
+- Windows usa `explorer.exe`;
+- macOS usa `open`;
+- Unix usa `xdg-open`;
+- foi evitado `fs::canonicalize()` no Windows porque pode produzir path com prefixo `\\?\`, que não é um formato confiável para a linha de comando do Explorer.
+
+### Commits / versão
+
+- `0858690254db7fe00a28f0e53479ecca6fec941c` — botão da pasta de saves, traduções e invariant arquitetural; `VERSION 0.39.0`;
+- `298150b6625e3dc23d41158a54445d731cdb1da0` — path compatível com Explorer;
+- `45e273970231e64e9b9044d4c0ca98a288a87214` — fecha bypass de settling durante selection rebuild; HEAD funcional final antes deste handoff.
+
+### CI
+
+HEAD funcional `45e273970231e64e9b9044d4c0ca98a288a87214`:
+
+- push CI `35535600959`: **success**;
+- PR CI `35535603233`: **success**;
+- localization audit: success;
+- Clippy rigoroso: success;
+- `cargo check --locked`: success.
+
+Não houve `cargo test`, `cargo run` nem QA Windows.
+
+### QA prioritária
+
+1. Entrar num mundo e caminhar continuamente para área nunca gerada:
+   - chunks novos devem fazer full settling antes de aparecer;
+   - mover durante o settling não pode publicar o chunk cedo.
+2. Aproximar-se de Volcano/Ocean/Lake novos:
+   - primeiro mesh deve conter estado já estabilizado dentro do batch recém-gerado.
+3. World Selection:
+   - botão deve aparecer ao lado de Return;
+   - no Windows deve abrir a pasta real `worlds` no Explorer;
+   - se a pasta não existir, deve ser criada antes de abrir.
