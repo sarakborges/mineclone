@@ -3245,3 +3245,36 @@ Correção aplicada sem suppression:
   - `cargo check --locked`.
 - PR CI equivalente ainda estava em execução no instante desta anotação, mas o pipeline de push validou o mesmo commit.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+## Checkpoint 121 — 2026-09-20: engineering best-practices canon adopted [DOC/PROCESS BLOCK]
+
+### Pedido
+
+O usuário forneceu um guia technology-agnostic de boas práticas cobrindo responsabilidade, ownership, boundaries, composição, modelagem de estado, async/concurrency, cache, determinismo, performance, testes, refactoring triggers e review checklist, e pediu que ele fosse aplicado ao trabalho em andamento.
+
+### Aplicação
+
+- Novo `ENGINEERING_PRACTICES.md` adapta o guia ao Asteria sem transformar `ARCHITECTURE.md` em um arquivo monolítico.
+- `ARCHITECTURE.md` declara os dois documentos conjuntamente normativos:
+  - `ARCHITECTURE.md` continua autoritativo para contratos específicos do Asteria;
+  - `ENGINEERING_PRACTICES.md` define as práticas gerais reutilizáveis.
+- Em conflito/aparente sobreposição, a regra específica do Asteria vence.
+- O refactor/performance em andamento passa a revisar explicitamente:
+  - single responsibility e owner único;
+  - boundaries/dependency direction;
+  - contexts estreitos;
+  - change-driven work;
+  - cache contracts;
+  - bounded async/work budgets;
+  - stale result protection;
+  - deterministic ordering;
+  - optimize-the-owner-of-the-cost;
+  - regression/invariant tests;
+  - refactoring triggers e code-review checklist.
+
+### Versionamento
+
+- `VERSION`: **0.34.9 → 0.34.10**.
+- Nenhuma mudança de runtime neste checkpoint; o bump é patch por alteração normativa/documental do projeto.
+- O próximo bloco funcional de performance deverá partir deste canon e atualizar novamente o handoff.

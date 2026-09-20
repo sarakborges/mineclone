@@ -1,5 +1,7 @@
 # Asteria Architecture Canon
 
+`ENGINEERING_PRACTICES.md` is the companion project-wide engineering standard. These documents are jointly normative: this file owns Asteria-specific domain/runtime contracts, while the companion guide owns reusable responsibility, ownership, boundary, concurrency, caching, testing, refactoring, and performance practices. When they overlap, follow the more specific Asteria rule here.
+
 This document defines the architectural rules that new code and refactors in Asteria must preserve. It is intentionally concrete: when a shared primitive or context already exists, new features should extend it instead of recreating the same behavior locally.
 
 ## 1. Single authoritative owner
