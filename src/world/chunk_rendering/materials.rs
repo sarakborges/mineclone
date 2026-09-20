@@ -16,6 +16,41 @@ use crate::{
 
 const TEXTURE_LAYER_DEPTH_BIAS: f32 = 2.0;
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum TerrainAlphaKey {
+    Opaque,
+    Mask(u32),
+    Blend,
+}
+
+impl TerrainAlphaKey {
+    fn for_layer(definition: &BlockDefinition, layer_index: usize) -> Self {
+        if layer_index > 0 || definition.alpha_blend {
+            Self::Blend
+        } else if let Some(cutoff) = definition.alpha_cutoff {
+            Self::Mask(cutoff.to_bits())
+        } else {
+            Self::Opaque
+        }
+    }
+
+    fn alpha_mode(self) -> AlphaMode {
+        match self {
+            Self::Opaque => AlphaMode::Opaque,
+            Self::Mask(cutoff) => AlphaMode::Mask(f32::from_bits(cutoff)),
+            Self::Blend => AlphaMode::Blend,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct TerrainMaterialKey {
+    texture: Option<String>,
+    tint_enabled: bool,
+    alpha: TerrainAlphaKey,
+    layer_index: usize,
+}
+
 #[derive(Resource, Clone)]
 pub struct TerrainMaterials {
     blocks: HashMap<String, BlockFaces<Vec<Handle<TerrainMaterial>>>>,
@@ -47,6 +82,7 @@ impl TerrainMaterials {
             .map(|texture| asset_server.load(texture))
             .collect();
 
+        let mut material_cache = HashMap::<TerrainMaterialKey, Handle<TerrainMaterial>>::new();
         let blocks = blocks
             .iter()
             .map(|definition| {
@@ -56,6 +92,7 @@ impl TerrainMaterials {
                         face,
                         asset_server,
                         materials,
+                        &mut material_cache,
                         roughness,
                         metallic,
                     )
@@ -89,6 +126,7 @@ fn create_material_layers(
     face: BlockFace,
     asset_server: &AssetServer,
     materials: &mut Assets<TerrainMaterial>,
+    material_cache: &mut HashMap<TerrainMaterialKey, Handle<TerrainMaterial>>,
     roughness: f32,
     metallic: f32,
 ) -> Vec<Handle<TerrainMaterial>> {
@@ -100,6 +138,7 @@ fn create_material_layers(
             0,
             asset_server,
             materials,
+            material_cache,
             roughness,
             metallic,
         )];
@@ -115,6 +154,7 @@ fn create_material_layers(
                 layer_index,
                 asset_server,
                 materials,
+                material_cache,
                 roughness,
                 metallic,
             )
@@ -128,24 +168,30 @@ fn create_material(
     layer_index: usize,
     asset_server: &AssetServer,
     materials: &mut Assets<TerrainMaterial>,
+    material_cache: &mut HashMap<TerrainMaterialKey, Handle<TerrainMaterial>>,
     roughness: f32,
     metallic: f32,
 ) -> Handle<TerrainMaterial> {
-    let alpha_mode = if layer_index == 0 {
-        definition.alpha_mode(1.0)
-    } else {
-        AlphaMode::Blend
+    let alpha = TerrainAlphaKey::for_layer(definition, layer_index);
+    let key = TerrainMaterialKey {
+        texture: layer.map(|layer| layer.texture.clone()),
+        tint_enabled: layer.is_some_and(|layer| layer.dyable),
+        alpha,
+        layer_index,
     };
-    let base_color_texture = layer.map(|layer| load_block_texture_layer(asset_server, layer));
-    let tint_enabled = layer.is_some_and(|layer| layer.dyable) as u8 as f32;
+    if let Some(existing) = material_cache.get(&key) {
+        return existing.clone();
+    }
 
-    materials.add(TerrainMaterial {
+    let base_color_texture = layer.map(|layer| load_block_texture_layer(asset_server, layer));
+    let tint_enabled = key.tint_enabled as u8 as f32;
+    let material = materials.add(TerrainMaterial {
         base: StandardMaterial {
             base_color: Color::WHITE,
             base_color_texture,
             perceptual_roughness: roughness,
             metallic,
-            alpha_mode,
+            alpha_mode: alpha.alpha_mode(),
             depth_bias: layer_index as f32 * TEXTURE_LAYER_DEPTH_BIAS,
             fog_enabled: true,
             unlit: true,
@@ -155,7 +201,9 @@ fn create_material(
             tint_enabled,
             ..default()
         },
-    })
+    });
+    material_cache.insert(key, material.clone());
+    material
 }
 
 #[derive(Resource, Clone)]

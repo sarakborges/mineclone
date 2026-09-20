@@ -158,6 +158,8 @@ Semantic/internal color is HSI-first.
 
 Rendering systems should avoid rebuilding expensive material/model/tint state every frame when the authoritative inputs have not changed. Use Bevy change detection, snapshot/local caches, spatial-cell caches, or event-driven refreshes as appropriate.
 
+Terrain material construction should intern exact-identical block material states instead of allocating one asset per block face. Sharing is valid only when texture path, tint behavior, alpha semantics, layer/depth-bias, and the construction-wide material parameters are identical; material interning must never merge semantically different layers.
+
 ## 9. Lifecycle helpers
 
 Prefer the existing generic lifecycle primitives when the operation is truly generic.

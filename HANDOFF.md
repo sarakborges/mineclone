@@ -3548,3 +3548,59 @@ Correção:
 - nenhum `allow(clippy::type_complexity)` foi adicionado;
 - comportamento e filtros permanecem idênticos;
 - `VERSION` permanece `0.34.15`.
+
+
+### CI verde do checkpoint 126
+
+- Push CI `35511577443`: **success**.
+- PR CI `35511579777`: **success**.
+- O topo `829d9173db4b85b9324c9a3b4d6984bc8c8310ef` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.15`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 127 — 2026-09-20: exact terrain-material interning [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`TerrainMaterials::from_registry()` criava um novo `TerrainMaterial` para cada face/layer de cada bloco, mesmo quando vários faces/blocos possuíam exatamente o mesmo estado de material. Isso aumentava `Assets<TerrainMaterial>` e o número de material/bind-group states que o sync global de iluminação precisa tocar.
+
+### Implementação
+
+A construção de `TerrainMaterials` agora possui um interner local, válido apenas durante `from_registry()`.
+
+Chave exata:
+
+- texture path (ou ausência de textura);
+- `dyable` / tint-enabled;
+- alpha semantics:
+  - Opaque;
+  - Mask com cutoff exato em bits;
+  - Blend;
+- layer index, que também define o depth bias.
+
+`roughness` e `metallic` não entram na chave porque são parâmetros únicos da própria chamada `from_registry()`; portanto todo item do interner já compartilha esses valores por construção.
+
+Quando a chave coincide:
+
+- reutiliza o mesmo `Handle<TerrainMaterial>`;
+- não cria novo material asset;
+- não recarrega a mesma textura para aquele material;
+- não altera a lista face→layers observada pelos meshes.
+
+Fluid materials continuam independentes porque possuem base color/opacity/double-sided semantics diferentes.
+
+### Decisão sobre sky_light_factor
+
+Não movi `sky_light_factor` para uniform global neste bloco. Fazer isso corretamente exige alterar a boundary de render/view bind groups; será tratado somente com profiling/evidência suficiente, não como micro-otimização especulativa.
+
+### Arquitetura / práticas
+
+- `ARCHITECTURE.md` documenta exact material interning.
+- reuse only a real invariant: materiais só compartilham quando o estado renderizado é idêntico;
+- public/render mapping permanece igual;
+- nenhuma cache runtime ou invalidation policy adicional foi criada.
+
+### Versionamento
+
+- `VERSION`: **0.34.15 → 0.34.16**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
