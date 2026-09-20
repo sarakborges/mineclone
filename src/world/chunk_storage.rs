@@ -16,8 +16,7 @@ pub(crate) fn generation_directory_name(generation: u64) -> String { format!("ge
 pub(crate) fn staging_generation_directory_name(generation: u64) -> String { format!(".generation-{generation}.tmp") }
 
 fn is_real_directory(metadata: &fs::Metadata) -> bool {
-    let file_type = metadata.file_type();
-    file_type.is_dir() && !file_type.is_symlink()
+    metadata.is_dir()
 }
 
 fn checked_directory_slot(world_directory: &Path, relative: &Path) -> io::Result<PathBuf> {
