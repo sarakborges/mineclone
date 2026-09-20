@@ -4484,3 +4484,61 @@ Todos os budgets, maximum-items, preemption rules e task limits foram mantidos n
 - `ARCHITECTURE.md` documenta ownership por pipeline stage mantendo orchestrator explícito.
 - `VERSION`: **0.34.27 → 0.34.28**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 139
+
+- Push CI `35518106747`: **success**.
+- PR CI `35518108350`: **success**.
+- O topo `46d8bd14c15d6c0c1573d9866e561e0441b79f39` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.28`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 140 — 2026-09-20: remesh queue semantics extraídas [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`chunk_remesh.rs` misturava dois owners:
+
+- semântica das quatro filas de remesh;
+- execution/scheduling de rebuilds.
+
+A fila possui invariantes próprias: dedup, priority promotion, geometry→lighting coalescing, fluid independence, round-robin background fairness e renderability scan caching.
+
+### Implementação
+
+Novo `chunk_remesh/queue.rs` possui:
+
+- `ChunkRemeshQueue`;
+- geometry/fluid/immediate-geometry/lighting queues;
+- enqueue/remove/coalescing rules;
+- task-kind requeue;
+- background-kind fairness;
+- render-pool filtering;
+- queue+pool revision scan-miss caches;
+- testes de invariantes da fila.
+
+`chunk_remesh.rs` agora possui apenas:
+
+- immediate geometry execution;
+- task snapshot sync;
+- completed-task integration;
+- async remesh dispatch;
+- per-frame budgets.
+
+O parent reexporta `ChunkRemeshQueue` com a mesma API crate-level.
+
+### Semântica preservada
+
+- quatro caminhos permanecem separados;
+- lighting coalesce terrain geometry sem consumir fluid work;
+- immediate geometry não consome fluid;
+- fairness continua round-robin entre fluid/lighting/geometry;
+- scan-miss invalidation continua por queue revision + render-pool membership revision;
+- budgets/task limits não mudaram.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` documenta queue semantics vs execution policy.
+- `VERSION`: **0.34.28 → 0.34.29**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
