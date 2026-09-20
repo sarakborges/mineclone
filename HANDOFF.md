@@ -4542,3 +4542,64 @@ O parent reexporta `ChunkRemeshQueue` com a mesma API crate-level.
 - `ARCHITECTURE.md` documenta queue semantics vs execution policy.
 - `VERSION`: **0.34.28 → 0.34.29**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 140
+
+- Push CI `35518264802`: **success**.
+- PR CI `35518267116`: **success**.
+- O topo `93a632567dc099a32453276ed388af7b472e67ae` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.29`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 141 — 2026-09-20: fluid scheduler state encapsulado [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`fluid_updates.rs` misturava o estado autoritativo do scheduler com processing/diagnostics. Diagnostics e topology processing liam diretamente collections internas como `topology_queue`, `wake_queue`, `scheduled_due` e `dormant_scheduled`.
+
+### Implementação
+
+Novo `fluid_updates/state.rs` possui:
+
+- `FluidTickKey`;
+- fair wake queue por chunk;
+- equal-due scheduled bucket round-robin por chunk;
+- `PendingFluidUpdates`;
+- dormant unloaded ticks;
+- `SavedFluidUpdates` + serialization/restore;
+- saved fluid ID/position validation;
+- catch-up threshold;
+- testes de queue/scheduling invariants.
+
+O parent reexporta `PendingFluidUpdates` e `SavedFluidUpdates`, preservando todos os paths externos.
+
+### Encapsulamento
+
+Processing usa apenas capabilities:
+
+- `pop_topology()`;
+- `pop_wake()`;
+- `pop_due()`;
+- `schedule_at()`;
+- `schedule_neighborhood()`;
+- `defer_unloaded()`;
+- `should_catch_up()`.
+
+Diagnostics usa `PendingFluidBacklog`, read-model com topology/wake/scheduled/dormant counts. Nenhum consumer lê collections internas.
+
+### Semântica preservada
+
+- scheduled ticks continuam keyed por fluid + voxel;
+- earliest due wins;
+- equal-due fairness continua por chunk;
+- frontier wake fairness continua por chunk;
+- unloaded due ticks continuam dormant até residency;
+- serialization ordering/dedup não mudou;
+- solver e fluid transition rules não foram alterados.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` documenta scheduler state como owner único e backlog como read-model.
+- `VERSION`: **0.34.29 → 0.34.30**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
