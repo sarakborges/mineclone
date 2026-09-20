@@ -3686,3 +3686,13 @@ Correção:
 - a capability trata `NotFound` como cleanup já concluído e propaga outros erros;
 - `save_catalog.rs` deixou de conhecer o nome físico do lock file;
 - `VERSION` permanece `0.34.17`.
+
+
+### CI verde do checkpoint 128
+
+- Push CI `35512218627`: **success**.
+- PR CI `35512221277`: **success**.
+- O topo `acaf4b63cd8accec11cf26bcd3c2218beed522d5` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- O owner `save_catalog::locking` agora encapsula também o cleanup físico do session lock file; `save_catalog.rs` não conhece mais `SESSION_LOCK_FILE`.
+- `VERSION` permanece `0.34.17`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
