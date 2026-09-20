@@ -1,11 +1,3 @@
-//! Disk identity and publication primitives for incremental chunk storage.
-//!
-//! This module deliberately contains no runtime residency policy. The save
-//! catalog owns publication/recovery, while `DiskChunk` owns voxel encoding.
-//! Keeping coordinate-to-path mapping and generation publication here gives
-//! segmented storage one canonical filesystem boundary without teaching
-//! streaming or worldgen about files.
-
 use std::{
     collections::HashSet,
     fs::{self, OpenOptions},
@@ -18,146 +10,138 @@ use bevy::prelude::IVec3;
 use crate::voxel::chunk_disk::DiskChunk;
 
 const CHUNK_DIRECTORY: &str = "chunks";
-const CHUNK_FILE_EXTENSION: &str = "json";
-const GENERATION_DIRECTORY_PREFIX: &str = "generation-";
-const STAGING_DIRECTORY_PREFIX: &str = ".generation-";
-const STAGING_DIRECTORY_SUFFIX: &str = ".tmp";
+const CHUNK_FILE_EXTENSION: &str = "chunk.json";
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct ChunkDiskIdentity(IVec3);
+pub(crate) fn generation_directory_name(generation: u64) -> String { format!("generation-{generation}") }
+pub(crate) fn staging_generation_directory_name(generation: u64) -> String { format!(".generation-{generation}.tmp") }
 
-impl ChunkDiskIdentity {
-    pub(crate) fn new(coord: IVec3) -> io::Result<Self> {
-        if coord.y < 0 {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "chunk disk identity cannot use a negative Y coordinate"));
-        }
-        Ok(Self(coord))
-    }
-
-    pub(crate) fn from_disk_coord(coord: [i32; 3]) -> io::Result<Self> {
-        Self::new(IVec3::new(coord[0], coord[1], coord[2]))
-    }
-
-    pub(crate) fn from_disk_chunk(chunk: &DiskChunk) -> io::Result<Self> {
-        Self::from_disk_coord(chunk.coord)
-    }
-
-    pub(crate) fn coord(self) -> IVec3 { self.0 }
-
-    pub(crate) fn relative_path(self) -> PathBuf {
-        Path::new(CHUNK_DIRECTORY).join(format!("x{}_y{}_z{}.{}", self.0.x, self.0.y, self.0.z, CHUNK_FILE_EXTENSION))
-    }
-
-    pub(crate) fn generation_relative_path(self, generation: u64) -> PathBuf {
-        generation_directory(generation).join(self.relative_path())
-    }
-}
-
-pub(crate) fn generation_directory(generation: u64) -> PathBuf {
-    PathBuf::from(format!("{GENERATION_DIRECTORY_PREFIX}{generation}"))
-}
-
-pub(crate) fn generation_staging_directory(generation: u64) -> PathBuf {
-    PathBuf::from(format!("{STAGING_DIRECTORY_PREFIX}{generation}{STAGING_DIRECTORY_SUFFIX}"))
-}
-
-pub(crate) fn validate_generation_directory_slot(path: &Path) -> io::Result<()> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => Ok(()),
-        Ok(_) => Err(io::Error::new(io::ErrorKind::InvalidData, "chunk generation path must be a real directory")),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+fn checked_directory_slot(world_directory: &Path, relative: &Path) -> io::Result<PathBuf> {
+    let path = world_directory.join(relative);
+    match fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => Ok(path),
+        Ok(_) => Err(io::Error::new(io::ErrorKind::InvalidData, format!("chunk storage directory slot is not a real directory: {}", path.display()))),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(path),
         Err(error) => Err(error),
     }
 }
 
-/// Assemble a complete immutable chunk generation privately and atomically
-/// promote its directory identity. The catalog still owns the later manifest
-/// commit, so a crash after this function leaves an unreferenced generation,
-/// never a manifest pointing at a partially written chunk set.
-pub(crate) fn publish_chunk_generation(world_directory: &Path, generation: u64, chunks: &[DiskChunk]) -> io::Result<()> {
-    let staging = world_directory.join(generation_staging_directory(generation));
-    let published = world_directory.join(generation_directory(generation));
-    validate_generation_directory_slot(&staging)?;
-    validate_generation_directory_slot(&published)?;
-    if published.exists() {
-        return Err(io::Error::new(io::ErrorKind::AlreadyExists, "chunk generation is already published"));
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct ChunkDiskIdentity { chunk_position: IVec3 }
+impl ChunkDiskIdentity {
+    pub(crate) fn new(chunk_position: IVec3) -> Self { Self { chunk_position } }
+    pub(crate) fn from_disk_chunk(chunk: &DiskChunk) -> Self { Self::new(chunk.chunk_position()) }
+    pub(crate) fn chunk_position(self) -> IVec3 { self.chunk_position }
+    pub(crate) fn relative_path(self) -> PathBuf {
+        let position = self.chunk_position;
+        PathBuf::from(CHUNK_DIRECTORY).join(position.x.to_string()).join(position.y.to_string()).join(format!("{}.{}", position.z, CHUNK_FILE_EXTENSION))
     }
-    if staging.exists() { fs::remove_dir_all(&staging)?; }
+    pub(crate) fn generation_relative_path(self, generation: u64) -> PathBuf { PathBuf::from(generation_directory_name(generation)).join(self.relative_path()) }
+}
 
+pub(crate) fn publish_generation_chunks(world_directory: &Path, generation: u64, chunks: &[DiskChunk]) -> io::Result<()> {
+    let published_relative = PathBuf::from(generation_directory_name(generation));
+    let staging_relative = PathBuf::from(staging_generation_directory_name(generation));
+    let published = checked_directory_slot(world_directory, &published_relative)?;
+    let staging = checked_directory_slot(world_directory, &staging_relative)?;
+    if published.exists() || staging.exists() {
+        return Err(io::Error::new(io::ErrorKind::AlreadyExists, format!("chunk generation {generation} already has a storage slot")));
+    }
     fs::create_dir(&staging)?;
-    let chunks_directory = staging.join(CHUNK_DIRECTORY);
-    fs::create_dir(&chunks_directory)?;
     let result = (|| {
         let mut identities = HashSet::with_capacity(chunks.len());
         for chunk in chunks {
-            let identity = ChunkDiskIdentity::from_disk_chunk(chunk)?;
+            let identity = ChunkDiskIdentity::from_disk_chunk(chunk);
             if !identities.insert(identity) {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "chunk generation contains a duplicate coordinate"));
+                return Err(io::Error::new(io::ErrorKind::InvalidData, format!("duplicate persisted chunk coordinate: {:?}", identity.chunk_position())));
             }
             let path = staging.join(identity.relative_path());
-            let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
-            serde_json::to_writer(&mut file, chunk).map_err(io::Error::other)?;
-            file.write_all(b"\n")?;
+            let parent = path.parent().ok_or_else(|| io::Error::other("chunk storage path has no parent"))?;
+            fs::create_dir_all(parent)?;
+            let payload = serde_json::to_vec(chunk).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            let mut file = OpenOptions::new().write(true).create_new(true).open(&path)?;
+            file.write_all(&payload)?;
             file.sync_all()?;
-            debug_assert_eq!(world_directory.join(identity.generation_relative_path(generation)), published.join(identity.relative_path()));
         }
-        sync_directory(&chunks_directory)?;
-        sync_directory(&staging)?;
+        sync_directory_tree(&staging)?;
         fs::rename(&staging, &published)?;
         sync_directory(world_directory)
     })();
-    if result.is_err() { let _ = fs::remove_dir_all(&staging); }
-    result
+    if let Err(error) = result {
+        if fs::symlink_metadata(&staging).is_ok_and(|metadata| metadata.file_type().is_dir() && !metadata.file_type().is_symlink()) {
+            let _ = fs::remove_dir_all(&staging);
+        }
+        return Err(error);
+    }
+    Ok(())
 }
 
-pub(crate) fn remove_chunk_generation(world_directory: &Path, generation: u64) -> io::Result<()> {
-    let path = world_directory.join(generation_directory(generation));
-    validate_generation_directory_slot(&path)?;
-    match fs::remove_dir_all(path) {
-        Ok(()) => Ok(()),
+pub(crate) fn remove_generation_chunks(world_directory: &Path, generation: u64) -> io::Result<()> {
+    let relative = PathBuf::from(generation_directory_name(generation));
+    let path = checked_directory_slot(world_directory, &relative)?;
+    match fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => { fs::remove_dir_all(path)?; sync_directory(world_directory) }
+        Ok(_) => Err(io::Error::new(io::ErrorKind::InvalidData, "chunk generation storage must be a real directory")),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error),
     }
 }
 
-fn sync_directory(path: &Path) -> io::Result<()> { fs::File::open(path)?.sync_all() }
+fn sync_directory_tree(directory: &Path) -> io::Result<()> {
+    let mut directories = vec![directory.to_path_buf()];
+    let mut index = 0;
+    while index < directories.len() {
+        let current = directories[index].clone(); index += 1;
+        for entry in fs::read_dir(&current)? { let entry = entry?; if entry.file_type()?.is_dir() { directories.push(entry.path()); } }
+    }
+    for directory in directories.into_iter().rev() { sync_directory(&directory)?; }
+    Ok(())
+}
+fn sync_directory(directory: &Path) -> io::Result<()> { fs::File::open(directory)?.sync_all() }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn identity_round_trips_coordinate_and_uses_canonical_path() {
-        let coord = IVec3::new(-12, 3, 45);
-        let identity = ChunkDiskIdentity::new(coord).expect("valid chunk coordinate");
-        assert_eq!(identity.coord(), coord);
-        assert_eq!(identity.relative_path(), Path::new("chunks").join("x-12_y3_z45.json"));
+    fn temp_directory(label: &str) -> PathBuf {
+        let unique = format!("asteria-{label}-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("clock must be after epoch").as_nanos());
+        std::env::temp_dir().join(unique)
     }
-
     #[test]
-    fn disk_coordinate_uses_the_same_canonical_identity() {
-        let identity = ChunkDiskIdentity::from_disk_coord([-12, 3, 45]).expect("portable disk coordinate must map to storage identity");
-        assert_eq!(identity.coord(), IVec3::new(-12, 3, 45));
+    fn chunk_identity_is_stable_across_disk_conversion() {
+        let chunk = DiskChunk::new(IVec3::new(-7, 3, 12), Vec::new()); let identity = ChunkDiskIdentity::from_disk_chunk(&chunk);
+        assert_eq!(identity.chunk_position(), IVec3::new(-7, 3, 12)); assert_eq!(identity, ChunkDiskIdentity::new(IVec3::new(-7, 3, 12)));
     }
-
     #[test]
-    fn generation_paths_are_distinct_and_canonical() {
-        let identity = ChunkDiskIdentity::new(IVec3::new(-12, 3, 45)).expect("valid chunk coordinate");
-        assert_eq!(identity.generation_relative_path(7), Path::new("generation-7").join("chunks").join("x-12_y3_z45.json"));
-        assert_eq!(generation_directory(7), Path::new("generation-7"));
-        assert_eq!(generation_staging_directory(7), Path::new(".generation-7.tmp"));
-        assert_ne!(generation_staging_directory(7), generation_directory(7));
+    fn chunk_identity_maps_to_canonical_relative_path() {
+        let identity = ChunkDiskIdentity::new(IVec3::new(-7, 3, 12));
+        assert_eq!(identity.relative_path(), PathBuf::from("chunks").join("-7").join("3").join("12.chunk.json"));
     }
-
     #[test]
-    fn identity_rejects_negative_vertical_coordinate() {
-        let error = ChunkDiskIdentity::new(IVec3::new(0, -1, 0)).expect_err("negative chunk Y must never reach disk identity");
-        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    fn generation_directory_identity_is_canonical() { assert_eq!(generation_directory_name(42), "generation-42"); }
+    #[test]
+    fn staging_generation_directory_identity_is_distinct() { assert_eq!(staging_generation_directory_name(42), ".generation-42.tmp"); assert_ne!(staging_generation_directory_name(42), generation_directory_name(42)); }
+    #[test]
+    fn chunk_identity_scopes_path_to_save_generation() {
+        let identity = ChunkDiskIdentity::new(IVec3::new(-7, 3, 12));
+        assert_eq!(identity.generation_relative_path(42), PathBuf::from("generation-42").join("chunks").join("-7").join("3").join("12.chunk.json"));
     }
-
     #[test]
-    fn publication_entrypoints_are_compiled_with_the_boundary() {
-        let _publish: fn(&Path, u64, &[DiskChunk]) -> io::Result<()> = publish_chunk_generation;
-        let _remove: fn(&Path, u64) -> io::Result<()> = remove_chunk_generation;
+    fn directory_slot_rejects_regular_files() {
+        let root = temp_directory("chunk-slot-file"); fs::create_dir_all(&root).expect("temp root must be created"); let slot = PathBuf::from(generation_directory_name(5)); fs::write(root.join(&slot), b"not a directory").expect("fixture file must be written");
+        let error = checked_directory_slot(&root, &slot).expect_err("file slot must be rejected"); assert_eq!(error.kind(), io::ErrorKind::InvalidData); fs::remove_dir_all(root).expect("temp root must be removed");
+    }
+    #[test]
+    fn publishes_generation_through_private_staging_directory() {
+        let root = temp_directory("chunk-publish"); fs::create_dir_all(&root).expect("temp root must be created");
+        let chunks = [DiskChunk::new(IVec3::new(-1, 0, 2), Vec::new()), DiskChunk::new(IVec3::new(3, 4, -5), Vec::new())];
+        publish_generation_chunks(&root, 9, &chunks).expect("generation must publish"); assert!(!root.join(staging_generation_directory_name(9)).exists());
+        for chunk in &chunks { let identity = ChunkDiskIdentity::from_disk_chunk(chunk); let path = root.join(identity.generation_relative_path(9)); assert!(path.is_file()); let decoded: DiskChunk = serde_json::from_slice(&fs::read(path).expect("published chunk must be readable")).expect("published chunk must decode"); assert_eq!(decoded.chunk_position(), chunk.chunk_position()); }
+        remove_generation_chunks(&root, 9).expect("generation must be removable"); assert!(!root.join(generation_directory_name(9)).exists()); fs::remove_dir_all(root).expect("temp root must be removed");
+    }
+    #[test]
+    fn duplicate_chunk_coordinates_abort_without_publishing() {
+        let root = temp_directory("chunk-duplicate"); fs::create_dir_all(&root).expect("temp root must be created");
+        let chunks = [DiskChunk::new(IVec3::new(1, 2, 3), Vec::new()), DiskChunk::new(IVec3::new(1, 2, 3), Vec::new())];
+        let error = publish_generation_chunks(&root, 11, &chunks).expect_err("duplicate coordinates must be rejected"); assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(!root.join(generation_directory_name(11)).exists()); assert!(!root.join(staging_generation_directory_name(11)).exists()); fs::remove_dir_all(root).expect("temp root must be removed");
     }
 }
