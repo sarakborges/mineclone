@@ -45,6 +45,7 @@ struct StructureRuntime {
     horizontal_footprint: Vec<IVec2>,
     support_offsets: Vec<IVec2>,
     column_spans: Vec<StructureColumnSpan>,
+    column_voxels: HashMap<(i32, i32), Vec<StructureVoxel>>,
     min_y_offset: i32,
     max_y_offset: i32,
 }
@@ -129,6 +130,14 @@ impl StructureDefinition {
         &self.runtime.column_spans
     }
 
+    pub(crate) fn column_voxels(&self, offset: IVec2) -> &[StructureVoxel] {
+        self.runtime
+            .column_voxels
+            .get(&(offset.x, offset.y))
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
     fn rebuild_runtime(&mut self) {
         let mut voxels = Vec::new();
         let mut horizontal_minimum = IVec2::splat(i32::MAX);
@@ -179,10 +188,12 @@ impl StructureDefinition {
         let mut footprint = HashSet::new();
         let mut supports = HashSet::new();
         let mut spans = HashMap::<(i32, i32), (i32, i32)>::new();
+        let mut column_voxels = HashMap::<(i32, i32), Vec<StructureVoxel>>::new();
 
         for voxel in &voxels {
             let horizontal = (voxel.offset.x, voxel.offset.z);
             footprint.insert(horizontal);
+            column_voxels.entry(horizontal).or_default().push(*voxel);
             if voxel.offset.y == min_y_offset {
                 supports.insert(horizontal);
             }
@@ -207,6 +218,10 @@ impl StructureDefinition {
             .collect::<Vec<_>>();
         support_offsets.sort_by_key(|offset| (offset.y, offset.x));
 
+        for column in column_voxels.values_mut() {
+            column.sort_unstable_by_key(|voxel| voxel.offset.y);
+        }
+
         let mut column_spans = spans
             .into_iter()
             .map(|((x, z), (min_y_offset, max_y_offset))| StructureColumnSpan {
@@ -224,6 +239,7 @@ impl StructureDefinition {
             horizontal_footprint,
             support_offsets,
             column_spans,
+            column_voxels,
             min_y_offset,
             max_y_offset,
         };
