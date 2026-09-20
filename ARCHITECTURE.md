@@ -205,6 +205,8 @@ Asteria targets stable 60 FPS and world streaming must protect frame time.
 
 ### Async world pipeline
 
+`streaming.rs` owns streaming state, selection orchestration, queue policy, and the cross-stage resident-lighting invariant. `streaming::generation` owns generation-task dispatch/result integration; `streaming::meshing` owns initial-mesh dispatch/result integration and loaded-neighbor render reconciliation. Keep `stream_chunks()` as the explicit stage-order orchestrator rather than hiding the pipeline behind callbacks or an event bus.
+
 Heavy generation and initial meshing belong off the main frame when they can operate on immutable inputs. The canonical pipeline is:
 
 `generation task → integrate chunk → initial lighting seed → halo snapshot → mesh task → spawn render entities`

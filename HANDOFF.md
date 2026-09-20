@@ -4413,3 +4413,74 @@ Correção:
 - `SystemTime/UNIX_EPOCH` voltam a ter owner correto no parent;
 - nenhum detalhe físico de JSON/publication voltou ao parent;
 - `VERSION` permanece `0.34.27`.
+
+
+### CI verde do checkpoint 138
+
+- Push CI `35517955553`: **success**.
+- PR CI `35517958828`: **success**.
+- O topo `20837617bf2e9b99895b1df23bf96a7f1e1ff438` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.27`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 139 — 2026-09-20: streaming pipeline dividido por lifecycle stage [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`streaming.rs` ainda possuía, no mesmo módulo:
+
+- state/queue policy;
+- selection orchestration;
+- generation task dispatch + result integration;
+- initial mesh task dispatch + result integration;
+- render-neighbor reconciliation.
+
+Essas partes mudam por motivos diferentes, embora a ordem do pipeline deva continuar explícita.
+
+### Implementação
+
+Novo `streaming/generation.rs` possui:
+
+- generation dispatch budget;
+- mesh-backlog generation cap;
+- generation-result integration budget;
+- `collect_generated_chunks()`;
+- `dispatch_generation_tasks()`.
+
+Novo `streaming/meshing.rs` possui:
+
+- initial mesh dispatch budget;
+- mesh-result integration budget;
+- `dispatch_initial_mesh_tasks()`;
+- empty-chunk render integration;
+- `collect_built_chunk_meshes()`;
+- loaded-neighbor geometry/fluid reconciliation.
+
+`streaming.rs` continua owner de:
+
+- `ChunkStreamingState`;
+- desired/retained/pending/ready/retired policy;
+- predicate scan caches;
+- player criticality;
+- selection rebuild;
+- `stream_chunks()` e sua stage order;
+- `seed_loaded_chunk_lighting()`, porque é um invariant compartilhado por generation integration e mesh dispatch.
+
+### Semântica preservada
+
+A ordem continua exatamente:
+
+1. rebuild selection quando necessário;
+2. sync generation/mesh snapshots;
+3. collect generation results;
+4. collect mesh results;
+5. dispatch initial mesh;
+6. dispatch generation.
+
+Todos os budgets, maximum-items, preemption rules e task limits foram mantidos nos mesmos valores.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` documenta ownership por pipeline stage mantendo orchestrator explícito.
+- `VERSION`: **0.34.27 → 0.34.28**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
