@@ -1,13 +1,15 @@
-//! Disk identity for the incremental chunk-storage boundary.
+//! Disk identity and publication primitives for incremental chunk storage.
 //!
 //! This module deliberately contains no runtime residency policy. The save
 //! catalog owns publication/recovery, while `DiskChunk` owns voxel encoding.
-//! Keeping the coordinate-to-path mapping here gives segmented storage one
-//! canonical identity without teaching streaming or worldgen about files.
+//! Keeping coordinate-to-path mapping and generation publication here gives
+//! segmented storage one canonical filesystem boundary without teaching
+//! streaming or worldgen about files.
 
 use std::{
-    fs,
-    io,
+    collections::HashSet,
+    fs::{self, OpenOptions},
+    io::{self, Write},
     path::{Path, PathBuf},
 };
 
@@ -61,27 +63,19 @@ impl ChunkDiskIdentity {
         ))
     }
 
-    /// Generation-scoped path used while the catalog publishes an immutable
-    /// save generation. Keeping the generation above the canonical chunk path
-    /// lets a manifest switch generations atomically without overwriting files
-    /// still referenced by retained backups.
+    /// Generation-scoped path used by an immutable published save generation.
     pub(crate) fn generation_relative_path(self, generation: u64) -> PathBuf {
         generation_directory(generation).join(self.relative_path())
     }
 }
 
 /// Canonical directory containing all chunk blobs owned by one immutable save
-/// generation. Catalog publication and pruning must use the same mapping so a
-/// generation can be removed without reconstructing chunk-path semantics.
+/// generation. Catalog publication and pruning must use the same mapping.
 pub(crate) fn generation_directory(generation: u64) -> PathBuf {
     PathBuf::from(format!("{GENERATION_DIRECTORY_PREFIX}{generation}"))
 }
 
 /// Private directory used while a generation's chunk set is being assembled.
-/// The catalog can populate this directory completely and rename it to the
-/// canonical generation directory before publishing the manifest. A crash can
-/// therefore leave only an obviously-unpublished staging directory, never a
-/// partially assembled directory with the canonical generation identity.
 pub(crate) fn generation_staging_directory(generation: u64) -> PathBuf {
     PathBuf::from(format!(
         "{STAGING_DIRECTORY_PREFIX}{generation}{STAGING_DIRECTORY_SUFFIX}"
@@ -104,6 +98,82 @@ pub(crate) fn validate_generation_directory_slot(path: &Path) -> io::Result<()> 
     }
 }
 
+/// Assemble a complete immutable chunk generation privately and atomically
+/// promote its directory identity. The catalog still owns the later manifest
+/// commit, so a crash after this function leaves an unreferenced generation,
+/// never a manifest pointing at a partially written chunk set.
+pub(crate) fn publish_chunk_generation(
+    world_directory: &Path,
+    generation: u64,
+    chunks: &[DiskChunk],
+) -> io::Result<()> {
+    let staging = world_directory.join(generation_staging_directory(generation));
+    let published = world_directory.join(generation_directory(generation));
+    validate_generation_directory_slot(&staging)?;
+    validate_generation_directory_slot(&published)?;
+
+    if published.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "chunk generation is already published",
+        ));
+    }
+    if staging.exists() {
+        fs::remove_dir_all(&staging)?;
+    }
+
+    fs::create_dir(&staging)?;
+    let chunks_directory = staging.join(CHUNK_DIRECTORY);
+    fs::create_dir(&chunks_directory)?;
+
+    let result = (|| {
+        let mut identities = HashSet::with_capacity(chunks.len());
+        for chunk in chunks {
+            let identity = ChunkDiskIdentity::from_disk_chunk(chunk)?;
+            if !identities.insert(identity) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "chunk generation contains a duplicate coordinate",
+                ));
+            }
+            let path = staging.join(identity.relative_path());
+            let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
+            serde_json::to_writer(&mut file, chunk).map_err(io::Error::other)?;
+            file.write_all(b"\n")?;
+            file.sync_all()?;
+
+            debug_assert_eq!(
+                world_directory.join(identity.generation_relative_path(generation)),
+                published.join(identity.relative_path())
+            );
+        }
+        sync_directory(&chunks_directory)?;
+        sync_directory(&staging)?;
+        fs::rename(&staging, &published)?;
+        sync_directory(world_directory)
+    })();
+
+    if result.is_err() {
+        let _ = fs::remove_dir_all(&staging);
+    }
+    result
+}
+
+/// Remove a generation directory only after verifying it is a real directory.
+pub(crate) fn remove_chunk_generation(world_directory: &Path, generation: u64) -> io::Result<()> {
+    let path = world_directory.join(generation_directory(generation));
+    validate_generation_directory_slot(&path)?;
+    match fs::remove_dir_all(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+fn sync_directory(path: &Path) -> io::Result<()> {
+    fs::File::open(path)?.sync_all()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,37 +182,21 @@ mod tests {
     fn identity_round_trips_coordinate_and_uses_canonical_path() {
         let coord = IVec3::new(-12, 3, 45);
         let identity = ChunkDiskIdentity::new(coord).expect("valid chunk coordinate");
-
         assert_eq!(identity.coord(), coord);
-        assert_eq!(
-            identity.relative_path(),
-            Path::new("chunks").join("x-12_y3_z45.json")
-        );
+        assert_eq!(identity.relative_path(), Path::new("chunks").join("x-12_y3_z45.json"));
     }
 
     #[test]
     fn disk_coordinate_uses_the_same_canonical_identity() {
-        let identity = ChunkDiskIdentity::from_disk_coord([-12, 3, 45])
-            .expect("portable disk coordinate must map to storage identity");
-
+        let identity = ChunkDiskIdentity::from_disk_coord([-12, 3, 45]).expect("portable disk coordinate must map to storage identity");
         assert_eq!(identity.coord(), IVec3::new(-12, 3, 45));
-        assert_eq!(
-            identity.relative_path(),
-            Path::new("chunks").join("x-12_y3_z45.json")
-        );
+        assert_eq!(identity.relative_path(), Path::new("chunks").join("x-12_y3_z45.json"));
     }
 
     #[test]
     fn generation_path_preserves_canonical_chunk_identity() {
-        let identity = ChunkDiskIdentity::new(IVec3::new(-12, 3, 45))
-            .expect("valid chunk coordinate");
-
-        assert_eq!(
-            identity.generation_relative_path(7),
-            Path::new("generation-7")
-                .join("chunks")
-                .join("x-12_y3_z45.json")
-        );
+        let identity = ChunkDiskIdentity::new(IVec3::new(-12, 3, 45)).expect("valid chunk coordinate");
+        assert_eq!(identity.generation_relative_path(7), Path::new("generation-7").join("chunks").join("x-12_y3_z45.json"));
     }
 
     #[test]
@@ -152,26 +206,19 @@ mod tests {
 
     #[test]
     fn staging_directory_cannot_be_mistaken_for_published_generation() {
-        assert_eq!(
-            generation_staging_directory(7),
-            Path::new(".generation-7.tmp")
-        );
+        assert_eq!(generation_staging_directory(7), Path::new(".generation-7.tmp"));
         assert_ne!(generation_staging_directory(7), generation_directory(7));
     }
 
     #[test]
     fn identity_rejects_negative_vertical_coordinate() {
-        let error = ChunkDiskIdentity::new(IVec3::new(0, -1, 0))
-            .expect_err("negative chunk Y must never reach disk identity");
-
+        let error = ChunkDiskIdentity::new(IVec3::new(0, -1, 0)).expect_err("negative chunk Y must never reach disk identity");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     }
 
     #[test]
     fn disk_coordinate_rejects_negative_vertical_coordinate() {
-        let error = ChunkDiskIdentity::from_disk_coord([0, -1, 0])
-            .expect_err("portable disk coordinate must obey storage identity rules");
-
+        let error = ChunkDiskIdentity::from_disk_coord([0, -1, 0]).expect_err("portable disk coordinate must obey storage identity rules");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     }
 }
