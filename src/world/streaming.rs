@@ -176,6 +176,7 @@ pub(super) struct ChunkStreamingWork<'w> {
     state: ResMut<'w, ChunkStreamingState>,
     generation_tasks: ResMut<'w, ChunkGenerationTasks>,
     mesh_tasks: ResMut<'w, ChunkMeshTasks>,
+    world_ticks: Res<'w, WorldTickClock>,
 }
 
 #[derive(SystemParam)]
@@ -196,7 +197,6 @@ pub(super) fn stream_chunks(
     content: ChunkContent,
     mut renderer: ChunkRenderer,
     player: Single<&Transform, With<GameplayCamera>>,
-    world_ticks: Res<WorldTickClock>,
     mut selection: ChunkStreamingSelection,
     mut work: ChunkStreamingWork,
     mut queues: ChunkStreamingQueues,
@@ -206,7 +206,7 @@ pub(super) fn stream_chunks(
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
     let horizontal_radius = selection.render_distance.chunks();
     let vertical_radius = selection.render_distance.vertical_chunks();
-    let current_tick = world_ticks.current_tick();
+    let current_tick = work.world_ticks.current_tick();
 
     if work.state.center != Some(center)
         || work.state.horizontal_radius != horizontal_radius
