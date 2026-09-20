@@ -29,6 +29,7 @@ pub(crate) use self::state::{PendingFluidUpdates, SavedFluidUpdates};
 use super::{
     chunk_remesh::ChunkRemeshQueue,
     game_rules::GameRules,
+    streaming::ChunkStreamingState,
     tick::WorldTickClock,
     work_budget::FrameWorkBudget,
 };
@@ -58,6 +59,7 @@ pub(super) struct FluidSimulationRuntime<'w> {
     pending: ResMut<'w, PendingFluidUpdates>,
     lighting: ResMut<'w, PendingLightingUpdates>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
+    streaming: Res<'w, ChunkStreamingState>,
 }
 
 pub(super) fn process_fluid_updates(
@@ -184,6 +186,14 @@ fn process_due_fluid_ticks(
         budget.record(1);
 
         let position = scheduled.position;
+        let coord = chunk_coord_from_world(position);
+        if runtime.streaming.generated_chunk_is_unpublished(coord) {
+            // Staged/generated chunks are resident for the worldgen settling
+            // layer, not yet runtime-owned. Reuse dormant scheduling so this
+            // tick is reactivated by the normal publication path.
+            runtime.pending.defer_unloaded(scheduled);
+            continue;
+        }
         let Some((cell, current, _)) = runtime.world.sample_at(position) else {
             runtime.pending.defer_unloaded(scheduled);
             continue;

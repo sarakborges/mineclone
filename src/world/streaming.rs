@@ -171,7 +171,7 @@ impl ChunkStreamingState {
         self.generation_wave_targets.clear();
     }
 
-    fn generated_chunk_is_unpublished(&self, coord: IVec3) -> bool {
+    pub(in crate::world) fn generated_chunk_is_unpublished(&self, coord: IVec3) -> bool {
         self.generation_wave_targets.contains(&coord)
             || self.staged_generated_chunks.contains(&coord)
             || self.fluid_settling.contains(coord)

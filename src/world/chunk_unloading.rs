@@ -94,7 +94,10 @@ pub(super) fn unload_chunk_meshes(
         else {
             break;
         };
-        if streaming.keeps_loaded(coord) || runtime.world.chunk(coord).is_none() {
+        if streaming.keeps_loaded(coord)
+            || streaming.generated_chunk_is_unpublished(coord)
+            || runtime.world.chunk(coord).is_none()
+        {
             continue;
         }
 
