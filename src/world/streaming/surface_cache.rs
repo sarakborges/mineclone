@@ -61,8 +61,23 @@ fn chunk_surface_range(
     // spatially dense enough for those authored frequencies, while a full
     // chunk of guard covers the remaining unsampled variation without paying
     // the complete 16x16 generation-column cost on the streaming thread.
+    conservative_surface_range(minimum, maximum, dimension.sea_level)
+}
+
+fn conservative_surface_range(minimum: i32, maximum: i32, sea_level: i32) -> (i32, i32) {
     (
         (minimum - SURFACE_RANGE_GUARD_BLOCKS).max(1),
-        maximum + SURFACE_RANGE_GUARD_BLOCKS,
+        (maximum + SURFACE_RANGE_GUARD_BLOCKS).max(sea_level),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn surface_guard_and_sea_level_share_one_vertical_ceiling() {
+        assert_eq!(conservative_surface_range(90, 96, 80), (74, 112));
+        assert_eq!(conservative_surface_range(50, 60, 90), (34, 90));
+    }
 }
