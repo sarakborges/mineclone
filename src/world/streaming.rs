@@ -155,7 +155,15 @@ impl ChunkStreamingState {
         coord
     }
 
+    fn generated_chunk_is_settling(&self, coord: IVec3) -> bool {
+        self.fluid_settling.contains(coord)
+    }
+
     fn mark_ready(&mut self, coord: IVec3) {
+        assert!(
+            !self.generated_chunk_is_settling(coord),
+            "generated chunk cannot become ready before fluid settling completes: {coord:?}"
+        );
         if self.keeps_loaded(coord) && !self.ready.contains(coord) {
             self.ready.enqueue(coord);
         }

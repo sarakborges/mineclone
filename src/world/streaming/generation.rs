@@ -164,6 +164,13 @@ pub(super) fn dispatch_generation_tasks(
         if work.generation_tasks.contains(coord) {
             continue;
         }
+        if work.state.generated_chunk_is_settling(coord) {
+            // Selection can change while a generated chunk is resident but
+            // still unpublished. Settling, not the generic resident path,
+            // owns its transition to ready.
+            budget.record(1);
+            continue;
+        }
 
         if work.world.has_resident_or_persisted_chunk(coord) {
             assert!(

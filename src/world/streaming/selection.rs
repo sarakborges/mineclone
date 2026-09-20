@@ -111,7 +111,10 @@ pub(super) fn rebuild_queue(
             .desired
             .iter()
             .copied()
-            .filter(|coord| !context.render_pool.contains(*coord))
+            .filter(|coord| {
+                !context.render_pool.contains(*coord)
+                    && !streaming.generated_chunk_is_settling(*coord)
+            })
             .map(|coord| PendingEntry {
                 coord,
                 priority: pending_priority(

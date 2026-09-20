@@ -42,6 +42,10 @@ impl GeneratedFluidSettling {
         self.active
     }
 
+    pub(in crate::world) fn contains(&self, coord: IVec3) -> bool {
+        self.generated_chunks.contains(&coord)
+    }
+
     pub(in crate::world) fn begin(
         &mut self,
         world: &VoxelWorld,
