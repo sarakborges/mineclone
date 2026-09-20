@@ -43,27 +43,24 @@ fn chunk_surface_range(
 ) -> (i32, i32) {
     let chunk_size = CHUNK_SIZE as i32;
     let origin = horizontal_chunk * chunk_size;
-    let last = chunk_size - 1;
-    let center = chunk_size / 2;
-    let probes = [
-        IVec2::new(0, 0),
-        IVec2::new(last, 0),
-        IVec2::new(0, last),
-        IVec2::new(last, last),
-        IVec2::new(center, center),
-    ];
+    let offsets = [0, chunk_size / 3, chunk_size * 2 / 3, chunk_size - 1];
     let mut minimum = i32::MAX;
     let mut maximum = i32::MIN;
 
-    for offset in probes {
-        let height = surface_height(origin + offset, dimension, biomes, biome_field);
-        minimum = minimum.min(height);
-        maximum = maximum.max(height);
+    for z in offsets {
+        for x in offsets {
+            let height =
+                surface_height(origin + IVec2::new(x, z), dimension, biomes, biome_field);
+            minimum = minimum.min(height);
+            maximum = maximum.max(height);
+        }
     }
 
-    // Distant streaming only needs a conservative vertical envelope. Five
-    // probes plus a full-chunk guard retain narrow ridges/cuts while avoiding
-    // the previous 16 expensive biome/terrain samples for every new column.
+    // Mountain peaks, volcano slopes and gorge walls can sit between the
+    // corners/center of a 16x16 column. A 4x4 probe lattice keeps the estimate
+    // spatially dense enough for those authored frequencies, while a full
+    // chunk of guard covers the remaining unsampled variation without paying
+    // the complete 16x16 generation-column cost on the streaming thread.
     (
         (minimum - SURFACE_RANGE_GUARD_BLOCKS).max(1),
         maximum + SURFACE_RANGE_GUARD_BLOCKS,
