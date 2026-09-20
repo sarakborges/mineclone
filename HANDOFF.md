@@ -8365,3 +8365,71 @@ Topo funcional antes do bump de versão:
    - água até sea_level não pode ser cortada.
 6. Mountains/volcano/gorge:
    - nenhum topo pode ser cortado; guard de 16 blocos foi preservado.
+
+
+## Checkpoint 178 — 2026-09-20: development runtime root prefers checkout content [FIX; VERSION 0.48.3]
+
+### Relato
+
+Ao iniciar o jogo, content validation panicou:
+
+- biome asteria:overworld/witchwood references missing structure: asteria:tree_oak.
+
+### Investigação
+
+O conteúdo atual do branch estava consistente:
+
+- data/structures/tree_oak.json existe;
+- declara id asteria:tree_oak;
+- witchwood e enchanted_forest apontam para asteria:tree_oak;
+- auditoria de todos os JSONs atuais encontrou 11 biomas, 6 structures e zero referências de biome para structure ausente.
+
+A causa estava em src/app/runtime_paths.rs.
+
+prepare_runtime_directory() sempre preferia o diretório do executável quando target/debug continha data/ + assets/. Em cargo run isso permitia que uma cópia antiga de target/debug/data virasse a raiz do runtime e sobrescrevesse implicitamente o checkout atual.
+
+Assim, o código atual podia executar contra conteúdo stale de uma build/dist anterior, produzindo exatamente a situação observada: os JSONs corretos existiam no repo, mas o registry carregado em runtime não os via.
+
+### Correção
+
+Commit funcional:
+
+- 6db1283f2ee0ac2ef270c3d447dc5089520f01b4 — fix: prefer checkout runtime content in development.
+
+Novo contrato:
+
+1. se o current working directory já contém data/ + assets/, ele é preservado;
+2. somente quando o cwd não é um runtime válido o jogo procura data/ + assets/ ao lado do executável;
+3. packaged builds continuam funcionando quando iniciadas fora do diretório do executável;
+4. cargo run a partir do checkout não pode mais ser redirecionado para target/debug/data stale.
+
+Não é necessário apagar target/debug/data manualmente para o fluxo normal de desenvolvimento.
+
+### Validação de conteúdo
+
+Foi auditado o conteúdo atual do develop:
+
+- structures: 6;
+- biomas: 11;
+- referências biome.structures[].id ausentes: 0.
+
+### CI
+
+Commit funcional 6db1283f2ee0ac2ef270c3d447dc5089520f01b4:
+
+- push 35545973498: success;
+- PR 35545975616: success;
+- Clippy rigoroso: success;
+- cargo check --locked: success.
+
+### Versionamento
+
+- VERSION: 0.48.2 -> 0.48.3.
+- commit do bump: cd4a4d129a9cd2c120cc30ae7e5c4d3dfc4d0723.
+
+### QA prioritária
+
+1. rodar cargo run a partir da raiz do repo com target/debug/data antigo ainda presente;
+2. confirmar startup sem panic de asteria:tree_oak;
+3. confirmar que alterações em data/ do checkout entram imediatamente no próximo launch;
+4. validar packaged build iniciada fora da pasta do executável para garantir fallback ao runtime empacotado.
