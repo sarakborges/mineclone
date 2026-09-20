@@ -4,6 +4,8 @@ mod system_params;
 
 use bevy::prelude::*;
 
+use super::fluid_updates::GeneratedFluidSettling;
+
 pub(super) use bootstrap::begin_world_loading;
 pub(super) use progress::setup_world;
 
@@ -25,6 +27,7 @@ pub(crate) struct WorldLoadingState {
     mesh_cursor: usize,
     meshed: usize,
     spawn_column: IVec2,
+    fluid_settling: GeneratedFluidSettling,
     phase: WorldLoadingPhase,
     screen_rendered: bool,
     transition_requested: bool,

@@ -11,6 +11,7 @@ use crate::{
         neighbors::HORIZONTAL_NEIGHBORS,
         world::VoxelWorld,
     },
+    world::work_budget::FrameWorkBudget,
 };
 
 use super::{
@@ -18,70 +19,141 @@ use super::{
     solver::{FluidSolverScratch, desired_fluid_with_scratch},
 };
 
-/// Resolve generated fluid frontiers immediately inside the newly generated
-/// chunk set. This is worldgen convergence, not gameplay simulation:
-/// authored spread cadence is intentionally ignored so the first published
-/// mesh already contains the settled state.
+/// Incremental convergence state for generated fluid frontiers.
 ///
-/// Targets outside `generated_chunks` are left to the runtime scheduler. That
-/// keeps streaming generation from silently mutating previously persisted or
-/// already-published neighboring chunks.
-pub(crate) fn settle_generated_fluid_chunks(
-    world: &mut VoxelWorld,
-    fluids: &FluidRegistry,
-    generated_chunks: &HashSet<IVec3>,
-) {
-    if generated_chunks.is_empty() {
-        return;
+/// This is worldgen convergence, not gameplay simulation: authored spread
+/// cadence is intentionally ignored so a chunk's first published mesh already
+/// contains its initial settled fluid state. Work is retained across frames so
+/// large oceans/waterfalls can never monopolize a loading or gameplay frame.
+#[derive(Default)]
+pub(in crate::world) struct GeneratedFluidSettling {
+    generated_chunks: HashSet<IVec3>,
+    queue: DeduplicatedQueue<IVec3>,
+    scratch: FluidSolverScratch,
+    active: bool,
+}
+
+impl GeneratedFluidSettling {
+    pub(in crate::world) fn is_active(&self) -> bool {
+        self.active
     }
 
-    let mut coords = generated_chunks.iter().copied().collect::<Vec<_>>();
-    coords.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
-
-    let mut queue = DeduplicatedQueue::default();
-    for coord in coords {
-        visit_loaded_fluid_frontier_targets(
-            world,
-            coord,
-            &mut |_fluid_id, target, priority| {
-                if !generated_chunks.contains(&chunk_coord_from_world(target)) {
-                    return;
-                }
-                if priority {
-                    queue.enqueue_front(target);
-                } else {
-                    queue.enqueue(target);
-                }
-            },
-        );
+    pub(in crate::world) fn begin(
+        &mut self,
+        world: &VoxelWorld,
+        coords: impl IntoIterator<Item = IVec3>,
+    ) {
+        self.generated_chunks.clear();
+        self.queue.clear();
+        self.active = false;
+        self.extend(world, coords);
     }
 
-    let mut scratch = FluidSolverScratch::default();
-    while let Some(position) = queue.pop() {
-        if !generated_chunks.contains(&chunk_coord_from_world(position)) {
-            continue;
+    /// Extend the current mutable worldgen set before publication. Targets
+    /// outside this set are intentionally left to the runtime scheduler.
+    pub(in crate::world) fn extend(
+        &mut self,
+        world: &VoxelWorld,
+        coords: impl IntoIterator<Item = IVec3>,
+    ) {
+        let mut added = Vec::new();
+        for coord in coords {
+            if coord.y >= 0 && self.generated_chunks.insert(coord) {
+                added.push(coord);
+            }
+        }
+        if added.is_empty() {
+            return;
         }
 
-        let Some((cell, current, _)) = world.sample_at(position) else {
-            continue;
-        };
-        let desired = desired_fluid_with_scratch(
-            world,
-            position,
-            cell,
-            current,
-            fluids,
-            &mut scratch,
-        );
-        if current == desired {
-            continue;
+        self.active = true;
+        added.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
+
+        let generated_chunks = &self.generated_chunks;
+        let queue = &mut self.queue;
+        for coord in added {
+            visit_loaded_fluid_frontier_targets(
+                world,
+                coord,
+                &mut |_fluid_id, target, priority| {
+                    if !generated_chunks.contains(&chunk_coord_from_world(target)) {
+                        return;
+                    }
+                    if priority {
+                        queue.enqueue_front(target);
+                    } else {
+                        queue.enqueue(target);
+                    }
+                },
+            );
+        }
+    }
+
+    /// Spend only the caller-provided frame budget. Returns true when the
+    /// current generated set has converged.
+    pub(in crate::world) fn process(
+        &mut self,
+        world: &mut VoxelWorld,
+        fluids: &FluidRegistry,
+        budget: &mut FrameWorkBudget,
+    ) -> bool {
+        if !self.active {
+            return true;
         }
 
-        if world.set_derived_fluid_at(position, desired).is_none() {
-            continue;
+        while !budget.exhausted() {
+            let Some(position) = self.queue.pop() else {
+                break;
+            };
+            budget.record(1);
+
+            if !self
+                .generated_chunks
+                .contains(&chunk_coord_from_world(position))
+            {
+                continue;
+            }
+
+            let Some((cell, current, _)) = world.sample_at(position) else {
+                continue;
+            };
+            let desired = desired_fluid_with_scratch(
+                world,
+                position,
+                cell,
+                current,
+                fluids,
+                &mut self.scratch,
+            );
+            if current == desired {
+                continue;
+            }
+
+            if world.set_derived_fluid_at(position, desired).is_none() {
+                continue;
+            }
+
+            enqueue_changed_neighborhood(
+                &mut self.queue,
+                position,
+                &self.generated_chunks,
+            );
         }
 
-        enqueue_changed_neighborhood(&mut queue, position, generated_chunks);
+        self.queue.len() == 0
+    }
+
+    /// Drain the converged chunk set exactly once. Callers use this as the
+    /// publication barrier before lighting/first mesh.
+    pub(in crate::world) fn take_completed_chunks(&mut self) -> Option<Vec<IVec3>> {
+        if !self.active || self.queue.len() != 0 {
+            return None;
+        }
+
+        let mut completed = self.generated_chunks.drain().collect::<Vec<_>>();
+        completed.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
+        self.active = false;
+        Some(completed)
     }
 }
 

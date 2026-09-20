@@ -23,7 +23,7 @@ use self::{
     state::FluidTickKey,
 };
 pub(crate) use self::{
-    settling::settle_generated_fluid_chunks,
+    settling::GeneratedFluidSettling,
     state::{PendingFluidUpdates, SavedFluidUpdates},
 };
 use super::{

@@ -211,6 +211,7 @@ pub(in crate::world) fn begin_world_loading(
         mesh_cursor: 0,
         meshed: 0,
         spawn_column,
+        fluid_settling: Default::default(),
         phase: WorldLoadingPhase::Generating,
         screen_rendered: false,
         transition_requested: false,
