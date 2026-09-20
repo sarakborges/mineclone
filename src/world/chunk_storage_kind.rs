@@ -111,6 +111,19 @@ impl ChunkStorageKind {
 mod tests {
     use super::*;
 
+    fn temp_root(label: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "asteria-chunk-kind-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock must be after epoch")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("temp root must be created");
+        root
+    }
+
     #[test]
     fn missing_manifest_field_defaults_to_legacy_snapshot_storage() {
         #[derive(Deserialize)]
@@ -170,19 +183,64 @@ mod tests {
 
     #[test]
     fn external_generation_validation_rejects_missing_storage() {
-        let root = std::env::temp_dir().join(format!(
-            "asteria-chunk-kind-missing-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("clock must be after epoch")
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&root).expect("temp root must be created");
+        let root = temp_root("missing");
         let error = ChunkStorageKind::GenerationDirectory
             .validate_generation(&root, 7)
             .expect_err("missing external generation must not validate");
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
+        std::fs::remove_dir_all(root).expect("temp root must be removed");
+    }
+
+    #[test]
+    fn external_generation_round_trip_keeps_snapshot_representation_empty() {
+        let root = temp_root("round-trip");
+        let chunk: DiskChunk = serde_json::from_str(r#"{"coord":[3,2,-1]}"#)
+            .expect("minimal empty chunk fixture must decode");
+        let storage = ChunkStorageKind::GenerationDirectory;
+
+        let snapshot_chunks = storage
+            .publish_chunks(&root, 11, std::slice::from_ref(&chunk))
+            .expect("external chunks must publish");
+        assert!(snapshot_chunks.is_empty());
+        assert!(storage
+            .generation_slot_occupied(&root, 11)
+            .expect("published slot must be inspectable"));
+        storage
+            .validate_generation(&root, 11)
+            .expect("published generation must validate");
+
+        let loaded = storage
+            .load_chunks(&root, 11, snapshot_chunks)
+            .expect("external generation must restore");
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].coord, [3, 2, -1]);
+
+        storage
+            .remove_chunks(&root, 11)
+            .expect("external generation must be removable");
+        assert!(!storage
+            .generation_slot_occupied(&root, 11)
+            .expect("removed slot must be inspectable"));
+        std::fs::remove_dir_all(root).expect("temp root must be removed");
+    }
+
+    #[test]
+    fn external_generation_rejects_snapshot_chunks_as_duplicate_owner() {
+        let root = temp_root("duplicate-owner");
+        let chunk: DiskChunk = serde_json::from_str(r#"{"coord":[0,0,0]}"#)
+            .expect("minimal empty chunk fixture must decode");
+        ChunkStorageKind::GenerationDirectory
+            .publish_chunks(&root, 5, std::slice::from_ref(&chunk))
+            .expect("external chunks must publish");
+
+        let error = ChunkStorageKind::GenerationDirectory
+            .load_chunks(&root, 5, vec![chunk])
+            .expect_err("dual ownership must be rejected");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+
+        ChunkStorageKind::GenerationDirectory
+            .remove_chunks(&root, 5)
+            .expect("external generation must be removable");
         std::fs::remove_dir_all(root).expect("temp root must be removed");
     }
 }
