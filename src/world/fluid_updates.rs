@@ -2,7 +2,7 @@ mod diagnostics;
 mod frontier;
 mod solver;
 mod state;
-mod settling;
+mod priming;
 
 use std::time::Duration;
 
@@ -22,7 +22,7 @@ use self::{
     solver::{FluidSolverScratch, desired_fluid_with_scratch, enqueue_remesh},
     state::FluidTickKey,
 };
-pub(in crate::world) use self::settling::GeneratedFluidPriming;
+pub(in crate::world) use self::priming::GeneratedFluidPriming;
 pub(crate) use self::state::{PendingFluidUpdates, SavedFluidUpdates};
 use super::{
     chunk_remesh::ChunkRemeshQueue,
