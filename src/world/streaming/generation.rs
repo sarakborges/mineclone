@@ -27,6 +27,13 @@ pub(super) fn collect_generated_chunks(
     queues: &mut ChunkStreamingQueues<'_>,
     current_tick: u64,
 ) {
+    if work.state.fluid_priming.is_active() {
+        if !process_streaming_fluid_priming(content, work) {
+            return;
+        }
+        publish_primed_chunks(content, work, queues, current_tick);
+    }
+
     let current_revision = work.generation_tasks.revision();
     let mut budget = FrameWorkBudget::new(GENERATION_RESULT_INTEGRATION_BUDGET, 1)
         .with_maximum_items(MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME);
@@ -66,34 +73,43 @@ pub(super) fn collect_generated_chunks(
         generated_coords.push(completed.coord);
     }
 
-    if !generated_coords.is_empty() {
-        let world = &work.world;
-        work.state
-            .fluid_priming
-            .extend(world, generated_coords);
-    }
-
-    if !work.state.fluid_priming.is_active() {
+    if generated_coords.is_empty() {
         return;
     }
 
+    let world = &work.world;
+    work.state
+        .fluid_priming
+        .begin(world, generated_coords);
+
+    if process_streaming_fluid_priming(content, work) {
+        publish_primed_chunks(content, work, queues, current_tick);
+    }
+}
+
+fn process_streaming_fluid_priming(
+    content: &ChunkContent<'_>,
+    work: &mut ChunkStreamingWork<'_>,
+) -> bool {
     let mut priming_budget = FrameWorkBudget::new(
         STREAMING_FLUID_PRIMING_BUDGET,
         MIN_STREAMING_FLUID_PRIMING_UPDATES,
     )
     .with_maximum_items(MAX_STREAMING_FLUID_PRIMING_UPDATES);
 
-    let complete = {
-        let state = &mut work.state;
-        let world = &mut work.world;
-        state
-            .fluid_priming
-            .process(world, content.fluids(), &mut priming_budget)
-    };
-    if !complete {
-        return;
-    }
+    let state = &mut work.state;
+    let world = &mut work.world;
+    state
+        .fluid_priming
+        .process(world, content.fluids(), &mut priming_budget)
+}
 
+fn publish_primed_chunks(
+    content: &ChunkContent<'_>,
+    work: &mut ChunkStreamingWork<'_>,
+    queues: &mut ChunkStreamingQueues<'_>,
+    current_tick: u64,
+) {
     let completed = work
         .state
         .fluid_priming
