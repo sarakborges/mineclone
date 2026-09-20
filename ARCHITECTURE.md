@@ -289,3 +289,10 @@ A streaming generation wave is not publishable merely because its currently resi
 This replaces arbitrary wave-boundary correctness with a causal closure: unrelated pending chunks do not delay publication, while a waterfall/spill may expand its wave across as many selected chunks as its actual movement requires. The boundary of the current live selection remains the intentional stopping boundary; a future chunk entering selection reopens the seam before that new chunk publishes.
 
 Generated settling also owns mutation rights for every resident non-persistent chunk in its mutable halo, including chunks that were already rendered before the wave. Runtime due fluid ticks targeting any settling-owned chunk must enter dormant scheduling instead of calling `set_fluid_at`, because that call would promote the chunk to persistent state and revoke derived-settling mutation rights mid-convergence. Final wave reconciliation reactivates dormant runtime work for every previously published chunk whose mutation ownership was suspended, not only chunks whose fluid value happened to change.
+
+
+### Surface biome boundary geometry
+
+Surface-biome ownership remains site/Voronoi based, but world-space borders must not expose long locally straight bisectors. `warp_surface_position` owns a deterministic continuous 2D multi-scale domain warp: a broad component bends regional borders and a lower-amplitude detail component breaks long straight runs without introducing voxel-scale serration. `surface_minimum_spacing` must include the full maximum domain-warp amplitude in its border allowance.
+
+`surfaceMargin.width` is the authored mean width of a regional margin, not a mandatory constant-width strip. Margins may define `widthVariation` and `variationScale`; the biome field derives a stable per-biome noise seed and evaluates a smooth deterministic width at each surface position. Width variation must remain smaller than the base width so the margin never inverts or disappears solely from its shaping noise. Terrain influences remain independent from margin identity: this boundary shaping changes regional/margin geometry, not terrain-height ownership.

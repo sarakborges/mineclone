@@ -130,6 +130,8 @@
       {
         "block": "asteria:stone"
       }
-    ]
+    ],
+    "widthVariation": 12,
+    "variationScale": 0.018
   }
 }

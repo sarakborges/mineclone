@@ -5,24 +5,80 @@ pub(super) use crate::world::deterministic::hash_unit;
 pub(super) use crate::world::math::{lerp, smoothstep};
 
 use super::constants::{
-    BORDER_TRANSITION_WIDTH, BORDER_WARP_AMPLITUDE, SITE_JITTER_FRACTION,
+    BORDER_TRANSITION_WIDTH, BORDER_WARP_BROAD_AMPLITUDE, BORDER_WARP_BROAD_SCALE,
+    BORDER_WARP_DETAIL_AMPLITUDE, BORDER_WARP_DETAIL_SCALE, SITE_JITTER_FRACTION,
     VOLUME_SITE_JITTER_FRACTION, VOLUME_WARP_AMPLITUDE,
 };
 
 pub(super) fn surface_minimum_spacing(minimum_radius: Vec2) -> Vec2 {
-    let border_allowance = BORDER_TRANSITION_WIDTH + BORDER_WARP_AMPLITUDE * 2.0;
+    let total_warp = BORDER_WARP_BROAD_AMPLITUDE + BORDER_WARP_DETAIL_AMPLITUDE;
+    let border_allowance = BORDER_TRANSITION_WIDTH + total_warp * 2.0;
     minimum_radius * 2.0 + Vec2::splat(border_allowance)
 }
 
 pub(super) fn warp_surface_position(position: Vec2, seed: u64) -> Vec2 {
-    let phase_x = hash_signed(seed) * std::f32::consts::TAU;
-    let phase_z = hash_signed(seed.rotate_left(31)) * std::f32::consts::TAU;
+    let broad_position = position * BORDER_WARP_BROAD_SCALE;
+    let detail_position = position * BORDER_WARP_DETAIL_SCALE;
 
-    position
-        + Vec2::new(
-            (position.y * 0.011 + phase_x).sin() * BORDER_WARP_AMPLITUDE,
-            (position.x * 0.009 + phase_z).sin() * BORDER_WARP_AMPLITUDE,
-        )
+    let broad = Vec2::new(
+        surface_value_noise(broad_position, seed ^ 0x243f_6a88_85a3_08d3),
+        surface_value_noise(
+            broad_position + Vec2::new(37.25, -19.75),
+            seed ^ 0x1319_8a2e_0370_7344,
+        ),
+    ) * BORDER_WARP_BROAD_AMPLITUDE;
+
+    let detail = Vec2::new(
+        surface_value_noise(
+            detail_position + Vec2::new(-11.5, 43.0),
+            seed ^ 0xa409_3822_299f_31d0,
+        ),
+        surface_value_noise(
+            detail_position + Vec2::new(29.0, 7.75),
+            seed ^ 0x082e_fa98_ec4e_6c89,
+        ),
+    ) * BORDER_WARP_DETAIL_AMPLITUDE;
+
+    position + broad + detail
+}
+
+pub(super) fn varied_surface_margin_width(
+    position: Vec2,
+    seed: u64,
+    width: f32,
+    width_variation: f32,
+    variation_scale: f32,
+) -> f32 {
+    if width_variation <= f32::EPSILON {
+        return width;
+    }
+
+    let noise = surface_value_noise(
+        position * variation_scale + Vec2::new(17.0, -31.0),
+        seed ^ 0x4528_21e6_38d0_1377,
+    );
+    width + noise * width_variation
+}
+
+fn surface_value_noise(position: Vec2, seed: u64) -> f32 {
+    let x0 = position.x.floor() as i32;
+    let z0 = position.y.floor() as i32;
+    let x1 = x0 + 1;
+    let z1 = z0 + 1;
+    let tx = smoothstep(position.x - x0 as f32);
+    let tz = smoothstep(position.y - z0 as f32);
+
+    let top = lerp(
+        hash_signed(cell_hash(IVec2::new(x0, z0), seed)),
+        hash_signed(cell_hash(IVec2::new(x1, z0), seed)),
+        tx,
+    );
+    let bottom = lerp(
+        hash_signed(cell_hash(IVec2::new(x0, z1), seed)),
+        hash_signed(cell_hash(IVec2::new(x1, z1), seed)),
+        tx,
+    );
+    lerp(top, bottom, tz)
 }
 
 pub(super) fn warp_volume_position(position: Vec3, seed: u64) -> Vec3 {

@@ -6,6 +6,10 @@ use super::biome_material::BiomeMaterialLayer;
 #[serde(rename_all = "camelCase")]
 pub struct BiomeSurfaceMargin {
     pub width: f32,
+    #[serde(default)]
+    pub width_variation: f32,
+    #[serde(default = "default_variation_scale")]
+    pub variation_scale: f32,
     pub surface_layers: Vec<BiomeMaterialLayer>,
 }
 
@@ -27,6 +31,18 @@ impl BiomeSurfaceMargin {
         assert!(
             self.width.is_finite() && self.width > 0.0,
             "biome {biome_id} surfaceMargin.width must be positive and finite"
+        );
+        assert!(
+            self.width_variation.is_finite() && self.width_variation >= 0.0,
+            "biome {biome_id} surfaceMargin.widthVariation must be finite and non-negative"
+        );
+        assert!(
+            self.width_variation < self.width,
+            "biome {biome_id} surfaceMargin.widthVariation must be smaller than width"
+        );
+        assert!(
+            self.variation_scale.is_finite() && self.variation_scale > 0.0,
+            "biome {biome_id} surfaceMargin.variationScale must be positive and finite"
         );
         assert!(
             !self.surface_layers.is_empty(),
@@ -53,4 +69,8 @@ impl BiomeSurfaceMargin {
             }
         }
     }
+}
+
+fn default_variation_scale() -> f32 {
+    0.02
 }

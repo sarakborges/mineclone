@@ -8,7 +8,10 @@ use super::{
     SurfaceBoundarySample,
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS},
     distribution::distribution_strength,
-    spatial::{smoothstep, surface_site_position, warp_surface_position},
+    spatial::{
+        smoothstep, surface_site_position, varied_surface_margin_width,
+        warp_surface_position,
+    },
 };
 
 const SITE_SEARCH_DIAMETER: usize = (SITE_SEARCH_RADIUS * 2 + 1) as usize;
@@ -202,10 +205,15 @@ impl BiomeField {
             .flatten();
         let surface_margin_index = nearest_boundary.and_then(|boundary| {
             let margin_owner = &self.surface_biomes[boundary.neighbor_surface_index];
-            margin_owner
-                .surface_margin_width
-                .filter(|width| boundary.distance <= *width)
-                .map(|_| boundary.neighbor_surface_index)
+            let margin = margin_owner.surface_margin?;
+            let width = varied_surface_margin_width(
+                position,
+                margin.noise_seed,
+                margin.width,
+                margin.width_variation,
+                margin.variation_scale,
+            );
+            (boundary.distance <= width).then_some(boundary.neighbor_surface_index)
         });
         let identity_surface_index = surface_margin_index.unwrap_or(primary_index);
 

@@ -55,7 +55,15 @@ pub(super) struct BiomeFieldEntry {
     pub avoid_near: Vec<String>,
     pub require_near: Vec<String>,
     pub exclusive_neighbor_group: Option<String>,
-    pub surface_margin_width: Option<f32>,
+    pub surface_margin: Option<SurfaceMarginField>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct SurfaceMarginField {
+    pub width: f32,
+    pub width_variation: f32,
+    pub variation_scale: f32,
+    pub noise_seed: u64,
 }
 
 #[derive(Resource, Clone)]
@@ -208,7 +216,15 @@ impl BiomeField {
                 avoid_near: dimension_biome.avoid_near.clone(),
                 require_near: dimension_biome.require_near.clone(),
                 exclusive_neighbor_group: dimension_biome.exclusive_neighbor_group.clone(),
-                surface_margin_width: biome.surface_margin.as_ref().map(|margin| margin.width),
+                surface_margin: biome.surface_margin.as_ref().map(|margin| SurfaceMarginField {
+                    width: margin.width,
+                    width_variation: margin.width_variation,
+                    variation_scale: margin.variation_scale,
+                    noise_seed: biome_density_seed(
+                        seed ^ 0x9e37_79b9_7f4a_7c15,
+                        &biome.id,
+                    ),
+                }),
             };
 
             match biome.kind {
