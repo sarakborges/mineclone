@@ -3754,3 +3754,12 @@ Os testes NÃO foram executados manualmente, conforme regra do projeto.
 - `ARCHITECTURE.md` documenta que predicate scan caching deve incluir todos os inputs de elegibilidade.
 - `VERSION`: **0.34.17 → 0.34.18**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 129
+
+- Push CI `35512515832`: **success**.
+- PR CI `35512517643`: **success**.
+- O topo `91ea8b8e349145caa9b54fcf3d9f43ec686e030e` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.18`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
