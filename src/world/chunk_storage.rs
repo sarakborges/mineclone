@@ -32,7 +32,9 @@ fn checked_directory_slot(world_directory: &Path, relative: &Path) -> io::Result
 pub(crate) struct ChunkDiskIdentity { chunk_position: IVec3 }
 impl ChunkDiskIdentity {
     pub(crate) fn new(chunk_position: IVec3) -> Self { Self { chunk_position } }
-    pub(crate) fn from_disk_chunk(chunk: &DiskChunk) -> Self { Self::new(chunk.chunk_position()) }
+    pub(crate) fn from_disk_chunk(chunk: &DiskChunk) -> Self {
+        Self::new(IVec3::new(chunk.coord[0], chunk.coord[1], chunk.coord[2]))
+    }
     pub(crate) fn chunk_position(self) -> IVec3 { self.chunk_position }
     pub(crate) fn relative_path(self) -> PathBuf {
         let position = self.chunk_position;
@@ -111,9 +113,13 @@ mod tests {
         let unique = format!("asteria-{label}-{pid}-{nanos}");
         std::env::temp_dir().join(unique)
     }
+    fn disk_chunk(position: IVec3) -> DiskChunk {
+        serde_json::from_value(serde_json::json!({"coord": [position.x, position.y, position.z]}))
+            .expect("minimal disk chunk fixture must decode")
+    }
     #[test]
     fn chunk_identity_is_stable_across_disk_conversion() {
-        let chunk = DiskChunk::new(IVec3::new(-7, 3, 12), Vec::new()); let identity = ChunkDiskIdentity::from_disk_chunk(&chunk);
+        let chunk = disk_chunk(IVec3::new(-7, 3, 12)); let identity = ChunkDiskIdentity::from_disk_chunk(&chunk);
         assert_eq!(identity.chunk_position(), IVec3::new(-7, 3, 12)); assert_eq!(identity, ChunkDiskIdentity::new(IVec3::new(-7, 3, 12)));
     }
     #[test]
@@ -133,15 +139,15 @@ mod tests {
     #[test]
     fn publishes_generation_through_private_staging_directory() {
         let root = temp_directory("chunk-publish"); fs::create_dir_all(root.as_path()).expect("temp root must be created");
-        let chunks = [DiskChunk::new(IVec3::new(-1, 0, 2), Vec::new()), DiskChunk::new(IVec3::new(3, 4, -5), Vec::new())];
+        let chunks = [disk_chunk(IVec3::new(-1, 0, 2)), disk_chunk(IVec3::new(3, 4, -5))];
         publish_generation_chunks(root.as_path(), 9, &chunks).expect("generation must publish"); assert!(!root.join(staging_generation_directory_name(9)).exists());
-        for chunk in &chunks { let identity = ChunkDiskIdentity::from_disk_chunk(chunk); let path = root.join(generation_directory_name(9)).join(identity.relative_path()); assert!(path.is_file()); let decoded: DiskChunk = serde_json::from_slice(&fs::read(path).expect("published chunk must be readable")).expect("published chunk must decode"); assert_eq!(decoded.chunk_position(), chunk.chunk_position()); }
+        for chunk in &chunks { let identity = ChunkDiskIdentity::from_disk_chunk(chunk); let path = root.join(generation_directory_name(9)).join(identity.relative_path()); assert!(path.is_file()); let decoded: DiskChunk = serde_json::from_slice(&fs::read(path).expect("published chunk must be readable")).expect("published chunk must decode"); assert_eq!(ChunkDiskIdentity::from_disk_chunk(&decoded), identity); }
         remove_generation_chunks(root.as_path(), 9).expect("generation must be removable"); assert!(!root.join(generation_directory_name(9)).exists()); fs::remove_dir_all(root).expect("temp root must be removed");
     }
     #[test]
     fn duplicate_chunk_coordinates_abort_without_publishing() {
         let root = temp_directory("chunk-duplicate"); fs::create_dir_all(root.as_path()).expect("temp root must be created");
-        let chunks = [DiskChunk::new(IVec3::new(1, 2, 3), Vec::new()), DiskChunk::new(IVec3::new(1, 2, 3), Vec::new())];
+        let chunks = [disk_chunk(IVec3::new(1, 2, 3)), disk_chunk(IVec3::new(1, 2, 3))];
         let error = publish_generation_chunks(root.as_path(), 11, &chunks).expect_err("duplicate coordinates must be rejected"); assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert!(!root.join(generation_directory_name(11)).exists()); assert!(!root.join(staging_generation_directory_name(11)).exists()); fs::remove_dir_all(root).expect("temp root must be removed");
     }
