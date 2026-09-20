@@ -47,32 +47,32 @@ pub(crate) fn publish_generation_chunks(world_directory: &Path, generation: u64,
         return Err(io::Error::new(io::ErrorKind::AlreadyExists, format!("chunk generation {generation} already has a storage slot")));
     }
     fs::create_dir(&staging)?;
-    let result = (|| {
-        let mut identities = HashSet::with_capacity(chunks.len());
-        for chunk in chunks {
-            let identity = ChunkDiskIdentity::from_disk_chunk(chunk);
-            if !identities.insert(identity) {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, format!("duplicate persisted chunk coordinate: {:?}", identity.chunk_position())));
-            }
-            let path = staging.join(identity.relative_path());
-            let parent = path.parent().ok_or_else(|| io::Error::other("chunk storage path has no parent"))?;
-            fs::create_dir_all(parent)?;
-            let payload = serde_json::to_vec(chunk).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-            let mut file = OpenOptions::new().write(true).create_new(true).open(&path)?;
-            file.write_all(&payload)?;
-            file.sync_all()?;
-        }
-        sync_directory_tree(&staging)?;
-        fs::rename(&staging, &published)?;
-        sync_directory(world_directory)
-    })();
-    if let Err(error) = result {
+    if let Err(error) = write_generation_chunks_to_staging(&staging, chunks) {
         if fs::symlink_metadata(&staging).is_ok_and(|metadata| metadata.file_type().is_dir() && !metadata.file_type().is_symlink()) {
             let _ = fs::remove_dir_all(&staging);
         }
         return Err(error);
     }
-    Ok(())
+    fs::rename(&staging, &published)?;
+    sync_directory(world_directory)
+}
+
+fn write_generation_chunks_to_staging(staging: &Path, chunks: &[DiskChunk]) -> io::Result<()> {
+    let mut identities = HashSet::with_capacity(chunks.len());
+    for chunk in chunks {
+        let identity = ChunkDiskIdentity::from_disk_chunk(chunk);
+        if !identities.insert(identity) {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, format!("duplicate persisted chunk coordinate: {:?}", identity.chunk_position())));
+        }
+        let path = staging.join(identity.relative_path());
+        let parent = path.parent().ok_or_else(|| io::Error::other("chunk storage path has no parent"))?;
+        fs::create_dir_all(parent)?;
+        let payload = serde_json::to_vec(chunk).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        let mut file = OpenOptions::new().write(true).create_new(true).open(&path)?;
+        file.write_all(&payload)?;
+        file.sync_all()?;
+    }
+    sync_directory_tree(staging)
 }
 
 pub(crate) fn remove_generation_chunks(world_directory: &Path, generation: u64) -> io::Result<()> {
