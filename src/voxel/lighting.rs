@@ -17,7 +17,9 @@ use crate::content::{
 
 use self::{
     context::LightingContext,
-    medium::{block_emission_for_cell, medium_dampening_for_cells},
+    medium::{
+        block_emission_for_cell, fluid_emission_for_cell, medium_dampening_for_cells,
+    },
     propagation::{LightingChangeSets, LightingRegistries, relax_budgeted},
     queue::LightingQueue,
 };
@@ -164,7 +166,7 @@ impl PendingLightingUpdates {
         blocks: &BlockRegistry,
         fluids: &FluidRegistry,
         secondary_properties: &SecondaryPropertyRegistry,
-    ) {
+    ) -> bool {
         seed_chunk_direct_lighting(
             world,
             coord,
@@ -172,7 +174,7 @@ impl PendingLightingUpdates {
             fluids,
             secondary_properties,
             &mut self.context,
-        );
+        )
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -238,7 +240,7 @@ fn seed_chunk_direct_lighting(
     fluids: &FluidRegistry,
     secondary_properties: &SecondaryPropertyRegistry,
     context: &mut LightingContext,
-) {
+) -> bool {
     let size = CHUNK_SIZE as i32;
     let world_x = coord.x * size;
     let world_z = coord.z * size;
@@ -262,18 +264,29 @@ fn seed_chunk_direct_lighting(
     if world.chunk(coord).is_some_and(|chunk| chunk.is_empty()) {
         let seeded = world.rebuild_empty_chunk_light_columns(coord, &sky_by_column);
         debug_assert!(seeded, "seeded chunk must be loaded: {coord:?}");
-        return;
+        return true;
     }
 
+    let mut requires_relaxation = false;
     let seeded = world.rebuild_chunk_light(coord, |x, _, z, cell, fluid| {
+        let dampening = medium_dampening_for_cells(cell, fluid, blocks, fluids);
+        let block_emission = block_emission_for_cell(cell, blocks, secondary_properties);
+        let fluid_emission = fluid_emission_for_cell(fluid, fluids);
+        if dampening < VoxelLight::MAX_LEVEL
+            || block_emission.intensity() > 0
+            || fluid_emission.intensity() > 0
+        {
+            requires_relaxation = true;
+        }
+
         let sky = &mut sky_by_column[x + z * CHUNK_SIZE];
         if *sky > 0 {
-            *sky = sky.saturating_sub(medium_dampening_for_cells(cell, fluid, blocks, fluids));
+            *sky = sky.saturating_sub(dampening);
         }
-        let emitted = block_emission_for_cell(cell, blocks, secondary_properties);
-        VoxelLight::new_hsi(*sky, emitted)
+        VoxelLight::new_hsi(*sky, block_emission)
     });
     debug_assert!(seeded, "seeded chunk must be loaded: {coord:?}");
+    requires_relaxation
 }
 
 pub(crate) fn process_pending_lighting(
