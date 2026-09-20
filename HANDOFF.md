@@ -5835,3 +5835,178 @@ Nenhum cache, allocation ou estado novo foi criado.
 - `VERSION`: **0.35.12 → 0.35.13**.
 - CI pendente.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 158
+
+- Push CI `35531267739`: **success**.
+- PR CI `35531270942`: **success**.
+- O topo `bd03b50c9ad716b593938064da0712d7ac497b10` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.35.13`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 159 — 2026-09-20: handoff consolidado do refactor/performance pass [DOCS ONLY]
+
+Este checkpoint consolida o estado real do `develop` após os checkpoints 145–158 para que a próxima sessão não repita trabalho já concluído.
+
+### Topo autoritativo
+
+- branch: `develop`;
+- commit funcional atual: `bd03b50c9ad716b593938064da0712d7ac497b10`;
+- `VERSION`: **0.35.13**;
+- CI do topo: **verde** em push + PR;
+- `Cargo.toml` continua com a versão deliberadamente independente do app;
+- não houve `cargo test`, `cargo run` nem QA Windows nesta sequência.
+
+### Persistence / save — estado atual
+
+A migração para save format v2 ESTÁ CONCLUÍDA e não deve ser refeita.
+
+Contrato atual:
+
+- gameplay não possui autosave periódico;
+- gameplay não possui clock-only checkpoint;
+- durable save ocorre somente ao sair do mundo/jogo, inclusive window-close;
+- falha no save final impede a saída/fechamento e permite retry;
+- `WorldSnapshot` é o owner runtime do estado persistente e deixou de ser serializável diretamente;
+- format v1 permanece read-compatible com `chunks: [...]` inline;
+- format v2 é o writer atual;
+- v2 publica chunks persistentes em `generation-N/`;
+- depois publica `snapshot-N.json` metadata-only;
+- `manifest-N.json` é publicado por último e é o commit marker;
+- v2 só é restorable quando metadata snapshot + external chunk generation existem;
+- load v1 válido é promovido para runtime current format e migra naturalmente no próximo save final;
+- não existem dois writable chunk catalogs.
+
+Durability/ownership já aplicados:
+
+- chunk JSON é streamado diretamente para storage, sem `Vec<u8>` proporcional ao payload;
+- JSON publication faz temp → serialize/flush → file fsync → rename;
+- directory fsync cobre durability da entrada renomeada;
+- generation lifecycle foi extraído do catálogo;
+- `chunk_storage` possui identidade canônica, duplicate rejection, reader validado e cleanup;
+- archived persistent chunks serializam direto para `DiskChunk`, sem restore/repack de `VoxelChunk`;
+- physical storage mechanics estão separados da save/recovery policy.
+
+### Streaming / remesh — estado atual
+
+Já concluído:
+
+- `DeduplicatedQueue<T>` centraliza dedup/FIFO/priority mechanics;
+- predicate scan misses usam revision-aware cache quando a elegibilidade pode ficar estável;
+- ready priority usa ranked single scan, preservando critical → forward → background e FIFO dentro do rank;
+- tie breaks de streaming são determinísticos;
+- streaming pipeline foi separado em generation stage e meshing stage, mantendo `stream_chunks()` como orchestrator explícito;
+- remesh queue semantics foram extraídas do scheduler;
+- remesh scan misses estão cacheados em todas as filas relevantes;
+- unload continua usando boundary metadata em vez de remesh amplo do halo.
+
+Não reintroduzir:
+
+- múltiplos `pop_where()` encadeados sobre a mesma fila para tiers de prioridade;
+- queue-specific dedup logic espalhada nos consumidores;
+- event bus para esconder a ordem explícita do streaming pipeline.
+
+### Fluid simulation — estado atual
+
+Já concluído:
+
+- scheduler state foi encapsulado;
+- diagnostics foram separados do scheduler;
+- frontier seed usa metadata/bitset sparse por chunk, não full 16³ scan ingênuo;
+- fluid frontier metadata é mantida pelo owner do chunk;
+- solver já possui diagnostics de downhill/BFS (`downhill_searches`, `downhill_nodes` etc.);
+- sem medição runtime, NÃO introduzir cache/BFS rewrite especulativo;
+- água/lava authored semantics permanecem data-driven.
+
+Próxima otimização do solver deve partir de métricas runtime reais, não de static guess.
+
+### Lighting / render — estado atual
+
+Já concluído:
+
+- direct skylight possui transmission/cache por seção/revision;
+- initial/bootstrap lighting propagation agora passa pelo mesmo path budgeted de pending lighting;
+- o antigo path runtime de relaxation sem budget foi removido e qualquer helper equivalente ficou test-only;
+- scene-global `sky_light_factor` não é mais replicado em cada `TerrainMaterial`;
+- `TerrainLightingBuffer` usa um shared GPU `ShaderBuffer` referenciado por terrain + fluid materials;
+- terrain material construction faz exact-identical material interning.
+
+PENDÊNCIA IMPORTANTE:
+
+- a mudança do shared `TerrainLightingBuffer` passou Rust CI, mas WGSL/bind-group runtime não foi validado com `cargo run`/QA renderer;
+- não afirmar validação visual/runtime até existir evidência;
+- se aparecer erro de shader/bind group no jogo, investigar esse checkpoint primeiro.
+
+### World selection / load activation / UI
+
+Já concluído:
+
+- `world_selection/layout.rs` possui view/layout/formatting e view-only markers;
+- `world_selection/tasks.rs` possui worker lifecycle, owned input capture, polling, abandon e off-thread disposal;
+- parent mantém decisão de quando iniciar/aceitar tasks e mutation de resources;
+- bootstrap lifecycle foi dividido em stages;
+- world activation agora prepara/valida estado antes de commit em resources autoritativos;
+- inventory layout ownership foi separado;
+- hotbar restore persistido usa prepare/construct → commit, sem mutation parcial;
+- API mutating antiga de restore do hotbar foi removida.
+
+### Performance wins recentes 155–158
+
+Checkpoint 155:
+- streaming selection hoista movement-direction normalization, radius² e center.xz() para fora do loop O(radius²).
+
+Checkpoint 156:
+- authored surface fluid/volcano fluid metadata é pré-computada uma vez por coluna;
+- chunks totalmente abaixo da superfície fazem vertical early-out;
+- fractal noise deixou de ser recalculado por voxel Y.
+
+Checkpoint 157:
+- surface biome selection reutiliza `distribution_strength` para climate + fallback weight;
+- candidate storage usa `SmallVec<[WeightedCandidate; 16]>`;
+- volume selection usa a mesma representação sem heap no caso comum.
+
+Checkpoint 158:
+- tunnel nearest-segment selection compara distância²;
+- `.sqrt()` ocorre somente para o segmento vencedor;
+- resultado geométrico permanece idêntico.
+
+### Princípios que continuam obrigatórios
+
+Aplicar `ARCHITECTURE.md` + engineering practices passados pelo usuário:
+
+- um owner autoritativo por fato;
+- split por invariant/responsabilidade, não por tamanho;
+- contexts/SystemParams estreitos e coesos;
+- reutilizar invariants reais, não similaridade superficial;
+- work change-driven sempre que possível;
+- cache somente com key/validity/invalidation/lifetime definidos;
+- async bounded + stale-result protection;
+- deterministic ordering quando ordem afeta resultado;
+- hot paths sem allocations/recomputations evitáveis;
+- otimização baseada em evidência quando a mudança altera algoritmo/complexidade;
+- não esconder side effects;
+- não criar `Utils`/Manager/general abstractions sem invariant concreto.
+
+### Próxima direção recomendada
+
+Continuar o pass de performance/componentização a partir do topo `0.35.13`, reavaliando o código ATUAL antes de usar findings antigos.
+
+Ordem prática:
+
+1. procurar trabalho loop-invariant/recomputation/allocation em hot paths de worldgen/streaming/render que ainda não tenha sido atacado;
+2. preferir otimizações locais e semanticamente demonstráveis como checkpoints 155–158;
+3. para fluid solver, usar diagnostics existentes antes de alterar BFS/cache;
+4. evitar novos refactors de persistence/streaming/remesh apenas por tamanho — os boundaries principais já foram estabelecidos;
+5. manter handoff atualizado a cada checkpoint e fechar CI antes de empilhar o próximo bloco quando possível.
+
+### Pendências de validação
+
+- runtime shader/bind-group do `TerrainLightingBuffer`;
+- `cargo run`/QA Windows do conjunto de mudanças;
+- benchmarks/FPS só podem ser afirmados quando medidos;
+- testes existentes podem ser compilados pela CI, mas não executar `cargo test` sem autorização explícita do usuário.
+
+### Regra operacional permanente
+
+A cada novo passo substancial, dar feedback ao usuário sobre o que está sendo investigado/aplicado. Não trabalhar longos blocos em silêncio.
