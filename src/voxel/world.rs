@@ -374,6 +374,12 @@ impl VoxelWorld {
         self.set_fluid_at_internal(world_position, fluid, false)
     }
 
+    pub(crate) fn derived_fluid_chunk_is_mutable(&self, coord: IVec3) -> bool {
+        coord.y >= 0
+            && self.chunks.contains_key(&coord)
+            && !self.persistent_chunks.contains(&coord)
+    }
+
     fn set_fluid_at_internal(
         &mut self,
         world_position: IVec3,

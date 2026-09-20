@@ -41,7 +41,7 @@ pub(super) fn reseed_loaded_fluid_frontiers(
     world: Res<VoxelWorld>,
     mut pending: ResMut<PendingFluidUpdates>,
 ) {
-    // Preserve work explicitly handed off by bootstrap priming. This pass is
+    // Preserve work explicitly handed off by bootstrap settling. This pass is
     // idempotent safety/reconciliation for all resident chunks, not a reset.
     let mut loaded = world.loaded_chunk_coords().collect::<Vec<_>>();
     loaded.sort_by_key(|coord| (coord.y, coord.z, coord.x));

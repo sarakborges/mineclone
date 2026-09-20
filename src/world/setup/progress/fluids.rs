@@ -41,18 +41,24 @@ pub(super) fn settle_initial_fluids(
     };
 
     if complete {
-        let completed = progress
+        let completion = progress
             .loading_state
             .fluid_settling
-            .take_completed_chunks()
+            .take_completion()
             .expect("completed initial fluid settling must own its generated chunk set");
-        debug_assert_eq!(completed.len(), progress.loading_state.coords.len());
+        debug_assert_eq!(
+            completion.generated_chunks.len(),
+            progress.loading_state.coords.len()
+        );
+        debug_assert!(
+            completion.changed_existing_positions.is_empty(),
+            "bootstrap settling should not need a previously published halo"
+        );
 
-        // Runtime begins from the converged generated state. Any frontier that
-        // points beyond the generated bootstrap region is handed to the normal
-        // scheduler; locally settleable work is already exhausted.
+        // Runtime begins from the verified converged generated state. Frontier
+        // work beyond the resident bootstrap closure remains runtime-owned.
         *fluid_updates = PendingFluidUpdates::default();
-        for coord in completed {
+        for coord in completion.generated_chunks {
             fluid_updates.enqueue_loaded_fluid_frontier(&progress.world, coord);
         }
 

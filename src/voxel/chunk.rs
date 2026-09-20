@@ -145,6 +145,26 @@ impl VoxelChunk {
         }
     }
 
+    pub(crate) fn visit_dynamic_fluid_cells(
+        &self,
+        mut visit: impl FnMut(IVec3, FluidCell),
+    ) {
+        if self.fluid_count == 0 {
+            return;
+        }
+
+        for (voxel_index, fluid) in self.fluids.iter().copied().enumerate() {
+            let Some(fluid) = fluid else {
+                continue;
+            };
+            if fluid.is_source() {
+                continue;
+            }
+            let (x, y, z) = coordinates(voxel_index);
+            visit(IVec3::new(x as i32, y as i32, z as i32), fluid);
+        }
+    }
+
     pub(crate) fn boundary_has_content(&self, outward: IVec3) -> bool {
         boundary_face_index(outward)
             .is_some_and(|face| self.boundary_content_counts[face] > 0)

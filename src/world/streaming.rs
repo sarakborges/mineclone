@@ -65,7 +65,8 @@ pub(super) struct ChunkStreamingState {
     initial_lighting_seeded: HashSet<IVec3>,
     initial_mesh_seed_catchup: HashSet<IVec3>,
     fluid_settling: GeneratedFluidSettling,
-    active_generation_region: Option<IVec3>,
+    generation_wave_targets: HashSet<IVec3>,
+    generation_wave_pending: DeduplicatedQueue<IVec3>,
     staged_generated_chunks: HashSet<IVec3>,
     selection_revision: u64,
     retired_scan_miss: Option<RetiredScanKey>,
@@ -129,41 +130,29 @@ impl ChunkStreamingState {
         }
     }
 
-    fn active_generation_region(&self) -> Option<IVec3> {
-        self.active_generation_region
-    }
-
-    fn begin_generation_region(&mut self, coord: IVec3) -> IVec3 {
-        let region = super::generation_region::generation_region_coord(coord);
-        match self.active_generation_region {
-            Some(active) => {
-                assert_eq!(
-                    active, region,
-                    "streaming generation cohort cannot mix generation regions"
-                );
-            }
-            None => self.active_generation_region = Some(region),
+    fn start_generation_wave_target(&mut self, coord: IVec3) {
+        if self.generation_wave_targets.insert(coord) {
+            self.generation_wave_pending.enqueue(coord);
         }
-        region
     }
 
-    fn generation_region_has_pending(&self, region: IVec3) -> bool {
-        self.pending
-            .values()
-            .any(|coord| super::generation_region::generation_region_coord(coord) == region)
+    fn generation_wave_active(&self) -> bool {
+        !self.generation_wave_targets.is_empty()
+            || !self.staged_generated_chunks.is_empty()
+            || self.fluid_settling.is_active()
+    }
+
+    fn generation_dispatch_work_exists(&self) -> bool {
+        (!self.generation_wave_pending.values().next().is_none() || !self.pending.values().next().is_none())
+            && !self.fluid_settling.is_active()
     }
 
     fn stage_generated_chunk(&mut self, coord: IVec3) {
-        let region = self.begin_generation_region(coord);
-        debug_assert_eq!(
-            super::generation_region::generation_region_coord(coord),
-            region
+        debug_assert!(
+            self.generation_wave_targets.contains(&coord),
+            "only an active generation-wave target may become staged"
         );
         self.staged_generated_chunks.insert(coord);
-    }
-
-    fn staged_generated_chunk(&self, coord: IVec3) -> bool {
-        self.staged_generated_chunks.contains(&coord)
     }
 
     fn take_staged_generated_chunks(&mut self) -> Vec<IVec3> {
@@ -172,26 +161,26 @@ impl ChunkStreamingState {
         staged
     }
 
-    fn finish_generation_region(&mut self) {
+    fn finish_generation_wave(&mut self) {
         assert!(
             self.staged_generated_chunks.is_empty(),
-            "generation region cannot finish with unpublished generated chunks"
+            "generation wave cannot finish with unpublished generated chunks"
+        );
+        assert!(
+            self.generation_wave_pending.values().next().is_none(),
+            "generation wave cannot finish with unscheduled targets"
         );
         assert!(
             !self.fluid_settling.is_active(),
-            "generation region cannot finish while fluid settling is active"
+            "generation wave cannot finish while fluid settling is active"
         );
-        self.active_generation_region = None;
-    }
-
-    fn generation_cohort_active(&self) -> bool {
-        self.active_generation_region.is_some()
-            || !self.staged_generated_chunks.is_empty()
-            || self.fluid_settling.is_active()
+        self.generation_wave_targets.clear();
     }
 
     fn generated_chunk_is_unpublished(&self, coord: IVec3) -> bool {
-        self.staged_generated_chunk(coord) || self.fluid_settling.contains(coord)
+        self.generation_wave_targets.contains(&coord)
+            || self.staged_generated_chunks.contains(&coord)
+            || self.fluid_settling.contains(coord)
     }
 
     fn mark_ready(&mut self, coord: IVec3) {
@@ -324,7 +313,7 @@ pub(super) fn stream_chunks(
     work.generation_tasks.sync_streaming_region(center);
     work.mesh_tasks.sync_snapshot(&content);
 
-    if work.generation_tasks.pending_count() > 0 || work.state.generation_cohort_active() {
+    if work.generation_tasks.pending_count() > 0 || work.state.generation_wave_active() {
         collect_generated_chunks(&content, &mut work, &mut queues, current_tick);
     }
     if work.mesh_tasks.pending_count() > 0 {
@@ -339,7 +328,7 @@ pub(super) fn stream_chunks(
             current_tick,
         );
     }
-    if work.state.pending.len() > 0 {
+    if work.state.generation_dispatch_work_exists() {
         dispatch_generation_tasks(
             &content,
             &renderer.pool,
