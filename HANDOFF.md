@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.39.0`. HEAD funcional `45e273970231e64e9b9044d4c0ca98a288a87214`. CI push `35535600959` e PR `35535603233`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Todo chunk recém-gerado, inclusive streaming em Gameplay, permanece atrás do gate de full fluid settling até fixed point antes de lighting/ready/primeiro mesh; selection rebuild não pode contornar esse gate. World Selection possui botão ao lado de Return para abrir a pasta canônica `worlds` no Explorer. Fog adaptativa, Volcano sky/fog cinza e Witchwood↔Enchanted Forest avoidNear permanecem ativos. Não houve `cargo test`, `cargo run` nem QA Windows.
+**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.40.0`. HEAD funcional `7311587a3157cd6c5d6cbde0643df3a551128276`. CI push `35536185243` e PR `35536186909`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Streaming de chunks novos agora usa coorte coerente por `generation_region`: integra todos os chunks desejados daquela region, mantém-os staged/invisíveis, só então executa full fluid settling até fixed point, seguido de lighting/ready/primeiro mesh. Ordem de conclusão das async generation tasks não decide mais quais vizinhos existiam durante o spread inicial. World Selection mantém botão para abrir a pasta canônica `worlds` no Explorer. Não houve `cargo test`, `cargo run` nem QA Windows.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.34.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **Estado mais recente em `develop`: comparação/correção do save game em andamento; HEAD funcional ainda não versionado `bd713963b9bbb8f69eeeb6df6b7bf7aa2773152f`.** CI `35413383474` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Já foram corrigidas persistência de scheduled fluid work, health do player, creatures e lock cross-process do diretório do mundo. Ainda NÃO foram implementados selected hotbar slot, rotação/look do player, autosave disparado somente pela passagem do clock, nem a migração do snapshot global para storage incremental por chunk/region. **Não houve bump de VERSION neste checkpoint porque o bloco de save foi interrompido antes do fechamento completo.** Não houve `cargo test`, `cargo run` ou QA Windows.
 
@@ -6778,3 +6778,123 @@ Não houve `cargo test`, `cargo run` nem QA Windows.
    - botão deve aparecer ao lado de Return;
    - no Windows deve abrir a pasta real `worlds` no Explorer;
    - se a pasta não existir, deve ser criada antes de abrir.
+
+
+## Checkpoint 169 — 2026-09-20: fluid settling como camada pós-geração por generation region [ARCHITECTURE; VERSION 0.40.0; CI VERDE]
+
+### Problema identificado pelo usuário
+
+O usuário observou a causa provável do spread residual em Gameplay:
+
+1. chunk A termina generation;
+2. A faz settling enquanto B ainda está em generation task;
+3. o spread de A para na seam porque B ainda não existe no `VoxelWorld`;
+4. B termina generation depois;
+5. B foi produzido sem participar do mesmo estado settled de A;
+6. a continuidade acaba aparecendo apenas mais tarde pelo scheduler runtime.
+
+Mesmo com frontier seam revisit, o resultado ainda ficava dependente da ordem temporal em que outputs async eram integrados.
+
+### Novo pipeline
+
+Streaming passa a tratar fluid spread como uma **camada posterior à geração coerente de chunks**, igual ao princípio já usado no bootstrap.
+
+A unidade finita escolhida é a `generation_region` existente de 8×8×8 chunks, mas somente para os chunks atualmente desejados dentro dela; NÃO são gerados 512 chunks cegamente.
+
+Fluxo atual:
+
+`select generation region cohort`
+→ `dispatch async generation apenas dessa region`
+→ `integrate outputs em qualquer ordem`
+→ `manter novos chunks staged/resident/unpublished`
+→ `aguardar zero pending desejado + zero generation task da region`
+→ `GeneratedFluidSettling sobre toda a coorte nova`
+→ `fixed point`
+→ `seed runtime frontier + lighting`
+→ `ready`
+→ `first mesh`
+→ `próxima generation region`
+
+### Estado novo do streaming
+
+`ChunkStreamingState` agora possui:
+
+- `active_generation_region: Option<IVec3>`;
+- `staged_generated_chunks: HashSet<IVec3>`;
+- `GeneratedFluidSettling` continua como owner da fase seguinte.
+
+Um chunk novo pode estar em dois estados unpublished:
+
+1. staged — generation terminou, mas a coorte ainda não terminou de gerar;
+2. settling — a coorte terminou generation e está convergindo fluidos.
+
+Ambos são proibidos de entrar em ready/mesh.
+
+### Coerência da coorte
+
+Enquanto uma generation region está ativa:
+
+- dispatcher só retira `pending` pertencente à mesma region;
+- chunks de outras regions ficam aguardando;
+- generation tasks podem terminar em qualquer ordem;
+- todos os outputs novos são integrados e staged;
+- settling NÃO começa enquanto existir:
+  - generation task da region; ou
+  - pending desejado da mesma region.
+
+Selection rebuild pode adicionar novos chunks desejados à coorte ativa; eles entram antes do settling.
+
+### Restored/persisted chunks
+
+Chunks já existentes no save/resident/archive não passam por worldgen settling novamente.
+
+Eles podem ser restaurados e usados como halo/read-only context da coorte nova.
+
+Somente outputs realmente novos de `generate_chunk()` entram em `staged_generated_chunks`.
+
+### Publicação e safety guards
+
+- selection rebuild exclui staged e settling chunks do pending genérico;
+- `mark_ready()` rejeita qualquer coord ainda unpublished;
+- generic resident/restored fast path não pode reclamar um chunk staged;
+- `finish_generation_region()` só aceita encerrar a coorte quando:
+  - staging está vazio;
+  - settling está inativo.
+
+### Scheduler / prioridade
+
+A preempção antiga de generation tasks por distância foi removida do generation owner.
+
+Motivo: cancelar uma task da coorte ativa para introduzir trabalho de outra prioridade/region reintroduziria mistura de regiões e faria a semântica depender novamente da ordem temporal de dispatch.
+
+A próxima generation region ainda é escolhida pela ordem/prioridade da queue de streaming; a coerência só é exigida depois que uma region começa.
+
+Mesh task preemption continua independente e não foi alterada.
+
+### Commits / versão
+
+- `d01002506ab17e94a5b74f6300d5e7604fb40f8d` — coorte por generation region, staging pós-generation e settling global; `VERSION 0.40.0`;
+- `7311587a3157cd6c5d6cbde0643df3a551128276` — remove generation preemption obsoleta; HEAD funcional final antes deste handoff.
+
+### CI
+
+HEAD funcional `7311587a3157cd6c5d6cbde0643df3a551128276`:
+
+- push CI `35536185243`: **success**;
+- PR CI `35536186909`: **success**;
+- localization audit: success;
+- Clippy rigoroso: success;
+- `cargo check --locked`: success.
+
+Não houve `cargo test`, `cargo run` nem QA Windows.
+
+### QA prioritária
+
+1. Caminhar até área nunca gerada com água/lava atravessando seams.
+2. Observar chunks de uma mesma generation region:
+   - nenhum deve aparecer enquanto parte da coorte ainda está gerando;
+   - ao aparecer, o spread entre eles já deve estar estabilizado.
+3. Testar waterfall cruzando múltiplos chunks da mesma region.
+4. Testar movimento contínuo atravessando boundary de generation region.
+   - próxima region deve aguardar a anterior publicar;
+   - não deve haver fluid correction visível causada apenas pela ordem de conclusão das generation tasks.
