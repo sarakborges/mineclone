@@ -126,22 +126,22 @@ mod tests {
     }
     #[test]
     fn directory_slot_rejects_regular_files() {
-        let root = temp_directory("chunk-slot-file"); fs::create_dir_all(&root).expect("temp root must be created"); let slot = PathBuf::from(generation_directory_name(5)); fs::write(root.join(&slot), b"not a directory").expect("fixture file must be written");
-        let error = checked_directory_slot(&root, &slot).expect_err("file slot must be rejected"); assert_eq!(error.kind(), io::ErrorKind::InvalidData); fs::remove_dir_all(root).expect("temp root must be removed");
+        let root = temp_directory("chunk-slot-file"); fs::create_dir_all(root.as_path()).expect("temp root must be created"); let slot = PathBuf::from(generation_directory_name(5)); fs::write(root.join(slot.as_path()), b"not a directory").expect("fixture file must be written");
+        let error = checked_directory_slot(root.as_path(), slot.as_path()).expect_err("file slot must be rejected"); assert_eq!(error.kind(), io::ErrorKind::InvalidData); fs::remove_dir_all(root).expect("temp root must be removed");
     }
     #[test]
     fn publishes_generation_through_private_staging_directory() {
-        let root = temp_directory("chunk-publish"); fs::create_dir_all(&root).expect("temp root must be created");
+        let root = temp_directory("chunk-publish"); fs::create_dir_all(root.as_path()).expect("temp root must be created");
         let chunks = [DiskChunk::new(IVec3::new(-1, 0, 2), Vec::new()), DiskChunk::new(IVec3::new(3, 4, -5), Vec::new())];
-        publish_generation_chunks(&root, 9, &chunks).expect("generation must publish"); assert!(!root.join(staging_generation_directory_name(9)).exists());
+        publish_generation_chunks(root.as_path(), 9, &chunks).expect("generation must publish"); assert!(!root.join(staging_generation_directory_name(9)).exists());
         for chunk in &chunks { let identity = ChunkDiskIdentity::from_disk_chunk(chunk); let path = root.join(identity.generation_relative_path(9)); assert!(path.is_file()); let decoded: DiskChunk = serde_json::from_slice(&fs::read(path).expect("published chunk must be readable")).expect("published chunk must decode"); assert_eq!(decoded.chunk_position(), chunk.chunk_position()); }
-        remove_generation_chunks(&root, 9).expect("generation must be removable"); assert!(!root.join(generation_directory_name(9)).exists()); fs::remove_dir_all(root).expect("temp root must be removed");
+        remove_generation_chunks(root.as_path(), 9).expect("generation must be removable"); assert!(!root.join(generation_directory_name(9)).exists()); fs::remove_dir_all(root).expect("temp root must be removed");
     }
     #[test]
     fn duplicate_chunk_coordinates_abort_without_publishing() {
-        let root = temp_directory("chunk-duplicate"); fs::create_dir_all(&root).expect("temp root must be created");
+        let root = temp_directory("chunk-duplicate"); fs::create_dir_all(root.as_path()).expect("temp root must be created");
         let chunks = [DiskChunk::new(IVec3::new(1, 2, 3), Vec::new()), DiskChunk::new(IVec3::new(1, 2, 3), Vec::new())];
-        let error = publish_generation_chunks(&root, 11, &chunks).expect_err("duplicate coordinates must be rejected"); assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        let error = publish_generation_chunks(root.as_path(), 11, &chunks).expect_err("duplicate coordinates must be rejected"); assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert!(!root.join(generation_directory_name(11)).exists()); assert!(!root.join(staging_generation_directory_name(11)).exists()); fs::remove_dir_all(root).expect("temp root must be removed");
     }
 }
