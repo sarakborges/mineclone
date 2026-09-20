@@ -5315,3 +5315,18 @@ Correção:
 - os helpers mantêm dependências estreitas em vez de receber o context inteiro;
 - nenhum comportamento de lighting/fluid/loading mudou;
 - `VERSION` permanece `0.35.6`.
+
+
+### Segunda correção de integração CI do checkpoint 151
+
+Depois de restaurar o import de fluids, Clippy encontrou `initialize_chunks_lighting()` sem consumidores runtime.
+
+Isso é consequência esperada da nova path budgeted: o bootstrap não deve mais possuir uma API síncrona que relaxa toda a fila até convergir.
+
+Correção:
+
+- removida `initialize_chunks_lighting()` da API runtime;
+- o helper test-only `initialize_chunk_lighting()` monta sua própria fila mínima para preservar os testes existentes;
+- runtime passa a ter uma única path de bootstrap lighting: `enqueue_initial_chunk_lighting()` + `process_pending_lighting()`;
+- nenhum lint suppression foi adicionado;
+- `VERSION` permanece `0.35.6`.

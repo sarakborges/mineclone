@@ -233,28 +233,6 @@ pub(crate) fn process_pending_lighting(
     );
 }
 
-pub(crate) fn initialize_chunks_lighting(
-    world: &mut VoxelWorld,
-    coords: &[IVec3],
-    blocks: &BlockRegistry,
-    fluids: &FluidRegistry,
-    secondary_properties: &SecondaryPropertyRegistry,
-) -> HashSet<IVec3> {
-    let mut queue = LightingQueue::default();
-
-    for &coord in coords {
-        if !world.clear_chunk_light(coord) {
-            continue;
-        }
-
-        let origin = chunk_origin(coord);
-        queue.enqueue_chunk_voxels(origin);
-        queue.enqueue_chunk_boundary_neighbors(origin);
-    }
-
-    relax(world, blocks, fluids, secondary_properties, &mut queue)
-}
-
 #[cfg(test)]
 fn initialize_chunk_lighting(
     world: &mut VoxelWorld,
@@ -263,12 +241,20 @@ fn initialize_chunk_lighting(
     fluids: &FluidRegistry,
 ) -> HashSet<IVec3> {
     let secondary_properties = SecondaryPropertyRegistry::default();
-    initialize_chunks_lighting(
+    let mut queue = LightingQueue::default();
+
+    if world.clear_chunk_light(coord) {
+        let origin = chunk_origin(coord);
+        queue.enqueue_chunk_voxels(origin);
+        queue.enqueue_chunk_boundary_neighbors(origin);
+    }
+
+    relax(
         world,
-        std::slice::from_ref(&coord),
         blocks,
         fluids,
         &secondary_properties,
+        &mut queue,
     )
 }
 
