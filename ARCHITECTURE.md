@@ -94,6 +94,7 @@ Queue mechanics must be layered rather than copied.
 
 - `DeduplicatedQueue<T>` owns generic deduplicated FIFO/priority behavior.
 - When one queue must choose among ordered eligibility tiers, use one queue-owned ranked scan rather than chaining multiple `pop_where()` passes over the same unchanged ordering. The rank function owns domain priority; `DeduplicatedQueue::pop_min_by_key()` owns the stable single-pass mechanics and preserves FIFO within equal rank.
+- Streaming selection is not allowed to use `HashSet` iteration order as a behavioral tie-break. Equal semantic priorities use a stable chunk-coordinate tie-break so seed/player state produce reproducible streaming order.
 - `VoxelUpdateQueue` adds voxel-domain rules such as nonnegative Y and neighbor expansion.
 - Lighting/fluid/remesh queues add only their domain-specific behavior on top.
 - `chunk_remesh::queue` owns remesh queue semantics: geometry/fluid/immediate-geometry/lighting deduplication, priority/coalescing, fair background-kind selection, renderability filtering, and queue/pool-revision scan-miss caches. `chunk_remesh.rs` owns execution policy: immediate main-thread geometry refresh plus async remesh dispatch/result integration. Consumers enqueue intent rather than manipulating the underlying queues.

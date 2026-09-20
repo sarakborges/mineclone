@@ -4663,3 +4663,38 @@ Correção:
 - fields e mutation API continuam privados ao módulo de diagnostics;
 - nenhum lint suppression foi adicionado;
 - `VERSION` permanece `0.34.31`.
+
+
+### CI verde do checkpoint 142
+
+- Push CI `35518688223`: **success**.
+- PR CI `35518691317`: **success**.
+- O topo `41d8f53fc5e0ab34c38cdd80b0be74a89b675e98` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.31`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 143 — 2026-09-20: streaming tie-break determinístico [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`rebuild_queue()` enumerava `scratch.desired: HashSet<IVec3>` e usava esse `ordinal` como último critério de ordenação.
+
+Para chunks com `PendingPriority` idêntica, a ordem final dependia da iteração do HashSet. Isso tornava a sequência de streaming incidental/não determinística entre execuções.
+
+### Implementação
+
+- removido `PendingEntry.ordinal`;
+- critérios semânticos de `PendingPriority` permanecem idênticos;
+- empate final agora usa `(coord.y, coord.z, coord.x)`;
+- sort continua em uma única `sort_unstable_by_key`;
+- nenhuma allocation/cache nova foi adicionada.
+
+### Regressão
+
+O teste de empate agora prova ordenação por coordenada estável em vez de preservar uma ordem de origem proveniente do HashSet.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` proíbe HashSet iteration como tie-break de streaming.
+- `VERSION`: **0.34.31 → 0.34.32**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.

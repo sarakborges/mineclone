@@ -32,7 +32,6 @@ type PendingPriority = (i32, i32, i32, i32, i32, i32, i32, i32, i32, i32);
 struct PendingEntry {
     coord: IVec3,
     priority: PendingPriority,
-    ordinal: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -113,8 +112,7 @@ pub(super) fn rebuild_queue(
             .iter()
             .copied()
             .filter(|coord| !context.render_pool.contains(*coord))
-            .enumerate()
-            .map(|(ordinal, coord)| PendingEntry {
+            .map(|coord| PendingEntry {
                 coord,
                 priority: pending_priority(
                     coord,
@@ -125,12 +123,16 @@ pub(super) fn rebuild_queue(
                     prioritize_surface,
                     &streaming.surface_ranges,
                 ),
-                ordinal,
             }),
     );
-    scratch
-        .pending
-        .sort_unstable_by_key(|entry| (entry.priority, entry.ordinal));
+    scratch.pending.sort_unstable_by_key(|entry| {
+        (
+            entry.priority,
+            entry.coord.y,
+            entry.coord.z,
+            entry.coord.x,
+        )
+    });
 
     collect_retired_chunk_coords(
         &streaming.retained,
@@ -482,24 +484,30 @@ mod tests {
     }
 
     #[test]
-    fn pending_entries_preserve_source_order_for_equal_priorities() {
+    fn pending_entries_use_stable_coordinate_tiebreaker() {
+        let priority = (1, 0, 1, 0, 0, 1, 9, 0, 0, 9);
         let mut pending = [
             PendingEntry {
                 coord: IVec3::new(3, 0, 0),
-                priority: (1, 0, 1, 0, 0, 1, 9, 0, 0, 9),
-                ordinal: 0,
+                priority,
             },
             PendingEntry {
                 coord: IVec3::new(-3, 0, 0),
-                priority: (1, 0, 1, 0, 0, 1, 9, 0, 0, 9),
-                ordinal: 1,
+                priority,
             },
         ];
 
-        pending.sort_unstable_by_key(|entry| (entry.priority, entry.ordinal));
+        pending.sort_unstable_by_key(|entry| {
+            (
+                entry.priority,
+                entry.coord.y,
+                entry.coord.z,
+                entry.coord.x,
+            )
+        });
 
-        assert_eq!(pending[0].coord, IVec3::new(3, 0, 0));
-        assert_eq!(pending[1].coord, IVec3::new(-3, 0, 0));
+        assert_eq!(pending[0].coord, IVec3::new(-3, 0, 0));
+        assert_eq!(pending[1].coord, IVec3::new(3, 0, 0));
     }
 
     #[test]
