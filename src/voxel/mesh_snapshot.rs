@@ -59,6 +59,14 @@ impl ChunkMeshDependencies {
     /// Once that first mesh is visible, reconcile its formerly absent halo rather
     /// than invalidating and repeatedly rescheduling the initial async task.
     pub(crate) fn needs_initial_catchup(&self, world: &VoxelWorld) -> bool {
+        self.needs_initial_catchup_with(world, |_| true)
+    }
+
+    pub(crate) fn needs_initial_catchup_with(
+        &self,
+        world: &VoxelWorld,
+        mut neighbor_is_visible: impl FnMut(IVec3) -> bool,
+    ) -> bool {
         for offset_y in -1..=1 {
             for offset_z in -1..=1 {
                 for offset_x in -1..=1 {
@@ -71,10 +79,8 @@ impl ChunkMeshDependencies {
                     {
                         continue;
                     }
-                    if world
-                        .chunk(self.center + IVec3::new(offset_x, offset_y, offset_z))
-                        .is_some()
-                    {
+                    let coord = self.center + IVec3::new(offset_x, offset_y, offset_z);
+                    if neighbor_is_visible(coord) && world.chunk(coord).is_some() {
                         return true;
                     }
                 }
@@ -94,6 +100,14 @@ pub(crate) struct ChunkMeshSnapshot {
 
 impl ChunkMeshSnapshot {
     pub(crate) fn capture(world: &VoxelWorld, coord: IVec3) -> Option<Self> {
+        Self::capture_with_neighbor_filter(world, coord, |_| true)
+    }
+
+    pub(crate) fn capture_with_neighbor_filter(
+        world: &VoxelWorld,
+        coord: IVec3,
+        mut include_neighbor: impl FnMut(IVec3) -> bool,
+    ) -> Option<Self> {
         let center_chunk = world.chunk(coord)?;
         let center_revision = world
             .chunk_content_revision(coord)
@@ -114,6 +128,9 @@ impl ChunkMeshSnapshot {
                     }
 
                     let neighbor_coord = coord + IVec3::new(offset_x, offset_y, offset_z);
+                    if !include_neighbor(neighbor_coord) {
+                        continue;
+                    }
                     let Some(neighbor_chunk) = world.chunk(neighbor_coord) else {
                         continue;
                     };
@@ -387,6 +404,38 @@ mod tests {
             snapshot.block_id_at(IVec3::new(edge, edge, edge)),
             Some("asteria:diagonal")
         );
+    }
+
+    #[test]
+    fn snapshot_filter_hides_resident_neighbor_until_it_is_visible() {
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
+
+        let mut neighbor = VoxelChunk::empty();
+        neighbor.set_block(
+            0,
+            0,
+            0,
+            Some(VoxelCell::new(
+                "asteria:hidden_neighbor",
+                TextureRotation::default(),
+            )),
+        );
+        world.insert_chunk(IVec3::X, neighbor);
+
+        let snapshot = ChunkMeshSnapshot::capture_with_neighbor_filter(
+            &world,
+            IVec3::ZERO,
+            |_| false,
+        )
+        .expect("center chunk should exist");
+        let edge = CHUNK_SIZE as i32;
+
+        assert_eq!(snapshot.block_id_at(IVec3::new(edge, 0, 0)), None);
+        assert!(!snapshot.dependencies().needs_initial_catchup_with(&world, |_| false));
+        assert!(snapshot.dependencies().needs_initial_catchup_with(&world, |coord| {
+            coord == IVec3::X
+        }));
     }
 
     #[test]

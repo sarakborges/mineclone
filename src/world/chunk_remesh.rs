@@ -184,7 +184,11 @@ fn dispatch_remesh_tasks(
             deferred.push((coord, kind));
             continue;
         }
-        let Some(snapshot) = ChunkMeshSnapshot::capture(world, coord) else {
+        let Some(snapshot) = ChunkMeshSnapshot::capture_with_neighbor_filter(
+            world,
+            coord,
+            |neighbor| render_pool.contains(neighbor),
+        ) else {
             continue;
         };
         if !tasks.schedule(coord, kind, snapshot) {

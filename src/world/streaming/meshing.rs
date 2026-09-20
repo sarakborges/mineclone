@@ -79,8 +79,12 @@ pub(super) fn dispatch_initial_mesh_tasks(
             continue;
         }
 
-        let snapshot = ChunkMeshSnapshot::capture(&work.world, coord)
-            .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
+        let snapshot = ChunkMeshSnapshot::capture_with_neighbor_filter(
+            &work.world,
+            coord,
+            |neighbor| renderer.pool.contains(neighbor),
+        )
+        .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
         if !work.mesh_tasks.schedule(coord, snapshot) {
             work.state.defer_ready(coord);
             break;
@@ -149,7 +153,12 @@ pub(super) fn collect_built_chunk_meshes(
             continue;
         };
         let chunk_has_fluid = chunk.has_fluid();
-        let catchup = completed.output.dependencies.needs_initial_catchup(&work.world)
+        let catchup = completed
+            .output
+            .dependencies
+            .needs_initial_catchup_with(&work.world, |neighbor| {
+                renderer.pool.contains(neighbor)
+            })
             || work.state.initial_mesh_seed_catchup.contains(&completed.coord);
         let render_context = content.render_context(
             &work.world,
