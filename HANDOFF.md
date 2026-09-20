@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.37.2`. HEAD funcional `c85c0831226dea12578dbd6aab97492d8c7f86a4`. CI push `35533512875` e PR `35533515535`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Fog adaptativa voltou a esconder a frontier ainda não publicada; Volcano usa sky/fog neutros em cinza; Witchwood e Enchanted Forest são mutuamente `avoidNear`; fluidos authored de chunks novos passam por initial settling com o mesmo solver do runtime antes de lighting/primeiro mesh, sem promover chunks derivados a persistentes. Não houve `cargo test`, `cargo run` nem QA Windows.
+**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.37.3`. HEAD funcional `c85c0831226dea12578dbd6aab97492d8c7f86a4`. CI push `35533512875` e PR `35533515535`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Fog adaptativa voltou a esconder a frontier ainda não publicada; Volcano usa sky/fog neutros em cinza; Witchwood e Enchanted Forest são mutuamente `avoidNear`; fluidos authored de chunks novos passam por initial settling com o mesmo solver do runtime antes de lighting/primeiro mesh, sem promover chunks derivados a persistentes. Não houve `cargo test`, `cargo run` nem QA Windows.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.34.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **Estado mais recente em `develop`: comparação/correção do save game em andamento; HEAD funcional ainda não versionado `bd713963b9bbb8f69eeeb6df6b7bf7aa2773152f`.** CI `35413383474` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Já foram corrigidas persistência de scheduled fluid work, health do player, creatures e lock cross-process do diretório do mundo. Ainda NÃO foram implementados selected hotbar slot, rotação/look do player, autosave disparado somente pela passagem do clock, nem a migração do snapshot global para storage incremental por chunk/region. **Não houve bump de VERSION neste checkpoint porque o bloco de save foi interrompido antes do fechamento completo.** Não houve `cargo test`, `cargo run` ou QA Windows.
 
@@ -6487,3 +6487,86 @@ Não houve `cargo test`, `cargo run` nem QA Windows.
    - coluna inteira não deve ser pre-resolvida instantaneamente.
 6. Streaming contínuo:
    - chunks novos devem publicar batch a batch sem primer crescer indefinidamente.
+
+
+## Checkpoint 166 — 2026-09-20: priming entrega frontier explicitamente ao scheduler de Gameplay [FIX; VERSION 0.37.3; CI VERDE]
+
+### Sintoma
+
+Após o root-cause fix do checkpoint 165:
+
+- Loading destravou;
+- o primeiro prime step aparecia;
+- porém a continuação não estava garantida como runtime work em Gameplay.
+
+O bootstrap ainda dependia demais de um reseed global posterior no `OnEnter(Gameplay)`.
+
+### Causa arquitetural
+
+Durante geração de mundo novo, antes do priming:
+
+- `generate_initial_chunks()` já enfileirava frontier do estado authored;
+- o priming então alterava o mundo;
+- a fila existente podia representar o snapshot pré-prime;
+- ao entrar em Gameplay, `reseed_loaded_fluid_frontiers()` resetava `PendingFluidUpdates` para New e tentava redescobrir tudo outra vez.
+
+Mesmo que o rescan devesse reconstruir a frontier, isso quebrava o ownership correto: o estágio que produz o primeiro flow visível não estava entregando explicitamente a continuação ao scheduler que deve possuir os próximos ticks.
+
+### Novo contrato
+
+Mundo novo:
+
+1. generation insere chunks sem criar runtime frontier wakes;
+2. `PrimingFluids` cria no máximo o primeiro step;
+3. ao concluir:
+   - qualquer work pré-prime é descartado;
+   - a frontier **pós-prime** é semeada em `PendingFluidUpdates`;
+4. lighting/meshing continuam;
+5. `OnEnter(Gameplay)` preserva a fila recebida;
+6. o reseed de Gameplay passa a ser apenas reconciliação idempotente, nunca reset.
+
+Assim o estado do primeiro mesh e a fila runtime descrevem o mesmo snapshot do mundo.
+
+### Cadência
+
+O priming continua sem executar a continuação.
+
+`PendingFluidUpdates` recebe apenas frontier wake. No primeiro `process_fluid_updates()` em Gameplay:
+
+- wake recebe due tick conforme `spreadSpeed`;
+- água/lava continuam através de scheduled voxel ticks;
+- primeiro step continua pre-mesh;
+- steps seguintes continuam visíveis em Gameplay.
+
+### Loaded worlds
+
+`WorldLoadMode::Load` mantém o comportamento de semear/restaurar frontier durante bootstrap, pois não existe prime step de worldgen sendo aplicado sobre o conteúdo persistido.
+
+### Streaming
+
+Streaming já estava no ordering correto:
+
+`generate batch → prime batch → seed_loaded_chunk_lighting()/enqueue_loaded_fluid_frontier → ready/mesh`
+
+Portanto foi mantido e documentado como o mesmo contrato de handoff pós-prime.
+
+### Commit / CI
+
+- commit funcional: `d63132a8def450bb819a38b4972ae0b00049251b`;
+- `VERSION 0.37.2 → 0.37.3`;
+- push CI `35534782633`: **success**;
+- PR CI `35534786204`: **success**;
+- localization audit, Clippy `-D warnings` e `cargo check --locked` verdes;
+- não houve `cargo test`, `cargo run` nem QA Windows.
+
+### QA prioritária
+
+1. Criar mundo novo com lava/água exposta.
+2. Confirmar primeiro step já visível ao entrar em Gameplay.
+3. Ficar parado sem quebrar/colocar bloco:
+   - próximos steps devem continuar sozinhos;
+   - água deve continuar mais rápida;
+   - lava deve continuar mais lenta.
+4. Streaming em direção a chunk novo com fluido:
+   - primeiro step pre-mesh;
+   - continuação automática depois da publicação.
