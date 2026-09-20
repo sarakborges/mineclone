@@ -4122,3 +4122,70 @@ O módulo principal `world_selection.rs` continua owner de:
 - `ARCHITECTURE.md` documenta a boundary view vs async/domain orchestration para screens complexas.
 - `VERSION`: **0.34.22 → 0.34.23**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 134
+
+- Push CI `35513586406`: **success**.
+- PR CI `35513588753`: **success**.
+- O topo `75504f23a66cba225f79ac7de7d4818fd6ab0dd7` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.23`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 135 — 2026-09-20: world-selection worker lifecycle extraído [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+Depois da extração de layout, `world_selection.rs` ainda era owner direto de toda mecânica low-level dos workers:
+
+- `Arc<Mutex<...>>`;
+- slot de result;
+- spawn de scan;
+- spawn de load;
+- catch de panic;
+- owned registry copies;
+- polling do mutex;
+- abandoned flag;
+- disposal off-thread de world load descartado.
+
+Essas invariantes formam um lifecycle coeso e não pertencem aos systems que decidem intents/transitions.
+
+### Implementação
+
+Novo `screens/world_selection/tasks.rs` possui:
+
+- `PendingWorldScan`;
+- `PendingWorldLoad`;
+- `WorldLoadCompletion`;
+- slots/result guards privados;
+- captura owned de registries para load;
+- spawn/panic containment/logging dos workers;
+- polling não bloqueante;
+- abandonment + stale-result disposal.
+
+`WorldSelectionScanContent` permanece no parent como `SystemParam` read-only e agora expõe apenas `registries()`. Isso evita esconder Bevy resource dependencies dentro do task owner.
+
+Os systems no parent continuam owner de decisões:
+
+- `refresh_world_list()` decide quando iniciar scan;
+- `poll_world_scan()` decide como aplicar o resultado à UI/state;
+- `handle_world_selection()` decide quando iniciar load;
+- `poll_world_load()` decide se o resultado pode ser aceito e aplica authoritative resources;
+- Back/OnExit decidem quando abandonar um load.
+
+### Semântica preservada
+
+- scan/load continuam em detached OS threads;
+- copies dos content registries continuam no main thread antes do worker;
+- worker panic continua virando `io::Error`;
+- polling continua non-blocking via `try_lock`;
+- Back continua tendo precedência;
+- resultado abandonado continua descartado fora do input frame;
+- nenhuma resource de Bevy escapa para thread;
+- nenhuma semântica de save/load mudou.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` documenta `tasks` como owner de lifecycle mecânico, mantendo systems como owner das decisões.
+- `VERSION`: **0.34.23 → 0.34.24**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
