@@ -51,6 +51,92 @@ struct TerrainMaterialKey {
     layer_index: usize,
 }
 
+
+struct TerrainMaterialBuilder<'a> {
+    asset_server: &'a AssetServer,
+    materials: &'a mut Assets<TerrainMaterial>,
+    cache: HashMap<TerrainMaterialKey, Handle<TerrainMaterial>>,
+    roughness: f32,
+    metallic: f32,
+}
+
+impl<'a> TerrainMaterialBuilder<'a> {
+    fn new(
+        asset_server: &'a AssetServer,
+        materials: &'a mut Assets<TerrainMaterial>,
+        roughness: f32,
+        metallic: f32,
+    ) -> Self {
+        Self {
+            asset_server,
+            materials,
+            cache: HashMap::new(),
+            roughness,
+            metallic,
+        }
+    }
+
+    fn layers_for(
+        &mut self,
+        definition: &BlockDefinition,
+        face: BlockFace,
+    ) -> Vec<Handle<TerrainMaterial>> {
+        let layers = block_face_texture_layers(face, definition);
+        if layers.is_empty() {
+            return vec![self.material_for(definition, None, 0)];
+        }
+
+        layers
+            .iter()
+            .enumerate()
+            .map(|(layer_index, layer)| {
+                self.material_for(definition, Some(layer), layer_index)
+            })
+            .collect()
+    }
+
+    fn material_for(
+        &mut self,
+        definition: &BlockDefinition,
+        layer: Option<&BlockTextureLayer>,
+        layer_index: usize,
+    ) -> Handle<TerrainMaterial> {
+        let alpha = TerrainAlphaKey::for_layer(definition, layer_index);
+        let key = TerrainMaterialKey {
+            texture: layer.map(|layer| layer.texture.clone()),
+            tint_enabled: layer.is_some_and(|layer| layer.dyable),
+            alpha,
+            layer_index,
+        };
+        if let Some(existing) = self.cache.get(&key) {
+            return existing.clone();
+        }
+
+        let base_color_texture =
+            layer.map(|layer| load_block_texture_layer(self.asset_server, layer));
+        let tint_enabled = key.tint_enabled as u8 as f32;
+        let material = self.materials.add(TerrainMaterial {
+            base: StandardMaterial {
+                base_color: Color::WHITE,
+                base_color_texture,
+                perceptual_roughness: self.roughness,
+                metallic: self.metallic,
+                alpha_mode: alpha.alpha_mode(),
+                depth_bias: layer_index as f32 * TEXTURE_LAYER_DEPTH_BIAS,
+                fog_enabled: true,
+                unlit: true,
+                ..default()
+            },
+            extension: TerrainMaterialExtension {
+                tint_enabled,
+                ..default()
+            },
+        });
+        self.cache.insert(key, material.clone());
+        material
+    }
+}
+
 #[derive(Resource, Clone)]
 pub struct TerrainMaterials {
     blocks: HashMap<String, BlockFaces<Vec<Handle<TerrainMaterial>>>>,
@@ -82,22 +168,13 @@ impl TerrainMaterials {
             .map(|texture| asset_server.load(texture))
             .collect();
 
-        let mut material_cache = HashMap::<TerrainMaterialKey, Handle<TerrainMaterial>>::new();
+        let mut builder =
+            TerrainMaterialBuilder::new(asset_server, materials, roughness, metallic);
         let blocks = blocks
             .iter()
             .map(|definition| {
-                let block_materials = BlockFaces::from_fn(|face| {
-                    create_material_layers(
-                        definition,
-                        face,
-                        asset_server,
-                        materials,
-                        &mut material_cache,
-                        roughness,
-                        metallic,
-                    )
-                });
-
+                let block_materials =
+                    BlockFaces::from_fn(|face| builder.layers_for(definition, face));
                 (definition.id.clone(), block_materials)
             })
             .collect();
@@ -119,91 +196,6 @@ impl TerrainMaterials {
             .get(face)
             .as_slice()
     }
-}
-
-fn create_material_layers(
-    definition: &BlockDefinition,
-    face: BlockFace,
-    asset_server: &AssetServer,
-    materials: &mut Assets<TerrainMaterial>,
-    material_cache: &mut HashMap<TerrainMaterialKey, Handle<TerrainMaterial>>,
-    roughness: f32,
-    metallic: f32,
-) -> Vec<Handle<TerrainMaterial>> {
-    let layers = block_face_texture_layers(face, definition);
-    if layers.is_empty() {
-        return vec![create_material(
-            definition,
-            None,
-            0,
-            asset_server,
-            materials,
-            material_cache,
-            roughness,
-            metallic,
-        )];
-    }
-
-    layers
-        .iter()
-        .enumerate()
-        .map(|(layer_index, layer)| {
-            create_material(
-                definition,
-                Some(layer),
-                layer_index,
-                asset_server,
-                materials,
-                material_cache,
-                roughness,
-                metallic,
-            )
-        })
-        .collect()
-}
-
-fn create_material(
-    definition: &BlockDefinition,
-    layer: Option<&BlockTextureLayer>,
-    layer_index: usize,
-    asset_server: &AssetServer,
-    materials: &mut Assets<TerrainMaterial>,
-    material_cache: &mut HashMap<TerrainMaterialKey, Handle<TerrainMaterial>>,
-    roughness: f32,
-    metallic: f32,
-) -> Handle<TerrainMaterial> {
-    let alpha = TerrainAlphaKey::for_layer(definition, layer_index);
-    let key = TerrainMaterialKey {
-        texture: layer.map(|layer| layer.texture.clone()),
-        tint_enabled: layer.is_some_and(|layer| layer.dyable),
-        alpha,
-        layer_index,
-    };
-    if let Some(existing) = material_cache.get(&key) {
-        return existing.clone();
-    }
-
-    let base_color_texture = layer.map(|layer| load_block_texture_layer(asset_server, layer));
-    let tint_enabled = key.tint_enabled as u8 as f32;
-    let material = materials.add(TerrainMaterial {
-        base: StandardMaterial {
-            base_color: Color::WHITE,
-            base_color_texture,
-            perceptual_roughness: roughness,
-            metallic,
-            alpha_mode: alpha.alpha_mode(),
-            depth_bias: layer_index as f32 * TEXTURE_LAYER_DEPTH_BIAS,
-            fog_enabled: true,
-            unlit: true,
-            ..default()
-        },
-        extension: TerrainMaterialExtension {
-            tint_enabled,
-            ..default()
-        },
-    });
-    material_cache.insert(key, material.clone());
-    material
 }
 
 #[derive(Resource, Clone)]

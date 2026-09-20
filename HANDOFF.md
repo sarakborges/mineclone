@@ -3604,3 +3604,22 @@ Não movi `sky_light_factor` para uniform global neste bloco. Fazer isso correta
 
 - `VERSION`: **0.34.15 → 0.34.16**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### Correção de integração CI do checkpoint 127
+
+A primeira CI do material interning falhou em `clippy::too_many_arguments` no helper `create_material`.
+
+Correção aplicada sem suppression:
+
+- criado `TerrainMaterialBuilder`, contexto privado e coeso da operação de construção;
+- ele possui somente:
+  - `AssetServer`;
+  - `Assets<TerrainMaterial>`;
+  - interner local;
+  - roughness;
+  - metallic;
+- `layers_for()` e `material_for()` agora operam nesse contexto;
+- os helpers de 7/8 parâmetros foram removidos;
+- a chave de interning e a semântica dos materiais permanecem idênticas;
+- `VERSION` permanece `0.34.16`.
