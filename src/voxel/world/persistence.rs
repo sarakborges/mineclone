@@ -20,7 +20,7 @@ impl VoxelWorld {
                 if let Some(chunk) = self.chunks.get(&coord) {
                     DiskChunk::from_chunk(coord, chunk, fluids)
                 } else if let Some(archived) = self.archived_chunks.get(&coord) {
-                    DiskChunk::from_chunk(coord, &archived.restore(), fluids)
+                    DiskChunk::from_archived_chunk(coord, archived, fluids)
                 } else {
                     Err(io::Error::new(
                         io::ErrorKind::InvalidData,

@@ -15,6 +15,7 @@ use crate::content::{
 use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk},
+    chunk_archive::ArchivedChunk,
     fluid::{FluidCell, MAX_FLUID_LEVEL},
     microblock::{CHISEL_MASK_PROPERTY, MicroblockMask},
     secondary_properties::SecondaryProperties,
@@ -84,16 +85,81 @@ struct DiskFluid {
     spread_distance: u16,
 }
 
+struct DiskChunkBuilder {
+    coord: [i32; 3],
+    block_palette: Vec<DiskBlockState>,
+    block_runs: Vec<DiskRun>,
+    fluid_palette: Vec<DiskFluidState>,
+    fluid_runs: Vec<DiskRun>,
+}
+
+impl DiskChunkBuilder {
+    fn new(coord: IVec3) -> Self {
+        Self {
+            coord: [coord.x, coord.y, coord.z],
+            block_palette: Vec::new(),
+            block_runs: Vec::new(),
+            fluid_palette: Vec::new(),
+            fluid_runs: Vec::new(),
+        }
+    }
+
+    fn push_block(&mut self, index: usize, cell: VoxelCell) -> io::Result<()> {
+        let mut properties = cell
+            .secondary_properties()
+            .iter_for_save()
+            .map(|(key, value)| (key.to_owned(), value.to_owned()))
+            .collect::<Vec<_>>();
+        properties.sort_unstable();
+        let state = DiskBlockState {
+            id: cell.block_id.to_owned(),
+            rotation: rotation_index(cell.texture_rotation),
+            orientation: cell.orientation.index(),
+            properties,
+        };
+        let state_index = palette_index(&mut self.block_palette, state)?;
+        append_run(&mut self.block_runs, index, state_index)
+    }
+
+    fn push_fluid(
+        &mut self,
+        index: usize,
+        cell: FluidCell,
+        fluids: &FluidRegistry,
+    ) -> io::Result<()> {
+        let definition = fluids.get(cell.fluid_id).ok_or_else(|| {
+            invalid_data(format!("unknown runtime fluid ID {}", cell.fluid_id))
+        })?;
+        let state = DiskFluidState {
+            id: definition.id.clone(),
+            level: cell.level,
+            source: cell.is_source(),
+            spread_distance: cell.spread_distance(),
+        };
+        let state_index = palette_index(&mut self.fluid_palette, state)?;
+        append_run(&mut self.fluid_runs, index, state_index)
+    }
+
+    fn finish(self) -> DiskChunk {
+        DiskChunk {
+            coord: self.coord,
+            block_palette: self.block_palette,
+            block_runs: self.block_runs,
+            fluid_palette: self.fluid_palette,
+            fluid_runs: self.fluid_runs,
+            blocks: Vec::new(),
+            fluids: Vec::new(),
+        }
+    }
+}
+
 impl DiskChunk {
     pub(crate) fn from_chunk(
         coord: IVec3,
         chunk: &VoxelChunk,
         fluids: &FluidRegistry,
     ) -> io::Result<Self> {
-        let mut block_palette = Vec::<DiskBlockState>::new();
-        let mut block_runs = Vec::<DiskRun>::new();
-        let mut fluid_palette = Vec::<DiskFluidState>::new();
-        let mut fluid_runs = Vec::<DiskRun>::new();
+        let mut builder = DiskChunkBuilder::new(coord);
 
         for index in 0..CHUNK_VOLUME {
             let (x, y, z) = coordinates(index);
@@ -102,46 +168,31 @@ impl DiskChunk {
                 .expect("disk chunk coordinates must be in range");
 
             if let Some(cell) = block {
-                let mut properties = cell
-                    .secondary_properties()
-                    .iter_for_save()
-                    .map(|(key, value)| (key.to_owned(), value.to_owned()))
-                    .collect::<Vec<_>>();
-                properties.sort_unstable();
-                let state = DiskBlockState {
-                    id: cell.block_id.to_owned(),
-                    rotation: rotation_index(cell.texture_rotation),
-                    orientation: cell.orientation.index(),
-                    properties,
-                };
-                let state_index = palette_index(&mut block_palette, state)?;
-                append_run(&mut block_runs, index, state_index)?;
+                builder.push_block(index, cell)?;
             }
-
             if let Some(cell) = fluid {
-                let definition = fluids.get(cell.fluid_id).ok_or_else(|| {
-                    invalid_data(format!("unknown runtime fluid ID {}", cell.fluid_id))
-                })?;
-                let state = DiskFluidState {
-                    id: definition.id.clone(),
-                    level: cell.level,
-                    source: cell.is_source(),
-                    spread_distance: cell.spread_distance(),
-                };
-                let state_index = palette_index(&mut fluid_palette, state)?;
-                append_run(&mut fluid_runs, index, state_index)?;
+                builder.push_fluid(index, cell, fluids)?;
             }
         }
 
-        Ok(Self {
-            coord: [coord.x, coord.y, coord.z],
-            block_palette,
-            block_runs,
-            fluid_palette,
-            fluid_runs,
-            blocks: Vec::new(),
-            fluids: Vec::new(),
-        })
+        Ok(builder.finish())
+    }
+
+    pub(crate) fn from_archived_chunk(
+        coord: IVec3,
+        chunk: &ArchivedChunk,
+        fluids: &FluidRegistry,
+    ) -> io::Result<Self> {
+        let mut builder = DiskChunkBuilder::new(coord);
+
+        for (index, cell) in chunk.block_entries() {
+            builder.push_block(index, cell)?;
+        }
+        for (index, cell) in chunk.fluid_entries() {
+            builder.push_fluid(index, cell, fluids)?;
+        }
+
+        Ok(builder.finish())
     }
 
     /// Validate the entire chunk before exposing it. New palette/run snapshots
@@ -407,4 +458,42 @@ fn rotation_index(rotation: TextureRotation) -> u8 {
 
 fn invalid_data(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::voxel::{
+        chunk_archive::ArchivedChunk,
+        texture_rotation::TextureRotation,
+    };
+
+    #[test]
+    fn archived_chunk_serializes_identically_without_runtime_restore() {
+        let coord = IVec3::new(2, 3, -4);
+        let fluids = FluidRegistry::default();
+        let mut chunk = VoxelChunk::empty();
+        chunk.set_block(
+            1,
+            2,
+            3,
+            Some(VoxelCell::new("asteria:test", TextureRotation::Degrees90)),
+        );
+        chunk.set_block(
+            4,
+            5,
+            6,
+            Some(VoxelCell::new("asteria:other", TextureRotation::Degrees180)),
+        );
+
+        let archived = ArchivedChunk::from_chunk(&chunk);
+        let resident_disk = DiskChunk::from_chunk(coord, &chunk, &fluids).unwrap();
+        let archived_disk =
+            DiskChunk::from_archived_chunk(coord, &archived, &fluids).unwrap();
+
+        assert_eq!(
+            serde_json::to_string(&resident_disk).unwrap(),
+            serde_json::to_string(&archived_disk).unwrap()
+        );
+    }
 }

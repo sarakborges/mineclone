@@ -94,66 +94,69 @@ impl ArchivedChunk {
         }
     }
 
+    pub(crate) fn block_entries(&self) -> impl Iterator<Item = (usize, VoxelCell)> + '_ {
+        occupied_indices(&self.occupancy)
+            .zip(self.cells.iter())
+            .map(|(index, archived)| {
+                let block_id = self.palette[archived.palette_index as usize];
+                let cell = VoxelCell::oriented(
+                    block_id,
+                    TextureRotation::from_quarter_turn(archived.rotation),
+                    BlockOrientation::from_index(archived.orientation),
+                )
+                .with_secondary_properties(archived.secondary_properties);
+                (index, cell)
+            })
+    }
+
+    pub(crate) fn fluid_entries(&self) -> impl Iterator<Item = (usize, FluidCell)> + '_ {
+        occupied_indices(&self.fluid_occupancy)
+            .zip(self.fluid_cells.iter())
+            .map(|(index, archived)| {
+                (
+                    index,
+                    FluidCell::with_state(
+                        archived.fluid_id,
+                        archived.level,
+                        archived.source,
+                        archived.spread_distance,
+                    ),
+                )
+            })
+    }
+
     pub fn restore(&self) -> VoxelChunk {
         let mut chunk = VoxelChunk::empty();
 
-        chunk.edit_content(|chunk| {
-            let mut archived_cells = self.cells.iter();
-            let mut archived_fluids = self.fluid_cells.iter();
-
-            for index in 0..CHUNK_VOLUME {
-                let block_occupied = self.occupancy[index / u64::BITS as usize]
-                    & (1_u64 << (index % u64::BITS as usize))
-                    != 0;
-                let fluid_occupied = self.fluid_occupancy[index / u64::BITS as usize]
-                    & (1_u64 << (index % u64::BITS as usize))
-                    != 0;
-                if !block_occupied && !fluid_occupied {
-                    continue;
-                }
-
+        chunk.edit_content(|content| {
+            for (index, cell) in self.block_entries() {
                 let (x, y, z) = coordinates(index);
-                if block_occupied {
-                    let archived = archived_cells
-                        .next()
-                        .expect("archived chunk occupancy should match archived cells");
-                    let block_id = self.palette[archived.palette_index as usize];
-                    chunk.set_block(
-                        x,
-                        y,
-                        z,
-                        Some(
-                            VoxelCell::oriented(
-                                block_id,
-                                TextureRotation::from_quarter_turn(archived.rotation),
-                                BlockOrientation::from_index(archived.orientation),
-                            )
-                            .with_secondary_properties(archived.secondary_properties),
-                        ),
-                    );
-                }
-
-                if fluid_occupied {
-                    let archived = archived_fluids
-                        .next()
-                        .expect("archived chunk fluid occupancy should match archived fluid cells");
-                    chunk.set_fluid(
-                        x,
-                        y,
-                        z,
-                        Some(FluidCell::with_state(
-                            archived.fluid_id,
-                            archived.level,
-                            archived.source,
-                            archived.spread_distance,
-                        )),
-                    );
-                }
+                content.set_block(x, y, z, Some(cell));
+            }
+            for (index, fluid) in self.fluid_entries() {
+                let (x, y, z) = coordinates(index);
+                content.set_fluid(x, y, z, Some(fluid));
             }
         });
 
         chunk
     }
+}
+
+fn occupied_indices(
+    occupancy: &[u64; OCCUPANCY_WORDS],
+) -> impl Iterator<Item = usize> + '_ {
+    occupancy.iter().enumerate().flat_map(|(word_index, &word)| {
+        let mut remaining = word;
+        std::iter::from_fn(move || {
+            if remaining == 0 {
+                return None;
+            }
+            let bit = remaining.trailing_zeros() as usize;
+            remaining &= remaining - 1;
+            Some(word_index * u64::BITS as usize + bit)
+        })
+    })
 }
 
 fn coordinates(index: usize) -> (usize, usize, usize) {

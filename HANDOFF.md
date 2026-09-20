@@ -3902,3 +3902,68 @@ A primeira CI do rename encontrou dois call sites adicionais que a busca de cód
 - `world/setup/progress.rs`.
 
 Ambos agora usam `has_resident_or_persisted_chunk()`. Nenhuma semântica mudou e `VERSION` permanece `0.34.20`.
+
+
+### CI verde do checkpoint 131
+
+- Push CI `35512944231`: **success**.
+- PR CI `35512948102`: **success**.
+- O topo `bb7eda356efa3d9cde62b43f7e649a49ad1aa103` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.20`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 132 — 2026-09-20: archived persistent chunks serializam sem restore/repack [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`VoxelWorld::save_persistent_chunks()` tratava chunk persistent já arquivado assim:
+
+1. `ArchivedChunk::restore()`;
+2. construção de um `VoxelChunk` completo;
+3. alocação/rebuild de storage/metadata derivada;
+4. `DiskChunk::from_chunk()` fazia novo scan de 4096 voxels;
+5. o runtime chunk temporário era descartado.
+
+Isso fazia trabalho e alocação que não participa do formato durável.
+
+### Implementação
+
+`ArchivedChunk` agora expõe capabilities read-only:
+
+- `block_entries()`;
+- `fluid_entries()`.
+
+Elas iteram apenas bits ocupados em ordem crescente e reconstroem somente o `VoxelCell`/`FluidCell` necessário ao consumidor. O layout interno de occupancy/palette continua encapsulado.
+
+`DiskChunk` ganhou um `DiskChunkBuilder` privado que centraliza:
+
+- block-state normalization/properties sorting;
+- portable block palette + runs;
+- runtime fluid ID → authored fluid ID;
+- portable fluid palette + runs.
+
+Tanto `from_chunk()` quanto o novo `from_archived_chunk()` usam o mesmo builder, portanto não existem dois encoders de disk semantics.
+
+`save_persistent_chunks()` agora chama `DiskChunk::from_archived_chunk()` para chunks archived.
+
+### Ganho estrutural
+
+Para um archived persistent chunk o save deixa de:
+
+- alocar light array/runtime chunk;
+- reconstruir block/fluid counts;
+- reconstruir frontier metadata;
+- executar setters sobre todo conteúdo;
+- fazer um segundo scan 16³.
+
+O archive é lido diretamente e `DiskChunk` continua dono exclusivo da representação portable.
+
+### Regressão adicionada
+
+Foi adicionado teste que compara JSON de `DiskChunk::from_chunk()` e `DiskChunk::from_archived_chunk()` para o mesmo conteúdo. O teste NÃO foi executado manualmente; ele será compilado pela CI `--all-targets`.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` documenta o direct archive → disk path.
+- `VERSION`: **0.34.20 → 0.34.21**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
