@@ -45,6 +45,7 @@ pub struct VoxelChunk {
     block_count: usize,
     fluid_count: usize,
     fluid_frontier_sources: Arc<[u64; FLUID_FRONTIER_WORDS]>,
+    dynamic_fluid_cells: Arc<[u64; FLUID_FRONTIER_WORDS]>,
     boundary_content_counts: [u16; BOUNDARY_FACE_COUNT],
     boundary_fluid_counts: [u16; BOUNDARY_FACE_COUNT],
 }
@@ -55,6 +56,7 @@ pub(crate) struct VoxelChunkContentMut<'a> {
     block_count: &'a mut usize,
     fluid_count: &'a mut usize,
     fluid_frontier_sources: &'a mut [u64; FLUID_FRONTIER_WORDS],
+    dynamic_fluid_cells: &'a mut [u64; FLUID_FRONTIER_WORDS],
     boundary_content_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
     boundary_fluid_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
 }
@@ -92,6 +94,7 @@ impl VoxelChunkContentMut<'_> {
             &mut *self.fluids,
             &mut *self.fluid_count,
             &mut *self.fluid_frontier_sources,
+            &mut *self.dynamic_fluid_cells,
             &mut *self.boundary_content_counts,
             &mut *self.boundary_fluid_counts,
             x,
@@ -111,6 +114,7 @@ impl VoxelChunk {
             block_count: 0,
             fluid_count: 0,
             fluid_frontier_sources: Arc::new([0; FLUID_FRONTIER_WORDS]),
+            dynamic_fluid_cells: Arc::new([0; FLUID_FRONTIER_WORDS]),
             boundary_content_counts: [0; BOUNDARY_FACE_COUNT],
             boundary_fluid_counts: [0; BOUNDARY_FACE_COUNT],
         }
@@ -149,19 +153,21 @@ impl VoxelChunk {
         &self,
         mut visit: impl FnMut(IVec3, FluidCell),
     ) {
-        if self.fluid_count == 0 {
-            return;
-        }
-
-        for (voxel_index, fluid) in self.fluids.iter().copied().enumerate() {
-            let Some(fluid) = fluid else {
-                continue;
-            };
-            if fluid.is_source() {
-                continue;
+        for (word_index, &word) in self.dynamic_fluid_cells.iter().enumerate() {
+            let mut remaining = word;
+            while remaining != 0 {
+                let bit = remaining.trailing_zeros() as usize;
+                let voxel_index = word_index * u64::BITS as usize + bit;
+                if voxel_index >= CHUNK_VOLUME {
+                    break;
+                }
+                let fluid = self.fluids[voxel_index]
+                    .expect("dynamic fluid metadata must point to a fluid voxel");
+                debug_assert!(!fluid.is_source());
+                let (x, y, z) = coordinates(voxel_index);
+                visit(IVec3::new(x as i32, y as i32, z as i32), fluid);
+                remaining &= remaining - 1;
             }
-            let (x, y, z) = coordinates(voxel_index);
-            visit(IVec3::new(x as i32, y as i32, z as i32), fluid);
         }
     }
 
@@ -220,12 +226,14 @@ impl VoxelChunk {
         let blocks = Arc::make_mut(&mut self.blocks);
         let fluids = Arc::make_mut(&mut self.fluids);
         let fluid_frontier_sources = Arc::make_mut(&mut self.fluid_frontier_sources);
+        let dynamic_fluid_cells = Arc::make_mut(&mut self.dynamic_fluid_cells);
         let mut content = VoxelChunkContentMut {
             blocks,
             fluids,
             block_count: &mut self.block_count,
             fluid_count: &mut self.fluid_count,
             fluid_frontier_sources,
+            dynamic_fluid_cells,
             boundary_content_counts: &mut self.boundary_content_counts,
             boundary_fluid_counts: &mut self.boundary_fluid_counts,
         };
@@ -251,11 +259,13 @@ impl VoxelChunk {
     pub(crate) fn set_fluid(&mut self, x: usize, y: usize, z: usize, fluid: Option<FluidCell>) {
         let fluids = Arc::make_mut(&mut self.fluids);
         let fluid_frontier_sources = Arc::make_mut(&mut self.fluid_frontier_sources);
+        let dynamic_fluid_cells = Arc::make_mut(&mut self.dynamic_fluid_cells);
         set_fluid_in_storage(
             self.blocks.as_ref(),
             fluids,
             &mut self.fluid_count,
             fluid_frontier_sources,
+            dynamic_fluid_cells,
             &mut self.boundary_content_counts,
             &mut self.boundary_fluid_counts,
             x,
@@ -356,6 +366,7 @@ fn set_fluid_in_storage(
     fluids: &mut [Option<FluidCell>],
     fluid_count: &mut usize,
     fluid_frontier_sources: &mut [u64; FLUID_FRONTIER_WORDS],
+    dynamic_fluid_cells: &mut [u64; FLUID_FRONTIER_WORDS],
     boundary_content_counts: &mut [u16; BOUNDARY_FACE_COUNT],
     boundary_fluid_counts: &mut [u16; BOUNDARY_FACE_COUNT],
     x: usize,
@@ -379,7 +390,22 @@ fn set_fluid_in_storage(
     }
 
     fluids[index] = fluid;
+    set_voxel_bit(
+        dynamic_fluid_cells,
+        index,
+        fluid.is_some_and(|fluid| !fluid.is_source()),
+    );
     refresh_fluid_frontier_sources_near(blocks, fluids, fluid_frontier_sources, x, y, z);
+}
+
+fn set_voxel_bit(bits: &mut [u64; FLUID_FRONTIER_WORDS], voxel_index: usize, value: bool) {
+    let word = voxel_index / u64::BITS as usize;
+    let mask = 1_u64 << (voxel_index % u64::BITS as usize);
+    if value {
+        bits[word] |= mask;
+    } else {
+        bits[word] &= !mask;
+    }
 }
 
 fn refresh_fluid_frontier_sources_near(
@@ -418,13 +444,7 @@ fn refresh_fluid_frontier_source(
             blocks[target_index].is_none() && fluids[target_index].is_none()
         });
 
-    let word = source_index / u64::BITS as usize;
-    let mask = 1_u64 << (source_index % u64::BITS as usize);
-    if should_track {
-        sources[word] |= mask;
-    } else {
-        sources[word] &= !mask;
-    }
+    set_voxel_bit(sources, source_index, should_track);
 }
 
 fn adjust_total_count(count: &mut usize, added: bool) {

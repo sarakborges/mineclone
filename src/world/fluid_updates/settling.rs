@@ -69,6 +69,7 @@ impl GeneratedFluidSettling {
     pub(in crate::world) fn begin(
         &mut self,
         world: &VoxelWorld,
+        fluids: &FluidRegistry,
         coords: impl IntoIterator<Item = IVec3>,
     ) {
         self.reset();
@@ -95,6 +96,7 @@ impl GeneratedFluidSettling {
         seeds.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
         for coord in seeds {
             self.seed_frontier_into_work(world, coord);
+            self.seed_horizontal_dependency_halo(world, fluids, coord);
         }
     }
 
@@ -308,6 +310,62 @@ impl GeneratedFluidSettling {
         }
     }
 
+    fn seed_horizontal_dependency_halo(
+        &mut self,
+        world: &VoxelWorld,
+        fluids: &FluidRegistry,
+        generated_coord: IVec3,
+    ) {
+        for z in -1..=1 {
+            for x in -1..=1 {
+                if x == 0 && z == 0 {
+                    continue;
+                }
+                let neighbor = generated_coord + IVec3::new(x, 0, z);
+                if self.generated_chunks.contains(&neighbor)
+                    || !world.derived_fluid_chunk_is_mutable(neighbor)
+                {
+                    continue;
+                }
+                let Some(chunk) = world.chunk(neighbor) else {
+                    continue;
+                };
+                let origin = chunk_origin(neighbor);
+
+                chunk.visit_dynamic_fluid_cells(|local_position, fluid| {
+                    let Some(definition) = fluids.get(fluid.fluid_id) else {
+                        return;
+                    };
+                    let position = origin + local_position;
+                    if horizontal_distance_to_chunk(position, generated_coord)
+                        <= i32::from(definition.max_spread).saturating_add(1)
+                    {
+                        self.work_queue.enqueue(position);
+                    }
+                });
+
+                let mut frontier_targets = Vec::new();
+                visit_loaded_fluid_frontier_targets(
+                    world,
+                    neighbor,
+                    &mut |fluid_id, target, priority| {
+                        let Some(definition) = fluids.get(fluid_id) else {
+                            return;
+                        };
+                        if horizontal_distance_to_chunk(target, generated_coord)
+                            <= i32::from(definition.max_spread).saturating_add(1)
+                        {
+                            frontier_targets.push((target, priority));
+                        }
+                    },
+                );
+                for (target, priority) in frontier_targets {
+                    self.enqueue_work_target(world, target, priority);
+                }
+            }
+        }
+    }
+
     fn seed_frontier_into_work(&mut self, world: &VoxelWorld, coord: IVec3) {
         let mut targets = Vec::new();
         visit_loaded_fluid_frontier_targets(
@@ -351,3 +409,25 @@ impl GeneratedFluidSettling {
         }
     }
 }
+ 
+fn horizontal_distance_to_chunk(position: IVec3, coord: IVec3) -> i32 {
+    let minimum = coord * crate::voxel::chunk::CHUNK_SIZE as i32;
+    let maximum = minimum + IVec3::splat(crate::voxel::chunk::CHUNK_SIZE as i32 - 1);
+
+    let x = if position.x < minimum.x {
+        minimum.x - position.x
+    } else if position.x > maximum.x {
+        position.x - maximum.x
+    } else {
+        0
+    };
+    let z = if position.z < minimum.z {
+        minimum.z - position.z
+    } else if position.z > maximum.z {
+        position.z - maximum.z
+    } else {
+        0
+    };
+    x.saturating_add(z)
+}
+

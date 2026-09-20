@@ -22,7 +22,7 @@ pub(super) fn settle_initial_fluids(
         progress
             .loading_state
             .fluid_settling
-            .begin(&progress.world, coords);
+            .begin(&progress.world, content.fluids(), coords);
     }
 
     let mut budget = FrameWorkBudget::new(

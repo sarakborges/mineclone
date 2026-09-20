@@ -106,7 +106,9 @@ pub(super) fn collect_generated_chunks(
     }
 
     let world = &work.world;
-    work.state.fluid_settling.begin(world, staged);
+    work.state
+        .fluid_settling
+        .begin(world, content.fluids(), staged);
 
     if process_streaming_fluid_settling(content, work) {
         let completion = work
