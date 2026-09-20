@@ -259,11 +259,8 @@ fn collect_structure_candidates<'a>(
     only_structure_id: Option<&str>,
     candidates: &mut Vec<StructureCandidate<'a>>,
 ) {
-    let StructurePlacementContext {
-        biome_id,
-        placement_id,
-        placement,
-    } = placement_context;
+    let biome_id = placement_context.biome_id;
+    let placement_id = placement_context.placement_id;
     let bounds = context
         .structures
         .bounds_for_reference(placement_id)
