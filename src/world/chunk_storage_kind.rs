@@ -79,6 +79,20 @@ impl ChunkStorageKind {
         }
     }
 
+    /// Validates that the authoritative chunk artifact for a published generation can be
+    /// read. Legacy snapshot ownership is validated when the snapshot itself is decoded;
+    /// external ownership additionally requires its generation directory to be complete.
+    pub(crate) fn validate_generation(
+        self,
+        world_directory: &Path,
+        generation: u64,
+    ) -> io::Result<()> {
+        match self {
+            Self::Snapshot => Ok(()),
+            Self::GenerationDirectory => read_generation_chunks(world_directory, generation).map(|_| ()),
+        }
+    }
+
     /// Removes storage owned by this mode. This is used both when publication of the
     /// generation's commit marker fails and when an old generation is pruned.
     pub(crate) fn remove_chunks(
@@ -145,5 +159,30 @@ mod tests {
         ChunkStorageKind::Snapshot
             .remove_chunks(missing, 7)
             .expect("snapshot ownership must not remove external storage");
+    }
+
+    #[test]
+    fn legacy_snapshot_generation_validation_does_not_require_external_storage() {
+        ChunkStorageKind::Snapshot
+            .validate_generation(Path::new("this-path-is-never-read-for-snapshot-storage"), 7)
+            .expect("legacy generation validation must stay snapshot-owned");
+    }
+
+    #[test]
+    fn external_generation_validation_rejects_missing_storage() {
+        let root = std::env::temp_dir().join(format!(
+            "asteria-chunk-kind-missing-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock must be after epoch")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("temp root must be created");
+        let error = ChunkStorageKind::GenerationDirectory
+            .validate_generation(&root, 7)
+            .expect_err("missing external generation must not validate");
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+        std::fs::remove_dir_all(root).expect("temp root must be removed");
     }
 }
