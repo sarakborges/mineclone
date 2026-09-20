@@ -68,7 +68,7 @@ fn write_generation_chunks_to_staging(staging: &Path, chunks: &[DiskChunk]) -> i
         let parent = path.parent().ok_or_else(|| io::Error::other("chunk storage path has no parent"))?;
         fs::create_dir_all(parent)?;
         let payload = serde_json::to_vec(chunk).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-        let mut file = OpenOptions::new().write(true).create_new(true).open(&path)?;
+        let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
         file.write_all(&payload)?;
         file.sync_all()?;
     }
