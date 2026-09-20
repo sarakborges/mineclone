@@ -19,7 +19,10 @@ fn checked_directory_slot(world_directory: &Path, relative: &Path) -> io::Result
     let path = world_directory.join(relative);
     match fs::symlink_metadata(path.as_path()) {
         Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => Ok(path),
-        Ok(_) => Err(io::Error::new(io::ErrorKind::InvalidData, format!("chunk storage directory slot is not a real directory: {}", path.display()))),
+        Ok(_) => {
+            let display = path.display();
+            Err(io::Error::new(io::ErrorKind::InvalidData, format!("chunk storage directory slot is not a real directory: {display}")))
+        }
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(path),
         Err(error) => Err(error),
     }
