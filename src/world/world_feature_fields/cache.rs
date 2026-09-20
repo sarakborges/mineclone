@@ -175,6 +175,7 @@ pub(super) struct FeatureCaches {
     volume_biomes: ConcurrentCache<IVec3, Arc<VolumeBiomeRegion>>,
     caves: ConcurrentCache<IVec3, Option<Arc<CaveConnectivityRegion>>>,
     regions: ConcurrentCache<IVec3, Arc<GenerationRegion>>,
+    structure_vertical_extents: ConcurrentCache<IVec2, i32>,
     structure_origins: StructureOriginCache,
     retention_scratch: Mutex<RetentionScratch>,
 }
@@ -187,6 +188,7 @@ impl FeatureCaches {
             volume_biomes: ConcurrentCache::new("volume biome cache"),
             caves: ConcurrentCache::new("cave region cache"),
             regions: ConcurrentCache::new("generation region cache"),
+            structure_vertical_extents: ConcurrentCache::new("structure vertical extent cache"),
             structure_origins: StructureOriginCache::new(),
             retention_scratch: Mutex::new(RetentionScratch::default()),
         }
@@ -222,6 +224,15 @@ impl FeatureCaches {
     ) -> Option<Arc<CaveConnectivityRegion>> {
         self.caves
             .get_or_insert_with(coord, || factory().map(Arc::new))
+    }
+
+    pub(super) fn structure_vertical_extent(
+        &self,
+        coord: IVec2,
+        factory: impl FnOnce() -> i32,
+    ) -> i32 {
+        self.structure_vertical_extents
+            .get_or_insert_with(coord, factory)
     }
 
     pub(super) fn structure_origin_y(
@@ -292,6 +303,8 @@ impl FeatureCaches {
 
         self.generation_columns
             .retain(|coord| horizontal_chunks.contains(coord));
+        self.structure_vertical_extents
+            .retain(|coord| horizontal_chunks.contains(coord));
         self.volume_biomes
             .retain(|coord| retained_regions.contains(coord));
         self.caves
@@ -333,6 +346,11 @@ impl FeatureCaches {
     #[cfg(test)]
     pub(super) fn cave_region_count(&self) -> usize {
         self.caves.len()
+    }
+
+    #[cfg(test)]
+    pub(super) fn structure_vertical_extent_count(&self) -> usize {
+        self.structure_vertical_extents.len()
     }
 
     #[cfg(test)]
