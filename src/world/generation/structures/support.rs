@@ -4,7 +4,7 @@ use arrayvec::ArrayVec;
 use bevy::prelude::*;
 
 use crate::{
-    content::structure::StructureVoxel,
+    content::structure::{StructureDefinition, StructureVoxel},
     voxel::coordinates::chunk_coord_from_world,
     world::{
         biome_field::MAX_SURFACE_INFLUENCES,
@@ -25,7 +25,6 @@ use super::super::{
     },
 };
 
-const MAX_STRUCTURE_GROUND_VARIATION: i32 = 1;
 const MAX_STRUCTURE_GROUND_RISE: i32 = 3;
 const SURFACE_CARVER_WATER_CLEARANCE: f32 = 12.0;
 
@@ -35,6 +34,7 @@ const SURFACE_CARVER_WATER_CLEARANCE: f32 = 12.0;
 pub(crate) fn fit_structure_to_ground(
     anchor: IVec2,
     voxels: &[StructureVoxel],
+    max_slope: i32,
     mut ground_at: impl FnMut(IVec2) -> Option<i32>,
 ) -> Option<i32> {
     let minimum_offset_y = voxels.iter().map(|voxel| voxel.offset.y).min()?;
@@ -48,9 +48,7 @@ pub(crate) fn fit_structure_to_ground(
         maximum_ground_y = maximum_ground_y.max(ground_y);
     }
 
-    if minimum_ground_y == i32::MAX
-        || maximum_ground_y - minimum_ground_y > MAX_STRUCTURE_GROUND_VARIATION
-    {
+    if minimum_ground_y == i32::MAX || maximum_ground_y - minimum_ground_y > max_slope {
         return None;
     }
 
@@ -59,17 +57,30 @@ pub(crate) fn fit_structure_to_ground(
 
 pub(super) fn compute_structure_origin_y(
     anchor: IVec2,
-    voxels: &[StructureVoxel],
+    structure: &StructureDefinition,
     context: &ChunkGenerationContext<'_>,
 ) -> Option<i32> {
+    let voxels = structure.voxels();
     let (region, anchored_caves) = structure_support_context(anchor, context);
-    fit_structure_to_ground(anchor, voxels, |position| {
-        let sample_position = position.as_vec2() + Vec2::splat(0.5);
-        if region.hydrology.water_at(sample_position).is_some() {
-            return None;
-        }
-        supported_surface_ground_y(position, region.as_ref(), anchored_caves.as_deref(), context)
-    })
+    fit_structure_to_ground(
+        anchor,
+        voxels,
+        structure.restrictions.max_slope,
+        |position| {
+            let sample_position = position.as_vec2() + Vec2::splat(0.5);
+            if structure.restrictions.requires_dry_ground
+                && region.hydrology.water_at(sample_position).is_some()
+            {
+                return None;
+            }
+            supported_surface_ground_y(
+                position,
+                region.as_ref(),
+                anchored_caves.as_deref(),
+                context,
+            )
+        },
+    )
 }
 
 fn structure_support_context(
