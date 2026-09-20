@@ -67,7 +67,7 @@ pub(in crate::world) fn setup_world(
             *persistence.load_mode,
         ),
         WorldLoadingPhase::PrimingFluids => {
-            prime_initial_fluids(&content, &mut progress)
+            prime_initial_fluids(&content, &mut progress, &mut simulation.fluids)
         }
         WorldLoadingPhase::Lighting => light_initial_chunks(
             &content,

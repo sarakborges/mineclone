@@ -18,8 +18,20 @@ pub(super) fn generate_initial_chunks(
     generation_tasks.sync_snapshot(generation, content);
     let mut budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 1);
 
-    integrate_generated_chunks(&mut budget, progress, fluid_updates, generation_tasks);
-    dispatch_generation_tasks(&mut budget, progress, fluid_updates, generation_tasks);
+    integrate_generated_chunks(
+        &mut budget,
+        progress,
+        fluid_updates,
+        generation_tasks,
+        load_mode,
+    );
+    dispatch_generation_tasks(
+        &mut budget,
+        progress,
+        fluid_updates,
+        generation_tasks,
+        load_mode,
+    );
 
     if progress.loading_state.generation_cursor >= progress.loading_state.coords.len()
         && progress.loading_state.generated >= progress.loading_state.coords.len()
@@ -37,6 +49,7 @@ fn integrate_generated_chunks(
     progress: &mut WorldSetupProgress<'_>,
     fluid_updates: &mut PendingFluidUpdates,
     generation_tasks: &mut ChunkGenerationTasks,
+    load_mode: WorldLoadMode,
 ) {
     let current_revision = generation_tasks.revision();
 
@@ -64,7 +77,9 @@ fn integrate_generated_chunks(
                 .world
                 .insert_chunk(completed.coord, completed.output);
         }
-        fluid_updates.enqueue_loaded_fluid_frontier(&progress.world, completed.coord);
+        if load_mode == WorldLoadMode::Load {
+            fluid_updates.enqueue_loaded_fluid_frontier(&progress.world, completed.coord);
+        }
         progress.loading_state.generated += 1;
     }
 }
@@ -74,6 +89,7 @@ fn dispatch_generation_tasks(
     progress: &mut WorldSetupProgress<'_>,
     fluid_updates: &mut PendingFluidUpdates,
     generation_tasks: &mut ChunkGenerationTasks,
+    load_mode: WorldLoadMode,
 ) {
     while generation_tasks.pending_count() < MAX_GENERATION_TASKS_IN_FLIGHT {
         if budget.exhausted() {
@@ -90,7 +106,9 @@ fn dispatch_generation_tasks(
         };
 
         if progress.world.chunk(coord).is_some() {
-            fluid_updates.enqueue_loaded_fluid_frontier(&progress.world, coord);
+            if load_mode == WorldLoadMode::Load {
+                fluid_updates.enqueue_loaded_fluid_frontier(&progress.world, coord);
+            }
             progress.loading_state.generation_cursor += 1;
             progress.loading_state.generated += 1;
             budget.record(1);
@@ -102,7 +120,9 @@ fn dispatch_generation_tasks(
                 progress.world.restore_chunk(coord),
                 "generated bootstrap chunk must be resident or archived: {coord:?}"
             );
-            fluid_updates.enqueue_loaded_fluid_frontier(&progress.world, coord);
+            if load_mode == WorldLoadMode::Load {
+                fluid_updates.enqueue_loaded_fluid_frontier(&progress.world, coord);
+            }
             progress.loading_state.generation_cursor += 1;
             progress.loading_state.generated += 1;
             budget.record(1);

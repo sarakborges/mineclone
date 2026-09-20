@@ -28,7 +28,6 @@ use super::{
     chunk_remesh::ChunkRemeshQueue,
     game_rules::GameRules,
     tick::WorldTickClock,
-    WorldLoadMode,
     work_budget::FrameWorkBudget,
 };
 
@@ -40,13 +39,10 @@ const MAX_FLUID_CATCHUP_UPDATES_PER_FRAME: usize = 2_048;
 
 pub(super) fn reseed_loaded_fluid_frontiers(
     world: Res<VoxelWorld>,
-    load_mode: Res<WorldLoadMode>,
     mut pending: ResMut<PendingFluidUpdates>,
 ) {
-    if *load_mode == WorldLoadMode::New {
-        *pending = PendingFluidUpdates::default();
-    }
-
+    // Preserve work explicitly handed off by bootstrap priming. This pass is
+    // idempotent safety/reconciliation for all resident chunks, not a reset.
     let mut loaded = world.loaded_chunk_coords().collect::<Vec<_>>();
     loaded.sort_by_key(|coord| (coord.y, coord.z, coord.x));
     for coord in loaded {
