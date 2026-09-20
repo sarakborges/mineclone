@@ -280,3 +280,12 @@ Adjacency checks use the same `SITE_SEARCH_RADIUS` as surface-site sampling, so 
 ### Concurrent worldgen prerequisites
 
 Generation-region, hydrology, volume-biome, cave, and generation-column caches own shared prerequisite serialization through per-key `OnceLock` entries. Chunk task dispatch must not add a second “only one task per uninitialized region/column” gate: concurrent tasks may enter the cache safely, one computes the value, and the others reuse it. This preserves bounded task parallelism without duplicate prerequisite construction.
+
+
+### Demand-driven generated-fluid generation closure
+
+A streaming generation wave is not publishable merely because its currently resident chunks reached a local fixed point. After each verified settling round, the mutable settling domain is scanned through sparse fluid-frontier metadata for a fluid that can move into a missing chunk which is still part of the live streaming selection. Such a chunk is a generation dependency of the same wave: the completed round is retained unpublished, the missing chunk is adopted into the active wave, generated asynchronously, and the union is settled again. This repeats until verified convergence has no reachable missing chunk inside the live selection. Only then may the wave publish.
+
+This replaces arbitrary wave-boundary correctness with a causal closure: unrelated pending chunks do not delay publication, while a waterfall/spill may expand its wave across as many selected chunks as its actual movement requires. The boundary of the current live selection remains the intentional stopping boundary; a future chunk entering selection reopens the seam before that new chunk publishes.
+
+Generated settling also owns mutation rights for every resident non-persistent chunk in its mutable halo, including chunks that were already rendered before the wave. Runtime due fluid ticks targeting any settling-owned chunk must enter dormant scheduling instead of calling `set_fluid_at`, because that call would promote the chunk to persistent state and revoke derived-settling mutation rights mid-convergence. Final wave reconciliation reactivates dormant runtime work for every previously published chunk whose mutation ownership was suspended, not only chunks whose fluid value happened to change.

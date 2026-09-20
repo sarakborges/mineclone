@@ -188,10 +188,14 @@ fn process_due_fluid_ticks(
 
         let position = scheduled.position;
         let coord = chunk_coord_from_world(position);
-        if runtime.streaming.generated_chunk_is_unpublished(coord) {
-            // Staged/generated chunks are resident for the worldgen settling
-            // layer, not yet runtime-owned. Reuse dormant scheduling so this
-            // tick is reactivated by the normal publication path.
+        if runtime.streaming.generated_chunk_is_unpublished(coord)
+            || runtime
+                .streaming
+                .generated_fluid_settling_owns_mutation(coord)
+        {
+            // Generated chunks and any already-published chunks temporarily
+            // owned by the settling closure are worldgen-owned. Reuse dormant
+            // scheduling; publication/final reconciliation reactivates them.
             runtime.pending.defer_unloaded(scheduled);
             continue;
         }

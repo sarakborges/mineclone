@@ -34,7 +34,9 @@ use super::{
     chunk_remesh::ChunkRemeshQueue,
     chunk_rendering::ChunkRenderPool,
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
-    fluid_updates::{GeneratedFluidSettling, PendingFluidUpdates},
+    fluid_updates::{
+        GeneratedFluidSettling, GeneratedFluidSettlingCompletion, PendingFluidUpdates,
+    },
     render_distance::RenderDistanceSettings,
     tick::WorldTickClock,
     world_feature_fields::WorldFeatureFields,
@@ -68,6 +70,8 @@ pub(super) struct ChunkStreamingState {
     generation_wave_targets: HashSet<IVec3>,
     generation_wave_pending: DeduplicatedQueue<IVec3>,
     staged_generated_chunks: HashSet<IVec3>,
+    generation_wave_changed_existing_positions: HashSet<IVec3>,
+    generation_wave_owned_existing_chunks: HashSet<IVec3>,
     selection_revision: u64,
     retired_scan_miss: Option<RetiredScanKey>,
 }
@@ -130,6 +134,11 @@ impl ChunkStreamingState {
         }
     }
 
+    fn adopt_generation_wave_target(&mut self, coord: IVec3) {
+        self.pending.remove(coord);
+        self.start_generation_wave_target(coord);
+    }
+
     fn generation_wave_active(&self) -> bool {
         !self.generation_wave_targets.is_empty()
             || !self.staged_generated_chunks.is_empty()
@@ -176,6 +185,47 @@ impl ChunkStreamingState {
         staged
     }
 
+    fn retain_settling_round(
+        &mut self,
+        completion: GeneratedFluidSettlingCompletion,
+    ) {
+        for coord in completion.generated_chunks {
+            debug_assert!(
+                self.generation_wave_targets.contains(&coord),
+                "retained settled chunk must remain reserved by its generation wave"
+            );
+            self.staged_generated_chunks.insert(coord);
+        }
+        self.generation_wave_changed_existing_positions
+            .extend(completion.changed_existing_positions);
+        self.generation_wave_owned_existing_chunks
+            .extend(completion.owned_existing_chunks);
+    }
+
+    fn merge_settling_rounds(
+        &mut self,
+        mut completion: GeneratedFluidSettlingCompletion,
+    ) -> GeneratedFluidSettlingCompletion {
+        completion
+            .changed_existing_positions
+            .extend(self.generation_wave_changed_existing_positions.drain());
+        completion.changed_existing_positions.sort_unstable_by_key(|position| {
+            let coord = chunk_coord_from_world(*position);
+            (coord.y, coord.z, coord.x, position.y, position.z, position.x)
+        });
+        completion.changed_existing_positions.dedup();
+
+        completion
+            .owned_existing_chunks
+            .extend(self.generation_wave_owned_existing_chunks.drain());
+        completion
+            .owned_existing_chunks
+            .sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
+        completion.owned_existing_chunks.dedup();
+
+        completion
+    }
+
     fn finish_generation_wave(&mut self) {
         assert!(
             self.staged_generated_chunks.is_empty(),
@@ -194,12 +244,24 @@ impl ChunkStreamingState {
             "generation wave cannot finish with unresolved target reservations: {:?}",
             self.generation_wave_targets
         );
+        assert!(
+            self.generation_wave_changed_existing_positions.is_empty(),
+            "generation wave cannot finish with unreconciled existing fluid mutations"
+        );
+        assert!(
+            self.generation_wave_owned_existing_chunks.is_empty(),
+            "generation wave cannot finish while runtime fluid ownership is still suspended"
+        );
     }
 
     pub(in crate::world) fn generated_chunk_is_unpublished(&self, coord: IVec3) -> bool {
         self.generation_wave_targets.contains(&coord)
             || self.staged_generated_chunks.contains(&coord)
             || self.fluid_settling.contains(coord)
+    }
+
+    pub(in crate::world) fn generated_fluid_settling_owns_mutation(&self, coord: IVec3) -> bool {
+        self.fluid_settling.owns_mutation(coord)
     }
 
     fn resident_generated_chunk_is_unpublished(&self, coord: IVec3) -> bool {

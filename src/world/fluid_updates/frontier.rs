@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::{
     voxel::{
         chunk::CHUNK_SIZE,
+        coordinates::chunk_coord_from_world,
         neighbors::CARDINAL_NEIGHBORS,
         world::VoxelWorld,
     },
@@ -60,6 +61,46 @@ pub(super) fn visit_loaded_fluid_frontier_targets(
     for offset in CARDINAL_NEIGHBORS {
         visit_neighbor_boundary_spread_targets(world, coord + offset, -offset, visit);
     }
+}
+
+pub(super) fn visit_unloaded_fluid_frontier_chunks(
+    world: &VoxelWorld,
+    coord: IVec3,
+    visit: &mut impl FnMut(IVec3),
+) {
+    if coord.y < 0 {
+        return;
+    }
+    let Some(chunk) = world.chunk(coord) else {
+        return;
+    };
+    if !chunk.has_fluid() {
+        return;
+    }
+
+    let origin = coord * CHUNK_SIZE as i32;
+    chunk.visit_potential_fluid_frontier_sources(|local_position, fluid| {
+        let position = origin + local_position;
+        let mut can_spread_horizontally = None;
+
+        for offset in FLUID_SPREAD_TARGETS {
+            let target = position + offset;
+            if target.y < 0 || world.sample_at(target).is_some() {
+                continue;
+            }
+
+            if offset != IVec3::NEG_Y {
+                let eligible = *can_spread_horizontally.get_or_insert_with(|| {
+                    can_spread_horizontally_from(world, position, fluid)
+                });
+                if !eligible {
+                    continue;
+                }
+            }
+
+            visit(chunk_coord_from_world(target));
+        }
+    });
 }
 
 fn enqueue_chunk_fluid_spread_targets(

@@ -15,7 +15,9 @@ use crate::{
 };
 
 use super::{
-    frontier::visit_loaded_fluid_frontier_targets,
+    frontier::{
+        visit_loaded_fluid_frontier_targets, visit_unloaded_fluid_frontier_chunks,
+    },
     solver::{FluidSolverScratch, desired_fluid_with_scratch},
 };
 
@@ -23,6 +25,7 @@ use super::{
 pub(in crate::world) struct GeneratedFluidSettlingCompletion {
     pub(in crate::world) generated_chunks: Vec<IVec3>,
     pub(in crate::world) changed_existing_positions: Vec<IVec3>,
+    pub(in crate::world) owned_existing_chunks: Vec<IVec3>,
 }
 
 /// Budgeted generated-fluid convergence with explicit fixed-point verification.
@@ -65,6 +68,36 @@ impl GeneratedFluidSettling {
     /// reported here because they may already be rendered.
     pub(in crate::world) fn contains(&self, coord: IVec3) -> bool {
         self.generated_chunks.contains(&coord)
+    }
+
+    pub(in crate::world) fn owns_mutation(&self, coord: IVec3) -> bool {
+        self.active && self.mutable_chunks.contains(&coord)
+    }
+
+    pub(in crate::world) fn required_unloaded_frontier_chunks(
+        &self,
+        world: &VoxelWorld,
+    ) -> Vec<IVec3> {
+        assert!(
+            self.active && self.converged,
+            "unloaded fluid frontier closure requires converged active settling"
+        );
+
+        let mut required = HashSet::new();
+        let mut domain = self.mutable_chunks.iter().copied().collect::<Vec<_>>();
+        domain.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
+
+        for coord in domain {
+            visit_unloaded_fluid_frontier_chunks(world, coord, &mut |target_coord| {
+                if target_coord.y >= 0 {
+                    required.insert(target_coord);
+                }
+            });
+        }
+
+        let mut required = required.into_iter().collect::<Vec<_>>();
+        required.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
+        required
     }
 
     pub(in crate::world) fn begin(
@@ -172,11 +205,20 @@ impl GeneratedFluidSettling {
             (coord.y, coord.z, coord.x, position.y, position.z, position.x)
         });
 
+        let mut owned_existing_chunks = self
+            .mutable_chunks
+            .iter()
+            .copied()
+            .filter(|coord| !self.generated_chunks.contains(coord))
+            .collect::<Vec<_>>();
+        owned_existing_chunks.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
+
         self.reset();
 
         Some(GeneratedFluidSettlingCompletion {
             generated_chunks,
             changed_existing_positions,
+            owned_existing_chunks,
         })
     }
 
