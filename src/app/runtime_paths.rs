@@ -7,6 +7,13 @@ const DATA_DIRECTORY: &str = "data";
 const ASSETS_DIRECTORY: &str = "assets";
 
 pub fn prepare_runtime_directory() {
+    if env::current_dir()
+        .ok()
+        .is_some_and(|directory| has_runtime_content(&directory))
+    {
+        return;
+    }
+
     let Ok(executable) = env::current_exe() else {
         return;
     };
@@ -14,7 +21,7 @@ pub fn prepare_runtime_directory() {
         return;
     };
 
-    if directory.join(DATA_DIRECTORY).is_dir() && directory.join(ASSETS_DIRECTORY).is_dir() {
+    if has_runtime_content(directory) {
         env::set_current_dir(directory).unwrap_or_else(|error| {
             panic!(
                 "failed to use packaged runtime directory {}: {error}",
@@ -22,6 +29,10 @@ pub fn prepare_runtime_directory() {
             )
         });
     }
+}
+
+fn has_runtime_content(directory: &Path) -> bool {
+    directory.join(DATA_DIRECTORY).is_dir() && directory.join(ASSETS_DIRECTORY).is_dir()
 }
 
 pub fn data_root() -> PathBuf {
