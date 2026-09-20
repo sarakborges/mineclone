@@ -28,6 +28,7 @@ use super::{
     chunk::CHUNK_SIZE,
     coordinates::chunk_origin,
     light::{BlockLight, VoxelLight},
+    neighbors::CARDINAL_NEIGHBORS,
     world::VoxelWorld,
 };
 
@@ -37,6 +38,9 @@ pub(crate) struct PendingLightingUpdates {
     emission_edit_previous_cells: HashMap<IVec3, Option<VoxelCell>>,
     context: LightingContext,
     interactive_changed_chunks: HashSet<IVec3>,
+    settling_changed_chunks: HashSet<IVec3>,
+    settling_fluid_remesh_priority: HashSet<IVec3>,
+    settling_fluid_remesh_background: HashSet<IVec3>,
 }
 
 impl PendingLightingUpdates {
@@ -49,6 +53,67 @@ impl PendingLightingUpdates {
 
     pub(crate) fn enqueue_medium_edit(&mut self, position: IVec3) {
         self.queue.enqueue_with_neighbors(position);
+    }
+
+    pub(crate) fn enqueue_settling_medium_edits(
+        &mut self,
+        positions: impl IntoIterator<Item = IVec3>,
+    ) {
+        let mut seeds = HashSet::new();
+        for position in positions {
+            if position.y >= 0 {
+                seeds.insert(position);
+            }
+            for offset in CARDINAL_NEIGHBORS {
+                let neighbor = position + offset;
+                if neighbor.y >= 0 {
+                    seeds.insert(neighbor);
+                }
+            }
+        }
+
+        let mut seeds = seeds.into_iter().collect::<Vec<_>>();
+        seeds.sort_unstable_by_key(|position| (position.y, position.z, position.x));
+        for position in seeds {
+            self.queue.enqueue_settling(position);
+        }
+    }
+
+    pub(crate) fn defer_settling_fluid_remesh(&mut self, coord: IVec3, priority: bool) {
+        if coord.y < 0 {
+            return;
+        }
+        if priority {
+            self.settling_fluid_remesh_background.remove(&coord);
+            self.settling_fluid_remesh_priority.insert(coord);
+        } else if !self.settling_fluid_remesh_priority.contains(&coord) {
+            self.settling_fluid_remesh_background.insert(coord);
+        }
+    }
+
+    pub(crate) fn take_completed_settling_fluid_remeshes(
+        &mut self,
+    ) -> Option<(Vec<IVec3>, Vec<IVec3>)> {
+        if self.queue.has_interactive_work() || self.queue.has_settling_work() {
+            return None;
+        }
+        if self.settling_fluid_remesh_priority.is_empty()
+            && self.settling_fluid_remesh_background.is_empty()
+        {
+            return None;
+        }
+
+        let mut priority = self
+            .settling_fluid_remesh_priority
+            .drain()
+            .collect::<Vec<_>>();
+        let mut background = self
+            .settling_fluid_remesh_background
+            .drain()
+            .collect::<Vec<_>>();
+        priority.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
+        background.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
+        Some((priority, background))
     }
 
     pub(crate) fn enqueue_chunk_unloads(&mut self, unloaded: &[IVec3]) {
@@ -114,6 +179,9 @@ impl PendingLightingUpdates {
         self.queue.is_empty()
             && self.emission_edit_previous_cells.is_empty()
             && self.interactive_changed_chunks.is_empty()
+            && self.settling_changed_chunks.is_empty()
+            && self.settling_fluid_remesh_priority.is_empty()
+            && self.settling_fluid_remesh_background.is_empty()
     }
 
     fn enqueue_emission_edit_volumes(
@@ -222,6 +290,7 @@ pub(crate) fn process_pending_lighting(
         queue,
         context,
         interactive_changed_chunks,
+        settling_changed_chunks,
         ..
     } = pending;
     relax_budgeted(
@@ -231,6 +300,7 @@ pub(crate) fn process_pending_lighting(
         context,
         changed_chunks,
         interactive_changed_chunks,
+        settling_changed_chunks,
         budget_exhausted,
     );
 }
