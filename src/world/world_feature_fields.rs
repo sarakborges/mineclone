@@ -147,11 +147,6 @@ impl WorldFeatureFields {
     }
 
     #[cfg(test)]
-    fn cached_structure_vertical_extent_count(&self) -> usize {
-        self.caches.structure_vertical_extent_count()
-    }
-
-    #[cfg(test)]
     fn cached_structure_origin_count(&self) -> usize {
         self.caches.structure_origin_count()
     }
