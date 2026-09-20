@@ -4,8 +4,11 @@ use bevy::{
 };
 
 use crate::{
-    voxel::{chunk::CHUNK_SIZE, coordinates::chunks_for_block_extent},
+    voxel::chunk::CHUNK_SIZE,
     world::{
+        generation::{
+            maximum_structure_vertical_chunk_allowance_for_horizontal_chunk,
+        },
         generation_region::generation_region_coord,
         render_distance::chunk_is_in_volume,
     },
@@ -39,7 +42,6 @@ struct DesiredChunkSelection {
     center: IVec3,
     horizontal_radius: i32,
     vertical_radius: i32,
-    structure_chunk_allowance: i32,
     movement_direction: IVec2,
 }
 
@@ -48,6 +50,7 @@ pub(super) struct QueueRebuildScratch {
     desired: HashSet<IVec3>,
     pending: Vec<PendingEntry>,
     retired: Vec<IVec3>,
+    structure_allowances: HashMap<IVec2, i32>,
 }
 
 pub(super) fn rebuild_queue(
@@ -68,18 +71,13 @@ pub(super) fn rebuild_queue(
         horizontal_radius,
         vertical_radius,
     );
-    let horizontal_structure_allowance =
-        chunks_for_block_extent(context.structures.max_horizontal_extent_from_anchor());
-    let preload_radius =
-        horizontal_radius + HORIZONTAL_PRELOAD_CHUNKS.max(horizontal_structure_allowance);
+    let preload_radius = horizontal_radius + HORIZONTAL_PRELOAD_CHUNKS;
     let retention_radius = preload_radius
         + if movement_direction == IVec2::ZERO {
             0
         } else {
             FORWARD_PRELOAD_CHUNKS
         };
-    let vertical_structure_allowance =
-        chunks_for_block_extent(context.structures.max_height_above_anchor());
     if prune_caches {
         prune_surface_cache(&mut streaming.surface_ranges, center.xz(), retention_radius);
     }
@@ -90,22 +88,28 @@ pub(super) fn rebuild_queue(
             center,
             horizontal_radius: preload_radius,
             vertical_radius,
-            structure_chunk_allowance: vertical_structure_allowance,
             movement_direction,
         },
         context,
         &mut streaming.surface_ranges,
+        &mut scratch.structure_allowances,
     );
     if prune_caches {
         context.feature_fields.retain_for_chunks(&scratch.desired);
     }
 
+    let center_structure_allowance = scratch
+        .structure_allowances
+        .get(&center.xz())
+        .copied()
+        .unwrap_or(0);
     let prioritize_surface = player_is_above_surface(
         center,
-        vertical_structure_allowance,
+        center_structure_allowance,
         &streaming.surface_ranges,
     );
     scratch.pending.clear();
+    let structure_allowances = &scratch.structure_allowances;
     scratch.pending.extend(
         scratch
             .desired
@@ -121,7 +125,10 @@ pub(super) fn rebuild_queue(
                     coord,
                     center,
                     horizontal_radius,
-                    vertical_structure_allowance,
+                    structure_allowances
+                        .get(&coord.xz())
+                        .copied()
+                        .unwrap_or(0),
                     movement_direction,
                     prioritize_surface,
                     &streaming.surface_ranges,
@@ -321,13 +328,14 @@ fn rebuild_desired_chunk_coords(
     selection: DesiredChunkSelection,
     context: &QueueRebuildContext<'_>,
     surface_ranges: &mut HashMap<IVec2, (i32, i32)>,
+    structure_allowances: &mut HashMap<IVec2, i32>,
 ) {
     desired.clear();
+    structure_allowances.clear();
     let DesiredChunkSelection {
         center,
         horizontal_radius,
         vertical_radius,
-        structure_chunk_allowance,
         movement_direction,
     } = selection;
 
@@ -386,6 +394,15 @@ fn rebuild_desired_chunk_coords(
                 context.biome_field,
                 context.feature_fields,
             );
+            let structure_chunk_allowance =
+                maximum_structure_vertical_chunk_allowance_for_horizontal_chunk(
+                    horizontal,
+                    context.biomes,
+                    context.structures,
+                    context.biome_field,
+                    context.feature_fields,
+                );
+            structure_allowances.insert(horizontal, structure_chunk_allowance);
             let mut surrounding_minimum = own_minimum;
 
             for neighbor_offset in SURFACE_SUPPORT_NEIGHBORS {
