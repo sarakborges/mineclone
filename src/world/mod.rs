@@ -12,7 +12,6 @@ mod chunk_task_queue;
 mod chunk_storage;
 mod chunk_unloading;
 mod chunk_visibility;
-mod clock_persistence;
 pub(crate) mod current_context;
 pub(crate) mod day_night;
 mod density_sampling;
@@ -64,9 +63,6 @@ use chunk_rendering::{
 };
 use chunk_unloading::{ChunkUnloadState, unload_chunk_meshes};
 use chunk_visibility::{sync_chunk_visibility, sync_new_chunk_visibility};
-use clock_persistence::{
-    ClockPersistence, persist_clock_periodically, reset_clock_persistence, restore_persisted_clock,
-};
 use day_night::DayNightPlugin;
 use dimension::{CurrentDimension, DimensionEntityCounts};
 use fluid_updates::{PendingFluidUpdates, process_fluid_updates, reseed_loaded_fluid_frontiers};
@@ -81,7 +77,10 @@ use render_diagnostics::{log_render_asset_pressure, render_diagnostics_due};
 use render_distance::RenderDistanceSettings;
 pub(crate) use save::{InMemoryWorldSave, WorldLoadMode};
 use save_catalog::WorldDirectoryLock;
-use save_session::{WorldSession, autosave_only_in_gameplay, autosave_world, restore_loaded_clock};
+use save_session::{
+    WorldSession, exit_on_window_close_without_gameplay, restore_loaded_clock,
+    save_on_gameplay_window_close,
+};
 pub(crate) use seed::WorldSeed;
 pub(crate) use setup::WorldLoadingState;
 use setup::{begin_world_loading, setup_world};
@@ -100,7 +99,6 @@ impl Plugin for WorldPlugin {
             .init_resource::<WorldLoadMode>()
             .init_resource::<InMemoryWorldSave>()
             .init_resource::<WorldSession>()
-            .init_resource::<ClockPersistence>()
             .init_resource::<NewWorldConfig>()
             .init_resource::<GameRules>()
             .init_resource::<WorldTickClock>()
@@ -137,8 +135,6 @@ impl Plugin for WorldPlugin {
                     reset_resource::<ChunkUnloadState>,
                     reset_resource::<WorldTickClock>,
                     restore_loaded_clock,
-                    restore_persisted_clock,
-                    reset_clock_persistence,
                     reseed_loaded_fluid_frontiers,
                 )
                     .chain(),
@@ -187,11 +183,10 @@ impl Plugin for WorldPlugin {
                     .run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(Last, log_render_asset_pressure.run_if(render_diagnostics_due))
+            .add_systems(Last, exit_on_window_close_without_gameplay)
             .add_systems(
                 Last,
-                (persist_clock_periodically, autosave_world)
-                    .chain()
-                    .run_if(autosave_only_in_gameplay),
+                save_on_gameplay_window_close.run_if(in_state(GameState::Gameplay)),
             );
     }
 }

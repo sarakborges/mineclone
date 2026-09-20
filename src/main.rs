@@ -74,6 +74,9 @@ fn run_game() {
                 })
                 .set(ImagePlugin::default_nearest())
                 .set(WindowPlugin {
+                    // World exit owns durability. The OS close button must not
+                    // destroy the window before the active world is saved.
+                    close_when_requested: false,
                     primary_window: Some(Window {
                         title: "Asteria".into(),
                         ..default()

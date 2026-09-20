@@ -3,7 +3,7 @@ use std::{io, time::Instant};
 use bevy::{
     ecs::system::SystemParam,
     prelude::*,
-    tasks::{AsyncComputeTaskPool, Task, futures::check_ready},
+    window::WindowCloseRequested,
 };
 
 use crate::{
@@ -29,126 +29,40 @@ use super::{
     dimension::CurrentDimension,
     game_rules::GameRules,
     fluid_updates::PendingFluidUpdates,
-    save_catalog::{
-        PruneRegistries, SaveRegistries, SavedPlayer, SnapshotSource, WorldSnapshot, save_world,
-        save_world_owned,
-    },
+    save_catalog::{SaveRegistries, SavedPlayer, SnapshotSource, WorldSnapshot, save_world},
     seed::WorldSeed,
     tick::WorldTickClock,
 };
 
-const AUTOSAVE_SECONDS: f32 = 60.0;
-
-/// The clock is deliberately excluded: passing simulation ticks alone must
-/// never create another full on-disk snapshot.
-#[derive(Clone, PartialEq)]
-struct SavedWorldState {
-    seed: u64,
-    dimension_id: String,
-    spawn_biome: Option<String>,
-    biome_size_multiplier: f32,
-    ticks_per_second: u32,
-    world_revision: u64,
-    position: [f32; 3],
-    creative: bool,
-    health: f32,
-    yaw: f32,
-    pitch: f32,
-    inventory: Vec<Option<String>>,
-    selected_hotbar_slot: usize,
-    creatures: Vec<SavedCreature>,
-}
-
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub(crate) struct WorldSession {
     pub(crate) id: Option<String>,
     pub(crate) pending_clock: Option<(u64, u64)>,
-    timer: Timer,
-    first_save_done: bool,
-    baseline_loaded_save: bool,
-    last_saved_state: Option<SavedWorldState>,
-    autosave_task: Option<Task<AutosaveResult>>,
-}
-
-impl Default for WorldSession {
-    fn default() -> Self {
-        Self {
-            id: None,
-            pending_clock: None,
-            timer: Timer::from_seconds(AUTOSAVE_SECONDS, TimerMode::Repeating),
-            first_save_done: false,
-            baseline_loaded_save: false,
-            last_saved_state: None,
-            autosave_task: None,
-        }
-    }
-}
-
-struct AutosaveResult {
-    state: SavedWorldState,
-    result: io::Result<()>,
-}
-
-struct OwnedWorldSaveCapture {
-    snapshot: WorldSnapshot,
-    state: SavedWorldState,
-    registries: PruneRegistries,
-}
-
-impl OwnedWorldSaveCapture {
-    fn persist(self) -> AutosaveResult {
-        let result = save_world_owned(&self.snapshot, self.registries).map(|_| ());
-
-        AutosaveResult {
-            state: self.state,
-            result,
-        }
-    }
 }
 
 impl WorldSession {
     pub(crate) fn new(id: String) -> Self {
-        Self { id: Some(id), ..Self::default() }
+        Self {
+            id: Some(id),
+            ..Self::default()
+        }
     }
 
     pub(crate) fn loaded(id: String, day: u64, tick_in_day: u64) -> Self {
         Self {
             id: Some(id),
             pending_clock: Some((day, tick_in_day)),
-            first_save_done: true,
-            baseline_loaded_save: true,
-            ..Self::default()
         }
     }
 
-    pub(crate) fn persist(&mut self, snapshot: &WorldSaveContext<'_, '_>) -> io::Result<()> {
-        let id = self.id.as_deref().ok_or_else(|| io::Error::other("no active world"))?;
+    pub(crate) fn persist(&self, snapshot: &WorldSaveContext<'_, '_>) -> io::Result<()> {
+        let id = self
+            .id
+            .as_deref()
+            .ok_or_else(|| io::Error::other("no active world"))?;
         let capture_started = Instant::now();
         let captured = snapshot.capture(id)?;
         let capture_elapsed = capture_started.elapsed();
-        // Derive the successful baseline from the EXACT snapshot being written.
-        // Calling saved_state() here used to query the player and inventory a
-        // second time, independently of the captured save.
-        let player = captured
-            .player
-            .as_ref()
-            .ok_or_else(|| io::Error::other("cannot save world without player state"))?;
-        let state = SavedWorldState {
-            seed: captured.seed,
-            dimension_id: captured.dimension_id.clone(),
-            spawn_biome: captured.spawn_biome.clone(),
-            biome_size_multiplier: captured.biome_size_multiplier,
-            ticks_per_second: captured.ticks_per_second,
-            world_revision: snapshot.world.save_content_revision(),
-            position: player.position,
-            creative: player.creative,
-            health: player.health.unwrap_or_default(),
-            yaw: player.yaw,
-            pitch: player.pitch,
-            inventory: captured.inventory.clone(),
-            selected_hotbar_slot: captured.selected_hotbar_slot,
-            creatures: captured.creatures.clone(),
-        };
         let publication_started = Instant::now();
         save_world(
             &captured,
@@ -164,14 +78,10 @@ impl WorldSession {
         let publication_elapsed = publication_started.elapsed();
         // Measured on the machine running the game, not inferred from CI.
         // Publication includes JSON serialization, fsync and cleanup dispatch;
-        // it still blocks Leave World/Exit until the save is committed.
+        // final world exit remains blocked until the commit is durable.
         info!(
             "World {id} saved: capture={capture_elapsed:?}, publication={publication_elapsed:?}"
         );
-        self.last_saved_state = Some(state);
-        self.baseline_loaded_save = false;
-        self.first_save_done = true;
-        self.timer.reset();
         Ok(())
     }
 }
@@ -208,7 +118,11 @@ pub(crate) struct WorldSaveContext<'w, 's> {
     creatures: Query<
         'w,
         's,
-        (&'static CreatureInstance, &'static Transform, &'static EntityHealth),
+        (
+            &'static CreatureInstance,
+            &'static Transform,
+            &'static EntityHealth,
+        ),
     >,
     pending_creatures: Res<'w, PendingCreatureRestores>,
 }
@@ -236,97 +150,11 @@ impl WorldSaveContext<'_, '_> {
         creatures
     }
 
-    fn saved_state(&self) -> io::Result<SavedWorldState> {
-        let (_, transform, mode, health, camera) = self.player.single().map_err(|error| {
-            io::Error::other(format!("cannot save world without exactly one player: {error}"))
-        })?;
-        let position = transform.translation;
-        Ok(SavedWorldState {
-            seed: self.seed.0,
-            dimension_id: self.dimension.id.clone(),
-            spawn_biome: self.save.spawn_biome().map(str::to_owned),
-            biome_size_multiplier: self.save.biome_size_multiplier(),
-            ticks_per_second: self.rules.ticks_per_second(),
-            world_revision: self.world.save_content_revision(),
-            position: [position.x, position.y, position.z],
-            creative: *mode == GameMode::Creative,
-            health: health.current(),
-            yaw: camera.yaw,
-            pitch: camera.pitch,
-            inventory: self.inventory.saved_items(),
-            selected_hotbar_slot: self.inventory.selected_slot(),
-            creatures: self.saved_creatures(),
-        })
-    }
-
-    fn capture_owned(&self, id: &str) -> io::Result<OwnedWorldSaveCapture> {
-        let (_, transform, mode, health, camera) = self.player.single().map_err(|error| {
-            io::Error::other(format!("cannot save world without exactly one player: {error}"))
-        })?;
-        let position = transform.translation;
-        let player = SavedPlayer {
-            position: [position.x, position.y, position.z],
-            creative: *mode == GameMode::Creative,
-            health: Some(health.current()),
-            yaw: camera.yaw,
-            pitch: camera.pitch,
-        };
-        let inventory = self.inventory.saved_items();
-        let selected_hotbar_slot = self.inventory.selected_slot();
-        let creatures = self.saved_creatures();
-        let snapshot = WorldSnapshot::capture(SnapshotSource {
-            id,
-            seed: self.seed.0,
-            dimension_id: &self.dimension.id,
-            spawn_biome: self.save.spawn_biome(),
-            biome_size_multiplier: self.save.biome_size_multiplier(),
-            ticks_per_second: self.rules.ticks_per_second(),
-            player: Some(player.clone()),
-            day: self.clock.day,
-            tick_in_day: self.clock.tick_in_day(),
-            inventory: inventory.clone(),
-            selected_hotbar_slot,
-            world: &self.world,
-            fluids: &self.fluids,
-            pending_fluids: &self.pending_fluids,
-            world_tick: self.world_ticks.current_tick(),
-            creatures: creatures.clone(),
-        })?;
-        let state = SavedWorldState {
-            seed: self.seed.0,
-            dimension_id: self.dimension.id.clone(),
-            spawn_biome: self.save.spawn_biome().map(str::to_owned),
-            biome_size_multiplier: self.save.biome_size_multiplier(),
-            ticks_per_second: self.rules.ticks_per_second(),
-            world_revision: self.world.save_content_revision(),
-            position: player.position,
-            creative: player.creative,
-            health: player.health.unwrap_or(health.current()),
-            yaw: player.yaw,
-            pitch: player.pitch,
-            inventory,
-            selected_hotbar_slot,
-            creatures,
-        };
-
-        Ok(OwnedWorldSaveCapture {
-            snapshot,
-            state,
-            registries: SaveRegistries {
-                blocks: &self.blocks,
-                fluids: &self.fluids,
-                tools: &self.tools,
-                creatures: &self.creature_definitions,
-                dimensions: &self.dimensions,
-                cycles: &self.cycles,
-            }
-            .owned_for_pruning(),
-        })
-    }
-
     fn capture(&self, id: &str) -> io::Result<WorldSnapshot> {
         let (_, transform, mode, health, camera) = self.player.single().map_err(|error| {
-            io::Error::other(format!("cannot save world without exactly one player: {error}"))
+            io::Error::other(format!(
+                "cannot save world without exactly one player: {error}"
+            ))
         })?;
         let position = transform.translation;
         WorldSnapshot::capture(SnapshotSource {
@@ -356,91 +184,6 @@ impl WorldSaveContext<'_, '_> {
     }
 }
 
-pub(crate) fn autosave_world(
-    time: Res<Time<Real>>,
-    mut session: ResMut<WorldSession>,
-    snapshot: WorldSaveContext,
-) {
-    if session.id.is_none() {
-        return;
-    }
-
-    let completed = session
-        .autosave_task
-        .as_mut()
-        .and_then(check_ready);
-    if let Some(completed) = completed {
-        session.autosave_task = None;
-        match completed.result {
-            Ok(()) => {
-                session.last_saved_state = Some(completed.state);
-                session.first_save_done = true;
-            }
-            Err(error) => {
-                error!("World autosave failed; the world stays loaded: {error}");
-            }
-        }
-        session.timer.reset();
-    }
-    if session.autosave_task.is_some() {
-        return;
-    }
-
-    // Loading restores disk state with world revision zero. Streaming runs before
-    // this Last-stage system, so a newly generated chunk on the first gameplay
-    // frame can already have advanced the persistent revision. Never absorb that
-    // new chunk into the disk baseline.
-    if session.baseline_loaded_save {
-        let state = match snapshot.saved_state() {
-            Ok(state) => state,
-            Err(error) => {
-                error!("Cannot initialize loaded save state: {error}");
-                return;
-            }
-        };
-        session.baseline_loaded_save = false;
-        if state.world_revision == 0 {
-            session.last_saved_state = Some(state);
-            return;
-        }
-    }
-
-    if session.first_save_done && !session.timer.tick(time.delta()).just_finished() {
-        return;
-    }
-
-    if let Some(previous) = &session.last_saved_state {
-        match snapshot.saved_state() {
-            Ok(current) if current == *previous => return,
-            Ok(_) => {}
-            Err(error) => {
-                error!("Cannot inspect autosave state: {error}");
-                return;
-            }
-        }
-    }
-
-    let id = session
-        .id
-        .as_deref()
-        .expect("active world ID checked above");
-    let captured = match snapshot.capture_owned(id) {
-        Ok(captured) => captured,
-        Err(error) => {
-            error!("Cannot capture world autosave state: {error}");
-            session.first_save_done = true;
-            session.timer.reset();
-            return;
-        }
-    };
-
-    session.autosave_task = Some(AsyncComputeTaskPool::get().spawn(async move {
-        captured.persist()
-    }));
-    session.first_save_done = true;
-    session.timer.reset();
-}
-
 pub(crate) fn restore_loaded_clock(
     mut session: ResMut<WorldSession>,
     dimension: CurrentDimensionContext,
@@ -462,6 +205,38 @@ pub(crate) fn restore_loaded_clock(
     );
 }
 
-pub(crate) fn autosave_only_in_gameplay(state: Res<State<GameState>>) -> bool {
-    *state.get() == GameState::Gameplay
+/// The default Bevy close handler is disabled so gameplay can durably save
+/// before the process exits. On failure the close request is consumed and the
+/// window remains open, matching Leave World / Exit Game retry semantics.
+pub(crate) fn save_on_gameplay_window_close(
+    mut close_requests: MessageReader<WindowCloseRequested>,
+    session: Res<WorldSession>,
+    snapshot: WorldSaveContext,
+    mut app_exit: MessageWriter<AppExit>,
+) {
+    if close_requests.read().next().is_none() {
+        return;
+    }
+
+    if let Err(error) = session.persist(&snapshot) {
+        error!("World save failed; keeping current world open: {error}");
+        return;
+    }
+
+    app_exit.write(AppExit::Success);
+}
+
+/// Keep consuming close requests while Gameplay owns the save-specific reader,
+/// but exit immediately in menu/loading states where there is no active world
+/// snapshot to publish.
+pub(crate) fn exit_on_window_close_without_gameplay(
+    state: Res<State<GameState>>,
+    mut close_requests: MessageReader<WindowCloseRequested>,
+    mut app_exit: MessageWriter<AppExit>,
+) {
+    if close_requests.read().next().is_none() || *state.get() == GameState::Gameplay {
+        return;
+    }
+
+    app_exit.write(AppExit::Success);
 }
