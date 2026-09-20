@@ -1,6 +1,7 @@
 use std::ops::Range;
 
 use bevy::{
+    ecs::system::SystemParam,
     prelude::*,
     text::{EditableText, TextEdit},
 };
@@ -339,14 +340,19 @@ fn completed_line(text: &str, range: Range<usize>, value: &str) -> (String, usiz
     (result, caret)
 }
 
+#[derive(SystemParam)]
+pub(super) struct AutocompleteContent<'w> {
+    creatures: Res<'w, CreatureRegistry>,
+    biomes: Res<'w, BiomeRegistry>,
+    structures: Res<'w, StructureRegistry>,
+    language: Res<'w, ActiveLanguage>,
+}
+
 /// Called after chat opening/closing; never steals focus or submits a command.
 pub(super) fn update_autocomplete(
     chat: Res<ChatState>,
     keys: Res<ButtonInput<KeyCode>>,
-    creatures: Res<CreatureRegistry>,
-    biomes: Res<BiomeRegistry>,
-    structures: Res<StructureRegistry>,
-    language: Res<ActiveLanguage>,
+    content: AutocompleteContent,
     mut autocomplete: ResMut<ChatAutocomplete>,
     mut draft: Single<&mut EditableText, With<ChatDraft>>,
 ) {
@@ -356,7 +362,13 @@ pub(super) fn update_autocomplete(
         }
         return;
     }
-    autocomplete.refresh(&draft, &creatures, &biomes, &structures, &language);
+    autocomplete.refresh(
+        &draft,
+        &content.creatures,
+        &content.biomes,
+        &content.structures,
+        &content.language,
+    );
     if !autocomplete.visible() || draft.is_composing() {
         return;
     }
