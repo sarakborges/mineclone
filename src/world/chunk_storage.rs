@@ -62,6 +62,52 @@ pub(crate) fn publish_generation_chunks(world_directory: &Path, generation: u64,
     sync_directory(world_directory)
 }
 
+pub(crate) fn read_generation_chunks(world_directory: &Path, generation: u64) -> io::Result<Vec<DiskChunk>> {
+    let relative = PathBuf::from(generation_directory_name(generation));
+    let generation_directory = checked_directory_slot(world_directory, relative.as_path())?;
+    if !generation_directory.exists() {
+        return Err(io::Error::new(io::ErrorKind::NotFound, format!("chunk generation {generation} is missing")));
+    }
+    let chunks_root = generation_directory.join(CHUNK_DIRECTORY);
+    let metadata = fs::symlink_metadata(chunks_root.as_path())?;
+    if !metadata.is_dir() {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "chunk generation root is not a real directory"));
+    }
+    let mut chunks = Vec::new();
+    read_chunk_directory(chunks_root.as_path(), &mut chunks)?;
+    let mut identities = HashSet::with_capacity(chunks.len());
+    for chunk in &chunks {
+        if !identities.insert(ChunkDiskIdentity::from_disk_chunk(chunk)) {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "chunk generation contains duplicate coordinates"));
+        }
+    }
+    Ok(chunks)
+}
+
+fn read_chunk_directory(directory: &Path, chunks: &mut Vec<DiskChunk>) -> io::Result<()> {
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        if file_type.is_symlink() {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "chunk storage must not contain symbolic links"));
+        }
+        if file_type.is_dir() {
+            read_chunk_directory(entry.path().as_path(), chunks)?;
+            continue;
+        }
+        if !file_type.is_file() {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "chunk storage contains an unsupported entry"));
+        }
+        let path = entry.path();
+        if path.extension().and_then(|extension| extension.to_str()) != Some("json") {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "chunk storage contains a non-chunk file"));
+        }
+        let chunk = serde_json::from_reader(io::BufReader::new(fs::File::open(path)?)).map_err(io::Error::other)?;
+        chunks.push(chunk);
+    }
+    Ok(())
+}
+
 fn write_generation_chunks_to_staging(staging: &Path, chunks: &[DiskChunk]) -> io::Result<()> {
     let mut identities = HashSet::with_capacity(chunks.len());
     for chunk in chunks {
@@ -141,7 +187,9 @@ mod tests {
         let root = temp_directory("chunk-publish"); fs::create_dir_all(root.as_path()).expect("temp root must be created");
         let chunks = [disk_chunk(IVec3::new(-1, 0, 2)), disk_chunk(IVec3::new(3, 4, -5))];
         publish_generation_chunks(root.as_path(), 9, &chunks).expect("generation must publish"); assert!(!root.join(staging_generation_directory_name(9)).exists());
-        for chunk in &chunks { let identity = ChunkDiskIdentity::from_disk_chunk(chunk); let path = root.join(generation_directory_name(9)).join(identity.relative_path()); assert!(path.is_file()); let decoded: DiskChunk = serde_json::from_slice(&fs::read(path).expect("published chunk must be readable")).expect("published chunk must decode"); assert_eq!(ChunkDiskIdentity::from_disk_chunk(&decoded), identity); }
+        let loaded = read_generation_chunks(root.as_path(), 9).expect("published generation must load");
+        assert_eq!(loaded.len(), chunks.len());
+        for chunk in &chunks { let identity = ChunkDiskIdentity::from_disk_chunk(chunk); assert!(loaded.iter().any(|loaded| ChunkDiskIdentity::from_disk_chunk(loaded) == identity)); }
         remove_generation_chunks(root.as_path(), 9).expect("generation must be removable"); assert!(!root.join(generation_directory_name(9)).exists()); fs::remove_dir_all(root).expect("temp root must be removed");
     }
     #[test]
