@@ -4,7 +4,7 @@ mod system_params;
 
 use bevy::prelude::*;
 
-use super::fluid_updates::GeneratedFluidPriming;
+use super::fluid_updates::GeneratedFluidSettling;
 
 pub(super) use bootstrap::begin_world_loading;
 pub(super) use progress::setup_world;
@@ -12,7 +12,7 @@ pub(super) use progress::setup_world;
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum WorldLoadingPhase {
     Generating,
-    PrimingFluids,
+    SettlingFluids,
     Lighting,
     Meshing,
     Spawning,
@@ -27,7 +27,7 @@ pub(crate) struct WorldLoadingState {
     mesh_cursor: usize,
     meshed: usize,
     spawn_column: IVec2,
-    fluid_priming: GeneratedFluidPriming,
+    fluid_settling: GeneratedFluidSettling,
     phase: WorldLoadingPhase,
     screen_rendered: bool,
     transition_requested: bool,

@@ -17,9 +17,9 @@ const MAX_GENERATION_TASKS_WITH_MESH_BACKLOG: usize = 4;
 const MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME: usize = 8;
 const GENERATION_DISPATCH_BUDGET: Duration = Duration::from_millis(1);
 const GENERATION_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
-const STREAMING_FLUID_PRIMING_BUDGET: Duration = Duration::from_millis(1);
-const MIN_STREAMING_FLUID_PRIMING_UPDATES: usize = 8;
-const MAX_STREAMING_FLUID_PRIMING_UPDATES: usize = 256;
+const STREAMING_FLUID_SETTLING_BUDGET: Duration = Duration::from_millis(1);
+const MIN_STREAMING_FLUID_SETTLING_UPDATES: usize = 8;
+const MAX_STREAMING_FLUID_SETTLING_UPDATES: usize = 256;
 
 pub(super) fn collect_generated_chunks(
     content: &ChunkContent<'_>,
@@ -27,11 +27,11 @@ pub(super) fn collect_generated_chunks(
     queues: &mut ChunkStreamingQueues<'_>,
     current_tick: u64,
 ) {
-    if work.state.fluid_priming.is_active() {
-        if !process_streaming_fluid_priming(content, work) {
+    if work.state.fluid_settling.is_active() {
+        if !process_streaming_fluid_settling(content, work) {
             return;
         }
-        publish_primed_chunks(content, work, queues, current_tick);
+        publish_settled_chunks(content, work, queues, current_tick);
     }
 
     let current_revision = work.generation_tasks.revision();
@@ -79,32 +79,32 @@ pub(super) fn collect_generated_chunks(
 
     let world = &work.world;
     work.state
-        .fluid_priming
+        .fluid_settling
         .begin(world, generated_coords);
 
-    if process_streaming_fluid_priming(content, work) {
-        publish_primed_chunks(content, work, queues, current_tick);
+    if process_streaming_fluid_settling(content, work) {
+        publish_settled_chunks(content, work, queues, current_tick);
     }
 }
 
-fn process_streaming_fluid_priming(
+fn process_streaming_fluid_settling(
     content: &ChunkContent<'_>,
     work: &mut ChunkStreamingWork<'_>,
 ) -> bool {
-    let mut priming_budget = FrameWorkBudget::new(
-        STREAMING_FLUID_PRIMING_BUDGET,
-        MIN_STREAMING_FLUID_PRIMING_UPDATES,
+    let mut settling_budget = FrameWorkBudget::new(
+        STREAMING_FLUID_SETTLING_BUDGET,
+        MIN_STREAMING_FLUID_SETTLING_UPDATES,
     )
-    .with_maximum_items(MAX_STREAMING_FLUID_PRIMING_UPDATES);
+    .with_maximum_items(MAX_STREAMING_FLUID_SETTLING_UPDATES);
 
     let state = &mut work.state;
     let world = &mut work.world;
     state
-        .fluid_priming
-        .process(world, content.fluids(), &mut priming_budget)
+        .fluid_settling
+        .process(world, content.fluids(), &mut settling_budget)
 }
 
-fn publish_primed_chunks(
+fn publish_settled_chunks(
     content: &ChunkContent<'_>,
     work: &mut ChunkStreamingWork<'_>,
     queues: &mut ChunkStreamingQueues<'_>,
@@ -112,9 +112,9 @@ fn publish_primed_chunks(
 ) {
     let completed = work
         .state
-        .fluid_priming
+        .fluid_settling
         .take_completed_chunks()
-        .expect("completed streaming fluid priming must own generated chunks");
+        .expect("completed streaming fluid settling must own generated chunks");
     for coord in completed {
         if !work.state.keeps_loaded(coord) {
             work.world.archive_chunk(coord);

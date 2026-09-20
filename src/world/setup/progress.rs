@@ -19,7 +19,7 @@ use crate::{
 };
 
 use self::{
-    fluids::prime_initial_fluids,
+    fluids::settle_initial_fluids,
     generation::generate_initial_chunks,
     lighting::light_initial_chunks,
     meshing::mesh_initial_chunks,
@@ -66,8 +66,8 @@ pub(in crate::world) fn setup_world(
             &mut generation_tasks,
             *persistence.load_mode,
         ),
-        WorldLoadingPhase::PrimingFluids => {
-            prime_initial_fluids(&content, &mut progress, &mut simulation.fluids)
+        WorldLoadingPhase::SettlingFluids => {
+            settle_initial_fluids(&content, &mut progress, &mut simulation.fluids)
         }
         WorldLoadingPhase::Lighting => light_initial_chunks(
             &content,
