@@ -86,5 +86,7 @@
   "hud.coordinates": "X: {x} | Z: {z} | Y: {y}",
   "secondaryProperty.dyed": "Teñido",
   "brush.palette.title": "Brocha",
-  "brush.palette.clear": "Quitar pintura"
+  "brush.palette.clear": "Quitar pintura",
+  "worldSelection.openSavesFolder": "Abrir Carpeta de Guardados",
+  "worldSelection.openSavesFolderError": "No se pudo abrir la carpeta de guardados"
 }

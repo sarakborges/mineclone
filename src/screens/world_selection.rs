@@ -16,7 +16,7 @@ use crate::{
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
     world::{
         InMemoryWorldSave,
-        save_catalog::{SaveRegistries, WorldSummary, delete_world},
+        save_catalog::{SaveRegistries, WorldSummary, delete_world, open_worlds_directory},
     },
 };
 
@@ -62,6 +62,7 @@ struct WorldSelectionState {
 enum WorldSelectionAction {
     Load(String),
     Delete(String),
+    OpenSavesFolder,
     Back,
 }
 
@@ -278,6 +279,21 @@ fn handle_world_selection(
             continue;
         }
 
+        if matches!(action, WorldSelectionAction::OpenSavesFolder) {
+            match open_worlds_directory() {
+                Ok(()) => state.error.clear(),
+                Err(error) => {
+                    state.error = format!(
+                        "{}: {error}",
+                        context
+                            .localization
+                            .text(context.language.get(), "worldSelection.openSavesFolderError")
+                    );
+                }
+            }
+            return;
+        }
+
         if state.loading.is_some() {
             state.error = context.localization
                 .text(context.language.get(), "worldSelection.stillLoading")
@@ -330,6 +346,9 @@ fn handle_world_selection(
                     }
                 }
                 return;
+            }
+            WorldSelectionAction::OpenSavesFolder => {
+                unreachable!("OpenSavesFolder was handled before load-state gating")
             }
             WorldSelectionAction::Back => unreachable!("Back was handled above"),
         }

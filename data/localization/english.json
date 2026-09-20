@@ -86,5 +86,7 @@
   "hud.coordinates": "X: {x} | Z: {z} | Y: {y}",
   "secondaryProperty.dyed": "Dyed",
   "brush.palette.title": "Brush",
-  "brush.palette.clear": "Clear"
+  "brush.palette.clear": "Clear",
+  "worldSelection.openSavesFolder": "Open Saves Folder",
+  "worldSelection.openSavesFolderError": "Cannot open saves folder"
 }

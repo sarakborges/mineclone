@@ -86,5 +86,7 @@
   "hud.coordinates": "X: {x} | Z: {z} | Y: {y}",
   "secondaryProperty.dyed": "Tingido",
   "brush.palette.title": "Pincel",
-  "brush.palette.clear": "Remover tinta"
+  "brush.palette.clear": "Remover tinta",
+  "worldSelection.openSavesFolder": "Abrir Pasta dos Saves",
+  "worldSelection.openSavesFolderError": "Não foi possível abrir a pasta dos saves"
 }

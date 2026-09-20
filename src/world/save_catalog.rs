@@ -9,6 +9,7 @@ use std::{
     fs,
     io,
     path::Path,
+    process::Command,
     thread,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -46,6 +47,29 @@ use super::{
 pub(crate) struct WorldSummary {
     pub(crate) id: String,
     pub(crate) last_saved_unix_ms: u64,
+}
+
+pub(crate) fn open_worlds_directory() -> io::Result<()> {
+    fs::create_dir_all(WORLDS_DIRECTORY)?;
+    let directory = fs::canonicalize(WORLDS_DIRECTORY)?;
+
+    #[cfg(target_os = "windows")]
+    let mut command = Command::new("explorer");
+
+    #[cfg(target_os = "macos")]
+    let mut command = Command::new("open");
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut command = Command::new("xdg-open");
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos", unix)))]
+    return Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "opening the saves directory is unsupported on this platform",
+    ));
+
+    command.arg(directory).spawn()?;
+    Ok(())
 }
 
 pub(crate) fn create_new_world(requested_name: &str, seed: u64, dimension_id: &str, biome_size_multiplier: f32, ticks_per_second: u32) -> io::Result<(String, WorldDirectoryLock)> {

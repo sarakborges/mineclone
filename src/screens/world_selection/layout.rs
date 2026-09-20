@@ -214,6 +214,15 @@ pub(super) fn spawn_world_selection(
                 COMPACT_CONTROL_HEIGHT,
                 ButtonVariant::Normal,
             ));
+            footer.spawn(button(
+                localization
+                    .text(language.get(), "worldSelection.openSavesFolder")
+                    .to_owned(),
+                WorldSelectionAction::OpenSavesFolder,
+                px(360),
+                COMPACT_CONTROL_HEIGHT,
+                ButtonVariant::Normal,
+            ));
         });
     });
 }
