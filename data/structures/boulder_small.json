@@ -1,6 +1,7 @@
 {
   "id": "asteria:boulder_small",
   "name": { "english": "Small Boulder", "portuguese_brazil": "Pedregulho pequeno", "spanish": "Roca pequeña" },
+  "locatable": false,
   "anchor": { "x": 1, "y": 0, "z": 1 },
   "palette": { "S": { "block": "asteria:stone" } },
   "layers": [

@@ -5,6 +5,7 @@
     "portuguese_brazil": "Carvalho",
     "spanish": "Roble"
   },
+  "locatable": false,
   "anchor": {
     "x": 2,
     "y": 0,

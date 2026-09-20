@@ -6,7 +6,7 @@ use bevy::{
 };
 
 use crate::{
-    content::{creature::CreatureRegistry, structure::StructureRegistry},
+    content::{biome::BiomeRegistry, creature::CreatureRegistry, structure::StructureRegistry},
     localization::ActiveLanguage,
 };
 
@@ -17,12 +17,17 @@ use super::{ChatState, MAX_INPUT_CHARS, visual::ChatDraft};
 enum CommandId {
     Spawn,
     Place,
+    Locate,
+    Warp,
 }
 
 #[derive(Clone, Copy)]
 enum ParameterKind {
     CreatureId,
     StructureId,
+    LocateKind,
+    LocateTargetId,
+    Coordinate,
 }
 
 struct CommandDefinition {
@@ -48,6 +53,24 @@ const COMMANDS: &[CommandDefinition] = &[
         parameters: &[ParameterKind::StructureId],
         id: CommandId::Place,
     },
+    CommandDefinition {
+        name: "locate",
+        usage: "/locate <biome|structure> <id>",
+        description: "Locate a biome or structure",
+        parameters: &[ParameterKind::LocateKind, ParameterKind::LocateTargetId],
+        id: CommandId::Locate,
+    },
+    CommandDefinition {
+        name: "warp",
+        usage: "/warp <x> <z> <y>",
+        description: "Warp near world coordinates",
+        parameters: &[
+            ParameterKind::Coordinate,
+            ParameterKind::Coordinate,
+            ParameterKind::Coordinate,
+        ],
+        id: CommandId::Warp,
+    },
 ];
 
 #[derive(Debug, PartialEq, Eq)]
@@ -55,6 +78,8 @@ pub(super) enum ParsedLine<'a> {
     Say(&'a str),
     Spawn(&'a str),
     Place(&'a str),
+    Locate(&'a str, &'a str),
+    Warp(IVec3),
     Usage(&'static str),
     Unknown(&'a str),
 }
@@ -81,6 +106,22 @@ pub(super) fn parse_line(input: &str) -> ParsedLine<'_> {
     match definition.id {
         CommandId::Spawn => ParsedLine::Spawn(args[0]),
         CommandId::Place => ParsedLine::Place(args[0]),
+        CommandId::Locate => match args[0] {
+            "biome" | "structure" => ParsedLine::Locate(args[0], args[1]),
+            _ => ParsedLine::Usage(definition.usage),
+        },
+        CommandId::Warp => {
+            let Ok(x) = args[0].parse::<i32>() else {
+                return ParsedLine::Usage(definition.usage);
+            };
+            let Ok(z) = args[1].parse::<i32>() else {
+                return ParsedLine::Usage(definition.usage);
+            };
+            let Ok(y) = args[2].parse::<i32>() else {
+                return ParsedLine::Usage(definition.usage);
+            };
+            ParsedLine::Warp(IVec3::new(x, y, z))
+        }
     }
 }
 
@@ -122,6 +163,7 @@ impl ChatAutocomplete {
         &mut self,
         editor: &EditableText,
         creatures: &CreatureRegistry,
+        biomes: &BiomeRegistry,
         structures: &StructureRegistry,
         language: &ActiveLanguage,
     ) {
@@ -145,6 +187,7 @@ impl ChatAutocomplete {
             &context.0,
             context.1,
             creatures,
+            biomes,
             structures,
             language,
         )
@@ -188,6 +231,7 @@ fn suggestions_for(
     text: &str,
     cursor: usize,
     creatures: &CreatureRegistry,
+    biomes: &BiomeRegistry,
     structures: &StructureRegistry,
     language: &ActiveLanguage,
 ) -> Option<(Range<usize>, Vec<Suggestion>)> {
@@ -232,6 +276,51 @@ fn suggestions_for(
                     description: structure.name.text(language.get()).to_owned(),
                 })
                 .collect::<Vec<_>>(),
+            ParameterKind::LocateKind => ["biome", "structure"]
+                .into_iter()
+                .filter(|value| value.starts_with(&prefix))
+                .map(|value| Suggestion {
+                    value: value.to_owned(),
+                    description: match value {
+                        "biome" => "Locate a biome".to_owned(),
+                        "structure" => "Locate a locatable structure".to_owned(),
+                        _ => unreachable!(),
+                    },
+                })
+                .collect::<Vec<_>>(),
+            ParameterKind::LocateTargetId => match text.split_whitespace().nth(1)? {
+                "biome" => biomes
+                    .iter()
+                    .filter(|biome| {
+                        let id = biome.id.to_ascii_lowercase();
+                        id.starts_with(&prefix)
+                            || id
+                                .strip_prefix("asteria:")
+                                .is_some_and(|short| short.starts_with(&prefix))
+                    })
+                    .map(|biome| Suggestion {
+                        value: biome.id.clone(),
+                        description: biome.name.text(language.get()).to_owned(),
+                    })
+                    .collect::<Vec<_>>(),
+                "structure" => structures
+                    .iter()
+                    .filter(|structure| structure.locatable)
+                    .filter(|structure| {
+                        let id = structure.id.to_ascii_lowercase();
+                        id.starts_with(&prefix)
+                            || id
+                                .strip_prefix("asteria:")
+                                .is_some_and(|short| short.starts_with(&prefix))
+                    })
+                    .map(|structure| Suggestion {
+                        value: structure.id.clone(),
+                        description: structure.name.text(language.get()).to_owned(),
+                    })
+                    .collect::<Vec<_>>(),
+                _ => Vec::new(),
+            },
+            ParameterKind::Coordinate => Vec::new(),
         }
     };
     suggestions.sort_by(|left, right| left.value.cmp(&right.value));
@@ -255,6 +344,7 @@ pub(super) fn update_autocomplete(
     chat: Res<ChatState>,
     keys: Res<ButtonInput<KeyCode>>,
     creatures: Res<CreatureRegistry>,
+    biomes: Res<BiomeRegistry>,
     structures: Res<StructureRegistry>,
     language: Res<ActiveLanguage>,
     mut autocomplete: ResMut<ChatAutocomplete>,
@@ -266,7 +356,7 @@ pub(super) fn update_autocomplete(
         }
         return;
     }
-    autocomplete.refresh(&draft, &creatures, &structures, &language);
+    autocomplete.refresh(&draft, &creatures, &biomes, &structures, &language);
     if !autocomplete.visible() || draft.is_composing() {
         return;
     }

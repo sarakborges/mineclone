@@ -7,7 +7,7 @@ use swimming::{swim_vertical, update_swimming_state};
 use walking::walk;
 use world_bounds::enforce_world_floor;
 
-mod collision;
+pub(crate) mod collision;
 pub(crate) mod config;
 mod entity_collision;
 pub(crate) mod flight;

@@ -76,9 +76,41 @@ pub(super) fn rasterize_structures(
     });
 }
 
+pub(crate) fn located_structure_origins_in_chunk(
+    horizontal_chunk: IVec2,
+    structure_id: &str,
+    context: &ChunkGenerationContext<'_>,
+) -> Vec<IVec3> {
+    let chunk_size = CHUNK_SIZE as i32;
+    let chunk_origin = IVec3::new(
+        horizontal_chunk.x * chunk_size,
+        0,
+        horizontal_chunk.y * chunk_size,
+    );
+
+    resolved_structure_candidates_matching(chunk_origin, context, Some(structure_id))
+        .into_iter()
+        .map(|candidate| {
+            IVec3::new(
+                candidate.anchor.x,
+                candidate.origin_y,
+                candidate.anchor.y,
+            )
+        })
+        .collect()
+}
+
 fn resolved_structure_candidates<'a>(
     chunk_origin: IVec3,
     context: &'a ChunkGenerationContext<'_>,
+) -> Vec<StructureCandidate<'a>> {
+    resolved_structure_candidates_matching(chunk_origin, context, None)
+}
+
+fn resolved_structure_candidates_matching<'a>(
+    chunk_origin: IVec3,
+    context: &'a ChunkGenerationContext<'_>,
+    only_structure_id: Option<&str>,
 ) -> Vec<StructureCandidate<'a>> {
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_min = IVec2::new(chunk_origin.x, chunk_origin.z);
@@ -86,6 +118,11 @@ fn resolved_structure_candidates<'a>(
     let mut direct_candidates = Vec::new();
 
     for biome_structure in context.biomes.structure_placements() {
+        if only_structure_id
+            .is_some_and(|structure_id| biome_structure.structure_id != structure_id)
+        {
+            continue;
+        }
         let structure = structure_for_placement(context.structures, biome_structure);
         collect_structure_candidates(
             chunk_min,

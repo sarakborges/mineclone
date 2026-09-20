@@ -33,7 +33,9 @@ use crate::{
 };
 
 pub(crate) use self::columns::{GenerationColumnSample, sample_generation_columns};
-pub(crate) use self::structures::fit_structure_to_ground;
+pub(crate) use self::structures::{
+    fit_structure_to_ground, located_structure_origins_in_chunk,
+};
 use self::{
     caves::anchored_cave_region,
     density::{DensityPassContext, sample_density_field},

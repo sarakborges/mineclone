@@ -158,6 +158,15 @@ fn loaded_surface_level(world: &VoxelWorld, position: IVec2) -> Option<i32> {
 }
 
 impl ChatPlacementContext<'_, '_> {
+    pub(super) fn player_block_position(&mut self) -> Option<IVec3> {
+        let player = self.player.single_mut().ok()?;
+        Some(
+            (player.translation - Vec3::Y * PLAYER_EYE_HEIGHT)
+                .floor()
+                .as_ivec3(),
+        )
+    }
+
     pub(super) fn spawn(
         &mut self,
         commands: &mut Commands,

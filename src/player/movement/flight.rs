@@ -33,6 +33,13 @@ impl Default for FlightState {
     }
 }
 
+impl FlightState {
+    pub(crate) fn reset_motion(&mut self) {
+        self.toggle_deadline_tick = None;
+        self.velocity = Vec3::ZERO;
+    }
+}
+
 pub(super) fn handle_flight_toggle(
     keys: Res<ButtonInput<KeyCode>>,
     world_ticks: Res<WorldTickClock>,

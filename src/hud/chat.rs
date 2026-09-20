@@ -1,4 +1,5 @@
 mod autocomplete;
+mod locate;
 mod placement;
 mod visual;
 
@@ -16,14 +17,16 @@ use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     player::{camera::look::MouseLookInputState, inventory::InventoryState},
     tools::BrushPaletteState,
+    world::warp::PendingWarp,
     ui::text_input::editable_value,
 };
 
 use autocomplete::{ChatAutocomplete, ParsedLine, parse_line, update_autocomplete};
+use locate::{ChatLocateContext, PendingLocate, poll_locate_task};
 use placement::ChatPlacementContext;
 use visual::{
     advance_chat_timeout, rebuild_chat_history, render_autocomplete, scroll_chat_history,
-    scroll_chat_to_bottom, spawn_chat_ui, sync_chat_visibility,
+    handle_chat_warp_links, scroll_chat_to_bottom, spawn_chat_ui, sync_chat_visibility,
 };
 
 const PLAYER_DISPLAY_NAME: &str = "Yogg'Sara";
@@ -31,12 +34,18 @@ const HISTORY_CAPACITY: usize = 64;
 const CHAT_TIMEOUT_SECS: f32 = 10.0;
 const MAX_INPUT_CHARS: usize = 256;
 
+#[derive(Clone, Debug)]
+pub(super) enum ChatMessage {
+    Text(String),
+    Located { prefix: String, target: IVec3 },
+}
+
 /// Oldest entries are first; visual order is the same as chronological order.
 #[derive(Resource, Default)]
 pub(crate) struct ChatState {
     open: bool,
     escape_consumed: bool,
-    history: VecDeque<String>,
+    history: VecDeque<ChatMessage>,
     since_last_message: f32,
     revision: u64,
 }
@@ -54,11 +63,11 @@ impl ChatState {
         self.open = false;
     }
 
-    fn append(&mut self, text: String) {
+    pub(super) fn append(&mut self, message: ChatMessage) {
         if self.history.len() == HISTORY_CAPACITY {
             self.history.pop_front();
         }
-        self.history.push_back(text);
+        self.history.push_back(message);
         self.since_last_message = 0.0;
         self.revision = self.revision.wrapping_add(1);
     }
@@ -77,6 +86,7 @@ impl Plugin for ChatHudPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ChatState>()
             .init_resource::<ChatAutocomplete>()
+            .init_resource::<PendingLocate>()
             .add_message::<ChatSubmission>()
             .add_systems(
                 OnEnter(GameState::Gameplay),
@@ -90,8 +100,10 @@ impl Plugin for ChatHudPlugin {
                 Update,
                 (
                     handle_chat_input,
+                    handle_chat_warp_links,
                     update_autocomplete,
                     interpret_chat_submissions,
+                    poll_locate_task,
                     advance_chat_timeout,
                     scroll_chat_history,
                     sync_chat_visibility,
@@ -108,9 +120,14 @@ impl Plugin for ChatHudPlugin {
     }
 }
 
-fn reset_chat(mut chat: ResMut<ChatState>, mut autocomplete: ResMut<ChatAutocomplete>) {
+fn reset_chat(
+    mut chat: ResMut<ChatState>,
+    mut autocomplete: ResMut<ChatAutocomplete>,
+    mut pending_locate: ResMut<PendingLocate>,
+) {
     *chat = ChatState::default();
     *autocomplete = ChatAutocomplete::default();
+    *pending_locate = PendingLocate::default();
 }
 
 fn close_chat_on_pause(
@@ -237,6 +254,8 @@ fn interpret_chat_submissions(
     mut chat: ResMut<ChatState>,
     mut commands: Commands,
     mut placement: ChatPlacementContext,
+    mut locate: ChatLocateContext,
+    mut warp: ResMut<PendingWarp>,
 ) {
     // Commands::spawn is deferred, so preflight must also account for creatures
     // already requested by earlier submissions during this same frame.
@@ -248,8 +267,24 @@ fn interpret_chat_submissions(
             ParsedLine::Unknown(command) => format!("Unknown command: {command}"),
             ParsedLine::Spawn(id) => placement.spawn(&mut commands, id, &mut reserved),
             ParsedLine::Place(id) => placement.place(id, &reserved),
+            ParsedLine::Locate(kind, id) => {
+                let Some(player_block) = placement.player_block_position() else {
+                    chat.append(ChatMessage::Text(
+                        "Cannot locate: player is unavailable.".to_owned(),
+                    ));
+                    continue;
+                };
+                locate.start(kind, id, player_block)
+            },
+            ParsedLine::Warp(target) => {
+                warp.request(target);
+                format!(
+                    "Warping to X: {} Z: {} Y: {}...",
+                    target.x, target.z, target.y
+                )
+            }
         };
-        chat.append(response);
+        chat.append(ChatMessage::Text(response));
     }
 }
 
@@ -271,10 +306,10 @@ mod tests {
     #[test]
     fn new_messages_append_below_old_messages_and_expire_when_closed() {
         let mut chat = ChatState::default();
-        chat.append("old".to_owned());
-        chat.append("new".to_owned());
-        assert_eq!(chat.history.front().map(String::as_str), Some("old"));
-        assert_eq!(chat.history.back().map(String::as_str), Some("new"));
+        chat.append(ChatMessage::Text("old".to_owned()));
+        chat.append(ChatMessage::Text("new".to_owned()));
+        assert!(matches!(chat.history.front(), Some(ChatMessage::Text(text)) if text == "old"));
+        assert!(matches!(chat.history.back(), Some(ChatMessage::Text(text)) if text == "new"));
         chat.since_last_message = CHAT_TIMEOUT_SECS;
         assert!(!chat.visible());
         chat.open = true;
@@ -285,10 +320,10 @@ mod tests {
     fn history_retains_last_entries_in_chronological_order() {
         let mut chat = ChatState::default();
         for index in 0..=HISTORY_CAPACITY {
-            chat.append(index.to_string());
+            chat.append(ChatMessage::Text(index.to_string()));
         }
         assert_eq!(chat.history.len(), HISTORY_CAPACITY);
-        assert_eq!(chat.history.front().map(String::as_str), Some("1"));
-        assert_eq!(chat.history.back().map(String::as_str), Some("64"));
+        assert!(matches!(chat.history.front(), Some(ChatMessage::Text(text)) if text == "1"));
+        assert!(matches!(chat.history.back(), Some(ChatMessage::Text(text)) if text == "64"));
     }
 }

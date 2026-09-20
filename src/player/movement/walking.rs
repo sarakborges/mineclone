@@ -20,6 +20,13 @@ pub struct WalkingState {
     step_target_y: Option<f32>,
 }
 
+impl WalkingState {
+    pub(crate) fn reset_motion(&mut self) {
+        self.velocity = Vec3::ZERO;
+        self.step_target_y = None;
+    }
+}
+
 pub(super) fn walk(
     game_rules: Res<GameRules>,
     world_ticks: Res<WorldTickClock>,

@@ -28,6 +28,13 @@ impl Default for GravityState {
     }
 }
 
+impl GravityState {
+    pub(crate) fn reset_motion(&mut self) {
+        self.vertical_velocity = 0.0;
+        self.grounded = true;
+    }
+}
+
 pub(super) fn apply_gravity(
     context: VerticalMovementContext,
     mut transform: Single<&mut Transform, With<PlayerEntity>>,

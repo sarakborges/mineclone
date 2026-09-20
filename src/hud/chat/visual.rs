@@ -9,7 +9,10 @@ use crate::{
     ui::{scrollbar, text_input, typography},
 };
 
-use super::{CHAT_TIMEOUT_SECS, ChatState, MAX_INPUT_CHARS, autocomplete::ChatAutocomplete};
+use super::{
+    CHAT_TIMEOUT_SECS, ChatMessage, ChatState, ChatSubmission, MAX_INPUT_CHARS,
+    autocomplete::ChatAutocomplete,
+};
 
 // The chat grows naturally until fifteen lines of 17px HUD text at 22px
 // line spacing, including wrapped visual lines. Beyond this, it scrolls.
@@ -32,6 +35,9 @@ pub(super) struct ChatDraft;
 
 #[derive(Component)]
 pub(super) struct ChatSuggestions;
+
+#[derive(Component, Clone, Copy)]
+pub(super) struct ChatWarpLink(pub(super) IVec3);
 
 pub(super) fn advance_chat_timeout(
     time: Res<Time>,
@@ -264,17 +270,78 @@ pub(super) fn rebuild_chat_history(
         // Older messages above; new messages are appended at the bottom.
         // Wrapped lines contribute to the actual computed scroll height.
         for message in &chat.history {
-            list.spawn((
-                typography::hud(message.clone()),
-                typography::tooltip_shadow(),
-                Node {
-                    width: percent(100),
-                    ..default()
-                },
-                Pickable::IGNORE,
-            ));
+            match message {
+                ChatMessage::Text(text) => {
+                    list.spawn((
+                        typography::hud(text.clone()),
+                        typography::tooltip_shadow(),
+                        Node {
+                            width: percent(100),
+                            ..default()
+                        },
+                        Pickable::IGNORE,
+                    ));
+                }
+                ChatMessage::Located { prefix, target } => {
+                    list.spawn((
+                        Node {
+                            width: percent(100),
+                            min_height: px(CHAT_LINE_HEIGHT),
+                            flex_direction: FlexDirection::Row,
+                            flex_wrap: FlexWrap::Wrap,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        Pickable::IGNORE,
+                    ))
+                    .with_children(|row| {
+                        row.spawn((
+                            typography::hud(prefix.clone()),
+                            typography::tooltip_shadow(),
+                            Pickable::IGNORE,
+                        ));
+                        row.spawn((
+                            Button,
+                            ChatWarpLink(*target),
+                            Node {
+                                width: Val::Auto,
+                                min_height: px(CHAT_LINE_HEIGHT),
+                                padding: UiRect::ZERO,
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::Center,
+                                ..default()
+                            },
+                            BackgroundColor(Color::NONE),
+                            BorderColor::all(Color::NONE),
+                            children![
+                                (
+                                    typography::hud_link("[Warp to]"),
+                                    typography::tooltip_shadow(),
+                                    Pickable::IGNORE,
+                                )
+                            ],
+                        ));
+                    });
+                }
+            }
         }
     });
+}
+
+pub(super) fn handle_chat_warp_links(
+    interactions: Query<(&Interaction, &ChatWarpLink), Changed<Interaction>>,
+    mut submissions: MessageWriter<ChatSubmission>,
+) {
+    for (interaction, link) in &interactions {
+        if *interaction != Interaction::Pressed {
+            continue;
+        }
+        let target = link.0;
+        submissions.write(ChatSubmission(format!(
+            "/warp {} {} {}",
+            target.x, target.z, target.y
+        )));
+    }
 }
 
 pub(super) fn scroll_chat_history(

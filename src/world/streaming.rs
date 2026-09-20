@@ -39,6 +39,7 @@ use super::{
     },
     render_distance::RenderDistanceSettings,
     tick::WorldTickClock,
+    warp::PendingWarp,
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -350,6 +351,7 @@ pub(super) struct ChunkStreamingWork<'w> {
 #[derive(SystemParam)]
 pub(super) struct ChunkStreamingSelection<'w, 's> {
     render_distance: Res<'w, RenderDistanceSettings>,
+    pending_warp: Res<'w, PendingWarp>,
     scratch: Local<'s, selection::QueueRebuildScratch>,
 }
 
@@ -370,7 +372,10 @@ pub(super) fn stream_chunks(
     mut queues: ChunkStreamingQueues,
 ) {
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
-    let player_chunk = chunk_coord_from_position(feet_position);
+    let player_chunk = selection
+        .pending_warp
+        .streaming_center()
+        .unwrap_or_else(|| chunk_coord_from_position(feet_position));
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
     let horizontal_radius = selection.render_distance.chunks();
     let vertical_radius = selection.render_distance.vertical_chunks();

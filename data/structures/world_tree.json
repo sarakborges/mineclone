@@ -5,6 +5,7 @@
     "portuguese_brazil": "Árvore do Mundo",
     "spanish": "Árbol del Mundo"
   },
+  "locatable": true,
   "priority": 100,
   "conflictGroups": [
     "tree",

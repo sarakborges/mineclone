@@ -72,12 +72,12 @@ pub(super) fn move_axis(
     MoveAxisResult::Clear
 }
 
-pub(super) fn player_collides(eye_position: Vec3, world: &VoxelWorld) -> bool {
+pub(crate) fn player_collides(eye_position: Vec3, world: &VoxelWorld) -> bool {
     let (min, max) = player_bounds(eye_position);
     collides_aabb(world, min, max)
 }
 
-fn player_bounds(eye_position: Vec3) -> (Vec3, Vec3) {
+pub(crate) fn player_bounds(eye_position: Vec3) -> (Vec3, Vec3) {
     let feet_y = eye_position.y - PLAYER_EYE_HEIGHT;
     let min = Vec3::new(
         eye_position.x - PLAYER_HALF_WIDTH,

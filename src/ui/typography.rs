@@ -94,6 +94,15 @@ pub fn hud(label: impl Into<String>) -> impl Bundle {
     )
 }
 
+pub fn hud_link(label: impl Into<String>) -> impl Bundle {
+    (
+        Text::new(label),
+        ui_font(16.0, FontWeight::MEDIUM),
+        LetterSpacing::Px(0.0),
+        TextColor(theme::BORDER_FOCUS),
+    )
+}
+
 pub fn inventory_category(label: impl Into<String>) -> impl Bundle {
     (
         Text::new(label),

@@ -1,6 +1,7 @@
 {
   "id": "asteria:stone_marker",
   "name": { "english": "Stone Marker", "portuguese_brazil": "Marco de pedra", "spanish": "Marcador de piedra" },
+  "locatable": false,
   "anchor": { "x": 0, "y": 0, "z": 0 },
   "palette": {
     "S": { "block": "asteria:stone" }

@@ -56,6 +56,8 @@ pub struct StructureDefinition {
     pub id: String,
     pub name: LocalizedText,
     #[serde(default)]
+    pub locatable: bool,
+    #[serde(default)]
     pub priority: i32,
     #[serde(default)]
     pub conflict_groups: Vec<String>,

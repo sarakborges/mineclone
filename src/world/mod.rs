@@ -40,6 +40,7 @@ mod streaming;
 pub(crate) mod terrain;
 pub(crate) mod tick;
 mod work_budget;
+pub(crate) mod warp;
 pub(crate) mod world_feature_fields;
 pub(crate) mod world_names;
 
@@ -86,6 +87,7 @@ pub(crate) use seed::WorldSeed;
 pub(crate) use setup::WorldLoadingState;
 use setup::{begin_world_loading, setup_world};
 use streaming::{ChunkStreamingState, stream_chunks};
+use warp::{PendingWarp, resolve_pending_warp};
 use tick::{WorldTickClock, WorldTickSet, advance_world_ticks};
 use world_feature_fields::WorldFeatureFields;
 
@@ -113,6 +115,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<ChunkRemeshQueue>()
             .init_resource::<PendingLightingUpdates>()
             .init_resource::<PendingFluidUpdates>()
+            .init_resource::<PendingWarp>()
             .add_plugins(DayNightPlugin)
             .add_systems(OnEnter(GameState::StartingScreen), release_world_session)
             .add_systems(
@@ -122,6 +125,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<ChunkMeshTasks>,
                     reset_resource::<ChunkRemeshTasks>,
                     reset_resource::<PendingLightingUpdates>,
+                    reset_resource::<PendingWarp>,
                     prepare_world_session,
                     begin_world_loading,
                 )
@@ -136,6 +140,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<ChunkRemeshTasks>,
                     reset_resource::<ChunkUnloadState>,
                     reset_resource::<WorldTickClock>,
+                    reset_resource::<PendingWarp>,
                     restore_loaded_clock,
                     reseed_loaded_fluid_frontiers,
                 )
@@ -152,6 +157,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<ChunkRemeshQueue>,
                     reset_resource::<PendingLightingUpdates>,
                     reset_resource::<PendingFluidUpdates>,
+                    reset_resource::<PendingWarp>,
                 ),
             )
             .add_systems(Update, setup_world.run_if(in_state(GameState::Loading)))
@@ -163,7 +169,7 @@ impl Plugin for WorldPlugin {
             )
             .add_systems(
                 Update,
-                (stream_chunks, unload_chunk_meshes)
+                (stream_chunks, resolve_pending_warp, unload_chunk_meshes)
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
             )

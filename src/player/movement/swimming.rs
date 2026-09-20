@@ -21,6 +21,12 @@ pub struct SwimmingState {
     pub(super) active: bool,
 }
 
+impl SwimmingState {
+    pub(crate) fn reset_motion(&mut self) {
+        self.active = false;
+    }
+}
+
 pub(super) fn update_swimming_state(
     world: Res<VoxelWorld>,
     player: Single<(&Transform, &mut SwimmingState), With<GameplayCamera>>,
