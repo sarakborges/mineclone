@@ -1,17 +1,19 @@
 use bevy::{ecs::system::SystemParam, prelude::*, ui_widgets::ScrollArea};
 
 use crate::{
-    app::{game_state::GameState, settings_state::{SettingsScreenMode, SettingsState}},
+    app::{
+        game_state::GameState,
+        settings_state::{SettingsScreenMode, SettingsState},
+    },
     hud::HudSettings,
     localization::{ActiveLanguage, Language, UiLocalization},
     player::{camera::GameplayCamera, game_mode::GameMode},
     ui::{
         button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
         cosmic_background::{self, STAR_FIELD},
-        screen, scrollbar::vertical_scrollbar,
-        surface, theme, typography,
+        screen, scrollbar::vertical_scrollbar, surface, theme, typography,
     },
-    world::{NewWorldConfig, game_rules::GameRules, render_distance::RenderDistanceSettings},
+    world::{game_rules::GameRules, render_distance::RenderDistanceSettings, NewWorldConfig},
 };
 
 use super::{
@@ -19,10 +21,13 @@ use super::{
     hud_section::hud_section,
     languages_section::languages_section,
     navigation::{
-        SettingsBackButton, SettingsSection, SettingsSectionPanel, SettingsSectionSelection,
-        section_button,
+        section_button, SettingsBackButton, SettingsContentScrollArea,
+        SettingsPendingSectionScroll, SettingsSection, SettingsSectionPanel,
+        SettingsSectionSelection,
     },
-    new_world_section::{new_world_general_section, spawn_new_world_footer},
+    new_world_section::{
+        new_world_generation_section, new_world_settings_section, spawn_new_world_footer,
+    },
     render_distance_section::graphics_section,
     world_settings_section::world_settings_section,
 };
@@ -30,6 +35,8 @@ use super::{
 const SIDEBAR_WIDTH: f32 = 280.0;
 const COLUMN_GAP: f32 = 22.0;
 const SIDEBAR_BUTTON_GAP: f32 = 11.0;
+const SECTION_GAP: f32 = 42.0;
+const SECTION_CONTENT_GAP: f32 = 22.0;
 
 const GAME_SECTIONS: &[SettingsSection] = &[
     SettingsSection::Graphics,
@@ -40,8 +47,11 @@ const WORLD_SECTIONS: &[SettingsSection] = &[
     SettingsSection::WorldSettings,
     SettingsSection::GameRules,
 ];
-const CREATE_WORLD_SECTIONS: &[SettingsSection] =
-    &[SettingsSection::General, SettingsSection::GameRules];
+const CREATE_WORLD_SECTIONS: &[SettingsSection] = &[
+    SettingsSection::WorldSettings,
+    SettingsSection::WorldGeneration,
+    SettingsSection::GameRules,
+];
 
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SettingsScreenContext {
@@ -72,8 +82,7 @@ impl SettingsScreenContext {
     const fn initial_section(self) -> SettingsSection {
         match self {
             Self::Start => SettingsSection::Graphics,
-            Self::InWorld => SettingsSection::WorldSettings,
-            Self::CreateWorld => SettingsSection::General,
+            Self::InWorld | Self::CreateWorld => SettingsSection::WorldSettings,
         }
     }
 
@@ -150,8 +159,9 @@ pub(super) fn spawn_settings_screen(
     roots: Query<(Entity, &SettingsScreenContext)>,
 ) {
     let context = world.screen_context();
-    // Refresh labels captured during spawning, but preserve the selected tab
-    // and the actual settings held in resources when switching languages.
+    // Rebuilding for a language change preserves the current section. The new
+    // scroll area receives a pending anchor and restores that section after
+    // layout has measured the replacement tree.
     let replacing = roots.iter().any(|(_, existing)| *existing == context);
     for (entity, _) in &roots {
         commands.entity(entity).despawn();
@@ -203,8 +213,7 @@ pub(super) fn spawn_settings_screen(
             root.spawn(cosmic_background::star(spec));
         }
 
-        root.spawn(screen::header())
-        .with_children(|header| {
+        root.spawn(screen::header()).with_children(|header| {
             header.spawn(typography::title(
                 content
                     .localization
@@ -213,44 +222,46 @@ pub(super) fn spawn_settings_screen(
             ));
         });
 
-        root.spawn(screen::body())
-        .with_children(|body| {
+        root.spawn(screen::body()).with_children(|body| {
             body.spawn(screen::content_row(COLUMN_GAP))
-            .with_children(|columns| {
-                spawn_sidebar(columns, context, &content.localization, language);
-                spawn_content(
-                    columns,
-                    SettingsContentView {
-                        context,
-                        render_distance: &content.render_distance,
-                        game_rules: &world.game_rules,
-                        new_world: &world.new_world,
-                        hud_settings: &content.hud_settings,
-                        game_mode,
-                        localization: &content.localization,
-                        language,
-                        selected: selection.selected,
-                        ticks_per_second,
-                    },
-                );
-            });
+                .with_children(|columns| {
+                    spawn_sidebar(columns, context, &content.localization, language);
+                    spawn_content(
+                        columns,
+                        SettingsContentView {
+                            context,
+                            render_distance: &content.render_distance,
+                            game_rules: &world.game_rules,
+                            new_world: &world.new_world,
+                            hud_settings: &content.hud_settings,
+                            game_mode,
+                            localization: &content.localization,
+                            language,
+                            selected: selection.selected,
+                            ticks_per_second,
+                        },
+                    );
+                });
         });
 
         root.spawn(screen::footer())
-        .with_children(|footer| match context {
-            SettingsScreenContext::CreateWorld => {
-                spawn_new_world_footer(footer, &content.localization, language);
-            }
-            SettingsScreenContext::Start | SettingsScreenContext::InWorld => {
-                footer.spawn(button(
-                    content.localization.text(language, "settings.return").to_owned(),
-                    SettingsBackButton,
-                    px(360),
-                    COMPACT_CONTROL_HEIGHT,
-                    ButtonVariant::Normal,
-                ));
-            }
-        });
+            .with_children(|footer| match context {
+                SettingsScreenContext::CreateWorld => {
+                    spawn_new_world_footer(footer, &content.localization, language);
+                }
+                SettingsScreenContext::Start | SettingsScreenContext::InWorld => {
+                    footer.spawn(button(
+                        content
+                            .localization
+                            .text(language, "settings.return")
+                            .to_owned(),
+                        SettingsBackButton,
+                        px(360),
+                        COMPACT_CONTROL_HEIGHT,
+                        ButtonVariant::Normal,
+                    ));
+                }
+            });
     });
 }
 
@@ -331,93 +342,102 @@ fn spawn_content(columns: &mut ChildSpawnerCommands, view: SettingsContentView<'
                 .with_children(|frame| {
                     let scroll_area_id = frame
                         .spawn((
+                            SettingsContentScrollArea,
+                            SettingsPendingSectionScroll(view.selected),
                             Node {
                                 width: percent(100),
                                 height: percent(100),
                                 min_height: px(0),
-                                padding: UiRect::right(px(0)),
                                 flex_direction: FlexDirection::Column,
                                 align_items: AlignItems::Stretch,
+                                row_gap: px(SECTION_GAP),
                                 overflow: Overflow::scroll_y(),
                                 ..default()
                             },
                             ScrollPosition(Vec2::ZERO),
                             ScrollArea,
                         ))
-                        .with_children(|panels| match view.context {
-                            SettingsScreenContext::CreateWorld => {
-                                panels
-                                    .spawn((
-                                        SettingsSectionPanel(SettingsSection::General),
-                                        section_panel_node(
-                                            view.selected == SettingsSection::General,
+                        .with_children(|panels| {
+                            match view.context {
+                                SettingsScreenContext::CreateWorld => {
+                                    spawn_settings_section(
+                                        panels,
+                                        SettingsSection::WorldSettings,
+                                        new_world_settings_section(
+                                            view.new_world,
+                                            view.localization,
+                                            view.language,
                                         ),
-                                    ))
-                                    .with_child(new_world_general_section(
-                                        view.new_world,
                                         view.localization,
                                         view.language,
-                                    ));
-
-                                panels
-                                    .spawn((
-                                        SettingsSectionPanel(SettingsSection::GameRules),
-                                        section_panel_node(
-                                            view.selected == SettingsSection::GameRules,
+                                    );
+                                    spawn_settings_section(
+                                        panels,
+                                        SettingsSection::WorldGeneration,
+                                        new_world_generation_section(
+                                            view.new_world,
+                                            view.localization,
+                                            view.language,
                                         ),
-                                    ))
-                                    .with_child(game_rules_section(
-                                        view.ticks_per_second,
                                         view.localization,
                                         view.language,
-                                    ));
+                                    );
+                                    spawn_settings_section(
+                                        panels,
+                                        SettingsSection::GameRules,
+                                        game_rules_section(
+                                            view.ticks_per_second,
+                                            view.localization,
+                                            view.language,
+                                        ),
+                                        view.localization,
+                                        view.language,
+                                    );
+                                }
+                                SettingsScreenContext::InWorld => {
+                                    spawn_settings_section(
+                                        panels,
+                                        SettingsSection::WorldSettings,
+                                        world_settings_section(
+                                            view.game_mode,
+                                            view.localization,
+                                            view.language,
+                                        ),
+                                        view.localization,
+                                        view.language,
+                                    );
+                                    spawn_settings_section(
+                                        panels,
+                                        SettingsSection::GameRules,
+                                        game_rules_section(
+                                            view.game_rules.ticks_per_second(),
+                                            view.localization,
+                                            view.language,
+                                        ),
+                                        view.localization,
+                                        view.language,
+                                    );
+                                }
+                                SettingsScreenContext::Start => {
+                                    spawn_global_settings_sections(
+                                        panels,
+                                        view.render_distance,
+                                        view.hud_settings,
+                                        view.localization,
+                                        view.language,
+                                    );
+                                }
                             }
-                            SettingsScreenContext::InWorld => {
-                                panels
-                                    .spawn((
-                                        SettingsSectionPanel(SettingsSection::WorldSettings),
-                                        section_panel_node(
-                                            view.selected == SettingsSection::WorldSettings,
-                                        ),
-                                    ))
-                                    .with_child(world_settings_section(
-                                        view.game_mode,
-                                        view.localization,
-                                        view.language,
-                                    ));
 
-                                panels
-                                    .spawn((
-                                        SettingsSectionPanel(SettingsSection::GameRules),
-                                        section_panel_node(
-                                            view.selected == SettingsSection::GameRules,
-                                        ),
-                                    ))
-                                    .with_child(game_rules_section(
-                                        view.game_rules.ticks_per_second(),
-                                        view.localization,
-                                        view.language,
-                                    ));
-
-                                spawn_global_settings_panels(
-                                    panels,
-                                    view.render_distance,
-                                    view.hud_settings,
-                                    view.localization,
-                                    view.language,
-                                    view.selected,
-                                );
-                            }
-                            SettingsScreenContext::Start => {
-                                spawn_global_settings_panels(
-                                    panels,
-                                    view.render_distance,
-                                    view.hud_settings,
-                                    view.localization,
-                                    view.language,
-                                    view.selected,
-                                );
-                            }
+                            // A full viewport of trailing space lets the final
+                            // section reach the top, so it can become the
+                            // authoritative active sidebar item.
+                            panels.spawn(Node {
+                                width: percent(100),
+                                height: percent(100),
+                                flex_shrink: 0.0,
+                                ..default()
+                            });
                         })
                         .id();
 
@@ -426,38 +446,53 @@ fn spawn_content(columns: &mut ChildSpawnerCommands, view: SettingsContentView<'
         });
 }
 
-fn spawn_global_settings_panels(
+fn spawn_global_settings_sections(
     panels: &mut ChildSpawnerCommands,
     render_distance: &RenderDistanceSettings,
     hud_settings: &HudSettings,
     localization: &UiLocalization,
     language: Language,
-    selected: SettingsSection,
+) {
+    spawn_settings_section(
+        panels,
+        SettingsSection::Graphics,
+        graphics_section(render_distance.chunks(), localization, language),
+        localization,
+        language,
+    );
+    spawn_settings_section(
+        panels,
+        SettingsSection::Hud,
+        hud_section(hud_settings, localization, language),
+        localization,
+        language,
+    );
+    spawn_settings_section(
+        panels,
+        SettingsSection::Languages,
+        languages_section(localization, language),
+        localization,
+        language,
+    );
+}
+
+fn spawn_settings_section<B: Bundle>(
+    panels: &mut ChildSpawnerCommands,
+    section: SettingsSection,
+    content: B,
+    localization: &UiLocalization,
+    language: Language,
 ) {
     panels
-        .spawn((
-            SettingsSectionPanel(SettingsSection::Graphics),
-            section_panel_node(selected == SettingsSection::Graphics),
-        ))
-        .with_child(graphics_section(
-            render_distance.chunks(),
-            localization,
-            language,
-        ));
-
-    panels
-        .spawn((
-            SettingsSectionPanel(SettingsSection::Hud),
-            section_panel_node(selected == SettingsSection::Hud),
-        ))
-        .with_child(hud_section(hud_settings, localization, language));
-
-    panels
-        .spawn((
-            SettingsSectionPanel(SettingsSection::Languages),
-            section_panel_node(selected == SettingsSection::Languages),
-        ))
-        .with_child(languages_section(localization, language));
+        .spawn((SettingsSectionPanel(section), section_panel_node()))
+        .with_children(|panel| {
+            panel.spawn(typography::heading(
+                localization
+                    .text(language, section.localization_key())
+                    .to_owned(),
+            ));
+            panel.spawn(content);
+        });
 }
 
 fn spawn_section_button(
@@ -474,15 +509,13 @@ fn spawn_section_button(
     ));
 }
 
-fn section_panel_node(visible: bool) -> Node {
+fn section_panel_node() -> Node {
     Node {
         width: percent(100),
+        flex_shrink: 0.0,
         flex_direction: FlexDirection::Column,
-        display: if visible {
-            Display::Flex
-        } else {
-            Display::None
-        },
+        align_items: AlignItems::Stretch,
+        row_gap: px(SECTION_CONTENT_GAP),
         ..default()
     }
 }

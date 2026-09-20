@@ -28,7 +28,6 @@ use super::{
 };
 use crate::screens::settings_screen::{
     game_rules_section::TicksPerSecondInputState,
-    navigation::{SettingsSection, SettingsSectionSelection},
     new_world_section::SeedInputState,
 };
 
@@ -176,8 +175,7 @@ pub(in crate::screens::settings_screen) fn handle_spawn_biome_dropdown_button(
     }
 }
 
-pub(in crate::screens::settings_screen) fn close_spawn_biome_dropdown_outside_general(
-    selection: Res<SettingsSectionSelection>,
+pub(in crate::screens::settings_screen) fn close_spawn_biome_dropdown_outside(
     mouse: Res<ButtonInput<MouseButton>>,
     inside: Query<
         &Interaction,
@@ -185,10 +183,6 @@ pub(in crate::screens::settings_screen) fn close_spawn_biome_dropdown_outside_ge
     >,
     mut state: ResMut<SpawnBiomeDropdownState>,
 ) {
-    if selection.is_changed() && selection.selected != SettingsSection::General && state.is_open() {
-        state.close();
-        return;
-    }
     if dropdown::clicked_outside(state.is_open(), &mouse, &inside) {
         state.close();
     }

@@ -9,7 +9,6 @@ use crate::{
     },
 };
 
-use super::navigation::{SettingsSection, SettingsSectionSelection};
 
 const DROPDOWN_WIDTH: f32 = 240.0;
 
@@ -270,8 +269,7 @@ pub(super) fn handle_target_block_position_options(
     }
 }
 
-pub(super) fn close_target_block_position_dropdown_outside_hud(
-    selection: Res<SettingsSectionSelection>,
+pub(super) fn close_target_block_position_dropdown_outside(
     mouse: Res<ButtonInput<MouseButton>>,
     inside: Query<
         &Interaction,
@@ -279,10 +277,6 @@ pub(super) fn close_target_block_position_dropdown_outside_hud(
     >,
     mut state: ResMut<TargetBlockPositionDropdownState>,
 ) {
-    if selection.is_changed() && selection.selected != SettingsSection::Hud && state.is_open() {
-        state.close();
-        return;
-    }
     if dropdown::clicked_outside(state.is_open(), &mouse, &inside) {
         state.close();
     }

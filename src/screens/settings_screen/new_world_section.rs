@@ -105,7 +105,7 @@ pub(super) fn reset_new_world_settings(
     mut name_feedback: ResMut<WorldNameFeedback>,
 ) {
     config.reset();
-    selection.selected = SettingsSection::General;
+    selection.selected = SettingsSection::WorldSettings;
     seed_input.reset();
     ticks_input.reset();
     biome_size_input.reset();
@@ -113,7 +113,7 @@ pub(super) fn reset_new_world_settings(
     name_feedback.set(String::new());
 }
 
-pub(super) fn new_world_general_section(
+pub(super) fn new_world_settings_section(
     config: &NewWorldConfig,
     localization: &UiLocalization,
     language: Language,
@@ -123,9 +123,21 @@ pub(super) fn new_world_general_section(
         children![
             world_name_setting(config, localization, language),
             seed_setting(config.seed().0, localization, language),
+            world_settings_section(config.game_mode(), localization, language),
+        ],
+    )
+}
+
+pub(super) fn new_world_generation_section(
+    config: &NewWorldConfig,
+    localization: &UiLocalization,
+    language: Language,
+) -> impl Bundle {
+    (
+        settings_layout::group_column(),
+        children![
             spawn_biome_setting(localization, language),
             biome_size_multiplier_setting(config, localization, language),
-            world_settings_section(config.game_mode(), localization, language),
         ],
     )
 }
@@ -193,34 +205,7 @@ pub(super) fn spawn_new_world_footer(
     ));
 }
 
-pub(super) fn sync_new_world_input_focus_to_section(
-    selection: Res<SettingsSectionSelection>,
-    mut seed_input: ResMut<SeedInputState>,
-    mut ticks_input: ResMut<TicksPerSecondInputState>,
-    mut biome_size_input: ResMut<BiomeSizeMultiplierInputState>,
-    mut spawn_biome_dropdown: ResMut<SpawnBiomeDropdownState>,
-) {
-    if !selection.is_changed() {
-        return;
-    }
-
-    match selection.selected {
-        SettingsSection::General => ticks_input.reset(),
-        SettingsSection::GameRules => {
-            seed_input.reset();
-            biome_size_input.reset();
-            spawn_biome_dropdown.close();
-        }
-        _ => {
-            seed_input.reset();
-            ticks_input.reset();
-            biome_size_input.reset();
-            spawn_biome_dropdown.close();
-        }
-    }
-}
-
-pub(super) fn handle_new_world_general_control_focus(
+pub(super) fn handle_new_world_settings_control_focus(
     interactions: NewWorldGeneralControlInteractions,
     mut seed_input: ResMut<SeedInputState>,
     mut biome_size_input: ResMut<BiomeSizeMultiplierInputState>,

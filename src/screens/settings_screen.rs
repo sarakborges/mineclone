@@ -14,7 +14,7 @@ use biome_size_multiplier_section::{
     sync_biome_size_multiplier_slider_thumb,
 };
 use hud_section::{
-    TargetBlockPositionDropdownState, close_target_block_position_dropdown_outside_hud,
+    TargetBlockPositionDropdownState, close_target_block_position_dropdown_outside,
     handle_display_tooltips_toggle, handle_target_block_position_dropdown_button,
     handle_target_block_position_options, sync_display_tooltips_toggle,
     sync_target_block_position_dropdown, sync_target_block_position_options,
@@ -25,12 +25,13 @@ use languages_section::{
 };
 use layout::spawn_settings_screen;
 use navigation::{
-    SettingsSectionSelection, handle_close_requests, handle_section_buttons, sync_section_ui,
+    SettingsSectionSelection, apply_pending_section_scroll, handle_close_requests,
+    handle_section_buttons, sync_section_ui,
 };
 use new_world_section::{
-    SeedInputState, handle_new_world_footer, handle_new_world_general_control_focus,
+    SeedInputState, handle_new_world_footer, handle_new_world_settings_control_focus,
     handle_random_seed, handle_seed_focus, handle_seed_keyboard, reset_new_world_settings,
-    sync_new_world_input_focus_to_section, sync_seed_text,
+    sync_seed_text,
 };
 use render_distance_logic::{
     handle_render_distance_input, handle_render_distance_keyboard,
@@ -38,7 +39,7 @@ use render_distance_logic::{
 };
 use render_distance_section::{RenderDistanceInput, RenderDistanceInputState};
 use spawn_biome_section::{
-    SpawnBiomeDropdownState, close_spawn_biome_dropdown_outside_general,
+    SpawnBiomeDropdownState, close_spawn_biome_dropdown_outside,
     focus_spawn_biome_search_frame, handle_spawn_biome_dropdown_button,
     handle_spawn_biome_option_buttons, handle_spawn_biome_search_focus,
     handle_spawn_biome_search_keyboard, populate_spawn_biome_options,
@@ -108,17 +109,17 @@ impl Plugin for SettingsScreenPlugin {
                 Update,
                 (
                     (
+                        apply_pending_section_scroll,
                         handle_section_buttons,
-                        sync_new_world_input_focus_to_section.run_if(in_state(GameState::NewWorld)),
-                        close_spawn_biome_dropdown_outside_general,
-                        close_target_block_position_dropdown_outside_hud,
+                        close_spawn_biome_dropdown_outside,
+                        close_target_block_position_dropdown_outside,
                         close_language_dropdown_outside,
                         handle_seed_focus,
                         handle_biome_size_multiplier_input
                             .run_if(in_state(GameState::NewWorld)),
                         handle_render_distance_input,
                         handle_world_name_focus.run_if(in_state(GameState::NewWorld)),
-                        handle_new_world_general_control_focus
+                        handle_new_world_settings_control_focus
                             .run_if(in_state(GameState::NewWorld)),
                         handle_random_seed,
                         handle_spawn_biome_dropdown_button.run_if(in_state(GameState::NewWorld)),

@@ -24,6 +24,7 @@
   "newWorld.return": "Return",
   "newWorld.createWorld": "Create World",
   "newWorld.section.general": "General",
+  "newWorld.section.worldGeneration": "World Generation",
   "newWorld.name": "Name",
   "newWorld.name.description": "Names identify saved worlds. If this name already exists, the new world will be named Copy of ...",
   "newWorld.seed": "Seed",

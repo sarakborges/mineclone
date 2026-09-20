@@ -24,6 +24,7 @@
   "newWorld.return": "Volver",
   "newWorld.createWorld": "Crear Mundo",
   "newWorld.section.general": "General",
+  "newWorld.section.worldGeneration": "Generación del Mundo",
   "newWorld.name": "Nombre",
   "newWorld.name.description": "Los nombres identifican mundos guardados. Si este nombre ya existe, el nuevo mundo se llamará Copia de ...",
   "newWorld.seed": "Semilla",
