@@ -4,7 +4,7 @@ use arrayvec::ArrayVec;
 use bevy::prelude::*;
 
 use crate::{
-    content::structure::{StructureDefinition, StructureVoxel},
+    content::structure::StructureDefinition,
     voxel::coordinates::chunk_coord_from_world,
     world::{
         biome_field::MAX_SURFACE_INFLUENCES,
@@ -33,17 +33,16 @@ const SURFACE_CARVER_WATER_CLEARANCE: f32 = 12.0;
 /// procedural density or the already-generated, possibly edited voxel world.
 pub(crate) fn fit_structure_to_ground(
     anchor: IVec2,
-    voxels: &[StructureVoxel],
+    support_offsets: &[IVec2],
+    minimum_offset_y: i32,
     max_slope: i32,
     mut ground_at: impl FnMut(IVec2) -> Option<i32>,
 ) -> Option<i32> {
-    let minimum_offset_y = voxels.iter().map(|voxel| voxel.offset.y).min()?;
     let mut minimum_ground_y = i32::MAX;
     let mut maximum_ground_y = i32::MIN;
 
-    for voxel in voxels.iter().filter(|voxel| voxel.offset.y == minimum_offset_y) {
-        let position = anchor + IVec2::new(voxel.offset.x, voxel.offset.z);
-        let ground_y = ground_at(position)?;
+    for &offset in support_offsets {
+        let ground_y = ground_at(anchor + offset)?;
         minimum_ground_y = minimum_ground_y.min(ground_y);
         maximum_ground_y = maximum_ground_y.max(ground_y);
     }
@@ -60,11 +59,11 @@ pub(super) fn compute_structure_origin_y(
     structure: &StructureDefinition,
     context: &ChunkGenerationContext<'_>,
 ) -> Option<i32> {
-    let voxels = structure.voxels();
     let (region, anchored_caves) = structure_support_context(anchor, context);
     fit_structure_to_ground(
         anchor,
-        voxels,
+        structure.support_offsets(),
+        structure.min_y_offset(),
         structure.restrictions.max_slope,
         |position| {
             let sample_position = position.as_vec2() + Vec2::splat(0.5);
