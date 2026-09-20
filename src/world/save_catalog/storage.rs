@@ -137,13 +137,37 @@ pub(super) fn publish_json<T: Serialize>(
         }
         file.sync_all()?;
         drop(file);
-        fs::rename(&temporary, &final_path)
+        fs::rename(&temporary, &final_path)?;
+        if let Err(error) = sync_directory(directory) {
+            return Err(rollback_published_file(directory, &final_path, error));
+        }
+        Ok(())
     })();
 
     if result.is_err() {
         let _ = fs::remove_file(temporary);
     }
     result
+}
+
+fn rollback_published_file(
+    directory: &Path,
+    final_path: &Path,
+    publish_error: io::Error,
+) -> io::Error {
+    match fs::remove_file(final_path).and_then(|_| sync_directory(directory)) {
+        Ok(()) => publish_error,
+        Err(rollback_error) => io::Error::new(
+            publish_error.kind(),
+            format!(
+                "{publish_error}; rollback of published file failed: {rollback_error}"
+            ),
+        ),
+    }
+}
+
+fn sync_directory(directory: &Path) -> io::Result<()> {
+    fs::File::open(directory)?.sync_all()
 }
 
 pub(super) fn read_json_file<T: for<'de> Deserialize<'de>>(file: fs::File) -> io::Result<T> {

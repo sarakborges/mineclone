@@ -5066,3 +5066,53 @@ A CI seguinte encontrou o último atributo serde remanescente no runtime snapsho
 - todos os `#[serde(...)]` do runtime snapshot agora foram removidos;
 - `StoredWorldSnapshot` mantém os defaults de compatibilidade;
 - `VERSION` permanece `0.35.2`.
+
+
+### CI verde do checkpoint 147
+
+- Push CI `35522171662`: **success**.
+- PR CI `35522173732`: **success**.
+- O topo `27fb6918560631dff1bdc1af6846ec3289d8bb50` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.35.2`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 148 — 2026-09-20: JSON publication sincroniza directory commit [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`save_catalog::storage::publish_json()` sincronizava o conteúdo do arquivo temporário e fazia atomic rename, mas não executava `fsync` no diretório pai depois do rename.
+
+Para snapshot/manifest de save — especialmente `manifest-N.json`, que é o commit marker do format v2 — isso deixava uma janela de crash/power-loss em que o conteúdo do arquivo estava durável mas a entrada de diretório recém-renomeada podia não estar.
+
+`chunk_storage` já sincronizava o world directory após publicar uma generation; JSON publication precisava oferecer a mesma garantia.
+
+### Implementação
+
+Após:
+
+1. serialize + flush;
+2. `file.sync_all()`;
+3. atomic `rename(temp, final)`;
+
+`publish_json()` agora chama `sync_directory(directory)`.
+
+Se esse post-rename fsync falhar:
+
+- remove o arquivo final recém-visível;
+- sincroniza o diretório novamente para tornar o rollback durável;
+- retorna o erro original de publication;
+- se o rollback também falhar, retorna erro combinado com ambos os failures.
+
+O caller continua vendo a mesma capability: `Ok` significa published/durable; `Err` significa não tratar o arquivo como committed.
+
+### Semântica
+
+- JSON shape/save format não mudou;
+- publication ordering v2 não mudou;
+- nenhuma escrita em Gameplay;
+- custo adicional ocorre somente em create/save final, onde durability é o objetivo.
+
+### Versionamento
+
+- `VERSION`: **0.35.2 → 0.35.3**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
