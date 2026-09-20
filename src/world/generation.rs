@@ -113,7 +113,14 @@ pub(crate) fn generate_chunk(
         return VoxelChunk::empty();
     }
 
-    let structure_allowance = maximum_structure_vertical_chunk_allowance(context.structures);
+    let horizontal_chunk = chunk_coord.xz();
+    let structure_allowance = maximum_structure_vertical_chunk_allowance_for_horizontal_chunk(
+        horizontal_chunk,
+        context.biomes,
+        context.structures,
+        context.biome_field,
+        context.feature_fields,
+    );
     let (_, maximum_surface_chunk_y) = chunk_y_bounds(context.dimension, context.biomes);
     if chunk_coord.y > maximum_surface_chunk_y + structure_allowance
         && !context.biomes.has_volume_density_modifiers()
@@ -122,7 +129,6 @@ pub(crate) fn generate_chunk(
     }
 
     let chunk_origin = chunk_origin(chunk_coord);
-    let horizontal_chunk = chunk_coord.xz();
     let columns = context
         .feature_fields
         .generation_columns(horizontal_chunk, || {
@@ -212,6 +218,20 @@ pub(crate) fn generate_chunk(
     chunk
 }
 
-pub(crate) fn maximum_structure_vertical_chunk_allowance(structures: &StructureRegistry) -> i32 {
-    chunks_for_block_extent(structures.max_height_above_anchor())
+pub(crate) fn maximum_structure_vertical_chunk_allowance_for_horizontal_chunk(
+    horizontal_chunk: IVec2,
+    biomes: &BiomeRegistry,
+    structures: &StructureRegistry,
+    biome_field: &BiomeField,
+    feature_fields: &WorldFeatureFields,
+) -> i32 {
+    let block_extent = feature_fields.structure_vertical_extent(horizontal_chunk, || {
+        self::structures::maximum_potential_structure_height_for_chunk(
+            horizontal_chunk,
+            biomes,
+            structures,
+            biome_field,
+        )
+    });
+    chunks_for_block_extent(block_extent)
 }
