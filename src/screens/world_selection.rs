@@ -56,7 +56,7 @@ impl Plugin for WorldSelectionPlugin {
 struct WorldSelectionState {
     worlds: Vec<WorldSummary>,
     error: String,
-    scan: Option<PendingWorldScan>
+    scan: Option<PendingWorldScan>,
     loading: Option<PendingWorldLoad>,
 }
 

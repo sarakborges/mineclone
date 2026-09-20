@@ -4198,3 +4198,18 @@ Na revisão imediata pós-commit, antes de considerar o bloco validado, foi enco
 - `let id = id().to_owned();` → `let id = pending.id().to_owned();`.
 
 A correção restaura apenas o acesso ao ID do `PendingWorldLoad`; nenhuma semântica de task/load mudou e `VERSION` permanece `0.34.24`.
+
+
+### Correção de integração CI do checkpoint 135
+
+A primeira CI do worker split falhou por uma única vírgula ausente em `WorldSelectionState`:
+
+- `scan: Option<PendingWorldScan>` não terminava com vírgula antes de `loading`.
+
+Isso gerou uma cascata de erros de parsing/derive (`Resource`, fields inexistentes etc.), sem indicar falha arquitetural do split.
+
+Correção aplicada:
+
+- vírgula restaurada;
+- nenhum comportamento alterado;
+- `VERSION` permanece `0.34.24`.
