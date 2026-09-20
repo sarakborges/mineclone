@@ -5593,3 +5593,16 @@ Ganhos:
 - `VERSION`: **0.35.8 → 0.35.9**.
 - CI pendente.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### Correção de integração CI do checkpoint 154
+
+A primeira CI encontrou `PlayerHotbar::restore_items_and_selection()` sem consumidores após a mudança para prepare/commit.
+
+Correção alinhada à regra de public surface mínima:
+
+- removida a API mutating antiga;
+- `PlayerHotbar::from_saved_items_and_selection()` passa a ser a única capability de restore persistido;
+- nenhum lint suppression foi adicionado;
+- restauração continua atômica e sem `Vec` temporário;
+- `VERSION` permanece `0.35.9`.

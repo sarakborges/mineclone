@@ -121,22 +121,6 @@ impl PlayerHotbar {
         Ok(restored)
     }
 
-    pub(crate) fn restore_items_and_selection(
-        &mut self,
-        items: &[Option<String>],
-        selected_slot: usize,
-        blocks: &BlockRegistry,
-        tools: &ToolRegistry,
-    ) -> io::Result<()> {
-        *self = Self::from_saved_items_and_selection(
-            items,
-            selected_slot,
-            blocks,
-            tools,
-        )?;
-        Ok(())
-    }
-
     pub(crate) fn set_selected_item(&mut self, item: Option<&'static str>) {
         self.slots[self.selected_slot] = item;
     }
