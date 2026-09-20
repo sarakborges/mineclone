@@ -4053,3 +4053,72 @@ Correção:
 - `VERSION` permanece `0.34.22`.
 
 Também fica registrado que `chunk_storage.rs` já existe como primeira peça de per-generation chunk storage; próximos slices devem integrá-lo ao catálogo existente, não criar um segundo mecanismo paralelo.
+
+
+### CI verde do checkpoint 133
+
+- Push CI `35513357982`: **success**.
+- PR CI `35513360503`: **success**.
+- O topo `627773621e61d6a8e725f2559ef9e470aaf2baf1` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.22`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 134 — 2026-09-20: world-selection view extraída para layout owner [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`world_selection.rs` misturava no mesmo módulo:
+
+- worker lifecycle de scan/load/cancel;
+- ativação do mundo carregado e mutação de resources;
+- input/actions de Load/Delete/Back;
+- construção completa da UI;
+- marker components puramente visuais;
+- formatting de timestamp para apresentação.
+
+Isso fazia mudanças de layout tocarem o mesmo arquivo que controla thread/cancelamento/persistence activation.
+
+### Implementação
+
+Novo `screens/world_selection/layout.rs` possui exclusivamente a camada de view:
+
+- `WorldListEntry`;
+- `SelectionError`;
+- `WorldListStatus`;
+- `WorldListContainer`;
+- `spawn_world_entry()`;
+- `spawn_world_selection()`;
+- `format_save_time()`.
+
+O módulo principal `world_selection.rs` continua owner de:
+
+- `WorldSelectionState`;
+- `WorldSelectionAction`;
+- scan worker;
+- load worker;
+- cancellation/disposal;
+- delete/load orchestration;
+- accepted-world activation;
+- feedback synchronization.
+
+### Boundaries
+
+- detalhes de `ScrollArea`, scrollbar, cosmic background, screen/surface/theme/typography e button styling saíram do módulo de orchestration;
+- o layout recebe somente state/localization/domain read-model necessário para renderizar;
+- marker components são `pub(super)` apenas porque o parent precisa consultá-los para atualizar/despawn;
+- `WorldSelectionAction` continua no parent porque representa intent/control flow, não apresentação;
+- não foi criado helper genérico nem design-system paralelo.
+
+### Semântica preservada
+
+- ordem OnEnter/Update/OnExit não mudou;
+- Back continua precedendo worker result;
+- scan/load/delete behavior não mudou;
+- UI tree, labels, spacing e timestamp format não mudaram;
+- nenhum save/load format mudou.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` documenta a boundary view vs async/domain orchestration para screens complexas.
+- `VERSION`: **0.34.22 → 0.34.23**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.

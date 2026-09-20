@@ -61,6 +61,7 @@ Use schedule sets to express ordering between domains. Prefer named sets over ch
 Reusable UI behavior and appearance belong under `src/ui`.
 
 - Screens and HUD modules resolve domain data and assemble layouts; they should not clone interaction mechanics or control styling.
+- A screen with substantial async/domain orchestration should keep pure view assembly, view-only marker components, and presentation formatting in its `layout` module. Worker lifecycle, domain actions, and authoritative-state activation remain outside that view module so visual changes do not couple to I/O/control flow.
 - View-only state such as search focus, filter text, selected presentation categories, scroll positions, and UI dirtiness belongs to the owning HUD/screen module rather than gameplay/player domains.
 - Action buttons use the canonical `ui::button::button(...)` primitive and `ButtonVariant`; screens must not create parallel button constructors for the same interaction model. Canonical button labels render in Title Case (initial uppercase for every whitespace-separated word), so screens/localizations must not invent a different capitalization rule.
 - Numeric fields use `numeric_input_field`, `NumericInputState`, and `sync_numeric_input_view`.
