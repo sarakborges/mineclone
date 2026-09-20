@@ -180,17 +180,16 @@ fn poll_world_load(
     };
     let pending = state.loading.take().expect("completed load must be tracked");
     let id = pending.id().to_owned();
-    let result = match completion {
-        WorldLoadCompletion::Abandoned => return,
-        WorldLoadCompletion::Finished(Some(result)) => result,
-        WorldLoadCompletion::Finished(None) => {
-            state.error = format!(
-                "{} {}: completed worker returned no result",
-                localization.text(language.get(), "worldSelection.loadError"),
-                id
-            );
-            return;
-        }
+    if completion.abandoned {
+        return;
+    }
+    let Some(result) = completion.result else {
+        state.error = format!(
+            "{} {}: completed worker returned no result",
+            localization.text(language.get(), "worldSelection.loadError"),
+            id
+        );
+        return;
     };
     let (mut snapshot, world, session_lock) = match result {
         Ok(loaded) => loaded,

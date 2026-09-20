@@ -128,9 +128,9 @@ impl OwnedLoadContent {
     }
 }
 
-pub(super) enum WorldLoadCompletion {
-    Abandoned,
-    Finished(Option<io::Result<LoadedWorld>>),
+pub(super) struct WorldLoadCompletion {
+    pub(super) abandoned: bool,
+    pub(super) result: Option<io::Result<LoadedWorld>>,
 }
 
 pub(super) struct PendingWorldLoad {
@@ -188,10 +188,10 @@ impl PendingWorldLoad {
         if !slot.complete {
             return None;
         }
-        if slot.abandoned {
-            return Some(WorldLoadCompletion::Abandoned);
-        }
-        Some(WorldLoadCompletion::Finished(slot.result.take()))
+        Some(WorldLoadCompletion {
+            abandoned: slot.abandoned,
+            result: slot.result.take(),
+        })
     }
 
     pub(super) fn abandon(&self) {

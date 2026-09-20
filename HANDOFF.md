@@ -4213,3 +4213,16 @@ Correção aplicada:
 - vírgula restaurada;
 - nenhum comportamento alterado;
 - `VERSION` permanece `0.34.24`.
+
+
+### Segunda correção de integração do checkpoint 135
+
+Após corrigir a sintaxe, Clippy encontrou `large_enum_variant` em `WorldLoadCompletion`: a variante que carregava o world result era muito maior que `Abandoned`.
+
+Em vez de suppression ou heap indirection artificial:
+
+- `WorldLoadCompletion` virou struct com `abandoned: bool` e `result: Option<...>`;
+- isso espelha diretamente o estado observado do slot concluído;
+- o parent continua decidindo se aceita/ignora o resultado;
+- nenhuma allocation adicional foi introduzida;
+- `VERSION` permanece `0.34.24`.
