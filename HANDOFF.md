@@ -8210,3 +8210,156 @@ Não houve cargo run nem QA runtime Windows.
 6. /place world_tree:
    - ground fit continua respeitando slope/support;
    - custo de fitting deve usar só os 135 support offsets.
+
+
+## Checkpoint 177 — 2026-09-20: Enchanted fog fix + persistent FPS pressure reduction [FIX/PERF; VERSION 0.48.1]
+
+### Relato
+
+Após o fix de envelope global da World Tree:
+
+- sky e fog de Enchanted Forest estavam aparentando azul-marinho;
+- FPS ainda permanecia abaixo dos 60 desejados.
+
+### Visual — causa confirmada da fog
+
+EnvironmentVisualState já calculava sky_color e fog_color separadamente, mas o renderer da fog ignorava fog_color e copiava sky_color tanto no attach inicial quanto nas atualizações.
+
+Corrigido:
+
+- src/rendering/fog/color.rs usa visuals.fog_color;
+- src/rendering/fog/attachment.rs usa visuals.fog_color desde a criação;
+- teste cobre independência entre sky e fog.
+
+O sky não foi recolorido. A palette atual de Enchanted Forest é historicamente consistente; o tom azul-marinho corresponde à fase Night authored. O DayNightClock avança por tempo real/world ticks e mundos salvos restauram a fase.
+
+### GPU — foliage fora de cascaded shadow maps
+
+oak_leaf era AlphaMode::Mask e castsShadow=true.
+
+Em Enchanted Forest isso colocava copas densas (e folhas da World Tree) nos três passes de directional CSM, incluindo alpha test em shadow rendering.
+
+Alteração:
+
+- data/blocks/oak_leaf.json: castsShadow=false.
+
+Folhas continuam:
+
+- visíveis;
+- alpha-masked;
+- recebendo voxel lighting/tint;
+- participando de light dampening.
+
+Logs e terreno continuam projetando sombras direcionais.
+
+O mesher já coalescia faces com material idêntico via block_face_material_face; nenhuma duplicação dessa otimização foi adicionada.
+
+### CPU — chunks opacos não entram em relaxation desnecessária
+
+seed_chunk_direct_lighting() já percorre 16³ voxels e agora retorna se o chunk realmente precisa de propagation.
+
+Um chunk completamente bloqueante, sem emissão de bloco/fluido, já está em fixed point após o direct seed.
+
+Streaming agora:
+
+- mantém enqueue_empty_chunk_relaxation para chunks vazios;
+- mantém enqueue_chunk_relaxation para chunks transmissivos/emissivos/fluidos;
+- pula o enqueue de 4096 voxels para seções totalmente opacas e não-emissivas.
+
+Isso ataca especialmente as seções subterrâneas mantidas por padding de hydrology.
+
+Cobertura:
+
+- chunk totalmente opaco/non-emissive => no relaxation;
+- chunk com lamp emissiva => relaxation continua obrigatória.
+
+### Streaming — remove sky section redundante
+
+O surface cache usa probes 4x4 e mantém um guard conservador de 16 blocos para extremos não amostrados.
+
+Além desse guard, selection ainda adicionava SURFACE_PADDING_ABOVE_CHUNKS=1 globalmente, criando uma seção de ar extra em toda coluna.
+
+Hydrology foi revisada:
+
+- lake water level fica abaixo da elevação da source;
+- rivers são carve;
+- ocean sobe até sea_level.
+
+Novo teto conservador:
+
+max(sampled_surface_max + 16, sea_level)
+
+e depois somente:
+
++ structure_chunk_allowance local.
+
+O +1 global acima foi removido.
+
+Isso preserva:
+
+- guard para picos/volcano/gorge;
+- ocean até sea_level;
+- lakes/rivers;
+- structures via allowance por coluna;
+
+mas remove aproximadamente uma sky section vazia por coluna horizontal do streaming normal.
+
+### Visibility
+
+Foi investigado chunk_visibility_radii(12) = show 14 / hide 16.
+
+Não foi alterado.
+
+O +2 de show radius é deliberado e pré-existente para manter o limite real dos chunks atrás da fog; reduzir para 12 reabriria pop/flicker de borda. A otimização ficou no workload, não em esconder menos mundo do que o contrato visual atual.
+
+### Commits deste bloco
+
+- f91b909f310d28ca84692ad4e8a279d6f62c1a20 — fog usa palette authored.
+- 070d2e56cdae98fba10fe0954482c4b5b1d3b56d — fog attach usa fog_color.
+- e138d1c5a05691da5711afafab58f779a15ae1e9 — oak leaves fora do CSM.
+- 785ed55777d33d4242d1afa62a23da01745f8e5e — direct lighting detecta fixed point opaco.
+- 22f7d6f1c5457bafc5a369f43c202d095095f0fa — streaming pula relaxation opaca.
+- 83e21b2309f8bcaff48b7d9776c55cf96bcc092a — testes do fixed point.
+- cb1fde47416b3bd938d64d30931d9f02be379a32 — surface guard compartilha teto com sea level.
+- 244634dc7c2db3fc61f538ebcb8159fe870d686d — remove sky section redundante.
+- b62fc20376ec1f88b5170a339ce762aecdcd5a8b — bump 0.48.1.
+
+### Integração paralela
+
+Durante este bloco entrou 0.48.0 com structure variants/oak variants.
+
+Os commits paralelos inicialmente quebraram o CI por integração mecânica de variants e um needless_lifetimes; foram corrigidos em:
+
+- b660b2ea999350c183e6d437e7a00d979d8d8d3e;
+- 389631ab67bc8384a3bf8c24a8f789e39e1dbf7b.
+
+As mudanças deste checkpoint permaneceram no histórico e não foram sobrescritas.
+
+### CI
+
+Topo funcional antes do bump de versão:
+
+389631ab67bc8384a3bf8c24a8f789e39e1dbf7b
+
+- push 35545506048: success;
+- PR 35545507943: success;
+- Clippy rigoroso: success;
+- cargo check: success.
+
+### QA prioritária
+
+1. Enchanted Forest em Day:
+   - sky deve seguir a palette cyan/blue authored;
+   - fog deve ser independente e usar fogColor.
+2. Enchanted Forest em Night:
+   - sky azul-marinho/púrpura é authored;
+   - fog não deve ser uma cópia exata do sky.
+3. Medir FPS parado em Enchanted Forest:
+   - comparar especialmente após leaves saírem do CSM.
+4. Caminhar gerando chunks:
+   - verificar redução de spikes por lighting em seções opacas;
+   - verificar menos sky chunks vazios no streaming.
+5. Ocean/coast:
+   - água até sea_level não pode ser cortada.
+6. Mountains/volcano/gorge:
+   - nenhum topo pode ser cortado; guard de 16 blocos foi preservado.
