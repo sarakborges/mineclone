@@ -349,11 +349,6 @@ impl FeatureCaches {
     }
 
     #[cfg(test)]
-    pub(super) fn structure_vertical_extent_count(&self) -> usize {
-        self.structure_vertical_extents.len()
-    }
-
-    #[cfg(test)]
     pub(super) fn structure_origin_count(&self) -> usize {
         self.structure_origins.len()
     }
