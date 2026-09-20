@@ -62,7 +62,8 @@ fn write_generation_chunks_to_staging(staging: &Path, chunks: &[DiskChunk]) -> i
     for chunk in chunks {
         let identity = ChunkDiskIdentity::from_disk_chunk(chunk);
         if !identities.insert(identity) {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, format!("duplicate persisted chunk coordinate: {:?}", identity.chunk_position())));
+            let position = identity.chunk_position();
+            return Err(io::Error::new(io::ErrorKind::InvalidData, format!("duplicate persisted chunk coordinate: {position:?}")));
         }
         let path = staging.join(identity.relative_path());
         let parent = path.parent().ok_or_else(|| io::Error::other("chunk storage path has no parent"))?;
