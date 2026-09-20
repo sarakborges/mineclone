@@ -17,6 +17,8 @@ use crate::voxel::chunk_disk::DiskChunk;
 const CHUNK_DIRECTORY: &str = "chunks";
 const CHUNK_FILE_EXTENSION: &str = "json";
 const GENERATION_DIRECTORY_PREFIX: &str = "generation-";
+const STAGING_DIRECTORY_PREFIX: &str = ".generation-";
+const STAGING_DIRECTORY_SUFFIX: &str = ".tmp";
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct ChunkDiskIdentity(IVec3);
@@ -74,6 +76,17 @@ pub(crate) fn generation_directory(generation: u64) -> PathBuf {
     PathBuf::from(format!("{GENERATION_DIRECTORY_PREFIX}{generation}"))
 }
 
+/// Private directory used while a generation's chunk set is being assembled.
+/// The catalog can populate this directory completely and rename it to the
+/// canonical generation directory before publishing the manifest. A crash can
+/// therefore leave only an obviously-unpublished staging directory, never a
+/// partially assembled directory with the canonical generation identity.
+pub(crate) fn generation_staging_directory(generation: u64) -> PathBuf {
+    PathBuf::from(format!(
+        "{STAGING_DIRECTORY_PREFIX}{generation}{STAGING_DIRECTORY_SUFFIX}"
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,6 +131,15 @@ mod tests {
     #[test]
     fn generation_directory_is_shared_by_publication_and_pruning() {
         assert_eq!(generation_directory(7), Path::new("generation-7"));
+    }
+
+    #[test]
+    fn staging_directory_cannot_be_mistaken_for_published_generation() {
+        assert_eq!(
+            generation_staging_directory(7),
+            Path::new(".generation-7.tmp")
+        );
+        assert_ne!(generation_staging_directory(7), generation_directory(7));
     }
 
     #[test]
