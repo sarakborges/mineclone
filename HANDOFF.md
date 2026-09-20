@@ -3069,3 +3069,212 @@ Continuar exatamente daqui, sem refazer a investigação:
    - não reserializar todos os chunks persistentes a cada autosave.
 5. Só depois fechar o bloco com bump de versão apropriado e QA de roundtrip.
 
+
+
+## Checkpoint 119 — 2026-09-20: save somente ao sair + fechamento da janela durável [CÓDIGO APLICADO; CI PENDENTE]
+
+### Pedido / direção
+
+O usuário decidiu remover autosave completamente. A partir deste checkpoint, Asteria só pode publicar save durável quando o jogador:
+
+- usa **Leave World**;
+- usa **Exit Game** dentro de um mundo;
+- fecha a janela pelo botão do sistema operacional enquanto existe um mundo ativo.
+
+Não deve existir gravação periódica de world snapshot nem checkpoint periódico separado de relógio durante Gameplay.
+
+### Implementação
+
+Commit funcional:
+
+- `667c284d7465c7c925f2aab8bf55a1bbdfb2e19e` — `refactor: save worlds only on exit`.
+
+Mudanças principais:
+
+- `WorldSession` deixou de carregar:
+  - timer de autosave;
+  - baseline/dirty-state de autosave;
+  - task assíncrona;
+  - último estado salvo.
+- `autosave_world`, `SavedWorldState`, `OwnedWorldSaveCapture` e o caminho de `AsyncComputeTaskPool` para autosave foram removidos.
+- `src/world/clock_persistence.rs` foi removido integralmente.
+  - não há mais `clock-*.json`;
+  - não há mais `fsync` periódico em `Last`;
+  - day/tick continuam persistindo no `WorldSnapshot` final.
+- `WorldPlugin` não agenda mais autosave nem clock checkpoint.
+- `WindowPlugin.close_when_requested = false` para impedir o fechamento automático antes do save.
+- Um `WindowCloseRequested` em Gameplay:
+  - executa o mesmo commit síncrono/durável usado por Leave/Exit;
+  - só envia `AppExit::Success` depois de sucesso;
+  - em erro, consome o pedido e mantém a janela/mundo aberto para retry.
+- Em menus/loading, fechar a janela continua saindo imediatamente porque não existe snapshot de mundo ativo a publicar.
+- `WorldSession::persist` agora é somente a operação final síncrona de captura + publicação; não mantém baseline de autosave depois do commit.
+
+### Contrato arquitetural
+
+`ARCHITECTURE.md` foi atualizado no mesmo commit:
+
+- Gameplay não executa periodic autosave;
+- não existe clock-only checkpoint;
+- durable writes de mundo pertencem apenas ao lifecycle de saída;
+- falha de save impede abandonar o mundo/janela;
+- `WorldSnapshot` é o único owner durável de day/tick;
+- background periodic publication não pode reaparecer sem decisão explícita de produto/arquitetura.
+
+### Versionamento
+
+- `VERSION`: **0.34.7 → 0.34.8**.
+- `Cargo.toml` permanece deliberadamente em `0.10.16`.
+
+### Validação
+
+Neste ponto do handoff:
+
+- commit aplicado em `develop`;
+- CI ainda não verificada;
+- não executei `cargo test`, `cargo run` nem QA Windows.
+
+### Próximo passo
+
+Seguir a auditoria de performance pela prioridade já definida:
+
+1. remover o scan global por-frame de `dormant_scheduled` nos fluidos e reativar trabalho por evento de chunk carregado;
+2. depois otimizar o custo de seed/frontier/lighting no integration path;
+3. manter este handoff atualizado a cada bloco antes de avançar.
+
+
+## Checkpoint 120 — 2026-09-20: fluid dormant work reativado por residency event [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`process_fluid_updates()` chamava `reactivate_loaded_dormant()` em todo frame. Essa rotina:
+
+- percorria todas as chaves de `dormant_scheduled`;
+- consultava o `VoxelWorld` para descobrir quais chunks haviam voltado;
+- alocava um `Vec`;
+- ordenava os coords;
+- só então reativava os ticks daquele chunk.
+
+O custo crescia com a quantidade histórica de chunks com fluid work dormente, apesar de o streaming já conhecer exatamente o momento em que um chunk volta a ficar residente.
+
+### Implementação
+
+Commit funcional:
+
+- `9b59188fa7e98b5cf093f5463f972036d0eaef63` — `perf: reactivate dormant fluid work on chunk load`.
+
+Mudanças:
+
+- `PendingFluidUpdates::reactivate_loaded_dormant(world, tick)` foi removido.
+- Novo `reactivate_loaded_chunk(coord, current_tick)`:
+  - faz lookup direto por coord;
+  - remove apenas a lista daquele chunk;
+  - reagenda seus ticks para o tick atual.
+- `process_fluid_updates()` não faz mais scan global de chunks dormentes.
+- O streaming passa `WorldTickClock.current_tick()` pelo integration path.
+- `seed_loaded_chunk_lighting()`, que já é o ponto comum de primeira integração de um chunk residente durante Gameplay, reativa o fluid work daquele coord antes de semear a frontier.
+- Bootstrap/Loading não ganhou polling nem reativação artificial:
+  - a simulação de fluidos não roda nessa fase;
+  - `dormant_scheduled` só surge quando um due tick é processado enquanto seu chunk não está residente em Gameplay.
+- A regressão unitária interna foi atualizada para testar reativação explícita por residency event; ela NÃO foi executada.
+
+### Arquitetura
+
+`ARCHITECTURE.md` agora registra explicitamente:
+
+- due fluid work dormente é indexado por chunk;
+- reativação pertence à transição de residência daquele chunk;
+- o loop por-frame da simulação não pode redescobrir chunks carregados via scan global do mapa dormente.
+
+### Versionamento
+
+- `VERSION`: **0.34.8 → 0.34.9**.
+- `Cargo.toml` permanece `0.10.16`.
+
+### Validação
+
+Neste ponto:
+
+- código aplicado em `develop`;
+- CI do bloco ainda não verificada;
+- não executei `cargo test`, `cargo run` nem QA Windows.
+
+### Próximo passo
+
+Próxima prioridade de performance:
+
+1. reduzir o custo de `enqueue_loaded_fluid_frontier()` em chunks com grandes volumes de fluido;
+2. revisar o custo de direct skylight seed no integration path;
+3. só depois avançar para solver/remesh/streaming queue refinements.
+
+
+### Correção de integração CI dos checkpoints 119–120
+
+A primeira CI do commit de save final-only (`35510390475`) falhou somente no Clippy por duas sobras diretas da remoção do autosave:
+
+- `Pause Menu` ainda recebia `ResMut<WorldSession>` embora `persist()` agora use apenas `&self`;
+- `VoxelWorld::save_revision` / `save_content_revision()` ficaram sem consumidor depois que dirty-detection periódico foi removido.
+
+Correção aplicada:
+
+- `31f9cbe5569092aaca968904a3eff270776065da` — `fix: remove obsolete autosave revision state`.
+- `Pause Menu` usa `Res<WorldSession>`.
+- `save_revision`, `bump_save_revision()` e `save_content_revision()` foram removidos, sem supressão de warning.
+- O bump permanece `VERSION 0.34.9` porque esta é correção de integração do mesmo bloco ainda não fechado/validado.
+- Nova CI deste topo ainda precisa ser confirmada antes do próximo bloco funcional.
+
+
+### Correção de integração adicional do checkpoint 120
+
+A CI subsequente expôs `clippy::too_many_arguments` em `stream_chunks`: adicionar `WorldTickClock` diretamente ao system elevou a assinatura para 8 parâmetros.
+
+Correção aplicada sem suppression:
+
+- `2e9e4e29bd487141481b27a7b33d60efdfd941da` — `fix: keep streaming clock in runtime context`.
+- `WorldTickClock` agora compõe `ChunkStreamingWork`, junto do estado/runtime usado pela integração de chunks.
+- `stream_chunks` volta a 7 parâmetros e continua lendo um único `current_tick` por frame.
+- `VERSION` permanece `0.34.9`; esta é continuação do mesmo bloco de performance ainda em validação.
+
+
+### CI verde do bloco 0.34.9
+
+- Push CI `35510690984`: **success** no commit funcional `2e9e4e29bd487141481b27a7b33d60efdfd941da`.
+- Passou:
+  - auditoria de localizações;
+  - Clippy `--locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- PR CI equivalente ainda estava em execução no instante desta anotação, mas o pipeline de push validou o mesmo commit.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+## Checkpoint 121 — 2026-09-20: engineering best-practices canon adopted [DOC/PROCESS BLOCK]
+
+### Pedido
+
+O usuário forneceu um guia technology-agnostic de boas práticas cobrindo responsabilidade, ownership, boundaries, composição, modelagem de estado, async/concurrency, cache, determinismo, performance, testes, refactoring triggers e review checklist, e pediu que ele fosse aplicado ao trabalho em andamento.
+
+### Aplicação
+
+- Novo `ENGINEERING_PRACTICES.md` adapta o guia ao Asteria sem transformar `ARCHITECTURE.md` em um arquivo monolítico.
+- `ARCHITECTURE.md` declara os dois documentos conjuntamente normativos:
+  - `ARCHITECTURE.md` continua autoritativo para contratos específicos do Asteria;
+  - `ENGINEERING_PRACTICES.md` define as práticas gerais reutilizáveis.
+- Em conflito/aparente sobreposição, a regra específica do Asteria vence.
+- O refactor/performance em andamento passa a revisar explicitamente:
+  - single responsibility e owner único;
+  - boundaries/dependency direction;
+  - contexts estreitos;
+  - change-driven work;
+  - cache contracts;
+  - bounded async/work budgets;
+  - stale result protection;
+  - deterministic ordering;
+  - optimize-the-owner-of-the-cost;
+  - regression/invariant tests;
+  - refactoring triggers e code-review checklist.
+
+### Versionamento
+
+- `VERSION`: **0.34.9 → 0.34.10**.
+- Nenhuma mudança de runtime neste checkpoint; o bump é patch por alteração normativa/documental do projeto.
+- O próximo bloco funcional de performance deverá partir deste canon e atualizar novamente o handoff.
