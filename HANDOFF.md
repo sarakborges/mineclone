@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.37.0`. HEAD funcional `c85c0831226dea12578dbd6aab97492d8c7f86a4`. CI push `35533512875` e PR `35533515535`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Fog adaptativa voltou a esconder a frontier ainda não publicada; Volcano usa sky/fog neutros em cinza; Witchwood e Enchanted Forest são mutuamente `avoidNear`; fluidos authored de chunks novos passam por initial settling com o mesmo solver do runtime antes de lighting/primeiro mesh, sem promover chunks derivados a persistentes. Não houve `cargo test`, `cargo run` nem QA Windows.
+**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.37.1`. HEAD funcional `c85c0831226dea12578dbd6aab97492d8c7f86a4`. CI push `35533512875` e PR `35533515535`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Fog adaptativa voltou a esconder a frontier ainda não publicada; Volcano usa sky/fog neutros em cinza; Witchwood e Enchanted Forest são mutuamente `avoidNear`; fluidos authored de chunks novos passam por initial settling com o mesmo solver do runtime antes de lighting/primeiro mesh, sem promover chunks derivados a persistentes. Não houve `cargo test`, `cargo run` nem QA Windows.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.34.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **Estado mais recente em `develop`: comparação/correção do save game em andamento; HEAD funcional ainda não versionado `bd713963b9bbb8f69eeeb6df6b7bf7aa2773152f`.** CI `35413383474` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Já foram corrigidas persistência de scheduled fluid work, health do player, creatures e lock cross-process do diretório do mundo. Ainda NÃO foram implementados selected hotbar slot, rotação/look do player, autosave disparado somente pela passagem do clock, nem a migração do snapshot global para storage incremental por chunk/region. **Não houve bump de VERSION neste checkpoint porque o bloco de save foi interrompido antes do fechamento completo.** Não houve `cargo test`, `cargo run` ou QA Windows.
 
@@ -6232,3 +6232,95 @@ Isso evita transformar worldgen derivado em save autoritativo apenas porque a á
 7. Fog: durante generation/meshing backlog, a frontier não publicada deve permanecer escondida; depois que o pool preencher as colunas, a fog deve voltar ao range normal.
 8. Witchwood e Enchanted Forest não devem compartilhar borda regional.
 9. Volcano: sky/fog devem ser neutros/cinza em dawn/day/dusk/night.
+
+
+## Checkpoint 164 — 2026-09-20: initial fluid settling incremental; loading não pode bloquear [HOTFIX; VERSION 0.37.1; CI VERDE]
+
+### Regressão observada
+
+Após o checkpoint 163, criação de mundo travava visualmente na tela de loading.
+
+A causa era objetiva: `settle_generated_fluid_chunks()` executava a convergência inteira em um único `while queue.pop()` síncrono. Uma bootstrap region pode conter centenas de sections e uma frontier grande de ocean/lava/waterfall; cada voxel ainda pode executar o downhill solver. Mesmo sendo trabalho finito, o sistema não devolvia o frame até esvaziar toda a fila, congelando a loading UI.
+
+Não foi identificado deadlock de lock/thread; o problema era ausência de yield/frame budget.
+
+### Novo owner incremental
+
+`fluid_updates::settling::GeneratedFluidSettling` agora mantém entre frames:
+
+- conjunto de chunks recém-gerados autorizados a receber mutação derivada;
+- `DeduplicatedQueue<IVec3>` de voxels pendentes;
+- `FluidSolverScratch` reutilizado;
+- flag de activity/publication barrier.
+
+API interna:
+
+- `begin(world, coords)`;
+- `extend(world, coords)`;
+- `process(world, fluids, FrameWorkBudget)`;
+- `take_completed_chunks()`.
+
+A convergência só libera lighting/first mesh depois de a queue chegar a zero, mas **nunca tenta esvaziá-la inteira sem respeitar budget**.
+
+### Bootstrap
+
+`WorldLoadingState` passa a possuir o settling state.
+
+`SettlingFluids`:
+
+- inicializa uma vez com todas as bootstrap coords;
+- processa no máximo uma fatia por frame;
+- budget temporal: 6 ms;
+- mínimo antes de checar relógio: 32 updates;
+- máximo absoluto: 2048 updates/frame;
+- quando converge, consome a publication barrier e avança para `Lighting`.
+
+Portanto loading continua apresentando frames enquanto água/lava convergem.
+
+### Streaming
+
+`ChunkStreamingState` também possui um `GeneratedFluidSettling`.
+
+Generated results:
+
+1. entram no `VoxelWorld`;
+2. são adicionados ao conjunto de settling;
+3. podem receber novos chunks no mesmo owner enquanto generation continua;
+4. settling recebe budget separado de 2 ms / 512 updates por frame;
+5. nenhum desses chunks entra em initial lighting/ready mesh até a queue convergir;
+6. ao convergir, chunks ainda desejados recebem lighting e ready;
+7. chunk que saiu da seleção enquanto aguardava é arquivado/descartado conforme sua persistência.
+
+`stream_chunks()` continua chamando collection/settling mesmo quando generation tasks já chegaram a zero, enquanto o settling owner estiver ativo.
+
+### Liveness e ownership
+
+O pre-settle continua:
+
+- reutilizando o mesmo desired-state/downhill solver do runtime;
+- ignorando spread delay somente na fase derivada;
+- recusando mutação derivada em persistent chunks;
+- limitando targets ao conjunto recém-gerado;
+- deixando cross-boundary para runtime quando o target não pertence ao conjunto.
+
+Novo requisito arquitetural: **generated-fluid convergence nunca pode ser implementada novamente como loop síncrono sem frame budget/yield**.
+
+### Commits / CI
+
+- `8c9fa715b7a887ccf0b3b6929f2ae596e2a5e9cd`: implementação incremental + `VERSION 0.37.1`.
+- CI push `35533856014` falhou no Clippy por `E0365`: re-export de `GeneratedFluidSettling` ampliava a visibilidade além de `crate::world`.
+- `c15c1cc14df1361de06213bffa5e668b2dddc0ce`: mantém o state world-private com re-export na mesma visibility.
+- CI push `35533883399`: **success**.
+- CI PR `35533885662`: **success**.
+- auditoria de idiomas, Clippy rigoroso e `cargo check --locked` verdes.
+- não houve `cargo test`, `cargo run` nem QA Windows.
+
+### QA prioritária
+
+Recriar exatamente o caso que congelou:
+
+1. criar mundo novo com ocean/água/lava dentro da bootstrap region;
+2. confirmar que loading continua animando/responsivo durante SettlingFluids;
+3. confirmar entrada em Gameplay após convergência;
+4. confirmar que o primeiro frame do chunk já contém o spread inicial;
+5. durante streaming de região com fluido pesado, confirmar ausência de hitch longo e ausência de publicação antes do pre-settle local.
