@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.43.0`. HEAD funcional `c79ca42e33011c525e5890636ebccea84e16188e`. CI push `35539646925` e PR `35539653138`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Streaming fluid settling agora possui generation closure causal: se um fluido convergido alcança um chunk ainda não residente mas já pertencente à seleção viva, esse chunk é adotado pela mesma wave, gerado, e o settling reabre antes de qualquer publicação. Runtime fluid ticks também ficam suspensos em todo o mutable halo temporariamente owned pelo settling, inclusive chunks antigos já renderizados, evitando promoção para persistent no meio da convergência. Não houve `cargo test`, `cargo run` nem QA Windows/runtime.
+**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.44.0`. HEAD funcional `f7501a57201a98268cb2c7d379fdfa33f1875b15`. Push CI `35539995993`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. O contorno de surface biomes agora usa domain warp 2D multi-escala contínuo mantendo o mesmo envelope máximo de warp anterior; `surfaceMargin` suporta largura variável data-driven e ocean usa base 32, variação 12, escala 0.018 para evitar faixa costeira uniforme/retilínea. Não houve `cargo test`, `cargo run` nem QA Windows/runtime.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.34.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **Estado mais recente em `develop`: comparação/correção do save game em andamento; HEAD funcional ainda não versionado `bd713963b9bbb8f69eeeb6df6b7bf7aa2773152f`.** CI `35413383474` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Já foram corrigidas persistência de scheduled fluid work, health do player, creatures e lock cross-process do diretório do mundo. Ainda NÃO foram implementados selected hotbar slot, rotação/look do player, autosave disparado somente pela passagem do clock, nem a migração do snapshot global para storage incremental por chunk/region. **Não houve bump de VERSION neste checkpoint porque o bloco de save foi interrompido antes do fechamento completo.** Não houve `cargo test`, `cargo run` ou QA Windows.
 
@@ -7762,3 +7762,140 @@ Não houve `cargo test`, `cargo run` nem QA Windows/runtime.
 5. Após publication final:
    - dormant runtime ticks dos chunks antigos devem voltar;
    - mudanças futuras legítimas de Gameplay continuam funcionando.
+
+
+## Checkpoint 174 — 2026-09-20: bordas de surface biomes mais orgânicas; ocean margin sem faixa reta [FEATURE; VERSION 0.44.0; PUSH CI VERDE]
+
+### Sintoma
+
+Usuário observou `plains ↔ ocean` visualmente sem graça, parecendo uma faixa reta.
+
+Correção de interpretação: o problema reportado era **geometria/shape da transição entre biomas**, não terrain height.
+
+### Diagnóstico
+
+Surface ownership/blending usa Voronoi de sites em `BiomeField::sample_surface()`.
+
+Antes:
+
+- `warp_surface_position()` era apenas:
+  - seno em X dependente de Z;
+  - seno em Z dependente de X;
+- amplitude máxima: 24 blocos;
+- frequências ~0.009–0.011, portanto wavelength de centenas de blocos.
+
+Esse warp curva a borda em escala macro, mas localmente uma longa Voronoi bisector ainda pode parecer praticamente reta.
+
+Além disso, ocean define:
+
+`surfaceMargin.width = 32`
+
+e o margin era aceito por:
+
+`boundary.distance <= width`.
+
+Logo a faixa de praia acompanhava a mesma borda com largura exatamente constante. Em uma plains/ocean seam grande, o resultado visual podia parecer uma régua/fita uniforme.
+
+### Novo surface border warp
+
+`warp_surface_position()` agora usa um **domain warp 2D multi-escala**, contínuo e determinístico:
+
+- broad value-noise vector field:
+  - amplitude 17;
+  - scale 0.014;
+- detail value-noise vector field:
+  - amplitude 7;
+  - scale 0.045.
+
+Os dois eixos usam seeds/offsets diferentes para evitar padrão direcional evidente.
+
+O value noise é bilinear com `smoothstep`, usando `cell_hash()` + `hash_signed()`; portanto:
+
+- determinístico por world seed;
+- contínuo;
+- sem voxel-scale serration;
+- sem dependência de RNG state.
+
+A soma das amplitudes permanece **24**, exatamente o envelope máximo anterior. Assim `surface_minimum_spacing()` continua com o mesmo máximo de deformação efetiva: a mudança altera a **distribuição espacial/complexidade do contorno**, não aumenta silenciosamente o tamanho dos biomas.
+
+### Surface margin width variation data-driven
+
+`BiomeSurfaceMargin` ganhou:
+
+- `widthVariation` — default 0;
+- `variationScale` — default 0.02.
+
+Validação:
+
+- width > 0;
+- widthVariation finito e >= 0;
+- widthVariation < width;
+- variationScale positivo e finito.
+
+O runtime `BiomeFieldEntry` agora possui um `SurfaceMarginField` coeso:
+
+- base width;
+- width variation;
+- variation scale;
+- stable biome-derived noise seed.
+
+`surfaceMargin` sem `widthVariation` mantém exatamente a largura fixa authored anterior.
+
+### Ocean
+
+Ocean agora define:
+
+- `width = 32`;
+- `widthVariation = 12`;
+- `variationScale = 0.018`.
+
+A largura efetiva varia suavemente aproximadamente entre 20 e 44 blocos ao longo da costa, sem quebrar continuidade.
+
+Isso atua apenas na **identidade/material da margem**. Terrain influences continuam independentes do margin identity, preservando o contrato existente de terrain blending.
+
+### Arquitetura
+
+`ARCHITECTURE.md` passou a registrar:
+
+- Voronoi continua owner regional;
+- world-space boundary não deve expor longas bissetrizes locais retas;
+- `warp_surface_position` owns deterministic multi-scale 2D domain warp;
+- border spacing deve usar o envelope máximo total do warp;
+- surfaceMargin.width é mean authored width;
+- widthVariation/variationScale são shaping data-driven;
+- shaping de margem não altera terrain-height ownership.
+
+### Commits
+
+- `f5649853ef86c81969acad1e4cc3d051ca170481` — `feat: make surface biome borders more organic`; adiciona multi-scale warp, surfaceMargin variation e ocean shaping; bump `0.44.0`.
+- `c41631473952dfc1639161ca4c28bca439655f4b` — preserva envelope máximo total de warp em 24.
+- `f7501a57201a98268cb2c7d379fdfa33f1875b15` — atualiza fixture de test para novo `surface_margin`; HEAD funcional.
+
+### CI
+
+Primeiro HEAD intermediário falhou no test target porque o fixture de `BiomeFieldEntry` ainda usava o campo removido `surface_margin_width`.
+
+HEAD funcional final:
+
+`f7501a57201a98268cb2c7d379fdfa33f1875b15`
+
+- push CI `35539995993`: **success**;
+- localization audit: success;
+- Clippy rigoroso: success;
+- `cargo check --locked`: success.
+
+Até o fechamento deste checkpoint, nenhum PR workflow run havia aparecido para este HEAD.
+
+Não houve `cargo test`, `cargo run` nem QA Windows/runtime.
+
+### QA prioritária
+
+1. Plains ↔ Ocean em coastline longa:
+   - borda regional deve ter concavidades/curvas locais visíveis;
+   - praia não deve formar faixa de largura constante.
+2. Forest/Wasteland/Plains e outros surface pairs:
+   - bordas devem ficar mais orgânicas sem serrilhado de alta frequência.
+3. Forced spawn biome:
+   - shape deve continuar contínuo, já que usa o mesmo `warp_surface_position`.
+4. Verificar que biome size visual não cresceu sistematicamente:
+   - envelope máximo de warp permanece 24.
