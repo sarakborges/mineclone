@@ -8030,3 +8030,181 @@ Não houve cargo test, cargo run nem QA Windows/runtime.
    - quantidade de chunks deferred para fluid remesh;
    - stale/remesh requeues;
    - só então atacar o próximo gargalo, sem reabrir streaming por especulação.
+
+
+## Checkpoint 176 — 2026-09-20: World Tree no longer inflates global streaming/generation [PERF; VERSION 0.46.4; CI VERDE]
+
+### Sintoma
+
+Mesmo após batching de lighting/remesh do settling, chunk render continuava lento e FPS permanecia aproximadamente pela metade.
+
+### Root cause dominante
+
+A World Tree monumental introduzida em 0.45.x tinha:
+
+- 100 layers;
+- 49.548 voxels;
+- max Y offset = 99;
+- horizontal extent máximo = 34 blocos;
+- footprint de 3.382 colunas.
+
+StructureRegistry mantinha envelopes globais:
+
+- max_height_above_anchor;
+- max_horizontal_extent_from_anchor.
+
+Esses máximos eram usados por streaming, generation early-out e structure candidate discovery para TODO o mundo, independentemente de biome/candidate real.
+
+Consequências:
+
+1. streaming transformava a World Tree em +7 chunks verticais globais;
+2. horizontal preload subia de +2 para +3 globalmente;
+3. chunks altos que deveriam retornar vazio cedo atravessavam geração completa;
+4. resolved_structure_candidates expandia todas as 28 placements pela margem horizontal da maior structure;
+5. cada sky chunk publicado disparava lighting de sua coluna e enqueue_loaded_column_below, amplificando lighting/remesh.
+
+O patch anterior de settling era válido, mas não atacava esse multiplicador de trabalho.
+
+### Correção — structure envelope por coluna X/Z
+
+WorldFeatureFields ganhou cache concorrente por horizontal chunk:
+
+structure_vertical_extents: IVec2 -> i32.
+
+O valor é calculado de forma conservadora usando apenas candidates cuja geometria realmente pode intersectar a coluna:
+
+- placement spacing/chance/jitter continuam data-driven;
+- candidate anchor continua determinístico;
+- o anchor precisa pertencer ao biome configurado;
+- restrictions pesadas não são necessárias para o envelope; falso positivo local é aceitável, falso negativo não.
+
+Streaming e generation usam o mesmo cache.
+
+Resultado:
+
+- World Tree só reserva +7 nos chunks que ela pode realmente atravessar;
+- Plains/Wasteland/etc. deixam de herdar 99 blocos de headroom;
+- early-out de geração volta a acontecer perto da superfície para colunas sem structures altas.
+
+### Streaming
+
+Removido o uso de max_horizontal_extent_from_anchor() no preload global.
+
+Preload horizontal voltou a:
+
+horizontal render radius + HORIZONTAL_PRELOAD_CHUNKS.
+
+A seleção vertical usa, por coluna:
+
+maximum_structure_vertical_chunk_allowance_for_horizontal_chunk(...).
+
+Queue priority também usa o allowance daquela própria coluna, não um valor planetário.
+
+### Generation early-out
+
+generate_chunk() agora resolve/cacheia o vertical structure extent pelo horizontal chunk antes dos dois early-outs.
+
+Logo sky chunks sem structure alta:
+
+- não constroem hydrology/cave/volume region desnecessariamente;
+- não passam por density/material/fluid/structure passes só porque existe uma World Tree em algum outro lugar do mundo.
+
+### Candidate discovery sem margem global
+
+resolved_structure_candidates() deixou de criar query bounds usando a maior structure registrada.
+
+Novo fluxo:
+
+1. para cada placement, enumera somente anchors cuja geometria pode intersectar o chunk;
+2. candidates diretos são resolvidos normalmente;
+3. para preservar prioridade/conflicts entre chunks, procura blockers fora do chunk somente quando:
+   - podem outrank o candidate direto;
+   - e reserveSpace/conflictGroups permitem conflito;
+   - e a geometria pode realmente sobrepor o candidate direto.
+
+Isso mantém conflict resolution consistente sem ampliar oak/boulder/etc. pela footprint da World Tree.
+
+### Ground fit usando support_offsets
+
+fit_structure_to_ground() não recebe mais os voxels completos.
+
+Agora usa diretamente:
+
+- structure.support_offsets();
+- structure.min_y_offset().
+
+Na World Tree isso reduz o ground-fit de 49.548 voxels para 135 pontos de suporte, preservando exatamente a regra da camada inferior.
+
+O /place manual usa o mesmo caminho.
+
+### Rasterização de structures monumentais
+
+StructureRuntime agora pré-indexa voxels por coluna horizontal (offset X/Z), ordenados por Y.
+
+Para structures com >= 512 voxels:
+
+- cada chunk visita só as colunas X/Z dentro de seus 16x16;
+- dentro dessas colunas, só os voxels cujo Y cai no chunk;
+- fluidPolicy=forbid usa a mesma visita localizada.
+
+A World Tree deixa de varrer os 49.548 voxels inteiros em cada chunk tocado.
+
+Structures pequenas (<512 voxels) continuam no loop linear antigo para evitar regressão por HashMap/lookups em oak/boulders.
+
+### Remoção do conceito global
+
+StructureRegistry não mantém mais:
+
+- max_height_above_anchor;
+- max_horizontal_extent_from_anchor.
+
+O tamanho de uma structure não pode mais, por design, aumentar sozinho o streaming/generation envelope do planeta inteiro.
+
+### Commits principais
+
+- 66c8fdeb1f481127392635dcae944dd1361c1323 — cache local de structure vertical extent.
+- 81359645f0e0ed3be087624c63304422ac0008b7 — expõe o cache via WorldFeatureFields.
+- b03666b4f886b60038c5f5a80acf9c9cbeadb1a0 — ground fit usa support offsets.
+- e55ca322cc2627c6d39c2c7ab6b033cd7654dce9 — /place reutiliza support offsets.
+- 2524b7224b80bc116e4af6cf1a07db0b4af17c95 — candidate search localizado.
+- 43d61cd6402d0602581c7f7e3a673052973f2f37 — generation early-out usa height local.
+- 0ce15c5b18c55b48e5a7c83818ec7c6553d4d166 — streaming allowance por coluna.
+- 8814362476ade8aa701e4c3141d96d18936c245f — remove envelopes globais do registry.
+- d8f9eef6a91da8310fe9e0289f091818c8ec1bd3 — indexa voxels por coluna.
+- 2205d3e35bb913c6a643b28621401f0aa38c0b25 — rasterização visita só voxels do chunk.
+- 258b97dffc57b3818de745047201873dcec2b096 — small structures permanecem lineares.
+- a39aacce0bbfb422eb2dc72ea4dff19f57c789d9 — bump 0.46.4.
+
+### CI
+
+HEAD funcional de runtime 258b97dffc57b3818de745047201873dcec2b096:
+
+- push 35543378923: success;
+- PR 35543380405: success;
+- Clippy rigoroso: success;
+- cargo check --locked: success.
+
+Também houve marco verde em 8814362476ade8aa701e4c3141d96d18936c245f, confirmando o conjunto de local structure allowance + candidate resolver antes da otimização de rasterização.
+
+Falhas intermediárias foram apenas dead-code transitório enquanto novos callers ainda não haviam entrado.
+
+Não houve cargo run nem QA runtime Windows.
+
+### QA prioritária
+
+1. Criar mundo em Plains:
+   - chunk render deve voltar a avançar sem +7 sky layers globais;
+   - FPS durante streaming deve subir significativamente.
+2. Enchanted Forest longe da World Tree:
+   - não deve reservar a altura monumental.
+3. Aproximar-se da World Tree:
+   - apenas os chunks atravessados por ela ganham allowance alto;
+   - copa/tronco não podem cortar nas bordas de chunk.
+4. World Tree:
+   - continua chance 100%, spacing 1000;
+   - priority/restrictions permanecem intactas.
+5. Conflicts de structures:
+   - higher-priority reserveSpace ainda deve bloquear overlaps cruzando chunks.
+6. /place world_tree:
+   - ground fit continua respeitando slope/support;
+   - custo de fitting deve usar só os 135 support offsets.
