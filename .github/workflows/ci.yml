@@ -77,18 +77,7 @@ jobs:
           cache-on-failure: true
 
       - name: Clippy
-        shell: bash
-        run: |
-          set +e
-          cargo clippy --locked --all-targets --all-features -- -D warnings 2>&1 | tee /tmp/clippy.log
-          status=${PIPESTATUS[0]}
-          {
-            echo '### Clippy diagnostics'
-            echo '```text'
-            tail -n 80 /tmp/clippy.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit "$status"
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
       - name: Check
         run: cargo check --locked
