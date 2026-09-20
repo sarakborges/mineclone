@@ -93,6 +93,7 @@ Targeting has one raycast result and downstream consumers observe it.
 Queue mechanics must be layered rather than copied.
 
 - `DeduplicatedQueue<T>` owns generic deduplicated FIFO/priority behavior.
+- When one queue must choose among ordered eligibility tiers, use one queue-owned ranked scan rather than chaining multiple `pop_where()` passes over the same unchanged ordering. The rank function owns domain priority; `DeduplicatedQueue::pop_min_by_key()` owns the stable single-pass mechanics and preserves FIFO within equal rank.
 - `VoxelUpdateQueue` adds voxel-domain rules such as nonnegative Y and neighbor expansion.
 - Lighting/fluid/remesh queues add only their domain-specific behavior on top.
 - Do not implement another `VecDeque + HashSet` pair locally for the same semantics.

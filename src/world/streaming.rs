@@ -171,18 +171,17 @@ impl ChunkStreamingState {
     fn pop_ready(&mut self) -> Option<IVec3> {
         let center = self.center?;
         let movement_direction = self.movement_direction;
-        self.ready
-            .pop_where(|coord| is_critical_streaming_coord(coord, center))
-            .or_else(|| {
-                if movement_direction == IVec2::ZERO {
-                    None
-                } else {
-                    self.ready.pop_where(|coord| {
-                        (coord.xz() - center.xz()).dot(movement_direction) > 0
-                    })
-                }
-            })
-            .or_else(|| self.ready.pop())
+        self.ready.pop_min_by_key(|coord| {
+            if is_critical_streaming_coord(coord, center) {
+                0_u8
+            } else if movement_direction != IVec2::ZERO
+                && (coord.xz() - center.xz()).dot(movement_direction) > 0
+            {
+                1
+            } else {
+                2
+            }
+        })
     }
 
     fn defer_ready(&mut self, coord: IVec3) {
@@ -717,6 +716,26 @@ mod tests {
     use crate::voxel::{
         cell::VoxelCell, chunk::VoxelChunk, texture_rotation::TextureRotation,
     };
+
+    #[test]
+    fn ready_queue_preserves_critical_forward_background_priority_in_one_scan() {
+        let background = IVec3::new(-4, 0, 0);
+        let forward = IVec3::new(5, 0, 0);
+        let critical = IVec3::new(1, 0, 0);
+        let mut state = ChunkStreamingState {
+            center: Some(IVec3::ZERO),
+            movement_direction: IVec2::X,
+            ..default()
+        };
+        state.ready.enqueue(background);
+        state.ready.enqueue(forward);
+        state.ready.enqueue(critical);
+
+        assert_eq!(state.pop_ready(), Some(critical));
+        assert_eq!(state.pop_ready(), Some(forward));
+        assert_eq!(state.pop_ready(), Some(background));
+        assert_eq!(state.pop_ready(), None);
+    }
 
     #[test]
     fn critical_pending_scan_miss_retries_only_after_queue_or_center_change() {

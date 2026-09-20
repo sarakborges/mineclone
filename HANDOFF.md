@@ -4235,3 +4235,58 @@ A CI seguinte encontrou apenas um import obsoleto após a troca do completion en
 - removido `WorldLoadCompletion` do import do parent;
 - nenhum comportamento alterado;
 - `VERSION` permanece `0.34.24`.
+
+
+### CI verde do checkpoint 135
+
+- Push CI `35516875608`: **success**.
+- PR CI `35516877188`: **success**.
+- O topo `a71961697173692f98d0e2dea2f8fb969b0d5a9e` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.24`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 136 — 2026-09-20: ready streaming priority em single scan [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`ChunkStreamingState::pop_ready()` podia percorrer a mesma ready queue até duas vezes antes de consumir um item:
+
+1. `pop_where(critical)`;
+2. se não houvesse critical, `pop_where(forward)`;
+3. se também não houvesse forward, FIFO `pop()`.
+
+Como cada pop bem-sucedido muda a queue revision, scan-miss cache não amortiza esse caminho. Com backlog grande de mesh-ready chunks, um frame podia pagar dois scans lineares para cada integração.
+
+### Implementação
+
+`DeduplicatedQueue<T>` ganhou `pop_min_by_key()`:
+
+- percorre as entradas ativas uma única vez;
+- ignora records stale de priority promotions;
+- escolhe a menor key;
+- preserva a primeira entrada/FIFO entre keys iguais;
+- usa o mesmo path central de remoção/revision da fila.
+
+`pop_where()` e `pop_min_by_key()` compartilham agora `remove_active_index()`, eliminando duplicação da mutation primitive.
+
+`ChunkStreamingState::pop_ready()` usa ranks:
+
+- 0 = critical;
+- 1 = forward relativo ao movement direction;
+- 2 = fallback/background.
+
+O resultado observável é o mesmo ordering anterior, mas com no máximo um scan da ready queue por item integrado.
+
+### Testes de invariantes adicionados
+
+Sem execução manual:
+
+- `pop_min_by_key()` preserva FIFO dentro do melhor rank;
+- records stale de `enqueue_front` não participam do ranking;
+- streaming continua consumindo critical → forward → background.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` documenta ranked single-scan como generic queue mechanic.
+- `VERSION`: **0.34.24 → 0.34.25**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
