@@ -15,10 +15,15 @@ const CHUNK_FILE_EXTENSION: &str = "chunk.json";
 pub(crate) fn generation_directory_name(generation: u64) -> String { format!("generation-{generation}") }
 pub(crate) fn staging_generation_directory_name(generation: u64) -> String { format!(".generation-{generation}.tmp") }
 
+fn is_real_directory(metadata: &fs::Metadata) -> bool {
+    let file_type = metadata.file_type();
+    file_type.is_dir() && !file_type.is_symlink()
+}
+
 fn checked_directory_slot(world_directory: &Path, relative: &Path) -> io::Result<PathBuf> {
     let path = world_directory.join(relative);
     match fs::symlink_metadata(path.as_path()) {
-        Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => Ok(path),
+        Ok(metadata) if is_real_directory(&metadata) => Ok(path),
         Ok(_) => {
             let display = path.display();
             Err(io::Error::new(io::ErrorKind::InvalidData, format!("chunk storage directory slot is not a real directory: {display}")))
@@ -51,7 +56,7 @@ pub(crate) fn publish_generation_chunks(world_directory: &Path, generation: u64,
     }
     fs::create_dir(staging.as_path())?;
     if let Err(error) = write_generation_chunks_to_staging(staging.as_path(), chunks) {
-        if fs::symlink_metadata(staging.as_path()).is_ok_and(|metadata| metadata.file_type().is_dir() && !metadata.file_type().is_symlink()) {
+        if fs::symlink_metadata(staging.as_path()).is_ok_and(|metadata| is_real_directory(&metadata)) {
             let _ = fs::remove_dir_all(staging.as_path());
         }
         return Err(error);
@@ -83,7 +88,7 @@ pub(crate) fn remove_generation_chunks(world_directory: &Path, generation: u64) 
     let relative = PathBuf::from(generation_directory_name(generation));
     let path = checked_directory_slot(world_directory, relative.as_path())?;
     match fs::symlink_metadata(path.as_path()) {
-        Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => { fs::remove_dir_all(path)?; sync_directory(world_directory) }
+        Ok(metadata) if is_real_directory(&metadata) => { fs::remove_dir_all(path)?; sync_directory(world_directory) }
         Ok(_) => Err(io::Error::new(io::ErrorKind::InvalidData, "chunk generation storage must be a real directory")),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error),
