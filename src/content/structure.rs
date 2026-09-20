@@ -527,10 +527,10 @@ fn build_runtime(
     }
 }
 
-fn palette_entry<'a>(
-    palette: &'a HashMap<String, StructurePaletteEntry>,
+fn palette_entry(
+    palette: &HashMap<String, StructurePaletteEntry>,
     symbol: char,
-) -> Option<&'a StructurePaletteEntry> {
+) -> Option<&StructurePaletteEntry> {
     let mut buffer = [0_u8; 4];
     palette.get(symbol.encode_utf8(&mut buffer))
 }
