@@ -102,9 +102,7 @@ pub(super) fn collect_generated_chunks(
 
     let staged = work.state.take_staged_generated_chunks();
     if staged.is_empty() {
-        if !work.state.generation_wave_targets.is_empty() {
-            work.state.finish_generation_wave();
-        }
+        work.state.finish_generation_wave();
         return;
     }
 
