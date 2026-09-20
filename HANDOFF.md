@@ -4973,3 +4973,40 @@ Correção:
 - nenhuma API/public surface adicional foi exposta;
 - o módulo continua privado a `world`;
 - protocolo v2 e `VERSION 0.35.0` permanecem inalterados.
+
+
+### CI verde do checkpoint 145
+
+- Push CI `35521746295`: **success**.
+- PR CI `35521748186`: **success**.
+- O topo `916fe3543059d242508f7824db8d26cece5162bb` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- Save format v2 está integrado em runtime; `chunk_storage` deixou de ser test-only.
+- `VERSION` permanece `0.35.0`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+- Runtime save→exit→load de v2 e migração v1→v2 continuam pendentes sem evidência de execução.
+
+## Checkpoint 146 — 2026-09-20: new-world reservation sem side effect antes do clock [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`create_new_world()` criava o world directory e adquiria o session lock antes de chamar `now_unix_ms()`.
+
+Se o system clock falhasse nesse ponto, o operador `?` retornava sem executar o rollback explícito do diretório recém-reservado, deixando uma world directory incompleta.
+
+### Correção
+
+- `created_at = now_unix_ms()?` agora é resolvido antes de `create_dir_all(WORLDS_DIRECTORY)` e antes de qualquer world-directory reservation;
+- o reservation manifest usa esse valor já validado;
+- todos os fallible paths após a criação do world directory continuam nos rollback branches existentes.
+
+### Semântica
+
+- world timestamp continua sendo capturado no momento de criação;
+- naming/identity/locking não mudaram;
+- save format v2 não mudou;
+- nenhuma escrita durante Gameplay foi introduzida.
+
+### Versionamento
+
+- `VERSION`: **0.35.0 → 0.35.1**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
