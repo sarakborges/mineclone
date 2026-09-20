@@ -3312,3 +3312,12 @@ Mesmo após remover o polling global de fluid work dormente, a entrada de qualqu
 - `ARCHITECTURE.md` documenta o índice derivado e sua semântica conservadora.
 - `VERSION`: **0.34.10 → 0.34.11**.
 - CI ainda pendente neste instante; não executei `cargo test`, `cargo run` ou QA Windows.
+
+
+### CI verde do checkpoint 122
+
+- Push CI `35510994315`: **success**.
+- PR CI `35510996944`: **success**.
+- O bloco do índice derivado de frontier passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.11`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
