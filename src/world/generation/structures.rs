@@ -29,6 +29,8 @@ use self::{
 };
 use super::{super::biome_field::BiomeField, ChunkGenerationContext};
 
+const COLUMN_INDEX_MIN_VOXELS: usize = 512;
+
 #[derive(Clone, Copy)]
 struct StructureCandidate<'a> {
     biome_id: &'a str,
@@ -467,6 +469,26 @@ fn visit_structure_voxels_in_chunk(
     mut visit: impl FnMut(&StructureVoxel, IVec3, IVec3) -> bool,
 ) -> bool {
     let chunk_size = CHUNK_SIZE as i32;
+    if structure.voxels().len() < COLUMN_INDEX_MIN_VOXELS {
+        for voxel in structure.voxels() {
+            let world_position = origin + voxel.offset;
+            let local = world_position - chunk_origin;
+            if local.x < 0
+                || local.y < 0
+                || local.z < 0
+                || local.x >= chunk_size
+                || local.y >= chunk_size
+                || local.z >= chunk_size
+            {
+                continue;
+            }
+            if visit(voxel, world_position, local) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     let origin_horizontal = origin.xz();
     let chunk_horizontal = chunk_origin.xz();
 
