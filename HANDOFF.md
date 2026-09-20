@@ -5056,3 +5056,13 @@ Correção:
 - defaults/compatibilidade permanecem em `StoredWorldSnapshot`, que continua sendo o único reader de disco;
 - nenhum formato persistido mudou;
 - `VERSION` permanece `0.35.2`.
+
+
+### Segunda correção de integração CI do checkpoint 147
+
+A CI seguinte encontrou o último atributo serde remanescente no runtime snapshot:
+
+- removido `#[serde(default = "default_saved_biome_size_multiplier")]` de `WorldSnapshot::biome_size_multiplier`;
+- todos os `#[serde(...)]` do runtime snapshot agora foram removidos;
+- `StoredWorldSnapshot` mantém os defaults de compatibilidade;
+- `VERSION` permanece `0.35.2`.

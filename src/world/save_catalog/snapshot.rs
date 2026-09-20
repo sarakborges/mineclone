@@ -67,7 +67,6 @@ pub(crate) struct WorldSnapshot {
     pub(crate) dimension_id: String,
     pub(super) worldgen_version: WorldgenVersion,
     pub(crate) spawn_biome: Option<String>,
-    #[serde(default = "default_saved_biome_size_multiplier")]
     pub(crate) biome_size_multiplier: f32,
     pub(crate) ticks_per_second: u32,
     pub(crate) player: Option<SavedPlayer>,
