@@ -69,6 +69,21 @@ pub(super) fn process_dynamic_lighting(
         }
         enqueue_lighting_remesh(coord, &mut runtime);
     }
+
+    if let Some((priority, background)) =
+        runtime.lighting.take_completed_settling_fluid_remeshes()
+    {
+        for coord in priority {
+            if runtime.world.chunk(coord).is_some() {
+                runtime.remesh_queue.enqueue_fluid_priority(coord);
+            }
+        }
+        for coord in background {
+            if runtime.world.chunk(coord).is_some() {
+                runtime.remesh_queue.enqueue_fluid(coord);
+            }
+        }
+    }
 }
 
 fn enqueue_lighting_remesh(
