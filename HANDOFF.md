@@ -3967,3 +3967,71 @@ Foi adicionado teste que compara JSON de `DiskChunk::from_chunk()` e `DiskChunk:
 - `ARCHITECTURE.md` documenta o direct archive → disk path.
 - `VERSION`: **0.34.20 → 0.34.21**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 132
+
+- Push CI `35513064739`: **success**.
+- PR CI `35513066521`: **success**.
+- O topo `93d01004f03974a825549c045f82a1290cd03337` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.21`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 133 — 2026-09-20: serialized chunk catalog boundary [CÓDIGO APLICADO; CI PENDENTE]
+
+### Objetivo
+
+Criar o primeiro boundary real para a roadmap de chunk storage sem violar a decisão atual de produto:
+
+- save continua **somente ao sair**;
+- formato version 1 continua compatível;
+- nenhum chunk é escrito durante Gameplay;
+- nenhuma mudança de unload/load ownership ainda.
+
+### Implementação
+
+Novo `save_catalog/chunks.rs` define `SavedChunkCatalog`.
+
+Responsabilidades:
+
+- capturar authoritative persistent chunks de `VoxelWorld`;
+- encapsular a coleção de `DiskChunk`;
+- reconstruir um `VoxelWorld` a partir dessa coleção no load.
+
+`SavedChunkCatalog` usa `#[serde(transparent)]`, então o campo de snapshot continua serializando exatamente como array JSON:
+
+`"chunks": [ ... ]`
+
+`WorldSnapshot` agora possui `chunks: SavedChunkCatalog` em vez de `Vec<DiskChunk>` e não chama mais diretamente `VoxelWorld::save_persistent_chunks()`.
+
+No load, `save_catalog.rs` retira o catálogo do snapshot e pede `into_world()`, em vez de conhecer `Vec<DiskChunk>`.
+
+### Identidade de chunk em disco
+
+`DiskChunk.coord` deixou de ser field `pub(crate)`.
+
+Novo `DiskChunk::coord()`:
+
+- é a capability única de leitura da identidade espacial do disk chunk;
+- valida Y não negativo;
+- é reutilizado por `into_chunk()`;
+- é reutilizado pelo restore de `VoxelWorld` para duplicate-coordinate detection.
+
+Isso impede consumidores de reinterpretarem diretamente o array `[i32; 3]`.
+
+### Compatibilidade
+
+- `SAVE_FORMAT_VERSION` continua 1;
+- nenhuma key JSON mudou;
+- `chunks` continua sendo array;
+- legacy per-voxel `DiskChunk` continua legível;
+- fallback/recovery continua igual;
+- nenhuma escrita adicional foi introduzida.
+
+Foi adicionado teste de shape transparente (`SavedChunkCatalog::default()` serializa como `[]`), mas ele NÃO foi executado manualmente.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` documenta `SavedChunkCatalog` como boundary para evolução futura de storage e reafirma que isso não permite gameplay-time disk writes.
+- `VERSION`: **0.34.21 → 0.34.22**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.

@@ -1,3 +1,4 @@
+mod chunks;
 mod locking;
 mod snapshot;
 mod validation;
@@ -214,7 +215,10 @@ fn decode_snapshot(file:fs::File,id:&str,manifest:&WorldManifest,blocks:&BlockRe
         || !is_valid_biome_size_multiplier(snapshot.biome_size_multiplier) || snapshot.ticks_per_second != manifest.ticks_per_second
         || snapshot.ticks_per_second == 0 || snapshot.day == 0 || snapshot.player.as_ref().is_some_and(|player|player.position.iter().any(|coord|!coord.is_finite()))
     { return Err(invalid_data("snapshot metadata or player state is invalid")); }
-    validate(&snapshot)?; let world=VoxelWorld::from_saved_chunks(std::mem::take(&mut snapshot.chunks),blocks,fluids)?; Ok((snapshot,world))
+    validate(&snapshot)?;
+    let chunks = std::mem::take(&mut snapshot.chunks);
+    let world = chunks.into_world(blocks, fluids)?;
+    Ok((snapshot, world))
 }
 fn valid_manifest(manifest:&WorldManifest,id:&str,generation:u64)->bool{
     manifest.format_version==SAVE_FORMAT_VERSION && manifest.id==id && manifest.generation==generation

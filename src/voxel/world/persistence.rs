@@ -1,7 +1,5 @@
 use std::{io, sync::Arc};
 
-use bevy::prelude::IVec3;
-
 use crate::content::{block::BlockRegistry, fluid::FluidRegistry};
 use crate::voxel::{chunk_archive::ArchivedChunk, chunk_disk::DiskChunk};
 
@@ -41,7 +39,7 @@ impl VoxelWorld {
     ) -> io::Result<Self> {
         let mut world = Self::default();
         for entry in saved {
-            let coord = IVec3::from_array(entry.coord);
+            let coord = entry.coord()?;
             if world.persistent_chunks.contains(&coord) {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,

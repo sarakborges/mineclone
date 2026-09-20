@@ -27,7 +27,7 @@ const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct DiskChunk {
-    pub(crate) coord: [i32; 3],
+    coord: [i32; 3],
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     block_palette: Vec<DiskBlockState>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -154,6 +154,14 @@ impl DiskChunkBuilder {
 }
 
 impl DiskChunk {
+    pub(crate) fn coord(&self) -> io::Result<IVec3> {
+        let coord = IVec3::new(self.coord[0], self.coord[1], self.coord[2]);
+        if coord.y < 0 {
+            return Err(invalid_data("negative chunk Y"));
+        }
+        Ok(coord)
+    }
+
     pub(crate) fn from_chunk(
         coord: IVec3,
         chunk: &VoxelChunk,
@@ -203,10 +211,7 @@ impl DiskChunk {
         blocks: &BlockRegistry,
         fluids: &FluidRegistry,
     ) -> io::Result<(IVec3, VoxelChunk)> {
-        let coord = IVec3::new(self.coord[0], self.coord[1], self.coord[2]);
-        if coord.y < 0 {
-            return Err(invalid_data("negative chunk Y"));
-        }
+        let coord = self.coord()?;
 
         let has_compact = !self.block_palette.is_empty()
             || !self.block_runs.is_empty()

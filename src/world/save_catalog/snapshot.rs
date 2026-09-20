@@ -5,10 +5,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     content::fluid::FluidRegistry,
     creatures::SavedCreature,
-    voxel::{chunk_disk::DiskChunk, world::VoxelWorld},
+    voxel::world::VoxelWorld,
 };
 
-use super::invalid_data;
+use super::{chunks::SavedChunkCatalog, invalid_data};
 use crate::world::{
     fluid_updates::{PendingFluidUpdates, SavedFluidUpdates},
     new_world::{
@@ -77,7 +77,7 @@ pub(crate) struct WorldSnapshot {
     pub(crate) fluid_updates: SavedFluidUpdates,
     #[serde(default)]
     pub(crate) creatures: Vec<SavedCreature>,
-    pub(super) chunks: Vec<DiskChunk>,
+    pub(super) chunks: SavedChunkCatalog,
 }
 
 pub(crate) struct SnapshotSource<'a> {
@@ -135,7 +135,7 @@ impl WorldSnapshot {
                 .pending_fluids
                 .capture_saved(source.world_tick, source.fluids)?,
             creatures: source.creatures,
-            chunks: source.world.save_persistent_chunks(source.fluids)?,
+            chunks: SavedChunkCatalog::capture(source.world, source.fluids)?,
         })
     }
 }
