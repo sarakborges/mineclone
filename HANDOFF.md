@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.37.3`. HEAD funcional `c85c0831226dea12578dbd6aab97492d8c7f86a4`. CI push `35533512875` e PR `35533515535`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Fog adaptativa voltou a esconder a frontier ainda não publicada; Volcano usa sky/fog neutros em cinza; Witchwood e Enchanted Forest são mutuamente `avoidNear`; fluidos authored de chunks novos passam por initial settling com o mesmo solver do runtime antes de lighting/primeiro mesh, sem promover chunks derivados a persistentes. Não houve `cargo test`, `cargo run` nem QA Windows.
+**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.38.0`. HEAD funcional `c504e2c5a13098a8332930c49722e09d4882d458`. CI push `35535128155` e PR `35535130905`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Fog adaptativa esconde a frontier ainda não publicada; Volcano usa sky/fog neutros em cinza; Witchwood e Enchanted Forest são mutuamente `avoidNear`; fluidos authored de chunks novos agora fazem **full settling até fixed point** antes de lighting/primeiro mesh, usando o mesmo solver runtime, budgetado entre frames, sem promover chunks derivados a persistentes. `source` não flui em `source` e source pool não conta como downhill drop. Não houve `cargo test`, `cargo run` nem QA Windows.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.34.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **Estado mais recente em `develop`: comparação/correção do save game em andamento; HEAD funcional ainda não versionado `bd713963b9bbb8f69eeeb6df6b7bf7aa2773152f`.** CI `35413383474` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Já foram corrigidas persistência de scheduled fluid work, health do player, creatures e lock cross-process do diretório do mundo. Ainda NÃO foram implementados selected hotbar slot, rotação/look do player, autosave disparado somente pela passagem do clock, nem a migração do snapshot global para storage incremental por chunk/region. **Não houve bump de VERSION neste checkpoint porque o bloco de save foi interrompido antes do fechamento completo.** Não houve `cargo test`, `cargo run` ou QA Windows.
 
@@ -6570,3 +6570,119 @@ Portanto foi mantido e documentado como o mesmo contrato de handoff pós-prime.
 4. Streaming em direção a chunk novo com fluido:
    - primeiro step pre-mesh;
    - continuação automática depois da publicação.
+
+
+## Checkpoint 167 — 2026-09-20: generated fluids fazem full settling até não poderem mais mudar [FEATURE CORRECTION; VERSION 0.38.0; CI VERDE]
+
+### Clarificação final do requisito
+
+O usuário corrigiu a interpretação do checkpoint 165/166:
+
+**não é para materializar apenas uma célula de flow antes do primeiro mesh. O fluido gerado deve continuar simulando durante generation/streaming até alcançar um estado em que não exista mais nenhuma mutação possível dentro do conjunto recém-gerado.**
+
+Portanto os checkpoints de one-step priming em `0.37.x` ficam historicamente preservados, mas sua semântica está supersedida por este checkpoint.
+
+### Contrato atual
+
+Bootstrap de mundo novo:
+
+`Generating → SettlingFluids → Lighting → Meshing → Spawning`
+
+Durante `SettlingFluids`:
+
+1. sources authored permanecem imutáveis;
+2. targets expostos entram na queue;
+3. cada target é avaliado com `desired_fluid_with_scratch()`, o mesmo desired-state solver do runtime;
+4. se `current != desired`, a mutação derivada é aplicada;
+5. centro, abaixo e horizontais dependentes são re-enfileirados;
+6. esse processo continua, atravessando múltiplos steps de spread/fall, até a queue chegar realmente a zero;
+7. somente então lighting e primeiro mesh podem começar.
+
+Isso significa que o estado visual inicial já representa o fluido estabilizado dentro da região gerada, não apenas o primeiro passo.
+
+### O que impede a regressão de loading infinito
+
+O full settling original de `0.37.0` podia não convergir por causa da regra histórica corrigida no checkpoint 165.
+
+A correção permanece:
+
+- source pool abaixo de uma célula vazia **não** é downhill drop;
+- source não é destino de flow;
+- uma coluna dinâmica de queda do mesmo fluido com `spread_distance == 0` continua sendo um drop estável;
+- portanto preencher uma queda não altera sua classificação de forma a alternar rotas source-pool/empty indefinidamente.
+
+Além disso, full settling continua **incremental**:
+
+- bootstrap: budget de 4 ms, mínimo 16 e máximo 1024 avaliações por frame;
+- streaming: budget de 1 ms, mínimo 8 e máximo 256 avaliações por frame;
+- não existe `while` síncrono sem yield que tente esvaziar toda a região em um frame.
+
+### Streaming
+
+Chunks gerados durante Gameplay usam o mesmo contrato:
+
+`generate batch → settle batch até fixed point → seed runtime frontier/lighting → ready → first mesh`
+
+O batch atual precisa terminar antes de absorver o próximo batch de generation results. Isso evita crescimento indefinido do conjunto enquanto o player se move.
+
+O settling só pode alterar chunks do próprio conjunto recém-gerado. Se uma propagação cruza para chunk antigo/já publicado/persistido, essa transição continua sendo runtime work normal em Gameplay.
+
+### Runtime depois do settling
+
+Ao concluir o settling:
+
+- `PendingFluidUpdates` é reconstruído a partir da frontier **pós-settle**;
+- localmente, não deve sobrar trabalho que ainda poderia estabilizar dentro do conjunto já gerado;
+- cross-boundary work e futuras topology changes permanecem responsabilidade do scheduler normal;
+- quebrar/colocar bloco ou carregar um chunk vizinho pode acordar novamente o fluido e ele volta a espalhar conforme `spreadSpeed`.
+
+### Persistência
+
+`set_derived_fluid_at()` continua sendo usado durante settling:
+
+- altera conteúdo/revisions;
+- mantém metadata de fluid frontier;
+- não promove o chunk a `persistent_chunks`;
+- recusa mutação derivada em chunk já persistente.
+
+### Nome/ownership
+
+A abstração one-step `priming` foi removida novamente, agora por mudança real de semântica:
+
+- `b9f4f45c245ab67c31daf9572fb03b0bd34adb81` cria `fluid_updates/settling.rs`;
+- `ad38a13110c467aa3ff79e639e06e4ef1377eb00` move o owner para `settling`;
+- `c504e2c5a13098a8332930c49722e09d4882d458` remove `priming.rs`.
+
+Não existe alias legado de priming no código atual.
+
+### Commits / versão
+
+- `2b68876f69ffd7b1fa0a03c76655a4f338258d99` — full settling e `VERSION 0.38.0`;
+- `c504e2c5a13098a8332930c49722e09d4882d458` — HEAD funcional final antes deste handoff.
+
+### CI
+
+HEAD funcional `c504e2c5a13098a8332930c49722e09d4882d458`:
+
+- push CI `35535128155`: **success**;
+- PR CI `35535130905`: **success**;
+- localization audit: success;
+- Clippy `--locked --all-targets --all-features -- -D warnings`: success;
+- `cargo check --locked`: success.
+
+Não houve `cargo test`, `cargo run` nem QA Windows.
+
+### QA prioritária
+
+1. Novo mundo com Volcano:
+   - loading permanece responsivo;
+   - lava deve chegar em Gameplay já totalmente assentada dentro da bootstrap region.
+2. Água em desnível:
+   - queda + spread horizontal devem seguir até não haver novo estado possível antes do primeiro mesh.
+3. Source ao lado/acima de source:
+   - source não deve invadir source nem ser escolhido como downhill opening.
+4. Streaming:
+   - chunk novo com fluidos só deve publicar depois de seu batch estabilizar;
+   - não deve ocorrer hitch longo porque settling continua budgetado.
+5. Topology posterior em Gameplay:
+   - quebrar suporte/abrir passagem deve reativar o solver e permitir novo spread.
