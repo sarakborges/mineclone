@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::voxel::chunk_disk::DiskChunk;
 
-use super::chunk_storage::read_generation_chunks;
+use super::chunk_storage::{publish_generation_chunks, read_generation_chunks};
 
 /// Declares which persisted artifact is authoritative for a save generation's chunks.
 ///
@@ -19,6 +19,25 @@ pub(crate) enum ChunkStorageKind {
 }
 
 impl ChunkStorageKind {
+    /// Publishes chunks for this ownership mode and returns the representation that must
+    /// remain in the snapshot. External generations deliberately return an empty vector:
+    /// once their directory is published, serializing the same chunks into the snapshot
+    /// would create two authoritative persisted owners.
+    pub(crate) fn publish_chunks(
+        self,
+        world_directory: &Path,
+        generation: u64,
+        chunks: &[DiskChunk],
+    ) -> io::Result<Vec<DiskChunk>> {
+        match self {
+            Self::Snapshot => Ok(chunks.to_vec()),
+            Self::GenerationDirectory => {
+                publish_generation_chunks(world_directory, generation, chunks)?;
+                Ok(Vec::new())
+            }
+        }
+    }
+
     /// Resolves the one authoritative persisted chunk representation for a generation.
     ///
     /// External-storage generations must not also carry snapshot chunks: accepting both
@@ -77,5 +96,14 @@ mod tests {
             .load_chunks(Path::new("unused"), 7, chunks)
             .expect("legacy snapshot storage must not require an external generation");
         assert!(loaded.is_empty());
+    }
+
+    #[test]
+    fn legacy_snapshot_publication_does_not_require_external_storage() {
+        let chunks = Vec::new();
+        let snapshot_chunks = ChunkStorageKind::Snapshot
+            .publish_chunks(Path::new("unused"), 7, &chunks)
+            .expect("legacy publication must remain snapshot-owned");
+        assert!(snapshot_chunks.is_empty());
     }
 }
