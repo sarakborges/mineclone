@@ -36,7 +36,7 @@ const SIDEBAR_WIDTH: f32 = 280.0;
 const COLUMN_GAP: f32 = 22.0;
 const SIDEBAR_BUTTON_GAP: f32 = 11.0;
 const SECTION_GAP: f32 = 42.0;
-const SECTION_CONTENT_GAP: f32 = 22.0;
+const SECTION_TITLE_CARD_GAP: f32 = 14.0;
 
 const GAME_SECTIONS: &[SettingsSection] = &[
     SettingsSection::Graphics,
@@ -325,7 +325,15 @@ fn spawn_sidebar(
 
 fn spawn_content(columns: &mut ChildSpawnerCommands, view: SettingsContentView<'_>) {
     columns
-        .spawn(surface::settings_content())
+        .spawn(Node {
+            flex_grow: 1.0,
+            height: percent(100),
+            min_width: px(0),
+            min_height: px(0),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Stretch,
+            ..default()
+        })
         .with_children(|content| {
             content
                 .spawn(Node {
@@ -491,7 +499,7 @@ fn spawn_settings_section<B: Bundle>(
                     .text(language, section.localization_key())
                     .to_owned(),
             ));
-            panel.spawn(content);
+            panel.spawn(surface::settings_content()).with_child(content);
         });
 }
 
@@ -515,7 +523,7 @@ fn section_panel_node() -> Node {
         flex_shrink: 0.0,
         flex_direction: FlexDirection::Column,
         align_items: AlignItems::Stretch,
-        row_gap: px(SECTION_CONTENT_GAP),
+        row_gap: px(SECTION_TITLE_CARD_GAP),
         ..default()
     }
 }

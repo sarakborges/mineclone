@@ -6,10 +6,7 @@ const CONTROL_BORDER_WIDTH: f32 = 2.0;
 
 pub fn settings_content() -> impl Bundle {
     frosted_surface(Node {
-        flex_grow: 1.0,
-        height: percent(100),
-        min_width: px(0),
-        min_height: px(0),
+        width: percent(100),
         padding: UiRect::all(px(18)),
         flex_direction: FlexDirection::Column,
         align_items: AlignItems::Stretch,
