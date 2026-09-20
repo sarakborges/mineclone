@@ -6,6 +6,7 @@
 //! canonical identity without teaching streaming or worldgen about files.
 
 use std::{
+    fs,
     io,
     path::{Path, PathBuf},
 };
@@ -85,6 +86,22 @@ pub(crate) fn generation_staging_directory(generation: u64) -> PathBuf {
     PathBuf::from(format!(
         "{STAGING_DIRECTORY_PREFIX}{generation}{STAGING_DIRECTORY_SUFFIX}"
     ))
+}
+
+/// Reject a path that already exists with the wrong filesystem type.
+///
+/// Publication and pruning use this before touching generation directories so
+/// a symlink cannot redirect chunk I/O outside the locked world directory.
+pub(crate) fn validate_generation_directory_slot(path: &Path) -> io::Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => Ok(()),
+        Ok(_) => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "chunk generation path must be a real directory",
+        )),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
 }
 
 #[cfg(test)]
