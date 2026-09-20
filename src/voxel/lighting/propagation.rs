@@ -54,6 +54,26 @@ impl<'a> LightingRegistries<'a> {
     }
 }
 
+pub(super) struct LightingChangeSets<'a> {
+    frame: &'a mut HashSet<IVec3>,
+    interactive: &'a mut HashSet<IVec3>,
+    settling: &'a mut HashSet<IVec3>,
+}
+
+impl<'a> LightingChangeSets<'a> {
+    pub(super) fn new(
+        frame: &'a mut HashSet<IVec3>,
+        interactive: &'a mut HashSet<IVec3>,
+        settling: &'a mut HashSet<IVec3>,
+    ) -> Self {
+        Self {
+            frame,
+            interactive,
+            settling,
+        }
+    }
+}
+
 #[cfg(test)]
 pub(super) fn relax(
     world: &mut VoxelWorld,
@@ -71,9 +91,11 @@ pub(super) fn relax(
         LightingRegistries::new(blocks, fluids, secondary_properties),
         queue,
         &mut context,
-        &mut changed_chunks,
-        &mut interactive_changed_chunks,
-        &mut settling_changed_chunks,
+        LightingChangeSets::new(
+            &mut changed_chunks,
+            &mut interactive_changed_chunks,
+            &mut settling_changed_chunks,
+        ),
         |_| false,
     );
     changed_chunks
@@ -84,12 +106,10 @@ pub(super) fn relax_budgeted(
     registries: LightingRegistries<'_>,
     queue: &mut LightingQueue,
     context: &mut LightingContext,
-    changed_chunks: &mut HashSet<IVec3>,
-    interactive_changed_chunks: &mut HashSet<IVec3>,
-    settling_changed_chunks: &mut HashSet<IVec3>,
+    changes: LightingChangeSets<'_>,
     mut budget_exhausted: impl FnMut(usize) -> bool,
 ) {
-    changed_chunks.clear();
+    changes.frame.clear();
     context.reset_query_scratch();
     let Some(processing_lane) = queue.next_lane() else {
         return;
@@ -141,13 +161,13 @@ pub(super) fn relax_budgeted(
         }
         match lane {
             LightingLane::Interactive => {
-                interactive_changed_chunks.insert(chunk_coord);
+                changes.interactive.insert(chunk_coord);
             }
             LightingLane::Settling => {
-                settling_changed_chunks.insert(chunk_coord);
+                changes.settling.insert(chunk_coord);
             }
             LightingLane::Background => {
-                changed_chunks.insert(chunk_coord);
+                changes.frame.insert(chunk_coord);
             }
         }
         queue.enqueue_with_neighbors_in_lane(position, lane);
@@ -159,17 +179,17 @@ pub(super) fn relax_budgeted(
         // until the entire lane drains leaves visible meshes stale under
         // repeated edits; the next batch will enqueue another deduplicated
         // remesh if convergence changes these voxels again.
-        interactive_changed_chunks.retain(|coord| world.chunk(*coord).is_some());
-        changed_chunks.extend(interactive_changed_chunks.drain());
+        changes.interactive.retain(|coord| world.chunk(*coord).is_some());
+        changes.frame.extend(changes.interactive.drain());
     } else if processing_lane == LightingLane::Settling && !queue.has_settling_work() {
         // Generated-fluid settling is a batch. Keep its mesh revisions private
         // until the entire derived-light propagation converges so async remesh
         // cannot repeatedly capture intermediate lighting states.
-        settling_changed_chunks.retain(|coord| world.chunk(*coord).is_some());
-        changed_chunks.extend(settling_changed_chunks.drain());
+        changes.settling.retain(|coord| world.chunk(*coord).is_some());
+        changes.frame.extend(changes.settling.drain());
     }
 
-    world.commit_deferred_light_mesh_revisions(changed_chunks.iter().copied());
+    world.commit_deferred_light_mesh_revisions(changes.frame.iter().copied());
 }
 
 fn desired_light(
@@ -410,9 +430,11 @@ mod tests {
             LightingRegistries::new(&blocks, &fluids, &secondary_properties),
             &mut queue,
             &mut context,
-            &mut changed,
-            &mut interactive_changed,
-            &mut settling_changed,
+            LightingChangeSets::new(
+                &mut changed,
+                &mut interactive_changed,
+                &mut settling_changed,
+            ),
             |processed| processed >= BUDGET_CHECK_INTERVAL_VOXELS,
         );
 
@@ -446,9 +468,11 @@ mod tests {
             LightingRegistries::new(&blocks, &fluids, &secondary_properties),
             &mut queue,
             &mut context,
-            &mut changed,
-            &mut interactive_changed,
-            &mut settling_changed,
+            LightingChangeSets::new(
+                &mut changed,
+                &mut interactive_changed,
+                &mut settling_changed,
+            ),
             |processed| processed >= BUDGET_CHECK_INTERVAL_VOXELS,
         );
 
@@ -462,9 +486,11 @@ mod tests {
                 LightingRegistries::new(&blocks, &fluids, &secondary_properties),
                 &mut queue,
                 &mut context,
-                &mut changed,
-                &mut interactive_changed,
-                &mut settling_changed,
+                LightingChangeSets::new(
+                    &mut changed,
+                    &mut interactive_changed,
+                    &mut settling_changed,
+                ),
                 |_| false,
             );
         }
