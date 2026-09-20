@@ -5853,7 +5853,7 @@ Este checkpoint consolida o estado real do `develop` após os checkpoints 145–
 
 - branch: `develop`;
 - commit funcional atual: `bd03b50c9ad716b593938064da0712d7ac497b10`;
-- `VERSION`: **0.35.13**;
+- `VERSION`: **0.36.0**;
 - CI do topo: **verde** em push + PR;
 - `Cargo.toml` continua com a versão deliberadamente independente do app;
 - não houve `cargo test`, `cargo run` nem QA Windows nesta sequência.
@@ -5869,13 +5869,12 @@ Contrato atual:
 - durable save ocorre somente ao sair do mundo/jogo, inclusive window-close;
 - falha no save final impede a saída/fechamento e permite retry;
 - `WorldSnapshot` é o owner runtime do estado persistente e deixou de ser serializável diretamente;
-- format v1 permanece read-compatible com `chunks: [...]` inline;
-- format v2 é o writer atual;
-- v2 publica chunks persistentes em `generation-N/`;
-- depois publica `snapshot-N.json` metadata-only;
+- save format 2 é o único formato aceito e escrito;
+- chunks persistentes são publicados em `generation-N/`;
+- depois é publicado `snapshot-N.json` metadata-only;
 - `manifest-N.json` é publicado por último e é o commit marker;
-- v2 só é restorable quando metadata snapshot + external chunk generation existem;
-- load v1 válido é promovido para runtime current format e migra naturalmente no próximo save final;
+- uma generation só é restorable quando metadata snapshot + external chunk generation existem;
+- formatos históricos, chunks inline e encodings antigos são rejeitados; não existe caminho de migração/fallback;
 - não existem dois writable chunk catalogs.
 
 Durability/ownership já aplicados:
@@ -6010,3 +6009,39 @@ Ordem prática:
 ### Regra operacional permanente
 
 A cada novo passo substancial, dar feedback ao usuário sobre o que está sendo investigado/aplicado. Não trabalhar longos blocos em silêncio.
+
+
+## Checkpoint 160 — 2026-09-20: remoção total de compatibilidade de save legado [BREAKING STORAGE CLEANUP; VERSION 0.36.0]
+
+### Decisão de produto
+
+O usuário definiu que compatibilidade retroativa de save não deve ser preservada. O runtime deve suportar somente o formato produzido pela versão atual; código mantido exclusivamente para abrir/migrar formatos antigos deve ser removido.
+
+### Remoções
+
+- removido suporte a save format v1 e a snapshots com `chunks: [...]` inline;
+- `SAVE_FORMAT_VERSION = 2` passa a ser o único formato aceito pelo reader e writer;
+- removidos `LEGACY_SAVE_FORMAT_VERSION` e `is_supported_save_format()`;
+- `StoredWorldSnapshot` não possui mais campo de chunks inline nem branch de migração;
+- `SavedChunkCatalog` deixou de ser serializável: é somente estado runtime/capture;
+- removido decoder de `DiskChunk` per-voxel legado (`blocks`/`fluids`);
+- disk chunks atuais rejeitam campos desconhecidos para evitar interpretar payload antigo como chunk vazio;
+- removidos defaults de serde mantidos para manifests/snapshots anteriores ao schema atual;
+- removido fallback de `worldgen_version` ausente e os testes específicos de compatibilidade legada;
+- saved fluid state e saved creature payloads passam a usar schema estrito;
+- fixture tooling não oferece mais o modo antigo de duplicate inline chunk e exige format 2 + generation directory atual.
+
+### Contrato atual
+
+Persistência aceita somente:
+
+1. manifest com `format_version = 2`;
+2. snapshot metadata-only com `format_version = 2`;
+3. external chunk generation `generation-N/` usando palette/run encoding atual;
+4. schema atual completo para player, fluid work, creatures e worldgen identity.
+
+Qualquer save histórico que dependa de defaults, chunks inline ou encoding per-voxel é deliberadamente incompatível e deve falhar validation/load em vez de ser migrado.
+
+### Versionamento
+
+- `VERSION 0.35.13 → 0.36.0` por mudança incompatível no contrato de persistência.
