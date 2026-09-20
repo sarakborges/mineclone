@@ -450,7 +450,7 @@ mod tests {
             avoid_near: Vec::new(),
             require_near: Vec::new(),
             exclusive_neighbor_group: group.map(str::to_owned),
-            surface_margin_width: None,
+            surface_margin: None,
         }
     }
 
