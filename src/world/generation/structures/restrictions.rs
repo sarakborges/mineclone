@@ -17,12 +17,13 @@ use super::super::ChunkGenerationContext;
 pub(super) fn candidate_satisfies_restrictions(
     biome_id: &str,
     structure: &StructureDefinition,
+    variant_index: usize,
     anchor: IVec2,
     origin_y: i32,
     context: &ChunkGenerationContext<'_>,
 ) -> bool {
     let restrictions = &structure.restrictions;
-    let base_y = origin_y + structure.min_y_offset();
+    let base_y = origin_y + structure.variant_min_y_offset(variant_index);
 
     if restrictions.min_y.is_some_and(|minimum| base_y < minimum)
         || restrictions.max_y.is_some_and(|maximum| base_y > maximum)
@@ -31,7 +32,10 @@ pub(super) fn candidate_satisfies_restrictions(
     }
 
     if !restrictions.ground_blocks.is_empty()
-        && structure.support_offsets().iter().any(|offset| {
+        && structure
+            .variant_support_offsets(variant_index)
+            .iter()
+            .any(|offset| {
             !ground_block_is_allowed(anchor + *offset, &restrictions.ground_blocks, context)
         })
     {
@@ -39,7 +43,7 @@ pub(super) fn candidate_satisfies_restrictions(
     }
 
     if restrictions.required_biome_coverage > 0.0 {
-        let footprint = structure.horizontal_footprint();
+        let footprint = structure.variant_horizontal_footprint(variant_index);
         let matching = footprint
             .iter()
             .filter(|offset| {
@@ -57,7 +61,7 @@ pub(super) fn candidate_satisfies_restrictions(
     }
 
     if structure.generation.fluid_policy == StructureFluidPolicy::Forbid
-        && intersects_surface_fluid(structure, anchor, origin_y, context)
+        && intersects_surface_fluid(structure, variant_index, anchor, origin_y, context)
     {
         return false;
     }
@@ -110,11 +114,15 @@ fn ground_block_is_allowed(
 
 fn intersects_surface_fluid(
     structure: &StructureDefinition,
+    variant_index: usize,
     anchor: IVec2,
     origin_y: i32,
     context: &ChunkGenerationContext<'_>,
 ) -> bool {
-    structure.column_spans().iter().any(|span| {
+    structure
+        .variant_column_spans(variant_index)
+        .iter()
+        .any(|span| {
         let position = anchor + span.offset;
         let horizontal = position.as_vec2() + Vec2::splat(0.5);
         let surface = context.biome_field.sample_surface(horizontal);

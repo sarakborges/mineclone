@@ -23,7 +23,7 @@ use crate::{
 
 pub(crate) use self::support::fit_structure_to_ground;
 use self::{
-    placement::candidate_anchor,
+    placement::{candidate_anchor, structure_variant_hash},
     restrictions::candidate_satisfies_restrictions,
     support::compute_structure_origin_y,
 };
@@ -35,6 +35,7 @@ const COLUMN_INDEX_MIN_VOXELS: usize = 512;
 struct StructureCandidate<'a> {
     biome_id: &'a str,
     structure: &'a StructureDefinition,
+    variant_index: usize,
     anchor: IVec2,
     origin_y: i32,
     minimum: IVec2,
@@ -70,6 +71,7 @@ pub(super) fn rasterize_structures(
                     chunk_origin,
                 },
                 candidate.structure,
+                candidate.variant_index,
                 IVec3::new(candidate.anchor.x, candidate.origin_y, candidate.anchor.y),
             );
         }
@@ -253,7 +255,6 @@ fn collect_structure_candidates<'a>(
     placement: StructurePlacementRules,
     candidates: &mut Vec<StructureCandidate<'a>>,
 ) {
-    let (minimum_offset, maximum_offset) = structure.horizontal_bounds();
     visit_candidate_anchors_intersecting(
         target_min,
         target_max,
@@ -262,8 +263,20 @@ fn collect_structure_candidates<'a>(
         structure,
         placement,
         |anchor| {
-            let minimum = anchor + minimum_offset;
-            let maximum = anchor + maximum_offset;
+            let variant_index = structure.variant_index_for_hash(structure_variant_hash(
+                context.biome_field.seed(),
+                biome_id,
+                &structure.id,
+                anchor,
+            ));
+            let (variant_minimum_offset, variant_maximum_offset) =
+                structure.variant_horizontal_bounds(variant_index);
+            let minimum = anchor + variant_minimum_offset;
+            let maximum = anchor + variant_maximum_offset;
+            if !rectangles_overlap(minimum, maximum, target_min, target_max) {
+                return;
+            }
+
             let surface_sample = context
                 .biome_field
                 .sample_surface(anchor.as_vec2() + Vec2::splat(0.5));
@@ -275,10 +288,12 @@ fn collect_structure_candidates<'a>(
                 &structure.id,
                 anchor,
                 || {
-                    let origin_y = compute_structure_origin_y(anchor, structure, context)?;
+                    let origin_y =
+                        compute_structure_origin_y(anchor, structure, variant_index, context)?;
                     candidate_satisfies_restrictions(
                         biome_id,
                         structure,
+                        variant_index,
                         anchor,
                         origin_y,
                         context,
@@ -292,6 +307,7 @@ fn collect_structure_candidates<'a>(
             candidates.push(StructureCandidate {
                 biome_id,
                 structure,
+                variant_index,
                 anchor,
                 origin_y,
                 minimum,
@@ -368,6 +384,11 @@ fn candidate_order(
         .priority
         .cmp(&left.structure.priority)
         .then_with(|| left.structure.id.cmp(&right.structure.id))
+        .then_with(|| {
+            left.structure
+                .variant_id(left.variant_index)
+                .cmp(right.structure.variant_id(right.variant_index))
+        })
         .then_with(|| left.biome_id.cmp(right.biome_id))
         .then_with(|| left.anchor.x.cmp(&right.anchor.x))
         .then_with(|| left.anchor.y.cmp(&right.anchor.y))
@@ -429,26 +450,12 @@ fn rasterize_structure(
     claimed: &mut [bool],
     context: &StructureRasterizationContext<'_>,
     structure: &StructureDefinition,
+    variant_index: usize,
     origin: IVec3,
 ) {
-    if structure.generation.fluid_policy == StructureFluidPolicy::Forbid
-        && visit_structure_voxels_in_chunk(
-            structure,
-            origin,
-            context.chunk_origin,
-            |_, _, local| {
-                context
-                    .base_chunk
-                    .fluid_at(local.x, local.y, local.z)
-                    .is_some()
-            },
-        )
-    {
-        return;
-    }
-
     visit_structure_voxels_in_chunk(
         structure,
+        variant_index,
         origin,
         context.chunk_origin,
         |voxel, world_position, local| {
@@ -501,13 +508,14 @@ fn rasterize_structure(
 
 fn visit_structure_voxels_in_chunk(
     structure: &StructureDefinition,
+    variant_index: usize,
     origin: IVec3,
     chunk_origin: IVec3,
     mut visit: impl FnMut(&StructureVoxel, IVec3, IVec3) -> bool,
 ) -> bool {
     let chunk_size = CHUNK_SIZE as i32;
-    if structure.voxels().len() < COLUMN_INDEX_MIN_VOXELS {
-        for voxel in structure.voxels() {
+    if structure.variant_voxels(variant_index).len() < COLUMN_INDEX_MIN_VOXELS {
+        for voxel in structure.variant_voxels(variant_index) {
             let world_position = origin + voxel.offset;
             let local = world_position - chunk_origin;
             if local.x < 0
@@ -533,7 +541,7 @@ fn visit_structure_voxels_in_chunk(
         for local_x in 0..chunk_size {
             let world_horizontal = chunk_horizontal + IVec2::new(local_x, local_z);
             let structure_offset = world_horizontal - origin_horizontal;
-            for voxel in structure.column_voxels(structure_offset) {
+            for voxel in structure.variant_column_voxels(variant_index, structure_offset) {
                 let world_y = origin.y + voxel.offset.y;
                 let local_y = world_y - chunk_origin.y;
                 if local_y < 0 {

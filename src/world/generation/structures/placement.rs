@@ -27,6 +27,20 @@ pub(super) fn candidate_anchor(
     Some(center + IVec2::new(jitter_x, jitter_z))
 }
 
+
+pub(super) fn structure_variant_hash(
+    world_seed: u64,
+    biome_id: &str,
+    structure_id: &str,
+    anchor: IVec2,
+) -> u64 {
+    let mut hash = world_seed.rotate_left(17) ^ string_hash(structure_id).rotate_left(7);
+    hash ^= string_hash(biome_id).rotate_left(37);
+    hash ^= (anchor.x as i64 as u64).wrapping_mul(0xd6e8_feb8_6659_fd93);
+    hash ^= (anchor.y as i64 as u64).wrapping_mul(0xa5a3_58d5_33f6_8d21);
+    avalanche(hash)
+}
+
 fn placement_hash(world_seed: u64, biome_id: &str, structure_id: &str, cell: IVec2) -> u64 {
     let mut hash = world_seed ^ string_hash(structure_id);
     hash ^= string_hash(biome_id).rotate_left(29);
