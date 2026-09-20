@@ -5,9 +5,7 @@ use crate::{
     content::fluid::{FluidId, FluidRegistry},
     voxel::{
         cell::VoxelCell,
-        coordinates::{
-            chunk_coord_from_world, visit_chunk_coords_whose_voxel_halo_contains,
-        },
+        coordinates::visit_chunk_coords_whose_voxel_halo_contains,
         fluid::{FluidCell, MAX_FLUID_LEVEL},
         neighbors::HORIZONTAL_NEIGHBORS,
         world::VoxelWorld,
