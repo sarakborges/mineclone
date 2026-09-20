@@ -36,7 +36,6 @@ impl ChunkDiskIdentity {
         let z = position.z;
         PathBuf::from(CHUNK_DIRECTORY).join(position.x.to_string()).join(position.y.to_string()).join(format!("{z}.{CHUNK_FILE_EXTENSION}"))
     }
-    pub(crate) fn generation_relative_path(self, generation: u64) -> PathBuf { PathBuf::from(generation_directory_name(generation)).join(self.relative_path()) }
 }
 
 pub(crate) fn publish_generation_chunks(world_directory: &Path, generation: u64, chunks: &[DiskChunk]) -> io::Result<()> {
@@ -121,11 +120,6 @@ mod tests {
     #[test]
     fn staging_generation_directory_identity_is_distinct() { assert_eq!(staging_generation_directory_name(42), ".generation-42.tmp"); assert_ne!(staging_generation_directory_name(42), generation_directory_name(42)); }
     #[test]
-    fn chunk_identity_scopes_path_to_save_generation() {
-        let identity = ChunkDiskIdentity::new(IVec3::new(-7, 3, 12));
-        assert_eq!(identity.generation_relative_path(42), PathBuf::from("generation-42").join("chunks").join("-7").join("3").join("12.chunk.json"));
-    }
-    #[test]
     fn directory_slot_rejects_regular_files() {
         let root = temp_directory("chunk-slot-file"); fs::create_dir_all(root.as_path()).expect("temp root must be created"); let slot = PathBuf::from(generation_directory_name(5)); fs::write(root.join(slot.as_path()), b"not a directory").expect("fixture file must be written");
         let error = checked_directory_slot(root.as_path(), slot.as_path()).expect_err("file slot must be rejected"); assert_eq!(error.kind(), io::ErrorKind::InvalidData); fs::remove_dir_all(root).expect("temp root must be removed");
@@ -135,7 +129,7 @@ mod tests {
         let root = temp_directory("chunk-publish"); fs::create_dir_all(root.as_path()).expect("temp root must be created");
         let chunks = [DiskChunk::new(IVec3::new(-1, 0, 2), Vec::new()), DiskChunk::new(IVec3::new(3, 4, -5), Vec::new())];
         publish_generation_chunks(root.as_path(), 9, &chunks).expect("generation must publish"); assert!(!root.join(staging_generation_directory_name(9)).exists());
-        for chunk in &chunks { let identity = ChunkDiskIdentity::from_disk_chunk(chunk); let path = root.join(identity.generation_relative_path(9)); assert!(path.is_file()); let decoded: DiskChunk = serde_json::from_slice(&fs::read(path).expect("published chunk must be readable")).expect("published chunk must decode"); assert_eq!(decoded.chunk_position(), chunk.chunk_position()); }
+        for chunk in &chunks { let identity = ChunkDiskIdentity::from_disk_chunk(chunk); let path = root.join(generation_directory_name(9)).join(identity.relative_path()); assert!(path.is_file()); let decoded: DiskChunk = serde_json::from_slice(&fs::read(path).expect("published chunk must be readable")).expect("published chunk must decode"); assert_eq!(decoded.chunk_position(), chunk.chunk_position()); }
         remove_generation_chunks(root.as_path(), 9).expect("generation must be removable"); assert!(!root.join(generation_directory_name(9)).exists()); fs::remove_dir_all(root).expect("temp root must be removed");
     }
     #[test]
