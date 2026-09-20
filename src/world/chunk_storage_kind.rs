@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::voxel::chunk_disk::DiskChunk;
 
-use super::chunk_storage::{publish_generation_chunks, read_generation_chunks};
+use super::chunk_storage::{
+    generation_slot_occupied, publish_generation_chunks, read_generation_chunks,
+    remove_generation_chunks,
+};
 
 /// Declares which persisted artifact is authoritative for a save generation's chunks.
 ///
@@ -19,6 +22,19 @@ pub(crate) enum ChunkStorageKind {
 }
 
 impl ChunkStorageKind {
+    /// Reports whether this ownership mode already occupies the generation slot.
+    /// Snapshot-owned generations have no independent chunk-storage slot.
+    pub(crate) fn generation_slot_occupied(
+        self,
+        world_directory: &Path,
+        generation: u64,
+    ) -> io::Result<bool> {
+        match self {
+            Self::Snapshot => Ok(false),
+            Self::GenerationDirectory => generation_slot_occupied(world_directory, generation),
+        }
+    }
+
     /// Publishes chunks for this ownership mode and returns the representation that must
     /// remain in the snapshot. External generations deliberately return an empty vector:
     /// once their directory is published, serializing the same chunks into the snapshot
@@ -60,6 +76,19 @@ impl ChunkStorageKind {
                 }
                 read_generation_chunks(world_directory, generation)
             }
+        }
+    }
+
+    /// Removes storage owned by this mode. This is used both when publication of the
+    /// generation's commit marker fails and when an old generation is pruned.
+    pub(crate) fn remove_chunks(
+        self,
+        world_directory: &Path,
+        generation: u64,
+    ) -> io::Result<()> {
+        match self {
+            Self::Snapshot => Ok(()),
+            Self::GenerationDirectory => remove_generation_chunks(world_directory, generation),
         }
     }
 }
@@ -105,5 +134,16 @@ mod tests {
             .publish_chunks(Path::new("unused"), 7, &chunks)
             .expect("legacy publication must remain snapshot-owned");
         assert!(snapshot_chunks.is_empty());
+    }
+
+    #[test]
+    fn legacy_snapshot_storage_never_occupies_or_removes_external_slots() {
+        let missing = Path::new("this-path-is-never-read-for-snapshot-storage");
+        assert!(!ChunkStorageKind::Snapshot
+            .generation_slot_occupied(missing, 7)
+            .expect("snapshot ownership must not inspect external storage"));
+        ChunkStorageKind::Snapshot
+            .remove_chunks(missing, 7)
+            .expect("snapshot ownership must not remove external storage");
     }
 }
