@@ -356,6 +356,7 @@ fn spawn_content(columns: &mut ChildSpawnerCommands, view: SettingsContentView<'
                                 width: percent(100),
                                 height: percent(100),
                                 min_height: px(0),
+                                padding: UiRect::right(px(12)),
                                 flex_direction: FlexDirection::Column,
                                 align_items: AlignItems::Stretch,
                                 row_gap: px(SECTION_GAP),
