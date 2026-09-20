@@ -18,7 +18,7 @@ use crate::content::{
 use self::{
     context::LightingContext,
     medium::{block_emission_for_cell, medium_dampening_for_cells},
-    propagation::{LightingRegistries, relax_budgeted},
+    propagation::{LightingChangeSets, LightingRegistries, relax_budgeted},
     queue::LightingQueue,
 };
 #[cfg(test)]
@@ -298,9 +298,11 @@ pub(crate) fn process_pending_lighting(
         LightingRegistries::new(blocks, fluids, secondary_properties),
         queue,
         context,
-        changed_chunks,
-        interactive_changed_chunks,
-        settling_changed_chunks,
+        LightingChangeSets::new(
+            changed_chunks,
+            interactive_changed_chunks,
+            settling_changed_chunks,
+        ),
         budget_exhausted,
     );
 }
