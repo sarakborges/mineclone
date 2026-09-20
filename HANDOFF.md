@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.42.0`. HEAD funcional `4cf948900bee3a8b7636897aa8573214210df190`. CI push `35539207544` e PR `35539210374`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Streaming voltou a usar range vertical com 16 probes em grade 4×4 + guard de 1 chunk, removendo a regressão dos 5 probes que podia omitir picos/paredes entre amostras. Generation tasks da mesma region/coluna podem rodar concorrentemente; os caches `OnceLock` são o único owner da serialização de prerequisites. Terrenos montanhosos (`mountains`, `gorge`, `alps`, `mountain_belt`, `volcano`) pertencem ao mesmo `exclusiveNeighborGroup=mountain_terrain`, não podem compartilhar borda entre IDs diferentes e não podem surgir como fallback em um site cujo raw winner era outro biome. Não houve `cargo test`, `cargo run` nem QA Windows/runtime.
+**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.43.0`. HEAD funcional `c79ca42e33011c525e5890636ebccea84e16188e`. CI push `35539646925` e PR `35539653138`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Streaming fluid settling agora possui generation closure causal: se um fluido convergido alcança um chunk ainda não residente mas já pertencente à seleção viva, esse chunk é adotado pela mesma wave, gerado, e o settling reabre antes de qualquer publicação. Runtime fluid ticks também ficam suspensos em todo o mutable halo temporariamente owned pelo settling, inclusive chunks antigos já renderizados, evitando promoção para persistent no meio da convergência. Não houve `cargo test`, `cargo run` nem QA Windows/runtime.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.34.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **Estado mais recente em `develop`: comparação/correção do save game em andamento; HEAD funcional ainda não versionado `bd713963b9bbb8f69eeeb6df6b7bf7aa2773152f`.** CI `35413383474` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Já foram corrigidas persistência de scheduled fluid work, health do player, creatures e lock cross-process do diretório do mundo. Ainda NÃO foram implementados selected hotbar slot, rotação/look do player, autosave disparado somente pela passagem do clock, nem a migração do snapshot global para storage incremental por chunk/region. **Não houve bump de VERSION neste checkpoint porque o bloco de save foi interrompido antes do fechamento completo.** Não houve `cargo test`, `cargo run` ou QA Windows.
 
@@ -7622,3 +7622,143 @@ Não houve `cargo test`, `cargo run` nem QA Windows/runtime.
    IDs diferentes do grupo `mountain_terrain` não devem compartilhar border.
 4. Confirmar que biomes do mesmo ID podem formar regiões contínuas normalmente.
 5. Witchwood/Enchanted Forest continuam usando `avoidNear` e não dependem do novo grupo.
+
+
+## Checkpoint 173 — 2026-09-20: fluidos ainda incompletos entre generation waves [ROOT CAUSE + FIX; VERSION 0.43.0; CI VERDE]
+
+### Problema confirmado
+
+Apesar do fixed-point verification do 0.41.x, streaming ainda publicava fluidos por **waves arbitrárias de até 8 chunks**.
+
+Fluxo anterior:
+
+`wave A gera → settle → publica → wave B vizinha gera depois`.
+
+Se um source/flow de A deveria continuar em B, o solver de A não tinha como conhecer a topologia de B porque `VoxelWorld::sample_at()` retornava `None` fora dos chunks residentes.
+
+Quando B aparecia depois, a seam era reconciliada, mas A já havia sido publicada/meshed. Isso violava o requisito do usuário: chunk novo deve nascer com o spread já concluído dentro da topologia atualmente selecionada, não completar visualmente em Gameplay depois.
+
+### Correção — generation closure causal por fluid frontier
+
+Depois de cada verified settling round, antes de publication:
+
+1. o mutable settling domain é percorrido usando a metadata esparsa de `fluid_frontier_sources`;
+2. para cada boundary fluid que realmente pode mover:
+   - queda direta sempre conta;
+   - horizontal respeita `can_spread_horizontally_from()`;
+3. se o target está em um chunk não residente:
+   - fora da seleção viva: é boundary intencional; não segura a wave;
+   - dentro de `desired/retained`: vira generation dependency da MESMA wave.
+
+Quando existe dependency:
+
+- o completion atual é retido unpublished;
+- generated chunks voltam para `staged_generated_chunks`;
+- mutations/ownership do halo antigo são acumulados;
+- dependency é removida do pending global e adotada pela active generation wave;
+- o chunk é gerado async;
+- depois a união inteira passa novamente por verified settling.
+
+Repete até:
+
+- fixed-point verification concluir;
+- e nenhum fluid frontier alcançável apontar para chunk ainda não residente dentro da live selection.
+
+Somente então acontece lighting/ready/first mesh.
+
+Isso evita a antiga barreira enorme por `generation_region`: chunks pendentes sem relação causal com o fluido NÃO seguram publication.
+
+### Segundo root cause — runtime podia roubar ownership do halo antigo
+
+`GeneratedFluidSettling` pode expandir o mutable domain para um chunk antigo, já publicado, se uma seam nova exige mutation nele.
+
+O runtime gate anterior protegia somente:
+
+- generation targets;
+- staged/generated chunks;
+- generated chunks diretamente owned por settling.
+
+Ele NÃO protegia os mutable halo chunks antigos.
+
+Logo um due runtime fluid tick podia executar no mesmo chunk enquanto settling estava ativo:
+
+1. `process_due_fluid_ticks()`;
+2. `set_fluid_at()`;
+3. chunk entra em `persistent_chunks`;
+4. `set_derived_fluid_at()` passa a rejeitar futuras mutations naquele chunk;
+5. generated settling perde ownership no meio da convergência;
+6. resto do movimento sobra para Gameplay.
+
+### Correção — mutable settling domain é owner exclusivo de mutations
+
+Novo invariant:
+
+`GeneratedFluidSettling::owns_mutation(coord)`
+
+vale para TODO `mutable_chunks` enquanto settling está ativo.
+
+Runtime due ticks cujo target pertence ao mutable closure:
+
+- não chamam `set_fluid_at()`;
+- entram no mecanismo dormant já existente.
+
+O completion também retorna:
+
+`owned_existing_chunks`
+
+para todos os chunks antigos cujo runtime ownership ficou suspenso.
+
+Se a generation closure precisar de múltiplos settling rounds:
+
+- esse ownership é acumulado entre rounds;
+- runtime continua suspenso.
+
+Somente na publicação final:
+
+- dormant ticks são reativados;
+- frontier runtime é reconciliada;
+- lighting/remesh dos chunks antigos realmente alterados é enfileirado.
+
+### Archive dependencies
+
+Se o frontier causal alcança um chunk da live selection que já existe em archive/persistência:
+
+- ele é restaurado;
+- removido da fila pending;
+- lighting/ready seguem o caminho normal;
+- generated settling é reaberto para enxergar a topologia restaurada.
+
+Persistent chunks continuam hard boundary para derived mutation; sua topologia participa do solver, mas mutations neles permanecem runtime-owned.
+
+### Commits
+
+- `1303e0d4b596aa70b27d9ea960faecb1505f10fd` — `fix: close generated fluid waves across missing chunks`; bump `0.43.0`.
+- `c79ca42e33011c525e5890636ebccea84e16188e` — corrige bookkeeping de owned existing chunks antes do drain, remove restored dependency do pending global e adiciona import faltante; HEAD funcional final.
+
+### CI
+
+HEAD funcional:
+`c79ca42e33011c525e5890636ebccea84e16188e`
+
+- push `35539646925`: **success**;
+- PR `35539653138`: **success**;
+- localization audit: success;
+- Clippy rigoroso: success;
+- `cargo check --locked`: success.
+
+Não houve `cargo test`, `cargo run` nem QA Windows/runtime.
+
+### QA prioritária de fluidos
+
+1. Água/lava que nasce perto da borda entre duas waves:
+   - wave A NÃO deve publicar enquanto o flow causal precisar de B e B estiver na live selection.
+2. Waterfall atravessando múltiplos chunks verticais:
+   - a same wave deve crescer para baixo causalmente enquanto os chunks necessários estiverem selecionados.
+3. Spill horizontal que entra em neighbor ainda não gerado:
+   - neighbor vira dependency;
+   - nenhum primeiro mesh incompleto.
+4. Seam novo → chunk antigo já renderizado:
+   - runtime não pode promover o antigo para persistent enquanto settling o possui.
+5. Após publication final:
+   - dormant runtime ticks dos chunks antigos devem voltar;
+   - mudanças futuras legítimas de Gameplay continuam funcionando.
