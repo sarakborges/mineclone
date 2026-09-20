@@ -58,6 +58,7 @@ impl ChunkMeshDependencies {
     /// Initial meshes intentionally tolerate a missing neighbor becoming available.
     /// Once that first mesh is visible, reconcile its formerly absent halo rather
     /// than invalidating and repeatedly rescheduling the initial async task.
+    #[cfg(test)]
     pub(crate) fn needs_initial_catchup(&self, world: &VoxelWorld) -> bool {
         self.needs_initial_catchup_with(world, |_| true)
     }
