@@ -1,3 +1,4 @@
+mod diagnostics;
 mod frontier;
 mod solver;
 mod state;
@@ -16,10 +17,9 @@ use crate::{
 };
 
 use self::{
-    solver::{
-        FluidSolverMetrics, FluidSolverScratch, desired_fluid_with_scratch, enqueue_remesh,
-    },
-    state::{FluidTickKey, PendingFluidBacklog},
+    diagnostics::FluidPerformanceDiagnostics,
+    solver::{FluidSolverScratch, desired_fluid_with_scratch, enqueue_remesh},
+    state::FluidTickKey,
 };
 pub(crate) use self::state::{PendingFluidUpdates, SavedFluidUpdates};
 use super::{
@@ -35,7 +35,6 @@ const FLUID_CATCHUP_BUDGET: Duration = Duration::from_millis(3);
 const MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK: usize = 64;
 const MAX_FLUID_UPDATES_PER_FRAME: usize = 512;
 const MAX_FLUID_CATCHUP_UPDATES_PER_FRAME: usize = 2_048;
-const FLUID_DIAGNOSTIC_INTERVAL_SECONDS: f32 = 10.0;
 
 pub(super) fn reseed_loaded_fluid_frontiers(
     world: Res<VoxelWorld>,
@@ -50,67 +49,6 @@ pub(super) fn reseed_loaded_fluid_frontiers(
     loaded.sort_by_key(|coord| (coord.y, coord.z, coord.x));
     for coord in loaded {
         frontier::enqueue_resident_fluid_frontier(&mut pending, &world, coord);
-    }
-}
-
-#[derive(Default)]
-pub(super) struct FluidPerformanceDiagnostics {
-    timer: Option<Timer>,
-    totals: FluidSolverMetrics,
-    active_frames: u64,
-}
-
-impl FluidPerformanceDiagnostics {
-    fn record(
-        &mut self,
-        delta: Duration,
-        metrics: FluidSolverMetrics,
-        pending: &PendingFluidUpdates,
-        catch_up: bool,
-    ) {
-        if metrics.desired_evaluations > 0 {
-            self.active_frames = self.active_frames.saturating_add(1);
-        }
-        self.totals.accumulate(metrics);
-
-        let timer = self.timer.get_or_insert_with(|| {
-            Timer::from_seconds(FLUID_DIAGNOSTIC_INTERVAL_SECONDS, TimerMode::Repeating)
-        });
-        timer.tick(delta);
-        if !timer.just_finished() || self.totals.desired_evaluations == 0 {
-            return;
-        }
-
-        let searches_per_desired =
-            self.totals.downhill_searches as f64 / self.totals.desired_evaluations as f64;
-        let nodes_per_search = if self.totals.downhill_searches == 0 {
-            0.0
-        } else {
-            self.totals.downhill_nodes as f64 / self.totals.downhill_searches as f64
-        };
-
-        let PendingFluidBacklog {
-            topology,
-            wakes,
-            scheduled,
-            dormant_chunks,
-        } = pending.backlog();
-
-        info!(
-            "fluid solver diagnostics: desired={} horizontal_candidates={} downhill_searches={} downhill_nodes={} searches_per_desired={searches_per_desired:.3} nodes_per_search={nodes_per_search:.2} active_frames={} topology_backlog={} wake_backlog={} scheduled_backlog={} dormant_chunks={} catch_up={catch_up}",
-            self.totals.desired_evaluations,
-            self.totals.horizontal_candidates,
-            self.totals.downhill_searches,
-            self.totals.downhill_nodes,
-            self.active_frames,
-            topology,
-            wakes,
-            scheduled,
-            dormant_chunks,
-        );
-
-        self.totals = FluidSolverMetrics::default();
-        self.active_frames = 0;
     }
 }
 

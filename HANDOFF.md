@@ -4603,3 +4603,51 @@ Diagnostics usa `PendingFluidBacklog`, read-model com topology/wake/scheduled/do
 - `ARCHITECTURE.md` documenta scheduler state como owner único e backlog como read-model.
 - `VERSION`: **0.34.29 → 0.34.30**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 141
+
+- Push CI `35518456659`: **success**.
+- PR CI `35518458949`: **success**.
+- O topo `689e82379265f9c4bf5e0079e3561f1657de52a1` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.30`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 142 — 2026-09-20: fluid diagnostics separados da simulação [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+Depois do scheduler state split, `fluid_updates.rs` ainda possuía timer, accumulation e logging de performance no mesmo módulo que decide/aplica fluid transitions.
+
+Observabilidade não é estado de negócio e não deve aumentar as dependências da simulação.
+
+### Implementação
+
+Novo `fluid_updates/diagnostics.rs` possui:
+
+- `FluidPerformanceDiagnostics`;
+- intervalo de 10s;
+- accumulation de `FluidSolverMetrics`;
+- derived `searches_per_desired` / `nodes_per_search`;
+- active-frame count;
+- structured diagnostic log;
+- consumo read-only de `PendingFluidBacklog`.
+
+`fluid_updates.rs` apenas entrega:
+
+- frame delta;
+- metrics retiradas de `FluidSolverScratch`;
+- scheduler read-model;
+- catch-up state.
+
+### Semântica
+
+- diagnostics continuam sem participar da simulação;
+- cadence/log text e métricas não mudaram;
+- fluid budgets, scheduling, solver, lighting e remesh não mudaram.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` fixa diagnostics como observabilidade separada do authoritative state.
+- `VERSION`: **0.34.30 → 0.34.31**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
