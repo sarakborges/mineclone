@@ -55,7 +55,6 @@ struct StructureRuntime {
 pub struct StructureDefinition {
     pub id: String,
     pub name: LocalizedText,
-    #[serde(default)]
     pub locatable: bool,
     #[serde(default)]
     pub priority: i32,
