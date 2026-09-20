@@ -33,7 +33,8 @@ impl ChunkDiskIdentity {
     pub(crate) fn chunk_position(self) -> IVec3 { self.chunk_position }
     pub(crate) fn relative_path(self) -> PathBuf {
         let position = self.chunk_position;
-        PathBuf::from(CHUNK_DIRECTORY).join(position.x.to_string()).join(position.y.to_string()).join(format!("{}.{}", position.z, CHUNK_FILE_EXTENSION))
+        let z = position.z;
+        PathBuf::from(CHUNK_DIRECTORY).join(position.x.to_string()).join(position.y.to_string()).join(format!("{z}.{CHUNK_FILE_EXTENSION}"))
     }
     pub(crate) fn generation_relative_path(self, generation: u64) -> PathBuf { PathBuf::from(generation_directory_name(generation)).join(self.relative_path()) }
 }
