@@ -106,7 +106,9 @@ fn sync_directory(directory: &Path) -> io::Result<()> { fs::File::open(directory
 mod tests {
     use super::*;
     fn temp_directory(label: &str) -> PathBuf {
-        let unique = format!("asteria-{label}-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("clock must be after epoch").as_nanos());
+        let pid = std::process::id();
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("clock must be after epoch").as_nanos();
+        let unique = format!("asteria-{label}-{pid}-{nanos}");
         std::env::temp_dir().join(unique)
     }
     #[test]
