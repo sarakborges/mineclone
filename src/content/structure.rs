@@ -340,8 +340,6 @@ impl StructureDefinition {
 #[derive(Clone, Resource, Default)]
 pub struct StructureRegistry {
     definitions: DefinitionMap<StructureDefinition>,
-    max_height_above_anchor: i32,
-    max_horizontal_extent_from_anchor: i32,
 }
 
 impl StructureRegistry {
@@ -349,7 +347,6 @@ impl StructureRegistry {
         definition.validate_layout();
         definition.rebuild_runtime();
         self.definitions.insert(definition.id.clone(), definition);
-        self.rebuild_runtime_metadata();
     }
 
     pub fn get(&self, id: &str) -> Option<&StructureDefinition> {
@@ -360,35 +357,4 @@ impl StructureRegistry {
         self.definitions.values()
     }
 
-    pub(crate) fn max_height_above_anchor(&self) -> i32 {
-        self.max_height_above_anchor
-    }
-
-    pub(crate) fn max_horizontal_extent_from_anchor(&self) -> i32 {
-        self.max_horizontal_extent_from_anchor
-    }
-
-    fn rebuild_runtime_metadata(&mut self) {
-        self.max_height_above_anchor = self
-            .definitions
-            .values()
-            .map(StructureDefinition::max_y_offset)
-            .max()
-            .unwrap_or(0)
-            .max(0);
-        self.max_horizontal_extent_from_anchor = self
-            .definitions
-            .values()
-            .map(|definition| {
-                let (minimum, maximum) = definition.horizontal_bounds();
-                minimum
-                    .x
-                    .abs()
-                    .max(minimum.y.abs())
-                    .max(maximum.x.abs())
-                    .max(maximum.y.abs())
-            })
-            .max()
-            .unwrap_or(0);
-    }
 }
