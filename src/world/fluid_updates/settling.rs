@@ -8,7 +8,6 @@ use crate::{
     voxel::{
         coordinates::chunk_coord_from_world,
         deduplicated_queue::DeduplicatedQueue,
-        neighbors::HORIZONTAL_NEIGHBORS,
         world::VoxelWorld,
     },
     world::work_budget::FrameWorkBudget,
@@ -19,21 +18,22 @@ use super::{
     solver::{FluidSolverScratch, desired_fluid_with_scratch},
 };
 
-/// Incremental convergence state for generated fluid frontiers.
+/// Finite one-step priming for generated fluid frontiers.
 ///
-/// This is worldgen convergence, not gameplay simulation: authored spread
-/// cadence is intentionally ignored so a chunk's first published mesh already
-/// contains its initial settled fluid state. Work is retained across frames so
-/// large oceans/waterfalls can never monopolize a loading or gameplay frame.
+/// Worldgen owns the authored source volume. Before first publication we
+/// evaluate only the frontier targets that are exposed at priming time and
+/// materialize at most that first dynamic step. Newly created flow never
+/// re-enqueues its neighbors here: continuation belongs to the normal
+/// scheduled runtime solver and therefore preserves spreadSpeed cadence.
 #[derive(Default)]
-pub(in crate::world) struct GeneratedFluidSettling {
+pub(in crate::world) struct GeneratedFluidPriming {
     generated_chunks: HashSet<IVec3>,
     queue: DeduplicatedQueue<IVec3>,
     scratch: FluidSolverScratch,
     active: bool,
 }
 
-impl GeneratedFluidSettling {
+impl GeneratedFluidPriming {
     pub(in crate::world) fn is_active(&self) -> bool {
         self.active
     }
@@ -49,8 +49,9 @@ impl GeneratedFluidSettling {
         self.extend(world, coords);
     }
 
-    /// Extend the current mutable worldgen set before publication. Targets
-    /// outside this set are intentionally left to the runtime scheduler.
+    /// Add newly generated chunks to the current publication batch. Frontier
+    /// traversal includes loaded neighbor seams, but only targets inside the
+    /// newly generated set may be mutated by priming.
     pub(in crate::world) fn extend(
         &mut self,
         world: &VoxelWorld,
@@ -89,8 +90,9 @@ impl GeneratedFluidSettling {
         }
     }
 
-    /// Spend only the caller-provided frame budget. Returns true when the
-    /// current generated set has converged.
+    /// Process a finite snapshot of exposed frontier targets. No mutation made
+    /// here creates more priming work, so completion is guaranteed once the
+    /// queue has been consumed.
     pub(in crate::world) fn process(
         &mut self,
         world: &mut VoxelWorld,
@@ -117,6 +119,12 @@ impl GeneratedFluidSettling {
             let Some((cell, current, _)) = world.sample_at(position) else {
                 continue;
             };
+            // Priming never overwrites authored/generated fluid, especially a
+            // source. It only materializes flow into an empty exposed target.
+            if current.is_some() {
+                continue;
+            }
+
             let desired = desired_fluid_with_scratch(
                 world,
                 position,
@@ -125,26 +133,19 @@ impl GeneratedFluidSettling {
                 fluids,
                 &mut self.scratch,
             );
-            if current == desired {
+            let Some(desired) = desired else {
+                continue;
+            };
+            if desired.is_source() {
                 continue;
             }
 
-            if world.set_derived_fluid_at(position, desired).is_none() {
-                continue;
-            }
-
-            enqueue_changed_neighborhood(
-                &mut self.queue,
-                position,
-                &self.generated_chunks,
-            );
+            let _ = world.set_derived_fluid_at(position, Some(desired));
         }
 
         self.queue.len() == 0
     }
 
-    /// Drain the converged chunk set exactly once. Callers use this as the
-    /// publication barrier before lighting/first mesh.
     pub(in crate::world) fn take_completed_chunks(&mut self) -> Option<Vec<IVec3>> {
         if !self.active || self.queue.len() != 0 {
             return None;
@@ -154,20 +155,5 @@ impl GeneratedFluidSettling {
         completed.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
         self.active = false;
         Some(completed)
-    }
-}
-
-fn enqueue_changed_neighborhood(
-    queue: &mut DeduplicatedQueue<IVec3>,
-    position: IVec3,
-    generated_chunks: &HashSet<IVec3>,
-) {
-    for target in std::iter::once(position)
-        .chain(std::iter::once(position - IVec3::Y))
-        .chain(HORIZONTAL_NEIGHBORS.into_iter().map(|offset| position + offset))
-    {
-        if target.y >= 0 && generated_chunks.contains(&chunk_coord_from_world(target)) {
-            queue.enqueue(target);
-        }
     }
 }

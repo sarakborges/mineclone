@@ -34,7 +34,7 @@ use super::{
     chunk_remesh::ChunkRemeshQueue,
     chunk_rendering::ChunkRenderPool,
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
-    fluid_updates::{GeneratedFluidSettling, PendingFluidUpdates},
+    fluid_updates::{GeneratedFluidPriming, PendingFluidUpdates},
     render_distance::RenderDistanceSettings,
     tick::WorldTickClock,
     world_feature_fields::WorldFeatureFields,
@@ -70,7 +70,7 @@ pub(super) struct ChunkStreamingState {
     surface_ranges: HashMap<IVec2, (i32, i32)>,
     initial_lighting_seeded: HashSet<IVec3>,
     initial_mesh_seed_catchup: HashSet<IVec3>,
-    fluid_settling: GeneratedFluidSettling,
+    fluid_priming: GeneratedFluidPriming,
     selection_revision: u64,
     pending_critical_scan_miss: Option<CriticalPendingScanKey>,
     retired_scan_miss: Option<RetiredScanKey>,
@@ -281,7 +281,7 @@ pub(super) fn stream_chunks(
     work.generation_tasks.sync_streaming_region(center);
     work.mesh_tasks.sync_snapshot(&content);
 
-    if work.generation_tasks.pending_count() > 0 || work.state.fluid_settling.is_active() {
+    if work.generation_tasks.pending_count() > 0 || work.state.fluid_priming.is_active() {
         collect_generated_chunks(&content, &mut work, &mut queues, current_tick);
     }
     if work.mesh_tasks.pending_count() > 0 {

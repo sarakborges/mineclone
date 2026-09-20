@@ -26,7 +26,7 @@ pub(super) fn generate_initial_chunks(
         && generation_tasks.pending_count() == 0
     {
         progress.loading_state.phase = match load_mode {
-            WorldLoadMode::New => WorldLoadingPhase::SettlingFluids,
+            WorldLoadMode::New => WorldLoadingPhase::PrimingFluids,
             WorldLoadMode::Load => WorldLoadingPhase::Lighting,
         };
     }

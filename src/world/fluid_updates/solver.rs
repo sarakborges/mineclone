@@ -349,7 +349,6 @@ fn can_fall_from(world: &VoxelWorld, position: IVec3, fluid_id: FluidId) -> bool
         return false;
     }
 
-    let current_is_empty = world.fluid_at(position).is_none();
     world
         .sample_at(position - IVec3::Y)
         .is_some_and(|(cell, fluid, _)| {
@@ -357,10 +356,13 @@ fn can_fall_from(world: &VoxelWorld, position: IVec3, fluid_id: FluidId) -> bool
                 return false;
             }
 
+            // Source fluid below is support, not a downhill opening. Only an
+            // actual empty cell or an existing dynamic falling column keeps
+            // the route classified as a drop after it fills.
             fluid.is_none_or(|fluid| {
                 fluid.fluid_id == fluid_id
-                    && (current_is_empty
-                        || (!fluid.is_source() && fluid.spread_distance() == 0))
+                    && !fluid.is_source()
+                    && fluid.spread_distance() == 0
             })
         })
 }
@@ -511,10 +513,12 @@ mod tests {
     }
 
     #[test]
-    fn empty_ledge_above_same_fluid_pool_is_still_a_drop() {
+    fn source_pool_is_support_not_a_downhill_drop() {
         let origin = IVec3::new(6, 2, 6);
         let east = origin + IVec3::X;
-        let drop = origin + IVec3::new(2, 0, 0);
+        let west = origin + IVec3::NEG_X;
+        let source_pool_ledge = origin + IVec3::new(2, 0, 0);
+        let real_drop = origin + IVec3::new(-3, 0, 0);
         let mut world = VoxelWorld::default();
         world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
 
@@ -526,14 +530,20 @@ mod tests {
                 );
             }
         }
-        world.set_block_at(drop - IVec3::Y, None);
+
+        world.set_block_at(source_pool_ledge - IVec3::Y, None);
         world.set_fluid_at(
-            drop - IVec3::Y,
+            source_pool_ledge - IVec3::Y,
             Some(FluidCell::source(0, MAX_FLUID_LEVEL)),
         );
+        world.set_block_at(real_drop - IVec3::Y, None);
 
-        assert!(horizontal_spread_is_preferred(
+        assert!(!can_fall_from(&world, source_pool_ledge, 0));
+        assert!(!horizontal_spread_is_preferred(
             &world, origin, east, 0, 7,
+        ));
+        assert!(horizontal_spread_is_preferred(
+            &world, origin, west, 0, 7,
         ));
     }
 

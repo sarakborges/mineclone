@@ -17,9 +17,9 @@ const MAX_GENERATION_TASKS_WITH_MESH_BACKLOG: usize = 4;
 const MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME: usize = 8;
 const GENERATION_DISPATCH_BUDGET: Duration = Duration::from_millis(1);
 const GENERATION_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
-const STREAMING_FLUID_SETTLING_BUDGET: Duration = Duration::from_millis(2);
-const MIN_STREAMING_FLUID_SETTLING_UPDATES: usize = 16;
-const MAX_STREAMING_FLUID_SETTLING_UPDATES: usize = 512;
+const STREAMING_FLUID_PRIMING_BUDGET: Duration = Duration::from_millis(1);
+const MIN_STREAMING_FLUID_PRIMING_UPDATES: usize = 8;
+const MAX_STREAMING_FLUID_PRIMING_UPDATES: usize = 256;
 
 pub(super) fn collect_generated_chunks(
     content: &ChunkContent<'_>,
@@ -69,26 +69,26 @@ pub(super) fn collect_generated_chunks(
     if !generated_coords.is_empty() {
         let world = &work.world;
         work.state
-            .fluid_settling
+            .fluid_priming
             .extend(world, generated_coords);
     }
 
-    if !work.state.fluid_settling.is_active() {
+    if !work.state.fluid_priming.is_active() {
         return;
     }
 
-    let mut settling_budget = FrameWorkBudget::new(
-        STREAMING_FLUID_SETTLING_BUDGET,
-        MIN_STREAMING_FLUID_SETTLING_UPDATES,
+    let mut priming_budget = FrameWorkBudget::new(
+        STREAMING_FLUID_PRIMING_BUDGET,
+        MIN_STREAMING_FLUID_PRIMING_UPDATES,
     )
-    .with_maximum_items(MAX_STREAMING_FLUID_SETTLING_UPDATES);
+    .with_maximum_items(MAX_STREAMING_FLUID_PRIMING_UPDATES);
 
     let complete = {
         let state = &mut work.state;
         let world = &mut work.world;
         state
-            .fluid_settling
-            .process(world, content.fluids(), &mut settling_budget)
+            .fluid_priming
+            .process(world, content.fluids(), &mut priming_budget)
     };
     if !complete {
         return;
@@ -96,9 +96,9 @@ pub(super) fn collect_generated_chunks(
 
     let completed = work
         .state
-        .fluid_settling
+        .fluid_priming
         .take_completed_chunks()
-        .expect("completed streaming fluid settling must own generated chunks");
+        .expect("completed streaming fluid priming must own generated chunks");
     for coord in completed {
         if !work.state.keeps_loaded(coord) {
             work.world.archive_chunk(coord);
