@@ -14,18 +14,20 @@ const CHUNK_BOUNDARY_NEIGHBOR_COUNT: usize = 6 * CHUNK_SIZE * CHUNK_SIZE;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum LightingLane {
     Interactive,
+    Settling,
     Background,
 }
 
 #[derive(Default)]
 pub(super) struct LightingQueue {
     interactive: VoxelUpdateQueue,
+    settling: VoxelUpdateQueue,
     background: VoxelUpdateQueue,
 }
 
 impl LightingQueue {
     pub fn enqueue(&mut self, position: IVec3) {
-        if self.interactive.contains(position) {
+        if self.interactive.contains(position) || self.settling.contains(position) {
             return;
         }
         self.background.enqueue(position);
@@ -33,12 +35,22 @@ impl LightingQueue {
 
     pub(super) fn enqueue_interactive(&mut self, position: IVec3) {
         self.background.remove(position);
+        self.settling.remove(position);
         self.interactive.enqueue(position);
     }
 
     fn enqueue_interactive_priority(&mut self, position: IVec3) {
         self.background.remove(position);
+        self.settling.remove(position);
         self.interactive.enqueue_priority(position);
+    }
+
+    pub(super) fn enqueue_settling(&mut self, position: IVec3) {
+        if self.interactive.contains(position) {
+            return;
+        }
+        self.background.remove(position);
+        self.settling.enqueue(position);
     }
 
     pub fn enqueue_with_neighbors(&mut self, position: IVec3) {
@@ -65,6 +77,12 @@ impl LightingQueue {
                 self.enqueue_interactive(position);
                 for offset in CARDINAL_NEIGHBORS {
                     self.enqueue_interactive(position + offset);
+                }
+            }
+            LightingLane::Settling => {
+                self.enqueue_settling(position);
+                for offset in CARDINAL_NEIGHBORS {
+                    self.enqueue_settling(position + offset);
                 }
             }
             LightingLane::Background => self.enqueue_with_neighbors(position),
@@ -140,6 +158,9 @@ impl LightingQueue {
         if let Some(position) = self.interactive.pop() {
             return Some((position, LightingLane::Interactive));
         }
+        if let Some(position) = self.settling.pop() {
+            return Some((position, LightingLane::Settling));
+        }
         self.background
             .pop()
             .map(|position| (position, LightingLane::Background))
@@ -149,8 +170,32 @@ impl LightingQueue {
         self.interactive.len() > 0
     }
 
+    pub(super) fn has_settling_work(&self) -> bool {
+        self.settling.len() > 0
+    }
+
+    pub(super) fn next_lane(&self) -> Option<LightingLane> {
+        if self.has_interactive_work() {
+            Some(LightingLane::Interactive)
+        } else if self.has_settling_work() {
+            Some(LightingLane::Settling)
+        } else if self.background.len() > 0 {
+            Some(LightingLane::Background)
+        } else {
+            None
+        }
+    }
+
+    pub(super) fn has_work_in_lane(&self, lane: LightingLane) -> bool {
+        match lane {
+            LightingLane::Interactive => self.has_interactive_work(),
+            LightingLane::Settling => self.has_settling_work(),
+            LightingLane::Background => self.background.len() > 0,
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
-        self.interactive.len() == 0 && self.background.len() == 0
+        self.interactive.len() == 0 && self.settling.len() == 0 && self.background.len() == 0
     }
 
 
@@ -207,5 +252,20 @@ mod tests {
         queue.enqueue_with_neighbors_in_lane(position, lane);
 
         assert_eq!(queue.pop().map(|(_, lane)| lane), Some(LightingLane::Interactive));
+    }
+
+    #[test]
+    fn settling_work_preempts_background_and_preserves_its_lane() {
+        let mut queue = LightingQueue::default();
+        let background = IVec3::new(20, 4, 20);
+        let settling = IVec3::new(3, 4, 7);
+        queue.enqueue(background);
+        queue.enqueue_settling(settling);
+
+        assert_eq!(queue.pop(), Some((settling, LightingLane::Settling)));
+        queue.enqueue_with_neighbors_in_lane(settling, LightingLane::Settling);
+
+        assert_eq!(queue.pop().map(|(_, lane)| lane), Some(LightingLane::Settling));
+        assert!(queue.has_settling_work());
     }
 }
