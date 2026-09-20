@@ -52,6 +52,14 @@ pub(super) fn acquire_world_directory_lock(
     }
 }
 
+pub(super) fn remove_world_directory_lock_file(directory: &Path) -> io::Result<()> {
+    match fs::remove_file(directory.join(SESSION_LOCK_FILE)) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
 #[derive(Default)]
 pub(super) struct WorldGate {
     write: Mutex<()>,

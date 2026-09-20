@@ -3673,3 +3673,16 @@ Novo `src/world/save_catalog/locking.rs` é o owner único do invariant de conco
 - `ARCHITECTURE.md` documenta `save_catalog::locking` como owner desse invariant.
 - `VERSION`: **0.34.16 → 0.34.17**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### Correção de integração CI do checkpoint 128
+
+A primeira CI do módulo de locking falhou porque os dois rollbacks de `create_new_world()` ainda removiam `session.lock` pelo nome literal.
+
+Correção:
+
+- `save_catalog::locking` agora expõe `remove_world_directory_lock_file(directory)`;
+- o filename `SESSION_LOCK_FILE` permanece completamente privado ao owner de locking;
+- a capability trata `NotFound` como cleanup já concluído e propaga outros erros;
+- `save_catalog.rs` deixou de conhecer o nome físico do lock file;
+- `VERSION` permanece `0.34.17`.

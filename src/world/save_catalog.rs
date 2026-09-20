@@ -23,7 +23,9 @@ use crate::{
     voxel::{chunk_disk::DiskChunk, world::VoxelWorld},
 };
 
-use self::locking::{ReadLease, acquire_world_directory_lock, world_lock};
+use self::locking::{
+    ReadLease, acquire_world_directory_lock, remove_world_directory_lock_file, world_lock,
+};
 pub(crate) use self::locking::WorldDirectoryLock;
 
 use super::{
@@ -170,7 +172,7 @@ pub(crate) fn create_new_world(requested_name: &str, seed: u64, dimension_id: &s
             Ok(()) => {
                 let session_lock = match acquire_world_directory_lock(&directory) {
                     Ok(lock) => lock,
-                    Err(error) => { let _ = fs::remove_file(directory.join(SESSION_LOCK_FILE)); let _ = fs::remove_dir(&directory); return Err(error); }
+                    Err(error) => { let _ = remove_world_directory_lock_file(&directory); let _ = fs::remove_dir(&directory); return Err(error); }
                 };
                 let manifest = WorldManifest {
                     format_version: SAVE_FORMAT_VERSION, id: candidate.clone(), seed, dimension_id: dimension_id.to_owned(),
@@ -179,7 +181,7 @@ pub(crate) fn create_new_world(requested_name: &str, seed: u64, dimension_id: &s
                 };
                 if let Err(error) = publish_json(&directory, &manifest_name(0), &manifest) {
                     drop(session_lock); let _ = fs::remove_file(directory.join(format!("{}.tmp", manifest_name(0))));
-                    let _ = fs::remove_file(directory.join(SESSION_LOCK_FILE)); let _ = fs::remove_dir(&directory); return Err(error);
+                    let _ = remove_world_directory_lock_file(&directory); let _ = fs::remove_dir(&directory); return Err(error);
                 }
                 return Ok((candidate, session_lock));
             }
