@@ -7901,3 +7901,132 @@ Não houve `cargo test`, `cargo run` nem QA Windows/runtime.
    - shape deve continuar contínuo, já que usa o mesmo `warp_surface_position`.
 4. Verificar que biome size visual não cresceu sistematicamente:
    - envelope máximo de warp permanece 24.
+
+
+## Checkpoint 175 — 2026-09-20: generated settling lighting/remesh batching [PERF; VERSION 0.46.2; CI CÓDIGO VERDE]
+
+### Direção
+
+O usuário pediu explicitamente atacar somente o custo de **lighting + remesh causado pelo generated fluid settling**, sem reabrir estratégias de streaming/publication que já haviam falhado.
+
+Não foram alterados:
+
+- fluid solver/física;
+- generation-wave closure;
+- publication/ready;
+- scheduled runtime fluid ticks;
+- generation/mesh task concurrency;
+- chunk selection.
+
+### Root cause atacado
+
+reconcile_existing_fluid_changes() tratava cada voxel alterado pelo settling como evento independente:
+
+1. cada posição chamava enqueue_medium_edit(position);
+2. cada posição visitava seu halo e enfileirava fluid remesh;
+3. lighting convergia ao longo de vários frames;
+4. mudanças intermediárias publicavam lighting revisions/remeshes;
+5. async remesh podia capturar estados intermediários e depois ser invalidado por revisões seguintes.
+
+Mesmo com queues deduplicadas por chunk, havia trabalho repetido de enqueue/halo e churn de remesh durante a convergência.
+
+### Nova lane de lighting para settling
+
+LightingQueue agora possui três lanes, em prioridade:
+
+Interactive > Settling > Background.
+
+A lane Settling é usada exclusivamente pelas mutações de fluido derivadas da geração.
+
+- edits interativos continuam com comportamento anterior;
+- background/streaming normal continua separado;
+- propagation gerada por um seed de settling permanece na mesma lane.
+
+### Batching exato de seeds
+
+PendingLightingUpdates::enqueue_settling_medium_edits():
+
+- recebe todas as posições realmente alteradas;
+- deduplica posição + 6 vizinhos cardinais em um HashSet;
+- enfileira cada seed uma única vez na lane Settling.
+
+Não foi trocado por relight de chunk inteiro: o domínio inicial continua semanticamente equivalente ao antigo enqueue_medium_edit() repetido, apenas sem operações duplicadas.
+
+### Lighting revision somente no commit da lane
+
+Mudanças de luz produzidas pela lane Settling são acumuladas em settling_changed_chunks.
+
+Enquanto ainda existe work de settling:
+
+- valores de luz podem convergir normalmente dentro do budget;
+- não é publicado um novo batch de lighting remesh a cada frame intermediário.
+
+Quando a lane zera:
+
+- chunks realmente alterados são publicados juntos;
+- mesh revisions são commitadas;
+- ChunkRemeshTasks recebe a invalidação final;
+- lighting remesh usa o pipeline existente.
+
+Interactive lighting continua publicando por frame como antes.
+
+### Fluid remesh coalescido e deferido
+
+O remesh de fluido causado diretamente por changed_existing_positions não é mais disparado durante reconcile_existing_fluid_changes().
+
+Agora:
+
+- todos os halos afetados são condensados por chunk;
+- own chunk mantém prioridade;
+- neighbors ficam background;
+- prioridade domina background em caso de duplicata;
+- os requests ficam retidos em PendingLightingUpdates;
+- só são transferidos para ChunkRemeshQueue depois que a lane Settling convergiu.
+
+Resultado pretendido:
+
+muitas fluid mutations → seeds deduplicados → lighting final → 1 request de fluid remesh por chunk afetado
+
+em vez de reprocessar/iniciar remeshes enquanto a iluminação ainda muda.
+
+### Commits funcionais
+
+- d4ba8f821eb0cb7ac42d8c989d5e992af1394889 — adiciona settling lighting lane.
+- d63d01f25e32341fcdde6a0ca7deac790e763248 — acumula lighting do settling até convergência.
+- 06364d9db4a44982cd0ef7373f73b17e00d10480 — batching/dedup de seeds e deferred remesh state.
+- 496a357391e30655b31cc40756f2438e1f5b3c1e — coalesce de fluid-remesh halos.
+- 43ad4f89127b83ecd0e94493bf5133d8d7e174e9 — libera fluid remesh após lighting.
+- 739afe020ced12bd9ddbbcf483a086a63c22ea84 + 23b0e53d195bf2c311f89fa4c05ffaf6747669ee — corrige Clippy agrupando os change sets sem suppression.
+- fc8a868ad76ae0553636313764736d4213ad7ba0 — versiona o bloco como 0.46.2.
+
+Observação: b64591682f998b538577c1b31a40ecc2b11a2187 (Settings cards) entrou em paralelo durante este trabalho e consumiu 0.46.1; por isso este bloco usa 0.46.2.
+
+### CI
+
+HEAD funcional de código 23b0e53d195bf2c311f89fa4c05ffaf6747669ee:
+
+- push 35542352946: **success**;
+- PR 35542355512: **success**;
+- localization audit: success;
+- Clippy rigoroso: success;
+- cargo check: success.
+
+A primeira tentativa falhou somente em clippy::too_many_arguments; foi corrigida com LightingChangeSets, sem allow.
+
+Não houve cargo test, cargo run nem QA Windows/runtime.
+
+### QA prioritária
+
+1. Stream de região com água/lava cruzando seam para chunk já renderizado:
+   - o fluido deve continuar correto;
+   - o neighbor deve atualizar após lighting convergir.
+2. Lava:
+   - emissão de luz deve acompanhar o fluid mesh final;
+   - não deve ficar iluminação stale.
+3. Movimento contínuo durante geração:
+   - observar redução dos spikes de FPS associados a fluid settling.
+4. Se ainda houver queda forte:
+   - medir queue size da lane Settling;
+   - quantidade de chunks deferred para fluid remesh;
+   - stale/remesh requeues;
+   - só então atacar o próximo gargalo, sem reabrir streaming por especulação.
