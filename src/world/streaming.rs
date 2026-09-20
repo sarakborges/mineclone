@@ -33,6 +33,7 @@ use super::{
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
     fluid_updates::PendingFluidUpdates,
     render_distance::RenderDistanceSettings,
+    tick::WorldTickClock,
     work_budget::FrameWorkBudget,
     world_feature_fields::WorldFeatureFields,
 };
@@ -195,6 +196,7 @@ pub(super) fn stream_chunks(
     content: ChunkContent,
     mut renderer: ChunkRenderer,
     player: Single<&Transform, With<GameplayCamera>>,
+    world_ticks: Res<WorldTickClock>,
     mut selection: ChunkStreamingSelection,
     mut work: ChunkStreamingWork,
     mut queues: ChunkStreamingQueues,
@@ -204,6 +206,7 @@ pub(super) fn stream_chunks(
     let center = IVec3::new(player_chunk.x, player_chunk.y.max(0), player_chunk.z);
     let horizontal_radius = selection.render_distance.chunks();
     let vertical_radius = selection.render_distance.vertical_chunks();
+    let current_tick = world_ticks.current_tick();
 
     if work.state.center != Some(center)
         || work.state.horizontal_radius != horizontal_radius
@@ -232,16 +235,28 @@ pub(super) fn stream_chunks(
     work.mesh_tasks.sync_snapshot(&content);
 
     if work.generation_tasks.pending_count() > 0 {
-        collect_generated_chunks(&content, &mut work, &mut queues);
+        collect_generated_chunks(&content, &mut work, &mut queues, current_tick);
     }
     if work.mesh_tasks.pending_count() > 0 {
         collect_built_chunk_meshes(&content, &mut renderer, &mut work, &mut queues.remesh);
     }
     if work.state.ready.len() > 0 {
-        dispatch_initial_mesh_tasks(&content, &mut renderer, &mut work, &mut queues);
+        dispatch_initial_mesh_tasks(
+            &content,
+            &mut renderer,
+            &mut work,
+            &mut queues,
+            current_tick,
+        );
     }
     if work.state.pending.len() > 0 {
-        dispatch_generation_tasks(&content, &renderer.pool, &mut work, &mut queues);
+        dispatch_generation_tasks(
+            &content,
+            &renderer.pool,
+            &mut work,
+            &mut queues,
+            current_tick,
+        );
     }
 }
 
@@ -254,6 +269,7 @@ fn seed_loaded_chunk_lighting(
     content: &ChunkContent<'_>,
     work: &mut ChunkStreamingWork<'_>,
     queues: &mut ChunkStreamingQueues<'_>,
+    current_tick: u64,
 ) {
     if !work.state.mark_initial_lighting_seeded(coord) {
         return;
@@ -264,6 +280,7 @@ fn seed_loaded_chunk_lighting(
         .chunk(coord)
         .unwrap_or_else(|| panic!("seeded chunk must be resident: {coord:?}"))
         .is_empty();
+    queues.fluid.reactivate_loaded_chunk(coord, current_tick);
     queues.fluid.enqueue_loaded_fluid_frontier(&work.world, coord);
     seed_chunk_direct_lighting(
         &mut work.world,
@@ -309,6 +326,7 @@ fn collect_generated_chunks(
     content: &ChunkContent<'_>,
     work: &mut ChunkStreamingWork<'_>,
     queues: &mut ChunkStreamingQueues<'_>,
+    current_tick: u64,
 ) {
     let current_revision = work.generation_tasks.revision();
     let mut budget = FrameWorkBudget::new(GENERATION_RESULT_INTEGRATION_BUDGET, 1)
@@ -339,13 +357,13 @@ fn collect_generated_chunks(
                     completed.coord
                 );
             }
-            seed_loaded_chunk_lighting(completed.coord, content, work, queues);
+            seed_loaded_chunk_lighting(completed.coord, content, work, queues, current_tick);
             work.state.mark_ready(completed.coord);
             continue;
         }
 
         work.world.insert_chunk(completed.coord, completed.output);
-        seed_loaded_chunk_lighting(completed.coord, content, work, queues);
+        seed_loaded_chunk_lighting(completed.coord, content, work, queues, current_tick);
         work.state.mark_ready(completed.coord);
     }
 }
@@ -355,6 +373,7 @@ fn dispatch_generation_tasks(
     render_pool: &ChunkRenderPool,
     work: &mut ChunkStreamingWork<'_>,
     queues: &mut ChunkStreamingQueues<'_>,
+    current_tick: u64,
 ) {
     let max_in_flight = if work.mesh_tasks.pending_count() > 0 {
         MAX_GENERATION_TASKS_WITH_MESH_BACKLOG
@@ -394,7 +413,7 @@ fn dispatch_generation_tasks(
                 work.world.restore_chunk(coord),
                 "generated chunk must be resident or archived: {coord:?}"
             );
-            seed_loaded_chunk_lighting(coord, content, work, queues);
+            seed_loaded_chunk_lighting(coord, content, work, queues, current_tick);
             work.state.mark_ready(coord);
             budget.record(1);
             continue;
@@ -431,6 +450,7 @@ fn dispatch_initial_mesh_tasks(
     renderer: &mut ChunkRenderer<'_, '_>,
     work: &mut ChunkStreamingWork<'_>,
     queues: &mut ChunkStreamingQueues<'_>,
+    current_tick: u64,
 ) {
     let mut budget = FrameWorkBudget::new(STREAMING_BUDGET, MIN_CHUNKS_BEFORE_BUDGET_CHECK)
         .with_maximum_items(MAX_CHUNKS_PER_FRAME);
@@ -456,7 +476,7 @@ fn dispatch_initial_mesh_tasks(
 
         // Also covers a resident chunk that reached `ready` by a path other
         // than generated-result integration. No mesh may capture it as DARK.
-        seed_loaded_chunk_lighting(coord, content, work, queues);
+        seed_loaded_chunk_lighting(coord, content, work, queues, current_tick);
 
         if !chunk_is_empty && work.mesh_tasks.pending_count() >= MAX_MESH_TASKS_IN_FLIGHT {
             let Some(center) = work.state.center else {

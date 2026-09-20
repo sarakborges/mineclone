@@ -309,22 +309,12 @@ impl PendingFluidUpdates {
         Ok(pending)
     }
 
-    fn reactivate_loaded_dormant(&mut self, world: &VoxelWorld, current_tick: u64) {
-        let mut loaded = self
-            .dormant_scheduled
-            .keys()
-            .copied()
-            .filter(|coord| world.chunk(*coord).is_some())
-            .collect::<Vec<_>>();
-        loaded.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
-
-        for coord in loaded {
-            let Some(keys) = self.dormant_scheduled.remove(&coord) else {
-                continue;
-            };
-            for key in keys {
-                self.schedule_at(key, current_tick);
-            }
+    pub(crate) fn reactivate_loaded_chunk(&mut self, coord: IVec3, current_tick: u64) {
+        let Some(keys) = self.dormant_scheduled.remove(&coord) else {
+            return;
+        };
+        for key in keys {
+            self.schedule_at(key, current_tick);
         }
     }
 
@@ -473,10 +463,6 @@ pub(super) fn process_fluid_updates(
 ) {
     let current_tick = world_ticks.current_tick();
     let ticks_per_second = game_rules.ticks_per_second();
-
-    runtime
-        .pending
-        .reactivate_loaded_dormant(&runtime.world, current_tick);
 
     let catch_up = runtime.pending.should_catch_up();
     let mut budget = if catch_up {
@@ -883,7 +869,7 @@ mod tests {
     }
 
     #[test]
-    fn unloaded_due_tick_is_deferred_and_reactivated() {
+    fn unloaded_due_tick_is_reactivated_by_chunk_residency() {
         let mut pending = PendingFluidUpdates::default();
         let key = FluidTickKey {
             fluid_id: 0,
@@ -891,12 +877,9 @@ mod tests {
         };
         pending.defer_unloaded(key);
 
-        let mut world = VoxelWorld::default();
-        pending.reactivate_loaded_dormant(&world, 9);
         assert_eq!(pending.pop_due(9), None);
 
-        world.insert_chunk(IVec3::ZERO, crate::voxel::chunk::VoxelChunk::empty());
-        pending.reactivate_loaded_dormant(&world, 9);
+        pending.reactivate_loaded_chunk(IVec3::ZERO, 9);
         assert_eq!(pending.pop_due(9), Some((key, 9)));
     }
 
