@@ -2,15 +2,16 @@ mod placement;
 mod restrictions;
 mod support;
 
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::HashSet};
 
 use bevy::prelude::*;
 
 use crate::{
     content::{
+        biome::BiomeRegistry,
         biome_structure::StructurePlacementRules,
         block::BlockRegistry,
-        structure::{StructureDefinition, StructureVoxel},
+        structure::{StructureDefinition, StructureRegistry, StructureVoxel},
         structure_rules::{StructureFluidPolicy, StructureReplacePolicy},
     },
     voxel::{
@@ -26,7 +27,7 @@ use self::{
     restrictions::candidate_satisfies_restrictions,
     support::compute_structure_origin_y,
 };
-use super::ChunkGenerationContext;
+use super::{super::biome_field::BiomeField, ChunkGenerationContext};
 
 #[derive(Clone, Copy)]
 struct StructureCandidate<'a> {
@@ -87,39 +88,65 @@ fn resolved_structure_candidates<'a>(
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_min = IVec2::new(chunk_origin.x, chunk_origin.z);
     let chunk_max = chunk_min + IVec2::splat(chunk_size - 1);
-    let resolution_margin = context.structures.max_horizontal_extent_from_anchor();
-    let query_min = chunk_min - IVec2::splat(resolution_margin);
-    let query_max = chunk_max + IVec2::splat(resolution_margin);
-    let mut candidates = Vec::new();
+    let mut direct_candidates = Vec::new();
 
     for biome_structure in context.biomes.structure_placements() {
-        let structure = context
-            .structures
-            .get(&biome_structure.structure_id)
-            .unwrap_or_else(|| {
-                panic!(
-                    "biome {} references missing structure: {}",
-                    biome_structure.biome_id, biome_structure.structure_id
-                )
-            });
-
+        let structure = structure_for_placement(context.structures, biome_structure);
         collect_structure_candidates(
-            query_min,
-            query_max,
+            chunk_min,
+            chunk_max,
             context,
             &biome_structure.biome_id,
             structure,
             biome_structure.placement,
-            &mut candidates,
+            &mut direct_candidates,
         );
     }
 
-    let mut accepted = candidates
+    if direct_candidates.is_empty() {
+        return Vec::new();
+    }
+
+    // Conflict resolution must see a higher-priority candidate even when that
+    // candidate itself lies outside this chunk. Search only structures that can
+    // actually overlap each direct candidate instead of expanding every
+    // placement by the registry's largest structure.
+    let mut competitors = direct_candidates.clone();
+    let mut seen = competitors
         .iter()
-        .copied()
-        .filter(|candidate| candidate.intersects(chunk_min, chunk_max))
+        .map(candidate_identity)
+        .collect::<HashSet<_>>();
+    for direct in direct_candidates.iter().copied() {
+        for biome_structure in context.biomes.structure_placements() {
+            let structure = structure_for_placement(context.structures, biome_structure);
+            if structure.priority < direct.structure.priority
+                || !structures_may_conflict(structure, direct.structure)
+            {
+                continue;
+            }
+
+            let mut overlapping = Vec::new();
+            collect_structure_candidates(
+                direct.minimum,
+                direct.maximum,
+                context,
+                &biome_structure.biome_id,
+                structure,
+                biome_structure.placement,
+                &mut overlapping,
+            );
+            for candidate in overlapping {
+                if seen.insert(candidate_identity(&candidate)) {
+                    competitors.push(candidate);
+                }
+            }
+        }
+    }
+
+    let mut accepted = direct_candidates
+        .into_iter()
         .filter(|candidate| {
-            !candidates.iter().any(|other| {
+            !competitors.iter().any(|other| {
                 !same_candidate(other, candidate)
                     && candidate_outranks(other, candidate)
                     && candidates_conflict(other, candidate)
@@ -130,9 +157,64 @@ fn resolved_structure_candidates<'a>(
     accepted
 }
 
+pub(super) fn maximum_potential_structure_height_for_chunk(
+    horizontal_chunk: IVec2,
+    biomes: &BiomeRegistry,
+    structures: &StructureRegistry,
+    biome_field: &BiomeField,
+) -> i32 {
+    let chunk_size = CHUNK_SIZE as i32;
+    let chunk_min = horizontal_chunk * chunk_size;
+    let chunk_max = chunk_min + IVec2::splat(chunk_size - 1);
+    let mut maximum_height = 0;
+
+    for biome_structure in biomes.structure_placements() {
+        let structure = structures
+            .get(&biome_structure.structure_id)
+            .unwrap_or_else(|| {
+                panic!(
+                    "biome {} references missing structure: {}",
+                    biome_structure.biome_id, biome_structure.structure_id
+                )
+            });
+
+        visit_candidate_anchors_intersecting(
+            chunk_min,
+            chunk_max,
+            biome_field.seed(),
+            &biome_structure.biome_id,
+            structure,
+            biome_structure.placement,
+            |anchor| {
+                if biome_field
+                    .sample_surface(anchor.as_vec2() + Vec2::splat(0.5))
+                    .primary_id
+                    == biome_structure.biome_id
+                {
+                    maximum_height = maximum_height.max(structure.max_y_offset().max(0));
+                }
+            },
+        );
+    }
+
+    maximum_height
+}
+
+fn structure_for_placement<'a>(
+    structures: &'a StructureRegistry,
+    placement: &crate::content::biome::BiomeStructurePlacement,
+) -> &'a StructureDefinition {
+    structures.get(&placement.structure_id).unwrap_or_else(|| {
+        panic!(
+            "biome {} references missing structure: {}",
+            placement.biome_id, placement.structure_id
+        )
+    })
+}
+
 fn collect_structure_candidates<'a>(
-    query_min: IVec2,
-    query_max: IVec2,
+    target_min: IVec2,
+    target_max: IVec2,
     context: &'a ChunkGenerationContext<'_>,
     biome_id: &'a str,
     structure: &'a StructureDefinition,
@@ -140,35 +222,21 @@ fn collect_structure_candidates<'a>(
     candidates: &mut Vec<StructureCandidate<'a>>,
 ) {
     let (minimum_offset, maximum_offset) = structure.horizontal_bounds();
-    let minimum_candidate = query_min - maximum_offset;
-    let maximum_candidate = query_max - minimum_offset;
-    let spacing = placement.spacing;
-    let minimum_cell = IVec2::new(
-        minimum_candidate.x.div_euclid(spacing) - 1,
-        minimum_candidate.y.div_euclid(spacing) - 1,
-    );
-    let maximum_cell = IVec2::new(
-        maximum_candidate.x.div_euclid(spacing) + 1,
-        maximum_candidate.y.div_euclid(spacing) + 1,
-    );
-
-    for cell_z in minimum_cell.y..=maximum_cell.y {
-        for cell_x in minimum_cell.x..=maximum_cell.x {
-            let cell = IVec2::new(cell_x, cell_z);
-            let Some(anchor) = candidate_anchor(
-                context.biome_field.seed(),
-                biome_id,
-                structure,
-                placement,
-                cell,
-            ) else {
-                continue;
-            };
+    visit_candidate_anchors_intersecting(
+        target_min,
+        target_max,
+        context.biome_field.seed(),
+        biome_id,
+        structure,
+        placement,
+        |anchor| {
+            let minimum = anchor + minimum_offset;
+            let maximum = anchor + maximum_offset;
             let surface_sample = context
                 .biome_field
                 .sample_surface(anchor.as_vec2() + Vec2::splat(0.5));
             if surface_sample.primary_id != biome_id {
-                continue;
+                return;
             }
 
             let Some(origin_y) = context.feature_fields.structure_origin_y(
@@ -186,7 +254,7 @@ fn collect_structure_candidates<'a>(
                     .then_some(origin_y)
                 },
             ) else {
-                continue;
+                return;
             };
 
             candidates.push(StructureCandidate {
@@ -194,11 +262,69 @@ fn collect_structure_candidates<'a>(
                 structure,
                 anchor,
                 origin_y,
-                minimum: anchor + minimum_offset,
-                maximum: anchor + maximum_offset,
+                minimum,
+                maximum,
             });
+        },
+    );
+}
+
+fn visit_candidate_anchors_intersecting(
+    target_min: IVec2,
+    target_max: IVec2,
+    world_seed: u64,
+    biome_id: &str,
+    structure: &StructureDefinition,
+    placement: StructurePlacementRules,
+    mut visit: impl FnMut(IVec2),
+) {
+    let (minimum_offset, maximum_offset) = structure.horizontal_bounds();
+    let minimum_candidate = target_min - maximum_offset;
+    let maximum_candidate = target_max - minimum_offset;
+    let spacing = placement.spacing;
+    let minimum_cell = IVec2::new(
+        minimum_candidate.x.div_euclid(spacing) - 1,
+        minimum_candidate.y.div_euclid(spacing) - 1,
+    );
+    let maximum_cell = IVec2::new(
+        maximum_candidate.x.div_euclid(spacing) + 1,
+        maximum_candidate.y.div_euclid(spacing) + 1,
+    );
+
+    for cell_z in minimum_cell.y..=maximum_cell.y {
+        for cell_x in minimum_cell.x..=maximum_cell.x {
+            let cell = IVec2::new(cell_x, cell_z);
+            let Some(anchor) =
+                candidate_anchor(world_seed, biome_id, structure, placement, cell)
+            else {
+                continue;
+            };
+            let minimum = anchor + minimum_offset;
+            let maximum = anchor + maximum_offset;
+            if rectangles_overlap(minimum, maximum, target_min, target_max) {
+                visit(anchor);
+            }
         }
     }
+}
+
+fn candidate_identity<'a>(
+    candidate: &StructureCandidate<'a>,
+) -> (&'a str, &'a str, IVec2) {
+    (candidate.biome_id, candidate.structure.id.as_str(), candidate.anchor)
+}
+
+fn structures_may_conflict(
+    higher: &StructureDefinition,
+    lower: &StructureDefinition,
+) -> bool {
+    higher.generation.reserve_space
+        || higher.conflict_groups.iter().any(|group| {
+            lower
+                .conflict_groups
+                .iter()
+                .any(|candidate| candidate == group)
+        })
 }
 
 fn candidate_order(
