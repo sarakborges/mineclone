@@ -8,7 +8,6 @@ mod chunk_remesh_tasks;
 pub(crate) mod chunk_rendering;
 pub(crate) mod chunk_system_params;
 mod chunk_task_queue;
-#[cfg(test)]
 mod chunk_storage;
 mod chunk_unloading;
 mod chunk_visibility;

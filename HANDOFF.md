@@ -4959,3 +4959,17 @@ Essas capabilities mantêm directory/path policy no owner correto.
 - testes de regressão foram adicionados/ajustados, mas NÃO executei `cargo test`;
 - NÃO executei `cargo run` nem QA Windows;
 - runtime save→exit→load e renderer shader validation continuam explicitamente pendentes sem evidência de execução.
+
+
+### Correção de integração CI do checkpoint 145
+
+A primeira CI do format v2 falhou porque `world::chunk_storage` ainda estava declarado com `#[cfg(test)]`.
+
+Isso era correto enquanto os checkpoints 133/144 apenas preparavam e validavam reader/writer sem conectar manifests ao storage. Com o format v2, `save_catalog` passa a depender desse owner em runtime.
+
+Correção:
+
+- removido `#[cfg(test)]` de `mod chunk_storage`;
+- nenhuma API/public surface adicional foi exposta;
+- o módulo continua privado a `world`;
+- protocolo v2 e `VERSION 0.35.0` permanecem inalterados.
