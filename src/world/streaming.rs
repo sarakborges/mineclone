@@ -404,11 +404,11 @@ fn collect_generated_chunks(
         if !work.state.keeps_loaded(completed.coord) {
             continue;
         }
-        if work.world.has_generated_chunk(completed.coord) {
+        if work.world.has_resident_or_persisted_chunk(completed.coord) {
             if work.world.chunk(completed.coord).is_none() {
                 assert!(
                     work.world.restore_chunk(completed.coord),
-                    "generated chunk must be resident or archived: {:?}",
+                    "resident or persisted chunk must remain resident or archived: {:?}",
                     completed.coord
                 );
             }
@@ -463,10 +463,10 @@ fn dispatch_generation_tasks(
             continue;
         }
 
-        if work.world.has_generated_chunk(coord) {
+        if work.world.has_resident_or_persisted_chunk(coord) {
             assert!(
                 work.world.restore_chunk(coord),
-                "generated chunk must be resident or archived: {coord:?}"
+                "resident or persisted chunk must remain resident or archived: {coord:?}"
             );
             seed_loaded_chunk_lighting(coord, content, work, queues, current_tick);
             work.state.mark_ready(coord);

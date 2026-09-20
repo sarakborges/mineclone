@@ -33,7 +33,7 @@ impl VoxelWorld {
     pub fn insert_chunk(&mut self, coord: IVec3, chunk: VoxelChunk) {
         assert!(coord.y >= 0, "chunk Y cannot be negative: {}", coord.y);
         assert!(
-            !self.has_generated_chunk(coord),
+            !self.has_resident_or_persisted_chunk(coord),
             "worldgen cannot overwrite a resident or persisted chunk: {coord:?}"
         );
         self.chunks.insert(coord, chunk);
@@ -139,7 +139,7 @@ impl VoxelWorld {
         true
     }
 
-    pub fn has_generated_chunk(&self, coord: IVec3) -> bool {
+    pub fn has_resident_or_persisted_chunk(&self, coord: IVec3) -> bool {
         coord.y >= 0
             && (self.chunks.contains_key(&coord) || self.archived_chunks.contains_key(&coord))
     }
@@ -499,7 +499,7 @@ mod tests {
 
         world.archive_chunk(coord);
 
-        assert!(!world.has_generated_chunk(coord));
+        assert!(!world.has_resident_or_persisted_chunk(coord));
         assert!(!world.restore_chunk(coord));
     }
 
@@ -515,7 +515,7 @@ mod tests {
 
         world.archive_chunk(coord);
 
-        assert!(world.has_generated_chunk(coord));
+        assert!(world.has_resident_or_persisted_chunk(coord));
         assert!(world.restore_chunk(coord));
     }
 

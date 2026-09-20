@@ -135,7 +135,7 @@ impl WorldSnapshot {
                 .pending_fluids
                 .capture_saved(source.world_tick, source.fluids)?,
             creatures: source.creatures,
-            chunks: source.world.save_generated_chunks(source.fluids)?,
+            chunks: source.world.save_persistent_chunks(source.fluids)?,
         })
     }
 }

@@ -11,7 +11,7 @@ impl VoxelWorld {
     /// Captures only chunks with persistent mutations. Untouched deterministic
     /// terrain is reconstructed from the seed after load instead of being kept
     /// in RAM and copied into every save.
-    pub(crate) fn save_generated_chunks(&self, fluids: &FluidRegistry) -> io::Result<Vec<DiskChunk>> {
+    pub(crate) fn save_persistent_chunks(&self, fluids: &FluidRegistry) -> io::Result<Vec<DiskChunk>> {
         let mut coords = self.persistent_chunks.iter().copied().collect::<Vec<_>>();
         coords.sort_unstable_by_key(|coord| (coord.x, coord.y, coord.z));
         coords

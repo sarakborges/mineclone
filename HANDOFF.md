@@ -3843,3 +3843,52 @@ Correção:
 - ele permanece com o owner correto: listagem/catalog read model, não serialized snapshot;
 - nenhum campo/formato persistido mudou;
 - `VERSION` permanece `0.34.19`.
+
+
+### CI verde do checkpoint 130
+
+- Push CI `35512759083`: **success**.
+- PR CI `35512761340`: **success**.
+- O topo `58667508125fe07d7535f29de59c959cfc77ee80` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.19`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 131 — 2026-09-20: persistence naming alinhado ao ownership real [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+Duas APIs de `VoxelWorld` usavam “generated” para conceitos diferentes do contrato atual:
+
+- `save_generated_chunks()` serializava exclusivamente `persistent_chunks`;
+- `has_generated_chunk()` retornava true para qualquer chunk residente OU archived persistent, inclusive chunks runtime/persistidos e não apenas worldgen.
+
+Os nomes escondiam o owner real e incentivavam raciocínio incorreto sobre derived worldgen vs authoritative persistence.
+
+### Renomes
+
+- `save_generated_chunks()` → `save_persistent_chunks()`.
+- `has_generated_chunk()` → `has_resident_or_persisted_chunk()`.
+
+Call sites atualizados em:
+
+- `VoxelWorld::insert_chunk()`;
+- streaming generation result integration;
+- restore-before-generation path;
+- snapshot capture;
+- testes internos de archive/persistence.
+
+Assertions/comments também foram ajustados para falar em resident/persisted, não “generated”.
+
+### Semântica preservada
+
+- untouched deterministic worldgen continua descartável ao sair da retenção;
+- persistent mutation continua promovendo o chunk a authoritative saved state;
+- archived persistent chunks continuam restauráveis;
+- snapshot continua serializando apenas `persistent_chunks`;
+- nenhum formato de save mudou.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` agora fixa a nomenclatura de persistence.
+- `VERSION`: **0.34.19 → 0.34.20**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
