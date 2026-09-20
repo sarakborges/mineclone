@@ -51,25 +51,34 @@ pub(crate) struct WorldSummary {
 
 pub(crate) fn open_worlds_directory() -> io::Result<()> {
     fs::create_dir_all(WORLDS_DIRECTORY)?;
-    let directory = fs::canonicalize(WORLDS_DIRECTORY)?;
+    let directory = std::env::current_dir()?.join(WORLDS_DIRECTORY);
+    open_directory(&directory)
+}
 
-    #[cfg(target_os = "windows")]
-    let mut command = Command::new("explorer");
+#[cfg(target_os = "windows")]
+fn open_directory(directory: &Path) -> io::Result<()> {
+    Command::new("explorer.exe").arg(directory).spawn()?;
+    Ok(())
+}
 
-    #[cfg(target_os = "macos")]
-    let mut command = Command::new("open");
+#[cfg(target_os = "macos")]
+fn open_directory(directory: &Path) -> io::Result<()> {
+    Command::new("open").arg(directory).spawn()?;
+    Ok(())
+}
 
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let mut command = Command::new("xdg-open");
+#[cfg(all(unix, not(target_os = "macos")))]
+fn open_directory(directory: &Path) -> io::Result<()> {
+    Command::new("xdg-open").arg(directory).spawn()?;
+    Ok(())
+}
 
-    #[cfg(not(any(target_os = "windows", target_os = "macos", unix)))]
-    return Err(io::Error::new(
+#[cfg(not(any(target_os = "windows", target_os = "macos", unix)))]
+fn open_directory(_directory: &Path) -> io::Result<()> {
+    Err(io::Error::new(
         io::ErrorKind::Unsupported,
         "opening the saves directory is unsupported on this platform",
-    ));
-
-    command.arg(directory).spawn()?;
-    Ok(())
+    ))
 }
 
 pub(crate) fn create_new_world(requested_name: &str, seed: u64, dimension_id: &str, biome_size_multiplier: f32, ticks_per_second: u32) -> io::Result<(String, WorldDirectoryLock)> {
