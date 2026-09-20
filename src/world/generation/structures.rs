@@ -44,6 +44,12 @@ impl StructureCandidate<'_> {
     }
 }
 
+struct StructureRasterizationContext<'a> {
+    base_chunk: &'a VoxelChunk,
+    blocks: &'a BlockRegistry,
+    chunk_origin: IVec3,
+}
+
 pub(super) fn rasterize_structures(
     chunk: &mut VoxelChunk,
     chunk_origin: IVec3,
@@ -60,10 +66,12 @@ pub(super) fn rasterize_structures(
         for candidate in candidates {
             rasterize_structure(
                 chunk,
-                &base_chunk,
                 &mut claimed,
-                chunk_origin,
-                context.blocks,
+                &StructureRasterizationContext {
+                    base_chunk: &base_chunk,
+                    blocks: context.blocks,
+                    chunk_origin,
+                },
                 candidate.structure,
                 candidate.structure.voxels(),
                 IVec3::new(candidate.anchor.x, candidate.origin_y, candidate.anchor.y),
@@ -260,10 +268,8 @@ fn rectangles_overlap(
 
 fn rasterize_structure(
     chunk: &mut VoxelChunkContentMut<'_>,
-    base_chunk: &VoxelChunk,
     claimed: &mut [bool],
-    chunk_origin: IVec3,
-    blocks: &BlockRegistry,
+    context: &StructureRasterizationContext<'_>,
     structure: &StructureDefinition,
     voxels: &[StructureVoxel],
     origin: IVec3,
@@ -272,14 +278,14 @@ fn rasterize_structure(
 
     if structure.generation.fluid_policy == StructureFluidPolicy::Forbid
         && voxels.iter().any(|voxel| {
-            let local = origin + voxel.offset - chunk_origin;
+            let local = origin + voxel.offset - context.chunk_origin;
             local.x >= 0
                 && local.y >= 0
                 && local.z >= 0
                 && local.x < chunk_size
                 && local.y < chunk_size
                 && local.z < chunk_size
-                && base_chunk.fluid_at(local.x, local.y, local.z).is_some()
+                && context.base_chunk.fluid_at(local.x, local.y, local.z).is_some()
         })
     {
         return;
@@ -287,7 +293,7 @@ fn rasterize_structure(
 
     for voxel in voxels {
         let world_position = origin + voxel.offset;
-        let local = world_position - chunk_origin;
+        let local = world_position - context.chunk_origin;
         if local.x < 0
             || local.y < 0
             || local.z < 0
@@ -305,7 +311,7 @@ fn rasterize_structure(
         let can_replace = match structure.generation.replace_policy {
             StructureReplacePolicy::Any => true,
             StructureReplacePolicy::AirOnly => {
-                !claimed[index] && base_chunk.cell_at(local.x, local.y, local.z).is_none()
+                !claimed[index] && context.base_chunk.cell_at(local.x, local.y, local.z).is_none()
             }
             StructureReplacePolicy::Terrain => !claimed[index],
         };
@@ -313,7 +319,7 @@ fn rasterize_structure(
             continue;
         }
 
-        let block = blocks.get(voxel.block_id).unwrap_or_else(|| {
+        let block = context.blocks.get(voxel.block_id).unwrap_or_else(|| {
             panic!(
                 "structure {} references missing block: {}",
                 structure.id, voxel.block_id
