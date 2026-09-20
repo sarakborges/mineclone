@@ -3206,3 +3206,19 @@ Próxima prioridade de performance:
 1. reduzir o custo de `enqueue_loaded_fluid_frontier()` em chunks com grandes volumes de fluido;
 2. revisar o custo de direct skylight seed no integration path;
 3. só depois avançar para solver/remesh/streaming queue refinements.
+
+
+### Correção de integração CI dos checkpoints 119–120
+
+A primeira CI do commit de save final-only (`35510390475`) falhou somente no Clippy por duas sobras diretas da remoção do autosave:
+
+- `Pause Menu` ainda recebia `ResMut<WorldSession>` embora `persist()` agora use apenas `&self`;
+- `VoxelWorld::save_revision` / `save_content_revision()` ficaram sem consumidor depois que dirty-detection periódico foi removido.
+
+Correção aplicada:
+
+- `31f9cbe5569092aaca968904a3eff270776065da` — `fix: remove obsolete autosave revision state`.
+- `Pause Menu` usa `Res<WorldSession>`.
+- `save_revision`, `bump_save_revision()` e `save_content_revision()` foram removidos, sem supressão de warning.
+- O bump permanece `VERSION 0.34.9` porque esta é correção de integração do mesmo bloco ainda não fechado/validado.
+- Nova CI deste topo ainda precisa ser confirmada antes do próximo bloco funcional.
