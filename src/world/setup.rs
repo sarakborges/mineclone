@@ -10,6 +10,7 @@ pub(super) use progress::setup_world;
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum WorldLoadingPhase {
     Generating,
+    SettlingFluids,
     Lighting,
     Meshing,
     Spawning,

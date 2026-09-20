@@ -352,6 +352,34 @@ impl VoxelWorld {
         world_position: IVec3,
         fluid: Option<FluidCell>,
     ) -> Option<IVec3> {
+        self.set_fluid_at_internal(world_position, fluid, true)
+    }
+
+    /// Apply deterministic generated-fluid convergence without promoting the
+    /// target chunk to authoritative persistent state. A persisted chunk is
+    /// never eligible for this path; its future fluid changes belong to the
+    /// runtime scheduler.
+    pub(crate) fn set_derived_fluid_at(
+        &mut self,
+        world_position: IVec3,
+        fluid: Option<FluidCell>,
+    ) -> Option<IVec3> {
+        if world_position.y < 0 {
+            return None;
+        }
+        let chunk_coord = chunk_coord_from_world(world_position);
+        if self.persistent_chunks.contains(&chunk_coord) {
+            return None;
+        }
+        self.set_fluid_at_internal(world_position, fluid, false)
+    }
+
+    fn set_fluid_at_internal(
+        &mut self,
+        world_position: IVec3,
+        fluid: Option<FluidCell>,
+        persistent: bool,
+    ) -> Option<IVec3> {
         if world_position.y < 0 {
             return None;
         }
@@ -375,7 +403,10 @@ impl VoxelWorld {
 
             chunk.set_fluid(x, y, z, fluid);
         }
-        self.persistent_chunks.insert(chunk_coord);
+
+        if persistent {
+            self.persistent_chunks.insert(chunk_coord);
+        }
         self.bump_chunk_content_revision(chunk_coord);
         self.bump_chunk_mesh_revision(chunk_coord);
         Some(chunk_coord)

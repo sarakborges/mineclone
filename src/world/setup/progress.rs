@@ -1,3 +1,4 @@
+mod fluids;
 mod generation;
 mod lighting;
 mod meshing;
@@ -18,6 +19,7 @@ use crate::{
 };
 
 use self::{
+    fluids::settle_initial_fluids,
     generation::generate_initial_chunks,
     lighting::light_initial_chunks,
     meshing::mesh_initial_chunks,
@@ -62,7 +64,11 @@ pub(in crate::world) fn setup_world(
             &mut progress,
             &mut simulation.fluids,
             &mut generation_tasks,
+            *persistence.load_mode,
         ),
+        WorldLoadingPhase::SettlingFluids => {
+            settle_initial_fluids(&content, &mut progress)
+        }
         WorldLoadingPhase::Lighting => light_initial_chunks(
             &content,
             &mut progress,

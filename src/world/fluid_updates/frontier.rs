@@ -31,16 +31,34 @@ pub(super) fn enqueue_loaded_fluid_frontier(
     world: &VoxelWorld,
     coord: IVec3,
 ) {
+    visit_loaded_fluid_frontier_targets(
+        world,
+        coord,
+        &mut |fluid_id, target, priority| {
+            if priority {
+                pending.enqueue_fluid_priority(fluid_id, target);
+            } else {
+                pending.enqueue_fluid(fluid_id, target);
+            }
+        },
+    );
+}
+
+pub(super) fn visit_loaded_fluid_frontier_targets(
+    world: &VoxelWorld,
+    coord: IVec3,
+    visit: &mut impl FnMut(crate::content::fluid::FluidId, IVec3, bool),
+) {
     // Generated fluids are the initial world state, not permanently static
-    // decoration. Seed only their currently empty neighboring targets into the
-    // runtime solver; filled fluid cells themselves do not need queue entries.
-    enqueue_chunk_fluid_spread_targets(pending, world, coord);
+    // decoration. Visit only currently empty neighboring targets; filled fluid
+    // cells themselves do not need queue entries.
+    visit_chunk_fluid_spread_targets(world, coord, visit);
 
     // A neighboring chunk may have loaded earlier while this chunk was absent.
     // Revisit every fluid on the shared loaded boundaries so sources and
     // dynamic flow can cross the seam as soon as the target chunk exists.
     for offset in CARDINAL_NEIGHBORS {
-        enqueue_neighbor_boundary_spread_targets(pending, world, coord + offset, -offset);
+        visit_neighbor_boundary_spread_targets(world, coord + offset, -offset, visit);
     }
 }
 
@@ -48,6 +66,24 @@ fn enqueue_chunk_fluid_spread_targets(
     pending: &mut PendingFluidUpdates,
     world: &VoxelWorld,
     coord: IVec3,
+) {
+    visit_chunk_fluid_spread_targets(
+        world,
+        coord,
+        &mut |fluid_id, target, priority| {
+            if priority {
+                pending.enqueue_fluid_priority(fluid_id, target);
+            } else {
+                pending.enqueue_fluid(fluid_id, target);
+            }
+        },
+    );
+}
+
+fn visit_chunk_fluid_spread_targets(
+    world: &VoxelWorld,
+    coord: IVec3,
+    visit: &mut impl FnMut(crate::content::fluid::FluidId, IVec3, bool),
 ) {
     if coord.y < 0 {
         return;
@@ -61,20 +97,20 @@ fn enqueue_chunk_fluid_spread_targets(
 
     let origin = coord * CHUNK_SIZE as i32;
     chunk.visit_potential_fluid_frontier_sources(|local_position, fluid| {
-        enqueue_spread_targets_from_fluid(
-            pending,
+        visit_spread_targets_from_fluid(
             world,
             origin + local_position,
             fluid,
+            visit,
         );
     });
 }
 
-fn enqueue_neighbor_boundary_spread_targets(
-    pending: &mut PendingFluidUpdates,
+fn visit_neighbor_boundary_spread_targets(
     world: &VoxelWorld,
     coord: IVec3,
     direction: IVec3,
+    visit: &mut impl FnMut(crate::content::fluid::FluidId, IVec3, bool),
 ) {
     if coord.y < 0 {
         return;
@@ -96,11 +132,11 @@ fn enqueue_neighbor_boundary_spread_targets(
                 let Some(fluid) = chunk.fluid_at(local_x, local_y, local_z) else {
                     continue;
                 };
-                enqueue_spread_targets_from_fluid(
-                    pending,
+                visit_spread_targets_from_fluid(
                     world,
                     origin + IVec3::new(local_x, local_y, local_z),
                     fluid,
+                    visit,
                 );
             }
         }
@@ -114,11 +150,11 @@ fn enqueue_neighbor_boundary_spread_targets(
                 let Some(fluid) = chunk.fluid_at(local_x, local_y, local_z) else {
                     continue;
                 };
-                enqueue_spread_targets_from_fluid(
-                    pending,
+                visit_spread_targets_from_fluid(
                     world,
                     origin + IVec3::new(local_x, local_y, local_z),
                     fluid,
+                    visit,
                 );
             }
         }
@@ -131,21 +167,21 @@ fn enqueue_neighbor_boundary_spread_targets(
             let Some(fluid) = chunk.fluid_at(local_x, local_y, local_z) else {
                 continue;
             };
-            enqueue_spread_targets_from_fluid(
-                pending,
+            visit_spread_targets_from_fluid(
                 world,
                 origin + IVec3::new(local_x, local_y, local_z),
                 fluid,
+                visit,
             );
         }
     }
 }
 
-fn enqueue_spread_targets_from_fluid(
-    pending: &mut PendingFluidUpdates,
+fn visit_spread_targets_from_fluid(
     world: &VoxelWorld,
     position: IVec3,
     source_fluid: crate::voxel::fluid::FluidCell,
+    visit: &mut impl FnMut(crate::content::fluid::FluidId, IVec3, bool),
 ) {
     let mut can_spread_horizontally = None;
 
@@ -167,10 +203,6 @@ fn enqueue_spread_targets_from_fluid(
             }
         }
 
-        if offset == IVec3::NEG_Y {
-            pending.enqueue_fluid_priority(source_fluid.fluid_id, target);
-        } else {
-            pending.enqueue_fluid(source_fluid.fluid_id, target);
-        }
+        visit(source_fluid.fluid_id, target, offset == IVec3::NEG_Y);
     }
 }

@@ -1,9 +1,12 @@
 use std::time::Duration;
 
+use bevy::platform::collections::HashSet;
+
 use crate::world::{
     chunk_generation_tasks::MAX_GENERATION_TASKS_IN_FLIGHT,
     chunk_rendering::ChunkRenderPool,
     chunk_system_params::ChunkContent,
+    fluid_updates::settle_generated_fluid_chunks,
     work_budget::FrameWorkBudget,
 };
 
@@ -27,6 +30,7 @@ pub(super) fn collect_generated_chunks(
     let current_revision = work.generation_tasks.revision();
     let mut budget = FrameWorkBudget::new(GENERATION_RESULT_INTEGRATION_BUDGET, 1)
         .with_maximum_items(MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME);
+    let mut generated_coords = Vec::new();
 
     loop {
         if budget.exhausted() {
@@ -59,8 +63,19 @@ pub(super) fn collect_generated_chunks(
         }
 
         work.world.insert_chunk(completed.coord, completed.output);
-        seed_loaded_chunk_lighting(completed.coord, content, work, queues, current_tick);
-        work.state.mark_ready(completed.coord);
+        generated_coords.push(completed.coord);
+    }
+
+    if generated_coords.is_empty() {
+        return;
+    }
+
+    let generated_chunks = generated_coords.iter().copied().collect::<HashSet<_>>();
+    settle_generated_fluid_chunks(&mut work.world, content.fluids(), &generated_chunks);
+
+    for coord in generated_coords {
+        seed_loaded_chunk_lighting(coord, content, work, queues, current_tick);
+        work.state.mark_ready(coord);
     }
 }
 

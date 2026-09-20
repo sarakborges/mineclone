@@ -1,5 +1,5 @@
 use crate::world::{
-    PendingFluidUpdates,
+    PendingFluidUpdates, WorldLoadMode,
     chunk_generation_tasks::{ChunkGenerationTasks, MAX_GENERATION_TASKS_IN_FLIGHT},
     chunk_system_params::{ChunkContent, ChunkGeneration},
     work_budget::FrameWorkBudget,
@@ -13,6 +13,7 @@ pub(super) fn generate_initial_chunks(
     progress: &mut WorldSetupProgress<'_>,
     fluid_updates: &mut PendingFluidUpdates,
     generation_tasks: &mut ChunkGenerationTasks,
+    load_mode: WorldLoadMode,
 ) {
     generation_tasks.sync_snapshot(generation, content);
     let mut budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 1);
@@ -24,7 +25,10 @@ pub(super) fn generate_initial_chunks(
         && progress.loading_state.generated >= progress.loading_state.coords.len()
         && generation_tasks.pending_count() == 0
     {
-        progress.loading_state.phase = WorldLoadingPhase::Lighting;
+        progress.loading_state.phase = match load_mode {
+            WorldLoadMode::New => WorldLoadingPhase::SettlingFluids,
+            WorldLoadMode::Load => WorldLoadingPhase::Lighting,
+        };
     }
 }
 
