@@ -135,7 +135,7 @@ fn spawn_pause_menu(
 fn handle_pause_menu_buttons(
     interactions: Query<(&Interaction, &PauseMenuAction), Changed<Interaction>>,
     snapshot: WorldSaveContext,
-    mut session: ResMut<WorldSession>,
+    session: Res<WorldSession>,
     mut settings_mode: ResMut<SettingsScreenMode>,
     mut feedback: Query<&mut Text, With<PauseSaveFeedback>>,
     mut transition: ResMut<ScreenTransition>,

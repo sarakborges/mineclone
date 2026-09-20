@@ -8,13 +8,6 @@ use crate::voxel::{chunk_archive::ArchivedChunk, chunk_disk::DiskChunk};
 use super::VoxelWorld;
 
 impl VoxelWorld {
-    /// Monotonic revision of authoritative persistent world content.
-    /// Deterministic worldgen does not advance it; block/fluid mutations do.
-    /// Archiving, restoring and lighting do not.
-    pub(crate) fn save_content_revision(&self) -> u64 {
-        self.save_revision
-    }
-
     /// Captures only chunks with persistent mutations. Untouched deterministic
     /// terrain is reconstructed from the seed after load instead of being kept
     /// in RAM and copied into every save.

@@ -24,9 +24,6 @@ pub struct VoxelWorld {
     persistent_chunks: HashSet<IVec3>,
     chunk_content_revisions: HashMap<IVec3, u64>,
     next_chunk_content_revision: u64,
-    // Only persistent block/fluid mutations change saved voxel state.
-    // Deterministic generated terrain can be discarded and regenerated.
-    save_revision: u64,
     chunk_mesh_revisions: HashMap<IVec3, u64>,
     next_chunk_mesh_revision: u64,
     block_content_revision: u64,
@@ -342,7 +339,6 @@ impl VoxelWorld {
         }
 
         self.persistent_chunks.insert(chunk_coord);
-        self.bump_save_revision();
         if block_changed {
             self.bump_block_content_revision();
         }
@@ -380,7 +376,6 @@ impl VoxelWorld {
             chunk.set_fluid(x, y, z, fluid);
         }
         self.persistent_chunks.insert(chunk_coord);
-        self.bump_save_revision();
         self.bump_chunk_content_revision(chunk_coord);
         self.bump_chunk_mesh_revision(chunk_coord);
         Some(chunk_coord)
@@ -399,13 +394,6 @@ impl VoxelWorld {
             .block_content_revision
             .checked_add(1)
             .expect("block content revision counter exhausted");
-    }
-
-    fn bump_save_revision(&mut self) {
-        self.save_revision = self
-            .save_revision
-            .checked_add(1)
-            .expect("world save revision counter exhausted");
     }
 
     fn bump_chunk_content_revision(&mut self, coord: IVec3) {
