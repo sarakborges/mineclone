@@ -145,6 +145,7 @@ pub(super) fn rebuild_queue(
     streaming.center = Some(center);
     streaming.horizontal_radius = horizontal_radius;
     streaming.vertical_radius = vertical_radius;
+    streaming.mark_selection_rebuilt();
 
     streaming.pending.clear();
     streaming.pending.reserve(scratch.pending.len());

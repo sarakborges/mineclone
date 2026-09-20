@@ -50,6 +50,20 @@ const GENERATION_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
 const MESH_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(2);
 const STREAMING_BUDGET: Duration = Duration::from_millis(4);
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CriticalPendingScanKey {
+    queue_revision: u64,
+    center: IVec3,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RetiredScanKey {
+    queue_revision: u64,
+    selection_revision: u64,
+    center: IVec2,
+    radius_squared: i32,
+}
+
 #[derive(Resource, Default)]
 pub(super) struct ChunkStreamingState {
     center: Option<IVec3>,
@@ -64,6 +78,9 @@ pub(super) struct ChunkStreamingState {
     surface_ranges: HashMap<IVec2, (i32, i32)>,
     initial_lighting_seeded: HashSet<IVec3>,
     initial_mesh_seed_catchup: HashSet<IVec3>,
+    selection_revision: u64,
+    pending_critical_scan_miss: Option<CriticalPendingScanKey>,
+    retired_scan_miss: Option<RetiredScanKey>,
 }
 
 impl ChunkStreamingState {
@@ -84,17 +101,32 @@ impl ChunkStreamingState {
     ) -> Option<IVec3> {
         let center = center.xz();
         let radius_squared = horizontal_radius.max(0).pow(2);
+        let scan_key = RetiredScanKey {
+            queue_revision: self.retired.revision(),
+            selection_revision: self.selection_revision,
+            center,
+            radius_squared,
+        };
+        if self.retired_scan_miss == Some(scan_key) {
+            return None;
+        }
+
         let desired = &self.desired;
         let retained = &self.retained;
-
-        self.retired.pop_where(|coord| {
+        let coord = self.retired.pop_where(|coord| {
             if desired.contains(&coord) || retained.contains(&coord) {
                 return false;
             }
 
             let delta = coord.xz() - center;
             delta.length_squared() > radius_squared
-        })
+        });
+        if coord.is_some() {
+            self.retired_scan_miss = None;
+        } else {
+            self.retired_scan_miss = Some(scan_key);
+        }
+        coord
     }
 
     fn requeue(&mut self, coord: IVec3) {
@@ -111,8 +143,23 @@ impl ChunkStreamingState {
 
     fn pop_critical_pending(&mut self) -> Option<IVec3> {
         let center = self.center?;
-        self.pending
-            .pop_where(|coord| is_critical_streaming_coord(coord, center))
+        let scan_key = CriticalPendingScanKey {
+            queue_revision: self.pending.revision(),
+            center,
+        };
+        if self.pending_critical_scan_miss == Some(scan_key) {
+            return None;
+        }
+
+        let coord = self
+            .pending
+            .pop_where(|coord| is_critical_streaming_coord(coord, center));
+        if coord.is_some() {
+            self.pending_critical_scan_miss = None;
+        } else {
+            self.pending_critical_scan_miss = Some(scan_key);
+        }
+        coord
     }
 
     fn mark_ready(&mut self, coord: IVec3) {
@@ -151,6 +198,14 @@ impl ChunkStreamingState {
     pub(super) fn forget_initial_lighting_seeded(&mut self, coord: IVec3) {
         self.initial_lighting_seeded.remove(&coord);
         self.initial_mesh_seed_catchup.remove(&coord);
+    }
+
+
+    fn mark_selection_rebuilt(&mut self) {
+        self.selection_revision = self
+            .selection_revision
+            .checked_add(1)
+            .expect("chunk streaming selection revision exhausted");
     }
 }
 
@@ -662,6 +717,59 @@ mod tests {
     use crate::voxel::{
         cell::VoxelCell, chunk::VoxelChunk, texture_rotation::TextureRotation,
     };
+
+    #[test]
+    fn critical_pending_scan_miss_retries_only_after_queue_or_center_change() {
+        let far = IVec3::new(8, 0, 0);
+        let critical = IVec3::new(1, 0, 0);
+        let mut state = ChunkStreamingState {
+            center: Some(IVec3::ZERO),
+            ..default()
+        };
+        state.pending.enqueue(far);
+
+        assert_eq!(state.pop_critical_pending(), None);
+        let first_miss = state.pending_critical_scan_miss;
+        assert!(first_miss.is_some());
+
+        assert_eq!(state.pop_critical_pending(), None);
+        assert_eq!(state.pending_critical_scan_miss, first_miss);
+
+        state.pending.enqueue(critical);
+        assert_eq!(state.pop_critical_pending(), Some(critical));
+
+        state.center = Some(IVec3::new(8, 0, 0));
+        assert_eq!(state.pop_critical_pending(), Some(far));
+    }
+
+    #[test]
+    fn retired_scan_miss_invalidates_when_selection_rebuilds() {
+        let coord = IVec3::new(20, 0, 0);
+        let mut state = ChunkStreamingState::default();
+        state.enqueue_retired(coord);
+        state.retained.insert(coord);
+
+        assert_eq!(
+            state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 10),
+            None
+        );
+        let first_miss = state.retired_scan_miss;
+        assert!(first_miss.is_some());
+
+        assert_eq!(
+            state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 10),
+            None
+        );
+        assert_eq!(state.retired_scan_miss, first_miss);
+
+        state.retained.remove(&coord);
+        state.mark_selection_rebuilt();
+
+        assert_eq!(
+            state.pop_retired_outside_horizontal_radius(IVec3::ZERO, 10),
+            Some(coord)
+        );
+    }
 
     #[test]
     fn retired_chunks_wait_inside_horizontal_retention_radius() {

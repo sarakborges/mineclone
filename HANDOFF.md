@@ -3696,3 +3696,61 @@ Correção:
 - O owner `save_catalog::locking` agora encapsula também o cleanup físico do session lock file; `save_catalog.rs` não conhece mais `SESSION_LOCK_FILE`.
 - `VERSION` permanece `0.34.17`.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+## Checkpoint 129 — 2026-09-20: streaming predicate scan-miss cache [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+Duas filas de streaming ainda repetiam scans lineares em frames onde nenhuma entrada elegível existia e nenhum input relevante havia mudado:
+
+- `pending` quando generation tasks estão saturadas e só chunks críticos podem furar a capacidade;
+- `retired` quando todos os candidatos ainda estão dentro do retention radius ou voltaram para `desired/retained`.
+
+`ready` foi revisada e deliberadamente NÃO recebeu cache: um `pop_ready()` com fila não vazia termina consumindo uma entrada e portanto já muda a revision; não há miss linear estável para amortizar.
+
+### Implementação
+
+`ChunkStreamingState` agora mantém:
+
+- `pending_critical_scan_miss: Option<CriticalPendingScanKey>`;
+- `retired_scan_miss: Option<RetiredScanKey>`;
+- `selection_revision`.
+
+Critical pending key:
+
+- `pending.revision()`;
+- current streaming center.
+
+Retired key:
+
+- `retired.revision()`;
+- `selection_revision`;
+- current x/z center;
+- squared retention radius.
+
+`selection_revision` avança somente quando `rebuild_queue()` publica uma nova seleção `desired/retained`, tornando explícita a invalidation de elegibilidade que não pertence à própria retired queue.
+
+### Semântica
+
+- ordering e prioridade das filas não mudaram;
+- nenhum coord é removido/reordenado por causa do cache;
+- qualquer enqueue/pop/remove/promotion altera a queue revision e força novo scan;
+- mover o centro invalida critical pending;
+- rebuild de seleção ou mudança de retention radius invalida retired;
+- cache só representa "nenhum item satisfazia este predicado com estes inputs".
+
+### Testes adicionados
+
+Foram adicionados testes de invariantes para:
+
+- critical pending miss permanecer estável até queue/center mudar;
+- retired miss permanecer estável até selection revision mudar.
+
+Os testes NÃO foram executados manualmente, conforme regra do projeto.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` documenta que predicate scan caching deve incluir todos os inputs de elegibilidade.
+- `VERSION`: **0.34.17 → 0.34.18**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.

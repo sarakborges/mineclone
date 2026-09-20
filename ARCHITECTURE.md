@@ -95,6 +95,7 @@ Queue mechanics must be layered rather than copied.
 - Lighting/fluid/remesh queues add only their domain-specific behavior on top.
 - Do not implement another `VecDeque + HashSet` pair locally for the same semantics.
 - Predicate-filtered remesh queues must cache a no-renderable-result by queue revision plus render-pool membership revision; repeated frames must not linearly rescan an unchanged queue/pool pair.
+- Streaming predicate scans that may legitimately return no item while leaving the queue unchanged must cache that miss against every input that controls eligibility. Critical pending work keys on pending-queue revision plus streaming center; retired work additionally keys on selection revision and retention radius. Do not cache filtered results without complete invalidation inputs.
 
 Time-sliced world work uses `FrameWorkBudget`.
 
