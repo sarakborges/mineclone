@@ -30,6 +30,7 @@ mod registry;
 pub(crate) mod secondary_property;
 pub(crate) mod sky;
 pub(crate) mod structure;
+pub(crate) mod structure_rules;
 pub(crate) mod tool;
 pub(crate) mod tool_id;
 mod validation;
