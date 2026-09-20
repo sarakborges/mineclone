@@ -4751,3 +4751,73 @@ Este checkpoint NÃO muda o save format e NÃO conecta manifests ao chunk direct
 - `ARCHITECTURE.md` exige reader/writer simétricos antes da migração.
 - `VERSION`: **0.34.32 → 0.34.33**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 144
+
+- Push CI `35519022642`: **success**.
+- PR CI `35519024483`: **success**.
+- O topo `134eae71f11d8c3f5b3be4f323209b13e2883deb` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.33`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Próximo migration slice de persistence — executar como um protocolo único
+
+A próxima mudança de formato NÃO deve ser parcialmente aplicada. O reader/writer de generation chunks agora existe e está verde; o próximo slice deve migrar a publicação para chunks externos mantendo leitura de saves antigos.
+
+Contrato planejado:
+
+1. **Format v2 para novos saves**
+   - bump do save-format interno de 1 para 2;
+   - `WorldSnapshot` runtime continua sendo o snapshot autoritativo capturado no main thread;
+   - criar disk DTO v2 metadata-only para serialização, em vez de clonar/mutar `WorldSnapshot`;
+   - snapshot v2 NÃO serializa a coleção de chunks inline.
+
+2. **Compatibilidade de leitura v1**
+   - manifests/snapshots format 1 continuam legíveis;
+   - v1 continua usando `chunks: [...]` inline;
+   - um mundo v1 carregado normalmente será salvo como v2 na próxima saída;
+   - reservation manifest generation 0 antigo não pode impedir essa migração só por ser format 1.
+
+3. **Publication v2, ainda final-only**
+   Ordem de commit:
+   - publicar `generation-N/` via `publish_generation_chunks()`;
+   - publicar snapshot metadata-only `snapshot-N.json`;
+   - publicar `manifest-N.json` POR ÚLTIMO como commit marker.
+   Nenhuma dessas escritas acontece durante Gameplay.
+
+4. **Rollback**
+   - falha antes do manifest deve remover qualquer snapshot/chunk generation não publicado;
+   - manifest jamais pode apontar para payload parcial;
+   - orphan não referenciado pode ser limpo, mas nunca tratado como authoritative.
+
+5. **Load v2**
+   - validar metadata do snapshot primeiro;
+   - carregar chunks pela generation indicada pelo próprio manifest generation;
+   - `load_generation_chunks()` valida path ↔ payload identity;
+   - converter pelo existing `SavedChunkCatalog`/`VoxelWorld::from_saved_chunks`.
+
+6. **Recovery/listing**
+   - `valid_manifest()` deve aceitar v1 e v2;
+   - generation v2 só é complete quando snapshot + generation chunk directory existem;
+   - fallback continua newest → older verified generation.
+
+7. **Prune**
+   - remover manifest/snapshot antigos e a generation chunk directory correspondente sob o mesmo write gate;
+   - v1 sem chunk directory continua válido/no-op nesse cleanup.
+
+8. **Uma fonte autoritativa**
+   - não escrever chunks inline E externos em v2;
+   - não manter dois catálogos mutáveis;
+   - manifest continua sendo o único commit marker de uma generation.
+
+9. **Validação**
+   - CI Rust após cada commit coerente;
+   - runtime/save-load QA continua explicitamente pendente se não houver `cargo run`;
+   - não rodar `cargo test` sem autorização.
+
+### Outros itens ainda dependentes de runtime evidence
+
+- Fluid solver BFS: diagnostics de downhill searches/nodes já estão instrumentados; não alterar algoritmo/cache sem capturar números reais.
+- Shared `TerrainLightingBuffer`: Rust CI verde no checkpoint 137, mas WGSL/bind-group runtime ainda precisa de execução do renderer.
+- CSM/shadow budget: manter como profiling/A-B item; não reduzir qualidade por análise estática.
