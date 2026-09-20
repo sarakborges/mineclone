@@ -4358,3 +4358,46 @@ Agora: uma mutation de `ShaderBuffer` por alteração.
 - CI Rust pendente.
 - O shader WGSL é compilado em runtime pelo renderer; Clippy/cargo check não validam o bind-group WGSL end-to-end.
 - Não executei `cargo test`, `cargo run` nem QA Windows; runtime shader validation continuará explicitamente pendente mesmo se CI Rust ficar verde.
+
+
+### CI verde do checkpoint 137
+
+- Push CI `35517590973`: **success**.
+- PR CI `35517593395`: **success**.
+- O topo `ec335843b46dd685678585d65965bcd0ec4548b7` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.26`.
+- Runtime shader/bind-group validation permanece pendente porque não houve `cargo run`/QA de renderer.
+
+## Checkpoint 138 — 2026-09-20: physical save storage extraído do catálogo [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`save_catalog.rs` ainda misturava policy/orchestration de catálogo com detalhes físicos de arquivo: filename protocol, generation parsing/scanning, JSON IO, size limit, fsync e atomic rename.
+
+### Implementação
+
+Novo `save_catalog/storage.rs` é owner do mecanismo físico:
+
+- canonical manifest/snapshot naming;
+- generation parsing e manifest directory scan;
+- highest generation lookup;
+- snapshot regular-file + 512 MiB validation;
+- bounded JSON serialization;
+- temp file → flush → fsync → atomic rename → cleanup;
+- JSON reads.
+
+O parent continua owner de world identity, locks, generation selection, recovery ordering, playable validation e retention/prune policy.
+
+O parser genérico de prefix permanece privado; o parent recebe apenas a capability estreita `snapshot_generation()`.
+
+### Semântica
+
+- save format, filenames, size limit, fsync, fallback e retention não mudaram;
+- save continua final-only;
+- `invalid_data()` permanece no parent porque snapshot/validation também usam esse boundary error.
+
+### Versionamento
+
+- `VERSION`: **0.34.26 → 0.34.27**.
+- CI pendente.
+- Não executei `cargo test`, `cargo run` nem QA Windows.

@@ -1,19 +1,18 @@
 mod chunks;
 mod locking;
 mod snapshot;
+mod storage;
 mod validation;
 
 use std::{
-    fs::{self, OpenOptions},
-    io::{self, Write},
+    fs,
+    io,
     path::{Path, PathBuf},
     thread,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use bevy::log::warn;
-use serde::{Deserialize, Serialize};
-
 use crate::{
     content::{block::BlockRegistry, fluid::FluidRegistry},
     voxel::world::VoxelWorld,
@@ -24,6 +23,10 @@ use self::{
         ReadLease, acquire_world_directory_lock, remove_world_directory_lock_file, world_lock,
     },
     snapshot::{SAVE_FORMAT_VERSION, WorldManifest},
+    storage::{
+        highest_generation, manifest_name, manifest_paths, open_snapshot_file, publish_json,
+        read_json, snapshot_generation, snapshot_name,
+    },
 };
 pub(crate) use self::{
     locking::WorldDirectoryLock,
@@ -38,7 +41,6 @@ use super::{
     world_names::{WORLDS_DIRECTORY, available_world_name, validate_world_name},
 };
 
-const MAX_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
 const RETAINED_GENERATIONS: usize = 4;
 
 #[derive(Clone, Debug)]
@@ -196,14 +198,6 @@ pub(crate) fn load_world(id: &str, registries: SaveRegistries<'_>) -> io::Result
         match loaded { Ok((snapshot,world)) => return Ok((snapshot,world,session_lock)), Err(error) => { warn!("Skipping damaged save for world {id}, generation {}: {error}",candidate.generation); last_error=Some(error); } }
     } Err(last_error.unwrap_or_else(|| invalid_data(format!("world {id} has no restorable save"))))
 }
-fn open_snapshot_file(directory:&Path,manifest:&WorldManifest)->io::Result<fs::File>{
-    let filename=manifest.snapshot_file.as_ref().ok_or_else(||invalid_data("no complete snapshot"))?; let expected=snapshot_name(manifest.generation);
-    if filename != &expected { return Err(invalid_data("manifest references a noncanonical snapshot path")); }
-    let path=directory.join(filename); let metadata=fs::symlink_metadata(&path)?;
-    if !metadata.file_type().is_file() || metadata.len()>MAX_SNAPSHOT_BYTES { return Err(invalid_data("snapshot is not a regular file or exceeds supported size")); }
-    let file=fs::File::open(path)?; let opened_metadata=file.metadata()?;
-    if !opened_metadata.is_file() || opened_metadata.len()>MAX_SNAPSHOT_BYTES { return Err(invalid_data("opened snapshot is not a regular file or exceeds supported size")); } Ok(file)
-}
 fn load_snapshot(directory:&Path,id:&str,manifest:&WorldManifest,blocks:&BlockRegistry,fluids:&FluidRegistry,validate:impl FnOnce(&WorldSnapshot)->io::Result<()>)->io::Result<(WorldSnapshot,VoxelWorld)>{
     let file=open_snapshot_file(directory,manifest)?; decode_snapshot(file,id,manifest,blocks,fluids,validate)
 }
@@ -244,20 +238,7 @@ fn prune_old_generations(directory:&Path,id:&str,registries:&PruneRegistries)->i
     let Some(cutoff)=cutoff else{return Ok(());}; let gate=world_lock(id)?; let _write=gate.lock_after_readers()?;
     if !fs::symlink_metadata(directory)?.file_type().is_dir(){return Err(invalid_data("world directory cannot be a symbolic link"));}
     for (generation,path) in candidates {if generation>0&&generation<cutoff{fs::remove_file(path)?;}}
-    for entry in fs::read_dir(directory)? {let entry=entry?;if !entry.file_type()?.is_file(){continue;}let Some(name)=entry.file_name().to_str().map(str::to_owned) else{continue;};let Some(generation)=parse_generation(&name,"snapshot-") else{continue;};if generation>0&&generation<cutoff{fs::remove_file(entry.path())?;}}
+    for entry in fs::read_dir(directory)? {let entry=entry?;if !entry.file_type()?.is_file(){continue;}let Some(name)=entry.file_name().to_str().map(str::to_owned) else{continue;};let Some(generation)=snapshot_generation(&name) else{continue;};if generation>0&&generation<cutoff{fs::remove_file(entry.path())?;}}
     Ok(())
 }
-fn highest_generation(directory:&Path)->io::Result<u64>{Ok(manifest_paths(directory)?.into_iter().map(|(generation,_)|generation).max().unwrap_or(0))}
-fn manifest_paths(directory:&Path)->io::Result<Vec<(u64,PathBuf)>>{let mut result=Vec::new();for entry in fs::read_dir(directory)?{let entry=entry?;if !entry.file_type()?.is_file(){continue;}let Some(name)=entry.file_name().to_str().map(str::to_owned) else{continue;};if let Some(generation)=parse_generation(&name,"manifest-"){result.push((generation,entry.path()));}}Ok(result)}
-fn parse_generation(name:&str,prefix:&str)->Option<u64>{let digits=name.strip_prefix(prefix)?.strip_suffix(".json")?;(digits.len()==20&&digits.bytes().all(|byte|byte.is_ascii_digit())).then(||digits.parse().ok()).flatten()}
-fn manifest_name(generation:u64)->String{format!("manifest-{generation:020}.json")}
-fn snapshot_name(generation:u64)->String{format!("snapshot-{generation:020}.json")}
-struct SnapshotSizeLimit<W>{writer:W,remaining:u64}
-impl<W:Write> Write for SnapshotSizeLimit<W>{fn write(&mut self,data:&[u8])->io::Result<usize>{if data.len() as u64>self.remaining{return Err(invalid_data("snapshot exceeds the maximum supported size"));}let written=self.writer.write(data)?;self.remaining-=written as u64;Ok(written)}fn flush(&mut self)->io::Result<()>{self.writer.flush()}}
-fn publish_json<T:Serialize>(directory:&Path,filename:&str,value:&T)->io::Result<()> {
-    let temporary=directory.join(format!("{filename}.tmp"));let final_path=directory.join(filename);let mut file=OpenOptions::new().write(true).create_new(true).open(&temporary)?;
-    let result=(||{{let mut buffered=io::BufWriter::new(&mut file);if filename.starts_with("snapshot-"){let mut bounded=SnapshotSizeLimit{writer:&mut buffered,remaining:MAX_SNAPSHOT_BYTES};serde_json::to_writer(&mut bounded,value).map_err(io::Error::other)?;bounded.write_all(b"\n")?;}else{serde_json::to_writer(&mut buffered,value).map_err(io::Error::other)?;buffered.write_all(b"\n")?;}buffered.flush()?;}file.sync_all()?;drop(file);fs::rename(&temporary,&final_path)})();if result.is_err(){let _=fs::remove_file(temporary);}result
-}
-fn read_json<T:for<'de>Deserialize<'de>>(path:&Path)->io::Result<T>{serde_json::from_reader(io::BufReader::new(fs::File::open(path)?)).map_err(io::Error::other)}
-fn now_unix_ms()->io::Result<u64>{let elapsed=SystemTime::now().duration_since(UNIX_EPOCH).map_err(io::Error::other)?;u64::try_from(elapsed.as_millis()).map_err(io::Error::other)}
 fn invalid_data(message:impl Into<String>)->io::Error{io::Error::new(io::ErrorKind::InvalidData,message.into())}
