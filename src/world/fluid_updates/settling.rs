@@ -1,5 +1,5 @@
 use bevy::{
-    platform::collections::HashSet,
+    platform::collections::{HashMap, HashSet},
     prelude::*,
 };
 
@@ -47,6 +47,7 @@ pub(in crate::world) struct GeneratedFluidSettling {
     verification_queue: DeduplicatedQueue<IVec3>,
     verification_chunks: Vec<IVec3>,
     verification_chunk_cursor: usize,
+    verification_revisions: HashMap<IVec3, u64>,
     verification_active: bool,
     verification_changed: bool,
     scratch: FluidSolverScratch,
@@ -118,7 +119,7 @@ impl GeneratedFluidSettling {
             }
 
             if !self.verification_active {
-                self.start_verification();
+                self.start_verification(world);
                 continue;
             }
 
@@ -139,8 +140,8 @@ impl GeneratedFluidSettling {
                 continue;
             }
 
-            if self.verification_changed {
-                self.start_verification();
+            if self.verification_changed || self.verification_inputs_changed(world) {
+                self.start_verification(world);
                 continue;
             }
 
@@ -184,13 +185,14 @@ impl GeneratedFluidSettling {
         self.verification_queue.clear();
         self.verification_chunks.clear();
         self.verification_chunk_cursor = 0;
+        self.verification_revisions.clear();
         self.verification_active = false;
         self.verification_changed = false;
         self.active = false;
         self.converged = false;
     }
 
-    fn start_verification(&mut self) {
+    fn start_verification(&mut self, world: &VoxelWorld) {
         self.verification_queue.clear();
 
         self.verification_chunks.clear();
@@ -200,8 +202,21 @@ impl GeneratedFluidSettling {
             .sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
         self.verification_chunk_cursor = 0;
 
+        self.verification_revisions.clear();
+        for &coord in &self.verification_chunks {
+            if let Some(revision) = world.chunk_content_revision(coord) {
+                self.verification_revisions.insert(coord, revision);
+            }
+        }
+
         self.verification_active = true;
         self.verification_changed = false;
+    }
+
+    fn verification_inputs_changed(&self, world: &VoxelWorld) -> bool {
+        self.verification_revisions.iter().any(|(coord, revision)| {
+            world.chunk_content_revision(*coord) != Some(*revision)
+        })
     }
 
     fn evaluate_position(
