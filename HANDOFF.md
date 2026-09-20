@@ -5330,3 +5330,15 @@ Correção:
 - runtime passa a ter uma única path de bootstrap lighting: `enqueue_initial_chunk_lighting()` + `process_pending_lighting()`;
 - nenhum lint suppression foi adicionado;
 - `VERSION` permanece `0.35.6`.
+
+
+### Terceira correção de integração CI do checkpoint 151
+
+Após remover a runtime API síncrona, `relax` permaneceu importado no build normal embora só seja usado pelo helper `#[cfg(test)]`.
+
+Correção:
+
+- `relax_budgeted` permanece no import runtime;
+- `relax` agora é importado apenas sob `#[cfg(test)]`;
+- runtime continua sem path de lighting inicial não-budgeted;
+- `VERSION` permanece `0.35.6`.

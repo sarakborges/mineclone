@@ -18,9 +18,11 @@ use crate::content::{
 use self::{
     context::LightingContext,
     medium::{block_emission_for_cell, medium_dampening_for_cells},
-    propagation::{LightingRegistries, relax, relax_budgeted},
+    propagation::{LightingRegistries, relax_budgeted},
     queue::LightingQueue,
 };
+#[cfg(test)]
+use self::propagation::relax;
 use super::{
     cell::VoxelCell,
     chunk::CHUNK_SIZE,
