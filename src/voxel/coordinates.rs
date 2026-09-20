@@ -45,6 +45,38 @@ pub(crate) fn chunks_for_block_extent(extent: i32) -> i32 {
     extent.saturating_add(chunk_size - 1) / chunk_size
 }
 
+pub(crate) fn visit_chunk_coords_whose_voxel_halo_contains(
+    world_position: IVec3,
+    mut visit: impl FnMut(IVec3),
+) {
+    let (center, local) = split_world_position(world_position);
+    let (x_offsets, x_len) = halo_axis_offsets(local.x);
+    let (y_offsets, y_len) = halo_axis_offsets(local.y);
+    let (z_offsets, z_len) = halo_axis_offsets(local.z);
+
+    for &y in &y_offsets[..y_len] {
+        for &z in &z_offsets[..z_len] {
+            for &x in &x_offsets[..x_len] {
+                let coord = center + IVec3::new(x, y, z);
+                if coord.y >= 0 {
+                    visit(coord);
+                }
+            }
+        }
+    }
+}
+
+fn halo_axis_offsets(local: i32) -> ([i32; 2], usize) {
+    let last = CHUNK_SIZE as i32 - 1;
+    if local == 0 {
+        ([-1, 0], 2)
+    } else if local == last {
+        ([0, 1], 2)
+    } else {
+        ([0, 0], 1)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -65,6 +97,34 @@ mod tests {
             chunk_coord_from_position(Vec3::new(-0.1, 16.0, -16.1)),
             IVec3::new(-1, 1, -2),
         );
+    }
+
+    #[test]
+    fn voxel_halo_visits_only_chunks_whose_one_voxel_shell_contains_position() {
+        let interior = IVec3::new(4, 20, 6);
+        let mut interior_chunks = Vec::new();
+        visit_chunk_coords_whose_voxel_halo_contains(interior, |coord| {
+            interior_chunks.push(coord)
+        });
+        assert_eq!(interior_chunks, vec![IVec3::new(0, 1, 0)]);
+
+        let corner = IVec3::new(15, 31, 15);
+        let mut corner_chunks = Vec::new();
+        visit_chunk_coords_whose_voxel_halo_contains(corner, |coord| {
+            corner_chunks.push(coord)
+        });
+        corner_chunks.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
+
+        let mut expected = Vec::new();
+        for y in [1, 2] {
+            for z in [0, 1] {
+                for x in [0, 1] {
+                    expected.push(IVec3::new(x, y, z));
+                }
+            }
+        }
+        expected.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
+        assert_eq!(corner_chunks, expected);
     }
 
     #[test]

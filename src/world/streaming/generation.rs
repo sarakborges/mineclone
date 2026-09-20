@@ -6,9 +6,8 @@ use bevy::{
 };
 
 use crate::{
-    voxel::{
-        coordinates::chunk_coord_from_world,
-        neighbors::CARDINAL_NEIGHBORS,
+    voxel::coordinates::{
+        chunk_coord_from_world, visit_chunk_coords_whose_voxel_halo_contains,
     },
     world::{
         chunk_generation_tasks::MAX_GENERATION_TASKS_IN_FLIGHT,
@@ -181,13 +180,13 @@ fn reconcile_existing_fluid_changes(
         queues.lighting.enqueue_medium_edit(position);
         let coord = chunk_coord_from_world(position);
         changed_chunks.insert(coord);
-        queues.remesh.enqueue_fluid_priority(coord);
-        for offset in CARDINAL_NEIGHBORS {
-            let neighbor = coord + offset;
-            if neighbor.y >= 0 {
-                queues.remesh.enqueue_fluid(neighbor);
+        visit_chunk_coords_whose_voxel_halo_contains(position, |affected| {
+            if affected == coord {
+                queues.remesh.enqueue_fluid_priority(affected);
+            } else {
+                queues.remesh.enqueue_fluid(affected);
             }
-        }
+        });
     }
 
     let mut changed_chunks = changed_chunks.into_iter().collect::<Vec<_>>();
