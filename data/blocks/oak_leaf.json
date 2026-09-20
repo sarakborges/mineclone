@@ -14,5 +14,5 @@
   "rotateTexture": { "top": false, "bottom": false, "left": false, "right": false, "front": false, "back": false },
   "alphaCutoff": 0.5,
   "lightDampening": 1,
-  "castsShadow": true
+  "castsShadow": false
 }
