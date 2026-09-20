@@ -212,6 +212,7 @@ Asteria targets stable 60 FPS and world streaming must protect frame time.
 - Prefer change-driven updates and caches for UI/model/material refreshes.
 - Rebuild only the smallest stable UI/render subtree whose authoritative inputs changed; preserve unaffected roots, controls, slots, and materials.
 - Derived metadata from loaded definitions belongs to the owning definition or registry. Precompute immutable voxel expansions, bounds, capability flags, sorted lookup lists, and similar summaries during load/insert instead of rescanning or reparsing definitions in generation, rendering, or UI hot paths.
+- In dense voxel-generation loops, column-invariant authored-feature state belongs outside the inner Y loop. Biome/rule lookup, authored fluid ID resolution, terrain-strength-derived levels, deterministic spill noise, and similar per-column work should be resolved once and reduced to a compact column state before iterating voxels. Skip that precompute entirely when the chunk's vertical range cannot intersect the authored feature.
 - If definitions may replace an existing ID, rebuild derived metadata from authoritative definitions so cached summaries remain exact rather than monotonic or stale.
 - Avoid broad neighbor remeshes when a boundary/content test can determine whether work is necessary.
 - Do not trade away correctness of authoritative world data to hide a performance problem. Move or stage expensive work instead.

@@ -29,6 +29,33 @@ pub(super) struct FluidPassContext<'a> {
     pub(super) underground_water_fluid: &'a str,
 }
 
+#[derive(Clone, Copy)]
+struct AuthoredSurfaceFluidColumn {
+    fluid_id: FluidId,
+    surface_height: i32,
+    crater_level: Option<f32>,
+    spill_level: Option<u8>,
+}
+
+impl AuthoredSurfaceFluidColumn {
+    fn fluid_at(self, world_y: i32) -> Option<FluidCell> {
+        if world_y >= self.surface_height
+            && let Some(crater_level) = self.crater_level
+            && let Some(level) = fluid_level_for_surface(crater_level, world_y)
+        {
+            return Some(FluidCell::source(self.fluid_id, level));
+        }
+
+        if world_y == self.surface_height
+            && let Some(spill_level) = self.spill_level
+        {
+            return Some(FluidCell::source(self.fluid_id, spill_level));
+        }
+
+        None
+    }
+}
+
 pub(super) fn rasterize_fluid_pass(
     chunk: &mut VoxelChunk,
     chunk_origin: IVec3,
@@ -68,6 +95,10 @@ pub(super) fn rasterize_fluid_pass(
                         panic!("hydrology references missing fluid: {}", water.fluid_id)
                     })
                 });
+                let maximum_world_y = chunk_origin.y + CHUNK_SIZE as i32 - 1;
+                let authored_surface_fluid = (maximum_world_y >= column.surface_height)
+                    .then(|| authored_surface_fluid_column(horizontal, column, pass))
+                    .flatten();
 
                 for local_y in 0..CHUNK_SIZE {
                     if density[voxel_index(local_x, local_y, local_z)] > 0.0 {
@@ -76,7 +107,7 @@ pub(super) fn rasterize_fluid_pass(
 
                     let world_y = chunk_origin.y + local_y as i32;
                     if let Some(authored) =
-                        authored_surface_fluid_at(horizontal, world_y, column, pass)
+                        authored_surface_fluid.and_then(|column| column.fluid_at(world_y))
                     {
                         chunk.set_fluid(local_x, local_y, local_z, Some(authored));
                         continue;
@@ -126,12 +157,11 @@ pub(super) fn rasterize_fluid_pass(
     });
 }
 
-fn authored_surface_fluid_at(
+fn authored_surface_fluid_column(
     horizontal: Vec2,
-    world_y: i32,
     column: &GenerationColumnSample,
     pass: &FluidPassContext<'_>,
-) -> Option<FluidCell> {
+) -> Option<AuthoredSurfaceFluidColumn> {
     let biome_id = pass
         .biome_field
         .surface_biome_id(column.identity_surface_index);
@@ -163,33 +193,33 @@ fn authored_surface_fluid_at(
             else {
                 unreachable!("validated volcano crater surface fluid requires volcano terrain");
             };
+
             let fluid_id = resolve_authored_fluid_id(pass.fluids, fluid, biome_id);
             let strength = column.primary_terrain_strength.clamp(0.0, 1.0);
             let crater_level =
                 pass.sea_level as f32 + base_height + height - crater_depth + level_offset;
-
-            if strength >= *minimum_strength
-                && world_y >= column.surface_height
-                && let Some(level) = fluid_level_for_surface(crater_level, world_y)
-            {
-                return Some(FluidCell::source(fluid_id, level));
-            }
-
-            if strength >= *spill_minimum_strength
+            let crater_level = (strength >= *minimum_strength
+                && crater_level > column.surface_height as f32)
+                .then_some(crater_level);
+            let spill_level = (strength >= *spill_minimum_strength
                 && strength <= *spill_maximum_strength
-                && world_y == column.surface_height
                 && volcano_spill_channel(
                     horizontal,
                     *spill_scale,
                     *spill_width,
                     pass.biome_field.seed(),
                     biome_id,
-                )
-            {
-                return Some(FluidCell::source(fluid_id, *spill_level));
-            }
+                ))
+            .then_some(*spill_level);
 
-            None
+            (crater_level.is_some() || spill_level.is_some()).then_some(
+                AuthoredSurfaceFluidColumn {
+                    fluid_id,
+                    surface_height: column.surface_height,
+                    crater_level,
+                    spill_level,
+                },
+            )
         }
     }
 }

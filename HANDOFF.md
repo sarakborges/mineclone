@@ -5658,3 +5658,79 @@ O nested loop recebe/reusa esses valores.
 - `VERSION`: **0.35.9 → 0.35.10**.
 - CI pendente.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 155
+
+- Push CI `35530702521`: **success**.
+- PR CI `35530704811`: **success**.
+- O topo `5a56f2bc86f0520d320433a6490601579c960225` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.35.10`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 156 — 2026-09-20: authored surface fluids pré-computados por coluna [CÓDIGO APLICADO; CI PENDENTE]
+
+### Hot path
+
+`rasterize_fluid_pass()` percorre 16×16 colunas e até 16 voxels Y por chunk.
+
+Antes, para cada voxel vazio da coluna, `authored_surface_fluid_at()` repetia:
+
+- surface-biome lookup;
+- biome registry lookup;
+- surface-fluid rule match;
+- volcano terrain destructuring;
+- authored fluid ID lookup;
+- terrain-strength clamp;
+- crater level arithmetic;
+- world-seed + biome-ID hashing;
+- `fractal_noise_2d(..., 3)` para decidir spill channel.
+
+Esses valores não mudam com `world_y`.
+
+### Implementação
+
+Novo `AuthoredSurfaceFluidColumn` é um valor local/derivado da coluna, não estado persistente nem cache global.
+
+Uma vez por coluna potencialmente intersectada:
+
+- resolve biome/rule/fluid;
+- calcula strength;
+- calcula crater level aplicável;
+- calcula o spill/noise uma única vez;
+- guarda apenas `fluid_id`, `surface_height`, optional crater level e optional spill level.
+
+O loop Y chama apenas `fluid_at(world_y)`, que preserva a precedência:
+
+1. crater fluid;
+2. spill fluid;
+3. nenhum authored surface fluid.
+
+### Vertical early-out
+
+Se o topo do chunk está abaixo de `column.surface_height`, authored surface fluid não pode aparecer nesse chunk.
+
+Nesse caso o precompute inteiro é pulado, incluindo biome lookup e noise.
+
+### Performance
+
+No pior caso superficial, trabalho caro authored passa de até 16 vezes por coluna para 1 vez por coluna.
+
+Em chunks inteiramente subterrâneos, passa para zero.
+
+Não foi criado cache, revision tracking ou estado duplicado.
+
+### Semântica preservada
+
+- crater exige strength mínimo;
+- crater só existe em/above surface;
+- spill continua restrito exatamente ao surface voxel;
+- same deterministic spill seed/noise;
+- crater continua vencendo spill quando ambos se aplicam;
+- hydrology e underground cave water paths não mudaram.
+
+### Versionamento
+
+- `VERSION`: **0.35.10 → 0.35.11**.
+- CI pendente.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
