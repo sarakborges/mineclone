@@ -3069,3 +3069,75 @@ Continuar exatamente daqui, sem refazer a investigação:
    - não reserializar todos os chunks persistentes a cada autosave.
 5. Só depois fechar o bloco com bump de versão apropriado e QA de roundtrip.
 
+
+
+## Checkpoint 119 — 2026-09-20: save somente ao sair + fechamento da janela durável [CÓDIGO APLICADO; CI PENDENTE]
+
+### Pedido / direção
+
+O usuário decidiu remover autosave completamente. A partir deste checkpoint, Asteria só pode publicar save durável quando o jogador:
+
+- usa **Leave World**;
+- usa **Exit Game** dentro de um mundo;
+- fecha a janela pelo botão do sistema operacional enquanto existe um mundo ativo.
+
+Não deve existir gravação periódica de world snapshot nem checkpoint periódico separado de relógio durante Gameplay.
+
+### Implementação
+
+Commit funcional:
+
+- `667c284d7465c7c925f2aab8bf55a1bbdfb2e19e` — `refactor: save worlds only on exit`.
+
+Mudanças principais:
+
+- `WorldSession` deixou de carregar:
+  - timer de autosave;
+  - baseline/dirty-state de autosave;
+  - task assíncrona;
+  - último estado salvo.
+- `autosave_world`, `SavedWorldState`, `OwnedWorldSaveCapture` e o caminho de `AsyncComputeTaskPool` para autosave foram removidos.
+- `src/world/clock_persistence.rs` foi removido integralmente.
+  - não há mais `clock-*.json`;
+  - não há mais `fsync` periódico em `Last`;
+  - day/tick continuam persistindo no `WorldSnapshot` final.
+- `WorldPlugin` não agenda mais autosave nem clock checkpoint.
+- `WindowPlugin.close_when_requested = false` para impedir o fechamento automático antes do save.
+- Um `WindowCloseRequested` em Gameplay:
+  - executa o mesmo commit síncrono/durável usado por Leave/Exit;
+  - só envia `AppExit::Success` depois de sucesso;
+  - em erro, consome o pedido e mantém a janela/mundo aberto para retry.
+- Em menus/loading, fechar a janela continua saindo imediatamente porque não existe snapshot de mundo ativo a publicar.
+- `WorldSession::persist` agora é somente a operação final síncrona de captura + publicação; não mantém baseline de autosave depois do commit.
+
+### Contrato arquitetural
+
+`ARCHITECTURE.md` foi atualizado no mesmo commit:
+
+- Gameplay não executa periodic autosave;
+- não existe clock-only checkpoint;
+- durable writes de mundo pertencem apenas ao lifecycle de saída;
+- falha de save impede abandonar o mundo/janela;
+- `WorldSnapshot` é o único owner durável de day/tick;
+- background periodic publication não pode reaparecer sem decisão explícita de produto/arquitetura.
+
+### Versionamento
+
+- `VERSION`: **0.34.7 → 0.34.8**.
+- `Cargo.toml` permanece deliberadamente em `0.10.16`.
+
+### Validação
+
+Neste ponto do handoff:
+
+- commit aplicado em `develop`;
+- CI ainda não verificada;
+- não executei `cargo test`, `cargo run` nem QA Windows.
+
+### Próximo passo
+
+Seguir a auditoria de performance pela prioridade já definida:
+
+1. remover o scan global por-frame de `dormant_scheduled` nos fluidos e reativar trabalho por evento de chunk carregado;
+2. depois otimizar o custo de seed/frontier/lighting no integration path;
+3. manter este handoff atualizado a cada bloco antes de avançar.
