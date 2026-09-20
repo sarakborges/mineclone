@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use smallvec::SmallVec;
 
 use crate::{
     content::biome::{BiomeClimate, BiomeClimateRange, BiomeVerticalRange},
@@ -15,6 +16,30 @@ use super::{
 const PROXIMITY_SITE_RADIUS: i32 = 1;
 const PROXIMITY_NEIGHBOR_COUNT: usize =
     ((PROXIMITY_SITE_RADIUS * 2 + 1) * (PROXIMITY_SITE_RADIUS * 2 + 1) - 1) as usize;
+
+const INLINE_WEIGHTED_BIOME_CANDIDATES: usize = 16;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct WeightedCandidate {
+    index: usize,
+    climate_weight: f32,
+    fallback_weight: f32,
+}
+
+#[derive(Clone, Copy)]
+enum WeightedDraw {
+    Climate,
+    Fallback,
+}
+
+impl WeightedCandidate {
+    fn weight(self, draw: WeightedDraw) -> f32 {
+        match draw {
+            WeightedDraw::Climate => self.climate_weight,
+            WeightedDraw::Fallback => self.fallback_weight,
+        }
+    }
+}
 
 struct SurfaceAdjacencyContext<'a> {
     cell: IVec2,
@@ -103,7 +128,8 @@ impl BiomeField {
         hash: u64,
         predicate: impl Fn(&BiomeFieldEntry) -> bool,
     ) -> Option<usize> {
-        let mut weighted = Vec::with_capacity(self.surface_biomes.len());
+        let mut weighted =
+            SmallVec::<[WeightedCandidate; INLINE_WEIGHTED_BIOME_CANDIDATES]>::new();
         for (index, biome) in self.surface_biomes.iter().enumerate() {
             if !predicate(biome) || biome.weight <= f32::EPSILON {
                 continue;
@@ -122,33 +148,24 @@ impl BiomeField {
                 continue;
             }
 
-            weighted.push((
+            let fallback_weight = biome.weight * distribution;
+            weighted.push(WeightedCandidate {
                 index,
-                biome.weight * distribution * climate_suitability(biome.climate, climate),
-            ));
+                climate_weight: fallback_weight * climate_suitability(biome.climate, climate),
+                fallback_weight,
+            });
         }
 
         if weighted.is_empty() {
             return None;
         }
-        if let Some(index) = pick_weighted(&weighted, hash.rotate_left(17)) {
+        if let Some(index) =
+            pick_weighted(&weighted, hash.rotate_left(17), WeightedDraw::Climate)
+        {
             return Some(index);
         }
 
-        for (index, weight) in &mut weighted {
-            let biome = &self.surface_biomes[*index];
-            let distribution = biome
-                .distributions
-                .iter()
-                .copied()
-                .map(|distribution| {
-                    distribution_strength(distribution, site, self.seed, biome.id.as_str())
-                })
-                .fold(0.0_f32, f32::max)
-                .clamp(0.0, 1.0);
-            *weight = biome.weight * distribution;
-        }
-        pick_weighted(&weighted, hash.rotate_left(29))
+        pick_weighted(&weighted, hash.rotate_left(29), WeightedDraw::Fallback)
     }
 }
 
@@ -268,44 +285,52 @@ fn select_weighted_biome_index(
     hash: u64,
     predicate: impl Fn(&BiomeFieldEntry) -> bool,
 ) -> Option<usize> {
-    // Reuse one allocation for the climate-weighted draw and the raw-weight
-    // fallback. The prior pipeline collected eligible indices, climate pairs,
-    // and fallback pairs into three separate vectors per selection.
-    let mut weighted = Vec::with_capacity(biomes.len());
+    let mut weighted =
+        SmallVec::<[WeightedCandidate; INLINE_WEIGHTED_BIOME_CANDIDATES]>::new();
     for (index, biome) in biomes.iter().enumerate() {
         if predicate(biome) && biome.weight > f32::EPSILON {
-            weighted.push((index, biome.weight * climate_suitability(biome.climate, climate)));
+            weighted.push(WeightedCandidate {
+                index,
+                climate_weight: biome.weight * climate_suitability(biome.climate, climate),
+                fallback_weight: biome.weight,
+            });
         }
     }
 
     if weighted.is_empty() {
         return None;
     }
-    if let Some(index) = pick_weighted(&weighted, hash.rotate_left(17)) {
+    if let Some(index) =
+        pick_weighted(&weighted, hash.rotate_left(17), WeightedDraw::Climate)
+    {
         return Some(index);
     }
 
-    for (index, weight) in &mut weighted {
-        *weight = biomes[*index].weight;
-    }
-    pick_weighted(&weighted, hash.rotate_left(29))
+    pick_weighted(&weighted, hash.rotate_left(29), WeightedDraw::Fallback)
 }
 
-fn pick_weighted(weighted: &[(usize, f32)], hash: u64) -> Option<usize> {
-    let total_weight: f32 = weighted.iter().map(|(_, weight)| *weight).sum();
+fn pick_weighted(
+    weighted: &[WeightedCandidate],
+    hash: u64,
+    draw: WeightedDraw,
+) -> Option<usize> {
+    let total_weight: f32 = weighted
+        .iter()
+        .map(|candidate| candidate.weight(draw))
+        .sum();
     if total_weight <= f32::EPSILON {
         return None;
     }
 
     let mut selector = hash_unit(hash) * total_weight;
-    for (index, weight) in weighted {
-        selector -= *weight;
+    for candidate in weighted {
+        selector -= candidate.weight(draw);
         if selector <= 0.0 {
-            return Some(*index);
+            return Some(candidate.index);
         }
     }
 
-    weighted.last().map(|(index, _)| *index)
+    weighted.last().map(|candidate| candidate.index)
 }
 
 fn climate_suitability(profile: BiomeClimate, climate: MacroClimateSample) -> f32 {
@@ -386,18 +411,33 @@ mod tests {
     }
 
     #[test]
-    fn weighted_fallback_keeps_input_order_after_reusing_climate_storage() {
-        let mut weighted = vec![(4, 0.0), (2, 0.0), (7, 0.0)];
-        assert_eq!(pick_weighted(&weighted, 42), None);
-        for (index, weight) in &mut weighted {
-            *weight = match *index {
-                4 => 1.0,
-                2 => 2.0,
-                7 => 3.0,
-                _ => unreachable!(),
-            };
-        }
-        assert_eq!(weighted, vec![(4, 1.0), (2, 2.0), (7, 3.0)]);
-        assert!(matches!(pick_weighted(&weighted, 42), Some(4 | 2 | 7)));
+    fn weighted_fallback_keeps_candidate_order_without_recomputing_primary_inputs() {
+        let weighted = [
+            WeightedCandidate {
+                index: 4,
+                climate_weight: 0.0,
+                fallback_weight: 1.0,
+            },
+            WeightedCandidate {
+                index: 2,
+                climate_weight: 0.0,
+                fallback_weight: 2.0,
+            },
+            WeightedCandidate {
+                index: 7,
+                climate_weight: 0.0,
+                fallback_weight: 3.0,
+            },
+        ];
+
+        assert_eq!(
+            pick_weighted(&weighted, 42, WeightedDraw::Climate),
+            None
+        );
+        assert!(matches!(
+            pick_weighted(&weighted, 42, WeightedDraw::Fallback),
+            Some(4 | 2 | 7)
+        ));
     }
+
 }

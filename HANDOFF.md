@@ -5734,3 +5734,59 @@ Não foi criado cache, revision tracking ou estado duplicado.
 - `VERSION`: **0.35.10 → 0.35.11**.
 - CI pendente.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 156
+
+- Push CI `35530849830`: **success**.
+- PR CI `35530853126`: **success**.
+- O topo `2b3650a8cc907f12ca440c2a1f90482e45d21060` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.35.11`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 157 — 2026-09-20: weighted biome fallback reutiliza pesos calculados [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+Surface-biome selection calculava `distribution_strength` para cada candidato no draw climático e, quando todos os pesos climáticos zeravam, recalculava as mesmas distributions/noise novamente para o fallback raw-weight.
+
+Surface e volume selection também criavam um `Vec` heap por cache miss/site.
+
+### Implementação
+
+Novo `WeightedCandidate` representa o invariant compartilhado:
+
+- index;
+- climate weight;
+- fallback weight.
+
+`WeightedDraw::{Climate, Fallback}` torna explícito qual peso participa de cada sorteio.
+
+Surface selection calcula `distribution_strength` uma única vez e deriva ambos os pesos desse resultado.
+
+Volume selection usa a mesma representação com authored weight como fallback.
+
+Os candidates usam `SmallVec<[WeightedCandidate; 16]>`:
+
+- até 16 candidatos ficam inline;
+- content packs maiores mantêm comportamento correto via heap fallback.
+
+### Semântica preservada
+
+- candidate order não mudou;
+- climate draw continua em `hash.rotate_left(17)`;
+- fallback continua em `hash.rotate_left(29)`;
+- eligibility/distribution/climate math não mudou;
+- nenhuma cache/revision state foi introduzida.
+
+### Performance
+
+- remove segunda avaliação de distribution/noise no fallback de surface biomes;
+- remove heap allocation no caso comum de até 16 candidatos;
+- otimização permanece no owner de biome selection.
+
+### Versionamento
+
+- `VERSION`: **0.35.11 → 0.35.12**.
+- CI pendente.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
