@@ -366,6 +366,7 @@ impl StructureDefinition {
 #[derive(Clone, Resource, Default)]
 pub struct StructureRegistry {
     definitions: DefinitionMap<StructureDefinition>,
+    groups: HashMap<String, Vec<String>>,
 }
 
 impl StructureRegistry {
@@ -373,6 +374,7 @@ impl StructureRegistry {
         definition.validate_layout();
         definition.rebuild_runtime();
         self.definitions.insert(definition.id.clone(), definition);
+        self.rebuild_group_index();
     }
 
     pub fn get(&self, id: &str) -> Option<&StructureDefinition> {
@@ -384,11 +386,7 @@ impl StructureRegistry {
     }
 
     pub(crate) fn resolves_reference(&self, reference: &str) -> bool {
-        self.get(reference).is_some()
-            || self
-                .definitions
-                .values()
-                .any(|structure| group_reference_matches(structure, reference))
+        self.get(reference).is_some() || self.groups.contains_key(reference)
     }
 
     pub(crate) fn reference_contains_structure(
@@ -398,29 +396,9 @@ impl StructureRegistry {
     ) -> bool {
         self.get(reference).is_some_and(|structure| structure.id == structure_id)
             || self
-                .definitions
-                .values()
-                .any(|structure| {
-                    structure.id == structure_id
-                        && group_reference_matches(structure, reference)
-                })
-    }
-
-    pub(crate) fn members_for_reference(
-        &self,
-        reference: &str,
-    ) -> Vec<&StructureDefinition> {
-        if let Some(structure) = self.get(reference) {
-            return vec![structure];
-        }
-
-        let mut members = self
-            .definitions
-            .values()
-            .filter(|structure| group_reference_matches(structure, reference))
-            .collect::<Vec<_>>();
-        members.sort_by(|left, right| left.id.cmp(&right.id));
-        members
+                .groups
+                .get(reference)
+                .is_some_and(|members| members.iter().any(|member| member == structure_id))
     }
 
     pub(crate) fn select_for_reference(
@@ -428,22 +406,32 @@ impl StructureRegistry {
         reference: &str,
         hash: u64,
     ) -> Option<&StructureDefinition> {
-        let members = self.members_for_reference(reference);
-        if members.is_empty() {
-            None
-        } else {
-            Some(members[(hash as usize) % members.len()])
+        if let Some(structure) = self.get(reference) {
+            return Some(structure);
         }
+
+        let members = self.groups.get(reference)?;
+        let id = &members[(hash as usize) % members.len()];
+        self.get(id)
     }
 
     pub(crate) fn bounds_for_reference(
         &self,
         reference: &str,
     ) -> Option<(IVec2, IVec2)> {
-        let members = self.members_for_reference(reference);
-        let first = *members.first()?;
+        if let Some(structure) = self.get(reference) {
+            return Some(structure.horizontal_bounds());
+        }
+
+        let members = self.groups.get(reference)?;
+        let first = self
+            .get(members.first()?)
+            .expect("group index references registered structures");
         let (mut minimum, mut maximum) = first.horizontal_bounds();
-        for structure in members.into_iter().skip(1) {
+        for id in members.iter().skip(1) {
+            let structure = self
+                .get(id)
+                .expect("group index references registered structures");
             let (candidate_minimum, candidate_maximum) = structure.horizontal_bounds();
             minimum = minimum.min(candidate_minimum);
             maximum = maximum.max(candidate_maximum);
@@ -452,26 +440,37 @@ impl StructureRegistry {
     }
 
     pub(crate) fn max_y_offset_for_reference(&self, reference: &str) -> Option<i32> {
-        self.members_for_reference(reference)
-            .into_iter()
-            .map(StructureDefinition::max_y_offset)
-            .max()
-    }
-}
+        if let Some(structure) = self.get(reference) {
+            return Some(structure.max_y_offset());
+        }
 
-fn group_reference_matches(structure: &StructureDefinition, reference: &str) -> bool {
-    let Some(group_id) = structure.group_id.as_deref() else {
-        return false;
-    };
-    if reference == group_id {
-        return true;
+        self.groups.get(reference)?.iter().map(|id| {
+            self.get(id)
+                .expect("group index references registered structures")
+                .max_y_offset()
+        }).max()
     }
 
-    let Some((reference_namespace, reference_group)) = reference.split_once(':') else {
-        return false;
-    };
-    let Some((structure_namespace, _)) = structure.id.split_once(':') else {
-        return false;
-    };
-    reference_namespace == structure_namespace && reference_group == group_id
+    fn rebuild_group_index(&mut self) {
+        self.groups.clear();
+        for structure in self.definitions.values() {
+            let Some(group_id) = structure.group_id.as_deref() else {
+                continue;
+            };
+            let reference = structure
+                .id
+                .split_once(':')
+                .map_or_else(
+                    || group_id.to_owned(),
+                    |(namespace, _)| format!("{namespace}:{group_id}"),
+                );
+            self.groups
+                .entry(reference)
+                .or_default()
+                .push(structure.id.clone());
+        }
+        for members in self.groups.values_mut() {
+            members.sort();
+        }
+    }
 }
