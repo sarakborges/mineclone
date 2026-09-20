@@ -68,7 +68,6 @@ pub(super) fn rasterize_structures(
                     chunk_origin,
                 },
                 candidate.structure,
-                candidate.structure.voxels(),
                 IVec3::new(candidate.anchor.x, candidate.origin_y, candidate.anchor.y),
             );
         }
@@ -391,76 +390,109 @@ fn rasterize_structure(
     claimed: &mut [bool],
     context: &StructureRasterizationContext<'_>,
     structure: &StructureDefinition,
-    voxels: &[StructureVoxel],
     origin: IVec3,
 ) {
-    let chunk_size = CHUNK_SIZE as i32;
-
     if structure.generation.fluid_policy == StructureFluidPolicy::Forbid
-        && voxels.iter().any(|voxel| {
-            let local = origin + voxel.offset - context.chunk_origin;
-            local.x >= 0
-                && local.y >= 0
-                && local.z >= 0
-                && local.x < chunk_size
-                && local.y < chunk_size
-                && local.z < chunk_size
-                && context.base_chunk.fluid_at(local.x, local.y, local.z).is_some()
-        })
+        && visit_structure_voxels_in_chunk(
+            structure,
+            origin,
+            context.chunk_origin,
+            |_, _, local| {
+                context
+                    .base_chunk
+                    .fluid_at(local.x, local.y, local.z)
+                    .is_some()
+            },
+        )
     {
         return;
     }
 
-    for voxel in voxels {
-        let world_position = origin + voxel.offset;
-        let local = world_position - context.chunk_origin;
-        if local.x < 0
-            || local.y < 0
-            || local.z < 0
-            || local.x >= chunk_size
-            || local.y >= chunk_size
-            || local.z >= chunk_size
-        {
-            continue;
-        }
-
-        let local_x = local.x as usize;
-        let local_y = local.y as usize;
-        let local_z = local.z as usize;
-        let index = local_x + local_z * CHUNK_SIZE + local_y * CHUNK_SIZE * CHUNK_SIZE;
-        let can_replace = match structure.generation.replace_policy {
-            StructureReplacePolicy::Any => true,
-            StructureReplacePolicy::AirOnly => {
-                !claimed[index] && context.base_chunk.cell_at(local.x, local.y, local.z).is_none()
+    visit_structure_voxels_in_chunk(
+        structure,
+        origin,
+        context.chunk_origin,
+        |voxel, world_position, local| {
+            let local_x = local.x as usize;
+            let local_y = local.y as usize;
+            let local_z = local.z as usize;
+            let index = local_x + local_z * CHUNK_SIZE + local_y * CHUNK_SIZE * CHUNK_SIZE;
+            let can_replace = match structure.generation.replace_policy {
+                StructureReplacePolicy::Any => true,
+                StructureReplacePolicy::AirOnly => {
+                    !claimed[index]
+                        && context
+                            .base_chunk
+                            .cell_at(local.x, local.y, local.z)
+                            .is_none()
+                }
+                StructureReplacePolicy::Terrain => !claimed[index],
+            };
+            if !can_replace {
+                return false;
             }
-            StructureReplacePolicy::Terrain => !claimed[index],
-        };
-        if !can_replace {
-            continue;
-        }
 
-        let block = context.blocks.get(voxel.block_id).unwrap_or_else(|| {
-            panic!(
-                "structure {} references missing block: {}",
-                structure.id, voxel.block_id
-            )
-        });
-        let texture_rotation =
-            TextureRotation::for_position(world_position, block.rotate_texture.any());
+            let block = context.blocks.get(voxel.block_id).unwrap_or_else(|| {
+                panic!(
+                    "structure {} references missing block: {}",
+                    structure.id, voxel.block_id
+                )
+            });
+            let texture_rotation =
+                TextureRotation::for_position(world_position, block.rotate_texture.any());
 
-        chunk.set_block(
-            local_x,
-            local_y,
-            local_z,
-            Some(VoxelCell::oriented(
-                voxel.block_id,
-                texture_rotation,
-                voxel.orientation,
-            )),
-        );
-        if structure.generation.fluid_policy == StructureFluidPolicy::Displace {
-            chunk.set_fluid(local_x, local_y, local_z, None);
+            chunk.set_block(
+                local_x,
+                local_y,
+                local_z,
+                Some(VoxelCell::oriented(
+                    voxel.block_id,
+                    texture_rotation,
+                    voxel.orientation,
+                )),
+            );
+            if structure.generation.fluid_policy == StructureFluidPolicy::Displace {
+                chunk.set_fluid(local_x, local_y, local_z, None);
+            }
+            claimed[index] = true;
+            false
+        },
+    );
+}
+
+fn visit_structure_voxels_in_chunk(
+    structure: &StructureDefinition,
+    origin: IVec3,
+    chunk_origin: IVec3,
+    mut visit: impl FnMut(&StructureVoxel, IVec3, IVec3) -> bool,
+) -> bool {
+    let chunk_size = CHUNK_SIZE as i32;
+    let origin_horizontal = origin.xz();
+    let chunk_horizontal = chunk_origin.xz();
+
+    for local_z in 0..chunk_size {
+        for local_x in 0..chunk_size {
+            let world_horizontal = chunk_horizontal + IVec2::new(local_x, local_z);
+            let structure_offset = world_horizontal - origin_horizontal;
+            for voxel in structure.column_voxels(structure_offset) {
+                let world_y = origin.y + voxel.offset.y;
+                let local_y = world_y - chunk_origin.y;
+                if local_y < 0 {
+                    continue;
+                }
+                if local_y >= chunk_size {
+                    break;
+                }
+
+                let local = IVec3::new(local_x, local_y, local_z);
+                let world_position =
+                    IVec3::new(world_horizontal.x, world_y, world_horizontal.y);
+                if visit(voxel, world_position, local) {
+                    return true;
+                }
+            }
         }
-        claimed[index] = true;
     }
+
+    false
 }
