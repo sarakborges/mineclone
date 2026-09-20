@@ -3234,3 +3234,14 @@ Correção aplicada sem suppression:
 - `WorldTickClock` agora compõe `ChunkStreamingWork`, junto do estado/runtime usado pela integração de chunks.
 - `stream_chunks` volta a 7 parâmetros e continua lendo um único `current_tick` por frame.
 - `VERSION` permanece `0.34.9`; esta é continuação do mesmo bloco de performance ainda em validação.
+
+
+### CI verde do bloco 0.34.9
+
+- Push CI `35510690984`: **success** no commit funcional `2e9e4e29bd487141481b27a7b33d60efdfd941da`.
+- Passou:
+  - auditoria de localizações;
+  - Clippy `--locked --all-targets --all-features -- -D warnings`;
+  - `cargo check --locked`.
+- PR CI equivalente ainda estava em execução no instante desta anotação, mas o pipeline de push validou o mesmo commit.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
