@@ -5479,3 +5479,22 @@ Os submódulos novos não vazam para o restante do HUD.
 - `VERSION`: **0.35.7 → 0.35.8**.
 - CI pendente.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### Correção de integração CI do checkpoint 153
+
+A primeira CI do inventory-layout split falhou porque três helpers reexportados pelo parent `layout` continuaram `pub(super)` dentro dos submódulos aninhados.
+
+Nesse nível, `pub(super)` permite acesso apenas ao próprio `layout`, mas `sync.rs` é sibling de `layout` dentro de `inventory`.
+
+Correção de visibilidade mínima:
+
+- `spawn_creative_catalog_rows`;
+- `spawn_cursor_icon`;
+- `spawn_inventory_item`;
+
+agora são `pub(in crate::hud::inventory)`.
+
+O parent continua reexportando as mesmas capabilities para `sync.rs`; nada foi aberto em `pub(crate)` nem para fora do owner `inventory`.
+
+Nenhum comportamento/layout mudou e `VERSION` permanece `0.35.8`.

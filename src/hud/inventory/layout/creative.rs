@@ -323,7 +323,7 @@ fn spawn_category_button(
         });
 }
 
-pub(super) fn spawn_creative_catalog_rows(
+pub(in crate::hud::inventory) fn spawn_creative_catalog_rows(
     parent: &mut ChildSpawnerCommands,
     categories: &InventoryCategoryRegistry,
     creative_view: &CreativeInventoryView,

@@ -9,7 +9,7 @@ use crate::hud::tool_icon::spawn_tool_icon;
 
 use super::{InventoryItemView, super::state::{InventoryCursorIcon, ITEM_ICON_SIZE}};
 
-pub(super) fn spawn_cursor_icon(
+pub(in crate::hud::inventory) fn spawn_cursor_icon(
     root: &mut ChildSpawnerCommands,
     item_id: &'static str,
     position: Vec2,
@@ -93,7 +93,7 @@ pub(super) fn spawn_cursor_icon(
     panic!("inventory cursor references missing item: {item_id}");
 }
 
-pub(super) fn spawn_inventory_item(
+pub(in crate::hud::inventory) fn spawn_inventory_item(
     slot: &mut ChildSpawnerCommands,
     item_id: &'static str,
     items: &mut InventoryItemView<'_>,
