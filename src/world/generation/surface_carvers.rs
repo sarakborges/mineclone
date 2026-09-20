@@ -451,15 +451,16 @@ fn surface_tunnel_margin_density_delta(
     let mut strongest_delta = 0.0_f32;
 
     for tunnel in tunnels {
-        let Some((horizontal_distance, path_y)) = tunnel
+        let Some((horizontal_distance_squared, path_y)) = tunnel
             .points
             .windows(2)
-            .map(|segment| horizontal_distance_to_segment(horizontal, segment[0], segment[1]))
+            .map(|segment| horizontal_distance_squared_to_segment(horizontal, segment[0], segment[1]))
             .min_by(|left, right| left.0.total_cmp(&right.0))
         else {
             continue;
         };
 
+        let horizontal_distance = horizontal_distance_squared.sqrt();
         let tunnel_top = path_y + tunnel.radius;
         let depth_to_tunnel = (surface_y - tunnel_top).max(0.0);
         if depth_to_tunnel >= TUNNEL_MOUTH_BLEND_DEPTH {
@@ -502,7 +503,11 @@ fn surface_tunnel_margin_density_delta(
     strongest_delta
 }
 
-fn horizontal_distance_to_segment(point: Vec2, start: Vec3, end: Vec3) -> (f32, f32) {
+fn horizontal_distance_squared_to_segment(
+    point: Vec2,
+    start: Vec3,
+    end: Vec3,
+) -> (f32, f32) {
     let start_horizontal = Vec2::new(start.x, start.z);
     let end_horizontal = Vec2::new(end.x, end.z);
     let segment = end_horizontal - start_horizontal;
@@ -515,7 +520,7 @@ fn horizontal_distance_to_segment(point: Vec2, start: Vec3, end: Vec3) -> (f32, 
     let closest = start_horizontal + segment * progress;
     let path_y = start.y + (end.y - start.y) * progress;
 
-    (point.distance(closest), path_y)
+    (point.distance_squared(closest), path_y)
 }
 
 fn tunnel_margin_strength(horizontal_distance: f32, core_radius: f32) -> f32 {

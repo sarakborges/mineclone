@@ -5790,3 +5790,48 @@ Os candidates usam `SmallVec<[WeightedCandidate; 16]>`:
 - `VERSION`: **0.35.11 → 0.35.12**.
 - CI pendente.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 157
+
+- Push CI `35531151486`: **success**.
+- PR CI `35531154271`: **success**.
+- O topo `c7e25cad743d80e1af33ffe1a36a86b40d92ef95` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.35.12`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 158 — 2026-09-20: tunnel-margin escolhe segmento por distância² [CÓDIGO APLICADO; CI PENDENTE]
+
+### Hot path
+
+`surface_tunnel_margin_density_delta()` procura, para cada túnel candidato, o segmento horizontal mais próximo do ponto da coluna.
+
+Antes, cada segmento chamava `point.distance(closest)`, executando uma raiz quadrada, e só depois `min_by` escolhia o menor.
+
+### Implementação
+
+O helper agora retorna `distance_squared` + `path_y`.
+
+- todos os segmentos são comparados por distância²;
+- como sqrt é monotônico, o vencedor é exatamente o mesmo;
+- somente depois de escolher o segmento mínimo é executado `.sqrt()` uma única vez;
+- o restante da margem usa a mesma distância linear de antes.
+
+### Semântica preservada
+
+- closest-point/projection math não mudou;
+- degenerate segment handling não mudou;
+- nearest-segment ordering é idêntico;
+- tunnel margin/core/exposure math recebe a mesma distância final.
+
+### Performance
+
+Passa de até uma sqrt por segmento do tunnel path para uma sqrt por túnel avaliado.
+
+Nenhum cache, allocation ou estado novo foi criado.
+
+### Versionamento
+
+- `VERSION`: **0.35.12 → 0.35.13**.
+- CI pendente.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
