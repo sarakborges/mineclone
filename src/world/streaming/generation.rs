@@ -240,18 +240,24 @@ fn reconcile_existing_fluid_changes(
         return;
     }
 
+    queues
+        .lighting
+        .enqueue_settling_medium_edits(changed_positions.iter().copied());
+
     let mut changed_chunks = HashSet::new();
+    let mut affected_fluid_meshes = HashSet::new();
     for &position in changed_positions {
-        queues.lighting.enqueue_medium_edit(position);
         let coord = chunk_coord_from_world(position);
         changed_chunks.insert(coord);
         visit_chunk_coords_whose_voxel_halo_contains(position, |affected| {
-            if affected == coord {
-                queues.remesh.enqueue_fluid_priority(affected);
-            } else {
-                queues.remesh.enqueue_fluid(affected);
-            }
+            affected_fluid_meshes.insert(affected);
         });
+    }
+
+    for affected in affected_fluid_meshes {
+        queues
+            .lighting
+            .defer_settling_fluid_remesh(affected, changed_chunks.contains(&affected));
     }
 
     let mut changed_chunks = changed_chunks.into_iter().collect::<Vec<_>>();
