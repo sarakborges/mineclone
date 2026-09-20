@@ -3222,3 +3222,15 @@ Correção aplicada:
 - `save_revision`, `bump_save_revision()` e `save_content_revision()` foram removidos, sem supressão de warning.
 - O bump permanece `VERSION 0.34.9` porque esta é correção de integração do mesmo bloco ainda não fechado/validado.
 - Nova CI deste topo ainda precisa ser confirmada antes do próximo bloco funcional.
+
+
+### Correção de integração adicional do checkpoint 120
+
+A CI subsequente expôs `clippy::too_many_arguments` em `stream_chunks`: adicionar `WorldTickClock` diretamente ao system elevou a assinatura para 8 parâmetros.
+
+Correção aplicada sem suppression:
+
+- `2e9e4e29bd487141481b27a7b33d60efdfd941da` — `fix: keep streaming clock in runtime context`.
+- `WorldTickClock` agora compõe `ChunkStreamingWork`, junto do estado/runtime usado pela integração de chunks.
+- `stream_chunks` volta a 7 parâmetros e continua lendo um único `current_tick` por frame.
+- `VERSION` permanece `0.34.9`; esta é continuação do mesmo bloco de performance ainda em validação.
