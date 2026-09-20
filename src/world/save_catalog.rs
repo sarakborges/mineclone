@@ -1,17 +1,15 @@
+mod locking;
+
 use std::{
     collections::{HashMap, HashSet},
     fs::{self, OpenOptions},
     io::{self, Write},
     path::{Path, PathBuf},
-    sync::{
-        Arc, Condvar, Mutex, OnceLock,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
-    },
     thread,
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use bevy::{log::warn, prelude::Resource};
+use bevy::log::warn;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -25,6 +23,9 @@ use crate::{
     voxel::{chunk_disk::DiskChunk, world::VoxelWorld},
 };
 
+use self::locking::{ReadLease, acquire_world_directory_lock, world_lock};
+pub(crate) use self::locking::WorldDirectoryLock;
+
 use super::{
     fluid_updates::{PendingFluidUpdates, SavedFluidUpdates},
     new_world::{
@@ -37,48 +38,10 @@ use super::{
 const SAVE_FORMAT_VERSION: u32 = 1;
 const MAX_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
 const RETAINED_GENERATIONS: usize = 4;
-const SESSION_LOCK_FILE: &str = "session.lock";
 
 fn default_saved_biome_size_multiplier() -> f32 {
     DEFAULT_BIOME_SIZE_MULTIPLIER
 }
-static WORLD_LOCKS: OnceLock<Mutex<HashMap<String, Arc<WorldGate>>>> = OnceLock::new();
-
-#[derive(Resource)]
-pub(crate) struct WorldDirectoryLock { _file: fs::File }
-
-fn acquire_world_directory_lock(directory: &Path) -> io::Result<WorldDirectoryLock> {
-    let path = directory.join(SESSION_LOCK_FILE);
-    if let Ok(metadata) = fs::symlink_metadata(&path)
-        && (!metadata.file_type().is_file() || metadata.file_type().is_symlink())
-    { return Err(invalid_data("world session lock must be a regular file")); }
-    let file = OpenOptions::new().read(true).write(true).create(true).truncate(false).open(&path)?;
-    if !file.metadata()?.is_file() { return Err(invalid_data("opened world session lock is not a regular file")); }
-    match file.try_lock() {
-        Ok(()) => Ok(WorldDirectoryLock { _file: file }),
-        Err(fs::TryLockError::WouldBlock) => Err(io::Error::new(io::ErrorKind::WouldBlock, "world is already open in another Asteria process")),
-        Err(fs::TryLockError::Error(error)) => Err(error),
-    }
-}
-
-#[derive(Default)]
-struct WorldGate {
-    write: Mutex<()>, readers: AtomicUsize, reader_signal: Mutex<()>,
-    readers_finished: Condvar, prune_running: AtomicBool,
-}
-fn world_lock(id: &str) -> io::Result<Arc<WorldGate>> {
-    let locks = WORLD_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut locks = locks.lock().map_err(|_| io::Error::other("world lock catalog poisoned"))?;
-    Ok(Arc::clone(locks.entry(id.to_owned()).or_insert_with(|| Arc::new(WorldGate::default()))))
-}
-struct ReadLease(Arc<WorldGate>);
-impl Drop for ReadLease {
-    fn drop(&mut self) {
-        let _signal = self.0.reader_signal.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        if self.0.readers.fetch_sub(1, Ordering::AcqRel) == 1 { self.0.readers_finished.notify_all(); }
-    }
-}
-
 #[derive(Clone, Copy)]
 pub(crate) struct SaveRegistries<'a> {
     pub(crate) blocks: &'a BlockRegistry, pub(crate) fluids: &'a FluidRegistry,
@@ -232,7 +195,7 @@ pub(crate) fn save_world(snapshot: &WorldSnapshot, registries: SaveRegistries<'_
 pub(crate) fn save_world_owned(snapshot: &WorldSnapshot, registries: PruneRegistries) -> io::Result<u64> {
     validate_world_name(&snapshot.id)?;
     let gate = world_lock(&snapshot.id)?;
-    let lock = gate.write.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+    let lock = gate.lock_write()?;
     if snapshot.format_version != SAVE_FORMAT_VERSION { return Err(invalid_data("unsupported snapshot format")); }
     registries.validate_playable(snapshot)?;
     let directory = Path::new(WORLDS_DIRECTORY).join(&snapshot.id);
@@ -263,20 +226,33 @@ pub(crate) fn save_world_owned(snapshot: &WorldSnapshot, registries: PruneRegist
     Ok(saved_at)
 }
 fn schedule_backup_prune(id: String, owned: PruneRegistries) {
-    let gate = match world_lock(&id) { Ok(gate) => gate, Err(error) => { warn!("World {id} was saved, but its cleanup lock is unavailable: {error}"); return; } };
-    if gate.prune_running.swap(true, Ordering::AcqRel) { return; }
-    let worker_gate = Arc::clone(&gate);
-    let spawned = thread::Builder::new().name("asteria-save-prune".to_owned()).spawn(move || {
-        struct ResetPruneFlag(Arc<WorldGate>); impl Drop for ResetPruneFlag { fn drop(&mut self) { self.0.prune_running.store(false, Ordering::Release); } }
-        let _reset = ResetPruneFlag(worker_gate); let directory = Path::new(WORLDS_DIRECTORY).join(&id);
-        if let Err(error) = prune_old_generations(&directory, &id, &owned) { warn!("World {id} was saved, but background backup cleanup failed: {error}"); }
-    });
-    if let Err(error) = spawned { gate.prune_running.store(false, Ordering::Release); warn!("World was saved, but backup cleanup thread could not start: {error}"); }
-}
+    let gate = match world_lock(&id) {
+        Ok(gate) => gate,
+        Err(error) => {
+            warn!("World {id} was saved, but its cleanup lock is unavailable: {error}");
+            return;
+        }
+    };
+    let Some(prune_lease) = gate.try_begin_prune() else {
+        return;
+    };
 
+    let spawned = thread::Builder::new()
+        .name("asteria-save-prune".to_owned())
+        .spawn(move || {
+            let _prune_lease = prune_lease;
+            let directory = Path::new(WORLDS_DIRECTORY).join(&id);
+            if let Err(error) = prune_old_generations(&directory, &id, &owned) {
+                warn!("World {id} was saved, but background backup cleanup failed: {error}");
+            }
+        });
+    if let Err(error) = spawned {
+        warn!("World was saved, but backup cleanup thread could not start: {error}");
+    }
+}
 pub(crate) fn delete_world(id: &str) -> io::Result<()> {
     validate_world_name(id)?; let gate = world_lock(id)?;
-    let _lock = gate.write.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+    let _lock = gate.lock_write()?;
     let directory = Path::new(WORLDS_DIRECTORY).join(id); let metadata = fs::symlink_metadata(&directory)?;
     if !metadata.file_type().is_dir() { return Err(invalid_data("world directory cannot be a symbolic link")); }
     let session_lock = acquire_world_directory_lock(&directory)?; fs::remove_dir_all(&directory)?; drop(session_lock); Ok(())
@@ -288,7 +264,7 @@ pub(crate) fn list_worlds() -> io::Result<Vec<WorldSummary>> {
         let entry = entry?; if !entry.file_type()?.is_dir() { continue; }
         let Some(id) = entry.file_name().to_str().map(str::to_owned) else { continue; };
         if validate_world_name(&id).is_err() { continue; }
-        let gate = world_lock(&id)?; let _lock = gate.write.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+        let gate = world_lock(&id)?; let _lock = gate.lock_write()?;
         if let Ok(manifest) = latest_complete_manifest(&entry.path(), &id) { worlds.push(WorldSummary { id, last_saved_unix_ms: manifest.last_saved_unix_ms }); }
     }
     worlds.sort_unstable_by(|a,b| b.last_saved_unix_ms.cmp(&a.last_saved_unix_ms).then_with(|| a.id.cmp(&b.id))); Ok(worlds)
@@ -306,13 +282,13 @@ struct SnapshotCandidates { directory: PathBuf, candidates: Vec<Candidate>, _lea
 fn snapshot_candidates(id: &str) -> io::Result<SnapshotCandidates> {
     validate_world_name(id)?; let gate = world_lock(id)?;
     let (directory, candidates, lease) = {
-        let _lock = gate.write.lock().map_err(|_| io::Error::other("world save lock poisoned"))?;
+        let _lock = gate.lock_write()?;
         let directory = Path::new(WORLDS_DIRECTORY).join(id);
         if !fs::symlink_metadata(&directory)?.file_type().is_dir() { return Err(invalid_data("world directory cannot be a symbolic link")); }
         let mut paths = manifest_paths(&directory)?; paths.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.0));
         let mut candidates = Vec::with_capacity(paths.len());
         for (generation,path) in paths { let Ok(manifest) = read_json::<WorldManifest>(&path) else { continue; }; if valid_manifest(&manifest,id,generation) { candidates.push(Candidate { generation, manifest }); } }
-        gate.readers.fetch_add(1, Ordering::AcqRel); (directory,candidates,ReadLease(Arc::clone(&gate)))
+        let lease = gate.pin_read(); (directory,candidates,lease)
     }; Ok(SnapshotCandidates { directory,candidates,_lease:lease })
 }
 fn newest_restorable_timestamp(id: &str, registries: &PruneRegistries) -> io::Result<u64> {
@@ -373,9 +349,7 @@ fn prune_old_generations(directory:&Path,id:&str,registries:&PruneRegistries)->i
             Err(error)=>warn!("Preserving older saves because world {id} generation {generation} is not restorable: {error}"),
         }
     }
-    let Some(cutoff)=cutoff else{return Ok(());}; let gate=world_lock(id)?; let mut write=gate.write.lock().map_err(|_|io::Error::other("world save lock poisoned"))?;
-    loop { if gate.readers.load(Ordering::Acquire)==0{break;} drop(write); let mut signal=gate.reader_signal.lock().map_err(|_|io::Error::other("reader wait lock poisoned"))?;
-        while gate.readers.load(Ordering::Acquire)!=0{signal=gate.readers_finished.wait(signal).map_err(|_|io::Error::other("reader wait lock poisoned"))?;} drop(signal); write=gate.write.lock().map_err(|_|io::Error::other("world save lock poisoned"))?; }
+    let Some(cutoff)=cutoff else{return Ok(());}; let gate=world_lock(id)?; let _write=gate.lock_after_readers()?;
     if !fs::symlink_metadata(directory)?.file_type().is_dir(){return Err(invalid_data("world directory cannot be a symbolic link"));}
     for (generation,path) in candidates {if generation>0&&generation<cutoff{fs::remove_file(path)?;}}
     for entry in fs::read_dir(directory)? {let entry=entry?;if !entry.file_type()?.is_file(){continue;}let Some(name)=entry.file_name().to_str().map(str::to_owned) else{continue;};let Some(generation)=parse_generation(&name,"snapshot-") else{continue;};if generation>0&&generation<cutoff{fs::remove_file(entry.path())?;}}

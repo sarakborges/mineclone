@@ -3623,3 +3623,53 @@ Correção aplicada sem suppression:
 - os helpers de 7/8 parâmetros foram removidos;
 - a chave de interning e a semântica dos materiais permanecem idênticas;
 - `VERSION` permanece `0.34.16`.
+
+
+### CI verde do checkpoint 127
+
+- Push CI `35511769135`: **success**.
+- PR CI `35511772132`: **success**.
+- O topo `b834d64921b0b5524776d8a70bcb6e05a6a342ee` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.16`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 128 — 2026-09-20: save-catalog locking encapsulado [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`save_catalog.rs` era owner simultâneo de schema, catálogo, publicação, recovery/pruning e também dos detalhes de concorrência: mutex de escrita, reader count, condvar, session file lock e prune flag. Os atomics/mutexes eram manipulados diretamente por vários caminhos do arquivo.
+
+### Implementação
+
+Novo `src/world/save_catalog/locking.rs` é o owner único do invariant de concorrência da persistência:
+
+- `WorldDirectoryLock` — lease do lock de sessão no filesystem;
+- `WorldGate` — gate in-process por world id;
+- `ReadLease` — reader pin liberado/notificado por RAII;
+- `PruneLease` — prune-running flag liberado por RAII;
+- `lock_write()`;
+- `pin_read()`;
+- `try_begin_prune()`;
+- `lock_after_readers()`;
+- `world_lock()`;
+- `acquire_world_directory_lock()`.
+
+`save_catalog.rs` agora usa essas capabilities e não toca diretamente em fields/atomics/condvar do gate.
+
+### Partial failure
+
+`PruneLease` substitui o antigo `ResetPruneFlag` local e também cobre falha de `thread::Builder::spawn`: se a closure capturada for descartada porque o spawn falhou, o lease é derrubado e o flag volta a false.
+
+### Semântica preservada
+
+- save/delete/list continuam serializados pelo per-world write gate;
+- snapshot candidates continuam pinando readers;
+- prune só entra na fase destrutiva quando todos os readers terminaram e mantém o write gate durante remoção;
+- o lock de sessão entre processos mantém a mesma política;
+- schema, formato, publication e recovery não mudaram.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` documenta `save_catalog::locking` como owner desse invariant.
+- `VERSION`: **0.34.16 → 0.34.17**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.

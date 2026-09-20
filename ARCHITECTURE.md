@@ -177,6 +177,7 @@ A module boundary should own meaningful semantics.
 - Remove modules/functions whose only purpose is forwarding to another generic helper.
 - Keep modules that define a domain lifecycle, invariant, data model, or substantial transformation even if their code is small.
 - Shared primitives should live at the lowest layer that understands their semantics. Do not move domain policy into generic utility modules.
+- Save-catalog concurrency belongs to `save_catalog::locking`: session file locks, per-world write gates, pinned read leases, prune leases, and reader-drain waiting are one persistence-locking invariant. Catalog/schema/publication code must use those capabilities rather than mutate mutexes or atomics directly.
 - Avoid circular ownership: UI reads gameplay state; gameplay should not depend on HUD implementation details. Rendering utilities may be reused by HUD/viewmodel/preview, but should not know those consumers.
 
 ## 11. Performance expectations
