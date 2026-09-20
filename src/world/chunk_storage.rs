@@ -48,13 +48,22 @@ impl ChunkDiskIdentity {
         self.0
     }
 
-    /// Stable relative path for one authoritative chunk. Signed X/Z are kept
-    /// explicit in the filename; Y is validated non-negative before this point.
+    /// Stable relative path for one authoritative chunk inside a generation.
+    /// Signed X/Z are explicit in the filename; Y was validated on creation.
     pub(crate) fn relative_path(self) -> PathBuf {
         Path::new(CHUNK_DIRECTORY).join(format!(
             "x{}_y{}_z{}.{}",
             self.0.x, self.0.y, self.0.z, CHUNK_FILE_EXTENSION
         ))
+    }
+
+    /// Generation-scoped path used while the catalog publishes an immutable
+    /// save generation. Keeping the generation above the canonical chunk path
+    /// lets a manifest switch generations atomically without overwriting files
+    /// still referenced by retained backups.
+    pub(crate) fn generation_relative_path(self, generation: u64) -> PathBuf {
+        Path::new(&format!("generation-{generation}"))
+            .join(self.relative_path())
     }
 }
 
@@ -83,6 +92,19 @@ mod tests {
         assert_eq!(
             identity.relative_path(),
             Path::new("chunks").join("x-12_y3_z45.json")
+        );
+    }
+
+    #[test]
+    fn generation_path_preserves_canonical_chunk_identity() {
+        let identity = ChunkDiskIdentity::new(IVec3::new(-12, 3, 45))
+            .expect("valid chunk coordinate");
+
+        assert_eq!(
+            identity.generation_relative_path(7),
+            Path::new("generation-7")
+                .join("chunks")
+                .join("x-12_y3_z45.json")
         );
     }
 
