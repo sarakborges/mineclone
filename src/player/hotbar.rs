@@ -81,13 +81,12 @@ impl PlayerHotbar {
             .collect()
     }
 
-    pub(crate) fn restore_items_and_selection(
-        &mut self,
+    pub(crate) fn from_saved_items_and_selection(
         items: &[Option<String>],
         selected_slot: usize,
         blocks: &BlockRegistry,
         tools: &ToolRegistry,
-    ) -> io::Result<()> {
+    ) -> io::Result<Self> {
         if items.len() != INVENTORY_SLOT_COUNT {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid inventory length"));
         }
@@ -97,9 +96,10 @@ impl PlayerHotbar {
                 "invalid selected hotbar slot",
             ));
         }
-        let mut restored = Vec::with_capacity(INVENTORY_SLOT_COUNT);
-        for item in items {
-            let item = match item {
+
+        let mut restored = Self::default();
+        for (index, item) in items.iter().enumerate() {
+            let resolved = match item {
                 None => None,
                 Some(id) if blocks.get(id).is_some() => Some(intern_block_id(id)),
                 Some(id) if tools.get(id).is_some() => Some(intern_tool_id(id)),
@@ -110,11 +110,30 @@ impl PlayerHotbar {
                     ));
                 }
             };
-            restored.push(item);
+
+            if index < BACKPACK_SLOT_COUNT {
+                restored.backpack[index] = resolved;
+            } else {
+                restored.slots[index - HOTBAR_INVENTORY_OFFSET] = resolved;
+            }
         }
-        self.backpack.copy_from_slice(&restored[..BACKPACK_SLOT_COUNT]);
-        self.slots.copy_from_slice(&restored[BACKPACK_SLOT_COUNT..]);
-        self.selected_slot = selected_slot;
+        restored.selected_slot = selected_slot;
+        Ok(restored)
+    }
+
+    pub(crate) fn restore_items_and_selection(
+        &mut self,
+        items: &[Option<String>],
+        selected_slot: usize,
+        blocks: &BlockRegistry,
+        tools: &ToolRegistry,
+    ) -> io::Result<()> {
+        *self = Self::from_saved_items_and_selection(
+            items,
+            selected_slot,
+            blocks,
+            tools,
+        )?;
         Ok(())
     }
 

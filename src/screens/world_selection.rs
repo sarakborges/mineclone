@@ -1,3 +1,4 @@
+mod activation;
 mod layout;
 mod tasks;
 
@@ -10,24 +11,23 @@ use crate::{
         day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
         fluid::FluidRegistry, tool::ToolRegistry,
     },
-    creatures::PendingCreatureRestores,
     localization::{ActiveLanguage, UiLocalization},
-    player::{game_mode::GameMode, hotbar::PlayerHotbar, player_id::LOCAL_PLAYER_ID},
+    player::hotbar::PlayerHotbar,
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
     world::{
-        InMemoryWorldSave, WorldLoadMode, WorldSeed,
-        dimension::CurrentDimension, game_rules::GameRules,
-        fluid_updates::PendingFluidUpdates,
+        InMemoryWorldSave,
         save_catalog::{SaveRegistries, WorldSummary, delete_world},
-        save_session::WorldSession,
     },
 };
 
-use self::layout::{
+use self::{
+    activation::{PreparedWorldActivation, WorldActivationError},
+    layout::{
     SelectionError, WorldListContainer, WorldListEntry, WorldListStatus, spawn_world_entry,
-    spawn_world_selection,
+        spawn_world_selection,
+    },
+    tasks::{PendingWorldLoad, PendingWorldScan},
 };
-use self::tasks::{PendingWorldLoad, PendingWorldScan};
 
 pub(crate) struct WorldSelectionPlugin;
 
@@ -157,8 +157,9 @@ struct WorldSelectionLoadContext<'w> {
     save: ResMut<'w, InMemoryWorldSave>,
 }
 
-/// Polling a completed result and activating a world is cheap relative to
-/// parsing and rehydrating every saved chunk, which happens on the worker.
+/// Polling a completed result is cheap relative to parsing and rehydrating
+/// saved chunks, which happens on the worker. All fallible activation
+/// preparation finishes before any live world resource is mutated.
 fn poll_world_load(
     mut commands: Commands,
     mut state: ResMut<WorldSelectionState>,
@@ -189,7 +190,7 @@ fn poll_world_load(
         );
         return;
     };
-    let (mut snapshot, world, session_lock) = match result {
+    let (snapshot, world, session_lock) = match result {
         Ok(loaded) => loaded,
         Err(error) => {
             state.error = format!(
@@ -200,66 +201,39 @@ fn poll_world_load(
             return;
         }
     };
-    // Rebuild scheduled runtime fluid work before mutating any live resources.
-    // Saved ticks use textual fluid IDs, so a content change cannot silently
-    // reinterpret a runtime FluidId.
-    let pending_fluid_updates =
-        match PendingFluidUpdates::from_saved(&snapshot.fluid_updates, &context.content.fluids) {
-            Ok(pending) => pending,
-            Err(error) => {
-                state.error = format!(
-                    "{} {}: {error}",
-                    localization.text(language.get(), "worldSelection.loadError"),
-                    id
-                );
-                return;
-            }
-        };
 
-    // Content or files might have changed since the catalog scan. The worker
-    // revalidated its own immutable content; the live inventory is changed
-    // only once that result has been accepted on the Bevy thread.
-    if let Err(error) = context.inventory.restore_items_and_selection(
-        &snapshot.inventory,
-        snapshot.selected_hotbar_slot,
+    let activation = match PreparedWorldActivation::prepare(
+        id.clone(),
+        snapshot,
+        world,
+        session_lock,
         &context.content.blocks,
+        &context.content.fluids,
         &context.content.tools,
     ) {
-        state.error = format!(
-            "{}: {error}",
-            localization.text(language.get(), "worldSelection.inventoryError")
-        );
-        return;
-    }
-    let mut rules = GameRules::default();
-    rules.set_ticks_per_second(snapshot.ticks_per_second);
-    context.save.begin_new_world(
-        WorldSeed(snapshot.seed),
-        &snapshot.dimension_id,
-        rules,
-        snapshot.spawn_biome.as_deref(),
-        snapshot.biome_size_multiplier,
+        Ok(activation) => activation,
+        Err(WorldActivationError::Load(error)) => {
+            state.error = format!(
+                "{} {}: {error}",
+                localization.text(language.get(), "worldSelection.loadError"),
+                id
+            );
+            return;
+        }
+        Err(WorldActivationError::Inventory(error)) => {
+            state.error = format!(
+                "{}: {error}",
+                localization.text(language.get(), "worldSelection.inventoryError")
+            );
+            return;
+        }
+    };
+
+    activation.commit(
+        &mut commands,
+        &mut context.inventory,
+        &mut context.save,
     );
-    if let Some(player) = snapshot.player {
-        context.save.save_player_state_with_health(
-            LOCAL_PLAYER_ID,
-            Vec3::from_array(player.position),
-            if player.creative { GameMode::Creative } else { GameMode::Survival },
-            player.health,
-            Some((player.yaw, player.pitch)),
-        );
-    }
-    commands.insert_resource(session_lock);
-    commands.insert_resource(pending_fluid_updates);
-    commands.insert_resource(PendingCreatureRestores::new(std::mem::take(
-        &mut snapshot.creatures,
-    )));
-    commands.insert_resource(WorldSeed(snapshot.seed));
-    commands.insert_resource(CurrentDimension { id: snapshot.dimension_id });
-    commands.insert_resource(rules);
-    commands.insert_resource(world);
-    commands.insert_resource(WorldSession::loaded(id, snapshot.day, snapshot.tick_in_day));
-    commands.insert_resource(WorldLoadMode::Load);
     transition.request(ScreenTransitionTarget::game(GameState::Loading));
 }
 

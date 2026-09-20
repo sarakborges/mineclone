@@ -5498,3 +5498,98 @@ agora são `pub(in crate::hud::inventory)`.
 O parent continua reexportando as mesmas capabilities para `sync.rs`; nada foi aberto em `pub(crate)` nem para fora do owner `inventory`.
 
 Nenhum comportamento/layout mudou e `VERSION` permanece `0.35.8`.
+
+
+### CI verde do checkpoint 153
+
+- Push CI `35530280801`: **success**.
+- PR CI `35530283148`: **success**.
+- O topo `68c737ea3736e0b0913afff3289c5fb44c5bb8b9` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.35.8`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 154 — 2026-09-20: world-selection activation preparada antes do commit [CÓDIGO APLICADO; CI PENDENTE]
+
+### Objetivo
+
+Aplicar explicitamente os critérios de responsabilidade única, limite de dependências e performance ao último bloco grande de `world_selection`.
+
+### Problema
+
+`poll_world_load()` ainda misturava:
+
+- polling/acceptance do worker;
+- rebuild de scheduled fluid state;
+- validação/restauração de inventory;
+- construção do in-memory save;
+- montagem de session resources;
+- commit de resources Bevy;
+- UI error routing e screen transition.
+
+Além disso, `PlayerHotbar::restore_items_and_selection()` alocava um `Vec` temporário de 36 slots antes de copiar para arrays fixos.
+
+### Implementação
+
+Novo `screens/world_selection/activation.rs` possui a responsabilidade única de transformar um world carregado validado em `PreparedWorldActivation`.
+
+`prepare()` recebe somente:
+
+- loaded snapshot/world/session lock;
+- `BlockRegistry`;
+- `FluidRegistry`;
+- `ToolRegistry`.
+
+Ele NÃO recebe o `WorldSelectionScanContent` inteiro.
+
+Todo passo fallible acontece antes de tocar em resources live:
+
+- rebuild de `PendingFluidUpdates`;
+- resolução/validação de inventory IDs.
+
+Depois disso, o aggregate prepara:
+
+- restored `PlayerHotbar`;
+- novo `InMemoryWorldSave`;
+- pending creature restores;
+- seed/dimension/rules/world/session/lock.
+
+`commit()` é não-fallible e recebe apenas:
+
+- `Commands`;
+- live `PlayerHotbar`;
+- live `InMemoryWorldSave`.
+
+O parent continua owner de worker acceptance, localization/error presentation e transition para Loading.
+
+### Limite de params / ownership
+
+- nenhum novo mega-`SystemParam`;
+- `WorldSelectionLoadContext` continua agrupando o contexto coerente já existente: seis registries read-only + inventory/save mutáveis (~8 dependencies significativas);
+- activation recebe apenas três definition registries realmente usados;
+- tasks/layout continuam separados.
+
+### PlayerHotbar
+
+Novo `PlayerHotbar::from_saved_items_and_selection()` constrói o aggregate restaurado diretamente nos arrays fixos.
+
+`restore_items_and_selection()` agora delega para esse constructor e substitui `self` somente após sucesso.
+
+Ganhos:
+
+- restauração fica atômica;
+- removida allocation temporária de `Vec<Option<&'static str>>`;
+- o owner do invariant continua sendo `PlayerHotbar`, não o screen.
+
+### Semântica preservada
+
+- mensagens de load vs inventory error continuam distintas;
+- fluid saved ticks continuam resolvidos por authored IDs;
+- session resources e Loading transition continuam iguais;
+- worker thread/lifecycle não mudou;
+- nenhum save format/worldgen/simulation rule mudou.
+
+### Versionamento
+
+- `VERSION`: **0.35.8 → 0.35.9**.
+- CI pendente.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
