@@ -1,7 +1,6 @@
 //! Portable representation of authoritative chunk content.
 //! Runtime palette indices, fluid numeric IDs and derived lighting must never
-//! cross the disk boundary. New saves use state palettes plus contiguous runs;
-//! legacy per-voxel entries remain readable for backward compatibility.
+//! cross the disk boundary. The disk schema uses state palettes plus contiguous runs.
 use std::io;
 
 use bevy::prelude::IVec3;
@@ -26,6 +25,7 @@ const MAX_PROPERTIES: usize = 8;
 const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct DiskChunk {
     coord: [i32; 3],
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -36,15 +36,10 @@ pub(crate) struct DiskChunk {
     fluid_palette: Vec<DiskFluidState>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     fluid_runs: Vec<DiskRun>,
-    // Version-1 snapshots stored one JSON object per occupied voxel. Keep
-    // these fields readable, but never write them in new snapshots.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    blocks: Vec<DiskBlock>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    fluids: Vec<DiskFluid>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 struct DiskBlockState {
     id: String,
     rotation: u8,
@@ -53,6 +48,7 @@ struct DiskBlockState {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 struct DiskFluidState {
     id: String,
     level: u8,
@@ -61,28 +57,11 @@ struct DiskFluidState {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 struct DiskRun {
     start: u16,
     len: u16,
     state: u16,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct DiskBlock {
-    index: u16,
-    id: String,
-    rotation: u8,
-    orientation: u8,
-    properties: Vec<(String, String)>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct DiskFluid {
-    index: u16,
-    id: String,
-    level: u8,
-    source: bool,
-    spread_distance: u16,
 }
 
 struct DiskChunkBuilder {
@@ -147,8 +126,6 @@ impl DiskChunkBuilder {
             block_runs: self.block_runs,
             fluid_palette: self.fluid_palette,
             fluid_runs: self.fluid_runs,
-            blocks: Vec::new(),
-            fluids: Vec::new(),
         }
     }
 }
@@ -203,39 +180,24 @@ impl DiskChunk {
         Ok(builder.finish())
     }
 
-    /// Validate the entire chunk before exposing it. New palette/run snapshots
-    /// and legacy per-voxel snapshots are both accepted, but mixed encodings
-    /// are rejected.
+    /// Validate the entire current-format chunk before exposing it.
     pub(crate) fn into_chunk(
         self,
         blocks: &BlockRegistry,
         fluids: &FluidRegistry,
     ) -> io::Result<(IVec3, VoxelChunk)> {
         let coord = self.coord()?;
-
-        let has_compact = !self.block_palette.is_empty()
-            || !self.block_runs.is_empty()
-            || !self.fluid_palette.is_empty()
-            || !self.fluid_runs.is_empty();
-        let has_legacy = !self.blocks.is_empty() || !self.fluids.is_empty();
-        if has_compact && has_legacy {
-            return Err(invalid_data("chunk mixes compact and legacy voxel encodings"));
-        }
-
-        if has_compact {
-            return decode_compact(
-                coord,
-                self.block_palette,
-                self.block_runs,
-                self.fluid_palette,
-                self.fluid_runs,
-                blocks,
-                fluids,
-            );
-        }
-
-        decode_legacy(coord, self.blocks, self.fluids, blocks, fluids)
+        decode_compact(
+            coord,
+            self.block_palette,
+            self.block_runs,
+            self.fluid_palette,
+            self.fluid_runs,
+            blocks,
+            fluids,
+        )
     }
+
 }
 
 fn palette_index<T: Eq>(palette: &mut Vec<T>, state: T) -> io::Result<u16> {
@@ -370,51 +332,6 @@ fn decode_fluid_state(state: DiskFluidState, fluids: &FluidRegistry) -> io::Resu
     ))
 }
 
-fn decode_legacy(
-    coord: IVec3,
-    blocks_on_disk: Vec<DiskBlock>,
-    fluids_on_disk: Vec<DiskFluid>,
-    blocks: &BlockRegistry,
-    fluids: &FluidRegistry,
-) -> io::Result<(IVec3, VoxelChunk)> {
-    let mut chunk = VoxelChunk::empty();
-    let mut previous = None;
-    for entry in blocks_on_disk {
-        let index = validate_index(entry.index, previous)?;
-        previous = Some(index);
-        let cell = decode_block_state(
-            DiskBlockState {
-                id: entry.id,
-                rotation: entry.rotation,
-                orientation: entry.orientation,
-                properties: entry.properties,
-            },
-            blocks,
-        )?;
-        let (x, y, z) = coordinates(index);
-        chunk.set_block(x, y, z, Some(cell));
-    }
-
-    previous = None;
-    for entry in fluids_on_disk {
-        let index = validate_index(entry.index, previous)?;
-        previous = Some(index);
-        let cell = decode_fluid_state(
-            DiskFluidState {
-                id: entry.id,
-                level: entry.level,
-                source: entry.source,
-                spread_distance: entry.spread_distance,
-            },
-            fluids,
-        )?;
-        let (x, y, z) = coordinates(index);
-        chunk.set_fluid(x, y, z, Some(cell));
-    }
-
-    Ok((coord, chunk))
-}
-
 fn validate_properties(
     properties: &[(String, String)],
     can_fragment: bool,
@@ -435,14 +352,6 @@ fn validate_properties(
         }
     }
     Ok(())
-}
-
-fn validate_index(index: u16, previous: Option<usize>) -> io::Result<usize> {
-    let index = index as usize;
-    if index >= CHUNK_VOLUME || previous.is_some_and(|previous| index <= previous) {
-        return Err(invalid_data("saved voxel indexes must be in range and strictly increasing"));
-    }
-    Ok(index)
 }
 
 fn coordinates(index: usize) -> (usize, usize, usize) {

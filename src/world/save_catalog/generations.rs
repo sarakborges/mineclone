@@ -15,10 +15,7 @@ use super::{
     chunks::SavedChunkCatalog,
     invalid_data,
     locking::{ReadLease, WorldDirectoryLock, acquire_world_directory_lock, world_lock},
-    snapshot::{
-        LEGACY_SAVE_FORMAT_VERSION, SAVE_FORMAT_VERSION, StoredWorldSnapshot, WorldManifest,
-        WorldSnapshot, is_supported_save_format,
-    },
+    snapshot::{SAVE_FORMAT_VERSION, StoredWorldSnapshot, WorldManifest, WorldSnapshot},
     storage::{
         manifest_paths, open_snapshot_file, read_json, read_json_file, snapshot_generation,
         snapshot_name,
@@ -166,10 +163,11 @@ fn decode_snapshot(
     validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
 ) -> io::Result<(WorldSnapshot, VoxelWorld)> {
     let stored: StoredWorldSnapshot = read_json_file(file)?;
-    if !is_supported_save_format(stored.format_version)
+    if stored.format_version != SAVE_FORMAT_VERSION
+        || manifest.format_version != SAVE_FORMAT_VERSION
         || stored.format_version != manifest.format_version
     {
-        return Err(invalid_data("snapshot and manifest format do not match"));
+        return Err(invalid_data("unsupported or mismatched save format"));
     }
 
     manifest
@@ -192,33 +190,20 @@ fn decode_snapshot(
         return Err(invalid_data("snapshot metadata or player state is invalid"));
     }
 
-    let stored_format = stored.format_version;
-    let (snapshot, inline_chunks) = stored.into_runtime()?;
+    let snapshot = stored.into_runtime();
     validate(&snapshot)?;
 
-    let chunks = match stored_format {
-        LEGACY_SAVE_FORMAT_VERSION => inline_chunks
-            .ok_or_else(|| invalid_data("format v1 snapshot is missing inline chunks"))?,
-        SAVE_FORMAT_VERSION => {
-            if inline_chunks.is_some() {
-                return Err(invalid_data(
-                    "format v2 snapshot has conflicting inline chunk state",
-                ));
-            }
-            SavedChunkCatalog::from_disk_chunks(load_generation_chunks(
-                directory,
-                manifest.generation,
-            )?)
-        }
-        _ => return Err(invalid_data("unsupported snapshot format")),
-    };
+    let chunks = SavedChunkCatalog::from_disk_chunks(load_generation_chunks(
+        directory,
+        manifest.generation,
+    )?);
 
     let world = chunks.into_world(blocks, fluids)?;
     Ok((snapshot, world))
 }
 
 fn valid_manifest(manifest: &WorldManifest, id: &str, generation: u64) -> bool {
-    is_supported_save_format(manifest.format_version)
+    manifest.format_version == SAVE_FORMAT_VERSION
         && manifest.id == id
         && manifest.generation == generation
         && manifest.worldgen_version.validate().is_ok()
@@ -235,11 +220,7 @@ fn manifest_payload_published(
     if !directory.join(snapshot_name(manifest.generation)).is_file() {
         return Ok(false);
     }
-    match manifest.format_version {
-        LEGACY_SAVE_FORMAT_VERSION => Ok(true),
-        SAVE_FORMAT_VERSION => generation_chunks_published(directory, manifest.generation),
-        _ => Ok(false),
-    }
+    generation_chunks_published(directory, manifest.generation)
 }
 
 pub(super) fn latest_complete_manifest(

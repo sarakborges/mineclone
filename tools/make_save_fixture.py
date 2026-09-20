@@ -14,13 +14,13 @@ import shutil
 import sys
 
 MAX_FIXTURE_SNAPSHOT_BYTES = 64 * 1024 * 1024
+CURRENT_SAVE_FORMAT = 2
 MANIFEST_PATTERN = re.compile(r"manifest-(\d{20})\.json\Z")
 DAMAGES = (
     "snapshot-json",
     "manifest-json",
     "inventory-id",
     "clock",
-    "duplicate-chunk",
     "player-null",
 )
 
@@ -50,13 +50,17 @@ def complete_generations(world: Path) -> list[tuple[int, Path, Path, dict]]:
     for number, manifest_path in manifests[:2]:
         manifest = read_json(manifest_path, 64 * 1024)
         expected = f"snapshot-{number:020}.json"
-        if (manifest.get("generation") != number or manifest.get("id") != world.name
+        if (manifest.get("format_version") != CURRENT_SAVE_FORMAT
+                or manifest.get("generation") != number or manifest.get("id") != world.name
                 or manifest.get("snapshot_file") != expected):
-            raise ValueError(f"Invalid manifest in source fixture: {manifest_path}")
+            raise ValueError(f"Invalid current-format manifest in source fixture: {manifest_path}")
         snapshot_path = world / expected
         snapshot = read_json(snapshot_path, MAX_FIXTURE_SNAPSHOT_BYTES)
-        if snapshot.get("id") != world.name:
-            raise ValueError(f"Snapshot ID mismatch: {snapshot_path}")
+        if snapshot.get("format_version") != CURRENT_SAVE_FORMAT or snapshot.get("id") != world.name:
+            raise ValueError(f"Invalid current-format snapshot: {snapshot_path}")
+        generation_directory = world / f"generation-{number}"
+        if generation_directory.is_symlink() or not generation_directory.is_dir():
+            raise ValueError(f"Missing current-format chunk generation: {generation_directory}")
         generations.append((number, manifest_path, snapshot_path, snapshot))
     return generations
 
@@ -70,11 +74,6 @@ def damaged_payload(snapshot: dict, damage: str) -> dict:
         inventory[0] = "__asteria_invalid_fixture_item__"
     elif damage == "clock":
         result["tick_in_day"] = (1 << 64) - 1
-    elif damage == "duplicate-chunk":
-        chunks = result.get("chunks")
-        if not isinstance(chunks, list) or not chunks:
-            raise ValueError("Edit at least one chunk before generating a duplicate-chunk fixture")
-        chunks.append(copy.deepcopy(chunks[0]))
     elif damage == "player-null":
         result["player"] = None
     return result

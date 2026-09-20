@@ -1,14 +1,11 @@
 use std::io;
 
-use serde::{Deserialize, Serialize};
-
 use crate::{
     content::{block::BlockRegistry, fluid::FluidRegistry},
     voxel::{chunk_disk::DiskChunk, world::VoxelWorld},
 };
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(transparent)]
+#[derive(Clone, Debug, Default)]
 pub(super) struct SavedChunkCatalog(Vec<DiskChunk>);
 
 impl SavedChunkCatalog {
@@ -33,13 +30,3 @@ impl SavedChunkCatalog {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn saved_chunk_catalog_keeps_legacy_array_shape() {
-        let catalog = SavedChunkCatalog::default();
-        assert_eq!(serde_json::to_string(&catalog).unwrap(), "[]");
-    }
-}

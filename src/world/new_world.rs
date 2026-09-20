@@ -15,12 +15,6 @@ use super::{WorldSeed, game_rules::GameRules, world_names::DEFAULT_WORLD_NAME};
 /// never silently mixes two world-generation algorithms in one world.
 pub(crate) const WORLDGEN_VERSION: u32 = 1;
 
-/// Saves created before the worldgen identity field existed used the same
-/// generator now identified as version 1. Keep this fallback fixed forever:
-/// defaulting legacy saves to `WORLDGEN_VERSION` would silently reinterpret
-/// them after a future generator bump.
-pub(crate) const LEGACY_WORLDGEN_VERSION: u32 = 1;
-
 /// Persisted deterministic-generator identity. The transparent representation
 /// keeps manifests/snapshots human-readable while making it harder for save
 /// boundaries to accidentally confuse this compatibility identity with an
@@ -41,19 +35,6 @@ impl WorldgenVersion {
     pub(crate) fn validate_matches(self, snapshot: Self) -> io::Result<()> {
         validate_matching_worldgen_versions(self.0, snapshot.0)
     }
-}
-
-impl Default for WorldgenVersion {
-    fn default() -> Self {
-        legacy_worldgen_version()
-    }
-}
-
-/// Serde default for manifests/snapshots written before worldgen identity was
-/// persisted. Keep this function tied to the fixed legacy value, never the
-/// current generator version.
-pub(crate) const fn legacy_worldgen_version() -> WorldgenVersion {
-    WorldgenVersion(LEGACY_WORLDGEN_VERSION)
 }
 
 /// A save may only generate untouched terrain when it was created with the
@@ -229,12 +210,6 @@ pub(crate) fn is_valid_biome_size_multiplier(value: f32) -> bool {
 mod tests {
     use super::*;
 
-    #[derive(Debug, Deserialize, Serialize)]
-    struct PersistedWorldgenIdentity {
-        #[serde(default = "legacy_worldgen_version")]
-        worldgen_version: WorldgenVersion,
-    }
-
     #[test]
     fn biome_size_multiplier_defaults_to_one() {
         assert_eq!(
@@ -251,26 +226,6 @@ mod tests {
         assert_eq!(snap_biome_size_multiplier(6.0), 5.0);
         assert!(is_valid_biome_size_multiplier(2.3));
         assert!(!is_valid_biome_size_multiplier(2.34));
-    }
-
-    #[test]
-    fn legacy_worldgen_identity_stays_pinned_to_v1() {
-        assert_eq!(LEGACY_WORLDGEN_VERSION, 1);
-        assert_eq!(legacy_worldgen_version().0, LEGACY_WORLDGEN_VERSION);
-        assert_eq!(WorldgenVersion::default().0, LEGACY_WORLDGEN_VERSION);
-    }
-
-    #[test]
-    fn worldgen_identity_serde_defaults_legacy_and_stays_numeric() {
-        let legacy: PersistedWorldgenIdentity =
-            serde_json::from_str("{}").expect("legacy metadata must deserialize");
-        assert_eq!(legacy.worldgen_version.0, LEGACY_WORLDGEN_VERSION);
-
-        let current = PersistedWorldgenIdentity {
-            worldgen_version: WorldgenVersion::current(),
-        };
-        let json = serde_json::to_string(&current).expect("worldgen identity must serialize");
-        assert_eq!(json, format!("{{\"worldgen_version\":{WORLDGEN_VERSION}}}"));
     }
 
     #[test]

@@ -155,22 +155,22 @@ impl ScheduledFluidBucket {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SavedFluidUpdates {
-    #[serde(default)]
     topology: Vec<[i32; 3]>,
-    #[serde(default)]
     wakes: Vec<SavedFluidWake>,
-    #[serde(default)]
     scheduled: Vec<SavedScheduledFluidTick>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 struct SavedFluidWake {
     fluid: String,
     position: [i32; 3],
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 struct SavedScheduledFluidTick {
     fluid: String,
     position: [i32; 3],

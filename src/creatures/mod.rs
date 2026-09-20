@@ -31,6 +31,7 @@ pub(crate) struct CreatureInstance {
 pub(crate) struct CreatureDeathTimer(pub(crate) Timer);
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SavedCreature {
     pub(crate) definition_id: String,
     pub(crate) position: [f32; 3],

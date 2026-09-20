@@ -11,57 +11,39 @@ use crate::{
 use super::{chunks::SavedChunkCatalog, invalid_data};
 use crate::world::{
     fluid_updates::{PendingFluidUpdates, SavedFluidUpdates},
-    new_world::{
-        DEFAULT_BIOME_SIZE_MULTIPLIER, WorldgenVersion, is_valid_biome_size_multiplier,
-        legacy_worldgen_version,
-    },
+    new_world::{WorldgenVersion, is_valid_biome_size_multiplier},
     world_names::validate_world_name,
 };
 
-pub(super) const LEGACY_SAVE_FORMAT_VERSION: u32 = 1;
 pub(super) const SAVE_FORMAT_VERSION: u32 = 2;
 
-pub(super) fn is_supported_save_format(version: u32) -> bool {
-    matches!(version, LEGACY_SAVE_FORMAT_VERSION | SAVE_FORMAT_VERSION)
-}
-
-fn default_saved_biome_size_multiplier() -> f32 {
-    DEFAULT_BIOME_SIZE_MULTIPLIER
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct WorldManifest {
     pub(super) format_version: u32,
     pub(super) id: String,
     pub(super) seed: u64,
     pub(super) dimension_id: String,
-    #[serde(default = "legacy_worldgen_version")]
     pub(super) worldgen_version: WorldgenVersion,
-    #[serde(default = "default_saved_biome_size_multiplier")]
     pub(super) biome_size_multiplier: f32,
     pub(super) ticks_per_second: u32,
     pub(super) last_saved_unix_ms: u64,
-    #[serde(default)]
     pub(super) generation: u64,
-    #[serde(default)]
     pub(super) snapshot_file: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SavedPlayer {
     pub(crate) position: [f32; 3],
     pub(crate) creative: bool,
-    #[serde(default)]
     pub(crate) health: Option<f32>,
-    #[serde(default)]
     pub(crate) yaw: f32,
-    #[serde(default)]
     pub(crate) pitch: f32,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct WorldSnapshot {
-    pub(super) format_version: u32,
     pub(crate) id: String,
     pub(crate) seed: u64,
     pub(crate) dimension_id: String,
@@ -80,34 +62,27 @@ pub(crate) struct WorldSnapshot {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct StoredWorldSnapshot {
     pub(super) format_version: u32,
     pub(super) id: String,
     pub(super) seed: u64,
     pub(super) dimension_id: String,
-    #[serde(default = "legacy_worldgen_version")]
     pub(super) worldgen_version: WorldgenVersion,
-    #[serde(default)]
     pub(super) spawn_biome: Option<String>,
-    #[serde(default = "default_saved_biome_size_multiplier")]
     pub(super) biome_size_multiplier: f32,
     pub(super) ticks_per_second: u32,
     pub(super) player: Option<SavedPlayer>,
     pub(super) day: u64,
     pub(super) tick_in_day: u64,
     pub(super) inventory: Vec<Option<String>>,
-    #[serde(default)]
     pub(super) selected_hotbar_slot: usize,
-    #[serde(default)]
     pub(super) fluid_updates: SavedFluidUpdates,
-    #[serde(default)]
     pub(super) creatures: Vec<SavedCreature>,
-    #[serde(default)]
-    chunks: Option<SavedChunkCatalog>,
 }
 
 #[derive(Serialize)]
-pub(super) struct WorldSnapshotV2<'a> {
+pub(super) struct DiskWorldSnapshot<'a> {
     format_version: u32,
     id: &'a str,
     seed: u64,
@@ -126,44 +101,24 @@ pub(super) struct WorldSnapshotV2<'a> {
 }
 
 impl StoredWorldSnapshot {
-    pub(super) fn into_runtime(self) -> io::Result<(WorldSnapshot, Option<SavedChunkCatalog>)> {
-        let inline_chunks = match self.format_version {
-            LEGACY_SAVE_FORMAT_VERSION => Some(
-                self.chunks
-                    .ok_or_else(|| invalid_data("format v1 snapshot is missing inline chunks"))?,
-            ),
-            SAVE_FORMAT_VERSION => {
-                if self.chunks.is_some() {
-                    return Err(invalid_data(
-                        "format v2 snapshot must not contain inline chunks",
-                    ));
-                }
-                None
-            }
-            _ => return Err(invalid_data("unsupported snapshot format")),
-        };
-
-        Ok((
-            WorldSnapshot {
-                format_version: SAVE_FORMAT_VERSION,
-                id: self.id,
-                seed: self.seed,
-                dimension_id: self.dimension_id,
-                worldgen_version: self.worldgen_version,
-                spawn_biome: self.spawn_biome,
-                biome_size_multiplier: self.biome_size_multiplier,
-                ticks_per_second: self.ticks_per_second,
-                player: self.player,
-                day: self.day,
-                tick_in_day: self.tick_in_day,
-                inventory: self.inventory,
-                selected_hotbar_slot: self.selected_hotbar_slot,
-                fluid_updates: self.fluid_updates,
-                creatures: self.creatures,
-                chunks: SavedChunkCatalog::default(),
-            },
-            inline_chunks,
-        ))
+    pub(super) fn into_runtime(self) -> WorldSnapshot {
+        WorldSnapshot {
+            id: self.id,
+            seed: self.seed,
+            dimension_id: self.dimension_id,
+            worldgen_version: self.worldgen_version,
+            spawn_biome: self.spawn_biome,
+            biome_size_multiplier: self.biome_size_multiplier,
+            ticks_per_second: self.ticks_per_second,
+            player: self.player,
+            day: self.day,
+            tick_in_day: self.tick_in_day,
+            inventory: self.inventory,
+            selected_hotbar_slot: self.selected_hotbar_slot,
+            fluid_updates: self.fluid_updates,
+            creatures: self.creatures,
+            chunks: SavedChunkCatalog::default(),
+        }
     }
 }
 
@@ -187,8 +142,8 @@ pub(crate) struct SnapshotSource<'a> {
 }
 
 impl WorldSnapshot {
-    pub(super) fn disk_v2(&self) -> WorldSnapshotV2<'_> {
-        WorldSnapshotV2 {
+    pub(super) fn disk_snapshot(&self) -> DiskWorldSnapshot<'_> {
+        DiskWorldSnapshot {
             format_version: SAVE_FORMAT_VERSION,
             id: &self.id,
             seed: self.seed,
@@ -225,7 +180,6 @@ impl WorldSnapshot {
         }
 
         Ok(Self {
-            format_version: SAVE_FORMAT_VERSION,
             id: source.id.to_owned(),
             seed: source.seed,
             dimension_id: source.dimension_id.to_owned(),
@@ -252,15 +206,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn v2_snapshot_payload_omits_inline_chunks() {
+    fn current_snapshot_payload_omits_inline_chunks() {
         let snapshot = WorldSnapshot {
-            format_version: SAVE_FORMAT_VERSION,
             id: "World".to_owned(),
             seed: 1,
             dimension_id: "asteria:overworld".to_owned(),
             worldgen_version: WorldgenVersion::current(),
             spawn_biome: None,
-            biome_size_multiplier: DEFAULT_BIOME_SIZE_MULTIPLIER,
+            biome_size_multiplier: crate::world::new_world::DEFAULT_BIOME_SIZE_MULTIPLIER,
             ticks_per_second: 20,
             player: None,
             day: 1,
@@ -272,7 +225,7 @@ mod tests {
             chunks: SavedChunkCatalog::default(),
         };
 
-        let value = serde_json::to_value(snapshot.disk_v2()).unwrap();
+        let value = serde_json::to_value(snapshot.disk_snapshot()).unwrap();
         assert_eq!(value["format_version"], SAVE_FORMAT_VERSION);
         assert!(value.get("chunks").is_none());
     }

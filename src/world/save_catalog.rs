@@ -22,7 +22,7 @@ use self::{
     locking::{
         acquire_world_directory_lock, remove_world_directory_lock_file, world_lock,
     },
-    snapshot::{is_supported_save_format, WorldManifest, SAVE_FORMAT_VERSION},
+    snapshot::{WorldManifest, SAVE_FORMAT_VERSION},
     storage::{highest_generation, manifest_name, publish_json, read_json, snapshot_name},
 };
 pub(crate) use self::{
@@ -90,9 +90,6 @@ pub(crate) fn save_world_owned(
     validate_world_name(&snapshot.id)?;
     let gate = world_lock(&snapshot.id)?;
     let lock = gate.lock_write()?;
-    if snapshot.format_version != SAVE_FORMAT_VERSION {
-        return Err(invalid_data("unsupported runtime snapshot format"));
-    }
     registries.validate_playable(snapshot)?;
 
     let directory = Path::new(WORLDS_DIRECTORY).join(&snapshot.id);
@@ -109,7 +106,7 @@ pub(crate) fn save_world_owned(
         || initial.dimension_id != snapshot.dimension_id
         || biome_size_multiplier_tenths(initial.biome_size_multiplier)
             != biome_size_multiplier_tenths(snapshot.biome_size_multiplier)
-        || !is_supported_save_format(initial.format_version)
+        || initial.format_version != SAVE_FORMAT_VERSION
         || initial.generation != 0
         || initial.snapshot_file.is_some()
     {
@@ -149,7 +146,7 @@ pub(crate) fn save_world_owned(
     }
 
     let snapshot_file = snapshot_name(next);
-    if let Err(error) = publish_json(&directory, &snapshot_file, &snapshot.disk_v2()) {
+    if let Err(error) = publish_json(&directory, &snapshot_file, &snapshot.disk_snapshot()) {
         cleanup_unpublished_generation(&directory, next, Some(&snapshot_file));
         return Err(error);
     }
