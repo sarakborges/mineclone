@@ -15,7 +15,7 @@ use crate::{
     },
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
-        coordinates::chunk_coord_from_position,
+        coordinates::{chunk_coord_from_position, chunk_coord_from_world},
         deduplicated_queue::DeduplicatedQueue,
         lighting::PendingLightingUpdates,
         world::VoxelWorld,
@@ -134,8 +134,12 @@ impl ChunkStreamingState {
         }
     }
 
-    fn adopt_generation_wave_target(&mut self, coord: IVec3) {
+    fn remove_pending(&mut self, coord: IVec3) {
         self.pending.remove(coord);
+    }
+
+    fn adopt_generation_wave_target(&mut self, coord: IVec3) {
+        self.remove_pending(coord);
         self.start_generation_wave_target(coord);
     }
 

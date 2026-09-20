@@ -195,6 +195,14 @@ impl GeneratedFluidSettling {
             return None;
         }
 
+        let mut owned_existing_chunks = self
+            .mutable_chunks
+            .iter()
+            .copied()
+            .filter(|coord| !self.generated_chunks.contains(coord))
+            .collect::<Vec<_>>();
+        owned_existing_chunks.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
+
         let mut generated_chunks = self.generated_chunks.drain().collect::<Vec<_>>();
         generated_chunks.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
 
@@ -204,14 +212,6 @@ impl GeneratedFluidSettling {
             let coord = chunk_coord_from_world(*position);
             (coord.y, coord.z, coord.x, position.y, position.z, position.x)
         });
-
-        let mut owned_existing_chunks = self
-            .mutable_chunks
-            .iter()
-            .copied()
-            .filter(|coord| !self.generated_chunks.contains(coord))
-            .collect::<Vec<_>>();
-        owned_existing_chunks.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
 
         self.reset();
 

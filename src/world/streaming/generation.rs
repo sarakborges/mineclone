@@ -168,6 +168,7 @@ fn extend_generation_wave_for_fluid_closure(
 
     for coord in required {
         if work.world.has_resident_or_persisted_chunk(coord) {
+            work.state.remove_pending(coord);
             assert!(
                 work.world.restore_chunk(coord),
                 "fluid dependency chunk must restore from archived state: {coord:?}"
