@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.41.0`. HEAD funcional `3eba0bb5aee39af8fe136fd9280fc7df7c815447`. CI push `35537427631` e PR `35537429561`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. A barreira de `generation_region` do 0.40.0 foi descartada após QA reportar hitch severo e chunks ainda nascendo sem spread completo. Streaming agora usa waves pequenas de no máximo 8 chunks, full fluid settling com verificação explícita de fixed point, closure causal através de seams para chunks residentes não-persistentes, proteção contra runtime/unload tocar chunks unpublished, e metadata esparsa de dynamic fluids para evitar scans 16³. World Selection mantém botão para abrir `worlds` no Explorer. Não houve `cargo test`, `cargo run` nem QA Windows.
+**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.41.1`. HEAD funcional `6bbdb5fade29d15763a1701e20fc9241c8f73937`. CI push `35538535445` e PR `35538538976`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Streaming usa generation waves de até 8 chunks, settling com fixed-point verification e dependências externas retidas, chunks não renderizados não participam do mesh halo, wave reservations têm lifecycle explícito e fluid remesh invalida o halo 1-voxel exato. Não houve `cargo test`, `cargo run` nem QA Windows.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.34.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **Estado mais recente em `develop`: comparação/correção do save game em andamento; HEAD funcional ainda não versionado `bd713963b9bbb8f69eeeb6df6b7bf7aa2773152f`.** CI `35413383474` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Já foram corrigidas persistência de scheduled fluid work, health do player, creatures e lock cross-process do diretório do mundo. Ainda NÃO foram implementados selected hotbar slot, rotação/look do player, autosave disparado somente pela passagem do clock, nem a migração do snapshot global para storage incremental por chunk/region. **Não houve bump de VERSION neste checkpoint porque o bloco de save foi interrompido antes do fechamento completo.** Não houve `cargo test`, `cargo run` ou QA Windows.
 
@@ -7198,3 +7198,190 @@ Não houve `cargo test`, `cargo run` nem QA Windows/runtime.
    - não deve promover chunk staged para persistent;
    - deve reativar após publicação.
 6. Confirmar que chunks aparecem sem spread adicional imediatamente após first mesh, salvo topology/runtime event posterior legítimo.
+
+
+## Checkpoint 171 — 2026-09-20: partes de streaming ainda ausentes/stale após 0.41.0 [ROOT CAUSE + FIX; VERSION 0.41.1; CI VERDE]
+
+### Sintoma
+
+Após o 0.41.0, hitch e settling melhoraram, mas ainda havia regiões/pedaços que não carregavam corretamente.
+
+A investigação separou quatro problemas restantes em owners diferentes, em vez de atribuir tudo ao solver.
+
+### 1. Generation-wave target podia ficar órfão
+
+Lifecycle anterior mantinha `generation_wave_targets` como reservation até o fim da wave.
+
+Caso reproduzível:
+
+1. target A entra na wave;
+2. player sai da seleção enquanto a task de A está em voo ou antes do dispatch;
+3. resultado/dispatch de A é descartado por `!keeps_loaded(A)`;
+4. A continua em `generation_wave_targets`, apesar de não estar mais em:
+   - `generation_wave_pending`;
+   - task em voo;
+   - staged;
+   - settling;
+5. player volta antes da wave terminar;
+6. `rebuild_queue()` exclui A porque `generated_chunk_is_unpublished(A)` ainda é true;
+7. fim da wave fazia `generation_wave_targets.clear()`;
+8. se o player parasse, não havia novo rebuild para recolocar A em `pending`.
+
+Resultado: chunk desejado podia ficar fora de todas as filas até novo movimento.
+
+Correção:
+
+- `abandon_generation_wave_target(coord)` remove reservation/pending imediatamente quando trabalho é descartado;
+- `complete_generation_wave_target(coord)` remove explicitamente a reservation após publish/archive;
+- stale result só é requeued se target ainda é live;
+- `finish_generation_wave()` não faz mais `clear()`;
+- finalizar wave agora **asserta zero unresolved reservations**.
+
+Commit:
+- `42614ee8a807401ddecce5fc90d288739247a120` — `fix: release abandoned generation wave targets`; bump `0.41.1`.
+- `5dc14fd735d28bfc91b3ae67ccc22e960cb9610e` — corrige/fortalece validação do branch de wave vazia.
+
+### 2. Resident não significava visible — mesh cullava contra chunk invisível
+
+Generated/staged/ready chunks vivem no `VoxelWorld` antes de terem render allocation.
+
+`ChunkMeshSnapshot::capture()` capturava qualquer neighbor resident.
+
+Logo um chunk visível podia:
+
+- capturar terreno/fluid de neighbor staged/ready;
+- remover sua face de boundary contra esse neighbor;
+- o neighbor ainda não existir no render.
+
+Isso produzia um buraco visual contra conteúdo logicamente residente porém invisível.
+
+Correção:
+
+- `ChunkMeshSnapshot::capture_with_neighbor_filter(...)`;
+- streaming initial mesh inclui neighbor no halo somente se `ChunkRenderPool::contains(neighbor)`;
+- background remesh usa a mesma regra;
+- initial catch-up ganhou `needs_initial_catchup_with()` e também considera publicação visual;
+- bootstrap continua usando `capture()` completo porque todos os bootstrap chunks são preparados durante Loading antes de Gameplay.
+
+`ChunkRenderPool::contains()` foi confirmado como membership de allocation realmente inserida em `active`, portanto é o owner correto de publicação visual.
+
+Commit:
+- `b2ea67c2728d1a3eec70a84b615b1009bd27e3a9` — `fix: keep invisible chunks out of mesh halos`.
+- `6bbdb5fade29d15763a1701e20fc9241c8f73937` — wrapper legado de catch-up restrito a tests após Clippy detectar dead code.
+
+### 3. Dependency halo do fluid solver ainda era 2D
+
+O 0.41.0 reavaliava dynamic fluids de 8 neighbors horizontais próximos ao chunk novo.
+
+Mas o solver pode mudar sem existir empty frontier target:
+
+- dynamic fluid no bottom plane de um chunk acima;
+- nova seção aparece abaixo;
+- `can_fall_from()` da BFS muda;
+- uma rota horizontal já preenchida pode precisar ser refeita/removida.
+
+O direct frontier revisit dos 6 cardinais cobre empty targets cruzando a seam, mas não uma célula dinâmica já preenchida cuja preferência downhill mudou.
+
+Correção:
+
+- dependency halo agora percorre o 3×3×3 de chunks vizinhos;
+- same-level:
+  - dynamic cells + frontier targets;
+  - bounded por `maxSpread + 1`;
+- neighbor um nível acima/abaixo:
+  - dynamic cells somente no plano vertical compartilhado;
+  - horizontalmente bounded por `maxSpread + 1`;
+- direct vertical empty-frontier crossing continua no owner anterior dos 6 cardinais.
+
+Isso também cobre dependências diagonais quando uma BFS horizontal atravessa um neighbor residente e passa a enxergar o chunk recém-carregado acima/abaixo.
+
+Commit:
+- `e7f4e27e1409cc9e7b0b34f6dc0c5154cde234cd` — `fix: close fluid dependency and mesh halos`.
+
+### 4. External dependency era checada uma vez cedo demais
+
+Mesmo com dependency halo 3D, havia uma janela:
+
+1. external dynamic cell é reavaliada no início;
+2. naquele instante `desired == current`;
+3. portanto seu chunk não entra no mutable domain;
+4. a wave continua settling e sofre mutations;
+5. essas mutations podem mudar a BFS da external cell;
+6. como ela não estava no mutable domain, o verification final não necessariamente a revisitava.
+
+Correção:
+
+- `GeneratedFluidSettling` agora mantém `dependency_positions` explícitas;
+- todo work target fora do mutable domain é retido;
+- cada verification round reenfileira essas positions em ordem determinística;
+- content revisions dos chunks externos residentes também entram em `verification_revisions`;
+- mutation posterior na wave ou runtime edit no external chunk força novo round.
+
+Só um round completo sem mutation e sem revision drift aceita convergence.
+
+Commit:
+- `ba915a0de0ade84c04b941f33d8f9d541bf81b5c` — `fix: retain external fluid dependencies through verification`.
+
+### 5. Fluid mesh invalidation ignorava diagonais
+
+`fluid_face_heights()` lê:
+
+- 3×3 no plano atual;
+- 3×3 no plano acima.
+
+`ChunkMeshSnapshot` também é explicitamente um halo 3×3×3 de 1 voxel.
+
+Porém runtime `enqueue_remesh()` e streaming settling reconciliation invalidavam apenas:
+
+- center;
+- cardinais.
+
+Mutation numa quina/aresta podia alterar corner height/face state de mesh em chunk diagonal sem enfileirar esse remesh.
+
+Correção:
+
+- novo helper `visit_chunk_coords_whose_voxel_halo_contains(position, ...)`;
+- ele encontra exatamente os chunks cujo shell de 1 voxel contém o voxel alterado:
+  - interior: 1 chunk;
+  - face: até 2;
+  - edge: até 4;
+  - corner: até 8;
+- runtime fluid mutation e generated-settling reconciliation usam esse helper.
+
+Não há broadcast fixo para 27 chunks por mutation.
+
+Commit:
+- incluído em `e7f4e27e1409cc9e7b0b34f6dc0c5154cde234cd`.
+
+### CI intermediário
+
+HEAD `ba915a0...` push CI `35538476688`: **failure** apenas por dead-code:
+
+- `ChunkMeshDependencies::needs_initial_catchup()` ficou sem uso no bin depois da versão visibility-aware;
+- corrigido em `6bbdb5f...` com `#[cfg(test)]`.
+
+### CI final funcional
+
+HEAD:
+`6bbdb5fade29d15763a1701e20fc9241c8f73937`
+
+- push `35538535445`: **success**;
+- PR `35538538976`: **success**;
+- localization audit: success;
+- Clippy `--locked --all-targets --all-features -- -D warnings`: success;
+- `cargo check --locked`: success.
+
+Não houve `cargo test`, `cargo run` nem QA Windows/runtime.
+
+### QA prioritária
+
+1. Ficar parado depois de voltar para uma área enquanto outra wave ainda está terminando:
+   - nenhum chunk deve depender de novo movimento para reaparecer.
+2. Observar fronteira entre chunk já visível e chunk ainda gerando/settling:
+   - não deve abrir buraco por culling contra neighbor invisível.
+3. Água em quina/edge entre chunks:
+   - corner heights e faces diagonais devem atualizar.
+4. Água em bottom/top section seam:
+   - novo chunk abaixo/acima deve reavaliar rota dinâmica existente antes do first mesh.
+5. Movimento rápido indo/voltando:
+   - reservations devem ser abandonadas/recriadas sem stranded coords.
