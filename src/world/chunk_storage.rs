@@ -109,6 +109,7 @@ fn read_chunk_directory(directory: &Path, chunks: &mut Vec<DiskChunk>) -> io::Re
 }
 
 fn write_generation_chunks_to_staging(staging: &Path, chunks: &[DiskChunk]) -> io::Result<()> {
+    fs::create_dir(staging.join(CHUNK_DIRECTORY))?;
     let mut identities = HashSet::with_capacity(chunks.len());
     for chunk in chunks {
         let identity = ChunkDiskIdentity::from_disk_chunk(chunk);
@@ -191,6 +192,13 @@ mod tests {
         assert_eq!(loaded.len(), chunks.len());
         for chunk in &chunks { let identity = ChunkDiskIdentity::from_disk_chunk(chunk); assert!(loaded.iter().any(|loaded| ChunkDiskIdentity::from_disk_chunk(loaded) == identity)); }
         remove_generation_chunks(root.as_path(), 9).expect("generation must be removable"); assert!(!root.join(generation_directory_name(9)).exists()); fs::remove_dir_all(root).expect("temp root must be removed");
+    }
+    #[test]
+    fn empty_generation_round_trips() {
+        let root = temp_directory("chunk-empty"); fs::create_dir_all(root.as_path()).expect("temp root must be created");
+        publish_generation_chunks(root.as_path(), 3, &[]).expect("empty generation must publish");
+        assert!(read_generation_chunks(root.as_path(), 3).expect("empty generation must load").is_empty());
+        fs::remove_dir_all(root).expect("temp root must be removed");
     }
     #[test]
     fn duplicate_chunk_coordinates_abort_without_publishing() {
