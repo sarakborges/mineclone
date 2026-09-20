@@ -29,6 +29,13 @@ impl ChunkDiskIdentity {
         Ok(Self(coord))
     }
 
+    /// Build the canonical identity directly from the portable `DiskChunk`
+    /// coordinate representation. Keeping this conversion at the storage
+    /// boundary prevents catalog code from reimplementing coordinate rules.
+    pub(crate) fn from_disk_coord(coord: [i32; 3]) -> io::Result<Self> {
+        Self::new(IVec3::new(coord[0], coord[1], coord[2]))
+    }
+
     pub(crate) fn coord(self) -> IVec3 {
         self.0
     }
@@ -60,9 +67,29 @@ mod tests {
     }
 
     #[test]
+    fn disk_coordinate_uses_the_same_canonical_identity() {
+        let identity = ChunkDiskIdentity::from_disk_coord([-12, 3, 45])
+            .expect("portable disk coordinate must map to storage identity");
+
+        assert_eq!(identity.coord(), IVec3::new(-12, 3, 45));
+        assert_eq!(
+            identity.relative_path(),
+            Path::new("chunks").join("x-12_y3_z45.json")
+        );
+    }
+
+    #[test]
     fn identity_rejects_negative_vertical_coordinate() {
         let error = ChunkDiskIdentity::new(IVec3::new(0, -1, 0))
             .expect_err("negative chunk Y must never reach disk identity");
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn disk_coordinate_rejects_negative_vertical_coordinate() {
+        let error = ChunkDiskIdentity::from_disk_coord([0, -1, 0])
+            .expect_err("portable disk coordinate must obey storage identity rules");
 
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     }
