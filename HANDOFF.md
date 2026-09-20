@@ -4290,3 +4290,71 @@ Sem execução manual:
 - `ARCHITECTURE.md` documenta ranked single-scan como generic queue mechanic.
 - `VERSION`: **0.34.24 → 0.34.25**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 136
+
+- Push CI `35517017404`: **success**.
+- PR CI `35517019499`: **success**.
+- O topo `3645cc71c208e654e8de5a63c64e38f3fb3461a0` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.25`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 137 — 2026-09-20: sky-light factor em shared GPU buffer [CÓDIGO APLICADO; CI/RUNTIME SHADER PENDENTES]
+
+### Problema
+
+`sync_sky_light_factor()` tratava `sky_light_factor` — estado global da cena — como field de cada `TerrainMaterialExtension`.
+
+Sempre que o ciclo dia/noite mudava:
+
+- iterava todos os `Assets<TerrainMaterial>`;
+- marcava cada material como mutado;
+- reescrevia o mesmo float em todos os assets;
+- o custo crescia com a quantidade de materiais/content packs.
+
+Isso permanecia mesmo após exact material interning.
+
+### Implementação
+
+Novo `TerrainLightingBuffer` em `rendering::terrain_material`:
+
+- é um Resource com um único `Handle<ShaderBuffer>`;
+- o buffer contém um `vec4<f32>`, usando `.x` para `sky_light_factor`;
+- terrain e fluid material extensions clonam o MESMO handle;
+- `set_sky_light_factor()` atualiza somente esse asset via API oficial do Bevy.
+
+`TerrainMaterialExtension` agora separa:
+
+- binding 100: shared read-only storage buffer global;
+- binding 101: uniform material-local com `fluid_animation_factor` e `tint_enabled`.
+
+O WGSL usa `terrain_global_lighting[0].x` no mesmo ponto onde antes lia `terrain_material_extension.sky_light_factor`.
+
+### Lifecycle
+
+- o buffer é criado uma vez em `begin_world_loading()`;
+- o mesmo handle é passado para `TerrainMaterials` e `FluidMaterials`;
+- `lighting.rs` mantém o existing change gate e atualiza apenas o shared buffer;
+- `release_world_session()` remove o Resource junto dos material registries.
+
+### Semântica pretendida
+
+O cálculo visual de skylight não mudou:
+
+`pow(sky_level, SKY_LIGHT_GAMMA) * sky_light_factor`
+
+Mudou somente o transporte do fator CPU → GPU.
+
+### Performance
+
+Antes: O(número de TerrainMaterial assets) mutations por alteração de iluminação global.
+
+Agora: uma mutation de `ShaderBuffer` por alteração.
+
+### Validação
+
+- `VERSION`: **0.34.25 → 0.34.26**.
+- CI Rust pendente.
+- O shader WGSL é compilado em runtime pelo renderer; Clippy/cargo check não validam o bind-group WGSL end-to-end.
+- Não executei `cargo test`, `cargo run` nem QA Windows; runtime shader validation continuará explicitamente pendente mesmo se CI Rust ficar verde.

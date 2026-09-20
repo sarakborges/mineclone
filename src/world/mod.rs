@@ -48,6 +48,7 @@ use bevy::prelude::*;
 use crate::{
     app::{game_state::GameState, resource_systems::reset_resource},
     player::hotbar::PlayerHotbar,
+    rendering::terrain_material::TerrainLightingBuffer,
     voxel::{lighting::PendingLightingUpdates, world::VoxelWorld},
 };
 use biome::{CurrentBiome, track_current_biome};
@@ -208,6 +209,7 @@ fn release_world_session(mut commands: Commands) {
     commands.remove_resource::<VoxelWorld>();
     commands.remove_resource::<BiomeField>();
     commands.remove_resource::<WorldFeatureFields>();
+    commands.remove_resource::<TerrainLightingBuffer>();
     commands.remove_resource::<TerrainMaterials>();
     commands.remove_resource::<FluidMaterials>();
     commands.remove_resource::<WorldLoadingState>();

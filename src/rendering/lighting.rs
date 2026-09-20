@@ -1,8 +1,11 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::storage::ShaderBuffer};
 
 use crate::app::game_state::GameState;
 
-use super::{environment::EnvironmentVisualState, terrain_material::TerrainMaterial};
+use super::{
+    environment::EnvironmentVisualState,
+    terrain_material::TerrainLightingBuffer,
+};
 
 #[derive(Resource, Default)]
 struct AppliedSkyLightFactor(Option<f32>);
@@ -36,15 +39,14 @@ fn sky_light_factor_needs_sync(
 fn sync_sky_light_factor(
     visuals: Res<EnvironmentVisualState>,
     mut applied: ResMut<AppliedSkyLightFactor>,
-    mut materials: ResMut<Assets<TerrainMaterial>>,
+    terrain_lighting: Res<TerrainLightingBuffer>,
+    mut shader_buffers: ResMut<Assets<ShaderBuffer>>,
 ) {
     let sky_light_factor = visuals.sky_light_factor.clamp(0.0, 1.0);
     if applied.0 == Some(sky_light_factor) {
         return;
     }
 
-    for (_, material) in materials.iter_mut() {
-        material.extension.sky_light_factor = sky_light_factor;
-    }
+    terrain_lighting.set_sky_light_factor(&mut shader_buffers, sky_light_factor);
     applied.0 = Some(sky_light_factor);
 }

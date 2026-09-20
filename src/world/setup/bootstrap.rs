@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::storage::ShaderBuffer};
 
 use crate::{
     content::{
@@ -7,7 +7,7 @@ use crate::{
         read_content,
     },
     player::player_id::LOCAL_PLAYER_ID,
-    rendering::terrain_material::TerrainMaterial,
+    rendering::terrain_material::{TerrainLightingBuffer, TerrainMaterial},
     voxel::{
         chunk::CHUNK_SIZE, coordinates::chunk_coord_from_position,
         spatial_search::find_map_square_rings, world::VoxelWorld,
@@ -38,6 +38,7 @@ const SPAWN_SEARCH_RADIUS_STEPS: i32 = 64;
 pub(in crate::world) fn begin_world_loading(
     mut commands: Commands,
     mut terrain_material_assets: ResMut<Assets<TerrainMaterial>>,
+    mut shader_buffers: ResMut<Assets<ShaderBuffer>>,
     content: WorldBootstrapContent,
     mut config: WorldBootstrapConfig,
     mut persistence: WorldBootstrapPersistence,
@@ -109,14 +110,17 @@ pub(in crate::world) fn begin_world_loading(
         ocean_weight,
     );
     let (roughness, metallic) = average_terrain_material(dimension, biomes);
+    let terrain_lighting = TerrainLightingBuffer::new(&mut shader_buffers);
     let terrain_materials = TerrainMaterials::from_registry(
         blocks,
         &content.asset_server,
         &mut terrain_material_assets,
+        &terrain_lighting,
         roughness,
         metallic,
     );
-    let fluid_materials = FluidMaterials::from_registry(fluids, &mut terrain_material_assets);
+    let fluid_materials =
+        FluidMaterials::from_registry(fluids, &mut terrain_material_assets, &terrain_lighting);
     let spawn_column = if *persistence.load_mode == WorldLoadMode::Load {
         persistence
             .save
@@ -196,6 +200,7 @@ pub(in crate::world) fn begin_world_loading(
 
     commands.insert_resource(biome_field);
     commands.insert_resource(feature_fields);
+    commands.insert_resource(terrain_lighting);
     commands.insert_resource(terrain_materials);
     commands.insert_resource(fluid_materials);
     commands.insert_resource(WorldLoadingState {

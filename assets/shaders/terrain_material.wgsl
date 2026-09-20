@@ -23,12 +23,14 @@
 #endif
 
 struct TerrainMaterialExtension {
-    sky_light_factor: f32,
     fluid_animation_factor: f32,
     tint_enabled: f32,
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(100)
+var<storage, read> terrain_global_lighting: array<vec4<f32>>;
+
+@group(#{MATERIAL_BIND_GROUP}) @binding(101)
 var<uniform> terrain_material_extension: TerrainMaterialExtension;
 
 const AMBIENT_FLOOR: f32 = 0.055;
@@ -184,7 +186,7 @@ fn fragment(
     let is_fluid = fluid_animation > 0.5;
     let ambient_occlusion = clamp(in.color.a, 0.0, 1.0);
     let sky_level = clamp(in.uv_b.x, 0.0, 1.0);
-    let sky_light = pow(sky_level, SKY_LIGHT_GAMMA) * terrain_material_extension.sky_light_factor;
+    let sky_light = pow(sky_level, SKY_LIGHT_GAMMA) * terrain_global_lighting[0].x;
 
     // RGB remains linear all the way through interpolation. Strength is shaped
     // from the peak only, so boosting dim light never raises the weaker color

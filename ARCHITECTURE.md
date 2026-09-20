@@ -166,6 +166,8 @@ Rendering systems should avoid rebuilding expensive material/model/tint state ev
 
 Terrain material construction should intern exact-identical block material states instead of allocating one asset per block face. Sharing is valid only when texture path, tint behavior, alpha semantics, layer/depth-bias, and the construction-wide material parameters are identical; material interning must never merge semantically different layers.
 
+Scene-global terrain lighting state must not be mirrored into every material asset. `TerrainLightingBuffer` owns one shared GPU `ShaderBuffer` referenced by terrain and fluid material extensions; day/night updates mutate that buffer once, while per-material uniforms remain limited to material-local/static state such as tint and fluid-animation flags.
+
 ## 9. Lifecycle helpers
 
 Prefer the existing generic lifecycle primitives when the operation is truly generic.

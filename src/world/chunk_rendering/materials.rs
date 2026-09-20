@@ -9,7 +9,9 @@ use crate::{
     },
     rendering::{
         block_texture::{block_face_texture_layers, load_block_texture_layer},
-        terrain_material::{TerrainMaterial, TerrainMaterialExtension},
+        terrain_material::{
+            TerrainLightingBuffer, TerrainMaterial, TerrainMaterialExtension,
+        },
     },
     voxel::block_face::{BlockFace, BlockFaces},
 };
@@ -56,6 +58,7 @@ struct TerrainMaterialBuilder<'a> {
     asset_server: &'a AssetServer,
     materials: &'a mut Assets<TerrainMaterial>,
     cache: HashMap<TerrainMaterialKey, Handle<TerrainMaterial>>,
+    lighting: &'a TerrainLightingBuffer,
     roughness: f32,
     metallic: f32,
 }
@@ -64,6 +67,7 @@ impl<'a> TerrainMaterialBuilder<'a> {
     fn new(
         asset_server: &'a AssetServer,
         materials: &'a mut Assets<TerrainMaterial>,
+        lighting: &'a TerrainLightingBuffer,
         roughness: f32,
         metallic: f32,
     ) -> Self {
@@ -71,6 +75,7 @@ impl<'a> TerrainMaterialBuilder<'a> {
             asset_server,
             materials,
             cache: HashMap::new(),
+            lighting,
             roughness,
             metallic,
         }
@@ -128,8 +133,9 @@ impl<'a> TerrainMaterialBuilder<'a> {
                 ..default()
             },
             extension: TerrainMaterialExtension {
+                lighting: self.lighting.handle(),
+                fluid_animation_factor: 0.0,
                 tint_enabled,
-                ..default()
             },
         });
         self.cache.insert(key, material.clone());
@@ -148,6 +154,7 @@ impl TerrainMaterials {
         blocks: &BlockRegistry,
         asset_server: &AssetServer,
         materials: &mut Assets<TerrainMaterial>,
+        lighting: &TerrainLightingBuffer,
         roughness: f32,
         metallic: f32,
     ) -> Self {
@@ -169,7 +176,7 @@ impl TerrainMaterials {
             .collect();
 
         let mut builder =
-            TerrainMaterialBuilder::new(asset_server, materials, roughness, metallic);
+            TerrainMaterialBuilder::new(asset_server, materials, lighting, roughness, metallic);
         let blocks = blocks
             .iter()
             .map(|definition| {
@@ -204,7 +211,11 @@ pub struct FluidMaterials {
 }
 
 impl FluidMaterials {
-    pub fn from_registry(fluids: &FluidRegistry, materials: &mut Assets<TerrainMaterial>) -> Self {
+    pub fn from_registry(
+        fluids: &FluidRegistry,
+        materials: &mut Assets<TerrainMaterial>,
+        lighting: &TerrainLightingBuffer,
+    ) -> Self {
         let materials = fluids
             .iter()
             .map(|(fluid_id, definition)| {
@@ -225,9 +236,9 @@ impl FluidMaterials {
                         ..default()
                     },
                     extension: TerrainMaterialExtension {
+                        lighting: lighting.handle(),
                         fluid_animation_factor: 1.0,
                         tint_enabled: 1.0,
-                        ..default()
                     },
                 });
 
