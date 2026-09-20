@@ -46,7 +46,7 @@
       }
     },
     {
-      "id": "asteria:tree_oak",
+      "id": "asteria:oak_tree",
       "placement": {
         "spacing": 12,
         "chance": 0.66,
