@@ -11,6 +11,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     content::fluid::{FluidId, FluidRegistry},
     voxel::{
+        coordinates::chunk_coord_from_world,
         fluid::FluidCell,
         lighting::PendingLightingUpdates,
         world::VoxelWorld,
