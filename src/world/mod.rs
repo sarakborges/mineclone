@@ -9,6 +9,7 @@ pub(crate) mod chunk_rendering;
 pub(crate) mod chunk_system_params;
 mod chunk_task_queue;
 mod chunk_storage;
+mod chunk_storage_kind;
 mod chunk_unloading;
 mod chunk_visibility;
 mod clock_persistence;
