@@ -13,7 +13,7 @@ use super::{
     spatial::{cell_hash, hash_unit, surface_site_position},
 };
 
-const PROXIMITY_SITE_RADIUS: i32 = 1;
+const PROXIMITY_SITE_RADIUS: i32 = SITE_SEARCH_RADIUS;
 const PROXIMITY_NEIGHBOR_COUNT: usize =
     ((PROXIMITY_SITE_RADIUS * 2 + 1) * (PROXIMITY_SITE_RADIUS * 2 + 1) - 1) as usize;
 
@@ -102,7 +102,13 @@ impl BiomeField {
             site,
             climate,
             hash.rotate_left(9),
-            |candidate| adjacency_allows(candidate, &adjacency),
+            |candidate| {
+                adjacency_allows(candidate, &adjacency)
+                    && exclusive_fallback_allows(
+                        &self.surface_biomes[raw_index],
+                        candidate,
+                    )
+            },
         )
         .unwrap_or_else(|| {
             panic!(
@@ -264,8 +270,20 @@ fn surface_sites_share_border(
 }
 
 fn biomes_conflict(left: &BiomeFieldEntry, right: &BiomeFieldEntry) -> bool {
-    left.avoid_near.iter().any(|avoided| avoided == &right.id)
-        || right.avoid_near.iter().any(|avoided| avoided == &left.id)
+    let explicit_conflict = left.avoid_near.iter().any(|avoided| avoided == &right.id)
+        || right.avoid_near.iter().any(|avoided| avoided == &left.id);
+    let exclusive_group_conflict = left.id != right.id
+        && left.exclusive_neighbor_group.is_some()
+        && left.exclusive_neighbor_group == right.exclusive_neighbor_group;
+
+    explicit_conflict || exclusive_group_conflict
+}
+
+fn exclusive_fallback_allows(
+    raw: &BiomeFieldEntry,
+    candidate: &BiomeFieldEntry,
+) -> bool {
+    candidate.exclusive_neighbor_group.is_none() || candidate.id == raw.id
 }
 
 pub(super) fn select_volume_biome_index(
@@ -408,6 +426,56 @@ mod tests {
             spacing,
             42,
         ));
+    }
+
+    fn test_surface_entry(id: &str, group: Option<&str>) -> BiomeFieldEntry {
+        BiomeFieldEntry {
+            id: id.to_owned(),
+            distributions: vec![crate::content::biome_distribution::BiomeDistribution::Regional],
+            size: crate::content::dimension::DimensionBiomeSize {
+                x: crate::content::dimension::DimensionBiomeSizeAxis { min: 1.0, max: 1.0 },
+                z: crate::content::dimension::DimensionBiomeSizeAxis { min: 1.0, max: 1.0 },
+                y: None,
+            },
+            weight: 1.0,
+            climate: BiomeClimate::default(),
+            vertical_range: None,
+            priority: 0,
+            terrain: None,
+            terrain_modifiers: Vec::new(),
+            hydrology: Default::default(),
+            density_modifier: None,
+            solid_block: None,
+            density_seed: 0,
+            avoid_near: Vec::new(),
+            require_near: Vec::new(),
+            exclusive_neighbor_group: group.map(str::to_owned),
+            surface_margin_width: None,
+        }
+    }
+
+    #[test]
+    fn exclusive_neighbor_group_conflicts_across_different_biome_ids() {
+        let volcano = test_surface_entry("volcano", Some("mountain_terrain"));
+        let gorge = test_surface_entry("gorge", Some("mountain_terrain"));
+        let another_volcano = test_surface_entry("volcano", Some("mountain_terrain"));
+        let plains = test_surface_entry("plains", None);
+
+        assert!(biomes_conflict(&volcano, &gorge));
+        assert!(!biomes_conflict(&volcano, &another_volcano));
+        assert!(!biomes_conflict(&volcano, &plains));
+    }
+
+    #[test]
+    fn exclusive_group_biome_cannot_appear_as_fallback_for_another_raw_site() {
+        let plains = test_surface_entry("plains", None);
+        let volcano = test_surface_entry("volcano", Some("mountain_terrain"));
+        let gorge = test_surface_entry("gorge", Some("mountain_terrain"));
+
+        assert!(!exclusive_fallback_allows(&plains, &volcano));
+        assert!(!exclusive_fallback_allows(&volcano, &gorge));
+        assert!(exclusive_fallback_allows(&volcano, &volcano));
+        assert!(exclusive_fallback_allows(&volcano, &plains));
     }
 
     #[test]

@@ -15,7 +15,6 @@ use super::{
     chunk_system_params::{ChunkContent, ChunkGeneration},
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
     generation::{ChunkGenerationContext, generate_chunk},
-    generation_region::generation_region_coord,
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -106,26 +105,6 @@ impl ChunkGenerationTasks {
             .snapshot
             .as_ref()
             .unwrap_or_else(|| panic!("chunk generation snapshot must be prepared before scheduling"));
-        let region = generation_region_coord(coord);
-        if !snapshot
-            .feature_fields
-            .generation_region_prerequisites_initialized(region)
-            && self
-                .pending
-                .any_coord(|pending_coord| generation_region_coord(pending_coord) == region)
-        {
-            return false;
-        }
-
-        let column = coord.xz();
-        if !snapshot.feature_fields.generation_columns_initialized(column)
-            && self
-                .pending
-                .any_coord(|pending_coord| pending_coord.xz() == column)
-        {
-            return false;
-        }
-
         let snapshot = snapshot.clone();
         let revision = self.revision;
         let task = AsyncComputeTaskPool::get().spawn(async move {

@@ -54,6 +54,7 @@ pub(super) struct BiomeFieldEntry {
     pub density_seed: u64,
     pub avoid_near: Vec<String>,
     pub require_near: Vec<String>,
+    pub exclusive_neighbor_group: Option<String>,
     pub surface_margin_width: Option<f32>,
 }
 
@@ -206,6 +207,7 @@ impl BiomeField {
                 density_seed: biome_density_seed(seed, &biome.id),
                 avoid_near: dimension_biome.avoid_near.clone(),
                 require_near: dimension_biome.require_near.clone(),
+                exclusive_neighbor_group: dimension_biome.exclusive_neighbor_group.clone(),
                 surface_margin_width: biome.surface_margin.as_ref().map(|margin| margin.width),
             };
 

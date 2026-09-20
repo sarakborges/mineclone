@@ -59,6 +59,7 @@ impl WorldFeatureFields {
         self.caches.generation_columns(coord, factory)
     }
 
+    #[cfg(test)]
     pub(crate) fn generation_columns_initialized(&self, coord: IVec2) -> bool {
         self.caches.generation_columns_initialized(coord)
     }
@@ -103,11 +104,6 @@ impl WorldFeatureFields {
 
             GenerationRegion { coord, hydrology }
         })
-    }
-
-    pub(crate) fn generation_region_prerequisites_initialized(&self, coord: IVec3) -> bool {
-        self.caches
-            .generation_region_prerequisites_initialized(coord)
     }
 
     pub(crate) fn retain_for_chunks<'a>(

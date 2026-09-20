@@ -269,3 +269,14 @@ Before adding a new system or helper, answer these questions:
 10. If this completes an update block, has `VERSION` been bumped appropriately?
 
 When in doubt, prefer one authoritative owner plus small reusable primitives over mirrored state, copied systems, or one oversized context.
+
+
+### Surface biome exclusive-neighbor groups
+
+Dimension biome entries may define `exclusiveNeighborGroup`. Two different surface biome IDs in the same non-empty group are not allowed to share a Voronoi border. This is the authoritative owner for families such as mountainous terrain variants; do not duplicate an all-pairs `avoidNear` matrix for the same family.
+
+Adjacency checks use the same `SITE_SEARCH_RADIUS` as surface-site sampling, so constraint evaluation cannot inspect a smaller neighborhood than the Voronoi field itself. A biome in an exclusive group may survive only when it is the raw weighted winner of that site; exclusive-group biomes are not eligible as fallback replacements for a different raw biome. This prevents independent fallback resolution on adjacent sites from creating two different exclusive-group terrain IDs after the raw adjacency check.
+
+### Concurrent worldgen prerequisites
+
+Generation-region, hydrology, volume-biome, cave, and generation-column caches own shared prerequisite serialization through per-key `OnceLock` entries. Chunk task dispatch must not add a second “only one task per uninitialized region/column” gate: concurrent tasks may enter the cache safely, one computes the value, and the others reuse it. This preserves bounded task parallelism without duplicate prerequisite construction.

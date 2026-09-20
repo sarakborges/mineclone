@@ -39,6 +39,8 @@ pub struct DimensionBiome {
     pub avoid_near: Vec<String>,
     #[serde(default)]
     pub require_near: Vec<String>,
+    #[serde(default)]
+    pub exclusive_neighbor_group: Option<String>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -168,6 +170,22 @@ impl DimensionDefinition {
                     self.id,
                     entry.id,
                     avoided_id
+                );
+            }
+
+            if let Some(group) = entry.exclusive_neighbor_group.as_deref() {
+                assert_eq!(
+                    biome.kind,
+                    BiomeKind::Surface,
+                    "dimension {} biome {} exclusiveNeighborGroup is only valid for surface biomes",
+                    self.id,
+                    entry.id
+                );
+                assert!(
+                    !group.trim().is_empty(),
+                    "dimension {} biome {} exclusiveNeighborGroup cannot be empty",
+                    self.id,
+                    entry.id
                 );
             }
 

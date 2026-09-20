@@ -63,6 +63,7 @@ where
         entry.get_or_init(factory).clone()
     }
 
+    #[cfg(test)]
     fn is_initialized(&self, key: &K) -> bool {
         self.entries
             .read()
@@ -200,6 +201,7 @@ impl FeatureCaches {
             .get_or_insert_with(coord, || Arc::new(factory()))
     }
 
+    #[cfg(test)]
     pub(super) fn generation_columns_initialized(&self, coord: IVec2) -> bool {
         self.generation_columns.is_initialized(&coord)
     }
@@ -248,12 +250,6 @@ impl FeatureCaches {
     ) -> Arc<GenerationRegion> {
         self.regions
             .get_or_insert_with(coord, || Arc::new(factory()))
-    }
-
-    pub(super) fn generation_region_prerequisites_initialized(&self, coord: IVec3) -> bool {
-        self.regions.is_initialized(&coord)
-            && self.volume_biomes.is_initialized(&coord)
-            && self.caves.is_initialized(&coord)
     }
 
     pub(super) fn retain_for_chunks<'a>(
