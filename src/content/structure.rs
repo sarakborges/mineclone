@@ -45,12 +45,8 @@ pub struct StructureVariantDefinition {
     pub weight: f32,
     #[serde(default)]
     pub anchor: StructureAnchor,
-    #[serde(default)]
     pub palette: HashMap<String, StructurePaletteEntry>,
-    #[serde(default)]
     pub layers: Vec<StructureLayer>,
-    #[serde(default)]
-    pub variants: Vec<StructureVariantDefinition>,
     #[serde(skip)]
     runtime: StructureRuntime,
 }
@@ -84,8 +80,12 @@ pub struct StructureDefinition {
     pub generation: StructureGenerationRules,
     #[serde(default)]
     pub anchor: StructureAnchor,
+    #[serde(default)]
     pub palette: HashMap<String, StructurePaletteEntry>,
+    #[serde(default)]
     pub layers: Vec<StructureLayer>,
+    #[serde(default)]
+    pub variants: Vec<StructureVariantDefinition>,
     #[serde(skip)]
     runtime: StructureRuntime,
 }
