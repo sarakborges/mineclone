@@ -8,7 +8,6 @@ use crate::{
     voxel::{
         coordinates::{chunk_coord_from_world, chunk_origin},
         deduplicated_queue::DeduplicatedQueue,
-        fluid::FluidCell,
         neighbors::HORIZONTAL_NEIGHBORS,
         world::VoxelWorld,
     },
@@ -44,13 +43,10 @@ pub(in crate::world) struct GeneratedFluidSettling {
     generated_chunks: HashSet<IVec3>,
     mutable_chunks: HashSet<IVec3>,
     changed_existing_positions: HashSet<IVec3>,
-    dynamic_positions: HashSet<IVec3>,
     work_queue: DeduplicatedQueue<IVec3>,
     verification_queue: DeduplicatedQueue<IVec3>,
     verification_chunks: Vec<IVec3>,
     verification_chunk_cursor: usize,
-    verification_dynamic: Vec<IVec3>,
-    verification_dynamic_cursor: usize,
     verification_active: bool,
     verification_changed: bool,
     scratch: FluidSolverScratch,
@@ -132,19 +128,6 @@ impl GeneratedFluidSettling {
                 continue;
             }
 
-            if let Some(position) = self
-                .verification_dynamic
-                .get(self.verification_dynamic_cursor)
-                .copied()
-            {
-                self.verification_dynamic_cursor += 1;
-                budget.record(1);
-                if self.dynamic_positions.contains(&position) {
-                    self.evaluate_position(world, fluids, position);
-                }
-                continue;
-            }
-
             if let Some(coord) = self
                 .verification_chunks
                 .get(self.verification_chunk_cursor)
@@ -197,13 +180,10 @@ impl GeneratedFluidSettling {
         self.generated_chunks.clear();
         self.mutable_chunks.clear();
         self.changed_existing_positions.clear();
-        self.dynamic_positions.clear();
         self.work_queue.clear();
         self.verification_queue.clear();
         self.verification_chunks.clear();
         self.verification_chunk_cursor = 0;
-        self.verification_dynamic.clear();
-        self.verification_dynamic_cursor = 0;
         self.verification_active = false;
         self.verification_changed = false;
         self.active = false;
@@ -219,15 +199,6 @@ impl GeneratedFluidSettling {
         self.verification_chunks
             .sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
         self.verification_chunk_cursor = 0;
-
-        self.verification_dynamic.clear();
-        self.verification_dynamic
-            .extend(self.dynamic_positions.iter().copied());
-        self.verification_dynamic.sort_unstable_by_key(|position| {
-            let coord = chunk_coord_from_world(*position);
-            (coord.y, coord.z, coord.x, position.y, position.z, position.x)
-        });
-        self.verification_dynamic_cursor = 0;
 
         self.verification_active = true;
         self.verification_changed = false;
@@ -267,21 +238,11 @@ impl GeneratedFluidSettling {
             self.verification_changed = true;
         }
 
-        self.track_dynamic_position(position, desired);
-
         if !self.generated_chunks.contains(&coord) {
             self.changed_existing_positions.insert(position);
         }
 
         self.enqueue_changed_neighborhood(world, position);
-    }
-
-    fn track_dynamic_position(&mut self, position: IVec3, fluid: Option<FluidCell>) {
-        if fluid.is_some_and(|fluid| !fluid.is_source()) {
-            self.dynamic_positions.insert(position);
-        } else {
-            self.dynamic_positions.remove(&position);
-        }
     }
 
     fn include_mutable_chunk(
@@ -301,10 +262,7 @@ impl GeneratedFluidSettling {
         };
 
         self.mutable_chunks.insert(coord);
-        let origin = chunk_origin(coord);
-        chunk.visit_dynamic_fluid_cells(|local_position, _fluid| {
-            self.dynamic_positions.insert(origin + local_position);
-        });
+        debug_assert!(chunk.is_empty() || world.chunk(coord).is_some());
 
         if self.verification_active {
             self.verification_changed = true;
@@ -355,6 +313,13 @@ impl GeneratedFluidSettling {
     fn seed_frontier_into_verification(&mut self, world: &VoxelWorld, coord: IVec3) {
         if !self.mutable_chunks.contains(&coord) || world.chunk(coord).is_none() {
             return;
+        }
+
+        let origin = chunk_origin(coord);
+        if let Some(chunk) = world.chunk(coord) {
+            chunk.visit_dynamic_fluid_cells(|local_position, _fluid| {
+                self.verification_queue.enqueue(origin + local_position);
+            });
         }
 
         let mut targets = Vec::new();
