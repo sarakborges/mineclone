@@ -17,7 +17,7 @@ pub(crate) fn staging_generation_directory_name(generation: u64) -> String { for
 
 fn checked_directory_slot(world_directory: &Path, relative: &Path) -> io::Result<PathBuf> {
     let path = world_directory.join(relative);
-    match fs::symlink_metadata(&path) {
+    match fs::symlink_metadata(path.as_path()) {
         Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => Ok(path),
         Ok(_) => Err(io::Error::new(io::ErrorKind::InvalidData, format!("chunk storage directory slot is not a real directory: {}", path.display()))),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(path),
@@ -78,7 +78,7 @@ fn write_generation_chunks_to_staging(staging: &Path, chunks: &[DiskChunk]) -> i
 pub(crate) fn remove_generation_chunks(world_directory: &Path, generation: u64) -> io::Result<()> {
     let relative = PathBuf::from(generation_directory_name(generation));
     let path = checked_directory_slot(world_directory, &relative)?;
-    match fs::symlink_metadata(&path) {
+    match fs::symlink_metadata(path.as_path()) {
         Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => { fs::remove_dir_all(path)?; sync_directory(world_directory) }
         Ok(_) => Err(io::Error::new(io::ErrorKind::InvalidData, "chunk generation storage must be a real directory")),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
@@ -93,7 +93,7 @@ fn sync_directory_tree(directory: &Path) -> io::Result<()> {
         let current = directories[index].clone(); index += 1;
         for entry in fs::read_dir(&current)? { let entry = entry?; if entry.file_type()?.is_dir() { directories.push(entry.path()); } }
     }
-    for directory in directories.into_iter().rev() { sync_directory(&directory)?; }
+    for directory in directories.into_iter().rev() { sync_directory(directory.as_path())?; }
     Ok(())
 }
 fn sync_directory(directory: &Path) -> io::Result<()> { fs::File::open(directory)?.sync_all() }
