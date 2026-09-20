@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.37.1`. HEAD funcional `c85c0831226dea12578dbd6aab97492d8c7f86a4`. CI push `35533512875` e PR `35533515535`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Fog adaptativa voltou a esconder a frontier ainda não publicada; Volcano usa sky/fog neutros em cinza; Witchwood e Enchanted Forest são mutuamente `avoidNear`; fluidos authored de chunks novos passam por initial settling com o mesmo solver do runtime antes de lighting/primeiro mesh, sem promover chunks derivados a persistentes. Não houve `cargo test`, `cargo run` nem QA Windows.
+**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.37.2`. HEAD funcional `c85c0831226dea12578dbd6aab97492d8c7f86a4`. CI push `35533512875` e PR `35533515535`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Fog adaptativa voltou a esconder a frontier ainda não publicada; Volcano usa sky/fog neutros em cinza; Witchwood e Enchanted Forest são mutuamente `avoidNear`; fluidos authored de chunks novos passam por initial settling com o mesmo solver do runtime antes de lighting/primeiro mesh, sem promover chunks derivados a persistentes. Não houve `cargo test`, `cargo run` nem QA Windows.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.34.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **Estado mais recente em `develop`: comparação/correção do save game em andamento; HEAD funcional ainda não versionado `bd713963b9bbb8f69eeeb6df6b7bf7aa2773152f`.** CI `35413383474` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Já foram corrigidas persistência de scheduled fluid work, health do player, creatures e lock cross-process do diretório do mundo. Ainda NÃO foram implementados selected hotbar slot, rotação/look do player, autosave disparado somente pela passagem do clock, nem a migração do snapshot global para storage incremental por chunk/region. **Não houve bump de VERSION neste checkpoint porque o bloco de save foi interrompido antes do fechamento completo.** Não houve `cargo test`, `cargo run` ou QA Windows.
 
@@ -6324,3 +6324,166 @@ Recriar exatamente o caso que congelou:
 3. confirmar entrada em Gameplay após convergência;
 4. confirmar que o primeiro frame do chunk já contém o spread inicial;
 5. durante streaming de região com fluido pesado, confirmar ausência de hitch longo e ausência de publicação antes do pre-settle local.
+
+
+## Checkpoint 165 — 2026-09-20: remover fixed-point de fluidos gerados; prime step finito e source pool não é drop [ROOT CAUSE FIX; VERSION 0.37.2; CI VERDE]
+
+### Sintoma
+
+Mesmo após tornar o initial fluid settling budgetado entre frames, a criação de mundo podia continuar presa na tela de loading.
+
+O primeiro hotfix de budget (`0.37.1`) corrigia apenas monopolização de frame. Ele NÃO corrigia liveness da própria fila: se o solver alternasse estados, a queue podia nunca chegar a zero.
+
+### Investigação profunda
+
+O bootstrap máximo atual é limitado a raio horizontal 4 e vertical 2 (até ~245 chunks), portanto o problema não era simplesmente “render distance inteira”.
+
+Também foi descartada a hipótese de bulk-simulation do interior de Ocean/Lake/etc.:
+
+- worldgen gera esses volumes como sources;
+- source não flui em source;
+- frontier seed considera apenas targets vazios expostos;
+- o bitset `fluid_frontier_sources` evita scan 16³ ingênuo.
+
+A causa real estava em uma regra state-dependent de downhill routing.
+
+#### Regressão histórica identificada
+
+Commit histórico `fa0b7d6dbe9ee6c7e7028fbe8e9738f05c10449d` (“Treat lower same-fluid pools as reachable drops”) alterou `can_fall_from()` para usar:
+
+- célula atual vazia + source do mesmo fluido abaixo => considerar como drop;
+- depois que a célula enchia, o mesmo ponto deixava de ser drop porque o fluido abaixo era source.
+
+Isso permitia ciclo:
+
+1. caminho A, ainda vazio acima de source pool, é classificado como drop mais próximo;
+2. A recebe flow;
+3. A deixa de ser vazio e deixa de ser drop;
+4. outro caminho B passa a ser preferido;
+5. A perde alimentação e esvazia;
+6. A volta a ser vazio e volta a ser drop;
+7. repetir.
+
+O pre-settle fixed-point re-enfileirava exatamente centro/baixo/horizontais depois de cada mutação, portanto podia perpetuar esse ciclo indefinidamente.
+
+A regra também contrariava o contrato reafirmado pelo usuário: **source não flui em source**. Source pool é suporte/estado authored, não uma abertura downhill.
+
+### Correção do solver
+
+`can_fall_from()` voltou a uma classificação estável:
+
+- vazio real abaixo => drop;
+- coluna dinâmica existente do mesmo fluido com `spread_distance == 0` => drop persistente, preservando waterfall routing;
+- source do mesmo fluido abaixo => NÃO é drop.
+
+Foi substituído o teste histórico `empty_ledge_above_same_fluid_pool_is_still_a_drop` por uma regressão que cria:
+
+- source pool em uma direção;
+- drop real concorrente em outra;
+
+e exige que o source pool não atraia o downhill routing.
+
+### Correção arquitetural: priming, não settling
+
+A releitura do contrato dos checkpoints 109–112 mostrou que o modelo histórico era:
+
+- volume de hydrology/surfaceFluid gerado é estado inicial autoritativo;
+- somente targets vazios expostos entram no solver;
+- propagação visual deve continuar step-by-step respeitando `spreadSpeed`.
+
+Portanto o checkpoint 163 interpretou errado o requisito ao introduzir convergência até fixed point.
+
+Novo modelo:
+
+`Generating → PrimingFluids → Lighting → Meshing → Spawning`
+
+`GeneratedFluidPriming`:
+
+- captura somente a frontier exposta no início do batch;
+- avalia cada target vazio no máximo uma vez;
+- pode materializar a primeira célula `spreading`;
+- nunca sobrescreve fluido authored/source;
+- nunca re-enfileira vizinhos criados pelo próprio priming;
+- não procura fixed point;
+- continua frame-budgeted;
+- usa `set_derived_fluid_at()`, então prime step não promove chunk gerado a persistent;
+- Runtime scheduler assume toda continuação com cadência authored.
+
+Resultado pretendido:
+
+- primeiro mesh já mostra que o fluido começou a fluir;
+- waterfall/spread NÃO aparece inteiro instantaneamente;
+- Gameplay apresenta os próximos steps no intervalo normal de água/lava.
+
+### Bootstrap
+
+Priming inicial:
+
+- budget 4 ms/frame;
+- mínimo 16 targets antes do clock check;
+- máximo 1024 targets/frame;
+- queue é finita por construção, pois mutations não criam novo priming work;
+- após consumir a snapshot da frontier, Loading avança para Lighting.
+
+No OnEnter Gameplay, o reseed normal encontra a nova célula dinâmica criada pelo prime step e agenda a continuação.
+
+### Streaming
+
+Streaming usa a mesma semântica, com budget menor:
+
+- 1 ms/frame;
+- mínimo 8 targets;
+- máximo 256 targets/frame.
+
+Follow-up `e02a3e239950fa5bd4356c3e31ca685a37e44cf4` fecha outra fonte de starvation:
+
+- enquanto um batch está em priming, novos generation results NÃO são incorporados ao mesmo batch;
+- o batch atual precisa terminar e publicar primeiro;
+- somente então o próximo batch de generation results é coletado.
+
+Isso dá um limite de publicação por batch e impede um conjunto de priming de crescer indefinidamente durante movimento/streaming contínuo.
+
+### Limpeza
+
+A abstração `settling` foi removida por completo:
+
+- `2d7a806605e421be60522d3cfe2d43516697d4a2` cria `fluid_updates/priming.rs`;
+- `2ffff8c70826e5f64be7036b3be5449d7eefb7ec` muda o owner/module para `priming`;
+- `911360936b51799f41e53bd51551cc60187028a8` remove `settling.rs`.
+
+Não fica alias/caminho legado para a arquitetura errada.
+
+### Commits / versionamento
+
+- `72fef101829b50d00011ca20be4e1a4af5595585` — source pool deixa de ser drop + fixed-point vira one-step priming + `VERSION 0.37.2`;
+- `e02a3e239950fa5bd4356c3e31ca685a37e44cf4` — batches de streaming ficam bounded;
+- `911360936b51799f41e53bd51551cc60187028a8` — HEAD funcional final antes deste handoff.
+
+### CI
+
+HEAD funcional `911360936b51799f41e53bd51551cc60187028a8`:
+
+- push CI `35534437410`: **success**;
+- PR CI `35534440795`: **success**;
+- localization audit: success;
+- Clippy `--locked --all-targets --all-features -- -D warnings`: success;
+- `cargo check --locked`: success.
+
+Não houve `cargo test`, `cargo run` nem QA Windows.
+
+### QA prioritária
+
+1. Recriar exatamente o mundo que travava em Loading.
+   - esperado: PrimingFluids termina; Gameplay é alcançado.
+2. Source ao lado/acima de source do mesmo fluido:
+   - source existente não pode receber/atrair flow como downhill destination.
+3. Volcano:
+   - primeiro mesh deve mostrar ao menos o primeiro spill step quando houver target elegível;
+   - próximos steps devem aparecer gradualmente com cadência da lava.
+4. Água:
+   - mesma regra com cadência mais rápida.
+5. Waterfall:
+   - primeiro segmento pode nascer materializado;
+   - coluna inteira não deve ser pre-resolvida instantaneamente.
+6. Streaming contínuo:
+   - chunks novos devem publicar batch a batch sem primer crescer indefinidamente.
