@@ -22,7 +22,6 @@ use super::{
 const HORIZONTAL_PRELOAD_CHUNKS: i32 = 2;
 const FORWARD_PRELOAD_CHUNKS: i32 = 8;
 const FORWARD_PRELOAD_HALF_WIDTH_CHUNKS: f32 = 8.0;
-const SURFACE_PADDING_ABOVE_CHUNKS: i32 = 1;
 const NEAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const FAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const PLAYER_LOCAL_VOLUME_RADIUS_CHUNKS: i32 = 3;
@@ -428,7 +427,7 @@ fn rebuild_desired_chunk_coords(
             let minimum_y =
                 (surrounding_minimum.div_euclid(chunk_size) - padding_below).max(0);
             let maximum_y = (own_maximum.div_euclid(chunk_size)
-                + SURFACE_PADDING_ABOVE_CHUNKS.max(structure_chunk_allowance))
+                + structure_chunk_allowance)
                 .max(minimum_y);
 
             for y in minimum_y..=maximum_y {
