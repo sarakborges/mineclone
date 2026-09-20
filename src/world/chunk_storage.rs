@@ -53,7 +53,7 @@ pub(crate) fn publish_generation_chunks(world_directory: &Path, generation: u64,
         }
         return Err(error);
     }
-    fs::rename(&staging, &published)?;
+    fs::rename(staging, published)?;
     sync_directory(world_directory)
 }
 
