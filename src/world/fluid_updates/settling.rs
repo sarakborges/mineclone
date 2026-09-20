@@ -257,12 +257,11 @@ impl GeneratedFluidSettling {
         if !generated && !world.derived_fluid_chunk_is_mutable(coord) {
             return false;
         }
-        let Some(chunk) = world.chunk(coord) else {
+        if world.chunk(coord).is_none() {
             return false;
-        };
+        }
 
         self.mutable_chunks.insert(coord);
-        debug_assert!(chunk.is_empty() || world.chunk(coord).is_some());
 
         if self.verification_active {
             self.verification_changed = true;

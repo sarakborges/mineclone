@@ -167,7 +167,7 @@ impl ChunkStreamingState {
             "generation wave cannot finish with unpublished generated chunks"
         );
         assert!(
-            self.generation_wave_pending.values().next().is_none(),
+            self.generation_wave_pending.len() == 0,
             "generation wave cannot finish with unscheduled targets"
         );
         assert!(
@@ -183,10 +183,14 @@ impl ChunkStreamingState {
             || self.fluid_settling.contains(coord)
     }
 
+    fn resident_generated_chunk_is_unpublished(&self, coord: IVec3) -> bool {
+        self.staged_generated_chunks.contains(&coord) || self.fluid_settling.contains(coord)
+    }
+
     fn mark_ready(&mut self, coord: IVec3) {
         assert!(
-            !self.generated_chunk_is_unpublished(coord),
-            "generated chunk cannot become ready before generation-region fluid settling completes: {coord:?}"
+            !self.resident_generated_chunk_is_unpublished(coord),
+            "generated chunk cannot become ready before fluid settling completes: {coord:?}"
         );
         if self.keeps_loaded(coord) && !self.ready.contains(coord) {
             self.ready.enqueue(coord);
