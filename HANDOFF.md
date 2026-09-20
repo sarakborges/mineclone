@@ -5044,3 +5044,15 @@ A regra “v2 nunca serializa chunks inline” deixa de depender apenas do call 
 
 - `VERSION`: **0.35.1 → 0.35.2**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### Correção de integração CI do checkpoint 147
+
+A primeira CI do hardening encontrou atributos `#[serde(...)]` ainda presentes nos fields de `WorldSnapshot` depois que o tipo deixou de derivar serde.
+
+Correção:
+
+- removidos os atributos serde apenas do runtime `WorldSnapshot`;
+- defaults/compatibilidade permanecem em `StoredWorldSnapshot`, que continua sendo o único reader de disco;
+- nenhum formato persistido mudou;
+- `VERSION` permanece `0.35.2`.

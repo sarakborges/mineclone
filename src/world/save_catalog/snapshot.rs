@@ -65,9 +65,7 @@ pub(crate) struct WorldSnapshot {
     pub(crate) id: String,
     pub(crate) seed: u64,
     pub(crate) dimension_id: String,
-    #[serde(default = "legacy_worldgen_version")]
     pub(super) worldgen_version: WorldgenVersion,
-    #[serde(default)]
     pub(crate) spawn_biome: Option<String>,
     #[serde(default = "default_saved_biome_size_multiplier")]
     pub(crate) biome_size_multiplier: f32,
@@ -76,11 +74,8 @@ pub(crate) struct WorldSnapshot {
     pub(crate) day: u64,
     pub(crate) tick_in_day: u64,
     pub(crate) inventory: Vec<Option<String>>,
-    #[serde(default)]
     pub(crate) selected_hotbar_slot: usize,
-    #[serde(default)]
     pub(crate) fluid_updates: SavedFluidUpdates,
-    #[serde(default)]
     pub(crate) creatures: Vec<SavedCreature>,
     pub(super) chunks: SavedChunkCatalog,
 }
