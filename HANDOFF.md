@@ -3412,3 +3412,50 @@ A CI do cache de skylight falhou por uma call site mecânica restante após reno
 - Passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
 - `VERSION` permanece `0.34.13`.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+## Checkpoint 125 — 2026-09-20: aggregate fluid solver performance diagnostics [CÓDIGO APLICADO; CI PENDENTE]
+
+### Motivo
+
+A auditoria identificou o BFS downhill do solver como possível hotspot algorítmico, mas o novo `ENGINEERING_PRACTICES.md` exige medir antes de introduzir cache/rewrite mais complexo.
+
+### Instrumentação
+
+`FluidSolverScratch` agora acumula, sem allocations extras por chamada:
+
+- desired-state evaluations;
+- horizontal candidates considerados;
+- downhill BFS searches;
+- BFS nodes efetivamente processados.
+
+`process_fluid_updates()` agrega esses counters em `Local<FluidPerformanceDiagnostics>` e emite no máximo um log a cada 10 segundos quando houve trabalho, incluindo:
+
+- searches por desired evaluation;
+- nodes por search;
+- frames com trabalho;
+- backlog topology/wake/scheduled;
+- quantidade de dormant chunks;
+- estado de catch-up no instante do relatório.
+
+A instrumentação:
+
+- não é Resource/autoritativa;
+- não altera queue order, due ticks, budgets ou solver result;
+- não faz logging por voxel;
+- usa wall-clock somente para frequência observacional do relatório;
+- reseta apenas os counters após publicar a amostra.
+
+### Próxima decisão
+
+Usar os números observados em gameplay para escolher entre:
+
+1. cache revisionado de preferred directions, caso haja muita repetição com mundo estável;
+2. solver source-centric, caso searches por desired evaluation permaneçam altas sob mutação;
+3. nenhuma mudança algorítmica, caso o BFS não seja custo relevante.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` registra que fluid performance metrics são observacionais e nunca participam de correctness.
+- `VERSION`: **0.34.13 → 0.34.14**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.

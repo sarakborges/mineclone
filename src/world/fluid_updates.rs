@@ -27,7 +27,9 @@ use crate::{
     },
 };
 
-use self::solver::{FluidSolverScratch, desired_fluid_with_scratch, enqueue_remesh};
+use self::solver::{
+    FluidSolverMetrics, FluidSolverScratch, desired_fluid_with_scratch, enqueue_remesh,
+};
 use super::{
     chunk_remesh::ChunkRemeshQueue,
     game_rules::GameRules,
@@ -42,6 +44,7 @@ const MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK: usize = 64;
 const MAX_FLUID_UPDATES_PER_FRAME: usize = 512;
 const MAX_FLUID_CATCHUP_UPDATES_PER_FRAME: usize = 2_048;
 const FLUID_CATCHUP_QUEUE_THRESHOLD: usize = 512;
+const FLUID_DIAGNOSTIC_INTERVAL_SECONDS: f32 = 10.0;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct FluidTickKey {
@@ -446,6 +449,60 @@ pub(super) fn reseed_loaded_fluid_frontiers(
     }
 }
 
+#[derive(Default)]
+struct FluidPerformanceDiagnostics {
+    timer: Option<Timer>,
+    totals: FluidSolverMetrics,
+    active_frames: u64,
+}
+
+impl FluidPerformanceDiagnostics {
+    fn record(
+        &mut self,
+        delta: Duration,
+        metrics: FluidSolverMetrics,
+        pending: &PendingFluidUpdates,
+        catch_up: bool,
+    ) {
+        if metrics.desired_evaluations > 0 {
+            self.active_frames = self.active_frames.saturating_add(1);
+        }
+        self.totals.accumulate(metrics);
+
+        let timer = self.timer.get_or_insert_with(|| {
+            Timer::from_seconds(FLUID_DIAGNOSTIC_INTERVAL_SECONDS, TimerMode::Repeating)
+        });
+        timer.tick(delta);
+        if !timer.just_finished() || self.totals.desired_evaluations == 0 {
+            return;
+        }
+
+        let searches_per_desired =
+            self.totals.downhill_searches as f64 / self.totals.desired_evaluations as f64;
+        let nodes_per_search = if self.totals.downhill_searches == 0 {
+            0.0
+        } else {
+            self.totals.downhill_nodes as f64 / self.totals.downhill_searches as f64
+        };
+
+        info!(
+            "fluid solver diagnostics: desired={} horizontal_candidates={} downhill_searches={} downhill_nodes={} searches_per_desired={searches_per_desired:.3} nodes_per_search={nodes_per_search:.2} active_frames={} topology_backlog={} wake_backlog={} scheduled_backlog={} dormant_chunks={} catch_up={catch_up}",
+            self.totals.desired_evaluations,
+            self.totals.horizontal_candidates,
+            self.totals.downhill_searches,
+            self.totals.downhill_nodes,
+            self.active_frames,
+            pending.topology_queue.len(),
+            pending.wake_queue.len(),
+            pending.scheduled_due.len(),
+            pending.dormant_scheduled.len(),
+        );
+
+        self.totals = FluidSolverMetrics::default();
+        self.active_frames = 0;
+    }
+}
+
 #[derive(SystemParam)]
 pub(super) struct FluidSimulationRuntime<'w> {
     world: ResMut<'w, VoxelWorld>,
@@ -458,7 +515,9 @@ pub(super) fn process_fluid_updates(
     world_ticks: Res<WorldTickClock>,
     game_rules: Res<GameRules>,
     fluids: Res<FluidRegistry>,
+    time: Res<Time<Real>>,
     mut solver_scratch: Local<FluidSolverScratch>,
+    mut diagnostics: Local<FluidPerformanceDiagnostics>,
     mut runtime: FluidSimulationRuntime,
 ) {
     let current_tick = world_ticks.current_tick();
@@ -503,6 +562,13 @@ pub(super) fn process_fluid_updates(
         current_tick,
         ticks_per_second,
         &mut budget,
+    );
+
+    diagnostics.record(
+        time.delta(),
+        solver_scratch.take_metrics(),
+        &runtime.pending,
+        catch_up,
     );
 }
 

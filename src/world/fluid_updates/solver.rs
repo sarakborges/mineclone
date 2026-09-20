@@ -14,10 +14,40 @@ use crate::{
 
 use crate::world::chunk_remesh::ChunkRemeshQueue;
 
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct FluidSolverMetrics {
+    pub(super) desired_evaluations: u64,
+    pub(super) horizontal_candidates: u64,
+    pub(super) downhill_searches: u64,
+    pub(super) downhill_nodes: u64,
+}
+
+impl FluidSolverMetrics {
+    pub(super) fn accumulate(&mut self, other: Self) {
+        self.desired_evaluations = self
+            .desired_evaluations
+            .saturating_add(other.desired_evaluations);
+        self.horizontal_candidates = self
+            .horizontal_candidates
+            .saturating_add(other.horizontal_candidates);
+        self.downhill_searches = self
+            .downhill_searches
+            .saturating_add(other.downhill_searches);
+        self.downhill_nodes = self.downhill_nodes.saturating_add(other.downhill_nodes);
+    }
+}
+
 #[derive(Default)]
 pub(in crate::world) struct FluidSolverScratch {
     queue: Vec<(IVec3, u16)>,
     visited: HashMap<IVec3, (u16, u8)>,
+    metrics: FluidSolverMetrics,
+}
+
+impl FluidSolverScratch {
+    pub(super) fn take_metrics(&mut self) -> FluidSolverMetrics {
+        std::mem::take(&mut self.metrics)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -55,6 +85,11 @@ pub(super) fn desired_fluid_with_scratch(
     fluids: &FluidRegistry,
     scratch: &mut FluidSolverScratch,
 ) -> Option<FluidCell> {
+    scratch.metrics.desired_evaluations = scratch
+        .metrics
+        .desired_evaluations
+        .saturating_add(1);
+
     if target_cell.is_some() {
         return None;
     }
@@ -110,6 +145,11 @@ pub(super) fn desired_fluid_with_scratch(
             .then_with(|| left.spread_distance.cmp(&right.spread_distance))
             .then_with(|| left.fluid_id.cmp(&right.fluid_id))
     });
+
+    scratch.metrics.horizontal_candidates = scratch
+        .metrics
+        .horizontal_candidates
+        .saturating_add(candidates.len() as u64);
 
     candidates.into_iter().find_map(|candidate| {
         horizontal_spread_is_preferred_with_scratch(
@@ -205,82 +245,93 @@ fn preferred_horizontal_directions(
         return None;
     }
 
-    let FluidSolverScratch { queue, visited } = scratch;
-    queue.clear();
-    visited.clear();
-    visited.insert(origin, (0, 0));
+    scratch.metrics.downhill_searches = scratch.metrics.downhill_searches.saturating_add(1);
 
-    for (index, offset) in HORIZONTAL_NEIGHBORS.into_iter().enumerate() {
-        let position = origin + offset;
-        if !can_flow_horizontally_through(world, position, fluid_id) {
-            continue;
-        }
+    let (result, processed_nodes) = {
+        let queue = &mut scratch.queue;
+        let visited = &mut scratch.visited;
+        queue.clear();
+        visited.clear();
+        visited.insert(origin, (0, 0));
 
-        let direction = 1_u8 << index;
-        visited.insert(position, (1, direction));
-        queue.push((position, 1));
-    }
-
-    let mut nearest_drop = None;
-    let mut preferred = 0_u8;
-
-    let mut queue_index = 0;
-    while queue_index < queue.len() {
-        let (position, distance) = queue[queue_index];
-        queue_index += 1;
-
-        if nearest_drop.is_some_and(|best| distance > best) {
-            break;
-        }
-
-        let direction_mask = visited
-            .get(&position)
-            .map(|(_, directions)| *directions)
-            .expect("queued fluid path node must be visited");
-
-        if can_fall_from(world, position, fluid_id) {
-            match nearest_drop {
-                None => {
-                    nearest_drop = Some(distance);
-                    preferred = direction_mask;
-                }
-                Some(best) if best == distance => {
-                    preferred |= direction_mask;
-                }
-                Some(_) => {}
-            }
-            continue;
-        }
-
-        if distance >= remaining_steps || nearest_drop.is_some() {
-            continue;
-        }
-
-        let next_distance = distance + 1;
-        for offset in HORIZONTAL_NEIGHBORS {
-            let next = position + offset;
-            if !can_flow_horizontally_through(world, next, fluid_id) {
+        for (index, offset) in HORIZONTAL_NEIGHBORS.into_iter().enumerate() {
+            let position = origin + offset;
+            if !can_flow_horizontally_through(world, position, fluid_id) {
                 continue;
             }
 
-            match visited.get_mut(&next) {
-                Some((known_distance, known_directions)) if *known_distance == next_distance => {
-                    let merged = *known_directions | direction_mask;
-                    if merged != *known_directions {
-                        *known_directions = merged;
+            let direction = 1_u8 << index;
+            visited.insert(position, (1, direction));
+            queue.push((position, 1));
+        }
+
+        let mut nearest_drop = None;
+        let mut preferred = 0_u8;
+
+        let mut queue_index = 0;
+        while queue_index < queue.len() {
+            let (position, distance) = queue[queue_index];
+            queue_index += 1;
+
+            if nearest_drop.is_some_and(|best| distance > best) {
+                break;
+            }
+
+            let direction_mask = visited
+                .get(&position)
+                .map(|(_, directions)| *directions)
+                .expect("queued fluid path node must be visited");
+
+            if can_fall_from(world, position, fluid_id) {
+                match nearest_drop {
+                    None => {
+                        nearest_drop = Some(distance);
+                        preferred = direction_mask;
+                    }
+                    Some(best) if best == distance => {
+                        preferred |= direction_mask;
+                    }
+                    Some(_) => {}
+                }
+                continue;
+            }
+
+            if distance >= remaining_steps || nearest_drop.is_some() {
+                continue;
+            }
+
+            let next_distance = distance + 1;
+            for offset in HORIZONTAL_NEIGHBORS {
+                let next = position + offset;
+                if !can_flow_horizontally_through(world, next, fluid_id) {
+                    continue;
+                }
+
+                match visited.get_mut(&next) {
+                    Some((known_distance, known_directions)) if *known_distance == next_distance => {
+                        let merged = *known_directions | direction_mask;
+                        if merged != *known_directions {
+                            *known_directions = merged;
+                            queue.push((next, next_distance));
+                        }
+                    }
+                    Some(_) => {}
+                    None => {
+                        visited.insert(next, (next_distance, direction_mask));
                         queue.push((next, next_distance));
                     }
                 }
-                Some(_) => {}
-                None => {
-                    visited.insert(next, (next_distance, direction_mask));
-                    queue.push((next, next_distance));
-                }
             }
         }
-    }
 
-    nearest_drop.map(|_| preferred)
+        (nearest_drop.map(|_| preferred), queue_index as u64)
+    };
+
+    scratch.metrics.downhill_nodes = scratch
+        .metrics
+        .downhill_nodes
+        .saturating_add(processed_nodes);
+    result
 }
 
 fn can_flow_horizontally_through(
