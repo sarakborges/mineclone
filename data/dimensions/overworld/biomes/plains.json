@@ -47,7 +47,7 @@
   ],
   "structures": [
     {
-      "id": "asteria:oak_tree",
+      "id": "asteria:tree_oak",
       "placement": {
         "spacing": 80,
         "chance": 0.54,

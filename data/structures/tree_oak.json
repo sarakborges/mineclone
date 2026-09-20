@@ -1,5 +1,5 @@
 {
-  "id": "asteria:oak_tree",
+  "id": "asteria:tree_oak",
   "name": {
     "english": "Oak Tree",
     "portuguese_brazil": "Carvalho",
@@ -25,7 +25,7 @@
   },
   "variants": [
     {
-      "id": "oak_tree_01",
+      "id": "tree_oak_01",
       "weight": 1,
       "anchor": {
         "x": 4,
@@ -182,7 +182,7 @@
       ]
     },
     {
-      "id": "oak_tree_02",
+      "id": "tree_oak_02",
       "weight": 1,
       "anchor": {
         "x": 4,
@@ -339,7 +339,7 @@
       ]
     },
     {
-      "id": "oak_tree_03",
+      "id": "tree_oak_03",
       "weight": 1,
       "anchor": {
         "x": 4,
@@ -496,7 +496,7 @@
       ]
     },
     {
-      "id": "oak_tree_04",
+      "id": "tree_oak_04",
       "weight": 1,
       "anchor": {
         "x": 4,
