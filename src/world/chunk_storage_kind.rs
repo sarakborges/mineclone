@@ -54,6 +54,33 @@ impl ChunkStorageKind {
         }
     }
 
+    /// Publishes the authoritative chunk artifact, runs the caller's remaining generation
+    /// publication, and rolls the chunk artifact back if that publication fails.
+    ///
+    /// The save catalog owns snapshot/manifest commit ordering; this helper owns only the
+    /// storage-specific rollback invariant so callers cannot forget to clean up a published
+    /// external generation when a later commit-marker step fails.
+    pub(crate) fn publish_chunks_then<T>(
+        self,
+        world_directory: &Path,
+        generation: u64,
+        chunks: &[DiskChunk],
+        publish_generation: impl FnOnce(Vec<DiskChunk>) -> io::Result<T>,
+    ) -> io::Result<T> {
+        let snapshot_chunks = self.publish_chunks(world_directory, generation, chunks)?;
+        match publish_generation(snapshot_chunks) {
+            Ok(value) => Ok(value),
+            Err(error) => {
+                if let Err(cleanup_error) = self.remove_chunks(world_directory, generation) {
+                    return Err(io::Error::other(format!(
+                        "generation publication failed ({error}); chunk rollback also failed ({cleanup_error})"
+                    )));
+                }
+                Err(error)
+            }
+        }
+    }
+
     /// Resolves the one authoritative persisted chunk representation for a generation.
     ///
     /// External-storage generations must not also carry snapshot chunks: accepting both
@@ -241,6 +268,50 @@ mod tests {
         ChunkStorageKind::GenerationDirectory
             .remove_chunks(&root, 5)
             .expect("external generation must be removable");
+        std::fs::remove_dir_all(root).expect("temp root must be removed");
+    }
+
+    #[test]
+    fn failed_generation_publication_rolls_back_external_chunks() {
+        let root = temp_root("rollback");
+        let chunk: DiskChunk = serde_json::from_str(r#"{"coord":[1,0,2]}"#)
+            .expect("minimal empty chunk fixture must decode");
+        let storage = ChunkStorageKind::GenerationDirectory;
+
+        let error = storage
+            .publish_chunks_then(&root, 13, std::slice::from_ref(&chunk), |snapshot_chunks| {
+                assert!(snapshot_chunks.is_empty());
+                Err::<(), _>(io::Error::other("commit marker failed"))
+            })
+            .expect_err("failed generation publication must propagate");
+        assert_eq!(error.to_string(), "commit marker failed");
+        assert!(!storage
+            .generation_slot_occupied(&root, 13)
+            .expect("rollback must release the generation slot"));
+        std::fs::remove_dir_all(root).expect("temp root must be removed");
+    }
+
+    #[test]
+    fn successful_generation_publication_keeps_external_chunks() {
+        let root = temp_root("commit");
+        let chunk: DiskChunk = serde_json::from_str(r#"{"coord":[2,0,4]}"#)
+            .expect("minimal empty chunk fixture must decode");
+        let storage = ChunkStorageKind::GenerationDirectory;
+
+        let value = storage
+            .publish_chunks_then(&root, 17, std::slice::from_ref(&chunk), |snapshot_chunks| {
+                assert!(snapshot_chunks.is_empty());
+                Ok(42)
+            })
+            .expect("successful generation publication must commit");
+        assert_eq!(value, 42);
+        assert!(storage
+            .generation_slot_occupied(&root, 17)
+            .expect("committed generation must keep its slot"));
+
+        storage
+            .remove_chunks(&root, 17)
+            .expect("test generation must be removable");
         std::fs::remove_dir_all(root).expect("temp root must be removed");
     }
 }
