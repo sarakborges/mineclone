@@ -89,28 +89,32 @@ struct WorldSnapshotState<'w> {
     world_ticks: Res<'w, WorldTickClock>,
 }
 
+type SavedPlayerQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Transform,
+        &'static GameMode,
+        &'static EntityHealth,
+        &'static GameplayCamera,
+    ),
+    (With<GameplayCamera>, With<PlayerId>),
+>;
+
+type SavedCreatureQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static CreatureInstance,
+        &'static Transform,
+        &'static EntityHealth,
+    ),
+>;
+
 #[derive(SystemParam)]
 struct WorldSaveEntities<'w, 's> {
-    player: Query<
-        'w,
-        's,
-        (
-            &'static Transform,
-            &'static GameMode,
-            &'static EntityHealth,
-            &'static GameplayCamera,
-        ),
-        (With<GameplayCamera>, With<PlayerId>),
-    >,
-    creatures: Query<
-        'w,
-        's,
-        (
-            &'static CreatureInstance,
-            &'static Transform,
-            &'static EntityHealth,
-        ),
-    >,
+    player: SavedPlayerQuery<'w, 's>,
+    creatures: SavedCreatureQuery<'w, 's>,
     pending_creatures: Res<'w, PendingCreatureRestores>,
 }
 

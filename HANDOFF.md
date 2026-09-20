@@ -3536,3 +3536,15 @@ Outros ajustes:
 - `ARCHITECTURE.md` passa a citar `WorldSaveContext` como exemplo canônico de composição de contexts.
 - `VERSION`: **0.34.14 → 0.34.15**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### Correção de integração CI do checkpoint 126
+
+A primeira CI do refactor de save falhou somente em `clippy::type_complexity` na assinatura inline da player query.
+
+Correção:
+- as queries de snapshot ganharam aliases semânticos `SavedPlayerQuery` e `SavedCreatureQuery`;
+- `WorldSaveEntities` agora lê como um contexto de capabilities, não como um bloco de tipos aninhados;
+- nenhum `allow(clippy::type_complexity)` foi adicionado;
+- comportamento e filtros permanecem idênticos;
+- `VERSION` permanece `0.34.15`.
