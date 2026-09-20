@@ -3399,3 +3399,16 @@ A CI do cache de skylight falhou por uma call site mecânica restante após reno
 - `src/voxel/lighting/propagation.rs` ainda chamava o nome antigo.
 - Correção aplicada no topo atual, sem mudança de comportamento.
 - `VERSION` permanece `0.34.13`, pois é correção de integração dos blocos 123–124 ainda não validados em conjunto.
+
+
+### CI verde dos checkpoints 123–124
+
+- Push CI `35511266089`: **success**.
+- PR CI `35511268056`: **success**.
+- O topo `7dbf4162ce595157737a1c5e1754a111b0132752` validou em conjunto:
+  - cache revisionado de transmissão vertical de skylight;
+  - scan-miss cache para geometry/fluid/immediate/lighting remesh queues;
+  - correção do rename de `LightingContext::reset_query_scratch()`.
+- Passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.34.13`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
