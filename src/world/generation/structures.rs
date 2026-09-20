@@ -39,12 +39,6 @@ struct StructureCandidate<'a> {
     maximum: IVec2,
 }
 
-impl StructureCandidate<'_> {
-    fn intersects(&self, minimum: IVec2, maximum: IVec2) -> bool {
-        rectangles_overlap(self.minimum, self.maximum, minimum, maximum)
-    }
-}
-
 struct StructureRasterizationContext<'a> {
     base_chunk: &'a VoxelChunk,
     blocks: &'a BlockRegistry,
