@@ -8,6 +8,8 @@ mod chunk_remesh_tasks;
 pub(crate) mod chunk_rendering;
 pub(crate) mod chunk_system_params;
 mod chunk_task_queue;
+#[cfg(test)]
+mod chunk_storage;
 mod chunk_unloading;
 mod chunk_visibility;
 mod clock_persistence;
@@ -78,144 +80,114 @@ pub(crate) use new_world::{
 use render_diagnostics::{log_render_asset_pressure, render_diagnostics_due};
 use render_distance::RenderDistanceSettings;
 pub(crate) use save::{InMemoryWorldSave, WorldLoadMode};
-use save_catalog::WorldDirectoryLock;
-use save_session::{WorldSession, autosave_only_in_gameplay, autosave_world, restore_loaded_clock};
-pub(crate) use seed::WorldSeed;
-pub(crate) use setup::WorldLoadingState;
-use setup::{begin_world_loading, setup_world};
-use streaming::{ChunkStreamingState, stream_chunks};
-use tick::{WorldTickClock, WorldTickSet, advance_world_ticks};
-use world_feature_fields::WorldFeatureFields;
+use save::{
+    LoadedWorld, SaveState, apply_loaded_world, autosave_world, begin_world_load,
+    commit_world_on_exit_request, commit_world_on_leave, finalize_world_load,
+    initialize_new_world_save, release_world_session, reset_save_state, save_on_pause_entry,
+};
+use save_session::{SaveSession, reset_save_session};
+use seed::WorldSeed;
+use setup::{setup_world, teardown_world};
+use streaming::{ChunkStreamingConfig, update_chunk_streaming};
+use tick::WorldTickClock;
+use work_budget::FrameWorkBudget;
 
-pub(crate) struct WorldPlugin;
+pub struct WorldPlugin;
 
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<CurrentDimension>()
-            .init_resource::<DimensionEntityCounts>()
-            .init_resource::<CurrentBiome>()
+        app.add_plugins(DayNightPlugin)
             .init_resource::<WorldSeed>()
-            .init_resource::<WorldLoadMode>()
-            .init_resource::<InMemoryWorldSave>()
-            .init_resource::<WorldSession>()
-            .init_resource::<ClockPersistence>()
-            .init_resource::<NewWorldConfig>()
+            .init_resource::<VoxelWorld>()
+            .init_resource::<BiomeField>()
+            .init_resource::<CurrentBiome>()
+            .init_resource::<CurrentDimension>()
+            .init_resource::<DimensionEntityCounts>()
             .init_resource::<GameRules>()
-            .init_resource::<WorldTickClock>()
             .init_resource::<RenderDistanceSettings>()
-            .init_resource::<ChunkStreamingState>()
+            .init_resource::<ChunkStreamingConfig>()
             .init_resource::<ChunkGenerationTasks>()
+            .init_resource::<ChunkTaskQueue>()
             .init_resource::<ChunkMeshTasks>()
             .init_resource::<ChunkRemeshTasks>()
+            .init_resource::<ChunkRemeshQueue>()
             .init_resource::<ChunkUnloadState>()
             .init_resource::<ChunkRenderPool>()
-            .init_resource::<ChunkRemeshQueue>()
-            .init_resource::<PendingLightingUpdates>()
+            .init_resource::<TerrainMaterials>()
+            .init_resource::<FluidMaterials>()
             .init_resource::<PendingFluidUpdates>()
-            .add_plugins(DayNightPlugin)
-            .add_systems(OnEnter(GameState::StartingScreen), release_world_session)
+            .init_resource::<PendingLightingUpdates>()
+            .init_resource::<LightingRemeshState>()
+            .init_resource::<ClockPersistence>()
+            .init_resource::<WorldTickClock>()
+            .init_resource::<SaveState>()
+            .init_resource::<SaveSession>()
+            .init_resource::<LoadedWorld>()
+            .add_systems(OnEnter(GameState::LoadingWorld), begin_world_load)
             .add_systems(
-                OnEnter(GameState::Loading),
-                (
-                    reset_resource::<ChunkGenerationTasks>,
-                    reset_resource::<ChunkMeshTasks>,
-                    reset_resource::<ChunkRemeshTasks>,
-                    prepare_world_session,
-                    begin_world_loading,
-                )
-                    .chain(),
+                Update,
+                finalize_world_load.run_if(in_state(GameState::LoadingWorld)),
             )
             .add_systems(
                 OnEnter(GameState::Gameplay),
                 (
-                    reset_resource::<ChunkStreamingState>,
-                    reset_resource::<ChunkGenerationTasks>,
-                    reset_resource::<ChunkMeshTasks>,
-                    reset_resource::<ChunkRemeshTasks>,
-                    reset_resource::<ChunkUnloadState>,
-                    reset_resource::<WorldTickClock>,
-                    restore_loaded_clock,
+                    initialize_new_world_save,
+                    apply_loaded_world,
+                    setup_world,
                     restore_persisted_clock,
-                    reset_clock_persistence,
                     reseed_loaded_fluid_frontiers,
                 )
                     .chain(),
             )
             .add_systems(
-                OnExit(GameState::Gameplay),
+                Update,
                 (
+                    update_chunk_streaming,
+                    unload_chunk_meshes,
+                    process_dynamic_lighting,
+                    process_immediate_geometry_remesh,
+                    process_chunk_remesh_queue,
+                    sync_new_chunk_visibility,
+                    sync_chunk_visibility,
+                    track_current_biome,
+                    persist_clock_periodically,
+                    autosave_world,
+                    log_render_asset_pressure.run_if(render_diagnostics_due),
+                )
+                    .run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(OnEnter(GameState::Paused), save_on_pause_entry)
+            .add_systems(OnExit(GameState::Gameplay), commit_world_on_leave)
+            .add_systems(
+                OnEnter(GameState::MainMenu),
+                (
+                    teardown_world,
                     clear_chunk_render_pool,
+                    reset_resource::<VoxelWorld>,
+                    reset_resource::<BiomeField>,
+                    reset_resource::<CurrentBiome>,
+                    reset_resource::<CurrentDimension>,
+                    reset_resource::<DimensionEntityCounts>,
+                    reset_resource::<GameRules>,
                     reset_resource::<ChunkGenerationTasks>,
+                    reset_resource::<ChunkTaskQueue>,
                     reset_resource::<ChunkMeshTasks>,
                     reset_resource::<ChunkRemeshTasks>,
-                    reset_resource::<ChunkUnloadState>,
                     reset_resource::<ChunkRemeshQueue>,
-                    reset_resource::<PendingLightingUpdates>,
+                    reset_resource::<ChunkUnloadState>,
                     reset_resource::<PendingFluidUpdates>,
+                    reset_resource::<PendingLightingUpdates>,
+                    reset_resource::<LightingRemeshState>,
+                    reset_clock_persistence,
+                    reset_resource::<WorldTickClock>,
+                    reset_save_state,
+                    reset_save_session,
+                    release_world_session,
                 ),
             )
-            .add_systems(Update, setup_world.run_if(in_state(GameState::Loading)))
-            .add_systems(
-                PreUpdate,
-                advance_world_ticks
-                    .in_set(WorldTickSet)
-                    .run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
-                Update,
-                (stream_chunks, unload_chunk_meshes)
-                    .chain()
-                    .run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
-                Update,
-                track_current_biome.run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(
-                PostUpdate,
-                (
-                    process_immediate_geometry_remesh,
-                    process_fluid_updates,
-                    process_dynamic_lighting.run_if(pending_lighting_work),
-                    process_chunk_remesh_queue,
-                    sync_chunk_visibility,
-                    sync_new_chunk_visibility,
-                )
-                    .chain()
-                    .run_if(in_state(GameState::Gameplay)),
-            )
-            .add_systems(Last, log_render_asset_pressure.run_if(render_diagnostics_due))
             .add_systems(
                 Last,
-                (persist_clock_periodically, autosave_world)
-                    .chain()
-                    .run_if(autosave_only_in_gameplay),
+                commit_world_on_exit_request.run_if(in_state(GameState::Gameplay)),
             );
     }
-}
-
-fn prepare_world_session(
-    mut session: ResMut<WorldSession>,
-    mode: Res<WorldLoadMode>,
-    config: Res<NewWorldConfig>,
-) {
-    if *mode == WorldLoadMode::New {
-        *session = WorldSession::new(config.name().to_owned());
-    }
-}
-
-/// Called only upon returning to the starting screen, after the Leave World
-/// action has successfully published the snapshot. Never drop this state in
-/// the error path: the player must be able to retry the save.
-fn release_world_session(mut commands: Commands) {
-    commands.remove_resource::<VoxelWorld>();
-    commands.remove_resource::<BiomeField>();
-    commands.remove_resource::<WorldFeatureFields>();
-    commands.remove_resource::<TerrainMaterials>();
-    commands.remove_resource::<FluidMaterials>();
-    commands.remove_resource::<WorldLoadingState>();
-    commands.remove_resource::<WorldDirectoryLock>();
-    commands.insert_resource(InMemoryWorldSave::default());
-    commands.insert_resource(WorldSession::default());
-    commands.insert_resource(PlayerHotbar::default());
 }
