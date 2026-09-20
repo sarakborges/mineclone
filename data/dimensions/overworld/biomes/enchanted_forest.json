@@ -38,6 +38,14 @@
   },
   "structures": [
     {
+      "id": "asteria:world_tree",
+      "placement": {
+        "spacing": 384,
+        "chance": 0.65,
+        "jitter": 112
+      }
+    },
+    {
       "id": "asteria:tree_oak",
       "placement": {
         "spacing": 12,
