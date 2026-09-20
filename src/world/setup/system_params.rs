@@ -1,17 +1,22 @@
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{
+    ecs::system::SystemParam,
+    platform::collections::HashSet,
+    prelude::*,
+};
 
 use crate::{
     content::{
         biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionRegistry,
         fluid::FluidRegistry,
     },
-    voxel::world::VoxelWorld,
+    voxel::{lighting::PendingLightingUpdates, world::VoxelWorld},
 };
 
 use super::WorldLoadingState;
 use crate::world::{
     InMemoryWorldSave, NewWorldConfig, WorldLoadMode, WorldSeed,
     dimension::CurrentDimension,
+    fluid_updates::PendingFluidUpdates,
     game_rules::GameRules,
     render_distance::RenderDistanceSettings,
 };
@@ -45,6 +50,13 @@ pub(in crate::world) struct WorldBootstrapPersistence<'w> {
 pub(in crate::world) struct WorldSetupProgress<'w> {
     pub(super) world: ResMut<'w, VoxelWorld>,
     pub(super) loading_state: ResMut<'w, WorldLoadingState>,
+}
+
+#[derive(SystemParam)]
+pub(in crate::world) struct WorldSetupSimulation<'w, 's> {
+    pub(super) fluids: ResMut<'w, PendingFluidUpdates>,
+    pub(super) lighting: ResMut<'w, PendingLightingUpdates>,
+    pub(super) changed_lighting_chunks: Local<'s, HashSet<IVec3>>,
 }
 
 #[derive(SystemParam)]

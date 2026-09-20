@@ -63,6 +63,21 @@ impl PendingLightingUpdates {
         self.queue.enqueue_chunk_boundary_neighbors(origin);
     }
 
+    pub(crate) fn enqueue_initial_chunk_lighting(
+        &mut self,
+        world: &mut VoxelWorld,
+        coord: IVec3,
+    ) -> bool {
+        if !world.clear_chunk_light(coord) {
+            return false;
+        }
+
+        let origin = chunk_origin(coord);
+        self.queue.enqueue_chunk_voxels(origin);
+        self.queue.enqueue_chunk_boundary_neighbors(origin);
+        true
+    }
+
     pub(crate) fn enqueue_loaded_column_below(&mut self, world: &VoxelWorld, coord: IVec3) {
         for lower in world.loaded_chunk_coords_below(coord) {
             self.queue.enqueue_chunk_voxels(chunk_origin(lower));

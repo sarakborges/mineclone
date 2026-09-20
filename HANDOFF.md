@@ -5226,3 +5226,79 @@ Novo `save_catalog/generations.rs` possui:
 
 - `VERSION`: **0.35.4 → 0.35.5**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### CI verde do checkpoint 150
+
+- Push CI `35522626564`: **success**.
+- PR CI `35522628973`: **success**.
+- O topo `7f01abf8fe814782756a2b9ba12651f78023db81` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.35.5`.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 151 — 2026-09-20: bootstrap lighting relaxation agora é realmente budgeted [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+A fase `WorldLoadingPhase::Lighting` aparentava respeitar `INITIAL_LOADING_BUDGET = 12 ms`, mas o budget era externo a `initialize_chunks_lighting()`.
+
+Cada item fazia:
+
+1. limpar/enfileirar 2 chunks;
+2. chamar `relax()`;
+3. `relax()` processava a fila inteira até convergir;
+4. só depois o loading consultava novamente o frame budget.
+
+Logo uma única iteração podia atravessar o budget por uma quantidade arbitrária de propagação. Reduzir 2 chunks para 1 diminuiria o pico, mas não corrigiria o owner do custo.
+
+### Implementação
+
+`PendingLightingUpdates` ganhou a capability estreita `enqueue_initial_chunk_lighting(world, coord)`:
+
+- limpa a luz do chunk;
+- enfileira todos os voxels;
+- enfileira os neighbors de boundary;
+- usa a mesma `LightingQueue`/contexto autoritativo da iluminação dinâmica.
+
+Novo `WorldSetupSimulation` agrupa somente estado de simulação do bootstrap:
+
+- `PendingFluidUpdates`;
+- `PendingLightingUpdates`;
+- scratch local de changed lighting chunks.
+
+Isso substitui o parâmetro isolado de fluids e evita aumentar o broad system signature.
+
+### Novo fluxo de lighting no loading
+
+Para cada chunk, em ordem:
+
+1. se a fila está vazia, enfileira o próximo chunk;
+2. chama `process_pending_lighting()`;
+3. o callback registra voxels processados no `FrameWorkBudget`;
+4. `relax_budgeted()` pode devolver controle durante a propagação;
+5. se a fila ainda contém trabalho, o mesmo chunk continua no frame seguinte;
+6. só incrementa `loading_state.lit` quando aquela fila converge;
+7. só entra em Meshing quando todos os chunks convergiram e a fila está vazia.
+
+A granularidade de budget agora existe **dentro** da propagação, com checks do próprio solver de lighting, em vez de ao redor de uma operação ilimitada.
+
+### Lifecycle
+
+- `PendingLightingUpdates` é resetado também em `OnEnter(GameState::Loading)`, antes do bootstrap;
+- a mesma resource continua sendo usada depois no gameplay;
+- changed-chunk scratch do loading é descartado porque ainda não existem meshes a invalidar;
+- não foi criada uma segunda fila/cache de iluminação.
+
+### Semântica
+
+- algoritmo de lighting/desired light não mudou;
+- ordem de chunks do bootstrap não mudou;
+- meshing só começa após convergência da iluminação;
+- final lighting continua vindo do mesmo `relax_budgeted()` usado pelo runtime;
+- nenhum comportamento de save/worldgen/fluid foi alterado.
+
+### Versionamento
+
+- `VERSION`: **0.35.5 → 0.35.6**.
+- CI pendente.
+- Não executei `cargo test`, `cargo run` nem QA Windows.

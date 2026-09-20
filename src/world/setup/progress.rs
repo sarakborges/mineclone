@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use bevy::prelude::*;
+use bevy::{platform::collections::HashSet, prelude::*};
 
 use crate::{
     app::game_state::GameState,
@@ -9,12 +9,15 @@ use crate::{
         safe_spawn_position, spawn_player_entity,
     },
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
-    voxel::{lighting::initialize_chunks_lighting, mesh_snapshot::ChunkMeshSnapshot},
+    voxel::{
+        lighting::{PendingLightingUpdates, process_pending_lighting},
+        mesh_snapshot::ChunkMeshSnapshot,
+    },
 };
 
 use super::{
     WorldLoadingPhase,
-    system_params::{WorldSetupPersistence, WorldSetupProgress},
+    system_params::{WorldSetupPersistence, WorldSetupProgress, WorldSetupSimulation},
 };
 use crate::world::{
     WorldLoadMode,
@@ -22,11 +25,9 @@ use crate::world::{
     chunk_mesh_tasks::{ChunkMeshTasks, MAX_MESH_TASKS_IN_FLIGHT},
     chunk_rendering::spawn_built_chunk_meshes,
     chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
-    fluid_updates::PendingFluidUpdates,
     work_budget::FrameWorkBudget,
 };
 
-const BOOTSTRAP_LIGHT_BATCH_CHUNKS: usize = 2;
 const INITIAL_LOADING_BUDGET: Duration = Duration::from_millis(12);
 
 #[expect(
@@ -39,7 +40,7 @@ pub(in crate::world) fn setup_world(
     mut renderer: ChunkRenderer,
     mut progress: WorldSetupProgress,
     mut transition: ResMut<ScreenTransition>,
-    mut fluid_updates: ResMut<PendingFluidUpdates>,
+    mut simulation: WorldSetupSimulation,
     mut generation_tasks: ResMut<ChunkGenerationTasks>,
     mut mesh_tasks: ResMut<ChunkMeshTasks>,
     persistence: WorldSetupPersistence,
@@ -59,10 +60,15 @@ pub(in crate::world) fn setup_world(
             &generation,
             &content,
             &mut progress,
-            &mut fluid_updates,
+            &mut simulation.fluids,
             &mut generation_tasks,
         ),
-        WorldLoadingPhase::Lighting => light_initial_chunks(&content, &mut progress),
+        WorldLoadingPhase::Lighting => light_initial_chunks(
+            &content,
+            &mut progress,
+            &mut simulation.lighting,
+            &mut simulation.changed_lighting_chunks,
+        ),
         WorldLoadingPhase::Meshing => {
             mesh_initial_chunks(&content, &mut renderer, &mut progress, &mut mesh_tasks)
         }
@@ -182,32 +188,59 @@ fn dispatch_generation_tasks(
     }
 }
 
-fn light_initial_chunks(content: &ChunkContent<'_>, progress: &mut WorldSetupProgress<'_>) {
-    let mut budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 1);
+fn light_initial_chunks(
+    content: &ChunkContent<'_>,
+    progress: &mut WorldSetupProgress<'_>,
+    lighting: &mut PendingLightingUpdates,
+    changed_chunks: &mut HashSet<IVec3>,
+) {
+    let mut budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 256);
 
     loop {
         if budget.exhausted() {
             break;
         }
 
-        let start = progress.loading_state.lit;
-        if start >= progress.loading_state.coords.len() {
-            break;
+        if lighting.is_empty() {
+            let Some(coord) = progress
+                .loading_state
+                .coords
+                .get(progress.loading_state.lit)
+                .copied()
+            else {
+                progress.loading_state.phase = WorldLoadingPhase::Meshing;
+                break;
+            };
+            assert!(
+                lighting.enqueue_initial_chunk_lighting(&mut progress.world, coord),
+                "generated bootstrap chunk data should exist at {coord:?}"
+            );
         }
-        let end = (start + BOOTSTRAP_LIGHT_BATCH_CHUNKS).min(progress.loading_state.coords.len());
 
-        drop(initialize_chunks_lighting(
+        let mut recorded_voxels = 0;
+        process_pending_lighting(
             &mut progress.world,
-            &progress.loading_state.coords[start..end],
+            lighting,
             content.blocks(),
             content.fluids(),
             content.secondary_properties(),
-        ));
-        progress.loading_state.lit = end;
-        budget.record(end - start);
+            changed_chunks,
+            |processed_voxels| {
+                budget.record(processed_voxels.saturating_sub(recorded_voxels));
+                recorded_voxels = processed_voxels;
+                budget.exhausted()
+            },
+        );
+        changed_chunks.clear();
+
+        if !lighting.is_empty() {
+            break;
+        }
+
+        progress.loading_state.lit += 1;
     }
 
-    if progress.loading_state.lit >= progress.loading_state.coords.len() {
+    if progress.loading_state.lit >= progress.loading_state.coords.len() && lighting.is_empty() {
         progress.loading_state.phase = WorldLoadingPhase::Meshing;
     }
 }

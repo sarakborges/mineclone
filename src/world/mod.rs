@@ -120,6 +120,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<ChunkGenerationTasks>,
                     reset_resource::<ChunkMeshTasks>,
                     reset_resource::<ChunkRemeshTasks>,
+                    reset_resource::<PendingLightingUpdates>,
                     prepare_world_session,
                     begin_world_loading,
                 )
