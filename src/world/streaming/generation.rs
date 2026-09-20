@@ -68,10 +68,13 @@ pub(super) fn collect_generated_chunks(
                 && work.state.generation_wave_targets.contains(&completed.coord)
             {
                 work.state.generation_wave_pending.enqueue(completed.coord);
+            } else {
+                work.state.abandon_generation_wave_target(completed.coord);
             }
             continue;
         }
         if !work.state.keeps_loaded(completed.coord) {
+            work.state.abandon_generation_wave_target(completed.coord);
             continue;
         }
         if work.world.has_resident_or_persisted_chunk(completed.coord) {
@@ -84,6 +87,7 @@ pub(super) fn collect_generated_chunks(
             }
             seed_loaded_chunk_lighting(completed.coord, content, work, queues, current_tick);
             work.state.mark_ready(completed.coord);
+            work.state.complete_generation_wave_target(completed.coord);
             continue;
         }
 
@@ -154,10 +158,12 @@ fn publish_settled_wave(
     for coord in completion.generated_chunks {
         if !work.state.keeps_loaded(coord) {
             work.world.archive_chunk(coord);
+            work.state.complete_generation_wave_target(coord);
             continue;
         }
         seed_loaded_chunk_lighting(coord, content, work, queues, current_tick);
         work.state.mark_ready(coord);
+        work.state.complete_generation_wave_target(coord);
     }
 }
 
@@ -228,6 +234,7 @@ pub(super) fn dispatch_generation_tasks(
             break;
         };
         if !work.state.keeps_loaded(coord) {
+            work.state.abandon_generation_wave_target(coord);
             budget.record(1);
             continue;
         }

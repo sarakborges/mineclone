@@ -149,6 +149,27 @@ impl ChunkStreamingState {
         self.staged_generated_chunks.insert(coord);
     }
 
+    fn abandon_generation_wave_target(&mut self, coord: IVec3) {
+        self.generation_wave_pending.remove(coord);
+        self.generation_wave_targets.remove(&coord);
+    }
+
+    fn complete_generation_wave_target(&mut self, coord: IVec3) {
+        debug_assert!(
+            !self.staged_generated_chunks.contains(&coord),
+            "completed generation-wave target cannot remain staged"
+        );
+        debug_assert!(
+            !self.fluid_settling.contains(coord),
+            "completed generation-wave target cannot remain settling-owned"
+        );
+        let removed = self.generation_wave_targets.remove(&coord);
+        debug_assert!(
+            removed,
+            "completed generation-wave target must still own its reservation: {coord:?}"
+        );
+    }
+
     fn take_staged_generated_chunks(&mut self) -> Vec<IVec3> {
         let mut staged = self.staged_generated_chunks.drain().collect::<Vec<_>>();
         staged.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
@@ -168,7 +189,11 @@ impl ChunkStreamingState {
             !self.fluid_settling.is_active(),
             "generation wave cannot finish while fluid settling is active"
         );
-        self.generation_wave_targets.clear();
+        assert!(
+            self.generation_wave_targets.is_empty(),
+            "generation wave cannot finish with unresolved target reservations: {:?}",
+            self.generation_wave_targets
+        );
     }
 
     pub(in crate::world) fn generated_chunk_is_unpublished(&self, coord: IVec3) -> bool {
