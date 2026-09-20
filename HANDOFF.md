@@ -1,5 +1,7 @@
 # HANDOFF — Asteria / Mineclone
 
+**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.37.0`. HEAD funcional `c85c0831226dea12578dbd6aab97492d8c7f86a4`. CI push `35533512875` e PR `35533515535`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Fog adaptativa voltou a esconder a frontier ainda não publicada; Volcano usa sky/fog neutros em cinza; Witchwood e Enchanted Forest são mutuamente `avoidNear`; fluidos authored de chunks novos passam por initial settling com o mesmo solver do runtime antes de lighting/primeiro mesh, sem promover chunks derivados a persistentes. Não houve `cargo test`, `cargo run` nem QA Windows.
+
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.34.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **Estado mais recente em `develop`: comparação/correção do save game em andamento; HEAD funcional ainda não versionado `bd713963b9bbb8f69eeeb6df6b7bf7aa2773152f`.** CI `35413383474` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Já foram corrigidas persistência de scheduled fluid work, health do player, creatures e lock cross-process do diretório do mundo. Ainda NÃO foram implementados selected hotbar slot, rotação/look do player, autosave disparado somente pela passagem do clock, nem a migração do snapshot global para storage incremental por chunk/region. **Não houve bump de VERSION neste checkpoint porque o bloco de save foi interrompido antes do fechamento completo.** Não houve `cargo test`, `cargo run` ou QA Windows.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.34.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **HEAD funcional/versionado atual:** `b6e67ff852a3e0f021948537e596263ec05a69bd`. O runtime de chunks/lighting agora separa residência de conteúdo, readiness de iluminação e render dirtiness, inspirado na separação `INITIALIZE_LIGHT → LIGHT → FULL` e no dirty-state de render sections do Minecraft. A fila de luz rastreia work pendente por section 16³; o primeiro mesh aguarda o halo 3×3×3 estabilizar; background terrain/lighting remesh não captura halo ainda em propagação; light changes são coalescidas antes de rebuild; load/unload vertical invalida skylight das sections residentes abaixo na mesma coluna. Fluid remesh e geometry edits interativos continuam responsivos/independentes. CI final `35412334182` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. O CSM direcional do sol (1024, 3 cascades, ~8 chunks) foi identificado como um sistema extra em relação ao modelo de terreno/lightmap do Minecraft, mas NÃO foi alterado neste bloco. Não houve `cargo test`, `cargo run` ou QA Windows.
@@ -6079,3 +6081,154 @@ Isso corrige tanto:
 ### Versionamento
 
 - `VERSION 0.36.0 → 0.36.1`.
+
+
+## Checkpoint 162 — 2026-09-20: fog de streaming restaurada + ajustes de bioma [FIX/TUNING; VERSION 0.36.2; CI VERDE]
+
+### Fog volta a esconder chunks ainda não publicados
+
+Foi revertida deliberadamente a decisão de 19/09 que prendia a fog somente ao envelope configurado de render distance.
+
+O comportamento restaurado usa o frontier real do `ChunkRenderPool`:
+
+- `ChunkRenderPool::active_coords()` expõe somente a membership já publicada;
+- o sistema colapsa as sections verticais para colunas x/z, portanto um gap vertical isolado não encurta a fog;
+- a posição horizontal do player, render distance, membership revision do pool e replacement da câmera formam os inputs change-driven;
+- dentro do círculo de render distance, a coluna publicada faltante mais próxima limita o fim da fog;
+- existe um guard de 1 chunk antes da coluna ausente;
+- quando todas as colunas estão publicadas, a fog volta ao range normal `0.78 → 0.98` do raio configurado;
+- o terminal da fog continua combinando com o sky background para o espaço não publicado não aparecer como um buraco.
+
+Essa é a versão change-driven da fog adaptativa que existia antes da remoção; não foi restaurada uma variante que dependesse de readiness vertical/lighting transitória.
+
+### Volcano cinza
+
+`data/dimensions/overworld/biomes/volcano.json` agora usa saturation 0 em todas as fases de `skyColor` e `fogColor`.
+
+- dawn/day/dusk/night preservam suas intensidades relativas;
+- hue é neutralizado;
+- resultado authored é escala de cinza, inclusive à noite.
+
+### Witchwood × Enchanted Forest
+
+No owner correto, `data/dimensions/overworld/dimension.json`:
+
+- Witchwood declara `avoidNear: enchanted_forest`;
+- Enchanted Forest declara `avoidNear: witchwood`.
+
+Embora o runtime já trate `avoidNear` simetricamente, os dois lados ficam authored explicitamente. As duas regiões não podem compartilhar uma borda Voronoi real.
+
+### Commit / CI
+
+- commit funcional: `8205525f5ab762aadb92645cc4630fbf0f21d30a`;
+- `VERSION 0.36.1 → 0.36.2`;
+- push CI `35533424186`: **success**;
+- PR CI `35533426981`: **success**;
+- não houve `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 163 — 2026-09-20: initial fluid settling antes do primeiro mesh [FEATURE; VERSION 0.37.0; CI VERDE]
+
+### Requisito recuperado
+
+O requisito correto é diferente de apenas “acordar” generated fluid frontiers quando Gameplay começa:
+
+**um chunk novo deve ter o seu spread inicial materializado antes da primeira publicação visual.**
+
+O scheduler runtime continua responsável por mudanças posteriores e por propagação que cruza para estado fora do conjunto recém-gerado.
+
+### Solver único
+
+Não foi criada uma segunda física de fluidos.
+
+Novo `fluid_updates::settling` reutiliza diretamente:
+
+- `desired_fluid_with_scratch()`;
+- as mesmas regras gravity-first;
+- o mesmo horizontal spread state;
+- o mesmo nearest-drop/downhill BFS;
+- as mesmas regras de waterfall/lower-pool;
+- `maxSpread` e identidade de fluido authored.
+
+A única diferença deliberada é temporal:
+
+- initial settling ignora `spreadSpeed`/scheduled delay;
+- executa a convergência até a frontier local estabilizar;
+- Gameplay continua usando scheduled voxel ticks com cadência authored.
+
+### Frontier compartilhada
+
+`fluid_updates::frontier` agora possui um único traversal que emite:
+
+- `FluidId`;
+- target;
+- prioridade vertical.
+
+Esse traversal é usado por:
+
+1. runtime `PendingFluidUpdates`;
+2. initial settling.
+
+Assim generated frontier eligibility e runtime frontier não podem divergir silenciosamente.
+
+### Bootstrap de mundo novo
+
+Novo loading lifecycle:
+
+`Generating → SettlingFluids → Lighting → Meshing → Spawning`
+
+Somente `WorldLoadMode::New` passa por `SettlingFluids`.
+
+Quando toda a bootstrap region já está residente:
+
+- todas as coords bootstrap formam o conjunto mutável;
+- sources e seams são seeded;
+- spread converge através dos chunks recém-gerados;
+- somente depois começam direct lighting e initial meshing.
+
+Loaded saves pulam essa fase: estado persistido não é reinterpretado como worldgen derivado.
+
+### Streaming em Gameplay
+
+Quando generation tasks terminam durante streaming:
+
+1. resultados novos são integrados;
+2. coords novas do batch formam o conjunto de settling;
+3. incoming frontier de chunks vizinhos já residentes também pode preencher targets dentro dos chunks novos;
+4. settling converge dentro do conjunto novo;
+5. só então cada chunk recebe initial lighting seed e entra na ready queue de mesh.
+
+Se uma propagação quiser sair do conjunto novo para um chunk antigo/já publicado, o target não é alterado pelo pre-settle. A frontier runtime continua existindo e assume essa transição com a cadência normal.
+
+### Persistência preservada
+
+Foi adicionado `VoxelWorld::set_derived_fluid_at()`.
+
+Diferença para `set_fluid_at()` runtime:
+
+- atualiza voxel content revision e mesh revision;
+- mantém metadata de frontier via `VoxelChunk::set_fluid()`;
+- **não insere o chunk em `persistent_chunks`**;
+- recusa o path se o target já é persistent.
+
+Isso evita transformar worldgen derivado em save autoritativo apenas porque a água/lava assentou antes do primeiro mesh.
+
+### Commit / CI
+
+- commit funcional: `c85c0831226dea12578dbd6aab97492d8c7f86a4`;
+- `VERSION 0.36.2 → 0.37.0`;
+- push CI `35533512875`: **success**;
+- PR CI `35533515535`: **success**;
+- localization audit, Clippy rigoroso e `cargo check --locked` verdes;
+- não houve `cargo test`, `cargo run` nem QA Windows.
+
+### QA prioritária
+
+1. Novo mundo em Volcano: crater/spill lava deve já aparecer assentada no primeiro frame de Gameplay dentro da bootstrap region, sem começar como source estática e “acordar” depois.
+2. Novo mundo com água exposta: mesma regra.
+3. Waterfall dentro da bootstrap region: coluna e routing horizontal devem existir antes do primeiro mesh.
+4. Streaming: aproximar-se de Volcano/água nova; o chunk deve ser publicado já com o estado inicial local resolvido.
+5. Seam streaming: incoming fluid de chunk antigo pode preencher o chunk novo no pre-settle; outgoing para chunk antigo continua como scheduled runtime work.
+6. Afastar/reaproximar de chunk derivado que só sofreu initial settling: ele deve continuar descartável/regenerável, não virar persistente.
+7. Fog: durante generation/meshing backlog, a frontier não publicada deve permanecer escondida; depois que o pool preencher as colunas, a fog deve voltar ao range normal.
+8. Witchwood e Enchanted Forest não devem compartilhar borda regional.
+9. Volcano: sky/fog devem ser neutros/cinza em dawn/day/dusk/night.
