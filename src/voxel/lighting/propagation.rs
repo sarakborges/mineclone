@@ -64,6 +64,7 @@ pub(super) fn relax(
 ) -> HashSet<IVec3> {
     let mut changed_chunks = HashSet::new();
     let mut interactive_changed_chunks = HashSet::new();
+    let mut settling_changed_chunks = HashSet::new();
     let mut context = LightingContext::default();
     relax_budgeted(
         world,
@@ -72,6 +73,7 @@ pub(super) fn relax(
         &mut context,
         &mut changed_chunks,
         &mut interactive_changed_chunks,
+        &mut settling_changed_chunks,
         |_| false,
     );
     changed_chunks
@@ -84,15 +86,18 @@ pub(super) fn relax_budgeted(
     context: &mut LightingContext,
     changed_chunks: &mut HashSet<IVec3>,
     interactive_changed_chunks: &mut HashSet<IVec3>,
+    settling_changed_chunks: &mut HashSet<IVec3>,
     mut budget_exhausted: impl FnMut(usize) -> bool,
 ) {
     changed_chunks.clear();
     context.reset_query_scratch();
-    let processing_interactive = queue.has_interactive_work();
+    let Some(processing_lane) = queue.next_lane() else {
+        return;
+    };
     let mut processed = 0;
 
     loop {
-        if processing_interactive && !queue.has_interactive_work() {
+        if !queue.has_work_in_lane(processing_lane) {
             break;
         }
         if processed > 0
@@ -105,11 +110,7 @@ pub(super) fn relax_budgeted(
         let Some((position, lane)) = queue.pop() else {
             break;
         };
-        if processing_interactive {
-            debug_assert_eq!(lane, LightingLane::Interactive);
-        } else {
-            debug_assert_eq!(lane, LightingLane::Background);
-        }
+        debug_assert_eq!(lane, processing_lane);
         processed += 1;
 
         let (chunk_coord, local_position) = split_world_position(position);
@@ -138,15 +139,21 @@ pub(super) fn relax_budgeted(
         if !world.set_light_at_deferred_mesh_revision(chunk_coord, local_position, desired) {
             continue;
         }
-        if lane == LightingLane::Interactive {
-            interactive_changed_chunks.insert(chunk_coord);
-        } else {
-            changed_chunks.insert(chunk_coord);
+        match lane {
+            LightingLane::Interactive => {
+                interactive_changed_chunks.insert(chunk_coord);
+            }
+            LightingLane::Settling => {
+                settling_changed_chunks.insert(chunk_coord);
+            }
+            LightingLane::Background => {
+                changed_chunks.insert(chunk_coord);
+            }
         }
         queue.enqueue_with_neighbors_in_lane(position, lane);
     }
 
-    if processing_interactive {
+    if processing_lane == LightingLane::Interactive {
         // Publish each completed frame's voxel changes even if a large edit
         // still has interactive relaxation queued. Deferring mesh revisions
         // until the entire lane drains leaves visible meshes stale under
@@ -154,6 +161,12 @@ pub(super) fn relax_budgeted(
         // remesh if convergence changes these voxels again.
         interactive_changed_chunks.retain(|coord| world.chunk(*coord).is_some());
         changed_chunks.extend(interactive_changed_chunks.drain());
+    } else if processing_lane == LightingLane::Settling && !queue.has_settling_work() {
+        // Generated-fluid settling is a batch. Keep its mesh revisions private
+        // until the entire derived-light propagation converges so async remesh
+        // cannot repeatedly capture intermediate lighting states.
+        settling_changed_chunks.retain(|coord| world.chunk(*coord).is_some());
+        changed_chunks.extend(settling_changed_chunks.drain());
     }
 
     world.commit_deferred_light_mesh_revisions(changed_chunks.iter().copied());
@@ -390,6 +403,7 @@ mod tests {
         let mut context = LightingContext::default();
         let mut changed = HashSet::new();
         let mut interactive_changed = HashSet::new();
+        let mut settling_changed = HashSet::new();
 
         relax_budgeted(
             &mut world,
@@ -398,12 +412,65 @@ mod tests {
             &mut context,
             &mut changed,
             &mut interactive_changed,
+            &mut settling_changed,
             |processed| processed >= BUDGET_CHECK_INTERVAL_VOXELS,
         );
 
         assert!(queue.has_interactive_work());
         assert!(changed.contains(&IVec3::ZERO));
         assert!(interactive_changed.is_empty());
+        assert!(world.chunk_mesh_revision(IVec3::ZERO).unwrap() > initial_revision);
+    }
+
+    #[test]
+    fn budgeted_settling_changes_publish_revision_only_after_lane_converges() {
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(IVec3::ZERO, VoxelChunk::empty());
+        let initial_revision = world.chunk_mesh_revision(IVec3::ZERO).unwrap();
+        let blocks = BlockRegistry::default();
+        let fluids = FluidRegistry::default();
+        let secondary_properties = SecondaryPropertyRegistry::default();
+        let mut queue = LightingQueue::default();
+        for z in 0..CHUNK_SIZE as i32 {
+            for x in 0..CHUNK_SIZE as i32 {
+                queue.enqueue_settling(IVec3::new(x, 8, z));
+            }
+        }
+        let mut context = LightingContext::default();
+        let mut changed = HashSet::new();
+        let mut interactive_changed = HashSet::new();
+        let mut settling_changed = HashSet::new();
+
+        relax_budgeted(
+            &mut world,
+            LightingRegistries::new(&blocks, &fluids, &secondary_properties),
+            &mut queue,
+            &mut context,
+            &mut changed,
+            &mut interactive_changed,
+            &mut settling_changed,
+            |processed| processed >= BUDGET_CHECK_INTERVAL_VOXELS,
+        );
+
+        assert!(queue.has_settling_work());
+        assert!(changed.is_empty());
+        assert_eq!(world.chunk_mesh_revision(IVec3::ZERO).unwrap(), initial_revision);
+
+        while queue.has_settling_work() {
+            relax_budgeted(
+                &mut world,
+                LightingRegistries::new(&blocks, &fluids, &secondary_properties),
+                &mut queue,
+                &mut context,
+                &mut changed,
+                &mut interactive_changed,
+                &mut settling_changed,
+                |_| false,
+            );
+        }
+
+        assert!(changed.contains(&IVec3::ZERO));
+        assert!(settling_changed.is_empty());
         assert!(world.chunk_mesh_revision(IVec3::ZERO).unwrap() > initial_revision);
     }
 }
