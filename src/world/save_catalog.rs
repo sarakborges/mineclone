@@ -241,4 +241,11 @@ fn prune_old_generations(directory:&Path,id:&str,registries:&PruneRegistries)->i
     for entry in fs::read_dir(directory)? {let entry=entry?;if !entry.file_type()?.is_file(){continue;}let Some(name)=entry.file_name().to_str().map(str::to_owned) else{continue;};let Some(generation)=snapshot_generation(&name) else{continue;};if generation>0&&generation<cutoff{fs::remove_file(entry.path())?;}}
     Ok(())
 }
+fn now_unix_ms() -> io::Result<u64> {
+    let elapsed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(io::Error::other)?;
+    u64::try_from(elapsed.as_millis()).map_err(io::Error::other)
+}
+
 fn invalid_data(message:impl Into<String>)->io::Error{io::Error::new(io::ErrorKind::InvalidData,message.into())}

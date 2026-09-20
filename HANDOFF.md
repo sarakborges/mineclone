@@ -4401,3 +4401,15 @@ O parser genérico de prefix permanece privado; o parent recebe apenas a capabil
 - `VERSION`: **0.34.26 → 0.34.27**.
 - CI pendente.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### Correção de integração CI do checkpoint 138
+
+A primeira CI do split de storage falhou porque `now_unix_ms()` foi removido junto do antigo tail de helpers, embora pertença à policy do catálogo e ainda seja usado em create/save manifest.
+
+Correção:
+
+- `now_unix_ms()` restaurado em `save_catalog.rs`;
+- `SystemTime/UNIX_EPOCH` voltam a ter owner correto no parent;
+- nenhum detalhe físico de JSON/publication voltou ao parent;
+- `VERSION` permanece `0.34.27`.
