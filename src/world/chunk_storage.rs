@@ -12,6 +12,8 @@ use std::{
 
 use bevy::prelude::IVec3;
 
+use crate::voxel::chunk_disk::DiskChunk;
+
 const CHUNK_DIRECTORY: &str = "chunks";
 const CHUNK_FILE_EXTENSION: &str = "json";
 
@@ -34,6 +36,12 @@ impl ChunkDiskIdentity {
     /// boundary prevents catalog code from reimplementing coordinate rules.
     pub(crate) fn from_disk_coord(coord: [i32; 3]) -> io::Result<Self> {
         Self::new(IVec3::new(coord[0], coord[1], coord[2]))
+    }
+
+    /// Resolve the storage identity of an encoded chunk without exposing its
+    /// portable coordinate representation to catalog publication code.
+    pub(crate) fn from_disk_chunk(chunk: &DiskChunk) -> io::Result<Self> {
+        Self::from_disk_coord(chunk.coord)
     }
 
     pub(crate) fn coord(self) -> IVec3 {
