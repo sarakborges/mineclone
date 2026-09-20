@@ -37,10 +37,6 @@ impl<T> ChunkTaskQueue<T> {
         self.pending.contains_key(&coord)
     }
 
-    pub(crate) fn any_coord(&self, mut predicate: impl FnMut(IVec3) -> bool) -> bool {
-        self.pending.keys().copied().any(&mut predicate)
-    }
-
     pub(crate) fn insert(&mut self, coord: IVec3, revision: u64, task: Task<T>) -> bool {
         if self.pending.contains_key(&coord) {
             return false;
