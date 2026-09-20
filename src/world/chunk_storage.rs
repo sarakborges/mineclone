@@ -16,6 +16,7 @@ use crate::voxel::chunk_disk::DiskChunk;
 
 const CHUNK_DIRECTORY: &str = "chunks";
 const CHUNK_FILE_EXTENSION: &str = "json";
+const GENERATION_DIRECTORY_PREFIX: &str = "generation-";
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct ChunkDiskIdentity(IVec3);
@@ -62,9 +63,15 @@ impl ChunkDiskIdentity {
     /// lets a manifest switch generations atomically without overwriting files
     /// still referenced by retained backups.
     pub(crate) fn generation_relative_path(self, generation: u64) -> PathBuf {
-        Path::new(&format!("generation-{generation}"))
-            .join(self.relative_path())
+        generation_directory(generation).join(self.relative_path())
     }
+}
+
+/// Canonical directory containing all chunk blobs owned by one immutable save
+/// generation. Catalog publication and pruning must use the same mapping so a
+/// generation can be removed without reconstructing chunk-path semantics.
+pub(crate) fn generation_directory(generation: u64) -> PathBuf {
+    PathBuf::from(format!("{GENERATION_DIRECTORY_PREFIX}{generation}"))
 }
 
 #[cfg(test)]
@@ -106,6 +113,11 @@ mod tests {
                 .join("chunks")
                 .join("x-12_y3_z45.json")
         );
+    }
+
+    #[test]
+    fn generation_directory_is_shared_by_publication_and_pruning() {
+        assert_eq!(generation_directory(7), Path::new("generation-7"));
     }
 
     #[test]
