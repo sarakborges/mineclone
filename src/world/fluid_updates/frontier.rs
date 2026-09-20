@@ -59,25 +59,15 @@ fn enqueue_chunk_fluid_spread_targets(
         return;
     }
 
-    let size = CHUNK_SIZE as i32;
-    let origin = coord * size;
-
-    for local_y in 0..size {
-        for local_z in 0..size {
-            for local_x in 0..size {
-                let Some(fluid) = chunk.fluid_at(local_x, local_y, local_z) else {
-                    continue;
-                };
-
-                enqueue_spread_targets_from_fluid(
-                    pending,
-                    world,
-                    origin + IVec3::new(local_x, local_y, local_z),
-                    fluid,
-                );
-            }
-        }
-    }
+    let origin = coord * CHUNK_SIZE as i32;
+    chunk.visit_potential_fluid_frontier_sources(|local_position, fluid| {
+        enqueue_spread_targets_from_fluid(
+            pending,
+            world,
+            origin + local_position,
+            fluid,
+        );
+    });
 }
 
 fn enqueue_neighbor_boundary_spread_targets(

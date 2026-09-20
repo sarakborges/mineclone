@@ -3278,3 +3278,37 @@ O usuário forneceu um guia technology-agnostic de boas práticas cobrindo respo
 - `VERSION`: **0.34.9 → 0.34.10**.
 - Nenhuma mudança de runtime neste checkpoint; o bump é patch por alteração normativa/documental do projeto.
 - O próximo bloco funcional de performance deverá partir deste canon e atualizar novamente o handoff.
+
+
+## Checkpoint 122 — 2026-09-20: chunk-owned fluid frontier source index [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+Mesmo após remover o polling global de fluid work dormente, a entrada de qualquer chunk com fluido ainda percorria os 4096 voxels para reencontrar fontes que talvez tivessem algum target vazio. Em grandes volumes estáticos isso repetia trabalho derivado a cada residency transition.
+
+### Implementação
+
+- `VoxelChunk` agora possui um bitset derivado `fluid_frontier_sources`, COW via `Arc`.
+- O bitset não representa a frontier autoritativa; ele só marca conservadoramente fontes que merecem inspeção:
+  - fluido com algum target local down/horizontal vazio; ou
+  - fluido numa boundary por onde um target cross-chunk pode existir.
+- `set_block` e `set_fluid` atualizam apenas a célula afetada e as fontes cujos targets dependem dela.
+- `edit_content` (worldgen/load/archive restore) usa a mesma mutation primitive e portanto constrói a metadata junto do conteúdo, sem um scan posterior.
+- `enqueue_chunk_fluid_spread_targets()` deixou de varrer 16³ e agora visita apenas essas fontes potenciais.
+- A decisão real de spread continua chamando o solver/sampling contra o `VoxelWorld` atual.
+- O scan de uma face vizinha no seam permanece por enquanto; é no máximo 16² e será otimizado somente se profiling justificar.
+- Foram adicionados testes de invariantes da metadata, mas não executados manualmente.
+
+### Boas práticas aplicadas
+
+- optimize the owner of the cost: metadata pertence ao `VoxelChunk`, dono do conteúdo;
+- derived data close to source;
+- cache contract explícito: key=voxel local, value=potential-source bit, invalidation=block/fluid mutation local, lifetime=chunk, bounded=4096 bits;
+- não existe segunda fonte de verdade do solver;
+- capability API `visit_potential_fluid_frontier_sources` não expõe o layout interno do bitset.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` documenta o índice derivado e sua semântica conservadora.
+- `VERSION`: **0.34.10 → 0.34.11**.
+- CI ainda pendente neste instante; não executei `cargo test`, `cargo run` ou QA Windows.

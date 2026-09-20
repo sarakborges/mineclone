@@ -12,6 +12,14 @@ pub const CHUNK_SIZE: usize = 16;
 const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
 pub(crate) const CHUNK_VOLUME: usize = CHUNK_AREA * CHUNK_SIZE;
 const BOUNDARY_FACE_COUNT: usize = 6;
+const FLUID_FRONTIER_WORDS: usize = CHUNK_VOLUME.div_ceil(u64::BITS as usize);
+const FLUID_SPREAD_TARGETS: [IVec3; 5] = [
+    IVec3::NEG_Y,
+    IVec3::X,
+    IVec3::NEG_X,
+    IVec3::Z,
+    IVec3::NEG_Z,
+];
 const NEGATIVE_X_FACE: usize = 0;
 const POSITIVE_X_FACE: usize = 1;
 const NEGATIVE_Y_FACE: usize = 2;
@@ -36,6 +44,7 @@ pub struct VoxelChunk {
     light: Arc<[VoxelLight]>,
     block_count: usize,
     fluid_count: usize,
+    fluid_frontier_sources: Arc<[u64; FLUID_FRONTIER_WORDS]>,
     boundary_content_counts: [u16; BOUNDARY_FACE_COUNT],
     boundary_fluid_counts: [u16; BOUNDARY_FACE_COUNT],
 }
@@ -45,6 +54,7 @@ pub(crate) struct VoxelChunkContentMut<'a> {
     fluids: &'a mut [Option<FluidCell>],
     block_count: &'a mut usize,
     fluid_count: &'a mut usize,
+    fluid_frontier_sources: &'a mut [u64; FLUID_FRONTIER_WORDS],
     boundary_content_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
     boundary_fluid_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
 }
@@ -61,6 +71,7 @@ impl VoxelChunkContentMut<'_> {
             &mut *self.blocks,
             &*self.fluids,
             &mut *self.block_count,
+            &mut *self.fluid_frontier_sources,
             &mut *self.boundary_content_counts,
             x,
             y,
@@ -80,6 +91,7 @@ impl VoxelChunkContentMut<'_> {
             &*self.blocks,
             &mut *self.fluids,
             &mut *self.fluid_count,
+            &mut *self.fluid_frontier_sources,
             &mut *self.boundary_content_counts,
             &mut *self.boundary_fluid_counts,
             x,
@@ -98,6 +110,7 @@ impl VoxelChunk {
             light: Arc::from(vec![VoxelLight::DARK; CHUNK_VOLUME]),
             block_count: 0,
             fluid_count: 0,
+            fluid_frontier_sources: Arc::new([0; FLUID_FRONTIER_WORDS]),
             boundary_content_counts: [0; BOUNDARY_FACE_COUNT],
             boundary_fluid_counts: [0; BOUNDARY_FACE_COUNT],
         }
@@ -109,6 +122,27 @@ impl VoxelChunk {
 
     pub(crate) fn has_fluid(&self) -> bool {
         self.fluid_count > 0
+    }
+
+    pub(crate) fn visit_potential_fluid_frontier_sources(
+        &self,
+        mut visit: impl FnMut(IVec3, FluidCell),
+    ) {
+        for (word_index, &word) in self.fluid_frontier_sources.iter().enumerate() {
+            let mut remaining = word;
+            while remaining != 0 {
+                let bit = remaining.trailing_zeros() as usize;
+                let voxel_index = word_index * u64::BITS as usize + bit;
+                if voxel_index >= CHUNK_VOLUME {
+                    break;
+                }
+                let fluid = self.fluids[voxel_index]
+                    .expect("fluid frontier source metadata must point to a fluid voxel");
+                let (x, y, z) = coordinates(voxel_index);
+                visit(IVec3::new(x as i32, y as i32, z as i32), fluid);
+                remaining &= remaining - 1;
+            }
+        }
     }
 
     pub(crate) fn boundary_has_content(&self, outward: IVec3) -> bool {
@@ -165,11 +199,13 @@ impl VoxelChunk {
     ) -> R {
         let blocks = Arc::make_mut(&mut self.blocks);
         let fluids = Arc::make_mut(&mut self.fluids);
+        let fluid_frontier_sources = Arc::make_mut(&mut self.fluid_frontier_sources);
         let mut content = VoxelChunkContentMut {
             blocks,
             fluids,
             block_count: &mut self.block_count,
             fluid_count: &mut self.fluid_count,
+            fluid_frontier_sources,
             boundary_content_counts: &mut self.boundary_content_counts,
             boundary_fluid_counts: &mut self.boundary_fluid_counts,
         };
@@ -178,10 +214,12 @@ impl VoxelChunk {
 
     pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: Option<VoxelCell>) {
         let blocks = Arc::make_mut(&mut self.blocks);
+        let fluid_frontier_sources = Arc::make_mut(&mut self.fluid_frontier_sources);
         set_block_in_storage(
             blocks,
             self.fluids.as_ref(),
             &mut self.block_count,
+            fluid_frontier_sources,
             &mut self.boundary_content_counts,
             x,
             y,
@@ -192,10 +230,12 @@ impl VoxelChunk {
 
     pub(crate) fn set_fluid(&mut self, x: usize, y: usize, z: usize, fluid: Option<FluidCell>) {
         let fluids = Arc::make_mut(&mut self.fluids);
+        let fluid_frontier_sources = Arc::make_mut(&mut self.fluid_frontier_sources);
         set_fluid_in_storage(
             self.blocks.as_ref(),
             fluids,
             &mut self.fluid_count,
+            fluid_frontier_sources,
             &mut self.boundary_content_counts,
             &mut self.boundary_fluid_counts,
             x,
@@ -263,6 +303,7 @@ fn set_block_in_storage(
     blocks: &mut [Option<VoxelCell>],
     fluids: &[Option<FluidCell>],
     block_count: &mut usize,
+    fluid_frontier_sources: &mut [u64; FLUID_FRONTIER_WORDS],
     boundary_content_counts: &mut [u16; BOUNDARY_FACE_COUNT],
     x: usize,
     y: usize,
@@ -283,6 +324,7 @@ fn set_block_in_storage(
     }
 
     blocks[index] = block;
+    refresh_fluid_frontier_sources_near(blocks, fluids, fluid_frontier_sources, x, y, z);
 }
 
 #[expect(
@@ -293,6 +335,7 @@ fn set_fluid_in_storage(
     blocks: &[Option<VoxelCell>],
     fluids: &mut [Option<FluidCell>],
     fluid_count: &mut usize,
+    fluid_frontier_sources: &mut [u64; FLUID_FRONTIER_WORDS],
     boundary_content_counts: &mut [u16; BOUNDARY_FACE_COUNT],
     boundary_fluid_counts: &mut [u16; BOUNDARY_FACE_COUNT],
     x: usize,
@@ -316,6 +359,52 @@ fn set_fluid_in_storage(
     }
 
     fluids[index] = fluid;
+    refresh_fluid_frontier_sources_near(blocks, fluids, fluid_frontier_sources, x, y, z);
+}
+
+fn refresh_fluid_frontier_sources_near(
+    blocks: &[Option<VoxelCell>],
+    fluids: &[Option<FluidCell>],
+    sources: &mut [u64; FLUID_FRONTIER_WORDS],
+    x: usize,
+    y: usize,
+    z: usize,
+) {
+    let changed = IVec3::new(x as i32, y as i32, z as i32);
+    refresh_fluid_frontier_source(blocks, fluids, sources, changed);
+
+    for offset in FLUID_SPREAD_TARGETS {
+        let source = changed - offset;
+        if in_bounds(source.x, source.y, source.z) {
+            refresh_fluid_frontier_source(blocks, fluids, sources, source);
+        }
+    }
+}
+
+fn refresh_fluid_frontier_source(
+    blocks: &[Option<VoxelCell>],
+    fluids: &[Option<FluidCell>],
+    sources: &mut [u64; FLUID_FRONTIER_WORDS],
+    source: IVec3,
+) {
+    let source_index = index(source.x as usize, source.y as usize, source.z as usize);
+    let should_track = fluids[source_index].is_some()
+        && FLUID_SPREAD_TARGETS.iter().any(|offset| {
+            let target = source + *offset;
+            if !in_bounds(target.x, target.y, target.z) {
+                return true;
+            }
+            let target_index = index(target.x as usize, target.y as usize, target.z as usize);
+            blocks[target_index].is_none() && fluids[target_index].is_none()
+        });
+
+    let word = source_index / u64::BITS as usize;
+    let mask = 1_u64 << (source_index % u64::BITS as usize);
+    if should_track {
+        sources[word] |= mask;
+    } else {
+        sources[word] &= !mask;
+    }
 }
 
 fn adjust_total_count(count: &mut usize, added: bool) {
@@ -400,6 +489,14 @@ fn index(x: usize, y: usize, z: usize) -> usize {
     x + z * CHUNK_SIZE + y * CHUNK_AREA
 }
 
+fn coordinates(index: usize) -> (usize, usize, usize) {
+    let y = index / CHUNK_AREA;
+    let layer_index = index % CHUNK_AREA;
+    let z = layer_index / CHUNK_SIZE;
+    let x = layer_index % CHUNK_SIZE;
+    (x, y, z)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -482,6 +579,64 @@ mod tests {
         assert_eq!(chunk.sample_local(4, 5, 6).unwrap().1, Some(fluid));
         assert_eq!(chunk.sample_local(7, 8, 9).unwrap().2, light);
         assert!(chunk.sample_local(-1, 0, 0).is_none());
+    }
+
+    #[test]
+    fn fluid_frontier_source_metadata_tracks_only_potential_sources() {
+        let mut chunk = VoxelChunk::empty();
+        let fluid = FluidCell::source(0, 8);
+        let source = IVec3::new(5, 5, 5);
+        chunk.set_fluid(source.x as usize, source.y as usize, source.z as usize, Some(fluid));
+
+        let mut sources = Vec::new();
+        chunk.visit_potential_fluid_frontier_sources(|position, _| sources.push(position));
+        assert_eq!(sources, vec![source]);
+
+        for offset in FLUID_SPREAD_TARGETS {
+            let target = source + offset;
+            chunk.set_block(
+                target.x as usize,
+                target.y as usize,
+                target.z as usize,
+                Some(VoxelCell::new("stone", Default::default())),
+            );
+        }
+
+        sources.clear();
+        chunk.visit_potential_fluid_frontier_sources(|position, _| sources.push(position));
+        assert!(sources.is_empty());
+
+        let reopened = source + IVec3::X;
+        chunk.set_block(
+            reopened.x as usize,
+            reopened.y as usize,
+            reopened.z as usize,
+            None,
+        );
+        chunk.visit_potential_fluid_frontier_sources(|position, _| sources.push(position));
+        assert_eq!(sources, vec![source]);
+    }
+
+    #[test]
+    fn boundary_fluid_stays_a_potential_frontier_source() {
+        let mut chunk = VoxelChunk::empty();
+        let fluid = FluidCell::source(0, 8);
+        let source = IVec3::new(0, 5, 5);
+        chunk.set_fluid(source.x as usize, source.y as usize, source.z as usize, Some(fluid));
+
+        for offset in [IVec3::NEG_Y, IVec3::X, IVec3::Z, IVec3::NEG_Z] {
+            let target = source + offset;
+            chunk.set_block(
+                target.x as usize,
+                target.y as usize,
+                target.z as usize,
+                Some(VoxelCell::new("stone", Default::default())),
+            );
+        }
+
+        let mut sources = Vec::new();
+        chunk.visit_potential_fluid_frontier_sources(|position, _| sources.push(position));
+        assert_eq!(sources, vec![source]);
     }
 
     #[test]
