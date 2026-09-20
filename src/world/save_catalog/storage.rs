@@ -6,6 +6,8 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
+use crate::world::storage_durability::sync_directory;
+
 use super::{invalid_data, snapshot::WorldManifest};
 
 const MAX_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
@@ -164,10 +166,6 @@ fn rollback_published_file(
             ),
         ),
     }
-}
-
-fn sync_directory(directory: &Path) -> io::Result<()> {
-    fs::File::open(directory)?.sync_all()
 }
 
 pub(super) fn read_json_file<T: for<'de> Deserialize<'de>>(file: fs::File) -> io::Result<T> {

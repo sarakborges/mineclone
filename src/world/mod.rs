@@ -35,6 +35,7 @@ pub(crate) mod save_catalog;
 pub(crate) mod save_session;
 mod seed;
 mod setup;
+mod storage_durability;
 mod streaming;
 pub(crate) mod terrain;
 pub(crate) mod tick;

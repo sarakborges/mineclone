@@ -7,7 +7,10 @@ use std::{
 
 use bevy::prelude::IVec3;
 
-use crate::voxel::chunk_disk::DiskChunk;
+use crate::{
+    voxel::chunk_disk::DiskChunk,
+    world::storage_durability::{sync_directory, sync_directory_tree},
+};
 
 const CHUNK_DIRECTORY: &str = "chunks";
 const CHUNK_FILE_EXTENSION: &str = "chunk.json";
@@ -251,18 +254,6 @@ pub(crate) fn remove_generation_chunks(world_directory: &Path, generation: u64) 
         Err(error) => Err(error),
     }
 }
-
-fn sync_directory_tree(directory: &Path) -> io::Result<()> {
-    let mut directories = vec![directory.to_path_buf()];
-    let mut index = 0;
-    while index < directories.len() {
-        let current = directories[index].clone(); index += 1;
-        for entry in fs::read_dir(current.as_path())? { let entry = entry?; if entry.file_type()?.is_dir() { directories.push(entry.path()); } }
-    }
-    for directory in directories.into_iter().rev() { sync_directory(directory.as_path())?; }
-    Ok(())
-}
-fn sync_directory(directory: &Path) -> io::Result<()> { fs::File::open(directory)?.sync_all() }
 
 #[cfg(test)]
 mod tests {
