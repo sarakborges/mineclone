@@ -4189,3 +4189,12 @@ Os systems no parent continuam owner de decisões:
 - `ARCHITECTURE.md` documenta `tasks` como owner de lifecycle mecânico, mantendo systems como owner das decisões.
 - `VERSION`: **0.34.23 → 0.34.24**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### Correção mecânica do checkpoint 135
+
+Na revisão imediata pós-commit, antes de considerar o bloco validado, foi encontrado um call site transformado incorretamente por replace mecânico:
+
+- `let id = id().to_owned();` → `let id = pending.id().to_owned();`.
+
+A correção restaura apenas o acesso ao ID do `PendingWorldLoad`; nenhuma semântica de task/load mudou e `VERSION` permanece `0.34.24`.

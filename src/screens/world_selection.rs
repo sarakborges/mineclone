@@ -179,7 +179,7 @@ fn poll_world_load(
         return;
     };
     let pending = state.loading.take().expect("completed load must be tracked");
-    let id = id().to_owned();
+    let id = pending.id().to_owned();
     let result = match completion {
         WorldLoadCompletion::Abandoned => return,
         WorldLoadCompletion::Finished(Some(result)) => result,
