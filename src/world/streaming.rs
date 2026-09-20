@@ -143,7 +143,7 @@ impl ChunkStreamingState {
     }
 
     fn generation_dispatch_work_exists(&self) -> bool {
-        (!self.generation_wave_pending.values().next().is_none() || !self.pending.values().next().is_none())
+        (self.generation_wave_pending.len() > 0 || self.pending.len() > 0)
             && !self.fluid_settling.is_active()
     }
 

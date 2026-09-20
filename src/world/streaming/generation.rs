@@ -92,7 +92,7 @@ pub(super) fn collect_generated_chunks(
     }
 
     if work.generation_tasks.pending_count() > 0
-        || work.state.generation_wave_pending.values().next().is_some()
+        || work.state.generation_wave_pending.len() > 0
     {
         return;
     }
