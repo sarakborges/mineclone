@@ -5355,3 +5355,65 @@ Correção:
 - testes existentes continuam podendo usar a wrapper síncrona;
 - nenhuma lógica de iluminação mudou;
 - `VERSION` permanece `0.35.6`.
+
+
+### CI verde do checkpoint 151
+
+- Push CI `35526614181`: **success**.
+- PR CI `35526617306`: **success**.
+- O topo `84f80d7e7371e0aa3a8323a15828b8a2f8f17755` passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+- `VERSION` permanece `0.35.6`.
+- Runtime `relax_budgeted()` é agora a única entrypoint de propagation no build normal.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
+
+## Checkpoint 152 — 2026-09-20: bootstrap phases separados por lifecycle stage [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`setup/progress.rs` já modelava corretamente `WorldLoadingPhase`, mas também possuía a implementação completa de todas as fases:
+
+- generation dispatch/integration;
+- lighting propagation;
+- mesh dispatch/integration;
+- player spawn/transition.
+
+A state machine e a mecânica de cada stage mudam por motivos diferentes.
+
+### Implementação
+
+`setup/progress.rs` agora possui somente:
+
+- `setup_world()`;
+- dispatch explícito por `WorldLoadingPhase`;
+- `INITIAL_LOADING_BUDGET`.
+
+Novos owners:
+
+- `setup/progress/generation.rs`: generation task sync/collect/dispatch + frontier seed;
+- `setup/progress/lighting.rs`: bootstrap lighting queue + propagation budget;
+- `setup/progress/meshing.rs`: mesh task sync/collect/dispatch + render integration;
+- `setup/progress/spawning.rs`: spawn-position policy, player restore/new spawn e Gameplay transition.
+
+### Boundaries
+
+- `setup_world()` continua mostrando explicitamente `Generating → Lighting → Meshing → Spawning`;
+- nenhuma event bus/callback layer foi criada;
+- submódulos recebem apenas dependencies necessárias;
+- `WorldSetupSimulation` continua agrupando apenas simulation resources no system Bevy;
+- helpers de generation continuam recebendo diretamente `PendingFluidUpdates`, não o context inteiro.
+
+### Semântica preservada
+
+- mesmo budget de 12 ms;
+- mesma ordem de fases;
+- mesmos task limits;
+- mesma stale-task reschedule policy;
+- mesma regra de lighting convergence antes de meshing;
+- mesma spawn/load behavior;
+- nenhum save/worldgen/fluid rule mudou.
+
+### Versionamento
+
+- `VERSION`: **0.35.6 → 0.35.7**.
+- CI pendente.
+- Não executei `cargo test`, `cargo run` nem QA Windows.
