@@ -3459,3 +3459,14 @@ Usar os números observados em gameplay para escolher entre:
 - `ARCHITECTURE.md` registra que fluid performance metrics são observacionais e nunca participam de correctness.
 - `VERSION`: **0.34.13 → 0.34.14**.
 - CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+### Correção de integração CI do checkpoint 125
+
+A primeira CI da instrumentação falhou por `private_interfaces`: `process_fluid_updates` é `pub(super)` e expõe `Local<FluidPerformanceDiagnostics>` na assinatura, enquanto o tipo era privado ao módulo.
+
+Correção:
+- `FluidPerformanceDiagnostics` passou a `pub(super)`, exatamente a visibilidade necessária ao system;
+- nenhuma field/mutation API interna foi exposta;
+- nenhuma suppression de lint foi adicionada;
+- `VERSION` permanece `0.34.14`.

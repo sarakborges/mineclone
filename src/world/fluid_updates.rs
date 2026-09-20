@@ -450,7 +450,7 @@ pub(super) fn reseed_loaded_fluid_frontiers(
 }
 
 #[derive(Default)]
-struct FluidPerformanceDiagnostics {
+pub(super) struct FluidPerformanceDiagnostics {
     timer: Option<Timer>,
     totals: FluidSolverMetrics,
     active_frames: u64,
