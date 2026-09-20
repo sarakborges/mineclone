@@ -90,6 +90,51 @@ fn direct_seed_cache_refreshes_after_upper_chunk_content_changes() {
 }
 
 #[test]
+fn direct_seed_identifies_fully_opaque_non_emissive_chunk_as_stable() {
+    let blocks = test_blocks();
+    let fluids = test_fluids();
+    let mut world = VoxelWorld::default();
+    world.insert_chunk(IVec3::ZERO, opaque_chunk());
+    let mut pending = PendingLightingUpdates::default();
+
+    let requires_relaxation = pending.seed_chunk_direct_lighting(
+        &mut world,
+        IVec3::ZERO,
+        &blocks,
+        &fluids,
+        &SecondaryPropertyRegistry::default(),
+    );
+
+    assert!(!requires_relaxation);
+}
+
+#[test]
+fn direct_seed_keeps_emissive_chunk_on_relaxation_path() {
+    let blocks = test_blocks();
+    let fluids = test_fluids();
+    let mut chunk = opaque_chunk();
+    chunk.set_block(
+        8,
+        8,
+        8,
+        Some(VoxelCell::new(LAMP_BLOCK_ID, TextureRotation::default())),
+    );
+    let mut world = VoxelWorld::default();
+    world.insert_chunk(IVec3::ZERO, chunk);
+    let mut pending = PendingLightingUpdates::default();
+
+    let requires_relaxation = pending.seed_chunk_direct_lighting(
+        &mut world,
+        IVec3::ZERO,
+        &blocks,
+        &fluids,
+        &SecondaryPropertyRegistry::default(),
+    );
+
+    assert!(requires_relaxation);
+}
+
+#[test]
 fn loading_opaque_chunk_above_invalidates_existing_skylight_below() {
     let blocks = test_blocks();
     let fluids = test_fluids();
