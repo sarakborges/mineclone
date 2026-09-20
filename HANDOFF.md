@@ -1,6 +1,6 @@
 # HANDOFF — Asteria / Mineclone
 
-**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.41.1`. HEAD funcional `6bbdb5fade29d15763a1701e20fc9241c8f73937`. CI push `35538535445` e PR `35538538976`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Streaming usa generation waves de até 8 chunks, settling com fixed-point verification e dependências externas retidas, chunks não renderizados não participam do mesh halo, wave reservations têm lifecycle explícito e fluid remesh invalida o halo 1-voxel exato. Não houve `cargo test`, `cargo run` nem QA Windows.
+**ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.42.0`. HEAD funcional `4cf948900bee3a8b7636897aa8573214210df190`. CI push `35539207544` e PR `35539210374`: **success** em auditoria de localizações, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Streaming voltou a usar range vertical com 16 probes em grade 4×4 + guard de 1 chunk, removendo a regressão dos 5 probes que podia omitir picos/paredes entre amostras. Generation tasks da mesma region/coluna podem rodar concorrentemente; os caches `OnceLock` são o único owner da serialização de prerequisites. Terrenos montanhosos (`mountains`, `gorge`, `alps`, `mountain_belt`, `volcano`) pertencem ao mesmo `exclusiveNeighborGroup=mountain_terrain`, não podem compartilhar borda entre IDs diferentes e não podem surgir como fallback em um site cujo raw winner era outro biome. Não houve `cargo test`, `cargo run` nem QA Windows/runtime.
 
 **Fonte ativa:** `sarakborges/mineclone`, branch **`develop`**, Rust + Bevy 0.19.1. **Versão raiz atual `VERSION`: `0.34.0`**. `Cargo.toml` permanece em `0.10.16` deliberadamente e NÃO é a versão funcional do jogo. **Estado mais recente em `develop`: comparação/correção do save game em andamento; HEAD funcional ainda não versionado `bd713963b9bbb8f69eeeb6df6b7bf7aa2773152f`.** CI `35413383474` passou com auditoria de localizações, Clippy `-D warnings` e `cargo check --locked`. Já foram corrigidas persistência de scheduled fluid work, health do player, creatures e lock cross-process do diretório do mundo. Ainda NÃO foram implementados selected hotbar slot, rotação/look do player, autosave disparado somente pela passagem do clock, nem a migração do snapshot global para storage incremental por chunk/region. **Não houve bump de VERSION neste checkpoint porque o bloco de save foi interrompido antes do fechamento completo.** Não houve `cargo test`, `cargo run` ou QA Windows.
 
@@ -7385,3 +7385,240 @@ Não houve `cargo test`, `cargo run` nem QA Windows/runtime.
    - novo chunk abaixo/acima deve reavaliar rota dinâmica existente antes do first mesh.
 5. Movimento rápido indo/voltando:
    - reservations devem ser abandonadas/recriadas sem stranded coords.
+
+
+## Checkpoint 172 — 2026-09-20: missing streamed terrain + mountain-terrain exclusivity garantida no algoritmo [ROOT CAUSE + FIX; VERSION 0.42.0; CI VERDE]
+
+### Relato
+
+Após o checkpoint 171, o usuário informou que o problema de carregamento ainda não havia sido resolvido e observou novamente `gorge` diretamente ao lado de `volcano`, apesar do requisito de que os terrenos montanhosos sejam mutuamente exclusivos.
+
+A investigação foi separada em:
+
+1. seleção vertical do streaming;
+2. concorrência do generation scheduler;
+3. semântica real de `avoidNear` / seleção final de surface biome.
+
+---
+
+### 1. Root cause de partes de terreno não carregando: surface range voltou a ser aproximado demais
+
+`streaming/surface_cache.rs` decide quais chunks Y entram em `desired` para cada coluna horizontal.
+
+Estado encontrado:
+
+- apenas 5 probes por coluna 16×16:
+  - 4 cantos;
+  - centro;
+- guard de 16 blocos.
+
+Isso pode subestimar a altura real de:
+
+- volcano slopes/peaks;
+- alps;
+- mountain belts;
+- gorge walls;
+- cliffs/detail noise.
+
+Se o máximo real cai entre os probes e excede o guard, o chunk vertical **nem entra em `desired`**. Nesse caso não existe generation/settling/mesh bug posterior capaz de fazê-lo aparecer.
+
+#### Evidência histórica
+
+Histórico de `surface_cache.rs`:
+
+- `e915584...` — **Fix missing streamed terrain and dry river seams**
+  - usava as 16×16 `generation_columns` exatas como range;
+- `08e6f60...` — **Reduce streaming surface sampling cost**
+  - substituiu o range exato por 16 probes em grade 4×4 + guard de 1 chunk;
+- `dc29b00...` — **Reduce streaming surface probe cost**
+  - reduziu novamente para os 5 probes atuais.
+
+Os novos terrenos montanhosos foram adicionados depois dessas otimizações e têm variação interna maior/mais localizada.
+
+#### Correção adotada
+
+Não foi restaurado o scan síncrono 16×16 completo porque ele já havia sido removido por custo de streaming.
+
+Foi restaurado o compromisso anterior:
+
+- offsets `[0, chunk_size/3, 2*chunk_size/3, chunk_size-1]`;
+- 4×4 = **16 probes**;
+- guard de `CHUNK_SIZE` para cima e para baixo.
+
+Isso cobre o interior da coluna muito melhor mantendo custo significativamente menor do que 256 surface samples por coluna.
+
+Commit:
+- `451c202a2b678a15295fff57c7ea79f8f6956d65` — `fix: restore dense streaming surface probes`.
+
+---
+
+### 2. Generation scheduler estava serializando trabalho que o cache já serializa
+
+`ChunkGenerationTasks::schedule()` bloqueava uma segunda generation task quando:
+
+- a `generation_region` compartilhada ainda não tinha todos os prerequisites inicializados; ou
+- a coluna horizontal compartilhada ainda não tinha `generation_columns` inicializadas.
+
+Isso fazia uma wave de até 8 chunks degradar para 1 chunk por vez em regiões/colunas frias.
+
+Auditoria do owner real:
+
+- `WorldFeatureFields::FeatureCaches` usa `ConcurrentCache<K,V>`;
+- cada key possui `Arc<OnceLock<V>>`;
+- múltiplas tasks podem entrar na mesma key;
+- uma executa a factory;
+- as demais aguardam/reutilizam o mesmo valor;
+- teste existente confirma factory única sob concorrência.
+
+Portanto o gate em `ChunkGenerationTasks` era uma segunda serialização redundante.
+
+Correção:
+
+- removidos os gates por region/column de `schedule()`;
+- tasks continuam limitadas por `MAX_GENERATION_TASKS_IN_FLIGHT = 8`;
+- `OnceLock` passa a ser o único owner da construção compartilhada;
+- queries de initialized ficaram test-only ou foram removidas;
+- `ChunkTaskQueue::any_coord()` tornou-se obsoleto e foi removido.
+
+Commits:
+- `759577281148e93c89ca75fa6fe062d4cc8d07b4` — `fix: enforce mountain biome exclusivity and parallel worldgen`;
+- `4cf948900bee3a8b7636897aa8573214210df190` — remove helper `any_coord` morto; HEAD funcional.
+
+---
+
+### 3. Gorge + Volcano: configuração estava correta; algoritmo não garantia o resultado final
+
+O `dimension.json` já continha `avoidNear` simétrico entre:
+
+- mountains;
+- gorge;
+- alps;
+- mountain_belt;
+- volcano.
+
+Logo o problema NÃO era um par esquecido nos dados.
+
+Foram encontradas duas fraquezas na seleção:
+
+#### 3.1 Adjacency analisava um raio menor que o próprio Voronoi
+
+`SITE_SEARCH_RADIUS = 2`, usado pelo surface field.
+
+Mas `selection.rs` usava:
+
+`PROXIMITY_SITE_RADIUS = 1`
+
+para `avoidNear`.
+
+Assim a geometria do surface field podia considerar sites dentro do raio 2 enquanto a regra de conflito só inspecionava os 8 cells imediatos.
+
+Correção:
+
+`PROXIMITY_SITE_RADIUS = SITE_SEARCH_RADIUS`.
+
+A regra de adjacency passa a inspecionar a mesma vizinhança geométrica que o campo usa.
+
+#### 3.2 Fallback podia criar um terrain exclusivo depois do raw check
+
+O algoritmo:
+
+1. calcula raw biome de cada site;
+2. verifica conflitos contra raw neighbors;
+3. se raw candidate falha, escolhe outro biome weighted como fallback.
+
+Isso permitia que um site originalmente não-montanhoso acabasse escolhendo um terrain montanhoso no fallback. Dois sites vizinhos poderiam resolver conflitos diferentes de forma independente e terminar com dois mountain terrain IDs diferentes, mesmo que a configuração raw de `avoidNear` estivesse correta.
+
+---
+
+### 4. Novo owner data-driven: exclusiveNeighborGroup
+
+Foi adicionado ao `DimensionBiome`:
+
+`exclusiveNeighborGroup: Option<String>`
+
+Semântica:
+
+- válido apenas para surface biomes;
+- string não pode ser vazia;
+- dois IDs diferentes no mesmo grupo entram em conflito de adjacency;
+- mesmo ID pode ocupar sites vizinhos normalmente;
+- biomes do grupo **não podem aparecer como fallback para outro raw biome**.
+
+Overworld agora usa:
+
+`exclusiveNeighborGroup: "mountain_terrain"`
+
+em:
+
+- `asteria:overworld/mountains`;
+- `asteria:overworld/gorge`;
+- `asteria:overworld/alps`;
+- `asteria:overworld/mountain_belt`;
+- `asteria:overworld/volcano`.
+
+O antigo all-pairs `avoidNear` entre esses cinco foi removido para manter uma única fonte de verdade.
+
+`avoidNear` continua disponível para relações que não são grupos, como Witchwood ↔ Enchanted Forest.
+
+#### Garantia determinística
+
+Um biome com `exclusiveNeighborGroup`:
+
+- só pode permanecer se era o raw winner daquele site;
+- se entra em conflito com um neighbor, cai para um biome fora do grupo;
+- outro terrain do mesmo grupo não pode ser introduzido como fallback.
+
+Isso impede a criação tardia de `gorge`, `volcano`, etc. após a etapa onde os conflitos de adjacency foram avaliados.
+
+---
+
+### Tests adicionados
+
+Em `biome_field/selection.rs`:
+
+- IDs diferentes no mesmo exclusive group conflitam;
+- o mesmo ID no grupo não conflita consigo mesmo;
+- grupo vs biome sem grupo não conflita;
+- terrain de exclusive group não pode surgir como fallback de plains;
+- volcano não pode trocar para gorge como fallback;
+- fallback para biome sem grupo permanece permitido.
+
+Não foi executado `cargo test` por restrição explícita. Os test targets foram compilados pelo Clippy `--all-targets`.
+
+---
+
+### CI
+
+Primeiro HEAD 0.42.0 falhou apenas por dead-code após a remoção do scheduler gate:
+
+- `ChunkTaskQueue::any_coord()` ficou sem caller.
+
+Após limpeza, HEAD funcional:
+
+`4cf948900bee3a8b7636897aa8573214210df190`
+
+CI:
+
+- push `35539207544`: **success**;
+- PR `35539210374`: **success**;
+- localization audit: success;
+- Clippy rigoroso: success;
+- `cargo check --locked`: success.
+
+Não houve `cargo test`, `cargo run` nem QA Windows/runtime.
+
+### QA prioritária
+
+1. Reproduzir região montanhosa onde faltavam pedaços:
+   - paredes/picos entre centro e cantos do chunk devem agora entrar na seleção vertical.
+2. Caminhar por terrain novo:
+   - generation wave deve usar até 8 tasks sem serializar artificialmente region/column fria.
+3. Procurar borders entre:
+   - gorge;
+   - volcano;
+   - mountains;
+   - alps;
+   - mountain_belt.
+   IDs diferentes do grupo `mountain_terrain` não devem compartilhar border.
+4. Confirmar que biomes do mesmo ID podem formar regiões contínuas normalmente.
+5. Witchwood/Enchanted Forest continuam usando `avoidNear` e não dependem do novo grupo.
