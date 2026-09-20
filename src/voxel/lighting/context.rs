@@ -4,15 +4,28 @@ use crate::content::{
     block::BlockRegistry, fluid::FluidRegistry,
     secondary_property::SecondaryPropertyRegistry,
 };
-use crate::voxel::{chunk::CHUNK_SIZE, light::VoxelLight, world::VoxelWorld};
+use crate::voxel::{
+    chunk::{CHUNK_SIZE, VoxelChunk},
+    light::VoxelLight,
+    world::VoxelWorld,
+};
 
 use super::medium::medium_dampening_for_cells;
+
+const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
 
 #[derive(Default)]
 pub(super) struct LightingContext {
     direct_sky_columns: HashMap<IVec2, DirectSkyColumn>,
     highest_loaded_y_by_chunk_column: HashMap<IVec2, Option<i32>>,
     recycled_direct_sky_columns: Vec<DirectSkyColumn>,
+    chunk_vertical_dampening: HashMap<IVec3, ChunkVerticalDampening>,
+}
+
+#[derive(Clone)]
+struct ChunkVerticalDampening {
+    content_revision: u64,
+    by_column: [u8; CHUNK_AREA],
 }
 
 struct DirectSkyColumn {
@@ -93,10 +106,55 @@ impl DirectSkyColumn {
 }
 
 impl LightingContext {
-    pub(super) fn clear(&mut self) {
+    pub(super) fn reset_query_scratch(&mut self) {
         self.recycled_direct_sky_columns
             .extend(self.direct_sky_columns.drain().map(|(_, column)| column));
         self.highest_loaded_y_by_chunk_column.clear();
+    }
+
+    pub(super) fn forget_chunks(&mut self, coords: &[IVec3]) {
+        for coord in coords {
+            self.chunk_vertical_dampening.remove(coord);
+        }
+    }
+
+    pub(super) fn apply_chunk_vertical_dampening(
+        &mut self,
+        world: &VoxelWorld,
+        blocks: &BlockRegistry,
+        fluids: &FluidRegistry,
+        coord: IVec3,
+        sky_by_column: &mut [u8; CHUNK_AREA],
+    ) {
+        let Some(content_revision) = world.chunk_content_revision(coord) else {
+            return;
+        };
+        let needs_refresh = self
+            .chunk_vertical_dampening
+            .get(&coord)
+            .is_none_or(|cached| cached.content_revision != content_revision);
+
+        if needs_refresh {
+            let chunk = world
+                .chunk(coord)
+                .expect("resident chunk revision must have resident chunk content");
+            let by_column = vertical_dampening_by_column(chunk, blocks, fluids);
+            self.chunk_vertical_dampening.insert(
+                coord,
+                ChunkVerticalDampening {
+                    content_revision,
+                    by_column,
+                },
+            );
+        }
+
+        let cached = self
+            .chunk_vertical_dampening
+            .get(&coord)
+            .expect("vertical dampening cache must exist after refresh");
+        for (sky, dampening) in sky_by_column.iter_mut().zip(cached.by_column) {
+            *sky = sky.saturating_sub(dampening);
+        }
     }
 
     pub fn direct_sky_light(
@@ -144,4 +202,34 @@ impl LightingContext {
             .insert(chunk_column, highest);
         highest
     }
+}
+
+
+fn vertical_dampening_by_column(
+    chunk: &VoxelChunk,
+    blocks: &BlockRegistry,
+    fluids: &FluidRegistry,
+) -> [u8; CHUNK_AREA] {
+    if chunk.is_empty() {
+        return [0; CHUNK_AREA];
+    }
+
+    let mut dampening = [0_u8; CHUNK_AREA];
+    for local_z in 0..CHUNK_SIZE {
+        for local_x in 0..CHUNK_SIZE {
+            let column = &mut dampening[local_x + local_z * CHUNK_SIZE];
+            for local_y in 0..CHUNK_SIZE {
+                if *column >= VoxelLight::MAX_LEVEL {
+                    break;
+                }
+                let (cell, fluid, _) = chunk
+                    .sample_local(local_x as i32, local_y as i32, local_z as i32)
+                    .expect("vertical dampening coordinates must stay inside the chunk");
+                *column = column.saturating_add(medium_dampening_for_cells(
+                    cell, fluid, blocks, fluids,
+                ));
+            }
+        }
+    }
+    dampening
 }

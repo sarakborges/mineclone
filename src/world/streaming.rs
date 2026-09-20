@@ -17,7 +17,7 @@ use crate::{
     voxel::{
         coordinates::chunk_coord_from_position,
         deduplicated_queue::DeduplicatedQueue,
-        lighting::{PendingLightingUpdates, seed_chunk_direct_lighting},
+        lighting::PendingLightingUpdates,
         mesh_snapshot::ChunkMeshSnapshot,
         world::VoxelWorld,
     },
@@ -282,7 +282,7 @@ fn seed_loaded_chunk_lighting(
         .is_empty();
     queues.fluid.reactivate_loaded_chunk(coord, current_tick);
     queues.fluid.enqueue_loaded_fluid_frontier(&work.world, coord);
-    seed_chunk_direct_lighting(
+    queues.lighting.seed_chunk_direct_lighting(
         &mut work.world,
         coord,
         content.blocks(),

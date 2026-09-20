@@ -3321,3 +3321,41 @@ Mesmo após remover o polling global de fluid work dormente, a entrada de qualqu
 - O bloco do índice derivado de frontier passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
 - `VERSION` permanece `0.34.11`.
 - Não executei `cargo test`, `cargo run` nem QA Windows.
+
+
+## Checkpoint 123 — 2026-09-20: revision-guarded vertical skylight transmission cache [CÓDIGO APLICADO; CI PENDENTE]
+
+### Problema
+
+`seed_chunk_direct_lighting()` recalculava a transmissão de céu de um chunk novo percorrendo novamente todos os voxels de cada seção já residente acima dele. Em uma coluna vertical carregada incrementalmente, esse custo se repetia e crescia cumulativamente.
+
+### Implementação
+
+- `LightingContext` agora mantém `chunk_vertical_dampening`.
+- Cada entrada contém:
+  - key: `IVec3` do chunk;
+  - guard: `chunk_content_revision`;
+  - value: 256 valores (`16×16`) de dampening vertical agregado, um por coluna local.
+- O primeiro seed que precisa de uma versão de chunk calcula no máximo os 4096 voxels daquela seção.
+- Seeds posteriores aplicam apenas os 256 totais já calculados.
+- Se bloco/fluido muda, `chunk_content_revision` muda; a entrada é recomposta lazily no próximo uso.
+- `enqueue_chunk_unloads()` remove explicitamente as entradas dos chunks descarregados.
+- `LightingContext::clear()` foi renomeado para `reset_query_scratch()` porque a operação não apaga o cache persistente; o nome agora descreve corretamente o side effect.
+- Streaming deixou de chamar o helper de seed diretamente e usa a capability `PendingLightingUpdates::seed_chunk_direct_lighting()`, mantendo cache e seed sob o mesmo owner.
+- O seed do próprio chunk continua reconstruindo luz/emissão normalmente; a otimização só elimina re-scan redundante das seções superiores.
+- Adicionado teste de regressão para invalidation por `chunk_content_revision`; não executado manualmente.
+
+### Práticas aplicadas
+
+- optimize the owner of the cost;
+- one authoritative owner;
+- cache com key/value/validity/invalidation/lifetime/bound explícitos;
+- stale derived data protegida por revision;
+- API por capability, sem expor o `HashMap` interno;
+- nome de método alinhado ao side effect real.
+
+### Arquitetura / versionamento
+
+- `ARCHITECTURE.md` documenta o cache e seu contrato.
+- `VERSION`: **0.34.11 → 0.34.12**.
+- CI pendente; não executei `cargo test`, `cargo run` nem QA Windows.

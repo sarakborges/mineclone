@@ -50,6 +50,7 @@ impl PendingLightingUpdates {
     }
 
     pub(crate) fn enqueue_chunk_unloads(&mut self, unloaded: &[IVec3]) {
+        self.context.forget_chunks(unloaded);
         for coord in unloaded {
             self.queue
                 .enqueue_chunk_boundary_neighbors(chunk_origin(*coord));
@@ -72,6 +73,24 @@ impl PendingLightingUpdates {
         let origin = chunk_origin(coord);
         self.queue.enqueue_chunk_boundary_voxels(origin);
         self.queue.enqueue_chunk_boundary_neighbors(origin);
+    }
+
+    pub(crate) fn seed_chunk_direct_lighting(
+        &mut self,
+        world: &mut VoxelWorld,
+        coord: IVec3,
+        blocks: &BlockRegistry,
+        fluids: &FluidRegistry,
+        secondary_properties: &SecondaryPropertyRegistry,
+    ) {
+        seed_chunk_direct_lighting(
+            world,
+            coord,
+            blocks,
+            fluids,
+            secondary_properties,
+            &mut self.context,
+        );
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -127,12 +146,13 @@ fn emission_change_requires_full_volume(previous: BlockLight, current: BlockLigh
     previous != current && previous.intensity() > 0 && current.intensity() > 0
 }
 
-pub(crate) fn seed_chunk_direct_lighting(
+fn seed_chunk_direct_lighting(
     world: &mut VoxelWorld,
     coord: IVec3,
     blocks: &BlockRegistry,
     fluids: &FluidRegistry,
     secondary_properties: &SecondaryPropertyRegistry,
+    context: &mut LightingContext,
 ) {
     let size = CHUNK_SIZE as i32;
     let world_x = coord.x * size;
@@ -145,32 +165,13 @@ pub(crate) fn seed_chunk_direct_lighting(
 
     let mut sky_by_column = [VoxelLight::MAX_LEVEL; CHUNK_SIZE * CHUNK_SIZE];
     for upper_y in ((coord.y + 1)..=highest_loaded_chunk_y).rev() {
-        let Some(upper_chunk) = world.chunk(IVec3::new(coord.x, upper_y, coord.z)) else {
-            continue;
-        };
-        if upper_chunk.is_empty() {
-            continue;
-        }
-
-        for local_z in 0..CHUNK_SIZE {
-            for local_x in 0..CHUNK_SIZE {
-                let sky = &mut sky_by_column[local_x + local_z * CHUNK_SIZE];
-                if *sky == 0 {
-                    continue;
-                }
-
-                for local_y in (0..CHUNK_SIZE).rev() {
-                    if *sky == 0 {
-                        break;
-                    }
-                    let (cell, fluid, _) = upper_chunk
-                        .sample_local(local_x as i32, local_y as i32, local_z as i32)
-                        .expect("direct seed local coordinates must stay inside the chunk");
-                    *sky =
-                        sky.saturating_sub(medium_dampening_for_cells(cell, fluid, blocks, fluids));
-                }
-            }
-        }
+        context.apply_chunk_vertical_dampening(
+            world,
+            blocks,
+            fluids,
+            IVec3::new(coord.x, upper_y, coord.z),
+            &mut sky_by_column,
+        );
     }
 
     if world.chunk(coord).is_some_and(|chunk| chunk.is_empty()) {

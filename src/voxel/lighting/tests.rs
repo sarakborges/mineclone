@@ -6,6 +6,7 @@ use crate::{
         },
         color::Hsi,
         fluid::{FluidDefinition, FluidRegistry},
+        secondary_property::SecondaryPropertyRegistry,
     },
     localization::LocalizedText,
     voxel::{
@@ -53,6 +54,39 @@ fn direct_skylight_is_restored_after_removing_a_blocker() {
     relight_after_voxel_edit(&mut world, blocker, &blocks, &fluids);
 
     assert_eq!(world.light_at(below).sky(), VoxelLight::MAX_LEVEL);
+}
+
+#[test]
+fn direct_seed_cache_refreshes_after_upper_chunk_content_changes() {
+    let blocks = test_blocks();
+    let fluids = test_fluids();
+    let mut world = two_chunk_world(IVec3::ZERO, IVec3::Y);
+    let mut pending = PendingLightingUpdates::default();
+    let below = IVec3::new(8, CHUNK_SIZE as i32 - 1, 8);
+    let blocker = IVec3::new(8, CHUNK_SIZE as i32 + 8, 8);
+
+    pending.seed_chunk_direct_lighting(
+        &mut world,
+        IVec3::ZERO,
+        &blocks,
+        &fluids,
+        &SecondaryPropertyRegistry::default(),
+    );
+    assert_eq!(world.light_at(below).sky(), VoxelLight::MAX_LEVEL);
+
+    world.set_block_at(
+        blocker,
+        Some(VoxelCell::new(OPAQUE_BLOCK_ID, TextureRotation::default())),
+    );
+    pending.seed_chunk_direct_lighting(
+        &mut world,
+        IVec3::ZERO,
+        &blocks,
+        &fluids,
+        &SecondaryPropertyRegistry::default(),
+    );
+
+    assert_eq!(world.light_at(below).sky(), 0);
 }
 
 #[test]
