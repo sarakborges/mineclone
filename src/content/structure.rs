@@ -511,6 +511,50 @@ impl StructureRegistry {
         self.get(id)
     }
 
+    pub(crate) fn variation_count(&self, reference: &str) -> Option<usize> {
+        if self.get(reference).is_some() {
+            return Some(1);
+        }
+
+        self.groups.get(reference).map(Vec::len)
+    }
+
+    pub(crate) fn variation(
+        &self,
+        reference: &str,
+        variation: usize,
+    ) -> Option<&StructureDefinition> {
+        let index = variation.checked_sub(1)?;
+        if let Some(structure) = self.get(reference) {
+            return (index == 0).then_some(structure);
+        }
+
+        let members = self.groups.get(reference)?;
+        self.get(members.get(index)?)
+    }
+
+    pub(crate) fn select_for_manual_placement(
+        &self,
+        reference: &str,
+        variation: Option<usize>,
+        hash: u64,
+    ) -> Option<&StructureDefinition> {
+        match variation {
+            Some(variation) => self.variation(reference, variation),
+            None => self.select_for_reference(reference, hash),
+        }
+    }
+
+    pub(crate) fn group_references(
+        &self,
+    ) -> impl Iterator<Item = (&str, &StructureDefinition, usize)> {
+        self.groups.iter().filter_map(|(reference, members)| {
+            let first = members.first()?;
+            let structure = self.get(first)?;
+            Some((reference.as_str(), structure, members.len()))
+        })
+    }
+
     pub(crate) fn bounds_for_reference(
         &self,
         reference: &str,
