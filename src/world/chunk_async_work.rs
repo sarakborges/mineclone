@@ -11,6 +11,7 @@ use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 #[derive(Resource, Clone, Default)]
 pub(crate) struct ChunkAsyncWorkLimiter {
     in_flight: Arc<AtomicUsize>,
+    adaptive_limit: Arc<AtomicUsize>,
     metrics: Arc<ChunkAsyncWorkMetrics>,
 }
 
@@ -99,11 +100,30 @@ impl ChunkAsyncWorkLimiter {
         self.in_flight.load(Ordering::Acquire)
     }
 
-    pub(crate) fn limit(&self) -> usize {
+    pub(crate) fn base_limit(&self) -> usize {
         let workers = AsyncComputeTaskPool::get().thread_num().max(1);
         // Keep some executor headroom instead of allowing independent chunk
         // subsystems to saturate every worker with long CPU-heavy jobs.
         (workers * 3).div_ceil(4).max(1)
+    }
+
+    pub(crate) fn limit(&self) -> usize {
+        let base = self.base_limit();
+        let adaptive = self.adaptive_limit.load(Ordering::Acquire);
+        if adaptive == 0 {
+            base
+        } else {
+            adaptive.clamp(1, base)
+        }
+    }
+
+    pub(crate) fn reset_adaptive_limit(&self) {
+        self.adaptive_limit.store(0, Ordering::Release);
+    }
+
+    fn set_adaptive_limit(&self, limit: usize) {
+        self.adaptive_limit
+            .store(limit.clamp(1, self.base_limit()), Ordering::Release);
     }
 
     pub(crate) fn take_diagnostics(&self) -> ChunkAsyncWorkDiagnostics {
@@ -136,6 +156,49 @@ impl ChunkAsyncStageMetrics {
             },
             max_micros: max_nanos / 1_000,
         }
+    }
+}
+
+const ASYNC_SLOW_FRAME_SECONDS: f32 = 1.0 / 50.0;
+const ASYNC_RECOVERY_FRAME_SECONDS: f32 = 1.0 / 58.0;
+const ASYNC_RECOVERY_FRAMES: u16 = 120;
+
+#[derive(Default)]
+pub(crate) struct ChunkAsyncAdaptationState {
+    recovery_frames: u16,
+}
+
+pub(crate) fn reset_chunk_async_work_limit(
+    limiter: Res<ChunkAsyncWorkLimiter>,
+) {
+    limiter.reset_adaptive_limit();
+}
+
+pub(crate) fn tune_chunk_async_work(
+    time: Res<Time<Real>>,
+    limiter: Res<ChunkAsyncWorkLimiter>,
+    mut state: Local<ChunkAsyncAdaptationState>,
+) {
+    let frame_seconds = time.delta_secs();
+    let current = limiter.limit();
+    let base = limiter.base_limit();
+
+    if frame_seconds > ASYNC_SLOW_FRAME_SECONDS {
+        state.recovery_frames = 0;
+        if current > 1 {
+            limiter.set_adaptive_limit(current - 1);
+        }
+        return;
+    }
+
+    if frame_seconds <= ASYNC_RECOVERY_FRAME_SECONDS && current < base {
+        state.recovery_frames = state.recovery_frames.saturating_add(1);
+        if state.recovery_frames >= ASYNC_RECOVERY_FRAMES {
+            limiter.set_adaptive_limit(current + 1);
+            state.recovery_frames = 0;
+        }
+    } else {
+        state.recovery_frames = 0;
     }
 }
 
