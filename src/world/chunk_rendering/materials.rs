@@ -4,8 +4,9 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        block::{BlockDefinition, BlockRegistry, BlockTextureLayer},
+        block::{BlockDefinition, BlockRegistry, BlockTextureLayer, BlockTint},
         fluid::{FluidId, FluidRegistry},
+        layer::{LayerDefinition, LayerRegistry},
     },
     rendering::{
         block_texture::{block_face_texture_layers, load_block_texture_layer},
@@ -100,6 +101,48 @@ impl<'a> TerrainMaterialBuilder<'a> {
             .collect()
     }
 
+    fn material_for_layer(
+        &mut self,
+        definition: &LayerDefinition,
+    ) -> Handle<TerrainMaterial> {
+        let alpha = if definition.alpha_blend {
+            TerrainAlphaKey::Blend
+        } else if let Some(cutoff) = definition.alpha_cutoff {
+            TerrainAlphaKey::Mask(cutoff.to_bits())
+        } else {
+            TerrainAlphaKey::Opaque
+        };
+        let key = TerrainMaterialKey {
+            texture: Some(definition.texture.clone()),
+            tint_enabled: definition.tint != BlockTint::None,
+            alpha,
+            layer_index: 0,
+        };
+        if let Some(existing) = self.cache.get(&key) {
+            return existing.clone();
+        }
+
+        let material = self.materials.add(TerrainMaterial {
+            base: StandardMaterial {
+                base_color: Color::WHITE,
+                base_color_texture: Some(self.asset_server.load(definition.texture.clone())),
+                perceptual_roughness: self.roughness,
+                metallic: self.metallic,
+                alpha_mode: alpha.alpha_mode(),
+                fog_enabled: true,
+                unlit: true,
+                ..default()
+            },
+            extension: TerrainMaterialExtension {
+                lighting: self.lighting.handle(),
+                fluid_animation_factor: 0.0,
+                tint_enabled: key.tint_enabled as u8 as f32,
+            },
+        });
+        self.cache.insert(key, material.clone());
+        material
+    }
+
     fn material_for(
         &mut self,
         definition: &BlockDefinition,
@@ -146,12 +189,14 @@ impl<'a> TerrainMaterialBuilder<'a> {
 #[derive(Resource, Clone)]
 pub struct TerrainMaterials {
     blocks: HashMap<String, BlockFaces<Vec<Handle<TerrainMaterial>>>>,
+    layers: HashMap<String, Handle<TerrainMaterial>>,
     _texture_preloads: Vec<Handle<Image>>,
 }
 
 impl TerrainMaterials {
     pub fn from_registry(
         blocks: &BlockRegistry,
+        layers: &LayerRegistry,
         asset_server: &AssetServer,
         materials: &mut Assets<TerrainMaterial>,
         lighting: &TerrainLightingBuffer,
@@ -168,6 +213,7 @@ impl TerrainMaterials {
                         .map(|layer| layer.texture.as_str())
                 })
             })
+            .chain(layers.iter().map(|definition| definition.texture.as_str()))
             .filter_map(|texture| {
                 let texture = texture.to_owned();
                 seen_textures.insert(texture.clone()).then_some(texture)
@@ -185,9 +231,19 @@ impl TerrainMaterials {
                 (definition.id.clone(), block_materials)
             })
             .collect();
+        let layers = layers
+            .iter()
+            .map(|definition| {
+                (
+                    definition.id.clone(),
+                    builder.material_for_layer(definition),
+                )
+            })
+            .collect();
 
         Self {
             blocks,
+            layers,
             _texture_preloads: texture_preloads,
         }
     }
@@ -202,6 +258,12 @@ impl TerrainMaterials {
             .unwrap_or_else(|| panic!("missing terrain materials for block: {block_id}"))
             .get(face)
             .as_slice()
+    }
+
+    pub(super) fn for_layer(&self, layer_id: &str) -> &Handle<TerrainMaterial> {
+        self.layers
+            .get(layer_id)
+            .unwrap_or_else(|| panic!("missing terrain material for layer: {layer_id}"))
     }
 }
 

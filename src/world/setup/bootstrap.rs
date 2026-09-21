@@ -57,6 +57,9 @@ pub(in crate::world) fn begin_world_loading(
     let blocks = fresh_content
         .as_ref()
         .map_or(&*content.blocks, |content| &content.blocks);
+    let layers = fresh_content
+        .as_ref()
+        .map_or(&*content.layers, |content| &content.layers);
     let fluids = fresh_content
         .as_ref()
         .map_or(&*content.fluids, |content| &content.fluids);
@@ -113,6 +116,7 @@ pub(in crate::world) fn begin_world_loading(
     let terrain_lighting = TerrainLightingBuffer::new(&mut shader_buffers);
     let terrain_materials = TerrainMaterials::from_registry(
         blocks,
+        layers,
         &content.asset_server,
         &mut terrain_material_assets,
         &terrain_lighting,

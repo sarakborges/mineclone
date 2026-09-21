@@ -11,7 +11,7 @@ use crate::{
     content::{
         block::BlockRegistry, creature::CreatureRegistry,
         day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
-        fluid::FluidRegistry, tool::ToolRegistry,
+        fluid::FluidRegistry, layer::LayerRegistry, tool::ToolRegistry,
     },
     creatures::{CreatureInstance, PendingCreatureRestores, SavedCreature},
     entity::EntityHealth,
@@ -161,6 +161,7 @@ impl WorldSaveEntities<'_, '_> {
 #[derive(SystemParam)]
 struct WorldSaveRegistries<'w> {
     blocks: Res<'w, BlockRegistry>,
+    layers: Res<'w, LayerRegistry>,
     fluids: Res<'w, FluidRegistry>,
     tools: Res<'w, ToolRegistry>,
     creature_definitions: Res<'w, CreatureRegistry>,
@@ -172,6 +173,7 @@ impl WorldSaveRegistries<'_> {
     fn for_validation(&self) -> SaveRegistries<'_> {
         SaveRegistries {
             blocks: &self.blocks,
+            layers: &self.layers,
             fluids: &self.fluids,
             tools: &self.tools,
             creatures: &self.creature_definitions,

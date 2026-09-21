@@ -14,6 +14,11 @@ pub(super) enum ChunkMeshKey {
         face: BlockFace,
         casts_shadow: bool,
     },
+    Layer {
+        layer_id: &'static str,
+        face: BlockFace,
+        casts_shadow: bool,
+    },
     Fluid(FluidId),
 }
 
@@ -179,7 +184,10 @@ impl ChunkRenderPool {
         debug_assert!(
             mesh_keys
                 .iter()
-                .all(|key| matches!(key, ChunkMeshKey::Terrain { .. }))
+                .all(|key| matches!(
+                    key,
+                    ChunkMeshKey::Terrain { .. } | ChunkMeshKey::Layer { .. }
+                ))
         );
 
         let slot = self

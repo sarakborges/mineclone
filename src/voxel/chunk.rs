@@ -336,6 +336,10 @@ impl VoxelChunk {
         )
     }
 
+    #[expect(
+        dead_code,
+        reason = "layer removal API is ready before the first concrete layer content is authored"
+    )]
     pub(crate) fn remove_layer(
         &mut self,
         x: usize,
@@ -461,6 +465,10 @@ fn set_block_in_storage(
     refresh_fluid_frontier_sources_near(blocks, fluids, fluid_frontier_sources, x, y, z);
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "layer mutation keeps support, identity and sparse storage updates atomic"
+)]
 fn add_layer_in_storage(
     blocks: &[Option<VoxelCell>],
     layers: &mut HashMap<u16, Vec<AttachedLayer>>,
@@ -497,6 +505,10 @@ fn add_layer_in_storage(
     true
 }
 
+#[expect(
+    dead_code,
+    reason = "layer removal API is ready before the first concrete layer content is authored"
+)]
 fn remove_layer_in_storage(
     layers: &mut HashMap<u16, Vec<AttachedLayer>>,
     layer_count: &mut usize,

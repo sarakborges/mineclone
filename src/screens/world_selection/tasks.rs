@@ -11,7 +11,7 @@ use crate::{
     content::{
         block::BlockRegistry, creature::CreatureRegistry,
         day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
-        fluid::FluidRegistry, tool::ToolRegistry,
+        fluid::FluidRegistry, layer::LayerRegistry, tool::ToolRegistry,
     },
     voxel::world::VoxelWorld,
     world::save_catalog::{
@@ -80,6 +80,7 @@ impl PendingWorldScan {
 
 struct OwnedLoadContent {
     blocks: BlockRegistry,
+    layers: LayerRegistry,
     fluids: FluidRegistry,
     tools: ToolRegistry,
     creatures: CreatureRegistry,
@@ -108,6 +109,7 @@ impl OwnedLoadContent {
 
         Self {
             blocks: registries.blocks.clone(),
+            layers: registries.layers.clone(),
             fluids: registries.fluids.clone(),
             tools,
             creatures,
@@ -119,6 +121,7 @@ impl OwnedLoadContent {
     fn registries(&self) -> SaveRegistries<'_> {
         SaveRegistries {
             blocks: &self.blocks,
+            layers: &self.layers,
             fluids: &self.fluids,
             tools: &self.tools,
             creatures: &self.creatures,

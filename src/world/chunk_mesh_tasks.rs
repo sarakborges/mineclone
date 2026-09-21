@@ -5,7 +5,7 @@ use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 use crate::{
     content::{
         biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry,
-        secondary_property::SecondaryPropertyRegistry,
+        layer::LayerRegistry, secondary_property::SecondaryPropertyRegistry,
     },
     voxel::mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot},
 };
@@ -21,6 +21,7 @@ pub(crate) const MAX_MESH_TASKS_IN_FLIGHT: usize = 8;
 
 pub(crate) struct MeshContentSnapshot {
     blocks: BlockRegistry,
+    layers: LayerRegistry,
     fluids: FluidRegistry,
     biomes: BiomeRegistry,
     secondary_properties: SecondaryPropertyRegistry,
@@ -31,6 +32,7 @@ impl MeshContentSnapshot {
     pub(crate) fn from_content(content: &ChunkContent<'_>) -> Self {
         Self {
             blocks: content.blocks().clone(),
+            layers: content.layers().clone(),
             fluids: content.fluids().clone(),
             biomes: BiomeRegistry::clone(&content.biomes),
             secondary_properties: content.secondary_properties().clone(),
@@ -45,6 +47,7 @@ impl MeshContentSnapshot {
         ChunkMeshBuildContext {
             world,
             blocks: &self.blocks,
+            layers: &self.layers,
             fluids: &self.fluids,
             biomes: &self.biomes,
             secondary_properties: &self.secondary_properties,

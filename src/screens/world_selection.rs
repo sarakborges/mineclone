@@ -9,7 +9,7 @@ use crate::{
     content::{
         block::BlockRegistry, creature::CreatureRegistry,
         day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
-        fluid::FluidRegistry, tool::ToolRegistry,
+        fluid::FluidRegistry, layer::LayerRegistry, tool::ToolRegistry,
     },
     localization::{ActiveLanguage, UiLocalization},
     player::hotbar::PlayerHotbar,
@@ -71,6 +71,7 @@ enum WorldSelectionAction {
 #[derive(SystemParam)]
 struct WorldSelectionScanContent<'w> {
     blocks: Res<'w, BlockRegistry>,
+    layers: Res<'w, LayerRegistry>,
     fluids: Res<'w, FluidRegistry>,
     tools: Res<'w, ToolRegistry>,
     creatures: Res<'w, CreatureRegistry>,
@@ -82,6 +83,7 @@ impl WorldSelectionScanContent<'_> {
     fn registries(&self) -> SaveRegistries<'_> {
         SaveRegistries {
             blocks: &self.blocks,
+            layers: &self.layers,
             fluids: &self.fluids,
             tools: &self.tools,
             creatures: &self.creatures,

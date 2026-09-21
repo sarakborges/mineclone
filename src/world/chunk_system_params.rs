@@ -5,6 +5,7 @@ use crate::content::{
     block::BlockRegistry,
     dimension::DimensionDefinition,
     fluid::FluidRegistry,
+    layer::LayerRegistry,
     secondary_property::SecondaryPropertyRegistry,
     structure::StructureRegistry,
 };
@@ -19,6 +20,7 @@ use super::{
 #[derive(SystemParam)]
 pub(crate) struct VoxelContent<'w> {
     pub(crate) blocks: Res<'w, BlockRegistry>,
+    pub(crate) layers: Res<'w, LayerRegistry>,
     pub(crate) fluids: Res<'w, FluidRegistry>,
     pub(crate) secondary_properties: Res<'w, SecondaryPropertyRegistry>,
 }
@@ -33,6 +35,10 @@ pub(crate) struct ChunkContent<'w> {
 impl ChunkContent<'_> {
     pub(crate) fn blocks(&self) -> &BlockRegistry {
         &self.voxel.blocks
+    }
+
+    pub(crate) fn layers(&self) -> &LayerRegistry {
+        &self.voxel.layers
     }
 
     pub(crate) fn fluids(&self) -> &FluidRegistry {
@@ -52,6 +58,7 @@ impl ChunkContent<'_> {
 
     pub(crate) fn mesh_inputs_changed(&self) -> bool {
         self.voxel.blocks.is_changed()
+            || self.voxel.layers.is_changed()
             || self.voxel.fluids.is_changed()
             || self.voxel.secondary_properties.is_changed()
             || self.biomes.is_changed()
@@ -67,6 +74,7 @@ impl ChunkContent<'_> {
         ChunkRenderContext {
             world,
             blocks: self.blocks(),
+            layers: self.layers(),
             fluids: self.fluids(),
             biomes: &self.biomes,
             secondary_properties: self.secondary_properties(),

@@ -7,6 +7,7 @@ use crate::{
         day_night_cycle::DayNightCycleRegistry,
         dimension::DimensionRegistry,
         fluid::FluidRegistry,
+        layer::LayerRegistry,
         tool::ToolRegistry,
     },
     player::hotbar::{HOTBAR_SLOT_COUNT, INVENTORY_SLOT_COUNT},
@@ -21,6 +22,7 @@ use crate::world::{
 #[derive(Clone, Copy)]
 pub(crate) struct SaveRegistries<'a> {
     pub(crate) blocks: &'a BlockRegistry,
+    pub(crate) layers: &'a LayerRegistry,
     pub(crate) fluids: &'a FluidRegistry,
     pub(crate) tools: &'a ToolRegistry,
     pub(crate) creatures: &'a CreatureRegistry,
@@ -68,6 +70,7 @@ impl SaveRegistries<'_> {
 
         PruneRegistries {
             blocks: self.blocks.clone(),
+            layers: self.layers.clone(),
             fluids: self.fluids.clone(),
             creatures,
             valid_items,
@@ -78,6 +81,7 @@ impl SaveRegistries<'_> {
 
 pub(crate) struct PruneRegistries {
     pub(super) blocks: BlockRegistry,
+    pub(super) layers: LayerRegistry,
     pub(super) fluids: FluidRegistry,
     creatures: CreatureRegistry,
     valid_items: HashSet<String>,
