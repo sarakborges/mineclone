@@ -128,6 +128,13 @@ impl ChunkMeshTasks {
         self.pending.insert(coord, revision, task)
     }
 
+    pub(crate) fn cancel_where(
+        &mut self,
+        predicate: impl FnMut(IVec3) -> bool,
+    ) -> Vec<IVec3> {
+        self.pending.cancel_where(predicate)
+    }
+
     pub(crate) fn cancel_farthest_where(
         &mut self,
         center: IVec3,
