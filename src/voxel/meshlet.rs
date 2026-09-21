@@ -71,6 +71,17 @@ impl ChunkMeshletMask {
         self.0 & (1 << index) != 0
     }
 
+    pub(crate) fn for_dependency_offset(offset: IVec3) -> Self {
+        let mut mask = Self::default();
+        for index in 0..MESHLET_COUNT {
+            let single = Self(1 << index);
+            if single.depends_on_neighbor_offset(offset) {
+                mask.0 |= 1 << index;
+            }
+        }
+        mask
+    }
+
     pub(crate) fn depends_on_neighbor_offset(self, offset: IVec3) -> bool {
         if self.is_empty()
             || offset.x.abs() > 1
