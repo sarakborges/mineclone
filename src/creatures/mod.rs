@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     entity::EntityHealth,
-    app::{game_state::GameState, pause_state::PauseState},
+    app::{game_state::GameState, pause_state::PauseState, resource_systems::reset_resource},
     content::{biome::BiomeRegistry, creature::CreatureRegistry},
     localization::{ActiveLanguage, Language},
     player::camera::GameplayCamera,
@@ -80,6 +80,13 @@ impl Plugin for CreaturesPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<visual::TintedCreatureMaterials>()
             .init_resource::<PendingCreatureRestores>()
+            .add_systems(
+                OnEnter(GameState::StartingScreen),
+                (
+                    reset_resource::<PendingCreatureRestores>,
+                    reset_resource::<visual::TintedCreatureMaterials>,
+                ),
+            )
             .add_systems(
                 Update,
                 restore_saved_creatures
