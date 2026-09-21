@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 12 — 2026-09-21:** cross-registry e dead fallback. Dimensions agora validam referências para `dayNightCycle` e `sky` no startup, junto de biome/hydrology (`3b4ed477e72b1819499fbec4cf5cf1fbbe83cedf`). Removido fallback hardcoded e agora inalcançável de `PlayerDefinition` no loader; `LoadedContent::default()` é suficiente porque exatamente um `player.json` é obrigatório (`697c167ef443ad1e34d22661786e5350bae47a58`). **Pendências:** CI/runtime QA pendentes. **Próximo passo:** consultar CI/status atual e, se não houver execução visível, inspecionar workflow/config e continuar auditoria estática em world/render/entity.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 11 — 2026-09-21:** validação de floats/cores ampliada antes de chegar a render/simulação. Biome visuals agora validam grass/leaf/foliage/water/underwater e sky/fog HSI, além de terrain roughness/metallic em [0,1] (`51bead1575b8ffcb85e541f730542b20ab04002e`). Day/night cycles agora rejeitam ID vazio, `initialTime` fora de [0,1) ou não finito e `worldTimeStartHour` fora de [0,24) ou não finito (`131a3acd41a6fb6cdce4ee7bf1301e6b5a093d56`). **Pendências:** confirmar se conteúdo atual respeita os ranges (esperado pelo uso runtime); CI/runtime QA pendentes. **Próximo passo:** verificar referências dimension -> sky/dayNightCycle e demais cross-registry links globais; depois consultar status de CI dos commits recentes.
 
 
