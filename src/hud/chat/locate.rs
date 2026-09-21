@@ -146,7 +146,11 @@ impl ChatLocateContext<'_> {
                 (LocateTargetKind::Hydrology(kind), name.to_owned())
             }
             "structure" => {
-                let Some(structure) = self.structures.get(id) else {
+                let Some(structure) = self
+                    .structures
+                    .get(id)
+                    .or_else(|| self.structures.variation(id, 1))
+                else {
                     return format!("Unknown structure id: {id}");
                 };
                 if !structure.locatable {
@@ -157,8 +161,11 @@ impl ChatLocateContext<'_> {
                         .get(&dimension_biome.id)
                         .is_some_and(|biome| {
                             biome.structures.iter().any(|entry| {
-                                self.structures
-                                    .reference_contains_structure(&entry.id, id)
+                                entry.id == id
+                                    || self.structures.reference_contains_structure(
+                                        &entry.id,
+                                        &structure.id,
+                                    )
                             })
                         })
                 });
@@ -389,8 +396,13 @@ fn locate_structure(
     id: &str,
     player: IVec3,
 ) -> Option<IVec3> {
-    let structure = snapshot.structures.get(id)?;
-    let probe_offset = *structure.horizontal_footprint().first()?;
+    let probe_offset = if let Some(structure) = snapshot.structures.get(id) {
+        *structure.horizontal_footprint().first()?
+    } else if snapshot.structures.variation_count(id).is_some() {
+        IVec2::ZERO
+    } else {
+        return None;
+    };
     let context = snapshot.generation_context();
     let player_horizontal = player.xz();
     let maximum_distance_squared =
@@ -399,9 +411,10 @@ fn locate_structure(
     let mut best: Option<(i64, IVec3)> = None;
 
     for biome_structure in snapshot.biomes.structure_placements() {
-        if !snapshot
-            .structures
-            .reference_contains_structure(&biome_structure.structure_id, id)
+        if (biome_structure.structure_id != id
+            && !snapshot
+                .structures
+                .reference_contains_structure(&biome_structure.structure_id, id))
             || !snapshot
                 .dimension
                 .biomes

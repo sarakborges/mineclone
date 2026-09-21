@@ -148,9 +148,10 @@ fn resolved_structure_candidates_matching<'a>(
 
     for biome_structure in context.biomes.structure_placements() {
         if only_structure_id.is_some_and(|structure_id| {
-            !context
-                .structures
-                .reference_contains_structure(&biome_structure.structure_id, structure_id)
+            biome_structure.structure_id != structure_id
+                && !context
+                    .structures
+                    .reference_contains_structure(&biome_structure.structure_id, structure_id)
         }) {
             continue;
         }
@@ -358,7 +359,9 @@ fn collect_structure_candidates<'a>(
                         "biome {biome_id} references empty structure group: {placement_id}"
                     )
                 });
-            if only_structure_id.is_some_and(|structure_id| structure.id != structure_id) {
+            if only_structure_id.is_some_and(|structure_id| {
+                structure_id != placement_id && structure.id != structure_id
+            }) {
                 return;
             }
 
