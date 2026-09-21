@@ -13,6 +13,7 @@ use crate::voxel::{
 pub(crate) use self::queue::ChunkRemeshQueue;
 
 use super::{
+    chunk_async_work::ChunkAsyncWorkLimiter,
     chunk_remesh_tasks::{
         ChunkRemeshTaskKind, ChunkRemeshTaskMeshes, ChunkRemeshTasks,
     },
@@ -36,6 +37,7 @@ pub(super) fn process_chunk_remesh_queue(
     mut queue: ResMut<ChunkRemeshQueue>,
     mut tasks: ResMut<ChunkRemeshTasks>,
     frame_budget: Res<WorldFrameWorkBudget>,
+    async_work: Res<ChunkAsyncWorkLimiter>,
     mut deferred: Local<Vec<(IVec3, ChunkRemeshTaskKind, ChunkMeshletMask)>>,
 ) {
     tasks.sync_snapshot(&content);
@@ -61,6 +63,7 @@ pub(super) fn process_chunk_remesh_queue(
         &mut queue,
         &mut tasks,
         &mut deferred,
+        &async_work,
         frame_budget.deadline(),
     );
 }
@@ -160,6 +163,7 @@ fn dispatch_remesh_tasks(
     queue: &mut ChunkRemeshQueue,
     tasks: &mut ChunkRemeshTasks,
     deferred: &mut Vec<(IVec3, ChunkRemeshTaskKind, ChunkMeshletMask)>,
+    async_work: &ChunkAsyncWorkLimiter,
     deadline: Instant,
 ) {
     let mut budget = FrameWorkBudget::new(REMESH_TASK_DISPATCH_BUDGET, 1)
@@ -202,7 +206,7 @@ fn dispatch_remesh_tasks(
             snapshots.insert(coord, captured.clone());
             captured
         };
-        if !tasks.schedule(coord, kind, meshlets, snapshot) {
+        if !tasks.schedule(coord, kind, meshlets, snapshot, async_work) {
             deferred.push((coord, kind, meshlets));
             continue;
         }
