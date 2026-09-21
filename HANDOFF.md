@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 5 — 2026-09-21:** removidos dois rebuilds O(n²) durante carregamento data-driven. `BiomeRegistry::insert` agora atualiza flags de density e placements incrementalmente em vez de revarrer todos os biomas a cada arquivo (`1bc7b26246c8e6087f8825a78a942eddf0a102b4`). `StructureRegistry::insert` agora atualiza somente o grupo da structure inserida, preservando membros ordenados via binary insertion em vez de limpar/reconstruir todos os grupos a cada arquivo (`d61259afd89587e116321764512196ddc6192fa8`). A equivalência depende da unicidade de IDs garantida no checkpoint A. **Pendências:** validar CI quando houver status; runtime QA não executado. **Próximo passo:** revisar snapshots/clones de registries usados pelas tasks de generation/mesh e identificar cópias profundas que possam virar ownership compartilhado imutável sem aumentar acoplamento.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — checkpoint A — VERSION 0.50.7 — 2026-09-21:** bloco de autoridade/validação consolidado. Mudanças funcionais: `c0c4dd58` rejeita IDs duplicados em `DefinitionMap`; `5202aba6` remove validação duplicada do snapshot no save; `c7e7a603` exige exatamente um `data/entities/player.json`; `4e6a36d1` rejeita fluid IDs duplicados. Bump: `4c28ed7d9d45217c99e46abde4a13bf879e1fda4`. **Pendências:** o conector ainda não expôs check/status do Actions para estes pushes, portanto não registrar CI como success sem evidência; não houve runtime QA. **Próximo passo:** bloco B da auditoria — caches derivados e hot paths: procurar rebuild O(n²), scans repetidos, clones de registries/snapshots e ownership/lifetime desnecessariamente amplos; aplicar apenas mudanças semanticamente equivalentes e verificáveis.
 
 
