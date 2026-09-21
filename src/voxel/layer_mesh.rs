@@ -1,4 +1,5 @@
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::prelude::*;
+use smallvec::SmallVec;
 
 use crate::content::{
     block::{BlockLookup, BlockRegistry},
@@ -77,7 +78,7 @@ where
     F: FnMut(IVec3, &LayerDefinition) -> [f32; 3],
 {
     let mut buffers =
-        HashMap::<(&'static str, bool), VoxelMeshBuffer>::new();
+        SmallVec::<[(( &'static str, bool), VoxelMeshBuffer); 2]>::new();
     let mut block_lookup = BlockLookup::new(blocks);
     let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
 
@@ -207,7 +208,7 @@ where
 fn emit_sculpted_layer<W: VoxelRead + ?Sized>(
     world: &W,
     block_lookup: &mut BlockLookup<'_>,
-    buffers: &mut HashMap<(&'static str, bool), VoxelMeshBuffer>,
+    buffers: &mut SmallVec<[(( &'static str, bool), VoxelMeshBuffer); 2]>,
     support_cell: super::cell::VoxelCell,
     support_is_transparent: bool,
     world_voxel: IVec3,
@@ -307,7 +308,7 @@ fn emit_sculpted_layer<W: VoxelRead + ?Sized>(
     reason = "greedy layer rectangles carry their face, bounds and visual state"
 )]
 fn emit_sculpted_layer_rectangle(
-    buffers: &mut HashMap<(&'static str, bool), VoxelMeshBuffer>,
+    buffers: &mut SmallVec<[(( &'static str, bool), VoxelMeshBuffer); 2]>,
     local_voxel: IVec3,
     layer_id: &'static str,
     texture_rotation: TextureRotation,
@@ -384,13 +385,23 @@ fn emit_sculpted_layer_rectangle(
 }
 
 fn layer_buffer<'a>(
-    buffers: &'a mut HashMap<(&'static str, bool), VoxelMeshBuffer>,
+    buffers: &'a mut SmallVec<[(( &'static str, bool), VoxelMeshBuffer); 2]>,
     layer_id: &'static str,
     definition: &LayerDefinition,
 ) -> &'a mut VoxelMeshBuffer {
-    buffers
-        .entry((layer_id, definition.casts_shadow))
-        .or_default()
+    let key = (layer_id, definition.casts_shadow);
+    if let Some(index) = buffers
+        .iter()
+        .position(|(candidate, _)| *candidate == key)
+    {
+        return &mut buffers[index].1;
+    }
+
+    buffers.push((key, VoxelMeshBuffer::default()));
+    &mut buffers
+        .last_mut()
+        .expect("layer mesh buffer was just inserted")
+        .1
 }
 
 fn micro_position_for(face: BlockFace, depth: usize, u: usize, v: usize) -> [usize; 3] {
