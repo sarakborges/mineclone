@@ -141,7 +141,11 @@ pub(super) fn collect_built_chunk_meshes(
             work.state.mark_ready(completed.coord);
             continue;
         }
-        if !work.state.keeps_loaded(completed.coord) || renderer.pool.contains(completed.coord) {
+        if renderer.pool.contains(completed.coord) {
+            continue;
+        }
+        if !work.state.retains_render_mesh(completed.coord) {
+            work.state.mark_ready(completed.coord);
             continue;
         }
         if !completed.output.dependencies.is_current(&work.world) {
