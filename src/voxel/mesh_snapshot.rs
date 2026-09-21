@@ -162,13 +162,32 @@ pub(crate) struct ChunkMeshSnapshot {
 
 impl ChunkMeshSnapshot {
     pub(crate) fn capture(world: &VoxelWorld, coord: IVec3) -> Option<Self> {
-        Self::capture_with_neighbor_filter(world, coord, |_| true)
+        Self::capture_with_neighbor_filter_and_meshlets(
+            world,
+            coord,
+            |_| true,
+            ChunkMeshletMask::ALL,
+        )
     }
 
     pub(crate) fn capture_with_neighbor_filter(
         world: &VoxelWorld,
         coord: IVec3,
+        include_neighbor: impl FnMut(IVec3) -> bool,
+    ) -> Option<Self> {
+        Self::capture_with_neighbor_filter_and_meshlets(
+            world,
+            coord,
+            include_neighbor,
+            ChunkMeshletMask::ALL,
+        )
+    }
+
+    pub(crate) fn capture_with_neighbor_filter_and_meshlets(
+        world: &VoxelWorld,
+        coord: IVec3,
         mut include_neighbor: impl FnMut(IVec3) -> bool,
+        meshlets: ChunkMeshletMask,
     ) -> Option<Self> {
         let center_chunk = world.chunk(coord)?;
         let center_revision = world
@@ -190,7 +209,12 @@ impl ChunkMeshSnapshot {
                         continue;
                     }
 
-                    let neighbor_coord = coord + IVec3::new(offset_x, offset_y, offset_z);
+                    let offset = IVec3::new(offset_x, offset_y, offset_z);
+                    if !meshlets.depends_on_neighbor_offset(offset) {
+                        continue;
+                    }
+
+                    let neighbor_coord = coord + offset;
                     if !include_neighbor(neighbor_coord) {
                         continue;
                     }
@@ -218,7 +242,8 @@ impl ChunkMeshSnapshot {
                 center: coord,
                 content_revisions,
                 required_offsets,
-            },
+            }
+            .for_meshlets(meshlets),
         })
     }
 
