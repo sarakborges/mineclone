@@ -28,7 +28,8 @@ use super::{
         CreativeCatalogScrollArea, CreativeCategoryButton, CreativeInventorySlot,
         CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState, CreativeSearchBar,
         CreativeSearchText, ITEM_ICON_SIZE, InventoryCursorIcon, InventoryHudRoot,
-        InventoryItemTooltip, InventoryItemTooltipText, InventorySlot, InventoryTrashButton,
+        InventoryItemTooltip, InventoryItemTooltipId, InventoryItemTooltipText, InventorySlot,
+        InventoryTrashButton,
     },
 };
 
@@ -319,7 +320,7 @@ pub(super) fn rebuild_inventory_when_changed(
 
 const ITEM_TOOLTIP_OFFSET: f32 = 14.0;
 const ITEM_TOOLTIP_MAX_WIDTH: f32 = 280.0;
-const ITEM_TOOLTIP_EDGE_HEIGHT: f32 = 72.0;
+const ITEM_TOOLTIP_EDGE_HEIGHT: f32 = 88.0;
 
 pub(super) fn sync_inventory_item_tooltip(
     content: InventoryItemContent,
@@ -329,6 +330,7 @@ pub(super) fn sync_inventory_item_tooltip(
     creative_slots: Query<(&Interaction, &CreativeInventorySlot)>,
     tooltip: InventoryItemTooltipQuery,
     tooltip_text: Single<&mut Text, With<InventoryItemTooltipText>>,
+    tooltip_id: Single<&mut Text, With<InventoryItemTooltipId>>,
 ) {
     let (mut node, mut visibility) = tooltip.into_inner();
 
@@ -364,6 +366,11 @@ pub(super) fn sync_inventory_item_tooltip(
     let name = content.item_name(item_id);
     if text.0 != name {
         text.0 = name.to_owned();
+    }
+
+    let mut id_text = tooltip_id.into_inner();
+    if id_text.0 != item_id {
+        id_text.0 = item_id.to_owned();
     }
 
     if cursor.x + ITEM_TOOLTIP_OFFSET + ITEM_TOOLTIP_MAX_WIDTH <= window.width() {
