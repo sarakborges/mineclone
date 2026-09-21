@@ -38,6 +38,7 @@ const SPAWN_SEARCH_RADIUS_STEPS: i32 = 64;
 
 pub(in crate::world) fn begin_world_loading(
     mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
     mut terrain_material_assets: ResMut<Assets<TerrainMaterial>>,
     mut shader_buffers: ResMut<Assets<ShaderBuffer>>,
     content: WorldBootstrapContent,
@@ -119,13 +120,18 @@ pub(in crate::world) fn begin_world_loading(
         blocks,
         layers,
         &content.asset_server,
+        &mut images,
         &mut terrain_material_assets,
         &terrain_lighting,
         roughness,
         metallic,
     );
-    let fluid_materials =
-        FluidMaterials::from_registry(fluids, &mut terrain_material_assets, &terrain_lighting);
+    let fluid_materials = FluidMaterials::from_registry(
+        fluids,
+        &mut terrain_material_assets,
+        &terrain_lighting,
+        terrain_materials.texture_array_handle(),
+    );
     let spawn_column = if *persistence.load_mode == WorldLoadMode::Load {
         persistence
             .save
