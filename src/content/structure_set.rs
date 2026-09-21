@@ -253,14 +253,14 @@ impl StructureSetDefinition {
         bounds
     }
 
-    pub(crate) fn references_structure(
+    pub(crate) fn references_reference(
         &self,
-        structure_id: &str,
+        reference: &str,
         structures: &StructureRegistry,
     ) -> bool {
-        self.elements.iter().any(|element| {
-            structures.reference_contains_structure(&element.structure, structure_id)
-        })
+        self.elements
+            .iter()
+            .any(|element| structures.references_overlap(&element.structure, reference))
     }
 }
 
