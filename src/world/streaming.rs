@@ -40,6 +40,7 @@ use super::{
     render_distance::{RenderDistanceSettings, chunk_visibility_radii},
     tick::WorldTickClock,
     warp::PendingWarp,
+    work_budget::WorldFrameWorkBudget,
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -376,6 +377,7 @@ pub(super) struct ChunkStreamingWork<'w> {
     generation_tasks: ResMut<'w, ChunkGenerationTasks>,
     mesh_tasks: ResMut<'w, ChunkMeshTasks>,
     world_ticks: Res<'w, WorldTickClock>,
+    frame_budget: Res<'w, WorldFrameWorkBudget>,
 }
 
 #[derive(SystemParam)]
