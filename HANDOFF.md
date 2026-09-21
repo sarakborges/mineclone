@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 24 — 2026-09-21:** ajustes de UI/state compartilhado. `sync_language_dropdown` deixou de reaplicar cores de todas as opções a cada frame; agora só atualiza em mudança de idioma/localization ou `Changed<Interaction>` (`2651b5eed3ed4ee1e29e881e9f9f232aba9feeb1`). Entrada em `GameState::NewWorld` agora reseta também `RenderDistanceInputState`, `TargetBlockPositionDropdownState` e `LanguageDropdownState`, evitando Resource stale discordar da UI recém-spawnada após sair de Settings com dropdown/input aberto (`fe592e80f4165cef2a33d57b28ccab51331f8960`). **Pendências:** continuar auditoria de UI sync systems por writes per-frame e estados persistentes. **Próximo passo:** HUD/inventory/targeting UI + rendering caches/assets lifecycle.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 23 — 2026-09-21:** death lifecycle separado de regras de spawn/combat. Criaturas com `EntityHealth::is_dead()` deixam imediatamente de contar em `DimensionEntityCounts`, `maxPerType` e spacing de natural spawn, embora permaneçam 0,75 s para animação visual (`6433b23b7fd6394de0ce1e10479f2590065df1d9`). Ataques em criatura já morta agora são ignorados e não reiniciam o death timer nem reaplicam knockback (`823ef1b3ccd2065d578350c91314879a7b7e1e23`). **Pendências:** natural spawn ainda reconstrói counts/clona IDs a cada segundo; correctness resolvida, performance incremental ainda pendente. **Próximo passo:** implementar contagem incremental somente se puder garantir todos os spawn/despawn paths; antes disso revisar PendingCreatureRestores e spawn APIs para centralizar lifecycle.
 
 
