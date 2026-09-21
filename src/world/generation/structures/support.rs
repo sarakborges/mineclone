@@ -25,7 +25,7 @@ use super::super::{
     },
 };
 
-const MAX_STRUCTURE_GROUND_RISE: i32 = 3;
+pub(super) const MAX_STRUCTURE_GROUND_RISE: i32 = 3;
 const SURFACE_CARVER_WATER_CLEARANCE: f32 = 12.0;
 
 /// Both world generation and /place use the exact same bottom-voxel footprint
