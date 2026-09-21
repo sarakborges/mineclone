@@ -1,3 +1,5 @@
+use std::sync::{Arc, OnceLock};
+
 use bevy::prelude::*;
 
 use super::{
@@ -107,11 +109,12 @@ impl ChunkMeshDependencies {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct ChunkMeshSnapshot {
     chunk_origin: IVec3,
     chunk: VoxelChunk,
-    neighbor_chunks: Option<Box<NeighborChunks>>,
-    shell: Option<ShellStorage>,
+    neighbor_chunks: Arc<NeighborChunks>,
+    shell: Arc<OnceLock<Arc<ShellStorage>>>,
     dependencies: ChunkMeshDependencies,
 }
 
@@ -166,8 +169,8 @@ impl ChunkMeshSnapshot {
         Some(Self {
             chunk_origin,
             chunk,
-            neighbor_chunks: Some(Box::new(neighbor_chunks)),
-            shell: None,
+            neighbor_chunks: Arc::new(neighbor_chunks),
+            shell: Arc::new(OnceLock::new()),
             dependencies: ChunkMeshDependencies {
                 center: coord,
                 content_revisions,
@@ -175,16 +178,9 @@ impl ChunkMeshSnapshot {
         })
     }
 
-    pub(crate) fn materialize_shell(mut self) -> Self {
-        if self.shell.is_some() {
-            return self;
-        }
-
-        let neighbor_chunks = self
-            .neighbor_chunks
-            .take()
-            .expect("unmaterialized chunk mesh snapshot must retain neighbor chunks");
-        self.shell = Some(capture_shell(&neighbor_chunks));
+    pub(crate) fn materialize_shell(self) -> Self {
+        self.shell
+            .get_or_init(|| Arc::new(capture_shell(&self.neighbor_chunks)));
         self
     }
 
@@ -227,7 +223,7 @@ impl ChunkMeshSnapshot {
     ) -> Option<(Option<VoxelCell>, Option<FluidCell>, VoxelLight)> {
         let local = self.snapshot_local(position)?;
         shell_index_from_snapshot_coords(local.x as usize, local.y as usize, local.z as usize)?;
-        let neighbor_chunks = self.neighbor_chunks.as_ref()?;
+        let neighbor_chunks = self.neighbor_chunks.as_ref();
         let (chunk_x, local_x) = shell_axis(local.x as usize);
         let (chunk_y, local_y) = shell_axis(local.y as usize);
         let (chunk_z, local_z) = shell_axis(local.z as usize);
@@ -246,7 +242,7 @@ impl VoxelRead for ChunkMeshSnapshot {
             return self.chunk.sample_local(local.x, local.y, local.z);
         }
 
-        if let Some(shell) = &self.shell {
+        if let Some(shell) = self.shell.get() {
             let sample = shell.samples[self.shell_index(world_position)?];
             return sample.loaded.then_some((
                 shell.cell(sample.block_index),
