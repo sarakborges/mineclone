@@ -1,5 +1,6 @@
 use crate::world::{
     PendingFluidUpdates, WorldLoadMode,
+    chunk_async_work::ChunkAsyncWorkLimiter,
     chunk_generation_tasks::{ChunkGenerationTasks, MAX_GENERATION_TASKS_IN_FLIGHT},
     chunk_system_params::{ChunkContent, ChunkGeneration},
     work_budget::FrameWorkBudget,
@@ -13,6 +14,7 @@ pub(super) fn generate_initial_chunks(
     progress: &mut WorldSetupProgress<'_>,
     fluid_updates: &mut PendingFluidUpdates,
     generation_tasks: &mut ChunkGenerationTasks,
+    async_work: &ChunkAsyncWorkLimiter,
     load_mode: WorldLoadMode,
 ) {
     generation_tasks.sync_snapshot(generation, content);
@@ -23,6 +25,7 @@ pub(super) fn generate_initial_chunks(
         progress,
         fluid_updates,
         generation_tasks,
+        async_work,
         load_mode,
     );
     dispatch_generation_tasks(
@@ -30,6 +33,7 @@ pub(super) fn generate_initial_chunks(
         progress,
         fluid_updates,
         generation_tasks,
+        async_work,
         load_mode,
     );
 
@@ -49,6 +53,7 @@ fn integrate_generated_chunks(
     progress: &mut WorldSetupProgress<'_>,
     fluid_updates: &mut PendingFluidUpdates,
     generation_tasks: &mut ChunkGenerationTasks,
+    async_work: &ChunkAsyncWorkLimiter,
     load_mode: WorldLoadMode,
 ) {
     let current_revision = generation_tasks.revision();
@@ -65,7 +70,7 @@ fn integrate_generated_chunks(
 
         if completed.revision != current_revision {
             assert!(
-                generation_tasks.schedule(completed.coord),
+                generation_tasks.schedule(completed.coord, async_work),
                 "stale bootstrap generation must be rescheduled for {:?}",
                 completed.coord
             );
@@ -129,7 +134,7 @@ fn dispatch_generation_tasks(
             continue;
         }
 
-        if !generation_tasks.schedule(coord) {
+        if !generation_tasks.schedule(coord, async_work) {
             break;
         }
         progress.loading_state.generation_cursor += 1;
