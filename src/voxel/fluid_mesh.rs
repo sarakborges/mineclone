@@ -68,69 +68,69 @@ where
             return;
         };
 
-        let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
-                let exposed = BlockFace::ALL.map(|face| {
-                    if face == BlockFace::Bottom && world_voxel.y <= 0 {
-                        return false;
-                    }
-                    face_is_exposed(
-                        world,
-                        world_voxel + face.offset(),
-                        cell.fluid_id,
-                        face,
-                    )
-                });
+        let world_voxel =
+            chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
+        let exposed = BlockFace::ALL.map(|face| {
+            if face == BlockFace::Bottom && world_voxel.y <= 0 {
+                return false;
+            }
+            face_is_exposed(
+                world,
+                world_voxel + face.offset(),
+                cell.fluid_id,
+                face,
+            )
+        });
         if !exposed.iter().any(|value| *value) {
             return;
         }
 
-                let tint = tint_at(world_voxel, cell.fluid_id);
-                let heights = fluid_face_heights(world, world_voxel, cell.fluid_id);
-                let source_block_srgb = surface_block_srgb(
-                    chunk.light_at(x as i32, y as i32, z as i32),
-                    false,
-                );
-                let fluid = buffers.entry(cell.fluid_id).or_default();
+        let tint = tint_at(world_voxel, cell.fluid_id);
+        let heights = fluid_face_heights(world, world_voxel, cell.fluid_id);
+        let source_block_srgb = surface_block_srgb(
+            chunk.light_at(x as i32, y as i32, z as i32),
+            false,
+        );
+        let fluid = buffers.entry(cell.fluid_id).or_default();
 
-                for (face, is_exposed) in BlockFace::ALL.into_iter().zip(exposed) {
-                    if !is_exposed {
-                        continue;
-                    }
+        for (face, is_exposed) in BlockFace::ALL.into_iter().zip(exposed) {
+            if !is_exposed {
+                continue;
+            }
 
-                    let lighting = face_lighting(world, world_voxel, face, source_block_srgb);
-                    let source_mask = chunk
-                        .cell_at(x as i32, y as i32, z as i32)
-                        .filter(|block| MicroblockMask::is_modified(*block))
-                        .map(MicroblockMask::from_cell);
-                    let neighbor_mask = world
-                        .cell_at(world_voxel + face.offset())
-                        .filter(|block| MicroblockMask::is_modified(*block))
-                        .map(MicroblockMask::from_cell);
-                    if source_mask.is_some() || neighbor_mask.is_some() {
-                        emit_fluid_openings(
-                            fluid,
-                            face,
-                            x as f32,
-                            y as f32,
-                            z as f32,
-                            heights,
-                            source_mask,
-                            neighbor_mask,
-                            tint,
-                            lighting,
-                        );
-                    } else {
-                        push_lit_quad(
-                            fluid,
-                            fluid_face_vertices(face, x as f32, y as f32, z as f32, heights),
-                            face.normal(),
-                            VOXEL_FACE_UVS,
-                            tint,
-                            lighting,
-                            0.0,
-                        );
-                    }
+            if let Some(block_cell) = world.cell_at(world_voxel + face.offset()) {
+                if MicroblockMask::is_modified(block_cell) {
+                    emit_fluid_openings(
+                        fluid,
+                        world,
+                        world_voxel,
+                        face,
+                        block_cell,
+                        tint,
+                        source_block_srgb,
+                    );
+                    continue;
                 }
+            }
+
+            let lighting =
+                face_lighting(world, world_voxel, face, source_block_srgb);
+            push_lit_quad(
+                fluid,
+                fluid_face_vertices(
+                    face,
+                    x as f32,
+                    y as f32,
+                    z as f32,
+                    heights,
+                ),
+                face.normal(),
+                VOXEL_FACE_UVS,
+                tint,
+                lighting,
+                0.0,
+            );
+        }
     });
 
     let mut meshes = buffers
