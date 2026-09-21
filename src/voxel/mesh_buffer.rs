@@ -69,9 +69,11 @@ fn encode_vertex_payload(
     lighting: [f32; 4],
     light_uv: [f32; 2],
 ) -> [f32; 4] {
-    let block = lighting[..3].map(|channel| {
-        (channel.clamp(0.0, 1.0) * 15.0).round() as u32
-    });
+    let block = [
+        (lighting[0].clamp(0.0, 1.0) * 15.0).round() as u32,
+        (lighting[1].clamp(0.0, 1.0) * 15.0).round() as u32,
+        (lighting[2].clamp(0.0, 1.0) * 15.0).round() as u32,
+    ];
     let packed_block = block[0] | (block[1] << 4) | (block[2] << 8);
 
     let tint = tint.map(|channel| {
