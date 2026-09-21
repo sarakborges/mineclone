@@ -17,7 +17,7 @@ use super::{
     chunk_system_params::ChunkRenderer,
     render_distance::RenderDistanceSettings,
     streaming::ChunkStreamingState,
-    work_budget::FrameWorkBudget,
+    work_budget::{FrameWorkBudget, WorldFrameWorkBudget},
 };
 
 const MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK: usize = 1;
@@ -60,6 +60,7 @@ pub(super) struct ChunkUnloadRuntime<'w> {
     lighting: ResMut<'w, PendingLightingUpdates>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
     remesh_tasks: ResMut<'w, ChunkRemeshTasks>,
+    frame_budget: Res<'w, WorldFrameWorkBudget>,
 }
 
 pub(super) fn retire_distant_chunk_meshes(
@@ -116,7 +117,8 @@ pub(super) fn unload_chunk_meshes(
     let mut budget = FrameWorkBudget::new(
         CHUNK_UNLOAD_BUDGET,
         MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK,
-    );
+    )
+    .with_global_deadline(runtime.frame_budget.deadline());
 
     loop {
         if budget.exhausted() {
