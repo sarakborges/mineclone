@@ -70,10 +70,11 @@ impl FluidRegistry {
             definition.id
         );
 
-        if let Some(&fluid_id) = self.ids.get(&definition.id) {
-            self.definitions[fluid_id as usize] = definition;
-            return;
-        }
+        assert!(
+            !self.ids.contains_key(&definition.id),
+            "duplicate fluid definition id {}",
+            definition.id
+        );
 
         let index = self.definitions.len();
         assert!(
