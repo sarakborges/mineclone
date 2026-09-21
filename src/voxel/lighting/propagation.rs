@@ -56,20 +56,29 @@ impl<'a> LightingRegistries<'a> {
 
 pub(super) struct LightingChangeSets<'a> {
     frame: &'a mut HashSet<IVec3>,
+    frame_positions: &'a mut HashSet<IVec3>,
     interactive: &'a mut HashSet<IVec3>,
+    interactive_positions: &'a mut HashSet<IVec3>,
     settling: &'a mut HashSet<IVec3>,
+    settling_positions: &'a mut HashSet<IVec3>,
 }
 
 impl<'a> LightingChangeSets<'a> {
     pub(super) fn new(
         frame: &'a mut HashSet<IVec3>,
+        frame_positions: &'a mut HashSet<IVec3>,
         interactive: &'a mut HashSet<IVec3>,
+        interactive_positions: &'a mut HashSet<IVec3>,
         settling: &'a mut HashSet<IVec3>,
+        settling_positions: &'a mut HashSet<IVec3>,
     ) -> Self {
         Self {
             frame,
+            frame_positions,
             interactive,
+            interactive_positions,
             settling,
+            settling_positions,
         }
     }
 }
@@ -83,8 +92,11 @@ pub(super) fn relax(
     queue: &mut LightingQueue,
 ) -> HashSet<IVec3> {
     let mut changed_chunks = HashSet::new();
+    let mut changed_positions = HashSet::new();
     let mut interactive_changed_chunks = HashSet::new();
+    let mut interactive_changed_positions = HashSet::new();
     let mut settling_changed_chunks = HashSet::new();
+    let mut settling_changed_positions = HashSet::new();
     let mut context = LightingContext::default();
     relax_budgeted(
         world,
@@ -93,8 +105,11 @@ pub(super) fn relax(
         &mut context,
         LightingChangeSets::new(
             &mut changed_chunks,
+            &mut changed_positions,
             &mut interactive_changed_chunks,
+            &mut interactive_changed_positions,
             &mut settling_changed_chunks,
+            &mut settling_changed_positions,
         ),
         |_| false,
     );
@@ -110,6 +125,7 @@ pub(super) fn relax_budgeted(
     mut budget_exhausted: impl FnMut(usize) -> bool,
 ) {
     changes.frame.clear();
+    changes.frame_positions.clear();
     context.reset_query_scratch();
     let Some(processing_lane) = queue.next_lane() else {
         return;
@@ -162,12 +178,15 @@ pub(super) fn relax_budgeted(
         match lane {
             LightingLane::Interactive => {
                 changes.interactive.insert(chunk_coord);
+                changes.interactive_positions.insert(position);
             }
             LightingLane::Settling => {
                 changes.settling.insert(chunk_coord);
+                changes.settling_positions.insert(position);
             }
             LightingLane::Background => {
                 changes.frame.insert(chunk_coord);
+                changes.frame_positions.insert(position);
             }
         }
         queue.enqueue_with_neighbors_in_lane(position, lane);
@@ -180,13 +199,25 @@ pub(super) fn relax_budgeted(
         // repeated edits; the next batch will enqueue another deduplicated
         // remesh if convergence changes these voxels again.
         changes.interactive.retain(|coord| world.chunk(*coord).is_some());
+        changes
+            .interactive_positions
+            .retain(|position| world.sample_at(*position).is_some());
         changes.frame.extend(changes.interactive.drain());
+        changes
+            .frame_positions
+            .extend(changes.interactive_positions.drain());
     } else if processing_lane == LightingLane::Settling && !queue.has_settling_work() {
         // Generated-fluid settling is a batch. Keep its mesh revisions private
         // until the entire derived-light propagation converges so async remesh
         // cannot repeatedly capture intermediate lighting states.
         changes.settling.retain(|coord| world.chunk(*coord).is_some());
+        changes
+            .settling_positions
+            .retain(|position| world.sample_at(*position).is_some());
         changes.frame.extend(changes.settling.drain());
+        changes
+            .frame_positions
+            .extend(changes.settling_positions.drain());
     }
 
     world.commit_deferred_light_mesh_revisions(changes.frame.iter().copied());
@@ -422,8 +453,11 @@ mod tests {
         }
         let mut context = LightingContext::default();
         let mut changed = HashSet::new();
+        let mut changed_positions = HashSet::new();
         let mut interactive_changed = HashSet::new();
+        let mut interactive_changed_positions = HashSet::new();
         let mut settling_changed = HashSet::new();
+        let mut settling_changed_positions = HashSet::new();
 
         relax_budgeted(
             &mut world,
@@ -432,8 +466,11 @@ mod tests {
             &mut context,
             LightingChangeSets::new(
                 &mut changed,
+                &mut changed_positions,
                 &mut interactive_changed,
+                &mut interactive_changed_positions,
                 &mut settling_changed,
+                &mut settling_changed_positions,
             ),
             |processed| processed >= BUDGET_CHECK_INTERVAL_VOXELS,
         );
@@ -460,8 +497,11 @@ mod tests {
         }
         let mut context = LightingContext::default();
         let mut changed = HashSet::new();
+        let mut changed_positions = HashSet::new();
         let mut interactive_changed = HashSet::new();
+        let mut interactive_changed_positions = HashSet::new();
         let mut settling_changed = HashSet::new();
+        let mut settling_changed_positions = HashSet::new();
 
         relax_budgeted(
             &mut world,
@@ -470,8 +510,11 @@ mod tests {
             &mut context,
             LightingChangeSets::new(
                 &mut changed,
+                &mut changed_positions,
                 &mut interactive_changed,
+                &mut interactive_changed_positions,
                 &mut settling_changed,
+                &mut settling_changed_positions,
             ),
             |processed| processed >= BUDGET_CHECK_INTERVAL_VOXELS,
         );
