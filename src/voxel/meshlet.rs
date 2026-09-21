@@ -128,9 +128,10 @@ pub(crate) fn patch_voxel_mesh(
     }
 
     let existing = MeshArrays::from_mesh(existing)?;
-    let replacement = replacement
-        .map(MeshArrays::from_mesh)
-        .transpose()?;
+    let replacement = match replacement {
+        Some(mesh) => Some(MeshArrays::from_mesh(mesh)?),
+        None => None,
+    };
     let existing_dirty = existing.has_quad_in(dirty)?;
     let replacement_dirty = replacement
         .as_ref()
