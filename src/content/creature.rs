@@ -1,11 +1,11 @@
-use std::path::{Component, Path};
+use std::path::Path;
 
 use bevy::prelude::*;
 use serde::Deserialize;
 
 use crate::localization::LocalizedText;
 
-use super::{color::Hsi, registry::DefinitionMap};
+use super::{asset_path::is_safe_relative_asset_path, color::Hsi, registry::DefinitionMap};
 
 /// One reusable model can be referenced by any number of creature definitions.
 /// Model paths are relative to `assets/`, never absolute filesystem paths.
@@ -173,21 +173,12 @@ impl CreatureRegistry {
 }
 
 fn valid_creature_model_path(path: &str) -> bool {
-    if path.contains('\\') || path.contains(':') || path.contains('\0') {
+    if !is_safe_relative_asset_path(path) {
         return false;
     }
     let candidate = Path::new(path);
-    if !candidate
-        .components()
-        .all(|component| matches!(component, Component::Normal(_)))
-    {
-        return false;
-    }
     let mut parts = path.split('/');
     if parts.next() != Some("models") || parts.next() != Some("creatures") {
-        return false;
-    }
-    if !parts.all(|part| !part.is_empty() && part != "." && part != "..") {
         return false;
     }
     matches!(
@@ -198,21 +189,12 @@ fn valid_creature_model_path(path: &str) -> bool {
 
 /// Creature materials may only refer to PNGs beneath the moddable creature texture root.
 fn valid_creature_texture_path(path: &str) -> bool {
-    if path.contains('\\') || path.contains(':') || path.contains('\0') {
+    if !is_safe_relative_asset_path(path) {
         return false;
     }
     let candidate = Path::new(path);
-    if !candidate
-        .components()
-        .all(|component| matches!(component, Component::Normal(_)))
-    {
-        return false;
-    }
     let mut parts = path.split('/');
     if parts.next() != Some("textures") || parts.next() != Some("creatures") {
-        return false;
-    }
-    if !parts.all(|part| !part.is_empty() && part != "." && part != "..") {
         return false;
     }
     matches!(
