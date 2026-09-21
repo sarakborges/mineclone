@@ -22,6 +22,8 @@ struct ArchivedCell {
     rotation: u8,
     orientation: u8,
     secondary_properties: SecondaryProperties,
+    microblock_layers: Option<&'static [u64; 8]>,
+    microblock_transient: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -83,6 +85,8 @@ impl ArchivedChunk {
                 rotation: rotation_index(cell.texture_rotation),
                 orientation: cell.orientation.index(),
                 secondary_properties: cell.secondary_properties(),
+                microblock_layers: cell.microblock_layers(),
+                microblock_transient: cell.microblock_transient(),
             });
         }
 
@@ -155,6 +159,8 @@ impl ArchivedChunk {
                     rotation: rotation_index(cell.texture_rotation),
                     orientation: cell.orientation.index(),
                     secondary_properties: cell.secondary_properties(),
+                microblock_layers: cell.microblock_layers(),
+                microblock_transient: cell.microblock_transient(),
                 });
             }
 
@@ -205,7 +211,11 @@ impl ArchivedChunk {
                     TextureRotation::from_quarter_turn(archived.rotation),
                     BlockOrientation::from_index(archived.orientation),
                 )
-                .with_secondary_properties(archived.secondary_properties);
+                .with_secondary_properties(archived.secondary_properties)
+                .with_microblock_mask(
+                    archived.microblock_layers,
+                    archived.microblock_transient,
+                );
                 (index, cell)
             })
     }
