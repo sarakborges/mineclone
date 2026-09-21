@@ -6,6 +6,7 @@ use bevy::{
 use super::theme;
 
 pub(crate) const SLIDER_NUMBER_INPUT_WIDTH: f32 = 112.0;
+pub(crate) const SLIDER_NUMBER_INPUT_GAP: f32 = 16.0;
 const SLIDER_THUMB_SIZE: f32 = 16.0;
 
 pub(crate) fn slider_track<S: Component, T: Component>(
