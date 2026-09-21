@@ -76,86 +76,84 @@ pub(super) fn rasterize_fluid_pass(
                 )
             })
     });
+    let mut placements = Vec::<([u8; 3], FluidCell)>::new();
 
-    chunk.edit_fluids(|chunk| {
-        for local_z in 0..CHUNK_SIZE {
-            for local_x in 0..CHUNK_SIZE {
-                let world_x = chunk_origin.x + local_x as i32;
-                let world_z = chunk_origin.z + local_z as i32;
-                let horizontal = Vec2::new(world_x as f32 + 0.5, world_z as f32 + 0.5);
-                let column = &columns[column_index(local_x, local_z)];
-                let surface_height = column.surface_height as f32;
-                // Rank only candidates with a plausible original floor. A
-                // higher unsupported lake previously won water_at(), then got
-                // rejected here, hiding an otherwise supported river below.
-                let surface_water = pass
-                    .region
-                    .hydrology
-                    .supported_water_at(horizontal, surface_height)
-                    .filter(|water| surface_water_is_supported(*water, surface_height));
-                let surface_fluid_id = surface_water.as_ref().map(|water| {
-                    pass.fluids.id_of(water.fluid_id).unwrap_or_else(|| {
-                        panic!("hydrology references missing fluid: {}", water.fluid_id)
-                    })
-                });
-                let maximum_world_y = chunk_origin.y + CHUNK_SIZE as i32 - 1;
-                let authored_surface_fluid = (maximum_world_y >= column.surface_height)
-                    .then(|| authored_surface_fluid_column(horizontal, column, pass))
-                    .flatten();
+    for local_z in 0..CHUNK_SIZE {
+        for local_x in 0..CHUNK_SIZE {
+            let world_x = chunk_origin.x + local_x as i32;
+            let world_z = chunk_origin.z + local_z as i32;
+            let horizontal = Vec2::new(world_x as f32 + 0.5, world_z as f32 + 0.5);
+            let column = &columns[column_index(local_x, local_z)];
+            let surface_height = column.surface_height as f32;
+            // Rank only candidates with a plausible original floor. A
+            // higher unsupported lake previously won water_at(), then got
+            // rejected here, hiding an otherwise supported river below.
+            let surface_water = pass
+                .region
+                .hydrology
+                .supported_water_at(horizontal, surface_height)
+                .filter(|water| surface_water_is_supported(*water, surface_height));
+            let surface_fluid_id = surface_water.as_ref().map(|water| {
+                pass.fluids.id_of(water.fluid_id).unwrap_or_else(|| {
+                    panic!("hydrology references missing fluid: {}", water.fluid_id)
+                })
+            });
+            let maximum_world_y = chunk_origin.y + CHUNK_SIZE as i32 - 1;
+            let authored_surface_fluid = (maximum_world_y >= column.surface_height)
+                .then(|| authored_surface_fluid_column(horizontal, column, pass))
+                .flatten();
 
-                for local_y in 0..CHUNK_SIZE {
-                    if density[voxel_index(local_x, local_y, local_z)] > 0.0 {
-                        continue;
-                    }
+            for local_y in 0..CHUNK_SIZE {
+                if density[voxel_index(local_x, local_y, local_z)] > 0.0 {
+                    continue;
+                }
 
-                    let world_y = chunk_origin.y + local_y as i32;
-                    if let Some(authored) =
-                        authored_surface_fluid.and_then(|column| column.fluid_at(world_y))
-                    {
-                        chunk.set_fluid(local_x, local_y, local_z, Some(authored));
-                        continue;
-                    }
-
-                    if let (Some(water), Some(fluid_id)) = (surface_water.as_ref(), surface_fluid_id)
-                        && world_y as f32 + 1.0 > water.bed_level
-                        && let Some(level) = fluid_level_for_surface(water.water_level, world_y)
-                    {
-                        chunk.set_fluid(
-                            local_x,
-                            local_y,
-                            local_z,
-                            Some(FluidCell::source(fluid_id, level)),
-                        );
-                        continue;
-                    }
-
-                    let (Some(caves), Some(fluid_id)) = (pass.anchored_caves, underground_fluid_id)
-                    else {
-                        continue;
-                    };
+                let world_y = chunk_origin.y + local_y as i32;
+                let fluid = if let Some(authored) =
+                    authored_surface_fluid.and_then(|column| column.fluid_at(world_y))
+                {
+                    Some(authored)
+                } else if let (Some(water), Some(fluid_id)) =
+                    (surface_water.as_ref(), surface_fluid_id)
+                    && world_y as f32 + 1.0 > water.bed_level
+                    && let Some(level) = fluid_level_for_surface(water.water_level, world_y)
+                {
+                    Some(FluidCell::source(fluid_id, level))
+                } else if let (Some(caves), Some(fluid_id)) =
+                    (pass.anchored_caves, underground_fluid_id)
+                {
                     let position = Vec3::new(
                         world_x as f32 + 0.5,
                         world_y as f32 + 0.5,
                         world_z as f32 + 0.5,
                     );
-                    let Some(water) = caves.underground_water_at(position) else {
-                        continue;
-                    };
-                    if world_y as f32 + 1.0 <= water.bed_level {
-                        continue;
-                    }
-                    let Some(level) = fluid_level_for_surface(water.water_level, world_y) else {
-                        continue;
-                    };
+                    caves.underground_water_at(position).and_then(|water| {
+                        (world_y as f32 + 1.0 > water.bed_level)
+                            .then(|| fluid_level_for_surface(water.water_level, world_y))
+                            .flatten()
+                            .map(|level| FluidCell::source(fluid_id, level))
+                    })
+                } else {
+                    None
+                };
 
-                    chunk.set_fluid(
-                        local_x,
-                        local_y,
-                        local_z,
-                        Some(FluidCell::source(fluid_id, level)),
-                    );
+                if let Some(fluid) = fluid {
+                    placements.push((
+                        [local_x as u8, local_y as u8, local_z as u8],
+                        fluid,
+                    ));
                 }
             }
+        }
+    }
+
+    if placements.is_empty() {
+        return;
+    }
+
+    chunk.edit_fluids(|chunk| {
+        for ([x, y, z], fluid) in placements {
+            chunk.set_fluid(x as usize, y as usize, z as usize, Some(fluid));
         }
     });
 }
