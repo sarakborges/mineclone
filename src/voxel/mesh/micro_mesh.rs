@@ -4,8 +4,10 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::{
-    content::block::{BlockDefinition, BlockRegistry, BlockTextureRotations},
-    rendering::block_texture::block_face_material_face,
+    content::block::{
+        BlockDefinition, BlockRegistry, BlockTextureLayer, BlockTextureRotations,
+    },
+    rendering::block_texture::{block_face_material_face, block_face_texture_layers},
 };
 
 use super::super::{
@@ -19,8 +21,46 @@ use super::super::{
     texture_rotation::TextureRotation,
 };
 
-pub(super) type MicroMeshBuffers = HashMap<(&'static str, BlockFace, bool), VoxelMeshBuffer>;
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+pub(super) struct MaterialBatchKey<'a> {
+    layers: &'a [BlockTextureLayer],
+    alpha_cutoff: Option<u32>,
+    alpha_blend: bool,
+    casts_shadow: bool,
+}
+
+pub(super) struct MaterialMeshBuffer {
+    pub(super) block_id: &'static str,
+    pub(super) face: BlockFace,
+    pub(super) casts_shadow: bool,
+    pub(super) buffer: VoxelMeshBuffer,
+}
+
+pub(super) type MicroMeshBuffers<'a> = HashMap<MaterialBatchKey<'a>, MaterialMeshBuffer>;
 const EDGE: usize = MICROBLOCK_EDGE as usize;
+
+pub(super) fn material_buffer<'buffer, 'definition>(
+    buffers: &'buffer mut MicroMeshBuffers<'definition>,
+    block_id: &'static str,
+    block: &'definition BlockDefinition,
+    face: BlockFace,
+) -> &'buffer mut VoxelMeshBuffer {
+    let key = MaterialBatchKey {
+        layers: block_face_texture_layers(face, block),
+        alpha_cutoff: block.alpha_cutoff.map(f32::to_bits),
+        alpha_blend: block.alpha_blend,
+        casts_shadow: block.casts_shadow,
+    };
+    &mut buffers
+        .entry(key)
+        .or_insert_with(|| MaterialMeshBuffer {
+            block_id,
+            face,
+            casts_shadow: block.casts_shadow,
+            buffer: VoxelMeshBuffer::default(),
+        })
+        .buffer
+}
 
 pub(super) struct MicroSurface<'a, W: VoxelRead + ?Sized> {
     pub(super) world: &'a W,
@@ -33,9 +73,9 @@ pub(super) struct MicroSurface<'a, W: VoxelRead + ?Sized> {
     pub(super) block_srgb: [f32; 3],
 }
 
-pub(super) fn emit_sculpted_faces<W: VoxelRead + ?Sized>(
-    surface: &MicroSurface<'_, W>,
-    buffers: &mut MicroMeshBuffers,
+pub(super) fn emit_sculpted_faces<'a, W: VoxelRead + ?Sized>(
+    surface: &MicroSurface<'a, W>,
+    buffers: &mut MicroMeshBuffers<'a>,
 ) {
     let shape = MicroblockMask::from_cell(surface.cell);
     for face in BlockFace::ALL {
@@ -69,9 +109,9 @@ pub(super) fn emit_sculpted_faces<W: VoxelRead + ?Sized>(
 
 /// A regular macro face bordering a sculpted solid needs only the openings
 /// of the neighbor's boundary mask, not a whole hidden or z-fighting quad.
-pub(super) fn emit_neighbor_openings<W: VoxelRead + ?Sized>(
-    surface: &MicroSurface<'_, W>,
-    buffers: &mut MicroMeshBuffers,
+pub(super) fn emit_neighbor_openings<'a, W: VoxelRead + ?Sized>(
+    surface: &MicroSurface<'a, W>,
+    buffers: &mut MicroMeshBuffers<'a>,
     face: BlockFace,
     neighbor: VoxelCell,
 ) {
@@ -115,9 +155,9 @@ fn position_for(face: BlockFace, depth: usize, u: usize, v: usize) -> [usize; 3]
     }
 }
 
-fn emit_rectangles<W: VoxelRead + ?Sized>(
-    surface: &MicroSurface<'_, W>,
-    buffers: &mut MicroMeshBuffers,
+fn emit_rectangles<'a, W: VoxelRead + ?Sized>(
+    surface: &MicroSurface<'a, W>,
+    buffers: &mut MicroMeshBuffers<'a>,
     face: BlockFace,
     depth: usize,
     visible: &mut [bool; EDGE * EDGE],
@@ -151,9 +191,9 @@ fn emit_rectangles<W: VoxelRead + ?Sized>(
     clippy::too_many_arguments,
     reason = "a greedy rectangle needs its face, depth and four grid bounds"
 )]
-fn emit_rectangle<W: VoxelRead + ?Sized>(
-    surface: &MicroSurface<'_, W>,
-    buffers: &mut MicroMeshBuffers,
+fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
+    surface: &MicroSurface<'a, W>,
+    buffers: &mut MicroMeshBuffers<'a>,
     face: BlockFace,
     depth: usize,
     u: usize,
@@ -217,9 +257,12 @@ fn emit_rectangle<W: VoxelRead + ?Sized>(
     let material_face = block_face_material_face(source_face, surface.block);
     let lighting = face_lighting(surface.world, surface.world_voxel, face, surface.block_srgb);
     push_lit_quad(
-        buffers
-            .entry((surface.cell.block_id, material_face, surface.block.casts_shadow))
-            .or_default(),
+        material_buffer(
+            buffers,
+            surface.cell.block_id,
+            surface.block,
+            material_face,
+        ),
         vertices,
         face.normal(),
         uvs,
