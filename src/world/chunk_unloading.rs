@@ -100,7 +100,7 @@ pub(super) fn retire_distant_chunk_meshes(
 }
 
 #[derive(Clone, Copy)]
-struct MeshResidencyCandidate {
+pub(super) struct MeshResidencyCandidate {
     coord: IVec3,
     bytes: usize,
     visible: bool,
