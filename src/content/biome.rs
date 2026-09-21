@@ -163,7 +163,7 @@ pub struct BiomeRegistry {
     definitions: DefinitionMap<BiomeDefinition>,
     has_volume_density_modifiers: bool,
     has_volume_solid_density_modifiers: bool,
-    structure_placements: Vec<BiomeStructurePlacement>,
+    structure_placements: Arc<Vec<BiomeStructurePlacement>>,
 }
 
 impl BiomeRegistry {
@@ -195,8 +195,9 @@ impl BiomeRegistry {
         self.definitions.insert(biome_id, definition);
         self.has_volume_density_modifiers |= has_density_modifier;
         self.has_volume_solid_density_modifiers |= has_solid_density_modifier;
-        self.structure_placements.extend(placements);
-        self.structure_placements.sort_by(|left, right| {
+        let structure_placements = Arc::make_mut(&mut self.structure_placements);
+        structure_placements.extend(placements);
+        structure_placements.sort_by(|left, right| {
             left.biome_id
                 .cmp(&right.biome_id)
                 .then_with(|| left.structure_id.cmp(&right.structure_id))
