@@ -164,6 +164,10 @@ struct MeshArrays {
 
 impl MeshArrays {
     fn from_mesh(mesh: &Mesh) -> Option<Self> {
+        if !mesh.asset_usage.contains(RenderAssetUsages::MAIN_WORLD) {
+            return None;
+        }
+
         Some(Self {
             positions: float32x3(mesh.attribute(Mesh::ATTRIBUTE_POSITION)?)?.to_vec(),
             normals: float32x3(mesh.attribute(Mesh::ATTRIBUTE_NORMAL)?)?.to_vec(),
