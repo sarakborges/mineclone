@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
 };
@@ -297,9 +297,8 @@ pub struct TerrainMaterials {
     array_materials: HashMap<TerrainAlphaKey, Handle<TerrainMaterial>>,
     texture_table: TerrainTextureTable,
     texture_array: Handle<Image>,
-    texture_sources: Vec<Handle<Image>>,
+    texture_sources: Arc<Mutex<Option<Vec<Handle<Image>>>>>,
     texture_array_ready: Arc<AtomicBool>,
-    _texture_preloads: Vec<Handle<Image>>,
 }
 
 impl TerrainMaterials {
@@ -358,10 +357,6 @@ impl TerrainMaterials {
             })
             .collect();
 
-        let layer_texture_preloads = layers
-            .iter()
-            .map(|definition| asset_server.load(definition.texture.clone()))
-            .collect::<Vec<_>>();
         let layers = layers
             .iter()
             .map(|definition| {
@@ -378,9 +373,8 @@ impl TerrainMaterials {
             array_materials,
             texture_table,
             texture_array,
-            texture_sources,
+            texture_sources: Arc::new(Mutex::new(Some(texture_sources))),
             texture_array_ready: Arc::new(AtomicBool::new(false)),
-            _texture_preloads: layer_texture_preloads,
         }
     }
 
@@ -397,8 +391,17 @@ impl TerrainMaterials {
             return true;
         }
 
-        let mut layers = Vec::with_capacity(self.texture_sources.len());
-        for (path, handle) in self.texture_table.paths().iter().zip(&self.texture_sources) {
+        let mut texture_sources = self
+            .texture_sources
+            .lock()
+            .expect("terrain texture source lock cannot be poisoned");
+        let Some(source_handles) = texture_sources.as_ref() else {
+            self.texture_array_ready.store(true, Ordering::Release);
+            return true;
+        };
+
+        let mut layers = Vec::with_capacity(source_handles.len());
+        for (path, handle) in self.texture_table.paths().iter().zip(source_handles) {
             let Some(image) = images.get(handle) else {
                 return false;
             };
@@ -447,6 +450,9 @@ impl TerrainMaterials {
             target_data[start..start + TERRAIN_TEXTURE_BYTES].copy_from_slice(&layer);
         }
 
+        // Once the array owns the texels, its source handles are redundant.
+        // Legacy 3+ layer materials keep their own texture handles alive.
+        texture_sources.take();
         self.texture_array_ready.store(true, Ordering::Release);
         true
     }
