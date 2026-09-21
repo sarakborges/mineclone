@@ -109,11 +109,12 @@ impl ChunkAsyncWorkLimiter {
 
     pub(crate) fn limit(&self) -> usize {
         let base = self.base_limit();
+        let minimum = base.min(2);
         let adaptive = self.adaptive_limit.load(Ordering::Acquire);
         if adaptive == 0 {
             base
         } else {
-            adaptive.clamp(1, base)
+            adaptive.clamp(minimum, base)
         }
     }
 
@@ -122,8 +123,9 @@ impl ChunkAsyncWorkLimiter {
     }
 
     fn set_adaptive_limit(&self, limit: usize) {
+        let base = self.base_limit();
         self.adaptive_limit
-            .store(limit.clamp(1, self.base_limit()), Ordering::Release);
+            .store(limit.clamp(base.min(2), base), Ordering::Release);
     }
 
     pub(crate) fn take_diagnostics(&self) -> ChunkAsyncWorkDiagnostics {
@@ -161,10 +163,12 @@ impl ChunkAsyncStageMetrics {
 
 const ASYNC_SLOW_FRAME_SECONDS: f32 = 1.0 / 50.0;
 const ASYNC_RECOVERY_FRAME_SECONDS: f32 = 1.0 / 58.0;
+const ASYNC_SLOW_FRAMES: u16 = 4;
 const ASYNC_RECOVERY_FRAMES: u16 = 120;
 
 #[derive(Default)]
 pub(crate) struct ChunkAsyncAdaptationState {
+    slow_frames: u16,
     recovery_frames: u16,
 }
 
@@ -185,12 +189,15 @@ pub(crate) fn tune_chunk_async_work(
 
     if frame_seconds > ASYNC_SLOW_FRAME_SECONDS {
         state.recovery_frames = 0;
-        if current > 1 {
+        state.slow_frames = state.slow_frames.saturating_add(1);
+        if state.slow_frames >= ASYNC_SLOW_FRAMES && current > base.min(2) {
             limiter.set_adaptive_limit(current - 1);
+            state.slow_frames = 0;
         }
         return;
     }
 
+    state.slow_frames = 0;
     if frame_seconds <= ASYNC_RECOVERY_FRAME_SECONDS && current < base {
         state.recovery_frames = state.recovery_frames.saturating_add(1);
         if state.recovery_frames >= ASYNC_RECOVERY_FRAMES {
