@@ -163,6 +163,7 @@ pub struct StructureDefinition {
     pub id: String,
     pub name: LocalizedText,
     pub locatable: bool,
+    pub rotation: bool,
     #[serde(default, rename = "group_id")]
     pub group_id: Option<String>,
     #[serde(default)]
@@ -205,6 +206,22 @@ impl StructureSurfaceLayer {
 impl StructureDefinition {
     pub(crate) fn runtime_hash(&self) -> u64 {
         self.runtime.id_hash
+    }
+
+    pub(crate) fn rotation_for_hash(&self, hash: u64) -> StructureRotation {
+        if self.rotation {
+            StructureRotation::from_hash(hash)
+        } else {
+            StructureRotation::Degrees0
+        }
+    }
+
+    pub(crate) fn supported_rotations(&self) -> &'static [StructureRotation] {
+        if self.rotation {
+            &StructureRotation::ALL
+        } else {
+            &StructureRotation::ALL[..1]
+        }
     }
 
     pub(crate) fn validate_references(
@@ -714,9 +731,9 @@ impl StructureRegistry {
         &self,
         reference: &str,
     ) -> Option<(IVec2, IVec2)> {
-        let mut include_structure = |structure: &StructureDefinition,
-                                     bounds: &mut Option<(IVec2, IVec2)>| {
-            for rotation in StructureRotation::ALL {
+        let include_structure = |structure: &StructureDefinition,
+                                 bounds: &mut Option<(IVec2, IVec2)>| {
+            for &rotation in structure.supported_rotations() {
                 let candidate = structure.horizontal_bounds_for_rotation(rotation);
                 *bounds = Some(match *bounds {
                     Some((minimum, maximum)) => {
