@@ -37,7 +37,7 @@ use super::{
     fluid_updates::{
         GeneratedFluidSettling, GeneratedFluidSettlingCompletion, PendingFluidUpdates,
     },
-    render_distance::RenderDistanceSettings,
+    render_distance::{RenderDistanceSettings, chunk_visibility_radii},
     tick::WorldTickClock,
     warp::PendingWarp,
     world_feature_fields::WorldFeatureFields,
@@ -80,6 +80,22 @@ pub(super) struct ChunkStreamingState {
 impl ChunkStreamingState {
     pub(super) fn keeps_loaded(&self, coord: IVec3) -> bool {
         self.desired.contains(&coord) || self.retained.contains(&coord)
+    }
+
+    pub(super) fn wants_new_render_mesh(&self, coord: IVec3) -> bool {
+        let Some(center) = self.center else {
+            return false;
+        };
+        let (show_radius, _) = chunk_visibility_radii(self.horizontal_radius);
+        self.keeps_loaded(coord) && chunk_is_inside_render_radius(center, coord, show_radius)
+    }
+
+    pub(super) fn retains_render_mesh(&self, coord: IVec3) -> bool {
+        let Some(center) = self.center else {
+            return false;
+        };
+        let (_, hide_radius) = chunk_visibility_radii(self.horizontal_radius);
+        self.keeps_loaded(coord) && chunk_is_inside_render_radius(center, coord, hide_radius)
     }
 
     pub(super) fn enqueue_retired(&mut self, coord: IVec3) {
@@ -286,17 +302,26 @@ impl ChunkStreamingState {
     fn pop_ready(&mut self) -> Option<IVec3> {
         let center = self.center?;
         let movement_direction = self.movement_direction;
-        self.ready.pop_min_by_key(|coord| {
-            if is_critical_streaming_coord(coord, center) {
-                0_u8
-            } else if movement_direction != IVec2::ZERO
-                && (coord.xz() - center.xz()).dot(movement_direction) > 0
-            {
-                1
-            } else {
-                2
-            }
-        })
+        let (show_radius, _) = chunk_visibility_radii(self.horizontal_radius);
+        let desired = &self.desired;
+        let retained = &self.retained;
+        self.ready.pop_min_where_by_key(
+            |coord| {
+                (desired.contains(&coord) || retained.contains(&coord))
+                    && chunk_is_inside_render_radius(center, coord, show_radius)
+            },
+            |coord| {
+                if is_critical_streaming_coord(coord, center) {
+                    0_u8
+                } else if movement_direction != IVec2::ZERO
+                    && (coord.xz() - center.xz()).dot(movement_direction) > 0
+                {
+                    1
+                } else {
+                    2
+                }
+            },
+        )
     }
 
     fn defer_ready(&mut self, coord: IVec3) {
@@ -328,6 +353,15 @@ fn is_critical_streaming_coord(coord: IVec3, center: IVec3) -> bool {
     delta.x.abs() <= CRITICAL_PLAYER_RADIUS_CHUNKS
         && delta.y.abs() <= CRITICAL_PLAYER_RADIUS_CHUNKS
         && delta.z.abs() <= CRITICAL_PLAYER_RADIUS_CHUNKS
+}
+
+fn chunk_is_inside_render_radius(center: IVec3, coord: IVec3, horizontal_radius: i32) -> bool {
+    if horizontal_radius < 0 {
+        return false;
+    }
+
+    let delta = coord.xz() - center.xz();
+    delta.length_squared() <= horizontal_radius * horizontal_radius
 }
 
 struct QueueRebuildContext<'a> {
@@ -600,6 +634,29 @@ mod tests {
         state.forget_initial_lighting_seeded(coord);
         assert!(state.mark_initial_lighting_seeded(coord));
         assert!(!state.initial_mesh_seed_catchup.contains(&coord));
+    }
+
+    #[test]
+    fn forward_preload_stays_resident_without_allocating_a_gpu_mesh() {
+        let visible = IVec3::new(14, 0, 0);
+        let hysteresis = IVec3::new(15, 0, 0);
+        let preload_only = IVec3::new(20, 0, 0);
+        let mut state = ChunkStreamingState {
+            center: Some(IVec3::ZERO),
+            horizontal_radius: 12,
+            ..default()
+        };
+        state.desired.extend([visible, hysteresis, preload_only]);
+
+        assert!(state.wants_new_render_mesh(visible));
+        assert!(!state.wants_new_render_mesh(hysteresis));
+        assert!(state.retains_render_mesh(hysteresis));
+        assert!(!state.retains_render_mesh(preload_only));
+
+        state.mark_ready(preload_only);
+        state.mark_ready(visible);
+        assert_eq!(state.pop_ready(), Some(visible));
+        assert!(state.ready.contains(preload_only));
     }
 
 
