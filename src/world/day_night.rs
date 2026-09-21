@@ -106,10 +106,30 @@ fn advance_clock(
         return;
     }
 
-    let advanced_ticks = clock.tick_in_day.saturating_add(elapsed_ticks);
-    clock.day = clock
-        .day
-        .saturating_add(advanced_ticks / day_duration_ticks);
-    clock.tick_in_day = advanced_ticks % day_duration_ticks;
+    let midnight_tick = world_midnight_tick(cycle.world_time_start_hour, day_duration_ticks);
+    let shifted_tick = (clock.tick_in_day as u128
+        + day_duration_ticks as u128
+        - midnight_tick as u128)
+        % day_duration_ticks as u128;
+    let elapsed = elapsed_ticks as u128;
+    let crossed_midnights = (shifted_tick + elapsed) / day_duration_ticks as u128;
+    let crossed_midnights = u64::try_from(crossed_midnights).unwrap_or(u64::MAX);
+
+    clock.day = clock.day.saturating_add(crossed_midnights);
+    clock.tick_in_day =
+        ((clock.tick_in_day as u128 + elapsed) % day_duration_ticks as u128) as u64;
     clock.normalized_time = clock.tick_in_day as f32 / day_duration_ticks as f32;
+}
+
+
+fn world_midnight_tick(world_time_start_hour: f32, day_duration_ticks: u64) -> u64 {
+    debug_assert!(day_duration_ticks > 0);
+    let hours_until_midnight = (24.0 - world_time_start_hour.rem_euclid(24.0)).rem_euclid(24.0);
+    if hours_until_midnight <= f32::EPSILON {
+        return 0;
+    }
+
+    let fraction = hours_until_midnight / 24.0;
+    ((fraction * day_duration_ticks as f32).ceil() as u64).min(day_duration_ticks)
+        % day_duration_ticks
 }
