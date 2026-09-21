@@ -137,8 +137,24 @@ pub(super) struct InventoryTooltipView<'w, 's> {
     inventory_slots: Query<'w, 's, (&'static Interaction, &'static InventorySlot)>,
     creative_slots: Query<'w, 's, (&'static Interaction, &'static CreativeInventorySlot)>,
     tooltip: InventoryItemTooltipQuery<'w, 's>,
-    tooltip_text: Single<'w, 's, &'static mut Text, With<InventoryItemTooltipText>>,
-    tooltip_id: Single<'w, 's, &'static mut Text, With<InventoryItemTooltipId>>,
+    tooltip_text: Single<
+        'w,
+        's,
+        &'static mut Text,
+        (
+            With<InventoryItemTooltipText>,
+            Without<InventoryItemTooltipId>,
+        ),
+    >,
+    tooltip_id: Single<
+        'w,
+        's,
+        &'static mut Text,
+        (
+            With<InventoryItemTooltipId>,
+            Without<InventoryItemTooltipText>,
+        ),
+    >,
 }
 
 pub(super) type InventoryTrashButtonQuery<'w, 's> = Query<
