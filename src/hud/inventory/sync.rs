@@ -131,6 +131,16 @@ pub(super) type InventoryItemTooltipQuery<'w, 's> = Single<
     ),
 >;
 
+#[derive(SystemParam)]
+pub(super) struct InventoryTooltipView<'w, 's> {
+    window: Single<'w, 's, &'static Window>,
+    inventory_slots: Query<'w, 's, (&'static Interaction, &'static InventorySlot)>,
+    creative_slots: Query<'w, 's, (&'static Interaction, &'static CreativeInventorySlot)>,
+    tooltip: InventoryItemTooltipQuery<'w, 's>,
+    tooltip_text: Single<'w, 's, &'static mut Text, With<InventoryItemTooltipText>>,
+    tooltip_id: Single<'w, 's, &'static mut Text, With<InventoryItemTooltipId>>,
+}
+
 pub(super) type InventoryTrashButtonQuery<'w, 's> = Query<
     'w,
     's,
@@ -325,13 +335,16 @@ const ITEM_TOOLTIP_EDGE_HEIGHT: f32 = 88.0;
 pub(super) fn sync_inventory_item_tooltip(
     content: InventoryItemContent,
     settings: Res<HudSettings>,
-    window: Single<&Window>,
-    inventory_slots: Query<(&Interaction, &InventorySlot)>,
-    creative_slots: Query<(&Interaction, &CreativeInventorySlot)>,
-    tooltip: InventoryItemTooltipQuery,
-    tooltip_text: Single<&mut Text, With<InventoryItemTooltipText>>,
-    tooltip_id: Single<&mut Text, With<InventoryItemTooltipId>>,
+    view: InventoryTooltipView,
 ) {
+    let InventoryTooltipView {
+        window,
+        inventory_slots,
+        creative_slots,
+        tooltip,
+        tooltip_text,
+        tooltip_id,
+    } = view;
     let (mut node, mut visibility) = tooltip.into_inner();
 
     let hovered_item = inventory_slots
