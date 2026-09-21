@@ -68,15 +68,24 @@ where
             return;
         };
 
-        let world_voxel =
-            chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
-        let exposed = BlockFace::ALL.map(|face| {
+        let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
+        let world_voxel = chunk_origin + local_voxel;
+        let neighbor_samples = BlockFace::ALL.map(|face| {
+            fluid_neighbor_content(
+                world,
+                chunk,
+                local_voxel,
+                world_voxel,
+                face,
+            )
+        });
+        let exposed = std::array::from_fn(|index| {
+            let face = BlockFace::ALL[index];
             if face == BlockFace::Bottom && world_voxel.y <= 0 {
                 return false;
             }
-            face_is_exposed(
-                world,
-                world_voxel + face.offset(),
+            fluid_face_is_exposed(
+                neighbor_samples[index],
                 cell.fluid_id,
                 face,
             )
@@ -86,50 +95,67 @@ where
         }
 
         let tint = tint_at(world_voxel, cell.fluid_id);
-        let heights = fluid_face_heights(world, world_voxel, cell.fluid_id);
+        let heights = fluid_face_heights(
+            world,
+            chunk,
+            local_voxel,
+            world_voxel,
+            cell.fluid_id,
+        );
         let source_block_srgb = surface_block_srgb(
             chunk.light_at(x as i32, y as i32, z as i32),
             false,
         );
+        let source_mask = chunk
+            .cell_at(x as i32, y as i32, z as i32)
+            .filter(|block| MicroblockMask::is_modified(*block))
+            .map(MicroblockMask::from_cell);
         let fluid = buffers.entry(cell.fluid_id).or_default();
 
-        for (face, is_exposed) in BlockFace::ALL.into_iter().zip(exposed) {
+        for (index, (face, is_exposed)) in
+            BlockFace::ALL.into_iter().zip(exposed).enumerate()
+        {
             if !is_exposed {
                 continue;
             }
 
-            if let Some(block_cell) = world.cell_at(world_voxel + face.offset()) {
-                if MicroblockMask::is_modified(block_cell) {
-                    emit_fluid_openings(
-                        fluid,
-                        world,
-                        world_voxel,
-                        face,
-                        block_cell,
-                        tint,
-                        source_block_srgb,
-                    );
-                    continue;
-                }
-            }
-
             let lighting =
                 face_lighting(world, world_voxel, face, source_block_srgb);
-            push_lit_quad(
-                fluid,
-                fluid_face_vertices(
+            let neighbor_mask = neighbor_samples[index]
+                .and_then(|(block, _)| block)
+                .filter(|block| MicroblockMask::is_modified(*block))
+                .map(MicroblockMask::from_cell);
+
+            if source_mask.is_some() || neighbor_mask.is_some() {
+                emit_fluid_openings(
+                    fluid,
                     face,
                     x as f32,
                     y as f32,
                     z as f32,
                     heights,
-                ),
-                face.normal(),
-                VOXEL_FACE_UVS,
-                tint,
-                lighting,
-                0.0,
-            );
+                    source_mask,
+                    neighbor_mask,
+                    tint,
+                    lighting,
+                );
+            } else {
+                push_lit_quad(
+                    fluid,
+                    fluid_face_vertices(
+                        face,
+                        x as f32,
+                        y as f32,
+                        z as f32,
+                        heights,
+                    ),
+                    face.normal(),
+                    VOXEL_FACE_UVS,
+                    tint,
+                    lighting,
+                    0.0,
+                );
+            }
         }
     });
 
@@ -354,7 +380,9 @@ fn fluid_face_vertices(
 
 fn fluid_face_heights<W: VoxelRead + ?Sized>(
     world: &W,
-    position: IVec3,
+    chunk: &VoxelChunk,
+    local_position: IVec3,
+    world_position: IVec3,
     fluid_id: FluidId,
 ) -> FluidFaceHeights {
     let mut current = [[None; 3]; 3];
@@ -364,9 +392,19 @@ fn fluid_face_heights<W: VoxelRead + ?Sized>(
         for x in -1..=1 {
             let x_index = (x + 1) as usize;
             let z_index = (z + 1) as usize;
-            let sample_position = position + IVec3::new(x, 0, z);
-            current[z_index][x_index] = world.fluid_at(sample_position);
-            above[z_index][x_index] = world.fluid_at(sample_position + IVec3::Y);
+            let offset = IVec3::new(x, 0, z);
+            current[z_index][x_index] = fluid_at_local_or_world(
+                world,
+                chunk,
+                local_position + offset,
+                world_position + offset,
+            );
+            above[z_index][x_index] = fluid_at_local_or_world(
+                world,
+                chunk,
+                local_position + offset + IVec3::Y,
+                world_position + offset + IVec3::Y,
+            );
         }
     }
 
@@ -375,6 +413,29 @@ fn fluid_face_heights<W: VoxelRead + ?Sized>(
         h10: fluid_corner_height(&current, &above, fluid_id, 2, 0),
         h11: fluid_corner_height(&current, &above, fluid_id, 2, 2),
         h01: fluid_corner_height(&current, &above, fluid_id, 0, 2),
+    }
+}
+
+fn fluid_at_local_or_world<W: VoxelRead + ?Sized>(
+    world: &W,
+    chunk: &VoxelChunk,
+    local_position: IVec3,
+    world_position: IVec3,
+) -> Option<FluidCell> {
+    if local_position.x >= 0
+        && local_position.y >= 0
+        && local_position.z >= 0
+        && local_position.x < CHUNK_SIZE as i32
+        && local_position.y < CHUNK_SIZE as i32
+        && local_position.z < CHUNK_SIZE as i32
+    {
+        chunk.fluid_at(
+            local_position.x,
+            local_position.y,
+            local_position.z,
+        )
+    } else {
+        world.fluid_at(world_position)
     }
 }
 
@@ -405,18 +466,45 @@ fn fluid_corner_height(
     if count > 0.0 { total / count } else { 0.0 }
 }
 
-fn face_is_exposed<W: VoxelRead + ?Sized>(
+type FluidNeighborContent = Option<(Option<VoxelCell>, Option<FluidCell>)>;
+
+fn fluid_neighbor_content<W: VoxelRead + ?Sized>(
     world: &W,
-    position: IVec3,
+    chunk: &VoxelChunk,
+    local_voxel: IVec3,
+    world_voxel: IVec3,
+    face: BlockFace,
+) -> FluidNeighborContent {
+    let local = local_voxel + face.offset();
+    if local.x >= 0
+        && local.y >= 0
+        && local.z >= 0
+        && local.x < CHUNK_SIZE as i32
+        && local.y < CHUNK_SIZE as i32
+        && local.z < CHUNK_SIZE as i32
+    {
+        Some((
+            chunk.cell_at(local.x, local.y, local.z),
+            chunk.fluid_at(local.x, local.y, local.z),
+        ))
+    } else {
+        world
+            .sample_at(world_voxel + face.offset())
+            .map(|(block, fluid, _)| (block, fluid))
+    }
+}
+
+fn fluid_face_is_exposed(
+    sample: FluidNeighborContent,
     fluid_id: FluidId,
     face: BlockFace,
 ) -> bool {
-    let Some((cell, fluid, _)) = world.sample_at(position) else {
+    let Some((block, fluid)) = sample else {
         return face == BlockFace::Top;
     };
 
-    if let Some(block) = cell {
-        if !crate::voxel::microblock::MicroblockMask::is_modified(block) {
+    if let Some(block) = block {
+        if !MicroblockMask::is_modified(block) {
             return false;
         }
         if !partial_block_face_has_opening(block, face) {
