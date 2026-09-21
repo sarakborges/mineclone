@@ -58,6 +58,10 @@ impl ChunkRemeshQueue {
 
     fn enqueue_lighting_priority(&mut self, coord: IVec3) {
         if coord.y >= 0 {
+            // Lighting rebuilds the same terrain mesh as geometry. Once a newer
+            // lighting result is required, an undispatched geometry rebuild is
+            // strictly redundant.
+            self.queue.remove(coord);
             self.lighting.enqueue_front(coord);
         }
     }
@@ -107,6 +111,10 @@ impl ChunkRemeshQueue {
 
     pub(super) fn has_background_work(&self) -> bool {
         self.queue.len() > 0 || self.fluid.len() > 0 || self.lighting.len() > 0
+    }
+
+    pub(crate) fn diagnostic_counts(&self) -> (usize, usize, usize) {
+        (self.queue.len(), self.lighting.len(), self.fluid.len())
     }
 
     fn pop_renderable_geometry(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
