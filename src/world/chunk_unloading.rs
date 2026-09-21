@@ -45,7 +45,7 @@ impl ChunkUnloadState {
 
         let mut pending = world
             .loaded_chunk_coords()
-            .filter(|coord| !streaming.keeps_loaded(*coord))
+            .filter(|coord| !runtime.streaming.keeps_loaded(*coord))
             .collect::<Vec<_>>();
         pending.sort_by_key(|coord| -(*coord - center).length_squared());
         for coord in pending {
@@ -64,6 +64,14 @@ pub(super) struct ChunkUnloadRuntime<'w> {
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
     remesh_tasks: ResMut<'w, ChunkRemeshTasks>,
     frame_budget: Res<'w, WorldFrameWorkBudget>,
+}
+
+#[derive(SystemParam)]
+pub(super) struct ChunkMeshResidencyRuntime<'w> {
+    streaming: ResMut<'w, ChunkStreamingState>,
+    world: Res<'w, VoxelWorld>,
+    remesh_queue: ResMut<'w, ChunkRemeshQueue>,
+    remesh_tasks: ResMut<'w, ChunkRemeshTasks>,
 }
 
 pub(super) fn retire_distant_chunk_meshes(
@@ -92,9 +100,9 @@ pub(super) fn retire_distant_chunk_meshes(
         remesh_tasks.remove_lighting_revision(coord);
         enqueue_retired_render_halo_remeshes(
             coord,
-            &world,
+            &runtime.world,
             &renderer.pool,
-            &mut remesh_queue,
+            &mut runtime.remesh_queue,
         );
     }
 }
@@ -112,11 +120,8 @@ pub(super) struct MeshResidencyCandidate {
 pub(super) fn enforce_chunk_mesh_residency_budget(
     player: Single<&Transform, With<GameplayCamera>>,
     render_distance: Res<RenderDistanceSettings>,
-    mut streaming: ResMut<ChunkStreamingState>,
     mut renderer: ChunkRenderer,
-    world: Res<VoxelWorld>,
-    mut remesh_queue: ResMut<ChunkRemeshQueue>,
-    mut remesh_tasks: ResMut<ChunkRemeshTasks>,
+    mut runtime: ChunkMeshResidencyRuntime,
     mut candidates: Local<Vec<MeshResidencyCandidate>>,
     mut recovery: Local<Vec<IVec3>>,
 ) {
@@ -127,9 +132,9 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
     if before <= CHUNK_MESH_RESIDENCY_RECOVERY_BYTES {
         recovery.clear();
         recovery.extend(
-            streaming
+            runtime.streaming
                 .mesh_pressure_evicted_coords()
-                .filter(|coord| streaming.keeps_loaded(*coord) && !renderer.pool.contains(*coord)),
+                .filter(|coord| runtime.streaming.keeps_loaded(*coord) && !renderer.pool.contains(*coord)),
         );
         recovery.sort_unstable_by_key(|coord| {
             let delta = *coord - center;
@@ -141,7 +146,7 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
             )
         });
         for coord in recovery.iter().copied().take(2) {
-            streaming.recover_mesh_after_pressure(coord);
+            runtime.streaming.recover_mesh_after_pressure(coord);
         }
     }
 
@@ -218,9 +223,9 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
             &mut renderer.pool,
             candidate.coord,
         );
-        streaming.suppress_mesh_for_pressure(candidate.coord);
-        remesh_queue.remove(candidate.coord);
-        remesh_tasks.remove_lighting_revision(candidate.coord);
+        runtime.streaming.suppress_mesh_for_pressure(candidate.coord);
+        runtime.remesh_queue.remove(candidate.coord);
+        runtime.remesh_tasks.remove_lighting_revision(candidate.coord);
         enqueue_retired_render_halo_remeshes(
             candidate.coord,
             &world,
