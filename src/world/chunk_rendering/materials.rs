@@ -349,10 +349,10 @@ impl TerrainMaterials {
                 };
                 let alpha = if alpha_blend {
                     TerrainAlphaKey::Blend
+                } else if let Some(cutoff) = alpha_cutoff {
+                    TerrainAlphaKey::Mask(cutoff)
                 } else {
-                    TerrainAlphaKey::Mask(
-                        alpha_cutoff.expect("shared solid terrain uses a mask cutoff"),
-                    )
+                    TerrainAlphaKey::Opaque
                 };
                 if !array_materials.contains_key(&alpha) {
                     array_materials.insert(alpha, builder.array_material(alpha));
