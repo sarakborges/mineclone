@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 9 — 2026-09-21:** fechado trust boundary de inventory categories. `validate_references` agora rejeita category ID vazio e valida `blockIcon.tint` com `Hsi::is_valid()` no startup, em vez de permitir HSI inválido chegar até conversão/render. Commit: `67a2b2a96bf10c2e254297b42ea10ec7e447d54f`. **Pendências:** persistence foi revisado neste passe sem alteração segura adicional; testes de filesystem/runtime continuam pendentes. **Próximo passo:** revisar todas as structs Deserialize por floats/ranges/paths sem validação e referências cruzadas não cobertas; depois verificar CI/status e corrigir qualquer regressão estática detectável.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — checkpoint B — VERSION 0.50.8 — 2026-09-21:** bloco de performance/lifecycle consolidado. Inclui metadata de biomas incremental (`1bc7b262`), índice de grupos de structures incremental (`d61259af`), interner de tool IDs sem String duplicada (`e59b65e6`), dormant fluid ticks deduplicados por HashSet (`c2144134`) e Loading autossuficiente no reset de remesh/fluid queues (`84e6d0cf`). Bump: `f36c6b606bfcd63d6a885a80db605908f3924953`. **Pendências:** CI não confirmado pelo conector; runtime QA não executado. **Próximo passo:** bloco C — persistence/save e estruturas de estado; depois UI/design-system e validações de conteúdo restantes.
 
 
