@@ -5,14 +5,16 @@
 //! A leading `t` is retained for compatibility with legacy session-created
 //! parent blocks. New Chisel placement never creates parents in empty space.
 
-use std::sync::OnceLock;
+use std::{
+    collections::HashMap,
+    sync::{Mutex, OnceLock},
+};
 
 use bevy::prelude::*;
 
 use super::{
     cell::VoxelCell,
     read::VoxelRead,
-    secondary_properties::{SecondaryProperties, SecondaryPropertyToken},
 };
 
 pub(crate) const MICROBLOCK_EDGE: i32 = 8;
@@ -50,7 +52,7 @@ impl ChiselResolution {
 
 /// Eight Z layers, each holding an 8x8 XY occupancy bitmap. Ordinary blocks
 /// have no mask; sculpted blocks need only 64 bytes before string encoding.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct MicroblockMask {
     layers: [u64; LAYERS],
 }
@@ -62,14 +64,11 @@ impl MicroblockMask {
     };
 
     pub(crate) fn is_modified(cell: VoxelCell) -> bool {
-        cell.secondary_properties()
-            .contains_token(chisel_mask_token())
+        cell.microblock_layers().is_some()
     }
 
     pub(crate) fn is_transient_parent(cell: VoxelCell) -> bool {
-        cell.secondary_properties()
-            .get_token(chisel_mask_token())
-            .is_some_and(|encoded| encoded.starts_with(TRANSIENT_PREFIX))
+        cell.microblock_layers().is_some() && cell.microblock_transient()
     }
 
     /// A new piece must restore a previously carved portion of this very
@@ -83,18 +82,23 @@ impl MicroblockMask {
     /// Reject corrupted disk masks before interning properties or exposing a
     /// partially loaded world. Existing saves without a mask remain valid.
     pub(crate) fn valid_saved(encoded: &str) -> bool {
-        let encoded = encoded.strip_prefix(TRANSIENT_PREFIX).unwrap_or(encoded);
-        encoded.len() == ENCODED_LENGTH
-            && encoded.bytes().all(|byte| byte.is_ascii_hexdigit())
-            && Self::decode(encoded).is_some()
+        Self::decode_saved(encoded).is_some()
     }
 
     pub(crate) fn from_cell(cell: VoxelCell) -> Self {
-        let Some(encoded) = cell.secondary_properties().get_token(chisel_mask_token()) else {
-            return Self::FULL;
-        };
-        let encoded = encoded.strip_prefix(TRANSIENT_PREFIX).unwrap_or(encoded);
-        Self::decode(encoded).unwrap_or(Self::FULL)
+        cell.microblock_layers()
+            .map(|layers| Self { layers: *layers })
+            .unwrap_or(Self::FULL)
+    }
+
+    pub(crate) fn encoded_for_save(cell: VoxelCell) -> Option<String> {
+        let mask = Self::from_cell(cell);
+        Self::is_modified(cell).then(|| mask.encode(cell.microblock_transient()))
+    }
+
+    pub(crate) fn apply_saved(cell: VoxelCell, encoded: &str) -> Option<VoxelCell> {
+        let (mask, transient) = Self::decode_saved(encoded)?;
+        Some(cell.with_microblock_mask(Some(intern_mask(mask)), transient))
     }
 
     pub(crate) fn contains(self, [x, y, z]: [usize; 3]) -> bool {
@@ -157,8 +161,16 @@ impl MicroblockMask {
 
     pub(crate) fn apply_to_cell(self, cell: VoxelCell, transient: bool) -> VoxelCell {
         if self == Self::FULL && !transient {
-            return cell.without_secondary_property(CHISEL_MASK_PROPERTY);
+            return cell.with_microblock_mask(None, false);
         }
+        cell.with_microblock_mask(Some(intern_mask(self)), transient)
+    }
+
+    pub(crate) fn has_room(cell: VoxelCell) -> bool {
+        Self::is_modified(cell) || cell.secondary_properties().len() < 8
+    }
+
+    fn encode(self, transient: bool) -> String {
         let mut encoded = String::with_capacity(ENCODED_LENGTH + usize::from(transient));
         if transient {
             encoded.push(TRANSIENT_PREFIX);
@@ -167,22 +179,20 @@ impl MicroblockMask {
         for layer in self.layers {
             write!(&mut encoded, "{layer:016x}").expect("writing to a String cannot fail");
         }
-        cell.with_secondary_property(CHISEL_MASK_PROPERTY, &encoded)
+        encoded
     }
 
-    pub(crate) fn has_room(cell: VoxelCell) -> bool {
-        Self::is_modified(cell) || cell.secondary_properties().len() < 8
-    }
-
-    fn decode(encoded: &str) -> Option<Self> {
-        if encoded.len() != ENCODED_LENGTH {
+    fn decode_saved(encoded: &str) -> Option<(Self, bool)> {
+        let transient = encoded.starts_with(TRANSIENT_PREFIX);
+        let encoded = encoded.strip_prefix(TRANSIENT_PREFIX).unwrap_or(encoded);
+        if encoded.len() != ENCODED_LENGTH || !encoded.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return None;
         }
         let mut layers = [0; LAYERS];
         for (index, layer) in layers.iter_mut().enumerate() {
             *layer = u64::from_str_radix(encoded.get(index * 16..(index + 1) * 16)?, 16).ok()?;
         }
-        Some(Self { layers })
+        Some((Self { layers }, transient))
     }
 }
 
@@ -210,9 +220,24 @@ pub(crate) fn occupied_cell<W: VoxelRead + ?Sized>(world: &W, fine: IVec3) -> Op
         .then_some(cell)
 }
 
-fn chisel_mask_token() -> SecondaryPropertyToken {
-    static TOKEN: OnceLock<SecondaryPropertyToken> = OnceLock::new();
-    *TOKEN.get_or_init(|| SecondaryProperties::token(CHISEL_MASK_PROPERTY))
+#[derive(Default)]
+struct MicroblockMaskInterner {
+    masks: HashMap<MicroblockMask, &'static [u64; LAYERS]>,
+}
+
+fn intern_mask(mask: MicroblockMask) -> &'static [u64; LAYERS] {
+    static INTERNER: OnceLock<Mutex<MicroblockMaskInterner>> = OnceLock::new();
+    let mut interner = INTERNER
+        .get_or_init(|| Mutex::new(MicroblockMaskInterner::default()))
+        .lock()
+        .expect("microblock mask interner lock was poisoned");
+    if let Some(&layers) = interner.masks.get(&mask) {
+        return layers;
+    }
+
+    let layers: &'static [u64; LAYERS] = Box::leak(Box::new(mask.layers));
+    interner.masks.insert(mask, layers);
+    layers
 }
 
 #[cfg(test)]
