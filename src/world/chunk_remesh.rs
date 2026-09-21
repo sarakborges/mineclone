@@ -14,7 +14,6 @@ use super::{
     },
     chunk_rendering::{
         ChunkRenderPool, apply_built_chunk_fluid_meshes, apply_built_chunk_geometry_meshes,
-        refresh_chunk_geometry_mesh,
     },
     chunk_system_params::{ChunkContent, ChunkRenderer},
     work_budget::FrameWorkBudget,
@@ -24,30 +23,6 @@ const REMESH_TASK_DISPATCH_BUDGET: Duration = Duration::from_millis(1);
 const REMESH_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
 const MAX_REMESH_TASKS_DISPATCHED_PER_FRAME: usize = 4;
 const MAX_REMESH_RESULTS_COLLECTED_PER_FRAME: usize = 4;
-
-pub(super) fn process_immediate_geometry_remesh(
-    content: ChunkContent,
-    mut renderer: ChunkRenderer,
-    world: Res<VoxelWorld>,
-    mut queue: ResMut<ChunkRemeshQueue>,
-) {
-    let Some(coord) = queue.pop_renderable_immediate_geometry(&renderer.pool) else {
-        return;
-    };
-    let render_context = content.render_context(
-        &world,
-        &renderer.terrain_materials,
-        &renderer.fluid_materials,
-    );
-
-    refresh_chunk_geometry_mesh(
-        &mut renderer.commands,
-        &mut renderer.meshes,
-        &mut renderer.pool,
-        coord,
-        &render_context,
-    );
-}
 
 pub(super) fn process_chunk_remesh_queue(
     content: ChunkContent,
