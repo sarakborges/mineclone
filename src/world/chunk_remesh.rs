@@ -95,7 +95,7 @@ fn collect_completed_remesh_tasks(
             continue;
         }
 
-        let lighting_is_current = output.dependencies.lighting_is_current();
+        let lighting_is_current = output.dependencies.lighting_is_current(tasks);
         if output.kind != ChunkRemeshTaskKind::Fluid && !lighting_is_current {
             queue.enqueue_task_priority(coord, output.kind);
             continue;
