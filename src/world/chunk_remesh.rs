@@ -170,7 +170,7 @@ fn dispatch_remesh_tasks(
         .with_global_deadline(deadline)
         .with_maximum_items(MAX_REMESH_TASKS_DISPATCHED_PER_FRAME);
     deferred.clear();
-    let mut snapshots = HashMap::<IVec3, ChunkMeshSnapshot>::new();
+    let mut snapshots = HashMap::<(IVec3, ChunkMeshletMask), ChunkMeshSnapshot>::new();
 
     loop {
         if budget.exhausted() {
@@ -193,17 +193,21 @@ fn dispatch_remesh_tasks(
             deferred.push((coord, kind, meshlets));
             continue;
         }
-        let snapshot = if let Some(existing) = snapshots.get(&coord) {
+        let snapshot_key = (coord, meshlets);
+        let snapshot = if let Some(existing) = snapshots.get(&snapshot_key) {
             existing.clone()
         } else {
-            let Some(captured) = ChunkMeshSnapshot::capture_with_neighbor_filter(
-                world,
-                coord,
-                |neighbor| render_pool.contains(neighbor),
-            ) else {
+            let Some(captured) =
+                ChunkMeshSnapshot::capture_with_neighbor_filter_and_meshlets(
+                    world,
+                    coord,
+                    |neighbor| render_pool.contains(neighbor),
+                    meshlets,
+                )
+            else {
                 continue;
             };
-            snapshots.insert(coord, captured.clone());
+            snapshots.insert(snapshot_key, captured.clone());
             captured
         };
         if !tasks.schedule(coord, kind, meshlets, snapshot, async_work) {
