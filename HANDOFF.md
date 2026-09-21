@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 11 — 2026-09-21:** validação de floats/cores ampliada antes de chegar a render/simulação. Biome visuals agora validam grass/leaf/foliage/water/underwater e sky/fog HSI, além de terrain roughness/metallic em [0,1] (`51bead1575b8ffcb85e541f730542b20ab04002e`). Day/night cycles agora rejeitam ID vazio, `initialTime` fora de [0,1) ou não finito e `worldTimeStartHour` fora de [0,24) ou não finito (`131a3acd41a6fb6cdce4ee7bf1301e6b5a093d56`). **Pendências:** confirmar se conteúdo atual respeita os ranges (esperado pelo uso runtime); CI/runtime QA pendentes. **Próximo passo:** verificar referências dimension -> sky/dayNightCycle e demais cross-registry links globais; depois consultar status de CI dos commits recentes.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 10 — 2026-09-21:** reforçados trust boundaries restantes encontrados no conteúdo. Tools agora normalizam whitespace e rejeitam `id`, `category` e `icon` vazios antes de interning/registro (`5fcf17f1cd8b9555532531696079ca19513eeed2`). Sky agora rejeita ID vazio, size/orbitRadius não positivos ou não finitos, ângulos não finitos e centraliza validação de HSI por celestial body (`fa4d874302fba63f1820d8a0ff9acea8d5e2cfef`). **Pendências:** paths de tool icon ainda não têm política explícita equivalente à de creature assets; não impor extensão/root sem contrato documentado. **Próximo passo:** revisar day/night, dimensions e biome visuals por NaN/ranges não validados; em seguida checar compilação/CI disponível e corrigir regressões.
 
 
