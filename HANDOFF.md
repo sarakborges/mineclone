@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 14 — 2026-09-21:** removida suppression de dead code em `VoxelWorld::add_layer_at`. A API não possui caller no projeto e estava mantida apenas com `#[allow(dead_code)]`, contrariando a prática registrada de remover código morto em vez de silenciar warning. Função e imports exclusivos removidos (`02ae9f487185eb6bb756df4c5848c501ea8d2595`, `de81f369a50428611c15702e879f433fa252783a`). A mutação interna `VoxelChunk::add_layer` permanece usada por worldgen/structure e testes. **Pendências:** quando placement de layers por gameplay for implementado, a API pública deve nascer a partir do fluxo real e seus side effects (persistence/remesh/lighting), não antecipadamente. **Próximo passo:** procurar outras suppressions `allow/expect` e distinguir justificativas arquiteturais válidas de dead code; depois consolidar checkpoint C.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 13 — 2026-09-21:** `EntityHealth::damage` agora rejeita amount não finito no boundary compartilhado de health (`2b25bfd5cdc14ada1580aa67e4da19cb551c2dcb`). Ataques atuais já validam damage finito, mas o componente é a autoridade final e não deve depender de todos os callers futuros preservarem a invariante. **Pendências:** `DimensionEntityCounts::rebuild` ainda clona IDs de todas as creatures a cada natural-spawn tick; migrar para contagem incremental exige integrar spawn/restore/death/despawn e ficou registrado como refactor arquitetural, não aplicado parcialmente. **Próximo passo:** revisar combat/collision e world mutation APIs por invariantes equivalentes; depois consolidar checkpoint C/version.
 
 
