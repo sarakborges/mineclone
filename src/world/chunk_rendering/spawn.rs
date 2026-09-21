@@ -1,5 +1,8 @@
 use bevy::{
-    camera::{primitives::Aabb, visibility::NoAutoAabb},
+    camera::{
+        primitives::Aabb,
+        visibility::{NoAutoAabb, NoCpuCulling},
+    },
     light::NotShadowCaster,
     platform::collections::HashMap,
     prelude::*,
@@ -450,6 +453,7 @@ fn spawn_geometry_mesh(
             Visibility::Hidden,
             chunk_render_aabb(),
             NoAutoAabb,
+            NoCpuCulling,
             DespawnOnExit(GameState::Gameplay),
         ));
 
@@ -482,6 +486,7 @@ fn spawn_fluid_mesh(
             Visibility::Hidden,
             chunk_render_aabb(),
             NoAutoAabb,
+            NoCpuCulling,
             NotShadowCaster,
             DespawnOnExit(GameState::Gameplay),
         ))
