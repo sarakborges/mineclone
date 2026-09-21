@@ -68,6 +68,12 @@ impl ChunkRenderPool {
         self.active.values().map(|slot| slot.mesh_bytes).sum()
     }
 
+    pub(crate) fn mesh_bytes_for(&self, coord: IVec3) -> usize {
+        self.active
+            .get(&coord)
+            .map_or(0, |allocation| allocation.mesh_bytes)
+    }
+
     fn take(&mut self, coord: IVec3) -> Option<(Vec<Entity>, Vec<Handle<Mesh>>)> {
         let slot = self.active.remove(&coord)?;
         self.bump_membership_revision();
