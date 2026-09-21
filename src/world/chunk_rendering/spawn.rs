@@ -92,6 +92,7 @@ pub(super) fn build_chunk_terrain_render_meshlets<W: VoxelRead + ?Sized>(
         coord,
         chunk,
         context.blocks,
+        context.texture_table,
         meshlets,
         |voxel, cell, block| {
             let base_tint = if block.tint == BlockTint::None {
