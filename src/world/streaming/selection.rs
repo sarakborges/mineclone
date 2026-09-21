@@ -7,7 +7,7 @@ use crate::{
     voxel::chunk::CHUNK_SIZE,
     world::{
         generation::{
-            maximum_structure_top_chunk_for_horizontal_chunk,
+            ChunkGenerationContext, maximum_structure_top_chunk_for_horizontal_chunk,
         },
         generation_region::generation_region_coord,
         render_distance::chunk_is_in_volume,
@@ -402,8 +402,18 @@ fn rebuild_desired_chunk_coords(
                 context.biome_field,
                 context.feature_fields,
             );
+            let generation_context = ChunkGenerationContext {
+                blocks: context.blocks,
+                fluids: context.fluids,
+                dimension: context.dimension,
+                biomes: context.biomes,
+                structures: context.structures,
+                structure_sets: context.structure_sets,
+                biome_field: context.biome_field,
+                feature_fields: context.feature_fields,
+            };
             let structure_top_chunk =
-                maximum_structure_top_chunk_for_horizontal_chunk(horizontal, context);
+                maximum_structure_top_chunk_for_horizontal_chunk(horizontal, &generation_context);
             structure_top_chunks.insert(horizontal, structure_top_chunk);
             let mut surrounding_minimum = own_minimum;
 
