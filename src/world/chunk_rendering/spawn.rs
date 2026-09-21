@@ -8,7 +8,7 @@ use crate::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         fluid_mesh::{ChunkFluidMesh, build_fluid_meshlets},
         layer_mesh::{ChunkLayerMesh, build_layer_meshlets},
-        mesh::{ChunkFaceMesh, build_chunk_meshlets},
+        mesh::{ChunkFaceMesh, ChunkTerrainBatch, build_chunk_meshlets},
         meshlet::ChunkMeshletMask,
         read::VoxelRead,
     },
@@ -28,10 +28,25 @@ pub(crate) enum BuiltChunkMesh {
 impl BuiltChunkMesh {
     pub(super) fn key(&self) -> ChunkMeshKey {
         match self {
-            Self::Terrain(mesh) => ChunkMeshKey::Terrain {
-                block_id: mesh.block_id,
-                face: mesh.face,
-                casts_shadow: mesh.casts_shadow,
+            Self::Terrain(mesh) => match mesh.batch {
+                ChunkTerrainBatch::Array {
+                    alpha_cutoff,
+                    alpha_blend,
+                    casts_shadow,
+                } => ChunkMeshKey::TerrainArray {
+                    alpha_cutoff,
+                    alpha_blend,
+                    casts_shadow,
+                },
+                ChunkTerrainBatch::Legacy {
+                    block_id,
+                    face,
+                    casts_shadow,
+                } => ChunkMeshKey::TerrainLegacy {
+                    block_id,
+                    face,
+                    casts_shadow,
+                },
             },
             Self::Layer(mesh) => ChunkMeshKey::Layer {
                 layer_id: mesh.layer_id,
@@ -380,7 +395,19 @@ fn spawn_geometry_mesh(
 ) -> (Vec<Entity>, Handle<Mesh>) {
     let mesh_handle = meshes.add(mesh);
     let (layer_materials, casts_shadow) = match key {
-        ChunkMeshKey::Terrain {
+        ChunkMeshKey::TerrainArray {
+            alpha_cutoff,
+            alpha_blend,
+            casts_shadow,
+        } => (
+            std::slice::from_ref(
+                context
+                    .terrain_materials
+                    .for_array(alpha_blend, alpha_cutoff),
+            ),
+            casts_shadow,
+        ),
+        ChunkMeshKey::TerrainLegacy {
             block_id,
             face,
             casts_shadow,
