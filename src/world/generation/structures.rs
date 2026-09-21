@@ -112,11 +112,25 @@ pub(super) fn rasterize_structures(
     }
 
     let mut claimed = [0_u64; STRUCTURE_OCCUPANCY_WORDS];
+    let chunk_horizontal_minimum = IVec2::new(chunk_origin.x, chunk_origin.z);
+    let chunk_horizontal_maximum =
+        chunk_horizontal_minimum + IVec2::splat(CHUNK_SIZE as i32 - 1);
+
     for candidate in candidates.iter() {
         let structure = context
             .structures
             .get(&candidate.structure_id)
             .unwrap_or_else(|| panic!("missing cached structure: {}", candidate.structure_id));
+        let (minimum_offset, maximum_offset) =
+            structure.horizontal_bounds_for_rotation(candidate.rotation);
+        if !rectangles_overlap(
+            candidate.anchor + minimum_offset,
+            candidate.anchor + maximum_offset,
+            chunk_horizontal_minimum,
+            chunk_horizontal_maximum,
+        ) {
+            continue;
+        }
         let minimum_y = candidate.origin_y + structure.min_y_offset();
         let maximum_y = candidate.origin_y + structure.max_y_offset();
         if maximum_y < chunk_min_y || minimum_y > chunk_max_y {
@@ -400,12 +414,19 @@ pub(super) fn maximum_potential_structure_top_y_for_chunk(
         0,
         horizontal_chunk.y * chunk_size,
     );
+    let chunk_minimum = IVec2::new(chunk_origin.x, chunk_origin.z);
+    let chunk_maximum = chunk_minimum + IVec2::splat(chunk_size - 1);
 
     resolved_structure_candidates(chunk_origin, context)
         .iter()
         .filter_map(|candidate| {
             let structure = context.structures.get(&candidate.structure_id)?;
-            Some(candidate.origin_y + structure.max_y_offset())
+            let (minimum_offset, maximum_offset) =
+                structure.horizontal_bounds_for_rotation(candidate.rotation);
+            let minimum = candidate.anchor + minimum_offset;
+            let maximum = candidate.anchor + maximum_offset;
+            rectangles_overlap(minimum, maximum, chunk_minimum, chunk_maximum)
+                .then_some(candidate.origin_y + structure.max_y_offset())
         })
         .max()
         .unwrap_or(0)
