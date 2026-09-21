@@ -4,7 +4,6 @@ use bevy::{
         visibility::{NoAutoAabb, NoCpuCulling},
     },
     light::NotShadowCaster,
-    platform::collections::HashMap,
     prelude::*,
 };
 
@@ -230,22 +229,29 @@ pub(super) fn build_chunk_fluid_render_meshlets<W: VoxelRead + ?Sized>(
     context: &ChunkMeshBuildContext<'_, W>,
     meshlets: ChunkMeshletMask,
 ) -> Vec<ChunkFluidMesh> {
-    let mut column_tints = HashMap::<(i32, i32, FluidId), [f32; 3]>::new();
+    let mut column_tints = vec![
+        vec![None; CHUNK_SIZE * CHUNK_SIZE];
+        context.fluids.iter().count()
+    ];
     build_fluid_meshlets(context.world, coord, chunk, meshlets, |voxel, fluid_id| {
-        *column_tints
-            .entry((voxel.x, voxel.z, fluid_id))
-            .or_insert_with(|| {
-                let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-                let fluid = context
-                    .fluids
-                    .get(fluid_id)
-                    .unwrap_or_else(|| panic!("missing fluid definition for id {fluid_id}"));
+        let local_x = voxel.x.rem_euclid(CHUNK_SIZE as i32) as usize;
+        let local_z = voxel.z.rem_euclid(CHUNK_SIZE as i32) as usize;
+        let column_index = local_x + local_z * CHUNK_SIZE;
+        let fluid_index = usize::from(fluid_id);
+        let slot = &mut column_tints[fluid_index][column_index];
 
-                context
-                    .biome_field
-                    .water_color(position, context.biomes, fluid.color)
-                    .to_srgb()
-            })
+        *slot.get_or_insert_with(|| {
+            let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
+            let fluid = context
+                .fluids
+                .get(fluid_id)
+                .unwrap_or_else(|| panic!("missing fluid definition for id {fluid_id}"));
+
+            context
+                .biome_field
+                .water_color(position, context.biomes, fluid.color)
+                .to_srgb()
+        })
     })
 }
 
