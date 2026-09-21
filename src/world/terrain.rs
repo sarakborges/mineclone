@@ -127,15 +127,20 @@ fn biome_surface_height(
             base_height,
             depth,
             wall_height,
+            top_amplitude,
+            top_scale,
             floor_amplitude,
             floor_scale,
         } => {
             let strength = smoothstep(distribution_strength.clamp(0.0, 1.0));
+            let top_noise = fractal_noise(position * top_scale, seed.rotate_left(13));
             let floor_noise = fractal_noise(position * floor_scale, seed.rotate_left(41));
+            let rim_shape = (1.0 - strength).powf(0.8);
             let floor_shape = strength.powf(1.35);
             sea_level
                 + base_height
                 + wall_height * (1.0 - strength)
+                + top_noise * top_amplitude * rim_shape
                 - depth * strength
                 + floor_noise * floor_amplitude * floor_shape
         }
