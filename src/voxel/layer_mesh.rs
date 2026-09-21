@@ -12,13 +12,15 @@ use super::{
     mesh::geometry::is_face_exposed,
     mesh_buffer::VoxelMeshBuffer,
     mesh_lighting::{face_lighting, push_lit_quad, surface_block_srgb},
-    microblock::MicroblockMask,
+    microblock::{MICROBLOCK_EDGE, MicroblockMask, occupied_cell},
     quad::VOXEL_FACE_UVS,
     read::VoxelRead,
+    texture_rotation::TextureRotation,
 };
 
 const LAYER_STACK_OFFSET: f32 = 1.0 / 8192.0;
 const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
+const MICRO_EDGE: usize = MICROBLOCK_EDGE as usize;
 
 pub(crate) struct ChunkLayerMesh {
     pub(crate) layer_id: &'static str,
@@ -50,15 +52,10 @@ where
             continue;
         };
 
-        // A layer is a full-face surface. Keep it attached authoritatively while
-        // the host is sculpted, but hide it until partial-face projection exists.
-        if MicroblockMask::is_modified(support_cell) {
-            continue;
-        }
-
         let support = block_lookup.get(support_cell.block_id);
         let support_is_transparent = support.alpha_blend || support.alpha_cutoff.is_some();
         let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
+        let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
         let source_block_srgb = surface_block_srgb(
             chunk.light_at(x as i32, y as i32, z as i32),
             support.light_emission > 0,
@@ -73,6 +70,35 @@ where
             }
 
             let face = block_face(attached.face);
+            let stack_index = attached_layers[..order]
+                .iter()
+                .filter(|earlier| earlier.face == attached.face)
+                .count();
+            let outward_offset =
+                definition.offset + stack_index as f32 * LAYER_STACK_OFFSET;
+            let lighting = face_lighting(world, world_voxel, face, source_block_srgb);
+            let tint = tint_at(world_voxel, definition);
+
+            if MicroblockMask::is_modified(support_cell) {
+                emit_sculpted_layer(
+                    world,
+                    &mut block_lookup,
+                    &mut buffers,
+                    support_cell,
+                    support_is_transparent,
+                    world_voxel,
+                    local_voxel,
+                    attached.cell.layer_id,
+                    attached.cell.texture_rotation,
+                    face,
+                    definition,
+                    outward_offset,
+                    tint,
+                    lighting,
+                );
+                continue;
+            }
+
             if !is_face_exposed(
                 world,
                 &mut block_lookup,
@@ -84,24 +110,14 @@ where
                 continue;
             }
 
-            let stack_index = attached_layers[..order]
-                .iter()
-                .filter(|earlier| earlier.face == attached.face)
-                .count();
-            let outward_offset =
-                definition.offset + stack_index as f32 * LAYER_STACK_OFFSET;
-            let origin = Vec3::new(x as f32, y as f32, z as f32);
+            let origin = local_voxel.as_vec3();
             let normal = Vec3::from_array(face.normal());
             let vertices = face.unit_vertices().map(|vertex| {
                 (Vec3::from_array(vertex) + origin + normal * outward_offset).to_array()
             });
-            let lighting = face_lighting(world, world_voxel, face, source_block_srgb);
-            let tint = tint_at(world_voxel, definition);
 
             push_lit_quad(
-                buffers
-                    .entry((attached.cell.layer_id, face, definition.casts_shadow))
-                    .or_default(),
+                layer_buffer(&mut buffers, attached.cell.layer_id, face, definition),
                 vertices,
                 face.normal(),
                 attached
@@ -133,6 +149,217 @@ where
         )
     });
     meshes
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "sculpted layer projection needs the host, face, visual and mesh context"
+)]
+fn emit_sculpted_layer<W: VoxelRead + ?Sized>(
+    world: &W,
+    block_lookup: &mut BlockLookup<'_>,
+    buffers: &mut HashMap<(&'static str, BlockFace, bool), VoxelMeshBuffer>,
+    support_cell: super::cell::VoxelCell,
+    support_is_transparent: bool,
+    world_voxel: IVec3,
+    local_voxel: IVec3,
+    layer_id: &'static str,
+    texture_rotation: TextureRotation,
+    face: BlockFace,
+    definition: &LayerDefinition,
+    outward_offset: f32,
+    tint: [f32; 3],
+    lighting: super::mesh_lighting::FaceLighting,
+) {
+    if face == BlockFace::Bottom && world_voxel.y <= 0 {
+        return;
+    }
+
+    let shape = MicroblockMask::from_cell(support_cell);
+    let depth = match face {
+        BlockFace::Right | BlockFace::Top | BlockFace::Front => MICRO_EDGE - 1,
+        BlockFace::Left | BlockFace::Bottom | BlockFace::Back => 0,
+    };
+    let mut visible = [false; MICRO_EDGE * MICRO_EDGE];
+
+    for v in 0..MICRO_EDGE {
+        for u in 0..MICRO_EDGE {
+            let position = micro_position_for(face, depth, u, v);
+            if !shape.contains(position) {
+                continue;
+            }
+
+            let fine = world_voxel * MICROBLOCK_EDGE
+                + IVec3::new(position[0] as i32, position[1] as i32, position[2] as i32);
+            let occluded = occupied_cell(world, fine + face.offset()).is_some_and(|neighbor| {
+                let neighbor_definition = block_lookup.get(neighbor.block_id);
+                (support_cell.block_id == neighbor.block_id && support_is_transparent)
+                    || (!neighbor_definition.alpha_blend
+                        && neighbor_definition.alpha_cutoff.is_none())
+            });
+            visible[u + v * MICRO_EDGE] = !occluded;
+        }
+    }
+
+    for v in 0..MICRO_EDGE {
+        for u in 0..MICRO_EDGE {
+            if !visible[u + v * MICRO_EDGE] {
+                continue;
+            }
+            let mut width = 1;
+            while u + width < MICRO_EDGE && visible[u + width + v * MICRO_EDGE] {
+                width += 1;
+            }
+            let mut height = 1;
+            while v + height < MICRO_EDGE
+                && (u..u + width)
+                    .all(|column| visible[column + (v + height) * MICRO_EDGE])
+            {
+                height += 1;
+            }
+            for row in v..v + height {
+                for column in u..u + width {
+                    visible[column + row * MICRO_EDGE] = false;
+                }
+            }
+
+            emit_sculpted_layer_rectangle(
+                buffers,
+                local_voxel,
+                layer_id,
+                texture_rotation,
+                face,
+                definition,
+                outward_offset,
+                tint,
+                lighting,
+                depth,
+                u,
+                v,
+                width,
+                height,
+            );
+        }
+    }
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "greedy layer rectangles carry their face, bounds and visual state"
+)]
+fn emit_sculpted_layer_rectangle(
+    buffers: &mut HashMap<(&'static str, BlockFace, bool), VoxelMeshBuffer>,
+    local_voxel: IVec3,
+    layer_id: &'static str,
+    texture_rotation: TextureRotation,
+    face: BlockFace,
+    definition: &LayerDefinition,
+    outward_offset: f32,
+    tint: [f32; 3],
+    lighting: super::mesh_lighting::FaceLighting,
+    depth: usize,
+    u: usize,
+    v: usize,
+    width: usize,
+    height: usize,
+) {
+    let [min_x, min_y, min_z] = micro_position_for(face, depth, u, v);
+    let mut lower = [min_x, min_y, min_z];
+    let mut upper = lower;
+    match face {
+        BlockFace::Right | BlockFace::Left => {
+            upper[0] += 1;
+            upper[1] += height;
+            upper[2] += width;
+        }
+        BlockFace::Top | BlockFace::Bottom => {
+            upper[0] += width;
+            upper[1] += 1;
+            upper[2] += height;
+        }
+        BlockFace::Front | BlockFace::Back => {
+            upper[0] += width;
+            upper[1] += height;
+            upper[2] += 1;
+        }
+    }
+    match face {
+        BlockFace::Right => lower[0] = upper[0],
+        BlockFace::Left => upper[0] = lower[0],
+        BlockFace::Top => lower[1] = upper[1],
+        BlockFace::Bottom => upper[1] = lower[1],
+        BlockFace::Front => lower[2] = upper[2],
+        BlockFace::Back => upper[2] = lower[2],
+    }
+
+    let normal = Vec3::from_array(face.normal());
+    let vertices = face.unit_vertices().map(|corner| {
+        let mut point = [0.0; 3];
+        for axis in 0..3 {
+            let coordinate = if corner[axis] == 0.0 {
+                lower[axis]
+            } else {
+                upper[axis]
+            };
+            point[axis] =
+                local_voxel[axis] as f32 + coordinate as f32 / MICROBLOCK_EDGE as f32;
+        }
+        (Vec3::from_array(point) + normal * outward_offset).to_array()
+    });
+    let uvs = vertices.map(|vertex| {
+        let local = Vec3::from_array(vertex)
+            - local_voxel.as_vec3()
+            - normal * outward_offset;
+        rotate_macro_uv(macro_uv(face, local), texture_rotation)
+    });
+
+    push_lit_quad(
+        layer_buffer(buffers, layer_id, face, definition),
+        vertices,
+        face.normal(),
+        uvs,
+        tint,
+        lighting,
+    );
+}
+
+fn layer_buffer<'a>(
+    buffers: &'a mut HashMap<(&'static str, BlockFace, bool), VoxelMeshBuffer>,
+    layer_id: &'static str,
+    face: BlockFace,
+    definition: &LayerDefinition,
+) -> &'a mut VoxelMeshBuffer {
+    buffers
+        .entry((layer_id, face, definition.casts_shadow))
+        .or_default()
+}
+
+fn micro_position_for(face: BlockFace, depth: usize, u: usize, v: usize) -> [usize; 3] {
+    match face {
+        BlockFace::Right | BlockFace::Left => [depth, v, u],
+        BlockFace::Top | BlockFace::Bottom => [u, depth, v],
+        BlockFace::Front | BlockFace::Back => [u, v, depth],
+    }
+}
+
+fn macro_uv(face: BlockFace, point: Vec3) -> [f32; 2] {
+    match face {
+        BlockFace::Right => [1.0 - point.z, 1.0 - point.y],
+        BlockFace::Left => [point.z, 1.0 - point.y],
+        BlockFace::Top => [point.x, point.z],
+        BlockFace::Bottom => [point.x, 1.0 - point.z],
+        BlockFace::Front => [point.x, 1.0 - point.y],
+        BlockFace::Back => [1.0 - point.x, 1.0 - point.y],
+    }
+}
+
+fn rotate_macro_uv([u, v]: [f32; 2], rotation: TextureRotation) -> [f32; 2] {
+    match rotation {
+        TextureRotation::Degrees0 => [u, v],
+        TextureRotation::Degrees90 => [1.0 - v, u],
+        TextureRotation::Degrees180 => [1.0 - u, 1.0 - v],
+        TextureRotation::Degrees270 => [v, 1.0 - u],
+    }
 }
 
 fn coordinates(index: usize) -> (usize, usize, usize) {
