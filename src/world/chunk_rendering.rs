@@ -29,39 +29,20 @@ const MEBIBYTE: usize = 1024 * 1024;
 /// below the allocator's historical 256 MiB envelope so Bevy can grow its
 /// general vertex/index slabs without needing the old and new buffers to fit at
 /// the absolute residency limit.
-const CHUNK_MESH_RESIDENCY_HIGH_BYTES_AT_DEFAULT_DISTANCE: usize = 192 * MEBIBYTE;
-const CHUNK_MESH_RESIDENCY_TARGET_BYTES_AT_DEFAULT_DISTANCE: usize = 160 * MEBIBYTE;
-const CHUNK_MESH_RESIDENCY_RECOVERY_BYTES_AT_DEFAULT_DISTANCE: usize = 128 * MEBIBYTE;
-const MESH_RESIDENCY_BASE_RENDER_DISTANCE_CHUNKS: i32 = 12;
+const CHUNK_MESH_RESIDENCY_HIGH_BYTES: usize = 192 * MEBIBYTE;
+const CHUNK_MESH_RESIDENCY_TARGET_BYTES: usize = 160 * MEBIBYTE;
+const CHUNK_MESH_RESIDENCY_RECOVERY_BYTES: usize = 128 * MEBIBYTE;
 
-pub(crate) fn chunk_mesh_residency_high_bytes(render_distance_chunks: i32) -> usize {
-    scaled_chunk_mesh_residency_bytes(
-        CHUNK_MESH_RESIDENCY_HIGH_BYTES_AT_DEFAULT_DISTANCE,
-        render_distance_chunks,
-    )
+pub(crate) fn chunk_mesh_residency_high_bytes(_render_distance_chunks: i32) -> usize {
+    CHUNK_MESH_RESIDENCY_HIGH_BYTES
 }
 
-pub(crate) fn chunk_mesh_residency_target_bytes(render_distance_chunks: i32) -> usize {
-    scaled_chunk_mesh_residency_bytes(
-        CHUNK_MESH_RESIDENCY_TARGET_BYTES_AT_DEFAULT_DISTANCE,
-        render_distance_chunks,
-    )
+pub(crate) fn chunk_mesh_residency_target_bytes(_render_distance_chunks: i32) -> usize {
+    CHUNK_MESH_RESIDENCY_TARGET_BYTES
 }
 
-pub(crate) fn chunk_mesh_residency_recovery_bytes(render_distance_chunks: i32) -> usize {
-    scaled_chunk_mesh_residency_bytes(
-        CHUNK_MESH_RESIDENCY_RECOVERY_BYTES_AT_DEFAULT_DISTANCE,
-        render_distance_chunks,
-    )
-}
-
-fn scaled_chunk_mesh_residency_bytes(base_bytes: usize, render_distance_chunks: i32) -> usize {
-    let radius = render_distance_chunks.max(MESH_RESIDENCY_BASE_RENDER_DISTANCE_CHUNKS) as usize;
-    let base_radius = MESH_RESIDENCY_BASE_RENDER_DISTANCE_CHUNKS as usize;
-    base_bytes
-        .saturating_mul(radius)
-        .saturating_mul(radius)
-        / base_radius.saturating_mul(base_radius)
+pub(crate) fn chunk_mesh_residency_recovery_bytes(_render_distance_chunks: i32) -> usize {
+    CHUNK_MESH_RESIDENCY_RECOVERY_BYTES
 }
 
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
