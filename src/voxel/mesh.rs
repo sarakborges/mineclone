@@ -99,7 +99,7 @@ where
     let mut buffers = MicroMeshBuffers::default();
     let mut block_lookup = BlockLookup::new(blocks);
     let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
-    let mut visuals = vec![None; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
+    let mut visuals = vec![None; meshlets.selected_voxel_count()];
 
     // Sculpted voxels keep the dedicated micro-mesher. Partial remeshes visit
     // only dirty 8³ meshlets instead of scanning all 4096 chunk voxels.
@@ -116,6 +116,7 @@ where
         let world_voxel = chunk_origin + local_voxel;
         let visual = visual_for_cell(
             &mut visuals,
+            meshlets,
             chunk,
             [x, y, z],
             world_voxel,
@@ -308,6 +309,7 @@ struct CellVisual {
 
 fn visual_for_cell<F>(
     cache: &mut [Option<CellVisual>],
+    meshlets: ChunkMeshletMask,
     chunk: &VoxelChunk,
     [x, y, z]: [usize; 3],
     world_voxel: IVec3,
@@ -318,7 +320,9 @@ fn visual_for_cell<F>(
 where
     F: FnMut(IVec3, VoxelCell, &BlockDefinition) -> [f32; 3],
 {
-    let index = x + z * CHUNK_SIZE + y * CHUNK_SIZE * CHUNK_SIZE;
+    let index = meshlets
+        .compact_voxel_index(x, y, z)
+        .expect("visual cache only receives voxels from selected meshlets");
     if let Some(visual) = cache[index] {
         return visual;
     }
