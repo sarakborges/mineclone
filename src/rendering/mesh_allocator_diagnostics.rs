@@ -9,8 +9,8 @@ use bevy::{
 
 const LOG_INTERVAL_FRAMES: u32 = 120;
 const MEBIBYTE: u64 = 1024 * 1024;
-const MAX_GENERAL_MESH_SLAB_BYTES: u64 = 64 * MEBIBYTE;
-const LARGE_MESH_THRESHOLD_BYTES: u64 = 16 * MEBIBYTE;
+const MAX_GENERAL_MESH_SLAB_BYTES: u64 = 32 * MEBIBYTE;
+const LARGE_MESH_THRESHOLD_BYTES: u64 = 8 * MEBIBYTE;
 
 pub(super) struct MeshAllocatorDiagnosticsPlugin;
 
