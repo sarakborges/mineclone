@@ -56,8 +56,8 @@ const COMMANDS: &[CommandDefinition] = &[
     },
     CommandDefinition {
         name: "locate",
-        usage: "/locate <biome|structure> <id>",
-        description: "Locate a biome or structure",
+        usage: "/locate <biome|hydrology|structure> <id>",
+        description: "Locate a biome, hydrology feature or structure",
         parameters: &[ParameterKind::LocateKind, ParameterKind::LocateTargetId],
         id: CommandId::Locate,
     },
@@ -108,7 +108,7 @@ pub(super) fn parse_line(input: &str) -> ParsedLine<'_> {
         CommandId::Spawn => ParsedLine::Spawn(args[0]),
         CommandId::Place => ParsedLine::Place(args[0]),
         CommandId::Locate => match args[0] {
-            "biome" | "structure" => ParsedLine::Locate(args[0], args[1]),
+            "biome" | "hydrology" | "structure" => ParsedLine::Locate(args[0], args[1]),
             _ => ParsedLine::Usage(definition.usage),
         },
         CommandId::Warp => {
@@ -277,13 +277,14 @@ fn suggestions_for(
                     description: structure.name.text(language.get()).to_owned(),
                 })
                 .collect::<Vec<_>>(),
-            ParameterKind::LocateKind => ["biome", "structure"]
+            ParameterKind::LocateKind => ["biome", "hydrology", "structure"]
                 .into_iter()
                 .filter(|value| value.starts_with(&prefix))
                 .map(|value| Suggestion {
                     value: value.to_owned(),
                     description: match value {
-                        "biome" => "Locate a biome".to_owned(),
+                        "biome" => "Locate a surface or volume biome".to_owned(),
+                        "hydrology" => "Locate ocean, river or lake hydrology".to_owned(),
                         "structure" => "Locate a locatable structure".to_owned(),
                         _ => unreachable!(),
                     },
@@ -292,6 +293,7 @@ fn suggestions_for(
             ParameterKind::LocateTargetId => match text.split_whitespace().nth(1)? {
                 "biome" => biomes
                     .iter()
+                    .filter(|biome| biome.kind != crate::content::biome::BiomeKind::Hydrology)
                     .filter(|biome| {
                         let id = biome.id.to_ascii_lowercase();
                         id.starts_with(&prefix)
@@ -302,6 +304,19 @@ fn suggestions_for(
                     .map(|biome| Suggestion {
                         value: biome.id.clone(),
                         description: biome.name.text(language.get()).to_owned(),
+                    })
+                    .collect::<Vec<_>>(),
+                "hydrology" => ["ocean", "river", "lake"]
+                    .into_iter()
+                    .filter(|value| value.starts_with(&prefix))
+                    .map(|value| Suggestion {
+                        value: value.to_owned(),
+                        description: match value {
+                            "ocean" => "Locate ocean hydrology".to_owned(),
+                            "river" => "Locate river hydrology".to_owned(),
+                            "lake" => "Locate lake hydrology".to_owned(),
+                            _ => unreachable!(),
+                        },
                     })
                     .collect::<Vec<_>>(),
                 "structure" => structures
@@ -414,6 +429,10 @@ mod tests {
         assert_eq!(parse_line("hello"), ParsedLine::Say("hello"));
         assert_eq!(parse_line("/spawn asteria:meadow_slime"), ParsedLine::Spawn("asteria:meadow_slime"));
         assert_eq!(parse_line("/place asteria:hut"), ParsedLine::Place("asteria:hut"));
+        assert_eq!(
+            parse_line("/locate hydrology river"),
+            ParsedLine::Locate("hydrology", "river")
+        );
         assert_eq!(parse_line("/spawn"), ParsedLine::Usage("/spawn <id>"));
         assert_eq!(parse_line("/place extra extra"), ParsedLine::Usage("/place <id>"));
         assert_eq!(parse_line("/spawn_creature old"), ParsedLine::Unknown("/spawn_creature"));
