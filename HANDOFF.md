@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 17 — 2026-09-21:** soma de durations do day/night cycle agora usa `checked_add` e rejeita overflow explicitamente antes de comparar com `dayDurationTicks` (`1e07cd6fddaa9ad75a8fff41627149d956584751`). Evita wrap de u64 em release transformar conteúdo inválido em configuração aparentemente consistente. **Pendências:** continuar procurando aritmética de conteúdo/save que dependa de overflow behavior. **Próximo passo:** revisar generation spacing/chance/structure math e render distance arithmetic por checked/saturating operations e ranges.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 16 — 2026-09-21:** completada parte da uniformização de IDs obrigatórios: `FluidRegistry` e `BiomeRegistry` agora rejeitam ID vazio no boundary de insert (`cd1f0a5d552b9b02802dea140755b545ee994e41`, `46c18ec77d9bb9d692d0b272cedc525857eeb1dd`). Structures/layers/creatures já possuíam essa validação. **Pendências:** loader atualmente ignora silenciosamente JSON que não casa com nenhuma categoria conhecida; isso pode esconder typo de diretório/filename. Precisa distinguir arquivos auxiliares legítimos de definitions antes de transformar unknown JSON em erro. **Próximo passo:** auditar layout real de `data/` via paths conhecidos e decidir fail-fast seguro para definitions mal posicionadas; revisar localization audit e content filenames.
 
 
