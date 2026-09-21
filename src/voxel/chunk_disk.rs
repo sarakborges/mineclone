@@ -117,6 +117,9 @@ impl DiskChunkBuilder {
                 .iter_for_save()
                 .map(|(key, value)| (key.to_owned(), value.to_owned()))
                 .collect::<Vec<_>>();
+            if let Some(encoded) = MicroblockMask::encoded_for_save(cell) {
+                properties.push((CHISEL_MASK_PROPERTY.to_owned(), encoded));
+            }
             properties.sort_unstable();
             let state = DiskBlockState {
                 id: cell.block_id.to_owned(),
