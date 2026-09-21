@@ -454,8 +454,23 @@ impl StructureRegistry {
     pub fn insert(&mut self, mut definition: StructureDefinition) {
         definition.validate_layout();
         definition.rebuild_runtime();
-        self.definitions.insert(definition.id.clone(), definition);
-        self.rebuild_group_index();
+
+        let structure_id = definition.id.clone();
+        let group_reference = definition.group_id.as_deref().map(|group_id| {
+            structure_id.split_once(':').map_or_else(
+                || group_id.to_owned(),
+                |(namespace, _)| format!("{namespace}:{group_id}"),
+            )
+        });
+
+        self.definitions.insert(structure_id.clone(), definition);
+        if let Some(reference) = group_reference {
+            let members = self.groups.entry(reference).or_default();
+            let index = members
+                .binary_search(&structure_id)
+                .unwrap_or_else(|index| index);
+            members.insert(index, structure_id);
+        }
     }
 
     pub fn get(&self, id: &str) -> Option<&StructureDefinition> {
@@ -520,28 +535,6 @@ impl StructureRegistry {
         Some((minimum, maximum))
     }
 
-    fn rebuild_group_index(&mut self) {
-        self.groups.clear();
-        for structure in self.definitions.values() {
-            let Some(group_id) = structure.group_id.as_deref() else {
-                continue;
-            };
-            let reference = structure
-                .id
-                .split_once(':')
-                .map_or_else(
-                    || group_id.to_owned(),
-                    |(namespace, _)| format!("{namespace}:{group_id}"),
-                );
-            self.groups
-                .entry(reference)
-                .or_default()
-                .push(structure.id.clone());
-        }
-        for members in self.groups.values_mut() {
-            members.sort();
-        }
-    }
 }
 
 fn default_surface_layer_chance() -> f32 {
