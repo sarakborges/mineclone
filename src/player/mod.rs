@@ -43,6 +43,7 @@ pub(crate) fn spawn_player_entity(
     definition: &PlayerDefinition,
     saved_health: Option<f32>,
     saved_look: Option<(f32, f32)>,
+    saved_flying: bool,
 ) {
     let gameplay_camera = saved_look.map_or_else(GameplayCamera::default, |(yaw, pitch)| GameplayCamera::restored(yaw, pitch));
     let transform = Transform::from_translation(translation).with_rotation(gameplay_camera.rotation());
@@ -63,7 +64,7 @@ pub(crate) fn spawn_player_entity(
             LOCAL_PLAYER_ID,
             game_mode,
             WalkingState::default(),
-            FlightState::default(),
+            FlightState::restored(saved_flying && game_mode.allows_flight()),
             GravityState::default(),
             SwimmingState::default(),
             DespawnOnExit(GameState::Gameplay),
