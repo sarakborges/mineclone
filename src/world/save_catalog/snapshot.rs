@@ -2,13 +2,9 @@ use std::io;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    content::fluid::FluidRegistry,
-    creatures::SavedCreature,
-    voxel::world::VoxelWorld,
-};
+use crate::{content::fluid::FluidRegistry, creatures::SavedCreature};
 
-use super::{chunks::SavedChunkCatalog, invalid_data};
+use super::invalid_data;
 use crate::world::{
     fluid_updates::{PendingFluidUpdates, SavedFluidUpdates},
     new_world::{WorldgenVersion, is_valid_biome_size_multiplier},
@@ -61,7 +57,6 @@ pub(crate) struct WorldSnapshot {
     pub(crate) selected_hotbar_slot: usize,
     pub(crate) fluid_updates: SavedFluidUpdates,
     pub(crate) creatures: Vec<SavedCreature>,
-    pub(super) chunks: SavedChunkCatalog,
 }
 
 #[derive(Debug, Deserialize)]
@@ -124,7 +119,6 @@ impl StoredWorldSnapshot {
             selected_hotbar_slot: self.selected_hotbar_slot,
             fluid_updates: self.fluid_updates,
             creatures: self.creatures,
-            chunks: SavedChunkCatalog::default(),
         }
     }
 }
@@ -142,7 +136,6 @@ pub(crate) struct SnapshotSource<'a> {
     pub(crate) tick_in_day: u64,
     pub(crate) inventory: Vec<Option<String>>,
     pub(crate) selected_hotbar_slot: usize,
-    pub(crate) world: &'a VoxelWorld,
     pub(crate) fluids: &'a FluidRegistry,
     pub(crate) pending_fluids: &'a PendingFluidUpdates,
     pub(crate) world_tick: u64,
@@ -209,7 +202,6 @@ impl WorldSnapshot {
                 .pending_fluids
                 .capture_saved(source.world_tick, source.fluids)?,
             creatures: source.creatures,
-            chunks: SavedChunkCatalog::capture(source.world, source.fluids)?,
         })
     }
 }
@@ -236,7 +228,6 @@ mod tests {
             selected_hotbar_slot: 0,
             fluid_updates: SavedFluidUpdates::default(),
             creatures: Vec::new(),
-            chunks: SavedChunkCatalog::default(),
         };
 
         let value = serde_json::to_value(snapshot.disk_snapshot()).unwrap();
