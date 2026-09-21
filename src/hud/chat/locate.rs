@@ -217,10 +217,18 @@ fn locate_surface_biome(
 
     for radius in 0..=MAX_LOCATE_CHUNK_RADIUS {
         visit_square_chunk_ring(center, radius, |chunk| {
-            let origin = chunk * CHUNK_SIZE as i32;
+            let Some(origin) = chunk_block_origin(chunk) else {
+                return;
+            };
             for local_z in 0..CHUNK_SIZE as i32 {
                 for local_x in 0..CHUNK_SIZE as i32 {
-                    let horizontal = origin + IVec2::new(local_x, local_z);
+                    let (Some(x), Some(z)) = (
+                        origin.x.checked_add(local_x),
+                        origin.y.checked_add(local_z),
+                    ) else {
+                        continue;
+                    };
+                    let horizontal = IVec2::new(x, z);
                     let sample = snapshot
                         .biome_field
                         .sample_surface(horizontal.as_vec2() + Vec2::splat(0.5));
@@ -261,12 +269,14 @@ fn locate_volume_biome(
 
     for radius in 0..=MAX_LOCATE_CHUNK_RADIUS {
         visit_square_chunk_ring(center, radius, |chunk| {
-            let origin = chunk * CHUNK_SIZE as i32;
+            let Some(origin) = chunk_block_origin(chunk) else {
+                return;
+            };
             let minimum = Vec3::new(origin.x as f32, range.min, origin.y as f32);
             let maximum = Vec3::new(
-                (origin.x + CHUNK_SIZE as i32) as f32,
+                (i64::from(origin.x) + CHUNK_SIZE as i64) as f32,
                 range.max,
-                (origin.y + CHUNK_SIZE as i32) as f32,
+                (i64::from(origin.y) + CHUNK_SIZE as i64) as f32,
             );
             let region = snapshot
                 .biome_field
@@ -344,8 +354,14 @@ fn locate_structure(
                     return;
                 }
 
-                let probe = anchor + probe_offset;
-                let probe_chunk = chunk_coord_from_world(IVec3::new(probe.x, 0, probe.y)).xz();
+                let (Some(probe_x), Some(probe_z)) = (
+                    anchor.x.checked_add(probe_offset.x),
+                    anchor.y.checked_add(probe_offset.y),
+                ) else {
+                    return;
+                };
+                let probe_chunk =
+                    chunk_coord_from_world(IVec3::new(probe_x, 0, probe_z)).xz();
                 for position in located_structure_origins_in_chunk(probe_chunk, id, &context) {
                     if position.xz() == anchor && seen.insert(position) {
                         consider_nearest(&mut best, player, position);
@@ -383,7 +399,10 @@ fn consider_nearest(best: &mut Option<(i64, IVec3)>, player: IVec3, candidate: I
     let dx = i64::from(candidate.x) - i64::from(player.x);
     let dy = i64::from(candidate.y) - i64::from(player.y);
     let dz = i64::from(candidate.z) - i64::from(player.z);
-    let distance_squared = dx * dx + dy * dy + dz * dz;
+    let distance_squared = dx
+        .saturating_mul(dx)
+        .saturating_add(dy.saturating_mul(dy))
+        .saturating_add(dz.saturating_mul(dz));
     if best
         .as_ref()
         .is_none_or(|(best_distance, best_position)| {
@@ -420,9 +439,22 @@ fn visit_square_ring(center: IVec2, radius: i32, visit: &mut impl FnMut(IVec2)) 
             if radius > 0 && x.abs() != radius && z.abs() != radius {
                 continue;
             }
-            visit(center + IVec2::new(x, z));
+            let (Some(candidate_x), Some(candidate_z)) =
+                (center.x.checked_add(x), center.y.checked_add(z))
+            else {
+                continue;
+            };
+            visit(IVec2::new(candidate_x, candidate_z));
         }
     }
+}
+
+fn chunk_block_origin(chunk: IVec2) -> Option<IVec2> {
+    let size = CHUNK_SIZE as i32;
+    Some(IVec2::new(
+        chunk.x.checked_mul(size)?,
+        chunk.y.checked_mul(size)?,
+    ))
 }
 
 #[cfg(test)]
@@ -441,5 +473,22 @@ mod tests {
     fn locate_radius_keeps_existing_thirty_two_kiloblock_contract() {
         assert_eq!(MAX_LOCATE_BLOCK_RADIUS, 32_768);
         assert_eq!(MAX_LOCATE_CHUNK_RADIUS, 2_048);
+    }
+
+    #[test]
+    fn square_ring_skips_candidates_outside_i32_domain() {
+        let mut visited = Vec::new();
+        visit_square_ring(IVec2::new(i32::MAX, 0), 1, &mut |candidate| {
+            visited.push(candidate);
+        });
+
+        assert!(visited.iter().all(|candidate| candidate.x <= i32::MAX));
+        assert!(!visited.iter().any(|candidate| candidate.x == i32::MIN));
+    }
+
+    #[test]
+    fn chunk_block_origin_rejects_unrepresentable_world_coordinates() {
+        assert_eq!(chunk_block_origin(IVec2::ZERO), Some(IVec2::ZERO));
+        assert!(chunk_block_origin(IVec2::new(i32::MAX, 0)).is_none());
     }
 }
