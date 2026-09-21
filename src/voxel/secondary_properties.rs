@@ -52,13 +52,6 @@ impl SecondaryProperties {
             .map(resolve_token)
     }
 
-    pub(crate) fn contains_token(self, property: SecondaryPropertyToken) -> bool {
-        self.values
-            .iter()
-            .copied()
-            .any(|packed| unpack_property(packed) == property.0)
-    }
-
     pub(crate) fn len(self) -> usize {
         self.values
             .iter()
