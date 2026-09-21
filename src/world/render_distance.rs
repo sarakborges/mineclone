@@ -5,6 +5,8 @@ pub const MAX_RENDER_DISTANCE_CHUNKS: i32 = 24;
 pub const DEFAULT_RENDER_DISTANCE_CHUNKS: i32 = 12;
 pub const DEFAULT_VERTICAL_RENDER_DISTANCE_CHUNKS: i32 = 2;
 
+const MAX_VISIBILITY_SHOW_MARGIN_CHUNKS: i32 = 2;
+
 #[derive(Resource)]
 pub struct RenderDistanceSettings {
     horizontal_chunks: i32,
@@ -36,8 +38,11 @@ impl RenderDistanceSettings {
 }
 
 pub(crate) fn chunk_visibility_radii(render_distance_chunks: i32) -> (i32, i32) {
-    let show_radius = render_distance_chunks.max(1);
-    let hide_radius = show_radius.saturating_add(1);
+    let nominal_radius = render_distance_chunks.max(1);
+    let proportional_margin = ((nominal_radius + 5) / 6).max(1);
+    let show_margin = proportional_margin.min(MAX_VISIBILITY_SHOW_MARGIN_CHUNKS);
+    let show_radius = nominal_radius.saturating_add(show_margin);
+    let hide_radius = show_radius.saturating_add(proportional_margin);
 
     (show_radius, hide_radius)
 }
@@ -124,9 +129,9 @@ mod tests {
 
     #[test]
     fn visibility_radii_scale_from_render_distance() {
-        assert_eq!(chunk_visibility_radii(4), (4, 5));
-        assert_eq!(chunk_visibility_radii(12), (12, 13));
-        assert_eq!(chunk_visibility_radii(24), (24, 25));
+        assert_eq!(chunk_visibility_radii(4), (5, 6));
+        assert_eq!(chunk_visibility_radii(12), (14, 16));
+        assert_eq!(chunk_visibility_radii(24), (26, 30));
     }
 
     #[test]
