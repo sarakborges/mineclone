@@ -24,7 +24,7 @@ use crate::{
         current_context::CurrentDimensionContext,
         generation::{
             ChunkGenerationContext, located_structure_origins_in_chunk,
-            structure_candidate_anchor, structure_candidate_member_hash,
+            structure_candidate_anchor, structure_candidate_probe,
         },
         generation_region::generation_region_coord,
         hydrology::HydrologyWaterKind,
@@ -159,58 +159,94 @@ impl ChatLocateContext<'_> {
                 )
             }
             "structure" => {
-                let Some(variation_count) = self.structures.variation_count(id) else {
-                    return format!("Unknown structure id or group: {id}");
-                };
-                if let Some(variation) = variation
-                    && variation > variation_count
-                {
-                    return format!(
-                        "Unknown variation {variation} for {id}; expected 1..={variation_count}."
-                    );
-                }
-
-                let structure = match variation {
-                    Some(variation) => self
-                        .structures
-                        .variation(id, variation)
-                        .expect("validated structure variation must resolve"),
-                    None => self
-                        .structures
-                        .get(id)
-                        .or_else(|| self.structures.variation(id, 1))
-                        .expect("validated structure reference must resolve"),
-                };
-                if !structure.locatable {
-                    return format!("Structure cannot be located by command: {id}");
-                }
-                let generated_here = dimension.biomes.iter().any(|dimension_biome| {
-                    self.biomes
-                        .get(&dimension_biome.id)
-                        .is_some_and(|biome| {
-                            biome.structures.iter().any(|entry| {
-                                entry.id == id
-                                    || self.structures.reference_contains_structure(
-                                        &entry.id,
-                                        &structure.id,
-                                    )
+                if let Some(set) = self.structure_sets.get(id) {
+                    if variation.is_some() {
+                        return format!("Structure set {id} does not have variations.");
+                    }
+                    if !set.locatable {
+                        return format!("Structure set cannot be located by command: {id}");
+                    }
+                    let generated_here = dimension.biomes.iter().any(|dimension_biome| {
+                        self.biomes
+                            .get(&dimension_biome.id)
+                            .is_some_and(|biome| {
+                                biome.structures.iter().any(|entry| entry.id == id)
                             })
-                        })
-                });
-                if !generated_here {
-                    return format!("Structure is not generated in this dimension: {id}");
+                    });
+                    if !generated_here {
+                        return format!("Structure set is not generated in this dimension: {id}");
+                    }
+                    (
+                        LocateTargetKind::Structure,
+                        set.name.text(self.language.get()).to_owned(),
+                        id.to_owned(),
+                    )
+                } else {
+                    let Some(variation_count) = self.structures.variation_count(id) else {
+                        return format!(
+                            "Unknown structure, structure group, or structure set: {id}"
+                        );
+                    };
+                    if let Some(variation) = variation
+                        && variation > variation_count
+                    {
+                        return format!(
+                            "Unknown variation {variation} for {id}; expected 1..={variation_count}."
+                        );
+                    }
+
+                    let structure = match variation {
+                        Some(variation) => self
+                            .structures
+                            .variation(id, variation)
+                            .expect("validated structure variation must resolve"),
+                        None => self
+                            .structures
+                            .get(id)
+                            .or_else(|| self.structures.variation(id, 1))
+                            .expect("validated structure reference must resolve"),
+                    };
+                    if !structure.locatable {
+                        return format!("Structure cannot be located by command: {id}");
+                    }
+
+                    let search_id = variation
+                        .map(|_| structure.id.clone())
+                        .unwrap_or_else(|| id.to_owned());
+                    let generated_here = dimension.biomes.iter().any(|dimension_biome| {
+                        self.biomes
+                            .get(&dimension_biome.id)
+                            .is_some_and(|biome| {
+                                biome.structures.iter().any(|entry| {
+                                    entry.id == search_id
+                                        || self
+                                            .structures
+                                            .references_overlap(&entry.id, &search_id)
+                                        || self
+                                            .structure_sets
+                                            .get(&entry.id)
+                                            .is_some_and(|set| {
+                                                set.references_reference(
+                                                    &search_id,
+                                                    &self.structures,
+                                                )
+                                            })
+                                })
+                            })
+                    });
+                    if !generated_here {
+                        return format!("Structure is not generated in this dimension: {id}");
+                    }
+
+                    (
+                        LocateTargetKind::Structure,
+                        structure.name.text(self.language.get()).to_owned(),
+                        search_id,
+                    )
                 }
-                let search_id = variation
-                    .map(|_| structure.id.clone())
-                    .unwrap_or_else(|| id.to_owned());
-                (
-                    LocateTargetKind::Structure,
-                    structure.name.text(self.language.get()).to_owned(),
-                    search_id,
-                )
             }
             _ => {
-                return "Usage: /locate <biome|hydrology> <id> | /locate structure <groupid> [variation]"
+                return "Usage: /locate <biome|hydrology> <id> | /locate structure <id> [variation]"
                     .to_owned();
             }
         };
@@ -431,7 +467,11 @@ fn locate_structure(
     id: &str,
     player: IVec3,
 ) -> Option<IVec3> {
-    snapshot.structures.variation_count(id)?;
+    if snapshot.structures.variation_count(id).is_none()
+        && snapshot.structure_sets.get(id).is_none()
+    {
+        return None;
+    }
     let context = snapshot.generation_context();
     let player_horizontal = player.xz();
     let maximum_distance_squared =
@@ -440,10 +480,15 @@ fn locate_structure(
     let mut best: Option<(i64, IVec3)> = None;
 
     for biome_structure in snapshot.biomes.structure_placements() {
-        if (biome_structure.structure_id != id
-            && !snapshot
+        let placement_matches = biome_structure.structure_id == id
+            || snapshot
                 .structures
-                .reference_contains_structure(&biome_structure.structure_id, id))
+                .references_overlap(&biome_structure.structure_id, id)
+            || snapshot
+                .structure_sets
+                .get(&biome_structure.structure_id)
+                .is_some_and(|set| set.references_reference(id, &snapshot.structures));
+        if !placement_matches
             || !snapshot
                 .dimension
                 .biomes
@@ -480,39 +525,24 @@ fn locate_structure(
                     return;
                 }
 
-                let member_hash = structure_candidate_member_hash(
-                    snapshot.biome_field.seed(),
+                let Some(probe) = structure_candidate_probe(
                     &biome_structure.biome_id,
                     &biome_structure.structure_id,
+                    id,
                     anchor,
-                );
-                let Some(structure) = snapshot
-                    .structures
-                    .select_for_reference(&biome_structure.structure_id, member_hash)
-                else {
-                    return;
-                };
-                if biome_structure.structure_id != id && structure.id != id {
-                    return;
-                }
-                let rotation = structure.rotation_for_hash(member_hash);
-                let Some(probe_offset) = structure
-                    .horizontal_footprint_for_rotation(rotation)
-                    .first()
-                    .copied()
-                else {
-                    return;
-                };
-                let (Some(probe_x), Some(probe_z)) = (
-                    anchor.x.checked_add(probe_offset.x),
-                    anchor.y.checked_add(probe_offset.y),
+                    &context,
                 ) else {
                     return;
                 };
                 let probe_chunk =
-                    chunk_coord_from_world(IVec3::new(probe_x, 0, probe_z)).xz();
-                for position in located_structure_origins_in_chunk(probe_chunk, id, &context) {
-                    if position.xz() == anchor && seen.insert(position) {
+                    chunk_coord_from_world(IVec3::new(probe.x, 0, probe.y)).xz();
+                for position in located_structure_origins_in_chunk(
+                    probe_chunk,
+                    id,
+                    anchor,
+                    &context,
+                ) {
+                    if seen.insert(position) {
                         consider_nearest(&mut best, player, position);
                     }
                 }
