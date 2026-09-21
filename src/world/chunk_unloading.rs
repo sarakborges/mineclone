@@ -14,8 +14,8 @@ use super::{
     chunk_remesh::ChunkRemeshQueue,
     chunk_remesh_tasks::ChunkRemeshTasks,
     chunk_rendering::{
-        CHUNK_MESH_RESIDENCY_HIGH_BYTES, CHUNK_MESH_RESIDENCY_RECOVERY_BYTES,
-        CHUNK_MESH_RESIDENCY_TARGET_BYTES, ChunkRenderPool, retire_chunk_render_allocation,
+        ChunkRenderPool, chunk_mesh_residency_high_bytes, chunk_mesh_residency_recovery_bytes,
+        chunk_mesh_residency_target_bytes, retire_chunk_render_allocation,
         retire_chunk_render_allocation_immediately,
     },
     chunk_system_params::ChunkRenderer,
@@ -129,8 +129,12 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
     let before = renderer.pool.mesh_bytes();
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let center = chunk_coord_from_position(feet_position);
+    let render_distance_chunks = render_distance.chunks();
+    let high_bytes = chunk_mesh_residency_high_bytes(render_distance_chunks);
+    let target_bytes = chunk_mesh_residency_target_bytes(render_distance_chunks);
+    let recovery_bytes = chunk_mesh_residency_recovery_bytes(render_distance_chunks);
 
-    if before <= CHUNK_MESH_RESIDENCY_RECOVERY_BYTES {
+    if before <= recovery_bytes {
         recovery.clear();
         recovery.extend(
             runtime.streaming
@@ -151,11 +155,11 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
         }
     }
 
-    if before <= CHUNK_MESH_RESIDENCY_HIGH_BYTES {
+    if before <= high_bytes {
         return;
     }
 
-    let visible_radius = i64::from(render_distance.chunks().max(1));
+    let visible_radius = i64::from(render_distance_chunks.max(1));
     let visible_radius_squared = visible_radius * visible_radius;
 
     candidates.clear();
@@ -212,7 +216,7 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
     let mut evicted_bytes = 0_usize;
 
     for candidate in candidates.iter().copied() {
-        if resident_bytes <= CHUNK_MESH_RESIDENCY_TARGET_BYTES {
+        if resident_bytes <= target_bytes {
             break;
         }
         if !renderer.pool.contains(candidate.coord) {
@@ -242,10 +246,8 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
 
     if evicted_chunks > 0 {
         warn!(
-            "chunk mesh residency pressure: before_bytes={before} after_bytes={} high_watermark_bytes={} target_bytes={} evicted_chunks={evicted_chunks} evicted_bytes={evicted_bytes}",
+            "chunk mesh residency pressure: before_bytes={before} after_bytes={} render_distance_chunks={render_distance_chunks} high_watermark_bytes={high_bytes} target_bytes={target_bytes} recovery_bytes={recovery_bytes} evicted_chunks={evicted_chunks} evicted_bytes={evicted_bytes}",
             renderer.pool.mesh_bytes(),
-            CHUNK_MESH_RESIDENCY_HIGH_BYTES,
-            CHUNK_MESH_RESIDENCY_TARGET_BYTES,
         );
     }
 }
