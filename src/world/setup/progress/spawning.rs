@@ -45,6 +45,8 @@ pub(super) fn spawn_loaded_world(
     let saved_look = (*persistence.load_mode == WorldLoadMode::Load)
         .then(|| persistence.save.player_look(LOCAL_PLAYER_ID))
         .flatten();
+    let saved_flying = *persistence.load_mode == WorldLoadMode::Load
+        && persistence.save.player_flying(LOCAL_PLAYER_ID);
     spawn_player_entity(
         &mut renderer.commands,
         translation,
@@ -52,6 +54,7 @@ pub(super) fn spawn_loaded_world(
         player_definition,
         saved_health,
         saved_look,
+        saved_flying,
     );
     progress.loading_state.transition_requested = true;
     transition.request(ScreenTransitionTarget::game(GameState::Gameplay));
