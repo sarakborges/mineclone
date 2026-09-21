@@ -171,74 +171,84 @@ fn emit_sculpted_layer<W: VoxelRead + ?Sized>(
     tint: [f32; 3],
     lighting: super::mesh_lighting::FaceLighting,
 ) {
-    if face == BlockFace::Bottom && world_voxel.y <= 0 {
-        return;
-    }
-
     let shape = MicroblockMask::from_cell(support_cell);
-    let depth = match face {
-        BlockFace::Right | BlockFace::Top | BlockFace::Front => MICRO_EDGE - 1,
-        BlockFace::Left | BlockFace::Bottom | BlockFace::Back => 0,
-    };
-    let mut visible = [false; MICRO_EDGE * MICRO_EDGE];
 
-    for v in 0..MICRO_EDGE {
-        for u in 0..MICRO_EDGE {
-            let position = micro_position_for(face, depth, u, v);
-            if !shape.contains(position) {
-                continue;
-            }
+    // A layer attached to a sculpted face must follow every exposed microface
+    // with that normal, exactly like the host block's own texture. Restricting
+    // it to the macroblock boundary leaves the layer floating or missing after
+    // the Chisel recesses that surface.
+    for depth in 0..MICRO_EDGE {
+        let mut visible = [false; MICRO_EDGE * MICRO_EDGE];
 
-            let fine = world_voxel * MICROBLOCK_EDGE
-                + IVec3::new(position[0] as i32, position[1] as i32, position[2] as i32);
-            let occluded = occupied_cell(world, fine + face.offset()).is_some_and(|neighbor| {
-                let neighbor_definition = block_lookup.get(neighbor.block_id);
-                (support_cell.block_id == neighbor.block_id && support_is_transparent)
-                    || (!neighbor_definition.alpha_blend
-                        && neighbor_definition.alpha_cutoff.is_none())
-            });
-            visible[u + v * MICRO_EDGE] = !occluded;
-        }
-    }
-
-    for v in 0..MICRO_EDGE {
-        for u in 0..MICRO_EDGE {
-            if !visible[u + v * MICRO_EDGE] {
-                continue;
-            }
-            let mut width = 1;
-            while u + width < MICRO_EDGE && visible[u + width + v * MICRO_EDGE] {
-                width += 1;
-            }
-            let mut height = 1;
-            while v + height < MICRO_EDGE
-                && (u..u + width)
-                    .all(|column| visible[column + (v + height) * MICRO_EDGE])
-            {
-                height += 1;
-            }
-            for row in v..v + height {
-                for column in u..u + width {
-                    visible[column + row * MICRO_EDGE] = false;
+        for v in 0..MICRO_EDGE {
+            for u in 0..MICRO_EDGE {
+                let position = micro_position_for(face, depth, u, v);
+                if !shape.contains(position) {
+                    continue;
                 }
-            }
 
-            emit_sculpted_layer_rectangle(
-                buffers,
-                local_voxel,
-                layer_id,
-                texture_rotation,
-                face,
-                definition,
-                outward_offset,
-                tint,
-                lighting,
-                depth,
-                u,
-                v,
-                width,
-                height,
-            );
+                // Match the host micro-mesh floor rule: only the actual
+                // world-bottom microface is suppressed, not recessed surfaces
+                // higher inside the same macroblock.
+                if face == BlockFace::Bottom
+                    && world_voxel.y == 0
+                    && position[1] == 0
+                {
+                    continue;
+                }
+
+                let fine = world_voxel * MICROBLOCK_EDGE
+                    + IVec3::new(position[0] as i32, position[1] as i32, position[2] as i32);
+                let occluded =
+                    occupied_cell(world, fine + face.offset()).is_some_and(|neighbor| {
+                        let neighbor_definition = block_lookup.get(neighbor.block_id);
+                        (support_cell.block_id == neighbor.block_id && support_is_transparent)
+                            || (!neighbor_definition.alpha_blend
+                                && neighbor_definition.alpha_cutoff.is_none())
+                    });
+                visible[u + v * MICRO_EDGE] = !occluded;
+            }
+        }
+
+        for v in 0..MICRO_EDGE {
+            for u in 0..MICRO_EDGE {
+                if !visible[u + v * MICRO_EDGE] {
+                    continue;
+                }
+                let mut width = 1;
+                while u + width < MICRO_EDGE && visible[u + width + v * MICRO_EDGE] {
+                    width += 1;
+                }
+                let mut height = 1;
+                while v + height < MICRO_EDGE
+                    && (u..u + width)
+                        .all(|column| visible[column + (v + height) * MICRO_EDGE])
+                {
+                    height += 1;
+                }
+                for row in v..v + height {
+                    for column in u..u + width {
+                        visible[column + row * MICRO_EDGE] = false;
+                    }
+                }
+
+                emit_sculpted_layer_rectangle(
+                    buffers,
+                    local_voxel,
+                    layer_id,
+                    texture_rotation,
+                    face,
+                    definition,
+                    outward_offset,
+                    tint,
+                    lighting,
+                    depth,
+                    u,
+                    v,
+                    width,
+                    height,
+                );
+            }
         }
     }
 }
