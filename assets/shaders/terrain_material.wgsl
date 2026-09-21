@@ -187,12 +187,12 @@ fn fragment(
     let block_levels = clamp(in.color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
     let ambient_occlusion = clamp(in.color.a, 0.0, 1.0);
 
-    let packed_tint = u32(round(in.uv_b.y));
+    let packed_tint_normal = u32(round(in.uv_b.y));
     let tint = vec3<f32>(
-        f32(packed_tint & 255u),
-        f32((packed_tint >> 8u) & 255u),
-        f32((packed_tint >> 16u) & 255u),
-    ) / 255.0;
+        f32(packed_tint_normal & 127u),
+        f32((packed_tint_normal >> 7u) & 127u),
+        f32((packed_tint_normal >> 14u) & 127u),
+    ) / 127.0;
     let sky_level = clamp(in.uv_b.x, 0.0, 1.0);
     var base_tint_enabled = terrain_material_extension.base_tint_enabled > 0.5;
     var overlay_enabled = terrain_material_extension.overlay_enabled > 0.5;
