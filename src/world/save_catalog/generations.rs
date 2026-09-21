@@ -85,17 +85,14 @@ pub(super) fn newest_restorable_summary(
 ) -> io::Result<WorldSummary> {
     let pinned = snapshot_candidates(id)?;
     for candidate in &pinned.candidates {
-        let loaded = load_snapshot(
+        let loaded = load_snapshot_summary(
             &pinned.directory,
             id,
             &candidate.manifest,
-            &registries.blocks,
-            &registries.layers,
-            &registries.fluids,
             |snapshot| registries.validate_playable(snapshot),
         );
         match loaded {
-            Ok((snapshot, _world)) => {
+            Ok(snapshot) => {
                 return Ok(WorldSummary {
                     id: id.to_owned(),
                     last_saved_unix_ms: candidate.manifest.last_saved_unix_ms,
@@ -113,6 +110,19 @@ pub(super) fn newest_restorable_summary(
         }
     }
     Err(invalid_data(format!("world {id} has no restorable save")))
+}
+
+fn load_snapshot_summary(
+    directory: &Path,
+    id: &str,
+    manifest: &WorldManifest,
+    validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
+) -> io::Result<WorldSnapshot> {
+    if !generation_chunks_published(directory, manifest.generation)? {
+        return Err(invalid_data("saved chunk generation is missing"));
+    }
+    let file = open_snapshot_file(directory, manifest)?;
+    decode_snapshot_state(file, id, manifest, validate)
 }
 
 pub(crate) fn load_world(
@@ -180,6 +190,24 @@ fn decode_snapshot(
     fluids: &FluidRegistry,
     validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
 ) -> io::Result<(WorldSnapshot, VoxelWorld)> {
+    let snapshot = decode_snapshot_state(file, id, manifest, validate)?;
+
+    let world = load_generation_world(
+        directory,
+        manifest.generation,
+        blocks,
+        layers,
+        fluids,
+    )?;
+    Ok((snapshot, world))
+}
+
+fn decode_snapshot_state(
+    file: fs::File,
+    id: &str,
+    manifest: &WorldManifest,
+    validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
+) -> io::Result<WorldSnapshot> {
     let stored: StoredWorldSnapshot = read_json_file(file)?;
     if stored.format_version != SAVE_FORMAT_VERSION
         || manifest.format_version != SAVE_FORMAT_VERSION
@@ -210,15 +238,7 @@ fn decode_snapshot(
 
     let snapshot = stored.into_runtime();
     validate(&snapshot)?;
-
-    let world = load_generation_world(
-        directory,
-        manifest.generation,
-        blocks,
-        layers,
-        fluids,
-    )?;
-    Ok((snapshot, world))
+    Ok(snapshot)
 }
 
 fn valid_manifest(manifest: &WorldManifest, id: &str, generation: u64) -> bool {
