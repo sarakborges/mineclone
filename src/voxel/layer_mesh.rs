@@ -25,7 +25,6 @@ const MICRO_EDGE: usize = MICROBLOCK_EDGE as usize;
 
 pub(crate) struct ChunkLayerMesh {
     pub(crate) layer_id: &'static str,
-    pub(crate) face: BlockFace,
     pub(crate) mesh: Mesh,
     pub(crate) casts_shadow: bool,
 }
@@ -67,7 +66,7 @@ where
     F: FnMut(IVec3, &LayerDefinition) -> [f32; 3],
 {
     let mut buffers =
-        HashMap::<(&'static str, BlockFace, bool), VoxelMeshBuffer>::new();
+        HashMap::<(&'static str, bool), VoxelMeshBuffer>::new();
     let mut block_lookup = BlockLookup::new(blocks);
     let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
 
@@ -145,7 +144,7 @@ where
             });
 
             push_lit_quad(
-                layer_buffer(&mut buffers, attached.cell.layer_id, face, definition),
+                layer_buffer(&mut buffers, attached.cell.layer_id, definition),
                 vertices,
                 face.normal(),
                 attached
@@ -160,22 +159,15 @@ where
 
     let mut meshes = buffers
         .into_iter()
-        .filter_map(|((layer_id, face, casts_shadow), buffer)| {
+        .filter_map(|((layer_id, casts_shadow), buffer)| {
             buffer.into_mesh().map(|mesh| ChunkLayerMesh {
                 layer_id,
-                face,
                 mesh,
                 casts_shadow,
             })
         })
         .collect::<Vec<_>>();
-    meshes.sort_by_key(|mesh| {
-        (
-            mesh.layer_id,
-            face_sort_key(mesh.face),
-            mesh.casts_shadow,
-        )
-    });
+    meshes.sort_by_key(|mesh| (mesh.layer_id, mesh.casts_shadow));
     meshes
 }
 
@@ -186,7 +178,7 @@ where
 fn emit_sculpted_layer<W: VoxelRead + ?Sized>(
     world: &W,
     block_lookup: &mut BlockLookup<'_>,
-    buffers: &mut HashMap<(&'static str, BlockFace, bool), VoxelMeshBuffer>,
+    buffers: &mut HashMap<(&'static str, bool), VoxelMeshBuffer>,
     support_cell: super::cell::VoxelCell,
     support_is_transparent: bool,
     world_voxel: IVec3,
@@ -286,7 +278,7 @@ fn emit_sculpted_layer<W: VoxelRead + ?Sized>(
     reason = "greedy layer rectangles carry their face, bounds and visual state"
 )]
 fn emit_sculpted_layer_rectangle(
-    buffers: &mut HashMap<(&'static str, BlockFace, bool), VoxelMeshBuffer>,
+    buffers: &mut HashMap<(&'static str, bool), VoxelMeshBuffer>,
     local_voxel: IVec3,
     layer_id: &'static str,
     texture_rotation: TextureRotation,
@@ -352,7 +344,7 @@ fn emit_sculpted_layer_rectangle(
     });
 
     push_lit_quad(
-        layer_buffer(buffers, layer_id, face, definition),
+        layer_buffer(buffers, layer_id, definition),
         vertices,
         face.normal(),
         uvs,
@@ -362,13 +354,12 @@ fn emit_sculpted_layer_rectangle(
 }
 
 fn layer_buffer<'a>(
-    buffers: &'a mut HashMap<(&'static str, BlockFace, bool), VoxelMeshBuffer>,
+    buffers: &'a mut HashMap<(&'static str, bool), VoxelMeshBuffer>,
     layer_id: &'static str,
-    face: BlockFace,
     definition: &LayerDefinition,
 ) -> &'a mut VoxelMeshBuffer {
     buffers
-        .entry((layer_id, face, definition.casts_shadow))
+        .entry((layer_id, definition.casts_shadow))
         .or_default()
 }
 
@@ -408,13 +399,3 @@ fn coordinates(index: usize) -> (usize, usize, usize) {
     (x, y, z)
 }
 
-fn face_sort_key(face: BlockFace) -> u8 {
-    match face {
-        BlockFace::Right => 0,
-        BlockFace::Left => 1,
-        BlockFace::Top => 2,
-        BlockFace::Bottom => 3,
-        BlockFace::Front => 4,
-        BlockFace::Back => 5,
-    }
-}
