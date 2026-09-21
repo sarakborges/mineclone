@@ -33,6 +33,10 @@ pub struct InventoryCategoryDefinition {
 
 impl InventoryCategoryDefinition {
     pub fn validate_references(&self, blocks: &BlockRegistry) {
+        assert!(
+            !self.id.trim().is_empty(),
+            "inventory category id cannot be empty"
+        );
         self.display_name
             .validate(&format!("inventory category {} display name", self.id));
         if let Some(block_icon) = &self.block_icon {
@@ -42,6 +46,13 @@ impl InventoryCategoryDefinition {
                 self.id,
                 block_icon.block
             );
+            if let Some(tint) = block_icon.tint {
+                assert!(
+                    tint.is_valid(),
+                    "inventory category {} block icon HSI tint is invalid",
+                    self.id
+                );
+            }
         }
     }
 
