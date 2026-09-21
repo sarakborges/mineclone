@@ -1,5 +1,7 @@
 # HANDOFF — Asteria / Mineclone
 
+**ESTADO AUTORITATIVO ATUAL — 2026-09-21:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.50.1`. O crash `OutOfMemory RenderError` em `mesh slab resize encoder` foi tratado na raiz: chunks residentes/preloaded não implicam mais mesh GPU residente; forward preload só mantém dados de chunk/ready fora do show radius; allocations de render são aposentadas ao sair do hide radius mesmo quando o chunk continua em RAM; resultados assíncronos de mesh fora da residency são descartados e o chunk permanece pronto para futura aproximação. O allocator de meshes do Bevy foi configurado com slab geral máximo de 64 MiB e large-object threshold de 16 MiB, evitando o crescimento padrão até 512 MiB por slab. HEAD funcional `645293d6ffe8baf19df4ac6c6dab2eef6dcea477`; CI `35547595221`: **success** em auditoria, Clippy rigoroso e `cargo check --locked`. Não houve `cargo test`, `cargo run`, medição real de VRAM/FPS nem QA Windows; validar runtime prolongado, movimento contínuo e geração/remesh de fluids/structures observando `render assets` e `render mesh allocator` nos logs.
+
 **ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.49.0`. O modelo definitivo de variações de structures foi corrigido no bloco `508633f7f77a5f45363678e88f4a77c4ad4e93ba` → `02b855f56ce3d12a2a223d88faf572a517c181cc` → `557a005c50b010a1e21275b8e1f1b145db764128`. Regra vigente: **1 arquivo JSON = 1 structure concreta**; NÃO existe mais layout mestre com `variants` embutidas. `group_id` é uma propriedade opcional da structure, escrita exatamente em snake_case no JSON. Oak usa quatro arquivos independentes `tree_oak_01.json`…`tree_oak_04.json`, IDs `asteria:tree_oak_01`…`asteria:tree_oak_04`, todos com `group_id: "tree_oak"`; `data/structures/tree_oak.json` não existe. Os biomas continuam referenciando o identificador lógico `asteria:tree_oak`; o registry transforma namespace + `group_id` em um índice de grupo e o worldgen cria apenas **um placement grid/chance/spacing** para o grupo. Depois que o anchor é aceito, um membro do grupo é escolhido deterministicamente por seed+biome+group+anchor; os quatro arquivos não multiplicam chance de spawn. Bounds verticais/horizontais de streaming usam o envelope agregado do grupo; restrictions, support, fluid policy, priority, conflict groups e rasterização usam a structure concreta selecionada. O índice de grupos é montado no carregamento, sem varrer/sortear todo o registry por anchor. `/place` trabalha com IDs concretos dos arquivos; `/locate structure` também trabalha com structure concreta e sabe reconhecer quando ela é gerada através de um group reference. CI push `35546220264` no HEAD funcional `557a005c50b010a1e21275b8e1f1b145db764128`: **success** em auditoria de localizações/dados, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` nem QA runtime/visual Windows. **Importante:** o checkpoint anterior que descreve `variants` embutidas/`oak_tree` é histórico e foi substituído por este modelo.
 
 **ESTADO AUTORITATIVO ATUAL — 2026-09-20:** `develop`, Rust + Bevy 0.19.1, `VERSION 0.48.1`. Checkpoint funcional de structures/árvores em `b014d44e42109929bce32bb193410f0aa710ccbe` (feature base `f7975985fdd831feb89262b30f19106f3d27ec9c`, rename `a810de5e4f421d72728dfb92d76929d0e7a1f5ff`, correções de schema/Clippy `b660b2ea999350c183e6d437e7a00d979d8d8d3e` e `389631ab67bc8384a3bf8c24a8f789e39e1dbf7b`). `stone_marker` foi removido. A structure lógica de carvalho agora é `asteria:oak_tree`, referenciada uma única vez pelos biomas e com quatro variantes internas determinísticas `oak_tree_01..04`; spacing/chance/jitter dos biomas não mudaram. O schema genérico de structure agora aceita layout único OU `variants` ponderadas, e worldgen/place usam a variante escolhida para bounds, suporte, slope/restrictions, biome coverage, conflitos e rasterização. As novas oaks mantêm altura ~9 e footprint ocupado ~7x7, com canvas 9x9 vazio nas bordas, galhos conectados/orientados X/Z e copas assimétricas em lóbulos com vazios, em vez de esferas compactas. A World Tree tinha duas fontes concretas de truncamento: `fluidPolicy: forbid` era reaplicado por chunk durante rasterização, permitindo abortar apenas uma fatia da ocorrência, e o próprio JSON tinha 272 voxels ocupados na borda norte do layout, incluindo 17 logs. O abort por chunk foi removido; World Tree usa `fluidPolicy: displace`, então raízes/galhos que atravessam river ocupam seu volume e removem o fluido correspondente em vez de serem cortados. O asset ganhou 8 linhas de envelope ao norte, continuação orgânica dos galhos/copas antes recortados e remoção de um log isolado; nenhuma célula ocupada toca a nova borda externa. CI push `35545555723` no checkpoint `b014d44e42109929bce32bb193410f0aa710ccbe`: **success** em auditoria de localizações/dados, Clippy `--locked --all-targets --all-features -- -D warnings` e `cargo check --locked`. Não houve `cargo test`, `cargo run` nem QA visual/runtime Windows. Chunks já gerados/salvos não regeneram automaticamente essas structures; QA deve usar mundo/chunks novos. **Próximo passo:** validar visualmente as quatro oaks, a copa/galhos norte da World Tree e raízes atravessando river em geração nova.
@@ -8555,3 +8557,117 @@ Topo funcional antes do bump:
    - top texture do oak_log deve apontar no eixo do galho;
    - tronco principal deve continuar vertical;
 5. verificar que tree_oak group e boulders continuam sem regressão de placement/altura.
+
+
+## Checkpoint 180 — 2026-09-21: GPU mesh residency + Bevy slab OOM guard [FIX; VERSION 0.50.1]
+
+### Relato
+
+O runtime encerrou com:
+
+- `Out of Memory`;
+- `mesh slab resize encoder`;
+- `general mesh slab 5 (vertex buffer) is invalid`;
+- erros subsequentes em `Queue::submit`, `Queue::write_buffer_with` e `set_vertex_buffer`.
+
+Os erros de validation eram cascata após a falha de alocação do buffer. A investigação focou no lifetime de meshes de chunks e no allocator de meshes do Bevy.
+
+### Root cause
+
+Havia dois lifetimes indevidamente acoplados:
+
+1. **residência/cache do chunk em CPU**;
+2. **residência do mesh correspondente em GPU**.
+
+O streaming mantém chunks além da distância visual para cache, hysteresis e forward preload. Porém o `ChunkRenderPool` só aposentava a allocation quando o chunk era efetivamente arquivado pelo unload, usando uma retention radius muito maior que a visibility radius.
+
+Com render distance padrão 12:
+
+- show radius: 14 chunks;
+- hide radius: 16 chunks;
+- unload/cache retention: 22 chunks;
+- forward preload podia alcançar aproximadamente 22 chunks à frente.
+
+Além disso, chunks do forward preload percorriam generation -> ready -> initial mesh e recebiam buffers GPU mesmo fora do raio visível.
+
+Resultado: uma grande faixa de chunks invisíveis permanecia no `MeshAllocator`, elevando o high-water mark dos slabs. No Bevy 0.19.1, o limite padrão de um slab geral é 512 MiB; durante crescimento o allocator precisa substituir/copyar o buffer, aumentando o pico de VRAM e tornando o OOM plausível antes de qualquer erro posterior de validation.
+
+### Correção — separar CPU residency de GPU residency
+
+O streaming agora trata explicitamente três estados conceituais:
+
+- chunk residente/arquivável;
+- chunk pré-carregado/ready;
+- chunk com allocation de render GPU.
+
+Mudanças:
+
+- `DeduplicatedQueue` ganhou seleção `pop_min_where_by_key`, permitindo manter preload pronto na fila sem consumi-lo para meshing;
+- `ChunkStreamingState::pop_ready()` só entrega initial mesh dentro do **show radius**;
+- chunks de forward preload continuam gerados/prontos em CPU, mas não ganham mesh GPU antecipadamente;
+- resultado assíncrono de initial mesh que termina depois de sair da residency de render não é publicado; o chunk volta para ready quando ainda deve permanecer carregado;
+- `ChunkStreamingState::retains_render_mesh()` usa o **hide radius**, preservando hysteresis;
+- novo `retire_distant_chunk_meshes` percorre allocations ativas e remove entidades/handles GPU fora do hide radius mesmo quando o `VoxelChunk` continua residente;
+- a retirada invalida/remesheia o halo dos vizinhos ainda renderizados, preservando faces, AO/lighting e fluid corners nas bordas;
+- unload de conteúdo em CPU permanece independente e continua usando sua retention radius maior.
+
+Assim, preload/cache de mundo continua existindo sem pagar VRAM por chunks invisíveis.
+
+### Correção — limite defensivo do MeshAllocator
+
+`MeshAllocatorSettings` passou a usar:
+
+- min slab: 1 MiB;
+- max general slab: **64 MiB**;
+- large mesh threshold: **16 MiB**;
+- growth factor: 1.5.
+
+Meshes grandes passam a ser isolados cedo e um único slab geral não pode mais crescer até o default de 512 MiB.
+
+O diagnóstico periódico agora também registra:
+
+- `max_slab_bytes`;
+- `large_threshold_bytes`;
+
+além de slab count, slab bytes e index allocations já existentes.
+
+### Commits deste fix
+
+- `90433da04bdbfaac29cfe979f8336dd94722d12e` — filtered priority pop na fila deduplicada;
+- `3d71a1ea63f12600cb429e643d7a6e3f35167f8b` — forward preload deixa de criar GPU mesh fora do show radius;
+- `c715629b7b65695d8342b6e545aeee7410e02c53` — completed meshes respeitam GPU residency;
+- `675c6f5a5f19050186d894b4391368d44a000ac9` — allocations GPU distantes são aposentadas antes do archive;
+- `6fa39c274870bffc6c05a8e87e9bf64ecf95d479` — render lifetime desacoplado do cache lifetime no schedule;
+- `42dfcde0b32fefebf1bcea93dd938273eb8542ed` — cap do Bevy mesh slab + threshold para large objects;
+- `25d12bcd4f285347983242d67d3d28f97aed66c6` — VERSION 0.50.1, preservando o 0.50.0 que entrou em trabalho paralelo;
+- `261619e6ad3046bbaf11cafc1e6bc9e4fa4864d7` — remove wrapper de queue tornado obsoleto;
+- `645293d6ffe8baf19df4ac6c6dab2eef6dcea477` — fecha lint do helper de GPU residency.
+
+Durante este bloco houve commits paralelos de trees/structure restrictions na mesma `develop`; os updates foram sempre feitos sobre o HEAD atual e não sobrescreveram essas mudanças.
+
+### CI
+
+Houve runs intermediárias vermelhas por warnings/imports durante o trabalho paralelo e pelo wrapper/helper ainda não usados. Esses pontos foram corrigidos sem suppressions.
+
+Validação final do HEAD funcional `645293d6ffe8baf19df4ac6c6dab2eef6dcea477`:
+
+- run `35547595221`: **success**;
+- localization audit: success;
+- Clippy `--locked --all-targets --all-features -- -D warnings`: success;
+- `cargo check --locked`: success.
+
+Não houve `cargo test` por regra do projeto.
+
+### QA prioritária
+
+1. rodar sessão Windows longa com render distance 12 e caminhar continuamente por terreno novo;
+2. repetir perto de World Tree, oceans/fluids e regiões com remesh frequente;
+3. confirmar ausência de novo `OutOfMemory RenderError`;
+4. observar `render assets` e `render mesh allocator`:
+   - pooled/asset meshes devem cair ao deixar o hide radius;
+   - slab bytes devem estabilizar em vez de crescer indefinidamente;
+   - nenhum slab geral deve exceder 64 MiB;
+5. voltar por um caminho já percorrido e confirmar que chunks CPU-residentes readquirem mesh corretamente sem buracos/faces faltando;
+6. variar render distance 4/12/24 e validar show/hide hysteresis;
+7. se ainda houver OOM, capturar as últimas linhas de `render assets` + `render mesh allocator` antes do erro para distinguir volume total de allocations de um mesh individual patológico.
+
