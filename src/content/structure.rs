@@ -41,6 +41,8 @@ pub struct StructureSurfaceLayer {
     pub faces: Vec<LayerFace>,
     #[serde(default = "default_surface_layer_chance")]
     pub chance: f32,
+    #[serde(skip)]
+    runtime_hash: u64,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -52,6 +54,7 @@ pub struct StructureLayer {
 
 #[derive(Clone, Debug, Default)]
 struct StructureRuntime {
+    id_hash: u64,
     voxels: Vec<StructureVoxel>,
     horizontal_minimum: IVec2,
     horizontal_maximum: IVec2,
@@ -102,7 +105,17 @@ pub(crate) struct StructureColumnSpan {
     pub max_y_offset: i32,
 }
 
+impl StructureSurfaceLayer {
+    pub(crate) fn runtime_hash(&self) -> u64 {
+        self.runtime_hash
+    }
+}
+
 impl StructureDefinition {
+    pub(crate) fn runtime_hash(&self) -> u64 {
+        self.runtime.id_hash
+    }
+
     pub(crate) fn validate_references(
         &self,
         blocks: &BlockRegistry,
@@ -189,6 +202,12 @@ impl StructureDefinition {
     }
 
     fn rebuild_runtime(&mut self) {
+        let id_hash = stable_structure_hash(&self.id);
+        for entry in self.palette.values_mut() {
+            for surface in &mut entry.surface_layers {
+                surface.runtime_hash = stable_structure_hash(&surface.layer);
+            }
+        }
         let mut voxels = Vec::new();
         let mut horizontal_minimum = IVec2::splat(i32::MAX);
         let mut horizontal_maximum = IVec2::splat(i32::MIN);
@@ -227,7 +246,10 @@ impl StructureDefinition {
         }
 
         if voxels.is_empty() {
-            self.runtime = StructureRuntime::default();
+            self.runtime = StructureRuntime {
+                id_hash,
+                ..Default::default()
+            };
             return;
         }
 
@@ -284,6 +306,7 @@ impl StructureDefinition {
         column_spans.sort_by_key(|span| (span.offset.y, span.offset.x));
 
         self.runtime = StructureRuntime {
+            id_hash,
             voxels,
             horizontal_minimum,
             horizontal_maximum,
@@ -581,6 +604,15 @@ impl StructureRegistry {
         Some((minimum, maximum))
     }
 
+}
+
+fn stable_structure_hash(value: &str) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    for byte in value.bytes() {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
 }
 
 fn default_surface_layer_chance() -> f32 {
