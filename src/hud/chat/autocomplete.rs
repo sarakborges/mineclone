@@ -25,6 +25,7 @@ enum CommandId {
 #[derive(Clone, Copy)]
 enum ParameterKind {
     CreatureId,
+    StructureLiteral,
     StructureId,
     StructureVariation,
     LocateKind,
@@ -52,17 +53,25 @@ const COMMANDS: &[CommandDefinition] = &[
     },
     CommandDefinition {
         name: "place",
-        usage: "/place <id> [variation]",
+        usage: "/place structure <groupid> [variation]",
         description: "Place a structure",
-        parameters: &[ParameterKind::StructureId, ParameterKind::StructureVariation],
-        required_parameters: 1,
+        parameters: &[
+            ParameterKind::StructureLiteral,
+            ParameterKind::StructureId,
+            ParameterKind::StructureVariation,
+        ],
+        required_parameters: 2,
         id: CommandId::Place,
     },
     CommandDefinition {
         name: "locate",
-        usage: "/locate <biome|hydrology|structure> <id>",
+        usage: "/locate <biome|hydrology> <id> | /locate structure <groupid> [variation]",
         description: "Locate a biome, hydrology feature or structure",
-        parameters: &[ParameterKind::LocateKind, ParameterKind::LocateTargetId],
+        parameters: &[
+            ParameterKind::LocateKind,
+            ParameterKind::LocateTargetId,
+            ParameterKind::StructureVariation,
+        ],
         required_parameters: 2,
         id: CommandId::Locate,
     },
@@ -85,7 +94,7 @@ pub(super) enum ParsedLine<'a> {
     Say(&'a str),
     Spawn(&'a str),
     Place(&'a str, Option<usize>),
-    Locate(&'a str, &'a str),
+    Locate(&'a str, &'a str, Option<usize>),
     Warp(IVec3),
     Usage(&'static str),
     Unknown(&'a str),
@@ -113,17 +122,32 @@ pub(super) fn parse_line(input: &str) -> ParsedLine<'_> {
     match definition.id {
         CommandId::Spawn => ParsedLine::Spawn(args[0]),
         CommandId::Place => {
-            let variation = match args.get(1) {
+            if args[0] != "structure" {
+                return ParsedLine::Usage(definition.usage);
+            }
+            let variation = match args.get(2) {
                 Some(value) => match value.parse::<usize>() {
                     Ok(variation) if variation > 0 => Some(variation),
                     _ => return ParsedLine::Usage(definition.usage),
                 },
                 None => None,
             };
-            ParsedLine::Place(args[0], variation)
+            ParsedLine::Place(args[1], variation)
         },
         CommandId::Locate => match args[0] {
-            "biome" | "hydrology" | "structure" => ParsedLine::Locate(args[0], args[1]),
+            "biome" | "hydrology" if args.len() == 2 => {
+                ParsedLine::Locate(args[0], args[1], None)
+            }
+            "structure" => {
+                let variation = match args.get(2) {
+                    Some(value) => match value.parse::<usize>() {
+                        Ok(variation) if variation > 0 => Some(variation),
+                        _ => return ParsedLine::Usage(definition.usage),
+                    },
+                    None => None,
+                };
+                ParsedLine::Locate(args[0], args[1], variation)
+            }
             _ => ParsedLine::Usage(definition.usage),
         },
         CommandId::Warp => {
@@ -268,6 +292,14 @@ fn suggestions_for(
             .iter()
             .find(|item| command.strip_prefix('/') == Some(item.name))?;
         match definition.parameters.get(word_index - 1)? {
+            ParameterKind::StructureLiteral => ["structure"]
+                .into_iter()
+                .filter(|value| value.starts_with(&prefix))
+                .map(|value| Suggestion {
+                    value: value.to_owned(),
+                    description: "Structure".to_owned(),
+                })
+                .collect::<Vec<_>>(),
             ParameterKind::CreatureId => creatures
                 .iter()
                 .filter(|creature| {
@@ -317,7 +349,10 @@ fn suggestions_for(
                 values
             },
             ParameterKind::StructureVariation => {
-                let reference = text.split_whitespace().nth(1)?;
+                if text.split_whitespace().nth(1)? != "structure" {
+                    return Some((range, Vec::new()));
+                }
+                let reference = text.split_whitespace().nth(2)?;
                 let count = structures.variation_count(reference)?;
                 (1..=count)
                     .filter(|variation| variation.to_string().starts_with(&prefix))
@@ -372,21 +407,43 @@ fn suggestions_for(
                         },
                     })
                     .collect::<Vec<_>>(),
-                "structure" => structures
-                    .iter()
-                    .filter(|structure| structure.locatable)
-                    .filter(|structure| {
-                        let id = structure.id.to_ascii_lowercase();
-                        id.starts_with(&prefix)
-                            || id
-                                .strip_prefix("asteria:")
-                                .is_some_and(|short| short.starts_with(&prefix))
-                    })
-                    .map(|structure| Suggestion {
-                        value: structure.id.clone(),
-                        description: structure.name.text(language.get()).to_owned(),
-                    })
-                    .collect::<Vec<_>>(),
+                "structure" => {
+                    let mut values = structures
+                        .iter()
+                        .filter(|structure| structure.group_id.is_none() && structure.locatable)
+                        .filter(|structure| {
+                            let id = structure.id.to_ascii_lowercase();
+                            id.starts_with(&prefix)
+                                || id
+                                    .strip_prefix("asteria:")
+                                    .is_some_and(|short| short.starts_with(&prefix))
+                        })
+                        .map(|structure| Suggestion {
+                            value: structure.id.clone(),
+                            description: structure.name.text(language.get()).to_owned(),
+                        })
+                        .collect::<Vec<_>>();
+                    values.extend(
+                        structures
+                            .group_references()
+                            .filter(|(_, structure, _)| structure.locatable)
+                            .filter(|(reference, _, _)| {
+                                let id = reference.to_ascii_lowercase();
+                                id.starts_with(&prefix)
+                                    || id
+                                        .strip_prefix("asteria:")
+                                        .is_some_and(|short| short.starts_with(&prefix))
+                            })
+                            .map(|(reference, structure, count)| Suggestion {
+                                value: reference.to_owned(),
+                                description: format!(
+                                    "{} ({count} variations)",
+                                    structure.name.text(language.get())
+                                ),
+                            }),
+                    );
+                    values
+                },
                 _ => Vec::new(),
             },
             ParameterKind::Coordinate => Vec::new(),
@@ -482,29 +539,29 @@ mod tests {
         assert_eq!(parse_line("hello"), ParsedLine::Say("hello"));
         assert_eq!(parse_line("/spawn asteria:meadow_slime"), ParsedLine::Spawn("asteria:meadow_slime"));
         assert_eq!(
-            parse_line("/place asteria:hut"),
+            parse_line("/place structure asteria:hut"),
             ParsedLine::Place("asteria:hut", None)
         );
         assert_eq!(
-            parse_line("/place asteria:tree_oak 3"),
+            parse_line("/place structure asteria:tree_oak 3"),
             ParsedLine::Place("asteria:tree_oak", Some(3))
         );
         assert_eq!(
             parse_line("/locate hydrology river"),
-            ParsedLine::Locate("hydrology", "river")
+            ParsedLine::Locate("hydrology", "river", None)
         );
         assert_eq!(parse_line("/spawn"), ParsedLine::Usage("/spawn <id>"));
         assert_eq!(
-            parse_line("/place extra extra extra"),
-            ParsedLine::Usage("/place <id> [variation]")
+            parse_line("/place structure extra extra extra"),
+            ParsedLine::Usage("/place structure <groupid> [variation]")
         );
         assert_eq!(
-            parse_line("/place asteria:tree_oak nope"),
-            ParsedLine::Usage("/place <id> [variation]")
+            parse_line("/place structure asteria:tree_oak nope"),
+            ParsedLine::Usage("/place structure <groupid> [variation]")
         );
         assert_eq!(
-            parse_line("/place asteria:tree_oak 0"),
-            ParsedLine::Usage("/place <id> [variation]")
+            parse_line("/place structure asteria:tree_oak 0"),
+            ParsedLine::Usage("/place structure <groupid> [variation]")
         );
         assert_eq!(parse_line("/spawn_creature old"), ParsedLine::Unknown("/spawn_creature"));
         assert_eq!(parse_line("/missing"), ParsedLine::Unknown("/missing"));
