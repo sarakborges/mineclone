@@ -39,6 +39,27 @@ impl VoxelWorld {
         }
     }
 
+    pub(crate) fn insert_saved_chunk(
+        &mut self,
+        entry: DiskChunk,
+        blocks: &BlockRegistry,
+        layers: &LayerRegistry,
+        fluids: &FluidRegistry,
+    ) -> io::Result<()> {
+        let coord = entry.coord()?;
+        if self.persistent_chunks.contains(&coord) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("duplicate saved chunk coordinate: {coord:?}"),
+            ));
+        }
+
+        let (coord, archived) = entry.into_archived_chunk(blocks, layers, fluids)?;
+        self.persistent_chunks.insert(coord);
+        self.archived_chunks.insert(coord, Arc::new(archived));
+        Ok(())
+    }
+
     /// Rebuild a *fresh* world from disk, archiving saved chunks until streaming
     /// needs them. Reject duplicate coordinates BEFORE decoding their content.
     /// On any error the partially built world is dropped without being exposed.
@@ -50,16 +71,7 @@ impl VoxelWorld {
     ) -> io::Result<Self> {
         let mut world = Self::default();
         for entry in saved {
-            let coord = entry.coord()?;
-            if world.persistent_chunks.contains(&coord) {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("duplicate saved chunk coordinate: {coord:?}"),
-                ));
-            }
-            let (coord, archived) = entry.into_archived_chunk(blocks, layers, fluids)?;
-            world.persistent_chunks.insert(coord);
-            world.archived_chunks.insert(coord, Arc::new(archived));
+            world.insert_saved_chunk(entry, blocks, layers, fluids)?;
         }
         Ok(world)
     }
