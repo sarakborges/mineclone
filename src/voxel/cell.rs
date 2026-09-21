@@ -8,6 +8,8 @@ pub struct VoxelCell {
     pub texture_rotation: TextureRotation,
     pub orientation: BlockOrientation,
     secondary_properties: SecondaryProperties,
+    microblock_layers: Option<&'static [u64; 8]>,
+    microblock_transient: bool,
 }
 
 impl VoxelCell {
@@ -25,6 +27,8 @@ impl VoxelCell {
             texture_rotation,
             orientation,
             secondary_properties: SecondaryProperties::default(),
+            microblock_layers: None,
+            microblock_transient: false,
         }
     }
 
@@ -48,6 +52,24 @@ impl VoxelCell {
 
     pub(crate) fn with_secondary_properties(mut self, properties: SecondaryProperties) -> Self {
         self.secondary_properties = properties;
+        self
+    }
+
+    pub(crate) fn microblock_layers(self) -> Option<&'static [u64; 8]> {
+        self.microblock_layers
+    }
+
+    pub(crate) fn microblock_transient(self) -> bool {
+        self.microblock_transient
+    }
+
+    pub(crate) fn with_microblock_mask(
+        mut self,
+        layers: Option<&'static [u64; 8]>,
+        transient: bool,
+    ) -> Self {
+        self.microblock_layers = layers;
+        self.microblock_transient = layers.is_some() && transient;
         self
     }
 }
