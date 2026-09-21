@@ -8,7 +8,10 @@ use super::{
     chunk::{CHUNK_SIZE, VoxelChunk},
     fluid::FluidCell,
     mesh_buffer::VoxelMeshBuffer,
-    mesh_lighting::{face_lighting, push_lit_quad, surface_block_srgb},
+    mesh_lighting::{
+        ChunkLightingCache, face_lighting_with_cache, push_lit_quad,
+        surface_block_srgb,
+    },
     meshlet::ChunkMeshletMask,
     microblock::{MICROBLOCK_EDGE, MicroblockMask},
     quad::VOXEL_FACE_UVS,
@@ -38,11 +41,14 @@ where
     W: VoxelRead + ?Sized,
     F: FnMut(IVec3, FluidId) -> [f32; 3],
 {
+    let lighting_cache =
+        ChunkLightingCache::capture(world, chunk_coord * CHUNK_SIZE as i32);
     build_fluid_meshlets(
         world,
         chunk_coord,
         chunk,
         ChunkMeshletMask::ALL,
+        Some(&lighting_cache),
         tint_at,
     )
 }
@@ -52,6 +58,7 @@ pub(crate) fn build_fluid_meshlets<W, F>(
     chunk_coord: IVec3,
     chunk: &VoxelChunk,
     meshlets: ChunkMeshletMask,
+    lighting_cache: Option<&ChunkLightingCache>,
     mut tint_at: F,
 ) -> Vec<ChunkFluidMesh>
 where
@@ -119,7 +126,13 @@ where
             }
 
             let lighting =
-                face_lighting(world, world_voxel, face, source_block_srgb);
+                face_lighting_with_cache(
+                    lighting_cache,
+                    world,
+                    world_voxel,
+                    face,
+                    source_block_srgb,
+                );
             let neighbor_mask = neighbor_samples[index]
                 .and_then(|(block, _)| block)
                 .filter(|block| MicroblockMask::is_modified(*block))
