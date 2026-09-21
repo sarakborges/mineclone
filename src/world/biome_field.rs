@@ -14,12 +14,15 @@ use std::sync::{Arc, RwLock};
 use arrayvec::ArrayVec;
 use bevy::{platform::collections::HashMap, prelude::*};
 
-use crate::content::{
+use crate::{
+    content::{
     biome::{BiomeClimate, BiomeKind, BiomeRegistry, BiomeVerticalRange},
     biome_density::BiomeDensityModifier, biome_distribution::BiomeDistribution,
     biome_hydrology::BiomeHydrologyRules, biome_terrain::BiomeTerrain,
     biome_terrain_modifier::BiomeTerrainModifier,
     dimension::{DimensionBiomeSize, DimensionBiomeSizeAxis, DimensionDefinition},
+    },
+    voxel::chunk::CHUNK_SIZE,
 };
 
 pub(crate) use self::volume::{VolumeBiomeRegion, VolumeBiomeSelection};
@@ -158,6 +161,37 @@ pub(crate) struct VolumeBiomeAnchor<'a> {
 }
 
 impl BiomeField {
+    pub(crate) fn retain_surface_site_cache(
+        &self,
+        center_chunk: IVec2,
+        radius_chunks: i32,
+    ) {
+        let chunk_size = CHUNK_SIZE as i32;
+        let center_world = (center_chunk * chunk_size).as_vec2()
+            + Vec2::splat(CHUNK_SIZE as f32 * 0.5);
+        let center_cell = IVec2::new(
+            (center_world.x / self.surface_site_spacing.x).round() as i32,
+            (center_world.y / self.surface_site_spacing.y).round() as i32,
+        );
+        let world_radius = radius_chunks
+            .max(0)
+            .saturating_add(2)
+            .saturating_mul(chunk_size) as f32;
+        let padding = SITE_SEARCH_RADIUS + 2;
+        let radius_x =
+            (world_radius / self.surface_site_spacing.x).ceil() as i32 + padding;
+        let radius_z =
+            (world_radius / self.surface_site_spacing.y).ceil() as i32 + padding;
+
+        self.surface_site_biomes
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .retain(|cell, _| {
+                (cell.x - center_cell.x).abs() <= radius_x
+                    && (cell.y - center_cell.y).abs() <= radius_z
+            });
+    }
+
     pub fn from_dimension(
         dimension: &DimensionDefinition,
         biomes: &BiomeRegistry,
