@@ -19,6 +19,7 @@ pub(crate) struct VoxelMeshBuffer {
     positions: Vec<[f32; 3]>,
     normals: Vec<[f32; 3]>,
     uvs: Vec<[f32; 2]>,
+    light_uvs: Vec<[f32; 2]>,
     colors: Vec<[f32; 4]>,
     indices: Vec<u32>,
 }
@@ -27,16 +28,16 @@ impl VoxelMeshBuffer {
     pub(crate) fn push_quad(&mut self, quad: VoxelMeshQuad) {
         let base = self.positions.len() as u32;
 
+        let packed_tint = encode_tint(quad.tint);
         self.positions.extend(quad.vertices);
         self.normals.extend([quad.normal; 4]);
-        self.uvs.extend(quad.uvs);
-        self.colors.extend(std::array::from_fn(|index| {
-            encode_vertex_payload(
-                quad.tint,
-                quad.colors[index],
-                quad.light_uvs[index],
-            )
+        self.uvs.extend(std::array::from_fn(|index| {
+            encode_material_uv(quad.uvs[index], quad.light_uvs[index][1])
         }));
+        self.light_uvs.extend(std::array::from_fn(|index| {
+            [quad.light_uvs[index][0], packed_tint]
+        }));
+        self.colors.extend(quad.colors);
         self.indices
             .extend(quad_triangle_indices(base, quad.flip_diagonal));
     }
@@ -56,45 +57,29 @@ impl VoxelMeshBuffer {
             .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
             .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
             .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
-            // COLOR packs block-light RGB, biome/layer tint, AO, sky light and
-            // the terrain material code. Tangents and UV1 are intentionally
-            // omitted: voxel materials do not use normal maps and no secondary
-            // texture coordinates are required by the custom shader.
+            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
+            // Tangents are omitted: voxel materials do not use normal maps.
+            // RGB block light and AO remain independent interpolated channels.
             .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors)
             .with_inserted_indices(indices),
         )
     }
 }
 
-fn encode_vertex_payload(
-    tint: [f32; 3],
-    lighting: [f32; 4],
-    light_uv: [f32; 2],
-) -> [f32; 4] {
-    let block = [
-        (lighting[0].clamp(0.0, 1.0) * 15.0).round() as u32,
-        (lighting[1].clamp(0.0, 1.0) * 15.0).round() as u32,
-        (lighting[2].clamp(0.0, 1.0) * 15.0).round() as u32,
-    ];
-    let packed_block = block[0] | (block[1] << 4) | (block[2] << 8);
+const MATERIAL_UV_STRIDE: f32 = 16.0;
 
+fn encode_material_uv(uv: [f32; 2], material_code: f32) -> [f32; 2] {
+    [
+        uv[0] + material_code.round().max(0.0) * MATERIAL_UV_STRIDE,
+        uv[1],
+    ]
+}
+
+fn encode_tint(tint: [f32; 3]) -> f32 {
     let tint = tint.map(|channel| {
         (channel.clamp(0.0, 1.0) * 255.0).round() as u32
     });
-    let packed_tint = tint[0] | (tint[1] << 8) | (tint[2] << 16);
-
-    let material_code = light_uv[1].round().max(0.0) as u32;
-    debug_assert!(material_code < (1 << 20));
-    let sky_level =
-        (light_uv[0].clamp(0.0, 1.0) * 15.0).round() as u32;
-    let packed_sky_material = material_code | (sky_level << 20);
-
-    [
-        packed_block as f32,
-        packed_tint as f32,
-        lighting[3].clamp(0.0, 1.0),
-        packed_sky_material as f32,
-    ]
+    (tint[0] | (tint[1] << 8) | (tint[2] << 16)) as f32
 }
 
 fn compact_indices(vertex_count: usize, indices: Vec<u32>) -> Indices {
