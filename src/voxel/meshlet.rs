@@ -260,7 +260,6 @@ struct MeshArrays {
     normals: Vec<[f32; 3]>,
     uvs: Vec<[f32; 2]>,
     light_uvs: Vec<[f32; 2]>,
-    tangents: Vec<[f32; 4]>,
     colors: Vec<[f32; 4]>,
     indices: Vec<u32>,
 }
@@ -276,7 +275,6 @@ impl MeshArrays {
             normals: float32x3(mesh.attribute(Mesh::ATTRIBUTE_NORMAL)?)?.to_vec(),
             uvs: float32x2(mesh.attribute(Mesh::ATTRIBUTE_UV_0)?)?.to_vec(),
             light_uvs: float32x2(mesh.attribute(Mesh::ATTRIBUTE_UV_1)?)?.to_vec(),
-            tangents: float32x4(mesh.attribute(Mesh::ATTRIBUTE_TANGENT)?)?.to_vec(),
             colors: float32x4(mesh.attribute(Mesh::ATTRIBUTE_COLOR)?)?.to_vec(),
             indices: mesh.indices()?.iter().collect(),
         })
@@ -291,7 +289,6 @@ impl MeshArrays {
             || self.normals.len() != self.positions.len()
             || self.uvs.len() != self.positions.len()
             || self.light_uvs.len() != self.positions.len()
-            || self.tangents.len() != self.positions.len()
             || self.colors.len() != self.positions.len()
         {
             return None;
@@ -343,9 +340,6 @@ impl MeshArrays {
                 .light_uvs
                 .extend_from_slice(&self.light_uvs[source_base..source_base + 4]);
             output
-                .tangents
-                .extend_from_slice(&self.tangents[source_base..source_base + 4]);
-            output
                 .colors
                 .extend_from_slice(&self.colors[source_base..source_base + 4]);
 
@@ -371,7 +365,6 @@ impl MeshArrays {
         .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_TANGENT, self.tangents)
         .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors)
         .with_inserted_indices(Indices::U32(self.indices))
     }
