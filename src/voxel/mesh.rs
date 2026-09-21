@@ -113,7 +113,11 @@ where
                     let block_is_transparent = block.alpha_blend || block.alpha_cutoff.is_some();
                     let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
                     let world_voxel = chunk_origin + local_voxel;
-                    let source_face = source_face_for_oriented_face(face, cell.orientation);
+                    let source_face = if cell.orientation == BlockOrientation::Y {
+                        face
+                    } else {
+                        source_face_for_oriented_face(face, cell.orientation)
+                    };
                     let partial_occluder = world
                         .cell_at(world_voxel + face.offset())
                         .filter(|neighbor| MicroblockMask::is_modified(*neighbor))
