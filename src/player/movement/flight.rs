@@ -34,6 +34,17 @@ impl Default for FlightState {
 }
 
 impl FlightState {
+    pub(crate) fn restored(active: bool) -> Self {
+        Self {
+            active,
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn is_active(&self) -> bool {
+        self.active
+    }
+
     pub(crate) fn reset_motion(&mut self) {
         self.toggle_deadline_tick = None;
         self.velocity = Vec3::ZERO;
