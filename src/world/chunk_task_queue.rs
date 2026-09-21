@@ -37,6 +37,16 @@ impl<T> ChunkTaskQueue<T> {
         self.pending.contains_key(&coord)
     }
 
+    pub(crate) fn best_coord_by_key<K: Ord>(
+        &self,
+        mut key: impl FnMut(IVec3) -> K,
+    ) -> Option<IVec3> {
+        self.pending
+            .keys()
+            .copied()
+            .min_by_key(|coord| key(*coord))
+    }
+
     pub(crate) fn insert(&mut self, coord: IVec3, revision: u64, task: Task<T>) -> bool {
         if self.pending.contains_key(&coord) {
             return false;
@@ -71,6 +81,30 @@ impl<T> ChunkTaskQueue<T> {
                 .map(|output| (*coord, pending.revision, output))
         })?;
         let (coord, revision, output) = ready;
+        self.pending.remove(&coord);
+
+        Some(CompletedChunkTask {
+            coord,
+            revision,
+            output,
+        })
+    }
+
+    pub(crate) fn poll_ready_by_key<K: Ord>(
+        &mut self,
+        mut key: impl FnMut(IVec3) -> K,
+    ) -> Option<CompletedChunkTask<T>> {
+        let coord = self
+            .pending
+            .keys()
+            .copied()
+            .min_by_key(|coord| key(*coord))?;
+        let pending = self
+            .pending
+            .get_mut(&coord)
+            .expect("selected chunk task must remain pending");
+        let output = check_ready(&mut pending.task)?;
+        let revision = pending.revision;
         self.pending.remove(&coord);
 
         Some(CompletedChunkTask {
