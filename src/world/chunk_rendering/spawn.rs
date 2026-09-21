@@ -1,8 +1,5 @@
 use bevy::{
-    camera::{
-        primitives::Aabb,
-        visibility::{NoAutoAabb, NoCpuCulling},
-    },
+    camera::visibility::NoCpuCulling,
     light::NotShadowCaster,
     prelude::*,
 };
@@ -453,14 +450,6 @@ pub(super) fn spawn_fluid_meshes_into_existing_allocation(
     );
 }
 
-fn chunk_render_aabb() -> Aabb {
-    const MARGIN: f32 = 0.01;
-    Aabb::from_min_max(
-        Vec3::splat(-MARGIN),
-        Vec3::splat(CHUNK_SIZE as f32 + MARGIN),
-    )
-}
-
 fn spawn_geometry_mesh(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
@@ -512,8 +501,6 @@ fn spawn_geometry_mesh(
             transform,
             ChunkRenderCoord(coord),
             Visibility::Hidden,
-            chunk_render_aabb(),
-            NoAutoAabb,
             DespawnOnExit(GameState::Gameplay),
         ));
 
@@ -544,8 +531,6 @@ fn spawn_fluid_mesh(
             transform,
             ChunkRenderCoord(coord),
             Visibility::Hidden,
-            chunk_render_aabb(),
-            NoAutoAabb,
             NoCpuCulling,
             NotShadowCaster,
             DespawnOnExit(GameState::Gameplay),
