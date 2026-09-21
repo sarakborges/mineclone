@@ -249,7 +249,14 @@ fn fragment(
     // introduces unstable shadow artifacts on moving/translucent surfaces.
     if !is_fluid {
         let surface_normal = normalize(pbr_input.world_normal);
-        sun_visibility = directional_sun_visibility(in);
+
+        // Shadow-map sampling cannot affect a surface with no propagated sky
+        // contribution, and is also irrelevant when the global sky light is
+        // effectively off. Avoid the cascade lookup entirely in caves/night.
+        if sky_level > 0.001 && terrain_global_lighting[0].x > 0.001 {
+            sun_visibility = directional_sun_visibility(in);
+        }
+
         dynamic_light = dynamic_point_lighting(
             in,
             surface_normal,
