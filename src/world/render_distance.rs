@@ -42,6 +42,14 @@ pub(crate) fn chunk_visibility_radii(render_distance_chunks: i32) -> (i32, i32) 
     (show_radius, hide_radius)
 }
 
+pub(crate) fn chunk_mesh_preload_radius(render_distance_chunks: i32) -> i32 {
+    render_distance_chunks.max(1).saturating_add(1)
+}
+
+pub(crate) fn chunk_mesh_retention_radius(render_distance_chunks: i32) -> i32 {
+    render_distance_chunks.max(1).saturating_add(2)
+}
+
 pub fn chunk_coords_in_volume(
     center: IVec3,
     horizontal_radius: i32,
