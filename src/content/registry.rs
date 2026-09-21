@@ -1,27 +1,32 @@
+use std::sync::Arc;
+
 use bevy::platform::collections::HashMap;
 
 #[derive(Clone)]
 pub(super) struct DefinitionMap<T> {
-    definitions: HashMap<String, T>,
+    definitions: Arc<HashMap<String, T>>,
 }
 
 impl<T> Default for DefinitionMap<T> {
     fn default() -> Self {
         Self {
-            definitions: HashMap::new(),
+            definitions: Arc::new(HashMap::new()),
         }
     }
 }
 
-impl<T> DefinitionMap<T> {
+impl<T: Clone> DefinitionMap<T> {
     pub(super) fn insert(&mut self, id: String, definition: T) {
+        let definitions = Arc::make_mut(&mut self.definitions);
         assert!(
-            !self.definitions.contains_key(&id),
+            !definitions.contains_key(&id),
             "duplicate content definition id {id}"
         );
-        self.definitions.insert(id, definition);
+        definitions.insert(id, definition);
     }
+}
 
+impl<T> DefinitionMap<T> {
     pub(super) fn get(&self, id: &str) -> Option<&T> {
         self.definitions.get(id)
     }
