@@ -115,7 +115,7 @@ pub(super) struct ChunkStreamingState {
     surface_ranges: HashMap<IVec2, (i32, i32)>,
     initial_lighting_seeded: HashSet<IVec3>,
     initial_mesh_seed_catchup: HashSet<IVec3>,
-    mesh_pressure_evicted: HashSet<IVec3>,
+    mesh_pressure_evicted: HashMap<IVec3, usize>,
     fluid_settling: GeneratedFluidSettling,
     generation_wave_targets: HashSet<IVec3>,
     generation_wave_pending: DeduplicatedQueue<IVec3>,
@@ -149,7 +149,7 @@ impl ChunkStreamingState {
         self.desired
             .iter()
             .copied()
-            .filter(|coord| !self.mesh_pressure_evicted.contains(coord))
+            .filter(|coord| !self.mesh_pressure_evicted.contains_key(coord))
             .filter(|coord| !render_pool.contains(*coord))
             .filter(|coord| chunk_is_inside_render_radius(center, *coord, show_radius))
             .map(|coord| chunk_load_priority(coord, center, self.movement_direction))
@@ -354,7 +354,7 @@ impl ChunkStreamingState {
             !self.resident_generated_chunk_is_unpublished(coord),
             "generated chunk cannot become ready before fluid settling completes: {coord:?}"
         );
-        if self.mesh_pressure_evicted.contains(&coord) {
+        if self.mesh_pressure_evicted.contains_key(&coord) {
             return;
         }
         if self.keeps_loaded(coord) && !self.ready.contains(coord) {
@@ -362,13 +362,13 @@ impl ChunkStreamingState {
         }
     }
 
-    pub(super) fn suppress_mesh_for_pressure(&mut self, coord: IVec3) {
+    pub(super) fn suppress_mesh_for_pressure(&mut self, coord: IVec3, bytes: usize) {
         self.ready.remove(coord);
-        self.mesh_pressure_evicted.insert(coord);
+        self.mesh_pressure_evicted.insert(coord, bytes);
     }
 
     pub(super) fn recover_mesh_after_pressure(&mut self, coord: IVec3) -> bool {
-        if !self.mesh_pressure_evicted.remove(&coord) || !self.keeps_loaded(coord) {
+        if self.mesh_pressure_evicted.remove(&coord).is_none() || !self.keeps_loaded(coord) {
             return false;
         }
         self.mark_ready(coord);
@@ -376,11 +376,15 @@ impl ChunkStreamingState {
     }
 
     pub(super) fn mesh_pressure_evicted_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
-        self.mesh_pressure_evicted.iter().copied()
+        self.mesh_pressure_evicted.keys().copied()
+    }
+
+    pub(super) fn mesh_pressure_evicted_bytes(&self, coord: IVec3) -> Option<usize> {
+        self.mesh_pressure_evicted.get(&coord).copied()
     }
 
     pub(super) fn mesh_is_pressure_evicted(&self, coord: IVec3) -> bool {
-        self.mesh_pressure_evicted.contains(&coord)
+        self.mesh_pressure_evicted.contains_key(&coord)
     }
 
     pub(super) fn retain_mesh_pressure_evictions(
@@ -388,7 +392,7 @@ impl ChunkStreamingState {
         desired: &HashSet<IVec3>,
         center: IVec3,
     ) {
-        self.mesh_pressure_evicted.retain(|coord| {
+        self.mesh_pressure_evicted.retain(|coord, _| {
             desired.contains(coord) && !is_critical_streaming_coord(*coord, center)
         });
     }
