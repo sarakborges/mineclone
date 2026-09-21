@@ -90,5 +90,11 @@
   "brush.palette.clear": "Clear",
   "worldSelection.openSavesFolder": "Open Saves Folder",
   "worldSelection.openSavesFolderError": "Cannot open saves folder",
-  "hud.layers": "Layers"
+  "hud.layers": "Layers",
+  "worldSelection.seed": "Seed",
+  "worldSelection.daysPassed": "Days Passed",
+  "worldSelection.dimension": "Dimension",
+  "worldSelection.coordinates": "Coordinates",
+  "worldSelection.biome": "Current Biome",
+  "worldSelection.unknown": "Unavailable"
 }
