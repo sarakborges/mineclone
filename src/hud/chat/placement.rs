@@ -4,7 +4,7 @@ use crate::{
     content::{
         block::BlockRegistry,
         creature::{CreatureCollider, CreatureRegistry},
-        structure::{StructureRegistry, StructureRotation},
+        structure::StructureRegistry,
     },
     creatures::{CreatureInstance, spawn_creature_at},
     localization::ActiveLanguage,
