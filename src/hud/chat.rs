@@ -3,7 +3,7 @@ mod locate;
 mod placement;
 mod visual;
 
-use std::collections::VecDeque;
+use std::{collections::VecDeque, path::PathBuf};
 
 use bevy::{
     ecs::system::SystemParam,
@@ -26,7 +26,8 @@ use locate::{ChatLocateContext, PendingLocate, poll_locate_task};
 use placement::ChatPlacementContext;
 use visual::{
     advance_chat_timeout, rebuild_chat_history, render_autocomplete, scroll_chat_history,
-    handle_chat_warp_links, scroll_chat_to_bottom, spawn_chat_ui, sync_chat_visibility,
+    handle_chat_open_structure_file, handle_chat_warp_links, scroll_chat_to_bottom, spawn_chat_ui,
+    sync_chat_visibility,
 };
 
 const PLAYER_DISPLAY_NAME: &str = "Yogg'Sara";
@@ -38,6 +39,7 @@ const MAX_INPUT_CHARS: usize = 256;
 pub(super) enum ChatMessage {
     Text(String),
     Located { prefix: String, target: IVec3 },
+    StructureFile(PathBuf),
 }
 
 /// Oldest entries are first; visual order is the same as chronological order.
@@ -72,6 +74,14 @@ impl ChatState {
         self.revision = self.revision.wrapping_add(1);
     }
 
+    pub(crate) fn append_text(&mut self, text: impl Into<String>) {
+        self.append(ChatMessage::Text(text.into()));
+    }
+
+    pub(crate) fn append_structure_file(&mut self, path: PathBuf) {
+        self.append(ChatMessage::StructureFile(path));
+    }
+
     fn visible(&self) -> bool {
         self.open || (!self.history.is_empty() && self.since_last_message < CHAT_TIMEOUT_SECS)
     }
@@ -101,6 +111,7 @@ impl Plugin for ChatHudPlugin {
                 (
                     handle_chat_input,
                     handle_chat_warp_links,
+                    handle_chat_open_structure_file,
                     update_autocomplete,
                     interpret_chat_submissions,
                     poll_locate_task,
