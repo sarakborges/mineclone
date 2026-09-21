@@ -65,7 +65,12 @@ impl WorldSession {
         let captured = snapshot.capture(id)?;
         let capture_elapsed = capture_started.elapsed();
         let publication_started = Instant::now();
-        save_world(&captured, snapshot.registries.for_validation())?;
+        save_world(
+            &captured,
+            &snapshot.state.world,
+            &snapshot.registries.fluids,
+            snapshot.registries.for_validation(),
+        )?;
         let publication_elapsed = publication_started.elapsed();
         // Measured on the machine running the game, not inferred from CI.
         // Publication includes JSON serialization, fsync and cleanup dispatch;
@@ -211,7 +216,6 @@ impl WorldSaveContext<'_, '_> {
             tick_in_day: self.state.clock.tick_in_day(),
             inventory: self.state.inventory.saved_items(),
             selected_hotbar_slot: self.state.inventory.selected_slot(),
-            world: &self.state.world,
             fluids: &self.registries.fluids,
             pending_fluids: &self.state.pending_fluids,
             world_tick: self.state.world_ticks.current_tick(),
