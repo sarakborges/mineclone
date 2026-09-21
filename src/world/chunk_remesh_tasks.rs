@@ -81,7 +81,7 @@ impl ChunkRemeshDependencies {
         revisions: &HashMap<IVec3, [u64; 8]>,
     ) -> Self {
         Self {
-            content: world.dependencies(),
+            content: world.dependencies().for_meshlets(meshlets),
             // Revision slots are already expanded by the one-voxel lighting
             // halo, so a partial task only depends on the meshlets it rebuilds.
             lighting: LightingRemeshDependencies::capture(center, meshlets, revisions),
