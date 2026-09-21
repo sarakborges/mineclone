@@ -214,7 +214,7 @@ fn resolve_token(token: u32) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::SecondaryProperties;
+    use super::{MAX_SECONDARY_PROPERTIES, SecondaryProperties};
 
     #[test]
     fn stores_and_replaces_secondary_property_values() {
