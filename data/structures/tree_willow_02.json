@@ -44,7 +44,7 @@
       "block": "asteria:grass"
     },
     "W": {
-      "block": "asteria:willow_log",
+      "block": "asteria:log_willow",
       "orientation": "y",
       "surfaceLayers": [
         {
@@ -60,15 +60,15 @@
       ]
     },
     "X": {
-      "block": "asteria:willow_log",
+      "block": "asteria:log_willow",
       "orientation": "x"
     },
     "Z": {
-      "block": "asteria:willow_log",
+      "block": "asteria:log_willow",
       "orientation": "z"
     },
     "F": {
-      "block": "asteria:willow_leaf"
+      "block": "asteria:leaf_willow"
     }
   },
   "layers": [
