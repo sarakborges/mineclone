@@ -1,4 +1,5 @@
 use bevy::{prelude::*, ui_widgets::ScrollArea};
+use chrono::{DateTime, Datelike, Local, Timelike, Utc};
 
 use crate::{
     app::game_state::GameState,
@@ -321,37 +322,39 @@ fn format_coordinates(position: Option<[f32; 3]>) -> String {
 
 // Portable UTC rendering without relying on local timezone configuration.
 fn format_save_time(unix_ms: u64, language: Language) -> String {
-    let seconds = unix_ms / 1_000;
-    let days = i64::try_from(seconds / 86_400).unwrap_or(i64::MAX);
-    let seconds_in_day = seconds % 86_400;
-    let z = days.saturating_add(719_468);
-    let era = z.div_euclid(146_097);
-    let day_of_era = z - era * 146_097;
-    let year_of_era = (day_of_era - day_of_era / 1_460 + day_of_era / 36_524
-        - day_of_era / 146_096) / 365;
-    let mut year = year_of_era + era * 400;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let month_part = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * month_part + 2) / 5 + 1;
-    let month = month_part + if month_part < 10 { 3 } else { -9 };
-    if month <= 2 {
-        year += 1;
-    }
-    let hour = seconds_in_day / 3_600;
-    let minute = seconds_in_day / 60 % 60;
+    let Ok(unix_ms) = i64::try_from(unix_ms) else {
+        return "—".to_owned();
+    };
+    let Some(utc) = DateTime::<Utc>::from_timestamp_millis(unix_ms) else {
+        return "—".to_owned();
+    };
+    let local = utc.with_timezone(&Local);
+    let timezone = local.format("%Z");
+
     match language {
         Language::English => {
             let month_name = [
                 "Jan", "Feb", "Mar", "Apr", "May", "Jun",
                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
             ]
-            .get(month.saturating_sub(1) as usize)
+            .get(local.month0() as usize)
             .copied()
             .unwrap_or("?");
-            format!("{month_name} {day}, {year} · {hour:02}:{minute:02} UTC")
+            format!(
+                "{month_name} {}, {} · {:02}:{:02} {timezone}",
+                local.day(),
+                local.year(),
+                local.hour(),
+                local.minute(),
+            )
         }
-        Language::PortugueseBrazil | Language::Spanish => {
-            format!("{day:02}/{month:02}/{year:04} · {hour:02}:{minute:02} UTC")
-        }
+        Language::PortugueseBrazil | Language::Spanish => format!(
+            "{:02}/{:02}/{:04} · {:02}:{:02} {timezone}",
+            local.day(),
+            local.month(),
+            local.year(),
+            local.hour(),
+            local.minute(),
+        ),
     }
 }
