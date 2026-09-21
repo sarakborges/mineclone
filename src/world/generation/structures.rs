@@ -86,6 +86,22 @@ pub(super) fn rasterize_structures(
     });
 }
 
+pub(crate) fn structure_candidate_anchor(
+    world_seed: u64,
+    biome_id: &str,
+    structure_reference: &str,
+    placement: StructurePlacementRules,
+    cell: IVec2,
+) -> Option<IVec2> {
+    candidate_anchor(
+        world_seed,
+        biome_id,
+        structure_reference,
+        placement,
+        cell,
+    )
+}
+
 pub(crate) fn located_structure_origins_in_chunk(
     horizontal_chunk: IVec2,
     structure_id: &str,
