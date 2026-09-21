@@ -12,6 +12,7 @@ use crate::{
     content::player::PlayerDefinition,
     ui::transition::ScreenTransition,
     world::{
+        chunk_async_work::ChunkAsyncWorkLimiter,
         chunk_generation_tasks::ChunkGenerationTasks,
         chunk_mesh_tasks::ChunkMeshTasks,
         chunk_system_params::{ChunkContent, ChunkGeneration, ChunkRenderer},
@@ -45,6 +46,7 @@ pub(in crate::world) fn setup_world(
     mut simulation: WorldSetupSimulation,
     mut generation_tasks: ResMut<ChunkGenerationTasks>,
     mut mesh_tasks: ResMut<ChunkMeshTasks>,
+    async_work: Res<ChunkAsyncWorkLimiter>,
     persistence: WorldSetupPersistence,
     player_definition: Res<PlayerDefinition>,
 ) {
@@ -64,6 +66,7 @@ pub(in crate::world) fn setup_world(
             &mut progress,
             &mut simulation.fluids,
             &mut generation_tasks,
+            &async_work,
             *persistence.load_mode,
         ),
         WorldLoadingPhase::SettlingFluids => {
@@ -76,7 +79,13 @@ pub(in crate::world) fn setup_world(
             &mut simulation.changed_lighting_chunks,
         ),
         WorldLoadingPhase::Meshing => {
-            mesh_initial_chunks(&content, &mut renderer, &mut progress, &mut mesh_tasks)
+            mesh_initial_chunks(
+                &content,
+                &mut renderer,
+                &mut progress,
+                &mut mesh_tasks,
+                &async_work,
+            )
         }
         WorldLoadingPhase::Spawning => spawn_loaded_world(
             &content,
