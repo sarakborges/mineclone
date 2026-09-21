@@ -128,6 +128,10 @@ pub(super) struct ChunkStreamingState {
 }
 
 impl ChunkStreamingState {
+    pub(super) fn movement_direction(&self) -> IVec2 {
+        self.movement_direction
+    }
+
     pub(super) fn keeps_loaded(&self, coord: IVec3) -> bool {
         self.desired.contains(&coord) || self.retained.contains(&coord)
     }
