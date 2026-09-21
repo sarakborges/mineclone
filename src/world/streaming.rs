@@ -44,9 +44,7 @@ use super::{
     fluid_updates::{
         GeneratedFluidSettling, GeneratedFluidSettlingCompletion, PendingFluidUpdates,
     },
-    render_distance::{
-        RenderDistanceSettings, chunk_mesh_preload_radius, chunk_mesh_retention_radius,
-    },
+    render_distance::{RenderDistanceSettings, chunk_visibility_radii},
     tick::WorldTickClock,
     warp::PendingWarp,
     world_feature_fields::WorldFeatureFields,
@@ -133,8 +131,8 @@ impl ChunkStreamingState {
         let Some(center) = self.center else {
             return false;
         };
-        let retention_radius = chunk_mesh_retention_radius(self.horizontal_radius);
-        self.keeps_loaded(coord) && chunk_is_inside_render_radius(center, coord, retention_radius)
+        let (_, hide_radius) = chunk_visibility_radii(self.horizontal_radius);
+        self.keeps_loaded(coord) && chunk_is_inside_render_radius(center, coord, hide_radius)
     }
 
     pub(super) fn enqueue_retired(&mut self, coord: IVec3) {
@@ -377,7 +375,7 @@ impl ChunkStreamingState {
     fn pop_ready(&mut self) -> Option<IVec3> {
         let center = self.center?;
         let movement_direction = self.movement_direction;
-        let preload_radius = chunk_mesh_preload_radius(self.horizontal_radius);
+        let (show_radius, _) = chunk_visibility_radii(self.horizontal_radius);
         self.ready_priority.sync(
             &self.ready,
             self.selection_revision,
@@ -391,7 +389,7 @@ impl ChunkStreamingState {
                     continue;
                 }
                 if !(self.desired.contains(&coord) || self.retained.contains(&coord))
-                    || !chunk_is_inside_render_radius(center, coord, preload_radius)
+                    || !chunk_is_inside_render_radius(center, coord, show_radius)
                 {
                     continue;
                 }
