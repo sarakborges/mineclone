@@ -674,6 +674,7 @@ mod tests {
         let mut state = ChunkStreamingState {
             center: Some(IVec3::ZERO),
             movement_direction: IVec2::X,
+            horizontal_radius: 12,
             ..default()
         };
         state.ready.enqueue(background);
