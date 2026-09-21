@@ -1,9 +1,95 @@
+use std::collections::{BTreeSet, HashMap};
+
 use bevy::prelude::*;
 
 use crate::{
-    content::block::{BlockDefinition, BlockTextureLayer},
+    content::block::{BlockDefinition, BlockRegistry, BlockTextureLayer},
     voxel::block_face::BlockFace,
 };
+
+const TERRAIN_TEXTURE_INDEX_BITS: u32 = 10;
+const TERRAIN_TEXTURE_INDEX_MASK: u32 = (1 << TERRAIN_TEXTURE_INDEX_BITS) - 1;
+const TERRAIN_TEXTURE_NONE_INDEX: u32 = TERRAIN_TEXTURE_INDEX_MASK;
+const TERRAIN_TEXTURE_FLAG_SHIFT: u32 = TERRAIN_TEXTURE_INDEX_BITS * 2;
+const TERRAIN_TEXTURE_BASE_DYABLE: u32 = 1;
+const TERRAIN_TEXTURE_OVERLAY_DYABLE: u32 = 2;
+const MAX_TERRAIN_TEXTURES: usize = TERRAIN_TEXTURE_NONE_INDEX as usize - 1;
+
+#[derive(Clone, Default)]
+pub(crate) struct TerrainTextureTable {
+    paths: Vec<String>,
+    indices: HashMap<String, u16>,
+}
+
+impl TerrainTextureTable {
+    pub(crate) fn from_blocks(blocks: &BlockRegistry) -> Self {
+        let mut unique = BTreeSet::<String>::new();
+        for block in blocks.iter() {
+            for face in BlockFace::ALL {
+                for layer in block_face_texture_layers(face, block) {
+                    unique.insert(layer.texture.clone());
+                }
+            }
+        }
+
+        assert!(
+            unique.len() <= MAX_TERRAIN_TEXTURES,
+            "terrain texture array supports at most {MAX_TERRAIN_TEXTURES} unique block textures"
+        );
+
+        let paths = unique.into_iter().collect::<Vec<_>>();
+        let indices = paths
+            .iter()
+            .enumerate()
+            .map(|(index, path)| {
+                let array_index = u16::try_from(index + 1)
+                    .expect("terrain texture array index must fit in u16");
+                (path.clone(), array_index)
+            })
+            .collect();
+
+        Self { paths, indices }
+    }
+
+    pub(crate) fn paths(&self) -> &[String] {
+        &self.paths
+    }
+
+    pub(crate) fn layer_count(&self) -> u32 {
+        u32::try_from(self.paths.len() + 1)
+            .expect("terrain texture array layer count must fit in u32")
+    }
+
+    pub(crate) fn encoded_layers(&self, layers: &[BlockTextureLayer]) -> Option<f32> {
+        if layers.len() > 2 {
+            return None;
+        }
+
+        let base = layers.first().map_or(0_u32, |layer| {
+            u32::from(*self.indices.get(&layer.texture).unwrap_or_else(|| {
+                panic!("missing terrain texture index for {}", layer.texture)
+            }))
+        });
+        let overlay = layers.get(1).map_or(TERRAIN_TEXTURE_NONE_INDEX, |layer| {
+            u32::from(*self.indices.get(&layer.texture).unwrap_or_else(|| {
+                panic!("missing terrain texture index for {}", layer.texture)
+            }))
+        });
+        let mut flags = 0_u32;
+        if layers.first().is_some_and(|layer| layer.dyable) {
+            flags |= TERRAIN_TEXTURE_BASE_DYABLE;
+        }
+        if layers.get(1).is_some_and(|layer| layer.dyable) {
+            flags |= TERRAIN_TEXTURE_OVERLAY_DYABLE;
+        }
+
+        let encoded = base
+            | (overlay << TERRAIN_TEXTURE_INDEX_BITS)
+            | (flags << TERRAIN_TEXTURE_FLAG_SHIFT);
+        debug_assert!(encoded <= 0x00ff_ffff);
+        Some(encoded as f32)
+    }
+}
 
 pub(crate) fn block_face_texture_layers(
     face: BlockFace,
