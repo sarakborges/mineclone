@@ -24,6 +24,7 @@ use crate::{
 
 use super::{
     InMemoryWorldSave,
+    biome::CurrentBiome,
     current_context::CurrentDimensionContext,
     day_night::DayNightClock,
     dimension::CurrentDimension,
@@ -82,6 +83,7 @@ struct WorldSnapshotState<'w> {
     dimension: Res<'w, CurrentDimension>,
     rules: Res<'w, GameRules>,
     save: Res<'w, InMemoryWorldSave>,
+    biome: Res<'w, CurrentBiome>,
     clock: Res<'w, DayNightClock>,
     inventory: Res<'w, PlayerHotbar>,
     world: Res<'w, VoxelWorld>,
@@ -199,6 +201,7 @@ impl WorldSaveContext<'_, '_> {
             seed: self.state.seed.0,
             dimension_id: &self.state.dimension.id,
             spawn_biome: self.state.save.spawn_biome(),
+            current_biome: Some(self.state.biome.id.as_str()),
             biome_size_multiplier: self.state.save.biome_size_multiplier(),
             ticks_per_second: self.state.rules.ticks_per_second(),
             player: Some(self.entities.saved_player()?),
