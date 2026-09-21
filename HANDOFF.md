@@ -8435,3 +8435,123 @@ Commit funcional 6db1283f2ee0ac2ef270c3d447dc5089520f01b4:
 2. confirmar startup sem panic de asteria:tree_oak;
 3. confirmar que alterações em data/ do checkout entram imediatamente no próximo launch;
 4. validar packaged build iniciada fora da pasta do executável para garantir fallback ao runtime empacotado.
+
+
+## Checkpoint 179 — 2026-09-21: World Tree vertical truncation + branch log orientation [FIX; VERSION 0.49.1]
+
+### Relato
+
+World Tree ainda aparecia com partes truncadas e os galhos usavam majoritariamente oak logs na orientação vertical, apesar de oak_log suportar Y/Z/X.
+
+### Root cause do truncamento
+
+O streaming/generation ainda modelava structures altas como um extent relativo ao terreno local de cada horizontal chunk:
+
+local_surface_chunk + structure_height_chunks.
+
+Isso é incorreto para uma structure monumental atravessando várias colunas. O Y real da copa é definido pelo origin_y do anchor da structure, não pelo terreno abaixo de cada chunk da copa.
+
+Se uma coluna lateral da World Tree estivesse sobre terreno mais baixo que o anchor, o teto calculado podia terminar uma seção cedo demais. O selector deixava de pedir o chunk superior e/ou generate_chunk() podia classificar esse chunk como vazio.
+
+### Correção — teto absoluto de structure
+
+O cache anterior structure_vertical_extent foi substituído semanticamente por structure_top_y.
+
+Novo cálculo:
+
+1. enumera somente candidate anchors cuja geometria pode cruzar a horizontal chunk;
+2. resolve o membro real quando o placement referencia um structure group;
+3. exige o biome correto no anchor;
+4. usa um support offset real da structure;
+5. amostra o surface Y nesse support;
+6. como fit_structure_to_ground usa o menor ground dos supports, qualquer support individual fornece um upper bound conservador do origin;
+7. adiciona MAX_STRUCTURE_GROUND_RISE;
+8. converte para um top Y absoluto:
+   conservative_origin_y + max_y_offset.
+
+O selector e generate_chunk() agora trabalham com structure_top_chunk absoluto.
+
+Consequências:
+
+- World Tree deixa de depender do terrain Y local das colunas da copa;
+- chunks superiores necessários entram na desired selection;
+- os mesmos chunks não são descartados pelo generation early-out;
+- o comportamento continua local por candidate, sem reintroduzir o antigo envelope global da maior structure do mundo.
+
+### Limpeza
+
+A troca para top absoluto tornou obsoletos:
+
+- StructureRegistry::max_y_offset_for_reference();
+- chunks_for_block_extent().
+
+Ambos foram removidos em vez de manter dead code/lint suppression.
+
+### Orientação dos galhos da World Tree
+
+O arquivo tinha 24.419 oak logs:
+
+- 24.354 com orientação Y;
+- 65 com orientação Z;
+- 0 com orientação X.
+
+Foi adicionado símbolo X no palette:
+
+- X -> asteria:oak_log, orientation=x.
+
+Os W foram reclassificados somente quando o esqueleto local de oak logs tem continuidade horizontal claramente dominante:
+
+- X quando neighbors X > neighbors Y e X > Z;
+- Z quando neighbors Z > neighbors Y e Z > X;
+- caso ambíguo permanece Y;
+- Z authored anteriormente é preservado.
+
+Resultado final:
+
+- Y: 22.542 logs;
+- X: 851 logs;
+- Z: 1.026 logs.
+
+Isso mantém o tronco grosso vertical e orienta raízes/galhos horizontais de acordo com o eixo dominante.
+
+Validação estrutural do JSON:
+
+- 100 layers;
+- 69 blocos de largura;
+- 77 de profundidade;
+- todos os rows mantêm dimensões consistentes;
+- nenhum símbolo sem palette.
+
+### Commits
+
+- 4146cb9203f6b8ef9ceaa481c00d0ad97d297d4a — expõe MAX_STRUCTURE_GROUND_RISE para o bound.
+- a21cfca03b51aa650671af0e5a9ad8f2016ee0cb — cache passa a representar structure top Y.
+- 72fdce880d651a200ee16391c54657545210e41f — expõe structure_top_y via WorldFeatureFields.
+- f7954307de2e5dce574be4718ba1a14aed537a84 — calcula top Y absoluto conservador por candidate.
+- ca48ba8589fc41ebc504c550c439129e56980de0 — generation early-out usa top absoluto.
+- cc6c37087d810a15142978ebc1dee7da8eee142f — streaming selection usa top absoluto.
+- 7a617ed20dece94aabce492da5326ba52c4e9606 — orienta branch/root logs da World Tree.
+- 33385c610f4e035c8378da18c3a2154a08bd3686 — remove helper de height obsoleto.
+- 0f5c2250b9eefb6388fc5ff6fcd55e1774b28f74 — remove conversão de extent obsoleta.
+- d99f0bbcaf88a0aa050b7406cfb7852ef2990c50 — bump 0.49.1.
+
+### CI
+
+Topo funcional antes do bump:
+
+0f5c2250b9eefb6388fc5ff6fcd55e1774b28f74
+
+- push 35547057001: success;
+- PR 35547060041: success;
+- Clippy rigoroso: success;
+- cargo check --locked: success.
+
+### QA prioritária
+
+1. localizar/gerar World Tree e inspecionar toda a copa em altura máxima;
+2. verificar especialmente chunks laterais cujo terreno abaixo esteja abaixo do Y do anchor;
+3. confirmar ausência de cortes horizontais/verticais nas bordas de chunk;
+4. inspecionar galhos em X/Z e raízes:
+   - top texture do oak_log deve apontar no eixo do galho;
+   - tronco principal deve continuar vertical;
+5. verificar que tree_oak group e boulders continuam sem regressão de placement/altura.
