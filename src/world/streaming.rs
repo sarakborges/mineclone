@@ -65,7 +65,7 @@ struct RetiredScanKey {
 struct ReadyPriorityCache {
     source_revision: u64,
     selection_revision: u64,
-    buckets: [VecDeque<IVec3>; 3],
+    pending: VecDeque<IVec3>,
 }
 
 impl ReadyPriorityCache {
@@ -82,12 +82,12 @@ impl ReadyPriorityCache {
             return;
         }
 
-        for bucket in &mut self.buckets {
-            bucket.clear();
-        }
-        for coord in ready.values_in_order() {
-            self.buckets[ready_priority(coord, center, movement_direction)].push_back(coord);
-        }
+        self.pending.clear();
+        let mut ordered = ready.values_in_order().collect::<Vec<_>>();
+        ordered.sort_unstable_by_key(|coord| {
+            ready_priority(*coord, center, movement_direction)
+        });
+        self.pending.extend(ordered);
         self.source_revision = ready.revision();
         self.selection_revision = selection_revision;
     }
@@ -384,23 +384,21 @@ impl ChunkStreamingState {
             movement_direction,
         );
 
-        for bucket in &mut self.ready_priority.buckets {
-            while let Some(coord) = bucket.pop_front() {
-                if !self.ready.contains(coord) {
-                    continue;
-                }
-                if !(self.desired.contains(&coord) || self.retained.contains(&coord))
-                    || !chunk_is_inside_render_radius(center, coord, show_radius)
-                {
-                    continue;
-                }
-
-                let removed = self.ready.remove(coord);
-                debug_assert!(removed, "ready priority cache must reference an active chunk");
-                self.ready_priority
-                    .mark_source_revision(self.ready.revision());
-                return Some(coord);
+        while let Some(coord) = self.ready_priority.pending.pop_front() {
+            if !self.ready.contains(coord) {
+                continue;
             }
+            if !(self.desired.contains(&coord) || self.retained.contains(&coord))
+                || !chunk_is_inside_render_radius(center, coord, show_radius)
+            {
+                continue;
+            }
+
+            let removed = self.ready.remove(coord);
+            debug_assert!(removed, "ready priority cache must reference an active chunk");
+            self.ready_priority
+                .mark_source_revision(self.ready.revision());
+            return Some(coord);
         }
 
         None
@@ -441,16 +439,38 @@ impl ChunkStreamingState {
     }
 }
 
-fn ready_priority(coord: IVec3, center: IVec3, movement_direction: IVec2) -> usize {
-    if is_critical_streaming_coord(coord, center) {
+fn ready_priority(
+    coord: IVec3,
+    center: IVec3,
+    movement_direction: IVec2,
+) -> (i32, i32, i32, i32, i32, i32, i32) {
+    let delta = coord - center;
+    let horizontal_delta = coord.xz() - center.xz();
+    let critical_band = if is_critical_streaming_coord(coord, center) {
         0
-    } else if movement_direction != IVec2::ZERO
-        && (coord.xz() - center.xz()).dot(movement_direction) > 0
-    {
+    } else {
         1
+    };
+    let horizontal_distance = horizontal_delta.length_squared();
+    let total_distance = delta.length_squared();
+    let forward = horizontal_delta.dot(movement_direction);
+    let directional_band = if movement_direction == IVec2::ZERO || forward == 0 {
+        1
+    } else if forward > 0 {
+        0
     } else {
         2
-    }
+    };
+
+    (
+        critical_band,
+        horizontal_distance,
+        total_distance,
+        directional_band,
+        coord.y,
+        coord.z,
+        coord.x,
+    )
 }
 
 fn is_critical_streaming_coord(coord: IVec3, center: IVec3) -> bool {
@@ -647,7 +667,7 @@ fn seed_loaded_chunk_lighting(
 mod tests {
     use super::*;
     #[test]
-    fn ready_queue_preserves_critical_forward_background_priority_in_one_scan() {
+    fn ready_queue_prioritizes_distance_before_movement_direction() {
         let background = IVec3::new(-4, 0, 0);
         let forward = IVec3::new(5, 0, 0);
         let critical = IVec3::new(1, 0, 0);
@@ -661,8 +681,8 @@ mod tests {
         state.ready.enqueue(critical);
 
         assert_eq!(state.pop_ready(), Some(critical));
-        assert_eq!(state.pop_ready(), Some(forward));
         assert_eq!(state.pop_ready(), Some(background));
+        assert_eq!(state.pop_ready(), Some(forward));
         assert_eq!(state.pop_ready(), None);
     }
 
