@@ -26,7 +26,7 @@ use crate::hud::block_icon::BlockIconMaterial;
 
 pub(super) use self::{
     creative::spawn_creative_catalog_rows,
-    item::{spawn_cursor_icon, spawn_inventory_item},
+    item::{spawn_cursor_icon, spawn_inventory_item, spawn_item_tooltip},
 };
 use self::{creative::spawn_creative_panel, player::spawn_player_inventory_panel};
 use super::state::{InventoryHudRoot, PANEL_GAP};
@@ -86,6 +86,7 @@ pub(super) fn spawn_inventory_root(
                 spawn_creative_panel(root, state, items);
             }
             spawn_player_inventory_panel(root, state.hotbar, items);
+            spawn_item_tooltip(root);
 
             let Some(item_id) = state.cursor.item() else {
                 return;
