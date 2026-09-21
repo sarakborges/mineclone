@@ -181,17 +181,19 @@ fn fragment(
     // is clamped.
     let tiled_uv = fract(in.uv);
     var texel = vec4<f32>(1.0);
-#ifdef VERTEX_TANGENTS
-    // Tint is constant per voxel quad, so the tangent direction+magnitude
-    // encoding is stable and does not participate in the colored-light gradient.
-    let tint = clamp(
-        in.world_tangent.xyz * abs(in.world_tangent.w),
-        vec3<f32>(0.0),
-        vec3<f32>(1.0),
-    );
-#else
-    let tint = vec3<f32>(1.0);
-#endif
+    let packed_block_light = u32(round(in.color.x));
+    let block_levels = vec3<f32>(
+        f32(packed_block_light & 15u),
+        f32((packed_block_light >> 4u) & 15u),
+        f32((packed_block_light >> 8u) & 15u),
+    ) / 15.0;
+
+    let packed_tint = u32(round(in.color.y));
+    let tint = vec3<f32>(
+        f32(packed_tint & 255u),
+        f32((packed_tint >> 8u) & 255u),
+        f32((packed_tint >> 16u) & 255u),
+    ) / 255.0;
     var base_tint_enabled = terrain_material_extension.base_tint_enabled > 0.5;
     var overlay_enabled = terrain_material_extension.overlay_enabled > 0.5;
     var overlay_tint_enabled = terrain_material_extension.overlay_tint_enabled > 0.5;
@@ -227,14 +229,13 @@ fn fragment(
         1.0,
     );
     let is_fluid = fluid_animation > 0.5;
-    let ambient_occlusion = clamp(in.color.a, 0.0, 1.0);
+    let ambient_occlusion = clamp(in.color.z, 0.0, 1.0);
     let sky_level = clamp(in.uv_b.x, 0.0, 1.0);
     let sky_light = pow(sky_level, SKY_LIGHT_GAMMA) * terrain_global_lighting[0].x;
 
-    // RGB remains linear all the way through interpolation. Strength is shaped
-    // from the peak only, so boosting dim light never raises the weaker color
-    // channels and therefore cannot wash red+blue toward white.
-    let block_levels = clamp(in.color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+    // Block-light channels are exact 4-bit voxel levels packed into COLOR.x.
+    // Strength is shaped from the peak only, so boosting dim light never raises
+    // the weaker color channels and therefore cannot wash red+blue toward white.
     let block_peak = max(max(block_levels.r, block_levels.g), block_levels.b);
     let block_hue = block_levels / max(block_peak, 0.001);
     let block_intensity = pow(block_peak, BLOCK_LIGHT_INTENSITY_GAMMA);
