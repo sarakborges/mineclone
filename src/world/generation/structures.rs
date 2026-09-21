@@ -1,5 +1,6 @@
 mod placement;
 mod restrictions;
+mod set;
 mod support;
 
 use std::{cmp::Ordering, collections::HashSet};
@@ -32,7 +33,8 @@ use crate::{
 use self::{
     placement::{candidate_anchor, structure_member_hash},
     restrictions::candidate_satisfies_restrictions,
-    support::{MAX_STRUCTURE_GROUND_RISE, compute_structure_origin_y},
+    set::resolve_set_pieces,
+    support::compute_structure_origin_y,
 };
 use super::{super::biome_field::BiomeField, ChunkGenerationContext};
 
@@ -45,8 +47,12 @@ struct StructureCandidate<'a> {
     placement_id: &'a str,
     structure: &'a StructureDefinition,
     rotation: StructureRotation,
+    placement_anchor: IVec2,
     anchor: IVec2,
     origin_y: i32,
+    priority: i32,
+    reserve_space: bool,
+    conflict_groups: &'a [String],
     minimum: IVec2,
     maximum: IVec2,
 }
@@ -202,6 +208,7 @@ fn resolved_structure_candidates(
                 placement_id: candidate.placement_id.to_owned(),
                 structure_id: candidate.structure.id.clone(),
                 rotation: candidate.rotation,
+                placement_anchor: candidate.placement_anchor,
                 anchor: candidate.anchor,
                 origin_y: candidate.origin_y,
             })
