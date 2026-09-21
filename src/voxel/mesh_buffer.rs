@@ -1,8 +1,16 @@
 use bevy::{
-    asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology,
+    asset::RenderAssetUsages,
+    mesh::{Indices, MeshVertexAttribute},
+    prelude::*,
+    render::render_resource::{PrimitiveTopology, VertexFormat},
 };
 
 use super::{meshlet::CHUNK_MESHLET_EDGE, quad::quad_triangle_indices};
+
+/// Keep Bevy's built-in color attribute ID so the standard material pipeline
+/// still defines VERTEX_COLORS, but store voxel lighting in normalized bytes.
+pub(crate) const ATTRIBUTE_VOXEL_LIGHT: MeshVertexAttribute =
+    MeshVertexAttribute::new("Vertex_Color", 5, VertexFormat::Unorm8x4);
 
 pub(crate) struct VoxelMeshQuad {
     pub(crate) vertices: [[f32; 3]; 4],
@@ -19,7 +27,7 @@ pub(crate) struct VoxelMeshBuffer {
     positions: Vec<[f32; 3]>,
     uvs: Vec<[f32; 2]>,
     light_uvs: Vec<[f32; 2]>,
-    colors: Vec<[f32; 4]>,
+    colors: Vec<[u8; 4]>,
     indices: Vec<u32>,
 }
 
@@ -35,7 +43,7 @@ impl VoxelMeshBuffer {
         self.light_uvs.extend(std::array::from_fn(|index| {
             [quad.light_uvs[index][0], packed_tint]
         }));
-        self.colors.extend(quad.colors);
+        self.colors.extend(quad.colors.map(encode_voxel_light));
         self.indices
             .extend(quad_triangle_indices(base, quad.flip_diagonal));
     }
@@ -57,7 +65,7 @@ impl VoxelMeshBuffer {
             .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
             // Tangents are omitted: voxel materials do not use normal maps.
             // RGB block light and AO remain independent interpolated channels.
-            .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors)
+            .with_inserted_attribute(ATTRIBUTE_VOXEL_LIGHT, self.colors)
             .with_inserted_indices(indices),
         )
     }
@@ -71,6 +79,12 @@ fn encode_material_uv(uv: [f32; 2], material_code: f32) -> [f32; 2] {
         uv[0] + material_code.round().max(0.0) * MATERIAL_UV_STRIDE,
         uv[1],
     ]
+}
+
+fn encode_voxel_light(color: [f32; 4]) -> [u8; 4] {
+    color.map(|channel| {
+        (channel.clamp(0.0, 1.0) * 255.0).round() as u8
+    })
 }
 
 fn encode_tint_and_normal(tint: [f32; 3], normal: [f32; 3]) -> f32 {
