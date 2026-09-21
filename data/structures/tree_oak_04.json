@@ -34,19 +34,19 @@
       "block": "asteria:grass"
     },
     "W": {
-      "block": "asteria:oak_log",
+      "block": "asteria:log_oak",
       "orientation": "y"
     },
     "X": {
-      "block": "asteria:oak_log",
+      "block": "asteria:log_oak",
       "orientation": "x"
     },
     "Z": {
-      "block": "asteria:oak_log",
+      "block": "asteria:log_oak",
       "orientation": "z"
     },
     "F": {
-      "block": "asteria:oak_leaf"
+      "block": "asteria:leaf_oak"
     }
   },
   "layers": [
