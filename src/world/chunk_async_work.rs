@@ -11,8 +11,17 @@ pub(crate) struct ChunkAsyncWorkLimiter {
 }
 
 impl ChunkAsyncWorkLimiter {
-    pub(crate) fn try_acquire(&self) -> Option<ChunkAsyncWorkPermit> {
+    pub(crate) fn try_acquire_generation(&self) -> Option<ChunkAsyncWorkPermit> {
         let limit = self.limit();
+        let generation_limit = if limit > 1 { limit - 1 } else { 1 };
+        self.try_acquire_with_limit(generation_limit)
+    }
+
+    pub(crate) fn try_acquire_render(&self) -> Option<ChunkAsyncWorkPermit> {
+        self.try_acquire_with_limit(self.limit())
+    }
+
+    fn try_acquire_with_limit(&self, limit: usize) -> Option<ChunkAsyncWorkPermit> {
         let mut current = self.in_flight.load(Ordering::Acquire);
 
         loop {
