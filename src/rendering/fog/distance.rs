@@ -12,7 +12,7 @@ use crate::{
 const FOG_START_RADIUS_FRACTION: f32 = 0.78;
 const FOG_END_RADIUS_FRACTION: f32 = 0.98;
 const FOG_STREAMING_GUARD_CHUNKS: f32 = 1.0;
-const MIN_FOG_END_CHUNKS: f32 = 0.5;
+const MIN_FOG_END_RADIUS_FRACTION: f32 = 0.80;
 
 #[derive(Default)]
 pub(super) struct FogDistanceState {
@@ -78,7 +78,7 @@ pub(super) fn update_fog_distance(
         &state.active_columns,
     )
     .map(|distance| distance - FOG_STREAMING_GUARD_CHUNKS * CHUNK_SIZE as f32);
-    let minimum_end = MIN_FOG_END_CHUNKS * CHUNK_SIZE as f32;
+    let minimum_end = minimum_fog_end(render_distance_chunks);
     let end = guard_end
         .map_or(target_end, |guard_end| guard_end.min(target_end))
         .max(minimum_end);
@@ -91,12 +91,18 @@ pub(super) fn update_fog_distance(
 
 fn guarded_fog_distances(render_distance_chunks: i32, end: f32) -> (f32, f32) {
     let (target_start, target_end) = fog_distances(render_distance_chunks);
-    let minimum_end = MIN_FOG_END_CHUNKS * CHUNK_SIZE as f32;
+    let minimum_end = minimum_fog_end(render_distance_chunks);
     let end = end.min(target_end).max(minimum_end);
     let target_span = target_end - target_start;
     let start = (end - target_span).max(0.0);
 
     (start, end)
+}
+
+fn minimum_fog_end(render_distance_chunks: i32) -> f32 {
+    render_distance_chunks.max(1) as f32
+        * CHUNK_SIZE as f32
+        * MIN_FOG_END_RADIUS_FRACTION
 }
 
 fn nearest_missing_column_distance(
@@ -198,10 +204,19 @@ mod tests {
     fn guarded_fog_preserves_span_while_receding() {
         let render_distance_chunks = 12;
         let (target_start, target_end) = fog_distances(render_distance_chunks);
-        let (start, end) = guarded_fog_distances(render_distance_chunks, 128.0);
+        let minimum_end = minimum_fog_end(render_distance_chunks);
+        let (start, end) = guarded_fog_distances(render_distance_chunks, minimum_end);
 
-        assert_eq!(end, 128.0);
+        assert!((end - minimum_end).abs() < 0.001);
         assert!((end - start - (target_end - target_start)).abs() < 0.001);
         assert!(end < target_end);
+    }
+
+    #[test]
+    fn streaming_guard_never_pulls_fog_into_the_players_face_at_high_distance() {
+        let render_distance_chunks = 24;
+        let (_, end) = guarded_fog_distances(render_distance_chunks, 0.0);
+
+        assert!(end >= 24.0 * CHUNK_SIZE as f32 * 0.79);
     }
 }
