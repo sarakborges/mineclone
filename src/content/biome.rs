@@ -172,8 +172,34 @@ impl BiomeRegistry {
             .name
             .validate(&format!("biome {} name", definition.id));
         validate_biome_definition(&definition);
-        self.definitions.insert(definition.id.clone(), definition);
-        self.rebuild_runtime_metadata();
+
+        let has_density_modifier =
+            definition.kind == BiomeKind::Volume && definition.density_modifier.is_some();
+        let has_solid_density_modifier = definition.kind == BiomeKind::Volume
+            && matches!(
+                definition.density_modifier,
+                Some(BiomeDensityModifier::Solid { .. })
+            );
+        let biome_id = definition.id.clone();
+        let placements = definition
+            .structures
+            .iter()
+            .map(|structure| BiomeStructurePlacement {
+                biome_id: biome_id.clone(),
+                structure_id: structure.id.clone(),
+                placement: structure.placement,
+            })
+            .collect::<Vec<_>>();
+
+        self.definitions.insert(biome_id, definition);
+        self.has_volume_density_modifiers |= has_density_modifier;
+        self.has_volume_solid_density_modifiers |= has_solid_density_modifier;
+        self.structure_placements.extend(placements);
+        self.structure_placements.sort_by(|left, right| {
+            left.biome_id
+                .cmp(&right.biome_id)
+                .then_with(|| left.structure_id.cmp(&right.structure_id))
+        });
     }
 
     pub fn get(&self, id: &str) -> Option<&BiomeDefinition> {
@@ -196,35 +222,6 @@ impl BiomeRegistry {
         &self.structure_placements
     }
 
-    fn rebuild_runtime_metadata(&mut self) {
-        self.has_volume_density_modifiers = self.definitions.values().any(|definition| {
-            definition.kind == BiomeKind::Volume && definition.density_modifier.is_some()
-        });
-        self.has_volume_solid_density_modifiers = self.definitions.values().any(|definition| {
-            definition.kind == BiomeKind::Volume
-                && matches!(
-                    definition.density_modifier,
-                    Some(BiomeDensityModifier::Solid { .. })
-                )
-        });
-
-        self.structure_placements = self
-            .definitions
-            .values()
-            .flat_map(|biome| {
-                biome.structures.iter().map(|structure| BiomeStructurePlacement {
-                    biome_id: biome.id.clone(),
-                    structure_id: structure.id.clone(),
-                    placement: structure.placement,
-                })
-            })
-            .collect();
-        self.structure_placements.sort_by(|left, right| {
-            left.biome_id
-                .cmp(&right.biome_id)
-                .then_with(|| left.structure_id.cmp(&right.structure_id))
-        });
-    }
 }
 
 fn default_biome_distributions() -> Vec<BiomeDistribution> {
