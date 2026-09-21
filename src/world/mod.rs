@@ -228,7 +228,15 @@ fn prepare_world_session(
 /// Called only upon returning to the starting screen, after the Leave World
 /// action has successfully published the snapshot. Never drop this state in
 /// the error path: the player must be able to retry the save.
-fn release_world_session(mut commands: Commands) {
+fn release_world_session(
+    mut commands: Commands,
+    terrain_materials: Option<Res<TerrainMaterials>>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    if let Some(terrain_materials) = terrain_materials {
+        let _ = images.remove(&terrain_materials.texture_array_handle());
+    }
+
     commands.remove_resource::<VoxelWorld>();
     commands.remove_resource::<BiomeField>();
     commands.remove_resource::<WorldFeatureFields>();
