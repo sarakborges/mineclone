@@ -1,6 +1,16 @@
-use super::loader::LoadedContent;
+use super::{
+    builtin_ids::{BRUSH_TOOL_ID, CHISEL_TOOL_ID},
+    loader::LoadedContent,
+};
 
 pub(super) fn validate_content(content: &LoadedContent) {
+    for required_tool in [BRUSH_TOOL_ID, CHISEL_TOOL_ID] {
+        assert!(
+            content.tools.get(required_tool).is_some(),
+            "missing required built-in tool definition: {required_tool}"
+        );
+    }
+
     for attack in content.attacks.iter() {
         attack.validate();
     }
