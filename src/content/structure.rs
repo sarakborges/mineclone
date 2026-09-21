@@ -296,14 +296,6 @@ impl StructureDefinition {
         self.runtime.min_y_offset
     }
 
-    pub(crate) fn horizontal_footprint(&self) -> &[IVec2] {
-        &self.runtime.horizontal_footprint
-    }
-
-    pub(crate) fn support_offsets(&self) -> &[IVec2] {
-        &self.runtime.support_offsets
-    }
-
     pub(crate) fn support_offsets_for_rotation(
         &self,
         rotation: StructureRotation,
