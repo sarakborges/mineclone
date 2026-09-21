@@ -1,4 +1,5 @@
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::prelude::*;
+use smallvec::SmallVec;
 use serde::{Deserialize, Deserializer};
 
 use crate::localization::LocalizedText;
@@ -290,20 +291,20 @@ impl BlockRegistry {
 
 pub(crate) struct BlockLookup<'a> {
     registry: &'a BlockRegistry,
-    cache: HashMap<(usize, usize), &'a BlockDefinition>,
+    cache: SmallVec<[((usize, usize), &'a BlockDefinition); 16]>,
 }
 
 impl<'a> BlockLookup<'a> {
     pub(crate) fn new(registry: &'a BlockRegistry) -> Self {
         Self {
             registry,
-            cache: HashMap::with_capacity(32),
+            cache: SmallVec::new(),
         }
     }
 
     pub(crate) fn get(&mut self, id: &'static str) -> &'a BlockDefinition {
         let key = (id.as_ptr() as usize, id.len());
-        if let Some(&definition) = self.cache.get(&key) {
+        if let Some((_, definition)) = self.cache.iter().find(|(candidate, _)| *candidate == key) {
             return definition;
         }
 
@@ -311,7 +312,7 @@ impl<'a> BlockLookup<'a> {
             .registry
             .get(id)
             .unwrap_or_else(|| panic!("missing block definition: {id}"));
-        self.cache.insert(key, definition);
+        self.cache.push((key, definition));
         definition
     }
 }
