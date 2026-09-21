@@ -474,17 +474,26 @@ fn decode_block_state(state: DiskBlockState, blocks: &BlockRegistry) -> io::Resu
         .ok_or_else(|| invalid_data(format!("missing block definition: {}", state.id)))?;
     validate_properties(&state.properties, definition.can_fragment())?;
     let mut properties = SecondaryProperties::default();
+    let mut chisel_mask = None;
     for (key, value) in state.properties {
-        properties.set(&key, &value);
+        if key == CHISEL_MASK_PROPERTY {
+            chisel_mask = Some(value);
+        } else {
+            properties.set(&key, &value);
+        }
     }
-    Ok(
-        VoxelCell::oriented(
-            intern_block_id(&state.id),
-            TextureRotation::from_quarter_turn(state.rotation),
-            BlockOrientation::from_index(state.orientation),
-        )
-        .with_secondary_properties(properties),
+
+    let mut cell = VoxelCell::oriented(
+        intern_block_id(&state.id),
+        TextureRotation::from_quarter_turn(state.rotation),
+        BlockOrientation::from_index(state.orientation),
     )
+    .with_secondary_properties(properties);
+    if let Some(encoded) = chisel_mask {
+        cell = MicroblockMask::apply_saved(cell, &encoded)
+            .ok_or_else(|| invalid_data("invalid Chisel mask"))?;
+    }
+    Ok(cell)
 }
 
 fn decode_fluid_state(state: DiskFluidState, fluids: &FluidRegistry) -> io::Result<FluidCell> {
