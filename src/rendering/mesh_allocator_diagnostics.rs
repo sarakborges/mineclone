@@ -3,6 +3,7 @@ use bevy::{
     render::{
         Render, RenderApp,
         mesh::allocator::{MeshAllocator, MeshAllocatorSettings},
+        renderer::RenderAdapterInfo,
         slab_allocator::SlabAllocatorSettings,
     },
 };
@@ -46,9 +47,13 @@ fn mesh_allocator_diagnostics_due(mut frames: Local<u32>) -> bool {
 fn log_mesh_allocator_pressure(
     allocator: Res<MeshAllocator>,
     settings: Res<MeshAllocatorSettings>,
+    adapter: Res<RenderAdapterInfo>,
 ) {
     info!(
-        "render mesh allocator: slabs={} slab_bytes={} index_allocations={} max_slab_bytes={} large_threshold_bytes={}",
+        "render mesh allocator: adapter={:?} backend={:?} device_type={:?} slabs={} slab_bytes={} index_allocations={} max_slab_bytes={} large_threshold_bytes={}",
+        adapter.name,
+        adapter.backend,
+        adapter.device_type,
         allocator.slab_count(),
         allocator.slabs_size(),
         allocator.index_allocation_count(),
