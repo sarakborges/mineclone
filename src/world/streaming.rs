@@ -361,6 +361,20 @@ impl ChunkStreamingState {
         self.mesh_pressure_evicted.iter().copied()
     }
 
+    pub(super) fn mesh_is_pressure_evicted(&self, coord: IVec3) -> bool {
+        self.mesh_pressure_evicted.contains(&coord)
+    }
+
+    pub(super) fn retain_mesh_pressure_evictions(
+        &mut self,
+        desired: &HashSet<IVec3>,
+        center: IVec3,
+    ) {
+        self.mesh_pressure_evicted.retain(|coord| {
+            desired.contains(coord) && !is_critical_streaming_coord(*coord, center)
+        });
+    }
+
     fn pop_ready(&mut self) -> Option<IVec3> {
         let center = self.center?;
         let movement_direction = self.movement_direction;
