@@ -87,7 +87,7 @@ pub(super) fn build_chunk_terrain_render_meshes<W: VoxelRead + ?Sized>(
             let base_tint = if block.tint == BlockTint::None {
                 Color::WHITE
             } else {
-                column_tints
+                *column_tints
                     .entry((voxel.x, voxel.z, block.tint))
                     .or_insert_with(|| {
                         let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
@@ -98,7 +98,6 @@ pub(super) fn build_chunk_terrain_render_meshes<W: VoxelRead + ?Sized>(
                             context.biomes,
                         )
                     })
-                    .clone()
             };
 
             block_vertex_tint(base_tint, block, cell, context.secondary_properties)
@@ -119,7 +118,7 @@ pub(super) fn build_chunk_terrain_render_meshes<W: VoxelRead + ?Sized>(
                 let color = if definition.tint == BlockTint::None {
                     Color::WHITE
                 } else {
-                    column_tints
+                    *column_tints
                         .entry((voxel.x, voxel.z, definition.tint))
                         .or_insert_with(|| {
                             let position =
@@ -131,7 +130,6 @@ pub(super) fn build_chunk_terrain_render_meshes<W: VoxelRead + ?Sized>(
                                 context.biomes,
                             )
                         })
-                        .clone()
                 };
                 let tint = color.to_srgba();
                 [tint.red, tint.green, tint.blue]
