@@ -1,5 +1,7 @@
 use std::{io, sync::Arc};
 
+use bevy::prelude::IVec3;
+
 use crate::content::{block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry};
 use crate::voxel::chunk_disk::DiskChunk;
 
