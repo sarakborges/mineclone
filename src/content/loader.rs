@@ -67,27 +67,31 @@ pub fn load_content(mut commands: Commands) {
 pub(crate) fn read_content() -> LoadedContent {
     let mut content = LoadedContent { player: PlayerDefinition { health: 20.0, attack: "asteria:punch".to_owned(), model: None }, ..Default::default() };
     let mut files = Vec::new();
+    let mut player_loaded = false;
 
     collect_json_files(&data_root(), &mut files);
     files.sort();
 
     for path in files {
-        load_definition(&path, &mut content);
+        load_definition(&path, &mut content, &mut player_loaded);
     }
 
+    assert!(player_loaded, "missing player definition under data/entities/player.json");
     validate_content(&content);
     content
 }
 
-fn load_definition(path: &Path, content: &mut LoadedContent) {
+fn load_definition(path: &Path, content: &mut LoadedContent, player_loaded: &mut bool) {
     let file_name = path
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or_default();
 
     if file_name == "player.json" && path_has_component(path, "entities") {
+        assert!(!*player_loaded, "duplicate player definition: {}", path.display());
         content.player = read_json_definition::<PlayerDefinition>(path);
         content.player.validate();
+        *player_loaded = true;
     } else if path_has_component(path, "attacks") {
         content.attacks.insert(read_json_definition::<AttackDefinition>(path));
     } else if file_name == "dimension.json" {
