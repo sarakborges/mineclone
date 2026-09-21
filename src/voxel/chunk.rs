@@ -236,6 +236,14 @@ impl VoxelChunk {
         self.fluid_count > 0
     }
 
+    pub(crate) fn block_count(&self) -> usize {
+        self.block_count
+    }
+
+    pub(crate) fn fluid_count(&self) -> usize {
+        self.fluid_count
+    }
+
     pub(crate) fn has_terrain_content(&self) -> bool {
         self.block_count > 0 || self.layer_count > 0
     }
