@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::voxel::fluid_mesh::ChunkFluidMesh;
+use crate::voxel::{
+    fluid_mesh::ChunkFluidMesh,
+    meshlet::ChunkMeshletMask,
+};
 
 use super::{
     ChunkRenderContext,
@@ -26,6 +29,34 @@ fn refresh_chunk_mesh(
 
     retire_chunk_render_allocation(commands, render_pool, coord);
     spawn_chunk_mesh(commands, meshes, render_pool, coord, chunk, context);
+}
+
+pub(crate) fn apply_built_chunk_geometry_meshlets(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    render_pool: &mut ChunkRenderPool,
+    coord: IVec3,
+    built_meshes: Vec<BuiltChunkMesh>,
+    meshlets: ChunkMeshletMask,
+    context: &ChunkRenderContext<'_>,
+) -> bool {
+    if meshlets.is_all() {
+        apply_built_chunk_geometry_meshes(
+            commands,
+            meshes,
+            render_pool,
+            coord,
+            built_meshes,
+            context,
+        );
+        return true;
+    }
+
+    if context.world.chunk(coord).is_none() {
+        return true;
+    }
+
+    render_pool.patch_terrain_mesh_assets(coord, meshes, &built_meshes, meshlets)
 }
 
 pub(crate) fn apply_built_chunk_geometry_meshes(
@@ -84,6 +115,34 @@ pub(crate) fn apply_built_chunk_geometry_meshes(
         terrain_mesh_bytes,
         context,
     );
+}
+
+pub(crate) fn apply_built_chunk_fluid_meshlets(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    render_pool: &mut ChunkRenderPool,
+    coord: IVec3,
+    fluid_meshes: Vec<ChunkFluidMesh>,
+    meshlets: ChunkMeshletMask,
+    context: &ChunkRenderContext<'_>,
+) -> bool {
+    if meshlets.is_all() {
+        apply_built_chunk_fluid_meshes(
+            commands,
+            meshes,
+            render_pool,
+            coord,
+            fluid_meshes,
+            context,
+        );
+        return true;
+    }
+
+    if context.world.chunk(coord).is_none() {
+        return true;
+    }
+
+    render_pool.patch_fluid_mesh_assets(coord, meshes, &fluid_meshes, meshlets)
 }
 
 pub(crate) fn apply_built_chunk_fluid_meshes(
