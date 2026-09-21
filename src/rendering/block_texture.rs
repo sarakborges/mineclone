@@ -26,7 +26,11 @@ impl TerrainTextureTable {
         let mut unique = BTreeSet::<String>::new();
         for block in blocks.iter() {
             for face in BlockFace::ALL {
-                for layer in block_face_texture_layers(face, block) {
+                let layers = block_face_texture_layers(face, block);
+                if layers.len() > 2 {
+                    continue;
+                }
+                for layer in layers {
                     unique.insert(layer.texture.clone());
                 }
             }
