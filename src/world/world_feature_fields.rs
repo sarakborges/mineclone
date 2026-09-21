@@ -13,7 +13,7 @@ use self::cache::FeatureCaches;
 use super::{
     biome_field::VolumeBiomeRegion,
     cave_connectivity::{CaveConnectivityField, CaveConnectivityRegion},
-    generation::GenerationColumnSample,
+    generation::{GenerationColumnSample, surface_carvers::SurfaceCarverResolveCache},
     generation_region::GenerationRegion,
     hydrology::{HydrologyBiomeOverlay, HydrologyField, HydrologyRegion},
 };
@@ -110,7 +110,11 @@ impl WorldFeatureFields {
                 hydrology_factory(&self.hydrology)
             });
 
-            GenerationRegion { coord, hydrology }
+            GenerationRegion {
+                coord,
+                hydrology,
+                surface_carvers: Arc::new(SurfaceCarverResolveCache::default()),
+            }
         })
     }
 
