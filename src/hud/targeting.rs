@@ -5,7 +5,7 @@ use crate::{
     app::{game_state::GameState, pause_state::PauseState},
     content::{
         builtin_ids::DYED_PROPERTY_ID,
-        layer::LayerRegistry,
+        layer::{LayerFace, LayerRegistry},
         secondary_property::SecondaryPropertyRegistry,
     },
     hud::block_icon::BlockIconMaterial,
@@ -71,7 +71,7 @@ struct TargetHudSnapshot {
     block_id: &'static str,
     normal: IVec3,
     properties: SecondaryProperties,
-    layers: SmallVec<[&'static str; 8]>,
+    layers: SmallVec<[(LayerFace, &'static str); 8]>,
     light_level: u8,
     language: Language,
 }
@@ -275,9 +275,13 @@ fn update_target_hud(
         .world
         .layers_at(hit.voxel)
         .iter()
-        .map(|attached| attached.cell.layer_id)
+        .map(|attached| (attached.face, attached.cell.layer_id))
         .collect::<SmallVec<[_; 8]>>();
-    applied_layers.sort_unstable();
+    applied_layers.sort_unstable_by(|left, right| {
+        left.1
+            .cmp(right.1)
+            .then_with(|| left.0.index().cmp(&right.0.index()))
+    });
     applied_layers.dedup();
 
     let snapshot = TargetHudSnapshot {
@@ -336,22 +340,32 @@ fn update_target_hud(
     } else {
         format!("\n{}", property_labels.join("\n"))
     };
-    let layer_names = applied_layers
-        .iter()
-        .map(|layer_id| {
-            content
-                .layers
-                .get(layer_id)
-                .map_or(*layer_id, |layer| layer.name.text(language))
-        })
-        .collect::<Vec<_>>();
-    let layers_text = if layer_names.is_empty() {
+    let mut layer_lines = Vec::new();
+    let mut index = 0;
+    while index < applied_layers.len() {
+        let layer_id = applied_layers[index].1;
+        let layer_name = content
+            .layers
+            .get(layer_id)
+            .map_or(layer_id, |layer| layer.name.text(language));
+        let mut faces = Vec::new();
+        while index < applied_layers.len() && applied_layers[index].1 == layer_id {
+            faces.push(layer_face_name(
+                &state.localization,
+                language,
+                applied_layers[index].0,
+            ));
+            index += 1;
+        }
+        layer_lines.push(format!("{layer_name}: {}", faces.join(", ")));
+    }
+    let layers_text = if layer_lines.is_empty() {
         String::new()
     } else {
         format!(
-            "\n{}: {}",
+            "\n{}:\n{}",
             state.localization.text(language, "hud.layers"),
-            layer_names.join(", ")
+            layer_lines.join("\n")
         )
     };
     let next_text = format!(
@@ -406,4 +420,21 @@ fn update_target_hud(
         material.set_tint(tint);
     }
     *cached_icon = Some(icon_snapshot);
+}
+
+
+fn layer_face_name(
+    localization: &UiLocalization,
+    language: Language,
+    face: LayerFace,
+) -> &str {
+    let key = match face {
+        LayerFace::Right => "hud.layerFace.right",
+        LayerFace::Left => "hud.layerFace.left",
+        LayerFace::Top => "hud.layerFace.top",
+        LayerFace::Bottom => "hud.layerFace.bottom",
+        LayerFace::Front => "hud.layerFace.front",
+        LayerFace::Back => "hud.layerFace.back",
+    };
+    localization.text(language, key)
 }
