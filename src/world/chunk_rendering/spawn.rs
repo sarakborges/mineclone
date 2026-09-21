@@ -1,8 +1,8 @@
-use bevy::{light::NotShadowCaster, prelude::*};
+use bevy::{light::NotShadowCaster, platform::collections::HashMap, prelude::*};
 
 use crate::{
     app::game_state::GameState,
-    content::fluid::FluidId,
+    content::{block::BlockTint, fluid::FluidId},
     rendering::block_tint::{block_tint_at, block_vertex_tint},
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
@@ -77,19 +77,29 @@ pub(super) fn build_chunk_terrain_render_meshes<W: VoxelRead + ?Sized>(
     chunk: &VoxelChunk,
     context: &ChunkMeshBuildContext<'_, W>,
 ) -> Vec<BuiltChunkMesh> {
+    let mut column_tints = HashMap::<(i32, i32, BlockTint), Color>::new();
     let mut meshes = build_chunk_mesh(
         context.world,
         coord,
         chunk,
         context.blocks,
-        |voxel, cell| {
-            let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-            let block = context
-                .blocks
-                .get(cell.block_id)
-                .unwrap_or_else(|| panic!("missing block definition: {}", cell.block_id));
-            let base_tint =
-                block_tint_at(block.tint, position, context.biome_field, context.biomes);
+        |voxel, cell, block| {
+            let base_tint = if block.tint == BlockTint::None {
+                Color::WHITE
+            } else {
+                column_tints
+                    .entry((voxel.x, voxel.z, block.tint))
+                    .or_insert_with(|| {
+                        let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
+                        block_tint_at(
+                            block.tint,
+                            position,
+                            context.biome_field,
+                            context.biomes,
+                        )
+                    })
+                    .clone()
+            };
 
             block_vertex_tint(base_tint, block, cell, context.secondary_properties)
         },
@@ -106,14 +116,24 @@ pub(super) fn build_chunk_terrain_render_meshes<W: VoxelRead + ?Sized>(
             context.blocks,
             context.layers,
             |voxel, definition| {
-                let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-                let tint = block_tint_at(
-                    definition.tint,
-                    position,
-                    context.biome_field,
-                    context.biomes,
-                )
-                .to_srgba();
+                let color = if definition.tint == BlockTint::None {
+                    Color::WHITE
+                } else {
+                    column_tints
+                        .entry((voxel.x, voxel.z, definition.tint))
+                        .or_insert_with(|| {
+                            let position =
+                                Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
+                            block_tint_at(
+                                definition.tint,
+                                position,
+                                context.biome_field,
+                                context.biomes,
+                            )
+                        })
+                        .clone()
+                };
+                let tint = color.to_srgba();
                 [tint.red, tint.green, tint.blue]
             },
         )
@@ -129,17 +149,22 @@ pub(super) fn build_chunk_fluid_render_meshes<W: VoxelRead + ?Sized>(
     chunk: &VoxelChunk,
     context: &ChunkMeshBuildContext<'_, W>,
 ) -> Vec<ChunkFluidMesh> {
+    let mut column_tints = HashMap::<(i32, i32, FluidId), [f32; 3]>::new();
     build_fluid_meshes(context.world, coord, chunk, |voxel, fluid_id| {
-        let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-        let fluid = context
-            .fluids
-            .get(fluid_id)
-            .unwrap_or_else(|| panic!("missing fluid definition for id {fluid_id}"));
+        *column_tints
+            .entry((voxel.x, voxel.z, fluid_id))
+            .or_insert_with(|| {
+                let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
+                let fluid = context
+                    .fluids
+                    .get(fluid_id)
+                    .unwrap_or_else(|| panic!("missing fluid definition for id {fluid_id}"));
 
-        context
-            .biome_field
-            .water_color(position, context.biomes, fluid.color)
-            .to_srgb()
+                context
+                    .biome_field
+                    .water_color(position, context.biomes, fluid.color)
+                    .to_srgb()
+            })
     })
 }
 
