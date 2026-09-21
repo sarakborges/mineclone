@@ -9,24 +9,32 @@ impl VoxelWorld {
     /// Captures only chunks with persistent mutations. Untouched deterministic
     /// terrain is reconstructed from the seed after load instead of being kept
     /// in RAM and copied into every save.
-    pub(crate) fn save_persistent_chunks(&self, fluids: &FluidRegistry) -> io::Result<Vec<DiskChunk>> {
-        let mut coords = self.persistent_chunks.iter().copied().collect::<Vec<_>>();
-        coords.sort_unstable_by_key(|coord| (coord.x, coord.y, coord.z));
-        coords
-            .into_iter()
-            .map(|coord| {
-                if let Some(chunk) = self.chunks.get(&coord) {
-                    DiskChunk::from_chunk(coord, chunk, fluids)
-                } else if let Some(archived) = self.archived_chunks.get(&coord) {
-                    DiskChunk::from_archived_chunk(coord, archived, fluids)
-                } else {
-                    Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("persistent chunk {coord:?} has neither loaded nor archived content"),
-                    ))
-                }
-            })
-            .collect()
+    pub(crate) fn persistent_chunk_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
+        self.persistent_chunks.iter().copied()
+    }
+
+    pub(crate) fn save_persistent_chunk(
+        &self,
+        coord: IVec3,
+        fluids: &FluidRegistry,
+    ) -> io::Result<DiskChunk> {
+        if !self.persistent_chunks.contains(&coord) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("chunk {coord:?} is not persistent"),
+            ));
+        }
+
+        if let Some(chunk) = self.chunks.get(&coord) {
+            DiskChunk::from_chunk(coord, chunk, fluids)
+        } else if let Some(archived) = self.archived_chunks.get(&coord) {
+            DiskChunk::from_archived_chunk(coord, archived, fluids)
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("persistent chunk {coord:?} has neither loaded nor archived content"),
+            ))
+        }
     }
 
     /// Rebuild a *fresh* world from disk, archiving saved chunks until streaming
