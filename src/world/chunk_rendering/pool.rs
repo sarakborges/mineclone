@@ -5,7 +5,7 @@ use crate::{
     voxel::{
         block_face::BlockFace,
         fluid_mesh::ChunkFluidMesh,
-        meshlet::{ChunkMeshletMask, patch_voxel_mesh},
+        meshlet::{ChunkMeshletMask, VoxelMeshPatch, patch_voxel_mesh},
     },
 };
 
@@ -122,20 +122,30 @@ impl ChunkRenderPool {
                 .iter()
                 .find(|replacement| replacement.key() == key)
                 .map(BuiltChunkMesh::mesh);
-            let Some(mesh) = patch_voxel_mesh(existing, replacement, dirty) else {
+            let Some(patch) = patch_voxel_mesh(existing, replacement, dirty) else {
                 return false;
             };
-            patched.push(mesh);
+            patched.push(patch);
         }
 
-        let terrain_mesh_bytes = patched.iter().map(mesh_asset_bytes).sum();
-        for (handle, replacement) in slot.meshes[..terrain_mesh_count]
-            .iter()
-            .zip(patched)
-        {
-            *meshes
-                .get_mut(handle)
-                .expect("terrain mesh handle must survive meshlet preflight") = replacement;
+        let mut terrain_mesh_bytes = 0;
+        for (index, patch) in patched.into_iter().enumerate() {
+            let handle = &slot.meshes[index];
+            match patch {
+                VoxelMeshPatch::Unchanged => {
+                    terrain_mesh_bytes += mesh_asset_bytes(
+                        meshes
+                            .get(handle)
+                            .expect("unchanged terrain mesh must remain resident"),
+                    );
+                }
+                VoxelMeshPatch::Changed(replacement) => {
+                    terrain_mesh_bytes += mesh_asset_bytes(&replacement);
+                    *meshes
+                        .get_mut(handle)
+                        .expect("terrain mesh handle must survive meshlet preflight") = replacement;
+                }
+            }
         }
 
         slot.mesh_bytes = terrain_mesh_bytes.saturating_add(slot.fluid_mesh_bytes);
@@ -176,17 +186,30 @@ impl ChunkRenderPool {
                 .iter()
                 .find(|replacement| replacement.fluid_id == fluid_id)
                 .map(|replacement| &replacement.mesh);
-            let Some(mesh) = patch_voxel_mesh(existing, replacement, dirty) else {
+            let Some(patch) = patch_voxel_mesh(existing, replacement, dirty) else {
                 return false;
             };
-            patched.push(mesh);
+            patched.push(patch);
         }
 
-        let fluid_mesh_bytes = patched.iter().map(mesh_asset_bytes).sum();
-        for (handle, replacement) in fluid_handles.iter().zip(patched) {
-            *meshes
-                .get_mut(handle)
-                .expect("fluid mesh handle must survive meshlet preflight") = replacement;
+        let mut fluid_mesh_bytes = 0;
+        for (index, patch) in patched.into_iter().enumerate() {
+            let handle = &fluid_handles[index];
+            match patch {
+                VoxelMeshPatch::Unchanged => {
+                    fluid_mesh_bytes += mesh_asset_bytes(
+                        meshes
+                            .get(handle)
+                            .expect("unchanged fluid mesh must remain resident"),
+                    );
+                }
+                VoxelMeshPatch::Changed(replacement) => {
+                    fluid_mesh_bytes += mesh_asset_bytes(&replacement);
+                    *meshes
+                        .get_mut(handle)
+                        .expect("fluid mesh handle must survive meshlet preflight") = replacement;
+                }
+            }
         }
 
         slot.mesh_bytes = slot
