@@ -7,7 +7,7 @@ use bevy::{
     prelude::*,
 };
 
-use crate::content::layer::{LayerFace, LayerRegistry};
+use crate::content::layer::LayerFace;
 
 use super::{
     cell::VoxelCell,
@@ -15,7 +15,6 @@ use super::{
     chunk_archive::ArchivedChunk,
     coordinates::{chunk_coord_from_world, split_world_position},
     fluid::FluidCell,
-    layer::LayerCell,
     light::VoxelLight,
 };
 
