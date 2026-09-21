@@ -180,11 +180,7 @@ fn fragment(
     // keeps the original per-block texture scale even when the sampler itself
     // is clamped.
     let tiled_uv = fract(in.uv);
-    var texel = textureSample(
-        pbr_bindings::base_color_texture,
-        pbr_bindings::base_color_sampler,
-        tiled_uv,
-    );
+    var texel = vec4<f32>(1.0);
 #ifdef VERTEX_TANGENTS
     // Tint is constant per voxel quad, so the tangent direction+magnitude
     // encoding is stable and does not participate in the colored-light gradient.
@@ -217,6 +213,12 @@ fn fragment(
         base_tint_enabled = (flags & 1u) != 0u;
         overlay_enabled = array_overlay_index != 1023u;
         overlay_tint_enabled = (flags & 2u) != 0u;
+    } else {
+        texel = textureSample(
+            pbr_bindings::base_color_texture,
+            pbr_bindings::base_color_sampler,
+            tiled_uv,
+        );
     }
 
     let fluid_animation = clamp(
