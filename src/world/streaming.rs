@@ -591,6 +591,15 @@ pub(super) fn stream_chunks(
             &mut selection.scratch,
             &rebuild_context,
         );
+
+        let cancelled_meshes = {
+            let state = &work.state;
+            work.mesh_tasks
+                .cancel_where(|coord| !state.retains_render_mesh(coord))
+        };
+        for coord in cancelled_meshes {
+            work.state.initial_mesh_seed_catchup.remove(&coord);
+        }
     }
 
     work.generation_tasks.sync_snapshot(&generation, &content);
