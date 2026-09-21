@@ -60,7 +60,7 @@ impl VoxelMutationRuntime<'_> {
             .set_block_at_with_previous(world_position, block)?;
         self.lighting
             .enqueue_voxel_edit(world_position, previous_cell);
-        self.remesh_queue.enqueue_voxel_edit(chunk);
+        self.remesh_queue.enqueue_voxel_edit(world_position);
         self.fluid_updates.enqueue_voxel_edit(world_position);
         Some(chunk)
     }
