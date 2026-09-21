@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — checkpoint D — VERSION 0.50.10 — 2026-09-21:** bloco de arithmetic/boundaries consolidado. Inclui overflow-safe day/night duration sum (`1e07cd6f`), streaming volume/retention/render radius em i64 + checked additions (`534c6896`, `21166770`, `194cb85d`), square-ring search bounded (`45c85021`) e warp target addition bounded (`9a2c7f94`). Bump: `9f3973068dd8db4dbb5fc11fc55f55e56ca65d71`. **Pendências:** CI de push segue não observável pelas APIs disponíveis; runtime QA não executado. **Próximo passo:** bloco E — natural spawning/entity counts, creature lifecycle/material caches e event/state cleanup; depois revisar UI design-system e localization-facing state.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 21 — 2026-09-21:** busca local de warp agora evita overflow ao somar offsets ao target externo; candidatos fora do domínio i32 são ignorados em vez de wrapar coordenadas em release. O distance-squared permanece seguro porque o offset é limitado a raio 32. Commit: `9a2c7f94c5bd96eee36ce8f93cc8230015d04d1c`. **Pendências:** validar CI/runtime; revisar outros pontos que recebem coordenadas externas antes de consolidar checkpoint D. **Próximo passo:** checar comandos/chat que constroem IVec3 a partir de input e save/player positions; depois bump de versão.
 
 
