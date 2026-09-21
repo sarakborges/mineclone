@@ -252,6 +252,7 @@ pub(crate) fn structure_candidate_probe(
 pub(crate) fn located_structure_origins_in_chunk(
     horizontal_chunk: IVec2,
     structure_id: &str,
+    placement_anchor: IVec2,
     context: &ChunkGenerationContext<'_>,
 ) -> Vec<IVec3> {
     let chunk_size = CHUNK_SIZE as i32;
@@ -264,7 +265,12 @@ pub(crate) fn located_structure_origins_in_chunk(
     resolved_structure_candidates(chunk_origin, context)
         .iter()
         .filter(|candidate| {
-            candidate.placement_id == structure_id || candidate.structure_id == structure_id
+            candidate.placement_anchor == placement_anchor
+                && (candidate.placement_id == structure_id
+                    || candidate.structure_id == structure_id
+                    || context
+                        .structures
+                        .reference_contains_structure(structure_id, &candidate.structure_id))
         })
         .map(|candidate| {
             if candidate.placement_id == structure_id
