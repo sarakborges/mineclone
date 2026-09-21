@@ -1,0 +1,21 @@
+{
+  "id": "asteria:leaf_willow",
+  "name": {
+    "english": "Willow Leaf",
+    "portuguese_brazil": "Folha de salgueiro",
+    "spanish": "Hoja de sauce"
+  },
+  "category": "foliage",
+  "tint": "leaf",
+  "textures": {
+    "top": [{ "texture": "textures/blocks/trees/willow/leaf.png", "dyable": true }],
+    "bottom": [{ "texture": "textures/blocks/trees/willow/leaf.png", "dyable": true }],
+    "left": [{ "texture": "textures/blocks/trees/willow/leaf.png", "dyable": true }],
+    "right": [{ "texture": "textures/blocks/trees/willow/leaf.png", "dyable": true }],
+    "front": [{ "texture": "textures/blocks/trees/willow/leaf.png", "dyable": true }],
+    "back": [{ "texture": "textures/blocks/trees/willow/leaf.png", "dyable": true }]
+  },
+  "alphaCutoff": 0.5,
+  "lightDampening": 1,
+  "castsShadow": false
+}
