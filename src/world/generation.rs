@@ -34,7 +34,7 @@ use crate::{
 
 pub(crate) use self::columns::{GenerationColumnSample, sample_generation_columns};
 pub(crate) use self::structures::{
-    fit_structure_to_ground, located_structure_origins_in_chunk,
+    fit_structure_to_ground, located_structure_origins_in_chunk, structure_candidate_anchor,
 };
 use self::{
     caves::anchored_cave_region,
