@@ -49,19 +49,6 @@ impl ChunkRemeshQueue {
         if coord.y < 0 || meshlets.is_empty() {
             return;
         }
-        if self.lighting.contains(coord) {
-            let combined = self
-                .lighting_meshlets
-                .get(&coord)
-                .copied()
-                .unwrap_or_default()
-                .union(meshlets);
-            self.lighting_meshlets.insert(coord, combined);
-            if priority {
-                self.lighting.enqueue_front(coord);
-            }
-            return;
-        }
 
         let combined = self
             .geometry_meshlets
@@ -154,14 +141,11 @@ impl ChunkRemeshQueue {
             return;
         }
 
-        let geometry = self.geometry_meshlets.remove(&coord).unwrap_or_default();
-        self.queue.remove(coord);
         let combined = self
             .lighting_meshlets
             .get(&coord)
             .copied()
             .unwrap_or_default()
-            .union(geometry)
             .union(meshlets);
         self.lighting_meshlets.insert(coord, combined);
         if priority {
@@ -312,22 +296,6 @@ impl ChunkRemeshQueue {
         Some((coord, meshlets))
     }
 
-    fn coalesce_geometry_into_lighting(&mut self, coord: IVec3) {
-        // Geometry and Lighting rebuild the same terrain mesh. If geometry
-        // arrived after a partial lighting request, fold its dirty regions into
-        // the lighting task before dispatch.
-        self.queue.remove(coord);
-        if let Some(geometry) = self.geometry_meshlets.remove(&coord) {
-            let combined = self
-                .lighting_meshlets
-                .get(&coord)
-                .copied()
-                .unwrap_or_default()
-                .union(geometry);
-            self.lighting_meshlets.insert(coord, combined);
-        }
-    }
-
     fn pop_renderable_lighting(
         &mut self,
         render_pool: &ChunkRenderPool,
@@ -337,7 +305,6 @@ impl ChunkRemeshQueue {
             &mut self.lighting_scan_miss,
             render_pool,
         )?;
-        self.coalesce_geometry_into_lighting(coord);
         let meshlets = self
             .lighting_meshlets
             .remove(&coord)
@@ -461,16 +428,14 @@ mod tests {
     }
 
     #[test]
-    fn lighting_remesh_coalesces_terrain_but_preserves_fluid() {
+    fn lighting_refresh_stays_separate_from_geometry_and_fluid() {
         let mut queue = ChunkRemeshQueue::default();
         let coord = IVec3::new(2, 1, 3);
         queue.enqueue_priority(coord);
         queue.enqueue_fluid_priority(coord);
         queue.enqueue_lighting_priority(coord);
 
-        queue.coalesce_geometry_into_lighting(coord);
-
-        assert_eq!(queue.pop(), None);
+        assert_eq!(queue.pop(), Some(coord));
         assert_eq!(queue.pop_lighting(), Some(coord));
         assert_eq!(queue.pop_fluid(), Some(coord));
     }
