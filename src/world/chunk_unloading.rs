@@ -118,6 +118,7 @@ pub(super) struct MeshResidencyCandidate {
     critical: bool,
     horizontal_distance_squared: i64,
     total_distance_squared: i64,
+    movement_alignment: i64,
 }
 
 pub(super) fn enforce_chunk_mesh_residency_budget(
@@ -132,6 +133,7 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
     let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
     let center = chunk_coord_from_position(feet_position);
     let render_distance_chunks = render_distance.chunks();
+    let movement_direction = runtime.streaming.movement_direction();
     let high_bytes = chunk_mesh_residency_high_bytes(render_distance_chunks);
     let target_bytes = chunk_mesh_residency_target_bytes(render_distance_chunks);
     let recovery_bytes = chunk_mesh_residency_recovery_bytes(render_distance_chunks);
@@ -158,7 +160,15 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
         );
         recovery.sort_unstable_by_key(|coord| {
             let delta = *coord - center;
-            (delta.length_squared(), coord.y, coord.z, coord.x)
+            let alignment = i64::from(delta.x) * i64::from(movement_direction.x)
+                + i64::from(delta.z) * i64::from(movement_direction.y);
+            (
+                delta.length_squared(),
+                -alignment,
+                coord.y,
+                coord.z,
+                coord.x,
+            )
         });
 
         let mut planned_bytes = before;
@@ -200,6 +210,10 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
         let total_distance_squared = horizontal_distance_squared
             .saturating_add(dy.saturating_mul(dy));
 
+        let movement_alignment =
+            dx * i64::from(movement_direction.x)
+                + dz * i64::from(movement_direction.y);
+
         Some(MeshResidencyCandidate {
             coord,
             bytes,
@@ -207,6 +221,7 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
             critical: dx.abs() <= 1 && dy.abs() <= 1 && dz.abs() <= 1,
             horizontal_distance_squared,
             total_distance_squared,
+            movement_alignment,
         })
     }));
 
@@ -228,6 +243,9 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
                     .horizontal_distance_squared
                     .cmp(&left.horizontal_distance_squared)
             })
+            // Among similarly distant chunks, retire the ones behind current
+            // movement before chunks the player is moving toward.
+            .then_with(|| left.movement_alignment.cmp(&right.movement_alignment))
             .then_with(|| right.bytes.cmp(&left.bytes))
             .then_with(|| left.coord.y.cmp(&right.coord.y))
             .then_with(|| left.coord.z.cmp(&right.coord.z))
