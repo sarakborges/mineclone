@@ -283,8 +283,8 @@ fn resolve_structure_candidates_uncached<'a>(
                 &mut overlapping,
             );
             for candidate in overlapping {
-                if candidate.structure.priority < direct.structure.priority
-                    || !structures_may_conflict(candidate.structure, direct.structure)
+                if candidate.priority < direct.priority
+                    || !candidates_may_conflict(&candidate, &direct)
                 {
                     continue;
                 }
@@ -600,15 +600,29 @@ fn visit_candidate_anchors_intersecting(
 
 fn candidate_identity<'a>(
     candidate: &StructureCandidate<'a>,
-) -> (&'a str, &'a str, IVec2) {
-    (candidate.biome_id, candidate.placement_id, candidate.anchor)
+) -> (
+    &'a str,
+    &'a str,
+    IVec2,
+    &'a str,
+    IVec2,
+    StructureRotation,
+) {
+    (
+        candidate.biome_id,
+        candidate.placement_id,
+        candidate.placement_anchor,
+        candidate.structure.id.as_str(),
+        candidate.anchor,
+        candidate.rotation,
+    )
 }
 
-fn structures_may_conflict(
-    higher: &StructureDefinition,
-    lower: &StructureDefinition,
+fn candidates_may_conflict(
+    higher: &StructureCandidate<'_>,
+    lower: &StructureCandidate<'_>,
 ) -> bool {
-    higher.generation.reserve_space
+    higher.reserve_space
         || higher.conflict_groups.iter().any(|group| {
             lower
                 .conflict_groups
@@ -622,11 +636,13 @@ fn candidate_order(
     right: &StructureCandidate<'_>,
 ) -> Ordering {
     right
-        .structure
         .priority
-        .cmp(&left.structure.priority)
-        .then_with(|| left.structure.id.cmp(&right.structure.id))
+        .cmp(&left.priority)
+        .then_with(|| left.placement_id.cmp(right.placement_id))
         .then_with(|| left.biome_id.cmp(right.biome_id))
+        .then_with(|| left.placement_anchor.x.cmp(&right.placement_anchor.x))
+        .then_with(|| left.placement_anchor.y.cmp(&right.placement_anchor.y))
+        .then_with(|| left.structure.id.cmp(&right.structure.id))
         .then_with(|| left.anchor.x.cmp(&right.anchor.x))
         .then_with(|| left.anchor.y.cmp(&right.anchor.y))
 }
@@ -644,30 +660,19 @@ fn same_candidate(
 ) -> bool {
     left.placement_id == right.placement_id
         && left.biome_id == right.biome_id
-        && left.anchor == right.anchor
+        && left.placement_anchor == right.placement_anchor
 }
 
 fn candidates_conflict(
     higher: &StructureCandidate<'_>,
     lower: &StructureCandidate<'_>,
 ) -> bool {
-    if !rectangles_overlap(
+    rectangles_overlap(
         higher.minimum,
         higher.maximum,
         lower.minimum,
         lower.maximum,
-    ) {
-        return false;
-    }
-
-    higher.structure.generation.reserve_space
-        || higher.structure.conflict_groups.iter().any(|group| {
-            lower
-                .structure
-                .conflict_groups
-                .iter()
-                .any(|candidate| candidate == group)
-        })
+    ) && candidates_may_conflict(higher, lower)
 }
 
 fn bit_get(bits: &[u64; STRUCTURE_OCCUPANCY_WORDS], index: usize) -> bool {
