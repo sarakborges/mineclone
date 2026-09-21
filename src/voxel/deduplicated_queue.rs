@@ -149,13 +149,21 @@ where
 
     pub(crate) fn pop_min_by_key<K: Ord>(
         &mut self,
+        key: impl FnMut(T) -> K,
+    ) -> Option<T> {
+        self.pop_min_where_by_key(|_| true, key)
+    }
+
+    pub(crate) fn pop_min_where_by_key<K: Ord>(
+        &mut self,
+        mut predicate: impl FnMut(T) -> bool,
         mut key: impl FnMut(T) -> K,
     ) -> Option<T> {
         self.compact_if_sparse();
         let mut best: Option<(usize, K)> = None;
 
         for (index, (value, generation)) in self.pending.iter().enumerate() {
-            if self.queued.get(value).copied() != Some(*generation) {
+            if self.queued.get(value).copied() != Some(*generation) || !predicate(*value) {
                 continue;
             }
 
@@ -327,6 +335,27 @@ mod tests {
         assert_eq!(queue.pop_min_by_key(|value| value), Some(1));
         assert_eq!(queue.pop_min_by_key(|value| value), Some(3));
         assert_eq!(queue.pop_min_by_key(|value| value), None);
+    }
+
+    #[test]
+    fn pop_min_where_by_key_preserves_filtered_entries() {
+        let mut queue = DeduplicatedQueue::from(vec![4, 3, 2, 1]);
+
+        assert_eq!(
+            queue.pop_min_where_by_key(|value| value % 2 == 1, |value| value),
+            Some(1)
+        );
+        assert!(queue.contains(2));
+        assert!(queue.contains(3));
+        assert!(queue.contains(4));
+
+        assert_eq!(
+            queue.pop_min_where_by_key(|value| value > 2, |value| value),
+            Some(3)
+        );
+        assert_eq!(queue.pop(), Some(4));
+        assert_eq!(queue.pop(), Some(2));
+        assert_eq!(queue.pop(), None);
     }
 
     #[test]
