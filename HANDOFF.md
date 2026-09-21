@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 26 — 2026-09-21:** content startup ficou mais fail-fast. O validator agora exige Brush e Chisel porque o viewmodel os resolve incondicionalmente ao entrar em Gameplay; ausência falha no load em vez de um `expect` tardio (`bc02b0018baafd4578b7e51b0354be95a19e1bb9`). O content loader agora ignora explicitamente somente `data/localization/` (loader próprio) e rejeita qualquer outro JSON de `data/` que não corresponda a uma definição conhecida, evitando typos/misplacement silenciosamente sem efeito (`6059fcfa21a4e5a31cdbdd6e48ec05ffb784a7a3`). **Pendências:** checar se CI/localization tooling gera JSON auxiliar em data em algum modo; árvore atual contém apenas localization como exceção. **Próximo passo:** localization loader/schema, content path safety e save activation invariants.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 25 — 2026-09-21:** mais state de gameplay isolado por world. `ViewModelAnimation` e `ViewModelItemSwitch` agora resetam no `OnEnter(Gameplay)`, impedindo swing/item-switch residual atravessar sessões (`2ab12e2c48b034d72d123c67b4e073cc5b9b7728`). `BrushMode` também reseta por Gameplay porque guarda ID de dye dependente do conteúdo; conteúdo pode ser relido em world novo e o ID antigo poderia deixar de existir (`36302584eeea835228580229471b4a9405e53f03`). **Pendências:** revisar caches/render resources ligados a handles/content e Locals semânticos. **Próximo passo:** rendering environment/fog/sky/dynamic lights + block/icon material caches.
 
 
