@@ -16,6 +16,7 @@ use super::{
     chunk_rendering::{
         CHUNK_MESH_RESIDENCY_HIGH_BYTES, CHUNK_MESH_RESIDENCY_RECOVERY_BYTES,
         CHUNK_MESH_RESIDENCY_TARGET_BYTES, ChunkRenderPool, retire_chunk_render_allocation,
+        retire_chunk_render_allocation_immediately,
     },
     chunk_system_params::ChunkRenderer,
     render_distance::RenderDistanceSettings,
@@ -218,8 +219,9 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
             continue;
         }
 
-        retire_chunk_render_allocation(
+        retire_chunk_render_allocation_immediately(
             &mut renderer.commands,
+            &mut renderer.meshes,
             &mut renderer.pool,
             candidate.coord,
         );
