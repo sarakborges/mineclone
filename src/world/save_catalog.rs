@@ -48,12 +48,28 @@ use super::{
 #[derive(Clone, Debug)]
 pub(crate) struct WorldSummary {
     pub(crate) id: String,
+    pub(crate) compatible: bool,
     pub(crate) last_saved_unix_ms: u64,
     pub(crate) seed: u64,
     pub(crate) day: u64,
     pub(crate) dimension_id: String,
     pub(crate) player_position: Option<[f32; 3]>,
     pub(crate) biome_id: Option<String>,
+}
+
+impl WorldSummary {
+    fn incompatible(id: String) -> Self {
+        Self {
+            id,
+            compatible: false,
+            last_saved_unix_ms: 0,
+            seed: 0,
+            day: 0,
+            dimension_id: String::new(),
+            player_position: None,
+            biome_id: None,
+        }
+    }
 }
 
 pub(crate) fn open_worlds_directory() -> io::Result<()> {
@@ -295,16 +311,21 @@ pub(crate) fn list_worlds() -> io::Result<Vec<WorldSummary>> {
         }
         let gate = world_lock(&id)?;
         let _lock = gate.lock_write()?;
-        if let Ok(manifest) = latest_complete_manifest(&entry.path(), &id) {
-            worlds.push(WorldSummary {
+        match latest_complete_manifest(&entry.path(), &id) {
+            Ok(manifest) => worlds.push(WorldSummary {
                 id,
+                compatible: true,
                 last_saved_unix_ms: manifest.last_saved_unix_ms,
                 seed: manifest.seed,
                 day: 0,
                 dimension_id: manifest.dimension_id,
                 player_position: None,
                 biome_id: None,
-            });
+            }),
+            Err(error) => {
+                warn!("World {id} is present on disk but incompatible: {error}");
+                worlds.push(WorldSummary::incompatible(id));
+            }
         }
     }
     worlds.sort_unstable_by(|a, b| {
@@ -321,9 +342,16 @@ pub(crate) fn list_verified_worlds(
     let candidates = list_worlds()?;
     let mut verified = Vec::with_capacity(candidates.len());
     for candidate in candidates {
+        if !candidate.compatible {
+            verified.push(candidate);
+            continue;
+        }
         match newest_restorable_summary(&candidate.id, registries) {
             Ok(summary) => verified.push(summary),
-            Err(error) => warn!("World {} has no verified snapshot: {error}", candidate.id),
+            Err(error) => {
+                warn!("World {} has no verified snapshot: {error}", candidate.id);
+                verified.push(WorldSummary::incompatible(candidate.id));
+            }
         }
     }
     verified.sort_unstable_by(|a, b| {

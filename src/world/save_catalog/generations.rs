@@ -95,6 +95,7 @@ pub(super) fn newest_restorable_summary(
             Ok(snapshot) => {
                 return Ok(WorldSummary {
                     id: id.to_owned(),
+                    compatible: true,
                     last_saved_unix_ms: candidate.manifest.last_saved_unix_ms,
                     seed: snapshot.seed,
                     day: snapshot.day,
