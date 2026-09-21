@@ -13,7 +13,12 @@ use super::spawn::BuiltChunkMesh;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ChunkMeshKey {
-    Terrain {
+    TerrainArray {
+        alpha_cutoff: Option<u32>,
+        alpha_blend: bool,
+        casts_shadow: bool,
+    },
+    TerrainLegacy {
         block_id: &'static str,
         face: BlockFace,
         casts_shadow: bool,
@@ -331,7 +336,9 @@ impl ChunkRenderPool {
                 .iter()
                 .all(|key| matches!(
                     key,
-                    ChunkMeshKey::Terrain { .. } | ChunkMeshKey::Layer { .. }
+                    ChunkMeshKey::TerrainArray { .. }
+                        | ChunkMeshKey::TerrainLegacy { .. }
+                        | ChunkMeshKey::Layer { .. }
                 ))
         );
 
