@@ -68,6 +68,12 @@ jobs:
           echo "Cargo.lock restored from cache: ${{ steps.cargo-lock.outputs.cache-hit }}"
           sha256sum Cargo.lock
 
+      - name: Export dependency lock for repository migration
+        run: |
+          echo "__ASTERIA_CARGO_LOCK_BEGIN__"
+          cat Cargo.lock
+          echo "__ASTERIA_CARGO_LOCK_END__"
+
       # Cache downloaded crates and compiled dependency artifacts. The key
       # now sees the restored lockfile, keeping crate versions stable across
       # successive commits instead of repeatedly rebuilding Bevy.
