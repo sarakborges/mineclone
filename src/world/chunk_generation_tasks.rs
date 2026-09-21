@@ -13,6 +13,7 @@ use crate::{
 
 use super::{
     biome_field::BiomeField,
+    chunk_async_work::ChunkAsyncWorkLimiter,
     chunk_system_params::{ChunkContent, ChunkGeneration},
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
     generation::{ChunkGenerationContext, generate_chunk},
@@ -100,10 +101,17 @@ impl ChunkGenerationTasks {
         self.pending.contains(coord)
     }
 
-    pub(crate) fn schedule(&mut self, coord: IVec3) -> bool {
+    pub(crate) fn schedule(
+        &mut self,
+        coord: IVec3,
+        limiter: &ChunkAsyncWorkLimiter,
+    ) -> bool {
         if self.pending.len() >= MAX_GENERATION_TASKS_IN_FLIGHT || self.pending.contains(coord) {
             return false;
         }
+        let Some(permit) = limiter.try_acquire() else {
+            return false;
+        };
 
         let snapshot = self
             .snapshot
@@ -112,6 +120,7 @@ impl ChunkGenerationTasks {
         let snapshot = snapshot.clone();
         let revision = self.revision;
         let task = AsyncComputeTaskPool::get().spawn(async move {
+            let _permit = permit;
             let context = snapshot.context();
             generate_chunk(coord, &context)
         });
