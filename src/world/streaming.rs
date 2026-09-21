@@ -82,14 +82,6 @@ impl ChunkStreamingState {
         self.desired.contains(&coord) || self.retained.contains(&coord)
     }
 
-    pub(super) fn wants_new_render_mesh(&self, coord: IVec3) -> bool {
-        let Some(center) = self.center else {
-            return false;
-        };
-        let (show_radius, _) = chunk_visibility_radii(self.horizontal_radius);
-        self.keeps_loaded(coord) && chunk_is_inside_render_radius(center, coord, show_radius)
-    }
-
     pub(super) fn retains_render_mesh(&self, coord: IVec3) -> bool {
         let Some(center) = self.center else {
             return false;
@@ -648,14 +640,14 @@ mod tests {
         };
         state.desired.extend([visible, hysteresis, preload_only]);
 
-        assert!(state.wants_new_render_mesh(visible));
-        assert!(!state.wants_new_render_mesh(hysteresis));
         assert!(state.retains_render_mesh(hysteresis));
         assert!(!state.retains_render_mesh(preload_only));
 
         state.mark_ready(preload_only);
+        state.mark_ready(hysteresis);
         state.mark_ready(visible);
         assert_eq!(state.pop_ready(), Some(visible));
+        assert!(state.ready.contains(hysteresis));
         assert!(state.ready.contains(preload_only));
     }
 
