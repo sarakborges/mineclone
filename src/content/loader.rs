@@ -19,6 +19,7 @@ use super::{
     secondary_property::{SecondaryPropertyDefinition, SecondaryPropertyRegistry},
     sky::{SkyDefinition, SkyRegistry},
     structure::{StructureDefinition, StructureRegistry},
+    structure_set::{StructureSetDefinition, StructureSetRegistry},
     tool::{ToolDefinition, ToolRegistry},
     validation::validate_content,
 };
@@ -38,6 +39,7 @@ pub(crate) struct LoadedContent {
     pub secondary_properties: SecondaryPropertyRegistry,
     pub skies: SkyRegistry,
     pub structures: StructureRegistry,
+    pub structure_sets: StructureSetRegistry,
     pub tools: ToolRegistry,
 }
 
@@ -56,6 +58,7 @@ impl LoadedContent {
         commands.insert_resource(self.secondary_properties);
         commands.insert_resource(self.skies);
         commands.insert_resource(self.structures);
+        commands.insert_resource(self.structure_sets);
         commands.insert_resource(self.tools);
     }
 }
@@ -141,6 +144,15 @@ fn load_definition(path: &Path, content: &mut LoadedContent, player_loaded: &mut
         content
             .fluids
             .insert(read_json_definition::<FluidDefinition>(path));
+    } else if path_has_component(path, "structure_sets") {
+        assert!(
+            path.starts_with(data_root().join("structure_sets")),
+            "structure set definitions must be under data/structure_sets/, not {}",
+            path.display()
+        );
+        content
+            .structure_sets
+            .insert(read_json_definition::<StructureSetDefinition>(path));
     } else if path_has_component(path, "structures") {
         assert!(
             path.starts_with(data_root().join("structures")),
