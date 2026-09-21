@@ -3,7 +3,10 @@ use serde::Deserialize;
 
 use crate::localization::LocalizedText;
 
-use super::{block::BlockTint, layer_id::intern_layer_id, registry::DefinitionMap};
+use super::{
+    asset_path::is_safe_relative_asset_path, block::BlockTint, layer_id::intern_layer_id,
+    registry::DefinitionMap,
+};
 
 const DEFAULT_LAYER_OFFSET: f32 = 1.0 / 1024.0;
 const MAX_LAYER_OFFSET: f32 = 1.0 / 8.0;
@@ -118,9 +121,10 @@ impl LayerRegistry {
             definition.id
         );
         assert!(
-            !definition.texture.trim().is_empty(),
-            "layer {} texture cannot be empty",
-            definition.id
+            is_safe_relative_asset_path(&definition.texture),
+            "layer {} texture must be a safe relative asset path: {}",
+            definition.id,
+            definition.texture
         );
         assert!(
             definition.offset.is_finite()
