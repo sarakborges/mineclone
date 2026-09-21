@@ -7,6 +7,7 @@
     "spanish": "Árbol Encantado"
   },
   "locatable": false,
+  "rotation": true,
   "priority": 0,
   "conflictGroups": [
     "tree"
