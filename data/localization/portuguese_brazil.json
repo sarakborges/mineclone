@@ -99,5 +99,11 @@
   "worldSelection.coordinates": "Coordenadas",
   "worldSelection.biome": "Bioma Atual",
   "worldSelection.unknown": "Indisponível",
-  "worldSelection.lastSaved": "Último salvamento"
+  "worldSelection.lastSaved": "Último salvamento",
+  "hud.layerFace.right": "Direita",
+  "hud.layerFace.left": "Esquerda",
+  "hud.layerFace.top": "Superior",
+  "hud.layerFace.bottom": "Inferior",
+  "hud.layerFace.front": "Frente",
+  "hud.layerFace.back": "Trás"
 }
