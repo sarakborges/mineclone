@@ -98,13 +98,14 @@ impl ChatLocateContext<'_> {
         &mut self,
         target_kind: &str,
         id: &str,
+        variation: Option<usize>,
         player_block: IVec3,
     ) -> String {
         let Some(dimension) = self.dimension.definition() else {
             return "Cannot locate: current dimension is unavailable.".to_owned();
         };
 
-        let (kind, name) = match target_kind {
+        let (kind, name, search_id) = match target_kind {
             "biome" => {
                 let Some(biome) = self.biomes.get(id) else {
                     return format!("Unknown biome id: {id}");
@@ -119,7 +120,11 @@ impl ChatLocateContext<'_> {
                         return format!("Use /locate hydrology for hydrology targets: {id}");
                     }
                 };
-                (kind, biome.name.text(self.language.get()).to_owned())
+                (
+                    kind,
+                    biome.name.text(self.language.get()).to_owned(),
+                    id.to_owned(),
+                )
             }
             "hydrology" => {
                 let (kind, name, enabled) = match id {
@@ -143,15 +148,34 @@ impl ChatLocateContext<'_> {
                 if !enabled {
                     return format!("{name} hydrology is disabled in this dimension.");
                 }
-                (LocateTargetKind::Hydrology(kind), name.to_owned())
+                (
+                    LocateTargetKind::Hydrology(kind),
+                    name.to_owned(),
+                    id.to_owned(),
+                )
             }
             "structure" => {
-                let Some(structure) = self
-                    .structures
-                    .get(id)
-                    .or_else(|| self.structures.variation(id, 1))
-                else {
-                    return format!("Unknown structure id: {id}");
+                let Some(variation_count) = self.structures.variation_count(id) else {
+                    return format!("Unknown structure id or group: {id}");
+                };
+                if let Some(variation) = variation
+                    && variation > variation_count
+                {
+                    return format!(
+                        "Unknown variation {variation} for {id}; expected 1..={variation_count}."
+                    );
+                }
+
+                let structure = match variation {
+                    Some(variation) => self
+                        .structures
+                        .variation(id, variation)
+                        .expect("validated structure variation must resolve"),
+                    None => self
+                        .structures
+                        .get(id)
+                        .or_else(|| self.structures.variation(id, 1))
+                        .expect("validated structure reference must resolve"),
                 };
                 if !structure.locatable {
                     return format!("Structure cannot be located by command: {id}");
@@ -172,12 +196,19 @@ impl ChatLocateContext<'_> {
                 if !generated_here {
                     return format!("Structure is not generated in this dimension: {id}");
                 }
+                let search_id = variation
+                    .map(|_| structure.id.clone())
+                    .unwrap_or_else(|| id.to_owned());
                 (
                     LocateTargetKind::Structure,
                     structure.name.text(self.language.get()).to_owned(),
+                    search_id,
                 )
             }
-            _ => return "Usage: /locate <biome|hydrology|structure> <id>".to_owned(),
+            _ => {
+                return "Usage: /locate <biome|hydrology> <id> | /locate structure <groupid> [variation]"
+                    .to_owned();
+            }
         };
 
         let snapshot = LocateSnapshot {
@@ -189,10 +220,9 @@ impl ChatLocateContext<'_> {
             biome_field: self.biome_field.as_ref().clone(),
             feature_fields: self.feature_fields.as_ref().clone(),
         };
-        let id = id.to_owned();
         let response = format!("Locating {name}...");
         self.pending.task = Some(AsyncComputeTaskPool::get().spawn(async move {
-            let position = locate_target(&snapshot, kind, &id, player_block);
+            let position = locate_target(&snapshot, kind, &search_id, player_block);
             LocateTaskResult { name, position }
         }));
 
