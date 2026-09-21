@@ -376,11 +376,13 @@ fn enqueue_retired_render_halo_remeshes(
                     continue;
                 };
                 let (geometry, fluid) = halo_remesh_needs(chunk, offset);
-                if geometry {
-                    remesh_queue.enqueue_priority(neighbor);
-                }
-                if fluid {
-                    remesh_queue.enqueue_fluid_priority(neighbor);
+                if geometry || fluid {
+                    remesh_queue.enqueue_halo_change(
+                        neighbor,
+                        -offset,
+                        geometry,
+                        fluid,
+                    );
                 }
             }
         }
