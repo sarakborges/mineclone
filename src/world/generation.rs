@@ -15,6 +15,7 @@ use crate::{
     content::{
         biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionDefinition,
         fluid::FluidRegistry, structure::StructureRegistry,
+        structure_set::StructureSetRegistry,
     },
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
@@ -56,6 +57,7 @@ pub(crate) struct ChunkGenerationContext<'a> {
     pub(crate) dimension: &'a DimensionDefinition,
     pub(crate) biomes: &'a BiomeRegistry,
     pub(crate) structures: &'a StructureRegistry,
+    pub(crate) structure_sets: &'a StructureSetRegistry,
     pub(crate) biome_field: &'a BiomeField,
     pub(crate) feature_fields: &'a WorldFeatureFields,
 }
