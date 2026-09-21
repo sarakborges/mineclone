@@ -1,6 +1,7 @@
 use crate::{
     voxel::mesh_snapshot::ChunkMeshSnapshot,
     world::{
+        chunk_async_work::ChunkAsyncWorkLimiter,
         chunk_mesh_tasks::{ChunkMeshTasks, MAX_MESH_TASKS_IN_FLIGHT},
         chunk_rendering::spawn_built_chunk_meshes,
         chunk_system_params::{ChunkContent, ChunkRenderer},
@@ -15,12 +16,27 @@ pub(super) fn mesh_initial_chunks(
     renderer: &mut ChunkRenderer<'_, '_>,
     progress: &mut WorldSetupProgress<'_>,
     mesh_tasks: &mut ChunkMeshTasks,
+    async_work: &ChunkAsyncWorkLimiter,
 ) {
     mesh_tasks.sync_snapshot(content);
     let mut budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 1);
 
-    integrate_built_chunk_meshes(content, renderer, &mut budget, progress, mesh_tasks);
-    dispatch_mesh_tasks(content, renderer, &mut budget, progress, mesh_tasks);
+    integrate_built_chunk_meshes(
+        content,
+        renderer,
+        &mut budget,
+        progress,
+        mesh_tasks,
+        async_work,
+    );
+    dispatch_mesh_tasks(
+        content,
+        renderer,
+        &mut budget,
+        progress,
+        mesh_tasks,
+        async_work,
+    );
 
     if progress.loading_state.mesh_cursor >= progress.loading_state.coords.len()
         && progress.loading_state.meshed >= progress.loading_state.coords.len()
@@ -36,6 +52,7 @@ fn integrate_built_chunk_meshes(
     budget: &mut FrameWorkBudget,
     progress: &mut WorldSetupProgress<'_>,
     mesh_tasks: &mut ChunkMeshTasks,
+    async_work: &ChunkAsyncWorkLimiter,
 ) {
     let current_revision = mesh_tasks.revision();
 
@@ -57,7 +74,7 @@ fn integrate_built_chunk_meshes(
             let snapshot = ChunkMeshSnapshot::capture(&progress.world, coord)
                 .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
             assert!(
-                mesh_tasks.schedule(coord, snapshot),
+                mesh_tasks.schedule(coord, snapshot, async_work),
                 "stale bootstrap mesh must be rescheduled for {coord:?}"
             );
             continue;
@@ -86,6 +103,7 @@ fn dispatch_mesh_tasks(
     budget: &mut FrameWorkBudget,
     progress: &mut WorldSetupProgress<'_>,
     mesh_tasks: &mut ChunkMeshTasks,
+    async_work: &ChunkAsyncWorkLimiter,
 ) {
     loop {
         if budget.exhausted() {
@@ -132,7 +150,7 @@ fn dispatch_mesh_tasks(
 
         let snapshot = ChunkMeshSnapshot::capture(&progress.world, coord)
             .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
-        if !mesh_tasks.schedule(coord, snapshot) {
+        if !mesh_tasks.schedule(coord, snapshot, async_work) {
             break;
         }
 
