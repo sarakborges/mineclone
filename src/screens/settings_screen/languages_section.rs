@@ -163,6 +163,7 @@ pub(super) fn sync_language_dropdown(
     state: Res<LanguageDropdownState>,
     active_language: Res<ActiveLanguage>,
     localization: Res<UiLocalization>,
+    changed_interactions: Query<(), (With<LanguageOption>, Changed<Interaction>)>,
     mut panels: Query<&mut Node, With<LanguageDropdownPanel>>,
     mut labels: Query<&mut Text, (With<LanguageDropdownLabel>, Without<LanguageOptionLabel>)>,
     mut options: Query<(
@@ -192,16 +193,14 @@ pub(super) fn sync_language_dropdown(
         }
     }
 
-    if !open_changed && !language_changed && options.iter().next().is_none() {
-        return;
-    }
-
-    for (option, interaction, background, border) in &mut options {
-        selectable::apply_colors(
-            selectable::colors(*interaction, option.0 == active_language.get()),
-            background,
-            border,
-        );
+    if language_changed || !changed_interactions.is_empty() {
+        for (option, interaction, background, border) in &mut options {
+            selectable::apply_colors(
+                selectable::colors(*interaction, option.0 == active_language.get()),
+                background,
+                border,
+            );
+        }
     }
 
     if localization.is_changed() {
