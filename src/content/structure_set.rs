@@ -283,11 +283,4 @@ impl StructureSetRegistry {
         self.definitions.values()
     }
 
-    pub(crate) fn horizontal_bounds(
-        &self,
-        id: &str,
-        structures: &StructureRegistry,
-    ) -> Option<(IVec2, IVec2)> {
-        self.get(id)?.horizontal_bounds(structures)
-    }
 }
