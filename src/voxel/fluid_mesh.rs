@@ -80,9 +80,9 @@ where
                         face,
                     )
                 });
-                if !exposed.iter().any(|value| *value) {
-                    continue;
-                }
+        if !exposed.iter().any(|value| *value) {
+            return;
+        }
 
                 let tint = tint_at(world_voxel, cell.fluid_id);
                 let heights = fluid_face_heights(world, world_voxel, cell.fluid_id);
