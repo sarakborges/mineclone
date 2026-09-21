@@ -39,6 +39,11 @@ use bevy::{
     app::{TaskPoolOptions, TaskPoolPlugin},
     prelude::*,
 };
+#[cfg(target_os = "windows")]
+use bevy::render::{
+    RenderPlugin,
+    settings::{Backends, WgpuSettings},
+};
 use content::ContentPlugin;
 use creatures::CreaturesPlugin;
 use gameplay::GameplayPlugin;
@@ -66,24 +71,29 @@ fn main() {
 fn run_game() {
     prepare_runtime_directory();
 
+    let default_plugins = DefaultPlugins
+        .set(TaskPoolPlugin {
+            task_pool_options: voxel_task_pool_options(),
+        })
+        .set(ImagePlugin::default_nearest())
+        .set(WindowPlugin {
+            // World exit owns durability. The OS close button must not
+            // destroy the window before the active world is saved.
+            close_when_requested: false,
+            primary_window: Some(Window {
+                title: "Asteria".into(),
+                ..default()
+            }),
+            ..default()
+        });
+    #[cfg(target_os = "windows")]
+    let default_plugins = default_plugins.set(RenderPlugin {
+        render_creation: windows_wgpu_settings().into(),
+        ..default()
+    });
+
     App::new()
-        .add_plugins(
-            DefaultPlugins
-                .set(TaskPoolPlugin {
-                    task_pool_options: voxel_task_pool_options(),
-                })
-                .set(ImagePlugin::default_nearest())
-                .set(WindowPlugin {
-                    // World exit owns durability. The OS close button must not
-                    // destroy the window before the active world is saved.
-                    close_when_requested: false,
-                    primary_window: Some(Window {
-                        title: "Asteria".into(),
-                        ..default()
-                    }),
-                    ..default()
-                }),
-        )
+        .add_plugins(default_plugins)
         .init_state::<GameState>()
         .init_state::<PauseState>()
         .insert_resource(ClearColor(Color::srgb(0.02, 0.025, 0.04)))
@@ -103,6 +113,21 @@ fn run_game() {
             HudPlugin,
         ))
         .run();
+}
+
+#[cfg(target_os = "windows")]
+fn windows_wgpu_settings() -> WgpuSettings {
+    let mut settings = WgpuSettings::default();
+
+    // Bevy 0.19 / wgpu 29 currently has a Vulkan VRAM-residency regression on
+    // Windows. Prefer DX12 unless the user explicitly chose a backend through
+    // WGPU_BACKEND, preserving the standard wgpu escape hatch for debugging or
+    // unsupported hardware.
+    if std::env::var_os("WGPU_BACKEND").is_none() {
+        settings.backends = Some(Backends::DX12);
+    }
+
+    settings
 }
 
 fn voxel_task_pool_options() -> TaskPoolOptions {
