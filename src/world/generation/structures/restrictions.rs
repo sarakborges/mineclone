@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        structure::StructureDefinition,
+        structure::{StructureDefinition, StructureRotation},
         structure_rules::{
             StructureFluidPolicy, StructureProximityMode, StructureProximityRestriction,
             StructureProximityTarget,
@@ -21,6 +21,7 @@ use super::super::{ChunkGenerationContext, fluids::authored_surface_fluid_id_at}
 pub(super) fn candidate_satisfies_restrictions(
     biome_id: &str,
     structure: &StructureDefinition,
+    rotation: StructureRotation,
     anchor: IVec2,
     origin_y: i32,
     context: &ChunkGenerationContext<'_>,
@@ -35,15 +36,18 @@ pub(super) fn candidate_satisfies_restrictions(
     }
 
     if !restrictions.ground_blocks.is_empty()
-        && structure.support_offsets().iter().any(|offset| {
-            !ground_block_is_allowed(anchor + *offset, &restrictions.ground_blocks, context)
-        })
+        && structure
+            .support_offsets_for_rotation(rotation)
+            .iter()
+            .any(|offset| {
+                !ground_block_is_allowed(anchor + *offset, &restrictions.ground_blocks, context)
+            })
     {
         return false;
     }
 
     if restrictions.required_biome_coverage > 0.0 {
-        let footprint = structure.horizontal_footprint();
+        let footprint = structure.horizontal_footprint_for_rotation(rotation);
         let matching = footprint
             .iter()
             .filter(|offset| {
@@ -61,7 +65,7 @@ pub(super) fn candidate_satisfies_restrictions(
     }
 
     if structure.generation.fluid_policy == StructureFluidPolicy::Forbid
-        && intersects_surface_fluid(structure, anchor, origin_y, context)
+        && intersects_surface_fluid(structure, rotation, anchor, origin_y, context)
     {
         return false;
     }
@@ -292,12 +296,13 @@ fn surface_fluid_matches(
 
 fn intersects_surface_fluid(
     structure: &StructureDefinition,
+    rotation: StructureRotation,
     anchor: IVec2,
     origin_y: i32,
     context: &ChunkGenerationContext<'_>,
 ) -> bool {
     structure.column_spans().iter().any(|span| {
-        let position = anchor + span.offset;
+        let position = anchor + rotation.rotate_horizontal(span.offset);
         let horizontal = position.as_vec2() + Vec2::splat(0.5);
         let surface = context.biome_field.sample_surface(horizontal);
         let surface_height = surface_height_from_sample(
