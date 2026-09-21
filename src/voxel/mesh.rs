@@ -33,11 +33,31 @@ use super::{
 pub(crate) mod geometry;
 mod micro_mesh;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ChunkTerrainBatch {
+    Array {
+        alpha_cutoff: Option<u32>,
+        alpha_blend: bool,
+        casts_shadow: bool,
+    },
+    Legacy {
+        block_id: &'static str,
+        face: BlockFace,
+        casts_shadow: bool,
+    },
+}
+
+impl ChunkTerrainBatch {
+    pub(crate) fn casts_shadow(self) -> bool {
+        match self {
+            Self::Array { casts_shadow, .. } | Self::Legacy { casts_shadow, .. } => casts_shadow,
+        }
+    }
+}
+
 pub struct ChunkFaceMesh {
-    pub block_id: &'static str,
-    pub face: BlockFace,
+    pub(crate) batch: ChunkTerrainBatch,
     pub mesh: Mesh,
-    pub casts_shadow: bool,
 }
 
 pub fn build_chunk_mesh<W, F>(
@@ -262,15 +282,13 @@ where
         .into_values()
         .filter_map(|entry| {
             entry.buffer.into_mesh().map(|mesh| ChunkFaceMesh {
-                block_id: entry.block_id,
-                face: entry.face,
+                batch: entry.batch,
                 mesh,
-                casts_shadow: entry.casts_shadow,
             })
         })
         .collect::<Vec<_>>();
 
-    meshes.sort_by_key(|mesh| (mesh.block_id, face_sort_key(mesh.face), mesh.casts_shadow));
+    meshes.sort_by_key(|mesh| terrain_batch_sort_key(mesh.batch));
     meshes
 }
 
@@ -457,6 +475,39 @@ fn tiled_uvs(width: usize, height: usize) -> [[f32; 2]; 4] {
     let width = width as f32;
     let height = height as f32;
     [[0.0, height], [width, height], [width, 0.0], [0.0, 0.0]]
+}
+
+fn terrain_batch_sort_key(
+    batch: ChunkTerrainBatch,
+) -> (u8, u8, u32, bool, &'static str, u8, bool) {
+    match batch {
+        ChunkTerrainBatch::Array {
+            alpha_cutoff,
+            alpha_blend,
+            casts_shadow,
+        } => (
+            0,
+            u8::from(alpha_cutoff.is_some()),
+            alpha_cutoff.unwrap_or(0),
+            alpha_blend,
+            "",
+            0,
+            casts_shadow,
+        ),
+        ChunkTerrainBatch::Legacy {
+            block_id,
+            face,
+            casts_shadow,
+        } => (
+            1,
+            0,
+            0,
+            false,
+            block_id,
+            face_sort_key(face),
+            casts_shadow,
+        ),
+    }
 }
 
 fn face_sort_key(face: BlockFace) -> u8 {
