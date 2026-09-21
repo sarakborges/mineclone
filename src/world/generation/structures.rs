@@ -590,14 +590,20 @@ fn rasterize_structure(
                     voxel.orientation,
                 )),
             );
-            rasterize_structure_surface_layers(
-                chunk,
+            for (face, layer) in surface_layer_placements(
+                context.world_seed,
                 structure,
                 voxel,
                 world_position,
-                local,
-                context.world_seed,
-            );
+            ) {
+                let _ = chunk.add_layer(
+                    local_x,
+                    local_y,
+                    local_z,
+                    face,
+                    layer,
+                );
+            }
             if structure.generation.fluid_policy == StructureFluidPolicy::Displace {
                 chunk.set_fluid(local_x, local_y, local_z, None);
             }
@@ -607,17 +613,16 @@ fn rasterize_structure(
     );
 }
 
-fn rasterize_structure_surface_layers(
-    chunk: &mut VoxelChunkContentMut<'_>,
+pub(crate) fn surface_layer_placements(
+    world_seed: u64,
     structure: &StructureDefinition,
     voxel: &StructureVoxel,
     world_position: IVec3,
-    local: IVec3,
-    world_seed: u64,
-) {
+) -> Vec<(LayerFace, LayerCell)> {
     // Structure generation is deterministic across chunk order. Use the
     // world seed plus world-space position and structure/layer/face identity
     // so the same seed and structure always choose the same layer patches.
+    let mut placements = Vec::new();
     for surface in structure.surface_layers_for_voxel(voxel) {
         for &face in &surface.faces {
             let hash = surface_layer_hash(
@@ -631,15 +636,10 @@ fn rasterize_structure_surface_layers(
                 continue;
             }
             let rotation = TextureRotation::from_quarter_turn(((hash >> 32) & 3) as u8);
-            let _ = chunk.add_layer(
-                local.x as usize,
-                local.y as usize,
-                local.z as usize,
-                face,
-                LayerCell::new(&surface.layer, rotation),
-            );
+            placements.push((face, LayerCell::new(&surface.layer, rotation)));
         }
     }
+    placements
 }
 
 fn surface_layer_hash(

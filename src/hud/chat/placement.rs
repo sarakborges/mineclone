@@ -13,7 +13,10 @@ use crate::{
         cell::VoxelCell, collision::collides_aabb, edit::VoxelTopologyRuntime,
         texture_rotation::TextureRotation, world::VoxelWorld,
     },
-    world::generation::fit_structure_to_ground,
+    world::{
+        generation::{fit_structure_to_ground, surface_layer_placements},
+        seed::WorldSeed,
+    },
 };
 
 const DISPLACEMENT_MARGIN: i32 = 3;
@@ -33,6 +36,7 @@ pub(super) struct ChatPlacementContext<'w, 's> {
     definitions: Res<'w, CreatureRegistry>,
     structures: Res<'w, StructureRegistry>,
     blocks: Res<'w, BlockRegistry>,
+    seed: Res<'w, WorldSeed>,
     assets: Res<'w, AssetServer>,
     language: Res<'w, ActiveLanguage>,
     runtime: VoxelTopologyRuntime<'w>,
@@ -291,6 +295,16 @@ impl ChatPlacementContext<'_, '_> {
             self.runtime
                 .set_block(position, Some(cell))
                 .expect("preflight guarantees a loaded empty structure voxel");
+            for (face, layer) in surface_layer_placements(
+                self.seed.0,
+                structure,
+                voxel,
+                position,
+            ) {
+                self.runtime
+                    .add_layer(position, face, layer)
+                    .expect("placed structure layer must attach to its freshly placed support");
+            }
         }
         player.translation = destination;
         format!("Placed {} ({id}).", structure.name.text(self.language.get()))
