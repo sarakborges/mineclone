@@ -65,7 +65,10 @@ pub(super) fn process_dynamic_lighting(
 
     runtime
         .remesh_tasks
-        .bump_lighting_revisions(changed_chunks.iter().copied());
+        .bump_lighting_revisions_for_positions(
+            &runtime.world,
+            changed_positions.iter().copied(),
+        );
     changed_chunks.clear();
 
     for position in changed_positions.drain() {
