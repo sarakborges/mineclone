@@ -28,35 +28,6 @@ fn refresh_chunk_mesh(
     spawn_chunk_mesh(commands, meshes, render_pool, coord, chunk, context);
 }
 
-pub fn refresh_chunk_geometry_mesh(
-    commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    render_pool: &mut ChunkRenderPool,
-    coord: IVec3,
-    context: &ChunkRenderContext<'_>,
-) {
-    let Some(chunk) = context.world.chunk(coord) else {
-        return;
-    };
-    if chunk.is_empty() {
-        if render_pool.contains(coord) {
-            refresh_chunk_mesh(commands, meshes, render_pool, coord, context);
-        }
-        return;
-    }
-
-    let build_context = context.mesh_build_context();
-    let built_meshes = build_chunk_terrain_render_meshes(coord, chunk, &build_context);
-    apply_built_chunk_geometry_meshes(
-        commands,
-        meshes,
-        render_pool,
-        coord,
-        built_meshes,
-        context,
-    );
-}
-
 pub(crate) fn apply_built_chunk_geometry_meshes(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
