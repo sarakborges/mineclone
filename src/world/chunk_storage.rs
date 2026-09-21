@@ -9,7 +9,8 @@ use bevy::prelude::IVec3;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    voxel::chunk_disk::DiskChunk,
+    content::fluid::FluidRegistry,
+    voxel::{chunk_disk::DiskChunk, world::VoxelWorld},
     world::storage_durability::{sync_directory, sync_directory_tree},
 };
 
@@ -156,13 +157,35 @@ struct StoredChunkRegion {
 #[derive(Serialize)]
 struct DiskChunkRegionRef<'a> {
     region: [i32; 3],
-    chunks: Vec<&'a DiskChunk>,
+    chunks: &'a [DiskChunk],
 }
 
+pub(crate) fn publish_generation_world_chunks(
+    world_directory: &Path,
+    generation: u64,
+    world: &VoxelWorld,
+    fluids: &FluidRegistry,
+) -> io::Result<()> {
+    publish_generation_storage(world_directory, generation, |staging| {
+        write_generation_world_chunks_to_staging(staging, world, fluids)
+    })
+}
+
+#[cfg(test)]
 pub(crate) fn publish_generation_chunks(
     world_directory: &Path,
     generation: u64,
     chunks: &[DiskChunk],
+) -> io::Result<()> {
+    publish_generation_storage(world_directory, generation, |staging| {
+        write_generation_chunks_to_staging(staging, chunks)
+    })
+}
+
+fn publish_generation_storage(
+    world_directory: &Path,
+    generation: u64,
+    write_staging: impl FnOnce(&Path) -> io::Result<()>,
 ) -> io::Result<()> {
     let published_relative = PathBuf::from(generation_directory_name(generation));
     let staging_relative = PathBuf::from(staging_generation_directory_name(generation));
@@ -176,7 +199,7 @@ pub(crate) fn publish_generation_chunks(
     }
 
     fs::create_dir(staging.as_path())?;
-    if let Err(error) = write_generation_chunks_to_staging(staging.as_path(), chunks) {
+    if let Err(error) = write_staging(staging.as_path()) {
         if fs::symlink_metadata(staging.as_path()).is_ok_and(|metadata| metadata.is_dir()) {
             let _ = fs::remove_dir_all(staging.as_path());
         }
@@ -433,9 +456,42 @@ fn noncanonical_region_path(path: PathBuf) -> io::Error {
     )
 }
 
+fn write_generation_world_chunks_to_staging(
+    staging: &Path,
+    world: &VoxelWorld,
+    fluids: &FluidRegistry,
+) -> io::Result<()> {
+    let mut coords = world.persistent_chunk_coords().collect::<Vec<_>>();
+    coords.sort_unstable_by_key(|coord| {
+        let region = ChunkRegionIdentity::from_chunk_position(*coord).region_position;
+        (region.y, region.z, region.x, coord.y, coord.z, coord.x)
+    });
+
+    let mut start = 0;
+    while start < coords.len() {
+        let identity = ChunkRegionIdentity::from_chunk_position(coords[start]);
+        let mut end = start + 1;
+        while end < coords.len()
+            && ChunkRegionIdentity::from_chunk_position(coords[end]) == identity
+        {
+            end += 1;
+        }
+
+        let mut chunks = Vec::with_capacity(end - start);
+        for &coord in &coords[start..end] {
+            chunks.push(world.save_persistent_chunk(coord, fluids)?);
+        }
+        write_region_file(staging, identity, &chunks)?;
+        start = end;
+    }
+
+    sync_directory_tree(staging)
+}
+
+#[cfg(test)]
 fn write_generation_chunks_to_staging(staging: &Path, chunks: &[DiskChunk]) -> io::Result<()> {
     let mut identities = HashSet::with_capacity(chunks.len());
-    let mut regions = HashMap::<ChunkRegionIdentity, Vec<(IVec3, &DiskChunk)>>::new();
+    let mut regions = HashMap::<ChunkRegionIdentity, Vec<DiskChunk>>::new();
 
     for chunk in chunks {
         let identity = ChunkDiskIdentity::from_disk_chunk(chunk)?;
@@ -451,7 +507,7 @@ fn write_generation_chunks_to_staging(staging: &Path, chunks: &[DiskChunk]) -> i
         regions
             .entry(ChunkRegionIdentity::from_chunk_position(position))
             .or_default()
-            .push((position, chunk));
+            .push(chunk.clone());
     }
 
     let mut regions = regions.into_iter().collect::<Vec<_>>();
@@ -461,30 +517,43 @@ fn write_generation_chunks_to_staging(staging: &Path, chunks: &[DiskChunk]) -> i
     });
 
     for (identity, mut region_chunks) in regions {
-        region_chunks.sort_unstable_by_key(|(coord, _)| (coord.y, coord.z, coord.x));
-        let path = staging.join(identity.relative_path());
-        let parent = path
-            .parent()
-            .ok_or_else(|| io::Error::other("chunk region storage path has no parent"))?;
-        fs::create_dir_all(parent)?;
-
-        let region = identity.region_position;
-        let payload = DiskChunkRegionRef {
-            region: [region.x, region.y, region.z],
-            chunks: region_chunks.into_iter().map(|(_, chunk)| chunk).collect(),
-        };
-
-        let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
-        {
-            let mut buffered = io::BufWriter::new(&mut file);
-            serde_json::to_writer(&mut buffered, &payload)
-                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-            buffered.flush()?;
-        }
-        file.sync_all()?;
+        region_chunks.sort_unstable_by_key(|chunk| {
+            let coord = chunk
+                .coord()
+                .expect("validated test chunk identity must remain readable");
+            (coord.y, coord.z, coord.x)
+        });
+        write_region_file(staging, identity, &region_chunks)?;
     }
 
     sync_directory_tree(staging)
+}
+
+fn write_region_file(
+    staging: &Path,
+    identity: ChunkRegionIdentity,
+    chunks: &[DiskChunk],
+) -> io::Result<()> {
+    let path = staging.join(identity.relative_path());
+    let parent = path
+        .parent()
+        .ok_or_else(|| io::Error::other("chunk region storage path has no parent"))?;
+    fs::create_dir_all(parent)?;
+
+    let region = identity.region_position;
+    let payload = DiskChunkRegionRef {
+        region: [region.x, region.y, region.z],
+        chunks,
+    };
+
+    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
+    {
+        let mut buffered = io::BufWriter::new(&mut file);
+        serde_json::to_writer(&mut buffered, &payload)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        buffered.flush()?;
+    }
+    file.sync_all()
 }
 
 pub(crate) fn remove_generation_chunks(
