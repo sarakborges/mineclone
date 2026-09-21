@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     voxel::{
+        coordinates::visit_chunk_coords_whose_voxel_halo_contains,
         deduplicated_queue::DeduplicatedQueue,
         neighbors::CARDINAL_NEIGHBORS,
         world::VoxelWorld,
@@ -82,14 +83,10 @@ impl ChunkRemeshQueue {
         }
     }
 
-    pub(crate) fn enqueue_voxel_edit(&mut self, coord: IVec3) {
-        for offset in CARDINAL_NEIGHBORS {
-            self.enqueue_priority(coord + offset);
-        }
-
-        if coord.y >= 0 {
+    pub(crate) fn enqueue_voxel_edit(&mut self, world_position: IVec3) {
+        visit_chunk_coords_whose_voxel_halo_contains(world_position, |coord| {
             self.enqueue_priority(coord);
-        }
+        });
     }
 
     pub(crate) fn enqueue_lighting_change(&mut self, coord: IVec3, world: &VoxelWorld) {
@@ -308,21 +305,22 @@ mod tests {
     }
 
     #[test]
-    fn voxel_edit_keeps_lighting_refresh_separate_from_geometry() {
+    fn voxel_edit_invalidates_only_chunks_whose_halo_contains_the_edit() {
         let mut queue = ChunkRemeshQueue::default();
-        let coord = IVec3::new(4, 2, -3);
-        queue.enqueue_voxel_edit(coord);
+        let interior = IVec3::new(4, 20, 6);
+        queue.enqueue_voxel_edit(interior);
 
         assert_eq!(queue.pop_lighting(), None);
-        assert_eq!(queue.pop(), Some(coord));
+        assert_eq!(queue.pop(), Some(IVec3::new(0, 1, 0)));
+        assert_eq!(queue.pop(), None);
 
+        let corner = IVec3::new(15, 31, 15);
+        queue.enqueue_voxel_edit(corner);
         let mut queued = Vec::new();
         while let Some(value) = queue.pop() {
             queued.push(value);
         }
-        for offset in CARDINAL_NEIGHBORS {
-            assert!(queued.contains(&(coord + offset)));
-        }
+        assert_eq!(queued.len(), 8);
     }
 
     #[test]
