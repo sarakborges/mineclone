@@ -27,6 +27,44 @@ use super::{
     pool::{ChunkMeshKey, ChunkRenderAllocation, ChunkRenderPool},
 };
 
+struct ColumnTintCache {
+    grass: Vec<Option<Color>>,
+    leaf: Vec<Option<Color>>,
+    foliage: Vec<Option<Color>>,
+}
+
+impl Default for ColumnTintCache {
+    fn default() -> Self {
+        let len = CHUNK_SIZE * CHUNK_SIZE;
+        Self {
+            grass: vec![None; len],
+            leaf: vec![None; len],
+            foliage: vec![None; len],
+        }
+    }
+}
+
+impl ColumnTintCache {
+    fn get_or_insert_with(
+        &mut self,
+        voxel: IVec3,
+        tint: BlockTint,
+        make: impl FnOnce() -> Color,
+    ) -> Color {
+        let local_x = voxel.x.rem_euclid(CHUNK_SIZE as i32) as usize;
+        let local_z = voxel.z.rem_euclid(CHUNK_SIZE as i32) as usize;
+        let index = local_x + local_z * CHUNK_SIZE;
+        let slot = match tint {
+            BlockTint::None => return Color::WHITE,
+            BlockTint::Grass => &mut self.grass[index],
+            BlockTint::Leaf => &mut self.leaf[index],
+            BlockTint::Foliage => &mut self.foliage[index],
+        };
+
+        slot.get_or_insert_with(make).clone()
+    }
+}
+
 pub(crate) enum BuiltChunkMesh {
     Terrain(ChunkFaceMesh),
     Layer(ChunkLayerMesh),
@@ -109,7 +147,7 @@ pub(super) fn build_chunk_terrain_render_meshlets<W: VoxelRead + ?Sized>(
     context: &ChunkMeshBuildContext<'_, W>,
     meshlets: ChunkMeshletMask,
 ) -> Vec<BuiltChunkMesh> {
-    let mut column_tints = HashMap::<(i32, i32, BlockTint), Color>::new();
+    let mut column_tints = ColumnTintCache::default();
     let mut meshes = build_chunk_meshlets(
         context.world,
         coord,
@@ -121,17 +159,16 @@ pub(super) fn build_chunk_terrain_render_meshlets<W: VoxelRead + ?Sized>(
             let base_tint = if block.tint == BlockTint::None {
                 Color::WHITE
             } else {
-                *column_tints
-                    .entry((voxel.x, voxel.z, block.tint))
-                    .or_insert_with(|| {
-                        let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-                        block_tint_at(
-                            block.tint,
-                            position,
-                            context.biome_field,
-                            context.biomes,
-                        )
-                    })
+                column_tints.get_or_insert_with(voxel, block.tint, || {
+                    let position =
+                        Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
+                    block_tint_at(
+                        block.tint,
+                        position,
+                        context.biome_field,
+                        context.biomes,
+                    )
+                })
             };
 
             block_vertex_tint(base_tint, block, cell, context.secondary_properties)
@@ -153,9 +190,10 @@ pub(super) fn build_chunk_terrain_render_meshlets<W: VoxelRead + ?Sized>(
                 let color = if definition.tint == BlockTint::None {
                     Color::WHITE
                 } else {
-                    *column_tints
-                        .entry((voxel.x, voxel.z, definition.tint))
-                        .or_insert_with(|| {
+                    column_tints.get_or_insert_with(
+                        voxel,
+                        definition.tint,
+                        || {
                             let position =
                                 Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
                             block_tint_at(
@@ -164,7 +202,8 @@ pub(super) fn build_chunk_terrain_render_meshlets<W: VoxelRead + ?Sized>(
                                 context.biome_field,
                                 context.biomes,
                             )
-                        })
+                        },
+                    )
                 };
                 let tint = color.to_srgba();
                 [tint.red, tint.green, tint.blue]
