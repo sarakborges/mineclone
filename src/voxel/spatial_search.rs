@@ -16,8 +16,16 @@ pub(crate) fn find_map_square_rings<T>(
                     continue;
                 }
 
-                let offset = IVec2::new(x_offset * step, z_offset * step);
-                if let Some(result) = resolve(center + offset) {
+                let offset_x = x_offset
+                    .checked_mul(step)
+                    .and_then(|offset| center.x.checked_add(offset));
+                let offset_z = z_offset
+                    .checked_mul(step)
+                    .and_then(|offset| center.y.checked_add(offset));
+                let (Some(x), Some(z)) = (offset_x, offset_z) else {
+                    continue;
+                };
+                if let Some(result) = resolve(IVec2::new(x, z)) {
                     return Some(result);
                 }
             }
