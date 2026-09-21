@@ -62,6 +62,17 @@ fn default_max_entities() -> usize { 128 }
 
 impl DimensionDefinition {
     pub fn validate_biomes(&self, biomes: &BiomeRegistry) {
+        assert!(!self.id.trim().is_empty(), "dimension id cannot be empty");
+        assert!(
+            !self.day_night_cycle.trim().is_empty(),
+            "dimension {} dayNightCycle cannot be empty",
+            self.id
+        );
+        assert!(
+            !self.sky.trim().is_empty(),
+            "dimension {} sky cannot be empty",
+            self.id
+        );
         assert!(self.max_entities > 0, "dimension {} maxEntities must be positive", self.id);
         assert!(
             !self.biomes.is_empty(),
