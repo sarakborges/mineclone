@@ -11,7 +11,7 @@ use super::{
 const MAX_LIGHT_DAMPENING: u8 = 15;
 pub const FRAGMENTABLE_BLOCK_TAG: &str = "fragmentable";
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockTextureLayer {
     pub texture: String,
