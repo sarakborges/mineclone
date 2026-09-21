@@ -10,7 +10,10 @@ use crate::{
         biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry,
         layer::LayerRegistry, secondary_property::SecondaryPropertyRegistry,
     },
-    voxel::{chunk::VoxelChunk, fluid_mesh::ChunkFluidMesh, read::VoxelRead, world::VoxelWorld},
+    voxel::{
+        chunk::VoxelChunk, fluid_mesh::ChunkFluidMesh, meshlet::ChunkMeshletMask,
+        read::VoxelRead, world::VoxelWorld,
+    },
 };
 
 use super::biome_field::BiomeField;
@@ -92,10 +95,28 @@ pub(crate) fn build_chunk_terrain_remeshes<W: VoxelRead + ?Sized>(
     spawn::build_chunk_terrain_render_meshes(coord, chunk, context)
 }
 
+pub(crate) fn build_chunk_terrain_meshlet_remeshes<W: VoxelRead + ?Sized>(
+    coord: IVec3,
+    chunk: &VoxelChunk,
+    context: &ChunkMeshBuildContext<'_, W>,
+    meshlets: ChunkMeshletMask,
+) -> Vec<BuiltChunkMesh> {
+    spawn::build_chunk_terrain_render_meshlets(coord, chunk, context, meshlets)
+}
+
 pub(crate) fn build_chunk_fluid_remeshes<W: VoxelRead + ?Sized>(
     coord: IVec3,
     chunk: &VoxelChunk,
     context: &ChunkMeshBuildContext<'_, W>,
 ) -> Vec<ChunkFluidMesh> {
     spawn::build_chunk_fluid_render_meshes(coord, chunk, context)
+}
+
+pub(crate) fn build_chunk_fluid_meshlet_remeshes<W: VoxelRead + ?Sized>(
+    coord: IVec3,
+    chunk: &VoxelChunk,
+    context: &ChunkMeshBuildContext<'_, W>,
+    meshlets: ChunkMeshletMask,
+) -> Vec<ChunkFluidMesh> {
+    spawn::build_chunk_fluid_render_meshlets(coord, chunk, context, meshlets)
 }
