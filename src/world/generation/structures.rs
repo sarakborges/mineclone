@@ -10,12 +10,10 @@ use smallvec::SmallVec;
 
 use crate::{
     content::{
-        biome::BiomeRegistry,
         biome_structure::StructurePlacementRules,
         block::BlockRegistry,
-        dimension::DimensionDefinition,
         layer::LayerFace,
-        structure::{StructureDefinition, StructureRegistry, StructureRotation, StructureVoxel},
+        structure::{StructureDefinition, StructureRotation, StructureVoxel},
         structure_rules::{StructureFluidPolicy, StructureReplacePolicy},
     },
     voxel::{
@@ -37,7 +35,7 @@ use self::{
     restrictions::candidate_satisfies_restrictions,
     support::compute_structure_origin_y,
 };
-use super::{super::biome_field::BiomeField, ChunkGenerationContext};
+use super::ChunkGenerationContext;
 
 const COLUMN_INDEX_MIN_VOXELS: usize = 512;
 const STRUCTURE_OCCUPANCY_WORDS: usize = CHUNK_VOLUME.div_ceil(u64::BITS as usize);
