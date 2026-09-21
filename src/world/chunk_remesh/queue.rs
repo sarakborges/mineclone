@@ -27,6 +27,7 @@ pub(crate) struct ChunkRemeshQueue {
     lighting: DeduplicatedQueue<IVec3>,
     geometry_meshlets: HashMap<IVec3, ChunkMeshletMask>,
     fluid_meshlets: HashMap<IVec3, ChunkMeshletMask>,
+    lighting_meshlets: HashMap<IVec3, ChunkMeshletMask>,
     geometry_scan_miss: Option<RenderableScanKey>,
     fluid_scan_miss: Option<RenderableScanKey>,
     lighting_scan_miss: Option<RenderableScanKey>,
@@ -45,9 +46,23 @@ impl ChunkRemeshQueue {
         meshlets: ChunkMeshletMask,
         priority: bool,
     ) {
-        if coord.y < 0 || meshlets.is_empty() || self.lighting.contains(coord) {
+        if coord.y < 0 || meshlets.is_empty() {
             return;
         }
+        if self.lighting.contains(coord) {
+            let combined = self
+                .lighting_meshlets
+                .get(&coord)
+                .copied()
+                .unwrap_or_default()
+                .union(meshlets);
+            self.lighting_meshlets.insert(coord, combined);
+            if priority {
+                self.lighting.enqueue_front(coord);
+            }
+            return;
+        }
+
         let combined = self
             .geometry_meshlets
             .get(&coord)
@@ -97,23 +112,39 @@ impl ChunkRemeshQueue {
         self.enqueue_fluid_meshlets(coord, ChunkMeshletMask::ALL, true);
     }
 
-    fn enqueue_lighting(&mut self, coord: IVec3) {
-        if coord.y >= 0 {
-            self.queue.remove(coord);
-            self.geometry_meshlets.remove(&coord);
+    fn enqueue_lighting_meshlets(
+        &mut self,
+        coord: IVec3,
+        meshlets: ChunkMeshletMask,
+        priority: bool,
+    ) {
+        if coord.y < 0 || meshlets.is_empty() {
+            return;
+        }
+
+        let geometry = self.geometry_meshlets.remove(&coord).unwrap_or_default();
+        self.queue.remove(coord);
+        let combined = self
+            .lighting_meshlets
+            .get(&coord)
+            .copied()
+            .unwrap_or_default()
+            .union(geometry)
+            .union(meshlets);
+        self.lighting_meshlets.insert(coord, combined);
+        if priority {
+            self.lighting.enqueue_front(coord);
+        } else {
             self.lighting.enqueue(coord);
         }
     }
 
+    fn enqueue_lighting(&mut self, coord: IVec3) {
+        self.enqueue_lighting_meshlets(coord, ChunkMeshletMask::ALL, false);
+    }
+
     fn enqueue_lighting_priority(&mut self, coord: IVec3) {
-        if coord.y >= 0 {
-            // Lighting rebuilds the same terrain mesh as geometry. Once a newer
-            // lighting result is required, an undispatched geometry rebuild is
-            // strictly redundant.
-            self.queue.remove(coord);
-            self.geometry_meshlets.remove(&coord);
-            self.lighting.enqueue_front(coord);
-        }
+        self.enqueue_lighting_meshlets(coord, ChunkMeshletMask::ALL, true);
     }
 
     pub(super) fn enqueue_task_priority(&mut self, coord: IVec3, kind: ChunkRemeshTaskKind) {
@@ -130,7 +161,9 @@ impl ChunkRemeshQueue {
             ChunkRemeshTaskKind::Geometry => {
                 self.enqueue_geometry_meshlets(coord, meshlets, true)
             }
-            ChunkRemeshTaskKind::Lighting => self.enqueue_lighting_priority(coord),
+            ChunkRemeshTaskKind::Lighting => {
+                self.enqueue_lighting_meshlets(coord, meshlets, true)
+            }
             ChunkRemeshTaskKind::Fluid => {
                 self.enqueue_fluid_meshlets(coord, meshlets, true)
             }
@@ -148,6 +181,25 @@ impl ChunkRemeshQueue {
         visit_chunk_coords_whose_voxel_halo_contains(world_position, |coord| {
             let meshlets = ChunkMeshletMask::for_world_position(coord, world_position);
             self.enqueue_fluid_meshlets(coord, meshlets, false);
+        });
+    }
+
+    pub(crate) fn enqueue_lighting_voxel_change(
+        &mut self,
+        world_position: IVec3,
+        world: &VoxelWorld,
+    ) {
+        visit_chunk_coords_whose_voxel_halo_contains(world_position, |coord| {
+            let Some(chunk) = world.chunk(coord) else {
+                return;
+            };
+            let meshlets = ChunkMeshletMask::for_world_position(coord, world_position);
+            if chunk.has_terrain_content() {
+                self.enqueue_lighting_meshlets(coord, meshlets, true);
+            }
+            if chunk.has_fluid() {
+                self.enqueue_fluid_meshlets(coord, meshlets, true);
+            }
         });
     }
 
@@ -188,6 +240,7 @@ impl ChunkRemeshQueue {
         self.lighting.remove(coord);
         self.geometry_meshlets.remove(&coord);
         self.fluid_meshlets.remove(&coord);
+        self.lighting_meshlets.remove(&coord);
     }
 
     pub(super) fn has_background_work(&self) -> bool {
@@ -227,10 +280,19 @@ impl ChunkRemeshQueue {
     }
 
     fn coalesce_geometry_into_lighting(&mut self, coord: IVec3) {
-        // Geometry and Lighting rebuild the same terrain mesh, but neither
-        // rebuilds fluid meshes. Keep the fluid request independent.
+        // Geometry and Lighting rebuild the same terrain mesh. If geometry
+        // arrived after a partial lighting request, fold its dirty regions into
+        // the lighting task before dispatch.
         self.queue.remove(coord);
-        self.geometry_meshlets.remove(&coord);
+        if let Some(geometry) = self.geometry_meshlets.remove(&coord) {
+            let combined = self
+                .lighting_meshlets
+                .get(&coord)
+                .copied()
+                .unwrap_or_default()
+                .union(geometry);
+            self.lighting_meshlets.insert(coord, combined);
+        }
     }
 
     fn pop_renderable_lighting(
@@ -243,7 +305,11 @@ impl ChunkRemeshQueue {
             render_pool,
         )?;
         self.coalesce_geometry_into_lighting(coord);
-        Some((coord, ChunkMeshletMask::ALL))
+        let meshlets = self
+            .lighting_meshlets
+            .remove(&coord)
+            .unwrap_or(ChunkMeshletMask::ALL);
+        Some((coord, meshlets))
     }
 
     pub(super) fn pop_renderable_background(
@@ -295,7 +361,9 @@ impl ChunkRemeshQueue {
 
     #[cfg(test)]
     fn pop_lighting(&mut self) -> Option<IVec3> {
-        self.lighting.pop()
+        let coord = self.lighting.pop()?;
+        self.lighting_meshlets.remove(&coord);
+        Some(coord)
     }
 }
 
