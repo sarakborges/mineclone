@@ -13,7 +13,10 @@ use crate::{
 use super::{
     chunk_remesh::ChunkRemeshQueue,
     chunk_remesh_tasks::ChunkRemeshTasks,
-    chunk_rendering::{ChunkRenderPool, retire_chunk_render_allocation},
+    chunk_rendering::{
+        CHUNK_MESH_RESIDENCY_HIGH_BYTES, CHUNK_MESH_RESIDENCY_TARGET_BYTES, ChunkRenderPool,
+        retire_chunk_render_allocation,
+    },
     chunk_system_params::ChunkRenderer,
     render_distance::RenderDistanceSettings,
     streaming::ChunkStreamingState,
@@ -92,6 +95,125 @@ pub(super) fn retire_distant_chunk_meshes(
             &world,
             &renderer.pool,
             &mut remesh_queue,
+        );
+    }
+}
+
+#[derive(Clone, Copy)]
+struct MeshResidencyCandidate {
+    coord: IVec3,
+    bytes: usize,
+    visible: bool,
+    critical: bool,
+    horizontal_distance_squared: i64,
+    total_distance_squared: i64,
+}
+
+pub(super) fn enforce_chunk_mesh_residency_budget(
+    player: Single<&Transform, With<GameplayCamera>>,
+    render_distance: Res<RenderDistanceSettings>,
+    mut renderer: ChunkRenderer,
+    world: Res<VoxelWorld>,
+    mut remesh_queue: ResMut<ChunkRemeshQueue>,
+    mut remesh_tasks: ResMut<ChunkRemeshTasks>,
+    mut candidates: Local<Vec<MeshResidencyCandidate>>,
+) {
+    let before = renderer.pool.mesh_bytes();
+    if before <= CHUNK_MESH_RESIDENCY_HIGH_BYTES {
+        return;
+    }
+
+    let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
+    let center = chunk_coord_from_position(feet_position);
+    let visible_radius = i64::from(render_distance.chunks().max(1));
+    let visible_radius_squared = visible_radius * visible_radius;
+
+    candidates.clear();
+    candidates.extend(renderer.pool.active_coords().filter_map(|coord| {
+        let bytes = renderer.pool.mesh_bytes_for(coord);
+        if bytes == 0 {
+            return None;
+        }
+
+        let dx = i64::from(coord.x) - i64::from(center.x);
+        let dy = i64::from(coord.y) - i64::from(center.y);
+        let dz = i64::from(coord.z) - i64::from(center.z);
+        let horizontal_distance_squared =
+            dx.saturating_mul(dx).saturating_add(dz.saturating_mul(dz));
+        let total_distance_squared = horizontal_distance_squared
+            .saturating_add(dy.saturating_mul(dy));
+
+        Some(MeshResidencyCandidate {
+            coord,
+            bytes,
+            visible: horizontal_distance_squared <= visible_radius_squared,
+            critical: dx.abs() <= 1 && dy.abs() <= 1 && dz.abs() <= 1,
+            horizontal_distance_squared,
+            total_distance_squared,
+        })
+    }));
+
+    // Evict hysteresis/preload allocations first, then the farthest visible
+    // allocations. The 3x3x3 player neighborhood is the last resort, not an
+    // absolute exemption: preventing a render OOM is more important than
+    // retaining any individual chunk mesh.
+    candidates.sort_unstable_by(|left, right| {
+        left.visible
+            .cmp(&right.visible)
+            .then_with(|| left.critical.cmp(&right.critical))
+            .then_with(|| {
+                right
+                    .total_distance_squared
+                    .cmp(&left.total_distance_squared)
+            })
+            .then_with(|| {
+                right
+                    .horizontal_distance_squared
+                    .cmp(&left.horizontal_distance_squared)
+            })
+            .then_with(|| right.bytes.cmp(&left.bytes))
+            .then_with(|| left.coord.y.cmp(&right.coord.y))
+            .then_with(|| left.coord.z.cmp(&right.coord.z))
+            .then_with(|| left.coord.x.cmp(&right.coord.x))
+    });
+
+    let mut resident_bytes = before;
+    let mut evicted_chunks = 0_usize;
+    let mut evicted_bytes = 0_usize;
+
+    for candidate in candidates.iter().copied() {
+        if resident_bytes <= CHUNK_MESH_RESIDENCY_TARGET_BYTES {
+            break;
+        }
+        if !renderer.pool.contains(candidate.coord) {
+            continue;
+        }
+
+        retire_chunk_render_allocation(
+            &mut renderer.commands,
+            &mut renderer.pool,
+            candidate.coord,
+        );
+        remesh_queue.remove(candidate.coord);
+        remesh_tasks.remove_lighting_revision(candidate.coord);
+        enqueue_retired_render_halo_remeshes(
+            candidate.coord,
+            &world,
+            &renderer.pool,
+            &mut remesh_queue,
+        );
+
+        resident_bytes = resident_bytes.saturating_sub(candidate.bytes);
+        evicted_bytes = evicted_bytes.saturating_add(candidate.bytes);
+        evicted_chunks += 1;
+    }
+
+    if evicted_chunks > 0 {
+        warn!(
+            "chunk mesh residency pressure: before_bytes={before} after_bytes={} high_watermark_bytes={} target_bytes={} evicted_chunks={evicted_chunks} evicted_bytes={evicted_bytes}",
+            renderer.pool.mesh_bytes(),
+            CHUNK_MESH_RESIDENCY_HIGH_BYTES,
+            CHUNK_MESH_RESIDENCY_TARGET_BYTES,
         );
     }
 }
