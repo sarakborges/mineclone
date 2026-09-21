@@ -22,7 +22,7 @@ use crate::world::{
     WorldLoadMode,
     biome_field::BiomeField,
     chunk_rendering::{FluidMaterials, TerrainMaterials},
-    generation::{fluids::authored_surface_fluid_id_for_position},
+    generation::authored_surface_fluid_id_for_position,
     generation_region::generation_region_coord,
     hydrology::HydrologySurfaceSample,
     render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
