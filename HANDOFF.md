@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 6 — 2026-09-21:** `ToolId` interner alinhado aos interners de block/layer: substituído `HashMap<String, &'static str>` por `HashSet<&'static str>`, usando a própria string canônica vazada como chave. Isso remove a segunda alocação permanente por tool ID sem mudar identidade/lookup. Commit: `e59b65e6118060cd33312f7f4b6c2a96f08d2153`. **Pendências:** CI/runtime QA ainda não verificados. **Próximo passo:** revisar caches concorrentes e snapshots assíncronos por clones profundos/locks redundantes; depois lifecycle de resources entre estados.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 5 — 2026-09-21:** removidos dois rebuilds O(n²) durante carregamento data-driven. `BiomeRegistry::insert` agora atualiza flags de density e placements incrementalmente em vez de revarrer todos os biomas a cada arquivo (`1bc7b26246c8e6087f8825a78a942eddf0a102b4`). `StructureRegistry::insert` agora atualiza somente o grupo da structure inserida, preservando membros ordenados via binary insertion em vez de limpar/reconstruir todos os grupos a cada arquivo (`d61259afd89587e116321764512196ddc6192fa8`). A equivalência depende da unicidade de IDs garantida no checkpoint A. **Pendências:** validar CI quando houver status; runtime QA não executado. **Próximo passo:** revisar snapshots/clones de registries usados pelas tasks de generation/mesh e identificar cópias profundas que possam virar ownership compartilhado imutável sem aumentar acoplamento.
 
 
