@@ -124,6 +124,7 @@ pub(super) fn push_lit_quad(
     uvs: [[f32; 2]; 4],
     tint: [f32; 3],
     lighting: FaceLighting,
+    material_code: f32,
 ) {
     let colors = std::array::from_fn(|index| {
         [
@@ -135,11 +136,16 @@ pub(super) fn push_lit_quad(
     });
     let flip_diagonal = should_flip_diagonal(lighting.ambient_occlusion, lighting.block_srgb);
 
+    let mut light_uvs = lighting.channels;
+    for light_uv in &mut light_uvs {
+        light_uv[1] = material_code;
+    }
+
     buffer.push_quad(VoxelMeshQuad {
         vertices,
         normal,
         uvs,
-        light_uvs: lighting.channels,
+        light_uvs,
         tint,
         colors,
         flip_diagonal,
