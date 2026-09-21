@@ -319,7 +319,7 @@ pub(super) fn dispatch_generation_tasks(
             continue;
         }
 
-        if work.generation_tasks.schedule(coord) {
+        if work.generation_tasks.schedule(coord, &work.async_work) {
             budget.record(1);
         } else {
             work.state.generation_wave_pending.enqueue(coord);
