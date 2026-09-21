@@ -423,11 +423,11 @@ fn update_target_hud(
 }
 
 
-fn layer_face_name(
-    localization: &UiLocalization,
+fn layer_face_name<'a>(
+    localization: &'a UiLocalization,
     language: Language,
     face: LayerFace,
-) -> &str {
+) -> &'a str {
     let key = match face {
         LayerFace::Right => "hud.layerFace.right",
         LayerFace::Left => "hud.layerFace.left",
