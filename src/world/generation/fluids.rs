@@ -3,7 +3,8 @@ use bevy::prelude::*;
 use crate::{
     content::{
         biome::BiomeRegistry, biome_surface_fluid::BiomeSurfaceFluid,
-        biome_terrain::BiomeTerrain, fluid::{FluidId, FluidRegistry},
+        biome_terrain::BiomeTerrain, dimension::DimensionDefinition,
+        fluid::{FluidId, FluidRegistry},
     },
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
@@ -162,18 +163,29 @@ pub(super) fn authored_surface_fluid_id_at<'a>(
     position: IVec2,
     context: &'a ChunkGenerationContext<'_>,
 ) -> Option<&'a str> {
+    authored_surface_fluid_id_for_position(
+        position,
+        context.dimension,
+        context.biomes,
+        context.biome_field,
+    )
+}
+
+pub(crate) fn authored_surface_fluid_id_for_position<'a>(
+    position: IVec2,
+    dimension: &DimensionDefinition,
+    biomes: &'a BiomeRegistry,
+    biome_field: &BiomeField,
+) -> Option<&'a str> {
     let horizontal = position.as_vec2() + Vec2::splat(0.5);
-    let surface = context.biome_field.sample_surface(horizontal);
-    let biome_id = context
-        .biome_field
-        .surface_biome_id(surface.identity_surface_index);
-    let biome = context
-        .biomes
+    let surface = biome_field.sample_surface(horizontal);
+    let biome_id = biome_field.surface_biome_id(surface.identity_surface_index);
+    let biome = biomes
         .get(biome_id)
         .unwrap_or_else(|| panic!("missing surface biome definition: {biome_id}"));
     let rule = biome.surface_fluid.as_ref()?;
     let surface_height =
-        surface_height_from_sample(position, context.dimension, context.biome_field, &surface);
+        surface_height_from_sample(position, dimension, biome_field, &surface);
     let primary_terrain_strength = surface
         .influences
         .iter()
@@ -202,7 +214,7 @@ pub(super) fn authored_surface_fluid_id_at<'a>(
             else {
                 unreachable!("validated volcano crater surface fluid requires volcano terrain");
             };
-            let crater_level = context.dimension.sea_level as f32
+            let crater_level = dimension.sea_level as f32
                 + base_height
                 + height
                 - crater_depth
@@ -217,7 +229,7 @@ pub(super) fn authored_surface_fluid_id_at<'a>(
                         horizontal,
                         *spill_scale,
                         *spill_width,
-                        context.biome_field.seed(),
+                        biome_field.seed(),
                         biome_id,
                     );
 
