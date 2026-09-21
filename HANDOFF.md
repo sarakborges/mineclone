@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 2 — 2026-09-21:** removida validação duplicada do snapshot no caminho normal de save. `save_world()` agora converte os registries para ownership de pruning e delega; `save_world_owned()` permanece como o único gate autoritativo que executa `validate_playable()` imediatamente antes da publicação. Antes, todo save válido repetia validação de clock/inventory, reconstrução de `PendingFluidUpdates` e validação de creatures duas vezes. Commit funcional: `5202aba6e1727bfd5cfc03a11cbec4fbcf7cf3fe`. **Pendências:** CI ainda não verificado para este checkpoint; o snapshot global/incremental continua sendo uma decisão arquitetural maior já registrada historicamente e não foi misturada neste refactor. **Próximo passo:** auditar filas/tasks assíncronas e estruturas de lookup por scans lineares/repetidos em hot paths.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 1 — 2026-09-21:** `develop`. Corrigido o registry genérico de conteúdo para rejeitar IDs duplicados em vez de sobrescrever silenciosamente a definição anterior. Isso elimina autoridade ambígua entre arquivos data-driven e torna duplicatas erro de startup com o ID conflitante explícito. Teste anterior que consagrava overwrite foi substituído por teste de rejeição. Commit funcional: `c0c4dd58191a1ae75b3ac4fa81008991214c1cf1`. **Pendências:** CI ainda não verificado para este checkpoint; auditoria do restante do projeto continua. **Próximo passo:** revisar lifecycle/reset de Resources e filas assíncronas entre Loading/Gameplay/StartingScreen, procurando estado stale e ownership duplicado.
 
 
