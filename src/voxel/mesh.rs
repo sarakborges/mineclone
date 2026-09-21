@@ -20,6 +20,7 @@ use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, VoxelChunk},
     mesh_lighting::{FaceLighting, face_lighting, push_lit_quad, surface_block_srgb},
+    meshlet::{CHUNK_MESHLET_EDGE, ChunkMeshletMask},
     microblock::MicroblockMask,
     orientation::source_face_for_oriented_face,
     quad::VOXEL_FACE_UVS,
@@ -42,6 +43,28 @@ pub fn build_chunk_mesh<W, F>(
     chunk_coord: IVec3,
     chunk: &VoxelChunk,
     blocks: &BlockRegistry,
+    tint_at: F,
+) -> Vec<ChunkFaceMesh>
+where
+    W: VoxelRead + ?Sized,
+    F: FnMut(IVec3, VoxelCell, &crate::content::block::BlockDefinition) -> [f32; 3],
+{
+    build_chunk_meshlets(
+        world,
+        chunk_coord,
+        chunk,
+        blocks,
+        ChunkMeshletMask::ALL,
+        tint_at,
+    )
+}
+
+pub(crate) fn build_chunk_meshlets<W, F>(
+    world: &W,
+    chunk_coord: IVec3,
+    chunk: &VoxelChunk,
+    blocks: &BlockRegistry,
+    meshlets: ChunkMeshletMask,
     mut tint_at: F,
 ) -> Vec<ChunkFaceMesh>
 where
@@ -58,6 +81,9 @@ where
     for y in 0..CHUNK_SIZE {
         for z in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
+                if !meshlets.contains_voxel(x, y, z) {
+                    continue;
+                }
                 let Some(cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
                     continue;
                 };
@@ -102,6 +128,9 @@ where
             for v in 0..CHUNK_SIZE {
                 for u in 0..CHUNK_SIZE {
                     let [x, y, z] = face_cell(face, depth, u, v);
+                    if !meshlets.contains_voxel(x, y, z) {
+                        continue;
+                    }
                     let Some(cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
                         continue;
                     };
@@ -314,15 +343,18 @@ fn emit_greedy_plane<'a>(
                 continue;
             };
 
+            let u_limit = ((u / CHUNK_MESHLET_EDGE) + 1) * CHUNK_MESHLET_EDGE;
+            let v_limit = ((v / CHUNK_MESHLET_EDGE) + 1) * CHUNK_MESHLET_EDGE;
+
             let mut width = 1;
-            while u + width < CHUNK_SIZE
+            while u + width < u_limit
                 && mask[u + width + v * CHUNK_SIZE] == Some(candidate)
             {
                 width += 1;
             }
 
             let mut height = 1;
-            while v + height < CHUNK_SIZE
+            while v + height < v_limit
                 && (u..u + width).all(|column| {
                     mask[column + (v + height) * CHUNK_SIZE] == Some(candidate)
                 })
