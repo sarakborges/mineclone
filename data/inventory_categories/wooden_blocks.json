@@ -1,1 +1,1 @@
-{ "id": "wooden_blocks", "displayName": { "english": "Wooden Blocks", "portuguese_brazil": "Blocos de Madeira", "spanish": "Bloques de Madera" }, "order": 30, "blockIcon": { "block": "asteria:oak_log" } }
+{ "id": "wooden_blocks", "displayName": { "english": "Wooden Blocks", "portuguese_brazil": "Blocos de Madeira", "spanish": "Bloques de Madera" }, "order": 30, "blockIcon": { "block": "asteria:log_oak" } }
