@@ -16,7 +16,7 @@ const _: () = assert!(CHUNK_SIZE % CHUNK_MESHLET_EDGE == 0);
 const _: () = assert!(MESHLETS_PER_AXIS == 2);
 const _: () = assert!(MESHLET_COUNT == 8);
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub(crate) struct ChunkMeshletMask(u8);
 
 impl ChunkMeshletMask {
