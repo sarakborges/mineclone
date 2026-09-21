@@ -99,6 +99,7 @@ pub(super) fn retire_distant_chunk_meshes(
     for coord in retired.drain(..) {
         retire_chunk_render_allocation(&mut renderer.commands, &mut renderer.pool, coord);
         remesh_queue.remove(coord);
+        remesh_tasks.cancel_coord(coord);
         remesh_tasks.remove_lighting_revision(coord);
         enqueue_retired_render_halo_remeshes(
             coord,
@@ -255,6 +256,7 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
             .streaming
             .suppress_mesh_for_pressure(candidate.coord, candidate.bytes);
         runtime.remesh_queue.remove(candidate.coord);
+        runtime.remesh_tasks.cancel_coord(candidate.coord);
         runtime.remesh_tasks.remove_lighting_revision(candidate.coord);
         enqueue_retired_render_halo_remeshes(
             candidate.coord,
@@ -318,6 +320,7 @@ pub(super) fn unload_chunk_meshes(
 
         retire_chunk_render_allocation(&mut renderer.commands, &mut renderer.pool, coord);
         runtime.remesh_queue.remove(coord);
+        runtime.remesh_tasks.cancel_coord(coord);
         runtime.remesh_tasks.remove_lighting_revision(coord);
         runtime.world.archive_chunk(coord);
 
