@@ -8671,3 +8671,125 @@ Não houve `cargo test` por regra do projeto.
 6. variar render distance 4/12/24 e validar show/hide hysteresis;
 7. se ainda houver OOM, capturar as últimas linhas de `render assets` + `render mesh allocator` antes do erro para distinguir volume total de allocations de um mesh individual patológico.
 
+
+
+## Checkpoint 180 — 2026-09-21: /locate structure queries deterministic placement cells [FIX/PERF; VERSION 0.50.2]
+
+### Relato
+
+/locate podia responder "Locating..." e parecer morrer sem retorno ao procurar uma structure rara, especialmente a World Tree.
+
+### Causa
+
+O locate já era seed-driven e não dependia de chunks carregados, mas a implementação de structure fazia a busca na unidade errada:
+
+- percorria chunk por chunk;
+- raio máximo = 2048 chunks;
+- cada chunk chamava resolved_structure_candidates_matching();
+- structures raras com spacing alto acabavam pagando milhões de consultas de chunk antes de chegar aos poucos placement candidates relevantes.
+
+Para a World Tree, cujo placement usa spacing 1000, o algoritmo ignorava a própria grade determinística que define onde candidates podem existir.
+
+### Correção
+
+A busca de structures agora percorre diretamente placement cells.
+
+Foi exposto o cálculo autoritativo de candidate anchor da worldgen:
+
+structure_candidate_anchor(seed, biome_id, structure_reference, placement, cell).
+
+Fluxo de /locate structure:
+
+1. seleciona apenas biome structure placements que podem resolver para o structure id solicitado;
+2. ignora placements de biomes inativos na dimensão atual;
+3. converte a posição do player para a placement cell daquele spacing;
+4. percorre rings de placement cells até o limite de 32.768 blocos;
+5. usa chance/jitter/spacing oficiais para produzir o candidate anchor;
+6. descarta anchors fora do raio;
+7. escolhe um voxel real do horizontal footprint como probe;
+8. chama located_structure_origins_in_chunk() no chunk desse probe;
+9. só aceita o anchor se o resolver normal da geração confirmar exatamente aquela structure.
+
+Portanto biome, ground fit, proximity restrictions, fluid restrictions, group member selection, priority e conflicts continuam usando a mesma lógica da geração normal.
+
+O comando continua read-only:
+
+- não gera chunks;
+- não materializa structures;
+- não altera save;
+- prevê o que a seed + content atual naturalmente gerariam.
+
+### Early stop
+
+Depois de encontrar um candidate válido, a busca pode parar quando a menor distância horizontal possível das próximas placement cells já é maior que a distância do melhor resultado atual.
+
+O bound considera:
+
+- spacing;
+- metade da largura da cell;
+- jitter máximo.
+
+Isso mantém nearest-result semantics sem continuar percorrendo rings que matematicamente não podem vencer o resultado atual.
+
+### Fallback explícito
+
+O limite de busca continua equivalente ao anterior:
+
+- 32.768 blocos;
+- 2048 chunks.
+
+A mensagem de falha agora é expressa em blocos:
+
+"<nome> could not be found within 32768 blocks."
+
+Assim o task possui dois finais normais:
+
+- encontrou coordenadas;
+- não existe candidate válido dentro do hard cap.
+
+Não existe fallback que force geração/criação.
+
+### Tests
+
+Foram adicionados testes para:
+
+- early stop de placement-cell search;
+- equivalência do contrato 32.768 blocos = 2048 chunks.
+
+### Commits
+
+- 74c9a25f7abf9796f94b2ae8542603bf39d2282f — expõe deterministic structure candidate anchors.
+- d0b44036bfc62abee84e949188b468ab75a495d0 — re-exporta structure placement query pela generation API.
+- 8165b2dcf505db05c13c32c89f448e3f3899aae0 — locate structures through placement cells.
+- 63cb1e6332fe65c03929ef6009b4e38251f9f4e5 — substitui div_ceil unstable por arredondamento inteiro compatível.
+- f1e10859ad59b547c876762cbbc3fcabaff8f784 — bump 0.50.2.
+
+### Integração paralela
+
+Durante o trabalho entraram mudanças de proximity restrictions e GPU residency.
+
+Os runs intermediários falharam por:
+
+- div_ceil unstable no locate, corrigido em 63cb1e63;
+- dead code transitório de queue/GPU introduzido pelo fluxo paralelo, corrigido em 261619e6 e 645293d6.
+
+O HEAD funcional que contém o locate novo mais as integrações paralelas é:
+
+645293d6ffe8baf19df4ac6c6dab2eef6dcea477.
+
+### CI
+
+HEAD funcional 645293d6ffe8baf19df4ac6c6dab2eef6dcea477:
+
+- push 35547593342: success;
+- PR 35547595221: success;
+- Clippy rigoroso: success;
+- cargo check --locked: success.
+
+### QA prioritária
+
+1. executar /locate structure asteria:world_tree em mundo/chunks ainda não gerados;
+2. confirmar retorno sem precisar caminhar/carregar terreno;
+3. teleportar para o resultado e confirmar que a World Tree realmente gera naquele candidate;
+4. testar seed/posição em que nenhuma World Tree válida exista dentro do cap e confirmar mensagem explícita de falha;
+5. confirmar que /locate não cria chunks nem altera o save.
