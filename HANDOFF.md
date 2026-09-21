@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 8 — 2026-09-21:** entrada em `GameState::Loading` agora reseta também `ChunkRemeshQueue` e `PendingFluidUpdates`. Antes esses Resources só eram limpos em `OnExit(Gameplay)`, fazendo a correção do estado inicial de Loading depender do caminho anterior. Loading agora é autossuficiente para filas transitórias, evitando stale work se houver retry/aborto/falha ou futuro caminho que entre em Loading sem sair de Gameplay imediatamente antes. Commit: `84e6d0cf6d1d54b3577dd57d2287ad19c21ca8c0`. **Pendências:** CI/runtime QA ainda não verificados. **Próximo passo:** revisar demais Resources de sessão (`WorldLoadingState`, render assets/material resources, unload/streaming state, session/save config) para ownership e limpeza simétricos; depois passar para UI e persistence.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 7 — 2026-09-21:** backlog de fluidos descarregados deixou de usar `HashMap<chunk, Vec<FluidTickKey>>` com `contains()` linear para deduplicação. Cada chunk agora mantém `HashSet<FluidTickKey>`, tornando `defer_unloaded` deduplicado em tempo amortizado constante e evitando degradação quadrática sob backlog/fronteira de streaming. A ordem não fazia parte do contrato; captura de save já ordena deterministicamente depois. Commit: `c21441344a577cc614cec970dbc87895d452ecbf`. **Pendências:** CI/runtime QA ainda não verificados. **Próximo passo:** auditar lifecycle/reset de Resources e filas entre `StartingScreen -> Loading -> Gameplay -> StartingScreen`, buscando estado stale e tasks antigas atravessando sessões.
 
 
