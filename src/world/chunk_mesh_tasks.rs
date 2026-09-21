@@ -104,7 +104,7 @@ impl ChunkMeshTasks {
         if self.pending.len() >= MAX_MESH_TASKS_IN_FLIGHT || self.pending.contains(coord) {
             return false;
         }
-        let Some(permit) = limiter.try_acquire() else {
+        let Some(permit) = limiter.try_acquire_render() else {
             return false;
         };
 
