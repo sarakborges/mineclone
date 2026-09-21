@@ -34,7 +34,7 @@ use crate::{
 
 pub(crate) use self::columns::{GenerationColumnSample, sample_generation_columns};
 pub(crate) use self::structures::{
-    fit_structure_to_ground, located_structure_origins_in_chunk, structure_candidate_anchor,
+    located_structure_origins_in_chunk, structure_candidate_anchor,
     surface_layer_placements,
 };
 use self::{
