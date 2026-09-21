@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 15 — 2026-09-21:** campos obrigatórios de identidade agora falham cedo. Blocks rejeitam ID/category vazios e lista de orientations vazia antes de interning (`ef99855c875e222690206ca960fbb90aeebcd5e4`). Dimensions rejeitam ID, dayNightCycle e sky vazios antes da validação cross-registry (`5ae47a2ba8a0b3fb241d6b125c877bc8cf36bbfa`). **Pendências:** continuar uniformizando required-field validation em registries restantes sem inventar políticas de paths/ranges não documentadas. **Próximo passo:** fluid/layer/biome/structure IDs e required strings; depois revisar loader classification para JSON desconhecido silenciosamente ignorado.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — checkpoint C — VERSION 0.50.9 — 2026-09-21:** bloco de trust boundaries/invariantes consolidado: inventory category IDs/tints (`67a2b2a9`), tool required fields (`5fcf17f1`), sky geometry/HSI (`fa4d8743`), biome visual HSI/PBR (`51bead15`), day-night normalized inputs (`131a3acd`), dimension refs para sky/cycle (`3b4ed477`), remoção do fallback morto de player (`697c167e`), dano finito em `EntityHealth` (`2b25bfd5`) e remoção de API dead-code de layer (`02ae9f48` + `de81f369`). Bump: `f55077bfc9d79f90e753cfa06ce2662b00b4a571`. **Pendências:** CI de push não é visível pelas APIs disponíveis; workflow continua configurado para develop. Runtime QA não executado. **Próximo passo:** bloco D — suppressions, panic/expect boundaries, duplicação de helpers e APIs excessivamente largas; depois performance de natural spawning/entity counts.
 
 
