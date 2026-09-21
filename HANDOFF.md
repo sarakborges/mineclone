@@ -1,4 +1,112 @@
 # HANDOFF — Asteria / Mineclone
+## Checkpoint — 2026-09-21: Structure Sets + structure rotation + first Enchanted Heart
+
+### Structure rotation
+
+A rotação da structure inteira agora faz parte do contrato data-driven de cada JSON via `"rotation": true|false`.
+
+Quando habilitada, cada ocorrência escolhe deterministicamente 0/90/180/270°. A rotação é aplicada a:
+
+- footprint horizontal;
+- support offsets / ground fit;
+- restrictions e fluid intersection;
+- conflict bounds;
+- rasterização dos voxels;
+- surface layers;
+- `/place structure`.
+
+Blocos orientados também acompanham a rotação da structure: `orientation: x` e `orientation: z` trocam de eixo em 90°/270°; `y` permanece `y`.
+
+O Structure Tool exporta `rotation: false` por padrão para exigir decisão explícita do autor. As structures naturais atuais usam `rotation: true`.
+
+### Structure Sets
+
+Foi criada a infra genérica de `data/structure_sets/*.json`.
+
+O set não conhece biome. O biome continua sendo o owner de spawn e define `spacing/chance/jitter`.
+
+Campos do set:
+
+- `id`, `name`, `locatable`;
+- `priority`, `conflictGroups`, `reserveSpace`;
+- `elements[]`.
+
+Cada element suporta:
+
+- `id`;
+- `structure` apontando para structure ou structure group;
+- `count { min, max }`;
+- `chance`;
+- `required`;
+- placement com `relativeTo`, `minDistance`, `maxDistance`, `minSeparation`, `attempts`, `allowOverlap`.
+
+`relativeTo` aceita `origin`, `any` ou o id de um elemento anterior. Não existe conceito obrigatório de core/satellite.
+
+A resolução é determinística por seed e o conjunto participa de prioridade/conflitos como uma ocorrência única.
+
+Integrações concluídas:
+
+- world generation;
+- streaming/top-Y bounds;
+- autocomplete;
+- `/place structure <set>`;
+- `/locate structure <set>`;
+- locate de uma structure individual que tenha sido gerada como elemento de um set.
+
+CI final da infra passou localization audit, Clippy com `-D warnings` e `cargo check --locked`.
+
+### Primeiro Enchanted Heart
+
+Criado `data/structure_sets/enchanted_heart.json` com id `asteria:enchanted_heart`.
+
+Composição inicial provisória:
+
+- 1 `asteria:world_tree` obrigatória no origin, usando as 5 variações existentes;
+- 6–10 `asteria:tree_enchanted` entre 78–112 blocos do origin;
+- separação mínima de 14 blocos;
+- `priority: 100`;
+- `reserveSpace: true`;
+- conflitos `heart/tree/landmark`;
+- `locatable: true`.
+
+No Enchanted Forest, o placement raro antigo de `asteria:world_tree` foi substituído por `asteria:enchanted_heart`, preservando:
+
+- spacing 1000;
+- chance 1;
+- jitter 112.
+
+O spawn normal de `asteria:tree_enchanted` permanece independente.
+
+Commits principais:
+
+- `fa55f94e8d07aefd5e307d09ea1d88f5226b6399` — cria o primeiro Enchanted Heart set;
+- `13338b2fc699c8773ece9420826bd10b6346bf1b` — conecta o set ao Enchanted Forest.
+
+CI do Enchanted Heart passou localization audit, Clippy e cargo check.
+
+### Investigação pendente — logs soltos no chão da World Tree
+
+Relato atual: aparecem blocos de madeira aparentemente aleatórios no chão da World Tree.
+
+Primeira inspeção confirmou que isso não parece ser introduzido pelo Structure Set em si: `world_tree_01` já possui **144 logs no layer y=0**, vários muito afastados do anchor, além de centenas de logs nos primeiros layers. Isso pode ser parte das raízes authored ou ilhas desconectadas no desenho.
+
+A investigação ainda NÃO foi concluída. Próximo passo deve ser barato e incremental:
+
+1. analisar conectividade dos logs dos layers baixos de uma única variação por vez;
+2. separar componentes conectados ao tronco principal de componentes isolados;
+3. confirmar se os blocos visíveis no chão são realmente voxels authored desconectados ou efeito da rotação/rasterização;
+4. só então editar as structures.
+
+Evitar novamente carregar/processar os 5 JSONs gigantes de World Tree em uma única chamada: os arquivos têm ~1.7–2.0 MB cada e o conector engasga. Trabalhar por blob/variação e resumos pequenos.
+
+### Estado
+
+Branch: `develop`.
+HEAD observado ao atualizar este handoff: `836393283943a77360cef1f588026c5723fbfd9c`.
+
+**Próximo passo:** concluir a investigação dos logs soltos da World Tree. Depois evoluir o Enchanted Heart com novas peças/decorativos em cima da infra de Structure Sets.
+
+
 **WORLD TREE — BRANCH FOLIAGE PASS — 2026-09-21:** `data/structures/world_tree.json` recebeu uma passada 3D de densificação de copa focada em galhos, sem engrossar o núcleo do tronco. A seleção usa logs horizontais `X/Z` e madeira externa ao raio do tronco a partir de `y=34`; segmentos com pouca cobertura receberam clusters irregulares de `F`, com reforço nas pontas. Foram adicionadas **2.813 folhas** no total (`50efeb3be9d526ccd24cf6fd72c00614ff58f5b8` + `23912843f59b136a8a54ae51eb1c906501236467`). Validação geométrica final: entre **275 voxels de galho expostos**, **0** ficaram sem folha num raio de 3 blocos. Os voxels ainda classificados como “sem folha” pelo raio curto são internos a galhos grossos e não correspondem a superfícies visualmente peladas. **Próximo passo:** runtime QA visual da World Tree para ajustar densidade/localização da copa se necessário.
 
 **WORLD TREE LEAF TINT CHECK — 2026-09-21:** confirmado que `asteria:leaf_world_tree` não recebe biome tint. O bloco não possuía `tint` (default `BlockTint::None`), todas as texture layers usam `dyable: false`, não há `secondaryProperties`, e `TerrainMaterialBuilder` só habilita tint de bloco quando a texture layer é dyable. A categoria `foliage` não aplica tint implicitamente. Para tornar a intenção data-driven explícita, adicionado `"tint": "none"` em `data/blocks/leaf_world_tree.json` no commit `04bc10768fb5f8db48bb830f48d5ab8e4030b26e`. Se a folha continuar com hue indesejado em runtime, investigar textura/lighting/fog, não leaf/foliage color.
