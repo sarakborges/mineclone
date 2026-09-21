@@ -33,11 +33,11 @@ pub(crate) fn build_layer_meshes<W, F>(
     chunk: &VoxelChunk,
     blocks: &BlockRegistry,
     layers: &LayerRegistry,
-    tint_at: F,
+    mut tint_at: F,
 ) -> Vec<ChunkLayerMesh>
 where
     W: VoxelRead + ?Sized,
-    F: Fn(IVec3, &LayerDefinition) -> [f32; 3],
+    F: FnMut(IVec3, &LayerDefinition) -> [f32; 3],
 {
     let mut buffers =
         HashMap::<(&'static str, BlockFace, bool), VoxelMeshBuffer>::new();
