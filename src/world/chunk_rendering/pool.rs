@@ -2,7 +2,11 @@ use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::{
     content::fluid::FluidId,
-    voxel::{block_face::BlockFace, fluid_mesh::ChunkFluidMesh},
+    voxel::{
+        block_face::BlockFace,
+        fluid_mesh::ChunkFluidMesh,
+        meshlet::{ChunkMeshletMask, patch_voxel_mesh},
+    },
 };
 
 use super::spawn::BuiltChunkMesh;
@@ -82,6 +86,115 @@ impl ChunkRenderPool {
         let slot = self.active.remove(&coord)?;
         self.bump_membership_revision();
         Some((slot.entities, slot.meshes))
+    }
+
+    pub(super) fn patch_terrain_mesh_assets(
+        &mut self,
+        coord: IVec3,
+        meshes: &mut Assets<Mesh>,
+        replacements: &[BuiltChunkMesh],
+        dirty: ChunkMeshletMask,
+    ) -> bool {
+        let Some(slot) = self.active.get_mut(&coord) else {
+            return false;
+        };
+        let Some(terrain_mesh_count) = fluid_mesh_start(slot) else {
+            return false;
+        };
+        let terrain_keys = &slot.mesh_keys[..terrain_mesh_count];
+        if replacements
+            .iter()
+            .any(|replacement| !terrain_keys.contains(&replacement.key()))
+            || slot.meshes[..terrain_mesh_count]
+                .iter()
+                .any(|handle| !meshes.contains(handle))
+        {
+            return false;
+        }
+
+        let mut patched = Vec::with_capacity(terrain_mesh_count);
+        for (index, key) in terrain_keys.iter().copied().enumerate() {
+            let handle = &slot.meshes[index];
+            let existing = meshes
+                .get(handle)
+                .expect("terrain mesh handle was checked before meshlet patch");
+            let replacement = replacements
+                .iter()
+                .find(|replacement| replacement.key() == key)
+                .map(BuiltChunkMesh::mesh);
+            let Some(mesh) = patch_voxel_mesh(existing, replacement, dirty) else {
+                return false;
+            };
+            patched.push(mesh);
+        }
+
+        let terrain_mesh_bytes = patched.iter().map(mesh_asset_bytes).sum();
+        for (handle, replacement) in slot.meshes[..terrain_mesh_count]
+            .iter()
+            .zip(patched)
+        {
+            *meshes
+                .get_mut(handle)
+                .expect("terrain mesh handle must survive meshlet preflight") = replacement;
+        }
+
+        slot.mesh_bytes = terrain_mesh_bytes.saturating_add(slot.fluid_mesh_bytes);
+        true
+    }
+
+    pub(super) fn patch_fluid_mesh_assets(
+        &mut self,
+        coord: IVec3,
+        meshes: &mut Assets<Mesh>,
+        replacements: &[ChunkFluidMesh],
+        dirty: ChunkMeshletMask,
+    ) -> bool {
+        let Some(slot) = self.active.get_mut(&coord) else {
+            return false;
+        };
+        let Some(terrain_mesh_count) = fluid_mesh_start(slot) else {
+            return false;
+        };
+        if replacements
+            .iter()
+            .any(|replacement| !slot.fluid_ids.contains(&replacement.fluid_id))
+        {
+            return false;
+        }
+
+        let fluid_handles = &slot.meshes[terrain_mesh_count..];
+        if fluid_handles.iter().any(|handle| !meshes.contains(handle)) {
+            return false;
+        }
+
+        let mut patched = Vec::with_capacity(fluid_handles.len());
+        for (index, fluid_id) in slot.fluid_ids.iter().copied().enumerate() {
+            let existing = meshes
+                .get(&fluid_handles[index])
+                .expect("fluid mesh handle was checked before meshlet patch");
+            let replacement = replacements
+                .iter()
+                .find(|replacement| replacement.fluid_id == fluid_id)
+                .map(|replacement| &replacement.mesh);
+            let Some(mesh) = patch_voxel_mesh(existing, replacement, dirty) else {
+                return false;
+            };
+            patched.push(mesh);
+        }
+
+        let fluid_mesh_bytes = patched.iter().map(mesh_asset_bytes).sum();
+        for (handle, replacement) in fluid_handles.iter().zip(patched) {
+            *meshes
+                .get_mut(handle)
+                .expect("fluid mesh handle must survive meshlet preflight") = replacement;
+        }
+
+        slot.mesh_bytes = slot
+            .mesh_bytes
+            .saturating_sub(slot.fluid_mesh_bytes)
+            .saturating_add(fluid_mesh_bytes);
+        slot.fluid_mesh_bytes = fluid_mesh_bytes;
+        true
     }
 
     pub(super) fn replace_terrain_mesh_assets(
@@ -288,6 +401,13 @@ impl ChunkRenderPool {
             .checked_add(1)
             .expect("chunk render pool membership revision exhausted");
     }
+}
+
+fn mesh_asset_bytes(mesh: &Mesh) -> usize {
+    mesh.get_vertex_buffer_size()
+        + mesh
+            .get_index_buffer_bytes()
+            .map_or(0, |indices| indices.len())
 }
 
 fn fluid_mesh_start(slot: &ChunkRenderAllocation) -> Option<usize> {
