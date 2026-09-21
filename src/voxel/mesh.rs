@@ -77,8 +77,11 @@ where
     W: VoxelRead + ?Sized,
     F: FnMut(IVec3, VoxelCell, &crate::content::block::BlockDefinition) -> [f32; 3],
 {
-    let lighting_cache =
-        ChunkLightingCache::capture(world, chunk_coord * CHUNK_SIZE as i32);
+    let lighting_cache = ChunkLightingCache::capture_if_worthwhile(
+        world,
+        chunk_coord * CHUNK_SIZE as i32,
+        chunk,
+    );
     build_chunk_meshlets(
         world,
         chunk_coord,
@@ -86,7 +89,7 @@ where
         blocks,
         texture_table,
         ChunkMeshletMask::ALL,
-        Some(&lighting_cache),
+        lighting_cache.as_ref(),
         tint_at,
     )
 }
