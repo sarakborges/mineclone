@@ -7,6 +7,7 @@ use bevy::{
 };
 
 use crate::voxel::{
+    coordinates::visit_chunk_coords_whose_voxel_halo_contains,
     fluid_mesh::ChunkFluidMesh,
     mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot},
     meshlet::ChunkMeshletMask,
@@ -40,32 +41,29 @@ pub(crate) enum ChunkRemeshTaskMeshes {
 
 #[derive(Clone)]
 struct LightingRemeshDependencies {
-    expected: [(IVec3, u64); 27],
+    center: IVec3,
+    meshlets: ChunkMeshletMask,
+    expected: [u64; 8],
 }
 
 impl LightingRemeshDependencies {
-    fn capture(center: IVec3, revisions: &HashMap<IVec3, u64>) -> Self {
-        let current = revisions;
-        let mut expected = [(IVec3::ZERO, 0_u64); 27];
-        let mut index = 0;
-        for y in -1..=1 {
-            for z in -1..=1 {
-                for x in -1..=1 {
-                    let coord = center + IVec3::new(x, y, z);
-                    expected[index] = (coord, current.get(&coord).copied().unwrap_or(0));
-                    index += 1;
-                }
-            }
+    fn capture(
+        center: IVec3,
+        meshlets: ChunkMeshletMask,
+        revisions: &HashMap<IVec3, [u64; 8]>,
+    ) -> Self {
+        Self {
+            center,
+            meshlets,
+            expected: revisions.get(&center).copied().unwrap_or([0; 8]),
         }
-        debug_assert_eq!(index, expected.len());
-
-        Self { expected }
     }
 
-    fn is_current(&self, current: &HashMap<IVec3, u64>) -> bool {
-        self.expected
-            .iter()
-            .all(|(coord, expected)| current.get(coord).copied().unwrap_or(0) == *expected)
+    fn is_current(&self, current: &HashMap<IVec3, [u64; 8]>) -> bool {
+        let revisions = current.get(&self.center).copied().unwrap_or([0; 8]);
+        (0..8).all(|index| {
+            !self.meshlets.contains_index(index) || revisions[index] == self.expected[index]
+        })
     }
 }
 
@@ -77,14 +75,15 @@ pub(crate) struct ChunkRemeshDependencies {
 impl ChunkRemeshDependencies {
     fn capture(
         center: IVec3,
+        meshlets: ChunkMeshletMask,
         world: &ChunkMeshSnapshot,
-        revisions: &HashMap<IVec3, u64>,
+        revisions: &HashMap<IVec3, [u64; 8]>,
     ) -> Self {
         Self {
             content: world.dependencies(),
-            // Both terrain and fluid meshes bake light from the captured chunk
-            // and its halo. Neither may overwrite a newer lighting result.
-            lighting: LightingRemeshDependencies::capture(center, revisions),
+            // Revision slots are already expanded by the one-voxel lighting
+            // halo, so a partial task only depends on the meshlets it rebuilds.
+            lighting: LightingRemeshDependencies::capture(center, meshlets, revisions),
         }
     }
 
@@ -112,7 +111,7 @@ pub(crate) struct ChunkRemeshTasks {
     terrain_pending: ChunkTaskQueue<ChunkRemeshTaskOutput>,
     fluid_pending: ChunkTaskQueue<ChunkRemeshTaskOutput>,
     poll_fluid_first: bool,
-    lighting_revisions: HashMap<IVec3, u64>,
+    lighting_revisions: HashMap<IVec3, [u64; 8]>,
 }
 
 impl Default for ChunkRemeshTasks {
@@ -166,19 +165,27 @@ impl ChunkRemeshTasks {
         }
     }
 
-    pub(crate) fn bump_lighting_revisions(
+    pub(crate) fn bump_lighting_revisions_for_positions(
         &mut self,
-        coords: impl IntoIterator<Item = IVec3>,
+        world: &VoxelWorld,
+        positions: impl IntoIterator<Item = IVec3>,
     ) {
         let revisions = &mut self.lighting_revisions;
-        for coord in coords {
-            let next = revisions
-                .get(&coord)
-                .copied()
-                .unwrap_or(0)
-                .wrapping_add(1)
-                .max(1);
-            revisions.insert(coord, next);
+        for position in positions {
+            visit_chunk_coords_whose_voxel_halo_contains(position, |coord| {
+                if world.chunk(coord).is_none() {
+                    return;
+                }
+
+                let meshlets = ChunkMeshletMask::for_world_position(coord, position);
+                let entry = revisions.entry(coord).or_insert([0; 8]);
+                for (index, revision) in entry.iter_mut().enumerate() {
+                    if !meshlets.contains_index(index) {
+                        continue;
+                    }
+                    *revision = revision.wrapping_add(1).max(1);
+                }
+            });
         }
     }
 
@@ -205,6 +212,7 @@ impl ChunkRemeshTasks {
         let revision = self.revision;
         let dependencies = ChunkRemeshDependencies::capture(
             coord,
+            meshlets,
             &world,
             &self.lighting_revisions,
         );
@@ -284,11 +292,16 @@ mod tests {
     fn lighting_dependencies_detect_halo_revision_changes() {
         let mut tasks = ChunkRemeshTasks::default();
         let center = IVec3::new(3, 2, 5);
-        let dependencies =
-            LightingRemeshDependencies::capture(center, &tasks.lighting_revisions);
+        let dependencies = LightingRemeshDependencies::capture(
+            center,
+            ChunkMeshletMask::ALL,
+            &tasks.lighting_revisions,
+        );
 
         assert!(dependencies.is_current(&tasks.lighting_revisions));
-        tasks.bump_lighting_revisions([center + IVec3::X]);
+        let mut world = VoxelWorld::default();
+        world.insert_chunk(center, VoxelChunk::empty());
+        tasks.bump_lighting_revisions_for_positions(&world, [center * 16 + IVec3::new(4, 4, 4)]);
         assert!(!dependencies.is_current(&tasks.lighting_revisions));
     }
 
@@ -301,6 +314,7 @@ mod tests {
         let mut tasks = ChunkRemeshTasks::default();
         let dependencies = ChunkRemeshDependencies::capture(
             center,
+            ChunkMeshletMask::ALL,
             &snapshot,
             &tasks.lighting_revisions,
         );
@@ -308,7 +322,10 @@ mod tests {
         assert!(dependencies.content_is_current(&world));
         assert!(dependencies.lighting_is_current(&tasks));
 
-        tasks.bump_lighting_revisions([center + IVec3::X]);
+        tasks.bump_lighting_revisions_for_positions(
+            &world,
+            [center * 16 + IVec3::new(4, 4, 4)],
+        );
 
         assert!(dependencies.content_is_current(&world));
         assert!(!dependencies.lighting_is_current(&tasks));
