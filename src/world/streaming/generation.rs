@@ -57,8 +57,10 @@ pub(super) fn collect_generated_chunks(
         return;
     }
 
+    let deadline = work.frame_budget.deadline();
     let current_revision = work.generation_tasks.revision();
     let mut budget = FrameWorkBudget::new(GENERATION_RESULT_INTEGRATION_BUDGET, 1)
+        .with_global_deadline(deadline)
         .with_maximum_items(MAX_GENERATION_RESULTS_COLLECTED_PER_FRAME);
 
     loop {
@@ -188,10 +190,12 @@ fn process_streaming_fluid_settling(
     content: &ChunkContent<'_>,
     work: &mut ChunkStreamingWork<'_>,
 ) -> bool {
+    let deadline = work.frame_budget.deadline();
     let mut settling_budget = FrameWorkBudget::new(
         STREAMING_FLUID_SETTLING_BUDGET,
         MIN_STREAMING_FLUID_SETTLING_UPDATES,
     )
+    .with_global_deadline(deadline)
     .with_maximum_items(MAX_STREAMING_FLUID_SETTLING_UPDATES);
 
     let state = &mut work.state;
@@ -278,7 +282,9 @@ pub(super) fn dispatch_generation_tasks(
         return;
     }
 
+    let deadline = work.frame_budget.deadline();
     let mut budget = FrameWorkBudget::new(GENERATION_DISPATCH_BUDGET, 1)
+        .with_global_deadline(deadline)
         .with_maximum_items(MAX_GENERATION_DISPATCH_WORK_PER_FRAME);
 
     if work.state.generation_wave_targets.is_empty() {
