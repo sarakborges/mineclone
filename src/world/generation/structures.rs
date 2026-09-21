@@ -23,7 +23,10 @@ use crate::{
         layer::LayerCell,
         texture_rotation::TextureRotation,
     },
-    world::terrain::surface_height,
+    world::{
+        terrain::surface_height,
+        world_feature_fields::CachedStructureCandidate,
+    },
 };
 
 use self::{
@@ -71,6 +74,21 @@ pub(super) fn rasterize_structures(
         return;
     }
 
+    let chunk_min_y = chunk_origin.y;
+    let chunk_max_y = chunk_origin.y + CHUNK_SIZE as i32 - 1;
+    let intersects_section = candidates.iter().any(|candidate| {
+        let structure = context
+            .structures
+            .get(&candidate.structure_id)
+            .unwrap_or_else(|| panic!("missing cached structure: {}", candidate.structure_id));
+        let minimum_y = candidate.origin_y + structure.min_y_offset();
+        let maximum_y = candidate.origin_y + structure.max_y_offset();
+        maximum_y >= chunk_min_y && minimum_y <= chunk_max_y
+    });
+    if !intersects_section {
+        return;
+    }
+
     let mut base_occupied = [0_u64; STRUCTURE_OCCUPANCY_WORDS];
     for local_y in 0..CHUNK_SIZE {
         for local_z in 0..CHUNK_SIZE {
@@ -88,7 +106,17 @@ pub(super) fn rasterize_structures(
     }
 
     let mut claimed = [0_u64; STRUCTURE_OCCUPANCY_WORDS];
-    for candidate in candidates {
+    for candidate in candidates.iter() {
+        let structure = context
+            .structures
+            .get(&candidate.structure_id)
+            .unwrap_or_else(|| panic!("missing cached structure: {}", candidate.structure_id));
+        let minimum_y = candidate.origin_y + structure.min_y_offset();
+        let maximum_y = candidate.origin_y + structure.max_y_offset();
+        if maximum_y < chunk_min_y || minimum_y > chunk_max_y {
+            continue;
+        }
+
         rasterize_structure(
             chunk,
             &mut claimed,
@@ -98,7 +126,7 @@ pub(super) fn rasterize_structures(
                 chunk_origin,
                 world_seed: context.biome_field.seed(),
             },
-            candidate.structure,
+            structure,
             IVec3::new(candidate.anchor.x, candidate.origin_y, candidate.anchor.y),
         );
     }
@@ -132,8 +160,11 @@ pub(crate) fn located_structure_origins_in_chunk(
         horizontal_chunk.y * chunk_size,
     );
 
-    resolved_structure_candidates_matching(chunk_origin, context, Some(structure_id))
-        .into_iter()
+    resolved_structure_candidates(chunk_origin, context)
+        .iter()
+        .filter(|candidate| {
+            candidate.placement_id == structure_id || candidate.structure_id == structure_id
+        })
         .map(|candidate| {
             IVec3::new(
                 candidate.anchor.x,
@@ -144,17 +175,31 @@ pub(crate) fn located_structure_origins_in_chunk(
         .collect()
 }
 
-fn resolved_structure_candidates<'a>(
+fn resolved_structure_candidates(
     chunk_origin: IVec3,
-    context: &'a ChunkGenerationContext<'_>,
-) -> Vec<StructureCandidate<'a>> {
-    resolved_structure_candidates_matching(chunk_origin, context, None)
+    context: &ChunkGenerationContext<'_>,
+) -> std::sync::Arc<Vec<CachedStructureCandidate>> {
+    let chunk_size = CHUNK_SIZE as i32;
+    let horizontal_chunk = IVec2::new(
+        chunk_origin.x.div_euclid(chunk_size),
+        chunk_origin.z.div_euclid(chunk_size),
+    );
+    context.feature_fields.structure_candidates(horizontal_chunk, || {
+        resolve_structure_candidates_uncached(chunk_origin, context)
+            .into_iter()
+            .map(|candidate| CachedStructureCandidate {
+                placement_id: candidate.placement_id.to_owned(),
+                structure_id: candidate.structure.id.clone(),
+                anchor: candidate.anchor,
+                origin_y: candidate.origin_y,
+            })
+            .collect()
+    })
 }
 
-fn resolved_structure_candidates_matching<'a>(
+fn resolve_structure_candidates_uncached<'a>(
     chunk_origin: IVec3,
     context: &'a ChunkGenerationContext<'_>,
-    only_structure_id: Option<&str>,
 ) -> Vec<StructureCandidate<'a>> {
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_min = IVec2::new(chunk_origin.x, chunk_origin.z);
@@ -162,14 +207,6 @@ fn resolved_structure_candidates_matching<'a>(
     let mut direct_candidates = Vec::new();
 
     for biome_structure in context.biomes.structure_placements() {
-        if only_structure_id.is_some_and(|structure_id| {
-            biome_structure.structure_id != structure_id
-                && !context
-                    .structures
-                    .reference_contains_structure(&biome_structure.structure_id, structure_id)
-        }) {
-            continue;
-        }
         collect_structure_candidates(
             chunk_min,
             chunk_max,
@@ -179,7 +216,7 @@ fn resolved_structure_candidates_matching<'a>(
                 placement_id: &biome_structure.structure_id,
                 placement: biome_structure.placement,
             },
-            only_structure_id,
+            None,
             &mut direct_candidates,
         );
     }
