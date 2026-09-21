@@ -4,7 +4,7 @@ use std::{
 };
 
 use bevy::{
-    platform::collections::HashMap,
+    platform::collections::{HashMap, HashSet},
     prelude::*,
 };
 use serde::{Deserialize, Serialize};
@@ -194,7 +194,7 @@ pub(crate) struct PendingFluidUpdates {
     scheduled_due: HashMap<FluidTickKey, u64>,
     // Due work whose chunk is currently not resident. It is reactivated when
     // streaming brings that chunk back instead of being silently discarded.
-    dormant_scheduled: HashMap<IVec3, Vec<FluidTickKey>>,
+    dormant_scheduled: HashMap<IVec3, HashSet<FluidTickKey>>,
 }
 
 impl PendingFluidUpdates {
@@ -309,10 +309,7 @@ impl PendingFluidUpdates {
 
     pub(super) fn defer_unloaded(&mut self, key: FluidTickKey) {
         let coord = chunk_coord_from_world(key.position);
-        let entries = self.dormant_scheduled.entry(coord).or_default();
-        if !entries.contains(&key) {
-            entries.push(key);
-        }
+        self.dormant_scheduled.entry(coord).or_default().insert(key);
     }
 
     pub(crate) fn enqueue_loaded_fluid_frontier(&mut self, world: &VoxelWorld, coord: IVec3) {
