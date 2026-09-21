@@ -283,7 +283,7 @@ fn export_structure(
     let json = serde_json::to_string_pretty(&model)
         .map_err(|error| format!("failed to serialize structure: {error}"))?;
 
-    let directory = std::env::temp_dir().join("structures");
+    let directory = PathBuf::from("tmp").join("structures");
     fs::create_dir_all(&directory).map_err(|error| {
         format!(
             "failed to create temporary structure directory {}: {error}",
