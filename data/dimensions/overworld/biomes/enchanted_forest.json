@@ -38,7 +38,7 @@
   },
   "structures": [
     {
-      "id": "asteria:world_tree",
+      "id": "asteria:enchanted_heart",
       "placement": {
         "spacing": 1000,
         "chance": 1,
