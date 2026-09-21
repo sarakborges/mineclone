@@ -6,9 +6,10 @@ use crate::{
     rendering::block_tint::{block_tint_at, block_vertex_tint},
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
-        fluid_mesh::{ChunkFluidMesh, build_fluid_meshes},
-        layer_mesh::{ChunkLayerMesh, build_layer_meshes},
-        mesh::{ChunkFaceMesh, build_chunk_mesh},
+        fluid_mesh::{ChunkFluidMesh, build_fluid_meshlets},
+        layer_mesh::{ChunkLayerMesh, build_layer_meshlets},
+        mesh::{ChunkFaceMesh, build_chunk_meshlets},
+        meshlet::ChunkMeshletMask,
         read::VoxelRead,
     },
 };
@@ -77,12 +78,22 @@ pub(super) fn build_chunk_terrain_render_meshes<W: VoxelRead + ?Sized>(
     chunk: &VoxelChunk,
     context: &ChunkMeshBuildContext<'_, W>,
 ) -> Vec<BuiltChunkMesh> {
+    build_chunk_terrain_render_meshlets(coord, chunk, context, ChunkMeshletMask::ALL)
+}
+
+pub(super) fn build_chunk_terrain_render_meshlets<W: VoxelRead + ?Sized>(
+    coord: IVec3,
+    chunk: &VoxelChunk,
+    context: &ChunkMeshBuildContext<'_, W>,
+    meshlets: ChunkMeshletMask,
+) -> Vec<BuiltChunkMesh> {
     let mut column_tints = HashMap::<(i32, i32, BlockTint), Color>::new();
-    let mut meshes = build_chunk_mesh(
+    let mut meshes = build_chunk_meshlets(
         context.world,
         coord,
         chunk,
         context.blocks,
+        meshlets,
         |voxel, cell, block| {
             let base_tint = if block.tint == BlockTint::None {
                 Color::WHITE
@@ -108,12 +119,13 @@ pub(super) fn build_chunk_terrain_render_meshes<W: VoxelRead + ?Sized>(
     .collect::<Vec<_>>();
 
     meshes.extend(
-        build_layer_meshes(
+        build_layer_meshlets(
             context.world,
             coord,
             chunk,
             context.blocks,
             context.layers,
+            meshlets,
             |voxel, definition| {
                 let color = if definition.tint == BlockTint::None {
                     Color::WHITE
@@ -147,8 +159,17 @@ pub(super) fn build_chunk_fluid_render_meshes<W: VoxelRead + ?Sized>(
     chunk: &VoxelChunk,
     context: &ChunkMeshBuildContext<'_, W>,
 ) -> Vec<ChunkFluidMesh> {
+    build_chunk_fluid_render_meshlets(coord, chunk, context, ChunkMeshletMask::ALL)
+}
+
+pub(super) fn build_chunk_fluid_render_meshlets<W: VoxelRead + ?Sized>(
+    coord: IVec3,
+    chunk: &VoxelChunk,
+    context: &ChunkMeshBuildContext<'_, W>,
+    meshlets: ChunkMeshletMask,
+) -> Vec<ChunkFluidMesh> {
     let mut column_tints = HashMap::<(i32, i32, FluidId), [f32; 3]>::new();
-    build_fluid_meshes(context.world, coord, chunk, |voxel, fluid_id| {
+    build_fluid_meshlets(context.world, coord, chunk, meshlets, |voxel, fluid_id| {
         *column_tints
             .entry((voxel.x, voxel.z, fluid_id))
             .or_insert_with(|| {
