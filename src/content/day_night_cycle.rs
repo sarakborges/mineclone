@@ -85,7 +85,7 @@ impl DayNightCycleDefinition {
         if current_ticks < start_ticks {
             current_ticks += self.day_duration_ticks as f32;
         }
-        if current_ticks < start_ticks || current_ticks > end_ticks {
+        if current_ticks < start_ticks || current_ticks >= end_ticks {
             return None;
         }
 
