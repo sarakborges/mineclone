@@ -99,19 +99,27 @@ where
     let mut buffers = MicroMeshBuffers::default();
     let mut block_lookup = BlockLookup::new(blocks);
     let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
-    let mut visuals = vec![None; meshlets.selected_voxel_count()];
+    let selected_voxel_count = meshlets.selected_voxel_count();
+    let mut visuals = vec![None; selected_voxel_count];
+    let mut sources = vec![None; selected_voxel_count];
 
-    // Sculpted voxels keep the dedicated micro-mesher. Partial remeshes visit
-    // only dirty 8³ meshlets instead of scanning all 4096 chunk voxels.
+    // Resolve selected chunk cells and definitions once. The six directional
+    // meshing passes reuse these entries instead of re-reading storage and
+    // searching the block registry for every face.
     meshlets.for_each_voxel(|x, y, z| {
         let Some(cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
             return;
         };
+        let block = block_lookup.get(cell.block_id);
+        let index = meshlets
+            .compact_voxel_index(x, y, z)
+            .expect("selected voxel must have a compact meshlet index");
+        sources[index] = Some(VoxelMeshSource { cell, block });
+
         if !MicroblockMask::is_modified(cell) {
             return;
         }
 
-        let block = block_lookup.get(cell.block_id);
         let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
         let world_voxel = chunk_origin + local_voxel;
         let visual = visual_for_cell(
@@ -157,14 +165,18 @@ where
                     for v in v_start..v_start + CHUNK_MESHLET_EDGE {
                         for u in u_start..u_start + CHUNK_MESHLET_EDGE {
                             let [x, y, z] = face_cell(face, depth, u, v);
-                            let Some(cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
+                            let source_index = meshlets
+                                .compact_voxel_index(x, y, z)
+                                .expect("face pass only visits selected meshlets");
+                            let Some(source) = sources[source_index] else {
                                 continue;
                             };
+                            let cell = source.cell;
+                            let block = source.block;
                             if MicroblockMask::is_modified(cell) {
                                 continue;
                             }
 
-                            let block = block_lookup.get(cell.block_id);
                             let block_is_transparent =
                                 block.alpha_blend || block.alpha_cutoff.is_some();
                             let local_voxel =
@@ -324,6 +336,12 @@ where
 
     meshes.sort_by_key(|mesh| terrain_batch_sort_key(mesh.batch));
     meshes
+}
+
+#[derive(Clone, Copy)]
+struct VoxelMeshSource<'a> {
+    cell: VoxelCell,
+    block: &'a BlockDefinition,
 }
 
 #[derive(Clone, Copy)]
