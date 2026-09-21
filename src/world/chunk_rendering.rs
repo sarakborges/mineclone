@@ -20,17 +20,6 @@ pub(crate) use pool::{ChunkRenderPool, clear_chunk_render_pool, retire_chunk_ren
 pub(crate) use refresh::{apply_built_chunk_fluid_meshes, apply_built_chunk_geometry_meshes};
 pub(crate) use spawn::{BuiltChunkMesh, build_chunk_render_meshes, spawn_built_chunk_meshes};
 
-const MEBIBYTE: usize = 1024 * 1024;
-pub(crate) const MAX_RESIDENT_CHUNK_MESH_BYTES: usize = 256 * MEBIBYTE;
-pub(crate) const MESH_TASK_RESERVATION_BYTES: usize = 8 * MEBIBYTE;
-
-pub(crate) fn built_chunk_mesh_bytes(meshes: &[BuiltChunkMesh]) -> usize {
-    meshes
-        .iter()
-        .map(|mesh| spawn::mesh_asset_bytes(mesh.mesh()))
-        .sum()
-}
-
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ChunkRenderCoord(pub(crate) IVec3);
 
