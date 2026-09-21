@@ -5,7 +5,9 @@ use crate::{
         block::{BlockDefinition, BlockLookup, BlockRegistry, BlockTextureRotations},
         block_orientation::BlockOrientation,
     },
-    rendering::block_texture::block_face_material_face,
+    rendering::block_texture::{
+        TerrainTextureTable, block_face_material_face, block_face_texture_layers,
+    },
 };
 
 use self::{
@@ -43,6 +45,7 @@ pub fn build_chunk_mesh<W, F>(
     chunk_coord: IVec3,
     chunk: &VoxelChunk,
     blocks: &BlockRegistry,
+    texture_table: &TerrainTextureTable,
     tint_at: F,
 ) -> Vec<ChunkFaceMesh>
 where
@@ -54,6 +57,7 @@ where
         chunk_coord,
         chunk,
         blocks,
+        texture_table,
         ChunkMeshletMask::ALL,
         tint_at,
     )
@@ -64,6 +68,7 @@ pub(crate) fn build_chunk_meshlets<W, F>(
     chunk_coord: IVec3,
     chunk: &VoxelChunk,
     blocks: &BlockRegistry,
+    texture_table: &TerrainTextureTable,
     meshlets: ChunkMeshletMask,
     mut tint_at: F,
 ) -> Vec<ChunkFaceMesh>
@@ -111,6 +116,7 @@ where
                     local_voxel,
                     tint: visual.tint,
                     block_srgb: visual.block_srgb,
+                    texture_table,
                 };
                 emit_sculpted_faces(&surface, &mut block_lookup, &mut buffers);
             }
@@ -202,12 +208,16 @@ where
                         };
                     let lighting = face_lighting(world, world_voxel, face, source_block_srgb);
                     let material_face = block_face_material_face(source_face, block);
+                    let material_code = texture_table
+                        .encoded_layers(block_face_texture_layers(material_face, block))
+                        .unwrap_or(0.0);
 
                     let candidate = GreedyFace {
                         block_id: cell.block_id,
                         material_face,
                         tint,
                         lighting,
+                        material_code,
                     };
                     let greedy_eligible = cell.orientation == BlockOrientation::Y
                         && !block_is_transparent
@@ -233,6 +243,7 @@ where
                         geometry.texture_rotation.rotate_uvs(VOXEL_FACE_UVS),
                         tint,
                         lighting,
+                        material_code,
                     );
                 }
             }
@@ -307,6 +318,7 @@ struct GreedyFace {
     material_face: BlockFace,
     tint: [f32; 3],
     lighting: FaceLighting,
+    material_code: f32,
 }
 
 fn lighting_is_uniform(lighting: FaceLighting) -> bool {
@@ -381,6 +393,7 @@ fn emit_greedy_plane<'a>(
                 tiled_uvs(width, height),
                 candidate.tint,
                 candidate.lighting,
+                candidate.material_code,
             );
         }
     }
