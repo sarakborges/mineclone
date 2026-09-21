@@ -38,8 +38,9 @@ impl ChunkRemeshQueue {
     }
 
     pub(crate) fn enqueue_priority(&mut self, coord: IVec3) {
-        if coord.y >= 0 {
-            // Terrain-only remesh cannot satisfy an independent fluid remesh.
+        if coord.y >= 0 && !self.lighting.contains(coord) {
+            // Lighting rebuilds the same terrain mesh, so a queued lighting
+            // refresh already subsumes an undispatched geometry request.
             self.queue.enqueue_front(coord);
         }
     }
@@ -53,6 +54,13 @@ impl ChunkRemeshQueue {
     pub(crate) fn enqueue_fluid_priority(&mut self, coord: IVec3) {
         if coord.y >= 0 {
             self.fluid.enqueue_front(coord);
+        }
+    }
+
+    fn enqueue_lighting(&mut self, coord: IVec3) {
+        if coord.y >= 0 {
+            self.queue.remove(coord);
+            self.lighting.enqueue(coord);
         }
     }
 
@@ -93,7 +101,7 @@ impl ChunkRemeshQueue {
         for offset in CARDINAL_NEIGHBORS {
             let neighbor = coord + offset;
             if neighbor.y >= 0 {
-                self.lighting.enqueue(neighbor);
+                self.enqueue_lighting(neighbor);
                 // Fluid vertices bake face lighting from the one-voxel halo too.
                 // Rebuild only chunks with actual fluid, using occupancy metadata.
                 if world.chunk(neighbor).is_some_and(|chunk| chunk.has_fluid()) {
