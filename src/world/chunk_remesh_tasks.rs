@@ -9,12 +9,16 @@ use bevy::{
 use crate::voxel::{
     fluid_mesh::ChunkFluidMesh,
     mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot},
+    meshlet::ChunkMeshletMask,
     world::VoxelWorld,
 };
 
 use super::{
     chunk_mesh_tasks::MeshContentSnapshot,
-    chunk_rendering::{BuiltChunkMesh, build_chunk_fluid_remeshes, build_chunk_terrain_remeshes},
+    chunk_rendering::{
+        BuiltChunkMesh, build_chunk_fluid_meshlet_remeshes,
+        build_chunk_terrain_meshlet_remeshes,
+    },
     chunk_system_params::ChunkContent,
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
 };
@@ -96,6 +100,7 @@ impl ChunkRemeshDependencies {
 
 pub(crate) struct ChunkRemeshTaskOutput {
     pub(crate) kind: ChunkRemeshTaskKind,
+    pub(crate) meshlets: ChunkMeshletMask,
     pub(crate) meshes: ChunkRemeshTaskMeshes,
     pub(crate) dependencies: ChunkRemeshDependencies,
 }
@@ -185,6 +190,7 @@ impl ChunkRemeshTasks {
         &mut self,
         coord: IVec3,
         kind: ChunkRemeshTaskKind,
+        meshlets: ChunkMeshletMask,
         world: ChunkMeshSnapshot,
     ) -> bool {
         if !self.can_schedule(kind) || self.contains(coord, kind) {
@@ -207,19 +213,26 @@ impl ChunkRemeshTasks {
             let context = snapshot.context(&world);
             let meshes = match kind {
                 ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
-                    ChunkRemeshTaskMeshes::Geometry(build_chunk_terrain_remeshes(
+                    ChunkRemeshTaskMeshes::Geometry(build_chunk_terrain_meshlet_remeshes(
                         coord,
                         world.chunk(),
                         &context,
+                        meshlets,
                     ))
                 }
                 ChunkRemeshTaskKind::Fluid => ChunkRemeshTaskMeshes::Fluid(
-                    build_chunk_fluid_remeshes(coord, world.chunk(), &context),
+                    build_chunk_fluid_meshlet_remeshes(
+                        coord,
+                        world.chunk(),
+                        &context,
+                        meshlets,
+                    ),
                 ),
             };
 
             ChunkRemeshTaskOutput {
                 kind,
+                meshlets,
                 meshes,
                 dependencies,
             }
