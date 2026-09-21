@@ -122,6 +122,7 @@
   ],
   "surfaceMargin": {
     "width": 32,
+    "maxSlope": 1,
     "surfaceLayers": [
       {
         "block": "asteria:sand",
