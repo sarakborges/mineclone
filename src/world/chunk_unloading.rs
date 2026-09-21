@@ -19,7 +19,7 @@ use super::{
         retire_chunk_render_allocation_immediately,
     },
     chunk_system_params::ChunkRenderer,
-    render_distance::RenderDistanceSettings,
+    render_distance::{RenderDistanceSettings, chunk_visibility_radii},
     streaming::ChunkStreamingState,
     work_budget::{FrameWorkBudget, WorldFrameWorkBudget},
 };
@@ -27,6 +27,7 @@ use super::{
 const MIN_CHUNKS_BEFORE_UNLOAD_BUDGET_CHECK: usize = 1;
 const CHUNK_UNLOAD_BUDGET: Duration = Duration::from_millis(4);
 const MIN_UNLOAD_RETENTION_MARGIN_CHUNKS: i32 = 10;
+const MAX_MESH_PRESSURE_RECOVERIES_PER_FRAME: usize = 8;
 
 #[derive(Resource, Default)]
 pub(super) struct ChunkUnloadState {
@@ -133,34 +134,53 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
     let high_bytes = chunk_mesh_residency_high_bytes(render_distance_chunks);
     let target_bytes = chunk_mesh_residency_target_bytes(render_distance_chunks);
     let recovery_bytes = chunk_mesh_residency_recovery_bytes(render_distance_chunks);
+    let (show_radius, _) = chunk_visibility_radii(render_distance_chunks);
+    let visible_radius = i64::from(show_radius.max(1));
+    let visible_radius_squared = visible_radius * visible_radius;
 
     if before <= recovery_bytes {
         recovery.clear();
         recovery.extend(
-            runtime.streaming
+            runtime
+                .streaming
                 .mesh_pressure_evicted_coords()
-                .filter(|coord| runtime.streaming.keeps_loaded(*coord) && !renderer.pool.contains(*coord)),
+                .filter(|coord| {
+                    if !runtime.streaming.keeps_loaded(*coord) || renderer.pool.contains(*coord) {
+                        return false;
+                    }
+                    let dx = i64::from(coord.x) - i64::from(center.x);
+                    let dz = i64::from(coord.z) - i64::from(center.z);
+                    dx * dx + dz * dz <= visible_radius_squared
+                }),
         );
         recovery.sort_unstable_by_key(|coord| {
             let delta = *coord - center;
-            (
-                delta.length_squared(),
-                coord.y,
-                coord.z,
-                coord.x,
-            )
+            (delta.length_squared(), coord.y, coord.z, coord.x)
         });
-        for coord in recovery.iter().copied().take(2) {
-            runtime.streaming.recover_mesh_after_pressure(coord);
+
+        let mut planned_bytes = before;
+        let mut recovered = 0_usize;
+        for coord in recovery.iter().copied() {
+            if recovered >= MAX_MESH_PRESSURE_RECOVERIES_PER_FRAME {
+                break;
+            }
+            let estimated_bytes = runtime
+                .streaming
+                .mesh_pressure_evicted_bytes(coord)
+                .unwrap_or_default();
+            if planned_bytes.saturating_add(estimated_bytes) > target_bytes {
+                continue;
+            }
+            if runtime.streaming.recover_mesh_after_pressure(coord) {
+                planned_bytes = planned_bytes.saturating_add(estimated_bytes);
+                recovered += 1;
+            }
         }
     }
 
     if before <= high_bytes {
         return;
     }
-
-    let visible_radius = i64::from(render_distance_chunks.max(1));
-    let visible_radius_squared = visible_radius * visible_radius;
 
     candidates.clear();
     candidates.extend(renderer.pool.active_coords().filter_map(|coord| {
@@ -229,7 +249,9 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
             &mut renderer.pool,
             candidate.coord,
         );
-        runtime.streaming.suppress_mesh_for_pressure(candidate.coord);
+        runtime
+            .streaming
+            .suppress_mesh_for_pressure(candidate.coord, candidate.bytes);
         runtime.remesh_queue.remove(candidate.coord);
         runtime.remesh_tasks.remove_lighting_revision(candidate.coord);
         enqueue_retired_render_halo_remeshes(
