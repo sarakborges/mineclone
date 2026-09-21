@@ -69,6 +69,13 @@ impl BlockLight {
     // Mesh vertex attributes are an RGB boundary. Lighting propagation and
     // mixing stay in HSI until this final conversion for the shader.
     pub(crate) fn to_srgb_levels(self) -> [u8; 3] {
+        if self.intensity == 0 {
+            return [0; 3];
+        }
+        if self.saturation == 0 {
+            return [self.intensity; 3];
+        }
+
         self.color().to_srgb().map(|channel| {
             (channel * VoxelLight::MAX_LEVEL as f32)
                 .round()
