@@ -71,7 +71,7 @@ pub(super) fn graphics_section(
                     width: percent(100),
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
-                    column_gap: px(12),
+                    column_gap: px(slider::SLIDER_NUMBER_INPUT_GAP),
                     ..default()
                 },
                 children![
