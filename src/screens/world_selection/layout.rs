@@ -70,22 +70,14 @@ pub(super) fn spawn_world_entry(
                 ..default()
             })
             .with_children(|info| {
-                info.spawn(Node {
-                    width: percent(100),
-                    flex_direction: FlexDirection::Column,
-                    row_gap: px(3),
-                    ..default()
-                })
-                .with_children(|header| {
-                    header.spawn(typography::heading(world.id.clone()));
-                    header.spawn(typography::caption(format!(
-                        "{} · {}",
-                        localization.text(language, "worldSelection.lastSaved"),
-                        format_save_time(world.last_saved_unix_ms, language),
-                    )));
-                });
+                info.spawn(typography::heading(world.id.clone()));
 
                 info.spawn(metadata_row()).with_children(|metadata| {
+                    spawn_metadata(
+                        metadata,
+                        localization.text(language, "worldSelection.lastSaved"),
+                        format_save_time(world.last_saved_unix_ms, language),
+                    );
                     spawn_metadata(
                         metadata,
                         localization.text(language, "worldSelection.seed"),
@@ -95,11 +87,6 @@ pub(super) fn spawn_world_entry(
                         metadata,
                         localization.text(language, "worldSelection.daysPassed"),
                         days_passed.to_string(),
-                    );
-                    spawn_metadata(
-                        metadata,
-                        localization.text(language, "worldSelection.coordinates"),
-                        position,
                     );
                 });
 
@@ -113,6 +100,11 @@ pub(super) fn spawn_world_entry(
                         metadata,
                         localization.text(language, "worldSelection.biome"),
                         biome.to_owned(),
+                    );
+                    spawn_metadata(
+                        metadata,
+                        localization.text(language, "worldSelection.coordinates"),
+                        position,
                     );
                 });
             });
