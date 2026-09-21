@@ -76,6 +76,28 @@ impl ChunkRenderPool {
         self.active.values().map(|slot| slot.entities.len()).sum()
     }
 
+    pub(crate) fn diagnostic_mesh_kind_counts(&self) -> (usize, usize, usize, usize) {
+        let mut terrain_array = 0;
+        let mut terrain_legacy = 0;
+        let mut layers = 0;
+        let mut fluids = 0;
+
+        for key in self
+            .active
+            .values()
+            .flat_map(|allocation| allocation.mesh_keys.iter())
+        {
+            match key {
+                ChunkMeshKey::TerrainArray { .. } => terrain_array += 1,
+                ChunkMeshKey::TerrainLegacy { .. } => terrain_legacy += 1,
+                ChunkMeshKey::Layer { .. } => layers += 1,
+                ChunkMeshKey::Fluid(_) => fluids += 1,
+            }
+        }
+
+        (terrain_array, terrain_legacy, layers, fluids)
+    }
+
     pub(crate) fn mesh_bytes(&self) -> usize {
         self.active.values().map(|slot| slot.mesh_bytes).sum()
     }
