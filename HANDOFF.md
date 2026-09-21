@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 3 — 2026-09-21:** o loader agora exige exatamente uma definição data-driven de player em `data/entities/player.json`. Antes, ausência do arquivo caía silenciosamente no fallback hardcoded `health=20 / attack=asteria:punch`, e múltiplos arquivos elegíveis sobrescreviam o anterior. Agora ausência e duplicata falham cedo; conteúdo válido continua usando o mesmo `PlayerDefinition` carregado do JSON. Commit funcional: `c7e7a6033e0b52bb2ffa4014be00d8e3a0d64179`. **Pendências:** CI ainda não verificado; continuar procurando fallbacks hardcoded/last-write-wins equivalentes em outros tipos de conteúdo e ownership duplicado em runtime. **Próximo passo:** auditar registries/definitions especiais que não passam por `DefinitionMap` e depois revisar hot paths de worldgen/render por trabalho repetido evitável.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 2 — 2026-09-21:** removida validação duplicada do snapshot no caminho normal de save. `save_world()` agora converte os registries para ownership de pruning e delega; `save_world_owned()` permanece como o único gate autoritativo que executa `validate_playable()` imediatamente antes da publicação. Antes, todo save válido repetia validação de clock/inventory, reconstrução de `PendingFluidUpdates` e validação de creatures duas vezes. Commit funcional: `5202aba6e1727bfd5cfc03a11cbec4fbcf7cf3fe`. **Pendências:** CI ainda não verificado para este checkpoint; o snapshot global/incremental continua sendo uma decisão arquitetural maior já registrada historicamente e não foi misturada neste refactor. **Próximo passo:** auditar filas/tasks assíncronas e estruturas de lookup por scans lineares/repetidos em hot paths.
 
 
