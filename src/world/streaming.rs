@@ -156,7 +156,6 @@ impl ChunkStreamingState {
 
         self.desired
             .iter()
-            .chain(self.retained.iter())
             .copied()
             .filter(|coord| !self.mesh_pressure_evicted.contains(coord))
             .filter(|coord| !render_pool.contains(*coord))
@@ -702,6 +701,7 @@ mod tests {
             horizontal_radius: 12,
             ..default()
         };
+        state.desired.extend([background, forward, critical]);
         state.ready.enqueue(background);
         state.ready.enqueue(forward);
         state.ready.enqueue(critical);
