@@ -97,6 +97,18 @@ pub(super) fn validate_content(content: &LoadedContent) {
 
     for dimension in content.dimensions.iter() {
         dimension.validate_biomes(&content.biomes);
+        assert!(
+            content.day_night_cycles.get(&dimension.day_night_cycle).is_some(),
+            "dimension {} references missing day-night cycle {}",
+            dimension.id,
+            dimension.day_night_cycle
+        );
+        assert!(
+            content.skies.get(&dimension.sky).is_some(),
+            "dimension {} references missing sky {}",
+            dimension.id,
+            dimension.sky
+        );
         dimension
             .hydrology
             .validate_references(&dimension.id, &content.biomes, &content.fluids);
