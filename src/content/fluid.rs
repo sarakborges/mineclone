@@ -35,6 +35,7 @@ pub struct FluidRegistry {
 
 impl FluidRegistry {
     pub fn insert(&mut self, definition: FluidDefinition) {
+        assert!(!definition.id.trim().is_empty(), "fluid id cannot be empty");
         definition
             .name
             .validate(&format!("fluid {} name", definition.id));
