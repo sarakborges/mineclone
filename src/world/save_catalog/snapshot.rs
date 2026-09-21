@@ -37,6 +37,8 @@ pub(super) struct WorldManifest {
 pub(crate) struct SavedPlayer {
     pub(crate) position: [f32; 3],
     pub(crate) creative: bool,
+    #[serde(default)]
+    pub(crate) flying: bool,
     pub(crate) health: Option<f32>,
     pub(crate) yaw: f32,
     pub(crate) pitch: f32,
@@ -183,6 +185,9 @@ impl WorldSnapshot {
             }
             if !player.yaw.is_finite() || !player.pitch.is_finite() {
                 return Err(invalid_data("player look must be finite"));
+            }
+            if player.flying && !player.creative {
+                return Err(invalid_data("survival player cannot be saved as flying"));
             }
         }
 
