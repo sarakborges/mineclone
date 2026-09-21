@@ -50,7 +50,7 @@ struct RetiredScanKey {
     queue_revision: u64,
     selection_revision: u64,
     center: IVec2,
-    radius_squared: i32,
+    radius_squared: i64,
 }
 
 #[derive(Resource, Default)]
