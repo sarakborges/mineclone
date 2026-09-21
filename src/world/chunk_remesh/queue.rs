@@ -22,11 +22,9 @@ struct RenderableScanKey {
 pub(crate) struct ChunkRemeshQueue {
     queue: DeduplicatedQueue<IVec3>,
     fluid: DeduplicatedQueue<IVec3>,
-    immediate_geometry: DeduplicatedQueue<IVec3>,
     lighting: DeduplicatedQueue<IVec3>,
     geometry_scan_miss: Option<RenderableScanKey>,
     fluid_scan_miss: Option<RenderableScanKey>,
-    immediate_geometry_scan_miss: Option<RenderableScanKey>,
     lighting_scan_miss: Option<RenderableScanKey>,
     next_background_kind: usize,
 }
@@ -79,7 +77,6 @@ impl ChunkRemeshQueue {
 
         if coord.y >= 0 {
             self.enqueue_priority(coord);
-            self.immediate_geometry.enqueue_front(coord);
         }
     }
 
@@ -105,7 +102,6 @@ impl ChunkRemeshQueue {
     pub(crate) fn remove(&mut self, coord: IVec3) {
         self.queue.remove(coord);
         self.fluid.remove(coord);
-        self.immediate_geometry.remove(coord);
         self.lighting.remove(coord);
     }
 
@@ -123,19 +119,6 @@ impl ChunkRemeshQueue {
 
     fn pop_renderable_fluid(&mut self, render_pool: &ChunkRenderPool) -> Option<IVec3> {
         pop_renderable_from(&mut self.fluid, &mut self.fluid_scan_miss, render_pool)
-    }
-
-    pub(super) fn pop_renderable_immediate_geometry(
-        &mut self,
-        render_pool: &ChunkRenderPool,
-    ) -> Option<IVec3> {
-        let coord = pop_renderable_from(
-            &mut self.immediate_geometry,
-            &mut self.immediate_geometry_scan_miss,
-            render_pool,
-        )?;
-        self.queue.remove(coord);
-        Some(coord)
     }
 
     fn coalesce_geometry_into_lighting(&mut self, coord: IVec3) {
@@ -195,13 +178,6 @@ impl ChunkRemeshQueue {
     #[cfg(test)]
     fn pop_fluid(&mut self) -> Option<IVec3> {
         self.fluid.pop()
-    }
-
-    #[cfg(test)]
-    fn pop_immediate_geometry(&mut self) -> Option<IVec3> {
-        let coord = self.immediate_geometry.pop()?;
-        self.queue.remove(coord);
-        Some(coord)
     }
 
     #[cfg(test)]
@@ -286,17 +262,6 @@ mod tests {
     }
 
     #[test]
-    fn immediate_geometry_remesh_preserves_pending_fluid_work() {
-        let mut queue = ChunkRemeshQueue::default();
-        let coord = IVec3::new(2, 1, 3);
-        queue.enqueue_fluid_priority(coord);
-        queue.enqueue_voxel_edit(coord);
-
-        assert_eq!(queue.pop_immediate_geometry(), Some(coord));
-        assert_eq!(queue.pop_fluid(), Some(coord));
-    }
-
-    #[test]
     fn lighting_change_refreshes_only_chunks_containing_fluid() {
         let coord = IVec3::new(2, 1, 3);
         let neighbor = coord + IVec3::X;
@@ -320,14 +285,13 @@ mod tests {
         let coord = IVec3::new(4, 2, -3);
         queue.enqueue_voxel_edit(coord);
 
-        assert_eq!(queue.pop_immediate_geometry(), Some(coord));
         assert_eq!(queue.pop_lighting(), None);
+        assert_eq!(queue.pop(), Some(coord));
 
         let mut queued = Vec::new();
         while let Some(value) = queue.pop() {
             queued.push(value);
         }
-        assert!(!queued.contains(&coord));
         for offset in CARDINAL_NEIGHBORS {
             assert!(queued.contains(&(coord + offset)));
         }
@@ -359,14 +323,12 @@ mod tests {
         let coord = IVec3::new(2, 1, 3);
         queue.enqueue_priority(coord);
         queue.enqueue_fluid_priority(coord);
-        queue.immediate_geometry.enqueue(coord);
         queue.lighting.enqueue(coord);
 
         queue.remove(coord);
 
         assert_eq!(queue.pop(), None);
         assert_eq!(queue.pop_fluid(), None);
-        assert_eq!(queue.pop_immediate_geometry(), None);
         assert_eq!(queue.pop_lighting(), None);
     }
 
