@@ -85,7 +85,7 @@ pub(super) fn dispatch_initial_mesh_tasks(
             |neighbor| renderer.pool.contains(neighbor),
         )
         .unwrap_or_else(|| panic!("generated chunk data should exist at {coord:?}"));
-        if !work.mesh_tasks.schedule(coord, snapshot) {
+        if !work.mesh_tasks.schedule(coord, snapshot, &work.async_work) {
             work.state.defer_ready(coord);
             break;
         }
