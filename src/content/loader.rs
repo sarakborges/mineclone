@@ -65,7 +65,7 @@ pub fn load_content(mut commands: Commands) {
 }
 
 pub(crate) fn read_content() -> LoadedContent {
-    let mut content = LoadedContent { player: PlayerDefinition { health: 20.0, attack: "asteria:punch".to_owned(), model: None }, ..Default::default() };
+    let mut content = LoadedContent::default();
     let mut files = Vec::new();
     let mut player_loaded = false;
 
