@@ -7,7 +7,7 @@ use crate::{
     voxel::chunk::CHUNK_SIZE,
     world::{
         generation::{
-            maximum_structure_vertical_chunk_allowance_for_horizontal_chunk,
+            maximum_structure_top_chunk_for_horizontal_chunk,
         },
         generation_region::generation_region_coord,
         render_distance::chunk_is_in_volume,
@@ -49,7 +49,7 @@ pub(super) struct QueueRebuildScratch {
     desired: HashSet<IVec3>,
     pending: Vec<PendingEntry>,
     retired: Vec<IVec3>,
-    structure_allowances: HashMap<IVec2, i32>,
+    structure_top_chunks: HashMap<IVec2, i32>,
 }
 
 pub(super) fn rebuild_queue(
@@ -91,24 +91,24 @@ pub(super) fn rebuild_queue(
         },
         context,
         &mut streaming.surface_ranges,
-        &mut scratch.structure_allowances,
+        &mut scratch.structure_top_chunks,
     );
     if prune_caches {
         context.feature_fields.retain_for_chunks(&scratch.desired);
     }
 
-    let center_structure_allowance = scratch
-        .structure_allowances
+    let center_structure_top_chunk = scratch
+        .structure_top_chunks
         .get(&center.xz())
         .copied()
         .unwrap_or(0);
     let prioritize_surface = player_is_above_surface(
         center,
-        center_structure_allowance,
+        center_structure_top_chunk,
         &streaming.surface_ranges,
     );
     scratch.pending.clear();
-    let structure_allowances = &scratch.structure_allowances;
+    let structure_top_chunks = &scratch.structure_top_chunks;
     scratch.pending.extend(
         scratch
             .desired
@@ -124,7 +124,7 @@ pub(super) fn rebuild_queue(
                     coord,
                     center,
                     horizontal_radius,
-                    structure_allowances
+                    structure_top_chunks
                         .get(&coord.xz())
                         .copied()
                         .unwrap_or(0),
@@ -213,14 +213,14 @@ fn collect_retired_chunk_coords(
 
 fn player_is_above_surface(
     center: IVec3,
-    structure_chunk_allowance: i32,
+    structure_top_chunk: i32,
     surface_ranges: &HashMap<IVec2, (i32, i32)>,
 ) -> bool {
     let Some((_, maximum_surface)) = surface_ranges.get(&center.xz()).copied() else {
         return false;
     };
     let maximum_structure_chunk =
-        maximum_surface.div_euclid(CHUNK_SIZE as i32) + structure_chunk_allowance;
+        maximum_surface.div_euclid(CHUNK_SIZE as i32).max(structure_top_chunk);
     center.y > maximum_structure_chunk
 }
 
@@ -228,7 +228,7 @@ fn pending_priority(
     coord: IVec3,
     center: IVec3,
     visible_radius: i32,
-    structure_chunk_allowance: i32,
+    structure_top_chunk: i32,
     movement_direction: IVec2,
     prioritize_surface: bool,
     surface_ranges: &HashMap<IVec2, (i32, i32)>,
@@ -241,7 +241,7 @@ fn pending_priority(
         .unwrap_or((coord.y * chunk_size, coord.y * chunk_size));
     let minimum_surface_chunk = minimum_surface.div_euclid(chunk_size);
     let maximum_structure_chunk =
-        maximum_surface.div_euclid(chunk_size) + structure_chunk_allowance;
+        maximum_surface.div_euclid(chunk_size).max(structure_top_chunk);
     let surface_distance = if coord.y < minimum_surface_chunk {
         minimum_surface_chunk - coord.y
     } else if coord.y > maximum_structure_chunk {
@@ -327,10 +327,10 @@ fn rebuild_desired_chunk_coords(
     selection: DesiredChunkSelection,
     context: &QueueRebuildContext<'_>,
     surface_ranges: &mut HashMap<IVec2, (i32, i32)>,
-    structure_allowances: &mut HashMap<IVec2, i32>,
+    structure_top_chunks: &mut HashMap<IVec2, i32>,
 ) {
     desired.clear();
-    structure_allowances.clear();
+    structure_top_chunks.clear();
     let DesiredChunkSelection {
         center,
         horizontal_radius,
@@ -393,15 +393,16 @@ fn rebuild_desired_chunk_coords(
                 context.biome_field,
                 context.feature_fields,
             );
-            let structure_chunk_allowance =
-                maximum_structure_vertical_chunk_allowance_for_horizontal_chunk(
+            let structure_top_chunk =
+                maximum_structure_top_chunk_for_horizontal_chunk(
                     horizontal,
+                    context.dimension,
                     context.biomes,
                     context.structures,
                     context.biome_field,
                     context.feature_fields,
                 );
-            structure_allowances.insert(horizontal, structure_chunk_allowance);
+            structure_top_chunks.insert(horizontal, structure_top_chunk);
             let mut surrounding_minimum = own_minimum;
 
             for neighbor_offset in SURFACE_SUPPORT_NEIGHBORS {
@@ -426,8 +427,9 @@ fn rebuild_desired_chunk_coords(
             };
             let minimum_y =
                 (surrounding_minimum.div_euclid(chunk_size) - padding_below).max(0);
-            let maximum_y = (own_maximum.div_euclid(chunk_size)
-                + structure_chunk_allowance)
+            let maximum_y = own_maximum
+                .div_euclid(chunk_size)
+                .max(structure_top_chunk)
                 .max(minimum_y);
 
             for y in minimum_y..=maximum_y {
