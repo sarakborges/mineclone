@@ -2,12 +2,42 @@ use bevy::prelude::*;
 
 use crate::{
     rendering::{block_model::BlockModel, block_tint::block_tint_at},
-    ui::typography,
+    ui::{surface, typography},
 };
 
 use crate::hud::{layer_icon::spawn_layer_icon, tool_icon::spawn_tool_icon};
 
-use super::{InventoryItemView, super::state::{InventoryCursorIcon, ITEM_ICON_SIZE}};
+use super::{
+    InventoryItemView,
+    super::state::{
+        InventoryCursorIcon, InventoryItemTooltip, InventoryItemTooltipText, ITEM_ICON_SIZE,
+    },
+};
+
+pub(in crate::hud::inventory) fn spawn_item_tooltip(root: &mut ChildSpawnerCommands) {
+    root.spawn((
+        InventoryItemTooltip,
+        surface::hud_container(Node {
+            position_type: PositionType::Absolute,
+            left: px(0),
+            top: px(0),
+            max_width: px(280),
+            padding: UiRect::axes(px(10), px(7)),
+            border: UiRect::all(px(1)),
+            ..default()
+        }),
+        Visibility::Hidden,
+        GlobalZIndex(200),
+        Pickable::IGNORE,
+    ))
+    .with_children(|tooltip| {
+        tooltip.spawn((
+            InventoryItemTooltipText,
+            typography::inventory_category(""),
+            Pickable::IGNORE,
+        ));
+    });
+}
 
 pub(in crate::hud::inventory) fn spawn_cursor_icon(
     root: &mut ChildSpawnerCommands,
