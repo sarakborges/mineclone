@@ -94,6 +94,7 @@ fn dispatch_generation_tasks(
     progress: &mut WorldSetupProgress<'_>,
     fluid_updates: &mut PendingFluidUpdates,
     generation_tasks: &mut ChunkGenerationTasks,
+    async_work: &ChunkAsyncWorkLimiter,
     load_mode: WorldLoadMode,
 ) {
     while generation_tasks.pending_count() < MAX_GENERATION_TASKS_IN_FLIGHT {
