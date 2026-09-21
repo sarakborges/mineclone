@@ -337,6 +337,36 @@ fn collect_structure_candidates<'a>(
     placement_context: StructurePlacementContext<'a>,
     candidates: &mut Vec<StructureCandidate<'a>>,
 ) {
+    if context
+        .structure_sets
+        .get(placement_context.placement_id)
+        .is_some()
+    {
+        collect_structure_set_candidates(
+            target_min,
+            target_max,
+            context,
+            placement_context,
+            candidates,
+        );
+    } else {
+        collect_direct_structure_candidates(
+            target_min,
+            target_max,
+            context,
+            placement_context,
+            candidates,
+        );
+    }
+}
+
+fn collect_direct_structure_candidates<'a>(
+    target_min: IVec2,
+    target_max: IVec2,
+    context: &'a ChunkGenerationContext<'_>,
+    placement_context: StructurePlacementContext<'a>,
+    candidates: &mut Vec<StructureCandidate<'a>>,
+) {
     let biome_id = placement_context.biome_id;
     let placement_id = placement_context.placement_id;
     let bounds = context
@@ -411,11 +441,111 @@ fn collect_structure_candidates<'a>(
                 placement_id,
                 structure,
                 rotation,
+                placement_anchor: anchor,
                 anchor,
                 origin_y,
+                priority: structure.priority,
+                reserve_space: structure.generation.reserve_space,
+                conflict_groups: &structure.conflict_groups,
                 minimum,
                 maximum,
             });
+        },
+    );
+}
+
+fn collect_structure_set_candidates<'a>(
+    target_min: IVec2,
+    target_max: IVec2,
+    context: &'a ChunkGenerationContext<'_>,
+    placement_context: StructurePlacementContext<'a>,
+    candidates: &mut Vec<StructureCandidate<'a>>,
+) {
+    let biome_id = placement_context.biome_id;
+    let placement_id = placement_context.placement_id;
+    let set = context
+        .structure_sets
+        .get(placement_id)
+        .expect("validated structure set placement must resolve");
+    let bounds = set
+        .horizontal_bounds(context.structures)
+        .unwrap_or_else(|| panic!("structure set {placement_id} has no resolvable bounds"));
+
+    visit_candidate_anchors_intersecting(
+        target_min,
+        target_max,
+        context.biome_field.seed(),
+        placement_context,
+        bounds,
+        |placement_anchor| {
+            if context
+                .biome_field
+                .sample_surface(placement_anchor.as_vec2() + Vec2::splat(0.5))
+                .primary_id
+                != biome_id
+            {
+                return;
+            }
+
+            let Some(pieces) = resolve_set_pieces(
+                context.biome_field.seed(),
+                set,
+                placement_anchor,
+                context.structures,
+                |structure, rotation, anchor| {
+                    context.feature_fields.structure_origin_y(
+                        &structure.id,
+                        rotation,
+                        anchor,
+                        || {
+                            let origin_y =
+                                compute_structure_origin_y(anchor, structure, rotation, context)?;
+                            candidate_satisfies_restrictions(
+                                biome_id,
+                                structure,
+                                rotation,
+                                anchor,
+                                origin_y,
+                                context,
+                            )
+                            .then_some(origin_y)
+                        },
+                    )
+                },
+            ) else {
+                return;
+            };
+
+            let minimum = pieces
+                .iter()
+                .fold(IVec2::splat(i32::MAX), |minimum, piece| {
+                    minimum.min(piece.minimum)
+                });
+            let maximum = pieces
+                .iter()
+                .fold(IVec2::splat(i32::MIN), |maximum, piece| {
+                    maximum.max(piece.maximum)
+                });
+            if !rectangles_overlap(minimum, maximum, target_min, target_max) {
+                return;
+            }
+
+            for piece in pieces {
+                candidates.push(StructureCandidate {
+                    biome_id,
+                    placement_id,
+                    structure: piece.structure,
+                    rotation: piece.rotation,
+                    placement_anchor,
+                    anchor: piece.anchor,
+                    origin_y: piece.origin_y,
+                    priority: set.priority,
+                    reserve_space: set.reserve_space,
+                    conflict_groups: &set.conflict_groups,
+                    minimum,
+                    maximum,
+                });
+            }
         },
     );
 }
