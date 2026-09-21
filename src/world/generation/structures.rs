@@ -11,6 +11,7 @@ use crate::{
         biome::BiomeRegistry,
         biome_structure::StructurePlacementRules,
         block::BlockRegistry,
+        dimension::DimensionDefinition,
         structure::{StructureDefinition, StructureRegistry, StructureVoxel},
         structure_rules::{StructureFluidPolicy, StructureReplacePolicy},
     },
@@ -19,13 +20,14 @@ use crate::{
         chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk, VoxelChunkContentMut},
         texture_rotation::TextureRotation,
     },
+    world::terrain::surface_height,
 };
 
 pub(crate) use self::support::fit_structure_to_ground;
 use self::{
     placement::{candidate_anchor, structure_member_hash},
     restrictions::candidate_satisfies_restrictions,
-    support::compute_structure_origin_y,
+    support::{MAX_STRUCTURE_GROUND_RISE, compute_structure_origin_y},
 };
 use super::{super::biome_field::BiomeField, ChunkGenerationContext};
 
@@ -202,8 +204,9 @@ fn resolved_structure_candidates_matching<'a>(
     accepted
 }
 
-pub(super) fn maximum_potential_structure_height_for_chunk(
+pub(super) fn maximum_potential_structure_top_y_for_chunk(
     horizontal_chunk: IVec2,
+    dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     structures: &StructureRegistry,
     biome_field: &BiomeField,
@@ -211,20 +214,18 @@ pub(super) fn maximum_potential_structure_height_for_chunk(
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_min = horizontal_chunk * chunk_size;
     let chunk_max = chunk_min + IVec2::splat(chunk_size - 1);
-    let mut maximum_height = 0;
+    let mut maximum_top_y = 0;
 
     for biome_structure in biomes.structure_placements() {
+        let placement_id = biome_structure.structure_id.as_str();
         let bounds = structures
-            .bounds_for_reference(&biome_structure.structure_id)
+            .bounds_for_reference(placement_id)
             .unwrap_or_else(|| {
                 panic!(
                     "biome {} references missing structure or structure group: {}",
-                    biome_structure.biome_id, biome_structure.structure_id
+                    biome_structure.biome_id, placement_id
                 )
             });
-        let reference_max_y = structures
-            .max_y_offset_for_reference(&biome_structure.structure_id)
-            .unwrap_or(0);
 
         visit_candidate_anchors_intersecting(
             chunk_min,
@@ -232,23 +233,70 @@ pub(super) fn maximum_potential_structure_height_for_chunk(
             biome_field.seed(),
             StructurePlacementContext {
                 biome_id: &biome_structure.biome_id,
-                placement_id: &biome_structure.structure_id,
+                placement_id,
                 placement: biome_structure.placement,
             },
             bounds,
             |anchor| {
+                let member_hash = structure_member_hash(
+                    biome_field.seed(),
+                    &biome_structure.biome_id,
+                    placement_id,
+                    anchor,
+                );
+                let structure = structures
+                    .select_for_reference(placement_id, member_hash)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "biome {} references empty structure group: {}",
+                            biome_structure.biome_id, placement_id
+                        )
+                    });
+                let (minimum_offset, maximum_offset) = structure.horizontal_bounds();
+                if !rectangles_overlap(
+                    anchor + minimum_offset,
+                    anchor + maximum_offset,
+                    chunk_min,
+                    chunk_max,
+                ) {
+                    return;
+                }
                 if biome_field
                     .sample_surface(anchor.as_vec2() + Vec2::splat(0.5))
                     .primary_id
-                    == biome_structure.biome_id
+                    != biome_structure.biome_id
                 {
-                    maximum_height = maximum_height.max(reference_max_y.max(0));
+                    return;
                 }
+
+                let support_offset = *structure
+                    .support_offsets()
+                    .first()
+                    .expect("validated non-empty structure must have a support offset");
+                let support_surface = surface_height(
+                    anchor + support_offset,
+                    dimension,
+                    biomes,
+                    biome_field,
+                );
+                // fit_structure_to_ground chooses the minimum ground among all
+                // support points. Therefore any single support gives a safe
+                // upper bound for the origin. Add the maximum density rise used
+                // by support fitting, then convert that bound into an absolute
+                // structure top Y. This stays conservative without resolving
+                // every expensive placement restriction during streaming.
+                let conservative_ground_y =
+                    support_surface - 1 + MAX_STRUCTURE_GROUND_RISE;
+                let conservative_origin_y =
+                    conservative_ground_y - structure.min_y_offset();
+                maximum_top_y = maximum_top_y.max(
+                    conservative_origin_y + structure.max_y_offset(),
+                );
             },
         );
     }
 
-    maximum_height
+    maximum_top_y
 }
 
 fn collect_structure_candidates<'a>(
