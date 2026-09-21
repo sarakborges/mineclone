@@ -120,6 +120,16 @@ pub(super) struct InventoryRebuildView<'w, 's> {
     search_text: Query<'w, 's, &'static mut Visibility, With<CreativeSearchText>>,
 }
 
+pub(super) type InventoryItemTooltipQuery<'w, 's> = Single<
+    'w,
+    's,
+    (&'static mut Node, &'static mut Visibility),
+    (
+        With<InventoryItemTooltip>,
+        Without<InventoryItemTooltipText>,
+    ),
+>;
+
 pub(super) type InventoryTrashButtonQuery<'w, 's> = Query<
     'w,
     's,
@@ -317,10 +327,7 @@ pub(super) fn sync_inventory_item_tooltip(
     window: Single<&Window>,
     inventory_slots: Query<(&Interaction, &InventorySlot)>,
     creative_slots: Query<(&Interaction, &CreativeInventorySlot)>,
-    tooltip: Single<
-        (&mut Node, &mut Visibility),
-        (With<InventoryItemTooltip>, Without<InventoryItemTooltipText>),
-    >,
+    tooltip: InventoryItemTooltipQuery,
     tooltip_text: Single<&mut Text, With<InventoryItemTooltipText>>,
 ) {
     let (mut node, mut visibility) = tooltip.into_inner();
