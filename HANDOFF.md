@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 4 — 2026-09-21:** `FluidRegistry`, que mantém IDs numéricos próprios e por isso não usa `DefinitionMap`, também deixou de aceitar redefinição silenciosa. Antes, um segundo fluid com o mesmo ID substituía a definição no slot numérico existente; agora duplicate fluid ID falha cedo com mensagem explícita. Commit funcional: `4e6a36d1f97ef0f4bdd95463faca8f44972c6432`. **Pendências:** CI ainda não verificado; procurar outros registries especiais com overwrite/update implícito antes de seguir para hot paths. **Próximo passo:** revisar registries baseados em Vec+ID/interning e caches derivados para garantir unicidade e rebuild apenas quando necessário.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 3 — 2026-09-21:** o loader agora exige exatamente uma definição data-driven de player em `data/entities/player.json`. Antes, ausência do arquivo caía silenciosamente no fallback hardcoded `health=20 / attack=asteria:punch`, e múltiplos arquivos elegíveis sobrescreviam o anterior. Agora ausência e duplicata falham cedo; conteúdo válido continua usando o mesmo `PlayerDefinition` carregado do JSON. Commit funcional: `c7e7a6033e0b52bb2ffa4014be00d8e3a0d64179`. **Pendências:** CI ainda não verificado; continuar procurando fallbacks hardcoded/last-write-wins equivalentes em outros tipos de conteúdo e ownership duplicado em runtime. **Próximo passo:** auditar registries/definitions especiais que não passam por `DefinitionMap` e depois revisar hot paths de worldgen/render por trabalho repetido evitável.
 
 
