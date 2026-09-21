@@ -49,7 +49,9 @@ impl TerrainAlphaKey {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct TerrainMaterialKey {
     texture: Option<String>,
-    tint_enabled: bool,
+    overlay_texture: Option<String>,
+    base_tint_enabled: bool,
+    overlay_tint_enabled: bool,
     alpha: TerrainAlphaKey,
     layer_index: usize,
 }
@@ -88,8 +90,8 @@ impl<'a> TerrainMaterialBuilder<'a> {
         face: BlockFace,
     ) -> Vec<Handle<TerrainMaterial>> {
         let layers = block_face_texture_layers(face, definition);
-        if layers.is_empty() {
-            return vec![self.material_for(definition, None, 0)];
+        if layers.len() <= 2 {
+            return vec![self.composite_material_for(definition, layers)];
         }
 
         layers
@@ -99,6 +101,50 @@ impl<'a> TerrainMaterialBuilder<'a> {
                 self.material_for(definition, Some(layer), layer_index)
             })
             .collect()
+    }
+
+    fn composite_material_for(
+        &mut self,
+        definition: &BlockDefinition,
+        layers: &[BlockTextureLayer],
+    ) -> Handle<TerrainMaterial> {
+        let base = layers.first();
+        let overlay = layers.get(1);
+        let alpha = TerrainAlphaKey::for_layer(definition, 0);
+        let key = TerrainMaterialKey {
+            texture: base.map(|layer| layer.texture.clone()),
+            overlay_texture: overlay.map(|layer| layer.texture.clone()),
+            base_tint_enabled: base.is_some_and(|layer| layer.dyable),
+            overlay_tint_enabled: overlay.is_some_and(|layer| layer.dyable),
+            alpha,
+            layer_index: 0,
+        };
+        if let Some(existing) = self.cache.get(&key) {
+            return existing.clone();
+        }
+
+        let material = self.materials.add(TerrainMaterial {
+            base: StandardMaterial {
+                base_color: Color::WHITE,
+                base_color_texture: base.map(|layer| load_block_texture_layer(self.asset_server, layer)),
+                perceptual_roughness: self.roughness,
+                metallic: self.metallic,
+                alpha_mode: alpha.alpha_mode(),
+                fog_enabled: true,
+                unlit: true,
+                ..default()
+            },
+            extension: TerrainMaterialExtension {
+                lighting: self.lighting.handle(),
+                fluid_animation_factor: 0.0,
+                base_tint_enabled: key.base_tint_enabled as u8 as f32,
+                overlay_enabled: overlay.is_some() as u8 as f32,
+                overlay_tint_enabled: key.overlay_tint_enabled as u8 as f32,
+                overlay_texture: overlay.map(|layer| load_block_texture_layer(self.asset_server, layer)),
+            },
+        });
+        self.cache.insert(key, material.clone());
+        material
     }
 
     fn material_for_layer(
@@ -114,7 +160,9 @@ impl<'a> TerrainMaterialBuilder<'a> {
         };
         let key = TerrainMaterialKey {
             texture: Some(definition.texture.clone()),
-            tint_enabled: definition.tint != BlockTint::None,
+            base_tint_enabled: definition.tint != BlockTint::None,
+            overlay_texture: None,
+            overlay_tint_enabled: false,
             alpha,
             layer_index: 0,
         };
@@ -136,7 +184,10 @@ impl<'a> TerrainMaterialBuilder<'a> {
             extension: TerrainMaterialExtension {
                 lighting: self.lighting.handle(),
                 fluid_animation_factor: 0.0,
-                tint_enabled: key.tint_enabled as u8 as f32,
+                base_tint_enabled: key.base_tint_enabled as u8 as f32,
+                overlay_enabled: 0.0,
+                overlay_tint_enabled: 0.0,
+                overlay_texture: None,
             },
         });
         self.cache.insert(key, material.clone());
@@ -152,7 +203,9 @@ impl<'a> TerrainMaterialBuilder<'a> {
         let alpha = TerrainAlphaKey::for_layer(definition, layer_index);
         let key = TerrainMaterialKey {
             texture: layer.map(|layer| layer.texture.clone()),
-            tint_enabled: layer.is_some_and(|layer| layer.dyable),
+            base_tint_enabled: layer.is_some_and(|layer| layer.dyable),
+            overlay_texture: None,
+            overlay_tint_enabled: false,
             alpha,
             layer_index,
         };
@@ -162,7 +215,7 @@ impl<'a> TerrainMaterialBuilder<'a> {
 
         let base_color_texture =
             layer.map(|layer| load_block_texture_layer(self.asset_server, layer));
-        let tint_enabled = key.tint_enabled as u8 as f32;
+        let base_tint_enabled = key.base_tint_enabled as u8 as f32;
         let material = self.materials.add(TerrainMaterial {
             base: StandardMaterial {
                 base_color: Color::WHITE,
@@ -178,7 +231,10 @@ impl<'a> TerrainMaterialBuilder<'a> {
             extension: TerrainMaterialExtension {
                 lighting: self.lighting.handle(),
                 fluid_animation_factor: 0.0,
-                tint_enabled,
+                base_tint_enabled,
+                overlay_enabled: 0.0,
+                overlay_tint_enabled: 0.0,
+                overlay_texture: None,
             },
         });
         self.cache.insert(key, material.clone());
@@ -300,7 +356,10 @@ impl FluidMaterials {
                     extension: TerrainMaterialExtension {
                         lighting: lighting.handle(),
                         fluid_animation_factor: 1.0,
-                        tint_enabled: 1.0,
+                        base_tint_enabled: 1.0,
+                        overlay_enabled: 0.0,
+                        overlay_tint_enabled: 0.0,
+                        overlay_texture: None,
                     },
                 });
 
