@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — checkpoint B — VERSION 0.50.8 — 2026-09-21:** bloco de performance/lifecycle consolidado. Inclui metadata de biomas incremental (`1bc7b262`), índice de grupos de structures incremental (`d61259af`), interner de tool IDs sem String duplicada (`e59b65e6`), dormant fluid ticks deduplicados por HashSet (`c2144134`) e Loading autossuficiente no reset de remesh/fluid queues (`84e6d0cf`). Bump: `f36c6b606bfcd63d6a885a80db605908f3924953`. **Pendências:** CI não confirmado pelo conector; runtime QA não executado. **Próximo passo:** bloco C — persistence/save e estruturas de estado; depois UI/design-system e validações de conteúdo restantes.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 8 — 2026-09-21:** entrada em `GameState::Loading` agora reseta também `ChunkRemeshQueue` e `PendingFluidUpdates`. Antes esses Resources só eram limpos em `OnExit(Gameplay)`, fazendo a correção do estado inicial de Loading depender do caminho anterior. Loading agora é autossuficiente para filas transitórias, evitando stale work se houver retry/aborto/falha ou futuro caminho que entre em Loading sem sair de Gameplay imediatamente antes. Commit: `84e6d0cf6d1d54b3577dd57d2287ad19c21ca8c0`. **Pendências:** CI/runtime QA ainda não verificados. **Próximo passo:** revisar demais Resources de sessão (`WorldLoadingState`, render assets/material resources, unload/streaming state, session/save config) para ownership e limpeza simétricos; depois passar para UI e persistence.
 
 
