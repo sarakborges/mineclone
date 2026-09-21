@@ -1,7 +1,8 @@
 //! Greedy meshing of the occupied portions of a macro block. All output goes
 //! into the normal chunk material buffers; no entities per microcell are made.
 
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::prelude::*;
+use smallvec::SmallVec;
 
 use crate::{
     content::block::{
@@ -45,7 +46,50 @@ pub(super) struct MaterialMeshBuffer {
     pub(super) buffer: VoxelMeshBuffer,
 }
 
-pub(super) type MicroMeshBuffers<'a> = HashMap<MaterialBatchKey<'a>, MaterialMeshBuffer>;
+pub(super) struct MicroMeshBuffers<'a> {
+    entries: SmallVec<[(MaterialBatchKey<'a>, MaterialMeshBuffer); 4]>,
+}
+
+impl Default for MicroMeshBuffers<'_> {
+    fn default() -> Self {
+        Self {
+            entries: SmallVec::new(),
+        }
+    }
+}
+
+impl<'a> MicroMeshBuffers<'a> {
+    fn buffer_for(
+        &mut self,
+        key: MaterialBatchKey<'a>,
+        batch: ChunkTerrainBatch,
+    ) -> &mut VoxelMeshBuffer {
+        if let Some(index) = self.entries.iter().position(|(candidate, _)| *candidate == key) {
+            return &mut self.entries[index].1.buffer;
+        }
+
+        self.entries.push((
+            key,
+            MaterialMeshBuffer {
+                batch,
+                buffer: VoxelMeshBuffer::default(),
+            },
+        ));
+        &mut self
+            .entries
+            .last_mut()
+            .expect("material mesh entry was just inserted")
+            .1
+            .buffer
+    }
+
+    pub(super) fn into_values(
+        self,
+    ) -> impl Iterator<Item = MaterialMeshBuffer> {
+        self.entries.into_iter().map(|(_, value)| value)
+    }
+}
+
 const EDGE: usize = MICROBLOCK_EDGE as usize;
 
 pub(super) fn material_buffer<'buffer, 'definition>(
@@ -90,13 +134,7 @@ pub(super) fn material_buffer<'buffer, 'definition>(
         )
     };
 
-    &mut buffers
-        .entry(key)
-        .or_insert_with(|| MaterialMeshBuffer {
-            batch,
-            buffer: VoxelMeshBuffer::default(),
-        })
-        .buffer
+    buffers.buffer_for(key, batch)
 }
 
 pub(super) struct MicroSurface<'a, W: VoxelRead + ?Sized> {
