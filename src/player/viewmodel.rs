@@ -6,7 +6,7 @@ mod model;
 use bevy::prelude::*;
 
 use crate::{
-    app::{game_state::GameState, pause_state::PauseState},
+    app::{game_state::GameState, pause_state::PauseState, resource_systems::reset_resource},
     targeting::block::BlockTargetingSet,
     ui::visibility::set_visibility,
 };
@@ -26,7 +26,13 @@ impl Plugin for PlayerViewModelPlugin {
             .add_systems(Startup, setup_viewmodel_arm_assets)
             .add_systems(
                 OnEnter(GameState::Gameplay),
-                (setup_held_brush_assets, setup_held_chisel_assets),
+                (
+                    reset_resource::<ViewModelAnimation>,
+                    reset_resource::<ViewModelItemSwitch>,
+                    setup_held_brush_assets,
+                    setup_held_chisel_assets,
+                )
+                    .chain(),
             )
             .add_systems(
                 OnEnter(PauseState::Paused),
