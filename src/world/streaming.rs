@@ -138,15 +138,6 @@ impl ChunkStreamingState {
         self.keeps_loaded(coord) && chunk_is_inside_render_radius(center, coord, hide_radius)
     }
 
-    pub(super) fn load_priority(&self, coord: IVec3) -> Option<ChunkLoadPriority> {
-        let center = self.center?;
-        Some(chunk_load_priority(
-            coord,
-            center,
-            self.movement_direction,
-        ))
-    }
-
     pub(super) fn nearest_missing_render_priority(
         &self,
         render_pool: &ChunkRenderPool,
