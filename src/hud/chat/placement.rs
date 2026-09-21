@@ -15,7 +15,7 @@ use crate::{
     },
     world::{
         generation::{fit_structure_to_ground, surface_layer_placements},
-        seed::WorldSeed,
+        WorldSeed,
     },
 };
 
