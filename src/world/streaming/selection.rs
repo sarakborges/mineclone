@@ -403,14 +403,7 @@ fn rebuild_desired_chunk_coords(
                 context.feature_fields,
             );
             let structure_top_chunk =
-                maximum_structure_top_chunk_for_horizontal_chunk(
-                    horizontal,
-                    context.dimension,
-                    context.biomes,
-                    context.structures,
-                    context.biome_field,
-                    context.feature_fields,
-                );
+                maximum_structure_top_chunk_for_horizontal_chunk(horizontal, context);
             structure_top_chunks.insert(horizontal, structure_top_chunk);
             let mut surrounding_minimum = own_minimum;
 
