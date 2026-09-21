@@ -38,7 +38,7 @@ pub(crate) enum ChunkRemeshTaskMeshes {
 
 #[derive(Clone)]
 struct LightingRemeshDependencies {
-    expected: Vec<(IVec3, u64)>,
+    expected: [(IVec3, u64); 27],
     revisions: SharedLightingRevisions,
 }
 
@@ -47,16 +47,18 @@ impl LightingRemeshDependencies {
         let current = revisions
             .read()
             .expect("lighting remesh revision tracker should not be poisoned");
-        let mut expected = Vec::with_capacity(27);
-
+        let mut expected = [(IVec3::ZERO, 0_u64); 27];
+        let mut index = 0;
         for y in -1..=1 {
             for z in -1..=1 {
                 for x in -1..=1 {
                     let coord = center + IVec3::new(x, y, z);
-                    expected.push((coord, current.get(&coord).copied().unwrap_or(0)));
+                    expected[index] = (coord, current.get(&coord).copied().unwrap_or(0));
+                    index += 1;
                 }
             }
         }
+        debug_assert_eq!(index, expected.len());
 
         drop(current);
         Self {
