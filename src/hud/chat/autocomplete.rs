@@ -329,14 +329,18 @@ fn suggestions_for(
 }
 
 fn completed_line(text: &str, range: Range<usize>, value: &str) -> (String, usize) {
-    let command = range.start == 0;
-    let append_space = command && text[range.end..].chars().next().is_none_or(|c| !c.is_whitespace());
-    let replacement = if append_space { format!("{value} ") } else { value.to_owned() };
+    let suffix = &text[range.end..];
+    let append_space = suffix.chars().next().is_none_or(|character| !character.is_whitespace());
+    let replacement = if append_space {
+        format!("{value} ")
+    } else {
+        value.to_owned()
+    };
     let mut result = String::with_capacity(text.len() + replacement.len());
     result.push_str(&text[..range.start]);
     result.push_str(&replacement);
     let caret = result.len();
-    result.push_str(&text[range.end..]);
+    result.push_str(suffix);
     (result, caret)
 }
 
@@ -425,8 +429,16 @@ mod tests {
     }
 
     #[test]
-    fn completing_command_adds_space_and_preserves_existing_arguments() {
-        assert_eq!(completed_line("/spa", 0..4, "/spawn"), ("/spawn ".to_owned(), 7));
+    fn tab_completion_always_advances_to_the_next_argument() {
+        assert_eq!(
+            completed_line("/spa", 0..4, "/spawn"),
+            ("/spawn ".to_owned(), 7)
+        );
+        assert_eq!(
+            completed_line("/locate hyd", 8..11, "hydrology"),
+            ("/locate hydrology ".to_owned(), 18)
+        );
+
         let text = "/spawn me tail";
         let expected = "/spawn asteria:meadow_slime tail";
         assert_eq!(
