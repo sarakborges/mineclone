@@ -1,0 +1,17 @@
+{
+  "id": "asteria:world_tree_leaf",
+  "name": { "english": "World Tree Leaf", "portuguese_brazil": "Folha da Árvore do Mundo", "spanish": "Hoja del Árbol del Mundo" },
+  "category": "foliage",
+  "textures": {
+    "top": [{ "texture": "textures/blocks/trees/world_tree/leaf.png", "dyable": false }],
+    "bottom": [{ "texture": "textures/blocks/trees/world_tree/leaf.png", "dyable": false }],
+    "left": [{ "texture": "textures/blocks/trees/world_tree/leaf.png", "dyable": false }],
+    "right": [{ "texture": "textures/blocks/trees/world_tree/leaf.png", "dyable": false }],
+    "front": [{ "texture": "textures/blocks/trees/world_tree/leaf.png", "dyable": false }],
+    "back": [{ "texture": "textures/blocks/trees/world_tree/leaf.png", "dyable": false }]
+  },
+  "rotateTexture": { "top": false, "bottom": false, "left": false, "right": false, "front": false, "back": false },
+  "alphaCutoff": 0.5,
+  "lightDampening": 1,
+  "castsShadow": false
+}
