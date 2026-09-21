@@ -38,8 +38,8 @@ pub(crate) use self::{
     fluids::authored_surface_fluid_id_for_position,
 };
 pub(crate) use self::structures::{
-    located_structure_origins_in_chunk, structure_candidate_anchor,
-    structure_candidate_member_hash, surface_layer_placements,
+    ResolvedSetPiece, located_structure_origins_in_chunk, resolve_set_pieces,
+    structure_candidate_anchor, structure_candidate_member_hash, surface_layer_placements,
 };
 use self::{
     caves::anchored_cave_region,
