@@ -13,7 +13,12 @@ use bevy::{
 
 use crate::{
     content::{
-        biome::BiomeRegistry, dimension::DimensionDefinition, structure::StructureRegistry,
+        biome::BiomeRegistry,
+        block::BlockRegistry,
+        dimension::DimensionDefinition,
+        fluid::FluidRegistry,
+        structure::StructureRegistry,
+        structure_set::StructureSetRegistry,
     },
     player::{PLAYER_EYE_HEIGHT, camera::GameplayCamera},
     voxel::{
@@ -434,9 +439,12 @@ fn chunk_is_inside_render_radius(center: IVec3, coord: IVec3, horizontal_radius:
 
 struct QueueRebuildContext<'a> {
     render_pool: &'a ChunkRenderPool,
+    blocks: &'a BlockRegistry,
+    fluids: &'a FluidRegistry,
     dimension: &'a DimensionDefinition,
     biomes: &'a BiomeRegistry,
     structures: &'a StructureRegistry,
+    structure_sets: &'a StructureSetRegistry,
     biome_field: &'a BiomeField,
     feature_fields: &'a WorldFeatureFields,
 }
@@ -490,9 +498,12 @@ pub(super) fn stream_chunks(
     {
         let rebuild_context = QueueRebuildContext {
             render_pool: &renderer.pool,
+            blocks: content.blocks(),
+            fluids: content.fluids(),
             dimension: generation.dimension(),
             biomes: &content.biomes,
             structures: &generation.structures,
+            structure_sets: &generation.structure_sets,
             biome_field: &content.biome_field,
             feature_fields: &generation.feature_fields,
         };
