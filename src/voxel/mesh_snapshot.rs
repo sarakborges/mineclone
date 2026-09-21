@@ -99,14 +99,28 @@ impl ChunkMeshDependencies {
     /// than invalidating and repeatedly rescheduling the initial async task.
     #[cfg(test)]
     pub(crate) fn needs_initial_catchup(&self, world: &VoxelWorld) -> bool {
-        self.needs_initial_catchup_with(world, |_| true)
+        !self
+            .initial_catchup_meshlets_with(world, |_| true)
+            .is_empty()
     }
 
     pub(crate) fn needs_initial_catchup_with(
         &self,
         world: &VoxelWorld,
-        mut neighbor_is_visible: impl FnMut(IVec3) -> bool,
+        neighbor_is_visible: impl FnMut(IVec3) -> bool,
     ) -> bool {
+        !self
+            .initial_catchup_meshlets_with(world, neighbor_is_visible)
+            .is_empty()
+    }
+
+    pub(crate) fn initial_catchup_meshlets_with(
+        &self,
+        world: &VoxelWorld,
+        mut neighbor_is_visible: impl FnMut(IVec3) -> bool,
+    ) -> ChunkMeshletMask {
+        let mut meshlets = ChunkMeshletMask::default();
+
         for offset_y in -1..=1 {
             for offset_z in -1..=1 {
                 for offset_x in -1..=1 {
@@ -116,21 +130,24 @@ impl ChunkMeshDependencies {
                     let y = (offset_y + 1) as usize;
                     let z = (offset_z + 1) as usize;
                     let x = (offset_x + 1) as usize;
-                    if !self.required_offsets[y][z][x] {
-                        continue;
-                    }
-                    if self.content_revisions[y][z][x].is_some()
+                    if !self.required_offsets[y][z][x]
+                        || self.content_revisions[y][z][x].is_some()
                     {
                         continue;
                     }
-                    let coord = self.center + IVec3::new(offset_x, offset_y, offset_z);
+
+                    let offset = IVec3::new(offset_x, offset_y, offset_z);
+                    let coord = self.center + offset;
                     if neighbor_is_visible(coord) && world.chunk(coord).is_some() {
-                        return true;
+                        meshlets = meshlets.union(
+                            ChunkMeshletMask::for_dependency_offset(offset),
+                        );
                     }
                 }
             }
         }
-        false
+
+        meshlets
     }
 }
 
