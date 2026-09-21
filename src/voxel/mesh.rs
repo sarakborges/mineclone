@@ -215,6 +215,7 @@ where
                             local_voxel,
                             tint,
                             block_srgb: source_block_srgb,
+                            texture_table,
                         };
                         emit_neighbor_openings(&surface, &mut buffers, face, neighbor);
                         continue;
