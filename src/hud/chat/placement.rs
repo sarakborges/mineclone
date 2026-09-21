@@ -13,10 +13,7 @@ use crate::{
         cell::VoxelCell, collision::collides_aabb, edit::VoxelTopologyRuntime,
         texture_rotation::TextureRotation, world::VoxelWorld,
     },
-    world::{
-        generation::{fit_structure_to_ground, surface_layer_placements},
-        WorldSeed,
-    },
+    world::{generation::surface_layer_placements, WorldSeed},
 };
 
 const DISPLACEMENT_MARGIN: i32 = 3;
@@ -146,19 +143,31 @@ fn displaced_eye(
     })
 }
 
-/// Inspect the *loaded* world instead of predicting an old procedural height:
-/// structures must fit the terrain currently present, including player edits.
-/// Return the first empty level directly above the highest solid voxel.
+/// Inspect the *loaded* world instead of procedural terrain. Manual /place
+/// deliberately ignores terrain type, slope and fluid restrictions; it only
+/// needs a loaded solid surface to anchor the structure above.
 fn loaded_surface_level(world: &VoxelWorld, position: IVec2) -> Option<i32> {
     let highest = world.highest_loaded_world_y_in_column(position.x, position.y)?;
-    let ground_y = (0..=highest).rev().find(|&y| {
-        world.is_solid(IVec3::new(position.x, y, position.y))
-    })?;
+    let ground_y = (0..=highest)
+        .rev()
+        .find(|&y| world.is_solid(IVec3::new(position.x, y, position.y)))?;
     let above = IVec3::new(position.x, ground_y + 1, position.y);
-    (world.is_loaded_at(above)
-        && !world.is_solid(above)
-        && world.fluid_at(above).is_none())
-    .then_some(ground_y + 1)
+    world.is_loaded_at(above).then_some(ground_y + 1)
+}
+
+fn manual_structure_hash(world_seed: u64, reference: &str, anchor: IVec2) -> u64 {
+    let mut hash = world_seed ^ 0xcbf29ce484222325;
+    for byte in reference
+        .as_bytes()
+        .iter()
+        .copied()
+        .chain(anchor.x.to_le_bytes())
+        .chain(anchor.y.to_le_bytes())
+    {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
 }
 
 impl ChatPlacementContext<'_, '_> {
@@ -220,31 +229,42 @@ impl ChatPlacementContext<'_, '_> {
 
     pub(super) fn place(
         &mut self,
-        id: &str,
+        reference: &str,
+        variation: Option<usize>,
         reserved: &[(Vec3, CreatureCollider)],
     ) -> String {
-        let Some(structure) = self.structures.get(id) else {
-            return format!("Unknown structure id: {id}");
+        let Some(variation_count) = self.structures.variation_count(reference) else {
+            return format!("Unknown structure id or group: {reference}");
         };
+        if let Some(variation) = variation {
+            if variation > variation_count {
+                return format!(
+                    "Unknown variation {variation} for {reference}; expected 1..={variation_count}."
+                );
+            }
+        }
+
         let Ok(mut player) = self.player.single_mut() else {
             return "Cannot place structure: player is unavailable.".to_owned();
         };
         let feet = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
         let anchor = feet.floor().as_ivec3().xz();
+        let hash = manual_structure_hash(self.seed.0, reference, anchor);
+        let structure = self
+            .structures
+            .select_for_manual_placement(reference, variation, hash)
+            .expect("validated manual structure reference must resolve");
         let voxels = structure.voxels();
         let world = self.runtime.world();
-        // Reuse the world generator's footprint and slope-fitting rule. Unlike
-        // worldgen's density-based ground voxel, the live-world sample returns
-        // the first empty level above terrain so existing blocks are preserved.
-        let Some(origin_y) = fit_structure_to_ground(
-            anchor,
-            structure.support_offsets(),
-            structure.min_y_offset(),
-            structure.restrictions.max_slope,
-            |position| loaded_surface_level(world, position),
-        ) else {
-            return format!("not enough space to place {id}");
+
+        // /place is an explicit manual override. It does not apply biome,
+        // proximity, Y-range, ground-block, dry-ground or slope restrictions.
+        // The structure's lowest layer is simply anchored to the highest loaded
+        // solid surface under the player.
+        let Some(surface_y) = loaded_surface_level(world, anchor) else {
+            return format!("no loaded ground available to place {reference}");
         };
+        let origin_y = surface_y - structure.min_y_offset();
         let origin = IVec3::new(anchor.x, origin_y, anchor.y);
         let min = voxels
             .iter()
@@ -253,12 +273,14 @@ impl ChatPlacementContext<'_, '_> {
             .iter()
             .fold(IVec3::splat(i32::MIN), |max, voxel| max.max(origin + voxel.offset));
         let blocked = (min.as_vec3(), (max + IVec3::ONE).as_vec3());
-        let all_loaded_and_clear = voxels.iter().all(|voxel| {
+
+        // Manual placement may replace terrain and fluids, but it still refuses
+        // to touch unloaded chunks or place blocks through creatures requested
+        // in this frame / already alive in the world.
+        let all_loaded_and_entity_clear = voxels.iter().all(|voxel| {
             let position = origin + voxel.offset;
             let voxel_bounds = (position.as_vec3(), position.as_vec3() + Vec3::ONE);
             world.is_loaded_at(position)
-                && !world.is_solid(position)
-                && world.fluid_at(position).is_none()
                 && !self.existing.iter().any(|(other, collider)| {
                     overlaps(voxel_bounds, collider.bounds(other.translation))
                 })
@@ -266,13 +288,10 @@ impl ChatPlacementContext<'_, '_> {
                     overlaps(voxel_bounds, collider.bounds(*other))
                 })
         });
-        // Every bottom-layer structure voxel must be supported. On a slope
-        // with no safe flush fit we reject rather than leave floating blocks.
-        let has_foundation = voxels.iter().filter(|voxel| origin.y + voxel.offset.y == min.y)
-            .all(|voxel| world.is_solid(origin + voxel.offset - IVec3::Y));
-        if !all_loaded_and_clear || !has_foundation {
-            return format!("not enough space to place {id}");
+        if !all_loaded_and_entity_clear {
+            return format!("not enough loaded space to place {reference}");
         }
+
         let destination = if !overlaps(player_bounds(player.translation), blocked) {
             Some(player.translation)
         } else {
@@ -281,33 +300,30 @@ impl ChatPlacementContext<'_, '_> {
             )
         };
         let Some(destination) = destination else {
-            return format!("not enough space to place {id}");
+            return format!("not enough safe space to place {reference}");
         };
 
-        // Every target cell is vacant, dry and loaded before the first edit.
-        // Mutations cannot return None under this preflight, so no partial
-        // structure can be silently reported as a successful placement.
         for voxel in voxels {
             let position = origin + voxel.offset;
             let block = self.blocks.get(voxel.block_id).expect("validated structure block");
             let rotation = TextureRotation::for_position(position, block.rotate_texture.any());
             let cell = VoxelCell::oriented(voxel.block_id, rotation, voxel.orientation);
-            self.runtime
-                .set_block(position, Some(cell))
-                .expect("preflight guarantees a loaded empty structure voxel");
+            let _ = self.runtime.set_block(position, Some(cell));
             for (face, layer) in surface_layer_placements(
                 self.seed.0,
                 structure,
                 voxel,
                 position,
             ) {
-                self.runtime
-                    .add_layer(position, face, layer)
-                    .expect("placed structure layer must attach to its freshly placed support");
+                let _ = self.runtime.add_layer(position, face, layer);
             }
         }
         player.translation = destination;
-        format!("Placed {} ({id}).", structure.name.text(self.language.get()))
+        format!(
+            "Placed {} ({}).",
+            structure.name.text(self.language.get()),
+            structure.id
+        )
     }
 }
 
@@ -319,5 +335,18 @@ mod tests {
     fn bounds_overlap_requires_positive_intersection() {
         assert!(!overlaps((Vec3::ZERO, Vec3::ONE), (Vec3::X, Vec3::X + Vec3::ONE)));
         assert!(overlaps((Vec3::ZERO, Vec3::ONE), (Vec3::splat(0.5), Vec3::splat(1.5))));
+    }
+
+    #[test]
+    fn manual_structure_hash_is_stable_and_position_sensitive() {
+        let first = manual_structure_hash(7, "asteria:tree_oak", IVec2::new(3, 4));
+        assert_eq!(
+            first,
+            manual_structure_hash(7, "asteria:tree_oak", IVec2::new(3, 4))
+        );
+        assert_ne!(
+            first,
+            manual_structure_hash(7, "asteria:tree_oak", IVec2::new(4, 4))
+        );
     }
 }
