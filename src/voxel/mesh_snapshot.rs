@@ -20,10 +20,21 @@ type NeighborChunks = [[[Option<VoxelChunk>; 3]; 3]; 3];
 
 #[derive(Clone, Copy, Default)]
 struct ShellSample {
-    cell: Option<VoxelCell>,
+    block_index: u16,
     fluid: Option<FluidCell>,
     light: VoxelLight,
     loaded: bool,
+}
+
+struct ShellStorage {
+    samples: Box<[ShellSample]>,
+    block_palette: Vec<VoxelCell>,
+}
+
+impl ShellStorage {
+    fn cell(&self, block_index: u16) -> Option<VoxelCell> {
+        (block_index != 0).then(|| self.block_palette[block_index as usize - 1])
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -95,7 +106,7 @@ pub(crate) struct ChunkMeshSnapshot {
     chunk_origin: IVec3,
     chunk: VoxelChunk,
     neighbor_chunks: Option<Box<NeighborChunks>>,
-    shell: Option<Box<[ShellSample]>>,
+    shell: Option<ShellStorage>,
     dependencies: ChunkMeshDependencies,
 }
 
@@ -231,19 +242,22 @@ impl VoxelRead for ChunkMeshSnapshot {
         }
 
         if let Some(shell) = &self.shell {
-            let sample = shell[self.shell_index(world_position)?];
-            return sample
-                .loaded
-                .then_some((sample.cell, sample.fluid, sample.light));
+            let sample = shell.samples[self.shell_index(world_position)?];
+            return sample.loaded.then_some((
+                shell.cell(sample.block_index),
+                sample.fluid,
+                sample.light,
+            ));
         }
 
         self.neighbor_sample(world_position)
     }
 }
 
-fn capture_shell(neighbor_chunks: &NeighborChunks) -> Box<[ShellSample]> {
+fn capture_shell(neighbor_chunks: &NeighborChunks) -> ShellStorage {
     let last = SNAPSHOT_SIDE - 1;
-    let capture_shell_voxel = |x: usize, y: usize, z: usize| {
+    let mut block_palette = Vec::<VoxelCell>::new();
+    let mut capture_shell_voxel = |x: usize, y: usize, z: usize| {
         let (chunk_x, local_x) = shell_axis(x);
         let (chunk_y, local_y) = shell_axis(y);
         let (chunk_z, local_z) = shell_axis(z);
@@ -255,39 +269,53 @@ fn capture_shell(neighbor_chunks: &NeighborChunks) -> Box<[ShellSample]> {
             return ShellSample::default();
         };
 
+        let block_index = cell.map_or(0, |cell| {
+            let index = block_palette
+                .iter()
+                .position(|candidate| *candidate == cell)
+                .unwrap_or_else(|| {
+                    block_palette.push(cell);
+                    block_palette.len() - 1
+                });
+            u16::try_from(index + 1).expect("mesh shell block palette cannot exceed u16")
+        });
+
         ShellSample {
-            cell,
+            block_index,
             fluid,
             light,
             loaded: true,
         }
     };
-    let mut shell = Vec::with_capacity(SHELL_VOLUME);
+    let mut samples = Vec::with_capacity(SHELL_VOLUME);
 
     for z in 0..SNAPSHOT_SIDE {
         for x in 0..SNAPSHOT_SIDE {
-            shell.push(capture_shell_voxel(x, 0, z));
+            samples.push(capture_shell_voxel(x, 0, z));
         }
     }
     for z in 0..SNAPSHOT_SIDE {
         for x in 0..SNAPSHOT_SIDE {
-            shell.push(capture_shell_voxel(x, last, z));
+            samples.push(capture_shell_voxel(x, last, z));
         }
     }
     for y in 1..last {
         for x in 0..SNAPSHOT_SIDE {
-            shell.push(capture_shell_voxel(x, y, 0));
+            samples.push(capture_shell_voxel(x, y, 0));
         }
         for x in 0..SNAPSHOT_SIDE {
-            shell.push(capture_shell_voxel(x, y, last));
+            samples.push(capture_shell_voxel(x, y, last));
         }
         for z in 1..last {
-            shell.push(capture_shell_voxel(0, y, z));
-            shell.push(capture_shell_voxel(last, y, z));
+            samples.push(capture_shell_voxel(0, y, z));
+            samples.push(capture_shell_voxel(last, y, z));
         }
     }
-    debug_assert_eq!(shell.len(), SHELL_VOLUME);
-    shell.into_boxed_slice()
+    debug_assert_eq!(samples.len(), SHELL_VOLUME);
+    ShellStorage {
+        samples: samples.into_boxed_slice(),
+        block_palette,
+    }
 }
 
 fn shell_axis(coordinate: usize) -> (usize, i32) {
