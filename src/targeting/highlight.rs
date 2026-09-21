@@ -13,7 +13,7 @@ use crate::{
     app::game_state::GameState,
     content::{
         block::BlockRegistry,
-        builtin_ids::{BRUSH_TOOL_ID, CHISEL_TOOL_ID, DYED_PROPERTY_ID},
+        builtin_ids::{BRUSH_TOOL_ID, CHISEL_TOOL_ID, DYED_PROPERTY_ID, STRUCTURE_TOOL_ID},
         secondary_property::SecondaryPropertyRegistry,
     },
     player::camera::GameplayCamera,
@@ -257,6 +257,22 @@ fn update_highlight(
         view.highlight.0.scale = Vec3::ONE;
     }
     let selected_item = input.scene.selected_item();
+
+    if selected_item == Some(STRUCTURE_TOOL_ID) {
+        hide_if_visible(&mut view.brush_ghost.1);
+        let Some(voxel) =
+            placement_voxel(hit, input.scene.world(), input.scene.player_translation())
+        else {
+            hide_if_visible(&mut view.highlight.1);
+            return;
+        };
+        let translation = voxel.as_vec3() + Vec3::splat(0.5);
+        if view.highlight.0.translation != translation {
+            view.highlight.0.translation = translation;
+        }
+        show_if_hidden(&mut view.highlight.1);
+        return;
+    }
     if selected_item == Some(BRUSH_TOOL_ID) {
         hide_if_visible(&mut view.highlight.1);
 
