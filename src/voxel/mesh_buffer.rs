@@ -46,6 +46,8 @@ impl VoxelMeshBuffer {
             return None;
         }
 
+        let indices = compact_indices(self.positions.len(), self.indices);
+
         Some(
             Mesh::new(
                 PrimitiveTopology::TriangleList,
@@ -59,7 +61,7 @@ impl VoxelMeshBuffer {
             // omitted: voxel materials do not use normal maps and no secondary
             // texture coordinates are required by the custom shader.
             .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors)
-            .with_inserted_indices(Indices::U32(self.indices)),
+            .with_inserted_indices(indices),
         )
     }
 }
@@ -93,4 +95,12 @@ fn encode_vertex_payload(
         lighting[3].clamp(0.0, 1.0),
         packed_sky_material as f32,
     ]
+}
+
+fn compact_indices(vertex_count: usize, indices: Vec<u32>) -> Indices {
+    if vertex_count <= usize::from(u16::MAX) + 1 {
+        Indices::U16(indices.into_iter().map(|index| index as u16).collect())
+    } else {
+        Indices::U32(indices)
+    }
 }
