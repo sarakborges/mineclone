@@ -174,40 +174,6 @@ impl VoxelChunkInitialBlocksMut<'_> {
     }
 }
 
-pub(crate) struct VoxelChunkBlocksMut<'a> {
-    blocks: &'a mut BlockStorage,
-    fluids: &'a [Option<FluidCell>],
-    layers: &'a mut HashMap<u16, Vec<AttachedLayer>>,
-    block_count: &'a mut usize,
-    layer_count: &'a mut usize,
-    fluid_frontier_sources: &'a mut [u64; FLUID_FRONTIER_WORDS],
-    boundary_content_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
-}
-
-impl VoxelChunkBlocksMut<'_> {
-    pub(crate) fn set_block(
-        &mut self,
-        x: usize,
-        y: usize,
-        z: usize,
-        block: Option<VoxelCell>,
-    ) {
-        set_block_in_storage(
-            &mut *self.blocks,
-            self.fluids,
-            &mut *self.layers,
-            &mut *self.block_count,
-            &mut *self.layer_count,
-            &mut *self.fluid_frontier_sources,
-            &mut *self.boundary_content_counts,
-            x,
-            y,
-            z,
-            block,
-        );
-    }
-}
-
 pub(crate) struct VoxelChunkFluidsMut<'a> {
     blocks: &'a BlockStorage,
     fluids: &'a mut [Option<FluidCell>],
@@ -387,25 +353,6 @@ impl VoxelChunk {
         let mut content = VoxelChunkInitialBlocksMut {
             blocks,
             block_count: &mut self.block_count,
-            boundary_content_counts: &mut self.boundary_content_counts,
-        };
-        edit(&mut content)
-    }
-
-    pub(crate) fn edit_blocks<R>(
-        &mut self,
-        edit: impl FnOnce(&mut VoxelChunkBlocksMut<'_>) -> R,
-    ) -> R {
-        let blocks = Arc::make_mut(&mut self.blocks);
-        let layers = Arc::make_mut(&mut self.layers);
-        let fluid_frontier_sources = Arc::make_mut(&mut self.fluid_frontier_sources);
-        let mut content = VoxelChunkBlocksMut {
-            blocks,
-            fluids: self.fluids.as_ref(),
-            layers,
-            block_count: &mut self.block_count,
-            layer_count: &mut self.layer_count,
-            fluid_frontier_sources,
             boundary_content_counts: &mut self.boundary_content_counts,
         };
         edit(&mut content)
