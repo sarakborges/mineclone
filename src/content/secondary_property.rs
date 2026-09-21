@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bevy::{platform::collections::HashMap, prelude::*};
 use serde::Deserialize;
 
@@ -15,7 +17,7 @@ pub struct SecondaryPropertyDefinition {
 
 #[derive(Resource, Default, Clone)]
 pub struct SecondaryPropertyRegistry {
-    definitions: HashMap<String, DefinitionMap<SecondaryPropertyDefinition>>,
+    definitions: Arc<HashMap<String, DefinitionMap<SecondaryPropertyDefinition>>>,
 }
 
 impl SecondaryPropertyRegistry {
@@ -38,7 +40,7 @@ impl SecondaryPropertyRegistry {
             definition.id
         );
 
-        self.definitions
+        Arc::make_mut(&mut self.definitions)
             .entry(property)
             .or_default()
             .insert(definition.id.clone(), definition);
