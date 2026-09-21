@@ -62,6 +62,39 @@ pub(super) struct ChunkUnloadRuntime<'w> {
     remesh_tasks: ResMut<'w, ChunkRemeshTasks>,
 }
 
+pub(super) fn retire_distant_chunk_meshes(
+    mut renderer: ChunkRenderer,
+    streaming: Res<ChunkStreamingState>,
+    world: Res<VoxelWorld>,
+    mut remesh_queue: ResMut<ChunkRemeshQueue>,
+    mut remesh_tasks: ResMut<ChunkRemeshTasks>,
+    mut retired: Local<Vec<IVec3>>,
+) {
+    retired.clear();
+    retired.extend(
+        renderer
+            .pool
+            .active_coords()
+            .filter(|coord| !streaming.retains_render_mesh(*coord)),
+    );
+    if retired.is_empty() {
+        return;
+    }
+
+    retired.sort_unstable_by_key(|coord| (coord.y, coord.z, coord.x));
+    for coord in retired.drain(..) {
+        retire_chunk_render_allocation(&mut renderer.commands, &mut renderer.pool, coord);
+        remesh_queue.remove(coord);
+        remesh_tasks.remove_lighting_revision(coord);
+        enqueue_retired_render_halo_remeshes(
+            coord,
+            &world,
+            &renderer.pool,
+            &mut remesh_queue,
+        );
+    }
+}
+
 pub(super) fn unload_chunk_meshes(
     player: Single<&Transform, With<GameplayCamera>>,
     render_distance: Res<RenderDistanceSettings>,
@@ -128,7 +161,7 @@ pub(super) fn unload_chunk_meshes(
         .enqueue_chunk_unloads(unloaded.as_slice());
 
     for coord in unloaded.drain(..) {
-        enqueue_unloaded_halo_remeshes(
+        enqueue_retired_render_halo_remeshes(
             coord,
             &runtime.world,
             &renderer.pool,
@@ -137,11 +170,12 @@ pub(super) fn unload_chunk_meshes(
     }
 }
 
-// Vertex lighting/AO and fluid corner heights use all 26 neighbors, not just
-// the six cardinals. An unloaded halo must invalidate both mesh families; a
-// lighting relaxation is not guaranteed to change a voxel and trigger remesh.
-// Check only rendered neighbors with actual content on each toward-source face.
-fn enqueue_unloaded_halo_remeshes(
+// Vertex lighting/AO and fluid corner heights use all 26 rendered neighbors,
+// not just the six cardinals. Retiring a render allocation must invalidate
+// neighboring mesh families even when the source chunk remains resident as
+// preload/cache data. Check only rendered neighbors with actual content on each
+// toward-source face.
+fn enqueue_retired_render_halo_remeshes(
     coord: IVec3,
     world: &VoxelWorld,
     render_pool: &ChunkRenderPool,
