@@ -12,6 +12,7 @@ use crate::{
 
 use super::{
     biome_field::BiomeField,
+    chunk_async_work::ChunkAsyncWorkLimiter,
     chunk_rendering::{BuiltChunkMesh, ChunkMeshBuildContext, build_chunk_render_meshes},
     chunk_system_params::ChunkContent,
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
@@ -90,10 +91,18 @@ impl ChunkMeshTasks {
         self.pending.contains(coord)
     }
 
-    pub(crate) fn schedule(&mut self, coord: IVec3, world: ChunkMeshSnapshot) -> bool {
+    pub(crate) fn schedule(
+        &mut self,
+        coord: IVec3,
+        world: ChunkMeshSnapshot,
+        limiter: &ChunkAsyncWorkLimiter,
+    ) -> bool {
         if self.pending.len() >= MAX_MESH_TASKS_IN_FLIGHT || self.pending.contains(coord) {
             return false;
         }
+        let Some(permit) = limiter.try_acquire() else {
+            return false;
+        };
 
         let snapshot = self
             .snapshot
@@ -103,6 +112,7 @@ impl ChunkMeshTasks {
         let revision = self.revision;
         let dependencies = world.dependencies();
         let task = AsyncComputeTaskPool::get().spawn(async move {
+            let _permit = permit;
             let world = world.materialize_shell();
             let context = snapshot.context(&world);
             ChunkMeshTaskOutput {
