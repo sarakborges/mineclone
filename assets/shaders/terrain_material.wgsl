@@ -161,10 +161,14 @@ fn fragment(
 ) -> FragmentOutput {
     var pbr_input = pbr_input_from_standard_material(in, is_front);
 
+    // Greedy terrain quads carry UVs larger than 1 so each merged voxel face
+    // keeps the original per-block texture scale even when the sampler itself
+    // is clamped.
+    let tiled_uv = fract(in.uv);
     let texel = textureSample(
         pbr_bindings::base_color_texture,
         pbr_bindings::base_color_sampler,
-        in.uv,
+        tiled_uv,
     );
 #ifdef VERTEX_TANGENTS
     // Tint is constant per voxel quad, so the tangent direction+magnitude
