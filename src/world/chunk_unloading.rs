@@ -45,7 +45,7 @@ impl ChunkUnloadState {
 
         let mut pending = world
             .loaded_chunk_coords()
-            .filter(|coord| !runtime.streaming.keeps_loaded(*coord))
+            .filter(|coord| !streaming.keeps_loaded(*coord))
             .collect::<Vec<_>>();
         pending.sort_by_key(|coord| -(*coord - center).length_squared());
         for coord in pending {
@@ -100,9 +100,9 @@ pub(super) fn retire_distant_chunk_meshes(
         remesh_tasks.remove_lighting_revision(coord);
         enqueue_retired_render_halo_remeshes(
             coord,
-            &runtime.world,
+            &world,
             &renderer.pool,
-            &mut runtime.remesh_queue,
+            &mut remesh_queue,
         );
     }
 }
@@ -228,9 +228,9 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
         runtime.remesh_tasks.remove_lighting_revision(candidate.coord);
         enqueue_retired_render_halo_remeshes(
             candidate.coord,
-            &world,
+            &runtime.world,
             &renderer.pool,
-            &mut remesh_queue,
+            &mut runtime.remesh_queue,
         );
 
         resident_bytes = resident_bytes.saturating_sub(candidate.bytes);
