@@ -218,7 +218,7 @@ fn natural_spawn_creatures(
     language: Res<ActiveLanguage>,
     asset_server: Res<AssetServer>,
     player: Single<&Transform, With<GameplayCamera>>,
-    creatures: Query<(&CreatureInstance, &Transform)>,
+    creatures: Query<(&CreatureInstance, &Transform, &EntityHealth)>,
     current_dimension: Res<CurrentDimension>,
     mut entity_counts: ResMut<DimensionEntityCounts>,
     dimensions: Res<crate::content::dimension::DimensionRegistry>,
@@ -232,7 +232,12 @@ fn natural_spawn_creatures(
     state.0 = NATURAL_SPAWN_INTERVAL;
     if state.1 == 0 { state.1 = player.translation.x.to_bits() ^ player.translation.z.to_bits().rotate_left(13) ^ 0x9E37_79B9; }
 
-    entity_counts.rebuild(creatures.iter().map(|(instance, _)| instance));
+    entity_counts.rebuild(
+        creatures
+            .iter()
+            .filter(|(_, _, health)| !health.is_dead())
+            .map(|(instance, _, _)| instance),
+    );
     let Some(dimension_definition) = dimensions.get(&current_dimension.id) else { return; };
     let Some(biome_definition) = biomes.get(&biome.id) else { return; };
     let candidates: Vec<_> = biome_definition
@@ -265,7 +270,13 @@ fn natural_spawn_creatures(
         let light = world.light_at(feet.floor().as_ivec3());
         let light_level = light.sky().max(light.block());
         if light_level < rule.light_min || light_level > rule.light_max { continue; }
-        if creatures.iter().any(|(instance, transform)| instance.definition_id == rule.creature && transform.translation.distance(feet) < rule.spacing) { continue; }
+        if creatures.iter().any(|(instance, transform, health)| {
+            !health.is_dead()
+                && instance.definition_id == rule.creature
+                && transform.translation.distance(feet) < rule.spacing
+        }) {
+            continue;
+        }
         if !world.is_loaded_at(feet.floor().as_ivec3()) || world.fluid_at(feet.floor().as_ivec3()).is_some() { continue; }
         let _ = spawn_creature_at(&mut commands, &definitions, &asset_server, language.get(), &rule.creature, feet);
         break;
