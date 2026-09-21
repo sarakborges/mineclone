@@ -1,6 +1,9 @@
 #import bevy_pbr::{
     pbr_bindings,
-    pbr_fragment::pbr_input_from_standard_material,
+    pbr_fragment::{
+        pbr_input_from_standard_material,
+        pbr_input_from_vertex_output,
+    },
     pbr_functions::alpha_discard,
 }
 
@@ -174,7 +177,19 @@ fn fragment(
     in: VertexOutput,
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
-    var pbr_input = pbr_input_from_standard_material(in, is_front);
+    let texture_array_enabled =
+        terrain_material_extension.texture_array_enabled > 0.5;
+
+    // Array terrain does not use StandardMaterial's texture/PBR stack.
+    // Prepare only view/normal state plus the fields used by alpha discard and fog.
+    var pbr_input = pbr_input_from_vertex_output(in, is_front, false);
+    if texture_array_enabled {
+        pbr_input.material.flags = pbr_bindings::material.flags;
+        pbr_input.material.base_color = pbr_bindings::material.base_color;
+        pbr_input.material.alpha_cutoff = pbr_bindings::material.alpha_cutoff;
+    } else {
+        pbr_input = pbr_input_from_standard_material(in, is_front);
+    }
 
     // Greedy terrain quads carry UVs larger than 1 so each merged voxel face
     // keeps the original per-block texture scale. The integer UV0.x region also
@@ -197,7 +212,6 @@ fn fragment(
     var base_tint_enabled = terrain_material_extension.base_tint_enabled > 0.5;
     var overlay_enabled = terrain_material_extension.overlay_enabled > 0.5;
     var overlay_tint_enabled = terrain_material_extension.overlay_tint_enabled > 0.5;
-    let texture_array_enabled = terrain_material_extension.texture_array_enabled > 0.5;
     var array_overlay_index = 511u;
 
     if texture_array_enabled {
