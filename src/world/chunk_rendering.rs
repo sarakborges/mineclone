@@ -10,6 +10,7 @@ use crate::{
         biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry,
         layer::LayerRegistry, secondary_property::SecondaryPropertyRegistry,
     },
+    rendering::block_texture::TerrainTextureTable,
     voxel::{
         chunk::VoxelChunk, fluid_mesh::ChunkFluidMesh, meshlet::ChunkMeshletMask,
         read::VoxelRead, world::VoxelWorld,
@@ -62,6 +63,7 @@ pub(crate) struct ChunkMeshBuildContext<'a, W: VoxelRead + ?Sized> {
     pub(crate) biomes: &'a BiomeRegistry,
     pub(crate) secondary_properties: &'a SecondaryPropertyRegistry,
     pub(crate) biome_field: &'a BiomeField,
+    pub(crate) texture_table: &'a TerrainTextureTable,
 }
 
 pub(crate) struct ChunkRenderContext<'a> {
@@ -86,6 +88,7 @@ impl ChunkRenderContext<'_> {
             biomes: self.biomes,
             secondary_properties: self.secondary_properties,
             biome_field: self.biome_field,
+            texture_table: self.terrain_materials.texture_table(),
         }
     }
 }
