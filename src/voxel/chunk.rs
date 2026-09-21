@@ -113,9 +113,21 @@ fn shared_empty_fluids() -> Arc<[Option<FluidCell>]> {
     Arc::clone(EMPTY_FLUIDS.get_or_init(|| Arc::from(vec![None; CHUNK_VOLUME])))
 }
 
+fn shared_uniform_sky_light(sky: u8) -> Arc<[VoxelLight]> {
+    static UNIFORM_LIGHT: OnceLock<[Arc<[VoxelLight]>; 16]> = OnceLock::new();
+    let levels = UNIFORM_LIGHT.get_or_init(|| {
+        std::array::from_fn(|level| {
+            Arc::from(vec![
+                VoxelLight::new_hsi(level as u8, BlockLight::DARK);
+                CHUNK_VOLUME
+            ])
+        })
+    });
+    Arc::clone(&levels[usize::from(sky.min(VoxelLight::MAX_LEVEL))])
+}
+
 fn shared_dark_light() -> Arc<[VoxelLight]> {
-    static DARK_LIGHT: OnceLock<Arc<[VoxelLight]>> = OnceLock::new();
-    Arc::clone(DARK_LIGHT.get_or_init(|| Arc::from(vec![VoxelLight::DARK; CHUNK_VOLUME])))
+    shared_uniform_sky_light(0)
 }
 
 fn shared_empty_fluid_bits() -> Arc<[u64; FLUID_FRONTIER_WORDS]> {
@@ -488,8 +500,15 @@ impl VoxelChunk {
 
     pub(crate) fn rebuild_empty_light_columns(&mut self, sky_by_column: &[u8; CHUNK_AREA]) {
         debug_assert!(self.is_empty(), "empty light rebuild requires an empty chunk");
-        let lights = Arc::make_mut(&mut self.light);
 
+        if let Some(&sky) = sky_by_column.first()
+            && sky_by_column.iter().all(|&candidate| candidate == sky)
+        {
+            self.light = shared_uniform_sky_light(sky);
+            return;
+        }
+
+        let lights = Arc::make_mut(&mut self.light);
         for (light, &sky) in lights[..CHUNK_AREA].iter_mut().zip(sky_by_column) {
             *light = VoxelLight::new_hsi(sky, BlockLight::DARK);
         }
@@ -499,7 +518,7 @@ impl VoxelChunk {
     }
 
     pub(crate) fn clear_light(&mut self) {
-        Arc::make_mut(&mut self.light).fill(VoxelLight::DARK);
+        self.light = shared_dark_light();
     }
 }
 
