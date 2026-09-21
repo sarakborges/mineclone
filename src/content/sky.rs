@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 use serde::Deserialize;
 
-use super::{color::Hsi, day_night_phase::DayNightPhase, registry::DefinitionMap};
+use super::{
+    asset_path::is_safe_relative_asset_path, color::Hsi, day_night_phase::DayNightPhase,
+    registry::DefinitionMap,
+};
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,6 +47,12 @@ impl SkyRegistry {
 }
 
 fn validate_celestial_body(sky_id: &str, body_name: &str, body: &CelestialBodyDefinition) {
+    if let Some(texture) = body.texture.as_deref() {
+        assert!(
+            is_safe_relative_asset_path(texture),
+            "sky {sky_id} {body_name} texture must be a safe relative asset path: {texture}"
+        );
+    }
     assert!(
         body.size.is_finite() && body.size > 0.0,
         "sky {sky_id} {body_name} size must be positive and finite"
