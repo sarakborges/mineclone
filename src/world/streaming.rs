@@ -114,6 +114,7 @@ pub(super) struct ChunkStreamingState {
     surface_ranges: HashMap<IVec2, (i32, i32)>,
     initial_lighting_seeded: HashSet<IVec3>,
     initial_mesh_seed_catchup: HashSet<IVec3>,
+    mesh_pressure_evicted: HashSet<IVec3>,
     fluid_settling: GeneratedFluidSettling,
     generation_wave_targets: HashSet<IVec3>,
     generation_wave_pending: DeduplicatedQueue<IVec3>,
@@ -335,9 +336,29 @@ impl ChunkStreamingState {
             !self.resident_generated_chunk_is_unpublished(coord),
             "generated chunk cannot become ready before fluid settling completes: {coord:?}"
         );
+        if self.mesh_pressure_evicted.contains(&coord) {
+            return;
+        }
         if self.keeps_loaded(coord) && !self.ready.contains(coord) {
             self.ready.enqueue(coord);
         }
+    }
+
+    pub(super) fn suppress_mesh_for_pressure(&mut self, coord: IVec3) {
+        self.ready.remove(coord);
+        self.mesh_pressure_evicted.insert(coord);
+    }
+
+    pub(super) fn recover_mesh_after_pressure(&mut self, coord: IVec3) -> bool {
+        if !self.mesh_pressure_evicted.remove(&coord) || !self.keeps_loaded(coord) {
+            return false;
+        }
+        self.mark_ready(coord);
+        true
+    }
+
+    pub(super) fn mesh_pressure_evicted_coords(&self) -> impl Iterator<Item = IVec3> + '_ {
+        self.mesh_pressure_evicted.iter().copied()
     }
 
     fn pop_ready(&mut self) -> Option<IVec3> {
@@ -389,13 +410,14 @@ impl ChunkStreamingState {
     }
 
 
-    pub(super) fn diagnostic_counts(&self) -> (usize, usize, usize, usize, usize) {
+    pub(super) fn diagnostic_counts(&self) -> (usize, usize, usize, usize, usize, usize) {
         (
             self.pending.len(),
             self.ready.len(),
             self.generation_wave_pending.len(),
             self.generation_wave_targets.len(),
             self.staged_generated_chunks.len(),
+            self.mesh_pressure_evicted.len(),
         )
     }
 
