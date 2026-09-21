@@ -37,6 +37,26 @@ impl<T> ChunkTaskQueue<T> {
         self.pending.contains_key(&coord)
     }
 
+    pub(crate) fn cancel(&mut self, coord: IVec3) -> bool {
+        self.pending.remove(&coord).is_some()
+    }
+
+    pub(crate) fn cancel_where(
+        &mut self,
+        mut predicate: impl FnMut(IVec3) -> bool,
+    ) -> Vec<IVec3> {
+        let coords = self
+            .pending
+            .keys()
+            .copied()
+            .filter(|coord| predicate(*coord))
+            .collect::<Vec<_>>();
+        for coord in &coords {
+            self.pending.remove(coord);
+        }
+        coords
+    }
+
     pub(crate) fn best_coord_by_key<K: Ord>(
         &self,
         mut key: impl FnMut(IVec3) -> K,
