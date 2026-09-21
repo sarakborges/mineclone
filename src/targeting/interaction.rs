@@ -104,6 +104,9 @@ fn edit_targeted_block(
             return;
         };
         if let Ok((mut health, mut animation, mut motion, creature_transform)) = creature_health.get_mut(entity) {
+            if health.is_dead() {
+                return;
+            }
             let dead = health.damage(attack.damage);
             let direction = creature_transform.translation - player_transform.translation;
             for effect in &attack.effects {
