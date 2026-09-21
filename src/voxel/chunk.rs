@@ -31,13 +31,13 @@ const NEGATIVE_Z_FACE: usize = 4;
 const POSITIVE_Z_FACE: usize = 5;
 
 #[derive(Clone)]
-struct BlockStorage {
-    palette: Vec<VoxelCell>,
+struct PaletteStorage<T> {
+    palette: Vec<T>,
     usage: Vec<u16>,
     indices: Box<[u16]>,
 }
 
-impl Default for BlockStorage {
+impl<T> Default for PaletteStorage<T> {
     fn default() -> Self {
         Self {
             palette: Vec::new(),
@@ -47,39 +47,39 @@ impl Default for BlockStorage {
     }
 }
 
-impl BlockStorage {
-    fn get(&self, voxel_index: usize) -> Option<VoxelCell> {
+impl<T: Copy + Eq> PaletteStorage<T> {
+    fn get(&self, voxel_index: usize) -> Option<T> {
         let palette_index = self.indices[voxel_index];
         (palette_index != 0).then(|| self.palette[palette_index as usize - 1])
     }
 
-    fn set(&mut self, voxel_index: usize, cell: Option<VoxelCell>) {
+    fn set(&mut self, voxel_index: usize, value: Option<T>) {
         let previous = self.indices[voxel_index];
-        let next = match cell {
+        let next = match value {
             None => 0,
-            Some(cell) => {
+            Some(value) => {
                 let palette_index = self
                     .palette
                     .iter()
-                    .position(|candidate| *candidate == cell)
+                    .position(|candidate| *candidate == value)
                     .or_else(|| self.usage.iter().position(|&usage| usage == 0));
 
                 let palette_index = match palette_index {
                     Some(index) => {
                         if self.usage[index] == 0 {
-                            self.palette[index] = cell;
+                            self.palette[index] = value;
                         }
                         index
                     }
                     None => {
-                        self.palette.push(cell);
+                        self.palette.push(value);
                         self.usage.push(0);
                         self.palette.len() - 1
                     }
                 };
 
                 u16::try_from(palette_index + 1)
-                    .expect("chunk block palette cannot exceed u16 index space")
+                    .expect("chunk palette cannot exceed u16 index space")
             }
         };
 
@@ -91,26 +91,29 @@ impl BlockStorage {
             let usage = &mut self.usage[previous as usize - 1];
             *usage = usage
                 .checked_sub(1)
-                .expect("chunk block palette usage cannot underflow");
+                .expect("chunk palette usage cannot underflow");
         }
         if next != 0 {
             let usage = &mut self.usage[next as usize - 1];
             *usage = usage
                 .checked_add(1)
-                .expect("chunk block palette usage cannot overflow");
+                .expect("chunk palette usage cannot overflow");
         }
         self.indices[voxel_index] = next;
     }
 }
+
+type BlockStorage = PaletteStorage<VoxelCell>;
+type FluidStorage = PaletteStorage<FluidCell>;
 
 fn shared_empty_blocks() -> Arc<BlockStorage> {
     static EMPTY_BLOCKS: OnceLock<Arc<BlockStorage>> = OnceLock::new();
     Arc::clone(EMPTY_BLOCKS.get_or_init(|| Arc::new(BlockStorage::default())))
 }
 
-fn shared_empty_fluids() -> Arc<[Option<FluidCell>]> {
-    static EMPTY_FLUIDS: OnceLock<Arc<[Option<FluidCell>]>> = OnceLock::new();
-    Arc::clone(EMPTY_FLUIDS.get_or_init(|| Arc::from(vec![None; CHUNK_VOLUME])))
+fn shared_empty_fluids() -> Arc<FluidStorage> {
+    static EMPTY_FLUIDS: OnceLock<Arc<FluidStorage>> = OnceLock::new();
+    Arc::clone(EMPTY_FLUIDS.get_or_init(|| Arc::new(FluidStorage::default())))
 }
 
 fn shared_uniform_sky_light(sky: u8) -> Arc<[VoxelLight]> {
@@ -143,7 +146,7 @@ fn shared_empty_layers() -> Arc<HashMap<u16, Vec<AttachedLayer>>> {
 #[derive(Component, Clone)]
 pub struct VoxelChunk {
     blocks: Arc<BlockStorage>,
-    fluids: Arc<[Option<FluidCell>]>,
+    fluids: Arc<FluidStorage>,
     layers: Arc<HashMap<u16, Vec<AttachedLayer>>>,
     light: Arc<[VoxelLight]>,
     block_count: usize,
@@ -176,7 +179,7 @@ impl VoxelChunkInitialBlocksMut<'_> {
 
 pub(crate) struct VoxelChunkFluidsMut<'a> {
     blocks: &'a BlockStorage,
-    fluids: &'a mut [Option<FluidCell>],
+    fluids: &'a mut FluidStorage,
     fluid_count: &'a mut usize,
     fluid_frontier_sources: &'a mut [u64; FLUID_FRONTIER_WORDS],
     dynamic_fluid_cells: &'a mut [u64; FLUID_FRONTIER_WORDS],
@@ -245,7 +248,7 @@ impl VoxelChunk {
                 if voxel_index >= CHUNK_VOLUME {
                     break;
                 }
-                let fluid = self.fluids[voxel_index]
+                let fluid = self.fluids.get(voxel_index)
                     .expect("fluid frontier source metadata must point to a fluid voxel");
                 let (x, y, z) = coordinates(voxel_index);
                 visit(IVec3::new(x as i32, y as i32, z as i32), fluid);
@@ -266,7 +269,7 @@ impl VoxelChunk {
                 if voxel_index >= CHUNK_VOLUME {
                     break;
                 }
-                let fluid = self.fluids[voxel_index]
+                let fluid = self.fluids.get(voxel_index)
                     .expect("dynamic fluid metadata must point to a fluid voxel");
                 debug_assert!(!fluid.is_source());
                 let (x, y, z) = coordinates(voxel_index);
@@ -316,7 +319,7 @@ impl VoxelChunk {
             return None;
         }
 
-        self.fluids[index(x as usize, y as usize, z as usize)]
+        self.fluids.get(index(x as usize, y as usize, z as usize))
     }
 
     pub(crate) fn light_at(&self, x: i32, y: i32, z: i32) -> VoxelLight {
@@ -338,7 +341,7 @@ impl VoxelChunk {
         }
 
         let index = index(x as usize, y as usize, z as usize);
-        Some((self.blocks.get(index), self.fluids[index], self.light[index]))
+        Some((self.blocks.get(index), self.fluids.get(index), self.light[index]))
     }
 
     pub(crate) fn edit_initial_blocks<R>(
@@ -475,7 +478,7 @@ impl VoxelChunk {
             for z in 0..CHUNK_SIZE {
                 for x in 0..CHUNK_SIZE {
                     let index = index(x, y, z);
-                    lights[index] = light_at(x, y, z, blocks.get(index), fluids[index]);
+                    lights[index] = light_at(x, y, z, blocks.get(index), fluids.get(index));
                 }
             }
         }
@@ -511,7 +514,7 @@ impl VoxelChunk {
 )]
 fn set_block_in_storage(
     blocks: &mut BlockStorage,
-    fluids: &[Option<FluidCell>],
+    fluids: &FluidStorage,
     layers: &mut HashMap<u16, Vec<AttachedLayer>>,
     block_count: &mut usize,
     layer_count: &mut usize,
@@ -525,7 +528,7 @@ fn set_block_in_storage(
     let index = index(x, y, z);
     let previous_block = blocks.get(index);
     let had_block = previous_block.is_some();
-    let had_content = had_block || fluids[index].is_some();
+    let had_content = had_block || fluids.get(index).is_some();
     let has_block = block.is_some();
 
     if previous_block.map(|cell| cell.block_id) != block.map(|cell| cell.block_id)
@@ -536,7 +539,7 @@ fn set_block_in_storage(
             .expect("chunk layer count cannot underflow");
     }
 
-    let has_content = has_block || fluids[index].is_some();
+    let has_content = has_block || fluids.get(index).is_some();
 
     if had_block != has_block {
         adjust_total_count(block_count, has_block);
@@ -625,7 +628,7 @@ fn remove_layer_in_storage(
 )]
 fn set_fluid_in_storage(
     blocks: &BlockStorage,
-    fluids: &mut [Option<FluidCell>],
+    fluids: &mut FluidStorage,
     fluid_count: &mut usize,
     fluid_frontier_sources: &mut [u64; FLUID_FRONTIER_WORDS],
     dynamic_fluid_cells: &mut [u64; FLUID_FRONTIER_WORDS],
@@ -637,7 +640,7 @@ fn set_fluid_in_storage(
     fluid: Option<FluidCell>,
 ) {
     let index = index(x, y, z);
-    let previous_fluid = fluids[index];
+    let previous_fluid = fluids.get(index);
     let had_fluid = previous_fluid.is_some();
     let had_content = had_fluid || blocks.get(index).is_some();
     let has_fluid = fluid.is_some();
@@ -651,7 +654,7 @@ fn set_fluid_in_storage(
         adjust_boundary_counts(boundary_content_counts, x, y, z, has_content);
     }
 
-    fluids[index] = fluid;
+    fluids.set(index, fluid);
     set_voxel_bit(
         dynamic_fluid_cells,
         index,
@@ -672,7 +675,7 @@ fn set_voxel_bit(bits: &mut [u64; FLUID_FRONTIER_WORDS], voxel_index: usize, val
 
 fn refresh_fluid_frontier_sources_near(
     blocks: &BlockStorage,
-    fluids: &[Option<FluidCell>],
+    fluids: &FluidStorage,
     sources: &mut [u64; FLUID_FRONTIER_WORDS],
     x: usize,
     y: usize,
@@ -691,19 +694,19 @@ fn refresh_fluid_frontier_sources_near(
 
 fn refresh_fluid_frontier_source(
     blocks: &BlockStorage,
-    fluids: &[Option<FluidCell>],
+    fluids: &FluidStorage,
     sources: &mut [u64; FLUID_FRONTIER_WORDS],
     source: IVec3,
 ) {
     let source_index = index(source.x as usize, source.y as usize, source.z as usize);
-    let should_track = fluids[source_index].is_some()
+    let should_track = fluids.get(source_index).is_some()
         && FLUID_SPREAD_TARGETS.iter().any(|offset| {
             let target = source + *offset;
             if !in_bounds(target.x, target.y, target.z) {
                 return true;
             }
             let target_index = index(target.x as usize, target.y as usize, target.z as usize);
-            blocks.get(target_index).is_none() && fluids[target_index].is_none()
+            blocks.get(target_index).is_none() && fluids.get(target_index).is_none()
         });
 
     set_voxel_bit(sources, source_index, should_track);
