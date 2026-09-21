@@ -41,6 +41,12 @@ pub(crate) const MAX_SURFACE_INFLUENCES: usize =
     SURFACE_SITE_SEARCH_DIAMETER * SURFACE_SITE_SEARCH_DIAMETER + 2;
 
 #[derive(Clone)]
+#[derive(Clone, Copy)]
+pub(super) struct SurfaceSiteCacheEntry {
+    pub(super) position: Vec2,
+    pub(super) biome_index: usize,
+}
+
 pub(super) struct BiomeFieldEntry {
     pub id: String,
     pub distributions: Vec<BiomeDistribution>,
@@ -77,7 +83,7 @@ pub struct BiomeField {
     pub(super) volume_site_spacing: Option<Vec3>,
     pub(super) climate: MacroClimateField,
     pub(super) seed: u64,
-    pub(super) surface_site_biomes: Arc<RwLock<HashMap<IVec2, usize>>>,
+    pub(super) surface_site_biomes: Arc<RwLock<HashMap<IVec2, SurfaceSiteCacheEntry>>>,
     forced_surface_biome: Option<ForcedSurfaceBiome>,
     ocean_surface_index: Option<usize>,
     pub(super) ocean_weight: f32,
