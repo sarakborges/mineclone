@@ -32,7 +32,10 @@ use crate::{
     },
 };
 
-pub(crate) use self::columns::{GenerationColumnSample, sample_generation_columns};
+pub(crate) use self::{
+    columns::{GenerationColumnSample, sample_generation_columns},
+    fluids::authored_surface_fluid_id_for_position,
+};
 pub(crate) use self::structures::{
     located_structure_origins_in_chunk, structure_candidate_anchor,
     surface_layer_placements,
