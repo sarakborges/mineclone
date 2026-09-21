@@ -521,6 +521,7 @@ impl FluidMaterials {
         fluids: &FluidRegistry,
         materials: &mut Assets<TerrainMaterial>,
         lighting: &TerrainLightingBuffer,
+        texture_array: Handle<Image>,
     ) -> Self {
         let materials = fluids
             .iter()
@@ -547,7 +548,9 @@ impl FluidMaterials {
                         base_tint_enabled: 1.0,
                         overlay_enabled: 0.0,
                         overlay_tint_enabled: 0.0,
+                        texture_array_enabled: 0.0,
                         overlay_texture: None,
+                        terrain_texture_array: texture_array.clone(),
                     },
                 });
 
