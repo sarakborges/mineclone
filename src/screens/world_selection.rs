@@ -126,6 +126,8 @@ fn poll_world_scan(
     list: Query<Entity, With<WorldListContainer>>,
     localization: Res<UiLocalization>,
     language: Res<ActiveLanguage>,
+    dimensions: Res<DimensionRegistry>,
+    biomes: Res<BiomeRegistry>,
 ) {
     let Some(scan) = state.scan.as_ref() else {
         return;
@@ -141,7 +143,14 @@ fn poll_world_scan(
             for list_entity in &list {
                 commands.entity(list_entity).with_children(|parent| {
                     for world in &state.worlds {
-                        spawn_world_entry(parent, world, &localization, language.get());
+                        spawn_world_entry(
+                            parent,
+                            world,
+                            &localization,
+                            language.get(),
+                            &dimensions,
+                            &biomes,
+                        );
                     }
                 });
             }
