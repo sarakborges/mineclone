@@ -336,6 +336,24 @@ pub(crate) fn retire_chunk_render_allocation(
     retire_render_allocation_parts(commands, entities, mesh_handles);
 }
 
+pub(crate) fn retire_chunk_render_allocation_immediately(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    render_pool: &mut ChunkRenderPool,
+    coord: IVec3,
+) {
+    let Some((entities, mesh_handles)) = render_pool.take(coord) else {
+        return;
+    };
+
+    for entity in entities {
+        commands.entity(entity).despawn();
+    }
+    for mesh_handle in mesh_handles {
+        let _ = meshes.remove(&mesh_handle);
+    }
+}
+
 pub(crate) fn clear_chunk_render_pool(
     mut meshes: ResMut<Assets<Mesh>>,
     mut render_pool: ResMut<ChunkRenderPool>,
