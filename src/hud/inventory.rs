@@ -24,7 +24,8 @@ use state::{CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState
 use sync::{
     rebuild_inventory_when_changed, spawn_inventory, style_category_buttons, style_creative_slots,
     style_inventory_slots, style_inventory_trash_button, style_search_bar,
-    sync_inventory_cursor_icon, sync_inventory_slot_contents, update_cursor_icon_position,
+    sync_inventory_cursor_icon, sync_inventory_item_tooltip, sync_inventory_slot_contents,
+    update_cursor_icon_position,
 };
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -106,6 +107,7 @@ impl Plugin for InventoryHudPlugin {
                     style_inventory_slots,
                     style_inventory_trash_button,
                     update_cursor_icon_position,
+                    sync_inventory_item_tooltip,
                 )
                     .chain()
                     .in_set(InventoryHudSet::Style)
