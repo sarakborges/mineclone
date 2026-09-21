@@ -21,6 +21,7 @@ use super::{
         snapshot_name,
     },
     validation::{PruneRegistries, SaveRegistries},
+    WorldSummary,
 };
 use crate::world::{
     chunk_storage::{
@@ -79,10 +80,10 @@ fn snapshot_candidates(id: &str) -> io::Result<SnapshotCandidates> {
     })
 }
 
-pub(super) fn newest_restorable_timestamp(
+pub(super) fn newest_restorable_summary(
     id: &str,
     registries: &PruneRegistries,
-) -> io::Result<u64> {
+) -> io::Result<WorldSummary> {
     let pinned = snapshot_candidates(id)?;
     for candidate in &pinned.candidates {
         let loaded = load_snapshot(
@@ -95,7 +96,17 @@ pub(super) fn newest_restorable_timestamp(
             |snapshot| registries.validate_playable(snapshot),
         );
         match loaded {
-            Ok(_) => return Ok(candidate.manifest.last_saved_unix_ms),
+            Ok((snapshot, _world)) => {
+                return Ok(WorldSummary {
+                    id: id.to_owned(),
+                    last_saved_unix_ms: candidate.manifest.last_saved_unix_ms,
+                    seed: snapshot.seed,
+                    day: snapshot.day,
+                    dimension_id: snapshot.dimension_id,
+                    player_position: snapshot.player.map(|player| player.position),
+                    biome_id: snapshot.current_biome,
+                });
+            }
             Err(error) => warn!(
                 "Skipping damaged save for world {id}, generation {}: {error}",
                 candidate.generation
