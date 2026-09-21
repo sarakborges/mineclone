@@ -106,7 +106,11 @@ fn collect_completed_remesh_tasks(
         if !lighting_is_current {
             match kind {
                 ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
-                    queue.enqueue_task_priority(coord, ChunkRemeshTaskKind::Lighting);
+                    queue.enqueue_task_meshlets_priority(
+                        coord,
+                        ChunkRemeshTaskKind::Lighting,
+                        meshlets,
+                    );
                 }
                 ChunkRemeshTaskKind::Fluid => {
                     queue.enqueue_task_meshlets_priority(coord, kind, meshlets);
