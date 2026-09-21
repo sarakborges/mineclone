@@ -4,7 +4,7 @@ use arrayvec::ArrayVec;
 use bevy::prelude::*;
 
 use crate::{
-    content::structure::StructureDefinition,
+    content::structure::{StructureDefinition, StructureRotation},
     voxel::coordinates::chunk_coord_from_world,
     world::{
         biome_field::MAX_SURFACE_INFLUENCES,
@@ -57,12 +57,14 @@ pub(crate) fn fit_structure_to_ground(
 pub(super) fn compute_structure_origin_y(
     anchor: IVec2,
     structure: &StructureDefinition,
+    rotation: StructureRotation,
     context: &ChunkGenerationContext<'_>,
 ) -> Option<i32> {
     let (region, anchored_caves) = structure_support_context(anchor, context);
+    let support_offsets = structure.support_offsets_for_rotation(rotation);
     fit_structure_to_ground(
         anchor,
-        structure.support_offsets(),
+        &support_offsets,
         structure.min_y_offset(),
         structure.restrictions.max_slope,
         |position| {
