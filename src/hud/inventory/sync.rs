@@ -17,7 +17,7 @@ use crate::{
     ui::selectable,
 };
 
-use crate::hud::block_icon::BlockIconMaterial;
+use crate::hud::{HudSettings, block_icon::BlockIconMaterial};
 
 use super::{
     layout::{
@@ -27,8 +27,8 @@ use super::{
     state::{
         CreativeCatalogScrollArea, CreativeCategoryButton, CreativeInventorySlot,
         CreativeInventoryUiDirty, CreativeInventoryView, CreativeScrollState, CreativeSearchBar,
-        CreativeSearchText, ITEM_ICON_SIZE, InventoryCursorIcon, InventoryHudRoot, InventorySlot,
-        InventoryTrashButton,
+        CreativeSearchText, ITEM_ICON_SIZE, InventoryCursorIcon, InventoryHudRoot,
+        InventoryItemTooltip, InventoryItemTooltipText, InventorySlot, InventoryTrashButton,
     },
 };
 
@@ -61,6 +61,20 @@ impl InventoryItemContent<'_> {
             language: self.language.get(),
             icon_materials,
         }
+    }
+
+    fn item_name<'a>(&'a self, item_id: &'a str) -> &'a str {
+        let language = self.language.get();
+        if let Some(block) = self.visual.blocks.get(item_id) {
+            return block.name.text(language);
+        }
+        if let Some(layer) = self.layers.get(item_id) {
+            return layer.name.text(language);
+        }
+        if let Some(tool) = self.tools.get(item_id) {
+            return tool.name.text(language);
+        }
+        item_id
     }
 }
 
@@ -291,6 +305,79 @@ pub(super) fn rebuild_inventory_when_changed(
             &mut items,
         );
     });
+}
+
+const ITEM_TOOLTIP_OFFSET: f32 = 14.0;
+const ITEM_TOOLTIP_MAX_WIDTH: f32 = 280.0;
+const ITEM_TOOLTIP_EDGE_HEIGHT: f32 = 72.0;
+
+pub(super) fn sync_inventory_item_tooltip(
+    content: InventoryItemContent,
+    settings: Res<HudSettings>,
+    window: Single<&Window>,
+    inventory_slots: Query<(&Interaction, &InventorySlot)>,
+    creative_slots: Query<(&Interaction, &CreativeInventorySlot)>,
+    tooltip: Single<
+        (&mut Node, &mut Visibility),
+        (With<InventoryItemTooltip>, Without<InventoryItemTooltipText>),
+    >,
+    tooltip_text: Single<&mut Text, With<InventoryItemTooltipText>>,
+) {
+    let (mut node, mut visibility) = tooltip.into_inner();
+
+    let hovered_item = inventory_slots
+        .iter()
+        .find_map(|(interaction, slot)| {
+            (*interaction != Interaction::None)
+                .then_some(slot.item)
+                .flatten()
+        })
+        .or_else(|| {
+            creative_slots.iter().find_map(|(interaction, slot)| {
+                (*interaction != Interaction::None)
+                    .then_some(slot.item)
+                    .flatten()
+            })
+        });
+
+    let Some(item_id) = hovered_item.filter(|_| settings.display_tooltips()) else {
+        if *visibility != Visibility::Hidden {
+            *visibility = Visibility::Hidden;
+        }
+        return;
+    };
+    let Some(cursor) = window.cursor_position() else {
+        if *visibility != Visibility::Hidden {
+            *visibility = Visibility::Hidden;
+        }
+        return;
+    };
+
+    let mut text = tooltip_text.into_inner();
+    let name = content.item_name(item_id);
+    if text.0 != name {
+        text.0 = name.to_owned();
+    }
+
+    if cursor.x + ITEM_TOOLTIP_OFFSET + ITEM_TOOLTIP_MAX_WIDTH <= window.width() {
+        node.left = px(cursor.x + ITEM_TOOLTIP_OFFSET);
+        node.right = Val::Auto;
+    } else {
+        node.left = Val::Auto;
+        node.right = px((window.width() - cursor.x + ITEM_TOOLTIP_OFFSET).max(0.0));
+    }
+
+    if cursor.y + ITEM_TOOLTIP_OFFSET + ITEM_TOOLTIP_EDGE_HEIGHT <= window.height() {
+        node.top = px(cursor.y + ITEM_TOOLTIP_OFFSET);
+        node.bottom = Val::Auto;
+    } else {
+        node.top = Val::Auto;
+        node.bottom = px((window.height() - cursor.y + ITEM_TOOLTIP_OFFSET).max(0.0));
+    }
+
+    if *visibility != Visibility::Inherited {
+        *visibility = Visibility::Inherited;
+    }
 }
 
 pub(super) fn style_search_bar(
