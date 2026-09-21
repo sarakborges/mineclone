@@ -96,7 +96,7 @@ fn collect_completed_remesh_tasks(
         }
 
         let lighting_is_current = output.dependencies.lighting_is_current(tasks);
-        if output.kind != ChunkRemeshTaskKind::Fluid && !lighting_is_current {
+        if output.kind == ChunkRemeshTaskKind::Lighting && !lighting_is_current {
             queue.enqueue_task_priority(coord, output.kind);
             continue;
         }
@@ -107,14 +107,19 @@ fn collect_completed_remesh_tasks(
             &renderer.fluid_materials,
         );
         match output.meshes {
-            ChunkRemeshTaskMeshes::Geometry(meshes) => apply_built_chunk_geometry_meshes(
-                &mut renderer.commands,
-                &mut renderer.meshes,
-                &mut renderer.pool,
-                coord,
-                meshes,
-                &render_context,
-            ),
+            ChunkRemeshTaskMeshes::Geometry(meshes) => {
+                apply_built_chunk_geometry_meshes(
+                    &mut renderer.commands,
+                    &mut renderer.meshes,
+                    &mut renderer.pool,
+                    coord,
+                    meshes,
+                    &render_context,
+                );
+                if output.kind == ChunkRemeshTaskKind::Geometry && !lighting_is_current {
+                    queue.enqueue_task_priority(coord, ChunkRemeshTaskKind::Lighting);
+                }
+            }
             ChunkRemeshTaskMeshes::Fluid(meshes) => {
                 apply_built_chunk_fluid_meshes(
                     &mut renderer.commands,
