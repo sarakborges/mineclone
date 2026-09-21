@@ -16,17 +16,13 @@ pub(crate) fn terrain_array_alpha_signature(
         return Some((true, None));
     }
 
-    if definition
-        .alpha_cutoff
-        .map_or(true, |cutoff| cutoff.to_bits() == TERRAIN_SHARED_MASK_CUTOFF.to_bits())
-    {
-        return Some((
-            false,
-            Some(TERRAIN_SHARED_MASK_CUTOFF.to_bits()),
-        ));
+    match definition.alpha_cutoff {
+        None => Some((false, None)),
+        Some(cutoff) if cutoff.to_bits() == TERRAIN_SHARED_MASK_CUTOFF.to_bits() => {
+            Some((false, Some(TERRAIN_SHARED_MASK_CUTOFF.to_bits())))
+        }
+        Some(_) => None,
     }
-
-    None
 }
 
 const TERRAIN_TEXTURE_INDEX_BITS: u32 = 9;
