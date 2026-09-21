@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 18 — 2026-09-21:** streaming volume agora é overflow-safe. `chunk_is_in_volume` calcula deltas/quadrados em i64; `chunk_coords_in_volume` usa `checked_add` para limites Y e offsets X/Z, evitando wrap silencioso de i32 em release para centers extremos vindos de warp/save/commands. Commit: `534c689654a9e083a5355d1087aa6f929a539db2`. **Pendências:** outras funções de distância ainda podem usar `IVec3::length_squared()` em coordenadas arbitrárias; revisar chamadas cujo input não é limitado por render distance. **Próximo passo:** procurar distance-squared em warp/spatial search/task prioritization e tornar apenas boundaries externos overflow-safe.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 17 — 2026-09-21:** soma de durations do day/night cycle agora usa `checked_add` e rejeita overflow explicitamente antes de comparar com `dayDurationTicks` (`1e07cd6fddaa9ad75a8fff41627149d956584751`). Evita wrap de u64 em release transformar conteúdo inválido em configuração aparentemente consistente. **Pendências:** continuar procurando aritmética de conteúdo/save que dependa de overflow behavior. **Próximo passo:** revisar generation spacing/chance/structure math e render distance arithmetic por checked/saturating operations e ranges.
 
 
