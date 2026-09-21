@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use serde::Deserialize;
 
+use super::asset_path::is_safe_relative_asset_path;
+
 /// Data-driven definition for the local player entity.
 #[derive(Resource, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,8 +24,8 @@ impl PlayerDefinition {
         assert!(!self.attack.trim().is_empty(), "player attack must not be empty");
         if let Some(model) = &self.model {
             assert!(
-                !model.is_empty() && !model.contains('\\') && !model.contains(':') && !model.contains('\0'),
-                "player model path must be a safe relative path: {model}"
+                is_safe_relative_asset_path(model),
+                "player model path must be a safe relative asset path: {model}"
             );
         }
     }
