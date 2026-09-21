@@ -362,7 +362,7 @@ fn locate_hydrology(
                     );
                     let sample_position = horizontal.as_vec2() + Vec2::splat(0.5);
                     let Some(water) =
-                        region.supported_water_at(sample_position, surface_y as f32)
+                        region.hydrology.supported_water_at(sample_position, surface_y as f32)
                     else {
                         continue;
                     };
