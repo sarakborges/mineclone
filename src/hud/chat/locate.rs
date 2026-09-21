@@ -23,7 +23,7 @@ use crate::{
         current_context::CurrentDimensionContext,
         generation::{
             ChunkGenerationContext, located_structure_origins_in_chunk,
-            structure_candidate_anchor,
+            structure_candidate_anchor, structure_candidate_member_hash,
         },
         generation_region::generation_region_coord,
         hydrology::HydrologyWaterKind,
@@ -426,13 +426,7 @@ fn locate_structure(
     id: &str,
     player: IVec3,
 ) -> Option<IVec3> {
-    let probe_offset = if let Some(structure) = snapshot.structures.get(id) {
-        *structure.horizontal_footprint().first()?
-    } else if snapshot.structures.variation_count(id).is_some() {
-        IVec2::ZERO
-    } else {
-        return None;
-    };
+    snapshot.structures.variation_count(id)?;
     let context = snapshot.generation_context();
     let player_horizontal = player.xz();
     let maximum_distance_squared =
@@ -481,6 +475,29 @@ fn locate_structure(
                     return;
                 }
 
+                let member_hash = structure_candidate_member_hash(
+                    snapshot.biome_field.seed(),
+                    &biome_structure.biome_id,
+                    &biome_structure.structure_id,
+                    anchor,
+                );
+                let Some(structure) = snapshot
+                    .structures
+                    .select_for_reference(&biome_structure.structure_id, member_hash)
+                else {
+                    return;
+                };
+                if biome_structure.structure_id != id && structure.id != id {
+                    return;
+                }
+                let rotation = structure.rotation_for_hash(member_hash);
+                let Some(probe_offset) = structure
+                    .horizontal_footprint_for_rotation(rotation)
+                    .first()
+                    .copied()
+                else {
+                    return;
+                };
                 let (Some(probe_x), Some(probe_z)) = (
                     anchor.x.checked_add(probe_offset.x),
                     anchor.y.checked_add(probe_offset.y),
