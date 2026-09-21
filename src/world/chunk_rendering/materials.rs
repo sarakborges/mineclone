@@ -102,6 +102,30 @@ impl<'a> TerrainMaterialBuilder<'a> {
         }
     }
 
+    fn array_material(&mut self, alpha: TerrainAlphaKey) -> Handle<TerrainMaterial> {
+        self.materials.add(TerrainMaterial {
+            base: StandardMaterial {
+                base_color: Color::WHITE,
+                perceptual_roughness: self.roughness,
+                metallic: self.metallic,
+                alpha_mode: alpha.alpha_mode(),
+                fog_enabled: true,
+                unlit: true,
+                ..default()
+            },
+            extension: TerrainMaterialExtension {
+                lighting: self.lighting.handle(),
+                fluid_animation_factor: 0.0,
+                base_tint_enabled: 0.0,
+                overlay_enabled: 0.0,
+                overlay_tint_enabled: 0.0,
+                texture_array_enabled: 1.0,
+                overlay_texture: None,
+                terrain_texture_array: self.texture_array.clone(),
+            },
+        })
+    }
+
     fn layers_for(
         &mut self,
         definition: &BlockDefinition,
@@ -158,7 +182,9 @@ impl<'a> TerrainMaterialBuilder<'a> {
                 base_tint_enabled: key.base_tint_enabled as u8 as f32,
                 overlay_enabled: overlay.is_some() as u8 as f32,
                 overlay_tint_enabled: key.overlay_tint_enabled as u8 as f32,
+                texture_array_enabled: 0.0,
                 overlay_texture: overlay.map(|layer| load_block_texture_layer(self.asset_server, layer)),
+                terrain_texture_array: self.texture_array.clone(),
             },
         });
         self.cache.insert(key, material.clone());
@@ -205,7 +231,9 @@ impl<'a> TerrainMaterialBuilder<'a> {
                 base_tint_enabled: key.base_tint_enabled as u8 as f32,
                 overlay_enabled: 0.0,
                 overlay_tint_enabled: 0.0,
+                texture_array_enabled: 0.0,
                 overlay_texture: None,
+                terrain_texture_array: self.texture_array.clone(),
             },
         });
         self.cache.insert(key, material.clone());
@@ -252,7 +280,9 @@ impl<'a> TerrainMaterialBuilder<'a> {
                 base_tint_enabled,
                 overlay_enabled: 0.0,
                 overlay_tint_enabled: 0.0,
+                texture_array_enabled: 0.0,
                 overlay_texture: None,
+                terrain_texture_array: self.texture_array.clone(),
             },
         });
         self.cache.insert(key, material.clone());
