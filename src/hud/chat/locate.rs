@@ -12,6 +12,7 @@ use crate::{
         block::BlockRegistry,
         fluid::FluidRegistry,
         structure::StructureRegistry,
+        structure_set::StructureSetRegistry,
     },
     localization::ActiveLanguage,
     voxel::{
@@ -62,6 +63,7 @@ struct LocateSnapshot {
     dimension: crate::content::dimension::DimensionDefinition,
     biomes: BiomeRegistry,
     structures: StructureRegistry,
+    structure_sets: StructureSetRegistry,
     biome_field: BiomeField,
     feature_fields: WorldFeatureFields,
 }
@@ -74,6 +76,7 @@ impl LocateSnapshot {
             dimension: &self.dimension,
             biomes: &self.biomes,
             structures: &self.structures,
+            structure_sets: &self.structure_sets,
             biome_field: &self.biome_field,
             feature_fields: &self.feature_fields,
         }
@@ -86,6 +89,7 @@ pub(super) struct ChatLocateContext<'w> {
     fluids: Res<'w, FluidRegistry>,
     biomes: Res<'w, BiomeRegistry>,
     structures: Res<'w, StructureRegistry>,
+    structure_sets: Res<'w, StructureSetRegistry>,
     biome_field: Res<'w, BiomeField>,
     feature_fields: Res<'w, WorldFeatureFields>,
     dimension: CurrentDimensionContext<'w>,
@@ -217,6 +221,7 @@ impl ChatLocateContext<'_> {
             dimension: dimension.clone(),
             biomes: self.biomes.as_ref().clone(),
             structures: self.structures.as_ref().clone(),
+            structure_sets: self.structure_sets.as_ref().clone(),
             biome_field: self.biome_field.as_ref().clone(),
             feature_fields: self.feature_fields.as_ref().clone(),
         };
