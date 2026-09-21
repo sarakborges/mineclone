@@ -8,7 +8,7 @@ use bevy::{
     prelude::*,
 };
 
-use crate::voxel::chunk::CHUNK_SIZE;
+use crate::{content::structure::StructureRotation, voxel::chunk::CHUNK_SIZE};
 
 use super::CachedStructureCandidate;
 use super::super::{
@@ -22,7 +22,7 @@ use super::super::{
 const CACHE_REGION_MARGIN: i32 = 1;
 
 type StructureOriginEntry = Arc<OnceLock<Option<i32>>>;
-type StructureOriginAnchors = HashMap<IVec2, StructureOriginEntry>;
+type StructureOriginAnchors = HashMap<(IVec2, StructureRotation), StructureOriginEntry>;
 type StructureOriginEntries = HashMap<String, StructureOriginAnchors>;
 
 struct ConcurrentCache<K, V> {
@@ -103,6 +103,7 @@ impl StructureOriginCache {
     fn get_or_insert_with(
         &self,
         structure_id: &str,
+        rotation: StructureRotation,
         anchor: IVec2,
         factory: impl FnOnce() -> Option<i32>,
     ) -> Option<i32> {
@@ -111,7 +112,7 @@ impl StructureOriginCache {
             .read()
             .expect("structure origin cache read lock was poisoned")
             .get(structure_id)
-            .and_then(|anchors| anchors.get(&anchor))
+            .and_then(|anchors| anchors.get(&(anchor, rotation)))
             .cloned();
         let entry = cached.unwrap_or_else(|| {
             let mut entries = self
@@ -121,7 +122,7 @@ impl StructureOriginCache {
 
             if let Some(cached) = entries
                 .get(structure_id)
-                .and_then(|anchors| anchors.get(&anchor))
+                .and_then(|anchors| anchors.get(&(anchor, rotation)))
                 .cloned()
             {
                 return cached;
@@ -129,9 +130,9 @@ impl StructureOriginCache {
 
             let entry = Arc::new(OnceLock::new());
             if let Some(anchors) = entries.get_mut(structure_id) {
-                anchors.insert(anchor, entry.clone());
+                anchors.insert((anchor, rotation), entry.clone());
             } else {
-                entries.insert(structure_id.to_owned(), HashMap::from([(anchor, entry.clone())]));
+                entries.insert(structure_id.to_owned(), HashMap::from([((anchor, rotation), entry.clone())]));
             }
             entry
         });
@@ -146,7 +147,7 @@ impl StructureOriginCache {
             .expect("structure origin cache write lock was poisoned");
 
         for anchors in entries.values_mut() {
-            anchors.retain(|anchor, _| predicate(*anchor));
+            anchors.retain(|(anchor, _), _| predicate(*anchor));
         }
         entries.retain(|_, anchors| !anchors.is_empty());
     }
@@ -250,11 +251,12 @@ impl FeatureCaches {
     pub(super) fn structure_origin_y(
         &self,
         structure_id: &str,
+        rotation: StructureRotation,
         anchor: IVec2,
         factory: impl FnOnce() -> Option<i32>,
     ) -> Option<i32> {
         self.structure_origins
-            .get_or_insert_with(structure_id, anchor, factory)
+            .get_or_insert_with(structure_id, rotation, anchor, factory)
     }
 
     pub(super) fn hydrology_region(
