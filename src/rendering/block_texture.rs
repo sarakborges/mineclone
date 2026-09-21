@@ -18,7 +18,7 @@ pub(crate) fn terrain_array_alpha_signature(
 
     if definition
         .alpha_cutoff
-        .is_none_or(|cutoff| cutoff.to_bits() == TERRAIN_SHARED_MASK_CUTOFF.to_bits())
+        .map_or(true, |cutoff| cutoff.to_bits() == TERRAIN_SHARED_MASK_CUTOFF.to_bits())
     {
         return Some((
             false,
