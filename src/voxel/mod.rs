@@ -15,6 +15,7 @@ pub(crate) mod layer;
 pub(crate) mod layer_mesh;
 pub(crate) mod mesh;
 pub(crate) mod mesh_buffer;
+pub(crate) mod meshlet;
 mod mesh_lighting;
 pub(crate) mod mesh_snapshot;
 pub(crate) mod microblock;
