@@ -3,7 +3,9 @@ use serde::Deserialize;
 
 use crate::localization::LocalizedText;
 
-use super::{registry::DefinitionMap, tool_id::intern_tool_id};
+use super::{
+    asset_path::is_safe_relative_asset_path, registry::DefinitionMap, tool_id::intern_tool_id,
+};
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,10 +40,18 @@ impl ToolRegistry {
             definition.id
         );
         assert!(
-            !definition.icon.is_empty(),
-            "tool {} icon cannot be empty",
-            definition.id
+            is_safe_relative_asset_path(&definition.icon),
+            "tool {} icon must be a safe relative asset path: {}",
+            definition.id,
+            definition.icon
         );
+        if let Some(tint_icon) = definition.tint_icon.as_deref() {
+            assert!(
+                is_safe_relative_asset_path(tint_icon),
+                "tool {} tintIcon must be a safe relative asset path: {tint_icon}",
+                definition.id
+            );
+        }
         definition
             .name
             .validate(&format!("tool {} name", definition.id));
