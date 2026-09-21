@@ -23,7 +23,7 @@ use super::{
     texture_rotation::TextureRotation,
 };
 
-mod geometry;
+pub(crate) mod geometry;
 mod micro_mesh;
 
 pub struct ChunkFaceMesh {

@@ -7,7 +7,7 @@ use bevy::{
 use crate::{
     content::{
         biome::BiomeRegistry, block::BlockRegistry, dimension::DimensionRegistry,
-        fluid::FluidRegistry,
+        fluid::FluidRegistry, layer::LayerRegistry,
     },
     voxel::{lighting::PendingLightingUpdates, world::VoxelWorld},
 };
@@ -27,6 +27,7 @@ pub(in crate::world) struct WorldBootstrapContent<'w> {
     pub(super) dimensions: Res<'w, DimensionRegistry>,
     pub(super) biomes: Res<'w, BiomeRegistry>,
     pub(super) blocks: Res<'w, BlockRegistry>,
+    pub(super) layers: Res<'w, LayerRegistry>,
     pub(super) fluids: Res<'w, FluidRegistry>,
 }
 

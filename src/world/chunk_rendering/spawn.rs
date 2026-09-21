@@ -7,6 +7,7 @@ use crate::{
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
         fluid_mesh::{ChunkFluidMesh, build_fluid_meshes},
+        layer_mesh::{ChunkLayerMesh, build_layer_meshes},
         mesh::{ChunkFaceMesh, build_chunk_mesh},
         read::VoxelRead,
     },
@@ -19,6 +20,7 @@ use super::{
 
 pub(crate) enum BuiltChunkMesh {
     Terrain(ChunkFaceMesh),
+    Layer(ChunkLayerMesh),
     Fluid(ChunkFluidMesh),
 }
 
@@ -30,6 +32,11 @@ impl BuiltChunkMesh {
                 face: mesh.face,
                 casts_shadow: mesh.casts_shadow,
             },
+            Self::Layer(mesh) => ChunkMeshKey::Layer {
+                layer_id: mesh.layer_id,
+                face: mesh.face,
+                casts_shadow: mesh.casts_shadow,
+            },
             Self::Fluid(mesh) => ChunkMeshKey::Fluid(mesh.fluid_id),
         }
     }
@@ -37,6 +44,7 @@ impl BuiltChunkMesh {
     pub(super) fn mesh(&self) -> &Mesh {
         match self {
             Self::Terrain(mesh) => &mesh.mesh,
+            Self::Layer(mesh) => &mesh.mesh,
             Self::Fluid(mesh) => &mesh.mesh,
         }
     }
@@ -44,6 +52,7 @@ impl BuiltChunkMesh {
     pub(super) fn into_mesh(self) -> Mesh {
         match self {
             Self::Terrain(mesh) => mesh.mesh,
+            Self::Layer(mesh) => mesh.mesh,
             Self::Fluid(mesh) => mesh.mesh,
         }
     }
@@ -68,7 +77,7 @@ pub(super) fn build_chunk_terrain_render_meshes<W: VoxelRead + ?Sized>(
     chunk: &VoxelChunk,
     context: &ChunkMeshBuildContext<'_, W>,
 ) -> Vec<BuiltChunkMesh> {
-    build_chunk_mesh(
+    let mut meshes = build_chunk_mesh(
         context.world,
         coord,
         chunk,
@@ -87,7 +96,32 @@ pub(super) fn build_chunk_terrain_render_meshes<W: VoxelRead + ?Sized>(
     )
     .into_iter()
     .map(BuiltChunkMesh::Terrain)
-    .collect()
+    .collect::<Vec<_>>();
+
+    meshes.extend(
+        build_layer_meshes(
+            context.world,
+            coord,
+            chunk,
+            context.blocks,
+            context.layers,
+            |voxel, definition| {
+                let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
+                let tint = block_tint_at(
+                    definition.tint,
+                    position,
+                    context.biome_field,
+                    context.biomes,
+                )
+                .to_srgba();
+                [tint.red, tint.green, tint.blue]
+            },
+        )
+        .into_iter()
+        .map(BuiltChunkMesh::Layer),
+    );
+
+    meshes
 }
 
 pub(super) fn build_chunk_fluid_render_meshes<W: VoxelRead + ?Sized>(
@@ -164,13 +198,27 @@ pub(crate) fn spawn_built_chunk_meshes(
         match built_mesh {
             BuiltChunkMesh::Terrain(face_mesh) => {
                 pooled_mesh_bytes += mesh_asset_bytes(&face_mesh.mesh);
-                let (spawned_entities, mesh_handle) = spawn_terrain_mesh(
+                let (spawned_entities, mesh_handle) = spawn_geometry_mesh(
                     commands,
                     meshes,
                     coord,
                     transform,
                     key,
                     face_mesh.mesh,
+                    context,
+                );
+                entities.extend(spawned_entities);
+                mesh_handles.push(mesh_handle);
+            }
+            BuiltChunkMesh::Layer(layer_mesh) => {
+                pooled_mesh_bytes += mesh_asset_bytes(&layer_mesh.mesh);
+                let (spawned_entities, mesh_handle) = spawn_geometry_mesh(
+                    commands,
+                    meshes,
+                    coord,
+                    transform,
+                    key,
+                    layer_mesh.mesh,
                     context,
                 );
                 entities.extend(spawned_entities);
@@ -232,7 +280,7 @@ pub(super) fn spawn_terrain_meshes_into_existing_allocation(
 
     for (key, mesh) in replacement_keys.iter().copied().zip(replacements) {
         let (spawned_entities, mesh_handle) =
-            spawn_terrain_mesh(commands, meshes, coord, transform, key, mesh, context);
+            spawn_geometry_mesh(commands, meshes, coord, transform, key, mesh, context);
         entities.extend(spawned_entities);
         mesh_handles.push(mesh_handle);
     }
@@ -277,7 +325,7 @@ pub(super) fn spawn_fluid_meshes_into_existing_allocation(
     );
 }
 
-fn spawn_terrain_mesh(
+fn spawn_geometry_mesh(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     coord: IVec3,
@@ -286,17 +334,28 @@ fn spawn_terrain_mesh(
     mesh: Mesh,
     context: &ChunkRenderContext<'_>,
 ) -> (Vec<Entity>, Handle<Mesh>) {
-    let ChunkMeshKey::Terrain {
-        block_id,
-        face,
-        casts_shadow,
-    } = key
-    else {
-        panic!("terrain mesh spawn requires a terrain mesh key");
-    };
-
     let mesh_handle = meshes.add(mesh);
-    let layer_materials = context.terrain_materials.for_face(block_id, face);
+    let (layer_materials, casts_shadow) = match key {
+        ChunkMeshKey::Terrain {
+            block_id,
+            face,
+            casts_shadow,
+        } => (
+            context.terrain_materials.for_face(block_id, face),
+            casts_shadow,
+        ),
+        ChunkMeshKey::Layer {
+            layer_id,
+            casts_shadow,
+            ..
+        } => (
+            std::slice::from_ref(context.terrain_materials.for_layer(layer_id)),
+            casts_shadow,
+        ),
+        ChunkMeshKey::Fluid(_) => {
+            panic!("geometry mesh spawn cannot use a fluid mesh key");
+        }
+    };
     let mut entities = Vec::with_capacity(layer_materials.len());
 
     for (layer_index, material) in layer_materials.iter().enumerate() {

@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use crate::content::{
     block::BlockRegistry, block_id::intern_block_id, block_orientation::BlockOrientation,
     fluid::FluidRegistry,
+    layer::{LayerFace, LayerRegistry},
+    layer_id::intern_layer_id,
 };
 
 use super::{
@@ -16,6 +18,7 @@ use super::{
     chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk},
     chunk_archive::ArchivedChunk,
     fluid::{FluidCell, MAX_FLUID_LEVEL},
+    layer::{AttachedLayer, LayerCell, MAX_LAYERS_PER_VOXEL},
     microblock::{CHISEL_MASK_PROPERTY, MicroblockMask},
     secondary_properties::SecondaryProperties,
     texture_rotation::TextureRotation,
@@ -33,6 +36,8 @@ pub(crate) struct DiskChunk {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     block_runs: Vec<DiskRun>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    layers: Vec<DiskLayerState>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     fluid_palette: Vec<DiskFluidState>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     fluid_runs: Vec<DiskRun>,
@@ -45,6 +50,16 @@ struct DiskBlockState {
     rotation: u8,
     orientation: u8,
     properties: Vec<(String, String)>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct DiskLayerState {
+    voxel: u16,
+    order: u8,
+    face: u8,
+    id: String,
+    rotation: u8,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -68,6 +83,7 @@ struct DiskChunkBuilder {
     coord: [i32; 3],
     block_palette: Vec<DiskBlockState>,
     block_runs: Vec<DiskRun>,
+    layers: Vec<DiskLayerState>,
     fluid_palette: Vec<DiskFluidState>,
     fluid_runs: Vec<DiskRun>,
 }
@@ -78,6 +94,7 @@ impl DiskChunkBuilder {
             coord: [coord.x, coord.y, coord.z],
             block_palette: Vec::new(),
             block_runs: Vec::new(),
+            layers: Vec::new(),
             fluid_palette: Vec::new(),
             fluid_runs: Vec::new(),
         }
@@ -100,6 +117,24 @@ impl DiskChunkBuilder {
         append_run(&mut self.block_runs, index, state_index)
     }
 
+    fn push_layer(
+        &mut self,
+        index: usize,
+        order: usize,
+        attached: AttachedLayer,
+    ) -> io::Result<()> {
+        self.layers.push(DiskLayerState {
+            voxel: u16::try_from(index)
+                .map_err(|_| invalid_data("chunk layer voxel index overflow"))?,
+            order: u8::try_from(order)
+                .map_err(|_| invalid_data("chunk layer order overflow"))?,
+            face: attached.face.index(),
+            id: attached.cell.layer_id.to_owned(),
+            rotation: rotation_index(attached.cell.texture_rotation),
+        });
+        Ok(())
+    }
+
     fn push_fluid(
         &mut self,
         index: usize,
@@ -119,11 +154,14 @@ impl DiskChunkBuilder {
         append_run(&mut self.fluid_runs, index, state_index)
     }
 
-    fn finish(self) -> DiskChunk {
+    fn finish(mut self) -> DiskChunk {
+        self.layers
+            .sort_unstable_by_key(|layer| (layer.voxel, layer.order));
         DiskChunk {
             coord: self.coord,
             block_palette: self.block_palette,
             block_runs: self.block_runs,
+            layers: self.layers,
             fluid_palette: self.fluid_palette,
             fluid_runs: self.fluid_runs,
         }
@@ -160,6 +198,12 @@ impl DiskChunk {
             }
         }
 
+        for (index, attached_layers) in chunk.layer_groups() {
+            for (order, attached) in attached_layers.iter().copied().enumerate() {
+                builder.push_layer(index, order, attached)?;
+            }
+        }
+
         Ok(builder.finish())
     }
 
@@ -173,6 +217,9 @@ impl DiskChunk {
         for (index, cell) in chunk.block_entries() {
             builder.push_block(index, cell)?;
         }
+        for (index, order, attached) in chunk.layer_entries() {
+            builder.push_layer(index, order, attached)?;
+        }
         for (index, cell) in chunk.fluid_entries() {
             builder.push_fluid(index, cell, fluids)?;
         }
@@ -184,6 +231,7 @@ impl DiskChunk {
     pub(crate) fn into_chunk(
         self,
         blocks: &BlockRegistry,
+        layers: &LayerRegistry,
         fluids: &FluidRegistry,
     ) -> io::Result<(IVec3, VoxelChunk)> {
         let coord = self.coord()?;
@@ -191,9 +239,11 @@ impl DiskChunk {
             coord,
             self.block_palette,
             self.block_runs,
+            self.layers,
             self.fluid_palette,
             self.fluid_runs,
             blocks,
+            layers,
             fluids,
         )
     }
@@ -234,9 +284,11 @@ fn decode_compact(
     coord: IVec3,
     block_palette: Vec<DiskBlockState>,
     block_runs: Vec<DiskRun>,
+    layer_states: Vec<DiskLayerState>,
     fluid_palette: Vec<DiskFluidState>,
     fluid_runs: Vec<DiskRun>,
     blocks: &BlockRegistry,
+    layers: &LayerRegistry,
     fluids: &FluidRegistry,
 ) -> io::Result<(IVec3, VoxelChunk)> {
     let block_states = block_palette
@@ -269,7 +321,84 @@ fn decode_compact(
         }
     });
 
+    decode_layers(&mut chunk, layer_states, layers)?;
+
     Ok((coord, chunk))
+}
+
+fn decode_layers(
+    chunk: &mut VoxelChunk,
+    states: Vec<DiskLayerState>,
+    layers: &LayerRegistry,
+) -> io::Result<()> {
+    let mut previous_voxel = None;
+    let mut expected_order = 0_u8;
+
+    for state in states {
+        if state.voxel as usize >= CHUNK_VOLUME
+            || state.rotation > 3
+            || state.order as usize >= MAX_LAYERS_PER_VOXEL
+        {
+            return Err(invalid_data("invalid saved layer voxel, order or rotation"));
+        }
+
+        match previous_voxel {
+            Some(previous) if state.voxel < previous => {
+                return Err(invalid_data("saved layers must be ordered by voxel and layer order"));
+            }
+            Some(previous) if state.voxel == previous => {
+                if state.order != expected_order {
+                    return Err(invalid_data("saved layer order must be contiguous per voxel"));
+                }
+            }
+            _ => {
+                if state.order != 0 {
+                    return Err(invalid_data("first saved layer in a voxel must have order zero"));
+                }
+                expected_order = 0;
+            }
+        }
+
+        let face = LayerFace::from_index(state.face)
+            .ok_or_else(|| invalid_data("invalid saved layer face"))?;
+        let definition = layers
+            .get(&state.id)
+            .ok_or_else(|| invalid_data(format!("missing layer definition: {}", state.id)))?;
+        if !definition.supports_face(face) {
+            return Err(invalid_data(format!(
+                "layer {} does not support saved face {:?}",
+                state.id, face
+            )));
+        }
+
+        let (x, y, z) = coordinates(state.voxel as usize);
+        if chunk.cell_at(x as i32, y as i32, z as i32).is_none() {
+            return Err(invalid_data("saved layer is missing its supporting block"));
+        }
+        if chunk
+            .layers_at(x as i32, y as i32, z as i32)
+            .iter()
+            .any(|existing| existing.face == face && existing.cell.layer_id == state.id)
+        {
+            return Err(invalid_data("duplicate saved layer on the same voxel face"));
+        }
+
+        let layer = LayerCell {
+            layer_id: intern_layer_id(&state.id),
+            texture_rotation: TextureRotation::from_quarter_turn(state.rotation),
+        };
+        if !chunk.add_layer(x, y, z, face, layer) {
+            return Err(invalid_data("saved layer could not attach to its support"));
+        }
+
+        previous_voxel = Some(state.voxel);
+        expected_order = state
+            .order
+            .checked_add(1)
+            .ok_or_else(|| invalid_data("saved layer order overflow"))?;
+    }
+
+    Ok(())
 }
 
 fn validate_runs(runs: &[DiskRun], palette_len: usize) -> io::Result<()> {

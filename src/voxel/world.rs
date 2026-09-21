@@ -364,6 +364,10 @@ impl VoxelWorld {
         Some((chunk_coord, previous_block))
     }
 
+    #[expect(
+        dead_code,
+        reason = "layer placement API is ready before the first concrete layer content is authored"
+    )]
     pub(crate) fn add_layer_at(
         &mut self,
         world_position: IVec3,
@@ -400,6 +404,10 @@ impl VoxelWorld {
         Some(chunk_coord)
     }
 
+    #[expect(
+        dead_code,
+        reason = "layer removal API is ready before the first concrete layer content is authored"
+    )]
     pub(crate) fn remove_layer_at(
         &mut self,
         world_position: IVec3,

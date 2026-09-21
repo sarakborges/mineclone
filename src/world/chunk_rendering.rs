@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use crate::{
     content::{
         biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry,
-        secondary_property::SecondaryPropertyRegistry,
+        layer::LayerRegistry, secondary_property::SecondaryPropertyRegistry,
     },
     voxel::{chunk::VoxelChunk, fluid_mesh::ChunkFluidMesh, read::VoxelRead, world::VoxelWorld},
 };
@@ -28,6 +28,7 @@ pub(crate) struct ChunkRenderCoord(pub(crate) IVec3);
 pub(crate) struct ChunkMeshBuildContext<'a, W: VoxelRead + ?Sized> {
     pub(crate) world: &'a W,
     pub(crate) blocks: &'a BlockRegistry,
+    pub(crate) layers: &'a LayerRegistry,
     pub(crate) fluids: &'a FluidRegistry,
     pub(crate) biomes: &'a BiomeRegistry,
     pub(crate) secondary_properties: &'a SecondaryPropertyRegistry,
@@ -37,6 +38,7 @@ pub(crate) struct ChunkMeshBuildContext<'a, W: VoxelRead + ?Sized> {
 pub(crate) struct ChunkRenderContext<'a> {
     pub(crate) world: &'a VoxelWorld,
     pub(crate) blocks: &'a BlockRegistry,
+    pub(crate) layers: &'a LayerRegistry,
     pub(crate) fluids: &'a FluidRegistry,
     pub(crate) biomes: &'a BiomeRegistry,
     pub(crate) secondary_properties: &'a SecondaryPropertyRegistry,
@@ -50,6 +52,7 @@ impl ChunkRenderContext<'_> {
         ChunkMeshBuildContext {
             world: self.world,
             blocks: self.blocks,
+            layers: self.layers,
             fluids: self.fluids,
             biomes: self.biomes,
             secondary_properties: self.secondary_properties,

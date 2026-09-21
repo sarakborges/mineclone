@@ -12,7 +12,7 @@ pub(super) struct FaceGeometry {
     pub texture_rotation: TextureRotation,
 }
 
-pub(super) fn is_face_exposed<W: VoxelRead + ?Sized>(
+pub(crate) fn is_face_exposed<W: VoxelRead + ?Sized>(
     world: &W,
     blocks: &BlockRegistry,
     block_id: &str,

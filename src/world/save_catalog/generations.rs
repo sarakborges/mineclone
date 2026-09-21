@@ -7,7 +7,7 @@ use std::{
 use bevy::log::warn;
 
 use crate::{
-    content::{block::BlockRegistry, fluid::FluidRegistry},
+    content::{block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry},
     voxel::world::VoxelWorld,
 };
 
@@ -90,6 +90,7 @@ pub(super) fn newest_restorable_timestamp(
             id,
             &candidate.manifest,
             &registries.blocks,
+            &registries.layers,
             &registries.fluids,
             |snapshot| registries.validate_playable(snapshot),
         );
@@ -123,6 +124,7 @@ pub(crate) fn load_world(
             id,
             &candidate.manifest,
             registries.blocks,
+            registries.layers,
             registries.fluids,
             |snapshot| registries.validate_playable(snapshot),
         );
@@ -146,11 +148,12 @@ fn load_snapshot(
     id: &str,
     manifest: &WorldManifest,
     blocks: &BlockRegistry,
+    layers: &LayerRegistry,
     fluids: &FluidRegistry,
     validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
 ) -> io::Result<(WorldSnapshot, VoxelWorld)> {
     let file = open_snapshot_file(directory, manifest)?;
-    decode_snapshot(directory, file, id, manifest, blocks, fluids, validate)
+    decode_snapshot(directory, file, id, manifest, blocks, layers, fluids, validate)
 }
 
 fn decode_snapshot(
@@ -159,6 +162,7 @@ fn decode_snapshot(
     id: &str,
     manifest: &WorldManifest,
     blocks: &BlockRegistry,
+    layers: &LayerRegistry,
     fluids: &FluidRegistry,
     validate: impl FnOnce(&WorldSnapshot) -> io::Result<()>,
 ) -> io::Result<(WorldSnapshot, VoxelWorld)> {
@@ -198,7 +202,7 @@ fn decode_snapshot(
         manifest.generation,
     )?);
 
-    let world = chunks.into_world(blocks, fluids)?;
+    let world = chunks.into_world(blocks, layers, fluids)?;
     Ok((snapshot, world))
 }
 
@@ -278,6 +282,7 @@ pub(super) fn prune_old_generations(
             id,
             &manifest,
             &registries.blocks,
+            &registries.layers,
             &registries.fluids,
             |snapshot| registries.validate_playable(snapshot),
         ) {

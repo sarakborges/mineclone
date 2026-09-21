@@ -1,6 +1,6 @@
 use std::{io, sync::Arc};
 
-use crate::content::{block::BlockRegistry, fluid::FluidRegistry};
+use crate::content::{block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry};
 use crate::voxel::{chunk_archive::ArchivedChunk, chunk_disk::DiskChunk};
 
 use super::VoxelWorld;
@@ -35,6 +35,7 @@ impl VoxelWorld {
     pub(crate) fn from_saved_chunks(
         saved: Vec<DiskChunk>,
         blocks: &BlockRegistry,
+        layers: &LayerRegistry,
         fluids: &FluidRegistry,
     ) -> io::Result<Self> {
         let mut world = Self::default();
@@ -46,7 +47,7 @@ impl VoxelWorld {
                     format!("duplicate saved chunk coordinate: {coord:?}"),
                 ));
             }
-            let (coord, chunk) = entry.into_chunk(blocks, fluids)?;
+            let (coord, chunk) = entry.into_chunk(blocks, layers, fluids)?;
             let archived = Arc::new(ArchivedChunk::from_chunk(&chunk));
             world.persistent_chunks.insert(coord);
             world.archived_chunks.insert(coord, archived);
