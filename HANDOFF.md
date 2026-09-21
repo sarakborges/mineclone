@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 20 — 2026-09-21:** helper compartilhado `find_map_square_rings` agora usa `checked_mul/checked_add` e ignora candidatos fora do domínio i32 em vez de wrapar coordenadas em release. Esse helper é usado por spawn/search e pode receber center derivado de estado externo. Commit: `45c85021fc4e21ba8c538e43373481d0346d26fc`. **Pendências:** warp faz busca local de raio 32 e offsets seguros, mas target extremo ainda passa por `target + offset`; revisar esse ponto. **Próximo passo:** tornar warp candidate addition overflow-safe e consolidar VERSION 0.50.10.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 19 — 2026-09-21:** retention/render-radius do streaming também passou a usar distância quadrática em i64. `pop_retired_outside_horizontal_radius` e `chunk_is_inside_render_radius` não dependem mais de subtração/quadrado i32; `RetiredScanKey.radius_squared` foi ampliado para i64 para manter o cache coerente (`21166770f8065f6e544c78b7b85d5d073f57af07`, `194cb85d6a6f48fc5e5a2bdf64762cd39258c919`). **Pendências:** `ChunkTaskQueue::cancel_farthest_where` usa `IVec3::length_squared`, mas os coords ali pertencem à janela limitada de streaming; risco prático menor. **Próximo passo:** revisar spatial search/warp boundaries e então versionar checkpoint D.
 
 
