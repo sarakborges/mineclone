@@ -294,6 +294,11 @@ impl<'a> TerrainMaterialBuilder<'a> {
 pub struct TerrainMaterials {
     blocks: HashMap<String, BlockFaces<Vec<Handle<TerrainMaterial>>>>,
     layers: HashMap<String, Handle<TerrainMaterial>>,
+    array_materials: HashMap<TerrainAlphaKey, Handle<TerrainMaterial>>,
+    texture_table: TerrainTextureTable,
+    texture_array: Handle<Image>,
+    texture_sources: Vec<Handle<Image>>,
+    texture_array_ready: Arc<AtomicBool>,
     _texture_preloads: Vec<Handle<Image>>,
 }
 
@@ -302,39 +307,61 @@ impl TerrainMaterials {
         blocks: &BlockRegistry,
         layers: &LayerRegistry,
         asset_server: &AssetServer,
+        images: &mut Assets<Image>,
         materials: &mut Assets<TerrainMaterial>,
         lighting: &TerrainLightingBuffer,
         roughness: f32,
         metallic: f32,
     ) -> Self {
-        let mut seen_textures = HashSet::<String>::new();
-        let texture_preloads = blocks
+        let texture_table = TerrainTextureTable::from_blocks(blocks);
+        let texture_sources = texture_table
+            .paths()
             .iter()
-            .flat_map(|definition| {
-                BlockFace::ALL.into_iter().flat_map(move |face| {
-                    block_face_texture_layers(face, definition)
-                        .iter()
-                        .map(|layer| layer.texture.as_str())
-                })
-            })
-            .chain(layers.iter().map(|definition| definition.texture.as_str()))
-            .filter_map(|texture| {
-                let texture = texture.to_owned();
-                seen_textures.insert(texture.clone()).then_some(texture)
-            })
-            .map(|texture| asset_server.load(texture))
-            .collect();
+            .map(|path| asset_server.load(path.clone()))
+            .collect::<Vec<_>>();
+        let texture_array =
+            create_terrain_texture_array(texture_table.layer_count(), images);
 
-        let mut builder =
-            TerrainMaterialBuilder::new(asset_server, materials, lighting, roughness, metallic);
+        let mut builder = TerrainMaterialBuilder::new(
+            asset_server,
+            materials,
+            lighting,
+            roughness,
+            metallic,
+            texture_array.clone(),
+        );
+
+        let mut array_materials = HashMap::new();
+        for definition in blocks.iter() {
+            for face in BlockFace::ALL {
+                if block_face_texture_layers(face, definition).len() > 2 {
+                    continue;
+                }
+                let alpha = TerrainAlphaKey::for_layer(definition, 0);
+                if !array_materials.contains_key(&alpha) {
+                    array_materials.insert(alpha, builder.array_material(alpha));
+                }
+            }
+        }
+
         let blocks = blocks
             .iter()
             .map(|definition| {
-                let block_materials =
-                    BlockFaces::from_fn(|face| builder.layers_for(definition, face));
+                let block_materials = BlockFaces::from_fn(|face| {
+                    if block_face_texture_layers(face, definition).len() <= 2 {
+                        Vec::new()
+                    } else {
+                        builder.layers_for(definition, face)
+                    }
+                });
                 (definition.id.clone(), block_materials)
             })
             .collect();
+
+        let layer_texture_preloads = layers
+            .iter()
+            .map(|definition| asset_server.load(definition.texture.clone()))
+            .collect::<Vec<_>>();
         let layers = layers
             .iter()
             .map(|definition| {
@@ -348,8 +375,97 @@ impl TerrainMaterials {
         Self {
             blocks,
             layers,
-            _texture_preloads: texture_preloads,
+            array_materials,
+            texture_table,
+            texture_array,
+            texture_sources,
+            texture_array_ready: Arc::new(AtomicBool::new(false)),
+            _texture_preloads: layer_texture_preloads,
         }
+    }
+
+    pub(crate) fn texture_table(&self) -> &TerrainTextureTable {
+        &self.texture_table
+    }
+
+    pub(crate) fn texture_array_handle(&self) -> Handle<Image> {
+        self.texture_array.clone()
+    }
+
+    pub(crate) fn ensure_texture_array_ready(&self, images: &mut Assets<Image>) -> bool {
+        if self.texture_array_ready.load(Ordering::Acquire) {
+            return true;
+        }
+
+        let mut layers = Vec::with_capacity(self.texture_sources.len());
+        for (path, handle) in self.texture_table.paths().iter().zip(&self.texture_sources) {
+            let Some(image) = images.get(handle) else {
+                return false;
+            };
+            assert_eq!(
+                image.width(),
+                TERRAIN_TEXTURE_SIZE,
+                "terrain texture must be {TERRAIN_TEXTURE_SIZE}x{TERRAIN_TEXTURE_SIZE}: {path}"
+            );
+            assert_eq!(
+                image.height(),
+                TERRAIN_TEXTURE_SIZE,
+                "terrain texture must be {TERRAIN_TEXTURE_SIZE}x{TERRAIN_TEXTURE_SIZE}: {path}"
+            );
+            assert_eq!(
+                image.texture_descriptor.format,
+                TextureFormat::Rgba8UnormSrgb,
+                "terrain texture must load as RGBA8 sRGB: {path}"
+            );
+            let data = image
+                .data
+                .as_ref()
+                .unwrap_or_else(|| panic!("terrain texture CPU data is unavailable: {path}"));
+            assert_eq!(
+                data.len(),
+                TERRAIN_TEXTURE_BYTES,
+                "terrain texture has unexpected byte size: {path}"
+            );
+            layers.push(data.clone());
+        }
+
+        let target = images
+            .get_mut(&self.texture_array)
+            .expect("terrain texture array must remain resident while a world is active");
+        let target_data = target
+            .data
+            .as_mut()
+            .expect("terrain texture array must retain CPU data until populated");
+        assert_eq!(
+            target_data.len(),
+            TERRAIN_TEXTURE_BYTES * self.texture_table.layer_count() as usize,
+            "terrain texture array byte size must match its layer count"
+        );
+
+        for (index, layer) in layers.into_iter().enumerate() {
+            let start = (index + 1) * TERRAIN_TEXTURE_BYTES;
+            target_data[start..start + TERRAIN_TEXTURE_BYTES].copy_from_slice(&layer);
+        }
+
+        self.texture_array_ready.store(true, Ordering::Release);
+        true
+    }
+
+    pub(super) fn for_array(
+        &self,
+        alpha_blend: bool,
+        alpha_cutoff: Option<u32>,
+    ) -> &Handle<TerrainMaterial> {
+        let alpha = if alpha_blend {
+            TerrainAlphaKey::Blend
+        } else if let Some(cutoff) = alpha_cutoff {
+            TerrainAlphaKey::Mask(cutoff)
+        } else {
+            TerrainAlphaKey::Opaque
+        };
+        self.array_materials
+            .get(&alpha)
+            .unwrap_or_else(|| panic!("missing shared terrain array material for {alpha:?}"))
     }
 
     pub(super) fn for_face(
@@ -369,6 +485,30 @@ impl TerrainMaterials {
             .get(layer_id)
             .unwrap_or_else(|| panic!("missing terrain material for layer: {layer_id}"))
     }
+}
+
+fn create_terrain_texture_array(
+    layer_count: u32,
+    images: &mut Assets<Image>,
+) -> Handle<Image> {
+    let stacked_height = TERRAIN_TEXTURE_SIZE
+        .checked_mul(layer_count)
+        .expect("terrain texture array height cannot overflow u32");
+    let mut image = Image::new_fill(
+        Extent3d {
+            width: TERRAIN_TEXTURE_SIZE,
+            height: stacked_height,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        &[255, 255, 255, 255],
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    );
+    image
+        .reinterpret_stacked_2d_as_array(layer_count)
+        .expect("terrain texture stack must reinterpret as a 2D array");
+    images.add(image)
 }
 
 #[derive(Resource, Clone)]
