@@ -28,6 +28,7 @@ const MEBIBYTE: usize = 1024 * 1024;
 /// the absolute residency limit.
 pub(crate) const CHUNK_MESH_RESIDENCY_HIGH_BYTES: usize = 192 * MEBIBYTE;
 pub(crate) const CHUNK_MESH_RESIDENCY_TARGET_BYTES: usize = 160 * MEBIBYTE;
+pub(crate) const CHUNK_MESH_RESIDENCY_RECOVERY_BYTES: usize = 128 * MEBIBYTE;
 
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ChunkRenderCoord(pub(crate) IVec3);
