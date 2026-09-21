@@ -14,6 +14,7 @@ pub(super) fn light_initial_chunks(
     changed_chunks: &mut HashSet<IVec3>,
 ) {
     let mut budget = FrameWorkBudget::new(INITIAL_LOADING_BUDGET, 256);
+    let mut changed_positions = HashSet::new();
 
     loop {
         if budget.exhausted() {
@@ -44,6 +45,7 @@ pub(super) fn light_initial_chunks(
             content.fluids(),
             content.secondary_properties(),
             changed_chunks,
+            &mut changed_positions,
             |processed_voxels| {
                 budget.record(processed_voxels.saturating_sub(recorded_voxels));
                 recorded_voxels = processed_voxels;
@@ -51,6 +53,7 @@ pub(super) fn light_initial_chunks(
             },
         );
         changed_chunks.clear();
+        changed_positions.clear();
 
         if !lighting.is_empty() {
             break;
