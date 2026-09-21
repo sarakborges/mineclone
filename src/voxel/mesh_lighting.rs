@@ -21,7 +21,8 @@ const LIGHTING_CACHE_VOLUME: usize =
 
 #[derive(Clone, Copy, Default)]
 struct CachedLightingSample {
-    light: VoxelLight,
+    sky: u8,
+    block_srgb: [u8; 3],
     occupied_fraction: f32,
     loaded: bool,
 }
@@ -89,7 +90,8 @@ fn cached_lighting_sample(sample: VoxelSample) -> CachedLightingSample {
     };
 
     CachedLightingSample {
-        light,
+        sky: light.sky(),
+        block_srgb: light.block_srgb_levels(),
         occupied_fraction: cell.map_or(0.0, |cell| {
             crate::voxel::microblock::MicroblockMask::from_cell(cell)
                 .occupied_fraction()
@@ -226,7 +228,8 @@ fn provisional_top_sky_sample_cached(
 ) -> CachedLightingSample {
     if face == BlockFace::Top && !sample.loaded {
         CachedLightingSample {
-            light: VoxelLight::new_hsi(VoxelLight::MAX_LEVEL, BlockLight::DARK),
+            sky: VoxelLight::MAX_LEVEL,
+            block_srgb: [0; 3],
             occupied_fraction: 0.0,
             loaded: true,
         }
@@ -251,8 +254,8 @@ fn average_cached_shader_light_levels(
             continue;
         }
 
-        sky_total += sample.light.sky() as f32 * weight;
-        let block = sample.light.block_srgb_levels();
+        sky_total += sample.sky as f32 * weight;
+        let block = sample.block_srgb;
         block_total[0] += block[0] as f32 * weight;
         block_total[1] += block[1] as f32 * weight;
         block_total[2] += block[2] as f32 * weight;
