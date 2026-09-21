@@ -3,9 +3,6 @@ use std::io;
 use bevy::prelude::*;
 
 use crate::{
-    content::{
-        block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry, tool::ToolRegistry,
-    },
     creatures::PendingCreatureRestores,
     player::{
         game_mode::GameMode,
@@ -18,7 +15,7 @@ use crate::{
         dimension::CurrentDimension,
         fluid_updates::PendingFluidUpdates,
         game_rules::GameRules,
-        save_catalog::{WorldDirectoryLock, WorldSnapshot},
+        save_catalog::{SaveRegistries, WorldDirectoryLock, WorldSnapshot},
         save_session::WorldSession,
     },
 };
@@ -47,20 +44,17 @@ impl PreparedWorldActivation {
         mut snapshot: WorldSnapshot,
         world: VoxelWorld,
         session_lock: WorldDirectoryLock,
-        blocks: &BlockRegistry,
-        layers: &LayerRegistry,
-        fluids: &FluidRegistry,
-        tools: &ToolRegistry,
+        registries: SaveRegistries<'_>,
     ) -> Result<Self, WorldActivationError> {
         let pending_fluids =
-            PendingFluidUpdates::from_saved(&snapshot.fluid_updates, fluids)
+            PendingFluidUpdates::from_saved(&snapshot.fluid_updates, registries.fluids)
                 .map_err(WorldActivationError::Load)?;
         let inventory = PlayerHotbar::from_saved_items_and_selection(
             &snapshot.inventory,
             snapshot.selected_hotbar_slot,
-            blocks,
-            layers,
-            tools,
+            registries.blocks,
+            registries.layers,
+            registries.tools,
         )
         .map_err(WorldActivationError::Inventory)?;
 

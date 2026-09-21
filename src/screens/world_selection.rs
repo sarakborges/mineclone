@@ -210,10 +210,7 @@ fn poll_world_load(
         snapshot,
         world,
         session_lock,
-        &context.content.blocks,
-        &context.content.layers,
-        &context.content.fluids,
-        &context.content.tools,
+        context.content.registries(),
     ) {
         Ok(activation) => activation,
         Err(WorldActivationError::Load(error)) => {
