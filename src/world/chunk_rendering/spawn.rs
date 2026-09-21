@@ -125,15 +125,18 @@ pub(crate) fn build_chunk_render_meshes<W: VoxelRead + ?Sized>(
         return Vec::new();
     }
 
-    let lighting_cache =
-        ChunkLightingCache::capture(context.world, coord * CHUNK_SIZE as i32);
+    let lighting_cache = ChunkLightingCache::capture_if_worthwhile(
+        context.world,
+        coord * CHUNK_SIZE as i32,
+        chunk,
+    );
     let terrain_meshes = if chunk.has_terrain_content() {
         build_chunk_terrain_render_meshlets_with_lighting(
             coord,
             chunk,
             context,
             ChunkMeshletMask::ALL,
-            Some(&lighting_cache),
+            lighting_cache.as_ref(),
         )
     } else {
         Vec::new()
@@ -144,7 +147,7 @@ pub(crate) fn build_chunk_render_meshes<W: VoxelRead + ?Sized>(
             chunk,
             context,
             ChunkMeshletMask::ALL,
-            Some(&lighting_cache),
+            lighting_cache.as_ref(),
         )
     } else {
         Vec::new()
@@ -178,7 +181,7 @@ pub(super) fn build_chunk_terrain_render_meshlets<W: VoxelRead + ?Sized>(
             chunk,
             context,
             meshlets,
-            Some(&lighting_cache),
+            lighting_cache.as_ref(),
         );
     }
 
@@ -295,7 +298,7 @@ pub(super) fn build_chunk_fluid_render_meshlets<W: VoxelRead + ?Sized>(
             chunk,
             context,
             meshlets,
-            Some(&lighting_cache),
+            lighting_cache.as_ref(),
         );
     }
 
