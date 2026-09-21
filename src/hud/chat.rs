@@ -267,14 +267,14 @@ fn interpret_chat_submissions(
             ParsedLine::Unknown(command) => format!("Unknown command: {command}"),
             ParsedLine::Spawn(id) => placement.spawn(&mut commands, id, &mut reserved),
             ParsedLine::Place(id, variation) => placement.place(id, variation, &reserved),
-            ParsedLine::Locate(kind, id) => {
+            ParsedLine::Locate(kind, id, variation) => {
                 let Some(player_block) = placement.player_block_position() else {
                     chat.append(ChatMessage::Text(
                         "Cannot locate: player is unavailable.".to_owned(),
                     ));
                     continue;
                 };
-                locate.start(kind, id, player_block)
+                locate.start(kind, id, variation, player_block)
             },
             ParsedLine::Warp(target) => {
                 warp.request(target);
@@ -299,11 +299,11 @@ mod tests {
         assert_eq!(parse_line("/spawn"), ParsedLine::Usage("/spawn <id>"));
         assert_eq!(
             parse_line("/place"),
-            ParsedLine::Usage("/place <id> [variation]")
+            ParsedLine::Usage("/place structure <groupid> [variation]")
         );
         assert_eq!(
-            parse_line("/place foo extra extra"),
-            ParsedLine::Usage("/place <id> [variation]")
+            parse_line("/place structure foo extra extra"),
+            ParsedLine::Usage("/place structure <groupid> [variation]")
         );
         assert_eq!(parse_line("/spawn_creature foo"), ParsedLine::Unknown("/spawn_creature"));
         assert_eq!(parse_line("/unknown"), ParsedLine::Unknown("/unknown"));
