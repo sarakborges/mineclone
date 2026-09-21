@@ -81,12 +81,12 @@ impl WorldFeatureFields {
             .cave_region(coord, || factory(&self.cave_connectivity))
     }
 
-    pub(crate) fn structure_vertical_extent(
+    pub(crate) fn structure_top_y(
         &self,
         coord: IVec2,
         factory: impl FnOnce() -> i32,
     ) -> i32 {
-        self.caches.structure_vertical_extent(coord, factory)
+        self.caches.structure_top_y(coord, factory)
     }
 
     pub(crate) fn structure_origin_y(
