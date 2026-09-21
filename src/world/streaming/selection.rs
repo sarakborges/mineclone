@@ -101,6 +101,8 @@ pub(super) fn rebuild_queue(
             .retain_surface_site_cache(center.xz(), retention_radius);
     }
 
+    streaming.retain_mesh_pressure_evictions(&scratch.desired, center);
+
     let center_structure_top_chunk = scratch
         .structure_top_chunks
         .get(&center.xz())
@@ -121,6 +123,7 @@ pub(super) fn rebuild_queue(
             .filter(|coord| {
                 !context.render_pool.contains(*coord)
                     && !streaming.generated_chunk_is_unpublished(*coord)
+                    && !streaming.mesh_is_pressure_evicted(*coord)
             })
             .map(|coord| PendingEntry {
                 coord,
