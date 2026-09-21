@@ -375,7 +375,10 @@ impl MeshArrays {
         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
-        .with_inserted_attribute(ATTRIBUTE_VOXEL_LIGHT, self.colors)
+        .with_inserted_attribute(
+            ATTRIBUTE_VOXEL_LIGHT,
+            VertexAttributeValues::Unorm8x4(self.colors),
+        )
         .with_inserted_indices(indices)
     }
 }
