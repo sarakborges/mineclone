@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 21 — 2026-09-21:** busca local de warp agora evita overflow ao somar offsets ao target externo; candidatos fora do domínio i32 são ignorados em vez de wrapar coordenadas em release. O distance-squared permanece seguro porque o offset é limitado a raio 32. Commit: `9a2c7f94c5bd96eee36ce8f93cc8230015d04d1c`. **Pendências:** validar CI/runtime; revisar outros pontos que recebem coordenadas externas antes de consolidar checkpoint D. **Próximo passo:** checar comandos/chat que constroem IVec3 a partir de input e save/player positions; depois bump de versão.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 20 — 2026-09-21:** helper compartilhado `find_map_square_rings` agora usa `checked_mul/checked_add` e ignora candidatos fora do domínio i32 em vez de wrapar coordenadas em release. Esse helper é usado por spawn/search e pode receber center derivado de estado externo. Commit: `45c85021fc4e21ba8c538e43373481d0346d26fc`. **Pendências:** warp faz busca local de raio 32 e offsets seguros, mas target extremo ainda passa por `target + offset`; revisar esse ponto. **Próximo passo:** tornar warp candidate addition overflow-safe e consolidar VERSION 0.50.10.
 
 
