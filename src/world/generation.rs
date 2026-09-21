@@ -58,7 +58,7 @@ pub(crate) struct ChunkGenerationContext<'a> {
 }
 
 impl ChunkGenerationContext<'_> {
-    fn region(&self, region_coord: IVec3) -> Arc<GenerationRegion> {
+    pub(crate) fn region(&self, region_coord: IVec3) -> Arc<GenerationRegion> {
         self.feature_fields
             .region_with_hydrology(region_coord, |hydrology| {
                 hydrology.region_from_macro_terrain(region_coord.xz(), |position| {
