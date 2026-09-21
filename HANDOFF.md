@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 7 — 2026-09-21:** backlog de fluidos descarregados deixou de usar `HashMap<chunk, Vec<FluidTickKey>>` com `contains()` linear para deduplicação. Cada chunk agora mantém `HashSet<FluidTickKey>`, tornando `defer_unloaded` deduplicado em tempo amortizado constante e evitando degradação quadrática sob backlog/fronteira de streaming. A ordem não fazia parte do contrato; captura de save já ordena deterministicamente depois. Commit: `c21441344a577cc614cec970dbc87895d452ecbf`. **Pendências:** CI/runtime QA ainda não verificados. **Próximo passo:** auditar lifecycle/reset de Resources e filas entre `StartingScreen -> Loading -> Gameplay -> StartingScreen`, buscando estado stale e tasks antigas atravessando sessões.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 6 — 2026-09-21:** `ToolId` interner alinhado aos interners de block/layer: substituído `HashMap<String, &'static str>` por `HashSet<&'static str>`, usando a própria string canônica vazada como chave. Isso remove a segunda alocação permanente por tool ID sem mudar identidade/lookup. Commit: `e59b65e6118060cd33312f7f4b6c2a96f08d2153`. **Pendências:** CI/runtime QA ainda não verificados. **Próximo passo:** revisar caches concorrentes e snapshots assíncronos por clones profundos/locks redundantes; depois lifecycle de resources entre estados.
 
 
