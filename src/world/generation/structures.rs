@@ -34,6 +34,7 @@ use self::{
 use super::{super::biome_field::BiomeField, ChunkGenerationContext};
 
 const COLUMN_INDEX_MIN_VOXELS: usize = 512;
+const STRUCTURE_OCCUPANCY_WORDS: usize = CHUNK_VOLUME.div_ceil(u64::BITS as usize);
 
 #[derive(Clone, Copy)]
 struct StructureCandidate<'a> {
