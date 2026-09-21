@@ -84,6 +84,15 @@ pub(super) fn validate_content(content: &LoadedContent) {
         structure.validate_references(&content.blocks, &content.layers, &content.fluids);
     }
 
+    for structure_set in content.structure_sets.iter() {
+        assert!(
+            !content.structures.resolves_reference(&structure_set.id),
+            "content id {} cannot be both a structure/structure group and a structure set",
+            structure_set.id
+        );
+        structure_set.validate_references(&content.structures);
+    }
+
     for biome in content.biomes.iter() {
         biome.validate_material_references(&content.blocks);
         for spawn in &biome.creature_spawns {
@@ -94,7 +103,7 @@ pub(super) fn validate_content(content: &LoadedContent) {
                 spawn.creature
             );
         }
-        biome.validate_structure_references(&content.structures);
+        biome.validate_structure_references(&content.structures, &content.structure_sets);
         if let Some(surface_fluid) = &biome.surface_fluid {
             assert!(
                 content.fluids.id_of(surface_fluid.fluid_id()).is_some(),
