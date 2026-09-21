@@ -324,7 +324,7 @@ fn locate_structure(
             player_horizontal.y.div_euclid(spacing),
         );
         let maximum_cell_radius =
-            MAX_LOCATE_BLOCK_RADIUS.div_ceil(spacing) + 2;
+            (MAX_LOCATE_BLOCK_RADIUS + spacing - 1) / spacing + 2;
 
         for radius in 0..=maximum_cell_radius {
             visit_square_cell_ring(center_cell, radius, |cell| {
