@@ -62,6 +62,12 @@ pub(super) struct CreativeCatalogScrollbar;
 #[derive(Component)]
 pub(super) struct InventoryCursorIcon;
 
+#[derive(Component)]
+pub(super) struct InventoryItemTooltip;
+
+#[derive(Component)]
+pub(super) struct InventoryItemTooltipText;
+
 #[derive(Resource, Default)]
 pub(super) struct CreativeInventoryView {
     search: String,
