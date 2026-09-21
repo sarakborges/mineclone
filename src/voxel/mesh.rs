@@ -8,7 +8,8 @@ use crate::{
 use self::{
     geometry::{face_geometry, is_face_exposed, orient_face_geometry},
     micro_mesh::{
-        MicroMeshBuffers, MicroSurface, emit_neighbor_openings, emit_sculpted_faces, occludes,
+        MicroMeshBuffers, MicroSurface, emit_neighbor_openings, emit_sculpted_faces,
+        material_buffer, occludes,
     },
 };
 use super::{
@@ -151,9 +152,7 @@ where
                     let lighting = face_lighting(world, world_voxel, face, source_block_srgb);
                     let material_face = block_face_material_face(block_face, block);
                     push_lit_quad(
-                        buffers
-                            .entry((cell.block_id, material_face, block.casts_shadow))
-                            .or_default(),
+                        material_buffer(&mut buffers, cell.block_id, block, material_face),
                         geometry.vertices,
                         geometry.normal,
                         geometry.texture_rotation.rotate_uvs(VOXEL_FACE_UVS),
@@ -166,13 +165,13 @@ where
     }
 
     let mut meshes = buffers
-        .into_iter()
-        .filter_map(|((block_id, face, casts_shadow), buffer)| {
-            buffer.into_mesh().map(|mesh| ChunkFaceMesh {
-                block_id,
-                face,
+        .into_values()
+        .filter_map(|entry| {
+            entry.buffer.into_mesh().map(|mesh| ChunkFaceMesh {
+                block_id: entry.block_id,
+                face: entry.face,
                 mesh,
-                casts_shadow,
+                casts_shadow: entry.casts_shadow,
             })
         })
         .collect::<Vec<_>>();
