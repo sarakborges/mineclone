@@ -1,6 +1,9 @@
 use serde::Deserialize;
 
-use super::{biome::BiomeDefinition, structure::StructureRegistry};
+use super::{
+    biome::BiomeDefinition, structure::StructureRegistry,
+    structure_set::StructureSetRegistry,
+};
 
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,11 +39,16 @@ pub struct BiomeStructure {
 }
 
 impl BiomeDefinition {
-    pub(crate) fn validate_structure_references(&self, structures: &StructureRegistry) {
+    pub(crate) fn validate_structure_references(
+        &self,
+        structures: &StructureRegistry,
+        structure_sets: &StructureSetRegistry,
+    ) {
         for (index, structure) in self.structures.iter().enumerate() {
             assert!(
-                structures.resolves_reference(&structure.id),
-                "biome {} references missing structure or structure group: {}",
+                structures.resolves_reference(&structure.id)
+                    || structure_sets.get(&structure.id).is_some(),
+                "biome {} references missing structure, structure group, or structure set: {}",
                 self.id,
                 structure.id
             );
