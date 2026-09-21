@@ -531,8 +531,11 @@ mod tests {
                 &mut context,
                 LightingChangeSets::new(
                     &mut changed,
+                    &mut changed_positions,
                     &mut interactive_changed,
+                    &mut interactive_changed_positions,
                     &mut settling_changed,
+                    &mut settling_changed_positions,
                 ),
                 |_| false,
             );
