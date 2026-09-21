@@ -147,13 +147,6 @@ where
         Some(self.remove_active_index(index))
     }
 
-    pub(crate) fn pop_min_by_key<K: Ord>(
-        &mut self,
-        key: impl FnMut(T) -> K,
-    ) -> Option<T> {
-        self.pop_min_where_by_key(|_| true, key)
-    }
-
     pub(crate) fn pop_min_where_by_key<K: Ord>(
         &mut self,
         mut predicate: impl FnMut(T) -> bool,
@@ -315,26 +308,26 @@ mod tests {
     }
 
     #[test]
-    fn pop_min_by_key_preserves_fifo_within_best_rank() {
+    fn pop_min_where_by_key_preserves_fifo_within_best_rank() {
         let mut queue = DeduplicatedQueue::from(vec![4, 2, 3, 1]);
 
-        assert_eq!(queue.pop_min_by_key(|value| value % 2), Some(4));
-        assert_eq!(queue.pop_min_by_key(|value| value % 2), Some(2));
-        assert_eq!(queue.pop_min_by_key(|value| value % 2), Some(3));
-        assert_eq!(queue.pop_min_by_key(|value| value % 2), Some(1));
-        assert_eq!(queue.pop_min_by_key(|value| value % 2), None);
+        assert_eq!(queue.pop_min_where_by_key(|_| true, |value| value % 2), Some(4));
+        assert_eq!(queue.pop_min_where_by_key(|_| true, |value| value % 2), Some(2));
+        assert_eq!(queue.pop_min_where_by_key(|_| true, |value| value % 2), Some(3));
+        assert_eq!(queue.pop_min_where_by_key(|_| true, |value| value % 2), Some(1));
+        assert_eq!(queue.pop_min_where_by_key(|_| true, |value| value % 2), None);
     }
 
     #[test]
-    fn pop_min_by_key_ignores_stale_priority_promotions() {
+    fn pop_min_where_by_key_ignores_stale_priority_promotions() {
         let mut queue = DeduplicatedQueue::default();
         queue.enqueue(3);
         queue.enqueue(1);
         queue.enqueue_front(1);
 
-        assert_eq!(queue.pop_min_by_key(|value| value), Some(1));
-        assert_eq!(queue.pop_min_by_key(|value| value), Some(3));
-        assert_eq!(queue.pop_min_by_key(|value| value), None);
+        assert_eq!(queue.pop_min_where_by_key(|_| true, |value| value), Some(1));
+        assert_eq!(queue.pop_min_where_by_key(|_| true, |value| value), Some(3));
+        assert_eq!(queue.pop_min_where_by_key(|_| true, |value| value), None);
     }
 
     #[test]
