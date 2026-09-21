@@ -35,7 +35,6 @@ impl BuiltChunkMesh {
             },
             Self::Layer(mesh) => ChunkMeshKey::Layer {
                 layer_id: mesh.layer_id,
-                face: mesh.face,
                 casts_shadow: mesh.casts_shadow,
             },
             Self::Fluid(mesh) => ChunkMeshKey::Fluid(mesh.fluid_id),
@@ -391,7 +390,6 @@ fn spawn_geometry_mesh(
         ChunkMeshKey::Layer {
             layer_id,
             casts_shadow,
-            ..
         } => (
             std::slice::from_ref(context.terrain_materials.for_layer(layer_id)),
             casts_shadow,
