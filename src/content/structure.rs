@@ -439,18 +439,6 @@ impl StructureRegistry {
         Some((minimum, maximum))
     }
 
-    pub(crate) fn max_y_offset_for_reference(&self, reference: &str) -> Option<i32> {
-        if let Some(structure) = self.get(reference) {
-            return Some(structure.max_y_offset());
-        }
-
-        self.groups.get(reference)?.iter().map(|id| {
-            self.get(id)
-                .expect("group index references registered structures")
-                .max_y_offset()
-        }).max()
-    }
-
     fn rebuild_group_index(&mut self) {
         self.groups.clear();
         for structure in self.definitions.values() {
