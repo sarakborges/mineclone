@@ -14,7 +14,7 @@ const AO_DIAGONAL_EPSILON: f32 = 0.001;
 
 type VoxelSample = Option<(Option<VoxelCell>, Option<FluidCell>, VoxelLight)>;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(super) struct FaceLighting {
     pub(super) channels: [[f32; 2]; 4],
     pub(super) block_srgb: [[f32; 3]; 4],
