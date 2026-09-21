@@ -108,7 +108,7 @@ pub(crate) fn patch_voxel_mesh(
     dirty: ChunkMeshletMask,
 ) -> Option<Mesh> {
     if dirty.is_all() {
-        return replacement.cloned();
+        return replacement.and_then(|mesh| MeshArrays::from_mesh(mesh)?.into_mesh());
     }
 
     let mut output = MeshArrays::default();
