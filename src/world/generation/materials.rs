@@ -72,7 +72,7 @@ pub(super) fn rasterize_material_pass(
 ) {
     let mut surface_materials = SurfaceMaterialColumn::default();
 
-    chunk.edit_blocks(|chunk| {
+    chunk.edit_initial_blocks(|chunk| {
         for local_z in 0..CHUNK_SIZE {
             for local_x in 0..CHUNK_SIZE {
                 let column = &columns[column_index(local_x, local_z)];
@@ -129,7 +129,7 @@ pub(super) fn rasterize_material_pass(
                         local_x,
                         local_y,
                         local_z,
-                        Some(VoxelCell::new(block_id, rotation)),
+                        VoxelCell::new(block_id, rotation),
                     );
                 }
             }
