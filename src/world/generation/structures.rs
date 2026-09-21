@@ -5,6 +5,7 @@ mod support;
 use std::{cmp::Ordering, collections::HashSet};
 
 use bevy::prelude::*;
+use smallvec::SmallVec;
 
 use crate::{
     content::{
@@ -627,11 +628,11 @@ pub(crate) fn surface_layer_placements(
     structure: &StructureDefinition,
     voxel: &StructureVoxel,
     world_position: IVec3,
-) -> Vec<(LayerFace, LayerCell)> {
+) -> SmallVec<[(LayerFace, LayerCell); 6]> {
     // Structure generation is deterministic across chunk order. Use the
     // world seed plus world-space position and structure/layer/face identity
     // so the same seed and structure always choose the same layer patches.
-    let mut placements = Vec::new();
+    let mut placements = SmallVec::new();
     for surface in structure.surface_layers_for_voxel(voxel) {
         for &face in &surface.faces {
             let hash = surface_layer_hash(
