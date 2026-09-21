@@ -40,6 +40,16 @@ fn shared_empty_fluids() -> Arc<[Option<FluidCell>]> {
     Arc::clone(EMPTY_FLUIDS.get_or_init(|| Arc::from(vec![None; CHUNK_VOLUME])))
 }
 
+fn shared_dark_light() -> Arc<[VoxelLight]> {
+    static DARK_LIGHT: OnceLock<Arc<[VoxelLight]>> = OnceLock::new();
+    Arc::clone(DARK_LIGHT.get_or_init(|| Arc::from(vec![VoxelLight::DARK; CHUNK_VOLUME])))
+}
+
+fn shared_empty_fluid_bits() -> Arc<[u64; FLUID_FRONTIER_WORDS]> {
+    static EMPTY_FLUID_BITS: OnceLock<Arc<[u64; FLUID_FRONTIER_WORDS]>> = OnceLock::new();
+    Arc::clone(EMPTY_FLUID_BITS.get_or_init(|| Arc::new([0; FLUID_FRONTIER_WORDS])))
+}
+
 fn shared_empty_layers() -> Arc<HashMap<u16, Vec<AttachedLayer>>> {
     static EMPTY_LAYERS: OnceLock<Arc<HashMap<u16, Vec<AttachedLayer>>>> = OnceLock::new();
     Arc::clone(EMPTY_LAYERS.get_or_init(|| Arc::new(HashMap::new())))
@@ -145,12 +155,12 @@ impl VoxelChunk {
             blocks: shared_empty_blocks(),
             fluids: shared_empty_fluids(),
             layers: shared_empty_layers(),
-            light: Arc::from(vec![VoxelLight::DARK; CHUNK_VOLUME]),
+            light: shared_dark_light(),
             block_count: 0,
             fluid_count: 0,
             layer_count: 0,
-            fluid_frontier_sources: Arc::new([0; FLUID_FRONTIER_WORDS]),
-            dynamic_fluid_cells: Arc::new([0; FLUID_FRONTIER_WORDS]),
+            fluid_frontier_sources: shared_empty_fluid_bits(),
+            dynamic_fluid_cells: shared_empty_fluid_bits(),
             boundary_content_counts: [0; BOUNDARY_FACE_COUNT],
             boundary_fluid_counts: [0; BOUNDARY_FACE_COUNT],
         }
@@ -729,14 +739,22 @@ mod tests {
     }
 
     #[test]
-    fn empty_chunks_share_content_storage_but_not_light() {
+    fn empty_chunks_share_all_zeroed_storage() {
         let first = VoxelChunk::empty();
         let second = VoxelChunk::empty();
 
         assert!(Arc::ptr_eq(&first.blocks, &second.blocks));
         assert!(Arc::ptr_eq(&first.fluids, &second.fluids));
         assert!(Arc::ptr_eq(&first.layers, &second.layers));
-        assert!(!Arc::ptr_eq(&first.light, &second.light));
+        assert!(Arc::ptr_eq(&first.light, &second.light));
+        assert!(Arc::ptr_eq(
+            &first.fluid_frontier_sources,
+            &second.fluid_frontier_sources
+        ));
+        assert!(Arc::ptr_eq(
+            &first.dynamic_fluid_cells,
+            &second.dynamic_fluid_cells
+        ));
     }
 
     #[test]
