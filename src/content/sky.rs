@@ -32,12 +32,38 @@ pub struct SkyRegistry {
 
 impl SkyRegistry {
     pub fn insert(&mut self, definition: SkyDefinition) {
-        assert!(definition.sun.tint.is_valid(), "sky {} sun HSI tint is invalid", definition.id);
-        assert!(definition.moon.tint.is_valid(), "sky {} moon HSI tint is invalid", definition.id);
+        assert!(!definition.id.trim().is_empty(), "sky id cannot be empty");
+        validate_celestial_body(&definition.id, "sun", &definition.sun);
+        validate_celestial_body(&definition.id, "moon", &definition.moon);
         self.definitions.insert(definition.id.clone(), definition);
     }
 
     pub fn get(&self, id: &str) -> Option<&SkyDefinition> {
         self.definitions.get(id)
     }
+}
+
+fn validate_celestial_body(sky_id: &str, body_name: &str, body: &CelestialBodyDefinition) {
+    assert!(
+        body.size.is_finite() && body.size > 0.0,
+        "sky {sky_id} {body_name} size must be positive and finite"
+    );
+    assert!(
+        body.orbit_radius.is_finite() && body.orbit_radius > 0.0,
+        "sky {sky_id} {body_name} orbit radius must be positive and finite"
+    );
+    for (field, value) in [
+        ("riseAzimuthDegrees", body.rise_azimuth_degrees),
+        ("setAzimuthDegrees", body.set_azimuth_degrees),
+        ("maxAltitudeDegrees", body.max_altitude_degrees),
+    ] {
+        assert!(
+            value.is_finite(),
+            "sky {sky_id} {body_name} {field} must be finite"
+        );
+    }
+    assert!(
+        body.tint.is_valid(),
+        "sky {sky_id} {body_name} HSI tint is invalid"
+    );
 }
