@@ -164,14 +164,7 @@ pub(in crate::world) fn begin_world_loading(
             spawn_column.y.div_euclid(CHUNK_SIZE as i32),
         )
     };
-    let mut coords = bootstrap_chunk_coords(initial_center, &config.render_distance);
-    if *persistence.load_mode == WorldLoadMode::Load {
-        let saved_world = persistence
-            .existing_world
-            .as_ref()
-            .expect("loaded world voxel state must exist before bootstrap");
-        coords.retain(|coord| saved_world.has_resident_or_persisted_chunk(*coord));
-    }
+    let coords = bootstrap_chunk_coords(initial_center, &config.render_distance);
     let bootstrap_chunks = coords
         .iter()
         .copied()
