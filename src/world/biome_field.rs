@@ -40,13 +40,13 @@ const SURFACE_SITE_SEARCH_DIAMETER: usize = (SITE_SEARCH_RADIUS * 2 + 1) as usiz
 pub(crate) const MAX_SURFACE_INFLUENCES: usize =
     SURFACE_SITE_SEARCH_DIAMETER * SURFACE_SITE_SEARCH_DIAMETER + 2;
 
-#[derive(Clone)]
 #[derive(Clone, Copy)]
 pub(super) struct SurfaceSiteCacheEntry {
     pub(super) position: Vec2,
     pub(super) biome_index: usize,
 }
 
+#[derive(Clone)]
 pub(super) struct BiomeFieldEntry {
     pub id: String,
     pub distributions: Vec<BiomeDistribution>,
