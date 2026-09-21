@@ -5,6 +5,7 @@ use bevy::{ecs::system::SystemParam, prelude::*, text::FontAtlasSet};
 use crate::{app::game_state::GameState, rendering::terrain_material::TerrainMaterial};
 
 use super::{
+    chunk_async_work::ChunkAsyncWorkLimiter,
     chunk_generation_tasks::ChunkGenerationTasks,
     chunk_mesh_tasks::ChunkMeshTasks,
     chunk_remesh::ChunkRemeshQueue,
@@ -32,6 +33,7 @@ pub(super) struct RenderDiagnosticAssets<'w> {
     pool: Res<'w, ChunkRenderPool>,
     streaming: Res<'w, ChunkStreamingState>,
     generation_tasks: Res<'w, ChunkGenerationTasks>,
+    async_work: Res<'w, ChunkAsyncWorkLimiter>,
     mesh_tasks: Res<'w, ChunkMeshTasks>,
     remesh_queue: Res<'w, ChunkRemeshQueue>,
     remesh_tasks: Res<'w, ChunkRemeshTasks>,
@@ -74,6 +76,8 @@ pub(super) fn log_render_asset_pressure(
         pressure_evicted_meshes,
     ) = assets.streaming.diagnostic_counts();
     let generation_tasks = assets.generation_tasks.pending_count();
+    let async_chunk_work = assets.async_work.in_flight();
+    let async_chunk_work_limit = assets.async_work.limit();
     let mesh_tasks = assets.mesh_tasks.pending_count();
     let remesh_tasks = assets.remesh_tasks.pending_count();
     let (remesh_geometry, remesh_lighting, remesh_fluid) =
@@ -129,7 +133,7 @@ pub(super) fn log_render_asset_pressure(
     });
 
     info!(
-        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} render_entities={render_entities} pooled_mesh_bytes={pooled_mesh_bytes} stream_pending={stream_pending} stream_ready={stream_ready} generation_tasks={generation_tasks} generation_wave_pending={generation_wave_pending} generation_wave_targets={generation_wave_targets} staged_generated_chunks={staged_generated_chunks} pressure_evicted_meshes={pressure_evicted_meshes} mesh_tasks={mesh_tasks} remesh_tasks={remesh_tasks} remesh_geometry={remesh_geometry} remesh_lighting={remesh_lighting} remesh_fluid={remesh_fluid} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} non_font_runtime_images={non_font_runtime_images} runtime_top_shapes={runtime_top_shapes:?} font_atlas_keys={font_atlas_keys} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} deltas={deltas:?} standard_materials={} terrain_materials={}",
+        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} render_entities={render_entities} pooled_mesh_bytes={pooled_mesh_bytes} stream_pending={stream_pending} stream_ready={stream_ready} generation_tasks={generation_tasks} async_chunk_work={async_chunk_work}/{async_chunk_work_limit} generation_wave_pending={generation_wave_pending} generation_wave_targets={generation_wave_targets} staged_generated_chunks={staged_generated_chunks} pressure_evicted_meshes={pressure_evicted_meshes} mesh_tasks={mesh_tasks} remesh_tasks={remesh_tasks} remesh_geometry={remesh_geometry} remesh_lighting={remesh_lighting} remesh_fluid={remesh_fluid} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} non_font_runtime_images={non_font_runtime_images} runtime_top_shapes={runtime_top_shapes:?} font_atlas_keys={font_atlas_keys} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} deltas={deltas:?} standard_materials={} terrain_materials={}",
         assets.state.get(),
         assets.standard_materials.len(),
         assets.terrain_materials.len(),
