@@ -32,7 +32,7 @@ use super::{
     game_rules::GameRules,
     streaming::ChunkStreamingState,
     tick::WorldTickClock,
-    work_budget::FrameWorkBudget,
+    work_budget::{FrameWorkBudget, WorldFrameWorkBudget},
 };
 
 const FLUID_UPDATE_BUDGET: Duration = Duration::from_millis(1);
@@ -61,6 +61,7 @@ pub(super) struct FluidSimulationRuntime<'w> {
     lighting: ResMut<'w, PendingLightingUpdates>,
     remesh_queue: ResMut<'w, ChunkRemeshQueue>,
     streaming: Res<'w, ChunkStreamingState>,
+    frame_budget: Res<'w, WorldFrameWorkBudget>,
 }
 
 pub(super) fn process_fluid_updates(
@@ -81,12 +82,14 @@ pub(super) fn process_fluid_updates(
             FLUID_CATCHUP_BUDGET,
             MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK,
         )
+        .with_global_deadline(runtime.frame_budget.deadline())
         .with_maximum_items(MAX_FLUID_CATCHUP_UPDATES_PER_FRAME)
     } else {
         FrameWorkBudget::new(
             FLUID_UPDATE_BUDGET,
             MIN_FLUID_UPDATES_BEFORE_BUDGET_CHECK,
         )
+        .with_global_deadline(runtime.frame_budget.deadline())
         .with_maximum_items(MAX_FLUID_UPDATES_PER_FRAME)
     };
 
