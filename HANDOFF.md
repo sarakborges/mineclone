@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — checkpoint A — VERSION 0.50.7 — 2026-09-21:** bloco de autoridade/validação consolidado. Mudanças funcionais: `c0c4dd58` rejeita IDs duplicados em `DefinitionMap`; `5202aba6` remove validação duplicada do snapshot no save; `c7e7a603` exige exatamente um `data/entities/player.json`; `4e6a36d1` rejeita fluid IDs duplicados. Bump: `4c28ed7d9d45217c99e46abde4a13bf879e1fda4`. **Pendências:** o conector ainda não expôs check/status do Actions para estes pushes, portanto não registrar CI como success sem evidência; não houve runtime QA. **Próximo passo:** bloco B da auditoria — caches derivados e hot paths: procurar rebuild O(n²), scans repetidos, clones de registries/snapshots e ownership/lifetime desnecessariamente amplos; aplicar apenas mudanças semanticamente equivalentes e verificáveis.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 4 — 2026-09-21:** `FluidRegistry`, que mantém IDs numéricos próprios e por isso não usa `DefinitionMap`, também deixou de aceitar redefinição silenciosa. Antes, um segundo fluid com o mesmo ID substituía a definição no slot numérico existente; agora duplicate fluid ID falha cedo com mensagem explícita. Commit funcional: `4e6a36d1f97ef0f4bdd95463faca8f44972c6432`. **Pendências:** CI ainda não verificado; procurar outros registries especiais com overwrite/update implícito antes de seguir para hot paths. **Próximo passo:** revisar registries baseados em Vec+ID/interning e caches derivados para garantir unicidade e rebuild apenas quando necessário.
 
 
