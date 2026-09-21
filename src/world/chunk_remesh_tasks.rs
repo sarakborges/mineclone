@@ -274,9 +274,9 @@ mod tests {
         let dependencies =
             LightingRemeshDependencies::capture(center, &tasks.lighting_revisions);
 
-        assert!(dependencies.is_current());
+        assert!(dependencies.is_current(&tasks.lighting_revisions));
         tasks.bump_lighting_revisions([center + IVec3::X]);
-        assert!(!dependencies.is_current());
+        assert!(!dependencies.is_current(&tasks.lighting_revisions));
     }
 
     #[test]
@@ -293,11 +293,11 @@ mod tests {
         );
 
         assert!(dependencies.content_is_current(&world));
-        assert!(dependencies.lighting_is_current());
+        assert!(dependencies.lighting_is_current(&tasks));
 
         tasks.bump_lighting_revisions([center + IVec3::X]);
 
         assert!(dependencies.content_is_current(&world));
-        assert!(!dependencies.lighting_is_current());
+        assert!(!dependencies.lighting_is_current(&tasks));
     }
 }
