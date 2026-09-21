@@ -30,10 +30,11 @@ use crate::{
     },
 };
 
+pub(crate) use self::set::{ResolvedSetPiece, resolve_set_pieces};
+
 use self::{
     placement::{candidate_anchor, structure_member_hash},
     restrictions::candidate_satisfies_restrictions,
-    set::resolve_set_pieces,
     support::compute_structure_origin_y,
 };
 use super::{super::biome_field::BiomeField, ChunkGenerationContext};
