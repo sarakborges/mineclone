@@ -36,15 +36,6 @@ pub(crate) fn chunk_origin(coord: IVec3) -> IVec3 {
     coord * CHUNK_SIZE as i32
 }
 
-pub(crate) fn chunks_for_block_extent(extent: i32) -> i32 {
-    if extent <= 0 {
-        return 0;
-    }
-
-    let chunk_size = CHUNK_SIZE as i32;
-    extent.saturating_add(chunk_size - 1) / chunk_size
-}
-
 pub(crate) fn visit_chunk_coords_whose_voxel_halo_contains(
     world_position: IVec3,
     mut visit: impl FnMut(IVec3),
@@ -127,11 +118,4 @@ mod tests {
         assert_eq!(corner_chunks, expected);
     }
 
-    #[test]
-    fn block_extent_rounds_up_to_whole_chunks() {
-        assert_eq!(chunks_for_block_extent(0), 0);
-        assert_eq!(chunks_for_block_extent(1), 1);
-        assert_eq!(chunks_for_block_extent(CHUNK_SIZE as i32), 1);
-        assert_eq!(chunks_for_block_extent(CHUNK_SIZE as i32 + 1), 2);
-    }
 }
