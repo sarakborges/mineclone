@@ -44,39 +44,12 @@ jobs:
             libx11-dev libxkbcommon-dev libxcursor-dev libxi-dev libxrandr-dev
           version: ubuntu-24.04-bevy-0.19-v1
 
-      # Cargo.lock is intentionally gitignored. Without restoring it BEFORE
-      # rust-cache, every fresh runner resolves hundreds of dependencies again,
-      # potentially downloading newer crates and invalidating compiled artifacts
-      # even when the Cargo cache reports an exact hit.
-      - name: Cache CI Cargo.lock
-        id: cargo-lock
-        uses: actions/cache@v5
-        with:
-          path: Cargo.lock
-          key: ubuntu-24.04-cargo-lock-v1-${{ hashFiles('Cargo.toml', '.cargo/config.toml') }}
-
-      # On a cold cache only: generate the lock before rust-cache computes its
-      # dependency key; the cache action saves this file at the end of the job.
-      - name: Resolve dependencies on cache miss
-        if: steps.cargo-lock.outputs.cache-hit != 'true'
-        run: cargo generate-lockfile
-
-      # Provide auditable evidence that the lockfile and crate versions remain
-      # stable across commits. A true cache hit skips dependency resolution.
-      - name: Report dependency cache
-        run: |
-          echo "Cargo.lock restored from cache: ${{ steps.cargo-lock.outputs.cache-hit }}"
-          sha256sum Cargo.lock
-
-      - name: Export dependency lock for repository migration
-        run: |
-          echo "__ASTERIA_CARGO_LOCK_BEGIN__"
-          cat Cargo.lock
-          echo "__ASTERIA_CARGO_LOCK_END__"
+      # Cargo.lock is committed for reproducible executable builds.
+      - name: Report dependency lock
+        run: sha256sum Cargo.lock
 
       # Cache downloaded crates and compiled dependency artifacts. The key
-      # now sees the restored lockfile, keeping crate versions stable across
-      # successive commits instead of repeatedly rebuilding Bevy.
+      # includes the committed lockfile, so dependency versions remain stable.
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
