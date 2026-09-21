@@ -20,6 +20,15 @@ pub(crate) use pool::{ChunkRenderPool, clear_chunk_render_pool, retire_chunk_ren
 pub(crate) use refresh::{apply_built_chunk_fluid_meshes, apply_built_chunk_geometry_meshes};
 pub(crate) use spawn::{BuiltChunkMesh, build_chunk_render_meshes, spawn_built_chunk_meshes};
 
+const MEBIBYTE: usize = 1024 * 1024;
+
+/// Chunk meshes are only one consumer of VRAM. Keep the steady-state pool well
+/// below the allocator's historical 256 MiB envelope so Bevy can grow its
+/// general vertex/index slabs without needing the old and new buffers to fit at
+/// the absolute residency limit.
+pub(crate) const CHUNK_MESH_RESIDENCY_HIGH_BYTES: usize = 192 * MEBIBYTE;
+pub(crate) const CHUNK_MESH_RESIDENCY_TARGET_BYTES: usize = 160 * MEBIBYTE;
+
 #[derive(Component, Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ChunkRenderCoord(pub(crate) IVec3);
 
