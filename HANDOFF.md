@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 19 — 2026-09-21:** retention/render-radius do streaming também passou a usar distância quadrática em i64. `pop_retired_outside_horizontal_radius` e `chunk_is_inside_render_radius` não dependem mais de subtração/quadrado i32; `RetiredScanKey.radius_squared` foi ampliado para i64 para manter o cache coerente (`21166770f8065f6e544c78b7b85d5d073f57af07`, `194cb85d6a6f48fc5e5a2bdf64762cd39258c919`). **Pendências:** `ChunkTaskQueue::cancel_farthest_where` usa `IVec3::length_squared`, mas os coords ali pertencem à janela limitada de streaming; risco prático menor. **Próximo passo:** revisar spatial search/warp boundaries e então versionar checkpoint D.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 18 — 2026-09-21:** streaming volume agora é overflow-safe. `chunk_is_in_volume` calcula deltas/quadrados em i64; `chunk_coords_in_volume` usa `checked_add` para limites Y e offsets X/Z, evitando wrap silencioso de i32 em release para centers extremos vindos de warp/save/commands. Commit: `534c689654a9e083a5355d1087aa6f929a539db2`. **Pendências:** outras funções de distância ainda podem usar `IVec3::length_squared()` em coordenadas arbitrárias; revisar chamadas cujo input não é limitado por render distance. **Próximo passo:** procurar distance-squared em warp/spatial search/task prioritization e tornar apenas boundaries externos overflow-safe.
 
 
