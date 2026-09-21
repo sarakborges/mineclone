@@ -17,7 +17,7 @@ use std::{
 use bevy::log::warn;
 use self::{
     generations::{
-        RETAINED_GENERATIONS, latest_complete_manifest, newest_restorable_timestamp,
+        RETAINED_GENERATIONS, latest_complete_manifest, newest_restorable_summary,
         prune_old_generations,
     },
     locking::{
@@ -47,6 +47,11 @@ use super::{
 pub(crate) struct WorldSummary {
     pub(crate) id: String,
     pub(crate) last_saved_unix_ms: u64,
+    pub(crate) seed: u64,
+    pub(crate) day: u64,
+    pub(crate) dimension_id: String,
+    pub(crate) player_position: Option<[f32; 3]>,
+    pub(crate) biome_id: Option<String>,
 }
 
 pub(crate) fn open_worlds_directory() -> io::Result<()> {
@@ -260,24 +265,62 @@ pub(crate) fn delete_world(id: &str) -> io::Result<()> {
     let session_lock = acquire_world_directory_lock(&directory)?; fs::remove_dir_all(&directory)?; drop(session_lock); Ok(())
 }
 pub(crate) fn list_worlds() -> io::Result<Vec<WorldSummary>> {
-    let entries = match fs::read_dir(WORLDS_DIRECTORY) { Ok(entries) => entries, Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()), Err(error) => return Err(error) };
+    let entries = match fs::read_dir(WORLDS_DIRECTORY) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error),
+    };
     let mut worlds = Vec::new();
     for entry in entries {
-        let entry = entry?; if !entry.file_type()?.is_dir() { continue; }
-        let Some(id) = entry.file_name().to_str().map(str::to_owned) else { continue; };
-        if validate_world_name(&id).is_err() { continue; }
-        let gate = world_lock(&id)?; let _lock = gate.lock_write()?;
-        if let Ok(manifest) = latest_complete_manifest(&entry.path(), &id) { worlds.push(WorldSummary { id, last_saved_unix_ms: manifest.last_saved_unix_ms }); }
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let Some(id) = entry.file_name().to_str().map(str::to_owned) else {
+            continue;
+        };
+        if validate_world_name(&id).is_err() {
+            continue;
+        }
+        let gate = world_lock(&id)?;
+        let _lock = gate.lock_write()?;
+        if let Ok(manifest) = latest_complete_manifest(&entry.path(), &id) {
+            worlds.push(WorldSummary {
+                id,
+                last_saved_unix_ms: manifest.last_saved_unix_ms,
+                seed: manifest.seed,
+                day: 0,
+                dimension_id: manifest.dimension_id,
+                player_position: None,
+                biome_id: None,
+            });
+        }
     }
-    worlds.sort_unstable_by(|a,b| b.last_saved_unix_ms.cmp(&a.last_saved_unix_ms).then_with(|| a.id.cmp(&b.id))); Ok(worlds)
+    worlds.sort_unstable_by(|a, b| {
+        b.last_saved_unix_ms
+            .cmp(&a.last_saved_unix_ms)
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    Ok(worlds)
 }
-pub(crate) fn list_verified_worlds(registries: &PruneRegistries) -> io::Result<Vec<WorldSummary>> {
-    let candidates = list_worlds()?; let mut verified = Vec::with_capacity(candidates.len());
-    for candidate in candidates { match newest_restorable_timestamp(&candidate.id, registries) {
-        Ok(timestamp) => verified.push(WorldSummary { id: candidate.id, last_saved_unix_ms: timestamp }),
-        Err(error) => warn!("World {} has no verified snapshot: {error}", candidate.id),
-    }}
-    verified.sort_unstable_by(|a,b| b.last_saved_unix_ms.cmp(&a.last_saved_unix_ms).then_with(|| a.id.cmp(&b.id))); Ok(verified)
+
+pub(crate) fn list_verified_worlds(
+    registries: &PruneRegistries,
+) -> io::Result<Vec<WorldSummary>> {
+    let candidates = list_worlds()?;
+    let mut verified = Vec::with_capacity(candidates.len());
+    for candidate in candidates {
+        match newest_restorable_summary(&candidate.id, registries) {
+            Ok(summary) => verified.push(summary),
+            Err(error) => warn!("World {} has no verified snapshot: {error}", candidate.id),
+        }
+    }
+    verified.sort_unstable_by(|a, b| {
+        b.last_saved_unix_ms
+            .cmp(&a.last_saved_unix_ms)
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    Ok(verified)
 }
 fn now_unix_ms() -> io::Result<u64> {
     let elapsed = SystemTime::now()
