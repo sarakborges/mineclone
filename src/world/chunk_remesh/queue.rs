@@ -93,20 +93,32 @@ impl ChunkRemeshQueue {
     }
 
     pub(crate) fn enqueue_lighting_change(&mut self, coord: IVec3, world: &VoxelWorld) {
-        self.enqueue_lighting_priority(coord);
+        if world
+            .chunk(coord)
+            .is_some_and(|chunk| chunk.has_terrain_content())
+        {
+            self.enqueue_lighting_priority(coord);
+        }
         if world.chunk(coord).is_some_and(|chunk| chunk.has_fluid()) {
             self.enqueue_fluid_priority(coord);
         }
 
         for offset in CARDINAL_NEIGHBORS {
             let neighbor = coord + offset;
-            if neighbor.y >= 0 {
+            if neighbor.y < 0 {
+                continue;
+            }
+            let Some(chunk) = world.chunk(neighbor) else {
+                continue;
+            };
+
+            // A one-voxel lighting halo can only influence neighbor terrain
+            // that actually touches the boundary facing the changed chunk.
+            if chunk.boundary_has_content(-offset) {
                 self.enqueue_lighting(neighbor);
-                // Fluid vertices bake face lighting from the one-voxel halo too.
-                // Rebuild only chunks with actual fluid, using occupancy metadata.
-                if world.chunk(neighbor).is_some_and(|chunk| chunk.has_fluid()) {
-                    self.fluid.enqueue(neighbor);
-                }
+            }
+            if chunk.boundary_has_fluid(-offset) {
+                self.fluid.enqueue(neighbor);
             }
         }
     }
