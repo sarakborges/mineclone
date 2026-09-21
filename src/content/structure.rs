@@ -13,6 +13,97 @@ use super::{
     structure_rules::{StructureGenerationRules, StructureRestrictions},
 };
 
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub(crate) enum StructureRotation {
+    #[default]
+    Degrees0,
+    Degrees90,
+    Degrees180,
+    Degrees270,
+}
+
+impl StructureRotation {
+    pub(crate) const ALL: [Self; 4] = [
+        Self::Degrees0,
+        Self::Degrees90,
+        Self::Degrees180,
+        Self::Degrees270,
+    ];
+
+    pub(crate) fn from_hash(hash: u64) -> Self {
+        match (hash >> 32) & 3 {
+            1 => Self::Degrees90,
+            2 => Self::Degrees180,
+            3 => Self::Degrees270,
+            _ => Self::Degrees0,
+        }
+    }
+
+    pub(crate) fn inverse(self) -> Self {
+        match self {
+            Self::Degrees0 => Self::Degrees0,
+            Self::Degrees90 => Self::Degrees270,
+            Self::Degrees180 => Self::Degrees180,
+            Self::Degrees270 => Self::Degrees90,
+        }
+    }
+
+    pub(crate) fn rotate_horizontal(self, offset: IVec2) -> IVec2 {
+        match self {
+            Self::Degrees0 => offset,
+            Self::Degrees90 => IVec2::new(-offset.y, offset.x),
+            Self::Degrees180 => -offset,
+            Self::Degrees270 => IVec2::new(offset.y, -offset.x),
+        }
+    }
+
+    pub(crate) fn rotate_offset(self, offset: IVec3) -> IVec3 {
+        let horizontal = self.rotate_horizontal(offset.xz());
+        IVec3::new(horizontal.x, offset.y, horizontal.y)
+    }
+
+    pub(crate) fn rotate_orientation(self, orientation: BlockOrientation) -> BlockOrientation {
+        match self {
+            Self::Degrees0 | Self::Degrees180 => orientation,
+            Self::Degrees90 | Self::Degrees270 => match orientation {
+                BlockOrientation::X => BlockOrientation::Z,
+                BlockOrientation::Z => BlockOrientation::X,
+                BlockOrientation::Y => BlockOrientation::Y,
+            },
+        }
+    }
+
+    pub(crate) fn rotate_face(self, face: LayerFace) -> LayerFace {
+        match self {
+            Self::Degrees0 => face,
+            Self::Degrees90 => match face {
+                LayerFace::Right => LayerFace::Front,
+                LayerFace::Front => LayerFace::Left,
+                LayerFace::Left => LayerFace::Back,
+                LayerFace::Back => LayerFace::Right,
+                LayerFace::Top => LayerFace::Top,
+                LayerFace::Bottom => LayerFace::Bottom,
+            },
+            Self::Degrees180 => match face {
+                LayerFace::Right => LayerFace::Left,
+                LayerFace::Left => LayerFace::Right,
+                LayerFace::Front => LayerFace::Back,
+                LayerFace::Back => LayerFace::Front,
+                LayerFace::Top => LayerFace::Top,
+                LayerFace::Bottom => LayerFace::Bottom,
+            },
+            Self::Degrees270 => match face {
+                LayerFace::Right => LayerFace::Back,
+                LayerFace::Back => LayerFace::Left,
+                LayerFace::Left => LayerFace::Front,
+                LayerFace::Front => LayerFace::Right,
+                LayerFace::Top => LayerFace::Top,
+                LayerFace::Bottom => LayerFace::Bottom,
+            },
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StructureAnchor {
@@ -163,6 +254,23 @@ impl StructureDefinition {
         )
     }
 
+    pub(crate) fn horizontal_bounds_for_rotation(
+        &self,
+        rotation: StructureRotation,
+    ) -> (IVec2, IVec2) {
+        let (minimum, maximum) = self.horizontal_bounds();
+        let corners = [
+            minimum,
+            IVec2::new(maximum.x, minimum.y),
+            maximum,
+            IVec2::new(minimum.x, maximum.y),
+        ];
+        corners.into_iter().map(|corner| rotation.rotate_horizontal(corner)).fold(
+            (IVec2::splat(i32::MAX), IVec2::splat(i32::MIN)),
+            |(minimum, maximum), corner| (minimum.min(corner), maximum.max(corner)),
+        )
+    }
+
     pub(crate) fn max_y_offset(&self) -> i32 {
         self.runtime.max_y_offset
     }
@@ -177,6 +285,28 @@ impl StructureDefinition {
 
     pub(crate) fn support_offsets(&self) -> &[IVec2] {
         &self.runtime.support_offsets
+    }
+
+    pub(crate) fn support_offsets_for_rotation(
+        &self,
+        rotation: StructureRotation,
+    ) -> Vec<IVec2> {
+        self.runtime
+            .support_offsets
+            .iter()
+            .map(|offset| rotation.rotate_horizontal(*offset))
+            .collect()
+    }
+
+    pub(crate) fn horizontal_footprint_for_rotation(
+        &self,
+        rotation: StructureRotation,
+    ) -> Vec<IVec2> {
+        self.runtime
+            .horizontal_footprint
+            .iter()
+            .map(|offset| rotation.rotate_horizontal(*offset))
+            .collect()
     }
 
     pub(crate) fn column_spans(&self) -> &[StructureColumnSpan] {
@@ -584,24 +714,33 @@ impl StructureRegistry {
         &self,
         reference: &str,
     ) -> Option<(IVec2, IVec2)> {
+        let mut include_structure = |structure: &StructureDefinition,
+                                     bounds: &mut Option<(IVec2, IVec2)>| {
+            for rotation in StructureRotation::ALL {
+                let candidate = structure.horizontal_bounds_for_rotation(rotation);
+                *bounds = Some(match *bounds {
+                    Some((minimum, maximum)) => {
+                        (minimum.min(candidate.0), maximum.max(candidate.1))
+                    }
+                    None => candidate,
+                });
+            }
+        };
+
+        let mut bounds = None;
         if let Some(structure) = self.get(reference) {
-            return Some(structure.horizontal_bounds());
+            include_structure(structure, &mut bounds);
+            return bounds;
         }
 
         let members = self.groups.get(reference)?;
-        let first = self
-            .get(members.first()?)
-            .expect("group index references registered structures");
-        let (mut minimum, mut maximum) = first.horizontal_bounds();
-        for id in members.iter().skip(1) {
+        for id in members {
             let structure = self
                 .get(id)
                 .expect("group index references registered structures");
-            let (candidate_minimum, candidate_maximum) = structure.horizontal_bounds();
-            minimum = minimum.min(candidate_minimum);
-            maximum = maximum.max(candidate_maximum);
+            include_structure(structure, &mut bounds);
         }
-        Some((minimum, maximum))
+        bounds
     }
 
 }
