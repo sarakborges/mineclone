@@ -9,7 +9,7 @@ use bevy::log::{info, warn};
 
 use crate::{
     content::{
-        block::BlockRegistry, creature::CreatureRegistry,
+        biome::BiomeRegistry, block::BlockRegistry, creature::CreatureRegistry,
         day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
         fluid::FluidRegistry, layer::LayerRegistry, tool::ToolRegistry,
     },
@@ -79,6 +79,7 @@ impl PendingWorldScan {
 }
 
 struct OwnedLoadContent {
+    biomes: BiomeRegistry,
     blocks: BlockRegistry,
     layers: LayerRegistry,
     fluids: FluidRegistry,
@@ -108,6 +109,7 @@ impl OwnedLoadContent {
         }
 
         Self {
+            biomes: registries.biomes.clone(),
             blocks: registries.blocks.clone(),
             layers: registries.layers.clone(),
             fluids: registries.fluids.clone(),
@@ -120,6 +122,7 @@ impl OwnedLoadContent {
 
     fn registries(&self) -> SaveRegistries<'_> {
         SaveRegistries {
+            biomes: &self.biomes,
             blocks: &self.blocks,
             layers: &self.layers,
             fluids: &self.fluids,
