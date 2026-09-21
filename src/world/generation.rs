@@ -39,7 +39,7 @@ pub(crate) use self::{
 };
 pub(crate) use self::structures::{
     ResolvedSetPiece, located_structure_origins_in_chunk, resolve_set_pieces,
-    structure_candidate_anchor, structure_candidate_member_hash, structure_candidate_probe,
+    structure_candidate_anchor, structure_candidate_probe,
     surface_layer_placements,
 };
 use self::{
