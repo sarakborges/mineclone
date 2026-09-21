@@ -9,6 +9,17 @@ use bevy::prelude::*;
 
 use crate::content::dimension_hydrology::DimensionHydrology;
 
+#[derive(Clone, Debug)]
+pub(crate) struct CachedStructureCandidate {
+    pub(crate) biome_id: String,
+    pub(crate) placement_id: String,
+    pub(crate) structure_id: String,
+    pub(crate) anchor: IVec2,
+    pub(crate) origin_y: i32,
+    pub(crate) minimum: IVec2,
+    pub(crate) maximum: IVec2,
+}
+
 use self::cache::FeatureCaches;
 use super::{
     biome_field::VolumeBiomeRegion,
@@ -97,6 +108,14 @@ impl WorldFeatureFields {
     ) -> Option<i32> {
         self.caches
             .structure_origin_y(structure_id, anchor, factory)
+    }
+
+    pub(crate) fn structure_candidates(
+        &self,
+        coord: IVec2,
+        factory: impl FnOnce() -> Vec<CachedStructureCandidate>,
+    ) -> Arc<Vec<CachedStructureCandidate>> {
+        self.caches.structure_candidates(coord, factory)
     }
 
     pub(crate) fn region_with_hydrology(
