@@ -21,6 +21,7 @@ use crate::{
     rendering::{
         block_texture::{
             TerrainTextureTable, block_face_texture_layers, load_block_texture_layer,
+            terrain_array_alpha_signature,
         },
         terrain_material::{
             TerrainLightingBuffer, TerrainMaterial, TerrainMaterialExtension,
@@ -336,7 +337,18 @@ impl TerrainMaterials {
                 if block_face_texture_layers(face, definition).len() > 2 {
                     continue;
                 }
-                let alpha = TerrainAlphaKey::for_layer(definition, 0);
+                let Some((alpha_blend, alpha_cutoff)) =
+                    terrain_array_alpha_signature(definition)
+                else {
+                    continue;
+                };
+                let alpha = if alpha_blend {
+                    TerrainAlphaKey::Blend
+                } else {
+                    TerrainAlphaKey::Mask(
+                        alpha_cutoff.expect("shared solid terrain uses a mask cutoff"),
+                    )
+                };
                 if !array_materials.contains_key(&alpha) {
                     array_materials.insert(alpha, builder.array_material(alpha));
                 }
@@ -347,7 +359,9 @@ impl TerrainMaterials {
             .iter()
             .map(|definition| {
                 let block_materials = BlockFaces::from_fn(|face| {
-                    if block_face_texture_layers(face, definition).len() <= 2 {
+                    let uses_array = block_face_texture_layers(face, definition).len() <= 2
+                        && terrain_array_alpha_signature(definition).is_some();
+                    if uses_array {
                         Vec::new()
                     } else {
                         builder.layers_for(definition, face)
