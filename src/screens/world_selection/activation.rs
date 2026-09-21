@@ -82,6 +82,7 @@ impl PreparedWorldActivation {
                 },
                 player.health,
                 Some((player.yaw, player.pitch)),
+                player.flying,
             );
         }
 
