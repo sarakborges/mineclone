@@ -661,6 +661,28 @@ impl StructureRegistry {
                 .is_some_and(|members| members.iter().any(|member| member == structure_id))
     }
 
+    pub(crate) fn references_overlap(&self, left: &str, right: &str) -> bool {
+        if left == right {
+            return self.resolves_reference(left);
+        }
+        if let Some(structure) = self.get(left) {
+            return self.reference_contains_structure(right, &structure.id);
+        }
+        if let Some(structure) = self.get(right) {
+            return self.reference_contains_structure(left, &structure.id);
+        }
+
+        let Some(left_members) = self.groups.get(left) else {
+            return false;
+        };
+        let Some(right_members) = self.groups.get(right) else {
+            return false;
+        };
+        left_members
+            .iter()
+            .any(|member| right_members.binary_search(member).is_ok())
+    }
+
     pub(crate) fn select_for_reference(
         &self,
         reference: &str,
