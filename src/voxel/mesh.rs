@@ -299,11 +299,13 @@ where
                                 cell.orientation,
                                 texture_rotation,
                             );
+                            let greedy_lighting =
+                                canonical_greedy_lighting(lighting);
                             let candidate = GreedyFace {
                                 block_id: cell.block_id,
                                 material_face,
-                                tint,
-                                lighting,
+                                tint: canonical_greedy_tint(tint),
+                                lighting: greedy_lighting,
                                 material_code,
                                 uv_rotation,
                             };
@@ -311,7 +313,7 @@ where
                                 // Alpha-cutout is order-independent and safe to merge.
                                 // Only true alpha blending must keep independent quads.
                                 !block_visual.alpha_blend
-                                && lighting_is_uniform(lighting);
+                                && lighting_is_uniform(greedy_lighting);
 
                             if greedy_eligible {
                                 greedy[u + v * CHUNK_SIZE] = Some(candidate);
@@ -465,6 +467,28 @@ struct GreedyFace {
     lighting: FaceLighting,
     material_code: f32,
     uv_rotation: TextureRotation,
+}
+
+fn canonical_greedy_tint(tint: [f32; 3]) -> [f32; 3] {
+    tint.map(|channel| quantize_unit(channel, 127.0))
+}
+
+fn canonical_greedy_lighting(mut lighting: FaceLighting) -> FaceLighting {
+    for index in 0..4 {
+        lighting.channels[index][0] =
+            quantize_unit(lighting.channels[index][0], 15.0);
+        // The second channel is replaced by material_code before upload.
+        lighting.channels[index][1] = 0.0;
+        lighting.block_srgb[index] = lighting.block_srgb[index]
+            .map(|channel| quantize_unit(channel, 255.0));
+        lighting.ambient_occlusion[index] =
+            quantize_unit(lighting.ambient_occlusion[index], 255.0);
+    }
+    lighting
+}
+
+fn quantize_unit(value: f32, steps: f32) -> f32 {
+    (value.clamp(0.0, 1.0) * steps).round() / steps
 }
 
 fn lighting_is_uniform(lighting: FaceLighting) -> bool {
