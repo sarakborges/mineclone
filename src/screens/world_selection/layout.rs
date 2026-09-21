@@ -190,6 +190,7 @@ pub(super) fn spawn_world_selection(
             height: percent(100),
             ..default()
         },
+        BackgroundColor(crate::ui::theme::SCREEN_BACKGROUND),
         crate::ui::theme::cosmic_background_gradient(),
     ));
 
@@ -255,7 +256,7 @@ pub(super) fn spawn_world_selection(
                             frame.spawn((
                                 WorldListStatus,
                                 typography::heading(status),
-                                TextLayout::new_with_justify(Justify::Center),
+                                TextLayout::justify(Justify::Center),
                                 Node {
                                     position_type: PositionType::Absolute,
                                     left: px(24),
