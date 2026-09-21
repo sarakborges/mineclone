@@ -30,7 +30,13 @@ impl EntityHealth {
     pub(crate) fn is_dead(self) -> bool { self.current <= 0.0 }
 
     pub(crate) fn damage(&mut self, amount: f32) -> bool {
-        if self.is_dead() { return true; }
+        assert!(
+            amount.is_finite(),
+            "entity damage must be finite"
+        );
+        if self.is_dead() {
+            return true;
+        }
         self.current = (self.current - amount.max(0.0)).max(0.0);
         self.is_dead()
     }
