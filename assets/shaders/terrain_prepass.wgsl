@@ -21,7 +21,9 @@ var terrain_texture_array: texture_2d_array<f32>;
 var terrain_texture_array_sampler: sampler;
 
 @fragment
-fn fragment(in: prepass_io::VertexOutput) {
+fn fragment(in: prepass_io::VertexOutput) -> prepass_io::FragmentOutput {
+    var out: prepass_io::FragmentOutput;
+
     if terrain_material_extension.texture_array_enabled > 0.5 {
         let material_code = u32(floor(in.uv.x / 16.0));
         let base_index = material_code & 511u;
@@ -38,10 +40,17 @@ fn fragment(in: prepass_io::VertexOutput) {
         if texel.a < 0.5 {
             discard;
         }
-        return;
+#ifdef UNCLIPPED_DEPTH_ORTHO_EMULATION
+        out.frag_depth = in.unclipped_depth;
+#endif
+        return out;
     }
 
     // Legacy block materials and attached layers still use StandardMaterial
     // base textures, so retain Bevy's native alpha-discard behavior for them.
     pbr_prepass_functions::prepass_alpha_discard(in);
+#ifdef UNCLIPPED_DEPTH_ORTHO_EMULATION
+    out.frag_depth = in.unclipped_depth;
+#endif
+    return out;
 }
