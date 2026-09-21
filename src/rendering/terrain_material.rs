@@ -7,6 +7,7 @@ use bevy::{
 };
 
 const TERRAIN_SHADER_PATH: &str = "shaders/terrain_material.wgsl";
+const TERRAIN_PREPASS_SHADER_PATH: &str = "shaders/terrain_prepass.wgsl";
 
 pub(crate) type TerrainMaterial = ExtendedMaterial<StandardMaterial, TerrainMaterialExtension>;
 
@@ -62,9 +63,7 @@ impl MaterialExtension for TerrainMaterialExtension {
     }
 
     fn prepass_fragment_shader() -> ShaderRef {
-        // Depth prepass and shadow maps must use the same texture-array alpha
-        // discard as the main terrain pass, especially for cutout foliage.
-        TERRAIN_SHADER_PATH.into()
+        TERRAIN_PREPASS_SHADER_PATH.into()
     }
 
     fn deferred_fragment_shader() -> ShaderRef {
