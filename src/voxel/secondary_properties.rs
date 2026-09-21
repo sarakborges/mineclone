@@ -3,8 +3,6 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-use super::microblock::CHISEL_MASK_PROPERTY;
-
 const MAX_SECONDARY_PROPERTIES: usize = 8;
 const EMPTY_PROPERTY_VALUE: u64 = 0;
 
@@ -68,8 +66,6 @@ impl SecondaryProperties {
             .count()
     }
 
-    /// Only public properties for HUD and rendering; the Chisel shape must not
-    /// appear as a normal block property in tooltips or visual definitions.
     pub(crate) fn iter(self) -> impl Iterator<Item = (&'static str, &'static str)> {
         self.values
             .into_iter()
@@ -80,12 +76,8 @@ impl SecondaryProperties {
                     resolve_token(unpack_value(packed)),
                 )
             })
-            .filter(|(property, _)| *property != CHISEL_MASK_PROPERTY)
     }
 
-    /// Snapshot serialization needs the complete cell state, including its
-    /// private 8x8x8 occupancy mask. Keep this explicit instead of changing
-    /// `iter()`, which also serves public presentation paths.
     pub(crate) fn iter_for_save(
         self,
     ) -> impl Iterator<Item = (&'static str, &'static str)> {
