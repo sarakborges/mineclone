@@ -12,8 +12,7 @@ use crate::{
     world::{
         biome_field::BiomeField, cave_connectivity::CaveConnectivityRegion,
         deterministic::{hash_string, mix_seed}, generation::GenerationColumnSample,
-        generation::{surface_carvers::SurfaceCarverResolveCache},
-    generation_region::GenerationRegion, hydrology::HydrologyWaterSample,
+        generation_region::GenerationRegion, hydrology::HydrologyWaterSample,
         noise::fractal_noise_2d, terrain::surface_height_from_sample,
     },
 };
@@ -350,7 +349,10 @@ mod tests {
         },
         world::{
             biome_field::{BiomeField, VolumeBiomeRegion},
-            generation::density::{DensityPassContext, sample_density_field},
+            generation::{
+                density::{DensityPassContext, sample_density_field},
+                surface_carvers::SurfaceCarverResolveCache,
+            },
             hydrology::{HydrologyField, HydrologySurfaceSample, HydrologyWaterKind},
             terrain::terrain_density,
         },
