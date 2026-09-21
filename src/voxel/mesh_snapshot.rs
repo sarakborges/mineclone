@@ -1,4 +1,7 @@
-use std::sync::{Arc, OnceLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, OnceLock},
+};
 
 use bevy::prelude::*;
 
@@ -328,6 +331,8 @@ fn capture_shell(neighbor_chunks: &NeighborChunks) -> ShellStorage {
     let last = SNAPSHOT_SIDE - 1;
     let mut block_palette = Vec::<VoxelCell>::new();
     let mut fluid_palette = Vec::<FluidCell>::new();
+    let mut block_indices = HashMap::<VoxelCell, u16>::new();
+    let mut fluid_indices = HashMap::<FluidCell, u16>::new();
     let mut capture_shell_voxel = |x: usize, y: usize, z: usize| {
         let (chunk_x, local_x) = shell_axis(x);
         let (chunk_y, local_y) = shell_axis(y);
@@ -341,24 +346,24 @@ fn capture_shell(neighbor_chunks: &NeighborChunks) -> ShellStorage {
         };
 
         let block_index = cell.map_or(0, |cell| {
-            let index = block_palette
-                .iter()
-                .position(|candidate| *candidate == cell)
-                .unwrap_or_else(|| {
-                    block_palette.push(cell);
-                    block_palette.len() - 1
-                });
-            u16::try_from(index + 1).expect("mesh shell block palette cannot exceed u16")
+            if let Some(&index) = block_indices.get(&cell) {
+                return index;
+            }
+            let index = u16::try_from(block_palette.len() + 1)
+                .expect("mesh shell block palette cannot exceed u16");
+            block_palette.push(cell);
+            block_indices.insert(cell, index);
+            index
         });
         let fluid_index = fluid.map_or(0, |fluid| {
-            let index = fluid_palette
-                .iter()
-                .position(|candidate| *candidate == fluid)
-                .unwrap_or_else(|| {
-                    fluid_palette.push(fluid);
-                    fluid_palette.len() - 1
-                });
-            u16::try_from(index + 1).expect("mesh shell fluid palette cannot exceed u16")
+            if let Some(&index) = fluid_indices.get(&fluid) {
+                return index;
+            }
+            let index = u16::try_from(fluid_palette.len() + 1)
+                .expect("mesh shell fluid palette cannot exceed u16");
+            fluid_palette.push(fluid);
+            fluid_indices.insert(fluid, index);
+            index
         });
 
         ShellSample {
