@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use bevy::prelude::*;
+use smallvec::SmallVec;
 
 use crate::{content::fluid::FluidId, voxel::cell::VoxelCell};
 
@@ -59,7 +58,7 @@ where
     W: VoxelRead + ?Sized,
     F: FnMut(IVec3, FluidId) -> [f32; 3],
 {
-    let mut buffers = HashMap::<FluidId, VoxelMeshBuffer>::new();
+    let mut buffers = SmallVec::<[(FluidId, VoxelMeshBuffer); 2]>::new();
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_origin = chunk_coord * chunk_size;
 
@@ -110,7 +109,7 @@ where
             .cell_at(x as i32, y as i32, z as i32)
             .filter(|block| MicroblockMask::is_modified(*block))
             .map(MicroblockMask::from_cell);
-        let fluid = buffers.entry(cell.fluid_id).or_default();
+        let fluid = fluid_buffer(&mut buffers, cell.fluid_id);
 
         for (index, (face, is_exposed)) in
             BlockFace::ALL.into_iter().zip(exposed).enumerate()
@@ -169,6 +168,24 @@ where
         .collect::<Vec<_>>();
     meshes.sort_by_key(|mesh| mesh.fluid_id);
     meshes
+}
+
+fn fluid_buffer(
+    buffers: &mut SmallVec<[(FluidId, VoxelMeshBuffer); 2]>,
+    fluid_id: FluidId,
+) -> &mut VoxelMeshBuffer {
+    if let Some(index) = buffers
+        .iter()
+        .position(|(candidate, _)| *candidate == fluid_id)
+    {
+        return &mut buffers[index].1;
+    }
+
+    buffers.push((fluid_id, VoxelMeshBuffer::default()));
+    &mut buffers
+        .last_mut()
+        .expect("fluid mesh buffer was just inserted")
+        .1
 }
 
 #[expect(
