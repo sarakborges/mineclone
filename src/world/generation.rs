@@ -38,7 +38,7 @@ pub(crate) use self::{
 };
 pub(crate) use self::structures::{
     located_structure_origins_in_chunk, structure_candidate_anchor,
-    surface_layer_placements,
+    structure_candidate_member_hash, surface_layer_placements,
 };
 use self::{
     caves::anchored_cave_region,
