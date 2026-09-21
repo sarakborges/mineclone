@@ -274,6 +274,50 @@ fn validate_visuals(definition: &BiomeDefinition) {
         "biome {} underwaterTint opacity must be between 0 and 1",
         definition.id
     );
+
+    for (field, color) in [
+        ("grassColor", visuals.grass_color),
+        ("leafColor", visuals.leaf_color),
+        ("foliageColor", visuals.foliage_color),
+        ("underwaterTint.color", visuals.underwater_tint.color),
+    ] {
+        assert!(
+            color.is_valid(),
+            "biome {} visuals.{field} HSI color is invalid",
+            definition.id
+        );
+    }
+    if let Some(color) = visuals.water_color {
+        assert!(
+            color.is_valid(),
+            "biome {} visuals.waterColor HSI color is invalid",
+            definition.id
+        );
+    }
+    for (phase, colors) in [
+        ("dawn", (visuals.sky_color.dawn, visuals.fog_color.dawn)),
+        ("day", (visuals.sky_color.day, visuals.fog_color.day)),
+        ("dusk", (visuals.sky_color.dusk, visuals.fog_color.dusk)),
+        ("night", (visuals.sky_color.night, visuals.fog_color.night)),
+    ] {
+        assert!(
+            colors.0.is_valid() && colors.1.is_valid(),
+            "biome {} {phase} sky/fog HSI color is invalid",
+            definition.id
+        );
+    }
+    assert!(
+        visuals.terrain_roughness.is_finite()
+            && (0.0..=1.0).contains(&visuals.terrain_roughness),
+        "biome {} terrainRoughness must be between 0 and 1",
+        definition.id
+    );
+    assert!(
+        visuals.terrain_metallic.is_finite()
+            && (0.0..=1.0).contains(&visuals.terrain_metallic),
+        "biome {} terrainMetallic must be between 0 and 1",
+        definition.id
+    );
 }
 
 fn validate_climate(biome_id: &str, climate: BiomeClimate) {
