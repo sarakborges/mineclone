@@ -11,13 +11,10 @@ use crate::content::dimension_hydrology::DimensionHydrology;
 
 #[derive(Clone, Debug)]
 pub(crate) struct CachedStructureCandidate {
-    pub(crate) biome_id: String,
     pub(crate) placement_id: String,
     pub(crate) structure_id: String,
     pub(crate) anchor: IVec2,
     pub(crate) origin_y: i32,
-    pub(crate) minimum: IVec2,
-    pub(crate) maximum: IVec2,
 }
 
 use self::cache::FeatureCaches;
