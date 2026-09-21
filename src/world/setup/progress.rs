@@ -42,6 +42,7 @@ pub(in crate::world) fn setup_world(
     content: ChunkContent,
     mut renderer: ChunkRenderer,
     mut progress: WorldSetupProgress,
+    mut images: ResMut<Assets<Image>>,
     mut transition: ResMut<ScreenTransition>,
     mut simulation: WorldSetupSimulation,
     mut generation_tasks: ResMut<ChunkGenerationTasks>,
@@ -56,6 +57,14 @@ pub(in crate::world) fn setup_world(
 
     if !progress.loading_state.screen_rendered {
         progress.loading_state.screen_rendered = true;
+        return;
+    }
+
+    if progress.loading_state.phase == WorldLoadingPhase::Meshing
+        && !renderer
+            .terrain_materials
+            .ensure_texture_array_ready(&mut images)
+    {
         return;
     }
 
