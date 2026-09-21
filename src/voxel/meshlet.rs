@@ -186,34 +186,10 @@ impl ChunkMeshletMask {
         self.0 & bit != 0
     }
 
-    fn contains_quad(self, positions: &[[f32; 3]], base: usize) -> bool {
-        let mut center = Vec3::ZERO;
-        for position in &positions[base..base + 4] {
-            center += Vec3::from_array(*position);
-        }
-        center *= 0.25;
-
-        let edge_a = Vec3::from_array(positions[base + 1])
-            - Vec3::from_array(positions[base]);
-        let edge_b = Vec3::from_array(positions[base + 2])
-            - Vec3::from_array(positions[base]);
-        let normal = edge_a.cross(edge_b).normalize_or_zero();
-        // Layer surfaces are deliberately pushed ~0.001 blocks outward to
-        // avoid z-fighting. Step farther back than that offset, while staying
-        // well inside the smallest 1/8-block sculpted cell.
-        let source = center - normal * 0.01;
-        let source = source.floor().as_ivec3();
-        if source.x < 0
-            || source.y < 0
-            || source.z < 0
-            || source.x >= CHUNK_SIZE as i32
-            || source.y >= CHUNK_SIZE as i32
-            || source.z >= CHUNK_SIZE as i32
-        {
-            return false;
-        }
-
-        self.contains_voxel(source.x as usize, source.y as usize, source.z as usize)
+    fn contains_payload(self, payload: u32) -> bool {
+        let meshlet = ((payload >> 28) & 0x7) as usize;
+        debug_assert!(meshlet < MESHLET_COUNT);
+        self.contains_index(meshlet)
     }
 }
 
@@ -300,7 +276,7 @@ impl MeshArrays {
         }
 
         Some((0..quad_count).any(|quad| {
-            dirty.contains_quad(&self.positions, quad * 4)
+            dirty.contains_payload(self.payloads[quad * 4])
         }))
     }
 
@@ -324,7 +300,7 @@ impl MeshArrays {
 
         for quad in 0..quad_count {
             let source_base = quad * 4;
-            let is_dirty = dirty.contains_quad(&self.positions, source_base);
+            let is_dirty = dirty.contains_payload(self.payloads[source_base]);
             if is_dirty != keep_dirty {
                 continue;
             }
