@@ -16,10 +16,7 @@ use crate::{
     },
 };
 
-use super::{
-    super::ChunkGenerationContext,
-    fluids::authored_surface_fluid_id_at,
-};
+use super::super::{ChunkGenerationContext, fluids::authored_surface_fluid_id_at};
 
 pub(super) fn candidate_satisfies_restrictions(
     biome_id: &str,
