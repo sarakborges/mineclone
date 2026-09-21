@@ -216,7 +216,6 @@ fn resolve_structure_candidates_uncached<'a>(
                 placement_id: &biome_structure.structure_id,
                 placement: biome_structure.placement,
             },
-            None,
             &mut direct_candidates,
         );
     }
@@ -246,7 +245,6 @@ fn resolve_structure_candidates_uncached<'a>(
                     placement_id: &biome_structure.structure_id,
                     placement: biome_structure.placement,
                 },
-                None,
                 &mut overlapping,
             );
             for candidate in overlapping {
@@ -376,7 +374,6 @@ fn collect_structure_candidates<'a>(
     target_max: IVec2,
     context: &'a ChunkGenerationContext<'_>,
     placement_context: StructurePlacementContext<'a>,
-    only_structure_id: Option<&str>,
     candidates: &mut Vec<StructureCandidate<'a>>,
 ) {
     let biome_id = placement_context.biome_id;
@@ -411,12 +408,6 @@ fn collect_structure_candidates<'a>(
                         "biome {biome_id} references empty structure group: {placement_id}"
                     )
                 });
-            if only_structure_id.is_some_and(|structure_id| {
-                structure_id != placement_id && structure.id != structure_id
-            }) {
-                return;
-            }
-
             let (minimum_offset, maximum_offset) = structure.horizontal_bounds();
             let minimum = anchor + minimum_offset;
             let maximum = anchor + maximum_offset;
