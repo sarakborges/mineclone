@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 25 — 2026-09-21:** mais state de gameplay isolado por world. `ViewModelAnimation` e `ViewModelItemSwitch` agora resetam no `OnEnter(Gameplay)`, impedindo swing/item-switch residual atravessar sessões (`2ab12e2c48b034d72d123c67b4e073cc5b9b7728`). `BrushMode` também reseta por Gameplay porque guarda ID de dye dependente do conteúdo; conteúdo pode ser relido em world novo e o ID antigo poderia deixar de existir (`36302584eeea835228580229471b4a9405e53f03`). **Pendências:** revisar caches/render resources ligados a handles/content e Locals semânticos. **Próximo passo:** rendering environment/fog/sky/dynamic lights + block/icon material caches.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 24 — 2026-09-21:** ajustes de UI/state compartilhado. `sync_language_dropdown` deixou de reaplicar cores de todas as opções a cada frame; agora só atualiza em mudança de idioma/localization ou `Changed<Interaction>` (`2651b5eed3ed4ee1e29e881e9f9f232aba9feeb1`). Entrada em `GameState::NewWorld` agora reseta também `RenderDistanceInputState`, `TargetBlockPositionDropdownState` e `LanguageDropdownState`, evitando Resource stale discordar da UI recém-spawnada após sair de Settings com dropdown/input aberto (`fe592e80f4165cef2a33d57b28ccab51331f8960`). **Pendências:** continuar auditoria de UI sync systems por writes per-frame e estados persistentes. **Próximo passo:** HUD/inventory/targeting UI + rendering caches/assets lifecycle.
 
 
