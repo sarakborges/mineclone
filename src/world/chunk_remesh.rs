@@ -2,7 +2,7 @@ mod queue;
 
 use std::time::{Duration, Instant};
 
-use bevy::prelude::*;
+use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::voxel::{mesh_snapshot::ChunkMeshSnapshot, world::VoxelWorld};
 
@@ -148,6 +148,7 @@ fn dispatch_remesh_tasks(
         .with_global_deadline(deadline)
         .with_maximum_items(MAX_REMESH_TASKS_DISPATCHED_PER_FRAME);
     deferred.clear();
+    let mut snapshots = HashMap::<IVec3, ChunkMeshSnapshot>::new();
 
     loop {
         if budget.exhausted() {
@@ -170,12 +171,18 @@ fn dispatch_remesh_tasks(
             deferred.push((coord, kind));
             continue;
         }
-        let Some(snapshot) = ChunkMeshSnapshot::capture_with_neighbor_filter(
-            world,
-            coord,
-            |neighbor| render_pool.contains(neighbor),
-        ) else {
-            continue;
+        let snapshot = if let Some(existing) = snapshots.get(&coord) {
+            existing.clone()
+        } else {
+            let Some(captured) = ChunkMeshSnapshot::capture_with_neighbor_filter(
+                world,
+                coord,
+                |neighbor| render_pool.contains(neighbor),
+            ) else {
+                continue;
+            };
+            snapshots.insert(coord, captured.clone());
+            captured
         };
         if !tasks.schedule(coord, kind, snapshot) {
             deferred.push((coord, kind));
