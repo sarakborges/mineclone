@@ -296,16 +296,16 @@ fn pending_priority(
     };
 
     (
-        player_chunk,
-        visibility_band,
+        horizontal_distance,
+        total_distance,
+        vertical_distance,
         primary_locality,
         secondary_locality,
-        immediate_distance,
-        horizontal_distance,
-        directional_band,
         surface_distance,
-        vertical_distance,
-        total_distance,
+        directional_band,
+        visibility_band,
+        player_chunk,
+        immediate_distance,
     )
 }
 
@@ -628,7 +628,7 @@ mod tests {
     }
 
     #[test]
-    fn high_player_prioritizes_surface_before_neighboring_air() {
+    fn high_player_still_prioritizes_nearer_horizontal_chunks() {
         let center = IVec3::new(0, 8, 0);
         let surface = IVec3::new(2, 0, 0);
         let air = IVec3::new(1, 8, 0);
@@ -644,6 +644,6 @@ mod tests {
         let air_priority =
             pending_priority(air, center, 12, 0, IVec2::X, true, &surface_ranges);
 
-        assert!(surface_priority < air_priority);
+        assert!(air_priority < surface_priority);
     }
 }
