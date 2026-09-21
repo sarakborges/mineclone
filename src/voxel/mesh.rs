@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use bevy::prelude::*;
+use smallvec::SmallVec;
 
 use crate::{
     content::{
@@ -114,7 +113,8 @@ where
     let selected_voxel_count = meshlets.selected_voxel_count();
     let mut visuals = vec![None; selected_voxel_count];
     let mut sources = vec![None; selected_voxel_count];
-    let mut block_visual_indices = HashMap::<&'static str, usize>::new();
+    let mut block_visual_indices =
+        SmallVec::<[((usize, usize), usize); 16]>::new();
     let mut block_visuals = Vec::<BlockMeshVisual>::new();
     let mut active_by_x: [Vec<u32>; CHUNK_SIZE] = std::array::from_fn(|_| Vec::new());
     let mut active_by_y: [Vec<u32>; CHUNK_SIZE] = std::array::from_fn(|_| Vec::new());
@@ -128,12 +128,16 @@ where
             return;
         };
         let block = block_lookup.get(cell.block_id);
-        let block_visual_index = if let Some(&index) = block_visual_indices.get(cell.block_id) {
-            index
+        let block_key = (cell.block_id.as_ptr() as usize, cell.block_id.len());
+        let block_visual_index = if let Some((_, index)) = block_visual_indices
+            .iter()
+            .find(|(candidate, _)| *candidate == block_key)
+        {
+            *index
         } else {
             let index = block_visuals.len();
             block_visuals.push(BlockMeshVisual::new(block, texture_table));
-            block_visual_indices.insert(cell.block_id, index);
+            block_visual_indices.push((block_key, index));
             index
         };
         let index = meshlets
@@ -157,7 +161,7 @@ where
         let world_voxel = chunk_origin + local_voxel;
         let visual = visual_for_cell(
             &mut visuals,
-            meshlets,
+            index,
             chunk,
             [x, y, z],
             world_voxel,
@@ -244,7 +248,7 @@ where
 
                 let visual = visual_for_cell(
                     &mut visuals,
-                    meshlets,
+                    source_index,
                     chunk,
                     [x, y, z],
                     world_voxel,
@@ -421,7 +425,7 @@ struct CellVisual {
 
 fn visual_for_cell<F>(
     cache: &mut [Option<CellVisual>],
-    meshlets: ChunkMeshletMask,
+    index: usize,
     chunk: &VoxelChunk,
     [x, y, z]: [usize; 3],
     world_voxel: IVec3,
@@ -432,9 +436,6 @@ fn visual_for_cell<F>(
 where
     F: FnMut(IVec3, VoxelCell, &BlockDefinition) -> [f32; 3],
 {
-    let index = meshlets
-        .compact_voxel_index(x, y, z)
-        .expect("visual cache only receives voxels from selected meshlets");
     if let Some(visual) = cache[index] {
         return visual;
     }
