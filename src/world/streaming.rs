@@ -384,6 +384,16 @@ impl ChunkStreamingState {
     }
 
 
+    pub(super) fn diagnostic_counts(&self) -> (usize, usize, usize, usize, usize) {
+        (
+            self.pending.len(),
+            self.ready.len(),
+            self.generation_wave_pending.len(),
+            self.generation_wave_targets.len(),
+            self.staged_generated_chunks.len(),
+        )
+    }
+
     fn mark_selection_rebuilt(&mut self) {
         self.selection_revision = self
             .selection_revision
