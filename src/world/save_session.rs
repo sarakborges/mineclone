@@ -9,7 +9,7 @@ use bevy::{
 use crate::{
     app::game_state::GameState,
     content::{
-        block::BlockRegistry, creature::CreatureRegistry,
+        biome::BiomeRegistry, block::BlockRegistry, creature::CreatureRegistry,
         day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
         fluid::FluidRegistry, layer::LayerRegistry, tool::ToolRegistry,
     },
@@ -160,6 +160,7 @@ impl WorldSaveEntities<'_, '_> {
 
 #[derive(SystemParam)]
 struct WorldSaveRegistries<'w> {
+    biomes: Res<'w, BiomeRegistry>,
     blocks: Res<'w, BlockRegistry>,
     layers: Res<'w, LayerRegistry>,
     fluids: Res<'w, FluidRegistry>,
@@ -172,6 +173,7 @@ struct WorldSaveRegistries<'w> {
 impl WorldSaveRegistries<'_> {
     fn for_validation(&self) -> SaveRegistries<'_> {
         SaveRegistries {
+            biomes: &self.biomes,
             blocks: &self.blocks,
             layers: &self.layers,
             fluids: &self.fluids,
