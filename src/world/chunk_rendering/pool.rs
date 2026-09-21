@@ -20,7 +20,6 @@ pub(super) enum ChunkMeshKey {
     },
     Layer {
         layer_id: &'static str,
-        face: BlockFace,
         casts_shadow: bool,
     },
     Fluid(FluidId),
