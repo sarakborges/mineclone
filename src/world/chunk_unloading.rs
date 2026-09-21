@@ -134,8 +134,10 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
     let high_bytes = chunk_mesh_residency_high_bytes(render_distance_chunks);
     let target_bytes = chunk_mesh_residency_target_bytes(render_distance_chunks);
     let recovery_bytes = chunk_mesh_residency_recovery_bytes(render_distance_chunks);
-    let (show_radius, _) = chunk_visibility_radii(render_distance_chunks);
-    let visible_radius = i64::from(show_radius.max(1));
+    let (show_radius, hide_radius) = chunk_visibility_radii(render_distance_chunks);
+    let recovery_radius = i64::from(show_radius.max(1));
+    let recovery_radius_squared = recovery_radius * recovery_radius;
+    let visible_radius = i64::from(hide_radius.max(1));
     let visible_radius_squared = visible_radius * visible_radius;
 
     if before <= recovery_bytes {
@@ -150,7 +152,7 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
                     }
                     let dx = i64::from(coord.x) - i64::from(center.x);
                     let dz = i64::from(coord.z) - i64::from(center.z);
-                    dx * dx + dz * dz <= visible_radius_squared
+                    dx * dx + dz * dz <= recovery_radius_squared
                 }),
         );
         recovery.sort_unstable_by_key(|coord| {
