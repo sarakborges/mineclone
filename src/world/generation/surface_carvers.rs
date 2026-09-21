@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock, RwLock};
 
 use bevy::{platform::collections::HashMap, prelude::*};
 
@@ -53,8 +53,40 @@ struct SurfaceTunnelCacheKey {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct SurfaceCarverResolveCache {
-    tunnels: HashMap<SurfaceTunnelCacheKey, Option<ResolvedSurfaceTunnelGeometry>>,
+pub(crate) struct SurfaceCarverResolveCache {
+    tunnels: RwLock<
+        HashMap<
+            SurfaceTunnelCacheKey,
+            Arc<OnceLock<Option<ResolvedSurfaceTunnelGeometry>>>,
+        >,
+    >,
+}
+
+impl SurfaceCarverResolveCache {
+    fn get_or_resolve(
+        &self,
+        key: SurfaceTunnelCacheKey,
+        factory: impl FnOnce() -> Option<ResolvedSurfaceTunnelGeometry>,
+    ) -> Option<ResolvedSurfaceTunnelGeometry> {
+        let cached = self
+            .tunnels
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(&key)
+            .cloned();
+        let entry = cached.unwrap_or_else(|| {
+            let mut tunnels = self
+                .tunnels
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            tunnels
+                .entry(key)
+                .or_insert_with(|| Arc::new(OnceLock::new()))
+                .clone()
+        });
+
+        entry.get_or_init(factory).clone()
+    }
 }
 
 #[derive(Debug, Default)]
@@ -82,7 +114,7 @@ struct SurfaceTunnelCandidate<'a> {
 
 pub(super) fn resolve_surface_carver_column(
     column: &mut SurfaceCarverColumn,
-    cache: &mut SurfaceCarverResolveCache,
+    cache: &SurfaceCarverResolveCache,
     horizontal: Vec2,
     surface_y: f32,
     identity_surface_index: usize,
@@ -218,7 +250,7 @@ fn carver_intersects_vertical_range(
 
 fn resolve_tunnel_candidates(
     tunnels: &mut Vec<ResolvedSurfaceTunnel>,
-    cache: &mut SurfaceCarverResolveCache,
+    cache: &SurfaceCarverResolveCache,
     horizontal: Vec2,
     context: &SurfaceCarverResolveContext<'_>,
     candidate: SurfaceTunnelCandidate<'_>,
@@ -275,56 +307,49 @@ fn resolve_tunnel_candidates(
                 cell_x: cell.x,
                 cell_z: cell.y,
             };
-            let geometry = cache
-                .tunnels
-                .entry(cache_key)
-                .or_insert_with(|| {
-                    let angle = hash_unit(hash.rotate_left(47)) * std::f32::consts::TAU;
-                    let direction = Vec2::new(angle.cos(), angle.sin());
-                    let perpendicular = Vec2::new(-direction.y, direction.x);
-                    let tunnel_length = sample_range(length, hash.rotate_left(7));
-                    let tunnel_radius = sample_range(radius, hash.rotate_left(23));
-                    let underground_y = sample_range(elevation, hash.rotate_left(41));
-                    let mouth_block =
-                        IVec2::new(anchor.x.floor() as i32, anchor.y.floor() as i32);
-                    let mouth_surface = surface_height(
-                        mouth_block,
-                        context.dimension,
-                        context.biomes,
-                        context.biome_field,
-                    ) as f32;
-                    let mouth_y =
-                        mouth_surface + TUNNEL_MOUTH_SURFACE_OVERSHOOT - tunnel_radius;
-                    if underground_y >= mouth_y - TUNNEL_CAVE_CONNECTION_MIN_ROOF_DEPTH {
-                        return None;
-                    }
+            let geometry = cache.get_or_resolve(cache_key, || {
+                let angle = hash_unit(hash.rotate_left(47)) * std::f32::consts::TAU;
+                let direction = Vec2::new(angle.cos(), angle.sin());
+                let perpendicular = Vec2::new(-direction.y, direction.x);
+                let tunnel_length = sample_range(length, hash.rotate_left(7));
+                let tunnel_radius = sample_range(radius, hash.rotate_left(23));
+                let underground_y = sample_range(elevation, hash.rotate_left(41));
+                let mouth_block = IVec2::new(anchor.x.floor() as i32, anchor.y.floor() as i32);
+                let mouth_surface = surface_height(
+                    mouth_block,
+                    context.dimension,
+                    context.biomes,
+                    context.biome_field,
+                ) as f32;
+                let mouth_y = mouth_surface + TUNNEL_MOUTH_SURFACE_OVERSHOOT - tunnel_radius;
+                if underground_y >= mouth_y - TUNNEL_CAVE_CONNECTION_MIN_ROOF_DEPTH {
+                    return None;
+                }
 
-                    let end_horizontal = anchor + direction * tunnel_length;
-                    let curve_offset =
-                        signed_unit(hash.rotate_left(17)) * tunnel_length * TUNNEL_CURVE_STRENGTH;
-                    let control_horizontal = anchor
-                        + direction * (tunnel_length * 0.5)
-                        + perpendicular * curve_offset;
-                    let control_y = lerp(mouth_y, underground_y, 0.45)
-                        + signed_unit(hash.rotate_left(37)) * tunnel_radius * 0.5;
-                    let start = Vec3::new(anchor.x, mouth_y, anchor.y);
-                    let control =
-                        Vec3::new(control_horizontal.x, control_y, control_horizontal.y);
-                    let end = Vec3::new(end_horizontal.x, underground_y, end_horizontal.y);
-                    let points = (0..TUNNEL_PATH_SAMPLES)
-                        .map(|index| {
-                            let t = index as f32 / (TUNNEL_PATH_SAMPLES - 1) as f32;
-                            quadratic_bezier(start, control, end, t)
-                        })
-                        .collect::<Vec<_>>();
-                    let points = connected_surface_tunnel(points, tunnel_radius, context)?;
-
-                    Some(ResolvedSurfaceTunnelGeometry {
-                        points: Arc::new(points),
-                        radius: tunnel_radius,
+                let end_horizontal = anchor + direction * tunnel_length;
+                let curve_offset =
+                    signed_unit(hash.rotate_left(17)) * tunnel_length * TUNNEL_CURVE_STRENGTH;
+                let control_horizontal = anchor
+                    + direction * (tunnel_length * 0.5)
+                    + perpendicular * curve_offset;
+                let control_y = lerp(mouth_y, underground_y, 0.45)
+                    + signed_unit(hash.rotate_left(37)) * tunnel_radius * 0.5;
+                let start = Vec3::new(anchor.x, mouth_y, anchor.y);
+                let control = Vec3::new(control_horizontal.x, control_y, control_horizontal.y);
+                let end = Vec3::new(end_horizontal.x, underground_y, end_horizontal.y);
+                let points = (0..TUNNEL_PATH_SAMPLES)
+                    .map(|index| {
+                        let t = index as f32 / (TUNNEL_PATH_SAMPLES - 1) as f32;
+                        quadratic_bezier(start, control, end, t)
                     })
+                    .collect::<Vec<_>>();
+                let points = connected_surface_tunnel(points, tunnel_radius, context)?;
+
+                Some(ResolvedSurfaceTunnelGeometry {
+                    points: Arc::new(points),
+                    radius: tunnel_radius,
                 })
-                .clone();
+            });
 
             let Some(geometry) = geometry else {
                 continue;
