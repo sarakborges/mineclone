@@ -36,7 +36,7 @@ impl VoxelMutationRuntime<'_> {
         let chunk = self
             .world
             .add_layer_at(world_position, face, layer, &self.layers)?;
-        self.remesh_queue.enqueue_priority(chunk);
+        self.remesh_queue.enqueue_voxel_edit(world_position);
         Some(chunk)
     }
 
@@ -45,8 +45,8 @@ impl VoxelMutationRuntime<'_> {
         world_position: IVec3,
         face: LayerFace,
     ) -> Option<&'static str> {
-        let (chunk, layer_id) = self.world.remove_top_layer_at(world_position, face)?;
-        self.remesh_queue.enqueue_priority(chunk);
+        let (_chunk, layer_id) = self.world.remove_top_layer_at(world_position, face)?;
+        self.remesh_queue.enqueue_voxel_edit(world_position);
         Some(layer_id)
     }
 
