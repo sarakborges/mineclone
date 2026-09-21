@@ -64,12 +64,25 @@ pub fn chunk_coords_in_volume(
 
     let mut coords = Vec::new();
     let min_chunk_y = (center.y - vertical_radius).max(0);
-    let max_chunk_y = center.y + vertical_radius;
+    let max_chunk_y = center
+        .y
+        .checked_add(vertical_radius)
+        .expect("vertical streaming range cannot overflow chunk coordinates");
 
     for y in min_chunk_y..=max_chunk_y {
         for z in -horizontal_radius..=horizontal_radius {
             for x in -horizontal_radius..=horizontal_radius {
-                let coord = IVec3::new(center.x + x, y, center.z + z);
+                let coord = IVec3::new(
+                    center
+                        .x
+                        .checked_add(x)
+                        .expect("horizontal streaming X range cannot overflow chunk coordinates"),
+                    y,
+                    center
+                        .z
+                        .checked_add(z)
+                        .expect("horizontal streaming Z range cannot overflow chunk coordinates"),
+                );
 
                 if chunk_is_in_volume(center, coord, horizontal_radius, vertical_radius) {
                     coords.push(coord);
@@ -92,11 +105,14 @@ pub(crate) fn chunk_is_in_volume(
         return false;
     }
 
-    let delta = coord - center;
-    let horizontal_squared = delta.x * delta.x + delta.z * delta.z;
+    let delta_x = i64::from(coord.x) - i64::from(center.x);
+    let delta_y = i64::from(coord.y) - i64::from(center.y);
+    let delta_z = i64::from(coord.z) - i64::from(center.z);
+    let horizontal_squared = delta_x * delta_x + delta_z * delta_z;
+    let horizontal_radius = i64::from(horizontal_radius);
 
     horizontal_squared <= horizontal_radius * horizontal_radius
-        && delta.y.abs() <= vertical_radius
+        && delta_y.abs() <= i64::from(vertical_radius)
 }
 
 #[cfg(test)]
