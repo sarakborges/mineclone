@@ -31,7 +31,9 @@ pub(super) fn dispatch_initial_mesh_tasks(
     queues: &mut ChunkStreamingQueues<'_>,
     current_tick: u64,
 ) {
+    let deadline = work.frame_budget.deadline();
     let mut budget = FrameWorkBudget::new(STREAMING_BUDGET, MIN_CHUNKS_BEFORE_BUDGET_CHECK)
+        .with_global_deadline(deadline)
         .with_maximum_items(MAX_CHUNKS_PER_FRAME);
 
     loop {
@@ -123,8 +125,10 @@ pub(super) fn collect_built_chunk_meshes(
     work: &mut ChunkStreamingWork<'_>,
     remesh_queue: &mut ChunkRemeshQueue,
 ) {
+    let deadline = work.frame_budget.deadline();
     let current_revision = work.mesh_tasks.revision();
     let mut budget = FrameWorkBudget::new(MESH_RESULT_INTEGRATION_BUDGET, 1)
+        .with_global_deadline(deadline)
         .with_maximum_items(MAX_MESH_RESULTS_COLLECTED_PER_FRAME);
 
     loop {
