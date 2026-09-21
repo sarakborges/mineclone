@@ -336,7 +336,7 @@ impl VoxelChunk {
         )
     }
 
-    #[expect(
+    #[allow(
         dead_code,
         reason = "layer removal API is ready before the first concrete layer content is authored"
     )]
@@ -505,7 +505,7 @@ fn add_layer_in_storage(
     true
 }
 
-#[expect(
+#[allow(
     dead_code,
     reason = "layer removal API is ready before the first concrete layer content is authored"
 )]

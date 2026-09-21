@@ -156,6 +156,10 @@ fn load_snapshot(
     decode_snapshot(directory, file, id, manifest, blocks, layers, fluids, validate)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "snapshot decode keeps validation and content registries explicit at the trust boundary"
+)]
 fn decode_snapshot(
     directory: &Path,
     file: fs::File,

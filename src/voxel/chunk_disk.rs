@@ -280,6 +280,10 @@ fn append_run(runs: &mut Vec<DiskRun>, index: usize, state: u16) -> io::Result<(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "disk decoding keeps the independent block, layer and fluid channels explicit"
+)]
 fn decode_compact(
     coord: IVec3,
     block_palette: Vec<DiskBlockState>,
@@ -355,7 +359,6 @@ fn decode_layers(
                 if state.order != 0 {
                     return Err(invalid_data("first saved layer in a voxel must have order zero"));
                 }
-                expected_order = 0;
             }
         }
 

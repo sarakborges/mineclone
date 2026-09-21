@@ -159,6 +159,10 @@ impl VoxelWorld {
             .cell_at(local_position.x, local_position.y, local_position.z)
     }
 
+    #[allow(
+        dead_code,
+        reason = "public layer read API exists before the first concrete layer gameplay content"
+    )]
     pub(crate) fn layers_at(
         &self,
         world_position: IVec3,
@@ -364,7 +368,7 @@ impl VoxelWorld {
         Some((chunk_coord, previous_block))
     }
 
-    #[expect(
+    #[allow(
         dead_code,
         reason = "layer placement API is ready before the first concrete layer content is authored"
     )]
@@ -404,7 +408,7 @@ impl VoxelWorld {
         Some(chunk_coord)
     }
 
-    #[expect(
+    #[allow(
         dead_code,
         reason = "layer removal API is ready before the first concrete layer content is authored"
     )]
