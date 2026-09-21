@@ -104,7 +104,15 @@ fn find_nearest_safe_eye_position(world: &VoxelWorld, target: IVec3) -> WarpSear
                     }
 
                     let offset = IVec3::new(x, y, z);
-                    let feet = target + offset;
+                    let Some(feet) = target
+                        .x
+                        .checked_add(offset.x)
+                        .zip(target.y.checked_add(offset.y))
+                        .zip(target.z.checked_add(offset.z))
+                        .map(|((x, y), z)| IVec3::new(x, y, z))
+                    else {
+                        continue;
+                    };
                     match candidate_state(world, feet) {
                         CandidateState::Unloaded => {
                             shell_unloaded = true;
