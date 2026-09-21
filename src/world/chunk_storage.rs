@@ -632,8 +632,8 @@ mod tests {
             loaded_positions,
             vec![
                 IVec3::new(-1, 0, 2),
-                IVec3::new(3, 4, -5),
                 IVec3::new(4, 4, -6),
+                IVec3::new(3, 4, -5),
             ]
         );
 
