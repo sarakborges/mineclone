@@ -550,7 +550,19 @@ mod tests {
             parse_line("/locate hydrology river"),
             ParsedLine::Locate("hydrology", "river", None)
         );
+        assert_eq!(
+            parse_line("/locate structure asteria:tree_oak"),
+            ParsedLine::Locate("structure", "asteria:tree_oak", None)
+        );
+        assert_eq!(
+            parse_line("/locate structure asteria:tree_oak 3"),
+            ParsedLine::Locate("structure", "asteria:tree_oak", Some(3))
+        );
         assert_eq!(parse_line("/spawn"), ParsedLine::Usage("/spawn <id>"));
+        assert_eq!(
+            parse_line("/locate biome asteria:plains 2"),
+            ParsedLine::Usage("/locate <biome|hydrology> <id> | /locate structure <groupid> [variation]")
+        );
         assert_eq!(
             parse_line("/place structure extra extra extra"),
             ParsedLine::Usage("/place structure <groupid> [variation]")
