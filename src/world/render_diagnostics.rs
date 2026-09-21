@@ -4,7 +4,12 @@ use bevy::{ecs::system::SystemParam, prelude::*, text::FontAtlasSet};
 
 use crate::{app::game_state::GameState, rendering::terrain_material::TerrainMaterial};
 
-use super::chunk_rendering::ChunkRenderPool;
+use super::{
+    chunk_generation_tasks::ChunkGenerationTasks,
+    chunk_mesh_tasks::ChunkMeshTasks,
+    chunk_rendering::ChunkRenderPool,
+    streaming::ChunkStreamingState,
+};
 
 const RENDER_DIAGNOSTIC_INTERVAL_SECONDS: f32 = 10.0;
 const MESH_ASSET_OVERHEAD_WARNING: usize = 128;
@@ -23,6 +28,9 @@ pub(super) struct RenderDiagnosticAssets<'w> {
     state: Res<'w, State<GameState>>,
     asset_server: Res<'w, AssetServer>,
     pool: Res<'w, ChunkRenderPool>,
+    streaming: Res<'w, ChunkStreamingState>,
+    generation_tasks: Res<'w, ChunkGenerationTasks>,
+    mesh_tasks: Res<'w, ChunkMeshTasks>,
     meshes: Res<'w, Assets<Mesh>>,
     images: Res<'w, Assets<Image>>,
     font_atlases: Res<'w, FontAtlasSet>,
@@ -52,6 +60,15 @@ pub(super) fn log_render_asset_pressure(
     let active_chunks = assets.pool.active_count();
     let pooled_meshes = assets.pool.mesh_count();
     let pooled_mesh_bytes = assets.pool.mesh_bytes();
+    let (
+        stream_pending,
+        stream_ready,
+        generation_wave_pending,
+        generation_wave_targets,
+        staged_generated_chunks,
+    ) = assets.streaming.diagnostic_counts();
+    let generation_tasks = assets.generation_tasks.pending_count();
+    let mesh_tasks = assets.mesh_tasks.pending_count();
     let mesh_assets = assets.meshes.len();
     let mesh_overhead = mesh_assets.saturating_sub(pooled_meshes);
     let mut file_images = 0;
@@ -103,7 +120,7 @@ pub(super) fn log_render_asset_pressure(
     });
 
     info!(
-        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} pooled_mesh_bytes={pooled_mesh_bytes} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} non_font_runtime_images={non_font_runtime_images} runtime_top_shapes={runtime_top_shapes:?} font_atlas_keys={font_atlas_keys} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} deltas={deltas:?} standard_materials={} terrain_materials={}",
+        "render assets: state={:?} active_chunks={active_chunks} pooled_meshes={pooled_meshes} pooled_mesh_bytes={pooled_mesh_bytes} stream_pending={stream_pending} stream_ready={stream_ready} generation_tasks={generation_tasks} generation_wave_pending={generation_wave_pending} generation_wave_targets={generation_wave_targets} staged_generated_chunks={staged_generated_chunks} mesh_tasks={mesh_tasks} mesh_assets={mesh_assets} images={image_assets} file_images={file_images} runtime_images={runtime_images} non_font_runtime_images={non_font_runtime_images} runtime_top_shapes={runtime_top_shapes:?} font_atlas_keys={font_atlas_keys} font_atlases={font_atlas_count} font_atlas_bytes={font_atlas_bytes} deltas={deltas:?} standard_materials={} terrain_materials={}",
         assets.state.get(),
         assets.standard_materials.len(),
         assets.terrain_materials.len(),
