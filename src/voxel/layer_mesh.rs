@@ -12,7 +12,10 @@ use super::{
     layer::block_face,
     mesh::geometry::is_face_exposed,
     mesh_buffer::VoxelMeshBuffer,
-    mesh_lighting::{face_lighting, push_lit_quad, surface_block_srgb},
+    mesh_lighting::{
+        ChunkLightingCache, face_lighting_with_cache, push_lit_quad,
+        surface_block_srgb,
+    },
     meshlet::ChunkMeshletMask,
     microblock::{MICROBLOCK_EDGE, MicroblockMask, occupied_cell},
     quad::VOXEL_FACE_UVS,
@@ -55,6 +58,8 @@ where
     W: VoxelRead + ?Sized,
     F: FnMut(IVec3, &LayerDefinition) -> [f32; 3],
 {
+    let lighting_cache =
+        ChunkLightingCache::capture(world, chunk_coord * CHUNK_SIZE as i32);
     build_layer_meshlets(
         world,
         chunk_coord,
@@ -62,6 +67,7 @@ where
         blocks,
         layers,
         ChunkMeshletMask::ALL,
+        Some(&lighting_cache),
         tint_at,
     )
 }
@@ -73,6 +79,7 @@ pub(crate) fn build_layer_meshlets<W, F>(
     blocks: &BlockRegistry,
     layers: &LayerRegistry,
     meshlets: ChunkMeshletMask,
+    lighting_cache: Option<&ChunkLightingCache>,
     mut tint_at: F,
 ) -> Vec<ChunkLayerMesh>
 where
@@ -124,7 +131,13 @@ where
                 lighting
             } else {
                 let lighting =
-                    face_lighting(world, world_voxel, face, source_block_srgb);
+                    face_lighting_with_cache(
+                    lighting_cache,
+                    world,
+                    world_voxel,
+                    face,
+                    source_block_srgb,
+                );
                 lighting_by_face[face_index] = Some(lighting);
                 lighting
             };
