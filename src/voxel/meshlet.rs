@@ -82,7 +82,10 @@ impl ChunkMeshletMask {
         center *= 0.25;
 
         let normal = Vec3::from_array(normals[base]);
-        let source = center - normal * 0.001;
+        // Layer surfaces are deliberately pushed ~0.001 blocks outward to
+        // avoid z-fighting. Step farther back than that offset, while staying
+        // well inside the smallest 1/8-block sculpted cell.
+        let source = center - normal * 0.01;
         let source = source.floor().as_ivec3();
         if source.x < 0
             || source.y < 0
