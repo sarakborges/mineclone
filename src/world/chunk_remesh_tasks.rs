@@ -205,7 +205,7 @@ impl ChunkRemeshTasks {
         if !self.can_schedule(kind) || self.contains(coord, kind) {
             return false;
         }
-        let Some(permit) = limiter.try_acquire_render() else {
+        let Some(permit) = limiter.try_acquire_remesh() else {
             return false;
         };
 
