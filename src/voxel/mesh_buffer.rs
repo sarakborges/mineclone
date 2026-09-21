@@ -20,7 +20,6 @@ pub(crate) struct VoxelMeshBuffer {
     normals: Vec<[f32; 3]>,
     uvs: Vec<[f32; 2]>,
     light_uvs: Vec<[f32; 2]>,
-    tangents: Vec<[f32; 4]>,
     colors: Vec<[f32; 4]>,
     indices: Vec<u32>,
 }
@@ -28,14 +27,15 @@ pub(crate) struct VoxelMeshBuffer {
 impl VoxelMeshBuffer {
     pub(crate) fn push_quad(&mut self, quad: VoxelMeshQuad) {
         let base = self.positions.len() as u32;
-        let encoded_tint = encode_tint_tangent(quad.tint);
 
         self.positions.extend(quad.vertices);
         self.normals.extend([quad.normal; 4]);
         self.uvs.extend(quad.uvs);
         self.light_uvs.extend(quad.light_uvs);
-        self.tangents.extend([encoded_tint; 4]);
-        self.colors.extend(quad.colors);
+        self.colors.extend(
+            quad.colors
+                .map(|color| encode_vertex_payload(quad.tint, color)),
+        );
         self.indices
             .extend(quad_triangle_indices(base, quad.flip_diagonal));
     }
@@ -54,27 +54,29 @@ impl VoxelMeshBuffer {
             .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
             .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
             .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
-            // Terrain does not use normal maps. Reuse the built-in tangent varying
-            // for the per-quad tint. Tint is constant across each quad, so the
-            // direction+magnitude encoding cannot distort an interpolated gradient.
-            .with_inserted_attribute(Mesh::ATTRIBUTE_TANGENT, self.tangents)
-            // RGB carries block-light color directly so rasterization interpolates
-            // colored light linearly. Alpha remains ambient occlusion.
+            // COLOR packs block-light RGB, biome/layer tint and AO. Tangents are
+            // intentionally omitted: voxel materials do not use normal maps.
             .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors)
             .with_inserted_indices(Indices::U32(self.indices)),
         )
     }
 }
 
-fn encode_tint_tangent(tint: [f32; 3]) -> [f32; 4] {
-    let color = Vec3::from_array(tint);
-    let magnitude = color.length();
-    if magnitude <= f32::EPSILON {
-        return [0.0; 4];
-    }
+fn encode_vertex_payload(tint: [f32; 3], lighting: [f32; 4]) -> [f32; 4] {
+    let block = lighting[..3].map(|channel| {
+        (channel.clamp(0.0, 1.0) * 15.0).round() as u32
+    });
+    let packed_block = block[0] | (block[1] << 4) | (block[2] << 8);
 
-    let direction = color / magnitude;
-    [direction.x, direction.y, direction.z, magnitude]
+    let tint = tint.map(|channel| {
+        (channel.clamp(0.0, 1.0) * 255.0).round() as u32
+    });
+    let packed_tint = tint[0] | (tint[1] << 8) | (tint[2] << 16);
+
+    [
+        packed_block as f32,
+        packed_tint as f32,
+        lighting[3].clamp(0.0, 1.0),
+        1.0,
+    ]
 }
-
-
