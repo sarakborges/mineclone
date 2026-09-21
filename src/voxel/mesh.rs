@@ -39,11 +39,11 @@ pub fn build_chunk_mesh<W, F>(
     chunk_coord: IVec3,
     chunk: &VoxelChunk,
     blocks: &BlockRegistry,
-    tint_at: F,
+    mut tint_at: F,
 ) -> Vec<ChunkFaceMesh>
 where
     W: VoxelRead + ?Sized,
-    F: Fn(IVec3, VoxelCell) -> [f32; 3],
+    F: FnMut(IVec3, VoxelCell, &crate::content::block::BlockDefinition) -> [f32; 3],
 {
     let mut buffers = MicroMeshBuffers::default();
     let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
@@ -61,13 +61,6 @@ where
                 let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
                 let mut tint = None;
                 let mut source_block_srgb = None;
-                let tint_for_cell = || {
-                    if block.textures.is_empty() {
-                        [1.0, 1.0, 1.0]
-                    } else {
-                        tint_at(world_voxel, cell)
-                    }
-                };
                 let block_srgb_for_cell = || {
                     surface_block_srgb(
                         chunk.light_at(x as i32, y as i32, z as i32),
@@ -85,7 +78,11 @@ where
                         block,
                         world_voxel,
                         local_voxel: IVec3::new(x as i32, y as i32, z as i32),
-                        tint: tint_for_cell(),
+                        tint: if block.textures.is_empty() {
+                            [1.0, 1.0, 1.0]
+                        } else {
+                            tint_at(world_voxel, cell, block)
+                        },
                         block_srgb: block_srgb_for_cell(),
                     };
                     emit_sculpted_faces(&surface, &mut buffers);
@@ -117,7 +114,13 @@ where
                         continue;
                     }
 
-                    let tint = *tint.get_or_insert_with(tint_for_cell);
+                    let tint = *tint.get_or_insert_with(|| {
+                        if block.textures.is_empty() {
+                            [1.0, 1.0, 1.0]
+                        } else {
+                            tint_at(world_voxel, cell, block)
+                        }
+                    });
                     let source_block_srgb =
                         *source_block_srgb.get_or_insert_with(block_srgb_for_cell);
 
