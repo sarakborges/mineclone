@@ -18,7 +18,7 @@ use crate::{
     },
     voxel::{
         chunk::{CHUNK_SIZE, VoxelChunk},
-        coordinates::{chunk_origin, chunks_for_block_extent},
+        coordinates::chunk_origin,
     },
     world::{
         biome_field::BiomeField,
@@ -116,15 +116,16 @@ pub(crate) fn generate_chunk(
     }
 
     let horizontal_chunk = chunk_coord.xz();
-    let structure_allowance = maximum_structure_vertical_chunk_allowance_for_horizontal_chunk(
+    let structure_top_chunk = maximum_structure_top_chunk_for_horizontal_chunk(
         horizontal_chunk,
+        context.dimension,
         context.biomes,
         context.structures,
         context.biome_field,
         context.feature_fields,
     );
     let (_, maximum_surface_chunk_y) = chunk_y_bounds(context.dimension, context.biomes);
-    if chunk_coord.y > maximum_surface_chunk_y + structure_allowance
+    if chunk_coord.y > maximum_surface_chunk_y.max(structure_top_chunk)
         && !context.biomes.has_volume_density_modifiers()
     {
         return VoxelChunk::empty();
@@ -153,7 +154,8 @@ pub(crate) fn generate_chunk(
     // hydrology/cave/volume region for chunks that are well above any local
     // surface, while retaining two full chunks of headroom for high lake water,
     // biome transitions and structures reaching in from neighboring columns.
-    if chunk_coord.y > local_surface_chunk + structure_allowance + LOCAL_EMPTY_HEADROOM_CHUNKS
+    if chunk_coord.y
+        > local_surface_chunk.max(structure_top_chunk) + LOCAL_EMPTY_HEADROOM_CHUNKS
         && !context.biomes.has_volume_solid_density_modifiers()
     {
         return VoxelChunk::empty();
@@ -220,20 +222,22 @@ pub(crate) fn generate_chunk(
     chunk
 }
 
-pub(crate) fn maximum_structure_vertical_chunk_allowance_for_horizontal_chunk(
+pub(crate) fn maximum_structure_top_chunk_for_horizontal_chunk(
     horizontal_chunk: IVec2,
+    dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
     structures: &StructureRegistry,
     biome_field: &BiomeField,
     feature_fields: &WorldFeatureFields,
 ) -> i32 {
-    let block_extent = feature_fields.structure_vertical_extent(horizontal_chunk, || {
-        self::structures::maximum_potential_structure_height_for_chunk(
+    let top_y = feature_fields.structure_top_y(horizontal_chunk, || {
+        self::structures::maximum_potential_structure_top_y_for_chunk(
             horizontal_chunk,
+            dimension,
             biomes,
             structures,
             biome_field,
         )
     });
-    chunks_for_block_extent(block_extent)
+    top_y.div_euclid(CHUNK_SIZE as i32)
 }
