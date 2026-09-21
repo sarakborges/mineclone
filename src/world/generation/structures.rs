@@ -155,15 +155,6 @@ pub(crate) fn structure_candidate_anchor(
     )
 }
 
-pub(crate) fn structure_candidate_member_hash(
-    world_seed: u64,
-    biome_id: &str,
-    structure_reference: &str,
-    anchor: IVec2,
-) -> u64 {
-    structure_member_hash(world_seed, biome_id, structure_reference, anchor)
-}
-
 pub(crate) fn structure_candidate_probe(
     biome_id: &str,
     placement_id: &str,
