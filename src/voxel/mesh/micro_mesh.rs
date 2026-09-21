@@ -117,6 +117,8 @@ pub(super) fn emit_sculpted_faces<'a, W: VoxelRead + ?Sized>(
 ) {
     let shape = MicroblockMask::from_cell(surface.cell);
     for face in BlockFace::ALL {
+        let lighting =
+            face_lighting(surface.world, surface.world_voxel, face, surface.block_srgb);
         for depth in 0..EDGE {
             let mut visible = [false; EDGE * EDGE];
             for v in 0..EDGE {
@@ -138,7 +140,14 @@ pub(super) fn emit_sculpted_faces<'a, W: VoxelRead + ?Sized>(
                             && position[1] == 0);
                 }
             }
-            emit_rectangles(surface, buffers, face, depth, &mut visible);
+            emit_rectangles(
+                surface,
+                buffers,
+                face,
+                depth,
+                &mut visible,
+                lighting,
+            );
         }
     }
 }
@@ -170,7 +179,16 @@ pub(super) fn emit_neighbor_openings<'a, W: VoxelRead + ?Sized>(
             ));
         }
     }
-    emit_rectangles(surface, buffers, face, depth, &mut visible);
+    let lighting =
+        face_lighting(surface.world, surface.world_voxel, face, surface.block_srgb);
+    emit_rectangles(
+        surface,
+        buffers,
+        face,
+        depth,
+        &mut visible,
+        lighting,
+    );
 }
 
 pub(super) fn occludes(
@@ -197,6 +215,7 @@ fn emit_rectangles<'a, W: VoxelRead + ?Sized>(
     face: BlockFace,
     depth: usize,
     visible: &mut [bool; EDGE * EDGE],
+    lighting: crate::voxel::mesh_lighting::FaceLighting,
 ) {
     for v in 0..EDGE {
         for u in 0..EDGE {
@@ -218,7 +237,17 @@ fn emit_rectangles<'a, W: VoxelRead + ?Sized>(
                     visible[column + row * EDGE] = false;
                 }
             }
-            emit_rectangle(surface, buffers, face, depth, u, v, width, height);
+            emit_rectangle(
+                surface,
+                buffers,
+                face,
+                depth,
+                u,
+                v,
+                width,
+                height,
+                lighting,
+            );
         }
     }
 }
@@ -236,6 +265,7 @@ fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
     v: usize,
     width: usize,
     height: usize,
+    lighting: crate::voxel::mesh_lighting::FaceLighting,
 ) {
     let [min_x, min_y, min_z] = position_for(face, depth, u, v);
     let mut lower = [min_x, min_y, min_z];
@@ -295,7 +325,6 @@ fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
         .texture_table
         .encoded_layers(block_face_texture_layers(material_face, surface.block))
         .unwrap_or(0.0);
-    let lighting = face_lighting(surface.world, surface.world_voxel, face, surface.block_srgb);
     push_lit_quad(
         material_buffer(
             buffers,
