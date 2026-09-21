@@ -7,7 +7,10 @@ use crate::{
     world::{
         chunk_mesh_tasks::MAX_MESH_TASKS_IN_FLIGHT,
         chunk_remesh::ChunkRemeshQueue,
-        chunk_rendering::{ChunkRenderPool, spawn_built_chunk_meshes},
+        chunk_rendering::{
+            ChunkRenderPool, MAX_RESIDENT_CHUNK_MESH_BYTES, MESH_TASK_RESERVATION_BYTES,
+            built_chunk_mesh_bytes, spawn_built_chunk_meshes,
+        },
         chunk_system_params::{ChunkContent, ChunkRenderer},
         work_budget::FrameWorkBudget,
     },
@@ -78,6 +81,21 @@ pub(super) fn dispatch_initial_mesh_tasks(
             integrate_empty_chunk(content, renderer, &work.world, &mut queues.remesh, coord);
             budget.record(1);
             continue;
+        }
+
+        let reserved_mesh_bytes = work
+            .mesh_tasks
+            .pending_count()
+            .saturating_add(1)
+            .saturating_mul(MESH_TASK_RESERVATION_BYTES);
+        if renderer
+            .pool
+            .mesh_bytes()
+            .saturating_add(reserved_mesh_bytes)
+            > MAX_RESIDENT_CHUNK_MESH_BYTES
+        {
+            work.state.defer_ready(coord);
+            break;
         }
 
         let snapshot = ChunkMeshSnapshot::capture_with_neighbor_filter(
@@ -166,6 +184,17 @@ pub(super) fn collect_built_chunk_meshes(
                 renderer.pool.contains(neighbor)
             })
             || work.state.initial_mesh_seed_catchup.contains(&completed.coord);
+        let built_mesh_bytes = built_chunk_mesh_bytes(&completed.output.meshes);
+        if renderer
+            .pool
+            .mesh_bytes()
+            .saturating_add(built_mesh_bytes)
+            > MAX_RESIDENT_CHUNK_MESH_BYTES
+        {
+            work.state.defer_ready(completed.coord);
+            continue;
+        }
+
         let render_context = content.render_context(
             &work.world,
             &renderer.terrain_materials,
