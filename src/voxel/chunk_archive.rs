@@ -249,23 +249,27 @@ impl ArchivedChunk {
     pub fn restore(&self) -> VoxelChunk {
         let mut chunk = VoxelChunk::empty();
 
-        chunk.edit_content(|content| {
+        chunk.edit_initial_blocks(|content| {
             for (index, cell) in self.block_entries() {
                 let (x, y, z) = coordinates(index);
-                content.set_block(x, y, z, Some(cell));
-            }
-            for (index, _order, attached) in self.layer_entries() {
-                let (x, y, z) = coordinates(index);
-                assert!(
-                    content.add_layer(x, y, z, attached.face, attached.cell),
-                    "archived layer must restore onto its supporting block"
-                );
-            }
-            for (index, fluid) in self.fluid_entries() {
-                let (x, y, z) = coordinates(index);
-                content.set_fluid(x, y, z, Some(fluid));
+                content.set_block(x, y, z, cell);
             }
         });
+        for (index, _order, attached) in self.layer_entries() {
+            let (x, y, z) = coordinates(index);
+            assert!(
+                chunk.add_layer(x, y, z, attached.face, attached.cell),
+                "archived layer must restore onto its supporting block"
+            );
+        }
+        if !self.fluid_cells.is_empty() {
+            chunk.edit_fluids(|content| {
+                for (index, fluid) in self.fluid_entries() {
+                    let (x, y, z) = coordinates(index);
+                    content.set_fluid(x, y, z, Some(fluid));
+                }
+            });
+        }
 
         chunk
     }
