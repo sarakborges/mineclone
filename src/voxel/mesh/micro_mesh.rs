@@ -5,7 +5,7 @@ use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::{
     content::block::{
-        BlockDefinition, BlockRegistry, BlockTextureLayer, BlockTextureRotations,
+        BlockDefinition, BlockLookup, BlockTextureLayer, BlockTextureRotations,
     },
     rendering::block_texture::{block_face_material_face, block_face_texture_layers},
 };
@@ -64,7 +64,6 @@ pub(super) fn material_buffer<'buffer, 'definition>(
 
 pub(super) struct MicroSurface<'a, W: VoxelRead + ?Sized> {
     pub(super) world: &'a W,
-    pub(super) blocks: &'a BlockRegistry,
     pub(super) cell: VoxelCell,
     pub(super) block: &'a BlockDefinition,
     pub(super) world_voxel: IVec3,
@@ -75,6 +74,7 @@ pub(super) struct MicroSurface<'a, W: VoxelRead + ?Sized> {
 
 pub(super) fn emit_sculpted_faces<'a, W: VoxelRead + ?Sized>(
     surface: &MicroSurface<'a, W>,
+    blocks: &mut BlockLookup<'a>,
     buffers: &mut MicroMeshBuffers<'a>,
 ) {
     let shape = MicroblockMask::from_cell(surface.cell);
@@ -91,9 +91,7 @@ pub(super) fn emit_sculpted_faces<'a, W: VoxelRead + ?Sized>(
                         + IVec3::new(position[0] as i32, position[1] as i32, position[2] as i32);
                     let neighbor = occupied_cell(surface.world, fine + face.offset());
                     let occluded = neighbor.is_some_and(|neighbor| {
-                        let definition = surface.blocks.get(neighbor.block_id).unwrap_or_else(|| {
-                            panic!("missing block definition: {}", neighbor.block_id)
-                        });
+                        let definition = blocks.get(neighbor.block_id);
                         occludes(surface.cell.block_id, surface.block, neighbor.block_id, definition)
                     });
                     visible[u + v * EDGE] = !occluded
