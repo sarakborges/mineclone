@@ -21,7 +21,9 @@
     "depth": 42,
     "wallHeight": 20,
     "floorAmplitude": 6,
-    "floorScale": 0.032
+    "floorScale": 0.032,
+    "topAmplitude": 10,
+    "topScale": 0.008
   },
   "allowSurfaceCarvers": true,
   "surfaceLayers": [
