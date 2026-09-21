@@ -29,9 +29,47 @@ const SURFACE_CARVER_WATER_ROOF: f32 = 3.0;
 const SURFACE_CARVER_WATER_FADE_DEPTH: f32 = 4.0;
 const SURFACE_CARVER_WATER_FADE_HEIGHT: f32 = 4.0;
 
+#[derive(Clone, Copy)]
+struct PackedVolumeBiomeSelection {
+    biome_index: u16,
+    strength: f32,
+}
+
+impl PackedVolumeBiomeSelection {
+    const NONE_INDEX: u16 = u16::MAX;
+    const NONE: Self = Self {
+        biome_index: Self::NONE_INDEX,
+        strength: 0.0,
+    };
+
+    fn from_selection(selection: Option<VolumeBiomeSelection>) -> Self {
+        let Some(selection) = selection else {
+            return Self::NONE;
+        };
+        Self {
+            biome_index: u16::try_from(selection.biome_index)
+                .expect("volume biome index must fit in u16"),
+            strength: selection.strength,
+        }
+    }
+
+    fn unpack(self) -> Option<VolumeBiomeSelection> {
+        (self.biome_index != Self::NONE_INDEX).then_some(VolumeBiomeSelection {
+            biome_index: usize::from(self.biome_index),
+            strength: self.strength,
+        })
+    }
+}
+
 pub(super) struct DensityField {
     pub(super) values: Vec<f32>,
-    pub(super) volume: Vec<Option<VolumeBiomeSelection>>,
+    volume: Vec<PackedVolumeBiomeSelection>,
+}
+
+impl DensityField {
+    pub(super) fn volume_at(&self, index: usize) -> Option<VolumeBiomeSelection> {
+        self.volume[index].unpack()
+    }
 }
 
 pub(super) struct DensityPassContext<'a> {
@@ -51,7 +89,7 @@ pub(super) fn sample_density_field(
     let context = DensitySampleContext::new(pass.region, pass.anchored_caves, pass.biome_field);
     let mut field = DensityField {
         values: vec![0.0; CHUNK_VOLUME],
-        volume: vec![None; CHUNK_VOLUME],
+        volume: vec![PackedVolumeBiomeSelection::NONE; CHUNK_VOLUME],
     };
     let chunk_minimum_y = chunk_origin.y as f32 + 0.5;
     let chunk_maximum_y = chunk_origin.y as f32 + CHUNK_SIZE as f32 - 0.5;
@@ -141,7 +179,7 @@ pub(super) fn sample_density_field(
                 );
 
                 field.values[index] = sampled_density + protected_carver_delta;
-                field.volume[index] = volume;
+                field.volume[index] = PackedVolumeBiomeSelection::from_selection(volume);
             }
         }
     }
