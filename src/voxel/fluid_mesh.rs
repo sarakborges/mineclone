@@ -32,11 +32,11 @@ pub fn build_fluid_meshes<W, F>(
     world: &W,
     chunk_coord: IVec3,
     chunk: &VoxelChunk,
-    tint_at: F,
+    mut tint_at: F,
 ) -> Vec<ChunkFluidMesh>
 where
     W: VoxelRead + ?Sized,
-    F: Fn(IVec3, FluidId) -> [f32; 3],
+    F: FnMut(IVec3, FluidId) -> [f32; 3],
 {
     let mut buffers = HashMap::<FluidId, VoxelMeshBuffer>::new();
     let chunk_size = CHUNK_SIZE as i32;
