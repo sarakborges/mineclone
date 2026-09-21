@@ -66,6 +66,33 @@ impl ChunkMeshletMask {
         mask
     }
 
+    pub(crate) fn for_each_voxel(
+        self,
+        mut visit: impl FnMut(usize, usize, usize),
+    ) {
+        for meshlet_y in 0..MESHLETS_PER_AXIS {
+            for meshlet_z in 0..MESHLETS_PER_AXIS {
+                for meshlet_x in 0..MESHLETS_PER_AXIS {
+                    let index = meshlet_index(meshlet_x, meshlet_y, meshlet_z);
+                    if !self.contains_index(index) {
+                        continue;
+                    }
+
+                    let x0 = meshlet_x * CHUNK_MESHLET_EDGE;
+                    let y0 = meshlet_y * CHUNK_MESHLET_EDGE;
+                    let z0 = meshlet_z * CHUNK_MESHLET_EDGE;
+                    for y in y0..y0 + CHUNK_MESHLET_EDGE {
+                        for z in z0..z0 + CHUNK_MESHLET_EDGE {
+                            for x in x0..x0 + CHUNK_MESHLET_EDGE {
+                                visit(x, y, z);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     pub(crate) fn contains_index(self, index: usize) -> bool {
         debug_assert!(index < MESHLET_COUNT);
         self.0 & (1 << index) != 0
