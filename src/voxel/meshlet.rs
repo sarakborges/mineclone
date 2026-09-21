@@ -108,7 +108,10 @@ pub(crate) fn patch_voxel_mesh(
     dirty: ChunkMeshletMask,
 ) -> Option<Mesh> {
     if dirty.is_all() {
-        return replacement.and_then(|mesh| MeshArrays::from_mesh(mesh)?.into_mesh());
+        return Some(match replacement {
+            Some(mesh) => MeshArrays::from_mesh(mesh)?.into_mesh(),
+            None => MeshArrays::default().into_mesh(),
+        });
     }
 
     let mut output = MeshArrays::default();
@@ -119,7 +122,7 @@ pub(crate) fn patch_voxel_mesh(
         MeshArrays::from_mesh(replacement)?.append_filtered(&mut output, dirty, true)?;
     }
 
-    output.into_mesh()
+    Some(output.into_mesh())
 }
 
 #[derive(Default)]
@@ -206,24 +209,18 @@ impl MeshArrays {
         Some(())
     }
 
-    fn into_mesh(self) -> Option<Mesh> {
-        if self.positions.is_empty() {
-            return None;
-        }
-
-        Some(
-            Mesh::new(
-                PrimitiveTopology::TriangleList,
-                RenderAssetUsages::RENDER_WORLD,
-            )
-            .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_TANGENT, self.tangents)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors)
-            .with_inserted_indices(Indices::U32(self.indices)),
+    fn into_mesh(self) -> Mesh {
+        Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::RENDER_WORLD,
         )
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_TANGENT, self.tangents)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors)
+        .with_inserted_indices(Indices::U32(self.indices))
     }
 }
 
