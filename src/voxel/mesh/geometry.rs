@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use super::BlockFace;
 use crate::{
-    content::{block::BlockRegistry, block_orientation::BlockOrientation},
+    content::{block::BlockLookup, block_orientation::BlockOrientation},
     voxel::{orientation::orient_vector, read::VoxelRead, texture_rotation::TextureRotation},
 };
 
@@ -14,7 +14,7 @@ pub(super) struct FaceGeometry {
 
 pub(crate) fn is_face_exposed<W: VoxelRead + ?Sized>(
     world: &W,
-    blocks: &BlockRegistry,
+    blocks: &mut BlockLookup<'_>,
     block_id: &str,
     block_is_transparent: bool,
     world_voxel: IVec3,
@@ -28,9 +28,7 @@ pub(crate) fn is_face_exposed<W: VoxelRead + ?Sized>(
     let Some(neighbor_id) = world.block_id_at(neighbor_position) else {
         return true;
     };
-    let neighbor = blocks
-        .get(neighbor_id)
-        .unwrap_or_else(|| panic!("missing block definition: {neighbor_id}"));
+    let neighbor = blocks.get(neighbor_id);
     let neighbor_occludes = !neighbor.alpha_blend && neighbor.alpha_cutoff.is_none();
 
     !face_is_occluded(block_id, neighbor_id, block_is_transparent, neighbor_occludes)
