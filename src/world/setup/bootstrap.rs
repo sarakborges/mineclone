@@ -297,6 +297,10 @@ fn spawn_column_has_surface_fluid(
     biome_field: &BiomeField,
     feature_fields: &WorldFeatureFields,
 ) -> bool {
+    if authored_surface_fluid_id_for_position(column, dimension, biomes, biome_field).is_some() {
+        return true;
+    }
+
     let chunk_coord = IVec3::new(
         column.x.div_euclid(CHUNK_SIZE as i32),
         0,
@@ -325,10 +329,6 @@ fn spawn_column_has_surface_fluid(
             }
         })
     });
-    if authored_surface_fluid_id_for_position(column, dimension, biomes, biome_field).is_some() {
-        return true;
-    }
-
     let position = column.as_vec2() + Vec2::splat(0.5);
     let surface_height = surface_height(column, dimension, biomes, biome_field) as f32;
 
