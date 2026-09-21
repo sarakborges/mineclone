@@ -32,21 +32,21 @@
   },
   "palette": {
     "W": {
-      "block": "asteria:oak_log",
+      "block": "asteria:world_tree_log",
       "orientation": "y"
     },
     "F": {
-      "block": "asteria:oak_leaf"
+      "block": "asteria:world_tree_leaf"
     },
     "S": {
       "block": "asteria:stone"
     },
     "Z": {
-      "block": "asteria:oak_log",
+      "block": "asteria:world_tree_log",
       "orientation": "z"
     },
     "X": {
-      "block": "asteria:oak_log",
+      "block": "asteria:world_tree_log",
       "orientation": "x"
     }
   },
