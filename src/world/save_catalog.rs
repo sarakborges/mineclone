@@ -15,6 +15,9 @@ use std::{
 };
 
 use bevy::log::warn;
+
+use crate::{content::fluid::FluidRegistry, voxel::world::VoxelWorld};
+
 use self::{
     generations::{
         RETAINED_GENERATIONS, latest_complete_manifest, newest_restorable_summary,
@@ -35,7 +38,7 @@ pub(crate) use self::{
 
 use super::{
     chunk_storage::{
-        generation_storage_slot_exists, publish_generation_chunks, remove_generation_chunks,
+        generation_storage_slot_exists, publish_generation_world_chunks, remove_generation_chunks,
     },
     new_world::{
         WorldgenVersion, biome_size_multiplier_tenths, is_valid_biome_size_multiplier,
@@ -120,12 +123,21 @@ pub(crate) fn create_new_world(requested_name: &str, seed: u64, dimension_id: &s
 
 pub(crate) fn save_world(
     snapshot: &WorldSnapshot,
+    world: &VoxelWorld,
+    fluids: &FluidRegistry,
     registries: SaveRegistries<'_>,
 ) -> io::Result<u64> {
-    save_world_owned(snapshot, registries.owned_for_pruning())
+    save_world_owned(
+        snapshot,
+        world,
+        fluids,
+        registries.owned_for_pruning(),
+    )
 }
 pub(crate) fn save_world_owned(
     snapshot: &WorldSnapshot,
+    world: &VoxelWorld,
+    fluids: &FluidRegistry,
     registries: PruneRegistries,
 ) -> io::Result<u64> {
     validate_world_name(&snapshot.id)?;
@@ -180,7 +192,7 @@ pub(crate) fn save_world_owned(
     let saved_at = now_unix_ms()?;
 
     if let Err(error) =
-        publish_generation_chunks(&directory, next, snapshot.chunks.disk_chunks())
+        publish_generation_world_chunks(&directory, next, world, fluids)
     {
         cleanup_unpublished_generation(&directory, next, None);
         return Err(error);
