@@ -126,11 +126,11 @@ fn encode_vertex_payload(
 }
 
 fn quad_meshlet_index(vertices: [[f32; 3]; 4], normal: [f32; 3]) -> u32 {
-    let center = vertices
-        .into_iter()
-        .map(Vec3::from_array)
-        .sum::<Vec3>()
-        * 0.25;
+    let mut center = Vec3::ZERO;
+    for vertex in vertices {
+        center += Vec3::from_array(vertex);
+    }
+    center *= 0.25;
     let source = (center - Vec3::from_array(normal) * 0.01)
         .floor()
         .as_ivec3();
