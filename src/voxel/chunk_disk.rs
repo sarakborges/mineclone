@@ -248,6 +248,26 @@ impl DiskChunk {
         )
     }
 
+    pub(crate) fn into_archived_chunk(
+        self,
+        blocks: &BlockRegistry,
+        layers: &LayerRegistry,
+        fluids: &FluidRegistry,
+    ) -> io::Result<(IVec3, ArchivedChunk)> {
+        let coord = self.coord()?;
+        decode_archived_compact(
+            coord,
+            self.block_palette,
+            self.block_runs,
+            self.layers,
+            self.fluid_palette,
+            self.fluid_runs,
+            blocks,
+            layers,
+            fluids,
+        )
+    }
+
 }
 
 fn palette_index<T: Eq>(palette: &mut Vec<T>, state: T) -> io::Result<u16> {
@@ -328,6 +348,141 @@ fn decode_compact(
     decode_layers(&mut chunk, layer_states, layers)?;
 
     Ok((coord, chunk))
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "direct archive decoding keeps the independent disk channels explicit"
+)]
+fn decode_archived_compact(
+    coord: IVec3,
+    block_palette: Vec<DiskBlockState>,
+    block_runs: Vec<DiskRun>,
+    layer_states: Vec<DiskLayerState>,
+    fluid_palette: Vec<DiskFluidState>,
+    fluid_runs: Vec<DiskRun>,
+    blocks: &BlockRegistry,
+    layers: &LayerRegistry,
+    fluids: &FluidRegistry,
+) -> io::Result<(IVec3, ArchivedChunk)> {
+    let block_states = block_palette
+        .into_iter()
+        .map(|state| decode_block_state(state, blocks))
+        .collect::<io::Result<Vec<_>>>()?;
+    let fluid_states = fluid_palette
+        .into_iter()
+        .map(|state| decode_fluid_state(state, fluids))
+        .collect::<io::Result<Vec<_>>>()?;
+
+    validate_runs(&block_runs, block_states.len())?;
+    validate_runs(&fluid_runs, fluid_states.len())?;
+    let layer_entries = decode_layer_entries(&block_runs, layer_states, layers)?;
+
+    let block_entries = block_runs.iter().flat_map(|run| {
+        let cell = block_states[run.state as usize];
+        (run.start as usize..run.start as usize + run.len as usize)
+            .map(move |index| (index, cell))
+    });
+    let fluid_entries = fluid_runs.iter().flat_map(|run| {
+        let cell = fluid_states[run.state as usize];
+        (run.start as usize..run.start as usize + run.len as usize)
+            .map(move |index| (index, cell))
+    });
+
+    Ok((
+        coord,
+        ArchivedChunk::from_entries(block_entries, layer_entries, fluid_entries),
+    ))
+}
+
+fn decode_layer_entries(
+    block_runs: &[DiskRun],
+    states: Vec<DiskLayerState>,
+    layers: &LayerRegistry,
+) -> io::Result<Vec<(usize, usize, AttachedLayer)>> {
+    let mut previous_voxel = None;
+    let mut expected_order = 0_u8;
+    let mut current_layers = Vec::<(LayerFace, &'static str)>::new();
+    let mut entries = Vec::with_capacity(states.len());
+
+    for state in states {
+        if state.voxel as usize >= CHUNK_VOLUME
+            || state.rotation > 3
+            || state.order as usize >= MAX_LAYERS_PER_VOXEL
+        {
+            return Err(invalid_data("invalid saved layer voxel, order or rotation"));
+        }
+
+        match previous_voxel {
+            Some(previous) if state.voxel < previous => {
+                return Err(invalid_data("saved layers must be ordered by voxel and layer order"));
+            }
+            Some(previous) if state.voxel == previous => {
+                if state.order != expected_order {
+                    return Err(invalid_data("saved layer order must be contiguous per voxel"));
+                }
+            }
+            _ => {
+                if state.order != 0 {
+                    return Err(invalid_data("first saved layer in a voxel must have order zero"));
+                }
+                current_layers.clear();
+            }
+        }
+
+        let face = LayerFace::from_index(state.face)
+            .ok_or_else(|| invalid_data("invalid saved layer face"))?;
+        let definition = layers
+            .get(&state.id)
+            .ok_or_else(|| invalid_data(format!("missing layer definition: {}", state.id)))?;
+        if !definition.supports_face(face) {
+            return Err(invalid_data(format!(
+                "layer {} does not support saved face {:?}",
+                state.id, face
+            )));
+        }
+
+        let voxel = state.voxel as usize;
+        if !run_contains_index(block_runs, voxel) {
+            return Err(invalid_data("saved layer is missing its supporting block"));
+        }
+
+        let layer_id = intern_layer_id(&state.id);
+        if current_layers
+            .iter()
+            .any(|(existing_face, existing_id)| *existing_face == face && *existing_id == layer_id)
+        {
+            return Err(invalid_data("duplicate saved layer on the same voxel face"));
+        }
+        current_layers.push((face, layer_id));
+
+        entries.push((
+            voxel,
+            state.order as usize,
+            AttachedLayer {
+                face,
+                cell: LayerCell {
+                    layer_id,
+                    texture_rotation: TextureRotation::from_quarter_turn(state.rotation),
+                },
+            },
+        ));
+
+        previous_voxel = Some(state.voxel);
+        expected_order = state
+            .order
+            .checked_add(1)
+            .ok_or_else(|| invalid_data("saved layer order overflow"))?;
+    }
+
+    Ok(entries)
+}
+
+fn run_contains_index(runs: &[DiskRun], index: usize) -> bool {
+    runs.iter().any(|run| {
+        let start = run.start as usize;
+        index >= start && index < start + run.len as usize
+    })
 }
 
 fn decode_layers(
