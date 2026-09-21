@@ -17,7 +17,7 @@ use crate::{
     entity::EntityHealth,
     player::{
         camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar,
-        player_id::PlayerId,
+        movement::flight::FlightState, player_id::PlayerId,
     },
     voxel::world::VoxelWorld,
 };
@@ -99,6 +99,7 @@ type SavedPlayerQuery<'w, 's> = Query<
         &'static GameMode,
         &'static EntityHealth,
         &'static GameplayCamera,
+        &'static FlightState,
     ),
     (With<GameplayCamera>, With<PlayerId>),
 >;
@@ -122,7 +123,7 @@ struct WorldSaveEntities<'w, 's> {
 
 impl WorldSaveEntities<'_, '_> {
     fn saved_player(&self) -> io::Result<SavedPlayer> {
-        let (transform, mode, health, camera) = self.player.single().map_err(|error| {
+        let (transform, mode, health, camera, flight) = self.player.single().map_err(|error| {
             io::Error::other(format!(
                 "cannot save world without exactly one player: {error}"
             ))
@@ -131,6 +132,7 @@ impl WorldSaveEntities<'_, '_> {
         Ok(SavedPlayer {
             position: [position.x, position.y, position.z],
             creative: *mode == GameMode::Creative,
+            flying: flight.is_active(),
             health: Some(health.current()),
             yaw: camera.yaw,
             pitch: camera.pitch,
