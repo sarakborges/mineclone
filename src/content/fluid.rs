@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use bevy::prelude::*;
 use serde::Deserialize;
@@ -29,8 +29,8 @@ pub struct FluidDefinition {
 
 #[derive(Resource, Default, Clone)]
 pub struct FluidRegistry {
-    definitions: Vec<FluidDefinition>,
-    ids: HashMap<String, FluidId>,
+    definitions: Arc<Vec<FluidDefinition>>,
+    ids: Arc<HashMap<String, FluidId>>,
 }
 
 impl FluidRegistry {
@@ -71,13 +71,15 @@ impl FluidRegistry {
             definition.id
         );
 
+        let ids = Arc::make_mut(&mut self.ids);
         assert!(
-            !self.ids.contains_key(&definition.id),
+            !ids.contains_key(&definition.id),
             "duplicate fluid definition id {}",
             definition.id
         );
+        let definitions = Arc::make_mut(&mut self.definitions);
 
-        let index = self.definitions.len();
+        let index = definitions.len();
         assert!(
             index <= u16::MAX as usize,
             "fluid registry cannot exceed {} definitions",
@@ -85,8 +87,8 @@ impl FluidRegistry {
         );
         let fluid_id = index as FluidId;
 
-        self.ids.insert(definition.id.clone(), fluid_id);
-        self.definitions.push(definition);
+        ids.insert(definition.id.clone(), fluid_id);
+        definitions.push(definition);
     }
 
     pub fn id_of(&self, id: &str) -> Option<FluidId> {
