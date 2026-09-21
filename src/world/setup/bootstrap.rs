@@ -164,6 +164,8 @@ pub(in crate::world) fn begin_world_loading(
             spawn_column.y.div_euclid(CHUNK_SIZE as i32),
         )
     };
+    // Saves persist only modified chunks. Untouched terrain is intentionally absent and
+    // must be regenerated from the pinned worldgen identity around the restored player.
     let coords = bootstrap_chunk_coords(initial_center, &config.render_distance);
     let bootstrap_chunks = coords
         .iter()
