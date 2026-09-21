@@ -5,9 +5,15 @@
 //! A leading `t` is retained for compatibility with legacy session-created
 //! parent blocks. New Chisel placement never creates parents in empty space.
 
+use std::sync::OnceLock;
+
 use bevy::prelude::*;
 
-use super::{cell::VoxelCell, read::VoxelRead};
+use super::{
+    cell::VoxelCell,
+    read::VoxelRead,
+    secondary_properties::{SecondaryProperties, SecondaryPropertyToken},
+};
 
 pub(crate) const MICROBLOCK_EDGE: i32 = 8;
 pub(crate) const CHISEL_MASK_PROPERTY: &str = "asteria:chisel_mask";
@@ -56,11 +62,13 @@ impl MicroblockMask {
     };
 
     pub(crate) fn is_modified(cell: VoxelCell) -> bool {
-        cell.secondary_property(CHISEL_MASK_PROPERTY).is_some()
+        cell.secondary_properties()
+            .contains_token(chisel_mask_token())
     }
 
     pub(crate) fn is_transient_parent(cell: VoxelCell) -> bool {
-        cell.secondary_property(CHISEL_MASK_PROPERTY)
+        cell.secondary_properties()
+            .get_token(chisel_mask_token())
             .is_some_and(|encoded| encoded.starts_with(TRANSIENT_PREFIX))
     }
 
@@ -82,7 +90,7 @@ impl MicroblockMask {
     }
 
     pub(crate) fn from_cell(cell: VoxelCell) -> Self {
-        let Some(encoded) = cell.secondary_property(CHISEL_MASK_PROPERTY) else {
+        let Some(encoded) = cell.secondary_properties().get_token(chisel_mask_token()) else {
             return Self::FULL;
         };
         let encoded = encoded.strip_prefix(TRANSIENT_PREFIX).unwrap_or(encoded);
@@ -163,7 +171,7 @@ impl MicroblockMask {
     }
 
     pub(crate) fn has_room(cell: VoxelCell) -> bool {
-        Self::is_modified(cell) || cell.secondary_properties().iter().count() < 8
+        Self::is_modified(cell) || cell.secondary_properties().len() < 8
     }
 
     fn decode(encoded: &str) -> Option<Self> {
@@ -200,6 +208,11 @@ pub(crate) fn occupied_cell<W: VoxelRead + ?Sized>(world: &W, fine: IVec3) -> Op
     MicroblockMask::from_cell(cell)
         .contains(local_cell(fine))
         .then_some(cell)
+}
+
+fn chisel_mask_token() -> SecondaryPropertyToken {
+    static TOKEN: OnceLock<SecondaryPropertyToken> = OnceLock::new();
+    *TOKEN.get_or_init(|| SecondaryProperties::token(CHISEL_MASK_PROPERTY))
 }
 
 #[cfg(test)]
