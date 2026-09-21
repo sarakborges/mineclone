@@ -1,14 +1,17 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 use crate::{
-    content::{attack::AttackRegistry, block::BlockRegistry, player::PlayerDefinition, tool::ToolRegistry},
+    content::{
+        attack::AttackRegistry, block::BlockRegistry, layer::{LayerFace, LayerRegistry},
+        player::PlayerDefinition, tool::ToolRegistry,
+    },
     gameplay::availability::world_interaction_available,
     creatures::{CreatureAnimationState, CreatureDeathTimer, CreatureInstance},
     creatures::CreatureMotion,
     entity::EntityHealth,
     player::{camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar, viewmodel::ViewModelAnimation},
     voxel::{
-        cell::VoxelCell, edit::VoxelTopologyRuntime, raycast::VoxelHit,
+        cell::VoxelCell, edit::VoxelTopologyRuntime, layer::LayerCell, raycast::VoxelHit,
         texture_rotation::TextureRotation,
     },
 };
@@ -58,6 +61,7 @@ struct BlockEditInput<'w, 's> {
 #[derive(SystemParam)]
 struct BlockEditDefinitions<'w> {
     blocks: Res<'w, BlockRegistry>,
+    layers: Res<'w, LayerRegistry>,
     tools: Res<'w, ToolRegistry>,
     attacks: Res<'w, AttackRegistry>,
     player: Res<'w, PlayerDefinition>,
@@ -140,6 +144,19 @@ fn edit_targeted_block(
     let Some(hit) = input.targeted.0 else {
         return;
     };
+
+    if right_pressed
+        && let Some(layer_id) = selected_item.filter(|item_id| definitions.layers.get(item_id).is_some())
+    {
+        let Some(face) = LayerFace::from_normal(hit.normal) else {
+            return;
+        };
+        let layer = LayerCell::new(layer_id, TextureRotation::default());
+        if runtime.add_layer(hit.voxel, face, layer).is_some() {
+            viewmodel_animation.play_place();
+        }
+        return;
+    }
 
     let (edited, placed) = if left_pressed {
         (runtime.set_block(hit.voxel, None), false)

@@ -89,5 +89,6 @@
   "brush.palette.title": "Brocha",
   "brush.palette.clear": "Quitar pintura",
   "worldSelection.openSavesFolder": "Abrir Carpeta de Guardados",
-  "worldSelection.openSavesFolderError": "No se pudo abrir la carpeta de guardados"
+  "worldSelection.openSavesFolderError": "No se pudo abrir la carpeta de guardados",
+  "hud.layers": "Capas"
 }

@@ -3,10 +3,12 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     content::{
-        block::BlockRegistry, block_orientation::BlockOrientation,
+        block::BlockRegistry, block_orientation::BlockOrientation, layer::LayerRegistry,
         secondary_property::SecondaryPropertyRegistry, tool::ToolRegistry,
     },
-    hud::{block_icon::BlockIconMaterial, tool_icon::spawn_tool_icon},
+    hud::{
+        block_icon::BlockIconMaterial, layer_icon::spawn_layer_icon, tool_icon::spawn_tool_icon,
+    },
     localization::{ActiveLanguage, Language},
     player::{
         camera::GameplayCamera,
@@ -50,6 +52,7 @@ struct HotbarVisualCache {
 struct HotbarHudContent<'w> {
     asset_server: Res<'w, AssetServer>,
     blocks: Res<'w, BlockRegistry>,
+    layers: Res<'w, LayerRegistry>,
     tools: Res<'w, ToolRegistry>,
     dyes: Res<'w, SecondaryPropertyRegistry>,
     brush_mode: Res<'w, BrushMode>,
@@ -60,6 +63,7 @@ struct HotbarHudContent<'w> {
 struct HotbarItemView<'a> {
     asset_server: &'a AssetServer,
     blocks: &'a BlockRegistry,
+    layers: &'a LayerRegistry,
     tools: &'a ToolRegistry,
     dyes: &'a SecondaryPropertyRegistry,
     brush_mode: &'a BrushMode,
@@ -124,11 +128,12 @@ fn spawn_hotbar(
     let selected_name = content
         .hotbar
         .item_at(content.hotbar.selected_slot())
-        .map(|item_id| item_name(item_id, &content.blocks, &content.tools, language))
+        .map(|item_id| item_name(item_id, &content.blocks, &content.layers, &content.tools, language))
         .unwrap_or("");
     let mut items = HotbarItemView {
         asset_server: &content.asset_server,
         blocks: &content.blocks,
+        layers: &content.layers,
         tools: &content.tools,
         dyes: &content.dyes,
         brush_mode: &content.brush_mode,
@@ -253,7 +258,7 @@ fn sync_hotbar(
     let next_name = content
         .hotbar
         .item_at(content.hotbar.selected_slot())
-        .map(|item_id| item_name(item_id, &content.blocks, &content.tools, language))
+        .map(|item_id| item_name(item_id, &content.blocks, &content.layers, &content.tools, language))
         .unwrap_or("");
     if selected_name.0 != next_name {
         selected_name.0 = next_name.to_owned();
@@ -263,6 +268,7 @@ fn sync_hotbar(
     let mut items = HotbarItemView {
         asset_server: &content.asset_server,
         blocks: &content.blocks,
+        layers: &content.layers,
         tools: &content.tools,
         dyes: &content.dyes,
         brush_mode: &content.brush_mode,
@@ -322,6 +328,17 @@ fn spawn_hotbar_item(
         return;
     }
 
+    if let Some(layer) = items.layers.get(item_id) {
+        spawn_layer_icon(
+            slot,
+            layer,
+            items.asset_server,
+            Color::WHITE,
+            ITEM_ICON_SIZE,
+        );
+        return;
+    }
+
     if let Some(tool) = items.tools.get(item_id) {
         spawn_tool_icon(
             slot,
@@ -341,11 +358,15 @@ fn spawn_hotbar_item(
 fn item_name<'a>(
     item_id: &'a str,
     blocks: &'a BlockRegistry,
+    layers: &'a LayerRegistry,
     tools: &'a ToolRegistry,
     language: Language,
 ) -> &'a str {
     if let Some(block) = blocks.get(item_id) {
         return block.name.text(language);
+    }
+    if let Some(layer) = layers.get(item_id) {
+        return layer.name.text(language);
     }
     if let Some(tool) = tools.get(item_id) {
         return tool.name.text(language);

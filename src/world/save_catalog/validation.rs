@@ -38,7 +38,9 @@ impl SaveRegistries<'_> {
             .and_then(|dimension| self.cycles.get(&dimension.day_night_cycle))
             .map(|cycle| cycle.day_duration_ticks);
         validate_playable(snapshot, duration, |id| {
-            self.blocks.get(id).is_some() || self.tools.get(id).is_some()
+            self.blocks.get(id).is_some()
+                || self.layers.get(id).is_some()
+                || self.tools.get(id).is_some()
         })?;
         PendingFluidUpdates::from_saved(&snapshot.fluid_updates, self.fluids)?;
         for creature in &snapshot.creatures {
@@ -52,6 +54,7 @@ impl SaveRegistries<'_> {
             .blocks
             .iter()
             .map(|block| block.id.clone())
+            .chain(self.layers.iter().map(|layer| layer.id.clone()))
             .chain(self.tools.iter().map(|tool| tool.id.clone()))
             .collect();
         let day_lengths = self

@@ -336,10 +336,6 @@ impl VoxelChunk {
         )
     }
 
-    #[allow(
-        dead_code,
-        reason = "layer removal API is ready before the first concrete layer content is authored"
-    )]
     pub(crate) fn remove_layer(
         &mut self,
         x: usize,
@@ -505,10 +501,6 @@ fn add_layer_in_storage(
     true
 }
 
-#[allow(
-    dead_code,
-    reason = "layer removal API is ready before the first concrete layer content is authored"
-)]
 fn remove_layer_in_storage(
     layers: &mut HashMap<u16, Vec<AttachedLayer>>,
     layer_count: &mut usize,

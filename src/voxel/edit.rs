@@ -40,6 +40,16 @@ impl VoxelMutationRuntime<'_> {
         Some(chunk)
     }
 
+    pub(crate) fn remove_top_layer(
+        &mut self,
+        world_position: IVec3,
+        face: LayerFace,
+    ) -> Option<&'static str> {
+        let (chunk, layer_id) = self.world.remove_top_layer_at(world_position, face)?;
+        self.remesh_queue.enqueue_priority(chunk);
+        Some(layer_id)
+    }
+
     pub(crate) fn set_block(
         &mut self,
         world_position: IVec3,
@@ -73,6 +83,14 @@ impl VoxelTopologyRuntime<'_> {
         layer: LayerCell,
     ) -> Option<IVec3> {
         self.mutation.add_layer(world_position, face, layer)
+    }
+
+    pub(crate) fn remove_top_layer(
+        &mut self,
+        world_position: IVec3,
+        face: LayerFace,
+    ) -> Option<&'static str> {
+        self.mutation.remove_top_layer(world_position, face)
     }
 
     pub(crate) fn set_block(

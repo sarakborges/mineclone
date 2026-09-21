@@ -4,8 +4,8 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        block::BlockRegistry, block_id::intern_block_id, tool::ToolRegistry,
-        tool_id::intern_tool_id,
+        block::BlockRegistry, block_id::intern_block_id, layer::LayerRegistry,
+        layer_id::intern_layer_id, tool::ToolRegistry, tool_id::intern_tool_id,
     },
     gameplay::availability::world_interaction_available,
 };
@@ -85,6 +85,7 @@ impl PlayerHotbar {
         items: &[Option<String>],
         selected_slot: usize,
         blocks: &BlockRegistry,
+        layers: &LayerRegistry,
         tools: &ToolRegistry,
     ) -> io::Result<Self> {
         if items.len() != INVENTORY_SLOT_COUNT {
@@ -102,6 +103,7 @@ impl PlayerHotbar {
             let resolved = match item {
                 None => None,
                 Some(id) if blocks.get(id).is_some() => Some(intern_block_id(id)),
+                Some(id) if layers.get(id).is_some() => Some(intern_layer_id(id)),
                 Some(id) if tools.get(id).is_some() => Some(intern_tool_id(id)),
                 Some(id) => {
                     return Err(io::Error::new(

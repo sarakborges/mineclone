@@ -10,6 +10,7 @@ use crate::{
         biome::BiomeRegistry,
         block::BlockRegistry,
         inventory_category::InventoryCategoryRegistry,
+        layer::LayerRegistry,
         tool::ToolRegistry,
     },
     localization::{Language, UiLocalization},
@@ -33,6 +34,7 @@ use super::state::{InventoryHudRoot, PANEL_GAP};
 pub(super) struct InventoryItemView<'a> {
     pub(super) asset_server: &'a AssetServer,
     pub(super) blocks: &'a BlockRegistry,
+    pub(super) layers: &'a LayerRegistry,
     pub(super) tools: &'a ToolRegistry,
     pub(super) dyes: &'a crate::content::secondary_property::SecondaryPropertyRegistry,
     pub(super) brush_mode: &'a crate::tools::BrushMode,

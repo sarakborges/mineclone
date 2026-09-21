@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use serde::Deserialize;
 
+use crate::localization::LocalizedText;
+
 use super::{block::BlockTint, layer_id::intern_layer_id, registry::DefinitionMap};
 
 const DEFAULT_LAYER_OFFSET: f32 = 1.0 / 1024.0;
@@ -26,6 +28,18 @@ impl LayerFace {
         Self::Front,
         Self::Back,
     ];
+
+    pub(crate) fn from_normal(normal: IVec3) -> Option<Self> {
+        match normal {
+            IVec3::X => Some(Self::Right),
+            IVec3::NEG_X => Some(Self::Left),
+            IVec3::Y => Some(Self::Top),
+            IVec3::NEG_Y => Some(Self::Bottom),
+            IVec3::Z => Some(Self::Front),
+            IVec3::NEG_Z => Some(Self::Back),
+            _ => None,
+        }
+    }
 
     pub(crate) fn from_index(index: u8) -> Option<Self> {
         match index {
@@ -63,6 +77,8 @@ fn default_offset() -> f32 {
 #[serde(rename_all = "camelCase")]
 pub struct LayerDefinition {
     pub id: String,
+    pub name: LocalizedText,
+    pub category: String,
     pub texture: String,
     #[serde(default)]
     pub tint: BlockTint,
@@ -90,8 +106,17 @@ pub struct LayerRegistry {
 }
 
 impl LayerRegistry {
-    pub fn insert(&mut self, definition: LayerDefinition) {
+    pub fn insert(&mut self, mut definition: LayerDefinition) {
         assert!(!definition.id.trim().is_empty(), "layer id cannot be empty");
+        definition
+            .name
+            .validate(&format!("layer {} name", definition.id));
+        definition.category = definition.category.trim().to_owned();
+        assert!(
+            !definition.category.is_empty(),
+            "layer {} category cannot be empty",
+            definition.id
+        );
         assert!(
             !definition.texture.trim().is_empty(),
             "layer {} texture cannot be empty",
@@ -150,6 +175,11 @@ mod tests {
         let mut registry = LayerRegistry::default();
         registry.insert(LayerDefinition {
             id: "asteria:test_layer".to_owned(),
+            name: serde_json::from_str(
+                r#"{"english":"Test Layer","portuguese_brazil":"Test Layer","spanish":"Test Layer"}"#,
+            )
+            .unwrap(),
+            category: "natural_blocks".to_owned(),
             texture: "textures/test.png".to_owned(),
             tint: BlockTint::None,
             faces: vec![LayerFace::Top, LayerFace::Front],

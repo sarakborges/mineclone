@@ -8,6 +8,8 @@ use crate::{
         block::{BlockDefinition, BlockRegistry},
         block_id::intern_block_id,
         inventory_category::{InventoryCategoryDefinition, InventoryCategoryRegistry},
+        layer::{LayerDefinition, LayerRegistry},
+        layer_id::intern_layer_id,
         tool::{ToolDefinition, ToolRegistry},
         tool_id::intern_tool_id,
     },
@@ -16,7 +18,9 @@ use crate::{
     ui::{scrollbar, selectable, surface, text_input, typography},
 };
 
-use crate::hud::{block_icon::BlockIconMaterial, tool_icon::spawn_tool_icon};
+use crate::hud::{
+    block_icon::BlockIconMaterial, layer_icon::spawn_layer_icon, tool_icon::spawn_tool_icon,
+};
 
 use super::{
     InventoryItemView, InventoryLayoutState,
@@ -33,6 +37,7 @@ use super::{
 #[derive(Clone, Copy)]
 enum CreativeCatalogItem<'a> {
     Block(&'a BlockDefinition),
+    Layer(&'a LayerDefinition),
     Tool(&'a ToolDefinition),
 }
 
@@ -40,6 +45,7 @@ impl<'a> CreativeCatalogItem<'a> {
     fn id(self) -> &'a str {
         match self {
             Self::Block(block) => &block.id,
+            Self::Layer(layer) => &layer.id,
             Self::Tool(tool) => &tool.id,
         }
     }
@@ -47,6 +53,7 @@ impl<'a> CreativeCatalogItem<'a> {
     fn category(self) -> &'a str {
         match self {
             Self::Block(block) => &block.category,
+            Self::Layer(layer) => &layer.category,
             Self::Tool(tool) => &tool.category,
         }
     }
@@ -54,6 +61,7 @@ impl<'a> CreativeCatalogItem<'a> {
     fn name(self, language: Language) -> &'a str {
         match self {
             Self::Block(block) => block.name.text(language),
+            Self::Layer(layer) => layer.name.text(language),
             Self::Tool(tool) => tool.name.text(language),
         }
     }
@@ -61,6 +69,7 @@ impl<'a> CreativeCatalogItem<'a> {
     fn interned_id(self) -> &'static str {
         match self {
             Self::Block(block) => intern_block_id(&block.id),
+            Self::Layer(layer) => intern_layer_id(&layer.id),
             Self::Tool(tool) => intern_tool_id(&tool.id),
         }
     }
@@ -332,6 +341,7 @@ pub(in crate::hud::inventory) fn spawn_creative_catalog_rows(
 ) {
     let catalog = filtered_creative_catalog(
         items.blocks,
+        items.layers,
         items.tools,
         categories,
         creative_view.search_query(),
@@ -427,6 +437,21 @@ fn spawn_creative_slot(
                         Pickable::IGNORE,
                     ));
                 }
+                CreativeCatalogItem::Layer(layer) => {
+                    let tint = block_tint_at(
+                        layer.tint,
+                        items.player_position,
+                        items.biome_field,
+                        items.biomes,
+                    );
+                    spawn_layer_icon(
+                        slot,
+                        layer,
+                        items.asset_server,
+                        tint,
+                        ITEM_ICON_SIZE,
+                    );
+                }
                 CreativeCatalogItem::Tool(tool) => {
                     spawn_tool_icon(
                         slot,
@@ -444,6 +469,7 @@ fn spawn_creative_slot(
 
 fn filtered_creative_catalog<'a>(
     blocks: &'a BlockRegistry,
+    layers: &'a LayerRegistry,
     tools: &'a ToolRegistry,
     categories: &InventoryCategoryRegistry,
     query: &str,
@@ -454,6 +480,7 @@ fn filtered_creative_catalog<'a>(
     let mut catalog = blocks
         .iter()
         .map(CreativeCatalogItem::Block)
+        .chain(layers.iter().map(CreativeCatalogItem::Layer))
         .chain(tools.iter().map(CreativeCatalogItem::Tool))
         .filter(|item| category.is_none_or(|category| item.category() == category))
         .filter(|item| query.is_empty() || item.name(language).to_lowercase().contains(&query))

@@ -89,5 +89,6 @@
   "brush.palette.title": "Brush",
   "brush.palette.clear": "Clear",
   "worldSelection.openSavesFolder": "Open Saves Folder",
-  "worldSelection.openSavesFolderError": "Cannot open saves folder"
+  "worldSelection.openSavesFolderError": "Cannot open saves folder",
+  "hud.layers": "Layers"
 }

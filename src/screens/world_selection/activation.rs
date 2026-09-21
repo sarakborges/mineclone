@@ -3,7 +3,9 @@ use std::io;
 use bevy::prelude::*;
 
 use crate::{
-    content::{block::BlockRegistry, fluid::FluidRegistry, tool::ToolRegistry},
+    content::{
+        block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry, tool::ToolRegistry,
+    },
     creatures::PendingCreatureRestores,
     player::{
         game_mode::GameMode,
@@ -46,6 +48,7 @@ impl PreparedWorldActivation {
         world: VoxelWorld,
         session_lock: WorldDirectoryLock,
         blocks: &BlockRegistry,
+        layers: &LayerRegistry,
         fluids: &FluidRegistry,
         tools: &ToolRegistry,
     ) -> Result<Self, WorldActivationError> {
@@ -56,6 +59,7 @@ impl PreparedWorldActivation {
             &snapshot.inventory,
             snapshot.selected_hotbar_slot,
             blocks,
+            layers,
             tools,
         )
         .map_err(WorldActivationError::Inventory)?;

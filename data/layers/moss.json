@@ -1,5 +1,7 @@
 {
   "id": "asteria:moss",
+  "name": { "english": "Moss", "portuguese_brazil": "Moss", "spanish": "Moss" },
+  "category": "natural_blocks",
   "texture": "textures/blocks/layers/moss.png",
   "offset": 0.001,
   "alphaCutoff": 0.5,

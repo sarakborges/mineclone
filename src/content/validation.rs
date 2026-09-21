@@ -12,6 +12,11 @@ pub(super) fn validate_content(content: &LoadedContent) {
 
     for block in content.blocks.iter() {
         assert!(
+            content.layers.get(&block.id).is_none(),
+            "content id {} cannot be both a block and a layer",
+            block.id
+        );
+        assert!(
             content.inventory_categories.get(&block.category).is_some(),
             "block {} references missing inventory category {}",
             block.id,
@@ -27,10 +32,34 @@ pub(super) fn validate_content(content: &LoadedContent) {
         }
     }
 
+    for layer in content.layers.iter() {
+        assert!(
+            content.blocks.get(&layer.id).is_none(),
+            "content id {} cannot be both a layer and a block",
+            layer.id
+        );
+        assert!(
+            content.tools.get(&layer.id).is_none(),
+            "content id {} cannot be both a layer and a tool",
+            layer.id
+        );
+        assert!(
+            content.inventory_categories.get(&layer.category).is_some(),
+            "layer {} references missing inventory category {}",
+            layer.id,
+            layer.category
+        );
+    }
+
     for tool in content.tools.iter() {
         assert!(
             content.blocks.get(&tool.id).is_none(),
             "content id {} cannot be both a block and a tool",
+            tool.id
+        );
+        assert!(
+            content.layers.get(&tool.id).is_none(),
+            "content id {} cannot be both a tool and a layer",
             tool.id
         );
         assert!(

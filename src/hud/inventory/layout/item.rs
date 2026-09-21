@@ -5,7 +5,7 @@ use crate::{
     ui::typography,
 };
 
-use crate::hud::tool_icon::spawn_tool_icon;
+use crate::hud::{layer_icon::spawn_layer_icon, tool_icon::spawn_tool_icon};
 
 use super::{InventoryItemView, super::state::{InventoryCursorIcon, ITEM_ICON_SIZE}};
 
@@ -44,6 +44,37 @@ pub(in crate::hud::inventory) fn spawn_cursor_icon(
             },
             Pickable::IGNORE,
         ));
+        return;
+    }
+
+    if let Some(layer) = items.layers.get(item_id) {
+        let tint = block_tint_at(
+            layer.tint,
+            items.player_position,
+            items.biome_field,
+            items.biomes,
+        );
+        root.spawn((
+            InventoryCursorIcon,
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(position.x - ITEM_ICON_SIZE * 0.5),
+                top: px(position.y - ITEM_ICON_SIZE * 0.5),
+                width: px(ITEM_ICON_SIZE),
+                height: px(ITEM_ICON_SIZE),
+                ..default()
+            },
+            Pickable::IGNORE,
+        ))
+        .with_children(|cursor| {
+            spawn_layer_icon(
+                cursor,
+                layer,
+                items.asset_server,
+                tint,
+                ITEM_ICON_SIZE,
+            );
+        });
         return;
     }
 
@@ -123,6 +154,23 @@ pub(in crate::hud::inventory) fn spawn_inventory_item(
             },
             Pickable::IGNORE,
         ));
+        return;
+    }
+
+    if let Some(layer) = items.layers.get(item_id) {
+        let tint = block_tint_at(
+            layer.tint,
+            items.player_position,
+            items.biome_field,
+            items.biomes,
+        );
+        spawn_layer_icon(
+            slot,
+            layer,
+            items.asset_server,
+            tint,
+            ITEM_ICON_SIZE,
+        );
         return;
     }
 

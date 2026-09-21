@@ -4,6 +4,7 @@ use crate::{
     app::{game_state::GameState, pause_state::PauseState},
     content::{
         builtin_ids::DYED_PROPERTY_ID,
+        layer::LayerRegistry,
         secondary_property::SecondaryPropertyRegistry,
     },
     hud::block_icon::BlockIconMaterial,
@@ -63,12 +64,13 @@ struct TargetBlockText;
 #[derive(Component)]
 struct TargetBlockModel;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct TargetHudSnapshot {
     voxel: IVec3,
     block_id: &'static str,
     normal: IVec3,
     properties: SecondaryProperties,
+    layers: Vec<&'static str>,
     light_level: u8,
     language: Language,
 }
@@ -91,6 +93,7 @@ struct TargetHudState<'w> {
 #[derive(SystemParam)]
 struct TargetHudContent<'w> {
     visual: BlockVisualContent<'w>,
+    layers: Res<'w, LayerRegistry>,
     secondary_properties: Res<'w, SecondaryPropertyRegistry>,
 }
 
@@ -267,16 +270,27 @@ fn update_target_hud(
     };
     let light = state.world.light_at(light_position);
     let light_level = light.sky().max(light.block());
+    let mut applied_layers = state
+        .world
+        .layers_at(hit.voxel)
+        .iter()
+        .map(|attached| attached.cell.layer_id)
+        .collect::<Vec<_>>();
+    applied_layers.sort_unstable();
+    applied_layers.dedup();
+
     let snapshot = TargetHudSnapshot {
         voxel: hit.voxel,
         block_id: hit.block_id,
         normal: hit.normal,
         properties,
+        layers: applied_layers.clone(),
         light_level,
         language,
     };
     let block_definitions_changed = content.visual.block_definitions_changed();
     let definitions_changed = content.visual.inputs_changed()
+        || content.layers.is_changed()
         || content.secondary_properties.is_changed()
         || state.language.is_changed();
 
@@ -321,8 +335,26 @@ fn update_target_hud(
     } else {
         format!("\n{}", property_labels.join("\n"))
     };
+    let layer_names = applied_layers
+        .iter()
+        .map(|layer_id| {
+            content
+                .layers
+                .get(layer_id)
+                .map_or(*layer_id, |layer| layer.name.text(language))
+        })
+        .collect::<Vec<_>>();
+    let layers_text = if layer_names.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n{}: {}",
+            state.localization.text(language, "hud.layers"),
+            layer_names.join(", ")
+        )
+    };
     let next_text = format!(
-        "{block_name}{properties_text}\n{}: {light_level}\n{coordinates}",
+        "{block_name}{properties_text}{layers_text}\n{}: {light_level}\n{coordinates}",
         state.localization.text(language, "hud.light"),
     );
 

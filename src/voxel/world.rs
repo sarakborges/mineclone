@@ -159,10 +159,6 @@ impl VoxelWorld {
             .cell_at(local_position.x, local_position.y, local_position.z)
     }
 
-    #[allow(
-        dead_code,
-        reason = "public layer read API exists before the first concrete layer gameplay content"
-    )]
     pub(crate) fn layers_at(
         &self,
         world_position: IVec3,
@@ -408,10 +404,21 @@ impl VoxelWorld {
         Some(chunk_coord)
     }
 
-    #[allow(
-        dead_code,
-        reason = "layer removal API is ready before the first concrete layer content is authored"
-    )]
+    pub(crate) fn remove_top_layer_at(
+        &mut self,
+        world_position: IVec3,
+        face: LayerFace,
+    ) -> Option<(IVec3, &'static str)> {
+        let layer_id = self
+            .layers_at(world_position)
+            .iter()
+            .rev()
+            .find(|attached| attached.face == face)
+            .map(|attached| attached.cell.layer_id)?;
+        let chunk = self.remove_layer_at(world_position, face, layer_id)?;
+        Some((chunk, layer_id))
+    }
+
     pub(crate) fn remove_layer_at(
         &mut self,
         world_position: IVec3,
@@ -666,6 +673,11 @@ mod tests {
         let mut registry = LayerRegistry::default();
         registry.insert(crate::content::layer::LayerDefinition {
             id: "asteria:test_layer".to_owned(),
+            name: serde_json::from_str(
+                r#"{"english":"Test Layer","portuguese_brazil":"Test Layer","spanish":"Test Layer"}"#,
+            )
+            .unwrap(),
+            category: "natural_blocks".to_owned(),
             texture: "textures/test.png".to_owned(),
             tint: crate::content::block::BlockTint::None,
             faces: vec![LayerFace::Top],

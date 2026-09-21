@@ -89,5 +89,6 @@
   "brush.palette.title": "Pincel",
   "brush.palette.clear": "Remover tinta",
   "worldSelection.openSavesFolder": "Abrir Pasta dos Saves",
-  "worldSelection.openSavesFolderError": "Não foi possível abrir a pasta dos saves"
+  "worldSelection.openSavesFolderError": "Não foi possível abrir a pasta dos saves",
+  "hud.layers": "Camadas"
 }
