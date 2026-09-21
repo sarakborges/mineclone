@@ -260,6 +260,11 @@ impl ChunkRemeshTasks {
         }
     }
 
+    pub(crate) fn cancel_coord(&mut self, coord: IVec3) {
+        self.terrain_pending.cancel(coord);
+        self.fluid_pending.cancel(coord);
+    }
+
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<ChunkRemeshTaskOutput>> {
         let fluid_first = self.poll_fluid_first;
         let ready = if fluid_first {
