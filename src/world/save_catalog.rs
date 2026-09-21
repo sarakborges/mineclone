@@ -113,8 +113,11 @@ pub(crate) fn create_new_world(requested_name: &str, seed: u64, dimension_id: &s
     }
 }
 
-pub(crate) fn save_world(snapshot: &WorldSnapshot, registries: SaveRegistries<'_>) -> io::Result<u64> {
-    registries.validate_playable(snapshot)?; save_world_owned(snapshot, registries.owned_for_pruning())
+pub(crate) fn save_world(
+    snapshot: &WorldSnapshot,
+    registries: SaveRegistries<'_>,
+) -> io::Result<u64> {
+    save_world_owned(snapshot, registries.owned_for_pruning())
 }
 pub(crate) fn save_world_owned(
     snapshot: &WorldSnapshot,
