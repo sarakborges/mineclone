@@ -20,7 +20,7 @@ use super::{
 };
 
 const HORIZONTAL_PRELOAD_CHUNKS: i32 = 2;
-const FORWARD_PRELOAD_CHUNKS: i32 = 8;
+const MAX_FORWARD_PRELOAD_CHUNKS: i32 = 8;
 const FORWARD_PRELOAD_HALF_WIDTH_CHUNKS: f32 = 8.0;
 const NEAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
 const FAR_SURFACE_PADDING_BELOW_CHUNKS: i32 = 2;
@@ -71,11 +71,12 @@ pub(super) fn rebuild_queue(
         vertical_radius,
     );
     let preload_radius = horizontal_radius + HORIZONTAL_PRELOAD_CHUNKS;
+    let forward_preload = forward_preload_chunks(preload_radius);
     let retention_radius = preload_radius
         + if movement_direction == IVec2::ZERO {
             0
         } else {
-            FORWARD_PRELOAD_CHUNKS
+            forward_preload
         };
     if prune_caches {
         prune_surface_cache(&mut streaming.surface_ranges, center.xz(), retention_radius);
@@ -305,6 +306,10 @@ fn pending_priority(
     )
 }
 
+fn forward_preload_chunks(horizontal_radius: i32) -> i32 {
+    (horizontal_radius / 2).clamp(2, MAX_FORWARD_PRELOAD_CHUNKS)
+}
+
 fn inside_forward_preload(
     offset: IVec2,
     horizontal_radius: i32,
@@ -313,14 +318,15 @@ fn inside_forward_preload(
     let offset = offset.as_vec2();
     let forward = offset.dot(forward_direction);
     let base = horizontal_radius as f32;
-    let limit = base + FORWARD_PRELOAD_CHUNKS as f32;
+    let preload = forward_preload_chunks(horizontal_radius) as f32;
+    let limit = base + preload;
     if forward <= base || forward > limit {
         return false;
     }
 
     let extra = forward - base;
-    let lateral_width = FORWARD_PRELOAD_HALF_WIDTH_CHUNKS
-        + (FORWARD_PRELOAD_CHUNKS as f32 - extra) * 0.5;
+    let lateral_width =
+        FORWARD_PRELOAD_HALF_WIDTH_CHUNKS + (preload - extra) * 0.5;
     let lateral_squared = (offset.length_squared() - forward * forward).max(0.0);
     lateral_squared <= lateral_width * lateral_width
 }
@@ -369,7 +375,7 @@ fn rebuild_desired_chunk_coords(
         .then(|| movement_direction.as_vec2().normalize());
     let search_radius = horizontal_radius
         + if forward_direction.is_some() {
-            FORWARD_PRELOAD_CHUNKS
+            forward_preload_chunks(horizontal_radius)
         } else {
             0
         };
