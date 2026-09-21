@@ -150,6 +150,11 @@ fn load_definition(path: &Path, content: &mut LoadedContent, player_loaded: &mut
         content
             .structures
             .insert(read_json_definition::<StructureDefinition>(path));
+    } else if path.starts_with(data_root().join("localization")) {
+        // Localization owns its own JSON loader. Keep this explicit so a
+        // misspelled or misplaced content definition never disappears silently.
+    } else {
+        panic!("unrecognized data JSON definition: {}", path.display());
     }
 }
 
