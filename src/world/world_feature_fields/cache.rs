@@ -10,6 +10,7 @@ use bevy::{
 
 use crate::voxel::chunk::CHUNK_SIZE;
 
+use super::CachedStructureCandidate;
 use super::super::{
     biome_field::VolumeBiomeRegion,
     cave_connectivity::CaveConnectivityRegion,
@@ -176,6 +177,7 @@ pub(super) struct FeatureCaches {
     caves: ConcurrentCache<IVec3, Option<Arc<CaveConnectivityRegion>>>,
     regions: ConcurrentCache<IVec3, Arc<GenerationRegion>>,
     structure_top_ys: ConcurrentCache<IVec2, i32>,
+    structure_candidates: ConcurrentCache<IVec2, Arc<Vec<CachedStructureCandidate>>>,
     structure_origins: StructureOriginCache,
     retention_scratch: Mutex<RetentionScratch>,
 }
@@ -189,6 +191,7 @@ impl FeatureCaches {
             caves: ConcurrentCache::new("cave region cache"),
             regions: ConcurrentCache::new("generation region cache"),
             structure_top_ys: ConcurrentCache::new("structure top Y cache"),
+            structure_candidates: ConcurrentCache::new("structure candidate cache"),
             structure_origins: StructureOriginCache::new(),
             retention_scratch: Mutex::new(RetentionScratch::default()),
         }
@@ -233,6 +236,15 @@ impl FeatureCaches {
     ) -> i32 {
         self.structure_top_ys
             .get_or_insert_with(coord, factory)
+    }
+
+    pub(super) fn structure_candidates(
+        &self,
+        coord: IVec2,
+        factory: impl FnOnce() -> Vec<CachedStructureCandidate>,
+    ) -> Arc<Vec<CachedStructureCandidate>> {
+        self.structure_candidates
+            .get_or_insert_with(coord, || Arc::new(factory()))
     }
 
     pub(super) fn structure_origin_y(
@@ -304,6 +316,8 @@ impl FeatureCaches {
         self.generation_columns
             .retain(|coord| horizontal_chunks.contains(coord));
         self.structure_top_ys
+            .retain(|coord| horizontal_chunks.contains(coord));
+        self.structure_candidates
             .retain(|coord| horizontal_chunks.contains(coord));
         self.volume_biomes
             .retain(|coord| retained_regions.contains(coord));
