@@ -4,7 +4,7 @@ use crate::{
     content::{
         block::BlockRegistry,
         creature::{CreatureCollider, CreatureRegistry},
-        structure::StructureRegistry,
+        structure::{StructureRegistry, StructureRotation},
     },
     creatures::{CreatureInstance, spawn_creature_at},
     localization::ActiveLanguage,
@@ -254,6 +254,7 @@ impl ChatPlacementContext<'_, '_> {
             .structures
             .select_for_manual_placement(reference, variation, hash)
             .expect("validated manual structure reference must resolve");
+        let structure_rotation = structure.rotation_for_hash(hash);
         let voxels = structure.voxels();
         let world = self.runtime.world();
 
@@ -266,19 +267,19 @@ impl ChatPlacementContext<'_, '_> {
         };
         let origin_y = surface_y - structure.min_y_offset();
         let origin = IVec3::new(anchor.x, origin_y, anchor.y);
-        let min = voxels
-            .iter()
-            .fold(IVec3::splat(i32::MAX), |min, voxel| min.min(origin + voxel.offset));
-        let max = voxels
-            .iter()
-            .fold(IVec3::splat(i32::MIN), |max, voxel| max.max(origin + voxel.offset));
+        let min = voxels.iter().fold(IVec3::splat(i32::MAX), |min, voxel| {
+            min.min(origin + structure_rotation.rotate_offset(voxel.offset))
+        });
+        let max = voxels.iter().fold(IVec3::splat(i32::MIN), |max, voxel| {
+            max.max(origin + structure_rotation.rotate_offset(voxel.offset))
+        });
         let blocked = (min.as_vec3(), (max + IVec3::ONE).as_vec3());
 
         // Manual placement may replace terrain and fluids, but it still refuses
         // to touch unloaded chunks or place blocks through creatures requested
         // in this frame / already alive in the world.
         let all_loaded_and_entity_clear = voxels.iter().all(|voxel| {
-            let position = origin + voxel.offset;
+            let position = origin + structure_rotation.rotate_offset(voxel.offset);
             let voxel_bounds = (position.as_vec3(), position.as_vec3() + Vec3::ONE);
             world.is_loaded_at(position)
                 && !self.existing.iter().any(|(other, collider)| {
@@ -304,14 +305,20 @@ impl ChatPlacementContext<'_, '_> {
         };
 
         for voxel in voxels {
-            let position = origin + voxel.offset;
+            let position = origin + structure_rotation.rotate_offset(voxel.offset);
             let block = self.blocks.get(voxel.block_id).expect("validated structure block");
-            let rotation = TextureRotation::for_position(position, block.rotate_texture.any());
-            let cell = VoxelCell::oriented(voxel.block_id, rotation, voxel.orientation);
+            let texture_rotation =
+                TextureRotation::for_position(position, block.rotate_texture.any());
+            let cell = VoxelCell::oriented(
+                voxel.block_id,
+                texture_rotation,
+                structure_rotation.rotate_orientation(voxel.orientation),
+            );
             let _ = self.runtime.set_block(position, Some(cell));
             for (face, layer) in surface_layer_placements(
                 self.seed.0,
                 structure,
+                structure_rotation,
                 voxel,
                 position,
             ) {
