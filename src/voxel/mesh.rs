@@ -23,7 +23,10 @@ use super::{
     block_face::{BlockFace, BlockFaces},
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, VoxelChunk},
-    mesh_lighting::{FaceLighting, face_lighting, push_lit_quad, surface_block_srgb},
+    mesh_lighting::{
+        ChunkLightingCache, FaceLighting, face_lighting_with_cache, push_lit_quad,
+        surface_block_srgb,
+    },
     meshlet::{CHUNK_MESHLET_EDGE, ChunkMeshletMask},
     microblock::MicroblockMask,
     orientation::source_face_for_oriented_face,
@@ -74,6 +77,8 @@ where
     W: VoxelRead + ?Sized,
     F: FnMut(IVec3, VoxelCell, &crate::content::block::BlockDefinition) -> [f32; 3],
 {
+    let lighting_cache =
+        ChunkLightingCache::capture(world, chunk_coord * CHUNK_SIZE as i32);
     build_chunk_meshlets(
         world,
         chunk_coord,
@@ -81,6 +86,7 @@ where
         blocks,
         texture_table,
         ChunkMeshletMask::ALL,
+        Some(&lighting_cache),
         tint_at,
     )
 }
@@ -92,6 +98,7 @@ pub(crate) fn build_chunk_meshlets<W, F>(
     blocks: &BlockRegistry,
     texture_table: &TerrainTextureTable,
     meshlets: ChunkMeshletMask,
+    lighting_cache: Option<&ChunkLightingCache>,
     mut tint_at: F,
 ) -> Vec<ChunkFaceMesh>
 where
@@ -150,6 +157,7 @@ where
         );
         let surface = MicroSurface {
             world,
+            lighting_cache,
             cell,
             block,
             world_voxel,
@@ -251,6 +259,7 @@ where
                             if let Some(neighbor) = partial_occluder {
                                 let surface = MicroSurface {
                                     world,
+                                    lighting_cache,
                                     cell,
                                     block,
                                     world_voxel,
@@ -275,7 +284,13 @@ where
                                 TextureRotation::default()
                             };
                             let lighting =
-                                face_lighting(world, world_voxel, face, source_block_srgb);
+                                face_lighting_with_cache(
+                                    lighting_cache,
+                                    world,
+                                    world_voxel,
+                                    face,
+                                    source_block_srgb,
+                                );
                             let material_face = face_visual.material_face;
                             let material_code = face_visual.material_code;
 
