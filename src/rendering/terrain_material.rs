@@ -61,6 +61,12 @@ impl MaterialExtension for TerrainMaterialExtension {
         TERRAIN_SHADER_PATH.into()
     }
 
+    fn prepass_fragment_shader() -> ShaderRef {
+        // Depth prepass and shadow maps must use the same texture-array alpha
+        // discard as the main terrain pass, especially for cutout foliage.
+        TERRAIN_SHADER_PATH.into()
+    }
+
     fn deferred_fragment_shader() -> ShaderRef {
         TERRAIN_SHADER_PATH.into()
     }
