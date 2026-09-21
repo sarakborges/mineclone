@@ -242,7 +242,9 @@ where
                         material_code,
                     };
                     let greedy_eligible = cell.orientation == BlockOrientation::Y
-                        && !block_is_transparent
+                        // Alpha-cutout is order-independent and safe to merge.
+                        // Only true alpha blending must keep independent quads.
+                        && !block.alpha_blend
                         && texture_rotation == TextureRotation::Degrees0
                         && lighting_is_uniform(lighting);
 
