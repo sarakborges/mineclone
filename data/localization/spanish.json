@@ -96,5 +96,6 @@
   "worldSelection.dimension": "Dimensión",
   "worldSelection.coordinates": "Coordenadas",
   "worldSelection.biome": "Bioma Actual",
-  "worldSelection.unknown": "No disponible"
+  "worldSelection.unknown": "No disponible",
+  "worldSelection.lastSaved": "Último guardado"
 }
