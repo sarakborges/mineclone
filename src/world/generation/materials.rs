@@ -113,7 +113,7 @@ pub(super) fn rasterize_material_pass(
                     let block_id = solid_block_id(
                         sample_position,
                         surface_depth,
-                        density.volume[index],
+                        density.volume_at(index),
                         hydrology_block,
                         &surface_materials,
                         context.biome_field,
