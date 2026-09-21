@@ -110,27 +110,44 @@ fn meshlet_index(x: usize, y: usize, z: usize) -> usize {
     x + z * MESHLETS_PER_AXIS + y * MESHLETS_PER_AXIS * MESHLETS_PER_AXIS
 }
 
+pub(crate) enum VoxelMeshPatch {
+    Unchanged,
+    Changed(Mesh),
+}
+
 pub(crate) fn patch_voxel_mesh(
     existing: &Mesh,
     replacement: Option<&Mesh>,
     dirty: ChunkMeshletMask,
-) -> Option<Mesh> {
+) -> Option<VoxelMeshPatch> {
     if dirty.is_all() {
-        return Some(match replacement {
+        return Some(VoxelMeshPatch::Changed(match replacement {
             Some(mesh) => MeshArrays::from_mesh(mesh)?.into_mesh(),
             None => MeshArrays::default().into_mesh(),
-        });
+        }));
+    }
+
+    let existing = MeshArrays::from_mesh(existing)?;
+    let replacement = replacement
+        .map(MeshArrays::from_mesh)
+        .transpose()?;
+    let existing_dirty = existing.has_quad_in(dirty)?;
+    let replacement_dirty = replacement
+        .as_ref()
+        .is_some_and(|replacement| replacement.has_quad_in(dirty).unwrap_or(true));
+
+    if !existing_dirty && !replacement_dirty {
+        return Some(VoxelMeshPatch::Unchanged);
     }
 
     let mut output = MeshArrays::default();
-    let existing = MeshArrays::from_mesh(existing)?;
     existing.append_filtered(&mut output, dirty, false)?;
 
-    if let Some(replacement) = replacement {
-        MeshArrays::from_mesh(replacement)?.append_filtered(&mut output, dirty, true)?;
+    if let Some(replacement) = &replacement {
+        replacement.append_filtered(&mut output, dirty, true)?;
     }
 
-    Some(output.into_mesh())
+    Some(VoxelMeshPatch::Changed(output.into_mesh()))
 }
 
 #[derive(Default)]
@@ -155,6 +172,26 @@ impl MeshArrays {
             colors: float32x4(mesh.attribute(Mesh::ATTRIBUTE_COLOR)?)?.to_vec(),
             indices: mesh.indices()?.iter().collect(),
         })
+    }
+
+    fn has_quad_in(&self, dirty: ChunkMeshletMask) -> Option<bool> {
+        if self.positions.len() % 4 != 0 || self.indices.len() % 6 != 0 {
+            return None;
+        }
+        let quad_count = self.positions.len() / 4;
+        if self.indices.len() / 6 != quad_count
+            || self.normals.len() != self.positions.len()
+            || self.uvs.len() != self.positions.len()
+            || self.light_uvs.len() != self.positions.len()
+            || self.tangents.len() != self.positions.len()
+            || self.colors.len() != self.positions.len()
+        {
+            return None;
+        }
+
+        Some((0..quad_count).any(|quad| {
+            dirty.contains_quad(&self.positions, &self.normals, quad * 4)
+        }))
     }
 
     fn append_filtered(
