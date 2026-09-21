@@ -422,6 +422,10 @@ fn test_block(id: &str, light_emission: u8) -> BlockDefinition {
 }
 
 fn localized_text(value: &str) -> LocalizedText {
-    serde_json::from_value(serde_json::json!({ "english": value }))
-        .expect("test localized text should deserialize")
+    serde_json::from_value(serde_json::json!({
+        "english": value,
+        "portuguese_brazil": value,
+        "spanish": value
+    }))
+    .expect("test localized text should deserialize")
 }
