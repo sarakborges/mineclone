@@ -122,14 +122,8 @@ pub(crate) fn generate_chunk(
     }
 
     let horizontal_chunk = chunk_coord.xz();
-    let structure_top_chunk = maximum_structure_top_chunk_for_horizontal_chunk(
-        horizontal_chunk,
-        context.dimension,
-        context.biomes,
-        context.structures,
-        context.biome_field,
-        context.feature_fields,
-    );
+    let structure_top_chunk =
+        maximum_structure_top_chunk_for_horizontal_chunk(horizontal_chunk, context);
     let (_, maximum_surface_chunk_y) = chunk_y_bounds(context.dimension, context.biomes);
     if chunk_coord.y > maximum_surface_chunk_y.max(structure_top_chunk)
         && !context.biomes.has_volume_density_modifiers()
@@ -230,19 +224,12 @@ pub(crate) fn generate_chunk(
 
 pub(crate) fn maximum_structure_top_chunk_for_horizontal_chunk(
     horizontal_chunk: IVec2,
-    dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
-    structures: &StructureRegistry,
-    biome_field: &BiomeField,
-    feature_fields: &WorldFeatureFields,
+    context: &ChunkGenerationContext<'_>,
 ) -> i32 {
-    let top_y = feature_fields.structure_top_y(horizontal_chunk, || {
+    let top_y = context.feature_fields.structure_top_y(horizontal_chunk, || {
         self::structures::maximum_potential_structure_top_y_for_chunk(
             horizontal_chunk,
-            dimension,
-            biomes,
-            structures,
-            biome_field,
+            context,
         )
     });
     top_y.div_euclid(CHUNK_SIZE as i32)
