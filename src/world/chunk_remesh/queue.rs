@@ -443,12 +443,12 @@ mod tests {
     }
 
     #[test]
-    fn lighting_change_refreshes_only_chunks_containing_fluid() {
+    fn chunk_lighting_change_refreshes_only_boundary_fluid_neighbors() {
         let coord = IVec3::new(2, 1, 3);
         let neighbor = coord + IVec3::X;
         let mut world = VoxelWorld::default();
         let mut fluid_chunk = VoxelChunk::empty();
-        fluid_chunk.set_fluid(8, 8, 8, Some(FluidCell::source(0, 8)));
+        fluid_chunk.set_fluid(15, 8, 8, Some(FluidCell::source(0, 8)));
         world.insert_chunk(coord, fluid_chunk);
         world.insert_chunk(neighbor, VoxelChunk::empty());
         let mut queue = ChunkRemeshQueue::default();
@@ -457,7 +457,7 @@ mod tests {
 
         assert_eq!(queue.pop_fluid(), Some(coord));
         assert_eq!(queue.pop_fluid(), None);
-        assert_eq!(queue.pop_lighting(), Some(neighbor));
+        assert_eq!(queue.pop_lighting(), None);
     }
 
     #[test]
@@ -480,21 +480,28 @@ mod tests {
     }
 
     #[test]
-    fn lighting_change_uses_background_lighting_remesh_queue() {
+    fn voxel_lighting_change_queues_only_loaded_affected_terrain() {
         let mut queue = ChunkRemeshQueue::default();
-        let world = VoxelWorld::default();
+        let mut world = VoxelWorld::default();
         let coord = IVec3::new(4, 2, -3);
-        queue.enqueue_lighting_change(coord, &world);
+        let origin = crate::voxel::coordinates::chunk_origin(coord);
+        let position = origin + IVec3::new(4, 4, 4);
+        let mut chunk = VoxelChunk::empty();
+        chunk.set_block(
+            4,
+            4,
+            4,
+            Some(crate::voxel::cell::VoxelCell::new(
+                "asteria:test",
+                Default::default(),
+            )),
+        );
+        world.insert_chunk(coord, chunk);
 
-        let mut lighting = Vec::new();
-        while let Some(value) = queue.pop_lighting() {
-            lighting.push(value);
-        }
+        queue.enqueue_lighting_voxel_change(position, &world);
 
-        assert!(lighting.contains(&coord));
-        for offset in CARDINAL_NEIGHBORS {
-            assert!(lighting.contains(&(coord + offset)));
-        }
+        assert_eq!(queue.pop_lighting(), Some(coord));
+        assert_eq!(queue.pop_lighting(), None);
         assert_eq!(queue.pop(), None);
         assert_eq!(queue.pop_fluid(), None);
     }
