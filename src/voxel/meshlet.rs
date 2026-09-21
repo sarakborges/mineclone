@@ -8,7 +8,7 @@ use bevy::{
 use super::{
     chunk::CHUNK_SIZE,
     coordinates::chunk_origin,
-    mesh_buffer::ATTRIBUTE_VOXEL_LIGHT,
+    mesh_buffer::{ATTRIBUTE_VOXEL_LIGHT, ATTRIBUTE_VOXEL_PAYLOAD},
 };
 
 pub(crate) const CHUNK_MESHLET_EDGE: usize = 8;
@@ -266,7 +266,7 @@ pub(crate) fn patch_voxel_mesh(
 struct MeshArrays {
     positions: Vec<[f32; 3]>,
     uvs: Vec<[f32; 2]>,
-    light_uvs: Vec<[f32; 2]>,
+    payloads: Vec<u32>,
     colors: Vec<[u8; 4]>,
     indices: Vec<u32>,
 }
@@ -280,7 +280,7 @@ impl MeshArrays {
         Some(Self {
             positions: float32x3(mesh.attribute(Mesh::ATTRIBUTE_POSITION)?)?.to_vec(),
             uvs: float32x2(mesh.attribute(Mesh::ATTRIBUTE_UV_0)?)?.to_vec(),
-            light_uvs: float32x2(mesh.attribute(Mesh::ATTRIBUTE_UV_1)?)?.to_vec(),
+            payloads: uint32(mesh.attribute(Mesh::ATTRIBUTE_UV_1)?)?.to_vec(),
             colors: unorm8x4(mesh.attribute(Mesh::ATTRIBUTE_COLOR)?)?.to_vec(),
             indices: mesh.indices()?.iter().collect(),
         })
@@ -293,7 +293,7 @@ impl MeshArrays {
         let quad_count = self.positions.len() / 4;
         if self.indices.len() / 6 != quad_count
             || self.uvs.len() != self.positions.len()
-            || self.light_uvs.len() != self.positions.len()
+            || self.payloads.len() != self.positions.len()
             || self.colors.len() != self.positions.len()
         {
             return None;
@@ -316,7 +316,7 @@ impl MeshArrays {
         let quad_count = self.positions.len() / 4;
         if self.indices.len() / 6 != quad_count
             || self.uvs.len() != self.positions.len()
-            || self.light_uvs.len() != self.positions.len()
+            || self.payloads.len() != self.positions.len()
             || self.colors.len() != self.positions.len()
         {
             return None;
@@ -337,8 +337,8 @@ impl MeshArrays {
                 .uvs
                 .extend_from_slice(&self.uvs[source_base..source_base + 4]);
             output
-                .light_uvs
-                .extend_from_slice(&self.light_uvs[source_base..source_base + 4]);
+                .payloads
+                .extend_from_slice(&self.payloads[source_base..source_base + 4]);
             output
                 .colors
                 .extend_from_slice(&self.colors[source_base..source_base + 4]);
@@ -374,7 +374,10 @@ impl MeshArrays {
         )
         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
+        .with_inserted_attribute(
+            ATTRIBUTE_VOXEL_PAYLOAD,
+            VertexAttributeValues::Uint32(self.payloads),
+        )
         .with_inserted_attribute(
             ATTRIBUTE_VOXEL_LIGHT,
             VertexAttributeValues::Unorm8x4(self.colors),
@@ -386,6 +389,13 @@ impl MeshArrays {
 fn float32x2(values: &VertexAttributeValues) -> Option<&[[f32; 2]]> {
     match values {
         VertexAttributeValues::Float32x2(values) => Some(values),
+        _ => None,
+    }
+}
+
+fn uint32(values: &VertexAttributeValues) -> Option<&[u32]> {
+    match values {
+        VertexAttributeValues::Uint32(values) => Some(values),
         _ => None,
     }
 }
