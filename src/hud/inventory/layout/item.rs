@@ -10,7 +10,8 @@ use crate::hud::{layer_icon::spawn_layer_icon, tool_icon::spawn_tool_icon};
 use super::{
     InventoryItemView,
     super::state::{
-        InventoryCursorIcon, InventoryItemTooltip, InventoryItemTooltipText, ITEM_ICON_SIZE,
+        InventoryCursorIcon, InventoryItemTooltip, InventoryItemTooltipId,
+        InventoryItemTooltipText, ITEM_ICON_SIZE,
     },
 };
 
@@ -24,6 +25,8 @@ pub(in crate::hud::inventory) fn spawn_item_tooltip(root: &mut ChildSpawnerComma
             max_width: px(280),
             padding: UiRect::axes(px(10), px(7)),
             border: UiRect::all(px(1)),
+            flex_direction: FlexDirection::Column,
+            row_gap: px(2),
             ..default()
         }),
         Visibility::Hidden,
@@ -34,6 +37,11 @@ pub(in crate::hud::inventory) fn spawn_item_tooltip(root: &mut ChildSpawnerComma
         tooltip.spawn((
             InventoryItemTooltipText,
             typography::inventory_category(""),
+            Pickable::IGNORE,
+        ));
+        tooltip.spawn((
+            InventoryItemTooltipId,
+            typography::caption(""),
             Pickable::IGNORE,
         ));
     });
