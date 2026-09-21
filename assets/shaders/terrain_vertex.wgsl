@@ -1,11 +1,25 @@
 #import bevy_pbr::{
     mesh_functions,
-    forward_io::{Vertex, VertexOutput},
+    forward_io::VertexOutput,
     view_transformations::position_world_to_clip,
 }
 
-fn voxel_local_normal(packed_tint_normal: f32) -> vec3<f32> {
-    let code = (u32(round(packed_tint_normal)) >> 21u) & 7u;
+struct TerrainVertex {
+    @builtin(instance_index) instance_index: u32,
+    @location(0) position: vec3<f32>,
+#ifdef VERTEX_UVS_A
+    @location(2) uv: vec2<f32>,
+#endif
+#ifdef VERTEX_UVS_B
+    @location(3) payload: u32,
+#endif
+#ifdef VERTEX_COLORS
+    @location(5) color: vec4<f32>,
+#endif
+}
+
+fn voxel_local_normal(payload: u32) -> vec3<f32> {
+    let code = (payload >> 21u) & 7u;
     switch code {
         case 0u: { return vec3<f32>(1.0, 0.0, 0.0); }
         case 1u: { return vec3<f32>(-1.0, 0.0, 0.0); }
@@ -16,8 +30,14 @@ fn voxel_local_normal(packed_tint_normal: f32) -> vec3<f32> {
     }
 }
 
+fn decoded_uv_b(payload: u32) -> vec2<f32> {
+    let sky_light = f32((payload >> 24u) & 15u) / 15.0;
+    let tint_normal = payload & 0x00ffffffu;
+    return vec2<f32>(sky_light, f32(tint_normal));
+}
+
 @vertex
-fn vertex(vertex: Vertex) -> VertexOutput {
+fn vertex(vertex: TerrainVertex) -> VertexOutput {
     var out: VertexOutput;
 
     let world_from_local =
@@ -33,9 +53,9 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 #endif
 
 #ifdef VERTEX_UVS_B
-    out.uv_b = vertex.uv_b;
+    out.uv_b = decoded_uv_b(vertex.payload);
     out.world_normal = mesh_functions::mesh_normal_local_to_world(
-        voxel_local_normal(vertex.uv_b.y),
+        voxel_local_normal(vertex.payload),
         vertex.instance_index,
     );
 #else
