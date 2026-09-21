@@ -8,6 +8,7 @@ use std::{
 
 use bevy::{
     asset::RenderAssetUsages,
+    pbr::OpaqueRendererMethod,
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
@@ -112,6 +113,7 @@ impl<'a> TerrainMaterialBuilder<'a> {
                 alpha_mode: alpha.alpha_mode(),
                 fog_enabled: true,
                 unlit: true,
+                opaque_render_method: OpaqueRendererMethod::Forward,
                 ..default()
             },
             extension: TerrainMaterialExtension {
@@ -175,6 +177,7 @@ impl<'a> TerrainMaterialBuilder<'a> {
                 alpha_mode: alpha.alpha_mode(),
                 fog_enabled: true,
                 unlit: true,
+                opaque_render_method: OpaqueRendererMethod::Forward,
                 ..default()
             },
             extension: TerrainMaterialExtension {
@@ -224,6 +227,7 @@ impl<'a> TerrainMaterialBuilder<'a> {
                 alpha_mode: alpha.alpha_mode(),
                 fog_enabled: true,
                 unlit: true,
+                opaque_render_method: OpaqueRendererMethod::Forward,
                 ..default()
             },
             extension: TerrainMaterialExtension {
@@ -273,6 +277,7 @@ impl<'a> TerrainMaterialBuilder<'a> {
                 depth_bias: layer_index as f32 * TEXTURE_LAYER_DEPTH_BIAS,
                 fog_enabled: true,
                 unlit: true,
+                opaque_render_method: OpaqueRendererMethod::Forward,
                 ..default()
             },
             extension: TerrainMaterialExtension {
@@ -560,6 +565,7 @@ impl FluidMaterials {
                         cull_mode: None,
                         fog_enabled: true,
                         unlit: true,
+                opaque_render_method: OpaqueRendererMethod::Forward,
                         ..default()
                     },
                     extension: TerrainMaterialExtension {
