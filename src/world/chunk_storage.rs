@@ -1,9 +1,12 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     fs::{self, OpenOptions},
     io::{self, Write},
     path::{Path, PathBuf},
 };
+
+#[cfg(test)]
+use std::collections::HashMap;
 
 use bevy::prelude::IVec3;
 use serde::{Deserialize, Serialize};
