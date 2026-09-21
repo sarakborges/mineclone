@@ -21,7 +21,10 @@ use crate::{
     world::{
         biome_field::BiomeField,
         current_context::CurrentDimensionContext,
-        generation::{ChunkGenerationContext, located_structure_origins_in_chunk},
+        generation::{
+            ChunkGenerationContext, located_structure_origins_in_chunk,
+            structure_candidate_anchor,
+        },
         terrain::surface_height,
         world_feature_fields::WorldFeatureFields,
     },
@@ -29,7 +32,8 @@ use crate::{
 
 use super::{ChatMessage, ChatState};
 
-const MAX_LOCATE_CHUNK_RADIUS: i32 = 2048;
+const MAX_LOCATE_BLOCK_RADIUS: i32 = 32_768;
+const MAX_LOCATE_CHUNK_RADIUS: i32 = MAX_LOCATE_BLOCK_RADIUS / CHUNK_SIZE as i32;
 
 #[derive(Clone, Copy)]
 enum LocateTargetKind {
@@ -184,8 +188,8 @@ pub(super) fn poll_locate_task(
         });
     } else {
         chat.append(ChatMessage::Text(format!(
-            "{} could not be found within {} chunks.",
-            result.name, MAX_LOCATE_CHUNK_RADIUS
+            "{} could not be found within {} blocks.",
+            result.name, MAX_LOCATE_BLOCK_RADIUS
         )));
     }
 }
@@ -291,26 +295,88 @@ fn locate_structure(
     id: &str,
     player: IVec3,
 ) -> Option<IVec3> {
-    let center = chunk_coord_from_world(player).xz();
+    let structure = snapshot.structures.get(id)?;
+    let probe_offset = *structure.horizontal_footprint().first()?;
     let context = snapshot.generation_context();
+    let player_horizontal = player.xz();
+    let maximum_distance_squared =
+        i64::from(MAX_LOCATE_BLOCK_RADIUS) * i64::from(MAX_LOCATE_BLOCK_RADIUS);
     let mut seen = HashSet::new();
     let mut best: Option<(i64, IVec3)> = None;
 
-    for radius in 0..=MAX_LOCATE_CHUNK_RADIUS {
-        visit_square_chunk_ring(center, radius, |chunk| {
-            for position in located_structure_origins_in_chunk(chunk, id, &context) {
-                if seen.insert(position) {
-                    consider_nearest(&mut best, player, position);
-                }
-            }
-        });
+    for biome_structure in snapshot.biomes.structure_placements() {
+        if !snapshot
+            .structures
+            .reference_contains_structure(&biome_structure.structure_id, id)
+            || !snapshot
+                .dimension
+                .biomes
+                .iter()
+                .any(|entry| entry.id == biome_structure.biome_id && entry.weight > 0.0)
+        {
+            continue;
+        }
 
-        if best_is_final(best, radius) {
-            break;
+        let placement = biome_structure.placement;
+        let spacing = placement.spacing;
+        let center_cell = IVec2::new(
+            player_horizontal.x.div_euclid(spacing),
+            player_horizontal.y.div_euclid(spacing),
+        );
+        let maximum_cell_radius =
+            MAX_LOCATE_BLOCK_RADIUS.div_ceil(spacing) + 2;
+
+        for radius in 0..=maximum_cell_radius {
+            visit_square_cell_ring(center_cell, radius, |cell| {
+                let Some(anchor) = structure_candidate_anchor(
+                    snapshot.biome_field.seed(),
+                    &biome_structure.biome_id,
+                    &biome_structure.structure_id,
+                    placement,
+                    cell,
+                ) else {
+                    return;
+                };
+
+                let dx = i64::from(anchor.x) - i64::from(player_horizontal.x);
+                let dz = i64::from(anchor.y) - i64::from(player_horizontal.y);
+                if dx * dx + dz * dz > maximum_distance_squared {
+                    return;
+                }
+
+                let probe = anchor + probe_offset;
+                let probe_chunk = chunk_coord_from_world(IVec3::new(probe.x, 0, probe.y)).xz();
+                for position in located_structure_origins_in_chunk(probe_chunk, id, &context) {
+                    if position.xz() == anchor && seen.insert(position) {
+                        consider_nearest(&mut best, player, position);
+                    }
+                }
+            });
+
+            if structure_search_is_final(best, radius, spacing, placement.jitter) {
+                break;
+            }
         }
     }
 
     best.map(|(_, position)| position)
+}
+
+fn structure_search_is_final(
+    best: Option<(i64, IVec3)>,
+    visited_cell_radius: i32,
+    spacing: i32,
+    jitter: i32,
+) -> bool {
+    let Some((distance_squared, _)) = best else {
+        return false;
+    };
+    let next_radius = i64::from(visited_cell_radius) + 1;
+    let spacing = i64::from(spacing);
+    let jitter = i64::from(jitter);
+    let minimum_future_horizontal =
+        (next_radius * spacing - spacing / 2 - jitter).max(0);
+    minimum_future_horizontal * minimum_future_horizontal > distance_squared
 }
 
 fn consider_nearest(best: &mut Option<(i64, IVec3)>, player: IVec3, candidate: IVec3) {
@@ -340,7 +406,15 @@ fn best_is_final(best: Option<(i64, IVec3)>, radius: i32) -> bool {
     minimum_future_horizontal * minimum_future_horizontal > distance_squared
 }
 
+fn visit_square_cell_ring(center: IVec2, radius: i32, mut visit: impl FnMut(IVec2)) {
+    visit_square_ring(center, radius, &mut visit);
+}
+
 fn visit_square_chunk_ring(center: IVec2, radius: i32, mut visit: impl FnMut(IVec2)) {
+    visit_square_ring(center, radius, &mut visit);
+}
+
+fn visit_square_ring(center: IVec2, radius: i32, visit: &mut impl FnMut(IVec2)) {
     for z in -radius..=radius {
         for x in -radius..=radius {
             if radius > 0 && x.abs() != radius && z.abs() != radius {
@@ -348,5 +422,24 @@ fn visit_square_chunk_ring(center: IVec2, radius: i32, mut visit: impl FnMut(IVe
             }
             visit(center + IVec2::new(x, z));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn structure_cell_search_stops_once_future_cells_cannot_beat_best() {
+        let best = Some((900_i64 * 900_i64, IVec3::ZERO));
+
+        assert!(!structure_search_is_final(best, 0, 1_000, 112));
+        assert!(structure_search_is_final(best, 1, 1_000, 112));
+    }
+
+    #[test]
+    fn locate_radius_keeps_existing_thirty_two_kiloblock_contract() {
+        assert_eq!(MAX_LOCATE_BLOCK_RADIUS, 32_768);
+        assert_eq!(MAX_LOCATE_CHUNK_RADIUS, 2_048);
     }
 }
