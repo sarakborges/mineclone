@@ -1,0 +1,8 @@
+{
+  "id": "asteria:moss",
+  "texture": "textures/blocks/layers/moss.png",
+  "offset": 0.001,
+  "alphaCutoff": 0.5,
+  "alphaBlend": false,
+  "castsShadow": false
+}

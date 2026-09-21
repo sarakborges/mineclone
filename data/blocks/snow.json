@@ -1,0 +1,28 @@
+{
+  "id": "asteria:snow",
+  "name": {
+    "english": "Snow",
+    "portuguese_brazil": "Neve",
+    "spanish": "Nieve"
+  },
+  "category": "natural_blocks",
+  "tags": ["fragmentable"],
+  "textures": {
+    "top": "textures/blocks/snow.png",
+    "bottom": "textures/blocks/snow.png",
+    "left": "textures/blocks/snow.png",
+    "right": "textures/blocks/snow.png",
+    "front": "textures/blocks/snow.png",
+    "back": "textures/blocks/snow.png"
+  },
+  "rotateTexture": {
+    "top": true,
+    "bottom": true,
+    "left": true,
+    "right": true,
+    "front": true,
+    "back": true
+  },
+  "lightDampening": 15,
+  "castsShadow": true
+}

@@ -1,0 +1,28 @@
+{
+  "id": "asteria:clay",
+  "name": {
+    "english": "Clay",
+    "portuguese_brazil": "Argila",
+    "spanish": "Arcilla"
+  },
+  "category": "natural_blocks",
+  "tags": ["fragmentable"],
+  "textures": {
+    "top": "textures/blocks/clay.png",
+    "bottom": "textures/blocks/clay.png",
+    "left": "textures/blocks/clay.png",
+    "right": "textures/blocks/clay.png",
+    "front": "textures/blocks/clay.png",
+    "back": "textures/blocks/clay.png"
+  },
+  "rotateTexture": {
+    "top": true,
+    "bottom": true,
+    "left": true,
+    "right": true,
+    "front": true,
+    "back": true
+  },
+  "lightDampening": 15,
+  "castsShadow": true
+}

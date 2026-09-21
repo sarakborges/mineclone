@@ -7,7 +7,9 @@ use crate::localization::LocalizedText;
 
 use super::{
     block::BlockRegistry, block_id::intern_block_id, block_orientation::BlockOrientation,
-    fluid::FluidRegistry, registry::DefinitionMap,
+    fluid::FluidRegistry,
+    layer::{LayerFace, LayerRegistry},
+    registry::DefinitionMap,
     structure_rules::{StructureGenerationRules, StructureRestrictions},
 };
 
@@ -28,6 +30,17 @@ pub struct StructurePaletteEntry {
     pub block: String,
     #[serde(default)]
     pub orientation: BlockOrientation,
+    #[serde(default)]
+    pub surface_layers: Vec<StructureSurfaceLayer>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StructureSurfaceLayer {
+    pub layer: String,
+    pub faces: Vec<LayerFace>,
+    #[serde(default = "default_surface_layer_chance")]
+    pub chance: f32,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -79,6 +92,7 @@ pub(crate) struct StructureVoxel {
     pub offset: IVec3,
     pub block_id: &'static str,
     pub orientation: BlockOrientation,
+    palette_symbol: char,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -92,6 +106,7 @@ impl StructureDefinition {
     pub(crate) fn validate_references(
         &self,
         blocks: &BlockRegistry,
+        layers: &LayerRegistry,
         fluids: &FluidRegistry,
     ) {
         self.restrictions
@@ -104,6 +119,23 @@ impl StructureDefinition {
                 self.id,
                 entry.block
             );
+            for surface in &entry.surface_layers {
+                let definition = layers.get(&surface.layer).unwrap_or_else(|| {
+                    panic!(
+                        "structure {} references missing surface layer: {}",
+                        self.id, surface.layer
+                    )
+                });
+                for &face in &surface.faces {
+                    assert!(
+                        definition.supports_face(face),
+                        "structure {} surface layer {} does not support face {:?}",
+                        self.id,
+                        surface.layer,
+                        face
+                    );
+                }
+            }
         }
     }
 
@@ -146,6 +178,16 @@ impl StructureDefinition {
             .unwrap_or(&[])
     }
 
+    pub(crate) fn surface_layers_for_voxel(
+        &self,
+        voxel: &StructureVoxel,
+    ) -> &[StructureSurfaceLayer] {
+        self.palette_entry(voxel.palette_symbol)
+            .expect("runtime structure voxel must retain a valid palette symbol")
+            .surface_layers
+            .as_slice()
+    }
+
     fn rebuild_runtime(&mut self) {
         let mut voxels = Vec::new();
         let mut horizontal_minimum = IVec2::splat(i32::MAX);
@@ -178,6 +220,7 @@ impl StructureDefinition {
                         offset,
                         block_id: intern_block_id(&entry.block),
                         orientation: entry.orientation,
+                        palette_symbol: symbol,
                     });
                 }
             }
@@ -298,6 +341,39 @@ impl StructureDefinition {
                 "structure {} palette symbol {symbol} must reference a block",
                 self.id
             );
+
+            for (surface_index, surface) in entry.surface_layers.iter().enumerate() {
+                assert!(
+                    !surface.layer.trim().is_empty(),
+                    "structure {} palette symbol {symbol} surfaceLayers[{surface_index}] must reference a layer",
+                    self.id
+                );
+                assert!(
+                    surface.chance.is_finite() && (0.0..=1.0).contains(&surface.chance),
+                    "structure {} palette symbol {symbol} surfaceLayers[{surface_index}].chance must be between 0 and 1",
+                    self.id
+                );
+                assert!(
+                    !surface.faces.is_empty(),
+                    "structure {} palette symbol {symbol} surfaceLayers[{surface_index}] must define at least one face",
+                    self.id
+                );
+                for (face_index, face) in surface.faces.iter().enumerate() {
+                    assert!(
+                        !surface.faces[..face_index].contains(face),
+                        "structure {} palette symbol {symbol} surfaceLayers[{surface_index}].faces cannot contain duplicates",
+                        self.id
+                    );
+                }
+                for previous in &entry.surface_layers[..surface_index] {
+                    assert!(
+                        previous.layer != surface.layer
+                            || !previous.faces.iter().any(|face| surface.faces.contains(face)),
+                        "structure {} palette symbol {symbol} cannot define the same surface layer on the same face more than once",
+                        self.id
+                    );
+                }
+            }
         }
 
         let depth = self.layers[0].rows.len();
@@ -466,4 +542,8 @@ impl StructureRegistry {
             members.sort();
         }
     }
+}
+
+fn default_surface_layer_chance() -> f32 {
+    1.0
 }

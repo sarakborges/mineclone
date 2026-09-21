@@ -12,12 +12,14 @@ use crate::{
         biome_structure::StructurePlacementRules,
         block::BlockRegistry,
         dimension::DimensionDefinition,
+        layer::LayerFace,
         structure::{StructureDefinition, StructureRegistry, StructureVoxel},
         structure_rules::{StructureFluidPolicy, StructureReplacePolicy},
     },
     voxel::{
         cell::VoxelCell,
         chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk, VoxelChunkContentMut},
+        layer::LayerCell,
         texture_rotation::TextureRotation,
     },
     world::terrain::surface_height,
@@ -55,6 +57,7 @@ struct StructureRasterizationContext<'a> {
     base_chunk: &'a VoxelChunk,
     blocks: &'a BlockRegistry,
     chunk_origin: IVec3,
+    world_seed: u64,
 }
 
 pub(super) fn rasterize_structures(
@@ -78,6 +81,7 @@ pub(super) fn rasterize_structures(
                     base_chunk: &base_chunk,
                     blocks: context.blocks,
                     chunk_origin,
+                    world_seed: context.biome_field.seed(),
                 },
                 candidate.structure,
                 IVec3::new(candidate.anchor.x, candidate.origin_y, candidate.anchor.y),
@@ -586,6 +590,14 @@ fn rasterize_structure(
                     voxel.orientation,
                 )),
             );
+            rasterize_structure_surface_layers(
+                chunk,
+                structure,
+                voxel,
+                world_position,
+                local,
+                context.world_seed,
+            );
             if structure.generation.fluid_policy == StructureFluidPolicy::Displace {
                 chunk.set_fluid(local_x, local_y, local_z, None);
             }
@@ -593,6 +605,80 @@ fn rasterize_structure(
             false
         },
     );
+}
+
+fn rasterize_structure_surface_layers(
+    chunk: &mut VoxelChunkContentMut<'_>,
+    structure: &StructureDefinition,
+    voxel: &StructureVoxel,
+    world_position: IVec3,
+    local: IVec3,
+    world_seed: u64,
+) {
+    // Structure generation is deterministic across chunk order. Use the
+    // world seed plus world-space position and structure/layer/face identity
+    // so the same seed and structure always choose the same layer patches.
+    for surface in structure.surface_layers_for_voxel(voxel) {
+        for &face in &surface.faces {
+            let hash = surface_layer_hash(
+                world_seed,
+                &structure.id,
+                &surface.layer,
+                world_position,
+                face,
+            );
+            if unit_interval(hash) >= surface.chance {
+                continue;
+            }
+            let rotation = TextureRotation::from_quarter_turn(((hash >> 32) & 3) as u8);
+            let _ = chunk.add_layer(
+                local.x as usize,
+                local.y as usize,
+                local.z as usize,
+                face,
+                LayerCell::new(&surface.layer, rotation),
+            );
+        }
+    }
+}
+
+fn surface_layer_hash(
+    world_seed: u64,
+    structure_id: &str,
+    layer_id: &str,
+    position: IVec3,
+    face: LayerFace,
+) -> u64 {
+    let mut hash = world_seed
+        ^ stable_string_hash(structure_id).rotate_left(11)
+        ^ stable_string_hash(layer_id).rotate_left(37);
+    hash ^= (position.x as i64 as u64).wrapping_mul(0x9e37_79b1_85eb_ca87);
+    hash ^= (position.y as i64 as u64).wrapping_mul(0xc2b2_ae3d_27d4_eb4f);
+    hash ^= (position.z as i64 as u64).wrapping_mul(0x1656_67b1_9e37_79f9);
+    hash ^= (face.index() as u64 + 1).wrapping_mul(0xd6e8_feb8_6659_fd93);
+    avalanche(hash)
+}
+
+fn stable_string_hash(value: &str) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    for byte in value.bytes() {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
+}
+
+fn avalanche(mut value: u64) -> u64 {
+    value ^= value >> 30;
+    value = value.wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    value ^= value >> 27;
+    value = value.wrapping_mul(0x94d0_49bb_1331_11eb);
+    value ^ (value >> 31)
+}
+
+fn unit_interval(hash: u64) -> f32 {
+    let value = hash >> 11;
+    (value as f64 * (1.0 / (1_u64 << 53) as f64)) as f32
 }
 
 fn visit_structure_voxels_in_chunk(

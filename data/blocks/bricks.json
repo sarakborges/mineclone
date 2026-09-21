@@ -1,0 +1,20 @@
+{
+  "id": "asteria:bricks",
+  "name": {
+    "english": "Bricks",
+    "portuguese_brazil": "Tijolos",
+    "spanish": "Ladrillos"
+  },
+  "category": "crafted_blocks",
+  "tags": ["fragmentable"],
+  "textures": {
+    "top": "textures/blocks/bricks.png",
+    "bottom": "textures/blocks/bricks.png",
+    "left": "textures/blocks/bricks.png",
+    "right": "textures/blocks/bricks.png",
+    "front": "textures/blocks/bricks.png",
+    "back": "textures/blocks/bricks.png"
+  },
+  "lightDampening": 15,
+  "castsShadow": true
+}

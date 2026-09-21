@@ -42,7 +42,7 @@ pub(super) fn validate_content(content: &LoadedContent) {
     }
 
     for structure in content.structures.iter() {
-        structure.validate_references(&content.blocks, &content.fluids);
+        structure.validate_references(&content.blocks, &content.layers, &content.fluids);
     }
 
     for biome in content.biomes.iter() {
