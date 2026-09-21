@@ -36,6 +36,7 @@ use self::{
 };
 use super::{
     biome_field::BiomeField,
+    chunk_async_work::ChunkAsyncWorkLimiter,
     chunk_generation_tasks::ChunkGenerationTasks,
     chunk_mesh_tasks::ChunkMeshTasks,
     chunk_remesh::ChunkRemeshQueue,
@@ -526,6 +527,7 @@ pub(super) struct ChunkStreamingWork<'w> {
     mesh_tasks: ResMut<'w, ChunkMeshTasks>,
     world_ticks: Res<'w, WorldTickClock>,
     frame_budget: Res<'w, WorldFrameWorkBudget>,
+    async_work: Res<'w, ChunkAsyncWorkLimiter>,
 }
 
 #[derive(SystemParam)]
