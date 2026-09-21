@@ -66,6 +66,40 @@ impl ChunkMeshletMask {
         mask
     }
 
+    pub(crate) fn selected_voxel_count(self) -> usize {
+        self.0.count_ones() as usize
+            * CHUNK_MESHLET_EDGE
+            * CHUNK_MESHLET_EDGE
+            * CHUNK_MESHLET_EDGE
+    }
+
+    pub(crate) fn compact_voxel_index(
+        self,
+        x: usize,
+        y: usize,
+        z: usize,
+    ) -> Option<usize> {
+        let meshlet_x = x / CHUNK_MESHLET_EDGE;
+        let meshlet_y = y / CHUNK_MESHLET_EDGE;
+        let meshlet_z = z / CHUNK_MESHLET_EDGE;
+        let index = meshlet_index(meshlet_x, meshlet_y, meshlet_z);
+        if !self.contains_index(index) {
+            return None;
+        }
+
+        let lower_mask = if index == 0 { 0 } else { (1_u8 << index) - 1 };
+        let rank = (self.0 & lower_mask).count_ones() as usize;
+        let local_x = x % CHUNK_MESHLET_EDGE;
+        let local_y = y % CHUNK_MESHLET_EDGE;
+        let local_z = z % CHUNK_MESHLET_EDGE;
+        let voxels_per_meshlet =
+            CHUNK_MESHLET_EDGE * CHUNK_MESHLET_EDGE * CHUNK_MESHLET_EDGE;
+        let local_index = local_x
+            + local_z * CHUNK_MESHLET_EDGE
+            + local_y * CHUNK_MESHLET_EDGE * CHUNK_MESHLET_EDGE;
+        Some(rank * voxels_per_meshlet + local_index)
+    }
+
     pub(crate) fn for_each_voxel(
         self,
         mut visit: impl FnMut(usize, usize, usize),
