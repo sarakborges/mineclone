@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{platform::collections::HashMap, prelude::*};
 use serde::{Deserialize, Deserializer};
 
 use crate::localization::LocalizedText;
@@ -285,6 +285,34 @@ impl BlockRegistry {
 
     pub fn iter(&self) -> impl Iterator<Item = &BlockDefinition> {
         self.definitions.values()
+    }
+}
+
+pub(crate) struct BlockLookup<'a> {
+    registry: &'a BlockRegistry,
+    cache: HashMap<(usize, usize), &'a BlockDefinition>,
+}
+
+impl<'a> BlockLookup<'a> {
+    pub(crate) fn new(registry: &'a BlockRegistry) -> Self {
+        Self {
+            registry,
+            cache: HashMap::with_capacity(32),
+        }
+    }
+
+    pub(crate) fn get(&mut self, id: &'static str) -> &'a BlockDefinition {
+        let key = (id.as_ptr() as usize, id.len());
+        if let Some(&definition) = self.cache.get(&key) {
+            return definition;
+        }
+
+        let definition = self
+            .registry
+            .get(id)
+            .unwrap_or_else(|| panic!("missing block definition: {id}"));
+        self.cache.insert(key, definition);
+        definition
     }
 }
 
