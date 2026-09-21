@@ -482,7 +482,7 @@ mod tests {
             visited.push(candidate);
         });
 
-        assert!(visited.iter().all(|candidate| candidate.x <= i32::MAX));
+        assert!(visited.iter().any(|candidate| candidate.x == i32::MAX));
         assert!(!visited.iter().any(|candidate| candidate.x == i32::MIN));
     }
 
