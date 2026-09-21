@@ -26,6 +26,7 @@ enum CommandId {
 enum ParameterKind {
     CreatureId,
     StructureId,
+    StructureVariation,
     LocateKind,
     LocateTargetId,
     Coordinate,
@@ -36,6 +37,7 @@ struct CommandDefinition {
     usage: &'static str,
     description: &'static str,
     parameters: &'static [ParameterKind],
+    required_parameters: usize,
     id: CommandId,
 }
 
@@ -45,13 +47,15 @@ const COMMANDS: &[CommandDefinition] = &[
         usage: "/spawn <id>",
         description: "Spawn a creature",
         parameters: &[ParameterKind::CreatureId],
+        required_parameters: 1,
         id: CommandId::Spawn,
     },
     CommandDefinition {
         name: "place",
-        usage: "/place <id>",
+        usage: "/place <id> [variation]",
         description: "Place a structure",
-        parameters: &[ParameterKind::StructureId],
+        parameters: &[ParameterKind::StructureId, ParameterKind::StructureVariation],
+        required_parameters: 1,
         id: CommandId::Place,
     },
     CommandDefinition {
@@ -59,6 +63,7 @@ const COMMANDS: &[CommandDefinition] = &[
         usage: "/locate <biome|hydrology|structure> <id>",
         description: "Locate a biome, hydrology feature or structure",
         parameters: &[ParameterKind::LocateKind, ParameterKind::LocateTargetId],
+        required_parameters: 2,
         id: CommandId::Locate,
     },
     CommandDefinition {
@@ -70,6 +75,7 @@ const COMMANDS: &[CommandDefinition] = &[
             ParameterKind::Coordinate,
             ParameterKind::Coordinate,
         ],
+        required_parameters: 3,
         id: CommandId::Warp,
     },
 ];
@@ -78,7 +84,7 @@ const COMMANDS: &[CommandDefinition] = &[
 pub(super) enum ParsedLine<'a> {
     Say(&'a str),
     Spawn(&'a str),
-    Place(&'a str),
+    Place(&'a str, Option<usize>),
     Locate(&'a str, &'a str),
     Warp(IVec3),
     Usage(&'static str),
@@ -101,12 +107,21 @@ pub(super) fn parse_line(input: &str) -> ParsedLine<'_> {
         return ParsedLine::Unknown(name);
     };
     let args: Vec<_> = words.collect();
-    if args.len() != definition.parameters.len() {
+    if args.len() < definition.required_parameters || args.len() > definition.parameters.len() {
         return ParsedLine::Usage(definition.usage);
     }
     match definition.id {
         CommandId::Spawn => ParsedLine::Spawn(args[0]),
-        CommandId::Place => ParsedLine::Place(args[0]),
+        CommandId::Place => {
+            let variation = match args.get(1) {
+                Some(value) => match value.parse::<usize>() {
+                    Ok(variation) if variation > 0 => Some(variation),
+                    _ => return ParsedLine::Usage(definition.usage),
+                },
+                None => None,
+            };
+            ParsedLine::Place(args[0], variation)
+        },
         CommandId::Locate => match args[0] {
             "biome" | "hydrology" | "structure" => ParsedLine::Locate(args[0], args[1]),
             _ => ParsedLine::Usage(definition.usage),
@@ -265,18 +280,56 @@ fn suggestions_for(
                     description: creature.name.text(language.get()).to_owned(),
                 })
                 .collect::<Vec<_>>(),
-            ParameterKind::StructureId => structures
-                .iter()
-                .filter(|structure| {
-                    let id = structure.id.to_ascii_lowercase();
-                    id.starts_with(&prefix)
-                        || id.strip_prefix("asteria:").is_some_and(|short| short.starts_with(&prefix))
-                })
-                .map(|structure| Suggestion {
-                    value: structure.id.clone(),
-                    description: structure.name.text(language.get()).to_owned(),
-                })
-                .collect::<Vec<_>>(),
+            ParameterKind::StructureId => {
+                let mut values = structures
+                    .iter()
+                    .filter(|structure| structure.group_id.is_none())
+                    .filter(|structure| {
+                        let id = structure.id.to_ascii_lowercase();
+                        id.starts_with(&prefix)
+                            || id
+                                .strip_prefix("asteria:")
+                                .is_some_and(|short| short.starts_with(&prefix))
+                    })
+                    .map(|structure| Suggestion {
+                        value: structure.id.clone(),
+                        description: structure.name.text(language.get()).to_owned(),
+                    })
+                    .collect::<Vec<_>>();
+                values.extend(
+                    structures
+                        .group_references()
+                        .filter(|(reference, _, _)| {
+                            let id = reference.to_ascii_lowercase();
+                            id.starts_with(&prefix)
+                                || id
+                                    .strip_prefix("asteria:")
+                                    .is_some_and(|short| short.starts_with(&prefix))
+                        })
+                        .map(|(reference, structure, count)| Suggestion {
+                            value: reference.to_owned(),
+                            description: format!(
+                                "{} ({count} variations)",
+                                structure.name.text(language.get())
+                            ),
+                        }),
+                );
+                values
+            },
+            ParameterKind::StructureVariation => {
+                let reference = text.split_whitespace().nth(1)?;
+                let count = structures.variation_count(reference)?;
+                (1..=count)
+                    .filter(|variation| variation.to_string().starts_with(&prefix))
+                    .filter_map(|variation| {
+                        let structure = structures.variation(reference, variation)?;
+                        Some(Suggestion {
+                            value: variation.to_string(),
+                            description: structure.id.clone(),
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            },
             ParameterKind::LocateKind => ["biome", "hydrology", "structure"]
                 .into_iter()
                 .filter(|value| value.starts_with(&prefix))
@@ -428,13 +481,31 @@ mod tests {
     fn command_registry_also_drives_parser() {
         assert_eq!(parse_line("hello"), ParsedLine::Say("hello"));
         assert_eq!(parse_line("/spawn asteria:meadow_slime"), ParsedLine::Spawn("asteria:meadow_slime"));
-        assert_eq!(parse_line("/place asteria:hut"), ParsedLine::Place("asteria:hut"));
+        assert_eq!(
+            parse_line("/place asteria:hut"),
+            ParsedLine::Place("asteria:hut", None)
+        );
+        assert_eq!(
+            parse_line("/place asteria:tree_oak 3"),
+            ParsedLine::Place("asteria:tree_oak", Some(3))
+        );
         assert_eq!(
             parse_line("/locate hydrology river"),
             ParsedLine::Locate("hydrology", "river")
         );
         assert_eq!(parse_line("/spawn"), ParsedLine::Usage("/spawn <id>"));
-        assert_eq!(parse_line("/place extra extra"), ParsedLine::Usage("/place <id>"));
+        assert_eq!(
+            parse_line("/place extra extra extra"),
+            ParsedLine::Usage("/place <id> [variation]")
+        );
+        assert_eq!(
+            parse_line("/place asteria:tree_oak nope"),
+            ParsedLine::Usage("/place <id> [variation]")
+        );
+        assert_eq!(
+            parse_line("/place asteria:tree_oak 0"),
+            ParsedLine::Usage("/place <id> [variation]")
+        );
         assert_eq!(parse_line("/spawn_creature old"), ParsedLine::Unknown("/spawn_creature"));
         assert_eq!(parse_line("/missing"), ParsedLine::Unknown("/missing"));
     }
