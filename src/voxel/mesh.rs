@@ -547,14 +547,6 @@ fn face_uv(face: BlockFace, x: usize, y: usize, z: usize) -> (usize, usize) {
     }
 }
 
-fn face_cell(face: BlockFace, depth: usize, u: usize, v: usize) -> [usize; 3] {
-    match face {
-        BlockFace::Right | BlockFace::Left => [depth, v, u],
-        BlockFace::Top | BlockFace::Bottom => [u, depth, v],
-        BlockFace::Front | BlockFace::Back => [u, v, depth],
-    }
-}
-
 fn emit_greedy_plane<'a>(
     face: BlockFace,
     depth: usize,
