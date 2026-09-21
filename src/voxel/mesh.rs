@@ -138,9 +138,8 @@ where
     });
 
     // Normal voxels are processed face-by-face so compatible exposed faces can
-    // be merged into large rectangles. This first pass is intentionally
-    // conservative: rotated, transparent, partially occluded, or non-uniformly
-    // lit faces keep the old one-quad-per-face path.
+    // be merged into large rectangles. Partial remeshes only visit the selected
+    // 8³ regions on each face plane.
     for face in BlockFace::ALL {
         for depth in 0..CHUNK_SIZE {
             let mut greedy = [None; CHUNK_SIZE * CHUNK_SIZE];
@@ -159,107 +158,131 @@ where
                         for u in u_start..u_start + CHUNK_MESHLET_EDGE {
                             let [x, y, z] = face_cell(face, depth, u, v);
                             let Some(cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
-                        continue;
-                    };
-                    if MicroblockMask::is_modified(cell) {
-                        continue;
-                    }
+                                continue;
+                            };
+                            if MicroblockMask::is_modified(cell) {
+                                continue;
+                            }
 
-                    let block = block_lookup.get(cell.block_id);
-                    let block_is_transparent = block.alpha_blend || block.alpha_cutoff.is_some();
-                    let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
-                    let world_voxel = chunk_origin + local_voxel;
-                    let source_face = if cell.orientation == BlockOrientation::Y {
-                        face
-                    } else {
-                        source_face_for_oriented_face(face, cell.orientation)
-                    };
-                    let partial_occluder = world
-                        .cell_at(world_voxel + face.offset())
-                        .filter(|neighbor| MicroblockMask::is_modified(*neighbor))
-                        .filter(|neighbor| {
-                            let definition = block_lookup.get(neighbor.block_id);
-                            occludes(cell.block_id, block, neighbor.block_id, definition)
-                        });
+                            let block = block_lookup.get(cell.block_id);
+                            let block_is_transparent =
+                                block.alpha_blend || block.alpha_cutoff.is_some();
+                            let local_voxel =
+                                IVec3::new(x as i32, y as i32, z as i32);
+                            let world_voxel = chunk_origin + local_voxel;
+                            let source_face = if cell.orientation == BlockOrientation::Y {
+                                face
+                            } else {
+                                source_face_for_oriented_face(face, cell.orientation)
+                            };
+                            let partial_occluder = world
+                                .cell_at(world_voxel + face.offset())
+                                .filter(|neighbor| MicroblockMask::is_modified(*neighbor))
+                                .filter(|neighbor| {
+                                    let definition = block_lookup.get(neighbor.block_id);
+                                    occludes(
+                                        cell.block_id,
+                                        block,
+                                        neighbor.block_id,
+                                        definition,
+                                    )
+                                });
 
-                    if partial_occluder.is_none()
-                        && !is_face_exposed(
-                            world,
-                            &mut block_lookup,
-                            cell.block_id,
-                            block_is_transparent,
-                            world_voxel,
-                            face,
-                        )
-                    {
-                        continue;
-                    }
+                            if partial_occluder.is_none()
+                                && !is_face_exposed(
+                                    world,
+                                    &mut block_lookup,
+                                    cell.block_id,
+                                    block_is_transparent,
+                                    world_voxel,
+                                    face,
+                                )
+                            {
+                                continue;
+                            }
 
-                    let visual = visual_for_cell(
-                        &mut visuals,
-                        chunk,
-                        [x, y, z],
-                        world_voxel,
-                        cell,
-                        block,
-                        &mut tint_at,
-                    );
-                    let tint = visual.tint;
-                    let source_block_srgb = visual.block_srgb;
+                            let visual = visual_for_cell(
+                                &mut visuals,
+                                meshlets,
+                                chunk,
+                                [x, y, z],
+                                world_voxel,
+                                cell,
+                                block,
+                                &mut tint_at,
+                            );
+                            let tint = visual.tint;
+                            let source_block_srgb = visual.block_srgb;
 
-                    if let Some(neighbor) = partial_occluder {
-                        let surface = MicroSurface {
-                            world,
-                            cell,
-                            block,
-                            world_voxel,
-                            local_voxel,
-                            tint,
-                            block_srgb: source_block_srgb,
-                            texture_table,
-                        };
-                        emit_neighbor_openings(&surface, &mut buffers, face, neighbor);
-                        continue;
-                    }
+                            if let Some(neighbor) = partial_occluder {
+                                let surface = MicroSurface {
+                                    world,
+                                    cell,
+                                    block,
+                                    world_voxel,
+                                    local_voxel,
+                                    tint,
+                                    block_srgb: source_block_srgb,
+                                    texture_table,
+                                };
+                                emit_neighbor_openings(
+                                    &surface,
+                                    &mut buffers,
+                                    face,
+                                    neighbor,
+                                );
+                                continue;
+                            }
 
-                    let texture_rotation =
-                        if face_uses_texture_rotation(block.rotate_texture, source_face) {
-                            cell.texture_rotation
-                        } else {
-                            TextureRotation::default()
-                        };
-                    let lighting = face_lighting(world, world_voxel, face, source_block_srgb);
-                    let material_face = block_face_material_face(source_face, block);
-                    let material_code = texture_table
-                        .encoded_layers(block_face_texture_layers(material_face, block))
-                        .unwrap_or(0.0);
+                            let texture_rotation =
+                                if face_uses_texture_rotation(block.rotate_texture, source_face) {
+                                    cell.texture_rotation
+                                } else {
+                                    TextureRotation::default()
+                                };
+                            let lighting =
+                                face_lighting(world, world_voxel, face, source_block_srgb);
+                            let material_face =
+                                block_face_material_face(source_face, block);
+                            let material_code = texture_table
+                                .encoded_layers(block_face_texture_layers(
+                                    material_face,
+                                    block,
+                                ))
+                                .unwrap_or(0.0);
 
-                    let candidate = GreedyFace {
-                        block_id: cell.block_id,
-                        material_face,
-                        tint,
-                        lighting,
-                        material_code,
-                    };
-                    let greedy_eligible = cell.orientation == BlockOrientation::Y
-                        // Alpha-cutout is order-independent and safe to merge.
-                        // Only true alpha blending must keep independent quads.
-                        && !block.alpha_blend
-                        && texture_rotation == TextureRotation::Degrees0
-                        && lighting_is_uniform(lighting);
+                            let candidate = GreedyFace {
+                                block_id: cell.block_id,
+                                material_face,
+                                tint,
+                                lighting,
+                                material_code,
+                            };
+                            let greedy_eligible = cell.orientation == BlockOrientation::Y
+                                // Alpha-cutout is order-independent and safe to merge.
+                                // Only true alpha blending must keep independent quads.
+                                && !block.alpha_blend
+                                && texture_rotation == TextureRotation::Degrees0
+                                && lighting_is_uniform(lighting);
 
-                    if greedy_eligible {
-                        greedy[u + v * CHUNK_SIZE] = Some(candidate);
-                        continue;
-                    }
+                            if greedy_eligible {
+                                greedy[u + v * CHUNK_SIZE] = Some(candidate);
+                                continue;
+                            }
 
-                    let geometry = orient_face_geometry(
-                        face_geometry(source_face, x, y, z, texture_rotation),
-                        cell.orientation,
-                        x,
-                        y,
-                        z,
-                    );
+                            let geometry = orient_face_geometry(
+                                face_geometry(
+                                    source_face,
+                                    x,
+                                    y,
+                                    z,
+                                    texture_rotation,
+                                ),
+                                cell.orientation,
+                                x,
+                                y,
+                                z,
+                            );
                             push_lit_quad(
                                 material_buffer(
                                     &mut buffers,
