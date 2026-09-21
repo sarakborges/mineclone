@@ -12,16 +12,16 @@ const INSTANCE_HASH_SALT: u64 = 0xc2b2_ae3d_27d4_eb4f;
 const ATTEMPT_HASH_SALT: u64 = 0x1656_67b1_9e37_79f9;
 
 #[derive(Clone, Copy)]
-pub(super) struct ResolvedSetPiece<'a> {
-    pub(super) structure: &'a StructureDefinition,
-    pub(super) rotation: StructureRotation,
-    pub(super) anchor: IVec2,
-    pub(super) origin_y: i32,
-    pub(super) minimum: IVec2,
-    pub(super) maximum: IVec2,
+pub(crate) struct ResolvedSetPiece<'a> {
+    pub(crate) structure: &'a StructureDefinition,
+    pub(crate) rotation: StructureRotation,
+    pub(crate) anchor: IVec2,
+    pub(crate) origin_y: i32,
+    pub(crate) minimum: IVec2,
+    pub(crate) maximum: IVec2,
 }
 
-pub(super) fn resolve_set_pieces<'a>(
+pub(crate) fn resolve_set_pieces<'a>(
     world_seed: u64,
     set: &StructureSetDefinition,
     set_anchor: IVec2,
