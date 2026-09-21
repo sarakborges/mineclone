@@ -12,7 +12,6 @@ use crate::{
 };
 
 use super::{
-    chunks::SavedChunkCatalog,
     invalid_data,
     locking::{ReadLease, WorldDirectoryLock, acquire_world_directory_lock, world_lock},
     snapshot::{SAVE_FORMAT_VERSION, StoredWorldSnapshot, WorldManifest, WorldSnapshot},
@@ -25,7 +24,7 @@ use super::{
 };
 use crate::world::{
     chunk_storage::{
-        generation_chunks_published, load_generation_chunks, remove_generation_chunks,
+        generation_chunks_published, load_generation_world, remove_generation_chunks,
     },
     new_world::{biome_size_multiplier_tenths, is_valid_biome_size_multiplier},
     world_names::{WORLDS_DIRECTORY, validate_world_name},
@@ -212,12 +211,13 @@ fn decode_snapshot(
     let snapshot = stored.into_runtime();
     validate(&snapshot)?;
 
-    let chunks = SavedChunkCatalog::from_disk_chunks(load_generation_chunks(
+    let world = load_generation_world(
         directory,
         manifest.generation,
-    )?);
-
-    let world = chunks.into_world(blocks, layers, fluids)?;
+        blocks,
+        layers,
+        fluids,
+    )?;
     Ok((snapshot, world))
 }
 
