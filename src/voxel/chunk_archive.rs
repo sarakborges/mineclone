@@ -1,30 +1,15 @@
-use crate::content::{
-    block_orientation::BlockOrientation,
-    fluid::FluidId,
-    layer::LayerFace,
-};
+use crate::content::{fluid::FluidId, layer::LayerFace};
 
 use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk},
     fluid::FluidCell,
     layer::{AttachedLayer, LayerCell},
-    secondary_properties::SecondaryProperties,
     texture_rotation::TextureRotation,
 };
 
 const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
 const OCCUPANCY_WORDS: usize = CHUNK_VOLUME.div_ceil(u64::BITS as usize);
-
-#[derive(Clone, Copy)]
-struct ArchivedCell {
-    palette_index: u16,
-    rotation: u8,
-    orientation: u8,
-    secondary_properties: SecondaryProperties,
-    microblock_layers: Option<&'static [u64; 8]>,
-    microblock_transient: bool,
-}
 
 #[derive(Clone, Copy)]
 struct ArchivedLayerCell {
@@ -45,8 +30,8 @@ struct ArchivedFluidCell {
 
 pub struct ArchivedChunk {
     occupancy: [u64; OCCUPANCY_WORDS],
-    palette: Vec<&'static str>,
-    cells: Vec<ArchivedCell>,
+    palette: Vec<VoxelCell>,
+    cells: Vec<u16>,
     layers: Vec<ArchivedLayerCell>,
     fluid_occupancy: [u64; OCCUPANCY_WORDS],
     fluid_cells: Vec<ArchivedFluidCell>,
@@ -59,7 +44,7 @@ impl ArchivedChunk {
         fluid_entries: impl IntoIterator<Item = (usize, FluidCell)>,
     ) -> Self {
         let mut occupancy = [0_u64; OCCUPANCY_WORDS];
-        let mut palette = Vec::<&'static str>::new();
+        let mut palette = Vec::<VoxelCell>::new();
         let mut cells = Vec::new();
         let mut layers = Vec::new();
         let mut fluid_occupancy = [0_u64; OCCUPANCY_WORDS];
@@ -69,25 +54,18 @@ impl ArchivedChunk {
             assert!(index < CHUNK_VOLUME, "archived block index must stay inside the chunk");
             let palette_index = palette
                 .iter()
-                .position(|block_id| *block_id == cell.block_id)
+                .position(|candidate| *candidate == cell)
                 .unwrap_or_else(|| {
-                    palette.push(cell.block_id);
+                    palette.push(cell);
                     palette.len() - 1
                 });
             assert!(
-                palette_index <= u16::MAX as usize,
+                palette_index < u16::MAX as usize,
                 "chunk block palette cannot exceed {} entries",
                 u16::MAX
             );
             occupancy[index / u64::BITS as usize] |= 1_u64 << (index % u64::BITS as usize);
-            cells.push(ArchivedCell {
-                palette_index: palette_index as u16,
-                rotation: rotation_index(cell.texture_rotation),
-                orientation: cell.orientation.index(),
-                secondary_properties: cell.secondary_properties(),
-                microblock_layers: cell.microblock_layers(),
-                microblock_transient: cell.microblock_transient(),
-            });
+            cells.push(palette_index as u16);
         }
 
         for (index, order, attached) in layer_entries {
@@ -126,7 +104,7 @@ impl ArchivedChunk {
 
     pub fn from_chunk(chunk: &VoxelChunk) -> Self {
         let mut occupancy = [0_u64; OCCUPANCY_WORDS];
-        let mut palette = Vec::<&'static str>::new();
+        let mut palette = Vec::<VoxelCell>::new();
         let mut cells = Vec::new();
         let mut layers = Vec::new();
         let mut fluid_occupancy = [0_u64; OCCUPANCY_WORDS];
@@ -141,27 +119,20 @@ impl ArchivedChunk {
             if let Some(cell) = cell {
                 let palette_index = palette
                     .iter()
-                    .position(|block_id| *block_id == cell.block_id)
+                    .position(|candidate| *candidate == cell)
                     .unwrap_or_else(|| {
-                        palette.push(cell.block_id);
+                        palette.push(cell);
                         palette.len() - 1
                     });
 
                 assert!(
-                    palette_index <= u16::MAX as usize,
+                    palette_index < u16::MAX as usize,
                     "chunk block palette cannot exceed {} entries",
                     u16::MAX
                 );
 
                 occupancy[index / u64::BITS as usize] |= 1_u64 << (index % u64::BITS as usize);
-                cells.push(ArchivedCell {
-                    palette_index: palette_index as u16,
-                    rotation: rotation_index(cell.texture_rotation),
-                    orientation: cell.orientation.index(),
-                    secondary_properties: cell.secondary_properties(),
-                microblock_layers: cell.microblock_layers(),
-                microblock_transient: cell.microblock_transient(),
-                });
+                cells.push(palette_index as u16);
             }
 
             if let Some(fluid) = fluid {
@@ -203,21 +174,8 @@ impl ArchivedChunk {
 
     pub(crate) fn block_entries(&self) -> impl Iterator<Item = (usize, VoxelCell)> + '_ {
         occupied_indices(&self.occupancy)
-            .zip(self.cells.iter())
-            .map(|(index, archived)| {
-                let block_id = self.palette[archived.palette_index as usize];
-                let cell = VoxelCell::oriented(
-                    block_id,
-                    TextureRotation::from_quarter_turn(archived.rotation),
-                    BlockOrientation::from_index(archived.orientation),
-                )
-                .with_secondary_properties(archived.secondary_properties)
-                .with_microblock_mask(
-                    archived.microblock_layers,
-                    archived.microblock_transient,
-                );
-                (index, cell)
-            })
+            .zip(self.cells.iter().copied())
+            .map(|(index, palette_index)| (index, self.palette[palette_index as usize]))
     }
 
     pub(crate) fn layer_entries(
