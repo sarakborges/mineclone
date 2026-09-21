@@ -19,7 +19,9 @@ use super::super::{
     block_face::BlockFace,
     cell::VoxelCell,
     mesh_buffer::VoxelMeshBuffer,
-    mesh_lighting::{face_lighting, push_lit_quad},
+    mesh_lighting::{
+        ChunkLightingCache, face_lighting_with_cache, push_lit_quad,
+    },
     microblock::{MICROBLOCK_EDGE, MicroblockMask, occupied_cell},
     orientation::{orientation_rotation, source_face_for_oriented_face},
     read::VoxelRead,
@@ -139,6 +141,7 @@ pub(super) fn material_buffer<'buffer, 'definition>(
 
 pub(super) struct MicroSurface<'a, W: VoxelRead + ?Sized> {
     pub(super) world: &'a W,
+    pub(super) lighting_cache: Option<&'a ChunkLightingCache>,
     pub(super) cell: VoxelCell,
     pub(super) block: &'a BlockDefinition,
     pub(super) world_voxel: IVec3,
@@ -156,7 +159,13 @@ pub(super) fn emit_sculpted_faces<'a, W: VoxelRead + ?Sized>(
     let shape = MicroblockMask::from_cell(surface.cell);
     for face in BlockFace::ALL {
         let lighting =
-            face_lighting(surface.world, surface.world_voxel, face, surface.block_srgb);
+            face_lighting_with_cache(
+                surface.lighting_cache,
+                surface.world,
+                surface.world_voxel,
+                face,
+                surface.block_srgb,
+            );
         for depth in 0..EDGE {
             let mut visible = [false; EDGE * EDGE];
             for v in 0..EDGE {
@@ -218,7 +227,13 @@ pub(super) fn emit_neighbor_openings<'a, W: VoxelRead + ?Sized>(
         }
     }
     let lighting =
-        face_lighting(surface.world, surface.world_voxel, face, surface.block_srgb);
+        face_lighting_with_cache(
+                surface.lighting_cache,
+                surface.world,
+                surface.world_voxel,
+                face,
+                surface.block_srgb,
+            );
     emit_rectangles(
         surface,
         buffers,
