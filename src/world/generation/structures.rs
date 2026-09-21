@@ -164,6 +164,91 @@ pub(crate) fn structure_candidate_member_hash(
     structure_member_hash(world_seed, biome_id, structure_reference, anchor)
 }
 
+pub(crate) fn structure_candidate_probe(
+    biome_id: &str,
+    placement_id: &str,
+    target_reference: &str,
+    placement_anchor: IVec2,
+    context: &ChunkGenerationContext<'_>,
+) -> Option<IVec2> {
+    if let Some(set) = context.structure_sets.get(placement_id) {
+        if context
+            .biome_field
+            .sample_surface(placement_anchor.as_vec2() + Vec2::splat(0.5))
+            .primary_id
+            != biome_id
+        {
+            return None;
+        }
+
+        let pieces = resolve_set_pieces(
+            context.biome_field.seed(),
+            set,
+            placement_anchor,
+            context.structures,
+            |structure, rotation, anchor| {
+                context.feature_fields.structure_origin_y(
+                    &structure.id,
+                    rotation,
+                    anchor,
+                    || {
+                        let origin_y =
+                            compute_structure_origin_y(anchor, structure, rotation, context)?;
+                        candidate_satisfies_restrictions(
+                            biome_id,
+                            structure,
+                            rotation,
+                            anchor,
+                            origin_y,
+                            context,
+                        )
+                        .then_some(origin_y)
+                    },
+                )
+            },
+        )?;
+
+        let piece = if target_reference == placement_id {
+            pieces.first()?
+        } else {
+            pieces.iter().find(|piece| {
+                context
+                    .structures
+                    .reference_contains_structure(target_reference, &piece.structure.id)
+            })?
+        };
+        let offset = piece
+            .structure
+            .horizontal_footprint_for_rotation(piece.rotation)
+            .first()
+            .copied()?;
+        return Some(piece.anchor + offset);
+    }
+
+    let member_hash = structure_member_hash(
+        context.biome_field.seed(),
+        biome_id,
+        placement_id,
+        placement_anchor,
+    );
+    let structure = context
+        .structures
+        .select_for_reference(placement_id, member_hash)?;
+    if placement_id != target_reference
+        && !context
+            .structures
+            .reference_contains_structure(target_reference, &structure.id)
+    {
+        return None;
+    }
+    let rotation = structure.rotation_for_hash(member_hash);
+    let offset = structure
+        .horizontal_footprint_for_rotation(rotation)
+        .first()
+        .copied()?;
+    Some(placement_anchor + offset)
+}
+
 pub(crate) fn located_structure_origins_in_chunk(
     horizontal_chunk: IVec2,
     structure_id: &str,
