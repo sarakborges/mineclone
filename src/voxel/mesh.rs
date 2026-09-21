@@ -11,7 +11,7 @@ use crate::{
 };
 
 use self::{
-    geometry::{face_geometry, is_face_exposed, orient_face_geometry},
+    geometry::{face_geometry, is_face_exposed_against_neighbor, orient_face_geometry},
     micro_mesh::{
         MicroMeshBuffers, MicroSurface, emit_neighbor_openings, emit_sculpted_faces,
         material_buffer, occludes,
@@ -187,8 +187,14 @@ where
                             } else {
                                 source_face_for_oriented_face(face, cell.orientation)
                             };
-                            let partial_occluder = world
-                                .cell_at(world_voxel + face.offset())
+                            let neighbor_cell = face_neighbor_cell(
+                                world,
+                                chunk,
+                                local_voxel,
+                                world_voxel,
+                                face,
+                            );
+                            let partial_occluder = neighbor_cell
                                 .filter(|neighbor| MicroblockMask::is_modified(*neighbor))
                                 .filter(|neighbor| {
                                     let definition = block_lookup.get(neighbor.block_id);
@@ -201,13 +207,13 @@ where
                                 });
 
                             if partial_occluder.is_none()
-                                && !is_face_exposed(
-                                    world,
+                                && !is_face_exposed_against_neighbor(
                                     &mut block_lookup,
                                     cell.block_id,
                                     block_is_transparent,
                                     world_voxel,
                                     face,
+                                    neighbor_cell,
                                 )
                             {
                                 continue;
@@ -404,6 +410,27 @@ fn lighting_is_uniform(lighting: FaceLighting) -> bool {
         && lighting.ambient_occlusion[1..]
             .iter()
             .all(|value| *value == lighting.ambient_occlusion[0])
+}
+
+fn face_neighbor_cell<W: VoxelRead + ?Sized>(
+    world: &W,
+    chunk: &VoxelChunk,
+    local_voxel: IVec3,
+    world_voxel: IVec3,
+    face: BlockFace,
+) -> Option<VoxelCell> {
+    let local = local_voxel + face.offset();
+    if local.x >= 0
+        && local.y >= 0
+        && local.z >= 0
+        && local.x < CHUNK_SIZE as i32
+        && local.y < CHUNK_SIZE as i32
+        && local.z < CHUNK_SIZE as i32
+    {
+        chunk.cell_at(local.x, local.y, local.z)
+    } else {
+        world.cell_at(world_voxel + face.offset())
+    }
 }
 
 fn face_cell(face: BlockFace, depth: usize, u: usize, v: usize) -> [usize; 3] {
