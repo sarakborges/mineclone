@@ -12,6 +12,7 @@ use crate::{
     },
 };
 
+use super::ChunkTerrainBatch;
 use super::super::{
     block_face::BlockFace,
     cell::VoxelCell,
@@ -24,17 +25,22 @@ use super::super::{
 };
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
-pub(super) struct MaterialBatchKey<'a> {
-    layers: &'a [BlockTextureLayer],
-    alpha_cutoff: Option<u32>,
-    alpha_blend: bool,
-    casts_shadow: bool,
+pub(super) enum MaterialBatchKey<'a> {
+    Array {
+        alpha_cutoff: Option<u32>,
+        alpha_blend: bool,
+        casts_shadow: bool,
+    },
+    Legacy {
+        layers: &'a [BlockTextureLayer],
+        alpha_cutoff: Option<u32>,
+        alpha_blend: bool,
+        casts_shadow: bool,
+    },
 }
 
 pub(super) struct MaterialMeshBuffer {
-    pub(super) block_id: &'static str,
-    pub(super) face: BlockFace,
-    pub(super) casts_shadow: bool,
+    pub(super) batch: ChunkTerrainBatch,
     pub(super) buffer: VoxelMeshBuffer,
 }
 
@@ -47,18 +53,41 @@ pub(super) fn material_buffer<'buffer, 'definition>(
     block: &'definition BlockDefinition,
     face: BlockFace,
 ) -> &'buffer mut VoxelMeshBuffer {
-    let key = MaterialBatchKey {
-        layers: block_face_texture_layers(face, block),
-        alpha_cutoff: block.alpha_cutoff.map(f32::to_bits),
-        alpha_blend: block.alpha_blend,
-        casts_shadow: block.casts_shadow,
+    let layers = block_face_texture_layers(face, block);
+    let alpha_cutoff = block.alpha_cutoff.map(f32::to_bits);
+    let (key, batch) = if layers.len() <= 2 {
+        (
+            MaterialBatchKey::Array {
+                alpha_cutoff,
+                alpha_blend: block.alpha_blend,
+                casts_shadow: block.casts_shadow,
+            },
+            ChunkTerrainBatch::Array {
+                alpha_cutoff,
+                alpha_blend: block.alpha_blend,
+                casts_shadow: block.casts_shadow,
+            },
+        )
+    } else {
+        (
+            MaterialBatchKey::Legacy {
+                layers,
+                alpha_cutoff,
+                alpha_blend: block.alpha_blend,
+                casts_shadow: block.casts_shadow,
+            },
+            ChunkTerrainBatch::Legacy {
+                block_id,
+                face,
+                casts_shadow: block.casts_shadow,
+            },
+        )
     };
+
     &mut buffers
         .entry(key)
         .or_insert_with(|| MaterialMeshBuffer {
-            block_id,
-            face,
-            casts_shadow: block.casts_shadow,
+            batch,
             buffer: VoxelMeshBuffer::default(),
         })
         .buffer
