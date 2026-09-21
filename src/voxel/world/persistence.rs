@@ -1,7 +1,7 @@
 use std::{io, sync::Arc};
 
 use crate::content::{block::BlockRegistry, fluid::FluidRegistry, layer::LayerRegistry};
-use crate::voxel::{chunk_archive::ArchivedChunk, chunk_disk::DiskChunk};
+use crate::voxel::chunk_disk::DiskChunk;
 
 use super::VoxelWorld;
 
