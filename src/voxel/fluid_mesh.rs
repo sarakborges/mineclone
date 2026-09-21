@@ -63,17 +63,12 @@ where
     let chunk_size = CHUNK_SIZE as i32;
     let chunk_origin = chunk_coord * chunk_size;
 
-    for y in 0..CHUNK_SIZE {
-        for z in 0..CHUNK_SIZE {
-            for x in 0..CHUNK_SIZE {
-                if !meshlets.contains_voxel(x, y, z) {
-                    continue;
-                }
-                let Some(cell) = chunk.fluid_at(x as i32, y as i32, z as i32) else {
-                    continue;
-                };
+    meshlets.for_each_voxel(|x, y, z| {
+        let Some(cell) = chunk.fluid_at(x as i32, y as i32, z as i32) else {
+            return;
+        };
 
-                let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
+        let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
                 let exposed = BlockFace::ALL.map(|face| {
                     if face == BlockFace::Bottom && world_voxel.y <= 0 {
                         return false;
@@ -123,7 +118,6 @@ where
                             neighbor_mask,
                             tint,
                             lighting,
-                            0.0,
                         );
                     } else {
                         push_lit_quad(
@@ -133,12 +127,11 @@ where
                             VOXEL_FACE_UVS,
                             tint,
                             lighting,
+                            0.0,
                         );
                     }
                 }
-            }
-        }
-    }
+    });
 
     let mut meshes = buffers
         .into_iter()
