@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 13 — 2026-09-21:** `EntityHealth::damage` agora rejeita amount não finito no boundary compartilhado de health (`2b25bfd5cdc14ada1580aa67e4da19cb551c2dcb`). Ataques atuais já validam damage finito, mas o componente é a autoridade final e não deve depender de todos os callers futuros preservarem a invariante. **Pendências:** `DimensionEntityCounts::rebuild` ainda clona IDs de todas as creatures a cada natural-spawn tick; migrar para contagem incremental exige integrar spawn/restore/death/despawn e ficou registrado como refactor arquitetural, não aplicado parcialmente. **Próximo passo:** revisar combat/collision e world mutation APIs por invariantes equivalentes; depois consolidar checkpoint C/version.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 12 — 2026-09-21:** cross-registry e dead fallback. Dimensions agora validam referências para `dayNightCycle` e `sky` no startup, junto de biome/hydrology (`3b4ed477e72b1819499fbec4cf5cf1fbbe83cedf`). Removido fallback hardcoded e agora inalcançável de `PlayerDefinition` no loader; `LoadedContent::default()` é suficiente porque exatamente um `player.json` é obrigatório (`697c167ef443ad1e34d22661786e5350bae47a58`). **Pendências:** CI/runtime QA pendentes. **Próximo passo:** consultar CI/status atual e, se não houver execução visível, inspecionar workflow/config e continuar auditoria estática em world/render/entity.
 
 
