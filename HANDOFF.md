@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 22 — 2026-09-21:** corrigido vazamento de state entre worlds no subsistema de creatures. Ao entrar em `StartingScreen`, `PendingCreatureRestores` e `TintedCreatureMaterials` agora são resetados. Isso impede restores de criaturas ainda não carregadas de um world anterior aparecerem em world novo (new-world flow não sobrescrevia esse Resource) e solta handles do cache de materiais variantes entre sessões. Commit: `fb23e507269772dcfb9341f352f6016cae9ed4b6`. **Pendências:** natural-spawn usa `Local<(timer, rng)>`, que também persiste entre sessões; avaliar migrar para Resource resetável se RNG por sessão for contrato desejado. **Próximo passo:** revisar Resources/Locals persistentes dos demais gameplay systems por leakage equivalente.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — checkpoint D — VERSION 0.50.10 — 2026-09-21:** bloco de arithmetic/boundaries consolidado. Inclui overflow-safe day/night duration sum (`1e07cd6f`), streaming volume/retention/render radius em i64 + checked additions (`534c6896`, `21166770`, `194cb85d`), square-ring search bounded (`45c85021`) e warp target addition bounded (`9a2c7f94`). Bump: `9f3973068dd8db4dbb5fc11fc55f55e56ca65d71`. **Pendências:** CI de push segue não observável pelas APIs disponíveis; runtime QA não executado. **Próximo passo:** bloco E — natural spawning/entity counts, creature lifecycle/material caches e event/state cleanup; depois revisar UI design-system e localization-facing state.
 
 
