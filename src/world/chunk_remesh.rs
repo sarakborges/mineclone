@@ -4,7 +4,11 @@ use std::time::{Duration, Instant};
 
 use bevy::{platform::collections::HashMap, prelude::*};
 
-use crate::voxel::{mesh_snapshot::ChunkMeshSnapshot, world::VoxelWorld};
+use crate::voxel::{
+    mesh_snapshot::ChunkMeshSnapshot,
+    meshlet::ChunkMeshletMask,
+    world::VoxelWorld,
+};
 
 pub(crate) use self::queue::ChunkRemeshQueue;
 
@@ -13,7 +17,8 @@ use super::{
         ChunkRemeshTaskKind, ChunkRemeshTaskMeshes, ChunkRemeshTasks,
     },
     chunk_rendering::{
-        ChunkRenderPool, apply_built_chunk_fluid_meshes, apply_built_chunk_geometry_meshes,
+        ChunkRenderPool, apply_built_chunk_fluid_meshlets,
+        apply_built_chunk_geometry_meshlets,
     },
     chunk_system_params::{ChunkContent, ChunkRenderer},
     work_budget::{FrameWorkBudget, WorldFrameWorkBudget},
@@ -31,7 +36,7 @@ pub(super) fn process_chunk_remesh_queue(
     mut queue: ResMut<ChunkRemeshQueue>,
     mut tasks: ResMut<ChunkRemeshTasks>,
     frame_budget: Res<WorldFrameWorkBudget>,
-    mut deferred: Local<Vec<(IVec3, ChunkRemeshTaskKind)>>,
+    mut deferred: Local<Vec<(IVec3, ChunkRemeshTaskKind, ChunkMeshletMask)>>,
 ) {
     tasks.sync_snapshot(&content);
 
@@ -85,23 +90,27 @@ fn collect_completed_remesh_tasks(
 
         let coord = completed.coord;
         let output = completed.output;
+        let kind = output.kind;
+        let meshlets = output.meshlets;
         if !renderer.pool.contains(coord) || world.chunk(coord).is_none() {
             continue;
         }
         if completed.revision != current_revision
             || !output.dependencies.content_is_current(world)
         {
-            queue.enqueue_task_priority(coord, output.kind);
+            queue.enqueue_task_meshlets_priority(coord, kind, meshlets);
             continue;
         }
 
         let lighting_is_current = output.dependencies.lighting_is_current(tasks);
         if !lighting_is_current {
-            match output.kind {
+            match kind {
                 ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
                     queue.enqueue_task_priority(coord, ChunkRemeshTaskKind::Lighting);
                 }
-                ChunkRemeshTaskKind::Fluid => queue.enqueue_fluid_priority(coord),
+                ChunkRemeshTaskKind::Fluid => {
+                    queue.enqueue_task_meshlets_priority(coord, kind, meshlets);
+                }
             }
             continue;
         }
@@ -111,27 +120,32 @@ fn collect_completed_remesh_tasks(
             &renderer.terrain_materials,
             &renderer.fluid_materials,
         );
-        match output.meshes {
+        let applied = match output.meshes {
             ChunkRemeshTaskMeshes::Geometry(meshes) => {
-                apply_built_chunk_geometry_meshes(
+                apply_built_chunk_geometry_meshlets(
                     &mut renderer.commands,
                     &mut renderer.meshes,
                     &mut renderer.pool,
                     coord,
                     meshes,
+                    meshlets,
                     &render_context,
-                );
+                )
             }
             ChunkRemeshTaskMeshes::Fluid(meshes) => {
-                apply_built_chunk_fluid_meshes(
+                apply_built_chunk_fluid_meshlets(
                     &mut renderer.commands,
                     &mut renderer.meshes,
                     &mut renderer.pool,
                     coord,
                     meshes,
+                    meshlets,
                     &render_context,
-                );
+                )
             }
+        };
+        if !applied {
+            queue.enqueue_task_priority(coord, kind);
         }
     }
 }
@@ -141,7 +155,7 @@ fn dispatch_remesh_tasks(
     render_pool: &ChunkRenderPool,
     queue: &mut ChunkRemeshQueue,
     tasks: &mut ChunkRemeshTasks,
-    deferred: &mut Vec<(IVec3, ChunkRemeshTaskKind)>,
+    deferred: &mut Vec<(IVec3, ChunkRemeshTaskKind, ChunkMeshletMask)>,
     deadline: Instant,
 ) {
     let mut budget = FrameWorkBudget::new(REMESH_TASK_DISPATCH_BUDGET, 1)
@@ -161,14 +175,14 @@ fn dispatch_remesh_tasks(
             break;
         }
 
-        let Some((coord, kind)) =
+        let Some((coord, kind, meshlets)) =
             queue.pop_renderable_background(render_pool, allow_terrain, allow_fluid)
         else {
             break;
         };
 
         if tasks.contains(coord, kind) {
-            deferred.push((coord, kind));
+            deferred.push((coord, kind, meshlets));
             continue;
         }
         let snapshot = if let Some(existing) = snapshots.get(&coord) {
@@ -184,14 +198,14 @@ fn dispatch_remesh_tasks(
             snapshots.insert(coord, captured.clone());
             captured
         };
-        if !tasks.schedule(coord, kind, snapshot) {
-            deferred.push((coord, kind));
+        if !tasks.schedule(coord, kind, meshlets, snapshot) {
+            deferred.push((coord, kind, meshlets));
             continue;
         }
         budget.record(1);
     }
 
-    for (coord, kind) in deferred.drain(..).rev() {
-        queue.enqueue_task_priority(coord, kind);
+    for (coord, kind, meshlets) in deferred.drain(..).rev() {
+        queue.enqueue_task_meshlets_priority(coord, kind, meshlets);
     }
 }
