@@ -1,6 +1,7 @@
 pub(crate) mod biome;
 pub(crate) mod biome_field;
 pub(crate) mod cave_connectivity;
+mod chunk_async_work;
 mod chunk_generation_tasks;
 mod chunk_mesh_tasks;
 pub(crate) mod chunk_remesh;
@@ -54,6 +55,7 @@ use crate::{
 };
 use biome::{CurrentBiome, track_current_biome};
 use biome_field::BiomeField;
+use chunk_async_work::ChunkAsyncWorkLimiter;
 use chunk_generation_tasks::ChunkGenerationTasks;
 use chunk_mesh_tasks::ChunkMeshTasks;
 use chunk_remesh::{ChunkRemeshQueue, process_chunk_remesh_queue};
@@ -109,6 +111,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<WorldTickClock>()
             .init_resource::<RenderDistanceSettings>()
             .init_resource::<ChunkStreamingState>()
+            .init_resource::<ChunkAsyncWorkLimiter>()
             .init_resource::<ChunkGenerationTasks>()
             .init_resource::<ChunkMeshTasks>()
             .init_resource::<ChunkRemeshTasks>()
