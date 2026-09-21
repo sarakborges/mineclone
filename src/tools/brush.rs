@@ -6,6 +6,7 @@ use crate::{
     app::{
         game_state::GameState,
         pause_state::PauseState,
+        resource_systems::reset_resource,
         state_systems::{reset_next_state, reset_next_state_on_escape},
     },
     content::{
@@ -60,6 +61,10 @@ impl Plugin for BrushPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<BrushPaletteState>()
             .init_resource::<BrushMode>()
+            .add_systems(
+                OnEnter(GameState::Gameplay),
+                reset_resource::<BrushMode>,
+            )
             .add_systems(
                 Update,
                 handle_brush_use
