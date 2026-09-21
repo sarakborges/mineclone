@@ -90,5 +90,11 @@
   "brush.palette.clear": "Remover tinta",
   "worldSelection.openSavesFolder": "Abrir Pasta dos Saves",
   "worldSelection.openSavesFolderError": "Não foi possível abrir a pasta dos saves",
-  "hud.layers": "Camadas"
+  "hud.layers": "Camadas",
+  "worldSelection.seed": "Semente",
+  "worldSelection.daysPassed": "Dias Passados",
+  "worldSelection.dimension": "Dimensão",
+  "worldSelection.coordinates": "Coordenadas",
+  "worldSelection.biome": "Bioma Atual",
+  "worldSelection.unknown": "Indisponível"
 }
