@@ -48,11 +48,21 @@ impl SaveRegistries<'_> {
                     })
                 })
         });
-        validate_playable(snapshot, duration, spawn_biome_valid, |id| {
-            self.blocks.get(id).is_some()
-                || self.layers.get(id).is_some()
-                || self.tools.get(id).is_some()
-        })?;
+        let current_biome_valid = snapshot
+            .current_biome
+            .as_deref()
+            .is_none_or(|biome_id| self.biomes.get(biome_id).is_some());
+        validate_playable(
+            snapshot,
+            duration,
+            spawn_biome_valid,
+            current_biome_valid,
+            |id| {
+                self.blocks.get(id).is_some()
+                    || self.layers.get(id).is_some()
+                    || self.tools.get(id).is_some()
+            },
+        )?;
         PendingFluidUpdates::from_saved(&snapshot.fluid_updates, self.fluids)?;
         for creature in &snapshot.creatures {
             creature.validate(self.creatures)?;
@@ -68,6 +78,11 @@ impl SaveRegistries<'_> {
             .chain(self.layers.iter().map(|layer| layer.id.clone()))
             .chain(self.tools.iter().map(|tool| tool.id.clone()))
             .collect();
+        let valid_biomes = self
+            .biomes
+            .iter()
+            .map(|biome| biome.id.clone())
+            .collect::<HashSet<_>>();
         let day_lengths = self
             .dimensions
             .iter()
@@ -106,6 +121,7 @@ impl SaveRegistries<'_> {
             fluids: self.fluids.clone(),
             creatures,
             valid_items,
+            valid_biomes,
             day_lengths,
             valid_spawn_biomes,
         }
@@ -118,6 +134,7 @@ pub(crate) struct PruneRegistries {
     pub(super) fluids: FluidRegistry,
     creatures: CreatureRegistry,
     valid_items: HashSet<String>,
+    valid_biomes: HashSet<String>,
     day_lengths: HashMap<String, u64>,
     valid_spawn_biomes: HashMap<String, HashSet<String>>,
 }
@@ -129,10 +146,15 @@ impl PruneRegistries {
                 .get(&snapshot.dimension_id)
                 .is_some_and(|biomes| biomes.contains(biome_id))
         });
+        let current_biome_valid = snapshot
+            .current_biome
+            .as_deref()
+            .is_none_or(|biome_id| self.valid_biomes.contains(biome_id));
         validate_playable(
             snapshot,
             self.day_lengths.get(&snapshot.dimension_id).copied(),
             spawn_biome_valid,
+            current_biome_valid,
             |id| self.valid_items.contains(id),
         )?;
         PendingFluidUpdates::from_saved(&snapshot.fluid_updates, &self.fluids)?;
@@ -147,6 +169,7 @@ fn validate_playable(
     snapshot: &WorldSnapshot,
     duration: Option<u64>,
     spawn_biome_valid: bool,
+    current_biome_valid: bool,
     valid_item: impl Fn(&str) -> bool,
 ) -> io::Result<()> {
     if duration.is_none_or(|ticks| ticks == 0 || snapshot.tick_in_day >= ticks) {
@@ -154,6 +177,9 @@ fn validate_playable(
     }
     if !spawn_biome_valid {
         return Err(invalid_data("saved spawn biome is invalid for this dimension"));
+    }
+    if !current_biome_valid {
+        return Err(invalid_data("saved current biome is missing from content"));
     }
     if !is_valid_biome_size_multiplier(snapshot.biome_size_multiplier) {
         return Err(invalid_data("saved biome size multiplier is invalid"));
