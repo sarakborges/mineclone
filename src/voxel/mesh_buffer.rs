@@ -5,7 +5,11 @@ use bevy::{
     render::render_resource::{PrimitiveTopology, VertexFormat},
 };
 
-use super::{meshlet::CHUNK_MESHLET_EDGE, quad::quad_triangle_indices};
+use super::{
+    chunk::CHUNK_SIZE,
+    meshlet::CHUNK_MESHLET_EDGE,
+    quad::quad_triangle_indices,
+};
 
 /// Keep Bevy's built-in color attribute ID so the standard material pipeline
 /// still defines VERTEX_COLORS, but store voxel lighting in normalized bytes.
@@ -38,6 +42,7 @@ impl VoxelMeshBuffer {
         let base = self.positions.len() as u32;
 
         let packed_tint_normal = encode_tint_and_normal(quad.tint, quad.normal);
+        let meshlet_index = quad_meshlet_index(quad.vertices, quad.normal);
         self.positions.extend(quad.vertices);
         self.uvs.extend(std::array::from_fn(|index| {
             encode_material_uv(quad.uvs[index], quad.light_uvs[index][1])
@@ -46,6 +51,7 @@ impl VoxelMeshBuffer {
             encode_vertex_payload(
                 packed_tint_normal,
                 quad.light_uvs[index][0],
+                meshlet_index,
             )
         }));
         self.colors.extend(quad.colors.map(encode_voxel_light));
@@ -109,9 +115,40 @@ fn encode_tint_and_normal(tint: [f32; 3], normal: [f32; 3]) -> u32 {
     packed
 }
 
-fn encode_vertex_payload(packed_tint_normal: u32, sky_light: f32) -> u32 {
+fn encode_vertex_payload(
+    packed_tint_normal: u32,
+    sky_light: f32,
+    meshlet_index: u32,
+) -> u32 {
     let sky = (sky_light.clamp(0.0, 1.0) * 15.0).round() as u32;
-    packed_tint_normal | (sky << 24)
+    debug_assert!(meshlet_index < 8);
+    packed_tint_normal | (sky << 24) | (meshlet_index << 28)
+}
+
+fn quad_meshlet_index(vertices: [[f32; 3]; 4], normal: [f32; 3]) -> u32 {
+    let center = vertices
+        .into_iter()
+        .map(Vec3::from_array)
+        .sum::<Vec3>()
+        * 0.25;
+    let source = (center - Vec3::from_array(normal) * 0.01)
+        .floor()
+        .as_ivec3();
+    debug_assert!(
+        source.x >= 0
+            && source.y >= 0
+            && source.z >= 0
+            && source.x < CHUNK_SIZE as i32
+            && source.y < CHUNK_SIZE as i32
+            && source.z < CHUNK_SIZE as i32,
+        "voxel quad source must remain inside its chunk: {source:?}"
+    );
+
+    let x = source.x.clamp(0, CHUNK_SIZE as i32 - 1) as usize / CHUNK_MESHLET_EDGE;
+    let y = source.y.clamp(0, CHUNK_SIZE as i32 - 1) as usize / CHUNK_MESHLET_EDGE;
+    let z = source.z.clamp(0, CHUNK_SIZE as i32 - 1) as usize / CHUNK_MESHLET_EDGE;
+    let meshlets_per_axis = CHUNK_SIZE / CHUNK_MESHLET_EDGE;
+    (x + z * meshlets_per_axis + y * meshlets_per_axis * meshlets_per_axis) as u32
 }
 
 fn axis_normal_code(normal: [f32; 3]) -> u32 {
