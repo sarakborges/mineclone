@@ -102,7 +102,8 @@ impl ChunkStreamingState {
         horizontal_radius: i32,
     ) -> Option<IVec3> {
         let center = center.xz();
-        let radius_squared = horizontal_radius.max(0).pow(2);
+        let radius = i64::from(horizontal_radius.max(0));
+        let radius_squared = radius * radius;
         let scan_key = RetiredScanKey {
             queue_revision: self.retired.revision(),
             selection_revision: self.selection_revision,
@@ -120,8 +121,9 @@ impl ChunkStreamingState {
                 return false;
             }
 
-            let delta = coord.xz() - center;
-            delta.length_squared() > radius_squared
+            let delta_x = i64::from(coord.x) - i64::from(center.x);
+            let delta_z = i64::from(coord.z) - i64::from(center.y);
+            delta_x * delta_x + delta_z * delta_z > radius_squared
         });
         if coord.is_some() {
             self.retired_scan_miss = None;
@@ -352,8 +354,10 @@ fn chunk_is_inside_render_radius(center: IVec3, coord: IVec3, horizontal_radius:
         return false;
     }
 
-    let delta = coord.xz() - center.xz();
-    delta.length_squared() <= horizontal_radius * horizontal_radius
+    let delta_x = i64::from(coord.x) - i64::from(center.x);
+    let delta_z = i64::from(coord.z) - i64::from(center.z);
+    let radius = i64::from(horizontal_radius);
+    delta_x * delta_x + delta_z * delta_z <= radius * radius
 }
 
 struct QueueRebuildContext<'a> {
