@@ -203,11 +203,6 @@ impl BlockRegistry {
             "block {} category cannot be empty",
             definition.id
         );
-        assert!(
-            !definition.orientations.is_empty(),
-            "block {} must define at least one orientation",
-            definition.id
-        );
         definition.name.validate(&format!("block {} name", definition.id));
         assert!(
             definition.light_emission <= MAX_LIGHT_DAMPENING,
@@ -299,4 +294,45 @@ fn default_light_dampening() -> u8 {
 
 fn default_casts_shadow() -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn localized_name() -> LocalizedText {
+        serde_json::from_str(
+            r#"{"english":"Test","portuguese_brazil":"Teste","spanish":"Prueba"}"#,
+        )
+        .expect("test localization must parse")
+    }
+
+    #[test]
+    fn blocks_without_orientation_list_use_default_y_orientation() {
+        let mut registry = BlockRegistry::default();
+        registry.insert(BlockDefinition {
+            id: "asteria:test".to_owned(),
+            name: localized_name(),
+            category: "test".to_owned(),
+            tags: Vec::new(),
+            tint: BlockTint::None,
+            textures: BlockTextures::default(),
+            rotate_texture: BlockTextureRotations::default(),
+            orientations: Vec::new(),
+            secondary_properties: Vec::new(),
+            alpha_cutoff: None,
+            alpha_blend: false,
+            light_emission: 0,
+            light_dampening: default_light_dampening(),
+            casts_shadow: default_casts_shadow(),
+        });
+
+        let block = registry.get("asteria:test").expect("block must be registered");
+        assert_eq!(block.default_orientation(), BlockOrientation::Y);
+        assert!(!block.is_rotatable());
+        assert_eq!(
+            block.next_orientation(BlockOrientation::X),
+            BlockOrientation::Y
+        );
+    }
 }
