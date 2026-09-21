@@ -196,6 +196,17 @@ pub struct BlockRegistry {
 
 impl BlockRegistry {
     pub fn insert(&mut self, definition: BlockDefinition) {
+        assert!(!definition.id.trim().is_empty(), "block id cannot be empty");
+        assert!(
+            !definition.category.trim().is_empty(),
+            "block {} category cannot be empty",
+            definition.id
+        );
+        assert!(
+            !definition.orientations.is_empty(),
+            "block {} must define at least one orientation",
+            definition.id
+        );
         definition.name.validate(&format!("block {} name", definition.id));
         assert!(
             definition.light_emission <= MAX_LIGHT_DAMPENING,
