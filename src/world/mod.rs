@@ -55,7 +55,9 @@ use crate::{
 };
 use biome::{CurrentBiome, track_current_biome};
 use biome_field::BiomeField;
-use chunk_async_work::ChunkAsyncWorkLimiter;
+use chunk_async_work::{
+    ChunkAsyncWorkLimiter, reset_chunk_async_work_limit, tune_chunk_async_work,
+};
 use chunk_generation_tasks::ChunkGenerationTasks;
 use chunk_mesh_tasks::ChunkMeshTasks;
 use chunk_remesh::{ChunkRemeshQueue, process_chunk_remesh_queue};
@@ -134,6 +136,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<PendingLightingUpdates>,
                     reset_resource::<PendingFluidUpdates>,
                     reset_resource::<PendingWarp>,
+                    reset_chunk_async_work_limit,
                     prepare_world_session,
                     begin_world_loading,
                 )
@@ -149,6 +152,7 @@ impl Plugin for WorldPlugin {
                     reset_resource::<ChunkUnloadState>,
                     reset_resource::<WorldTickClock>,
                     reset_resource::<PendingWarp>,
+                    reset_chunk_async_work_limit,
                     restore_loaded_clock,
                     reseed_loaded_fluid_frontiers,
                 )
@@ -173,6 +177,7 @@ impl Plugin for WorldPlugin {
                 PreUpdate,
                 (
                     begin_world_frame_work_budget,
+                    tune_chunk_async_work,
                     advance_world_ticks.in_set(WorldTickSet),
                 )
                     .chain()
