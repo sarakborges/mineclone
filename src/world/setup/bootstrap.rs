@@ -22,6 +22,7 @@ use crate::world::{
     WorldLoadMode,
     biome_field::BiomeField,
     chunk_rendering::{FluidMaterials, TerrainMaterials},
+    generation::{fluids::authored_surface_fluid_id_for_position},
     generation_region::generation_region_coord,
     hydrology::HydrologySurfaceSample,
     render_distance::{RenderDistanceSettings, chunk_coords_in_volume},
@@ -274,22 +275,22 @@ fn find_initial_spawn_column(
                 return None;
             }
 
-            (!spawn_column_has_water(candidate, dimension, biomes, biome_field, feature_fields))
+            (!spawn_column_has_surface_fluid(candidate, dimension, biomes, biome_field, feature_fields))
                 .then_some(candidate)
         },
     )
     .unwrap_or_else(|| {
         if restrict_to_forced_region {
-            panic!("could not find a dry spawn column inside the forced initial biome region")
+            panic!("could not find a fluid-free spawn column inside the forced initial biome region")
         }
         panic!(
-            "could not find a dry spawn column within {} blocks",
+            "could not find a fluid-free spawn column within {} blocks",
             SPAWN_SEARCH_RADIUS_STEPS * SPAWN_SEARCH_STEP_BLOCKS
         )
     })
 }
 
-fn spawn_column_has_water(
+fn spawn_column_has_surface_fluid(
     column: IVec2,
     dimension: &DimensionDefinition,
     biomes: &BiomeRegistry,
@@ -324,6 +325,10 @@ fn spawn_column_has_water(
             }
         })
     });
+    if authored_surface_fluid_id_for_position(column, dimension, biomes, biome_field).is_some() {
+        return true;
+    }
+
     let position = column.as_vec2() + Vec2::splat(0.5);
     let surface_height = surface_height(column, dimension, biomes, biome_field) as f32;
 
