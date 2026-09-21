@@ -123,6 +123,7 @@ where
                             neighbor_mask,
                             tint,
                             lighting,
+                            0.0,
                         );
                     } else {
                         push_lit_quad(
@@ -205,7 +206,7 @@ fn emit_fluid_openings(
                 let local = Vec3::new(vertex[0] - x0, vertex[1] - y0, vertex[2] - z0);
                 fluid_uv(face, local)
             });
-            push_lit_quad(buffer, vertices, face.normal(), uvs, tint, lighting);
+            push_lit_quad(buffer, vertices, face.normal(), uvs, tint, lighting, 0.0);
         }
     }
 }
