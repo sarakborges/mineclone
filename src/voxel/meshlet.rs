@@ -66,6 +66,11 @@ impl ChunkMeshletMask {
         mask
     }
 
+    pub(crate) fn contains_index(self, index: usize) -> bool {
+        debug_assert!(index < MESHLET_COUNT);
+        self.0 & (1 << index) != 0
+    }
+
     pub(crate) fn contains_voxel(self, x: usize, y: usize, z: usize) -> bool {
         let meshlet_x = x / CHUNK_MESHLET_EDGE;
         let meshlet_y = y / CHUNK_MESHLET_EDGE;
