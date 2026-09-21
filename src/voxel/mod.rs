@@ -11,6 +11,7 @@ pub(crate) mod fluid;
 pub(crate) mod fluid_mesh;
 pub(crate) mod light;
 pub(crate) mod lighting;
+pub(crate) mod layer;
 pub(crate) mod mesh;
 pub(crate) mod mesh_buffer;
 mod mesh_lighting;

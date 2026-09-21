@@ -1,10 +1,13 @@
 use std::sync::{Arc, OnceLock};
 
-use bevy::prelude::*;
+use bevy::{platform::collections::HashMap, prelude::*};
+
+use crate::content::layer::LayerFace;
 
 use super::{
     cell::VoxelCell,
     fluid::FluidCell,
+    layer::{AttachedLayer, LayerCell, MAX_LAYERS_PER_VOXEL},
     light::{BlockLight, VoxelLight},
 };
 
@@ -37,13 +40,20 @@ fn shared_empty_fluids() -> Arc<[Option<FluidCell>]> {
     Arc::clone(EMPTY_FLUIDS.get_or_init(|| Arc::from(vec![None; CHUNK_VOLUME])))
 }
 
+fn shared_empty_layers() -> Arc<HashMap<u16, Vec<AttachedLayer>>> {
+    static EMPTY_LAYERS: OnceLock<Arc<HashMap<u16, Vec<AttachedLayer>>>> = OnceLock::new();
+    Arc::clone(EMPTY_LAYERS.get_or_init(|| Arc::new(HashMap::new())))
+}
+
 #[derive(Component, Clone)]
 pub struct VoxelChunk {
     blocks: Arc<[Option<VoxelCell>]>,
     fluids: Arc<[Option<FluidCell>]>,
+    layers: Arc<HashMap<u16, Vec<AttachedLayer>>>,
     light: Arc<[VoxelLight]>,
     block_count: usize,
     fluid_count: usize,
+    layer_count: usize,
     fluid_frontier_sources: Arc<[u64; FLUID_FRONTIER_WORDS]>,
     dynamic_fluid_cells: Arc<[u64; FLUID_FRONTIER_WORDS]>,
     boundary_content_counts: [u16; BOUNDARY_FACE_COUNT],
@@ -53,8 +63,10 @@ pub struct VoxelChunk {
 pub(crate) struct VoxelChunkContentMut<'a> {
     blocks: &'a mut [Option<VoxelCell>],
     fluids: &'a mut [Option<FluidCell>],
+    layers: &'a mut HashMap<u16, Vec<AttachedLayer>>,
     block_count: &'a mut usize,
     fluid_count: &'a mut usize,
+    layer_count: &'a mut usize,
     fluid_frontier_sources: &'a mut [u64; FLUID_FRONTIER_WORDS],
     dynamic_fluid_cells: &'a mut [u64; FLUID_FRONTIER_WORDS],
     boundary_content_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
@@ -72,7 +84,9 @@ impl VoxelChunkContentMut<'_> {
         set_block_in_storage(
             &mut *self.blocks,
             &*self.fluids,
+            &mut *self.layers,
             &mut *self.block_count,
+            &mut *self.layer_count,
             &mut *self.fluid_frontier_sources,
             &mut *self.boundary_content_counts,
             x,
@@ -80,6 +94,26 @@ impl VoxelChunkContentMut<'_> {
             z,
             block,
         );
+    }
+
+    pub(crate) fn add_layer(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        face: LayerFace,
+        layer: LayerCell,
+    ) -> bool {
+        add_layer_in_storage(
+            &*self.blocks,
+            &mut *self.layers,
+            &mut *self.layer_count,
+            x,
+            y,
+            z,
+            face,
+            layer,
+        )
     }
 
     pub(crate) fn set_fluid(
@@ -110,9 +144,11 @@ impl VoxelChunk {
         Self {
             blocks: shared_empty_blocks(),
             fluids: shared_empty_fluids(),
+            layers: shared_empty_layers(),
             light: Arc::from(vec![VoxelLight::DARK; CHUNK_VOLUME]),
             block_count: 0,
             fluid_count: 0,
+            layer_count: 0,
             fluid_frontier_sources: Arc::new([0; FLUID_FRONTIER_WORDS]),
             dynamic_fluid_cells: Arc::new([0; FLUID_FRONTIER_WORDS]),
             boundary_content_counts: [0; BOUNDARY_FACE_COUNT],
@@ -121,7 +157,7 @@ impl VoxelChunk {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.block_count == 0 && self.fluid_count == 0
+        self.block_count == 0 && self.fluid_count == 0 && self.layer_count == 0
     }
 
     pub(crate) fn has_fluid(&self) -> bool {
@@ -189,6 +225,23 @@ impl VoxelChunk {
         self.blocks[index(x as usize, y as usize, z as usize)]
     }
 
+    pub(crate) fn layers_at(&self, x: i32, y: i32, z: i32) -> &[AttachedLayer] {
+        if !in_bounds(x, y, z) {
+            return &[];
+        }
+
+        let index = index(x as usize, y as usize, z as usize) as u16;
+        self.layers.get(&index).map_or(&[], Vec::as_slice)
+    }
+
+    pub(crate) fn layer_groups(
+        &self,
+    ) -> impl Iterator<Item = (usize, &[AttachedLayer])> + '_ {
+        self.layers
+            .iter()
+            .map(|(&index, layers)| (index as usize, layers.as_slice()))
+    }
+
     pub fn fluid_at(&self, x: i32, y: i32, z: i32) -> Option<FluidCell> {
         if !in_bounds(x, y, z) {
             return None;
@@ -225,13 +278,16 @@ impl VoxelChunk {
     ) -> R {
         let blocks = Arc::make_mut(&mut self.blocks);
         let fluids = Arc::make_mut(&mut self.fluids);
+        let layers = Arc::make_mut(&mut self.layers);
         let fluid_frontier_sources = Arc::make_mut(&mut self.fluid_frontier_sources);
         let dynamic_fluid_cells = Arc::make_mut(&mut self.dynamic_fluid_cells);
         let mut content = VoxelChunkContentMut {
             blocks,
             fluids,
+            layers,
             block_count: &mut self.block_count,
             fluid_count: &mut self.fluid_count,
+            layer_count: &mut self.layer_count,
             fluid_frontier_sources,
             dynamic_fluid_cells,
             boundary_content_counts: &mut self.boundary_content_counts,
@@ -242,11 +298,14 @@ impl VoxelChunk {
 
     pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: Option<VoxelCell>) {
         let blocks = Arc::make_mut(&mut self.blocks);
+        let layers = Arc::make_mut(&mut self.layers);
         let fluid_frontier_sources = Arc::make_mut(&mut self.fluid_frontier_sources);
         set_block_in_storage(
             blocks,
             self.fluids.as_ref(),
+            layers,
             &mut self.block_count,
+            &mut self.layer_count,
             fluid_frontier_sources,
             &mut self.boundary_content_counts,
             x,
@@ -254,6 +313,39 @@ impl VoxelChunk {
             z,
             block,
         );
+    }
+
+    pub(crate) fn add_layer(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        face: LayerFace,
+        layer: LayerCell,
+    ) -> bool {
+        let layers = Arc::make_mut(&mut self.layers);
+        add_layer_in_storage(
+            self.blocks.as_ref(),
+            layers,
+            &mut self.layer_count,
+            x,
+            y,
+            z,
+            face,
+            layer,
+        )
+    }
+
+    pub(crate) fn remove_layer(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        face: LayerFace,
+        layer_id: &str,
+    ) -> bool {
+        let layers = Arc::make_mut(&mut self.layers);
+        remove_layer_in_storage(layers, &mut self.layer_count, x, y, z, face, layer_id)
     }
 
     pub(crate) fn set_fluid(&mut self, x: usize, y: usize, z: usize, fluid: Option<FluidCell>) {
@@ -332,7 +424,9 @@ impl VoxelChunk {
 fn set_block_in_storage(
     blocks: &mut [Option<VoxelCell>],
     fluids: &[Option<FluidCell>],
+    layers: &mut HashMap<u16, Vec<AttachedLayer>>,
     block_count: &mut usize,
+    layer_count: &mut usize,
     fluid_frontier_sources: &mut [u64; FLUID_FRONTIER_WORDS],
     boundary_content_counts: &mut [u16; BOUNDARY_FACE_COUNT],
     x: usize,
@@ -341,9 +435,19 @@ fn set_block_in_storage(
     block: Option<VoxelCell>,
 ) {
     let index = index(x, y, z);
-    let had_block = blocks[index].is_some();
+    let previous_block = blocks[index];
+    let had_block = previous_block.is_some();
     let had_content = had_block || fluids[index].is_some();
     let has_block = block.is_some();
+
+    if previous_block.map(|cell| cell.block_id) != block.map(|cell| cell.block_id)
+        && let Some(removed) = layers.remove(&(index as u16))
+    {
+        *layer_count = layer_count
+            .checked_sub(removed.len())
+            .expect("chunk layer count cannot underflow");
+    }
+
     let has_content = has_block || fluids[index].is_some();
 
     if had_block != has_block {
@@ -355,6 +459,72 @@ fn set_block_in_storage(
 
     blocks[index] = block;
     refresh_fluid_frontier_sources_near(blocks, fluids, fluid_frontier_sources, x, y, z);
+}
+
+fn add_layer_in_storage(
+    blocks: &[Option<VoxelCell>],
+    layers: &mut HashMap<u16, Vec<AttachedLayer>>,
+    layer_count: &mut usize,
+    x: usize,
+    y: usize,
+    z: usize,
+    face: LayerFace,
+    layer: LayerCell,
+) -> bool {
+    let index = index(x, y, z);
+    if blocks[index].is_none() {
+        return false;
+    }
+
+    let entries = layers.entry(index as u16).or_default();
+    if let Some(existing) = entries
+        .iter_mut()
+        .find(|existing| existing.face == face && existing.cell.layer_id == layer.layer_id)
+    {
+        if existing.cell == layer {
+            return false;
+        }
+        existing.cell = layer;
+        return true;
+    }
+
+    assert!(
+        entries.len() < MAX_LAYERS_PER_VOXEL,
+        "voxel cannot contain more than {MAX_LAYERS_PER_VOXEL} layers"
+    );
+    entries.push(AttachedLayer { face, cell: layer });
+    *layer_count += 1;
+    true
+}
+
+fn remove_layer_in_storage(
+    layers: &mut HashMap<u16, Vec<AttachedLayer>>,
+    layer_count: &mut usize,
+    x: usize,
+    y: usize,
+    z: usize,
+    face: LayerFace,
+    layer_id: &str,
+) -> bool {
+    let key = index(x, y, z) as u16;
+    let Some(entries) = layers.get_mut(&key) else {
+        return false;
+    };
+    let Some(position) = entries
+        .iter()
+        .position(|entry| entry.face == face && entry.cell.layer_id == layer_id)
+    else {
+        return false;
+    };
+
+    entries.remove(position);
+    *layer_count = layer_count
+        .checked_sub(1)
+        .expect("chunk layer count cannot underflow");
+    if entries.is_empty() {
+        layers.remove(&key);
+    }
+    true
 }
 
 #[expect(
@@ -561,6 +731,7 @@ mod tests {
 
         assert!(Arc::ptr_eq(&first.blocks, &second.blocks));
         assert!(Arc::ptr_eq(&first.fluids, &second.fluids));
+        assert!(Arc::ptr_eq(&first.layers, &second.layers));
         assert!(!Arc::ptr_eq(&first.light, &second.light));
     }
 
@@ -588,6 +759,39 @@ mod tests {
         chunk.set_block(0, last, 3, None);
         assert!(!chunk.boundary_has_content(IVec3::NEG_X));
         assert!(!chunk.boundary_has_content(IVec3::Y));
+    }
+
+    #[test]
+    fn layers_stack_per_face_and_follow_support_identity() {
+        let mut chunk = VoxelChunk::empty();
+        let support = VoxelCell::new("stone", Default::default());
+        chunk.set_block(2, 3, 4, Some(support));
+
+        let moss = LayerCell::new("asteria:moss", Default::default());
+        let lichen = LayerCell::new("asteria:lichen", Default::default());
+        assert!(chunk.add_layer(2, 3, 4, LayerFace::Top, moss));
+        assert!(chunk.add_layer(2, 3, 4, LayerFace::Top, lichen));
+        assert_eq!(chunk.layers_at(2, 3, 4).len(), 2);
+
+        chunk.set_block(
+            2,
+            3,
+            4,
+            Some(VoxelCell::new("dirt", Default::default())),
+        );
+        assert!(chunk.layers_at(2, 3, 4).is_empty());
+    }
+
+    #[test]
+    fn layers_require_a_supporting_block() {
+        let mut chunk = VoxelChunk::empty();
+        assert!(!chunk.add_layer(
+            2,
+            3,
+            4,
+            LayerFace::Top,
+            LayerCell::new("asteria:moss", Default::default()),
+        ));
     }
 
     #[test]

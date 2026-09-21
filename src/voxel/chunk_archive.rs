@@ -1,9 +1,14 @@
-use crate::content::{block_orientation::BlockOrientation, fluid::FluidId};
+use crate::content::{
+    block_orientation::BlockOrientation,
+    fluid::FluidId,
+    layer::LayerFace,
+};
 
 use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk},
     fluid::FluidCell,
+    layer::{AttachedLayer, LayerCell},
     secondary_properties::SecondaryProperties,
     texture_rotation::TextureRotation,
 };
@@ -20,6 +25,15 @@ struct ArchivedCell {
 }
 
 #[derive(Clone, Copy)]
+struct ArchivedLayerCell {
+    voxel_index: u16,
+    order: u8,
+    face: u8,
+    layer_id: &'static str,
+    rotation: u8,
+}
+
+#[derive(Clone, Copy)]
 struct ArchivedFluidCell {
     fluid_id: FluidId,
     level: u8,
@@ -31,6 +45,7 @@ pub struct ArchivedChunk {
     occupancy: [u64; OCCUPANCY_WORDS],
     palette: Vec<&'static str>,
     cells: Vec<ArchivedCell>,
+    layers: Vec<ArchivedLayerCell>,
     fluid_occupancy: [u64; OCCUPANCY_WORDS],
     fluid_cells: Vec<ArchivedFluidCell>,
 }
@@ -40,6 +55,7 @@ impl ArchivedChunk {
         let mut occupancy = [0_u64; OCCUPANCY_WORDS];
         let mut palette = Vec::<&'static str>::new();
         let mut cells = Vec::new();
+        let mut layers = Vec::new();
         let mut fluid_occupancy = [0_u64; OCCUPANCY_WORDS];
         let mut fluid_cells = Vec::new();
 
@@ -85,10 +101,26 @@ impl ArchivedChunk {
             }
         }
 
+        for (index, attached_layers) in chunk.layer_groups() {
+            for (order, attached) in attached_layers.iter().copied().enumerate() {
+                layers.push(ArchivedLayerCell {
+                    voxel_index: u16::try_from(index)
+                        .expect("chunk voxel index must fit in u16"),
+                    order: u8::try_from(order)
+                        .expect("layer order must fit in u8"),
+                    face: attached.face.index(),
+                    layer_id: attached.cell.layer_id,
+                    rotation: rotation_index(attached.cell.texture_rotation),
+                });
+            }
+        }
+        layers.sort_unstable_by_key(|layer| (layer.voxel_index, layer.order));
+
         Self {
             occupancy,
             palette,
             cells,
+            layers,
             fluid_occupancy,
             fluid_cells,
         }
@@ -107,6 +139,26 @@ impl ArchivedChunk {
                 .with_secondary_properties(archived.secondary_properties);
                 (index, cell)
             })
+    }
+
+    pub(crate) fn layer_entries(
+        &self,
+    ) -> impl Iterator<Item = (usize, usize, AttachedLayer)> + '_ {
+        self.layers.iter().map(|archived| {
+            let face = LayerFace::from_index(archived.face)
+                .expect("archived layer face must be valid");
+            (
+                archived.voxel_index as usize,
+                archived.order as usize,
+                AttachedLayer {
+                    face,
+                    cell: LayerCell::new(
+                        archived.layer_id,
+                        TextureRotation::from_quarter_turn(archived.rotation),
+                    ),
+                },
+            )
+        })
     }
 
     pub(crate) fn fluid_entries(&self) -> impl Iterator<Item = (usize, FluidCell)> + '_ {
@@ -132,6 +184,13 @@ impl ArchivedChunk {
             for (index, cell) in self.block_entries() {
                 let (x, y, z) = coordinates(index);
                 content.set_block(x, y, z, Some(cell));
+            }
+            for (index, _order, attached) in self.layer_entries() {
+                let (x, y, z) = coordinates(index);
+                assert!(
+                    content.add_layer(x, y, z, attached.face, attached.cell),
+                    "archived layer must restore onto its supporting block"
+                );
             }
             for (index, fluid) in self.fluid_entries() {
                 let (x, y, z) = coordinates(index);

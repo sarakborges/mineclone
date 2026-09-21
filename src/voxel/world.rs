@@ -7,12 +7,15 @@ use bevy::{
     prelude::*,
 };
 
+use crate::content::layer::{LayerFace, LayerRegistry};
+
 use super::{
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, VoxelChunk},
     chunk_archive::ArchivedChunk,
     coordinates::{chunk_coord_from_world, split_world_position},
     fluid::FluidCell,
+    layer::LayerCell,
     light::VoxelLight,
 };
 
@@ -154,6 +157,20 @@ impl VoxelWorld {
         self.chunks
             .get(&chunk_coord)?
             .cell_at(local_position.x, local_position.y, local_position.z)
+    }
+
+    pub(crate) fn layers_at(
+        &self,
+        world_position: IVec3,
+    ) -> &[super::layer::AttachedLayer] {
+        if world_position.y < 0 {
+            return &[];
+        }
+
+        let (chunk_coord, local_position) = split_world_position(world_position);
+        self.chunks.get(&chunk_coord).map_or(&[], |chunk| {
+            chunk.layers_at(local_position.x, local_position.y, local_position.z)
+        })
     }
 
     pub fn fluid_at(&self, world_position: IVec3) -> Option<FluidCell> {
@@ -345,6 +362,73 @@ impl VoxelWorld {
         self.bump_chunk_content_revision(chunk_coord);
         self.bump_chunk_mesh_revision(chunk_coord);
         Some((chunk_coord, previous_block))
+    }
+
+    pub(crate) fn add_layer_at(
+        &mut self,
+        world_position: IVec3,
+        face: LayerFace,
+        layer: LayerCell,
+        registry: &LayerRegistry,
+    ) -> Option<IVec3> {
+        if world_position.y < 0 {
+            return None;
+        }
+        let definition = registry.get(layer.layer_id)?;
+        if !definition.supports_face(face) {
+            return None;
+        }
+
+        let (chunk_coord, local_position) = split_world_position(world_position);
+        let changed = {
+            let chunk = self.chunks.get_mut(&chunk_coord)?;
+            chunk.add_layer(
+                local_position.x as usize,
+                local_position.y as usize,
+                local_position.z as usize,
+                face,
+                layer,
+            )
+        };
+        if !changed {
+            return None;
+        }
+
+        self.persistent_chunks.insert(chunk_coord);
+        self.bump_chunk_content_revision(chunk_coord);
+        self.bump_chunk_mesh_revision(chunk_coord);
+        Some(chunk_coord)
+    }
+
+    pub(crate) fn remove_layer_at(
+        &mut self,
+        world_position: IVec3,
+        face: LayerFace,
+        layer_id: &str,
+    ) -> Option<IVec3> {
+        if world_position.y < 0 {
+            return None;
+        }
+
+        let (chunk_coord, local_position) = split_world_position(world_position);
+        let changed = {
+            let chunk = self.chunks.get_mut(&chunk_coord)?;
+            chunk.remove_layer(
+                local_position.x as usize,
+                local_position.y as usize,
+                local_position.z as usize,
+                face,
+                layer_id,
+            )
+        };
+        if !changed {
+            return None;
+        }
+
+        self.persistent_chunks.insert(chunk_coord);
+        self.bump_chunk_content_revision(chunk_coord);
+        self.bump_chunk_mesh_revision(chunk_coord);
+        Some(chunk_coord)
     }
 
     pub(crate) fn set_fluid_at(
@@ -554,6 +638,43 @@ mod tests {
 
         assert!(world.has_resident_or_persisted_chunk(coord));
         assert!(world.restore_chunk(coord));
+    }
+
+    #[test]
+    fn layer_mutation_tracks_content_without_changing_block_revision() {
+        let mut world = VoxelWorld::default();
+        let coord = IVec3::ZERO;
+        let position = IVec3::new(1, 2, 3);
+        world.insert_chunk(coord, VoxelChunk::empty());
+        world.set_block_at(
+            position,
+            Some(VoxelCell::new("stone", Default::default())),
+        );
+
+        let mut registry = LayerRegistry::default();
+        registry.insert(crate::content::layer::LayerDefinition {
+            id: "asteria:test_layer".to_owned(),
+            texture: "textures/test.png".to_owned(),
+            tint: crate::content::block::BlockTint::None,
+            faces: vec![LayerFace::Top],
+            offset: 1.0 / 1024.0,
+            alpha_cutoff: Some(0.5),
+            alpha_blend: false,
+            casts_shadow: false,
+        });
+
+        let block_revision = world.block_content_revision();
+        assert_eq!(
+            world.add_layer_at(
+                position,
+                LayerFace::Top,
+                LayerCell::new("asteria:test_layer", Default::default()),
+                &registry,
+            ),
+            Some(coord),
+        );
+        assert_eq!(world.block_content_revision(), block_revision);
+        assert_eq!(world.layers_at(position).len(), 1);
     }
 
     #[test]
