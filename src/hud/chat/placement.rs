@@ -146,12 +146,11 @@ fn displaced_eye(
 /// Inspect the *loaded* world instead of procedural terrain. Manual /place
 /// deliberately ignores terrain type, slope and fluid restrictions; it only
 /// needs a loaded solid surface to anchor the structure above.
-fn loaded_surface_level(world: &VoxelWorld, position: IVec2) -> Option<i32> {
-    let highest = world.highest_loaded_world_y_in_column(position.x, position.y)?;
-    let ground_y = (0..=highest)
+fn loaded_surface_level(world: &VoxelWorld, feet: IVec3) -> Option<i32> {
+    let ground_y = (0..=feet.y.max(0))
         .rev()
-        .find(|&y| world.is_solid(IVec3::new(position.x, y, position.y)))?;
-    let above = IVec3::new(position.x, ground_y + 1, position.y);
+        .find(|&y| world.is_solid(IVec3::new(feet.x, y, feet.z)))?;
+    let above = IVec3::new(feet.x, ground_y + 1, feet.z);
     world.is_loaded_at(above).then_some(ground_y + 1)
 }
 
@@ -248,7 +247,8 @@ impl ChatPlacementContext<'_, '_> {
             return "Cannot place structure: player is unavailable.".to_owned();
         };
         let feet = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
-        let anchor = feet.floor().as_ivec3().xz();
+        let feet_block = feet.floor().as_ivec3();
+        let anchor = feet_block.xz();
         let hash = manual_structure_hash(self.seed.0, reference, anchor);
         let structure = self
             .structures
@@ -261,7 +261,7 @@ impl ChatPlacementContext<'_, '_> {
         // proximity, Y-range, ground-block, dry-ground or slope restrictions.
         // The structure's lowest layer is simply anchored to the highest loaded
         // solid surface under the player.
-        let Some(surface_y) = loaded_surface_level(world, anchor) else {
+        let Some(surface_y) = loaded_surface_level(world, feet_block) else {
             return format!("no loaded ground available to place {reference}");
         };
         let origin_y = surface_y - structure.min_y_offset();
