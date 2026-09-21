@@ -69,7 +69,7 @@ pub(super) fn biome_size_multiplier_setting(
                     width: percent(100),
                     flex_direction: FlexDirection::Row,
                     align_items: AlignItems::Center,
-                    column_gap: px(12),
+                    column_gap: px(slider::SLIDER_NUMBER_INPUT_GAP),
                     ..default()
                 },
                 children![
