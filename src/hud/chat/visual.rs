@@ -1,3 +1,8 @@
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
+
 use bevy::{
     input::mouse::{MouseScrollUnit, MouseWheel},
     prelude::*,
@@ -38,6 +43,9 @@ pub(super) struct ChatSuggestions;
 
 #[derive(Component, Clone, Copy)]
 pub(super) struct ChatWarpLink(pub(super) IVec3);
+
+#[derive(Component, Clone)]
+pub(super) struct ChatOpenStructureFile(pub(super) PathBuf);
 
 pub(super) fn advance_chat_timeout(
     time: Res<Time>,
@@ -323,6 +331,29 @@ pub(super) fn rebuild_chat_history(
                         ));
                     });
                 }
+                ChatMessage::StructureFile(path) => {
+                    list.spawn((
+                        Button,
+                        ChatOpenStructureFile(path.clone()),
+                        Node {
+                            width: Val::Auto,
+                            min_height: px(CHAT_LINE_HEIGHT),
+                            padding: UiRect::ZERO,
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::FlexStart,
+                            ..default()
+                        },
+                        BackgroundColor(Color::NONE),
+                        BorderColor::all(Color::NONE),
+                        children![
+                            (
+                                typography::hud_link("[Open structure file]"),
+                                typography::tooltip_shadow(),
+                                Pickable::IGNORE,
+                            )
+                        ],
+                    ));
+                }
             }
         }
     });
@@ -342,6 +373,52 @@ pub(super) fn handle_chat_warp_links(
             target.x, target.z, target.y
         )));
     }
+}
+
+pub(super) fn handle_chat_open_structure_file(
+    interactions: Query<(&Interaction, &ChatOpenStructureFile), Changed<Interaction>>,
+    mut chat: ResMut<ChatState>,
+) {
+    for (interaction, link) in &interactions {
+        if *interaction != Interaction::Pressed {
+            continue;
+        }
+        if let Err(error) = open_structure_file(&link.0) {
+            chat.append_text(format!(
+                "failed to open structure file {}: {error}",
+                link.0.display()
+            ));
+        }
+    }
+}
+
+fn open_structure_file(path: &Path) -> std::io::Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer.exe")
+            .arg(format!("/select,{}", path.display()))
+            .spawn()?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open").arg("-R").arg(path).spawn()?;
+        return Ok(());
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let directory = path.parent().unwrap_or(path);
+        Command::new("xdg-open").arg(directory).spawn()?;
+        return Ok(());
+    }
+
+    #[allow(unreachable_code)]
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "opening files is not supported on this platform",
+    ))
 }
 
 pub(super) fn scroll_chat_history(
