@@ -104,6 +104,38 @@ impl ChunkRemeshQueue {
         self.enqueue_geometry_meshlets(coord, ChunkMeshletMask::ALL, true);
     }
 
+    pub(crate) fn enqueue_geometry_meshlets_priority(
+        &mut self,
+        coord: IVec3,
+        meshlets: ChunkMeshletMask,
+    ) {
+        self.enqueue_geometry_meshlets(coord, meshlets, true);
+    }
+
+    pub(crate) fn enqueue_fluid_meshlets_priority(
+        &mut self,
+        coord: IVec3,
+        meshlets: ChunkMeshletMask,
+    ) {
+        self.enqueue_fluid_meshlets(coord, meshlets, true);
+    }
+
+    pub(crate) fn enqueue_halo_change(
+        &mut self,
+        coord: IVec3,
+        dependency_offset: IVec3,
+        geometry: bool,
+        fluid: bool,
+    ) {
+        let meshlets = ChunkMeshletMask::for_dependency_offset(dependency_offset);
+        if geometry {
+            self.enqueue_geometry_meshlets(coord, meshlets, true);
+        }
+        if fluid {
+            self.enqueue_fluid_meshlets(coord, meshlets, true);
+        }
+    }
+
     pub(crate) fn enqueue_fluid(&mut self, coord: IVec3) {
         self.enqueue_fluid_meshlets(coord, ChunkMeshletMask::ALL, false);
     }
@@ -225,11 +257,12 @@ impl ChunkRemeshQueue {
 
             // A one-voxel lighting halo can only influence neighbor terrain
             // that actually touches the boundary facing the changed chunk.
+            let meshlets = ChunkMeshletMask::for_dependency_offset(-offset);
             if chunk.boundary_has_content(-offset) {
-                self.enqueue_lighting(neighbor);
+                self.enqueue_lighting_meshlets(neighbor, meshlets, false);
             }
             if chunk.boundary_has_fluid(-offset) {
-                self.fluid.enqueue(neighbor);
+                self.enqueue_fluid_meshlets(neighbor, meshlets, false);
             }
         }
     }
