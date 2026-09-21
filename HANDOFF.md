@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 10 — 2026-09-21:** reforçados trust boundaries restantes encontrados no conteúdo. Tools agora normalizam whitespace e rejeitam `id`, `category` e `icon` vazios antes de interning/registro (`5fcf17f1cd8b9555532531696079ca19513eeed2`). Sky agora rejeita ID vazio, size/orbitRadius não positivos ou não finitos, ângulos não finitos e centraliza validação de HSI por celestial body (`fa4d874302fba63f1820d8a0ff9acea8d5e2cfef`). **Pendências:** paths de tool icon ainda não têm política explícita equivalente à de creature assets; não impor extensão/root sem contrato documentado. **Próximo passo:** revisar day/night, dimensions e biome visuals por NaN/ranges não validados; em seguida checar compilação/CI disponível e corrigir regressões.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 9 — 2026-09-21:** fechado trust boundary de inventory categories. `validate_references` agora rejeita category ID vazio e valida `blockIcon.tint` com `Hsi::is_valid()` no startup, em vez de permitir HSI inválido chegar até conversão/render. Commit: `67a2b2a96bf10c2e254297b42ea10ec7e447d54f`. **Pendências:** persistence foi revisado neste passe sem alteração segura adicional; testes de filesystem/runtime continuam pendentes. **Próximo passo:** revisar todas as structs Deserialize por floats/ranges/paths sem validação e referências cruzadas não cobertas; depois verificar CI/status e corrigir qualquer regressão estática detectável.
 
 
