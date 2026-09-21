@@ -81,3 +81,6 @@ jobs:
 
       - name: Check
         run: cargo check --locked
+
+      - name: Test
+        run: cargo test --locked --all-targets --all-features
