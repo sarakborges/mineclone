@@ -7,12 +7,13 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 
-use crate::content::dimension_hydrology::DimensionHydrology;
+use crate::content::{dimension_hydrology::DimensionHydrology, structure::StructureRotation};
 
 #[derive(Clone, Debug)]
 pub(crate) struct CachedStructureCandidate {
     pub(crate) placement_id: String,
     pub(crate) structure_id: String,
+    pub(crate) rotation: StructureRotation,
     pub(crate) anchor: IVec2,
     pub(crate) origin_y: i32,
 }
@@ -100,11 +101,12 @@ impl WorldFeatureFields {
     pub(crate) fn structure_origin_y(
         &self,
         structure_id: &str,
+        rotation: StructureRotation,
         anchor: IVec2,
         factory: impl FnOnce() -> Option<i32>,
     ) -> Option<i32> {
         self.caches
-            .structure_origin_y(structure_id, anchor, factory)
+            .structure_origin_y(structure_id, rotation, anchor, factory)
     }
 
     pub(crate) fn structure_candidates(
@@ -260,21 +262,21 @@ mod tests {
         let rejected_anchor = IVec2::new(24, -4);
 
         assert_eq!(
-            fields.structure_origin_y("asteria:test/tree", accepted_anchor, || Some(65)),
+            fields.structure_origin_y("asteria:test/tree", StructureRotation::Degrees0, accepted_anchor, || Some(65)),
             Some(65),
         );
         assert_eq!(
-            fields.structure_origin_y("asteria:test/tree", accepted_anchor, || {
+            fields.structure_origin_y("asteria:test/tree", StructureRotation::Degrees0, accepted_anchor, || {
                 panic!("accepted structure origin should be cached")
             }),
             Some(65),
         );
         assert_eq!(
-            fields.structure_origin_y("asteria:test/tree", rejected_anchor, || None),
+            fields.structure_origin_y("asteria:test/tree", StructureRotation::Degrees0, rejected_anchor, || None),
             None,
         );
         assert_eq!(
-            fields.structure_origin_y("asteria:test/tree", rejected_anchor, || {
+            fields.structure_origin_y("asteria:test/tree", StructureRotation::Degrees0, rejected_anchor, || {
                 panic!("rejected structure origin should be cached")
             }),
             None,
@@ -314,8 +316,8 @@ mod tests {
                 }
             })
         });
-        fields.structure_origin_y("test", IVec2::ZERO, || Some(64));
-        fields.structure_origin_y("test", IVec2::new(32 * CHUNK_SIZE as i32, 0), || Some(64));
+        fields.structure_origin_y("test", StructureRotation::Degrees0, IVec2::ZERO, || Some(64));
+        fields.structure_origin_y("test", StructureRotation::Degrees0, IVec2::new(32 * CHUNK_SIZE as i32, 0), || Some(64));
 
         let desired = HashSet::from([near_chunk]);
         fields.retain_for_chunks(&desired);
