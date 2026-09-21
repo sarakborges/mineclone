@@ -137,7 +137,7 @@ fn surface_block_matches(
                         .or(biome.hydrology.shore_block.as_deref())
                 }),
         };
-        if hydrology_block.is_some_and(|block| matches(block)) {
+        if hydrology_block.is_some_and(&matches) {
             return true;
         }
     }
