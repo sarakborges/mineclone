@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use super::{
     block_face::BlockFace,
     cell::VoxelCell,
+    chunk::CHUNK_SIZE,
     fluid::FluidCell,
     light::{BlockLight, VoxelLight},
     mesh_buffer::{VoxelMeshBuffer, VoxelMeshQuad},
@@ -13,6 +14,89 @@ const AO_BRIGHTNESS: [f32; 4] = [1.0, 0.86, 0.72, 0.58];
 const AO_DIAGONAL_EPSILON: f32 = 0.001;
 
 type VoxelSample = Option<(Option<VoxelCell>, Option<FluidCell>, VoxelLight)>;
+
+const LIGHTING_CACHE_SIDE: usize = CHUNK_SIZE + 2;
+const LIGHTING_CACHE_VOLUME: usize =
+    LIGHTING_CACHE_SIDE * LIGHTING_CACHE_SIDE * LIGHTING_CACHE_SIDE;
+
+#[derive(Clone, Copy, Default)]
+struct CachedLightingSample {
+    light: VoxelLight,
+    occupied_fraction: f32,
+    loaded: bool,
+}
+
+pub(super) struct ChunkLightingCache {
+    origin: IVec3,
+    samples: Box<[CachedLightingSample]>,
+}
+
+impl ChunkLightingCache {
+    pub(super) fn capture<W: VoxelRead + ?Sized>(
+        world: &W,
+        chunk_origin: IVec3,
+    ) -> Self {
+        let origin = chunk_origin - IVec3::ONE;
+        let mut samples = vec![CachedLightingSample::default(); LIGHTING_CACHE_VOLUME];
+
+        for y in 0..LIGHTING_CACHE_SIDE {
+            for z in 0..LIGHTING_CACHE_SIDE {
+                for x in 0..LIGHTING_CACHE_SIDE {
+                    let world_position =
+                        origin + IVec3::new(x as i32, y as i32, z as i32);
+                    let sample = world.sample_at(world_position);
+                    samples[lighting_cache_index(x, y, z)] =
+                        cached_lighting_sample(sample);
+                }
+            }
+        }
+
+        Self {
+            origin,
+            samples: samples.into_boxed_slice(),
+        }
+    }
+
+    fn sample(&self, world_position: IVec3) -> Option<CachedLightingSample> {
+        let local = world_position - self.origin;
+        if local.x < 0
+            || local.y < 0
+            || local.z < 0
+            || local.x >= LIGHTING_CACHE_SIDE as i32
+            || local.y >= LIGHTING_CACHE_SIDE as i32
+            || local.z >= LIGHTING_CACHE_SIDE as i32
+        {
+            return None;
+        }
+
+        let sample = self.samples[lighting_cache_index(
+            local.x as usize,
+            local.y as usize,
+            local.z as usize,
+        )];
+        sample.loaded.then_some(sample)
+    }
+}
+
+fn lighting_cache_index(x: usize, y: usize, z: usize) -> usize {
+    x + z * LIGHTING_CACHE_SIDE
+        + y * LIGHTING_CACHE_SIDE * LIGHTING_CACHE_SIDE
+}
+
+fn cached_lighting_sample(sample: VoxelSample) -> CachedLightingSample {
+    let Some((cell, _, light)) = sample else {
+        return CachedLightingSample::default();
+    };
+
+    CachedLightingSample {
+        light,
+        occupied_fraction: cell.map_or(0.0, |cell| {
+            crate::voxel::microblock::MicroblockMask::from_cell(cell)
+                .occupied_fraction()
+        }),
+        loaded: true,
+    }
+}
 
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct FaceLighting {
@@ -39,25 +123,60 @@ pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
     face: BlockFace,
     surface_block_srgb: [f32; 3],
 ) -> FaceLighting {
+    face_lighting_from_samples(
+        voxel,
+        face,
+        surface_block_srgb,
+        |position| cached_lighting_sample(world.sample_at(position)),
+    )
+}
+
+pub(super) fn face_lighting_with_cache<W: VoxelRead + ?Sized>(
+    cache: Option<&ChunkLightingCache>,
+    world: &W,
+    voxel: IVec3,
+    face: BlockFace,
+    surface_block_srgb: [f32; 3],
+) -> FaceLighting {
+    if let Some(cache) = cache {
+        face_lighting_from_samples(
+            voxel,
+            face,
+            surface_block_srgb,
+            |position| {
+                cache.sample(position).unwrap_or_default()
+            },
+        )
+    } else {
+        face_lighting(world, voxel, face, surface_block_srgb)
+    }
+}
+
+fn face_lighting_from_samples(
+    voxel: IVec3,
+    face: BlockFace,
+    surface_block_srgb: [f32; 3],
+    mut sample_at: impl FnMut(IVec3) -> CachedLightingSample,
+) -> FaceLighting {
     let (normal, tangent_a, tangent_b, signs) = face_basis(face);
     let base = voxel + normal;
-    let base_sample = provisional_top_sky_sample(face, world.sample_at(base));
+    let base_sample = provisional_top_sky_sample_cached(face, sample_at(base));
     let side_a_samples = [
-        world.sample_at(base - tangent_a),
-        world.sample_at(base + tangent_a),
+        sample_at(base - tangent_a),
+        sample_at(base + tangent_a),
     ];
     let side_b_samples = [
-        world.sample_at(base - tangent_b),
-        world.sample_at(base + tangent_b),
+        sample_at(base - tangent_b),
+        sample_at(base + tangent_b),
     ];
     let corner_samples = [
         [
-            world.sample_at(base - tangent_a - tangent_b),
-            world.sample_at(base - tangent_a + tangent_b),
+            sample_at(base - tangent_a - tangent_b),
+            sample_at(base - tangent_a + tangent_b),
         ],
         [
-            world.sample_at(base + tangent_a - tangent_b),
-            world.sample_at(base + tangent_a + tangent_b),
+            sample_at(base + tangent_a - tangent_b),
+            sample_at(base + tangent_a + tangent_b),
         ],
     ];
     let mut channels = [[0.0; 2]; 4];
@@ -70,15 +189,15 @@ pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
         let side_a_sample = side_a_samples[side_a_index];
         let side_b_sample = side_b_samples[side_b_index];
         let corner_sample = corner_samples[side_a_index][side_b_index];
-        let side_a_occlusion = sample_occlusion(side_a_sample);
-        let side_b_occlusion = sample_occlusion(side_b_sample);
-        let corner_occlusion = sample_occlusion(corner_sample);
+        let side_a_occlusion = side_a_sample.occupied_fraction;
+        let side_b_occlusion = side_b_sample.occupied_fraction;
+        let corner_occlusion = corner_sample.occupied_fraction;
         let occlusion = if side_a_occlusion >= 1.0 && side_b_occlusion >= 1.0 {
             3.0
         } else {
             (side_a_occlusion + side_b_occlusion + corner_occlusion).min(3.0)
         };
-        let (sky_level, sampled_block_srgb) = average_shader_light_levels([
+        let (sky_level, sampled_block_srgb) = average_cached_shader_light_levels([
             base_sample,
             side_a_sample,
             side_b_sample,
@@ -98,6 +217,59 @@ pub(super) fn face_lighting<W: VoxelRead + ?Sized>(
         channels,
         block_srgb,
         ambient_occlusion,
+    }
+}
+
+fn provisional_top_sky_sample_cached(
+    face: BlockFace,
+    sample: CachedLightingSample,
+) -> CachedLightingSample {
+    if face == BlockFace::Top && !sample.loaded {
+        CachedLightingSample {
+            light: VoxelLight::new_hsi(VoxelLight::MAX_LEVEL, BlockLight::DARK),
+            occupied_fraction: 0.0,
+            loaded: true,
+        }
+    } else {
+        sample
+    }
+}
+
+fn average_cached_shader_light_levels(
+    samples: [CachedLightingSample; 4],
+) -> (f32, [f32; 3]) {
+    let mut sky_total = 0.0;
+    let mut block_total = [0.0; 3];
+    let mut weight_total = 0.0;
+
+    for sample in samples {
+        if !sample.loaded {
+            continue;
+        }
+        let weight = 1.0 - sample.occupied_fraction;
+        if weight <= f32::EPSILON {
+            continue;
+        }
+
+        sky_total += sample.light.sky() as f32 * weight;
+        let block = sample.light.block_srgb_levels();
+        block_total[0] += block[0] as f32 * weight;
+        block_total[1] += block[1] as f32 * weight;
+        block_total[2] += block[2] as f32 * weight;
+        weight_total += weight;
+    }
+
+    if weight_total <= f32::EPSILON {
+        (0.0, [0.0; 3])
+    } else {
+        (
+            sky_total / weight_total,
+            [
+                block_total[0] / weight_total,
+                block_total[1] / weight_total,
+                block_total[2] / weight_total,
+            ],
+        )
     }
 }
 
