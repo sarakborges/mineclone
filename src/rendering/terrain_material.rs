@@ -46,9 +46,14 @@ pub(crate) struct TerrainMaterialExtension {
     pub overlay_enabled: f32,
     #[uniform(101)]
     pub overlay_tint_enabled: f32,
+    #[uniform(101)]
+    pub texture_array_enabled: f32,
     #[texture(102)]
     #[sampler(103)]
     pub overlay_texture: Option<Handle<Image>>,
+    #[texture(104, dimension = "2d_array")]
+    #[sampler(105)]
+    pub terrain_texture_array: Handle<Image>,
 }
 
 impl MaterialExtension for TerrainMaterialExtension {
