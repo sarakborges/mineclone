@@ -266,7 +266,7 @@ fn interpret_chat_submissions(
             ParsedLine::Usage(usage) => format!("Usage: {usage}"),
             ParsedLine::Unknown(command) => format!("Unknown command: {command}"),
             ParsedLine::Spawn(id) => placement.spawn(&mut commands, id, &mut reserved),
-            ParsedLine::Place(id) => placement.place(id, &reserved),
+            ParsedLine::Place(id, variation) => placement.place(id, variation, &reserved),
             ParsedLine::Locate(kind, id) => {
                 let Some(player_block) = placement.player_block_position() else {
                     chat.append(ChatMessage::Text(
@@ -297,8 +297,14 @@ mod tests {
         assert_eq!(parse_line("hello"), ParsedLine::Say("hello"));
         assert_eq!(parse_line(" /spawn asteria:meadow_slime "), ParsedLine::Spawn("asteria:meadow_slime"));
         assert_eq!(parse_line("/spawn"), ParsedLine::Usage("/spawn <id>"));
-        assert_eq!(parse_line("/place"), ParsedLine::Usage("/place <id>"));
-        assert_eq!(parse_line("/place foo extra"), ParsedLine::Usage("/place <id>"));
+        assert_eq!(
+            parse_line("/place"),
+            ParsedLine::Usage("/place <id> [variation]")
+        );
+        assert_eq!(
+            parse_line("/place foo extra extra"),
+            ParsedLine::Usage("/place <id> [variation]")
+        );
         assert_eq!(parse_line("/spawn_creature foo"), ParsedLine::Unknown("/spawn_creature"));
         assert_eq!(parse_line("/unknown"), ParsedLine::Unknown("/unknown"));
     }
