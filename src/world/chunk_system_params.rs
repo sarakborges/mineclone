@@ -8,6 +8,7 @@ use crate::content::{
     layer::LayerRegistry,
     secondary_property::SecondaryPropertyRegistry,
     structure::StructureRegistry,
+    structure_set::StructureSetRegistry,
 };
 
 use super::{
@@ -89,6 +90,7 @@ impl ChunkContent<'_> {
 pub(crate) struct ChunkGeneration<'w> {
     pub(crate) dimension: CurrentDimensionContext<'w>,
     pub(crate) structures: Res<'w, StructureRegistry>,
+    pub(crate) structure_sets: Res<'w, StructureSetRegistry>,
     pub(crate) feature_fields: Res<'w, WorldFeatureFields>,
 }
 
@@ -102,6 +104,7 @@ impl ChunkGeneration<'_> {
     pub(crate) fn inputs_changed(&self) -> bool {
         self.dimension.inputs_changed()
             || self.structures.is_changed()
+            || self.structure_sets.is_changed()
             || self.feature_fields.is_changed()
     }
 }
