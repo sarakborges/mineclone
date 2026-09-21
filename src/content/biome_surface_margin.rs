@@ -10,6 +10,8 @@ pub struct BiomeSurfaceMargin {
     pub width_variation: f32,
     #[serde(default = "default_variation_scale")]
     pub variation_scale: f32,
+    #[serde(default)]
+    pub max_slope: Option<i32>,
     pub surface_layers: Vec<BiomeMaterialLayer>,
 }
 
@@ -44,6 +46,12 @@ impl BiomeSurfaceMargin {
             self.variation_scale.is_finite() && self.variation_scale > 0.0,
             "biome {biome_id} surfaceMargin.variationScale must be positive and finite"
         );
+        if let Some(max_slope) = self.max_slope {
+            assert!(
+                max_slope >= 0,
+                "biome {biome_id} surfaceMargin.maxSlope cannot be negative"
+            );
+        }
         assert!(
             !self.surface_layers.is_empty(),
             "biome {biome_id} surfaceMargin must define surfaceLayers"
