@@ -15,6 +15,10 @@ impl<T> Default for DefinitionMap<T> {
 
 impl<T> DefinitionMap<T> {
     pub(super) fn insert(&mut self, id: String, definition: T) {
+        assert!(
+            !self.definitions.contains_key(&id),
+            "duplicate content definition id {id}"
+        );
         self.definitions.insert(id, definition);
     }
 
@@ -32,12 +36,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn replacing_an_id_keeps_a_single_definition() {
+    #[should_panic(expected = "duplicate content definition id test")]
+    fn duplicate_id_is_rejected() {
         let mut definitions = DefinitionMap::default();
         definitions.insert("test".to_owned(), 1);
         definitions.insert("test".to_owned(), 2);
-
-        assert_eq!(definitions.get("test"), Some(&2));
-        assert_eq!(definitions.values().count(), 1);
     }
 }
