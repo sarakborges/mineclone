@@ -25,6 +25,7 @@ use crate::{
         coordinates::{chunk_coord_from_position, chunk_coord_from_world},
         deduplicated_queue::DeduplicatedQueue,
         lighting::PendingLightingUpdates,
+        meshlet::ChunkMeshletMask,
         world::VoxelWorld,
     },
 };
@@ -114,7 +115,7 @@ pub(super) struct ChunkStreamingState {
     ready_priority: ReadyPriorityCache,
     surface_ranges: HashMap<IVec2, (i32, i32)>,
     initial_lighting_seeded: HashSet<IVec3>,
-    initial_mesh_seed_catchup: HashSet<IVec3>,
+    initial_mesh_seed_catchup: HashMap<IVec3, ChunkMeshletMask>,
     mesh_pressure_evicted: HashMap<IVec3, usize>,
     fluid_settling: GeneratedFluidSettling,
     generation_wave_targets: HashSet<IVec3>,
@@ -663,7 +664,19 @@ fn seed_loaded_chunk_lighting(
                 }
                 let neighbor = coord + offset;
                 if work.mesh_tasks.contains(neighbor) {
-                    work.state.initial_mesh_seed_catchup.insert(neighbor);
+                    let meshlets =
+                        ChunkMeshletMask::for_dependency_offset(-offset);
+                    let combined = work
+                        .state
+                        .initial_mesh_seed_catchup
+                        .get(&neighbor)
+                        .copied()
+                        .unwrap_or_default()
+                        .union(meshlets);
+                    work
+                        .state
+                        .initial_mesh_seed_catchup
+                        .insert(neighbor, combined);
                 }
             }
         }
@@ -787,7 +800,9 @@ mod tests {
 
         assert!(state.mark_initial_lighting_seeded(coord));
         assert!(!state.mark_initial_lighting_seeded(coord));
-        state.initial_mesh_seed_catchup.insert(coord);
+        state
+            .initial_mesh_seed_catchup
+            .insert(coord, ChunkMeshletMask::ALL);
         state.forget_initial_lighting_seeded(coord);
         assert!(state.mark_initial_lighting_seeded(coord));
         assert!(!state.initial_mesh_seed_catchup.contains(&coord));
