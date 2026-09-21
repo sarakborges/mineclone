@@ -7,6 +7,7 @@ use crate::{
         biome::BiomeRegistry, block::BlockRegistry, fluid::FluidRegistry,
         layer::LayerRegistry, secondary_property::SecondaryPropertyRegistry,
     },
+    rendering::block_texture::TerrainTextureTable,
     voxel::mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot},
 };
 
@@ -27,6 +28,7 @@ pub(crate) struct MeshContentSnapshot {
     biomes: BiomeRegistry,
     secondary_properties: SecondaryPropertyRegistry,
     biome_field: BiomeField,
+    texture_table: TerrainTextureTable,
 }
 
 impl MeshContentSnapshot {
@@ -38,6 +40,7 @@ impl MeshContentSnapshot {
             biomes: BiomeRegistry::clone(&content.biomes),
             secondary_properties: content.secondary_properties().clone(),
             biome_field: content.biome_field.as_ref().clone(),
+            texture_table: TerrainTextureTable::from_blocks(content.blocks()),
         }
     }
 
@@ -53,6 +56,7 @@ impl MeshContentSnapshot {
             biomes: &self.biomes,
             secondary_properties: &self.secondary_properties,
             biome_field: &self.biome_field,
+            texture_table: &self.texture_table,
         }
     }
 }
