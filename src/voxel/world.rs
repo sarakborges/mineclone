@@ -364,45 +364,6 @@ impl VoxelWorld {
         Some((chunk_coord, previous_block))
     }
 
-    #[allow(
-        dead_code,
-        reason = "layer placement API is ready before the first concrete layer content is authored"
-    )]
-    pub(crate) fn add_layer_at(
-        &mut self,
-        world_position: IVec3,
-        face: LayerFace,
-        layer: LayerCell,
-        registry: &LayerRegistry,
-    ) -> Option<IVec3> {
-        if world_position.y < 0 {
-            return None;
-        }
-        let definition = registry.get(layer.layer_id)?;
-        if !definition.supports_face(face) {
-            return None;
-        }
-
-        let (chunk_coord, local_position) = split_world_position(world_position);
-        let changed = {
-            let chunk = self.chunks.get_mut(&chunk_coord)?;
-            chunk.add_layer(
-                local_position.x as usize,
-                local_position.y as usize,
-                local_position.z as usize,
-                face,
-                layer,
-            )
-        };
-        if !changed {
-            return None;
-        }
-
-        self.persistent_chunks.insert(chunk_coord);
-        self.bump_chunk_content_revision(chunk_coord);
-        self.bump_chunk_mesh_revision(chunk_coord);
-        Some(chunk_coord)
-    }
 
     pub(crate) fn remove_top_layer_at(
         &mut self,
