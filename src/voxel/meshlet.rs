@@ -5,7 +5,11 @@ use bevy::{
     render::render_resource::PrimitiveTopology,
 };
 
-use super::{chunk::CHUNK_SIZE, coordinates::chunk_origin};
+use super::{
+    chunk::CHUNK_SIZE,
+    coordinates::chunk_origin,
+    mesh_buffer::ATTRIBUTE_VOXEL_LIGHT,
+};
 
 pub(crate) const CHUNK_MESHLET_EDGE: usize = 8;
 const MESHLETS_PER_AXIS: usize = CHUNK_SIZE / CHUNK_MESHLET_EDGE;
@@ -263,7 +267,7 @@ struct MeshArrays {
     positions: Vec<[f32; 3]>,
     uvs: Vec<[f32; 2]>,
     light_uvs: Vec<[f32; 2]>,
-    colors: Vec<[f32; 4]>,
+    colors: Vec<[u8; 4]>,
     indices: Vec<u32>,
 }
 
@@ -277,7 +281,7 @@ impl MeshArrays {
             positions: float32x3(mesh.attribute(Mesh::ATTRIBUTE_POSITION)?)?.to_vec(),
             uvs: float32x2(mesh.attribute(Mesh::ATTRIBUTE_UV_0)?)?.to_vec(),
             light_uvs: float32x2(mesh.attribute(Mesh::ATTRIBUTE_UV_1)?)?.to_vec(),
-            colors: float32x4(mesh.attribute(Mesh::ATTRIBUTE_COLOR)?)?.to_vec(),
+            colors: unorm8x4(mesh.attribute(Mesh::ATTRIBUTE_COLOR)?)?.to_vec(),
             indices: mesh.indices()?.iter().collect(),
         })
     }
@@ -371,7 +375,7 @@ impl MeshArrays {
         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors)
+        .with_inserted_attribute(ATTRIBUTE_VOXEL_LIGHT, self.colors)
         .with_inserted_indices(indices)
     }
 }
@@ -383,9 +387,9 @@ fn float32x2(values: &VertexAttributeValues) -> Option<&[[f32; 2]]> {
     }
 }
 
-fn float32x4(values: &VertexAttributeValues) -> Option<&[[f32; 4]]> {
+fn unorm8x4(values: &VertexAttributeValues) -> Option<&[[u8; 4]]> {
     match values {
-        VertexAttributeValues::Float32x4(values) => Some(values),
+        VertexAttributeValues::Unorm8x4(values) => Some(values),
         _ => None,
     }
 }
