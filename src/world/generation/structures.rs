@@ -18,7 +18,7 @@ use crate::{
     },
     voxel::{
         cell::VoxelCell,
-        chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk, VoxelChunkContentMut},
+        chunk::{CHUNK_SIZE, CHUNK_VOLUME, VoxelChunk},
         layer::LayerCell,
         texture_rotation::TextureRotation,
     },
@@ -53,7 +53,7 @@ struct StructurePlacementContext<'a> {
 }
 
 struct StructureRasterizationContext<'a> {
-    base_chunk: &'a VoxelChunk,
+    base_occupied: &'a [bool],
     blocks: &'a BlockRegistry,
     chunk_origin: IVec3,
     world_seed: u64,
@@ -69,24 +69,34 @@ pub(super) fn rasterize_structures(
         return;
     }
 
-    let base_chunk = chunk.clone();
-    let mut claimed = vec![false; CHUNK_VOLUME];
-    chunk.edit_content(|chunk| {
-        for candidate in candidates {
-            rasterize_structure(
-                chunk,
-                &mut claimed,
-                &StructureRasterizationContext {
-                    base_chunk: &base_chunk,
-                    blocks: context.blocks,
-                    chunk_origin,
-                    world_seed: context.biome_field.seed(),
-                },
-                candidate.structure,
-                IVec3::new(candidate.anchor.x, candidate.origin_y, candidate.anchor.y),
-            );
+    let mut base_occupied = vec![false; CHUNK_VOLUME];
+    for local_y in 0..CHUNK_SIZE {
+        for local_z in 0..CHUNK_SIZE {
+            for local_x in 0..CHUNK_SIZE {
+                let index =
+                    local_x + local_z * CHUNK_SIZE + local_y * CHUNK_SIZE * CHUNK_SIZE;
+                base_occupied[index] = chunk
+                    .cell_at(local_x as i32, local_y as i32, local_z as i32)
+                    .is_some();
+            }
         }
-    });
+    }
+
+    let mut claimed = vec![false; CHUNK_VOLUME];
+    for candidate in candidates {
+        rasterize_structure(
+            chunk,
+            &mut claimed,
+            &StructureRasterizationContext {
+                base_occupied: &base_occupied,
+                blocks: context.blocks,
+                chunk_origin,
+                world_seed: context.biome_field.seed(),
+            },
+            candidate.structure,
+            IVec3::new(candidate.anchor.x, candidate.origin_y, candidate.anchor.y),
+        );
+    }
 }
 
 pub(crate) fn structure_candidate_anchor(
@@ -543,7 +553,7 @@ fn rectangles_overlap(
 }
 
 fn rasterize_structure(
-    chunk: &mut VoxelChunkContentMut<'_>,
+    chunk: &mut VoxelChunk,
     claimed: &mut [bool],
     context: &StructureRasterizationContext<'_>,
     structure: &StructureDefinition,
@@ -562,10 +572,7 @@ fn rasterize_structure(
                 StructureReplacePolicy::Any => true,
                 StructureReplacePolicy::AirOnly => {
                     !claimed[index]
-                        && context
-                            .base_chunk
-                            .cell_at(local.x, local.y, local.z)
-                            .is_none()
+                        && !context.base_occupied[index]
                 }
                 StructureReplacePolicy::Terrain => !claimed[index],
             };
