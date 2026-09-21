@@ -5,7 +5,6 @@ use crate::{
     content::fluid::{FluidId, FluidRegistry},
     voxel::{
         cell::VoxelCell,
-        coordinates::visit_chunk_coords_whose_voxel_halo_contains,
         fluid::{FluidCell, MAX_FLUID_LEVEL},
         neighbors::HORIZONTAL_NEIGHBORS,
         world::VoxelWorld,
@@ -375,9 +374,7 @@ fn horizontal_direction_bit(offset: IVec3) -> Option<u8> {
 }
 
 pub(super) fn enqueue_remesh(position: IVec3, remesh_queue: &mut ChunkRemeshQueue) {
-    visit_chunk_coords_whose_voxel_halo_contains(position, |coord| {
-        remesh_queue.enqueue_fluid(coord);
-    });
+    remesh_queue.enqueue_fluid_voxel_edit(position);
 }
 
 #[cfg(test)]
