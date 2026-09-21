@@ -21,7 +21,7 @@ use super::{
     chunk::{CHUNK_SIZE, VoxelChunk},
     mesh_lighting::{FaceLighting, face_lighting, push_lit_quad, surface_block_srgb},
     microblock::MicroblockMask,
-    orientation::{orient_face, source_face_for_oriented_face},
+    orientation::source_face_for_oriented_face,
     quad::VOXEL_FACE_UVS,
     read::VoxelRead,
     texture_rotation::TextureRotation,
@@ -252,12 +252,12 @@ fn face_cell(face: BlockFace, depth: usize, u: usize, v: usize) -> [usize; 3] {
     }
 }
 
-fn emit_greedy_plane(
+fn emit_greedy_plane<'a>(
     face: BlockFace,
     depth: usize,
     mask: &mut [Option<GreedyFace>; CHUNK_SIZE * CHUNK_SIZE],
-    block_lookup: &mut BlockLookup<'_>,
-    buffers: &mut MicroMeshBuffers<'_>,
+    block_lookup: &mut BlockLookup<'a>,
+    buffers: &mut MicroMeshBuffers<'a>,
 ) {
     for v in 0..CHUNK_SIZE {
         for u in 0..CHUNK_SIZE {
