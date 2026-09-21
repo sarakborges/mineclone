@@ -53,6 +53,8 @@ use super::{
 
 const CRITICAL_PLAYER_RADIUS_CHUNKS: i32 = 1;
 
+pub(super) type ChunkLoadPriority = (i64, i64, i32, i32, i32, i32);
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct RetiredScanKey {
     queue_revision: u64,
@@ -85,7 +87,7 @@ impl ReadyPriorityCache {
         self.pending.clear();
         let mut ordered = ready.values_in_order().collect::<Vec<_>>();
         ordered.sort_unstable_by_key(|coord| {
-            ready_priority(*coord, center, movement_direction)
+            chunk_load_priority(*coord, center, movement_direction)
         });
         self.pending.extend(ordered);
         self.source_revision = ready.revision();
@@ -134,6 +136,33 @@ impl ChunkStreamingState {
         };
         let (_, hide_radius) = chunk_visibility_radii(self.horizontal_radius);
         self.keeps_loaded(coord) && chunk_is_inside_render_radius(center, coord, hide_radius)
+    }
+
+    pub(super) fn load_priority(&self, coord: IVec3) -> Option<ChunkLoadPriority> {
+        let center = self.center?;
+        Some(chunk_load_priority(
+            coord,
+            center,
+            self.movement_direction,
+        ))
+    }
+
+    pub(super) fn nearest_missing_render_priority(
+        &self,
+        render_pool: &ChunkRenderPool,
+    ) -> Option<ChunkLoadPriority> {
+        let center = self.center?;
+        let (show_radius, _) = chunk_visibility_radii(self.horizontal_radius);
+
+        self.desired
+            .iter()
+            .chain(self.retained.iter())
+            .copied()
+            .filter(|coord| !self.mesh_pressure_evicted.contains(coord))
+            .filter(|coord| !render_pool.contains(*coord))
+            .filter(|coord| chunk_is_inside_render_radius(center, *coord, show_radius))
+            .map(|coord| chunk_load_priority(coord, center, self.movement_direction))
+            .min()
     }
 
     pub(super) fn enqueue_retired(&mut self, coord: IVec3) {
@@ -439,21 +468,18 @@ impl ChunkStreamingState {
     }
 }
 
-fn ready_priority(
+pub(super) fn chunk_load_priority(
     coord: IVec3,
     center: IVec3,
     movement_direction: IVec2,
-) -> (i32, i32, i32, i32, i32, i32, i32) {
-    let delta = coord - center;
-    let horizontal_delta = coord.xz() - center.xz();
-    let critical_band = if is_critical_streaming_coord(coord, center) {
-        0
-    } else {
-        1
-    };
-    let horizontal_distance = horizontal_delta.length_squared();
-    let total_distance = delta.length_squared();
-    let forward = horizontal_delta.dot(movement_direction);
+) -> ChunkLoadPriority {
+    let dx = i64::from(coord.x) - i64::from(center.x);
+    let dy = i64::from(coord.y) - i64::from(center.y);
+    let dz = i64::from(coord.z) - i64::from(center.z);
+    let horizontal_distance = dx * dx + dz * dz;
+    let total_distance = horizontal_distance + dy * dy;
+    let forward = dx * i64::from(movement_direction.x)
+        + dz * i64::from(movement_direction.y);
     let directional_band = if movement_direction == IVec2::ZERO || forward == 0 {
         1
     } else if forward > 0 {
@@ -463,7 +489,6 @@ fn ready_priority(
     };
 
     (
-        critical_band,
         horizontal_distance,
         total_distance,
         directional_band,
