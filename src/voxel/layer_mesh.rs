@@ -23,6 +23,17 @@ const LAYER_STACK_OFFSET: f32 = 1.0 / 8192.0;
 const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
 const MICRO_EDGE: usize = MICROBLOCK_EDGE as usize;
 
+fn block_face_index(face: BlockFace) -> usize {
+    match face {
+        BlockFace::Right => 0,
+        BlockFace::Left => 1,
+        BlockFace::Top => 2,
+        BlockFace::Bottom => 3,
+        BlockFace::Front => 4,
+        BlockFace::Back => 5,
+    }
+}
+
 pub(crate) struct ChunkLayerMesh {
     pub(crate) layer_id: &'static str,
     pub(crate) mesh: Mesh,
@@ -87,6 +98,8 @@ where
             chunk.light_at(x as i32, y as i32, z as i32),
             support.light_emission > 0,
         );
+        let mut lighting_by_face = [None; 6];
+        let mut exposure_by_face = [None; 6];
 
         for (order, attached) in attached_layers.iter().copied().enumerate() {
             let definition = layers.get(attached.cell.layer_id).unwrap_or_else(|| {
@@ -103,7 +116,15 @@ where
                 .count();
             let outward_offset =
                 definition.offset + stack_index as f32 * LAYER_STACK_OFFSET;
-            let lighting = face_lighting(world, world_voxel, face, source_block_srgb);
+            let face_index = block_face_index(face);
+            let lighting = if let Some(lighting) = lighting_by_face[face_index] {
+                lighting
+            } else {
+                let lighting =
+                    face_lighting(world, world_voxel, face, source_block_srgb);
+                lighting_by_face[face_index] = Some(lighting);
+                lighting
+            };
             let tint = tint_at(world_voxel, definition);
 
             if MicroblockMask::is_modified(support_cell) {
@@ -126,14 +147,21 @@ where
                 continue;
             }
 
-            if !is_face_exposed(
-                world,
-                &mut block_lookup,
-                support_cell.block_id,
-                support_is_transparent,
-                world_voxel,
-                face,
-            ) {
+            let is_exposed = if let Some(is_exposed) = exposure_by_face[face_index] {
+                is_exposed
+            } else {
+                let is_exposed = is_face_exposed(
+                    world,
+                    &mut block_lookup,
+                    support_cell.block_id,
+                    support_is_transparent,
+                    world_voxel,
+                    face,
+                );
+                exposure_by_face[face_index] = Some(is_exposed);
+                is_exposed
+            };
+            if !is_exposed {
                 continue;
             }
 
