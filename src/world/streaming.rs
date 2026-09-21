@@ -3,6 +3,8 @@ mod meshing;
 mod selection;
 mod surface_cache;
 
+use std::collections::VecDeque;
+
 use bevy::{
     ecs::system::SystemParam,
     platform::collections::{HashMap, HashSet},
@@ -54,6 +56,42 @@ struct RetiredScanKey {
     radius_squared: i64,
 }
 
+#[derive(Default)]
+struct ReadyPriorityCache {
+    source_revision: u64,
+    selection_revision: u64,
+    buckets: [VecDeque<IVec3>; 3],
+}
+
+impl ReadyPriorityCache {
+    fn sync(
+        &mut self,
+        ready: &DeduplicatedQueue<IVec3>,
+        selection_revision: u64,
+        center: IVec3,
+        movement_direction: IVec2,
+    ) {
+        if self.source_revision == ready.revision()
+            && self.selection_revision == selection_revision
+        {
+            return;
+        }
+
+        for bucket in &mut self.buckets {
+            bucket.clear();
+        }
+        for coord in ready.values_in_order() {
+            self.buckets[ready_priority(coord, center, movement_direction)].push_back(coord);
+        }
+        self.source_revision = ready.revision();
+        self.selection_revision = selection_revision;
+    }
+
+    fn mark_source_revision(&mut self, revision: u64) {
+        self.source_revision = revision;
+    }
+}
+
 #[derive(Resource, Default)]
 pub(super) struct ChunkStreamingState {
     center: Option<IVec3>,
@@ -65,6 +103,7 @@ pub(super) struct ChunkStreamingState {
     retired: DeduplicatedQueue<IVec3>,
     pending: DeduplicatedQueue<IVec3>,
     ready: DeduplicatedQueue<IVec3>,
+    ready_priority: ReadyPriorityCache,
     surface_ranges: HashMap<IVec2, (i32, i32)>,
     initial_lighting_seeded: HashSet<IVec3>,
     initial_mesh_seed_catchup: HashSet<IVec3>,
@@ -298,25 +337,33 @@ impl ChunkStreamingState {
         let center = self.center?;
         let movement_direction = self.movement_direction;
         let (show_radius, _) = chunk_visibility_radii(self.horizontal_radius);
-        let desired = &self.desired;
-        let retained = &self.retained;
-        self.ready.pop_min_where_by_key(
-            |coord| {
-                (desired.contains(&coord) || retained.contains(&coord))
-                    && chunk_is_inside_render_radius(center, coord, show_radius)
-            },
-            |coord| {
-                if is_critical_streaming_coord(coord, center) {
-                    0_u8
-                } else if movement_direction != IVec2::ZERO
-                    && (coord.xz() - center.xz()).dot(movement_direction) > 0
-                {
-                    1
-                } else {
-                    2
+        self.ready_priority.sync(
+            &self.ready,
+            self.selection_revision,
+            center,
+            movement_direction,
+        );
+
+        for bucket in &mut self.ready_priority.buckets {
+            while let Some(coord) = bucket.pop_front() {
+                if !self.ready.contains(coord) {
+                    continue;
                 }
-            },
-        )
+                if !(self.desired.contains(&coord) || self.retained.contains(&coord))
+                    || !chunk_is_inside_render_radius(center, coord, show_radius)
+                {
+                    continue;
+                }
+
+                let removed = self.ready.remove(coord);
+                debug_assert!(removed, "ready priority cache must reference an active chunk");
+                self.ready_priority
+                    .mark_source_revision(self.ready.revision());
+                return Some(coord);
+            }
+        }
+
+        None
     }
 
     fn defer_ready(&mut self, coord: IVec3) {
@@ -340,6 +387,18 @@ impl ChunkStreamingState {
             .selection_revision
             .checked_add(1)
             .expect("chunk streaming selection revision exhausted");
+    }
+}
+
+fn ready_priority(coord: IVec3, center: IVec3, movement_direction: IVec2) -> usize {
+    if is_critical_streaming_coord(coord, center) {
+        0
+    } else if movement_direction != IVec2::ZERO
+        && (coord.xz() - center.xz()).dot(movement_direction) > 0
+    {
+        1
+    } else {
+        2
     }
 }
 
