@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 16 — 2026-09-21:** completada parte da uniformização de IDs obrigatórios: `FluidRegistry` e `BiomeRegistry` agora rejeitam ID vazio no boundary de insert (`cd1f0a5d552b9b02802dea140755b545ee994e41`, `46c18ec77d9bb9d692d0b272cedc525857eeb1dd`). Structures/layers/creatures já possuíam essa validação. **Pendências:** loader atualmente ignora silenciosamente JSON que não casa com nenhuma categoria conhecida; isso pode esconder typo de diretório/filename. Precisa distinguir arquivos auxiliares legítimos de definitions antes de transformar unknown JSON em erro. **Próximo passo:** auditar layout real de `data/` via paths conhecidos e decidir fail-fast seguro para definitions mal posicionadas; revisar localization audit e content filenames.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 15 — 2026-09-21:** campos obrigatórios de identidade agora falham cedo. Blocks rejeitam ID/category vazios e lista de orientations vazia antes de interning (`ef99855c875e222690206ca960fbb90aeebcd5e4`). Dimensions rejeitam ID, dayNightCycle e sky vazios antes da validação cross-registry (`5ae47a2ba8a0b3fb241d6b125c877bc8cf36bbfa`). **Pendências:** continuar uniformizando required-field validation em registries restantes sem inventar políticas de paths/ranges não documentadas. **Próximo passo:** fluid/layer/biome/structure IDs e required strings; depois revisar loader classification para JSON desconhecido silenciosamente ignorado.
 
 
