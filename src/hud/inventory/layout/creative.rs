@@ -489,11 +489,6 @@ fn filtered_creative_catalog<'a>(
     catalog.sort_by(|left, right| {
         category_order(categories, left.category())
             .cmp(&category_order(categories, right.category()))
-            .then_with(|| {
-                left.name(language)
-                    .to_lowercase()
-                    .cmp(&right.name(language).to_lowercase())
-            })
             .then_with(|| left.id().cmp(right.id()))
     });
     catalog
