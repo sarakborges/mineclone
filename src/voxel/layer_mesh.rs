@@ -12,6 +12,7 @@ use super::{
     mesh::geometry::is_face_exposed,
     mesh_buffer::VoxelMeshBuffer,
     mesh_lighting::{face_lighting, push_lit_quad, surface_block_srgb},
+    meshlet::ChunkMeshletMask,
     microblock::{MICROBLOCK_EDGE, MicroblockMask, occupied_cell},
     quad::VOXEL_FACE_UVS,
     read::VoxelRead,
@@ -35,6 +36,30 @@ pub(crate) fn build_layer_meshes<W, F>(
     chunk: &VoxelChunk,
     blocks: &BlockRegistry,
     layers: &LayerRegistry,
+    tint_at: F,
+) -> Vec<ChunkLayerMesh>
+where
+    W: VoxelRead + ?Sized,
+    F: FnMut(IVec3, &LayerDefinition) -> [f32; 3],
+{
+    build_layer_meshlets(
+        world,
+        chunk_coord,
+        chunk,
+        blocks,
+        layers,
+        ChunkMeshletMask::ALL,
+        tint_at,
+    )
+}
+
+pub(crate) fn build_layer_meshlets<W, F>(
+    world: &W,
+    chunk_coord: IVec3,
+    chunk: &VoxelChunk,
+    blocks: &BlockRegistry,
+    layers: &LayerRegistry,
+    meshlets: ChunkMeshletMask,
     mut tint_at: F,
 ) -> Vec<ChunkLayerMesh>
 where
@@ -48,6 +73,9 @@ where
 
     for (index, attached_layers) in chunk.layer_groups() {
         let (x, y, z) = coordinates(index);
+        if !meshlets.contains_voxel(x, y, z) {
+            continue;
+        }
         let Some(support_cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
             continue;
         };
