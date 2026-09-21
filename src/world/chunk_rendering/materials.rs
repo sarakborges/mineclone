@@ -1,6 +1,16 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
-use bevy::prelude::*;
+use bevy::{
+    asset::RenderAssetUsages,
+    prelude::*,
+    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+};
 
 use crate::{
     content::{
@@ -9,7 +19,9 @@ use crate::{
         layer::{LayerDefinition, LayerRegistry},
     },
     rendering::{
-        block_texture::{block_face_texture_layers, load_block_texture_layer},
+        block_texture::{
+            TerrainTextureTable, block_face_texture_layers, load_block_texture_layer,
+        },
         terrain_material::{
             TerrainLightingBuffer, TerrainMaterial, TerrainMaterialExtension,
         },
@@ -18,6 +30,9 @@ use crate::{
 };
 
 const TEXTURE_LAYER_DEPTH_BIAS: f32 = 2.0;
+const TERRAIN_TEXTURE_SIZE: u32 = 64;
+const TERRAIN_TEXTURE_BYTES: usize =
+    TERRAIN_TEXTURE_SIZE as usize * TERRAIN_TEXTURE_SIZE as usize * 4;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum TerrainAlphaKey {
@@ -64,6 +79,7 @@ struct TerrainMaterialBuilder<'a> {
     lighting: &'a TerrainLightingBuffer,
     roughness: f32,
     metallic: f32,
+    texture_array: Handle<Image>,
 }
 
 impl<'a> TerrainMaterialBuilder<'a> {
@@ -73,6 +89,7 @@ impl<'a> TerrainMaterialBuilder<'a> {
         lighting: &'a TerrainLightingBuffer,
         roughness: f32,
         metallic: f32,
+        texture_array: Handle<Image>,
     ) -> Self {
         Self {
             asset_server,
@@ -81,6 +98,7 @@ impl<'a> TerrainMaterialBuilder<'a> {
             lighting,
             roughness,
             metallic,
+            texture_array,
         }
     }
 
