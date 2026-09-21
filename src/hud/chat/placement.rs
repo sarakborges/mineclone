@@ -5,6 +5,7 @@ use crate::{
         block::BlockRegistry,
         creature::{CreatureCollider, CreatureRegistry},
         structure::StructureRegistry,
+        structure_set::{StructureSetDefinition, StructureSetRegistry},
     },
     creatures::{CreatureInstance, spawn_creature_at},
     localization::ActiveLanguage,
@@ -13,10 +14,14 @@ use crate::{
         cell::VoxelCell, collision::collides_aabb, edit::VoxelTopologyRuntime,
         texture_rotation::TextureRotation, world::VoxelWorld,
     },
-    world::{generation::surface_layer_placements, WorldSeed},
+    world::{
+        generation::{ResolvedSetPiece, resolve_set_pieces, surface_layer_placements},
+        WorldSeed,
+    },
 };
 
 const DISPLACEMENT_MARGIN: i32 = 3;
+const SET_DISPLACEMENT_RADIUS: i32 = 24;
 const DISPLACEMENT_HEIGHTS: [i32; 5] = [0, 1, -1, 2, -2];
 const SUPPORT_PROBE: f32 = 0.08;
 const BOUNDS_EPSILON: f32 = 0.0001;
@@ -32,6 +37,7 @@ type ExistingCreatures<'w, 's> = Query<
 pub(super) struct ChatPlacementContext<'w, 's> {
     definitions: Res<'w, CreatureRegistry>,
     structures: Res<'w, StructureRegistry>,
+    structure_sets: Res<'w, StructureSetRegistry>,
     blocks: Res<'w, BlockRegistry>,
     seed: Res<'w, WorldSeed>,
     assets: Res<'w, AssetServer>,
@@ -147,11 +153,90 @@ fn displaced_eye(
 /// deliberately ignores terrain type, slope and fluid restrictions; it only
 /// needs a loaded solid surface to anchor the structure above.
 fn loaded_surface_level(world: &VoxelWorld, feet: IVec3) -> Option<i32> {
-    let ground_y = (0..=feet.y.max(0))
-        .rev()
-        .find(|&y| world.is_solid(IVec3::new(feet.x, y, feet.z)))?;
-    let above = IVec3::new(feet.x, ground_y + 1, feet.z);
+    loaded_surface_level_at(world, feet.xz(), feet.y)
+}
+
+fn loaded_surface_level_at(
+    world: &VoxelWorld,
+    horizontal: IVec2,
+    search_top: i32,
+) -> Option<i32> {
+    let ground_y = (0..=search_top.max(0)).rev().find(|&y| {
+        let position = IVec3::new(horizontal.x, y, horizontal.y);
+        world.is_loaded_at(position) && world.is_solid(position)
+    })?;
+    let above = IVec3::new(horizontal.x, ground_y + 1, horizontal.y);
     world.is_loaded_at(above).then_some(ground_y + 1)
+}
+
+fn clear_destination_for_set(
+    world: &VoxelWorld,
+    eye: Vec3,
+    blocked: &[(Vec3, Vec3)],
+    existing: &ExistingCreatures<'_, '_>,
+    reserved: &[(Vec3, CreatureCollider)],
+) -> bool {
+    let bounds = player_bounds(eye);
+    if blocked.iter().any(|volume| overlaps(bounds, *volume))
+        || existing
+            .iter()
+            .any(|(transform, collider)| overlaps(bounds, collider.bounds(transform.translation)))
+        || reserved
+            .iter()
+            .any(|(feet, collider)| overlaps(bounds, collider.bounds(*feet)))
+    {
+        return false;
+    }
+
+    clear_volume(world, bounds, true) && has_support(world, bounds)
+}
+
+fn displaced_eye_for_set(
+    world: &VoxelWorld,
+    initial_eye: Vec3,
+    blocked: &[(Vec3, Vec3)],
+    existing: &ExistingCreatures<'_, '_>,
+    reserved: &[(Vec3, CreatureCollider)],
+) -> Option<Vec3> {
+    let initial_feet = (initial_eye - Vec3::Y * PLAYER_EYE_HEIGHT)
+        .floor()
+        .as_ivec3();
+
+    for radius in 0..=SET_DISPLACEMENT_RADIUS {
+        for z in -radius..=radius {
+            for x in -radius..=radius {
+                if radius > 0 && x.abs() != radius && z.abs() != radius {
+                    continue;
+                }
+                for delta_y in DISPLACEMENT_HEIGHTS {
+                    let eye = Vec3::new(
+                        (initial_feet.x + x) as f32 + 0.5,
+                        (initial_feet.y + delta_y) as f32 + PLAYER_EYE_HEIGHT,
+                        (initial_feet.z + z) as f32 + 0.5,
+                    );
+                    if clear_destination_for_set(world, eye, blocked, existing, reserved) {
+                        return Some(eye);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn set_piece_bounds(piece: &ResolvedSetPiece<'_>) -> (Vec3, Vec3) {
+    let minimum = IVec3::new(
+        piece.minimum.x,
+        piece.origin_y + piece.structure.min_y_offset(),
+        piece.minimum.y,
+    );
+    let maximum = IVec3::new(
+        piece.maximum.x,
+        piece.origin_y + piece.structure.max_y_offset(),
+        piece.maximum.y,
+    );
+    (minimum.as_vec3(), (maximum + IVec3::ONE).as_vec3())
 }
 
 fn manual_structure_hash(world_seed: u64, reference: &str, anchor: IVec2) -> u64 {
@@ -232,8 +317,15 @@ impl ChatPlacementContext<'_, '_> {
         variation: Option<usize>,
         reserved: &[(Vec3, CreatureCollider)],
     ) -> String {
+        if let Some(set) = self.structure_sets.get(reference).cloned() {
+            if variation.is_some() {
+                return format!("Structure set {reference} does not have variations.");
+            }
+            return self.place_set(&set, reserved);
+        }
+
         let Some(variation_count) = self.structures.variation_count(reference) else {
-            return format!("Unknown structure id or group: {reference}");
+            return format!("Unknown structure, structure group, or structure set: {reference}");
         };
         if let Some(variation) = variation
             && variation > variation_count
@@ -330,6 +422,109 @@ impl ChatPlacementContext<'_, '_> {
             "Placed {} ({}).",
             structure.name.text(self.language.get()),
             structure.id
+        )
+    }
+
+    fn place_set(
+        &mut self,
+        set: &StructureSetDefinition,
+        reserved: &[(Vec3, CreatureCollider)],
+    ) -> String {
+        let Ok(mut player) = self.player.single_mut() else {
+            return "Cannot place structure set: player is unavailable.".to_owned();
+        };
+        let feet = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
+        let feet_block = feet.floor().as_ivec3();
+        let placement_anchor = feet_block.xz();
+        let search_top = feet_block.y.saturating_add(64);
+
+        let world = self.runtime.world();
+        let Some(pieces) = resolve_set_pieces(
+            self.seed.0,
+            set,
+            placement_anchor,
+            &self.structures,
+            |structure, _rotation, anchor| {
+                let surface_y =
+                    loaded_surface_level_at(world, anchor, search_top)?;
+                Some(surface_y - structure.min_y_offset())
+            },
+        ) else {
+            return format!("could not resolve structure set {} in loaded terrain", set.id);
+        };
+
+        let blocked = pieces.iter().map(set_piece_bounds).collect::<Vec<_>>();
+        let all_loaded_and_entity_clear = pieces.iter().all(|piece| {
+            let origin = IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y);
+            piece.structure.voxels().iter().all(|voxel| {
+                let position = origin + piece.rotation.rotate_offset(voxel.offset);
+                let voxel_bounds = (position.as_vec3(), position.as_vec3() + Vec3::ONE);
+                world.is_loaded_at(position)
+                    && !self.existing.iter().any(|(other, collider)| {
+                        overlaps(voxel_bounds, collider.bounds(other.translation))
+                    })
+                    && !reserved.iter().any(|(other, collider)| {
+                        overlaps(voxel_bounds, collider.bounds(*other))
+                    })
+            })
+        });
+        if !all_loaded_and_entity_clear {
+            return format!("not enough loaded space to place {}", set.id);
+        }
+
+        let current_player_bounds = player_bounds(player.translation);
+        let destination = if blocked
+            .iter()
+            .all(|volume| !overlaps(current_player_bounds, *volume))
+        {
+            Some(player.translation)
+        } else {
+            displaced_eye_for_set(
+                world,
+                player.translation,
+                &blocked,
+                &self.existing,
+                reserved,
+            )
+        };
+        let Some(destination) = destination else {
+            return format!("not enough safe space to place {}", set.id);
+        };
+
+        for piece in &pieces {
+            let origin = IVec3::new(piece.anchor.x, piece.origin_y, piece.anchor.y);
+            for voxel in piece.structure.voxels() {
+                let position = origin + piece.rotation.rotate_offset(voxel.offset);
+                let block = self
+                    .blocks
+                    .get(voxel.block_id)
+                    .expect("validated structure block");
+                let texture_rotation =
+                    TextureRotation::for_position(position, block.rotate_texture.any());
+                let cell = VoxelCell::oriented(
+                    voxel.block_id,
+                    texture_rotation,
+                    piece.rotation.rotate_orientation(voxel.orientation),
+                );
+                let _ = self.runtime.set_block(position, Some(cell));
+                for (face, layer) in surface_layer_placements(
+                    self.seed.0,
+                    piece.structure,
+                    piece.rotation,
+                    voxel,
+                    position,
+                ) {
+                    let _ = self.runtime.add_layer(position, face, layer);
+                }
+            }
+        }
+
+        player.translation = destination;
+        format!(
+            "Placed {} ({}) with {} structures.",
+            set.name.text(self.language.get()),
+            set.id,
+            pieces.len()
         )
     }
 }
