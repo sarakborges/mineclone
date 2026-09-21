@@ -194,17 +194,20 @@ fn fragment(
         f32((packed_tint >> 8u) & 255u),
         f32((packed_tint >> 16u) & 255u),
     ) / 255.0;
+
+    let packed_sky_material = u32(round(in.color.w));
+    let material_code = packed_sky_material & 1048575u;
+    let sky_level = f32((packed_sky_material >> 20u) & 15u) / 15.0;
     var base_tint_enabled = terrain_material_extension.base_tint_enabled > 0.5;
     var overlay_enabled = terrain_material_extension.overlay_enabled > 0.5;
     var overlay_tint_enabled = terrain_material_extension.overlay_tint_enabled > 0.5;
     let texture_array_enabled = terrain_material_extension.texture_array_enabled > 0.5;
-    var array_overlay_index = 1023u;
+    var array_overlay_index = 511u;
 
     if texture_array_enabled {
-        let material_code = u32(round(in.uv_b.y));
-        let base_index = material_code & 1023u;
-        array_overlay_index = (material_code >> 10u) & 1023u;
-        let flags = (material_code >> 20u) & 3u;
+        let base_index = material_code & 511u;
+        array_overlay_index = (material_code >> 9u) & 511u;
+        let flags = (material_code >> 18u) & 3u;
 
         texel = textureSample(
             terrain_texture_array,
@@ -213,7 +216,7 @@ fn fragment(
             i32(base_index),
         );
         base_tint_enabled = (flags & 1u) != 0u;
-        overlay_enabled = array_overlay_index != 1023u;
+        overlay_enabled = array_overlay_index != 511u;
         overlay_tint_enabled = (flags & 2u) != 0u;
     } else {
         texel = textureSample(
@@ -230,7 +233,6 @@ fn fragment(
     );
     let is_fluid = fluid_animation > 0.5;
     let ambient_occlusion = clamp(in.color.z, 0.0, 1.0);
-    let sky_level = clamp(in.uv_b.x, 0.0, 1.0);
     let sky_light = pow(sky_level, SKY_LIGHT_GAMMA) * terrain_global_lighting[0].x;
 
     // Block-light channels are exact 4-bit voxel levels packed into COLOR.x.
