@@ -74,7 +74,7 @@ impl ChunkRemeshDependencies {
     fn capture(
         center: IVec3,
         world: &ChunkMeshSnapshot,
-        revisions: &SharedLightingRevisions,
+        revisions: &HashMap<IVec3, u64>,
     ) -> Self {
         Self {
             content: world.dependencies(),
