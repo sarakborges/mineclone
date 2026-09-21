@@ -5,7 +5,7 @@ mod fluids;
 mod index;
 mod materials;
 mod structures;
-mod surface_carvers;
+pub(crate) mod surface_carvers;
 
 use std::sync::Arc;
 
