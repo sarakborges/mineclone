@@ -27,6 +27,7 @@ struct TerrainMaterialExtension {
     base_tint_enabled: f32,
     overlay_enabled: f32,
     overlay_tint_enabled: f32,
+    texture_array_enabled: f32,
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(100)
@@ -40,6 +41,12 @@ var terrain_overlay_texture: texture_2d<f32>;
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(103)
 var terrain_overlay_sampler: sampler;
+
+@group(#{MATERIAL_BIND_GROUP}) @binding(104)
+var terrain_texture_array: texture_2d_array<f32>;
+
+@group(#{MATERIAL_BIND_GROUP}) @binding(105)
+var terrain_texture_array_sampler: sampler;
 
 const AMBIENT_FLOOR: f32 = 0.055;
 const SKY_LIGHT_GAMMA: f32 = 1.35;
@@ -173,7 +180,7 @@ fn fragment(
     // keeps the original per-block texture scale even when the sampler itself
     // is clamped.
     let tiled_uv = fract(in.uv);
-    let texel = textureSample(
+    var texel = textureSample(
         pbr_bindings::base_color_texture,
         pbr_bindings::base_color_sampler,
         tiled_uv,
@@ -189,9 +196,29 @@ fn fragment(
 #else
     let tint = vec3<f32>(1.0);
 #endif
-    let base_tint_enabled = terrain_material_extension.base_tint_enabled > 0.5;
-    let overlay_enabled = terrain_material_extension.overlay_enabled > 0.5;
-    let overlay_tint_enabled = terrain_material_extension.overlay_tint_enabled > 0.5;
+    var base_tint_enabled = terrain_material_extension.base_tint_enabled > 0.5;
+    var overlay_enabled = terrain_material_extension.overlay_enabled > 0.5;
+    var overlay_tint_enabled = terrain_material_extension.overlay_tint_enabled > 0.5;
+    let texture_array_enabled = terrain_material_extension.texture_array_enabled > 0.5;
+    var array_overlay_index = 1023u;
+
+    if texture_array_enabled {
+        let material_code = u32(round(in.uv_b.y));
+        let base_index = material_code & 1023u;
+        array_overlay_index = (material_code >> 10u) & 1023u;
+        let flags = (material_code >> 20u) & 3u;
+
+        texel = textureSample(
+            terrain_texture_array,
+            terrain_texture_array_sampler,
+            tiled_uv,
+            i32(base_index),
+        );
+        base_tint_enabled = (flags & 1u) != 0u;
+        overlay_enabled = array_overlay_index != 1023u;
+        overlay_tint_enabled = (flags & 2u) != 0u;
+    }
+
     let fluid_animation = clamp(
         terrain_material_extension.fluid_animation_factor,
         0.0,
@@ -251,11 +278,19 @@ fn fragment(
     }
 
     if overlay_enabled {
-        let overlay = textureSample(
+        var overlay = textureSample(
             terrain_overlay_texture,
             terrain_overlay_sampler,
             tiled_uv,
         );
+        if texture_array_enabled {
+            overlay = textureSample(
+                terrain_texture_array,
+                terrain_texture_array_sampler,
+                tiled_uv,
+                i32(array_overlay_index),
+            );
+        }
         var overlay_rgb = overlay.rgb;
         if overlay_tint_enabled {
             overlay_rgb = apply_layer_tint(overlay.rgb, tint);
