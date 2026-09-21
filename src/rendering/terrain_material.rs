@@ -41,7 +41,14 @@ pub(crate) struct TerrainMaterialExtension {
     #[uniform(101)]
     pub fluid_animation_factor: f32,
     #[uniform(101)]
-    pub tint_enabled: f32,
+    pub base_tint_enabled: f32,
+    #[uniform(101)]
+    pub overlay_enabled: f32,
+    #[uniform(101)]
+    pub overlay_tint_enabled: f32,
+    #[texture(102)]
+    #[sampler(103)]
+    pub overlay_texture: Option<Handle<Image>>,
 }
 
 impl MaterialExtension for TerrainMaterialExtension {
