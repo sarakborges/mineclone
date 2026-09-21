@@ -163,10 +163,19 @@ impl DayNightCycleRegistry {
             definition.id
         );
 
-        let phase_duration = definition.phases.dawn.duration_ticks
-            + definition.phases.day.duration_ticks
-            + definition.phases.dusk.duration_ticks
-            + definition.phases.night.duration_ticks;
+        let phase_duration = definition
+            .phases
+            .dawn
+            .duration_ticks
+            .checked_add(definition.phases.day.duration_ticks)
+            .and_then(|ticks| ticks.checked_add(definition.phases.dusk.duration_ticks))
+            .and_then(|ticks| ticks.checked_add(definition.phases.night.duration_ticks))
+            .unwrap_or_else(|| {
+                panic!(
+                    "day-night cycle {} phase duration sum cannot overflow",
+                    definition.id
+                )
+            });
 
         assert_eq!(
             phase_duration,
