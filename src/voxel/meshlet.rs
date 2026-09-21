@@ -71,6 +71,37 @@ impl ChunkMeshletMask {
         self.0 & (1 << index) != 0
     }
 
+    pub(crate) fn depends_on_neighbor_offset(self, offset: IVec3) -> bool {
+        if self.is_empty()
+            || offset.x.abs() > 1
+            || offset.y.abs() > 1
+            || offset.z.abs() > 1
+        {
+            return false;
+        }
+        if offset == IVec3::ZERO {
+            return true;
+        }
+
+        (0..MESHLET_COUNT).any(|index| {
+            if !self.contains_index(index) {
+                return false;
+            }
+
+            let meshlet_x = index % MESHLETS_PER_AXIS;
+            let meshlet_z = (index / MESHLETS_PER_AXIS) % MESHLETS_PER_AXIS;
+            let meshlet_y =
+                index / (MESHLETS_PER_AXIS * MESHLETS_PER_AXIS);
+            let side_x = if meshlet_x == 0 { -1 } else { 1 };
+            let side_y = if meshlet_y == 0 { -1 } else { 1 };
+            let side_z = if meshlet_z == 0 { -1 } else { 1 };
+
+            (offset.x == 0 || offset.x == side_x)
+                && (offset.y == 0 || offset.y == side_y)
+                && (offset.z == 0 || offset.z == side_z)
+        })
+    }
+
     pub(crate) fn contains_voxel(self, x: usize, y: usize, z: usize) -> bool {
         let meshlet_x = x / CHUNK_MESHLET_EDGE;
         let meshlet_y = y / CHUNK_MESHLET_EDGE;
