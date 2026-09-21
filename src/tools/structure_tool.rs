@@ -187,7 +187,7 @@ fn draw_structure_selection(
     let size = (maximum - minimum + IVec3::ONE).as_vec3();
     let center = minimum.as_vec3() + size * 0.5;
 
-    gizmos.cuboid(
+    gizmos.cube(
         Transform::from_translation(center).with_scale(size),
         SELECTION_COLOR,
     );
