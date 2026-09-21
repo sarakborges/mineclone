@@ -33,7 +33,7 @@ pub(crate) fn resolve_set_pieces<'a>(
     ) -> Option<i32>,
 ) -> Option<Vec<ResolvedSetPiece<'a>>> {
     let occurrence_hash = set_occurrence_hash(world_seed, &set.id, set_anchor);
-    let mut resolved = Vec::new();
+    let mut resolved: Vec<ResolvedSetPiece<'a>> = Vec::new();
     let mut anchors_by_element = HashMap::<&str, Vec<IVec2>>::new();
     let mut all_anchors = Vec::<IVec2>::new();
 
