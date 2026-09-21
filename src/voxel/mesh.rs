@@ -101,47 +101,40 @@ where
     let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
     let mut visuals = vec![None; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
 
-    // Sculpted voxels keep the dedicated micro-mesher. Their geometry already
-    // performs greedy rectangle merging at 1/8-block resolution.
-    for y in 0..CHUNK_SIZE {
-        for z in 0..CHUNK_SIZE {
-            for x in 0..CHUNK_SIZE {
-                if !meshlets.contains_voxel(x, y, z) {
-                    continue;
-                }
-                let Some(cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
-                    continue;
-                };
-                if !MicroblockMask::is_modified(cell) {
-                    continue;
-                }
-
-                let block = block_lookup.get(cell.block_id);
-                let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
-                let world_voxel = chunk_origin + local_voxel;
-                let visual = visual_for_cell(
-                    &mut visuals,
-                    chunk,
-                    [x, y, z],
-                    world_voxel,
-                    cell,
-                    block,
-                    &mut tint_at,
-                );
-                let surface = MicroSurface {
-                    world,
-                    cell,
-                    block,
-                    world_voxel,
-                    local_voxel,
-                    tint: visual.tint,
-                    block_srgb: visual.block_srgb,
-                    texture_table,
-                };
-                emit_sculpted_faces(&surface, &mut block_lookup, &mut buffers);
-            }
+    // Sculpted voxels keep the dedicated micro-mesher. Partial remeshes visit
+    // only dirty 8³ meshlets instead of scanning all 4096 chunk voxels.
+    meshlets.for_each_voxel(|x, y, z| {
+        let Some(cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
+            return;
+        };
+        if !MicroblockMask::is_modified(cell) {
+            return;
         }
-    }
+
+        let block = block_lookup.get(cell.block_id);
+        let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
+        let world_voxel = chunk_origin + local_voxel;
+        let visual = visual_for_cell(
+            &mut visuals,
+            chunk,
+            [x, y, z],
+            world_voxel,
+            cell,
+            block,
+            &mut tint_at,
+        );
+        let surface = MicroSurface {
+            world,
+            cell,
+            block,
+            world_voxel,
+            local_voxel,
+            tint: visual.tint,
+            block_srgb: visual.block_srgb,
+            texture_table,
+        };
+        emit_sculpted_faces(&surface, &mut block_lookup, &mut buffers);
+    });
 
     // Normal voxels are processed face-by-face so compatible exposed faces can
     // be merged into large rectangles. This first pass is intentionally
@@ -151,13 +144,20 @@ where
         for depth in 0..CHUNK_SIZE {
             let mut greedy = [None; CHUNK_SIZE * CHUNK_SIZE];
 
-            for v in 0..CHUNK_SIZE {
-                for u in 0..CHUNK_SIZE {
-                    let [x, y, z] = face_cell(face, depth, u, v);
-                    if !meshlets.contains_voxel(x, y, z) {
+            for v_region in 0..CHUNK_SIZE / CHUNK_MESHLET_EDGE {
+                for u_region in 0..CHUNK_SIZE / CHUNK_MESHLET_EDGE {
+                    let u_start = u_region * CHUNK_MESHLET_EDGE;
+                    let v_start = v_region * CHUNK_MESHLET_EDGE;
+                    let [probe_x, probe_y, probe_z] =
+                        face_cell(face, depth, u_start, v_start);
+                    if !meshlets.contains_voxel(probe_x, probe_y, probe_z) {
                         continue;
                     }
-                    let Some(cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
+
+                    for v in v_start..v_start + CHUNK_MESHLET_EDGE {
+                        for u in u_start..u_start + CHUNK_MESHLET_EDGE {
+                            let [x, y, z] = face_cell(face, depth, u, v);
+                            let Some(cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
                         continue;
                     };
                     if MicroblockMask::is_modified(cell) {
@@ -257,15 +257,22 @@ where
                         y,
                         z,
                     );
-                    push_lit_quad(
-                        material_buffer(&mut buffers, cell.block_id, block, material_face),
-                        geometry.vertices,
-                        geometry.normal,
-                        geometry.texture_rotation.rotate_uvs(VOXEL_FACE_UVS),
-                        tint,
-                        lighting,
-                        material_code,
-                    );
+                            push_lit_quad(
+                                material_buffer(
+                                    &mut buffers,
+                                    cell.block_id,
+                                    block,
+                                    material_face,
+                                ),
+                                geometry.vertices,
+                                geometry.normal,
+                                geometry.texture_rotation.rotate_uvs(VOXEL_FACE_UVS),
+                                tint,
+                                lighting,
+                                material_code,
+                            );
+                        }
+                    }
                 }
             }
 
