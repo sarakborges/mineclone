@@ -79,6 +79,8 @@
   "hud.brushPaint": "Clic izquierdo para pintar de {color}. Clic derecho para elegir el color.",
   "hud.brushClear": "Clic izquierdo para quitar la pintura. Clic derecho para elegir el color.",
   "hud.chisel": "Cincel: {precision} · R: precisión · Izquierdo: quitar · Derecho: colocar",
+  "hud.shears": "Tijeras: clic derecho para quitar la capa superficial superior",
+  "hud.structureTool": "Herramienta de Estructura: clic derecho para definir un punto de selección",
   "chisel.precision.thick": "Grueso",
   "chisel.precision.thin": "Fino",
   "chisel.precision.extraThin": "Extrafino",
