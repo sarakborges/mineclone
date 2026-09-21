@@ -14,7 +14,7 @@ use crate::{
         block::BlockRegistry,
         dimension::DimensionDefinition,
         layer::LayerFace,
-        structure::{StructureDefinition, StructureRegistry, StructureVoxel},
+        structure::{StructureDefinition, StructureRegistry, StructureRotation, StructureVoxel},
         structure_rules::{StructureFluidPolicy, StructureReplacePolicy},
     },
     voxel::{
@@ -44,6 +44,7 @@ struct StructureCandidate<'a> {
     biome_id: &'a str,
     placement_id: &'a str,
     structure: &'a StructureDefinition,
+    rotation: StructureRotation,
     anchor: IVec2,
     origin_y: i32,
     minimum: IVec2,
@@ -127,6 +128,7 @@ pub(super) fn rasterize_structures(
                 world_seed: context.biome_field.seed(),
             },
             structure,
+            candidate.rotation,
             IVec3::new(candidate.anchor.x, candidate.origin_y, candidate.anchor.y),
         );
     }
@@ -190,6 +192,7 @@ fn resolved_structure_candidates(
             .map(|candidate| CachedStructureCandidate {
                 placement_id: candidate.placement_id.to_owned(),
                 structure_id: candidate.structure.id.clone(),
+                rotation: candidate.rotation,
                 anchor: candidate.anchor,
                 origin_y: candidate.origin_y,
             })
@@ -322,7 +325,9 @@ pub(super) fn maximum_potential_structure_top_y_for_chunk(
                             biome_structure.biome_id, placement_id
                         )
                     });
-                let (minimum_offset, maximum_offset) = structure.horizontal_bounds();
+                let rotation = structure.rotation_for_hash(member_hash);
+                let (minimum_offset, maximum_offset) =
+                    structure.horizontal_bounds_for_rotation(rotation);
                 if !rectangles_overlap(
                     anchor + minimum_offset,
                     anchor + maximum_offset,
@@ -340,7 +345,7 @@ pub(super) fn maximum_potential_structure_top_y_for_chunk(
                 }
 
                 let support_offset = *structure
-                    .support_offsets()
+                    .support_offsets_for_rotation(rotation)
                     .first()
                     .expect("validated non-empty structure must have a support offset");
                 let support_surface = surface_height(
@@ -408,7 +413,9 @@ fn collect_structure_candidates<'a>(
                         "biome {biome_id} references empty structure group: {placement_id}"
                     )
                 });
-            let (minimum_offset, maximum_offset) = structure.horizontal_bounds();
+            let rotation = structure.rotation_for_hash(member_hash);
+            let (minimum_offset, maximum_offset) =
+                structure.horizontal_bounds_for_rotation(rotation);
             let minimum = anchor + minimum_offset;
             let maximum = anchor + maximum_offset;
             if !rectangles_overlap(minimum, maximum, target_min, target_max) {
@@ -424,12 +431,15 @@ fn collect_structure_candidates<'a>(
 
             let Some(origin_y) = context.feature_fields.structure_origin_y(
                 &structure.id,
+                rotation,
                 anchor,
                 || {
-                    let origin_y = compute_structure_origin_y(anchor, structure, context)?;
+                    let origin_y =
+                        compute_structure_origin_y(anchor, structure, rotation, context)?;
                     candidate_satisfies_restrictions(
                         biome_id,
                         structure,
+                        rotation,
                         anchor,
                         origin_y,
                         context,
@@ -444,6 +454,7 @@ fn collect_structure_candidates<'a>(
                 biome_id,
                 placement_id,
                 structure,
+                rotation,
                 anchor,
                 origin_y,
                 minimum,
@@ -598,10 +609,12 @@ fn rasterize_structure(
     claimed: &mut [u64; STRUCTURE_OCCUPANCY_WORDS],
     context: &StructureRasterizationContext<'_>,
     structure: &StructureDefinition,
+    rotation: StructureRotation,
     origin: IVec3,
 ) {
     visit_structure_voxels_in_chunk(
         structure,
+        rotation,
         origin,
         context.chunk_origin,
         |voxel, world_position, local| {
@@ -637,12 +650,13 @@ fn rasterize_structure(
                 Some(VoxelCell::oriented(
                     voxel.block_id,
                     texture_rotation,
-                    voxel.orientation,
+                    rotation.rotate_orientation(voxel.orientation),
                 )),
             );
             for (face, layer) in surface_layer_placements(
                 context.world_seed,
                 structure,
+                rotation,
                 voxel,
                 world_position,
             ) {
@@ -666,6 +680,7 @@ fn rasterize_structure(
 pub(crate) fn surface_layer_placements(
     world_seed: u64,
     structure: &StructureDefinition,
+    structure_rotation: StructureRotation,
     voxel: &StructureVoxel,
     world_position: IVec3,
 ) -> SmallVec<[(LayerFace, LayerCell); 6]> {
@@ -675,6 +690,7 @@ pub(crate) fn surface_layer_placements(
     let mut placements = SmallVec::new();
     for surface in structure.surface_layers_for_voxel(voxel) {
         for &face in &surface.faces {
+            let face = structure_rotation.rotate_face(face);
             let hash = surface_layer_hash(
                 world_seed,
                 structure.runtime_hash(),
@@ -723,6 +739,7 @@ fn unit_interval(hash: u64) -> f32 {
 
 fn visit_structure_voxels_in_chunk(
     structure: &StructureDefinition,
+    rotation: StructureRotation,
     origin: IVec3,
     chunk_origin: IVec3,
     mut visit: impl FnMut(&StructureVoxel, IVec3, IVec3) -> bool,
@@ -730,7 +747,7 @@ fn visit_structure_voxels_in_chunk(
     let chunk_size = CHUNK_SIZE as i32;
     if structure.voxels().len() < COLUMN_INDEX_MIN_VOXELS {
         for voxel in structure.voxels() {
-            let world_position = origin + voxel.offset;
+            let world_position = origin + rotation.rotate_offset(voxel.offset);
             let local = world_position - chunk_origin;
             if local.x < 0
                 || local.y < 0
@@ -754,7 +771,9 @@ fn visit_structure_voxels_in_chunk(
     for local_z in 0..chunk_size {
         for local_x in 0..chunk_size {
             let world_horizontal = chunk_horizontal + IVec2::new(local_x, local_z);
-            let structure_offset = world_horizontal - origin_horizontal;
+            let rotated_offset = world_horizontal - origin_horizontal;
+            let structure_offset =
+                rotation.inverse().rotate_horizontal(rotated_offset);
             for voxel in structure.column_voxels(structure_offset) {
                 let world_y = origin.y + voxel.offset.y;
                 let local_y = world_y - chunk_origin.y;
