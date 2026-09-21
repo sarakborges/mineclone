@@ -4,7 +4,8 @@ use serde::{Deserialize, Deserializer};
 use crate::localization::LocalizedText;
 
 use super::{
-    block_id::intern_block_id, block_orientation::BlockOrientation, registry::DefinitionMap,
+    asset_path::is_safe_relative_asset_path, block_id::intern_block_id,
+    block_orientation::BlockOrientation, registry::DefinitionMap,
 };
 
 const MAX_LIGHT_DAMPENING: u8 = 15;
@@ -271,9 +272,10 @@ impl BlockRegistry {
         ] {
             for (layer, texture) in layers.iter().enumerate() {
                 assert!(
-                    !texture.texture.is_empty(),
-                    "block {} textures.{face}[{layer}].texture cannot be empty",
-                    definition.id
+                    is_safe_relative_asset_path(&texture.texture),
+                    "block {} textures.{face}[{layer}].texture must be a safe relative asset path: {}",
+                    definition.id,
+                    texture.texture
                 );
             }
         }
