@@ -56,9 +56,7 @@ use biome::{CurrentBiome, track_current_biome};
 use biome_field::BiomeField;
 use chunk_generation_tasks::ChunkGenerationTasks;
 use chunk_mesh_tasks::ChunkMeshTasks;
-use chunk_remesh::{
-    ChunkRemeshQueue, process_chunk_remesh_queue, process_immediate_geometry_remesh,
-};
+use chunk_remesh::{ChunkRemeshQueue, process_chunk_remesh_queue};
 use chunk_remesh_tasks::ChunkRemeshTasks;
 use chunk_rendering::{
     ChunkRenderPool, FluidMaterials, TerrainMaterials, clear_chunk_render_pool,
@@ -187,7 +185,6 @@ impl Plugin for WorldPlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    process_immediate_geometry_remesh,
                     process_fluid_updates,
                     process_dynamic_lighting.run_if(pending_lighting_work),
                     process_chunk_remesh_queue,
