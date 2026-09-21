@@ -171,7 +171,7 @@ impl HydrologyRegion {
             let shore = shore_density_delta(
                 distance,
                 body.water_level,
-                river_opening,
+                if distance < 1.0 { 0.0 } else { river_opening },
                 surface_elevation,
             );
             // Iterator::max_by selects the last item when magnitudes tie.
