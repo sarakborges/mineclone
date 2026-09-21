@@ -77,7 +77,7 @@ pub(super) fn rasterize_fluid_pass(
             })
     });
 
-    chunk.edit_content(|chunk| {
+    chunk.edit_fluids(|chunk| {
         for local_z in 0..CHUNK_SIZE {
             for local_x in 0..CHUNK_SIZE {
                 let world_x = chunk_origin.x + local_x as i32;
