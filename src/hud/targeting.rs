@@ -1,4 +1,5 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
+use smallvec::SmallVec;
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
@@ -70,7 +71,7 @@ struct TargetHudSnapshot {
     block_id: &'static str,
     normal: IVec3,
     properties: SecondaryProperties,
-    layers: Vec<&'static str>,
+    layers: SmallVec<[&'static str; 8]>,
     light_level: u8,
     language: Language,
 }
@@ -275,7 +276,7 @@ fn update_target_hud(
         .layers_at(hit.voxel)
         .iter()
         .map(|attached| attached.cell.layer_id)
-        .collect::<Vec<_>>();
+        .collect::<SmallVec<[_; 8]>>();
     applied_layers.sort_unstable();
     applied_layers.dedup();
 
