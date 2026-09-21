@@ -24,7 +24,9 @@
 
 struct TerrainMaterialExtension {
     fluid_animation_factor: f32,
-    tint_enabled: f32,
+    base_tint_enabled: f32,
+    overlay_enabled: f32,
+    overlay_tint_enabled: f32,
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(100)
@@ -32,6 +34,12 @@ var<storage, read> terrain_global_lighting: array<vec4<f32>>;
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(101)
 var<uniform> terrain_material_extension: TerrainMaterialExtension;
+
+@group(#{MATERIAL_BIND_GROUP}) @binding(102)
+var terrain_overlay_texture: texture_2d<f32>;
+
+@group(#{MATERIAL_BIND_GROUP}) @binding(103)
+var terrain_overlay_sampler: sampler;
 
 const AMBIENT_FLOOR: f32 = 0.055;
 const SKY_LIGHT_GAMMA: f32 = 1.35;
@@ -181,7 +189,9 @@ fn fragment(
 #else
     let tint = vec3<f32>(1.0);
 #endif
-    let tint_enabled = terrain_material_extension.tint_enabled > 0.5;
+    let base_tint_enabled = terrain_material_extension.base_tint_enabled > 0.5;
+    let overlay_enabled = terrain_material_extension.overlay_enabled > 0.5;
+    let overlay_tint_enabled = terrain_material_extension.overlay_tint_enabled > 0.5;
     let fluid_animation = clamp(
         terrain_material_extension.fluid_animation_factor,
         0.0,
@@ -236,8 +246,21 @@ fn fragment(
     let local_light = combined_hue * combined_intensity * ambient_occlusion;
 
     var base_rgb = texel.rgb;
-    if tint_enabled {
+    if base_tint_enabled {
         base_rgb = apply_layer_tint(texel.rgb, tint);
+    }
+
+    if overlay_enabled {
+        let overlay = textureSample(
+            terrain_overlay_texture,
+            terrain_overlay_sampler,
+            tiled_uv,
+        );
+        var overlay_rgb = overlay.rgb;
+        if overlay_tint_enabled {
+            overlay_rgb = apply_layer_tint(overlay.rgb, tint);
+        }
+        base_rgb = mix(base_rgb, overlay_rgb, overlay.a);
     }
 
     var material_rgb = base_rgb * pbr_bindings::material.base_color.rgb;
