@@ -181,6 +181,12 @@ where
         self.queued.keys().copied()
     }
 
+    pub(crate) fn values_in_order(&self) -> impl Iterator<Item = T> + '_ {
+        self.pending.iter().filter_map(|(value, generation)| {
+            (self.queued.get(value).copied() == Some(*generation)).then_some(*value)
+        })
+    }
+
     pub(crate) fn revision(&self) -> u64 {
         self.revision
     }
