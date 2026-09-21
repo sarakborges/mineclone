@@ -16,6 +16,8 @@ use super::{assets::StarAssets, deterministic::hash01, state::SkyLayerVisualStat
 const MAX_STARS: usize = 96;
 const STAR_DISTANCE: f32 = 110.0;
 const GOLDEN_ANGLE: f32 = 2.3999631;
+const STAR_MIN_SIZE: f32 = 0.16;
+const STAR_SIZE_VARIATION: f32 = 0.18;
 
 #[derive(Component)]
 pub(super) struct Star {
@@ -32,7 +34,7 @@ pub(super) struct StarVisualSnapshot {
 pub(super) fn spawn_stars(mut commands: Commands, assets: Res<StarAssets>) {
     for index in 0..MAX_STARS {
         let direction = star_direction(index);
-        let size = 0.7 + hash01(index as u32) * 0.8;
+        let size = STAR_MIN_SIZE + hash01(index as u32) * STAR_SIZE_VARIATION;
         let mut transform = Transform {
             translation: direction * STAR_DISTANCE,
             scale: Vec3::splat(size),
@@ -71,6 +73,7 @@ pub(super) fn update_stars(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut stars: Query<(&Star, &mut Transform, &mut Visibility)>,
     mut last_camera: Local<Option<(Entity, Vec3)>>,
+    mut last_sky_rotation: Local<Option<f32>>,
     mut cached_visual: Local<Option<StarVisualSnapshot>>,
 ) {
     let StarView { camera, assets } = view;
@@ -87,6 +90,8 @@ pub(super) fn update_stars(
     let Some(sample) = scene.day_night.sample() else {
         return;
     };
+    let normalized_time = scene.day_night.clock().normalized_time.rem_euclid(1.0);
+    let rotation_changed = *last_sky_rotation != Some(normalized_time);
     let time_factor = star_time_factor(sample.phase, sample.next_phase, sample.transition);
     let visible_count =
         (scene.visuals.star_density * time_factor * MAX_STARS as f32).round() as usize;
@@ -98,12 +103,15 @@ pub(super) fn update_stars(
     };
     let visual_changed = cached_visual.as_ref() != Some(&visual_snapshot);
 
-    if !camera_changed && !visual_changed {
+    if !camera_changed && !rotation_changed && !visual_changed {
         return;
     }
 
     if camera_changed {
         *last_camera = Some((camera_entity, camera_position));
+    }
+    if rotation_changed {
+        *last_sky_rotation = Some(normalized_time);
     }
 
     if visual_changed {
@@ -117,11 +125,20 @@ pub(super) fn update_stars(
         }
     }
 
+    let sky_rotation = Quat::from_rotation_y(-normalized_time * std::f32::consts::TAU);
+
     for (star, mut transform, mut visibility) in &mut stars {
-        if camera_changed {
-            let translation = camera_position + star.direction * STAR_DISTANCE;
+        if camera_changed || rotation_changed {
+            let direction = sky_rotation * star.direction;
+            let translation = camera_position + direction * STAR_DISTANCE;
+            let mut next_transform = Transform::from_translation(translation);
+            next_transform.look_at(camera_position, Vec3::Y);
+
             if transform.translation != translation {
                 transform.translation = translation;
+            }
+            if transform.rotation != next_transform.rotation {
+                transform.rotation = next_transform.rotation;
             }
         }
 
