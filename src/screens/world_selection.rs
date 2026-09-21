@@ -7,7 +7,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use crate::{
     app::game_state::GameState,
     content::{
-        block::BlockRegistry, creature::CreatureRegistry,
+        biome::BiomeRegistry, block::BlockRegistry, creature::CreatureRegistry,
         day_night_cycle::DayNightCycleRegistry, dimension::DimensionRegistry,
         fluid::FluidRegistry, layer::LayerRegistry, tool::ToolRegistry,
     },
@@ -70,6 +70,7 @@ enum WorldSelectionAction {
 /// to activate a selected world. Keep the scan's resource access read-only.
 #[derive(SystemParam)]
 struct WorldSelectionScanContent<'w> {
+    biomes: Res<'w, BiomeRegistry>,
     blocks: Res<'w, BlockRegistry>,
     layers: Res<'w, LayerRegistry>,
     fluids: Res<'w, FluidRegistry>,
@@ -82,6 +83,7 @@ struct WorldSelectionScanContent<'w> {
 impl WorldSelectionScanContent<'_> {
     fn registries(&self) -> SaveRegistries<'_> {
         SaveRegistries {
+            biomes: &self.biomes,
             blocks: &self.blocks,
             layers: &self.layers,
             fluids: &self.fluids,
