@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use bevy::prelude::*;
 
 use crate::{
@@ -8,7 +10,10 @@ use crate::{
         color::Hsi,
         secondary_property::SecondaryPropertyRegistry,
     },
-    voxel::cell::VoxelCell,
+    voxel::{
+        cell::VoxelCell,
+        secondary_properties::{SecondaryProperties, SecondaryPropertyToken},
+    },
     world::biome_field::BiomeField,
 };
 
@@ -41,7 +46,9 @@ pub(crate) fn secondary_property_dye_tint(
         return None;
     }
 
-    let value_id = cell.secondary_property(DYED_PROPERTY_ID)?;
+    let value_id = cell
+        .secondary_properties()
+        .get_token(dyed_property_token())?;
     let dye = secondary_properties.get(DYED_PROPERTY_ID, value_id)?;
     if dye.color.intensity <= f32::EPSILON {
         return Some(Color::BLACK);
@@ -54,6 +61,11 @@ pub(crate) fn secondary_property_dye_tint(
             .normalized()
             .to_color(),
     )
+}
+
+fn dyed_property_token() -> SecondaryPropertyToken {
+    static TOKEN: OnceLock<SecondaryPropertyToken> = OnceLock::new();
+    *TOKEN.get_or_init(|| SecondaryProperties::token(DYED_PROPERTY_ID))
 }
 
 pub(crate) fn block_vertex_tint(
