@@ -64,6 +64,10 @@ impl ChunkRenderPool {
         self.active.values().map(|slot| slot.meshes.len()).sum()
     }
 
+    pub(crate) fn entity_count(&self) -> usize {
+        self.active.values().map(|slot| slot.entities.len()).sum()
+    }
+
     pub(crate) fn mesh_bytes(&self) -> usize {
         self.active.values().map(|slot| slot.mesh_bytes).sum()
     }
