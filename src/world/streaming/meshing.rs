@@ -14,7 +14,7 @@ use crate::{
 };
 
 use super::{
-    ChunkStreamingQueues, ChunkStreamingWork, is_critical_streaming_coord,
+    ChunkStreamingQueues, ChunkStreamingWork, chunk_load_priority,
     seed_loaded_chunk_lighting,
 };
 
@@ -62,12 +62,10 @@ pub(super) fn dispatch_initial_mesh_tasks(
                 work.state.defer_ready(coord);
                 break;
             };
-            if !is_critical_streaming_coord(coord, center) {
-                work.state.defer_ready(coord);
-                break;
-            }
+            let movement_direction = work.state.movement_direction;
+            let candidate_priority = chunk_load_priority(coord, center, movement_direction);
             let Some(preempted) = work.mesh_tasks.cancel_farthest_where(center, |task_coord| {
-                !is_critical_streaming_coord(task_coord, center)
+                chunk_load_priority(task_coord, center, movement_direction) > candidate_priority
             }) else {
                 work.state.defer_ready(coord);
                 break;
@@ -136,7 +134,38 @@ pub(super) fn collect_built_chunk_meshes(
             break;
         }
 
-        let Some(completed) = work.mesh_tasks.poll_ready() else {
+        let Some(center) = work.state.center else {
+            break;
+        };
+        let movement_direction = work.state.movement_direction;
+        let Some(next_coord) = work.mesh_tasks.best_coord_by_key(|coord| {
+            chunk_load_priority(coord, center, movement_direction)
+        }) else {
+            break;
+        };
+
+        if !work.state.retains_render_mesh(next_coord) {
+            let cancelled = work.mesh_tasks.cancel_farthest_where(center, |coord| {
+                coord == next_coord
+            });
+            debug_assert_eq!(cancelled, Some(next_coord));
+            work.state.mark_ready(next_coord);
+            budget.record(1);
+            continue;
+        }
+
+        let next_priority = chunk_load_priority(next_coord, center, movement_direction);
+        if work
+            .state
+            .nearest_missing_render_priority(&renderer.pool)
+            .is_some_and(|priority| priority < next_priority)
+        {
+            break;
+        }
+
+        let Some(completed) = work.mesh_tasks.poll_ready_by_key(|coord| {
+            chunk_load_priority(coord, center, movement_direction)
+        }) else {
             break;
         };
         budget.record(1);
