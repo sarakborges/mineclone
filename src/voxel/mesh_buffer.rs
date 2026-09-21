@@ -1,6 +1,6 @@
 use bevy::{
     asset::RenderAssetUsages,
-    mesh::{Indices, MeshVertexAttribute},
+    mesh::{Indices, MeshVertexAttribute, VertexAttributeValues},
     prelude::*,
     render::render_resource::{PrimitiveTopology, VertexFormat},
 };
@@ -65,7 +65,10 @@ impl VoxelMeshBuffer {
             .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
             // Tangents are omitted: voxel materials do not use normal maps.
             // RGB block light and AO remain independent interpolated channels.
-            .with_inserted_attribute(ATTRIBUTE_VOXEL_LIGHT, self.colors)
+            .with_inserted_attribute(
+                ATTRIBUTE_VOXEL_LIGHT,
+                VertexAttributeValues::Unorm8x4(self.colors),
+            )
             .with_inserted_indices(indices),
         )
     }
