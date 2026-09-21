@@ -103,7 +103,14 @@ impl Plugin for SettingsScreenPlugin {
             )
             .add_systems(
                 OnEnter(GameState::NewWorld),
-                (reset_new_world_settings, spawn_settings_screen).chain(),
+                (
+                    reset_resource::<RenderDistanceInputState>,
+                    reset_resource::<TargetBlockPositionDropdownState>,
+                    reset_resource::<LanguageDropdownState>,
+                    reset_new_world_settings,
+                    spawn_settings_screen,
+                )
+                    .chain(),
             )
             .add_systems(
                 Update,
