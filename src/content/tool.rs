@@ -39,12 +39,14 @@ impl ToolRegistry {
             "tool {} category cannot be empty",
             definition.id
         );
-        assert!(
-            is_safe_relative_asset_path(&definition.icon),
-            "tool {} icon must be a safe relative asset path: {}",
-            definition.id,
-            definition.icon
-        );
+        if !definition.icon.is_empty() {
+            assert!(
+                is_safe_relative_asset_path(&definition.icon),
+                "tool {} icon must be a safe relative asset path: {}",
+                definition.id,
+                definition.icon
+            );
+        }
         if let Some(tint_icon) = definition.tint_icon.as_deref() {
             assert!(
                 is_safe_relative_asset_path(tint_icon),
@@ -65,5 +67,35 @@ impl ToolRegistry {
 
     pub fn iter(&self) -> impl Iterator<Item = &ToolDefinition> {
         self.definitions.values()
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn localized_name() -> LocalizedText {
+        serde_json::from_str(
+            r#"{"english":"Shears","portuguese_brazil":"Tesoura","spanish":"Tijeras"}"#,
+        )
+        .expect("test localization must parse")
+    }
+
+    #[test]
+    fn tools_without_icons_are_valid_and_use_text_fallbacks() {
+        let mut registry = ToolRegistry::default();
+        registry.insert(ToolDefinition {
+            id: "asteria:test_shears".to_owned(),
+            name: localized_name(),
+            category: "tools".to_owned(),
+            icon: String::new(),
+            tint_icon: None,
+        });
+
+        let tool = registry
+            .get("asteria:test_shears")
+            .expect("tool must be registered");
+        assert!(tool.icon.is_empty());
     }
 }
