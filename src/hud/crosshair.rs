@@ -4,7 +4,10 @@ use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     content::{
         block::BlockRegistry,
-        builtin_ids::{BRUSH_TOOL_ID, CHISEL_TOOL_ID, DYED_PROPERTY_ID},
+        builtin_ids::{
+            BRUSH_TOOL_ID, CHISEL_TOOL_ID, DYED_PROPERTY_ID, SHEARS_TOOL_ID,
+            STRUCTURE_TOOL_ID,
+        },
         secondary_property::SecondaryPropertyRegistry,
     },
     gameplay::availability::world_interaction_available,
@@ -183,6 +186,30 @@ fn update_action_hint(
 
     let next_text = if !runtime.settings.display_tooltips() || runtime.targeted_creature.0.is_some() {
         None
+    } else if selected_item == Some(CHISEL_TOOL_ID) {
+        let precision_key = match *runtime.chisel_resolution {
+            ChiselResolution::Thick => "chisel.precision.thick",
+            ChiselResolution::Thin => "chisel.precision.thin",
+            ChiselResolution::ExtraThin => "chisel.precision.extraThin",
+        };
+        Some(
+            content
+                .localization
+                .text(language, "hud.chisel")
+                .replace(
+                    "{precision}",
+                    content.localization.text(language, precision_key),
+                ),
+        )
+    } else if selected_item == Some(SHEARS_TOOL_ID) {
+        Some(content.localization.text(language, "hud.shears").to_owned())
+    } else if selected_item == Some(STRUCTURE_TOOL_ID) {
+        Some(
+            content
+                .localization
+                .text(language, "hud.structureTool")
+                .to_owned(),
+        )
     } else if let Some(hit) = runtime.targeted.0 {
         if selected_item == Some(BRUSH_TOOL_ID) {
             let can_dye = content.blocks.get(hit.block_id).is_some_and(|block| {
@@ -212,22 +239,6 @@ fn update_action_hint(
                 // A brush has paint actions only; never fall back to Break/Place.
                 None
             }
-        } else if selected_item == Some(CHISEL_TOOL_ID) {
-            // Share the Brush hint's position, tooltip setting, and creature
-            // suppression. Ineligible blocks have no advertised Chisel action.
-            content.blocks.get(hit.block_id)
-                .filter(|block| block.can_fragment())
-                .map(|_| {
-                    let precision_key = match *runtime.chisel_resolution {
-                        ChiselResolution::Thick => "chisel.precision.thick",
-                        ChiselResolution::Thin => "chisel.precision.thin",
-                        ChiselResolution::ExtraThin => "chisel.precision.extraThin",
-                    };
-                    content.localization.text(language, "hud.chisel").replace(
-                        "{precision}",
-                        content.localization.text(language, precision_key),
-                    )
-                })
         } else if selected_block.is_some() {
             Some(
                 content
@@ -243,7 +254,7 @@ fn update_action_hint(
                     .to_owned(),
             )
         }
-    } else if selected_item == Some(BRUSH_TOOL_ID) || selected_item == Some(CHISEL_TOOL_ID) {
+    } else if selected_item == Some(BRUSH_TOOL_ID) {
         None
     } else {
         selected_block
