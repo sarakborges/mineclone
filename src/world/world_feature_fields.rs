@@ -14,6 +14,7 @@ pub(crate) struct CachedStructureCandidate {
     pub(crate) placement_id: String,
     pub(crate) structure_id: String,
     pub(crate) rotation: StructureRotation,
+    pub(crate) placement_anchor: IVec2,
     pub(crate) anchor: IVec2,
     pub(crate) origin_y: i32,
 }
