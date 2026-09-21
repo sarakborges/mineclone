@@ -1,0 +1,18 @@
+{
+  "id": "asteria:leaf_oak",
+  "name": { "english": "Oak Leaf", "portuguese_brazil": "Folha de carvalho", "spanish": "Hoja de roble" },
+  "category": "foliage",
+  "tint": "leaf",
+  "textures": {
+    "top": [{ "texture": "textures/blocks/trees/oak/leaf.png", "dyable": true }],
+    "bottom": [{ "texture": "textures/blocks/trees/oak/leaf.png", "dyable": true }],
+    "left": [{ "texture": "textures/blocks/trees/oak/leaf.png", "dyable": true }],
+    "right": [{ "texture": "textures/blocks/trees/oak/leaf.png", "dyable": true }],
+    "front": [{ "texture": "textures/blocks/trees/oak/leaf.png", "dyable": true }],
+    "back": [{ "texture": "textures/blocks/trees/oak/leaf.png", "dyable": true }]
+  },
+  "rotateTexture": { "top": false, "bottom": false, "left": false, "right": false, "front": false, "back": false },
+  "alphaCutoff": 0.5,
+  "lightDampening": 1,
+  "castsShadow": false
+}
