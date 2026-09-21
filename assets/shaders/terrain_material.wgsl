@@ -278,17 +278,19 @@ fn fragment(
     }
 
     if overlay_enabled {
-        var overlay = textureSample(
-            terrain_overlay_texture,
-            terrain_overlay_sampler,
-            tiled_uv,
-        );
+        var overlay = vec4<f32>(1.0);
         if texture_array_enabled {
             overlay = textureSample(
                 terrain_texture_array,
                 terrain_texture_array_sampler,
                 tiled_uv,
                 i32(array_overlay_index),
+            );
+        } else {
+            overlay = textureSample(
+                terrain_overlay_texture,
+                terrain_overlay_sampler,
+                tiled_uv,
             );
         }
         var overlay_rgb = overlay.rgb;
