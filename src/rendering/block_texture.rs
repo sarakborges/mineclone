@@ -7,6 +7,28 @@ use crate::{
     voxel::block_face::BlockFace,
 };
 
+pub(crate) const TERRAIN_SHARED_MASK_CUTOFF: f32 = 0.5;
+
+pub(crate) fn terrain_array_alpha_signature(
+    definition: &BlockDefinition,
+) -> Option<(bool, Option<u32>)> {
+    if definition.alpha_blend {
+        return Some((true, None));
+    }
+
+    if definition
+        .alpha_cutoff
+        .is_none_or(|cutoff| cutoff.to_bits() == TERRAIN_SHARED_MASK_CUTOFF.to_bits())
+    {
+        return Some((
+            false,
+            Some(TERRAIN_SHARED_MASK_CUTOFF.to_bits()),
+        ));
+    }
+
+    None
+}
+
 const TERRAIN_TEXTURE_INDEX_BITS: u32 = 10;
 const TERRAIN_TEXTURE_INDEX_MASK: u32 = (1 << TERRAIN_TEXTURE_INDEX_BITS) - 1;
 const TERRAIN_TEXTURE_NONE_INDEX: u32 = TERRAIN_TEXTURE_INDEX_MASK;
