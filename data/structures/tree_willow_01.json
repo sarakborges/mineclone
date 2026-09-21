@@ -1,0 +1,204 @@
+{
+  "id": "asteria:tree_willow_01",
+  "group_id": "tree_willow",
+  "name": {
+    "english": "Willow Tree",
+    "portuguese_brazil": "Salgueiro",
+    "spanish": "Sauce"
+  },
+  "locatable": false,
+  "priority": 0,
+  "conflictGroups": [
+    "tree"
+  ],
+  "restrictions": {
+    "groundBlocks": [
+      "asteria:grass",
+      "asteria:dirt"
+    ],
+    "maxSlope": 1,
+    "requiresDryGround": true,
+    "proximity": [
+      {
+        "target": {
+          "fluid": "asteria:water"
+        },
+        "mode": "required",
+        "minDistance": 5,
+        "maxDistance": 10
+      }
+    ]
+  },
+  "generation": {
+    "replacePolicy": "terrain",
+    "fluidPolicy": "forbid",
+    "reserveSpace": false
+  },
+  "anchor": {
+    "x": 4,
+    "y": 0,
+    "z": 4
+  },
+  "palette": {
+    "G": {
+      "block": "asteria:grass"
+    },
+    "W": {
+      "block": "asteria:oak_log",
+      "orientation": "y"
+    },
+    "X": {
+      "block": "asteria:oak_log",
+      "orientation": "x"
+    },
+    "Z": {
+      "block": "asteria:oak_log",
+      "orientation": "z"
+    },
+    "F": {
+      "block": "asteria:oak_leaf"
+    }
+  },
+  "layers": [
+    {
+      "y": 0,
+      "rows": [
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        "....G....",
+        ".........",
+        ".........",
+        ".........",
+        "........."
+      ]
+    },
+    {
+      "y": 1,
+      "rows": [
+        ".........",
+        ".........",
+        ".........",
+        ".........",
+        "....W....",
+        ".........",
+        ".........",
+        ".........",
+        "........."
+      ]
+    },
+    {
+      "y": 2,
+      "rows": [
+        ".........",
+        ".........",
+        "..F...F..",
+        ".........",
+        "....W....",
+        ".........",
+        "..F...F..",
+        ".........",
+        "........."
+      ]
+    },
+    {
+      "y": 3,
+      "rows": [
+        ".........",
+        "....F....",
+        "..F...F..",
+        ".........",
+        ".F..W....",
+        ".........",
+        "..F...F..",
+        "....F....",
+        "........."
+      ]
+    },
+    {
+      "y": 4,
+      "rows": [
+        ".........",
+        "....F....",
+        "..F...F..",
+        ".........",
+        ".F..W..F.",
+        ".........",
+        "..F...F..",
+        "....F....",
+        "........."
+      ]
+    },
+    {
+      "y": 5,
+      "rows": [
+        ".........",
+        "....Z....",
+        "..F.Z....",
+        "...FZF...",
+        ".XXXZXXX.",
+        "...FZF...",
+        "..F.Z.F..",
+        "....Z....",
+        "........."
+      ]
+    },
+    {
+      "y": 6,
+      "rows": [
+        ".........",
+        "....F....",
+        "..FFFFF..",
+        "..FFFFF..",
+        ".FFFFFFF.",
+        "..FFFFF..",
+        "..FFFFF..",
+        "....F....",
+        "........."
+      ]
+    },
+    {
+      "y": 7,
+      "rows": [
+        ".........",
+        "..FFFFF..",
+        ".FFFFFFF.",
+        ".FFFFFFF.",
+        ".FFFFFFF.",
+        ".FFFFFFF.",
+        "..FFFFFF.",
+        "..FFFF...",
+        "........."
+      ]
+    },
+    {
+      "y": 8,
+      "rows": [
+        ".........",
+        "....F....",
+        "...FFF...",
+        "..FFFFF..",
+        ".FFFFFFF.",
+        "..FFFFF..",
+        "...FFF...",
+        "....F....",
+        "........."
+      ]
+    },
+    {
+      "y": 9,
+      "rows": [
+        ".........",
+        ".........",
+        "....F....",
+        "...FFF...",
+        "..F.F.F..",
+        "...FFF...",
+        "....F....",
+        ".........",
+        "........."
+      ]
+    }
+  ]
+}

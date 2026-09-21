@@ -1,6 +1,8 @@
 use serde::Deserialize;
 
-use super::block::BlockRegistry;
+use super::{block::BlockRegistry, fluid::FluidRegistry};
+
+pub const MAX_STRUCTURE_PROXIMITY_DISTANCE: u32 = 64;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -18,6 +20,32 @@ pub enum StructureFluidPolicy {
     Displace,
     Preserve,
     Forbid,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum StructureProximityMode {
+    Required,
+    Forbidden,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StructureProximityTarget {
+    #[serde(default)]
+    pub block: Option<String>,
+    #[serde(default)]
+    pub fluid: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StructureProximityRestriction {
+    pub target: StructureProximityTarget,
+    pub mode: StructureProximityMode,
+    #[serde(default)]
+    pub min_distance: Option<u32>,
+    pub max_distance: u32,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
@@ -46,6 +74,8 @@ pub struct StructureRestrictions {
     pub min_y: Option<i32>,
     #[serde(default)]
     pub max_y: Option<i32>,
+    #[serde(default)]
+    pub proximity: Vec<StructureProximityRestriction>,
 }
 
 impl Default for StructureRestrictions {
@@ -57,6 +87,7 @@ impl Default for StructureRestrictions {
             required_biome_coverage: 0.0,
             min_y: None,
             max_y: None,
+            proximity: Vec::new(),
         }
     }
 }
@@ -89,14 +120,79 @@ impl StructureRestrictions {
                 "structure {structure_id} restrictions.groundBlocks cannot contain duplicates"
             );
         }
+
+        for (index, proximity) in self.proximity.iter().enumerate() {
+            let target_count =
+                usize::from(proximity.target.block.is_some())
+                    + usize::from(proximity.target.fluid.is_some());
+            assert_eq!(
+                target_count, 1,
+                "structure {structure_id} restrictions.proximity[{index}].target must define exactly one of block or fluid"
+            );
+            if let Some(block) = proximity.target.block.as_deref() {
+                assert!(
+                    !block.trim().is_empty(),
+                    "structure {structure_id} restrictions.proximity[{index}].target.block cannot be empty"
+                );
+            }
+            if let Some(fluid) = proximity.target.fluid.as_deref() {
+                assert!(
+                    !fluid.trim().is_empty(),
+                    "structure {structure_id} restrictions.proximity[{index}].target.fluid cannot be empty"
+                );
+            }
+            if let Some(minimum) = proximity.min_distance {
+                assert!(
+                    minimum <= proximity.max_distance,
+                    "structure {structure_id} restrictions.proximity[{index}].minDistance cannot exceed maxDistance"
+                );
+            }
+            assert!(
+                proximity.max_distance <= MAX_STRUCTURE_PROXIMITY_DISTANCE,
+                "structure {structure_id} restrictions.proximity[{index}].maxDistance cannot exceed {MAX_STRUCTURE_PROXIMITY_DISTANCE}"
+            );
+            assert!(
+                !self.proximity[..index].contains(proximity),
+                "structure {structure_id} restrictions.proximity cannot contain duplicate rules"
+            );
+            assert!(
+                !self.proximity[..index].iter().any(|previous| {
+                    previous.target == proximity.target
+                        && previous.min_distance == proximity.min_distance
+                        && previous.max_distance == proximity.max_distance
+                        && previous.mode != proximity.mode
+                }),
+                "structure {structure_id} restrictions.proximity cannot require and forbid the same target over the same distance range"
+            );
+        }
     }
 
-    pub(crate) fn validate_references(&self, structure_id: &str, blocks: &BlockRegistry) {
+    pub(crate) fn validate_references(
+        &self,
+        structure_id: &str,
+        blocks: &BlockRegistry,
+        fluids: &FluidRegistry,
+    ) {
         for block in &self.ground_blocks {
             assert!(
                 blocks.get(block).is_some(),
                 "structure {structure_id} restrictions.groundBlocks references missing block: {block}"
             );
+        }
+
+        for (index, proximity) in self.proximity.iter().enumerate() {
+            if let Some(block) = proximity.target.block.as_deref() {
+                assert!(
+                    blocks.get(block).is_some(),
+                    "structure {structure_id} restrictions.proximity[{index}] references missing block: {block}"
+                );
+            }
+            if let Some(fluid) = proximity.target.fluid.as_deref() {
+                assert!(
+                    fluids.id_of(fluid).is_some(),
+                    "structure {structure_id} restrictions.proximity[{index}] references missing fluid: {fluid}"
+                );
+            }
         }
     }
 }

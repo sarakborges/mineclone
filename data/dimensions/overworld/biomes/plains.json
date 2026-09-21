@@ -55,6 +55,14 @@
       }
     },
     {
+      "id": "asteria:tree_willow",
+      "placement": {
+        "spacing": 36,
+        "chance": 0.72,
+        "jitter": 11
+      }
+    },
+    {
       "id": "asteria:boulder_small",
       "placement": {
         "spacing": 36,

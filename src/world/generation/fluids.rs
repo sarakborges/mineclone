@@ -13,11 +13,14 @@ use crate::{
         biome_field::BiomeField, cave_connectivity::CaveConnectivityRegion,
         deterministic::{hash_string, mix_seed}, generation::GenerationColumnSample,
         generation_region::GenerationRegion, hydrology::HydrologyWaterSample,
-        noise::fractal_noise_2d,
+        noise::fractal_noise_2d, terrain::surface_height_from_sample,
     },
 };
 
-use super::index::{column_index, voxel_index};
+use super::{
+    ChunkGenerationContext,
+    index::{column_index, voxel_index},
+};
 
 pub(super) struct FluidPassContext<'a> {
     pub(super) fluids: &'a FluidRegistry,
@@ -155,6 +158,74 @@ pub(super) fn rasterize_fluid_pass(
             }
         }
     });
+}
+
+pub(super) fn authored_surface_fluid_id_at<'a>(
+    position: IVec2,
+    context: &'a ChunkGenerationContext<'_>,
+) -> Option<&'a str> {
+    let horizontal = position.as_vec2() + Vec2::splat(0.5);
+    let surface = context.biome_field.sample_surface(horizontal);
+    let biome_id = context
+        .biome_field
+        .surface_biome_id(surface.identity_surface_index);
+    let biome = context
+        .biomes
+        .get(biome_id)
+        .unwrap_or_else(|| panic!("missing surface biome definition: {biome_id}"));
+    let rule = biome.surface_fluid.as_ref()?;
+    let surface_height =
+        surface_height_from_sample(position, context.dimension, context.biome_field, &surface);
+    let primary_terrain_strength = surface
+        .influences
+        .iter()
+        .find(|influence| influence.surface_index == surface.primary_surface_index)
+        .map_or(1.0, |influence| influence.terrain_strength);
+
+    match rule {
+        BiomeSurfaceFluid::VolcanoCrater {
+            fluid,
+            minimum_strength,
+            level_offset,
+            spill_minimum_strength,
+            spill_maximum_strength,
+            spill_scale,
+            spill_width,
+            ..
+        } => {
+            let BiomeTerrain::Volcano {
+                base_height,
+                height,
+                crater_depth,
+                ..
+            } = biome
+                .terrain
+                .expect("validated volcano crater surface fluid requires volcano terrain")
+            else {
+                unreachable!("validated volcano crater surface fluid requires volcano terrain");
+            };
+            let crater_level = context.dimension.sea_level as f32
+                + base_height
+                + height
+                - crater_depth
+                + level_offset;
+            let crater_present =
+                primary_terrain_strength >= *minimum_strength
+                    && crater_level > surface_height as f32;
+            let spill_present =
+                primary_terrain_strength >= *spill_minimum_strength
+                    && primary_terrain_strength <= *spill_maximum_strength
+                    && volcano_spill_channel(
+                        horizontal,
+                        *spill_scale,
+                        *spill_width,
+                        context.biome_field.seed(),
+                        biome_id,
+                    );
+
+            (crater_present || spill_present).then_some(fluid.as_str())
+        }
+    }
 }
 
 fn authored_surface_fluid_column(

@@ -7,7 +7,7 @@ use crate::localization::LocalizedText;
 
 use super::{
     block::BlockRegistry, block_id::intern_block_id, block_orientation::BlockOrientation,
-    registry::DefinitionMap,
+    fluid::FluidRegistry, registry::DefinitionMap,
     structure_rules::{StructureGenerationRules, StructureRestrictions},
 };
 
@@ -89,8 +89,13 @@ pub(crate) struct StructureColumnSpan {
 }
 
 impl StructureDefinition {
-    pub(crate) fn validate_references(&self, blocks: &BlockRegistry) {
-        self.restrictions.validate_references(&self.id, blocks);
+    pub(crate) fn validate_references(
+        &self,
+        blocks: &BlockRegistry,
+        fluids: &FluidRegistry,
+    ) {
+        self.restrictions
+            .validate_references(&self.id, blocks, fluids);
 
         for entry in self.palette.values() {
             assert!(
