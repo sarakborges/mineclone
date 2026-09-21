@@ -16,12 +16,17 @@ pub(super) fn candidate_anchor(
     }
 
     let spacing = placement.spacing;
-    let center = cell * spacing + IVec2::splat(spacing / 2);
+    let half_spacing = spacing / 2;
+    let center_x = cell.x.checked_mul(spacing)?.checked_add(half_spacing)?;
+    let center_z = cell.y.checked_mul(spacing)?.checked_add(half_spacing)?;
     let jitter = placement.jitter;
     let jitter_x = signed_jitter(hash ^ 0x517c_c1b7_2722_0a95, jitter);
     let jitter_z = signed_jitter(hash ^ 0x6eed_0e9d_a4d9_4a4f, jitter);
 
-    Some(center + IVec2::new(jitter_x, jitter_z))
+    Some(IVec2::new(
+        center_x.checked_add(jitter_x)?,
+        center_z.checked_add(jitter_z)?,
+    ))
 }
 
 
@@ -78,4 +83,30 @@ fn avalanche(mut value: u64) -> u64 {
     value ^= value >> 27;
     value = value.wrapping_mul(0x94d0_49bb_1331_11eb);
     value ^ (value >> 31)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn candidate_anchor_rejects_coordinate_overflow() {
+        let placement = StructurePlacementRules {
+            spacing: 1_000,
+            chance: 1.0,
+            jitter: 100,
+        };
+
+        assert!(candidate_anchor(42, "biome", "structure", placement, IVec2::ZERO).is_some());
+        assert!(
+            candidate_anchor(
+                42,
+                "biome",
+                "structure",
+                placement,
+                IVec2::new(i32::MAX, 0),
+            )
+            .is_none()
+        );
+    }
 }
