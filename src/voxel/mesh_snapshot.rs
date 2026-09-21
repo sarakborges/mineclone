@@ -21,7 +21,7 @@ type NeighborChunks = [[[Option<VoxelChunk>; 3]; 3]; 3];
 #[derive(Clone, Copy, Default)]
 struct ShellSample {
     block_index: u16,
-    fluid: Option<FluidCell>,
+    fluid_index: u16,
     light: VoxelLight,
     loaded: bool,
 }
@@ -29,11 +29,16 @@ struct ShellSample {
 struct ShellStorage {
     samples: Box<[ShellSample]>,
     block_palette: Vec<VoxelCell>,
+    fluid_palette: Vec<FluidCell>,
 }
 
 impl ShellStorage {
     fn cell(&self, block_index: u16) -> Option<VoxelCell> {
         (block_index != 0).then(|| self.block_palette[block_index as usize - 1])
+    }
+
+    fn fluid(&self, fluid_index: u16) -> Option<FluidCell> {
+        (fluid_index != 0).then(|| self.fluid_palette[fluid_index as usize - 1])
     }
 }
 
@@ -245,7 +250,7 @@ impl VoxelRead for ChunkMeshSnapshot {
             let sample = shell.samples[self.shell_index(world_position)?];
             return sample.loaded.then_some((
                 shell.cell(sample.block_index),
-                sample.fluid,
+                shell.fluid(sample.fluid_index),
                 sample.light,
             ));
         }
@@ -257,6 +262,7 @@ impl VoxelRead for ChunkMeshSnapshot {
 fn capture_shell(neighbor_chunks: &NeighborChunks) -> ShellStorage {
     let last = SNAPSHOT_SIDE - 1;
     let mut block_palette = Vec::<VoxelCell>::new();
+    let mut fluid_palette = Vec::<FluidCell>::new();
     let mut capture_shell_voxel = |x: usize, y: usize, z: usize| {
         let (chunk_x, local_x) = shell_axis(x);
         let (chunk_y, local_y) = shell_axis(y);
@@ -279,10 +285,20 @@ fn capture_shell(neighbor_chunks: &NeighborChunks) -> ShellStorage {
                 });
             u16::try_from(index + 1).expect("mesh shell block palette cannot exceed u16")
         });
+        let fluid_index = fluid.map_or(0, |fluid| {
+            let index = fluid_palette
+                .iter()
+                .position(|candidate| *candidate == fluid)
+                .unwrap_or_else(|| {
+                    fluid_palette.push(fluid);
+                    fluid_palette.len() - 1
+                });
+            u16::try_from(index + 1).expect("mesh shell fluid palette cannot exceed u16")
+        });
 
         ShellSample {
             block_index,
-            fluid,
+            fluid_index,
             light,
             loaded: true,
         }
@@ -315,6 +331,7 @@ fn capture_shell(neighbor_chunks: &NeighborChunks) -> ShellStorage {
     ShellStorage {
         samples: samples.into_boxed_slice(),
         block_palette,
+        fluid_palette,
     }
 }
 

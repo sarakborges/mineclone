@@ -147,38 +147,18 @@ where
         Some(self.remove_active_index(index))
     }
 
-    pub(crate) fn pop_min_where_by_key<K: Ord>(
-        &mut self,
-        mut predicate: impl FnMut(T) -> bool,
-        mut key: impl FnMut(T) -> K,
-    ) -> Option<T> {
-        self.compact_if_sparse();
-        let mut best: Option<(usize, K)> = None;
-
-        for (index, (value, generation)) in self.pending.iter().enumerate() {
-            if self.queued.get(value).copied() != Some(*generation) || !predicate(*value) {
-                continue;
-            }
-
-            let candidate_key = key(*value);
-            if best
-                .as_ref()
-                .is_none_or(|(_, best_key)| candidate_key < *best_key)
-            {
-                best = Some((index, candidate_key));
-            }
-        }
-
-        let (index, _) = best?;
-        Some(self.remove_active_index(index))
-    }
-
     pub(crate) fn len(&self) -> usize {
         self.queued.len()
     }
 
     pub(crate) fn values(&self) -> impl Iterator<Item = T> + '_ {
         self.queued.keys().copied()
+    }
+
+    pub(crate) fn values_in_order(&self) -> impl Iterator<Item = T> + '_ {
+        self.pending.iter().filter_map(|(value, generation)| {
+            (self.queued.get(value).copied() == Some(*generation)).then_some(*value)
+        })
     }
 
     pub(crate) fn revision(&self) -> u64 {
@@ -303,50 +283,6 @@ mod tests {
 
         assert!(queue.remove(1));
         assert!(!queue.remove(3));
-        assert_eq!(queue.pop(), Some(2));
-        assert_eq!(queue.pop(), None);
-    }
-
-    #[test]
-    fn pop_min_where_by_key_preserves_fifo_within_best_rank() {
-        let mut queue = DeduplicatedQueue::from(vec![4, 2, 3, 1]);
-
-        assert_eq!(queue.pop_min_where_by_key(|_| true, |value| value % 2), Some(4));
-        assert_eq!(queue.pop_min_where_by_key(|_| true, |value| value % 2), Some(2));
-        assert_eq!(queue.pop_min_where_by_key(|_| true, |value| value % 2), Some(3));
-        assert_eq!(queue.pop_min_where_by_key(|_| true, |value| value % 2), Some(1));
-        assert_eq!(queue.pop_min_where_by_key(|_| true, |value| value % 2), None);
-    }
-
-    #[test]
-    fn pop_min_where_by_key_ignores_stale_priority_promotions() {
-        let mut queue = DeduplicatedQueue::default();
-        queue.enqueue(3);
-        queue.enqueue(1);
-        queue.enqueue_front(1);
-
-        assert_eq!(queue.pop_min_where_by_key(|_| true, |value| value), Some(1));
-        assert_eq!(queue.pop_min_where_by_key(|_| true, |value| value), Some(3));
-        assert_eq!(queue.pop_min_where_by_key(|_| true, |value| value), None);
-    }
-
-    #[test]
-    fn pop_min_where_by_key_preserves_filtered_entries() {
-        let mut queue = DeduplicatedQueue::from(vec![4, 3, 2, 1]);
-
-        assert_eq!(
-            queue.pop_min_where_by_key(|value| value % 2 == 1, |value| value),
-            Some(1)
-        );
-        assert!(queue.contains(2));
-        assert!(queue.contains(3));
-        assert!(queue.contains(4));
-
-        assert_eq!(
-            queue.pop_min_where_by_key(|value| value > 2, |value| value),
-            Some(3)
-        );
-        assert_eq!(queue.pop(), Some(4));
         assert_eq!(queue.pop(), Some(2));
         assert_eq!(queue.pop(), None);
     }
