@@ -7,7 +7,10 @@ use bevy::{
 };
 
 use crate::{
-    content::{biome::BiomeRegistry, creature::CreatureRegistry, structure::StructureRegistry},
+    content::{
+        biome::BiomeRegistry, creature::CreatureRegistry, structure::StructureRegistry,
+        structure_set::StructureSetRegistry,
+    },
     localization::ActiveLanguage,
 };
 
@@ -53,7 +56,7 @@ const COMMANDS: &[CommandDefinition] = &[
     },
     CommandDefinition {
         name: "place",
-        usage: "/place structure <groupid> [variation]",
+        usage: "/place structure <id> [variation]",
         description: "Place a structure",
         parameters: &[
             ParameterKind::StructureLiteral,
@@ -65,7 +68,7 @@ const COMMANDS: &[CommandDefinition] = &[
     },
     CommandDefinition {
         name: "locate",
-        usage: "/locate <biome|hydrology> <id> | /locate structure <groupid> [variation]",
+        usage: "/locate <biome|hydrology> <id> | /locate structure <id> [variation]",
         description: "Locate a biome, hydrology feature or structure",
         parameters: &[
             ParameterKind::LocateKind,
@@ -205,6 +208,7 @@ impl ChatAutocomplete {
         creatures: &CreatureRegistry,
         biomes: &BiomeRegistry,
         structures: &StructureRegistry,
+        structure_sets: &StructureSetRegistry,
         language: &ActiveLanguage,
     ) {
         if editor.is_composing() {
@@ -229,6 +233,7 @@ impl ChatAutocomplete {
             creatures,
             biomes,
             structures,
+            structure_sets,
             language,
         )
         .unwrap_or_else(|| (0..0, Vec::new()));
@@ -273,6 +278,7 @@ fn suggestions_for(
     creatures: &CreatureRegistry,
     biomes: &BiomeRegistry,
     structures: &StructureRegistry,
+    structure_sets: &StructureSetRegistry,
     language: &ActiveLanguage,
 ) -> Option<(Range<usize>, Vec<Suggestion>)> {
     let (range, word_index) = active_token(text, cursor)?;
@@ -346,6 +352,24 @@ fn suggestions_for(
                             ),
                         }),
                 );
+                values.extend(
+                    structure_sets
+                        .iter()
+                        .filter(|set| {
+                            let id = set.id.to_ascii_lowercase();
+                            id.starts_with(&prefix)
+                                || id
+                                    .strip_prefix("asteria:")
+                                    .is_some_and(|short| short.starts_with(&prefix))
+                        })
+                        .map(|set| Suggestion {
+                            value: set.id.clone(),
+                            description: format!(
+                                "{} (structure set)",
+                                set.name.text(language.get())
+                            ),
+                        }),
+                );
                 values
             },
             ParameterKind::StructureVariation => {
@@ -353,17 +377,21 @@ fn suggestions_for(
                     return Some((range, Vec::new()));
                 }
                 let reference = text.split_whitespace().nth(2)?;
-                let count = structures.variation_count(reference)?;
-                (1..=count)
-                    .filter(|variation| variation.to_string().starts_with(&prefix))
-                    .filter_map(|variation| {
-                        let structure = structures.variation(reference, variation)?;
-                        Some(Suggestion {
-                            value: variation.to_string(),
-                            description: structure.id.clone(),
+                if structure_sets.get(reference).is_some() {
+                    Vec::new()
+                } else {
+                    let count = structures.variation_count(reference)?;
+                    (1..=count)
+                        .filter(|variation| variation.to_string().starts_with(&prefix))
+                        .filter_map(|variation| {
+                            let structure = structures.variation(reference, variation)?;
+                            Some(Suggestion {
+                                value: variation.to_string(),
+                                description: structure.id.clone(),
+                            })
                         })
-                    })
-                    .collect::<Vec<_>>()
+                        .collect::<Vec<_>>()
+                }
             },
             ParameterKind::LocateKind => ["biome", "hydrology", "structure"]
                 .into_iter()
@@ -442,6 +470,25 @@ fn suggestions_for(
                                 ),
                             }),
                     );
+                    values.extend(
+                        structure_sets
+                            .iter()
+                            .filter(|set| set.locatable)
+                            .filter(|set| {
+                                let id = set.id.to_ascii_lowercase();
+                                id.starts_with(&prefix)
+                                    || id
+                                        .strip_prefix("asteria:")
+                                        .is_some_and(|short| short.starts_with(&prefix))
+                            })
+                            .map(|set| Suggestion {
+                                value: set.id.clone(),
+                                description: format!(
+                                    "{} (structure set)",
+                                    set.name.text(language.get())
+                                ),
+                            }),
+                    );
                     values
                 },
                 _ => Vec::new(),
@@ -474,6 +521,7 @@ pub(super) struct AutocompleteContent<'w> {
     creatures: Res<'w, CreatureRegistry>,
     biomes: Res<'w, BiomeRegistry>,
     structures: Res<'w, StructureRegistry>,
+    structure_sets: Res<'w, StructureSetRegistry>,
     language: Res<'w, ActiveLanguage>,
 }
 
@@ -496,6 +544,7 @@ pub(super) fn update_autocomplete(
         &content.creatures,
         &content.biomes,
         &content.structures,
+        &content.structure_sets,
         &content.language,
     );
     if !autocomplete.visible() || draft.is_composing() {
@@ -561,19 +610,19 @@ mod tests {
         assert_eq!(parse_line("/spawn"), ParsedLine::Usage("/spawn <id>"));
         assert_eq!(
             parse_line("/locate biome asteria:plains 2"),
-            ParsedLine::Usage("/locate <biome|hydrology> <id> | /locate structure <groupid> [variation]")
+            ParsedLine::Usage("/locate <biome|hydrology> <id> | /locate structure <id> [variation]")
         );
         assert_eq!(
             parse_line("/place structure extra extra extra"),
-            ParsedLine::Usage("/place structure <groupid> [variation]")
+            ParsedLine::Usage("/place structure <id> [variation]")
         );
         assert_eq!(
             parse_line("/place structure asteria:tree_oak nope"),
-            ParsedLine::Usage("/place structure <groupid> [variation]")
+            ParsedLine::Usage("/place structure <id> [variation]")
         );
         assert_eq!(
             parse_line("/place structure asteria:tree_oak 0"),
-            ParsedLine::Usage("/place structure <groupid> [variation]")
+            ParsedLine::Usage("/place structure <id> [variation]")
         );
         assert_eq!(parse_line("/spawn_creature old"), ParsedLine::Unknown("/spawn_creature"));
         assert_eq!(parse_line("/missing"), ParsedLine::Unknown("/missing"));
