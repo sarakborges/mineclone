@@ -23,6 +23,8 @@ use super::{
 const LAYER_STACK_OFFSET: f32 = 1.0 / 8192.0;
 const CHUNK_AREA: usize = CHUNK_SIZE * CHUNK_SIZE;
 const MICRO_EDGE: usize = MICROBLOCK_EDGE as usize;
+type LayerMeshKey = (&'static str, bool);
+type LayerMeshBuffers = SmallVec<[(LayerMeshKey, VoxelMeshBuffer); 2]>;
 
 fn block_face_index(face: BlockFace) -> usize {
     match face {
@@ -208,7 +210,7 @@ where
 fn emit_sculpted_layer<W: VoxelRead + ?Sized>(
     world: &W,
     block_lookup: &mut BlockLookup<'_>,
-    buffers: &mut SmallVec<[(( &'static str, bool), VoxelMeshBuffer); 2]>,
+    buffers: &mut LayerMeshBuffers,
     support_cell: super::cell::VoxelCell,
     support_is_transparent: bool,
     world_voxel: IVec3,
@@ -308,7 +310,7 @@ fn emit_sculpted_layer<W: VoxelRead + ?Sized>(
     reason = "greedy layer rectangles carry their face, bounds and visual state"
 )]
 fn emit_sculpted_layer_rectangle(
-    buffers: &mut SmallVec<[(( &'static str, bool), VoxelMeshBuffer); 2]>,
+    buffers: &mut LayerMeshBuffers,
     local_voxel: IVec3,
     layer_id: &'static str,
     texture_rotation: TextureRotation,
@@ -385,7 +387,7 @@ fn emit_sculpted_layer_rectangle(
 }
 
 fn layer_buffer<'a>(
-    buffers: &'a mut SmallVec<[(( &'static str, bool), VoxelMeshBuffer); 2]>,
+    buffers: &'a mut LayerMeshBuffers,
     layer_id: &'static str,
     definition: &LayerDefinition,
 ) -> &'a mut VoxelMeshBuffer {
