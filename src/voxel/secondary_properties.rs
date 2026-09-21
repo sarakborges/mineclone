@@ -18,7 +18,7 @@ struct SecondaryPropertyTokenInterner {
 static SECONDARY_PROPERTY_TOKEN_INTERNER: OnceLock<Mutex<SecondaryPropertyTokenInterner>> =
     OnceLock::new();
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub(crate) struct SecondaryProperties {
     // Zero means an unused slot. Token IDs start at one, so a property/value
     // pair fits in one u64 instead of storing two fat string pointers.
