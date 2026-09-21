@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, sync::Arc};
 
 use bevy::prelude::*;
 use serde::Deserialize;
@@ -447,7 +447,7 @@ impl StructureDefinition {
 #[derive(Clone, Resource, Default)]
 pub struct StructureRegistry {
     definitions: DefinitionMap<StructureDefinition>,
-    groups: HashMap<String, Vec<String>>,
+    groups: Arc<HashMap<String, Vec<String>>>,
 }
 
 impl StructureRegistry {
@@ -465,7 +465,9 @@ impl StructureRegistry {
 
         self.definitions.insert(structure_id.clone(), definition);
         if let Some(reference) = group_reference {
-            let members = self.groups.entry(reference).or_default();
+            let members = Arc::make_mut(&mut self.groups)
+                .entry(reference)
+                .or_default();
             let index = members
                 .binary_search(&structure_id)
                 .unwrap_or_else(|index| index);
