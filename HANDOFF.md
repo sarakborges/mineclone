@@ -1,5 +1,8 @@
 # HANDOFF — Asteria / Mineclone
 
+**AUDITORIA DE MELHORES PRÁTICAS — etapa 23 — 2026-09-21:** death lifecycle separado de regras de spawn/combat. Criaturas com `EntityHealth::is_dead()` deixam imediatamente de contar em `DimensionEntityCounts`, `maxPerType` e spacing de natural spawn, embora permaneçam 0,75 s para animação visual (`6433b23b7fd6394de0ce1e10479f2590065df1d9`). Ataques em criatura já morta agora são ignorados e não reiniciam o death timer nem reaplicam knockback (`823ef1b3ccd2065d578350c91314879a7b7e1e23`). **Pendências:** natural spawn ainda reconstrói counts/clona IDs a cada segundo; correctness resolvida, performance incremental ainda pendente. **Próximo passo:** implementar contagem incremental somente se puder garantir todos os spawn/despawn paths; antes disso revisar PendingCreatureRestores e spawn APIs para centralizar lifecycle.
+
+
 **AUDITORIA DE MELHORES PRÁTICAS — etapa 22 — 2026-09-21:** corrigido vazamento de state entre worlds no subsistema de creatures. Ao entrar em `StartingScreen`, `PendingCreatureRestores` e `TintedCreatureMaterials` agora são resetados. Isso impede restores de criaturas ainda não carregadas de um world anterior aparecerem em world novo (new-world flow não sobrescrevia esse Resource) e solta handles do cache de materiais variantes entre sessões. Commit: `fb23e507269772dcfb9341f352f6016cae9ed4b6`. **Pendências:** natural-spawn usa `Local<(timer, rng)>`, que também persiste entre sessões; avaliar migrar para Resource resetável se RNG por sessão for contrato desejado. **Próximo passo:** revisar Resources/Locals persistentes dos demais gameplay systems por leakage equivalente.
 
 
