@@ -9,6 +9,7 @@ use crate::{
     },
     rendering::block_texture::{
         TerrainTextureTable, block_face_material_face, block_face_texture_layers,
+        terrain_array_alpha_signature,
     },
 };
 
@@ -55,16 +56,21 @@ pub(super) fn material_buffer<'buffer, 'definition>(
 ) -> &'buffer mut VoxelMeshBuffer {
     let layers = block_face_texture_layers(face, block);
     let alpha_cutoff = block.alpha_cutoff.map(f32::to_bits);
-    let (key, batch) = if layers.len() <= 2 {
+    let array_signature = if layers.len() <= 2 {
+        terrain_array_alpha_signature(block)
+    } else {
+        None
+    };
+    let (key, batch) = if let Some((alpha_blend, alpha_cutoff)) = array_signature {
         (
             MaterialBatchKey::Array {
                 alpha_cutoff,
-                alpha_blend: block.alpha_blend,
+                alpha_blend,
                 casts_shadow: block.casts_shadow,
             },
             ChunkTerrainBatch::Array {
                 alpha_cutoff,
-                alpha_blend: block.alpha_blend,
+                alpha_blend,
                 casts_shadow: block.casts_shadow,
             },
         )
