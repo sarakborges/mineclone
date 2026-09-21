@@ -3,6 +3,7 @@
   "starting.loadWorlds": "Load Worlds",
   "worldSelection.empty": "No completed saved worlds found.",
   "worldSelection.load": "Load World",
+  "worldSelection.incompatible": "Incompatible world",
   "worldSelection.verifying": "Verifying saved worlds...",
   "worldSelection.noRestorable": "No restorable saved worlds found.",
   "worldSelection.scanStartError": "Cannot start saved-world verification",

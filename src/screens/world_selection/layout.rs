@@ -73,41 +73,49 @@ pub(super) fn spawn_world_entry(
             .with_children(|info| {
                 info.spawn(typography::heading(world.id.clone()));
 
-                info.spawn(metadata_row()).with_children(|metadata| {
-                    spawn_metadata(
-                        metadata,
-                        localization.text(language, "worldSelection.lastSaved"),
-                        format_save_time(world.last_saved_unix_ms, language),
-                    );
-                    spawn_metadata(
-                        metadata,
-                        localization.text(language, "worldSelection.seed"),
-                        world.seed.to_string(),
-                    );
-                    spawn_metadata(
-                        metadata,
-                        localization.text(language, "worldSelection.daysPassed"),
-                        days_passed.to_string(),
-                    );
-                });
+                if world.compatible {
+                    info.spawn(metadata_row()).with_children(|metadata| {
+                        spawn_metadata(
+                            metadata,
+                            localization.text(language, "worldSelection.lastSaved"),
+                            format_save_time(world.last_saved_unix_ms, language),
+                        );
+                        spawn_metadata(
+                            metadata,
+                            localization.text(language, "worldSelection.seed"),
+                            world.seed.to_string(),
+                        );
+                        spawn_metadata(
+                            metadata,
+                            localization.text(language, "worldSelection.daysPassed"),
+                            days_passed.to_string(),
+                        );
+                    });
 
-                info.spawn(metadata_row()).with_children(|metadata| {
-                    spawn_metadata(
-                        metadata,
-                        localization.text(language, "worldSelection.dimension"),
-                        dimension.to_owned(),
-                    );
-                    spawn_metadata(
-                        metadata,
-                        localization.text(language, "worldSelection.biome"),
-                        biome.to_owned(),
-                    );
-                    spawn_metadata(
-                        metadata,
-                        localization.text(language, "worldSelection.coordinates"),
-                        position,
-                    );
-                });
+                    info.spawn(metadata_row()).with_children(|metadata| {
+                        spawn_metadata(
+                            metadata,
+                            localization.text(language, "worldSelection.dimension"),
+                            dimension.to_owned(),
+                        );
+                        spawn_metadata(
+                            metadata,
+                            localization.text(language, "worldSelection.biome"),
+                            biome.to_owned(),
+                        );
+                        spawn_metadata(
+                            metadata,
+                            localization.text(language, "worldSelection.coordinates"),
+                            position,
+                        );
+                    });
+                } else {
+                    info.spawn(typography::hud(
+                        localization
+                            .text(language, "worldSelection.incompatible")
+                            .to_owned(),
+                    ));
+                }
             });
 
             row.spawn(Node {
@@ -119,13 +127,15 @@ pub(super) fn spawn_world_entry(
                 ..default()
             })
             .with_children(|actions| {
-                actions.spawn(button(
-                    localization.text(language, "worldSelection.load").to_owned(),
-                    WorldSelectionAction::Load(id.clone()),
-                    percent(100),
-                    COMPACT_CONTROL_HEIGHT,
-                    ButtonVariant::Primary,
-                ));
+                if world.compatible {
+                    actions.spawn(button(
+                        localization.text(language, "worldSelection.load").to_owned(),
+                        WorldSelectionAction::Load(id.clone()),
+                        percent(100),
+                        COMPACT_CONTROL_HEIGHT,
+                        ButtonVariant::Primary,
+                    ));
+                }
                 actions.spawn(button(
                     localization.text(language, "worldSelection.delete").to_owned(),
                     WorldSelectionAction::Delete(id),

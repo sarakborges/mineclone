@@ -3,6 +3,7 @@
   "starting.loadWorlds": "Cargar Mundos",
   "worldSelection.empty": "No se encontraron mundos guardados completos.",
   "worldSelection.load": "Cargar Mundo",
+  "worldSelection.incompatible": "Mundo incompatible",
   "worldSelection.verifying": "Verificando los mundos guardados...",
   "worldSelection.noRestorable": "No se encontraron mundos guardados recuperables.",
   "worldSelection.scanStartError": "No se pudo iniciar la verificación de los mundos guardados",
