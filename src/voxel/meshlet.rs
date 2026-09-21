@@ -349,6 +349,17 @@ impl MeshArrays {
     }
 
     fn into_mesh(self) -> Mesh {
+        let indices = if self.positions.len() <= usize::from(u16::MAX) + 1 {
+            Indices::U16(
+                self.indices
+                    .into_iter()
+                    .map(|index| index as u16)
+                    .collect(),
+            )
+        } else {
+            Indices::U32(self.indices)
+        };
+
         Mesh::new(
             PrimitiveTopology::TriangleList,
             RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
@@ -357,7 +368,7 @@ impl MeshArrays {
         .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
         .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors)
-        .with_inserted_indices(Indices::U32(self.indices))
+        .with_inserted_indices(indices)
     }
 }
 
