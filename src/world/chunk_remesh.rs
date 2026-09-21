@@ -1,6 +1,6 @@
 mod queue;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use bevy::prelude::*;
 
@@ -16,7 +16,7 @@ use super::{
         ChunkRenderPool, apply_built_chunk_fluid_meshes, apply_built_chunk_geometry_meshes,
     },
     chunk_system_params::{ChunkContent, ChunkRenderer},
-    work_budget::FrameWorkBudget,
+    work_budget::{FrameWorkBudget, WorldFrameWorkBudget},
 };
 
 const REMESH_TASK_DISPATCH_BUDGET: Duration = Duration::from_millis(1);
@@ -30,6 +30,7 @@ pub(super) fn process_chunk_remesh_queue(
     world: Res<VoxelWorld>,
     mut queue: ResMut<ChunkRemeshQueue>,
     mut tasks: ResMut<ChunkRemeshTasks>,
+    frame_budget: Res<WorldFrameWorkBudget>,
     mut deferred: Local<Vec<(IVec3, ChunkRemeshTaskKind)>>,
 ) {
     tasks.sync_snapshot(&content);
@@ -41,6 +42,7 @@ pub(super) fn process_chunk_remesh_queue(
             &world,
             &mut queue,
             &mut tasks,
+            frame_budget.deadline(),
         );
     }
 
@@ -54,6 +56,7 @@ pub(super) fn process_chunk_remesh_queue(
         &mut queue,
         &mut tasks,
         &mut deferred,
+        frame_budget.deadline(),
     );
 }
 
@@ -63,9 +66,11 @@ fn collect_completed_remesh_tasks(
     world: &VoxelWorld,
     queue: &mut ChunkRemeshQueue,
     tasks: &mut ChunkRemeshTasks,
+    deadline: Instant,
 ) {
     let current_revision = tasks.revision();
     let mut budget = FrameWorkBudget::new(REMESH_RESULT_INTEGRATION_BUDGET, 1)
+        .with_global_deadline(deadline)
         .with_maximum_items(MAX_REMESH_RESULTS_COLLECTED_PER_FRAME);
 
     loop {
@@ -133,8 +138,10 @@ fn dispatch_remesh_tasks(
     queue: &mut ChunkRemeshQueue,
     tasks: &mut ChunkRemeshTasks,
     deferred: &mut Vec<(IVec3, ChunkRemeshTaskKind)>,
+    deadline: Instant,
 ) {
     let mut budget = FrameWorkBudget::new(REMESH_TASK_DISPATCH_BUDGET, 1)
+        .with_global_deadline(deadline)
         .with_maximum_items(MAX_REMESH_TASKS_DISPATCHED_PER_FRAME);
     deferred.clear();
 
