@@ -153,6 +153,7 @@ where
                     .rotate_uvs(VOXEL_FACE_UVS),
                 tint,
                 lighting,
+                0.0,
             );
         }
     }
@@ -350,6 +351,7 @@ fn emit_sculpted_layer_rectangle(
         uvs,
         tint,
         lighting,
+        0.0,
     );
 }
 
