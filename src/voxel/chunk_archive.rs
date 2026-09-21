@@ -141,12 +141,19 @@ impl ArchivedChunk {
             if let Some(fluid) = fluid {
                 fluid_occupancy[index / u64::BITS as usize] |=
                     1_u64 << (index % u64::BITS as usize);
-                fluid_cells.push(ArchivedFluidCell {
-                    fluid_id: fluid.fluid_id,
-                    level: fluid.level,
-                    source: fluid.is_source(),
-                    spread_distance: fluid.spread_distance(),
-                });
+                let palette_index = fluid_palette
+                    .iter()
+                    .position(|candidate| *candidate == fluid)
+                    .unwrap_or_else(|| {
+                        fluid_palette.push(fluid);
+                        fluid_palette.len() - 1
+                    });
+                assert!(
+                    palette_index < u16::MAX as usize,
+                    "chunk fluid palette cannot exceed {} entries",
+                    u16::MAX
+                );
+                fluid_cells.push(palette_index as u16);
             }
         }
 
