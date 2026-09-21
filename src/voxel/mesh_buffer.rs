@@ -19,7 +19,6 @@ pub(crate) struct VoxelMeshBuffer {
     positions: Vec<[f32; 3]>,
     normals: Vec<[f32; 3]>,
     uvs: Vec<[f32; 2]>,
-    light_uvs: Vec<[f32; 2]>,
     colors: Vec<[f32; 4]>,
     indices: Vec<u32>,
 }
@@ -31,11 +30,13 @@ impl VoxelMeshBuffer {
         self.positions.extend(quad.vertices);
         self.normals.extend([quad.normal; 4]);
         self.uvs.extend(quad.uvs);
-        self.light_uvs.extend(quad.light_uvs);
-        self.colors.extend(
-            quad.colors
-                .map(|color| encode_vertex_payload(quad.tint, color)),
-        );
+        self.colors.extend(std::array::from_fn(|index| {
+            encode_vertex_payload(
+                quad.tint,
+                quad.colors[index],
+                quad.light_uvs[index],
+            )
+        }));
         self.indices
             .extend(quad_triangle_indices(base, quad.flip_diagonal));
     }
@@ -53,16 +54,21 @@ impl VoxelMeshBuffer {
             .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
             .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
             .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
-            // COLOR packs block-light RGB, biome/layer tint and AO. Tangents are
-            // intentionally omitted: voxel materials do not use normal maps.
+            // COLOR packs block-light RGB, biome/layer tint, AO, sky light and
+            // the terrain material code. Tangents and UV1 are intentionally
+            // omitted: voxel materials do not use normal maps and no secondary
+            // texture coordinates are required by the custom shader.
             .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors)
             .with_inserted_indices(Indices::U32(self.indices)),
         )
     }
 }
 
-fn encode_vertex_payload(tint: [f32; 3], lighting: [f32; 4]) -> [f32; 4] {
+fn encode_vertex_payload(
+    tint: [f32; 3],
+    lighting: [f32; 4],
+    light_uv: [f32; 2],
+) -> [f32; 4] {
     let block = lighting[..3].map(|channel| {
         (channel.clamp(0.0, 1.0) * 15.0).round() as u32
     });
@@ -73,10 +79,16 @@ fn encode_vertex_payload(tint: [f32; 3], lighting: [f32; 4]) -> [f32; 4] {
     });
     let packed_tint = tint[0] | (tint[1] << 8) | (tint[2] << 16);
 
+    let material_code = light_uv[1].round().max(0.0) as u32;
+    debug_assert!(material_code < (1 << 20));
+    let sky_level =
+        (light_uv[0].clamp(0.0, 1.0) * 15.0).round() as u32;
+    let packed_sky_material = material_code | (sky_level << 20);
+
     [
         packed_block as f32,
         packed_tint as f32,
         lighting[3].clamp(0.0, 1.0),
-        1.0,
+        packed_sky_material as f32,
     ]
 }
