@@ -60,19 +60,4 @@ impl VoxelWorld {
         Ok(())
     }
 
-    /// Rebuild a *fresh* world from disk, archiving saved chunks until streaming
-    /// needs them. Reject duplicate coordinates BEFORE decoding their content.
-    /// On any error the partially built world is dropped without being exposed.
-    pub(crate) fn from_saved_chunks(
-        saved: Vec<DiskChunk>,
-        blocks: &BlockRegistry,
-        layers: &LayerRegistry,
-        fluids: &FluidRegistry,
-    ) -> io::Result<Self> {
-        let mut world = Self::default();
-        for entry in saved {
-            world.insert_saved_chunk(entry, blocks, layers, fluids)?;
-        }
-        Ok(world)
-    }
 }
