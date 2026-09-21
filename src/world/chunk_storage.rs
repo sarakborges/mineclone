@@ -12,7 +12,11 @@ use bevy::prelude::IVec3;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    content::fluid::FluidRegistry,
+    content::{
+        block::BlockRegistry,
+        fluid::FluidRegistry,
+        layer::LayerRegistry,
+    },
     voxel::{chunk_disk::DiskChunk, world::VoxelWorld},
     world::storage_durability::{sync_directory, sync_directory_tree},
 };
@@ -213,10 +217,16 @@ fn publish_generation_storage(
     sync_directory(world_directory)
 }
 
-pub(crate) fn load_generation_chunks(
+enum GenerationChunkStorage {
+    Regions(PathBuf),
+    Legacy(PathBuf),
+    Empty,
+}
+
+fn generation_chunk_storage(
     world_directory: &Path,
     generation: u64,
-) -> io::Result<Vec<DiskChunk>> {
+) -> io::Result<GenerationChunkStorage> {
     let generation_directory = checked_directory_slot(
         world_directory,
         Path::new(&generation_directory_name(generation)),
@@ -239,9 +249,49 @@ pub(crate) fn load_generation_chunks(
             io::ErrorKind::InvalidData,
             "chunk generation mixes region and legacy storage layouts",
         )),
-        (true, false) => load_region_chunks(&regions_root),
-        (false, true) => load_legacy_chunks(&chunks_root),
-        (false, false) => Ok(Vec::new()),
+        (true, false) => Ok(GenerationChunkStorage::Regions(regions_root)),
+        (false, true) => Ok(GenerationChunkStorage::Legacy(chunks_root)),
+        (false, false) => Ok(GenerationChunkStorage::Empty),
+    }
+}
+
+pub(crate) fn load_generation_world(
+    world_directory: &Path,
+    generation: u64,
+    blocks: &BlockRegistry,
+    layers: &LayerRegistry,
+    fluids: &FluidRegistry,
+) -> io::Result<VoxelWorld> {
+    let mut world = VoxelWorld::default();
+    visit_generation_chunks(world_directory, generation, |_, chunk| {
+        world.insert_saved_chunk(chunk, blocks, layers, fluids)
+    })?;
+    Ok(world)
+}
+
+#[cfg(test)]
+pub(crate) fn load_generation_chunks(
+    world_directory: &Path,
+    generation: u64,
+) -> io::Result<Vec<DiskChunk>> {
+    let mut chunks = Vec::new();
+    visit_generation_chunks(world_directory, generation, |position, chunk| {
+        chunks.push((position, chunk));
+        Ok(())
+    })?;
+    chunks.sort_unstable_by_key(|(coord, _)| (coord.y, coord.z, coord.x));
+    Ok(chunks.into_iter().map(|(_, chunk)| chunk).collect())
+}
+
+fn visit_generation_chunks(
+    world_directory: &Path,
+    generation: u64,
+    visit: impl FnMut(IVec3, DiskChunk) -> io::Result<()>,
+) -> io::Result<()> {
+    match generation_chunk_storage(world_directory, generation)? {
+        GenerationChunkStorage::Regions(root) => visit_region_chunks(&root, visit),
+        GenerationChunkStorage::Legacy(root) => visit_legacy_chunks(&root, visit),
+        GenerationChunkStorage::Empty => Ok(()),
     }
 }
 
@@ -257,8 +307,10 @@ fn optional_real_directory(path: &Path, label: &str) -> io::Result<bool> {
     }
 }
 
-fn load_region_chunks(regions_root: &Path) -> io::Result<Vec<DiskChunk>> {
-    let mut chunks = Vec::new();
+fn visit_region_chunks(
+    regions_root: &Path,
+    mut visit: impl FnMut(IVec3, DiskChunk) -> io::Result<()>,
+) -> io::Result<()> {
     let mut identities = HashSet::new();
 
     for entry in fs::read_dir(regions_root)? {
@@ -315,17 +367,17 @@ fn load_region_chunks(regions_root: &Path) -> io::Result<Vec<DiskChunk>> {
                     format!("duplicate persisted chunk coordinate: {position:?}"),
                 ));
             }
-            chunks.push((position, chunk));
+            visit(position, chunk)?;
         }
     }
 
-    chunks.sort_unstable_by_key(|(coord, _)| (coord.y, coord.z, coord.x));
-    Ok(chunks.into_iter().map(|(_, chunk)| chunk).collect())
+    Ok(())
 }
 
-fn load_legacy_chunks(chunks_root: &Path) -> io::Result<Vec<DiskChunk>> {
-    let mut chunks = Vec::new();
-
+fn visit_legacy_chunks(
+    chunks_root: &Path,
+    mut visit: impl FnMut(IVec3, DiskChunk) -> io::Result<()>,
+) -> io::Result<()> {
     for x_entry in fs::read_dir(chunks_root)? {
         let x_entry = x_entry?;
         if !x_entry.file_type()?.is_dir() {
@@ -368,13 +420,12 @@ fn load_legacy_chunks(chunks_root: &Path) -> io::Result<Vec<DiskChunk>> {
                         ),
                     ));
                 }
-                chunks.push((expected, chunk));
+                visit(expected, chunk)?;
             }
         }
     }
 
-    chunks.sort_unstable_by_key(|(coord, _)| (coord.y, coord.z, coord.x));
-    Ok(chunks.into_iter().map(|(_, chunk)| chunk).collect())
+    Ok(())
 }
 
 fn parse_canonical_i32(value: &std::ffi::OsStr) -> io::Result<i32> {
