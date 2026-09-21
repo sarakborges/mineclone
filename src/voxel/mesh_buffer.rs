@@ -2,7 +2,7 @@ use bevy::{
     asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology,
 };
 
-use super::quad::quad_triangle_indices;
+use super::{meshlet::CHUNK_MESHLET_EDGE, quad::quad_triangle_indices};
 
 pub(crate) struct VoxelMeshQuad {
     pub(crate) vertices: [[f32; 3]; 4],
@@ -67,6 +67,7 @@ impl VoxelMeshBuffer {
 }
 
 const MATERIAL_UV_STRIDE: f32 = 16.0;
+const _: () = assert!(CHUNK_MESHLET_EDGE < MATERIAL_UV_STRIDE as usize);
 
 fn encode_material_uv(uv: [f32; 2], material_code: f32) -> [f32; 2] {
     [
