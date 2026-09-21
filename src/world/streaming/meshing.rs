@@ -3,7 +3,11 @@ use std::time::Duration;
 use bevy::prelude::*;
 
 use crate::{
-    voxel::{mesh_snapshot::ChunkMeshSnapshot, world::VoxelWorld},
+    voxel::{
+        mesh_snapshot::ChunkMeshSnapshot,
+        meshlet::ChunkMeshletMask,
+        world::VoxelWorld,
+    },
     world::{
         chunk_mesh_tasks::MAX_MESH_TASKS_IN_FLIGHT,
         chunk_remesh::ChunkRemeshQueue,
@@ -190,13 +194,15 @@ pub(super) fn collect_built_chunk_meshes(
             continue;
         };
         let chunk_has_fluid = chunk.has_fluid();
-        let catchup = completed
+        let mut catchup_meshlets = completed
             .output
             .dependencies
-            .needs_initial_catchup_with(&work.world, |neighbor| {
+            .initial_catchup_meshlets_with(&work.world, |neighbor| {
                 renderer.pool.contains(neighbor)
-            })
-            || work.state.initial_mesh_seed_catchup.contains(&completed.coord);
+            });
+        if work.state.initial_mesh_seed_catchup.contains(&completed.coord) {
+            catchup_meshlets = ChunkMeshletMask::ALL;
+        }
         let render_context = content.render_context(
             &work.world,
             &renderer.terrain_materials,
@@ -212,10 +218,16 @@ pub(super) fn collect_built_chunk_meshes(
             &render_context,
         );
         work.state.initial_mesh_seed_catchup.remove(&completed.coord);
-        if catchup {
-            remesh_queue.enqueue_priority(completed.coord);
+        if !catchup_meshlets.is_empty() {
+            remesh_queue.enqueue_geometry_meshlets_priority(
+                completed.coord,
+                catchup_meshlets,
+            );
             if chunk_has_fluid {
-                remesh_queue.enqueue_fluid_priority(completed.coord);
+                remesh_queue.enqueue_fluid_meshlets_priority(
+                    completed.coord,
+                    catchup_meshlets,
+                );
             }
         }
         notify_loaded_chunk_neighbors(
@@ -258,17 +270,22 @@ fn notify_loaded_chunk_neighbors(
                     continue;
                 };
 
-                if boundary_faces_toward(offset, |face| neighbor_chunk.boundary_has_content(face)) {
-                    remesh_queue.enqueue_priority(neighbor);
-                }
-
+                let geometry = boundary_faces_toward(offset, |face| {
+                    neighbor_chunk.boundary_has_content(face)
+                });
                 let has_fluid_border = boundary_faces_toward(offset, |face| {
                     neighbor_chunk.boundary_has_fluid(face)
                 });
                 let new_cardinal_fluid = offset.x.abs() + offset.y.abs() + offset.z.abs() == 1
                     && chunk.boundary_has_fluid(offset);
-                if has_fluid_border || new_cardinal_fluid {
-                    remesh_queue.enqueue_fluid_priority(neighbor);
+                let fluid = has_fluid_border || new_cardinal_fluid;
+                if geometry || fluid {
+                    remesh_queue.enqueue_halo_change(
+                        neighbor,
+                        -offset,
+                        geometry,
+                        fluid,
+                    );
                 }
             }
         }
