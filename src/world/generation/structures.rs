@@ -637,8 +637,8 @@ pub(crate) fn surface_layer_placements(
         for &face in &surface.faces {
             let hash = surface_layer_hash(
                 world_seed,
-                &structure.id,
-                &surface.layer,
+                structure.runtime_hash(),
+                surface.runtime_hash(),
                 world_position,
                 face,
             );
@@ -654,28 +654,18 @@ pub(crate) fn surface_layer_placements(
 
 fn surface_layer_hash(
     world_seed: u64,
-    structure_id: &str,
-    layer_id: &str,
+    structure_hash: u64,
+    layer_hash: u64,
     position: IVec3,
     face: LayerFace,
 ) -> u64 {
-    let mut hash = world_seed
-        ^ stable_string_hash(structure_id).rotate_left(11)
-        ^ stable_string_hash(layer_id).rotate_left(37);
+    let mut hash =
+        world_seed ^ structure_hash.rotate_left(11) ^ layer_hash.rotate_left(37);
     hash ^= (position.x as i64 as u64).wrapping_mul(0x9e37_79b1_85eb_ca87);
     hash ^= (position.y as i64 as u64).wrapping_mul(0xc2b2_ae3d_27d4_eb4f);
     hash ^= (position.z as i64 as u64).wrapping_mul(0x1656_67b1_9e37_79f9);
     hash ^= (face.index() as u64 + 1).wrapping_mul(0xd6e8_feb8_6659_fd93);
     avalanche(hash)
-}
-
-fn stable_string_hash(value: &str) -> u64 {
-    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-    for byte in value.bytes() {
-        hash ^= byte as u64;
-        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    hash
 }
 
 fn avalanche(mut value: u64) -> u64 {
