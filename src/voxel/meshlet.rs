@@ -182,14 +182,18 @@ impl ChunkMeshletMask {
         self.0 & bit != 0
     }
 
-    fn contains_quad(self, positions: &[[f32; 3]], normals: &[[f32; 3]], base: usize) -> bool {
+    fn contains_quad(self, positions: &[[f32; 3]], base: usize) -> bool {
         let mut center = Vec3::ZERO;
         for position in &positions[base..base + 4] {
             center += Vec3::from_array(*position);
         }
         center *= 0.25;
 
-        let normal = Vec3::from_array(normals[base]);
+        let edge_a = Vec3::from_array(positions[base + 1])
+            - Vec3::from_array(positions[base]);
+        let edge_b = Vec3::from_array(positions[base + 2])
+            - Vec3::from_array(positions[base]);
+        let normal = edge_a.cross(edge_b).normalize_or_zero();
         // Layer surfaces are deliberately pushed ~0.001 blocks outward to
         // avoid z-fighting. Step farther back than that offset, while staying
         // well inside the smallest 1/8-block sculpted cell.
@@ -257,7 +261,6 @@ pub(crate) fn patch_voxel_mesh(
 #[derive(Default)]
 struct MeshArrays {
     positions: Vec<[f32; 3]>,
-    normals: Vec<[f32; 3]>,
     uvs: Vec<[f32; 2]>,
     light_uvs: Vec<[f32; 2]>,
     colors: Vec<[f32; 4]>,
@@ -272,7 +275,6 @@ impl MeshArrays {
 
         Some(Self {
             positions: float32x3(mesh.attribute(Mesh::ATTRIBUTE_POSITION)?)?.to_vec(),
-            normals: float32x3(mesh.attribute(Mesh::ATTRIBUTE_NORMAL)?)?.to_vec(),
             uvs: float32x2(mesh.attribute(Mesh::ATTRIBUTE_UV_0)?)?.to_vec(),
             light_uvs: float32x2(mesh.attribute(Mesh::ATTRIBUTE_UV_1)?)?.to_vec(),
             colors: float32x4(mesh.attribute(Mesh::ATTRIBUTE_COLOR)?)?.to_vec(),
@@ -286,7 +288,6 @@ impl MeshArrays {
         }
         let quad_count = self.positions.len() / 4;
         if self.indices.len() / 6 != quad_count
-            || self.normals.len() != self.positions.len()
             || self.uvs.len() != self.positions.len()
             || self.light_uvs.len() != self.positions.len()
             || self.colors.len() != self.positions.len()
@@ -295,7 +296,7 @@ impl MeshArrays {
         }
 
         Some((0..quad_count).any(|quad| {
-            dirty.contains_quad(&self.positions, &self.normals, quad * 4)
+            dirty.contains_quad(&self.positions, quad * 4)
         }))
     }
 
@@ -310,7 +311,6 @@ impl MeshArrays {
         }
         let quad_count = self.positions.len() / 4;
         if self.indices.len() / 6 != quad_count
-            || self.normals.len() != self.positions.len()
             || self.uvs.len() != self.positions.len()
             || self.light_uvs.len() != self.positions.len()
             || self.colors.len() != self.positions.len()
@@ -320,7 +320,7 @@ impl MeshArrays {
 
         for quad in 0..quad_count {
             let source_base = quad * 4;
-            let is_dirty = dirty.contains_quad(&self.positions, &self.normals, source_base);
+            let is_dirty = dirty.contains_quad(&self.positions, source_base);
             if is_dirty != keep_dirty {
                 continue;
             }
@@ -329,9 +329,6 @@ impl MeshArrays {
             output
                 .positions
                 .extend_from_slice(&self.positions[source_base..source_base + 4]);
-            output
-                .normals
-                .extend_from_slice(&self.normals[source_base..source_base + 4]);
             output
                 .uvs
                 .extend_from_slice(&self.uvs[source_base..source_base + 4]);
@@ -372,7 +369,6 @@ impl MeshArrays {
             RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
         )
         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
         .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colors)
@@ -383,13 +379,6 @@ impl MeshArrays {
 fn float32x2(values: &VertexAttributeValues) -> Option<&[[f32; 2]]> {
     match values {
         VertexAttributeValues::Float32x2(values) => Some(values),
-        _ => None,
-    }
-}
-
-fn float32x3(values: &VertexAttributeValues) -> Option<&[[f32; 3]]> {
-    match values {
-        VertexAttributeValues::Float32x3(values) => Some(values),
         _ => None,
     }
 }
