@@ -68,6 +68,9 @@ pub(super) struct InventoryItemTooltip;
 #[derive(Component)]
 pub(super) struct InventoryItemTooltipText;
 
+#[derive(Component)]
+pub(super) struct InventoryItemTooltipId;
+
 #[derive(Resource, Default)]
 pub(super) struct CreativeInventoryView {
     search: String,
