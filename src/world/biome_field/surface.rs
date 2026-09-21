@@ -5,7 +5,7 @@ use crate::content::biome_distribution::BiomeDistribution;
 
 use super::{
     BiomeField, BiomeFieldSample, BiomeInfluence, MAX_SURFACE_INFLUENCES,
-    SurfaceBoundarySample,
+    SurfaceBoundarySample, SurfaceSiteCacheEntry,
     constants::{BORDER_TRANSITION_WIDTH, SITE_SEARCH_RADIUS},
     distribution::distribution_strength,
     spatial::{
@@ -37,12 +37,16 @@ impl BiomeField {
             for z in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
                 for x in -SITE_SEARCH_RADIUS..=SITE_SEARCH_RADIUS {
                     let cell = center + IVec2::new(x, z);
-                    let site = surface_site_position(cell, self.surface_site_spacing, self.seed);
+                    let cached = cache.get(&cell).copied();
+                    let site = cached.map_or_else(
+                        || surface_site_position(cell, self.surface_site_spacing, self.seed),
+                        |entry| entry.position,
+                    );
                     sampled_sites[sample_count] = (
                         cell,
                         site,
                         warped.distance(site),
-                        cache.get(&cell).copied(),
+                        cached.map(|entry| entry.biome_index),
                     );
                     sample_count += 1;
                 }
@@ -59,7 +63,7 @@ impl BiomeField {
 
             let selected = self.select_surface_biome_index(*cell, *site);
             *candidate_index = Some(selected);
-            cache_updates[cache_update_count] = Some((*cell, selected));
+            cache_updates[cache_update_count] = Some((*cell, *site, selected));
             cache_update_count += 1;
         }
 
@@ -69,9 +73,12 @@ impl BiomeField {
                 .write()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             for update in &cache_updates[..cache_update_count] {
-                let (cell, selected) =
+                let (cell, position, selected) =
                     update.expect("surface biome cache update must be initialized");
-                cache.entry(cell).or_insert(selected);
+                cache.entry(cell).or_insert(SurfaceSiteCacheEntry {
+                    position,
+                    biome_index: selected,
+                });
             }
         }
 
