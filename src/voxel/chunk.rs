@@ -155,6 +155,25 @@ pub struct VoxelChunk {
     boundary_fluid_counts: [u16; BOUNDARY_FACE_COUNT],
 }
 
+pub(crate) struct VoxelChunkInitialBlocksMut<'a> {
+    blocks: &'a mut BlockStorage,
+    block_count: &'a mut usize,
+    boundary_content_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
+}
+
+impl VoxelChunkInitialBlocksMut<'_> {
+    pub(crate) fn set_block(&mut self, x: usize, y: usize, z: usize, block: VoxelCell) {
+        let voxel_index = index(x, y, z);
+        debug_assert!(
+            self.blocks.get(voxel_index).is_none(),
+            "initial chunk material pass cannot overwrite a block"
+        );
+        self.blocks.set(voxel_index, Some(block));
+        *self.block_count += 1;
+        adjust_boundary_counts(self.boundary_content_counts, x, y, z, true);
+    }
+}
+
 pub(crate) struct VoxelChunkBlocksMut<'a> {
     blocks: &'a mut BlockStorage,
     fluids: &'a [Option<FluidCell>],
@@ -354,6 +373,23 @@ impl VoxelChunk {
 
         let index = index(x as usize, y as usize, z as usize);
         Some((self.blocks.get(index), self.fluids[index], self.light[index]))
+    }
+
+    pub(crate) fn edit_initial_blocks<R>(
+        &mut self,
+        edit: impl FnOnce(&mut VoxelChunkInitialBlocksMut<'_>) -> R,
+    ) -> R {
+        debug_assert_eq!(self.block_count, 0);
+        debug_assert_eq!(self.fluid_count, 0);
+        debug_assert_eq!(self.layer_count, 0);
+
+        let blocks = Arc::make_mut(&mut self.blocks);
+        let mut content = VoxelChunkInitialBlocksMut {
+            blocks,
+            block_count: &mut self.block_count,
+            boundary_content_counts: &mut self.boundary_content_counts,
+        };
+        edit(&mut content)
     }
 
     pub(crate) fn edit_blocks<R>(
