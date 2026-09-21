@@ -60,6 +60,12 @@ impl InMemoryWorldSave {
         self.players.get(&player_id).and_then(PlayerSaveData::look)
     }
 
+    pub(crate) fn player_flying(&self, player_id: PlayerId) -> bool {
+        self.players
+            .get(&player_id)
+            .is_some_and(PlayerSaveData::flying)
+    }
+
     pub fn begin_new_world(
         &mut self,
         seed: WorldSeed,
@@ -89,12 +95,13 @@ impl InMemoryWorldSave {
         game_mode: GameMode,
         health: Option<f32>,
         look: Option<(f32, f32)>,
+        flying: bool,
     ) {
         if self.has_world() {
             self.players
                 .entry(player_id)
                 .or_default()
-                .save_with_health(position, game_mode, health, look);
+                .save_with_health(position, game_mode, health, look, flying);
         }
     }
 }
