@@ -82,9 +82,11 @@ struct DiskRun {
 struct DiskChunkBuilder {
     coord: [i32; 3],
     block_palette: Vec<DiskBlockState>,
+    runtime_block_palette: Vec<(VoxelCell, u16)>,
     block_runs: Vec<DiskRun>,
     layers: Vec<DiskLayerState>,
     fluid_palette: Vec<DiskFluidState>,
+    runtime_fluid_palette: Vec<(FluidCell, u16)>,
     fluid_runs: Vec<DiskRun>,
 }
 
@@ -93,27 +95,39 @@ impl DiskChunkBuilder {
         Self {
             coord: [coord.x, coord.y, coord.z],
             block_palette: Vec::new(),
+            runtime_block_palette: Vec::new(),
             block_runs: Vec::new(),
             layers: Vec::new(),
             fluid_palette: Vec::new(),
+            runtime_fluid_palette: Vec::new(),
             fluid_runs: Vec::new(),
         }
     }
 
     fn push_block(&mut self, index: usize, cell: VoxelCell) -> io::Result<()> {
-        let mut properties = cell
-            .secondary_properties()
-            .iter_for_save()
-            .map(|(key, value)| (key.to_owned(), value.to_owned()))
-            .collect::<Vec<_>>();
-        properties.sort_unstable();
-        let state = DiskBlockState {
-            id: cell.block_id.to_owned(),
-            rotation: rotation_index(cell.texture_rotation),
-            orientation: cell.orientation.index(),
-            properties,
+        let state_index = if let Some((_, state_index)) = self
+            .runtime_block_palette
+            .iter()
+            .find(|(candidate, _)| *candidate == cell)
+        {
+            *state_index
+        } else {
+            let mut properties = cell
+                .secondary_properties()
+                .iter_for_save()
+                .map(|(key, value)| (key.to_owned(), value.to_owned()))
+                .collect::<Vec<_>>();
+            properties.sort_unstable();
+            let state = DiskBlockState {
+                id: cell.block_id.to_owned(),
+                rotation: rotation_index(cell.texture_rotation),
+                orientation: cell.orientation.index(),
+                properties,
+            };
+            let state_index = palette_index(&mut self.block_palette, state)?;
+            self.runtime_block_palette.push((cell, state_index));
+            state_index
         };
-        let state_index = palette_index(&mut self.block_palette, state)?;
         append_run(&mut self.block_runs, index, state_index)
     }
 
@@ -141,16 +155,26 @@ impl DiskChunkBuilder {
         cell: FluidCell,
         fluids: &FluidRegistry,
     ) -> io::Result<()> {
-        let definition = fluids.get(cell.fluid_id).ok_or_else(|| {
-            invalid_data(format!("unknown runtime fluid ID {}", cell.fluid_id))
-        })?;
-        let state = DiskFluidState {
-            id: definition.id.clone(),
-            level: cell.level,
-            source: cell.is_source(),
-            spread_distance: cell.spread_distance(),
+        let state_index = if let Some((_, state_index)) = self
+            .runtime_fluid_palette
+            .iter()
+            .find(|(candidate, _)| *candidate == cell)
+        {
+            *state_index
+        } else {
+            let definition = fluids.get(cell.fluid_id).ok_or_else(|| {
+                invalid_data(format!("unknown runtime fluid ID {}", cell.fluid_id))
+            })?;
+            let state = DiskFluidState {
+                id: definition.id.clone(),
+                level: cell.level,
+                source: cell.is_source(),
+                spread_distance: cell.spread_distance(),
+            };
+            let state_index = palette_index(&mut self.fluid_palette, state)?;
+            self.runtime_fluid_palette.push((cell, state_index));
+            state_index
         };
-        let state_index = palette_index(&mut self.fluid_palette, state)?;
         append_run(&mut self.fluid_runs, index, state_index)
     }
 
