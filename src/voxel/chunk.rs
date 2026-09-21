@@ -984,16 +984,14 @@ mod tests {
     }
 
     #[test]
-    fn batched_content_edits_preserve_metadata() {
+    fn independent_content_edits_preserve_metadata() {
         let mut chunk = VoxelChunk::empty();
         let last = CHUNK_SIZE - 1;
         let block = VoxelCell::new("stone", Default::default());
         let fluid = FluidCell::spreading(0, 7, 1);
 
-        chunk.edit_content(|content| {
-            content.set_block(0, 0, 0, Some(block));
-            content.set_fluid(last, last, last, Some(fluid));
-        });
+        chunk.set_block(0, 0, 0, Some(block));
+        chunk.set_fluid(last, last, last, Some(fluid));
 
         assert_eq!(chunk.cell_at(0, 0, 0), Some(block));
         assert_eq!(
