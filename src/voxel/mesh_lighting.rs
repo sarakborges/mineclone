@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use super::{
     block_face::BlockFace,
     cell::VoxelCell,
-    chunk::CHUNK_SIZE,
+    chunk::{CHUNK_SIZE, VoxelChunk},
     fluid::FluidCell,
     light::{BlockLight, VoxelLight},
     mesh_buffer::{VoxelMeshBuffer, VoxelMeshQuad},
@@ -27,13 +27,23 @@ struct CachedLightingSample {
     loaded: bool,
 }
 
-pub(super) struct ChunkLightingCache {
+pub(crate) struct ChunkLightingCache {
     origin: IVec3,
     samples: Box<[CachedLightingSample]>,
 }
 
 impl ChunkLightingCache {
-    pub(super) fn capture<W: VoxelRead + ?Sized>(
+    pub(crate) fn capture_if_worthwhile<W: VoxelRead + ?Sized>(
+        world: &W,
+        chunk_origin: IVec3,
+        chunk: &VoxelChunk,
+    ) -> Option<Self> {
+        const MIN_CONTENT_VOXELS: usize = 96;
+        (chunk.block_count() + chunk.fluid_count() >= MIN_CONTENT_VOXELS)
+            .then(|| Self::capture(world, chunk_origin))
+    }
+
+    pub(crate) fn capture<W: VoxelRead + ?Sized>(
         world: &W,
         chunk_origin: IVec3,
     ) -> Self {
