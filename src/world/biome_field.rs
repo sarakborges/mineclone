@@ -71,8 +71,8 @@ pub(super) struct SurfaceMarginField {
 
 #[derive(Resource, Clone)]
 pub struct BiomeField {
-    pub(super) surface_biomes: Vec<BiomeFieldEntry>,
-    pub(super) volume_biomes: Vec<BiomeFieldEntry>,
+    pub(super) surface_biomes: Arc<Vec<BiomeFieldEntry>>,
+    pub(super) volume_biomes: Arc<Vec<BiomeFieldEntry>>,
     pub(super) surface_site_spacing: Vec2,
     pub(super) volume_site_spacing: Option<Vec3>,
     pub(super) climate: MacroClimateField,
@@ -303,8 +303,8 @@ impl BiomeField {
             .as_deref()
             .and_then(|id| surface_biomes.iter().position(|biome| biome.id == id));
         Self {
-            surface_biomes,
-            volume_biomes,
+            surface_biomes: Arc::new(surface_biomes),
+            volume_biomes: Arc::new(volume_biomes),
             surface_site_spacing,
             volume_site_spacing,
             climate: MacroClimateField::new(seed),
