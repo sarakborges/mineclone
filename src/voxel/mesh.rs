@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    content::block::{BlockRegistry, BlockTextureRotations},
+    content::block::{BlockLookup, BlockRegistry, BlockTextureRotations},
     rendering::block_texture::block_face_material_face,
 };
 
@@ -46,6 +46,7 @@ where
     F: FnMut(IVec3, VoxelCell, &crate::content::block::BlockDefinition) -> [f32; 3],
 {
     let mut buffers = MicroMeshBuffers::default();
+    let mut block_lookup = BlockLookup::new(blocks);
     let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
 
     for y in 0..CHUNK_SIZE {
@@ -54,9 +55,7 @@ where
                 let Some(cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
                     continue;
                 };
-                let block = blocks
-                    .get(cell.block_id)
-                    .unwrap_or_else(|| panic!("missing block definition: {}", cell.block_id));
+                let block = block_lookup.get(cell.block_id);
                 let block_is_transparent = block.alpha_blend || block.alpha_cutoff.is_some();
                 let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
                 let mut tint = None;
@@ -73,7 +72,6 @@ where
                 if MicroblockMask::is_modified(cell) {
                     let surface = MicroSurface {
                         world,
-                        blocks,
                         cell,
                         block,
                         world_voxel,
@@ -85,7 +83,7 @@ where
                         },
                         block_srgb: block_srgb_for_cell(),
                     };
-                    emit_sculpted_faces(&surface, &mut buffers);
+                    emit_sculpted_faces(&surface, &mut block_lookup, &mut buffers);
                     continue;
                 }
 
@@ -95,16 +93,14 @@ where
                         .cell_at(world_voxel + face.offset())
                         .filter(|neighbor| MicroblockMask::is_modified(*neighbor))
                         .filter(|neighbor| {
-                            let definition = blocks.get(neighbor.block_id).unwrap_or_else(|| {
-                                panic!("missing block definition: {}", neighbor.block_id)
-                            });
+                            let definition = block_lookup.get(neighbor.block_id);
                             occludes(cell.block_id, block, neighbor.block_id, definition)
                         });
 
                     if partial_occluder.is_none()
                         && !is_face_exposed(
                             world,
-                            blocks,
+                            &mut block_lookup,
                             cell.block_id,
                             block_is_transparent,
                             world_voxel,
@@ -127,7 +123,6 @@ where
                     if let Some(neighbor) = partial_occluder {
                         let surface = MicroSurface {
                             world,
-                            blocks,
                             cell,
                             block,
                             world_voxel,
