@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bevy::prelude::*;
 
 use crate::{
@@ -18,7 +20,7 @@ use self::{
     },
 };
 use super::{
-    block_face::BlockFace,
+    block_face::{BlockFace, BlockFaces},
     cell::VoxelCell,
     chunk::{CHUNK_SIZE, VoxelChunk},
     mesh_lighting::{FaceLighting, face_lighting, push_lit_quad, surface_block_srgb},
@@ -102,6 +104,8 @@ where
     let selected_voxel_count = meshlets.selected_voxel_count();
     let mut visuals = vec![None; selected_voxel_count];
     let mut sources = vec![None; selected_voxel_count];
+    let mut block_visual_indices = HashMap::<&'static str, usize>::new();
+    let mut block_visuals = Vec::<BlockMeshVisual>::new();
 
     // Resolve selected chunk cells and definitions once. The six directional
     // meshing passes reuse these entries instead of re-reading storage and
@@ -111,10 +115,22 @@ where
             return;
         };
         let block = block_lookup.get(cell.block_id);
+        let block_visual_index = if let Some(&index) = block_visual_indices.get(cell.block_id) {
+            index
+        } else {
+            let index = block_visuals.len();
+            block_visuals.push(BlockMeshVisual::new(block, texture_table));
+            block_visual_indices.insert(cell.block_id, index);
+            index
+        };
         let index = meshlets
             .compact_voxel_index(x, y, z)
             .expect("selected voxel must have a compact meshlet index");
-        sources[index] = Some(VoxelMeshSource { cell, block });
+        sources[index] = Some(VoxelMeshSource {
+            cell,
+            block,
+            block_visual_index,
+        });
 
         if !MicroblockMask::is_modified(cell) {
             return;
@@ -177,8 +193,8 @@ where
                                 continue;
                             }
 
-                            let block_is_transparent =
-                                block.alpha_blend || block.alpha_cutoff.is_some();
+                            let block_visual = &block_visuals[source.block_visual_index];
+                            let block_is_transparent = block_visual.is_transparent;
                             let local_voxel =
                                 IVec3::new(x as i32, y as i32, z as i32);
                             let world_voxel = chunk_origin + local_voxel;
@@ -252,22 +268,16 @@ where
                                 continue;
                             }
 
-                            let texture_rotation =
-                                if face_uses_texture_rotation(block.rotate_texture, source_face) {
-                                    cell.texture_rotation
-                                } else {
-                                    TextureRotation::default()
-                                };
+                            let face_visual = block_visual.faces.get(source_face);
+                            let texture_rotation = if face_visual.uses_texture_rotation {
+                                cell.texture_rotation
+                            } else {
+                                TextureRotation::default()
+                            };
                             let lighting =
                                 face_lighting(world, world_voxel, face, source_block_srgb);
-                            let material_face =
-                                block_face_material_face(source_face, block);
-                            let material_code = texture_table
-                                .encoded_layers(block_face_texture_layers(
-                                    material_face,
-                                    block,
-                                ))
-                                .unwrap_or(0.0);
+                            let material_face = face_visual.material_face;
+                            let material_code = face_visual.material_code;
 
                             let uv_rotation = oriented_face_uv_rotation(
                                 face,
@@ -285,7 +295,7 @@ where
                             let greedy_eligible =
                                 // Alpha-cutout is order-independent and safe to merge.
                                 // Only true alpha blending must keep independent quads.
-                                !block.alpha_blend
+                                !block_visual.alpha_blend
                                 && lighting_is_uniform(lighting);
 
                             if greedy_eligible {
@@ -353,6 +363,42 @@ where
 struct VoxelMeshSource<'a> {
     cell: VoxelCell,
     block: &'a BlockDefinition,
+    block_visual_index: usize,
+}
+
+#[derive(Clone, Copy)]
+struct BlockFaceMeshVisual {
+    material_face: BlockFace,
+    material_code: f32,
+    uses_texture_rotation: bool,
+}
+
+struct BlockMeshVisual {
+    faces: BlockFaces<BlockFaceMeshVisual>,
+    is_transparent: bool,
+    alpha_blend: bool,
+}
+
+impl BlockMeshVisual {
+    fn new(block: &BlockDefinition, texture_table: &TerrainTextureTable) -> Self {
+        Self {
+            faces: BlockFaces::from_fn(|face| {
+                let material_face = block_face_material_face(face, block);
+                BlockFaceMeshVisual {
+                    material_face,
+                    material_code: texture_table
+                        .encoded_layers(block_face_texture_layers(material_face, block))
+                        .unwrap_or(0.0),
+                    uses_texture_rotation: face_uses_texture_rotation(
+                        block.rotate_texture,
+                        face,
+                    ),
+                }
+            }),
+            is_transparent: block.alpha_blend || block.alpha_cutoff.is_some(),
+            alpha_blend: block.alpha_blend,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
