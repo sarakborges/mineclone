@@ -1,4 +1,4 @@
-use std::{collections::{BTreeSet, HashMap}, fs};
+use std::{collections::{BTreeMap, HashMap}, fs};
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -87,11 +87,16 @@ pub(crate) struct UiLocalization {
     languages: HashMap<Language, HashMap<String, String>>,
 }
 
-fn placeholders(text: &str) -> BTreeSet<&str> {
-    text.split('{')
+fn placeholders(text: &str) -> BTreeMap<&str, usize> {
+    let mut counts = BTreeMap::new();
+    for name in text
+        .split('{')
         .skip(1)
         .filter_map(|part| part.split_once('}').map(|(name, _)| name))
-        .collect()
+    {
+        *counts.entry(name).or_default() += 1;
+    }
+    counts
 }
 
 impl UiLocalization {
