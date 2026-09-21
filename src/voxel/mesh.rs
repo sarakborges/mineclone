@@ -269,18 +269,23 @@ where
                                 ))
                                 .unwrap_or(0.0);
 
+                            let uv_rotation = oriented_face_uv_rotation(
+                                face,
+                                cell.orientation,
+                                texture_rotation,
+                            );
                             let candidate = GreedyFace {
                                 block_id: cell.block_id,
                                 material_face,
                                 tint,
                                 lighting,
                                 material_code,
+                                uv_rotation,
                             };
-                            let greedy_eligible = cell.orientation == BlockOrientation::Y
+                            let greedy_eligible =
                                 // Alpha-cutout is order-independent and safe to merge.
                                 // Only true alpha blending must keep independent quads.
-                                && !block.alpha_blend
-                                && texture_rotation == TextureRotation::Degrees0
+                                !block.alpha_blend
                                 && lighting_is_uniform(lighting);
 
                             if greedy_eligible {
@@ -398,6 +403,7 @@ struct GreedyFace {
     tint: [f32; 3],
     lighting: FaceLighting,
     material_code: f32,
+    uv_rotation: TextureRotation,
 }
 
 fn lighting_is_uniform(lighting: FaceLighting) -> bool {
@@ -490,7 +496,7 @@ fn emit_greedy_plane<'a>(
                 ),
                 greedy_vertices(face, depth, u, v, width, height),
                 face.normal(),
-                tiled_uvs(width, height),
+                tiled_uvs(width, height, candidate.uv_rotation),
                 candidate.tint,
                 candidate.lighting,
                 candidate.material_code,
@@ -553,10 +559,53 @@ fn greedy_vertices(
     }
 }
 
-fn tiled_uvs(width: usize, height: usize) -> [[f32; 2]; 4] {
-    let width = width as f32;
-    let height = height as f32;
-    [[0.0, height], [width, height], [width, 0.0], [0.0, 0.0]]
+fn tiled_uvs(
+    width: usize,
+    height: usize,
+    rotation: TextureRotation,
+) -> [[f32; 2]; 4] {
+    let (u_extent, v_extent) = match rotation {
+        TextureRotation::Degrees0 | TextureRotation::Degrees180 => {
+            (width as f32, height as f32)
+        }
+        TextureRotation::Degrees90 | TextureRotation::Degrees270 => {
+            (height as f32, width as f32)
+        }
+    };
+    rotation.rotate_uvs([
+        [0.0, v_extent],
+        [u_extent, v_extent],
+        [u_extent, 0.0],
+        [0.0, 0.0],
+    ])
+}
+
+fn oriented_face_uv_rotation(
+    face: BlockFace,
+    orientation: BlockOrientation,
+    texture_rotation: TextureRotation,
+) -> TextureRotation {
+    let orientation_turn = match orientation {
+        BlockOrientation::Y => 0,
+        BlockOrientation::Z => match face {
+            BlockFace::Right => 1,
+            BlockFace::Left => 3,
+            BlockFace::Top | BlockFace::Back => 2,
+            BlockFace::Bottom | BlockFace::Front => 0,
+        },
+        BlockOrientation::X => match face {
+            BlockFace::Back => 1,
+            BlockFace::Right
+            | BlockFace::Left
+            | BlockFace::Top
+            | BlockFace::Bottom
+            | BlockFace::Front => 3,
+        },
+    };
+
+    TextureRotation::from_quarter_turn(
+        orientation_turn + texture_rotation as u8,
+    )
 }
 
 fn terrain_batch_sort_key(
