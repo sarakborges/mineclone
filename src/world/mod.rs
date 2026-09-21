@@ -87,6 +87,7 @@ use setup::{begin_world_loading, setup_world};
 use streaming::{ChunkStreamingState, stream_chunks};
 use warp::{PendingWarp, resolve_pending_warp};
 use tick::{WorldTickClock, WorldTickSet, advance_world_ticks};
+use work_budget::{WorldFrameWorkBudget, begin_world_frame_work_budget};
 use world_feature_fields::WorldFeatureFields;
 
 pub(crate) struct WorldPlugin;
@@ -114,6 +115,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<PendingLightingUpdates>()
             .init_resource::<PendingFluidUpdates>()
             .init_resource::<PendingWarp>()
+            .init_resource::<WorldFrameWorkBudget>()
             .add_plugins(DayNightPlugin)
             .add_systems(OnEnter(GameState::StartingScreen), release_world_session)
             .add_systems(
@@ -163,8 +165,11 @@ impl Plugin for WorldPlugin {
             .add_systems(Update, setup_world.run_if(in_state(GameState::Loading)))
             .add_systems(
                 PreUpdate,
-                advance_world_ticks
-                    .in_set(WorldTickSet)
+                (
+                    begin_world_frame_work_budget,
+                    advance_world_ticks.in_set(WorldTickSet),
+                )
+                    .chain()
                     .run_if(in_state(GameState::Gameplay)),
             )
             .add_systems(
