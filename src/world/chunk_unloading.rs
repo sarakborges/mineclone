@@ -14,8 +14,8 @@ use super::{
     chunk_remesh::ChunkRemeshQueue,
     chunk_remesh_tasks::ChunkRemeshTasks,
     chunk_rendering::{
-        CHUNK_MESH_RESIDENCY_HIGH_BYTES, CHUNK_MESH_RESIDENCY_TARGET_BYTES, ChunkRenderPool,
-        retire_chunk_render_allocation,
+        CHUNK_MESH_RESIDENCY_HIGH_BYTES, CHUNK_MESH_RESIDENCY_RECOVERY_BYTES,
+        CHUNK_MESH_RESIDENCY_TARGET_BYTES, ChunkRenderPool, retire_chunk_render_allocation,
     },
     chunk_system_params::ChunkRenderer,
     render_distance::RenderDistanceSettings,
@@ -112,19 +112,43 @@ pub(super) struct MeshResidencyCandidate {
 pub(super) fn enforce_chunk_mesh_residency_budget(
     player: Single<&Transform, With<GameplayCamera>>,
     render_distance: Res<RenderDistanceSettings>,
+    mut streaming: ResMut<ChunkStreamingState>,
     mut renderer: ChunkRenderer,
     world: Res<VoxelWorld>,
     mut remesh_queue: ResMut<ChunkRemeshQueue>,
     mut remesh_tasks: ResMut<ChunkRemeshTasks>,
     mut candidates: Local<Vec<MeshResidencyCandidate>>,
+    mut recovery: Local<Vec<IVec3>>,
 ) {
     let before = renderer.pool.mesh_bytes();
+    let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
+    let center = chunk_coord_from_position(feet_position);
+
+    if before <= CHUNK_MESH_RESIDENCY_RECOVERY_BYTES {
+        recovery.clear();
+        recovery.extend(
+            streaming
+                .mesh_pressure_evicted_coords()
+                .filter(|coord| streaming.keeps_loaded(*coord) && !renderer.pool.contains(*coord)),
+        );
+        recovery.sort_unstable_by_key(|coord| {
+            let delta = *coord - center;
+            (
+                delta.length_squared(),
+                coord.y,
+                coord.z,
+                coord.x,
+            )
+        });
+        for coord in recovery.iter().copied().take(2) {
+            streaming.recover_mesh_after_pressure(coord);
+        }
+    }
+
     if before <= CHUNK_MESH_RESIDENCY_HIGH_BYTES {
         return;
     }
 
-    let feet_position = player.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
-    let center = chunk_coord_from_position(feet_position);
     let visible_radius = i64::from(render_distance.chunks().max(1));
     let visible_radius_squared = visible_radius * visible_radius;
 
@@ -194,6 +218,7 @@ pub(super) fn enforce_chunk_mesh_residency_budget(
             &mut renderer.pool,
             candidate.coord,
         );
+        streaming.suppress_mesh_for_pressure(candidate.coord);
         remesh_queue.remove(candidate.coord);
         remesh_tasks.remove_lighting_revision(candidate.coord);
         enqueue_retired_render_halo_remeshes(
