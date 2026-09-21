@@ -236,12 +236,12 @@ impl ChatPlacementContext<'_, '_> {
         let Some(variation_count) = self.structures.variation_count(reference) else {
             return format!("Unknown structure id or group: {reference}");
         };
-        if let Some(variation) = variation {
-            if variation > variation_count {
-                return format!(
-                    "Unknown variation {variation} for {reference}; expected 1..={variation_count}."
-                );
-            }
+        if let Some(variation) = variation
+            && variation > variation_count
+        {
+            return format!(
+                "Unknown variation {variation} for {reference}; expected 1..={variation_count}."
+            );
         }
 
         let Ok(mut player) = self.player.single_mut() else {
