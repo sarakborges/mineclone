@@ -15,6 +15,7 @@ use crate::voxel::{
 };
 
 use super::{
+    chunk_async_work::ChunkAsyncWorkLimiter,
     chunk_mesh_tasks::MeshContentSnapshot,
     chunk_rendering::{
         BuiltChunkMesh, build_chunk_fluid_meshlet_remeshes,
@@ -199,10 +200,14 @@ impl ChunkRemeshTasks {
         kind: ChunkRemeshTaskKind,
         meshlets: ChunkMeshletMask,
         world: ChunkMeshSnapshot,
+        limiter: &ChunkAsyncWorkLimiter,
     ) -> bool {
         if !self.can_schedule(kind) || self.contains(coord, kind) {
             return false;
         }
+        let Some(permit) = limiter.try_acquire() else {
+            return false;
+        };
 
         let snapshot = self
             .snapshot
@@ -217,6 +222,7 @@ impl ChunkRemeshTasks {
             &self.lighting_revisions,
         );
         let task = AsyncComputeTaskPool::get().spawn(async move {
+            let _permit = permit;
             let world = world.materialize_shell();
             let context = snapshot.context(&world);
             let meshes = match kind {
