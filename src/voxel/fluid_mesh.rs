@@ -146,7 +146,15 @@ fn emit_fluid_openings(
     const EDGE: usize = MICROBLOCK_EDGE as usize;
     for v in 0..EDGE {
         for u in 0..EDGE {
-            let boundary_position = match face {
+            let source_boundary_position = match face {
+                BlockFace::Right => [EDGE - 1, v, u],
+                BlockFace::Left => [0, v, u],
+                BlockFace::Top => [u, EDGE - 1, v],
+                BlockFace::Bottom => [u, 0, v],
+                BlockFace::Front => [u, v, EDGE - 1],
+                BlockFace::Back => [u, v, 0],
+            };
+            let neighbor_boundary_position = match face {
                 BlockFace::Right => [0, v, u],
                 BlockFace::Left => [EDGE - 1, v, u],
                 BlockFace::Top => [u, 0, v],
@@ -154,8 +162,8 @@ fn emit_fluid_openings(
                 BlockFace::Front => [u, v, 0],
                 BlockFace::Back => [u, v, EDGE - 1],
             };
-            if source_mask.is_some_and(|mask| mask.contains(boundary_position))
-                || neighbor_mask.is_some_and(|mask| mask.contains(boundary_position))
+            if source_mask.is_some_and(|mask| mask.contains(source_boundary_position))
+                || neighbor_mask.is_some_and(|mask| mask.contains(neighbor_boundary_position))
             {
                 continue;
             }
@@ -415,8 +423,8 @@ fn partial_block_face_has_opening(cell: VoxelCell, face: BlockFace) -> bool {
             let position = match face {
                 BlockFace::Right => [0, a, b],
                 BlockFace::Left => [7, a, b],
-                BlockFace::Top => [a, b, 0],
-                BlockFace::Bottom => [a, b, 7],
+                BlockFace::Top => [a, 0, b],
+                BlockFace::Bottom => [a, 7, b],
                 BlockFace::Front => [a, b, 0],
                 BlockFace::Back => [a, b, 7],
             };
