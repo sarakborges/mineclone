@@ -23,14 +23,28 @@ pub struct ToolRegistry {
 
 impl ToolRegistry {
     pub fn insert(&mut self, mut definition: ToolDefinition) {
-        definition
-            .name
-            .validate(&format!("tool {} name", definition.id));
+        definition.id = definition.id.trim().to_owned();
+        definition.category = definition.category.trim().to_owned();
         definition.icon = definition.icon.trim().to_owned();
         definition.tint_icon = definition
             .tint_icon
             .map(|path| path.trim().to_owned())
             .filter(|path| !path.is_empty());
+
+        assert!(!definition.id.is_empty(), "tool id cannot be empty");
+        assert!(
+            !definition.category.is_empty(),
+            "tool {} category cannot be empty",
+            definition.id
+        );
+        assert!(
+            !definition.icon.is_empty(),
+            "tool {} icon cannot be empty",
+            definition.id
+        );
+        definition
+            .name
+            .validate(&format!("tool {} name", definition.id));
         intern_tool_id(&definition.id);
         self.definitions.insert(definition.id.clone(), definition);
     }
