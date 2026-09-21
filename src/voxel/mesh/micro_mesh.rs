@@ -7,7 +7,9 @@ use crate::{
     content::block::{
         BlockDefinition, BlockLookup, BlockTextureLayer, BlockTextureRotations,
     },
-    rendering::block_texture::{block_face_material_face, block_face_texture_layers},
+    rendering::block_texture::{
+        TerrainTextureTable, block_face_material_face, block_face_texture_layers,
+    },
 };
 
 use super::super::{
@@ -70,6 +72,7 @@ pub(super) struct MicroSurface<'a, W: VoxelRead + ?Sized> {
     pub(super) local_voxel: IVec3,
     pub(super) tint: [f32; 3],
     pub(super) block_srgb: [f32; 3],
+    pub(super) texture_table: &'a TerrainTextureTable,
 }
 
 pub(super) fn emit_sculpted_faces<'a, W: VoxelRead + ?Sized>(
@@ -253,6 +256,10 @@ fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
         rotate_macro_uv(macro_uv(source_face, oriented), rotation)
     });
     let material_face = block_face_material_face(source_face, surface.block);
+    let material_code = surface
+        .texture_table
+        .encoded_layers(block_face_texture_layers(material_face, surface.block))
+        .unwrap_or(0.0);
     let lighting = face_lighting(surface.world, surface.world_voxel, face, surface.block_srgb);
     push_lit_quad(
         material_buffer(
@@ -266,6 +273,7 @@ fn emit_rectangle<'a, W: VoxelRead + ?Sized>(
         uvs,
         surface.tint,
         lighting,
+        material_code,
     );
 }
 
