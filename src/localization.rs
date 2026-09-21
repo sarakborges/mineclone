@@ -166,3 +166,20 @@ impl Plugin for LocalizationPlugin {
             .insert_resource(UiLocalization::load());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::placeholders;
+
+    #[test]
+    fn placeholder_validation_preserves_multiplicity() {
+        assert_eq!(
+            placeholders("{value} / {value}"),
+            placeholders("{value} / {value}")
+        );
+        assert_ne!(
+            placeholders("{value} / {value}"),
+            placeholders("{value}")
+        );
+    }
+}
