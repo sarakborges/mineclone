@@ -10,6 +10,7 @@ use super::{
     fluid::FluidCell,
     mesh_buffer::VoxelMeshBuffer,
     mesh_lighting::{face_lighting, push_lit_quad, surface_block_srgb},
+    meshlet::ChunkMeshletMask,
     microblock::{MICROBLOCK_EDGE, MicroblockMask},
     quad::VOXEL_FACE_UVS,
     read::VoxelRead,
@@ -32,6 +33,26 @@ pub fn build_fluid_meshes<W, F>(
     world: &W,
     chunk_coord: IVec3,
     chunk: &VoxelChunk,
+    tint_at: F,
+) -> Vec<ChunkFluidMesh>
+where
+    W: VoxelRead + ?Sized,
+    F: FnMut(IVec3, FluidId) -> [f32; 3],
+{
+    build_fluid_meshlets(
+        world,
+        chunk_coord,
+        chunk,
+        ChunkMeshletMask::ALL,
+        tint_at,
+    )
+}
+
+pub(crate) fn build_fluid_meshlets<W, F>(
+    world: &W,
+    chunk_coord: IVec3,
+    chunk: &VoxelChunk,
+    meshlets: ChunkMeshletMask,
     mut tint_at: F,
 ) -> Vec<ChunkFluidMesh>
 where
@@ -45,6 +66,9 @@ where
     for y in 0..CHUNK_SIZE {
         for z in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
+                if !meshlets.contains_voxel(x, y, z) {
+                    continue;
+                }
                 let Some(cell) = chunk.fluid_at(x as i32, y as i32, z as i32) else {
                     continue;
                 };
