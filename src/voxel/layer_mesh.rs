@@ -1,7 +1,7 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::content::{
-    block::BlockRegistry,
+    block::{BlockLookup, BlockRegistry},
     layer::{LayerDefinition, LayerRegistry},
 };
 
@@ -41,6 +41,7 @@ where
 {
     let mut buffers =
         HashMap::<(&'static str, BlockFace, bool), VoxelMeshBuffer>::new();
+    let mut block_lookup = BlockLookup::new(blocks);
     let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
 
     for (index, attached_layers) in chunk.layer_groups() {
@@ -55,9 +56,7 @@ where
             continue;
         }
 
-        let support = blocks.get(support_cell.block_id).unwrap_or_else(|| {
-            panic!("missing block definition: {}", support_cell.block_id)
-        });
+        let support = block_lookup.get(support_cell.block_id);
         let support_is_transparent = support.alpha_blend || support.alpha_cutoff.is_some();
         let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
         let source_block_srgb = surface_block_srgb(
@@ -76,7 +75,7 @@ where
             let face = block_face(attached.face);
             if !is_face_exposed(
                 world,
-                blocks,
+                &mut block_lookup,
                 support_cell.block_id,
                 support_is_transparent,
                 world_voxel,
