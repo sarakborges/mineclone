@@ -453,12 +453,11 @@ fn spawn_geometry_mesh(
             Visibility::Hidden,
             chunk_render_aabb(),
             NoAutoAabb,
-            NoCpuCulling,
             DespawnOnExit(GameState::Gameplay),
         ));
 
         if !casts_shadow || layer_index > 0 {
-            entity_commands.insert(NotShadowCaster);
+            entity_commands.insert((NotShadowCaster, NoCpuCulling));
         }
 
         entities.push(entity_commands.id());
