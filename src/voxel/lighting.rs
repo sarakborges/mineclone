@@ -40,7 +40,9 @@ pub(crate) struct PendingLightingUpdates {
     emission_edit_previous_cells: HashMap<IVec3, Option<VoxelCell>>,
     context: LightingContext,
     interactive_changed_chunks: HashSet<IVec3>,
+    interactive_changed_positions: HashSet<IVec3>,
     settling_changed_chunks: HashSet<IVec3>,
+    settling_changed_positions: HashSet<IVec3>,
     settling_fluid_remesh_priority: HashSet<IVec3>,
     settling_fluid_remesh_background: HashSet<IVec3>,
 }
@@ -181,7 +183,9 @@ impl PendingLightingUpdates {
         self.queue.is_empty()
             && self.emission_edit_previous_cells.is_empty()
             && self.interactive_changed_chunks.is_empty()
+            && self.interactive_changed_positions.is_empty()
             && self.settling_changed_chunks.is_empty()
+            && self.settling_changed_positions.is_empty()
             && self.settling_fluid_remesh_priority.is_empty()
             && self.settling_fluid_remesh_background.is_empty()
     }
@@ -296,6 +300,7 @@ pub(crate) fn process_pending_lighting(
     fluids: &FluidRegistry,
     secondary_properties: &SecondaryPropertyRegistry,
     changed_chunks: &mut HashSet<IVec3>,
+    changed_positions: &mut HashSet<IVec3>,
     budget_exhausted: impl FnMut(usize) -> bool,
 ) {
     pending.enqueue_emission_edit_volumes(world, blocks, secondary_properties);
@@ -303,7 +308,9 @@ pub(crate) fn process_pending_lighting(
         queue,
         context,
         interactive_changed_chunks,
+        interactive_changed_positions,
         settling_changed_chunks,
+        settling_changed_positions,
         ..
     } = pending;
     relax_budgeted(
@@ -313,8 +320,11 @@ pub(crate) fn process_pending_lighting(
         context,
         LightingChangeSets::new(
             changed_chunks,
+            changed_positions,
             interactive_changed_chunks,
+            interactive_changed_positions,
             settling_changed_chunks,
+            settling_changed_positions,
         ),
         budget_exhausted,
     );
