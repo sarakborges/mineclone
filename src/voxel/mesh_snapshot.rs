@@ -8,6 +8,7 @@ use super::{
     coordinates::chunk_origin,
     fluid::FluidCell,
     light::VoxelLight,
+    meshlet::ChunkMeshletMask,
     read::VoxelRead,
     world::VoxelWorld,
 };
@@ -48,15 +49,35 @@ impl ShellStorage {
 pub(crate) struct ChunkMeshDependencies {
     center: IVec3,
     content_revisions: [[[Option<u64>; 3]; 3]; 3],
+    required_offsets: [[[bool; 3]; 3]; 3],
 }
 
 impl ChunkMeshDependencies {
+    pub(crate) fn for_meshlets(mut self, meshlets: ChunkMeshletMask) -> Self {
+        for offset_y in -1..=1 {
+            for offset_z in -1..=1 {
+                for offset_x in -1..=1 {
+                    let offset = IVec3::new(offset_x, offset_y, offset_z);
+                    self.required_offsets[(offset_y + 1) as usize]
+                        [(offset_z + 1) as usize][(offset_x + 1) as usize] =
+                        meshlets.depends_on_neighbor_offset(offset);
+                }
+            }
+        }
+        self
+    }
+
     pub(crate) fn is_current(&self, world: &VoxelWorld) -> bool {
         for offset_y in -1..=1 {
             for offset_z in -1..=1 {
                 for offset_x in -1..=1 {
-                    let expected = self.content_revisions[(offset_y + 1) as usize]
-                        [(offset_z + 1) as usize][(offset_x + 1) as usize];
+                    let y = (offset_y + 1) as usize;
+                    let z = (offset_z + 1) as usize;
+                    let x = (offset_x + 1) as usize;
+                    if !self.required_offsets[y][z][x] {
+                        continue;
+                    }
+                    let expected = self.content_revisions[y][z][x];
                     let Some(expected) = expected else {
                         // Do not discard first-visible mesh when a previously absent neighbor
                         // loads during the async build. A cheap post-publication catch-up handles
@@ -92,9 +113,13 @@ impl ChunkMeshDependencies {
                     if offset_x == 0 && offset_y == 0 && offset_z == 0 {
                         continue;
                     }
-                    if self.content_revisions[(offset_y + 1) as usize]
-                        [(offset_z + 1) as usize][(offset_x + 1) as usize]
-                        .is_some()
+                    let y = (offset_y + 1) as usize;
+                    let z = (offset_z + 1) as usize;
+                    let x = (offset_x + 1) as usize;
+                    if !self.required_offsets[y][z][x] {
+                        continue;
+                    }
+                    if self.content_revisions[y][z][x].is_some()
                     {
                         continue;
                     }
@@ -138,6 +163,7 @@ impl ChunkMeshSnapshot {
             std::array::from_fn(|_| std::array::from_fn(|_| None))
         });
         let mut content_revisions = [[[None; 3]; 3]; 3];
+        let required_offsets = [[[true; 3]; 3]; 3];
         content_revisions[1][1][1] = Some(center_revision);
 
         for offset_y in -1..=1 {
@@ -174,6 +200,7 @@ impl ChunkMeshSnapshot {
             dependencies: ChunkMeshDependencies {
                 center: coord,
                 content_revisions,
+                required_offsets,
             },
         })
     }
