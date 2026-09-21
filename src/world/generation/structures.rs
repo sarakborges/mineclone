@@ -54,7 +54,7 @@ struct StructurePlacementContext<'a> {
 }
 
 struct StructureRasterizationContext<'a> {
-    base_occupied: &'a [bool],
+    base_occupied: &'a [u64; STRUCTURE_OCCUPANCY_WORDS],
     blocks: &'a BlockRegistry,
     chunk_origin: IVec3,
     world_seed: u64,
@@ -70,20 +70,23 @@ pub(super) fn rasterize_structures(
         return;
     }
 
-    let mut base_occupied = vec![false; CHUNK_VOLUME];
+    let mut base_occupied = [0_u64; STRUCTURE_OCCUPANCY_WORDS];
     for local_y in 0..CHUNK_SIZE {
         for local_z in 0..CHUNK_SIZE {
             for local_x in 0..CHUNK_SIZE {
                 let index =
                     local_x + local_z * CHUNK_SIZE + local_y * CHUNK_SIZE * CHUNK_SIZE;
-                base_occupied[index] = chunk
+                if chunk
                     .cell_at(local_x as i32, local_y as i32, local_z as i32)
-                    .is_some();
+                    .is_some()
+                {
+                    bit_set(&mut base_occupied, index);
+                }
             }
         }
     }
 
-    let mut claimed = vec![false; CHUNK_VOLUME];
+    let mut claimed = [0_u64; STRUCTURE_OCCUPANCY_WORDS];
     for candidate in candidates {
         rasterize_structure(
             chunk,
@@ -541,6 +544,14 @@ fn candidates_conflict(
         })
 }
 
+fn bit_get(bits: &[u64; STRUCTURE_OCCUPANCY_WORDS], index: usize) -> bool {
+    bits[index / u64::BITS as usize] & (1_u64 << (index % u64::BITS as usize)) != 0
+}
+
+fn bit_set(bits: &mut [u64; STRUCTURE_OCCUPANCY_WORDS], index: usize) {
+    bits[index / u64::BITS as usize] |= 1_u64 << (index % u64::BITS as usize);
+}
+
 fn rectangles_overlap(
     left_min: IVec2,
     left_max: IVec2,
@@ -555,7 +566,7 @@ fn rectangles_overlap(
 
 fn rasterize_structure(
     chunk: &mut VoxelChunk,
-    claimed: &mut [bool],
+    claimed: &mut [u64; STRUCTURE_OCCUPANCY_WORDS],
     context: &StructureRasterizationContext<'_>,
     structure: &StructureDefinition,
     origin: IVec3,
@@ -572,10 +583,10 @@ fn rasterize_structure(
             let can_replace = match structure.generation.replace_policy {
                 StructureReplacePolicy::Any => true,
                 StructureReplacePolicy::AirOnly => {
-                    !claimed[index]
-                        && !context.base_occupied[index]
+                    !bit_get(claimed, index)
+                        && !bit_get(context.base_occupied, index)
                 }
-                StructureReplacePolicy::Terrain => !claimed[index],
+                StructureReplacePolicy::Terrain => !bit_get(claimed, index),
             };
             if !can_replace {
                 return false;
@@ -617,7 +628,7 @@ fn rasterize_structure(
             if structure.generation.fluid_policy == StructureFluidPolicy::Displace {
                 chunk.set_fluid(local_x, local_y, local_z, None);
             }
-            claimed[index] = true;
+            bit_set(claimed, index);
             false
         },
     );
