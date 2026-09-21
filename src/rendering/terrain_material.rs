@@ -9,6 +9,8 @@ use bevy::{
 const TERRAIN_SHADER_PATH: &str = "shaders/terrain_material.wgsl";
 const TERRAIN_VERTEX_SHADER_PATH: &str = "shaders/terrain_vertex.wgsl";
 const TERRAIN_PREPASS_SHADER_PATH: &str = "shaders/terrain_prepass.wgsl";
+const TERRAIN_PREPASS_VERTEX_SHADER_PATH: &str =
+    "shaders/terrain_prepass_vertex.wgsl";
 
 pub(crate) type TerrainMaterial = ExtendedMaterial<StandardMaterial, TerrainMaterialExtension>;
 
@@ -65,6 +67,10 @@ impl MaterialExtension for TerrainMaterialExtension {
 
     fn fragment_shader() -> ShaderRef {
         TERRAIN_SHADER_PATH.into()
+    }
+
+    fn prepass_vertex_shader() -> ShaderRef {
+        TERRAIN_PREPASS_VERTEX_SHADER_PATH.into()
     }
 
     fn prepass_fragment_shader() -> ShaderRef {
