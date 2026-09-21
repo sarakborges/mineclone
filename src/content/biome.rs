@@ -168,6 +168,7 @@ pub struct BiomeRegistry {
 
 impl BiomeRegistry {
     pub fn insert(&mut self, definition: BiomeDefinition) {
+        assert!(!definition.id.trim().is_empty(), "biome id cannot be empty");
         definition
             .name
             .validate(&format!("biome {} name", definition.id));
