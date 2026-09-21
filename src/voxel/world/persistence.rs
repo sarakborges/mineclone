@@ -47,10 +47,9 @@ impl VoxelWorld {
                     format!("duplicate saved chunk coordinate: {coord:?}"),
                 ));
             }
-            let (coord, chunk) = entry.into_chunk(blocks, layers, fluids)?;
-            let archived = Arc::new(ArchivedChunk::from_chunk(&chunk));
+            let (coord, archived) = entry.into_archived_chunk(blocks, layers, fluids)?;
             world.persistent_chunks.insert(coord);
-            world.archived_chunks.insert(coord, archived);
+            world.archived_chunks.insert(coord, Arc::new(archived));
         }
         Ok(world)
     }
