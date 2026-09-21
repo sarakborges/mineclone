@@ -1,4 +1,3 @@
-mod chunks;
 mod generations;
 mod locking;
 mod snapshot;
