@@ -1,4 +1,4 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use bevy::{
     platform::collections::HashMap,
@@ -22,8 +22,6 @@ use super::{
 const MAX_TERRAIN_REMESH_TASKS_IN_FLIGHT: usize = 4;
 const MAX_FLUID_REMESH_TASKS_IN_FLIGHT: usize = 4;
 
-type SharedLightingRevisions = Arc<RwLock<HashMap<IVec3, u64>>>;
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ChunkRemeshTaskKind {
     Geometry,
@@ -39,14 +37,11 @@ pub(crate) enum ChunkRemeshTaskMeshes {
 #[derive(Clone)]
 struct LightingRemeshDependencies {
     expected: [(IVec3, u64); 27],
-    revisions: SharedLightingRevisions,
 }
 
 impl LightingRemeshDependencies {
-    fn capture(center: IVec3, revisions: &SharedLightingRevisions) -> Self {
-        let current = revisions
-            .read()
-            .expect("lighting remesh revision tracker should not be poisoned");
+    fn capture(center: IVec3, revisions: &HashMap<IVec3, u64>) -> Self {
+        let current = revisions;
         let mut expected = [(IVec3::ZERO, 0_u64); 27];
         let mut index = 0;
         for y in -1..=1 {
@@ -60,18 +55,10 @@ impl LightingRemeshDependencies {
         }
         debug_assert_eq!(index, expected.len());
 
-        drop(current);
-        Self {
-            expected,
-            revisions: Arc::clone(revisions),
-        }
+        Self { expected }
     }
 
-    fn is_current(&self) -> bool {
-        let current = self
-            .revisions
-            .read()
-            .expect("lighting remesh revision tracker should not be poisoned");
+    fn is_current(&self, current: &HashMap<IVec3, u64>) -> bool {
         self.expected
             .iter()
             .all(|(coord, expected)| current.get(coord).copied().unwrap_or(0) == *expected)
@@ -101,8 +88,8 @@ impl ChunkRemeshDependencies {
         self.content.is_current(world)
     }
 
-    pub(crate) fn lighting_is_current(&self) -> bool {
-        self.lighting.is_current()
+    pub(crate) fn lighting_is_current(&self, tasks: &ChunkRemeshTasks) -> bool {
+        self.lighting.is_current(&tasks.lighting_revisions)
     }
 
 }
@@ -120,7 +107,7 @@ pub(crate) struct ChunkRemeshTasks {
     terrain_pending: ChunkTaskQueue<ChunkRemeshTaskOutput>,
     fluid_pending: ChunkTaskQueue<ChunkRemeshTaskOutput>,
     poll_fluid_first: bool,
-    lighting_revisions: SharedLightingRevisions,
+    lighting_revisions: HashMap<IVec3, u64>,
 }
 
 impl Default for ChunkRemeshTasks {
@@ -131,7 +118,7 @@ impl Default for ChunkRemeshTasks {
             terrain_pending: ChunkTaskQueue::default(),
             fluid_pending: ChunkTaskQueue::default(),
             poll_fluid_first: true,
-            lighting_revisions: Arc::new(RwLock::new(HashMap::default())),
+            lighting_revisions: HashMap::default(),
         }
     }
 }
@@ -178,10 +165,7 @@ impl ChunkRemeshTasks {
         &mut self,
         coords: impl IntoIterator<Item = IVec3>,
     ) {
-        let mut revisions = self
-            .lighting_revisions
-            .write()
-            .expect("lighting remesh revision tracker should not be poisoned");
+        let revisions = &mut self.lighting_revisions;
         for coord in coords {
             let next = revisions
                 .get(&coord)
@@ -194,10 +178,7 @@ impl ChunkRemeshTasks {
     }
 
     pub(crate) fn remove_lighting_revision(&mut self, coord: IVec3) {
-        self.lighting_revisions
-            .write()
-            .expect("lighting remesh revision tracker should not be poisoned")
-            .remove(&coord);
+        self.lighting_revisions.remove(&coord);
     }
 
     pub(crate) fn schedule(
