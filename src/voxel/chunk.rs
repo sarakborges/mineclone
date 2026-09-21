@@ -143,20 +143,17 @@ pub struct VoxelChunk {
     boundary_fluid_counts: [u16; BOUNDARY_FACE_COUNT],
 }
 
-pub(crate) struct VoxelChunkContentMut<'a> {
+pub(crate) struct VoxelChunkBlocksMut<'a> {
     blocks: &'a mut BlockStorage,
-    fluids: &'a mut [Option<FluidCell>],
+    fluids: &'a [Option<FluidCell>],
     layers: &'a mut HashMap<u16, Vec<AttachedLayer>>,
     block_count: &'a mut usize,
-    fluid_count: &'a mut usize,
     layer_count: &'a mut usize,
     fluid_frontier_sources: &'a mut [u64; FLUID_FRONTIER_WORDS],
-    dynamic_fluid_cells: &'a mut [u64; FLUID_FRONTIER_WORDS],
     boundary_content_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
-    boundary_fluid_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
 }
 
-impl VoxelChunkContentMut<'_> {
+impl VoxelChunkBlocksMut<'_> {
     pub(crate) fn set_block(
         &mut self,
         x: usize,
@@ -166,7 +163,7 @@ impl VoxelChunkContentMut<'_> {
     ) {
         set_block_in_storage(
             &mut *self.blocks,
-            &*self.fluids,
+            self.fluids,
             &mut *self.layers,
             &mut *self.block_count,
             &mut *self.layer_count,
@@ -178,27 +175,19 @@ impl VoxelChunkContentMut<'_> {
             block,
         );
     }
+}
 
-    pub(crate) fn add_layer(
-        &mut self,
-        x: usize,
-        y: usize,
-        z: usize,
-        face: LayerFace,
-        layer: LayerCell,
-    ) -> bool {
-        add_layer_in_storage(
-            &*self.blocks,
-            &mut *self.layers,
-            &mut *self.layer_count,
-            x,
-            y,
-            z,
-            face,
-            layer,
-        )
-    }
+pub(crate) struct VoxelChunkFluidsMut<'a> {
+    blocks: &'a BlockStorage,
+    fluids: &'a mut [Option<FluidCell>],
+    fluid_count: &'a mut usize,
+    fluid_frontier_sources: &'a mut [u64; FLUID_FRONTIER_WORDS],
+    dynamic_fluid_cells: &'a mut [u64; FLUID_FRONTIER_WORDS],
+    boundary_content_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
+    boundary_fluid_counts: &'a mut [u16; BOUNDARY_FACE_COUNT],
+}
 
+impl VoxelChunkFluidsMut<'_> {
     pub(crate) fn set_fluid(
         &mut self,
         x: usize,
@@ -207,7 +196,7 @@ impl VoxelChunkContentMut<'_> {
         fluid: Option<FluidCell>,
     ) {
         set_fluid_in_storage(
-            &*self.blocks,
+            self.blocks,
             &mut *self.fluids,
             &mut *self.fluid_count,
             &mut *self.fluid_frontier_sources,
@@ -355,22 +344,36 @@ impl VoxelChunk {
         Some((self.blocks.get(index), self.fluids[index], self.light[index]))
     }
 
-    pub(crate) fn edit_content<R>(
+    pub(crate) fn edit_blocks<R>(
         &mut self,
-        edit: impl FnOnce(&mut VoxelChunkContentMut<'_>) -> R,
+        edit: impl FnOnce(&mut VoxelChunkBlocksMut<'_>) -> R,
     ) -> R {
         let blocks = Arc::make_mut(&mut self.blocks);
-        let fluids = Arc::make_mut(&mut self.fluids);
         let layers = Arc::make_mut(&mut self.layers);
         let fluid_frontier_sources = Arc::make_mut(&mut self.fluid_frontier_sources);
-        let dynamic_fluid_cells = Arc::make_mut(&mut self.dynamic_fluid_cells);
-        let mut content = VoxelChunkContentMut {
+        let mut content = VoxelChunkBlocksMut {
             blocks,
-            fluids,
+            fluids: self.fluids.as_ref(),
             layers,
             block_count: &mut self.block_count,
-            fluid_count: &mut self.fluid_count,
             layer_count: &mut self.layer_count,
+            fluid_frontier_sources,
+            boundary_content_counts: &mut self.boundary_content_counts,
+        };
+        edit(&mut content)
+    }
+
+    pub(crate) fn edit_fluids<R>(
+        &mut self,
+        edit: impl FnOnce(&mut VoxelChunkFluidsMut<'_>) -> R,
+    ) -> R {
+        let fluids = Arc::make_mut(&mut self.fluids);
+        let fluid_frontier_sources = Arc::make_mut(&mut self.fluid_frontier_sources);
+        let dynamic_fluid_cells = Arc::make_mut(&mut self.dynamic_fluid_cells);
+        let mut content = VoxelChunkFluidsMut {
+            blocks: self.blocks.as_ref(),
+            fluids,
+            fluid_count: &mut self.fluid_count,
             fluid_frontier_sources,
             dynamic_fluid_cells,
             boundary_content_counts: &mut self.boundary_content_counts,
