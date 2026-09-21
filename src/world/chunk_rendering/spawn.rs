@@ -123,8 +123,16 @@ pub(crate) fn build_chunk_render_meshes<W: VoxelRead + ?Sized>(
     chunk: &VoxelChunk,
     context: &ChunkMeshBuildContext<'_, W>,
 ) -> Vec<BuiltChunkMesh> {
-    let terrain_meshes = build_chunk_terrain_render_meshes(coord, chunk, context);
-    let fluid_meshes = build_chunk_fluid_render_meshes(coord, chunk, context);
+    let terrain_meshes = if chunk.has_terrain_content() {
+        build_chunk_terrain_render_meshes(coord, chunk, context)
+    } else {
+        Vec::new()
+    };
+    let fluid_meshes = if chunk.has_fluid() {
+        build_chunk_fluid_render_meshes(coord, chunk, context)
+    } else {
+        Vec::new()
+    };
 
     terrain_meshes
         .into_iter()
@@ -146,6 +154,10 @@ pub(super) fn build_chunk_terrain_render_meshlets<W: VoxelRead + ?Sized>(
     context: &ChunkMeshBuildContext<'_, W>,
     meshlets: ChunkMeshletMask,
 ) -> Vec<BuiltChunkMesh> {
+    if !chunk.has_terrain_content() || meshlets.is_empty() {
+        return Vec::new();
+    }
+
     let mut column_tints = ColumnTintCache::default();
     let mut meshes = build_chunk_meshlets(
         context.world,
@@ -229,6 +241,10 @@ pub(super) fn build_chunk_fluid_render_meshlets<W: VoxelRead + ?Sized>(
     context: &ChunkMeshBuildContext<'_, W>,
     meshlets: ChunkMeshletMask,
 ) -> Vec<ChunkFluidMesh> {
+    if !chunk.has_fluid() || meshlets.is_empty() {
+        return Vec::new();
+    }
+
     let mut column_tints = vec![
         vec![None; CHUNK_SIZE * CHUNK_SIZE];
         context.fluids.iter().count()
