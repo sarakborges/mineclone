@@ -17,7 +17,6 @@ pub(crate) struct VoxelMeshQuad {
 #[derive(Default)]
 pub(crate) struct VoxelMeshBuffer {
     positions: Vec<[f32; 3]>,
-    normals: Vec<[f32; 3]>,
     uvs: Vec<[f32; 2]>,
     light_uvs: Vec<[f32; 2]>,
     colors: Vec<[f32; 4]>,
@@ -28,9 +27,8 @@ impl VoxelMeshBuffer {
     pub(crate) fn push_quad(&mut self, quad: VoxelMeshQuad) {
         let base = self.positions.len() as u32;
 
-        let packed_tint = encode_tint(quad.tint);
+        let packed_tint = encode_tint_and_normal(quad.tint, quad.normal);
         self.positions.extend(quad.vertices);
-        self.normals.extend([quad.normal; 4]);
         self.uvs.extend(std::array::from_fn(|index| {
             encode_material_uv(quad.uvs[index], quad.light_uvs[index][1])
         }));
@@ -55,7 +53,6 @@ impl VoxelMeshBuffer {
                 RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
             )
             .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
             .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
             .with_inserted_attribute(Mesh::ATTRIBUTE_UV_1, self.light_uvs)
             // Tangents are omitted: voxel materials do not use normal maps.
@@ -76,11 +73,27 @@ fn encode_material_uv(uv: [f32; 2], material_code: f32) -> [f32; 2] {
     ]
 }
 
-fn encode_tint(tint: [f32; 3]) -> f32 {
+fn encode_tint_and_normal(tint: [f32; 3], normal: [f32; 3]) -> f32 {
     let tint = tint.map(|channel| {
-        (channel.clamp(0.0, 1.0) * 255.0).round() as u32
+        (channel.clamp(0.0, 1.0) * 127.0).round() as u32
     });
-    (tint[0] | (tint[1] << 8) | (tint[2] << 16)) as f32
+    let normal_code = axis_normal_code(normal);
+    let packed =
+        tint[0] | (tint[1] << 7) | (tint[2] << 14) | (normal_code << 21);
+    debug_assert!(packed <= 0x00ff_ffff);
+    packed as f32
+}
+
+fn axis_normal_code(normal: [f32; 3]) -> u32 {
+    match normal {
+        [1.0, 0.0, 0.0] => 0,
+        [-1.0, 0.0, 0.0] => 1,
+        [0.0, 1.0, 0.0] => 2,
+        [0.0, -1.0, 0.0] => 3,
+        [0.0, 0.0, 1.0] => 4,
+        [0.0, 0.0, -1.0] => 5,
+        _ => panic!("voxel mesh normal must be axis-aligned: {normal:?}"),
+    }
 }
 
 fn compact_indices(vertex_count: usize, indices: Vec<u32>) -> Indices {
