@@ -2,7 +2,7 @@ use crate::content::fluid::FluidId;
 
 pub const MAX_FLUID_LEVEL: u8 = 8;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct FluidCell {
     pub fluid_id: FluidId,
     pub level: u8,
