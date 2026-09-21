@@ -96,6 +96,7 @@ impl ChunkDiskIdentity {
         self.chunk_position
     }
 
+    #[cfg(test)]
     fn legacy_relative_path(self) -> PathBuf {
         let position = self.chunk_position;
         let z = position.z;
