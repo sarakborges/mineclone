@@ -200,8 +200,13 @@ pub(super) fn collect_built_chunk_meshes(
             .initial_catchup_meshlets_with(&work.world, |neighbor| {
                 renderer.pool.contains(neighbor)
             });
-        if work.state.initial_mesh_seed_catchup.contains(&completed.coord) {
-            catchup_meshlets = ChunkMeshletMask::ALL;
+        if let Some(seed_catchup) = work
+            .state
+            .initial_mesh_seed_catchup
+            .get(&completed.coord)
+            .copied()
+        {
+            catchup_meshlets = catchup_meshlets.union(seed_catchup);
         }
         let render_context = content.render_context(
             &work.world,
