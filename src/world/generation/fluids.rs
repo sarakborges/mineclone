@@ -12,7 +12,8 @@ use crate::{
     world::{
         biome_field::BiomeField, cave_connectivity::CaveConnectivityRegion,
         deterministic::{hash_string, mix_seed}, generation::GenerationColumnSample,
-        generation_region::GenerationRegion, hydrology::HydrologyWaterSample,
+        generation::{surface_carvers::SurfaceCarverResolveCache},
+    generation_region::GenerationRegion, hydrology::HydrologyWaterSample,
         noise::fractal_noise_2d, terrain::surface_height_from_sample,
     },
 };
@@ -495,6 +496,7 @@ mod tests {
             let region = GenerationRegion {
                 coord: IVec3::new(chunk_x.div_euclid(8), chunk_y.div_euclid(8), chunk_z.div_euclid(8)),
                 hydrology: Arc::new(hydrology),
+                surface_carvers: Arc::new(SurfaceCarverResolveCache::default()),
             };
             assert_eq!(region.coord.xz(), region.hydrology.coord);
             let density = sample_density_field(
