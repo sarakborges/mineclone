@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     content::{
-        block::{BlockLookup, BlockRegistry, BlockTextureRotations},
+        block::{BlockDefinition, BlockLookup, BlockRegistry, BlockTextureRotations},
         block_orientation::BlockOrientation,
     },
     rendering::block_texture::block_face_material_face,
@@ -51,6 +51,7 @@ where
     let mut buffers = MicroMeshBuffers::default();
     let mut block_lookup = BlockLookup::new(blocks);
     let chunk_origin = chunk_coord * CHUNK_SIZE as i32;
+    let mut visuals = vec![None; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
 
     // Sculpted voxels keep the dedicated micro-mesher. Their geometry already
     // performs greedy rectangle merging at 1/8-block resolution.
@@ -65,22 +66,25 @@ where
                 }
 
                 let block = block_lookup.get(cell.block_id);
-                let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
+                let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
+                let world_voxel = chunk_origin + local_voxel;
+                let visual = visual_for_cell(
+                    &mut visuals,
+                    chunk,
+                    [x, y, z],
+                    world_voxel,
+                    cell,
+                    block,
+                    &mut tint_at,
+                );
                 let surface = MicroSurface {
                     world,
                     cell,
                     block,
                     world_voxel,
-                    local_voxel: IVec3::new(x as i32, y as i32, z as i32),
-                    tint: if block.textures.is_empty() {
-                        [1.0, 1.0, 1.0]
-                    } else {
-                        tint_at(world_voxel, cell, block)
-                    },
-                    block_srgb: surface_block_srgb(
-                        chunk.light_at(x as i32, y as i32, z as i32),
-                        block.light_emission > 0,
-                    ),
+                    local_voxel,
+                    tint: visual.tint,
+                    block_srgb: visual.block_srgb,
                 };
                 emit_sculpted_faces(&surface, &mut block_lookup, &mut buffers);
             }
@@ -131,15 +135,17 @@ where
                         continue;
                     }
 
-                    let tint = if block.textures.is_empty() {
-                        [1.0, 1.0, 1.0]
-                    } else {
-                        tint_at(world_voxel, cell, block)
-                    };
-                    let source_block_srgb = surface_block_srgb(
-                        chunk.light_at(x as i32, y as i32, z as i32),
-                        block.light_emission > 0,
+                    let visual = visual_for_cell(
+                        &mut visuals,
+                        chunk,
+                        [x, y, z],
+                        world_voxel,
+                        cell,
+                        block,
+                        &mut tint_at,
                     );
+                    let tint = visual.tint;
+                    let source_block_srgb = visual.block_srgb;
 
                     if let Some(neighbor) = partial_occluder {
                         let surface = MicroSurface {
@@ -222,6 +228,44 @@ where
 
     meshes.sort_by_key(|mesh| (mesh.block_id, face_sort_key(mesh.face), mesh.casts_shadow));
     meshes
+}
+
+#[derive(Clone, Copy)]
+struct CellVisual {
+    tint: [f32; 3],
+    block_srgb: [f32; 3],
+}
+
+fn visual_for_cell<F>(
+    cache: &mut [Option<CellVisual>],
+    chunk: &VoxelChunk,
+    [x, y, z]: [usize; 3],
+    world_voxel: IVec3,
+    cell: VoxelCell,
+    block: &BlockDefinition,
+    tint_at: &mut F,
+) -> CellVisual
+where
+    F: FnMut(IVec3, VoxelCell, &BlockDefinition) -> [f32; 3],
+{
+    let index = x + z * CHUNK_SIZE + y * CHUNK_SIZE * CHUNK_SIZE;
+    if let Some(visual) = cache[index] {
+        return visual;
+    }
+
+    let visual = CellVisual {
+        tint: if block.textures.is_empty() {
+            [1.0, 1.0, 1.0]
+        } else {
+            tint_at(world_voxel, cell, block)
+        },
+        block_srgb: surface_block_srgb(
+            chunk.light_at(x as i32, y as i32, z as i32),
+            block.light_emission > 0,
+        ),
+    };
+    cache[index] = Some(visual);
+    visual
 }
 
 #[derive(Clone, Copy, PartialEq)]
