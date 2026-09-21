@@ -13,6 +13,7 @@ use crate::{
         fluid_mesh::{ChunkFluidMesh, build_fluid_meshlets},
         layer_mesh::{ChunkLayerMesh, build_layer_meshlets},
         mesh::{ChunkFaceMesh, ChunkTerrainBatch, build_chunk_meshlets},
+        mesh_lighting::ChunkLightingCache,
         meshlet::ChunkMeshletMask,
         read::VoxelRead,
     },
@@ -120,13 +121,31 @@ pub(crate) fn build_chunk_render_meshes<W: VoxelRead + ?Sized>(
     chunk: &VoxelChunk,
     context: &ChunkMeshBuildContext<'_, W>,
 ) -> Vec<BuiltChunkMesh> {
+    if chunk.is_empty() {
+        return Vec::new();
+    }
+
+    let lighting_cache =
+        ChunkLightingCache::capture(context.world, coord * CHUNK_SIZE as i32);
     let terrain_meshes = if chunk.has_terrain_content() {
-        build_chunk_terrain_render_meshes(coord, chunk, context)
+        build_chunk_terrain_render_meshlets_with_lighting(
+            coord,
+            chunk,
+            context,
+            ChunkMeshletMask::ALL,
+            Some(&lighting_cache),
+        )
     } else {
         Vec::new()
     };
     let fluid_meshes = if chunk.has_fluid() {
-        build_chunk_fluid_render_meshes(coord, chunk, context)
+        build_chunk_fluid_render_meshlets_with_lighting(
+            coord,
+            chunk,
+            context,
+            ChunkMeshletMask::ALL,
+            Some(&lighting_cache),
+        )
     } else {
         Vec::new()
     };
@@ -151,6 +170,34 @@ pub(super) fn build_chunk_terrain_render_meshlets<W: VoxelRead + ?Sized>(
     context: &ChunkMeshBuildContext<'_, W>,
     meshlets: ChunkMeshletMask,
 ) -> Vec<BuiltChunkMesh> {
+    if meshlets.is_all() {
+        let lighting_cache =
+            ChunkLightingCache::capture(context.world, coord * CHUNK_SIZE as i32);
+        return build_chunk_terrain_render_meshlets_with_lighting(
+            coord,
+            chunk,
+            context,
+            meshlets,
+            Some(&lighting_cache),
+        );
+    }
+
+    build_chunk_terrain_render_meshlets_with_lighting(
+        coord,
+        chunk,
+        context,
+        meshlets,
+        None,
+    )
+}
+
+fn build_chunk_terrain_render_meshlets_with_lighting<W: VoxelRead + ?Sized>(
+    coord: IVec3,
+    chunk: &VoxelChunk,
+    context: &ChunkMeshBuildContext<'_, W>,
+    meshlets: ChunkMeshletMask,
+    lighting_cache: Option<&ChunkLightingCache>,
+) -> Vec<BuiltChunkMesh> {
     if !chunk.has_terrain_content() || meshlets.is_empty() {
         return Vec::new();
     }
@@ -163,6 +210,7 @@ pub(super) fn build_chunk_terrain_render_meshlets<W: VoxelRead + ?Sized>(
         context.blocks,
         context.texture_table,
         meshlets,
+        lighting_cache,
         |voxel, cell, block| {
             let base_tint = if block.tint == BlockTint::None {
                 Color::WHITE
@@ -194,6 +242,7 @@ pub(super) fn build_chunk_terrain_render_meshlets<W: VoxelRead + ?Sized>(
             context.blocks,
             context.layers,
             meshlets,
+            lighting_cache,
             |voxel, definition| {
                 let color = if definition.tint == BlockTint::None {
                     Color::WHITE
@@ -238,6 +287,34 @@ pub(super) fn build_chunk_fluid_render_meshlets<W: VoxelRead + ?Sized>(
     context: &ChunkMeshBuildContext<'_, W>,
     meshlets: ChunkMeshletMask,
 ) -> Vec<ChunkFluidMesh> {
+    if meshlets.is_all() {
+        let lighting_cache =
+            ChunkLightingCache::capture(context.world, coord * CHUNK_SIZE as i32);
+        return build_chunk_fluid_render_meshlets_with_lighting(
+            coord,
+            chunk,
+            context,
+            meshlets,
+            Some(&lighting_cache),
+        );
+    }
+
+    build_chunk_fluid_render_meshlets_with_lighting(
+        coord,
+        chunk,
+        context,
+        meshlets,
+        None,
+    )
+}
+
+fn build_chunk_fluid_render_meshlets_with_lighting<W: VoxelRead + ?Sized>(
+    coord: IVec3,
+    chunk: &VoxelChunk,
+    context: &ChunkMeshBuildContext<'_, W>,
+    meshlets: ChunkMeshletMask,
+    lighting_cache: Option<&ChunkLightingCache>,
+) -> Vec<ChunkFluidMesh> {
     if !chunk.has_fluid() || meshlets.is_empty() {
         return Vec::new();
     }
@@ -246,26 +323,33 @@ pub(super) fn build_chunk_fluid_render_meshlets<W: VoxelRead + ?Sized>(
         vec![None; CHUNK_SIZE * CHUNK_SIZE];
         context.fluids.iter().count()
     ];
-    build_fluid_meshlets(context.world, coord, chunk, meshlets, |voxel, fluid_id| {
-        let local_x = voxel.x.rem_euclid(CHUNK_SIZE as i32) as usize;
-        let local_z = voxel.z.rem_euclid(CHUNK_SIZE as i32) as usize;
-        let column_index = local_x + local_z * CHUNK_SIZE;
-        let fluid_index = usize::from(fluid_id);
-        let slot = &mut column_tints[fluid_index][column_index];
+    build_fluid_meshlets(
+        context.world,
+        coord,
+        chunk,
+        meshlets,
+        lighting_cache,
+        |voxel, fluid_id| {
+            let local_x = voxel.x.rem_euclid(CHUNK_SIZE as i32) as usize;
+            let local_z = voxel.z.rem_euclid(CHUNK_SIZE as i32) as usize;
+            let column_index = local_x + local_z * CHUNK_SIZE;
+            let fluid_index = usize::from(fluid_id);
+            let slot = &mut column_tints[fluid_index][column_index];
 
-        *slot.get_or_insert_with(|| {
-            let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
-            let fluid = context
-                .fluids
-                .get(fluid_id)
-                .unwrap_or_else(|| panic!("missing fluid definition for id {fluid_id}"));
+            *slot.get_or_insert_with(|| {
+                let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
+                let fluid = context
+                    .fluids
+                    .get(fluid_id)
+                    .unwrap_or_else(|| panic!("missing fluid definition for id {fluid_id}"));
 
-            context
-                .biome_field
-                .water_color(position, context.biomes, fluid.color)
-                .to_srgb()
-        })
-    })
+                context
+                    .biome_field
+                    .water_color(position, context.biomes, fluid.color)
+                    .to_srgb()
+            })
+        },
+    )
 }
 
 pub fn spawn_chunk_mesh(
