@@ -183,11 +183,27 @@ pub(crate) fn located_structure_origins_in_chunk(
             candidate.placement_id == structure_id || candidate.structure_id == structure_id
         })
         .map(|candidate| {
-            IVec3::new(
-                candidate.anchor.x,
-                candidate.origin_y,
-                candidate.anchor.y,
-            )
+            if candidate.placement_id == structure_id
+                && context.structure_sets.get(structure_id).is_some()
+            {
+                let surface_y = surface_height(
+                    candidate.placement_anchor,
+                    context.dimension,
+                    context.biomes,
+                    context.biome_field,
+                );
+                IVec3::new(
+                    candidate.placement_anchor.x,
+                    surface_y,
+                    candidate.placement_anchor.y,
+                )
+            } else {
+                IVec3::new(
+                    candidate.anchor.x,
+                    candidate.origin_y,
+                    candidate.anchor.y,
+                )
+            }
         })
         .collect()
 }
@@ -295,99 +311,23 @@ fn resolve_structure_candidates_uncached<'a>(
 
 pub(super) fn maximum_potential_structure_top_y_for_chunk(
     horizontal_chunk: IVec2,
-    dimension: &DimensionDefinition,
-    biomes: &BiomeRegistry,
-    structures: &StructureRegistry,
-    biome_field: &BiomeField,
+    context: &ChunkGenerationContext<'_>,
 ) -> i32 {
     let chunk_size = CHUNK_SIZE as i32;
-    let chunk_min = horizontal_chunk * chunk_size;
-    let chunk_max = chunk_min + IVec2::splat(chunk_size - 1);
-    let mut maximum_top_y = 0;
+    let chunk_origin = IVec3::new(
+        horizontal_chunk.x * chunk_size,
+        0,
+        horizontal_chunk.y * chunk_size,
+    );
 
-    for biome_structure in biomes.structure_placements() {
-        let placement_id = biome_structure.structure_id.as_str();
-        let bounds = structures
-            .bounds_for_reference(placement_id)
-            .unwrap_or_else(|| {
-                panic!(
-                    "biome {} references missing structure or structure group: {}",
-                    biome_structure.biome_id, placement_id
-                )
-            });
-
-        visit_candidate_anchors_intersecting(
-            chunk_min,
-            chunk_max,
-            biome_field.seed(),
-            StructurePlacementContext {
-                biome_id: &biome_structure.biome_id,
-                placement_id,
-                placement: biome_structure.placement,
-            },
-            bounds,
-            |anchor| {
-                let member_hash = structure_member_hash(
-                    biome_field.seed(),
-                    &biome_structure.biome_id,
-                    placement_id,
-                    anchor,
-                );
-                let structure = structures
-                    .select_for_reference(placement_id, member_hash)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "biome {} references empty structure group: {}",
-                            biome_structure.biome_id, placement_id
-                        )
-                    });
-                let rotation = structure.rotation_for_hash(member_hash);
-                let (minimum_offset, maximum_offset) =
-                    structure.horizontal_bounds_for_rotation(rotation);
-                if !rectangles_overlap(
-                    anchor + minimum_offset,
-                    anchor + maximum_offset,
-                    chunk_min,
-                    chunk_max,
-                ) {
-                    return;
-                }
-                if biome_field
-                    .sample_surface(anchor.as_vec2() + Vec2::splat(0.5))
-                    .primary_id
-                    != biome_structure.biome_id
-                {
-                    return;
-                }
-
-                let support_offset = *structure
-                    .support_offsets_for_rotation(rotation)
-                    .first()
-                    .expect("validated non-empty structure must have a support offset");
-                let support_surface = surface_height(
-                    anchor + support_offset,
-                    dimension,
-                    biomes,
-                    biome_field,
-                );
-                // fit_structure_to_ground chooses the minimum ground among all
-                // support points. Therefore any single support gives a safe
-                // upper bound for the origin. Add the maximum density rise used
-                // by support fitting, then convert that bound into an absolute
-                // structure top Y. This stays conservative without resolving
-                // every expensive placement restriction during streaming.
-                let conservative_ground_y =
-                    support_surface - 1 + MAX_STRUCTURE_GROUND_RISE;
-                let conservative_origin_y =
-                    conservative_ground_y - structure.min_y_offset();
-                maximum_top_y = maximum_top_y.max(
-                    conservative_origin_y + structure.max_y_offset(),
-                );
-            },
-        );
-    }
-
-    maximum_top_y
+    resolved_structure_candidates(chunk_origin, context)
+        .iter()
+        .filter_map(|candidate| {
+            let structure = context.structures.get(&candidate.structure_id)?;
+            Some(candidate.origin_y + structure.max_y_offset())
+        })
+        .max()
+        .unwrap_or(0)
 }
 
 fn collect_structure_candidates<'a>(
