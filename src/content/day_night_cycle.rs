@@ -143,8 +143,23 @@ pub struct DayNightCycleRegistry {
 impl DayNightCycleRegistry {
     pub fn insert(&mut self, definition: DayNightCycleDefinition) {
         assert!(
+            !definition.id.trim().is_empty(),
+            "day-night cycle id cannot be empty"
+        );
+        assert!(
             definition.day_duration_ticks > 0,
             "day-night cycle {} day duration must be positive",
+            definition.id
+        );
+        assert!(
+            definition.initial_time.is_finite() && (0.0..1.0).contains(&definition.initial_time),
+            "day-night cycle {} initialTime must be finite and between 0 inclusive and 1 exclusive",
+            definition.id
+        );
+        assert!(
+            definition.world_time_start_hour.is_finite()
+                && (0.0..24.0).contains(&definition.world_time_start_hour),
+            "day-night cycle {} worldTimeStartHour must be finite and between 0 inclusive and 24 exclusive",
             definition.id
         );
 
