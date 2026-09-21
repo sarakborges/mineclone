@@ -8,7 +8,7 @@ use super::{
         ChunkRenderPool, retire_chunk_render_allocation, retire_render_allocation_parts,
     },
     spawn::{
-        BuiltChunkMesh, build_chunk_terrain_render_meshes, mesh_asset_bytes, spawn_chunk_mesh,
+        BuiltChunkMesh, mesh_asset_bytes, spawn_chunk_mesh,
         spawn_fluid_meshes_into_existing_allocation, spawn_terrain_meshes_into_existing_allocation,
     },
 };
