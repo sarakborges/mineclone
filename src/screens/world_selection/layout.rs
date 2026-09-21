@@ -57,8 +57,8 @@ pub(super) fn spawn_world_entry(
         card.spawn(Node {
             width: percent(100),
             flex_direction: FlexDirection::Row,
-            align_items: AlignItems::Center,
-            column_gap: px(20),
+            align_items: AlignItems::Stretch,
+            column_gap: px(24),
             ..default()
         })
         .with_children(|row| {
@@ -78,20 +78,14 @@ pub(super) fn spawn_world_entry(
                 })
                 .with_children(|header| {
                     header.spawn(typography::heading(world.id.clone()));
-                    header.spawn(typography::caption(format_save_time(
-                        world.last_saved_unix_ms,
+                    header.spawn(typography::caption(format!(
+                        "{} · {}",
+                        localization.text(language, "worldSelection.lastSaved"),
+                        format_save_time(world.last_saved_unix_ms, language),
                     )));
                 });
 
-                info.spawn(Node {
-                    width: percent(100),
-                    flex_direction: FlexDirection::Row,
-                    flex_wrap: FlexWrap::Wrap,
-                    column_gap: px(24),
-                    row_gap: px(10),
-                    ..default()
-                })
-                .with_children(|metadata| {
+                info.spawn(metadata_row()).with_children(|metadata| {
                     spawn_metadata(
                         metadata,
                         localization.text(language, "worldSelection.seed"),
@@ -104,13 +98,16 @@ pub(super) fn spawn_world_entry(
                     );
                     spawn_metadata(
                         metadata,
-                        localization.text(language, "worldSelection.dimension"),
-                        dimension.to_owned(),
-                    );
-                    spawn_metadata(
-                        metadata,
                         localization.text(language, "worldSelection.coordinates"),
                         position,
+                    );
+                });
+
+                info.spawn(metadata_row()).with_children(|metadata| {
+                    spawn_metadata(
+                        metadata,
+                        localization.text(language, "worldSelection.dimension"),
+                        dimension.to_owned(),
                     );
                     spawn_metadata(
                         metadata,
@@ -123,6 +120,7 @@ pub(super) fn spawn_world_entry(
             row.spawn(Node {
                 width: px(170),
                 flex_shrink: 0.0,
+                padding: UiRect::top(px(2)),
                 flex_direction: FlexDirection::Column,
                 row_gap: px(8),
                 ..default()
@@ -147,6 +145,16 @@ pub(super) fn spawn_world_entry(
     });
 }
 
+fn metadata_row() -> Node {
+    Node {
+        width: percent(100),
+        flex_direction: FlexDirection::Row,
+        column_gap: px(24),
+        row_gap: px(10),
+        ..default()
+    }
+}
+
 fn spawn_metadata(
     parent: &mut ChildSpawnerCommands,
     label: &str,
@@ -154,8 +162,8 @@ fn spawn_metadata(
 ) {
     parent
         .spawn(Node {
-            min_width: px(150),
-            max_width: px(260),
+            min_width: px(0),
+            flex_basis: px(0),
             flex_grow: 1.0,
             flex_direction: FlexDirection::Column,
             row_gap: px(2),
@@ -163,7 +171,7 @@ fn spawn_metadata(
         })
         .with_children(|item| {
             item.spawn(typography::caption(label.to_owned()));
-            item.spawn(typography::muted(value.into()));
+            item.spawn(typography::hud(value.into()));
         });
 }
 
@@ -316,11 +324,11 @@ fn format_coordinates(position: Option<[f32; 3]>) -> String {
     let Some([x, y, z]) = position else {
         return "—".to_owned();
     };
-    format!("X: {:.0} · Y: {:.0} · Z: {:.0}", x.floor(), y.floor(), z.floor())
+    format!("X: {:.0} · Z: {:.0} · Y: {:.0}", x.floor(), z.floor(), y.floor())
 }
 
 // Portable UTC rendering without relying on local timezone configuration.
-fn format_save_time(unix_ms: u64) -> String {
+fn format_save_time(unix_ms: u64, language: Language) -> String {
     let seconds = unix_ms / 1_000;
     let days = i64::try_from(seconds / 86_400).unwrap_or(i64::MAX);
     let seconds_in_day = seconds % 86_400;
@@ -339,5 +347,19 @@ fn format_save_time(unix_ms: u64) -> String {
     }
     let hour = seconds_in_day / 3_600;
     let minute = seconds_in_day / 60 % 60;
-    format!("{year:04}-{month:02}-{day:02} {hour:02}:{minute:02} UTC")
+    match language {
+        Language::English => {
+            let month_name = [
+                "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+            ]
+            .get(month.saturating_sub(1) as usize)
+            .copied()
+            .unwrap_or("?");
+            format!("{month_name} {day}, {year} · {hour:02}:{minute:02} UTC")
+        }
+        Language::PortugueseBrazil | Language::Spanish => {
+            format!("{day:02}/{month:02}/{year:04} · {hour:02}:{minute:02} UTC")
+        }
+    }
 }
