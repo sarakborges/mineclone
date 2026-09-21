@@ -63,7 +63,7 @@ use chunk_remesh_tasks::ChunkRemeshTasks;
 use chunk_rendering::{
     ChunkRenderPool, FluidMaterials, TerrainMaterials, clear_chunk_render_pool,
 };
-use chunk_unloading::{ChunkUnloadState, unload_chunk_meshes};
+use chunk_unloading::{ChunkUnloadState, retire_distant_chunk_meshes, unload_chunk_meshes};
 use chunk_visibility::{sync_chunk_visibility, sync_new_chunk_visibility};
 use day_night::DayNightPlugin;
 use dimension::{CurrentDimension, DimensionEntityCounts};
@@ -169,7 +169,12 @@ impl Plugin for WorldPlugin {
             )
             .add_systems(
                 Update,
-                (stream_chunks, resolve_pending_warp, unload_chunk_meshes)
+                (
+                    stream_chunks,
+                    retire_distant_chunk_meshes,
+                    resolve_pending_warp,
+                    unload_chunk_meshes,
+                )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
             )
