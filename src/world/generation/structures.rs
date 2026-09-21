@@ -25,7 +25,6 @@ use crate::{
     world::terrain::surface_height,
 };
 
-pub(crate) use self::support::fit_structure_to_ground;
 use self::{
     placement::{candidate_anchor, structure_member_hash},
     restrictions::candidate_satisfies_restrictions,
