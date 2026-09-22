@@ -157,9 +157,7 @@ where
         });
     }
 
-    let active_by_x = ActiveVoxelPlanes::from_sources(&active_sources, 0);
-    let active_by_y = ActiveVoxelPlanes::from_sources(&active_sources, 4);
-    let active_by_z = ActiveVoxelPlanes::from_sources(&active_sources, 8);
+    let active_planes = ActiveVoxelAxes::from_sources(&active_sources);
 
     // Normal voxels are processed face-by-face so compatible exposed faces can
     // be merged into large rectangles. Only occupied, non-sculpted voxels are
@@ -167,11 +165,7 @@ where
     // for each of the six face directions.
     for face in BlockFace::ALL {
         for depth in 0..CHUNK_SIZE {
-            let active_voxels = match face {
-                BlockFace::Right | BlockFace::Left => active_by_x.plane(depth),
-                BlockFace::Top | BlockFace::Bottom => active_by_y.plane(depth),
-                BlockFace::Front | BlockFace::Back => active_by_z.plane(depth),
-            };
+            let active_voxels = active_planes.plane(face, depth);
             if active_voxels.is_empty() {
                 continue;
             }
@@ -368,31 +362,73 @@ struct ActiveVoxelPlanes {
 }
 
 impl ActiveVoxelPlanes {
-    fn from_sources(sources: &[VoxelMeshSource], coordinate_shift: u32) -> Self {
-        let mut counts = [0_usize; CHUNK_SIZE];
-        for source in sources {
-            counts[packed_local_coordinate(source.local_position, coordinate_shift)] += 1;
-        }
-
+    fn from_counts(counts: [usize; CHUNK_SIZE], source_count: usize) -> Self {
         let mut offsets = [0_usize; CHUNK_SIZE + 1];
         for (index, count) in counts.into_iter().enumerate() {
             offsets[index + 1] = offsets[index] + count;
         }
 
-        let mut next = offsets;
-        let mut voxels = vec![0_u32; sources.len()];
-        for (source_index, source) in sources.iter().enumerate() {
-            let plane = packed_local_coordinate(source.local_position, coordinate_shift);
-            let destination = next[plane];
-            next[plane] += 1;
-            voxels[destination] = pack_active_voxel(source.local_position, source_index);
+        Self {
+            offsets,
+            voxels: vec![0_u32; source_count],
         }
-
-        Self { offsets, voxels }
     }
 
     fn plane(&self, depth: usize) -> &[u32] {
         &self.voxels[self.offsets[depth]..self.offsets[depth + 1]]
+    }
+}
+
+struct ActiveVoxelAxes {
+    x: ActiveVoxelPlanes,
+    y: ActiveVoxelPlanes,
+    z: ActiveVoxelPlanes,
+}
+
+impl ActiveVoxelAxes {
+    fn from_sources(sources: &[VoxelMeshSource]) -> Self {
+        let mut x_counts = [0_usize; CHUNK_SIZE];
+        let mut y_counts = [0_usize; CHUNK_SIZE];
+        let mut z_counts = [0_usize; CHUNK_SIZE];
+
+        for source in sources {
+            x_counts[packed_local_coordinate(source.local_position, 0)] += 1;
+            y_counts[packed_local_coordinate(source.local_position, 4)] += 1;
+            z_counts[packed_local_coordinate(source.local_position, 8)] += 1;
+        }
+
+        let source_count = sources.len();
+        let mut x = ActiveVoxelPlanes::from_counts(x_counts, source_count);
+        let mut y = ActiveVoxelPlanes::from_counts(y_counts, source_count);
+        let mut z = ActiveVoxelPlanes::from_counts(z_counts, source_count);
+        let mut x_next = x.offsets;
+        let mut y_next = y.offsets;
+        let mut z_next = z.offsets;
+
+        for (source_index, source) in sources.iter().enumerate() {
+            let local_position = source.local_position;
+            let packed = pack_active_voxel(local_position, source_index);
+            let x_plane = packed_local_coordinate(local_position, 0);
+            let y_plane = packed_local_coordinate(local_position, 4);
+            let z_plane = packed_local_coordinate(local_position, 8);
+
+            x.voxels[x_next[x_plane]] = packed;
+            x_next[x_plane] += 1;
+            y.voxels[y_next[y_plane]] = packed;
+            y_next[y_plane] += 1;
+            z.voxels[z_next[z_plane]] = packed;
+            z_next[z_plane] += 1;
+        }
+
+        Self { x, y, z }
+    }
+
+    fn plane(&self, face: BlockFace, depth: usize) -> &[u32] {
+        match face {
+            BlockFace::Right | BlockFace::Left => self.x.plane(depth),
+            BlockFace::Top | BlockFace::Bottom => self.y.plane(depth),
+            BlockFace::Front | BlockFace::Back => self.z.plane(depth),
+        }
     }
 }
 
