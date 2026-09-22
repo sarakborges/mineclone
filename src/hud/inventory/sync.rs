@@ -9,7 +9,7 @@ use crate::{
     player::{
         camera::GameplayCamera,
         game_mode::GameMode,
-        hotbar::{HOTBAR_INVENTORY_OFFSET, PlayerHotbar},
+        hotbar::PlayerHotbar,
         inventory::InventoryCursor,
     },
     rendering::block_visual_content::BlockVisualContent,
