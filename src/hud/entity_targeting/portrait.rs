@@ -41,7 +41,7 @@ pub(super) struct PortraitSelection<'w, 's> {
 pub(super) fn sync_portrait(
     mut commands: Commands,
     selection: PortraitSelection,
-    mut camera: Single<(&mut Camera, &mut Transform), With<PortraitCamera>>,
+    mut camera_transform: Single<&mut Transform, With<PortraitCamera>>,
     portraits: Query<(Entity, &PortraitModel)>,
 ) {
     let target = selection
@@ -51,8 +51,6 @@ pub(super) fn sync_portrait(
         .and_then(|card| card.entity)
         .and_then(|entity| selection.creatures.get(entity).ok())
         .and_then(|creature| selection.definitions.get(&creature.definition_id));
-    let (camera_settings, camera_transform) = &mut *camera;
-    camera_settings.is_active = target.is_some();
     let Some(definition) = target else {
         for (entity, _) in &portraits {
             commands.entity(entity).despawn();
