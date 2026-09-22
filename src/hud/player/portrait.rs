@@ -104,7 +104,7 @@ pub(super) fn spawn_player_preview_renderer(
         None,
     ));
     preview_images.portrait = Some(portrait.clone());
-    preview_images.character = Some(character);
+    preview_images.character = Some(character.clone());
 
     commands.spawn((
         PlayerPortraitPreviewCamera,
