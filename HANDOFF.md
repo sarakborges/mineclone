@@ -836,6 +836,23 @@ VERSION: `0.50.56`, commit
 `1e7a119c7224bf5f474af193ad83205c1ec00748`.
 CI de P33: **verde** nos runs push `35745922323` e PR `35745930103` para `1e7a119c7224bf5f474af193ad83205c1ec00748`. QA Windows deve observar especificamente suavidade da expansão visual dos chunks e se nearest-first continua coerente.
 
+### P34 — preservar throughput async sob frame pressure
+
+O limiter adaptativo podia cair para 2 slots após frames sustentados acima de
+20 ms e só recuperar com 120 frames abaixo de 17,24 ms. Após o fallback estável
+para CPU frustum culling, isso podia confundir custo base do frame com pressão
+de async work e estrangular initial meshing.
+
+Agora a redução só começa abaixo de ~45 FPS, a recuperação usa ~55 FPS por 60
+frames, e pools com mais de 2 slots preservam pelo menos metade do
+`base_limit`. O base continua limitado a 75% do AsyncComputeTaskPool e
+generation/remesh continuam reservando capacidade para initial mesh.
+
+Commit: `8295236b35e0def9ae7fbb852287a0a2e7890e93`.
+VERSION: `0.50.57`, commit
+`14b4d6d799d3d634508aa217930017b863d710ba`.
+CI: **verde** nos runs push `35746285093` e PR `35746293942`.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
