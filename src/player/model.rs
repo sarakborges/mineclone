@@ -31,9 +31,11 @@ use crate::{
 };
 
 const HURT_HOLD_SECONDS: f32 = 0.38;
+const BREAK_HOLD_SECONDS: f32 = 0.24;
 const HIT_HOLD_SECONDS: f32 = 0.42;
 const PLACE_HOLD_SECONDS: f32 = 0.48;
-const MOVING_SPEED_SQUARED: f32 = 0.01;
+const MOVING_START_SPEED_SQUARED: f32 = 0.01;
+const MOVING_STOP_SPEED_SQUARED: f32 = 0.0025;
 const THIRD_PERSON_HELD_BLOCK_SCALE: f32 = 0.22;
 
 #[derive(Component)]
@@ -398,34 +400,47 @@ fn sync_player_model(
             state.trigger("hurt", HURT_HOLD_SECONDS);
             continue;
         }
-        if state.hold_seconds > 0.0 {
-            continue;
-        }
-
         if let Some(action) = viewmodel_animation.action_name() {
             let action_revision = viewmodel_animation.revision();
-            let continuous_break = action == "break" && state.name == "break";
-            if !continuous_break
-                && (state.name != action || state.action_revision != action_revision)
-            {
+            if state.name != action || state.action_revision != action_revision {
                 state.action_revision = action_revision;
                 let hold_seconds = match action {
+                    "break" => BREAK_HOLD_SECONDS,
                     "hit" => HIT_HOLD_SECONDS,
                     "place" => PLACE_HOLD_SECONDS,
                     _ => 0.0,
                 };
-                state.trigger(action, hold_seconds);
+
+                if state.name == action {
+                    // Repeated action pulses extend the current clip instead of
+                    // restarting it. Mining emits a new swing pulse every few
+                    // ticks, and restarting the same clip caused visible flicker.
+                    state.hold_seconds = state.hold_seconds.max(hold_seconds);
+                } else {
+                    state.trigger(action, hold_seconds);
+                }
             }
             continue;
         }
 
+        if state.hold_seconds > 0.0 {
+            continue;
+        }
+
+        let horizontal_speed_squared = walking.horizontal_speed_squared();
         let locomotion = if !gravity.grounded() {
             if gravity.vertical_velocity() > 0.05 {
                 "jump"
             } else {
                 "fall"
             }
-        } else if walking.horizontal_speed_squared() > MOVING_SPEED_SQUARED {
+        } else if state.name == "walk" {
+            if horizontal_speed_squared > MOVING_STOP_SPEED_SQUARED {
+                "walk"
+            } else {
+                "idle"
+            }
+        } else if horizontal_speed_squared > MOVING_START_SPEED_SQUARED {
             "walk"
         } else {
             "idle"
@@ -434,7 +449,7 @@ fn sync_player_model(
     }
 
     for mut head in &mut heads {
-        head.rotation = Quat::from_rotation_x(camera.pitch);
+        head.rotation = Quat::from_rotation_x(-camera.pitch);
     }
 }
 
