@@ -7,12 +7,14 @@ use bevy::{
 };
 
 use crate::voxel::{
-    coordinates::visit_chunk_coords_whose_voxel_halo_contains,
     fluid_mesh::ChunkFluidMesh,
     mesh_snapshot::{ChunkMeshDependencies, ChunkMeshSnapshot},
     meshlet::ChunkMeshletMask,
     world::VoxelWorld,
 };
+
+#[cfg(test)]
+use crate::voxel::coordinates::visit_chunk_coords_whose_voxel_halo_contains;
 
 use super::{
     chunk_async_work::ChunkAsyncWorkLimiter,
