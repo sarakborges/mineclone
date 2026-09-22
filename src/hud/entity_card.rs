@@ -49,6 +49,7 @@ pub(super) struct EntityCardHealthLabel(EntityCardSource);
 pub(super) fn spawn_entity_card(
     parent: &mut ChildSpawnerCommands,
     source: EntityCardSource,
+    portrait: Option<Handle<Image>>,
 ) {
     let (avatar_background, avatar_border) = selectable::static_colors(false);
     parent
@@ -97,11 +98,23 @@ pub(super) fn spawn_entity_card(
                         ));
                     }
                     EntityCardSource::Target => {
-                        avatar.spawn((
-                            typography::hud_subheading("?"),
-                            TextLayout::justify(Justify::Center),
-                            Pickable::IGNORE,
-                        ));
+                        if let Some(image) = portrait {
+                            avatar.spawn((
+                                ImageNode::new(image),
+                                Node {
+                                    width: px(AVATAR_IMAGE_SIZE),
+                                    height: px(AVATAR_IMAGE_SIZE),
+                                    ..default()
+                                },
+                                Pickable::IGNORE,
+                            ));
+                        } else {
+                            avatar.spawn((
+                                typography::hud_subheading("?"),
+                                TextLayout::justify(Justify::Center),
+                                Pickable::IGNORE,
+                            ));
+                        }
                     }
                 }
             });
