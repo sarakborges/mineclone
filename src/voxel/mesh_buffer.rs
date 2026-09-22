@@ -104,8 +104,12 @@ const MATERIAL_UV_STRIDE: f32 = 16.0;
 const _: () = assert!(CHUNK_MESHLET_EDGE < MATERIAL_UV_STRIDE as usize);
 
 fn encode_material_uv(uv: [f32; 2], material_code: f32) -> [f32; 2] {
+    let material_code = material_code.round().max(0.0);
+    debug_assert!(material_code <= u16::MAX as f32);
+    // With a 16-bit material code this offset remains below 2^20, where f32
+    // still represents the 1/8-block UV steps used by sculpted geometry exactly.
     [
-        uv[0] + material_code.round().max(0.0) * MATERIAL_UV_STRIDE,
+        uv[0] + material_code * MATERIAL_UV_STRIDE,
         uv[1],
     ]
 }
