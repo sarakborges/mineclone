@@ -70,7 +70,8 @@ where
         if !meshlets.contains_voxel(x, y, z) {
             continue;
         }
-        let Some(support_cell) = chunk.cell_at(x as i32, y as i32, z as i32) else {
+        let (support_cell, _, support_light) = chunk.sample_local_at(x, y, z);
+        let Some(support_cell) = support_cell else {
             continue;
         };
 
@@ -81,7 +82,7 @@ where
         let source_block_srgb = surface_block_srgb_with_cache(
             lighting_cache,
             world_voxel,
-            chunk.light_at(x as i32, y as i32, z as i32),
+            support_light,
             support.light_emission > 0,
         );
         let mut lighting_by_face = [None; 6];
