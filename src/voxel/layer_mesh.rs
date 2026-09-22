@@ -14,7 +14,7 @@ use super::{
     mesh_buffer::VoxelMeshBuffer,
     mesh_lighting::{
         ChunkLightingCache, face_lighting_with_cache, push_lit_quad,
-        surface_block_srgb,
+        surface_block_srgb_with_cache,
     },
     meshlet::ChunkMeshletMask,
     microblock::{MICROBLOCK_EDGE, MicroblockMask, occupied_cell},
@@ -107,7 +107,9 @@ where
         let support_is_transparent = support.alpha_blend || support.alpha_cutoff.is_some();
         let world_voxel = chunk_origin + IVec3::new(x as i32, y as i32, z as i32);
         let local_voxel = IVec3::new(x as i32, y as i32, z as i32);
-        let source_block_srgb = surface_block_srgb(
+        let source_block_srgb = surface_block_srgb_with_cache(
+            lighting_cache,
+            world_voxel,
             chunk.light_at(x as i32, y as i32, z as i32),
             support.light_emission > 0,
         );
