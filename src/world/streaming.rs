@@ -122,6 +122,7 @@ pub(super) struct ChunkStreamingState {
     ready_priority: ReadyPriorityCache,
     missing_render_priority: Option<MissingRenderPriorityCache>,
     surface_ranges: HashMap<IVec2, (i32, i32)>,
+    surface_support_minimums: HashMap<IVec2, i32>,
     structure_top_chunks: HashMap<IVec2, i32>,
     initial_lighting_seeded: HashSet<IVec3>,
     initial_mesh_seed_catchup: HashMap<IVec3, ChunkMeshletMask>,
