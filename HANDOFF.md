@@ -752,6 +752,34 @@ CI: **verde** nos runs push `35742467046` e PR `35742473237` para
 `752d9b8ddabf308c1c64dadbfb0f3efb5731f964`. QA runtime ainda é necessária
 para confirmar que o flicker sumiu no backend/GPU usado em Windows.
 
+### Hotfix — rollback completo do experimento de clouds após flicker em runtime
+
+QA Windows confirmou que o fallback de CPU culling restaurou a renderização dos
+chunks, mas o flicker visual permaneceu intolerável. As duas tentativas de
+estabilizar o caminho otimizado de clouds (mover o material para opaque phase e
+forçar alpha opaco) não resolveram o sintoma no runtime real.
+
+Para retirar a regressão de forma conservadora, o experimento iniciado em
+`eadb6ead648d8b8fe790d81b9be0f85a045835c4` foi revertido integralmente no
+caminho visual das clouds:
+- `clouds.rs` voltou ao renderer multipart de 3 cuboids do último baseline
+  anterior ao experimento;
+- `assets.rs` voltou ao material alpha-blended original (`alpha = 0.78`);
+- os hotfixes opaque posteriores ficam superseded por este rollback.
+
+Commits do rollback:
+- renderer multipart: `99142bb3d8c2e768bbcd4dd27adb82da2eabb6bd`;
+- material blend estável: `6370b1244ae72b9fee54e5b1b8aef32ec7b93b81`.
+
+A otimização P32 de lighting que estava em investigação também foi retirada antes
+deste diagnóstico (`6834c49f28e1670dd7687bc374b6afe448902b83`), mantendo
+`mesh_lighting.rs` no baseline runtime-stable de `0.50.52`.
+
+VERSION: `0.50.53`, commit
+`d97232f74a3eb6e649d1c788e0f5e43cb2be9e57`.
+CI: aguardando. QA runtime visual continua obrigatória; prioridade atual é
+estabilidade visual antes de novas otimizações de shader/culling/publicação.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
