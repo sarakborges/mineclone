@@ -1,12 +1,13 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 
+#[cfg(test)]
+use crate::voxel::{neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld};
+
 use crate::{
     voxel::{
         coordinates::visit_chunk_coords_whose_voxel_halo_contains,
         deduplicated_queue::DeduplicatedQueue,
         meshlet::ChunkMeshletMask,
-        neighbors::CARDINAL_NEIGHBORS,
-        world::VoxelWorld,
     },
     world::{
         chunk_remesh_tasks::ChunkRemeshTaskKind,
@@ -87,6 +88,7 @@ impl ChunkRemeshQueue {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn enqueue_priority(&mut self, coord: IVec3) {
         self.enqueue_geometry_meshlets(coord, ChunkMeshletMask::ALL, true);
     }
@@ -155,10 +157,7 @@ impl ChunkRemeshQueue {
         }
     }
 
-    fn enqueue_lighting(&mut self, coord: IVec3) {
-        self.enqueue_lighting_meshlets(coord, ChunkMeshletMask::ALL, false);
-    }
-
+    #[cfg(test)]
     fn enqueue_lighting_priority(&mut self, coord: IVec3) {
         self.enqueue_lighting_meshlets(coord, ChunkMeshletMask::ALL, true);
     }
@@ -219,6 +218,7 @@ impl ChunkRemeshQueue {
         });
     }
 
+    #[cfg(test)]
     pub(crate) fn enqueue_lighting_change(&mut self, coord: IVec3, world: &VoxelWorld) {
         if world
             .chunk(coord)
