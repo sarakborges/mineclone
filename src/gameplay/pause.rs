@@ -3,7 +3,10 @@ use bevy::{prelude::*, window::WindowFocused};
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     hud::chat::ChatState,
-    player::{character_info::CharacterInfoState, inventory::InventoryState},
+    player::{
+        character_info::{CharacterInfoInputState, CharacterInfoState},
+        inventory::InventoryState,
+    },
     tools::BrushPaletteState,
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
 };
@@ -20,7 +23,9 @@ impl Plugin for PausePlugin {
                     .run_if(in_state(InventoryState::Closed))
                     .run_if(in_state(BrushPaletteState::Closed))
                     .run_if(in_state(CharacterInfoState::Closed)),
-                pause_on_focus_lost.run_if(in_state(InventoryState::Closed)),
+                pause_on_focus_lost
+                    .run_if(in_state(InventoryState::Closed))
+                    .run_if(in_state(CharacterInfoState::Closed)),
             )
                 .run_if(in_state(GameState::Gameplay)),
         );
@@ -31,9 +36,13 @@ fn toggle_pause(
     keys: Res<ButtonInput<KeyCode>>,
     pause_state: Res<State<PauseState>>,
     chat: Res<ChatState>,
+    character_info_input: Res<CharacterInfoInputState>,
     mut transition: ResMut<ScreenTransition>,
 ) {
-    if !keys.just_pressed(KeyCode::Escape) || chat.blocks_pause_escape() {
+    if !keys.just_pressed(KeyCode::Escape)
+        || chat.blocks_pause_escape()
+        || character_info_input.blocks_pause_escape()
+    {
         return;
     }
 
