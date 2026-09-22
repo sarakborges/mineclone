@@ -122,7 +122,7 @@ pub(super) fn spawn_held_brush(
                 // Keep the grip inside the actual 3D player arm used by the viewmodel.
                 Transform::from_translation(Vec3::new(-0.08, VIEW_MODEL_ARM_GRIP_Y, 0.21))
                     .with_rotation(rotation),
-                if selected { Visibility::Visible } else { Visibility::Hidden },
+                if selected { Visibility::Inherited } else { Visibility::Hidden },
                 RenderLayers::layer(VIEW_MODEL_RENDER_LAYER),
             ))
             .with_children(|brush| {
@@ -165,7 +165,7 @@ pub(super) fn sync_held_brush(
         return;
     }
     let selected = hotbar.item_at(hotbar.selected_slot()) == Some(BRUSH_TOOL_ID);
-    let visibility = if selected { Visibility::Visible } else { Visibility::Hidden };
+    let visibility = if selected { Visibility::Inherited } else { Visibility::Hidden };
     for mut current in &mut roots {
         if *current != visibility {
             *current = visibility;

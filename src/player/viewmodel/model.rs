@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, f32::consts::PI};
 
 use bevy::{
     camera::{Hdr, visibility::RenderLayers},
@@ -25,8 +25,7 @@ use crate::{
 
 use super::animation::{PlayerViewModel, ViewModelItemSwitch, base_viewmodel_transform};
 
-const MODEL_RIGHT_ARM_PIVOT_X: f32 = -0.3375;
-const MODEL_ARM_BASE_Y: f32 = 0.675;
+const MODEL_RIGHT_ARM_PIVOT: Vec3 = Vec3::new(-0.3375, 1.35, 0.0);
 pub(super) const VIEW_MODEL_ARM_LENGTH: f32 = 0.675;
 pub(super) const VIEW_MODEL_ARM_GRIP_Y: f32 = 0.52;
 const HELD_BLOCK_SCALE: f32 = 0.18;
@@ -42,7 +41,9 @@ pub(super) struct ViewModelArmScene(Handle<Gltf>);
 pub(super) struct ViewModelArmSceneAttached;
 
 #[derive(Component)]
-struct ViewModelArmAppearance;
+struct ViewModelArmAppearance {
+    owner: Entity,
+}
 
 #[derive(Component)]
 pub(super) struct HeldBlockRoot;
@@ -159,7 +160,7 @@ pub(super) fn spawn_viewmodel(
                 .spawn((
                     PlayerViewModel,
                     base_viewmodel_transform(),
-                    Visibility::Visible,
+                    Visibility::Inherited,
                 ))
                 .with_children(|viewmodel| {
                     if let Some(model) = player_model.clone() {
@@ -167,7 +168,7 @@ pub(super) fn spawn_viewmodel(
                             Name::new("First Person Player Arm"),
                             ViewModelArmScene(model),
                             viewmodel_arm_scene_transform(),
-                            Visibility::Inherited,
+                            Visibility::Hidden,
                         ));
                     }
 
@@ -224,7 +225,7 @@ pub(super) fn spawn_viewmodel(
                                             &mut material_asset,
                                             tint.unwrap_or(Color::WHITE),
                                         );
-                                        visibility = Visibility::Visible;
+                                        visibility = Visibility::Inherited;
                                     }
 
                                     held.spawn((
@@ -264,7 +265,7 @@ pub(super) fn attach_viewmodel_arm_model(
                 .spawn((
                     WorldAssetRoot(scene),
                     Transform::default(),
-                    ViewModelArmAppearance,
+                    ViewModelArmAppearance { owner: source },
                 ))
                 .observe(configure_viewmodel_arm_scene);
         });
@@ -278,8 +279,13 @@ fn configure_viewmodel_arm_scene(
     names: Query<&Name>,
     meshes: Query<&Mesh3d>,
     mesh_materials: Query<&MeshMaterial3d<StandardMaterial>>,
+    appearances: Query<&ViewModelArmAppearance>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    let Ok(appearance) = appearances.get(ready.entity) else {
+        return;
+    };
+
     let Some(arm_root) = descendants
         .iter_descendants(ready.entity)
         .find(|entity| {
@@ -324,6 +330,10 @@ fn configure_viewmodel_arm_scene(
                 .insert(MeshMaterial3d(material));
         }
     }
+
+    commands
+        .entity(appearance.owner)
+        .insert(Visibility::Inherited);
 }
 
 pub(super) fn sync_held_block(
@@ -407,8 +417,8 @@ pub(super) fn sync_held_block(
 
                 *material = face_material;
                 apply_block_display_shading(&mut material, face.face, held.opacity());
-                if *layer_visibility != Visibility::Visible {
-                    *layer_visibility = Visibility::Visible;
+                if *layer_visibility != Visibility::Inherited {
+                    *layer_visibility = Visibility::Inherited;
                 }
             }
         }
@@ -449,11 +459,8 @@ fn held_block_transform() -> Transform {
 }
 
 fn viewmodel_arm_scene_transform() -> Transform {
-    Transform::from_translation(Vec3::new(
-        -MODEL_RIGHT_ARM_PIVOT_X,
-        -MODEL_ARM_BASE_Y,
-        0.0,
-    ))
+    let rotation = Quat::from_rotation_z(PI);
+    Transform::from_translation(-(rotation * MODEL_RIGHT_ARM_PIVOT)).with_rotation(rotation)
 }
 
 #[cfg(test)]

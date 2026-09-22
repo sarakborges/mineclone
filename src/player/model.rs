@@ -2,6 +2,8 @@ use std::{collections::HashMap, time::Duration};
 
 use bevy::{
     animation::RepeatAnimation,
+    ecs::system::SystemParam,
+    light::NotShadowCaster,
     prelude::*,
     world_serialization::WorldInstanceReady,
 };
@@ -13,13 +15,26 @@ use crate::{
     player::{
         PLAYER_EYE_HEIGHT, PlayerEntity,
         camera::{CameraPerspective, GameplayCamera},
+        hotbar::PlayerHotbar,
         movement::{gravity::GravityState, walking::WalkingState},
         viewmodel::ViewModelAnimation,
     },
+    rendering::{
+        block_model::{
+            BlockModel, BlockModelMaterials, BlockModelMeshes, apply_block_display_shading,
+            block_face_material_data, maximum_block_model_layers, set_block_model_tint,
+        },
+        block_model_material::BlockModelMaterial,
+        block_visual_content::BlockVisualContent,
+    },
+    voxel::block_face::BlockFace,
 };
 
 const HURT_HOLD_SECONDS: f32 = 0.38;
+const HIT_HOLD_SECONDS: f32 = 0.42;
+const PLACE_HOLD_SECONDS: f32 = 0.48;
 const MOVING_SPEED_SQUARED: f32 = 0.01;
+const THIRD_PERSON_HELD_BLOCK_SCALE: f32 = 0.22;
 
 #[derive(Component)]
 struct PlayerModelRoot;
@@ -32,6 +47,27 @@ struct PlayerModelVisualAttached;
 
 #[derive(Component)]
 struct PlayerModelHead;
+
+#[derive(Component)]
+struct PlayerModelHand;
+
+#[derive(Component)]
+struct PlayerModelRestTransform(Transform);
+
+#[derive(Component)]
+struct ThirdPersonHeldBlockRoot;
+
+#[derive(Component)]
+struct ThirdPersonHeldBlockFace {
+    face: BlockFace,
+    layer_index: usize,
+}
+
+#[derive(Default)]
+struct ThirdPersonHeldBlockVisualCache {
+    tint_cell: Option<IVec2>,
+    tint: Option<Color>,
+}
 
 #[derive(Component)]
 struct PlayerModelAppearance {
@@ -77,6 +113,43 @@ type PlayerModelHeadQuery<'w, 's> = Query<
     ),
 >;
 
+type ThirdPersonHeldBlockRootQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut BlockModel, &'static mut Visibility),
+    (With<ThirdPersonHeldBlockRoot>, Without<ThirdPersonHeldBlockFace>),
+>;
+
+#[derive(SystemParam)]
+struct PlayerSceneVisuals<'w, 's> {
+    transforms: Query<'w, 's, &'static Transform>,
+    mesh_materials: Query<'w, 's, &'static MeshMaterial3d<StandardMaterial>>,
+    materials: ResMut<'w, Assets<StandardMaterial>>,
+}
+
+#[derive(SystemParam)]
+struct ThirdPersonHeldBlockAssets<'w> {
+    block_meshes: Res<'w, BlockModelMeshes>,
+    block_materials: ResMut<'w, BlockModelMaterials>,
+    materials: ResMut<'w, Assets<BlockModelMaterial>>,
+}
+
+#[derive(SystemParam)]
+struct ThirdPersonHeldBlockView<'w, 's> {
+    materials: ResMut<'w, Assets<BlockModelMaterial>>,
+    roots: ThirdPersonHeldBlockRootQuery<'w, 's>,
+    faces: Query<
+        'w,
+        's,
+        (
+            &'static ThirdPersonHeldBlockFace,
+            &'static MeshMaterial3d<BlockModelMaterial>,
+            &'static mut Visibility,
+        ),
+        Without<ThirdPersonHeldBlockRoot>,
+    >,
+}
+
 impl Default for PlayerModelAnimationState {
     fn default() -> Self {
         Self {
@@ -114,8 +187,10 @@ impl Plugin for PlayerModelPlugin {
                 Update,
                 (
                     attach_loaded_player_model,
+                    spawn_third_person_held_block,
                     sync_player_model,
                     sync_player_model_animations,
+                    sync_third_person_held_block,
                 )
                     .chain()
                     .run_if(in_state(GameState::Gameplay)),
@@ -204,17 +279,49 @@ fn configure_loaded_player_scene(
     names: Query<&Name>,
     appearances: Query<&PlayerModelAppearance>,
     mut players: Query<(Entity, &mut AnimationPlayer)>,
+    mut visuals: PlayerSceneVisuals,
 ) {
     let Ok(appearance) = appearances.get(ready.entity) else {
         return;
     };
 
     for descendant in descendants.iter_descendants(ready.entity) {
-        if names
-            .get(descendant)
-            .is_ok_and(|name| name.as_str() == "HeadPivot")
-        {
-            commands.entity(descendant).insert(PlayerModelHead);
+        if let Ok(material_handle) = visuals.mesh_materials.get(descendant) {
+            if let Some(material) = visuals.materials.get_mut(material_handle.id()) {
+                material.unlit = true;
+                material.metallic = 0.0;
+                material.perceptual_roughness = 1.0;
+                material.reflectance = 0.0;
+                material.emissive = LinearRgba::BLACK;
+                material.emissive_texture = None;
+            }
+            commands.entity(descendant).insert(NotShadowCaster);
+        }
+
+        if let Ok(name) = names.get(descendant) {
+            match name.as_str() {
+                "HeadPivot" => {
+                    commands.entity(descendant).insert(PlayerModelHead);
+                }
+                "RightArmPivot" => {
+                    if let Ok(transform) = visuals.transforms.get(descendant) {
+                        commands.entity(descendant).insert((
+                            PlayerModelHand,
+                            PlayerModelRestTransform(*transform),
+                        ));
+                    } else {
+                        commands.entity(descendant).insert(PlayerModelHand);
+                    }
+                }
+                "Visual" | "BodyPivot" | "LeftArmPivot" | "RightLegPivot" | "LeftLegPivot" => {
+                    if let Ok(transform) = visuals.transforms.get(descendant) {
+                        commands
+                            .entity(descendant)
+                            .insert(PlayerModelRestTransform(*transform));
+                    }
+                }
+                _ => {}
+            }
         }
 
         let Ok((player_entity, mut player)) = players.get_mut(descendant) else {
@@ -226,9 +333,7 @@ fn configure_loaded_player_scene(
 
         let mut transitions = AnimationTransitions::new();
         if let Some(index) = appearance.nodes.get("idle").copied() {
-            transitions
-                .play(&mut player, index, Duration::ZERO)
-                .repeat();
+            transitions.play(&mut player, index, Duration::ZERO).repeat();
         }
         commands.entity(player_entity).insert((
             AnimationGraphHandle(graph.clone()),
@@ -299,9 +404,17 @@ fn sync_player_model(
 
         if let Some(action) = viewmodel_animation.action_name() {
             let action_revision = viewmodel_animation.revision();
-            if state.name != action || state.action_revision != action_revision {
+            let continuous_break = action == "break" && state.name == "break";
+            if !continuous_break
+                && (state.name != action || state.action_revision != action_revision)
+            {
                 state.action_revision = action_revision;
-                state.trigger(action, 0.0);
+                let hold_seconds = match action {
+                    "hit" => HIT_HOLD_SECONDS,
+                    "place" => PLACE_HOLD_SECONDS,
+                    _ => 0.0,
+                };
+                state.trigger(action, hold_seconds);
             }
             continue;
         }
@@ -332,6 +445,7 @@ fn sync_player_model_animations(
         &mut AnimationTransitions,
         &mut PlayerModelAnimationLink,
     )>,
+    mut rest_transforms: Query<(&PlayerModelRestTransform, &mut Transform)>,
 ) {
     let Some(state) = states.iter().next() else {
         return;
@@ -345,7 +459,11 @@ fn sync_player_model_animations(
             continue;
         };
 
-        let animation = transitions.play(&mut player, index, Duration::from_millis(80));
+        for (rest, mut transform) in &mut rest_transforms {
+            *transform = rest.0;
+        }
+
+        let animation = transitions.play(&mut player, index, Duration::ZERO);
         if matches!(
             state.name.as_str(),
             "idle" | "walk" | "run" | "fall" | "break"
@@ -358,4 +476,199 @@ fn sync_player_model_animations(
         link.current_state.clone_from(&state.name);
         link.current_revision = state.revision;
     }
+}
+
+fn spawn_third_person_held_block(
+    mut commands: Commands,
+    hands: Query<Entity, Added<PlayerModelHand>>,
+    definitions: BlockVisualContent,
+    hotbar: Res<PlayerHotbar>,
+    player: Single<&Transform, With<PlayerEntity>>,
+    assets: ThirdPersonHeldBlockAssets,
+) {
+    let ThirdPersonHeldBlockAssets {
+        block_meshes,
+        mut block_materials,
+        mut materials,
+    } = assets;
+    let selected_block_id = hotbar
+        .item_at(hotbar.selected_slot())
+        .filter(|block_id| definitions.blocks.get(block_id).is_some());
+    let block_model = selected_block_id
+        .map(BlockModel::display)
+        .unwrap_or_else(BlockModel::empty_display);
+    let tint_position = Vec2::new(player.translation.x, player.translation.z);
+    let root_visibility = third_person_item_visibility(selected_block_id);
+
+    for hand in &hands {
+        commands.entity(hand).with_children(|hand| {
+            hand.spawn((
+                ThirdPersonHeldBlockRoot,
+                block_model,
+                third_person_held_block_transform(),
+                root_visibility,
+            ))
+            .with_children(|held| {
+                let selected_block = selected_block_id.and_then(|block_id| {
+                    definitions
+                        .blocks
+                        .get(block_id)
+                        .map(|block| (block_id, block))
+                });
+                let tint = selected_block
+                    .and_then(|(block_id, _)| definitions.tint_at(block_id, tint_position));
+
+                for &face in block_model.faces() {
+                    let layer_count = maximum_block_model_layers(&definitions.blocks, face);
+                    let layer_materials =
+                        block_materials.held_for_face(face, layer_count, &mut materials);
+
+                    for (layer_index, material) in layer_materials.into_iter().enumerate() {
+                        let mut visibility = Visibility::Hidden;
+                        if let Some((_, block)) = selected_block
+                            && let Some(face_material) = block_face_material_data(
+                                face,
+                                layer_index,
+                                block,
+                                &definitions.asset_server,
+                                block_model.opacity(),
+                            )
+                            && let Some(material_asset) = materials.get_mut(&material)
+                        {
+                            *material_asset = face_material;
+                            apply_block_display_shading(
+                                material_asset,
+                                face,
+                                block_model.opacity(),
+                            );
+                            set_block_model_tint(
+                                material_asset,
+                                tint.unwrap_or(Color::WHITE),
+                            );
+                            visibility = Visibility::Inherited;
+                        }
+
+                        held.spawn((
+                            ThirdPersonHeldBlockFace { face, layer_index },
+                            Mesh3d(block_meshes.display_face(face)),
+                            MeshMaterial3d(material),
+                            visibility,
+                            NotShadowCaster,
+                        ));
+                    }
+                }
+            });
+        });
+    }
+}
+
+fn sync_third_person_held_block(
+    definitions: BlockVisualContent,
+    hotbar: Res<PlayerHotbar>,
+    player: Single<&Transform, With<PlayerEntity>>,
+    mut cache: Local<ThirdPersonHeldBlockVisualCache>,
+    view: ThirdPersonHeldBlockView,
+) {
+    let ThirdPersonHeldBlockView {
+        mut materials,
+        mut roots,
+        mut faces,
+    } = view;
+    let tint_cell = IVec2::new(
+        player.translation.x.floor() as i32,
+        player.translation.z.floor() as i32,
+    );
+    let tint_cell_changed = cache.tint_cell != Some(tint_cell);
+    let definitions_changed = definitions.block_definitions_changed();
+    let selection_changed = hotbar.is_changed();
+    let visual_inputs_changed = definitions.inputs_changed();
+    if !tint_cell_changed && !selection_changed && !visual_inputs_changed {
+        return;
+    }
+    cache.tint_cell = Some(tint_cell);
+
+    let selected_block_id = hotbar
+        .item_at(hotbar.selected_slot())
+        .filter(|block_id| definitions.blocks.get(block_id).is_some());
+    let visibility = third_person_item_visibility(selected_block_id);
+    let tint_position = tint_cell.as_vec2() + Vec2::splat(0.5);
+
+    for (mut held, mut held_visibility) in &mut roots {
+        let block_changed = held.block_id() != selected_block_id;
+        if block_changed {
+            held.set_block_id(selected_block_id);
+        }
+        if *held_visibility != visibility {
+            *held_visibility = visibility;
+        }
+
+        let Some(block_id) = selected_block_id else {
+            if block_changed {
+                for (_, _, mut layer_visibility) in &mut faces {
+                    if *layer_visibility != Visibility::Hidden {
+                        *layer_visibility = Visibility::Hidden;
+                    }
+                }
+            }
+            cache.tint = None;
+            continue;
+        };
+        let Some(block) = definitions.blocks.get(block_id) else {
+            continue;
+        };
+
+        let materials_changed = block_changed || definitions_changed;
+        if materials_changed {
+            for (face, material_handle, mut layer_visibility) in &mut faces {
+                let Some(material) = materials.get_mut(&material_handle.0) else {
+                    continue;
+                };
+                let Some(face_material) = block_face_material_data(
+                    face.face,
+                    face.layer_index,
+                    block,
+                    &definitions.asset_server,
+                    held.opacity(),
+                ) else {
+                    if *layer_visibility != Visibility::Hidden {
+                        *layer_visibility = Visibility::Hidden;
+                    }
+                    continue;
+                };
+                *material = face_material;
+                apply_block_display_shading(material, face.face, held.opacity());
+                if *layer_visibility != Visibility::Inherited {
+                    *layer_visibility = Visibility::Inherited;
+                }
+            }
+        }
+
+        if materials_changed || tint_cell_changed || visual_inputs_changed {
+            let tint = definitions
+                .tint_at(block_id, tint_position)
+                .unwrap_or(Color::WHITE);
+            if materials_changed || cache.tint != Some(tint) {
+                for (_, material_handle, _) in &mut faces {
+                    if let Some(material) = materials.get_mut(&material_handle.0) {
+                        set_block_model_tint(material, tint);
+                    }
+                }
+            }
+            cache.tint = Some(tint);
+        }
+    }
+}
+
+fn third_person_item_visibility(block_id: Option<&'static str>) -> Visibility {
+    if block_id.is_some() {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    }
+}
+
+fn third_person_held_block_transform() -> Transform {
+    Transform::from_translation(Vec3::new(0.0, -0.72, -0.06))
+        .with_rotation(Quat::from_euler(EulerRot::XYZ, -0.35, 0.65, 0.18))
+        .with_scale(Vec3::splat(THIRD_PERSON_HELD_BLOCK_SCALE))
 }

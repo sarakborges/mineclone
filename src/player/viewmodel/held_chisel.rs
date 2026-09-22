@@ -95,7 +95,7 @@ pub(super) fn sync_held_chisel(
         return;
     }
     let desired = if hotbar.item_at(hotbar.selected_slot()) == Some(CHISEL_TOOL_ID) {
-        Visibility::Visible
+        Visibility::Inherited
     } else {
         Visibility::Hidden
     };
