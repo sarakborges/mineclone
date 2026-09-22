@@ -31,7 +31,4 @@ impl ToolCategoryRegistry {
         self.definitions.get(id)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &ToolCategoryDefinition> {
-        self.definitions.values()
-    }
 }
