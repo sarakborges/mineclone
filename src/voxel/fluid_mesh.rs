@@ -277,9 +277,7 @@ where
                     face,
                     source_block_srgb,
                 );
-            let face_heights = if face == BlockFace::Bottom {
-                FluidFaceHeights::default()
-            } else {
+            let face_heights = if fluid_face_needs_heights(face) {
                 *heights.get_or_insert_with(|| {
                     fluid_face_heights(
                         world,
@@ -289,6 +287,8 @@ where
                         cell.fluid_id,
                     )
                 })
+            } else {
+                FluidFaceHeights::default()
             };
             let neighbor_mask = neighbor_samples[index]
                 .and_then(|(block, _)| block)
@@ -769,6 +769,10 @@ fn fluid_uv(face: BlockFace, local: Vec3) -> [f32; 2] {
     }
 }
 
+fn fluid_face_needs_heights(face: BlockFace) -> bool {
+    face != BlockFace::Bottom
+}
+
 fn fluid_face_vertices(
     face: BlockFace,
     x0: f32,
@@ -986,6 +990,28 @@ mod tests {
     use crate::voxel::{
         cell::VoxelCell, microblock::ChiselResolution, world::VoxelWorld,
     };
+
+    #[test]
+    fn only_bottom_fluid_face_skips_height_sampling() {
+        for face in BlockFace::ALL {
+            assert_eq!(
+                fluid_face_needs_heights(face),
+                face != BlockFace::Bottom,
+            );
+        }
+
+        let default = FluidFaceHeights::default();
+        let varied = FluidFaceHeights {
+            h00: 0.1,
+            h10: 0.4,
+            h11: 0.7,
+            h01: 1.0,
+        };
+        assert_eq!(
+            fluid_face_vertices(BlockFace::Bottom, 2.0, 3.0, 4.0, default),
+            fluid_face_vertices(BlockFace::Bottom, 2.0, 3.0, 4.0, varied),
+        );
+    }
 
     #[test]
     fn greedy_fluid_lighting_compacts_uniform_face_without_loss() {
