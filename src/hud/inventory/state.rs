@@ -8,6 +8,8 @@ pub(super) const PANEL_GAP: f32 = 24.0;
 pub(super) const PANEL_PADDING: f32 = 18.0;
 pub(super) const SEARCH_HEIGHT: f32 = 40.0;
 pub(super) const SEARCH_GAP: f32 = 14.0;
+pub(super) const PLAYER_SEARCH_WIDTH: f32 = 210.0;
+pub(super) const PLAYER_HEADER_GAP: f32 = 8.0;
 pub(super) const CATEGORY_WIDTH: f32 = 172.0;
 pub(super) const CATEGORY_ROW_HEIGHT: f32 = SLOT_SIZE;
 pub(super) const CATEGORY_ICON_SIZE: f32 = 28.0;
@@ -30,6 +32,21 @@ pub(super) struct InventorySlot {
 
 #[derive(Component)]
 pub(super) struct InventoryTrashButton;
+
+#[derive(Component)]
+pub(super) struct InventorySearchBar;
+
+#[derive(Component)]
+pub(super) struct InventorySearchText;
+
+#[derive(Component)]
+pub(super) struct InventorySearchFrame;
+
+#[derive(Component)]
+pub(super) struct InventorySortButton;
+
+#[derive(Component)]
+pub(super) struct InventorySortTooltip;
 
 #[derive(Component)]
 pub(super) struct CreativeInventorySlot {
@@ -79,6 +96,36 @@ pub(super) struct InventoryItemTooltipStatsTitle;
 
 #[derive(Component)]
 pub(super) struct InventoryItemTooltipStats;
+
+#[derive(Resource, Default)]
+pub(super) struct PlayerInventoryView {
+    search: String,
+    search_focused: bool,
+}
+
+impl PlayerInventoryView {
+    pub(super) fn search_query(&self) -> &str {
+        &self.search
+    }
+
+    pub(super) fn search_focused(&self) -> bool {
+        self.search_focused
+    }
+
+    pub(super) fn focus_search(&mut self) {
+        self.search_focused = true;
+    }
+
+    pub(super) fn blur_search(&mut self) {
+        self.search_focused = false;
+    }
+
+    pub(super) fn set_search_query(&mut self, query: String) {
+        if self.search != query {
+            self.search = query;
+        }
+    }
+}
 
 #[derive(Resource, Default)]
 pub(super) struct CreativeInventoryView {
