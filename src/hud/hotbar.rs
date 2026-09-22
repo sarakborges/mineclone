@@ -13,7 +13,6 @@ use crate::{
     player::{
         camera::GameplayCamera,
         hotbar::{HOTBAR_SLOT_COUNT, PlayerHotbar},
-        inventory::InventoryState,
     },
     rendering::{block_model::BlockModel, block_visual_content::BlockVisualContent},
     targeting::{PlacementOrientation, block::BlockTargetingSet},
@@ -114,16 +113,11 @@ impl Plugin for HotbarHudPlugin {
 fn spawn_hotbar(
     mut commands: Commands,
     content: HotbarHudContent,
-    inventory_state: Res<State<InventoryState>>,
     pause_state: Res<State<PauseState>>,
     settings_state: Res<State<SettingsState>>,
     mut icon_materials: ResMut<Assets<BlockIconMaterial>>,
 ) {
-    let visibility = hotbar_visibility(
-        *pause_state.get(),
-        *settings_state.get(),
-        *inventory_state.get(),
-    );
+    let visibility = hotbar_visibility(*pause_state.get(), *settings_state.get());
     let language = content.language.get();
     let selected_name = content
         .hotbar
@@ -207,15 +201,8 @@ fn spawn_hotbar(
         });
 }
 
-fn hotbar_visibility(
-    pause: PauseState,
-    settings: SettingsState,
-    inventory: InventoryState,
-) -> Visibility {
-    if pause == PauseState::Paused
-        || settings == SettingsState::Open
-        || inventory == InventoryState::Open
-    {
+fn hotbar_visibility(pause: PauseState, settings: SettingsState) -> Visibility {
+    if pause == PauseState::Paused || settings == SettingsState::Open {
         Visibility::Hidden
     } else {
         Visibility::Visible
