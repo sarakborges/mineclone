@@ -646,6 +646,28 @@ VERSION: `0.50.46`, commit
 `f3ffd75e423ffaccd221f5df1d73a6ef45776655`.
 CI de P30: **verde** nos runs push `35739834526` e PR `35739842265` para `f3ffd75e423ffaccd221f5df1d73a6ef45776655`. Nenhum `cargo test` foi adicionado/executado.
 
+### P31 — construir índices voxel na largura final
+
+`VoxelMeshBuffer` acumulava todos os índices em `Vec<u32>`. No
+`into_mesh`, qualquer mesh com até 65.536 vértices alocava um novo
+`Vec<u16>`, convertia/copava todos os índices e descartava o buffer U32.
+Esse é o caso comum de terrain/layer/fluid meshes e patches pequenos.
+
+O buffer agora começa como `VoxelMeshIndices::U16` e grava os índices já na
+largura final. Se um quad introduzir índice acima de `u16::MAX`, promove o
+buffer existente uma única vez para U32, preservando capacidade e valores; a
+partir daí permanece wide. `into_mesh` entrega o vetor diretamente ao Bevy,
+sem passe final de compactação/alocação.
+
+Regressões cobrem o maior índice ainda representável em U16 e a primeira
+promoção para U32 com preservação exata dos valores anteriores.
+
+Commit funcional/regressões:
+`c660c6a271e46386ae4195c906eadecc2eadcb07`.
+VERSION: `0.50.47`, commit
+`e1ca796a05c7310d501b8d6b891f3699571699f3`.
+CI de P31: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
