@@ -1,9 +1,10 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::storage::ShaderBuffer};
 
 use crate::{
     app::game_state::GameState,
     content::block::BlockRegistry,
     player::{camera::GameplayCamera, hotbar::PlayerHotbar},
+    rendering::terrain_material::TerrainLightingBuffer,
 };
 
 const MAX_HELD_LIGHT_INTENSITY: f32 = 90.0;
@@ -34,9 +35,15 @@ fn spawn_held_dynamic_light(
     cameras: Query<Entity, Added<GameplayCamera>>,
     hotbar: Res<PlayerHotbar>,
     blocks: Res<BlockRegistry>,
+    mut terrain_lighting: ResMut<TerrainLightingBuffer>,
+    mut shader_buffers: ResMut<Assets<ShaderBuffer>>,
 ) {
     let block_id = hotbar.item_at(hotbar.selected_slot());
     let (intensity, visibility) = held_light_state(block_id, &blocks);
+    terrain_lighting.set_dynamic_light_enabled(
+        &mut shader_buffers,
+        visibility == Visibility::Visible,
+    );
 
     for camera in &cameras {
         commands.entity(camera).with_children(|camera| {
@@ -61,6 +68,8 @@ fn sync_held_dynamic_light(
     hotbar: Res<PlayerHotbar>,
     blocks: Res<BlockRegistry>,
     mut lights: Query<(&mut HeldDynamicLight, &mut PointLight, &mut Visibility)>,
+    mut terrain_lighting: ResMut<TerrainLightingBuffer>,
+    mut shader_buffers: ResMut<Assets<ShaderBuffer>>,
 ) {
     let selected_item_changed = hotbar.is_changed();
     let block_definitions_changed = blocks.is_changed();
@@ -70,6 +79,10 @@ fn sync_held_dynamic_light(
 
     let block_id = hotbar.item_at(hotbar.selected_slot());
     let (intensity, next_visibility) = held_light_state(block_id, &blocks);
+    terrain_lighting.set_dynamic_light_enabled(
+        &mut shader_buffers,
+        next_visibility == Visibility::Visible,
+    );
 
     for (mut held, mut light, mut visibility) in &mut lights {
         if held.block_id != block_id {
