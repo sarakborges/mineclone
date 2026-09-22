@@ -34,6 +34,12 @@ use super::{
     world::VoxelWorld,
 };
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct DirectLightingSeedResult {
+    pub(crate) requires_relaxation: bool,
+    pub(crate) changes_direct_sky_below: bool,
+}
+
 #[derive(Resource, Default)]
 pub(crate) struct PendingLightingUpdates {
     queue: LightingQueue,
@@ -168,7 +174,7 @@ impl PendingLightingUpdates {
         blocks: &BlockRegistry,
         fluids: &FluidRegistry,
         secondary_properties: &SecondaryPropertyRegistry,
-    ) -> bool {
+    ) -> DirectLightingSeedResult {
         seed_chunk_direct_lighting(
             world,
             coord,
@@ -244,7 +250,7 @@ fn seed_chunk_direct_lighting(
     fluids: &FluidRegistry,
     secondary_properties: &SecondaryPropertyRegistry,
     context: &mut LightingContext,
-) -> bool {
+) -> DirectLightingSeedResult {
     let size = CHUNK_SIZE as i32;
     let world_x = coord.x * size;
     let world_z = coord.z * size;
@@ -268,10 +274,14 @@ fn seed_chunk_direct_lighting(
     if world.chunk(coord).is_some_and(|chunk| chunk.is_empty()) {
         let seeded = world.rebuild_empty_chunk_light_columns(coord, &sky_by_column);
         debug_assert!(seeded, "seeded chunk must be loaded: {coord:?}");
-        return true;
+        return DirectLightingSeedResult {
+            requires_relaxation: true,
+            changes_direct_sky_below: false,
+        };
     }
 
     let mut requires_relaxation = false;
+    let mut changes_direct_sky_below = false;
     let seeded = world.rebuild_chunk_light(coord, |x, _, z, cell, fluid| {
         let dampening = medium_dampening_for_cells(cell, fluid, blocks, fluids);
         let block_emission = block_emission_for_cell(cell, blocks, secondary_properties);
@@ -285,12 +295,17 @@ fn seed_chunk_direct_lighting(
 
         let sky = &mut sky_by_column[x + z * CHUNK_SIZE];
         if *sky > 0 {
+            let incoming = *sky;
             *sky = sky.saturating_sub(dampening);
+            changes_direct_sky_below |= *sky != incoming;
         }
         VoxelLight::new_hsi(*sky, block_emission)
     });
     debug_assert!(seeded, "seeded chunk must be loaded: {coord:?}");
-    requires_relaxation
+    DirectLightingSeedResult {
+        requires_relaxation,
+        changes_direct_sky_below,
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
