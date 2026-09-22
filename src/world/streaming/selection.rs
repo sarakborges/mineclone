@@ -386,6 +386,16 @@ fn rebuild_desired_chunk_coords(
         };
     let horizontal_radius_squared = horizontal_radius * horizontal_radius;
     let center_horizontal = center.xz();
+    let generation_context = ChunkGenerationContext {
+        blocks: context.blocks,
+        fluids: context.fluids,
+        dimension: context.dimension,
+        biomes: context.biomes,
+        structures: context.structures,
+        structure_sets: context.structure_sets,
+        biome_field: context.biome_field,
+        feature_fields: context.feature_fields,
+    };
 
     for z in -search_radius..=search_radius {
         for x in -search_radius..=search_radius {
@@ -407,16 +417,6 @@ fn rebuild_desired_chunk_coords(
                 context.biome_field,
                 context.feature_fields,
             );
-            let generation_context = ChunkGenerationContext {
-                blocks: context.blocks,
-                fluids: context.fluids,
-                dimension: context.dimension,
-                biomes: context.biomes,
-                structures: context.structures,
-                structure_sets: context.structure_sets,
-                biome_field: context.biome_field,
-                feature_fields: context.feature_fields,
-            };
             let structure_top_chunk = *structure_top_chunks
                 .entry(horizontal)
                 .or_insert_with(|| {
