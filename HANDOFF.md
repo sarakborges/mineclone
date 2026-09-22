@@ -513,6 +513,27 @@ VERSION: `0.50.40`, commit
 `ced792046825152f77449e8d0d8f60416329b0a8`.
 CI de P24: aguardando. Nenhum `cargo test` foi adicionado/executado.
 
+### P25 — acesso direto no miolo do lighting cache denso
+
+`ChunkLightingCache::capture_with_center` captura uma grade 18³. As 4.096
+amostras do miolo 16³ já são garantidamente locais ao chunk, mas ainda
+passavam por `sample_local(i32)`, repetindo bounds checks e casts em cada
+amostra.
+
+`VoxelChunk::sample_local_at(usize, usize, usize)` agora resolve bloco,
+fluido e luz com um único índice e `debug_assert` de contrato. O lighting
+cache usa esse caminho apenas no miolo; as 1.736 amostras do halo continuam
+usando `VoxelRead`/snapshot, preservando ausência e vizinhos exatamente como
+antes. O accessor checked existente delega para o novo caminho depois da
+validação.
+
+Commits: accessor `c65ed4fc2d619b4fde7fe45a03e3c027e1593d7b`;
+cache denso `60970e6d6cf450bfc58b2c22c7ec6f6bb60615a0`;
+regressão `55894156aa57bba61d125071b6c4dd6bb9407667`.
+VERSION: `0.50.41`, commit
+`5c006f47099830e981d71195ca71894797f4cba0`.
+CI de P25: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
