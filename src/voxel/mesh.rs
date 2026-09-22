@@ -24,7 +24,7 @@ use super::{
     chunk::{CHUNK_SIZE, VoxelChunk},
     mesh_lighting::{
         ChunkLightingCache, FaceLighting, face_lighting_with_cache, push_lit_quad,
-        surface_block_srgb,
+        surface_block_srgb_with_cache,
     },
     meshlet::{CHUNK_MESHLET_EDGE, ChunkMeshletMask},
     microblock::MicroblockMask,
@@ -162,6 +162,7 @@ where
         let visual = visual_for_cell(
             &mut visuals,
             index,
+            lighting_cache,
             chunk,
             [x, y, z],
             world_voxel,
@@ -249,6 +250,7 @@ where
                 let visual = visual_for_cell(
                     &mut visuals,
                     source_index,
+                    lighting_cache,
                     chunk,
                     [x, y, z],
                     world_voxel,
@@ -426,6 +428,7 @@ struct CellVisual {
 fn visual_for_cell<F>(
     cache: &mut [Option<CellVisual>],
     index: usize,
+    lighting_cache: Option<&ChunkLightingCache>,
     chunk: &VoxelChunk,
     [x, y, z]: [usize; 3],
     world_voxel: IVec3,
@@ -446,7 +449,9 @@ where
         } else {
             tint_at(world_voxel, cell, block)
         },
-        block_srgb: surface_block_srgb(
+        block_srgb: surface_block_srgb_with_cache(
+            lighting_cache,
+            world_voxel,
             chunk.light_at(x as i32, y as i32, z as i32),
             block.light_emission > 0,
         ),
