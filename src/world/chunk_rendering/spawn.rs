@@ -319,10 +319,8 @@ fn build_chunk_fluid_render_meshlets_with_lighting<W: VoxelRead + ?Sized>(
         return Vec::new();
     }
 
-    let mut column_tints = vec![
-        vec![None; CHUNK_SIZE * CHUNK_SIZE];
-        context.fluids.iter().count()
-    ];
+    let mut column_tints =
+        vec![None::<Vec<Option<[f32; 3]>>>; context.fluids.iter().count()];
     build_fluid_meshlets(
         context.world,
         coord,
@@ -334,7 +332,9 @@ fn build_chunk_fluid_render_meshlets_with_lighting<W: VoxelRead + ?Sized>(
             let local_z = voxel.z.rem_euclid(CHUNK_SIZE as i32) as usize;
             let column_index = local_x + local_z * CHUNK_SIZE;
             let fluid_index = usize::from(fluid_id);
-            let slot = &mut column_tints[fluid_index][column_index];
+            let cache = column_tints[fluid_index]
+                .get_or_insert_with(|| vec![None; CHUNK_SIZE * CHUNK_SIZE]);
+            let slot = &mut cache[column_index];
 
             *slot.get_or_insert_with(|| {
                 let position = Vec2::new(voxel.x as f32 + 0.5, voxel.z as f32 + 0.5);
