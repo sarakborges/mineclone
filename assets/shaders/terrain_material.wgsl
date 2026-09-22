@@ -188,7 +188,8 @@ fn fragment(
     // Greedy terrain quads carry UVs larger than 1 so each merged voxel face
     // keeps the original per-block texture scale. The integer UV0.x region also
     // carries a constant material code without consuming another vertex channel.
-    let material_code = u32(floor(in.uv.x / 16.0));
+    let base_and_flags = u32(floor(in.uv.x / 16.0));
+    let overlay_code = u32(floor(in.uv.y / 16.0));
     let tiled_uv = fract(in.uv);
     var texel = vec4<f32>(1.0);
 
@@ -206,12 +207,12 @@ fn fragment(
     var base_tint_enabled = terrain_material_extension.base_tint_enabled > 0.5;
     var overlay_enabled = terrain_material_extension.overlay_enabled > 0.5;
     var overlay_tint_enabled = terrain_material_extension.overlay_tint_enabled > 0.5;
-    var array_overlay_index = 127u;
+    var array_overlay_index = 1023u;
 
     if texture_array_enabled {
-        let base_index = material_code & 127u;
-        array_overlay_index = (material_code >> 7u) & 127u;
-        let flags = (material_code >> 14u) & 3u;
+        let base_index = base_and_flags & 1023u;
+        array_overlay_index = overlay_code & 1023u;
+        let flags = (base_and_flags >> 10u) & 3u;
 
         texel = textureSample(
             terrain_texture_array,
@@ -220,7 +221,7 @@ fn fragment(
             i32(base_index),
         );
         base_tint_enabled = (flags & 1u) != 0u;
-        overlay_enabled = array_overlay_index != 127u;
+        overlay_enabled = array_overlay_index != 1023u;
         overlay_tint_enabled = (flags & 2u) != 0u;
     } else {
         texel = textureSample(
