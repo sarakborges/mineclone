@@ -983,8 +983,7 @@ Commit do hotfix de culling:
 `7ba9c935745958ac2732a7f2224f39839e015f63`.
 VERSION: `0.50.66`, commit
 `ae6f21dc1951d394e3f386ba0f8c0b000ae2a5b8`.
-CI do hotfix: aguardando. QA Windows é obrigatória; o critério principal é
-ausência completa de flicker de terrain/chunks durante movimento e streaming.
+CI do hotfix: **verde** nos runs push `35750594241` e PR `35750625979` para `ae6f21dc1951d394e3f386ba0f8c0b000ae2a5b8`. QA Windows é obrigatória; o critério principal é ausência completa de flicker de terrain/chunks durante movimento e streaming.
 
 ### Ordem de execução definida
 
