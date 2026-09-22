@@ -1,13 +1,14 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 
 #[cfg(test)]
-use crate::voxel::{neighbors::CARDINAL_NEIGHBORS, world::VoxelWorld};
+use crate::voxel::neighbors::CARDINAL_NEIGHBORS;
 
 use crate::{
     voxel::{
         coordinates::visit_chunk_coords_whose_voxel_halo_contains,
         deduplicated_queue::DeduplicatedQueue,
         meshlet::ChunkMeshletMask,
+        world::VoxelWorld,
     },
     world::{
         chunk_remesh_tasks::ChunkRemeshTaskKind,
