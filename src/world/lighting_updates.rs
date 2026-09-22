@@ -74,12 +74,8 @@ pub(super) fn process_dynamic_lighting(
             }
 
             let meshlets = ChunkMeshletMask::for_world_position(coord, position);
-            let combined = dirty_meshlets
-                .get(&coord)
-                .copied()
-                .unwrap_or_default()
-                .union(meshlets);
-            dirty_meshlets.insert(coord, combined);
+            let dirty = dirty_meshlets.entry(coord).or_default();
+            *dirty = dirty.union(meshlets);
         });
     }
 
