@@ -21,6 +21,10 @@ pub struct WalkingState {
 }
 
 impl WalkingState {
+    pub(crate) fn horizontal_speed_squared(&self) -> f32 {
+        self.velocity.x * self.velocity.x + self.velocity.z * self.velocity.z
+    }
+
     pub(crate) fn reset_motion(&mut self) {
         self.velocity = Vec3::ZERO;
         self.step_target_y = None;
