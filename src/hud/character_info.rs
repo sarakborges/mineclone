@@ -16,7 +16,7 @@ use super::player::portrait::{PlayerPreviewImages, PlayerPreviewRenderState};
 
 const CHARACTER_PREVIEW_CARD_WIDTH: f32 = 224.0;
 const CHARACTER_PREVIEW_CARD_HEIGHT: f32 = 298.0;
-const CHARACTER_PREVIEW_ASPECT_RATIO: f32 = 384.0 / 512.0;
+const CHARACTER_PREVIEW_IMAGE_SIZE: f32 = 216.0;
 const CHARACTER_PREVIEW_DRAG_SENSITIVITY: f32 = 0.01;
 
 #[derive(Resource, Default)]
@@ -37,11 +37,12 @@ impl Plugin for CharacterInfoHudPlugin {
         app.init_resource::<CharacterPreviewInteraction>()
             .add_systems(
                 OnEnter(CharacterInfoState::Open),
-                (request_character_preview, spawn_character_info)
-                    .chain()
-                    .run_if(in_state(GameState::Gameplay)),
+                spawn_character_info.run_if(in_state(GameState::Gameplay)),
             )
-            .add_systems(OnExit(CharacterInfoState::Open), stop_character_preview_drag)
+            .add_systems(
+                OnExit(CharacterInfoState::Open),
+                (stop_character_preview_drag, request_portrait_refresh).chain(),
+            )
             .add_systems(
                 Update,
                 rotate_character_preview
@@ -51,18 +52,12 @@ impl Plugin for CharacterInfoHudPlugin {
     }
 }
 
-fn request_character_preview(
-    mut render_state: ResMut<PlayerPreviewRenderState>,
-) {
-    render_state.request_character();
-}
-
 fn spawn_character_info(
     mut commands: Commands,
     preview_images: Res<PlayerPreviewImages>,
 ) {
-    let Some(image) = preview_images.character() else {
-        warn!("Character Info opened without a shared character preview target");
+    let Some(image) = preview_images.portrait() else {
+        warn!("Character Info opened without the shared player preview target");
         return;
     };
 
@@ -133,9 +128,8 @@ fn spawn_character_preview_viewport(
             frame.spawn((
                 ImageNode::new(image),
                 Node {
-                    height: percent(100),
-                    max_width: percent(100),
-                    aspect_ratio: Some(CHARACTER_PREVIEW_ASPECT_RATIO),
+                    width: px(CHARACTER_PREVIEW_IMAGE_SIZE),
+                    height: px(CHARACTER_PREVIEW_IMAGE_SIZE),
                     ..default()
                 },
                 Pickable::IGNORE,
@@ -174,4 +168,10 @@ fn rotate_character_preview(
     }
 
     render_state.rotate_character(delta.x * CHARACTER_PREVIEW_DRAG_SENSITIVITY);
+}
+
+fn request_portrait_refresh(
+    mut render_state: ResMut<PlayerPreviewRenderState>,
+) {
+    render_state.request_portrait();
 }
