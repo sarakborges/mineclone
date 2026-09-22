@@ -11267,3 +11267,50 @@ CI funcional push `35778651893`: **verde**.
 Commit de versão: `87abec745ceb22e581b05c3d455653ca4a5da74c`.
 CI de versão push `35779123708`: **verde**.
 VERSION: `0.50.87`.
+
+## 2026-09-22 — Renderer compartilhado para portrait + Character Info
+
+O pipeline de preview do player foi simplificado para eliminar a duplicação 3D
+que existia entre o HUD portrait e o Character Info.
+
+Nova arquitetura:
+- existe uma única scene/model do `player.glb` para previews;
+- existe uma única câmera 3D offscreen compartilhada;
+- o renderer mantém dois render targets cacheados:
+  - portrait HUD: 128×128;
+  - Character Info: 384×512;
+- a câmera troca target e framing conforme a solicitação de render;
+- quando não há atualização pendente, `CameraOutputMode::Skip` preserva a
+  última textura sem desligar a câmera;
+- o modelo é persistente durante toda a execução do app;
+- a scene e os materiais são configurados uma única vez.
+
+HUD portrait:
+- não cria mais câmera/model/scene próprios;
+- apenas usa o target `portrait` do renderer compartilhado;
+- ao entrar em gameplay solicita um refresh do portrait.
+
+Character Info:
+- não possui mais câmera, render layer, GLB handle, scene ou material próprios;
+- virou apenas UI + interação de drag;
+- usa o target `character` do renderer compartilhado;
+- ao abrir solicita render full-body;
+- drag horizontal atualiza o yaw armazenado no renderer e solicita novo render.
+
+O renderer também trata corretamente o caso em que o `player.glb` termina de
+carregar enquanto Character Info já está aberto, renderizando diretamente o
+target ativo em vez do portrait.
+
+Commits:
+- renderer compartilhado: `ed016ed939a0bf833b2087af2d562437f7f87587`;
+- HUD usa renderer compartilhado: `b48c2038bd0c8e737299e26025b0ec29dffce1f0`;
+- Character Info vira consumidor puro: `582982c417b626a642e992c1caef09fbc88b6533`;
+- seleção correta do target ativo: `ff4610380b05ef162e54e5850373993761201df9`;
+- ajuste de visibilidade interna do state compartilhado:
+  `c8d962a5aa3e344d19bace7ff8c62024d7684440`.
+
+CI funcional push `35780794961`: **verde** (localizações, Clippy rigoroso e
+cargo check).
+Commit de versão: `51ba1f828be7a36a7dbd32f25a4203cba244c42b`.
+CI de versão push `35780938926`: **verde**.
+VERSION: `0.50.88`.
