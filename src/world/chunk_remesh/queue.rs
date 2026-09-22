@@ -312,6 +312,40 @@ impl ChunkRemeshQueue {
         Some((coord, meshlets))
     }
 
+    pub(super) fn coalesce_terrain_work(
+        &mut self,
+        coord: IVec3,
+        kind: ChunkRemeshTaskKind,
+        meshlets: ChunkMeshletMask,
+    ) -> (ChunkRemeshTaskKind, ChunkMeshletMask) {
+        match kind {
+            ChunkRemeshTaskKind::Geometry => {
+                let lighting = if self.lighting.remove(coord) {
+                    self.lighting_meshlets.remove(&coord).unwrap_or_default()
+                } else {
+                    ChunkMeshletMask::default()
+                };
+                (
+                    ChunkRemeshTaskKind::Geometry,
+                    meshlets.union(lighting),
+                )
+            }
+            ChunkRemeshTaskKind::Lighting => {
+                if self.queue.remove(coord) {
+                    let geometry =
+                        self.geometry_meshlets.remove(&coord).unwrap_or_default();
+                    (
+                        ChunkRemeshTaskKind::Geometry,
+                        meshlets.union(geometry),
+                    )
+                } else {
+                    (ChunkRemeshTaskKind::Lighting, meshlets)
+                }
+            }
+            ChunkRemeshTaskKind::Fluid => (kind, meshlets),
+        }
+    }
+
     pub(super) fn pop_renderable_background(
         &mut self,
         render_pool: &ChunkRenderPool,
