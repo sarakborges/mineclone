@@ -215,6 +215,19 @@ fn vertical_dampening_by_column(
     }
 
     let mut dampening = [0_u8; CHUNK_AREA];
+    let occupied_upper_bound = chunk.block_count().saturating_add(chunk.fluid_count());
+    if occupied_upper_bound <= CHUNK_AREA {
+        chunk.visit_content_voxels(|local_x, _, local_z, cell, fluid| {
+            let column = &mut dampening[local_x + local_z * CHUNK_SIZE];
+            if *column < VoxelLight::MAX_LEVEL {
+                *column = column.saturating_add(medium_dampening_for_cells(
+                    cell, fluid, blocks, fluids,
+                ));
+            }
+        });
+        return dampening;
+    }
+
     for local_z in 0..CHUNK_SIZE {
         for local_x in 0..CHUNK_SIZE {
             let column = &mut dampening[local_x + local_z * CHUNK_SIZE];
@@ -232,4 +245,37 @@ fn vertical_dampening_by_column(
         }
     }
     dampening
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::voxel::{cell::VoxelCell, texture_rotation::TextureRotation};
+
+    #[test]
+    fn sparse_vertical_dampening_visits_only_occupied_content() {
+        let mut chunk = VoxelChunk::empty();
+        chunk.set_block(
+            3,
+            7,
+            5,
+            Some(VoxelCell::new(
+                "asteria:test/opaque",
+                TextureRotation::default(),
+            )),
+        );
+
+        let dampening = vertical_dampening_by_column(
+            &chunk,
+            &BlockRegistry::default(),
+            &FluidRegistry::default(),
+        );
+
+        assert_eq!(
+            dampening[3 + 5 * CHUNK_SIZE],
+            VoxelLight::MAX_LEVEL,
+        );
+        assert_eq!(dampening[4 + 5 * CHUNK_SIZE], 0);
+    }
 }
