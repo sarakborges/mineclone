@@ -48,6 +48,7 @@ pub(super) struct DetachedRenderAllocationParts {
 #[derive(Resource, Default)]
 pub struct ChunkRenderPool {
     active: HashMap<IVec3, ChunkRenderAllocation>,
+    total_mesh_bytes: usize,
     membership_revision: u64,
 }
 
@@ -99,6 +100,10 @@ impl ChunkRenderPool {
     }
 
     pub(crate) fn mesh_bytes(&self) -> usize {
+        self.total_mesh_bytes
+    }
+
+    pub(crate) fn diagnostic_recomputed_mesh_bytes(&self) -> usize {
         self.active.values().map(|slot| slot.mesh_bytes).sum()
     }
 
@@ -110,6 +115,11 @@ impl ChunkRenderPool {
 
     fn take(&mut self, coord: IVec3) -> Option<(Vec<Entity>, Vec<Handle<Mesh>>)> {
         let slot = self.active.remove(&coord)?;
+        replace_aggregated_mesh_bytes(
+            &mut self.total_mesh_bytes,
+            slot.mesh_bytes,
+            0,
+        );
         self.bump_membership_revision();
         Some((slot.entities, slot.meshes))
     }
@@ -154,6 +164,7 @@ impl ChunkRenderPool {
             patched.push(patch);
         }
 
+        let previous_mesh_bytes = slot.mesh_bytes;
         let mut terrain_mesh_bytes = 0;
         for (index, patch) in patched.into_iter().enumerate() {
             let handle = &slot.meshes[index];
@@ -175,6 +186,11 @@ impl ChunkRenderPool {
         }
 
         slot.mesh_bytes = terrain_mesh_bytes.saturating_add(slot.fluid_mesh_bytes);
+        replace_aggregated_mesh_bytes(
+            &mut self.total_mesh_bytes,
+            previous_mesh_bytes,
+            slot.mesh_bytes,
+        );
         true
     }
 
@@ -218,6 +234,7 @@ impl ChunkRenderPool {
             patched.push(patch);
         }
 
+        let previous_mesh_bytes = slot.mesh_bytes;
         let mut fluid_mesh_bytes = 0;
         for (index, patch) in patched.into_iter().enumerate() {
             let handle = &fluid_handles[index];
@@ -243,6 +260,11 @@ impl ChunkRenderPool {
             .saturating_sub(slot.fluid_mesh_bytes)
             .saturating_add(fluid_mesh_bytes);
         slot.fluid_mesh_bytes = fluid_mesh_bytes;
+        replace_aggregated_mesh_bytes(
+            &mut self.total_mesh_bytes,
+            previous_mesh_bytes,
+            slot.mesh_bytes,
+        );
         true
     }
 
@@ -271,6 +293,7 @@ impl ChunkRenderPool {
             return false;
         }
 
+        let previous_mesh_bytes = slot.mesh_bytes;
         for (handle, replacement) in slot.meshes[..terrain_mesh_count]
             .iter()
             .zip(replacements.drain(..))
@@ -281,6 +304,11 @@ impl ChunkRenderPool {
             *existing = replacement.into_mesh();
         }
         slot.mesh_bytes = terrain_mesh_bytes.saturating_add(slot.fluid_mesh_bytes);
+        replace_aggregated_mesh_bytes(
+            &mut self.total_mesh_bytes,
+            previous_mesh_bytes,
+            slot.mesh_bytes,
+        );
         true
     }
 
@@ -311,6 +339,7 @@ impl ChunkRenderPool {
             return false;
         }
 
+        let previous_mesh_bytes = slot.mesh_bytes;
         for (handle, replacement) in fluid_handles.iter().zip(replacements.drain(..)) {
             let mut existing = meshes
                 .get_mut(handle)
@@ -323,6 +352,11 @@ impl ChunkRenderPool {
             .saturating_sub(slot.fluid_mesh_bytes)
             .saturating_add(fluid_mesh_bytes);
         slot.fluid_mesh_bytes = fluid_mesh_bytes;
+        replace_aggregated_mesh_bytes(
+            &mut self.total_mesh_bytes,
+            previous_mesh_bytes,
+            slot.mesh_bytes,
+        );
         true
     }
 
@@ -331,6 +365,7 @@ impl ChunkRenderPool {
         coord: IVec3,
     ) -> Option<DetachedRenderAllocationParts> {
         let slot = self.active.get_mut(&coord)?;
+        let previous_mesh_bytes = slot.mesh_bytes;
         let terrain_mesh_count = fluid_mesh_start(slot)?;
         let terrain_entity_count = slot.entities.len().checked_sub(slot.fluid_ids.len())?;
 
@@ -340,6 +375,11 @@ impl ChunkRenderPool {
             .drain(..terrain_mesh_count)
             .for_each(drop);
         slot.mesh_bytes = slot.fluid_mesh_bytes;
+        replace_aggregated_mesh_bytes(
+            &mut self.total_mesh_bytes,
+            previous_mesh_bytes,
+            slot.mesh_bytes,
+        );
 
         Some(DetachedRenderAllocationParts { entities, meshes })
     }
@@ -368,6 +408,7 @@ impl ChunkRenderPool {
             .active
             .get_mut(&coord)
             .expect("terrain allocation append requires an active chunk render allocation");
+        let previous_mesh_bytes = slot.mesh_bytes;
 
         let mut combined_entities = entities;
         combined_entities.append(&mut slot.entities);
@@ -382,6 +423,11 @@ impl ChunkRenderPool {
         slot.mesh_keys = combined_keys;
 
         slot.mesh_bytes = terrain_mesh_bytes.saturating_add(slot.fluid_mesh_bytes);
+        replace_aggregated_mesh_bytes(
+            &mut self.total_mesh_bytes,
+            previous_mesh_bytes,
+            slot.mesh_bytes,
+        );
     }
 
     pub(super) fn detach_fluid_render_allocation(
@@ -389,6 +435,7 @@ impl ChunkRenderPool {
         coord: IVec3,
     ) -> Option<DetachedRenderAllocationParts> {
         let slot = self.active.get_mut(&coord)?;
+        let previous_mesh_bytes = slot.mesh_bytes;
         let terrain_mesh_count = fluid_mesh_start(slot)?;
         let fluid_entity_count = slot.fluid_ids.len();
         let terrain_entity_count = slot.entities.len().checked_sub(fluid_entity_count)?;
@@ -399,6 +446,11 @@ impl ChunkRenderPool {
         slot.mesh_bytes = slot.mesh_bytes.saturating_sub(slot.fluid_mesh_bytes);
         slot.fluid_mesh_bytes = 0;
         slot.fluid_ids.clear();
+        replace_aggregated_mesh_bytes(
+            &mut self.total_mesh_bytes,
+            previous_mesh_bytes,
+            slot.mesh_bytes,
+        );
 
         Some(DetachedRenderAllocationParts { entities, meshes })
     }
@@ -418,6 +470,7 @@ impl ChunkRenderPool {
             .active
             .get_mut(&coord)
             .expect("fluid allocation append requires an active chunk render allocation");
+        let previous_mesh_bytes = slot.mesh_bytes;
         slot.mesh_keys
             .extend(fluid_ids.iter().copied().map(ChunkMeshKey::Fluid));
         slot.entities.extend(entities);
@@ -425,10 +478,22 @@ impl ChunkRenderPool {
         slot.mesh_bytes = slot.mesh_bytes.saturating_add(fluid_mesh_bytes);
         slot.fluid_mesh_bytes = fluid_mesh_bytes;
         slot.fluid_ids = fluid_ids;
+        replace_aggregated_mesh_bytes(
+            &mut self.total_mesh_bytes,
+            previous_mesh_bytes,
+            slot.mesh_bytes,
+        );
     }
 
     pub(super) fn insert(&mut self, coord: IVec3, allocation: ChunkRenderAllocation) {
-        if self.active.insert(coord, allocation).is_none() {
+        let allocation_mesh_bytes = allocation.mesh_bytes;
+        let previous = self.active.insert(coord, allocation);
+        replace_aggregated_mesh_bytes(
+            &mut self.total_mesh_bytes,
+            previous.as_ref().map_or(0, |slot| slot.mesh_bytes),
+            allocation_mesh_bytes,
+        );
+        if previous.is_none() {
             self.bump_membership_revision();
         }
     }
@@ -441,6 +506,7 @@ impl ChunkRenderPool {
             }
         }
 
+        self.total_mesh_bytes = 0;
         if had_active_allocations {
             self.bump_membership_revision();
         }
@@ -452,6 +518,14 @@ impl ChunkRenderPool {
             .checked_add(1)
             .expect("chunk render pool membership revision exhausted");
     }
+}
+
+fn replace_aggregated_mesh_bytes(total: &mut usize, previous: usize, current: usize) {
+    *total = total
+        .checked_sub(previous)
+        .expect("chunk render pool mesh byte accounting cannot underflow")
+        .checked_add(current)
+        .expect("chunk render pool mesh byte accounting cannot overflow");
 }
 
 fn mesh_asset_bytes(mesh: &Mesh) -> usize {
