@@ -116,7 +116,8 @@ pub(super) fn attach_player_portrait_model(
 #[derive(SystemParam)]
 struct PlayerPortraitSceneAssets<'w, 's> {
     appearances: Query<'w, 's, (), With<PlayerPortraitAppearance>>,
-    meshes: Query<'w, 's, (), With<Mesh3d>>,
+    mesh_entities: Query<'w, 's, &'static Mesh3d>,
+    meshes: Res<'w, Assets<Mesh>>,
     mesh_materials: Query<'w, 's, &'static MeshMaterial3d<StandardMaterial>>,
     asset_server: Res<'w, AssetServer>,
     materials: ResMut<'w, Assets<StandardMaterial>>,
@@ -133,7 +134,18 @@ fn configure_player_portrait_scene(
     }
 
     for descendant in descendants.iter_descendants(ready.entity) {
-        if assets.meshes.contains(descendant) {
+        if let Ok(mesh_handle) = assets.mesh_entities.get(descendant) {
+            if assets
+                .meshes
+                .get(mesh_handle.id())
+                .is_some_and(|mesh| mesh.get_vertex_buffer_size() == 0)
+            {
+                commands
+                    .entity(descendant)
+                    .remove::<Mesh3d>()
+                    .remove::<MeshMaterial3d<StandardMaterial>>();
+                continue;
+            }
             commands.entity(descendant).insert((
                 RenderLayers::layer(PLAYER_PORTRAIT_RENDER_LAYER),
                 NotShadowCaster,
