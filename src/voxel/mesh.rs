@@ -907,19 +907,42 @@ mod tests {
             },
         ];
 
-        let planes = ActiveVoxelPlanes::from_sources(&sources, 0);
-        let plane_one = planes
+        let axes = ActiveVoxelAxes::from_sources(&sources);
+        let x_one = axes
+            .x
             .plane(1)
             .iter()
             .map(|packed| unpack_active_voxel(*packed).3)
             .collect::<Vec<_>>();
-        let plane_two = planes
+        let x_two = axes
+            .x
             .plane(2)
             .iter()
             .map(|packed| unpack_active_voxel(*packed).3)
             .collect::<Vec<_>>();
+        let y_zero = axes
+            .y
+            .plane(0)
+            .iter()
+            .map(|packed| unpack_active_voxel(*packed).3)
+            .collect::<Vec<_>>();
+        let y_one = axes
+            .y
+            .plane(1)
+            .iter()
+            .map(|packed| unpack_active_voxel(*packed).3)
+            .collect::<Vec<_>>();
+        let z_zero = axes
+            .z
+            .plane(0)
+            .iter()
+            .map(|packed| unpack_active_voxel(*packed).3)
+            .collect::<Vec<_>>();
 
-        assert_eq!(plane_one, vec![1, 3]);
-        assert_eq!(plane_two, vec![0, 2]);
+        assert_eq!(x_one, vec![1, 3]);
+        assert_eq!(x_two, vec![0, 2]);
+        assert_eq!(y_zero, vec![0, 1]);
+        assert_eq!(y_one, vec![2, 3]);
+        assert_eq!(z_zero, vec![0, 1, 2, 3]);
     }
 }
