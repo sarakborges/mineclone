@@ -17,7 +17,7 @@ use crate::{
     ui::selectable,
 };
 
-use crate::hud::{HudSettings, block_icon::BlockIconMaterial};
+use crate::hud::block_icon::BlockIconMaterial;
 
 use super::{
     layout::{
@@ -376,7 +376,6 @@ const ITEM_TOOLTIP_EDGE_HEIGHT: f32 = 156.0;
 
 pub(super) fn sync_inventory_item_tooltip(
     content: InventoryItemContent,
-    settings: Res<HudSettings>,
     localization: Res<UiLocalization>,
     view: InventoryTooltipView,
 ) {
