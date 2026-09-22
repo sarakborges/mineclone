@@ -2,7 +2,7 @@ use bevy::{ecs::system::SystemParam, input_focus::InputFocus, prelude::*, text::
 
 use crate::{
     app::game_state::GameState,
-    localization::{Language, UiLocalization},
+    localization::{ActiveLanguage, Language, UiLocalization},
     ui::{
         button::{
             button, ButtonVariant, COMPACT_CONTROL_HEIGHT, MENU_BUTTON_HEIGHT, MENU_BUTTON_WIDTH,
@@ -11,14 +11,16 @@ use crate::{
             NumericInputEvent, NumericInputFrame, NumericInputSizing, NumericInputState,
             numeric_input_field, sync_numeric_input_view,
         },
+        selectable,
         settings as settings_layout,
         text_input::editable_value,
+        toggle,
         transition::{ScreenTransition, ScreenTransitionTarget},
         typography,
     },
     world::{
-        NewWorldConfig, WorldLoadMode, WorldSeed, biome::CurrentBiome, dimension::CurrentDimension,
-        save_catalog::create_new_world,
+        NewWorldConfig, WorldGenerationMode, WorldLoadMode, WorldSeed,
+        biome::CurrentBiome, dimension::CurrentDimension, save_catalog::create_new_world,
     },
 };
 
@@ -45,13 +47,34 @@ pub(super) struct SeedValueText;
 #[derive(Component)]
 pub(super) struct RandomSeedButton;
 
+#[derive(Component, Clone, Copy)]
+pub(super) struct WorldGenerationModeButton(pub(super) WorldGenerationMode);
+
+#[derive(Component)]
+pub(super) struct SpawnStructuresToggle;
+
+#[derive(Component)]
+pub(super) struct SpawnStructuresToggleThumb;
+
+#[derive(Component)]
+pub(super) struct SingleBiomeToggle;
+
+#[derive(Component)]
+pub(super) struct SingleBiomeToggleThumb;
+
 type NewWorldGeneralControlInteractions<'w, 's> = Query<
     'w,
     's,
     &'static Interaction,
     (
         Changed<Interaction>,
-        Or<(With<RandomSeedButton>, With<GameModeButton>)>,
+        Or<(
+            With<RandomSeedButton>,
+            With<GameModeButton>,
+            With<WorldGenerationModeButton>,
+            With<SpawnStructuresToggle>,
+            With<SingleBiomeToggle>,
+        )>,
     ),
 >;
 
@@ -136,8 +159,142 @@ pub(super) fn new_world_generation_section(
     (
         settings_layout::group_column(),
         children![
+            world_generation_mode_setting(config, localization, language),
+            spawn_structures_setting(config, localization, language),
+            single_biome_setting(config, localization, language),
             spawn_biome_setting(localization, language),
             biome_size_multiplier_setting(config, localization, language),
+        ],
+    )
+}
+
+fn world_generation_mode_setting(
+    config: &NewWorldConfig,
+    localization: &UiLocalization,
+    language: Language,
+) -> impl Bundle {
+    let mode = config.world_generation().mode();
+    (
+        settings_layout::setting_column(),
+        children![
+            typography::setting_title(
+                localization.text(language, "newWorld.worldType").to_owned()
+            ),
+            typography::caption(
+                localization.text(language, "newWorld.worldType.description").to_owned()
+            ),
+            (
+                Node {
+                    width: percent(100),
+                    flex_direction: FlexDirection::Row,
+                    column_gap: px(8),
+                    ..default()
+                },
+                children![
+                    world_generation_mode_button(
+                        localization.text(language, "newWorld.worldType.normal").to_owned(),
+                        WorldGenerationMode::Normal,
+                        mode,
+                    ),
+                    world_generation_mode_button(
+                        localization.text(language, "newWorld.worldType.flat").to_owned(),
+                        WorldGenerationMode::Flat,
+                        mode,
+                    ),
+                    world_generation_mode_button(
+                        localization.text(language, "newWorld.worldType.void").to_owned(),
+                        WorldGenerationMode::Void,
+                        mode,
+                    ),
+                ],
+            ),
+        ],
+    )
+}
+
+fn world_generation_mode_button(
+    label: String,
+    mode: WorldGenerationMode,
+    selected: WorldGenerationMode,
+) -> impl Bundle {
+    button(
+        label,
+        WorldGenerationModeButton(mode),
+        Val::Auto,
+        COMPACT_CONTROL_HEIGHT,
+        ButtonVariant::from_active(mode == selected),
+    )
+}
+
+fn spawn_structures_setting(
+    config: &NewWorldConfig,
+    localization: &UiLocalization,
+    language: Language,
+) -> impl Bundle {
+    let enabled = config.world_generation().spawn_structures();
+    (
+        worldgen_toggle_row(),
+        children![
+            worldgen_setting_copy(
+                localization.text(language, "newWorld.spawnStructures"),
+                localization.text(language, "newWorld.spawnStructures.description"),
+            ),
+            (
+                Button,
+                SpawnStructuresToggle,
+                toggle::control(enabled),
+                children![(SpawnStructuresToggleThumb, toggle::thumb(enabled))],
+            ),
+        ],
+    )
+}
+
+fn single_biome_setting(
+    config: &NewWorldConfig,
+    localization: &UiLocalization,
+    language: Language,
+) -> impl Bundle {
+    let enabled = config.world_generation().single_biome();
+    (
+        worldgen_toggle_row(),
+        children![
+            worldgen_setting_copy(
+                localization.text(language, "newWorld.singleBiome"),
+                localization.text(language, "newWorld.singleBiome.description"),
+            ),
+            (
+                Button,
+                SingleBiomeToggle,
+                toggle::control(enabled),
+                children![(SingleBiomeToggleThumb, toggle::thumb(enabled))],
+            ),
+        ],
+    )
+}
+
+fn worldgen_toggle_row() -> Node {
+    Node {
+        width: percent(100),
+        flex_direction: FlexDirection::Row,
+        align_items: AlignItems::Center,
+        justify_content: JustifyContent::SpaceBetween,
+        column_gap: px(18),
+        ..default()
+    }
+}
+
+fn worldgen_setting_copy(title: impl Into<String>, description: impl Into<String>) -> impl Bundle {
+    (
+        Node {
+            flex_grow: 1.0,
+            min_width: px(0),
+            flex_direction: FlexDirection::Column,
+            row_gap: px(5),
+            ..default()
+        },
+        children![
+            typography::setting_title(title),
+            typography::caption(description),
         ],
     )
 }
@@ -223,6 +380,39 @@ pub(super) fn handle_new_world_settings_control_focus(
     spawn_biome_dropdown.close();
 }
 
+pub(super) fn handle_world_generation_mode_buttons(
+    interactions: Query<(&Interaction, &WorldGenerationModeButton), Changed<Interaction>>,
+    mut config: ResMut<NewWorldConfig>,
+) {
+    for (interaction, button) in &interactions {
+        if *interaction == Interaction::Pressed
+            && config.world_generation().mode() != button.0
+        {
+            config.set_world_generation_mode(button.0);
+        }
+    }
+}
+
+pub(super) fn handle_spawn_structures_toggle(
+    interactions: Query<&Interaction, (Changed<Interaction>, With<SpawnStructuresToggle>)>,
+    mut config: ResMut<NewWorldConfig>,
+) {
+    if interactions.iter().any(|interaction| *interaction == Interaction::Pressed) {
+        let next = !config.world_generation().spawn_structures();
+        config.set_spawn_structures(next);
+    }
+}
+
+pub(super) fn handle_single_biome_toggle(
+    interactions: Query<&Interaction, (Changed<Interaction>, With<SingleBiomeToggle>)>,
+    mut config: ResMut<NewWorldConfig>,
+) {
+    if interactions.iter().any(|interaction| *interaction == Interaction::Pressed) {
+        let next = !config.world_generation().single_biome();
+        config.set_single_biome(next);
+    }
+}
+
 pub(super) fn handle_seed_focus(
     interactions: Query<&Interaction, (Changed<Interaction>, With<SeedInput>)>,
     config: Res<NewWorldConfig>,
@@ -280,6 +470,8 @@ pub(super) fn handle_new_world_footer(
     keys: Res<ButtonInput<KeyCode>>,
     interactions: Query<(&Interaction, &NewWorldFooterAction), Changed<Interaction>>,
     mut draft: NewWorldDraft,
+    localization: Res<UiLocalization>,
+    language: Res<ActiveLanguage>,
     mut transition: ResMut<ScreenTransition>,
 ) {
     if *game_state.get() != GameState::NewWorld || transition.is_active() {
@@ -306,6 +498,16 @@ pub(super) fn handle_new_world_footer(
     }
 
     if !matches!(action, Some(NewWorldFooterAction::CreateWorld)) {
+        return;
+    }
+
+    if draft.config.world_generation().single_biome() && draft.config.spawn_biome().is_none() {
+        draft.name_feedback.set(
+            localization
+                .text(language.get(), "newWorld.singleBiome.required")
+                .to_owned(),
+        );
+        draft.spawn_biome_dropdown.open();
         return;
     }
 
@@ -342,6 +544,78 @@ pub(super) fn handle_new_world_footer(
     commands.insert_resource(rules);
     commands.insert_resource(WorldLoadMode::New);
     transition.request(ScreenTransitionTarget::game(GameState::Loading));
+}
+
+pub(super) fn sync_world_generation_mode_buttons(
+    config: Res<NewWorldConfig>,
+    mut buttons: Query<
+        (
+            &WorldGenerationModeButton,
+            Ref<Interaction>,
+            &mut ButtonVariant,
+        ),
+    >,
+) {
+    let selected = config.world_generation().mode();
+    for (button, interaction, mut variant) in &mut buttons {
+        if !config.is_changed() && !interaction.is_changed() {
+            continue;
+        }
+        *variant = ButtonVariant::from_active(button.0 == selected);
+    }
+}
+
+pub(super) fn sync_world_generation_toggles(
+    config: Res<NewWorldConfig>,
+    mut structure_toggles: Query<
+        (Ref<Interaction>, &mut BackgroundColor, &mut BorderColor),
+        (With<SpawnStructuresToggle>, Without<SingleBiomeToggle>),
+    >,
+    mut structure_thumbs: Query<
+        &mut Node,
+        (With<SpawnStructuresToggleThumb>, Without<SingleBiomeToggleThumb>),
+    >,
+    mut single_toggles: Query<
+        (Ref<Interaction>, &mut BackgroundColor, &mut BorderColor),
+        (With<SingleBiomeToggle>, Without<SpawnStructuresToggle>),
+    >,
+    mut single_thumbs: Query<
+        &mut Node,
+        (With<SingleBiomeToggleThumb>, Without<SpawnStructuresToggleThumb>),
+    >,
+) {
+    let structures = config.world_generation().spawn_structures();
+    let single = config.world_generation().single_biome();
+
+    for (interaction, background, border) in &mut structure_toggles {
+        if config.is_changed() || interaction.is_changed() {
+            selectable::apply_colors(
+                toggle::colors(structures, *interaction),
+                background,
+                border,
+            );
+        }
+    }
+    for (interaction, background, border) in &mut single_toggles {
+        if config.is_changed() || interaction.is_changed() {
+            selectable::apply_colors(
+                toggle::colors(single, *interaction),
+                background,
+                border,
+            );
+        }
+    }
+
+    if config.is_changed() {
+        let structures_left = px(toggle::thumb_left(structures));
+        for mut thumb in &mut structure_thumbs {
+            thumb.left = structures_left;
+        }
+        let single_left = px(toggle::thumb_left(single));
+        for mut thumb in &mut single_thumbs {
+            thumb.left = single_left;
+        }
+    }
 }
 
 pub(super) fn sync_seed_text(

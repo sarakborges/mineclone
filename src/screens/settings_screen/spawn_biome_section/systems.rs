@@ -100,12 +100,14 @@ pub(in crate::screens::settings_screen) fn populate_spawn_biome_options(
     });
 
     commands.entity(list_entity).with_children(|list| {
-        spawn_option(
-            list,
-            None,
-            content.option_label(None),
-            config.spawn_biome().is_none(),
-        );
+        if !config.world_generation().single_biome() {
+            spawn_option(
+                list,
+                None,
+                content.option_label(None),
+                config.spawn_biome().is_none(),
+            );
+        }
 
         for (biome_id, label) in &options {
             spawn_option(
@@ -210,6 +212,9 @@ pub(in crate::screens::settings_screen) fn handle_spawn_biome_option_buttons(
             continue;
         }
 
+        if option.biome_id.is_none() && config.world_generation().single_biome() {
+            continue;
+        }
         if config.spawn_biome() != option.biome_id.as_deref() {
             config.set_spawn_biome(option.biome_id.clone());
         }
@@ -301,7 +306,14 @@ pub(in crate::screens::settings_screen) fn sync_spawn_biome_selected_label(
         return;
     }
 
-    let next = content.option_label(config.spawn_biome());
+    let next = if config.world_generation().single_biome() && config.spawn_biome().is_none() {
+        content
+            .localization
+            .text(content.language.get(), "newWorld.spawnBiome.select")
+            .to_owned()
+    } else {
+        content.option_label(config.spawn_biome())
+    };
     for mut text in &mut labels {
         if text.0 != next {
             text.0 = next.clone();
@@ -352,7 +364,7 @@ pub(in crate::screens::settings_screen) fn sync_spawn_biome_options(
     let query = editable_value(editor);
     let query_changed = previous_query.as_str() != query;
     let _dropdown_open = search.state.is_open();
-    let filter_changed = query_changed || content.inputs_changed();
+    let filter_changed = query_changed || content.inputs_changed() || config.is_changed();
     let style_changed = config.is_changed() || !changed_interactions.is_empty();
     if !filter_changed && !style_changed {
         return;
@@ -371,8 +383,9 @@ pub(in crate::screens::settings_screen) fn sync_spawn_biome_options(
     for (option, interaction, mut node, background, border) in &mut options {
         if let Some(normalized_query) = normalized_query.as_deref() {
             let option_label = content.option_label(option.biome_id.as_deref());
-            let visible = normalized_query.is_empty()
-                || option_label.to_lowercase().contains(normalized_query);
+            let visible = !(config.world_generation().single_biome() && option.biome_id.is_none())
+                && (normalized_query.is_empty()
+                    || option_label.to_lowercase().contains(normalized_query));
             let next_display = if visible {
                 Display::Flex
             } else {
