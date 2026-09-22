@@ -558,6 +558,7 @@ struct QueueRebuildContext<'a> {
     structure_sets: &'a StructureSetRegistry,
     biome_field: &'a BiomeField,
     feature_fields: &'a WorldFeatureFields,
+    world_generation: super::WorldGenerationSettings,
 }
 
 #[derive(SystemParam)]
@@ -618,6 +619,7 @@ pub(super) fn stream_chunks(
             structure_sets: &generation.structure_sets,
             biome_field: &content.biome_field,
             feature_fields: &generation.feature_fields,
+            world_generation: *generation.world_generation,
         };
         rebuild_queue(
             &mut work.state,
