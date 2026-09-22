@@ -28,7 +28,7 @@ pub struct ChunkFluidMesh {
     pub mesh: Mesh,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 struct FluidFaceHeights {
     h00: f32,
     h10: f32,
@@ -249,13 +249,7 @@ where
         }
 
         let tint = tint_at(world_voxel, cell.fluid_id);
-        let heights = fluid_face_heights(
-            world,
-            chunk,
-            local_voxel,
-            world_voxel,
-            cell.fluid_id,
-        );
+        let mut heights = None::<FluidFaceHeights>;
         let source_block_srgb = surface_block_srgb_with_cache(
             lighting_cache,
             world_voxel,
@@ -283,6 +277,19 @@ where
                     face,
                     source_block_srgb,
                 );
+            let face_heights = if face == BlockFace::Bottom {
+                FluidFaceHeights::default()
+            } else {
+                *heights.get_or_insert_with(|| {
+                    fluid_face_heights(
+                        world,
+                        chunk,
+                        local_voxel,
+                        world_voxel,
+                        cell.fluid_id,
+                    )
+                })
+            };
             let neighbor_mask = neighbor_samples[index]
                 .and_then(|(block, _)| block)
                 .filter(|block| MicroblockMask::is_modified(*block))
@@ -295,7 +302,7 @@ where
                     x as f32,
                     y as f32,
                     z as f32,
-                    heights,
+                    face_heights,
                     source_mask,
                     neighbor_mask,
                     tint,
@@ -309,7 +316,7 @@ where
                         x as f32,
                         y as f32,
                         z as f32,
-                        heights,
+                        face_heights,
                     ),
                     face.normal(),
                     VOXEL_FACE_UVS,
