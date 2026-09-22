@@ -16,7 +16,7 @@ const MESHLETS_PER_AXIS: usize = CHUNK_SIZE / CHUNK_MESHLET_EDGE;
 const MESHLET_COUNT: usize =
     MESHLETS_PER_AXIS * MESHLETS_PER_AXIS * MESHLETS_PER_AXIS;
 
-const _: () = assert!(CHUNK_SIZE % CHUNK_MESHLET_EDGE == 0);
+const _: () = assert!(CHUNK_SIZE.is_multiple_of(CHUNK_MESHLET_EDGE));
 const _: () = assert!(MESHLETS_PER_AXIS == 2);
 const _: () = assert!(MESHLET_COUNT == 8);
 
@@ -197,6 +197,7 @@ fn meshlet_index(x: usize, y: usize, z: usize) -> usize {
     x + z * MESHLETS_PER_AXIS + y * MESHLETS_PER_AXIS * MESHLETS_PER_AXIS
 }
 
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum VoxelMeshPatch {
     Unchanged,
     Changed(Mesh),
@@ -282,7 +283,7 @@ impl MeshArrays {
     }
 
     fn has_quad_in(&self, dirty: ChunkMeshletMask) -> Option<bool> {
-        if self.positions.len() % 4 != 0 || self.indices.len() % 6 != 0 {
+        if !self.positions.len().is_multiple_of(4) || !self.indices.len().is_multiple_of(6) {
             return None;
         }
         let quad_count = self.positions.len() / 4;
