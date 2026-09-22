@@ -10,10 +10,7 @@ use crate::{
         settings_state::SettingsState,
     },
     localization::{ActiveLanguage, UiLocalization},
-    player::{
-        character_info::CharacterInfoState,
-        inventory::InventoryState,
-    },
+    player::inventory::InventoryState,
     ui::typography,
 };
 
@@ -91,11 +88,7 @@ fn spawn_player_hud(
                 row_gap: px(8),
                 ..default()
             },
-            player_hud_visibility(
-                *pause_state.get(),
-                *settings_state.get(),
-                CharacterInfoState::Closed,
-            ),
+            player_hud_visibility(*pause_state.get(), *settings_state.get()),
             GlobalZIndex(10),
             Pickable::IGNORE,
             DespawnOnExit(GameState::Gameplay),
@@ -119,15 +112,8 @@ fn spawn_player_hud(
         });
 }
 
-fn player_hud_visibility(
-    pause: PauseState,
-    settings: SettingsState,
-    character_info: CharacterInfoState,
-) -> Visibility {
-    if pause == PauseState::Paused
-        || settings == SettingsState::Open
-        || character_info == CharacterInfoState::Open
-    {
+fn player_hud_visibility(pause: PauseState, settings: SettingsState) -> Visibility {
+    if pause == PauseState::Paused || settings == SettingsState::Open {
         Visibility::Hidden
     } else {
         Visibility::Visible
@@ -137,14 +123,9 @@ fn player_hud_visibility(
 fn sync_player_hud_visibility(
     pause: Res<State<PauseState>>,
     settings: Res<State<SettingsState>>,
-    character_info: Res<State<CharacterInfoState>>,
     mut roots: Query<&mut Visibility, With<PlayerHudRoot>>,
 ) {
-    let next = player_hud_visibility(
-        *pause.get(),
-        *settings.get(),
-        *character_info.get(),
-    );
+    let next = player_hud_visibility(*pause.get(), *settings.get());
     for mut visibility in &mut roots {
         if *visibility != next {
             *visibility = next;
