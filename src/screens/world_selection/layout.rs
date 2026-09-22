@@ -8,7 +8,7 @@ use crate::{
     ui::{
         button::{button, ButtonVariant, COMPACT_CONTROL_HEIGHT},
         cosmic_background::{self, STAR_FIELD},
-        screen, scrollbar, surface, typography,
+        screen, scrollbar, surface, theme, typography,
     },
     world::save_catalog::WorldSummary,
 };
@@ -34,6 +34,7 @@ pub(super) fn spawn_world_entry(
     language: Language,
     dimensions: &DimensionRegistry,
     biomes: &BiomeRegistry,
+    thumbnail: Option<Handle<Image>>,
 ) {
     let id = world.id.clone();
     let dimension = dimensions
@@ -63,6 +64,10 @@ pub(super) fn spawn_world_entry(
             ..default()
         })
         .with_children(|row| {
+            if world.compatible {
+                spawn_world_thumbnail(row, thumbnail.clone());
+            }
+
             row.spawn(Node {
                 flex_grow: 1.0,
                 min_width: px(0),
@@ -146,6 +151,27 @@ pub(super) fn spawn_world_entry(
             });
         });
     });
+}
+
+fn spawn_world_thumbnail(
+    parent: &mut ChildSpawnerCommands,
+    thumbnail: Option<Handle<Image>>,
+) {
+    let node = Node {
+        width: px(256),
+        height: px(144),
+        flex_shrink: 0.0,
+        ..default()
+    };
+    if let Some(image) = thumbnail {
+        parent.spawn((ImageNode::new(image), node, Pickable::IGNORE));
+    } else {
+        parent.spawn((
+            node,
+            BackgroundColor(theme::SURFACE_INSET),
+            Pickable::IGNORE,
+        ));
+    }
 }
 
 fn metadata_row() -> Node {
