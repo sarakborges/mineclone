@@ -31,6 +31,14 @@ const REMESH_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
 const MAX_REMESH_DISPATCH_ATTEMPTS_PER_FRAME: usize = 4;
 const MAX_REMESH_RESULTS_COLLECTED_PER_FRAME: usize = 4;
 
+struct RemeshDispatchContext<'a> {
+    world: &'a VoxelWorld,
+    render_pool: &'a ChunkRenderPool,
+    async_work: &'a ChunkAsyncWorkLimiter,
+    center: Option<IVec3>,
+    deadline: Instant,
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn process_chunk_remesh_queue(
     content: ChunkContent,
@@ -61,14 +69,16 @@ pub(super) fn process_chunk_remesh_queue(
     }
 
     dispatch_remesh_tasks(
-        &world,
-        &renderer.pool,
+        RemeshDispatchContext {
+            world: &world,
+            render_pool: &renderer.pool,
+            async_work: &async_work,
+            center: streaming.center(),
+            deadline: frame_budget.deadline(),
+        },
         &mut queue,
         &mut tasks,
         &mut deferred,
-        &async_work,
-        streaming.center(),
-        frame_budget.deadline(),
     );
 }
 
@@ -154,17 +164,13 @@ fn collect_completed_remesh_tasks(
 }
 
 fn dispatch_remesh_tasks(
-    world: &VoxelWorld,
-    render_pool: &ChunkRenderPool,
+    context: RemeshDispatchContext<'_>,
     queue: &mut ChunkRemeshQueue,
     tasks: &mut ChunkRemeshTasks,
     deferred: &mut Vec<(IVec3, ChunkRemeshTaskKind, ChunkMeshletMask)>,
-    async_work: &ChunkAsyncWorkLimiter,
-    center: Option<IVec3>,
-    deadline: Instant,
 ) {
     let mut budget = FrameWorkBudget::new(REMESH_TASK_DISPATCH_BUDGET, 1)
-        .with_global_deadline(deadline)
+        .with_global_deadline(context.deadline)
         .with_maximum_items(MAX_REMESH_DISPATCH_ATTEMPTS_PER_FRAME);
     deferred.clear();
     let mut snapshots = HashMap::<(IVec3, ChunkMeshletMask), ChunkMeshSnapshot>::new();
@@ -181,7 +187,12 @@ fn dispatch_remesh_tasks(
         }
 
         let Some((coord, kind, meshlets)) =
-            queue.pop_renderable_background(render_pool, center, allow_terrain, allow_fluid)
+            queue.pop_renderable_background(
+                context.render_pool,
+                context.center,
+                allow_terrain,
+                allow_fluid,
+            )
         else {
             break;
         };
@@ -201,9 +212,9 @@ fn dispatch_remesh_tasks(
         } else {
             let Some(captured) =
                 ChunkMeshSnapshot::capture_with_neighbor_filter_and_meshlets(
-                    world,
+                    context.world,
                     coord,
-                    |neighbor| render_pool.contains(neighbor),
+                    |neighbor| context.render_pool.contains(neighbor),
                     meshlets,
                 )
             else {
@@ -212,7 +223,7 @@ fn dispatch_remesh_tasks(
             snapshots.insert(snapshot_key, captured.clone());
             captured
         };
-        if !tasks.schedule(coord, kind, meshlets, snapshot, async_work) {
+        if !tasks.schedule(coord, kind, meshlets, snapshot, context.async_work) {
             deferred.push((coord, kind, meshlets));
             // The per-kind and per-coordinate checks passed above, so shared
             // executor capacity is exhausted. Preserve the remaining queue.
