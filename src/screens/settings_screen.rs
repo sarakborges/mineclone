@@ -126,31 +126,39 @@ impl Plugin for SettingsScreenPlugin {
                 Update,
                 (
                     (
-                        apply_pending_section_scroll,
-                        handle_section_buttons,
-                        close_spawn_biome_dropdown_outside,
-                        close_target_block_position_dropdown_outside,
-                        close_language_dropdown_outside,
-                        handle_seed_focus,
-                        handle_biome_size_multiplier_input
-                            .run_if(in_state(GameState::NewWorld)),
-                        handle_render_distance_input,
-                        handle_world_name_focus.run_if(in_state(GameState::NewWorld)),
-                        handle_new_world_settings_control_focus
-                            .run_if(in_state(GameState::NewWorld)),
-                        handle_random_seed,
-                        handle_spawn_biome_dropdown_button.run_if(in_state(GameState::NewWorld)),
-                        handle_spawn_biome_search_focus.run_if(in_state(GameState::NewWorld)),
-                        focus_spawn_biome_search_frame.run_if(in_state(GameState::NewWorld)),
-                        handle_spawn_biome_option_buttons.run_if(in_state(GameState::NewWorld)),
-                        handle_game_mode_buttons,
-                        handle_world_generation_mode_buttons.run_if(in_state(GameState::NewWorld)),
-                        handle_spawn_structures_toggle.run_if(in_state(GameState::NewWorld)),
-                        handle_single_biome_toggle.run_if(in_state(GameState::NewWorld)),
-                        handle_world_generation_feature_toggles
-                            .run_if(in_state(GameState::NewWorld)),
-                        handle_keybind_buttons,
-                        handle_keybind_capture,
+                        (
+                            apply_pending_section_scroll,
+                            handle_section_buttons,
+                            close_spawn_biome_dropdown_outside,
+                            close_target_block_position_dropdown_outside,
+                            close_language_dropdown_outside,
+                            handle_seed_focus,
+                            handle_biome_size_multiplier_input
+                                .run_if(in_state(GameState::NewWorld)),
+                            handle_render_distance_input,
+                            handle_world_name_focus.run_if(in_state(GameState::NewWorld)),
+                            handle_new_world_settings_control_focus
+                                .run_if(in_state(GameState::NewWorld)),
+                            handle_random_seed,
+                        )
+                            .chain(),
+                        (
+                            handle_spawn_biome_dropdown_button
+                                .run_if(in_state(GameState::NewWorld)),
+                            handle_spawn_biome_search_focus.run_if(in_state(GameState::NewWorld)),
+                            focus_spawn_biome_search_frame.run_if(in_state(GameState::NewWorld)),
+                            handle_spawn_biome_option_buttons.run_if(in_state(GameState::NewWorld)),
+                            handle_game_mode_buttons,
+                            handle_world_generation_mode_buttons
+                                .run_if(in_state(GameState::NewWorld)),
+                            handle_spawn_structures_toggle.run_if(in_state(GameState::NewWorld)),
+                            handle_single_biome_toggle.run_if(in_state(GameState::NewWorld)),
+                            handle_world_generation_feature_toggles
+                                .run_if(in_state(GameState::NewWorld)),
+                            handle_keybind_buttons,
+                            handle_keybind_capture,
+                        )
+                            .chain(),
                     )
                         .chain(),
                     (
@@ -179,34 +187,40 @@ impl Plugin for SettingsScreenPlugin {
             .add_systems(
                 Update,
                 (
-                    populate_spawn_biome_options,
-                    sync_section_ui,
-                    sync_game_mode_buttons,
-                    sync_world_generation_mode_buttons.run_if(in_state(GameState::NewWorld)),
-                    sync_world_generation_toggles.run_if(in_state(GameState::NewWorld)),
-                    sync_world_generation_feature_toggles
-                        .run_if(in_state(GameState::NewWorld)),
-                    sync_keybinds_section,
-                    sync_language_dropdown,
-                    sync_hide_hints_toggle,
-                    sync_hint_toggles,
-                    sync_target_block_position_dropdown,
-                    sync_target_block_position_options,
-                    sync_spawn_biome_dropdown_state.run_if(in_state(GameState::NewWorld)),
-                    sync_spawn_biome_search_frame.run_if(in_state(GameState::NewWorld)),
-                    sync_spawn_biome_selected_label,
-                    sync_spawn_biome_option_labels,
-                    sync_spawn_biome_options.run_if(in_state(GameState::NewWorld)),
-                    sync_world_name_view.run_if(in_state(GameState::NewWorld)),
-                    sync_seed_text,
-                    sync_biome_size_multiplier_input.run_if(in_state(GameState::NewWorld)),
-                    sync_biome_size_multiplier_slider_thumb
-                        .run_if(in_state(GameState::NewWorld)),
-                    sync_ticks_per_second_text,
-                    sync_boolean_game_rule_toggles,
-                    sync_render_distance_text,
-                    sync_render_distance_input,
-                    sync_render_distance_slider_thumb,
+                    (
+                        populate_spawn_biome_options,
+                        sync_section_ui,
+                        sync_game_mode_buttons,
+                        sync_world_generation_mode_buttons.run_if(in_state(GameState::NewWorld)),
+                        sync_world_generation_toggles.run_if(in_state(GameState::NewWorld)),
+                        sync_world_generation_feature_toggles
+                            .run_if(in_state(GameState::NewWorld)),
+                        sync_keybinds_section,
+                        sync_language_dropdown,
+                        sync_hide_hints_toggle,
+                        sync_hint_toggles,
+                        sync_target_block_position_dropdown,
+                        sync_target_block_position_options,
+                        sync_spawn_biome_dropdown_state.run_if(in_state(GameState::NewWorld)),
+                    )
+                        .chain(),
+                    (
+                        sync_spawn_biome_search_frame.run_if(in_state(GameState::NewWorld)),
+                        sync_spawn_biome_selected_label,
+                        sync_spawn_biome_option_labels,
+                        sync_spawn_biome_options.run_if(in_state(GameState::NewWorld)),
+                        sync_world_name_view.run_if(in_state(GameState::NewWorld)),
+                        sync_seed_text,
+                        sync_biome_size_multiplier_input.run_if(in_state(GameState::NewWorld)),
+                        sync_biome_size_multiplier_slider_thumb
+                            .run_if(in_state(GameState::NewWorld)),
+                        sync_ticks_per_second_text,
+                        sync_boolean_game_rule_toggles,
+                        sync_render_distance_text,
+                        sync_render_distance_input,
+                        sync_render_distance_slider_thumb,
+                    )
+                        .chain(),
                 )
                     .chain()
                     .in_set(SettingsScreenSet::Sync),
