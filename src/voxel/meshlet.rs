@@ -228,7 +228,16 @@ pub(crate) fn patch_voxel_mesh(
         return Some(VoxelMeshPatch::Unchanged);
     }
 
-    let mut output = MeshArrays::default();
+    let replacement_vertices = replacement
+        .as_ref()
+        .map_or(0, |replacement| replacement.positions.len());
+    let replacement_indices = replacement
+        .as_ref()
+        .map_or(0, |replacement| replacement.indices.len());
+    let mut output = MeshArrays::with_capacity(
+        existing.positions.len() + replacement_vertices,
+        existing.indices.len() + replacement_indices,
+    );
     existing.append_filtered(&mut output, dirty, false)?;
 
     if let Some(replacement) = &replacement {
@@ -248,6 +257,16 @@ struct MeshArrays {
 }
 
 impl MeshArrays {
+    fn with_capacity(vertices: usize, indices: usize) -> Self {
+        Self {
+            positions: Vec::with_capacity(vertices),
+            uvs: Vec::with_capacity(vertices),
+            payloads: Vec::with_capacity(vertices),
+            colors: Vec::with_capacity(vertices),
+            indices: Vec::with_capacity(indices),
+        }
+    }
+
     fn from_mesh(mesh: &Mesh) -> Option<Self> {
         if !mesh.asset_usage.contains(RenderAssetUsages::MAIN_WORLD) {
             return None;
