@@ -192,6 +192,9 @@ impl HudSettings {
     }
 }
 
+#[derive(Component)]
+pub(crate) struct GameplayUiCamera;
+
 pub(crate) struct HudPlugin;
 
 impl Plugin for HudPlugin {
@@ -225,6 +228,7 @@ impl Plugin for HudPlugin {
 
 fn spawn_gameplay_ui_camera(mut commands: Commands) {
     commands.spawn((
+        GameplayUiCamera,
         Camera2d,
         Camera {
             order: UI_CAMERA_ORDER,
