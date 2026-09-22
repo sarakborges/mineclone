@@ -126,13 +126,10 @@ where
     let mut active_by_z: [Vec<u32>; CHUNK_SIZE] =
         std::array::from_fn(|_| Vec::with_capacity(plane_capacity));
 
-    // Resolve selected chunk cells and definitions once. The six directional
-    // meshing passes reuse these entries instead of re-reading storage and
-    // searching the block registry for every face.
-    meshlets.for_each_voxel(|x, y, z| {
-        let Some(cell) = chunk.cell_ref_at(x as i32, y as i32, z as i32) else {
-            return;
-        };
+    // Resolve selected chunk cells and definitions once. Sparse chunks iterate
+    // only occupied palette positions; dense chunks keep the straight meshlet
+    // scan to avoid bitset iteration overhead.
+    let mut collect_source = |x: usize, y: usize, z: usize, cell: &VoxelCell| {
         let block = block_lookup.get(cell.block_id);
         let block_key = (cell.block_id.as_ptr() as usize, cell.block_id.len());
         let block_visual_index = if let Some((_, index)) = block_visual_indices
@@ -190,7 +187,22 @@ where
             texture_table,
         };
         emit_sculpted_faces(&surface, &mut block_lookup, &mut buffers);
-    });
+    };
+
+    let selected_voxel_count = meshlets.selected_voxel_count();
+    if chunk.block_count() * 2 < selected_voxel_count {
+        chunk.visit_block_voxels(|x, y, z, cell| {
+            if meshlets.contains_voxel(x, y, z) {
+                collect_source(x, y, z, cell);
+            }
+        });
+    } else {
+        meshlets.for_each_voxel(|x, y, z| {
+            if let Some(cell) = chunk.cell_ref_at(x as i32, y as i32, z as i32) {
+                collect_source(x, y, z, cell);
+            }
+        });
+    }
 
     // Normal voxels are processed face-by-face so compatible exposed faces can
     // be merged into large rectangles. Only occupied, non-sculpted voxels are
