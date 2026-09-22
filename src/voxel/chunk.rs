@@ -1408,6 +1408,18 @@ mod tests {
         assert_eq!(chunk.sample_local(1, 2, 3).unwrap().0, Some(cell));
         assert_eq!(chunk.sample_local(4, 5, 6).unwrap().1, Some(fluid));
         assert_eq!(chunk.sample_local(7, 8, 9).unwrap().2, light);
+        assert_eq!(
+            chunk.sample_local_at(1, 2, 3),
+            chunk.sample_local(1, 2, 3).unwrap(),
+        );
+        assert_eq!(
+            chunk.sample_local_at(4, 5, 6),
+            chunk.sample_local(4, 5, 6).unwrap(),
+        );
+        assert_eq!(
+            chunk.sample_local_at(7, 8, 9),
+            chunk.sample_local(7, 8, 9).unwrap(),
+        );
         assert!(chunk.sample_local(-1, 0, 0).is_none());
     }
 
