@@ -5,7 +5,7 @@ use bevy::prelude::*;
 
 use crate::player::{
     camera::PlayerCameraPlugin, hotbar::PlayerHotbarPlugin, inventory::PlayerInventoryPlugin,
-    movement::PlayerMovementPlugin, viewmodel::PlayerViewModelPlugin,
+    model::PlayerModelPlugin, movement::PlayerMovementPlugin, viewmodel::PlayerViewModelPlugin,
 };
 use pause::PausePlugin;
 
@@ -17,6 +17,7 @@ impl Plugin for GameplayPlugin {
             PlayerInventoryPlugin,
             PausePlugin,
             PlayerHotbarPlugin,
+            PlayerModelPlugin,
             PlayerViewModelPlugin,
             PlayerCameraPlugin,
             PlayerMovementPlugin,

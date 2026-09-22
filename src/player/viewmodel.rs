@@ -7,8 +7,8 @@ use bevy::prelude::*;
 
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, resource_systems::reset_resource},
+    player::camera::CameraPerspective,
     targeting::block::BlockTargetingSet,
-    ui::visibility::set_visibility,
 };
 
 pub(crate) use animation::ViewModelAnimation;
@@ -35,14 +35,6 @@ impl Plugin for PlayerViewModelPlugin {
                     .chain(),
             )
             .add_systems(
-                OnEnter(PauseState::Paused),
-                set_visibility::<PlayerViewModel, false>,
-            )
-            .add_systems(
-                OnEnter(PauseState::Running),
-                set_visibility::<PlayerViewModel, true>,
-            )
-            .add_systems(
                 Update,
                 (
                     spawn_viewmodel,
@@ -53,10 +45,30 @@ impl Plugin for PlayerViewModelPlugin {
                     sync_held_brush,
                     sync_held_chisel,
                     animate_viewmodel,
+                    sync_viewmodel_visibility,
                 )
                     .chain()
                     .after(BlockTargetingSet::PlacementState)
                     .run_if(in_state(GameState::Gameplay)),
             );
+    }
+}
+
+
+fn sync_viewmodel_visibility(
+    perspective: Res<CameraPerspective>,
+    pause: Res<State<PauseState>>,
+    mut viewmodels: Query<&mut Visibility, With<PlayerViewModel>>,
+) {
+    let next = if !perspective.is_third_person() && *pause.get() == PauseState::Running {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
+
+    for mut visibility in &mut viewmodels {
+        if *visibility != next {
+            *visibility = next;
+        }
     }
 }

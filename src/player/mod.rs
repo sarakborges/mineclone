@@ -3,6 +3,7 @@ pub(crate) mod game_mode;
 pub(crate) mod hotbar;
 pub(crate) mod inventory;
 pub(crate) mod movement;
+pub(crate) mod model;
 pub(crate) mod player_id;
 pub(crate) mod save;
 pub(crate) mod viewmodel;
