@@ -155,15 +155,11 @@ pub(super) fn collect_built_chunk_meshes(
             continue;
         }
 
-        let next_priority = chunk_load_priority(next_coord, center, movement_direction);
-        if work
-            .state
-            .nearest_missing_render_priority(&renderer.pool)
-            .is_some_and(|priority| priority < next_priority)
-        {
-            break;
-        }
-
+        // Keep nearest-first strict within the mesh stage, but do not let a
+        // closer chunk that is still in generation/settling block publication
+        // of already-built meshes. The selected pending mesh remains the
+        // nearest mesh-stage candidate and must be ready before any farther
+        // pending mesh can publish.
         let Some(completed) = work.mesh_tasks.poll_ready_by_key(|coord| {
             chunk_load_priority(coord, center, movement_direction)
         }) else {
