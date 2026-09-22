@@ -74,16 +74,6 @@ impl ChunkMeshDependencies {
             .is_empty()
     }
 
-    pub(crate) fn needs_initial_catchup_with(
-        &self,
-        world: &VoxelWorld,
-        neighbor_is_visible: impl FnMut(IVec3) -> bool,
-    ) -> bool {
-        !self
-            .initial_catchup_meshlets_with(world, neighbor_is_visible)
-            .is_empty()
-    }
-
     pub(crate) fn initial_catchup_meshlets_with(
         &self,
         world: &VoxelWorld,
