@@ -62,7 +62,7 @@ fn spawn_held_dynamic_light(
                     intensity,
                     range: HELD_LIGHT_RANGE,
                     radius: HELD_LIGHT_RADIUS,
-                    shadow_maps_enabled: true,
+                    shadow_maps_enabled: visibility == Visibility::Visible,
                     ..default()
                 },
                 Transform::from_translation(HELD_LIGHT_OFFSET),
@@ -98,6 +98,10 @@ fn sync_held_dynamic_light(
         }
         if light.intensity != intensity {
             light.intensity = intensity;
+        }
+        let shadows_enabled = next_visibility == Visibility::Visible;
+        if light.shadow_maps_enabled != shadows_enabled {
+            light.shadow_maps_enabled = shadows_enabled;
         }
         if *visibility != next_visibility {
             *visibility = next_visibility;
