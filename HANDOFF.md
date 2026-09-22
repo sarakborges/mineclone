@@ -9574,4 +9574,5 @@ HEAD funcional 645293d6ffe8baf19df4ac6c6dab2eef6dcea477:
 - Started a prioritized rendering/meshing/remeshing/fluid/shadow performance pass on `develop`.
 - First confirmed hotspot removed: the camera-attached held `PointLight` no longer enables omnidirectional shadow maps. Voxel terrain already receives the held-light contribution through `TerrainLightingBuffer`; retaining Bevy point-light shadows duplicated expensive continuously-changing shadow work. The point light remains for non-terrain receivers, with `shadow_maps_enabled: false`.
 - Removed the now-unused global `PointLightShadowMap` override from the held-light plugin.
+- Root `VERSION` corrected from `0.50.18` to `0.50.19` for this functional block (`27a1caab45e2b1b2ae8ccb8a0cd5d4203ddf550b`).
 - Next priorities: validate CI, then inspect chunk mesh publication/allocation churn, remesh invalidation/coalescing, fluid remesh churn, and directional-shadow quality/cost in that order unless measurements indicate a stronger bottleneck.
