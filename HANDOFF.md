@@ -10956,3 +10956,24 @@ As transições de voo foram refinadas:
 Commit funcional: `da0f194e2b80253e555432f84aa7c893c4535f0b`.
 CI push `35763370536`: **verde** (localizações, Clippy rigoroso e cargo check).
 VERSION: `0.50.78`.
+
+
+## 2026-09-22 — B0001 após câmera única
+
+A migração para uma única `GameplayWorldCamera` introduziu um conflito Bevy
+B0001 em `sync_perspective_camera`: o system lia `Transform` do player e
+também mutava `Transform` da câmera sem filtros que provassem ao ECS que as
+queries eram disjuntas.
+
+A correção adicionou filtros explícitos:
+- player: `With<PlayerEntity> + Without<GameplayWorldCamera>`;
+- câmera: `With<GameplayWorldCamera> + Without<PlayerEntity>`.
+
+Os tipos complexos foram extraídos para aliases para manter o Clippy rigoroso
+sem `#[allow]`.
+
+Commits:
+- fix funcional: `d9c4bde65d4f40d39dbde6bcf3b06f5993f70242`;
+- ajuste de lint: `62360dd81e64508ca31c84a13e5d44dbfc459db9`.
+
+CI push `35767423349`: **verde** (localizações, Clippy rigoroso e cargo check).
