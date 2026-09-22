@@ -378,7 +378,7 @@ fn sync_player_model(
 
         model_transform.translation =
             player_transform.translation - Vec3::Y * PLAYER_EYE_HEIGHT;
-        model_transform.rotation = Quat::from_rotation_y(camera.yaw);
+        model_transform.rotation = Quat::from_rotation_y(camera.yaw + std::f32::consts::PI);
 
         state.hold_seconds = (state.hold_seconds - time.delta_secs()).max(0.0);
 
