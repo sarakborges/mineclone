@@ -36,9 +36,6 @@ const VIEW_MODEL_RENDER_LAYER: usize = 1;
 pub(super) struct ViewModelArm;
 
 #[derive(Component)]
-pub(super) struct ViewModelCamera;
-
-#[derive(Component)]
 pub(super) struct ViewModelArmScene(Handle<Gltf>);
 
 #[derive(Component)]
@@ -147,7 +144,6 @@ pub(super) fn spawn_viewmodel(
 
         commands.entity(camera).with_children(|camera| {
             camera.spawn((
-                ViewModelCamera,
                 Camera3d::default(),
                 Camera {
                     order: VIEW_MODEL_CAMERA_ORDER,
