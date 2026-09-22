@@ -1,4 +1,289 @@
 # HANDOFF — Asteria / Mineclone
+## Checkpoint 181 — 2026-09-21/22: rendering/meshing overhaul + aggressive renderer pass [IN PROGRESS]
+
+### Context / constraints
+
+Esta investigação começou por dois sintomas relacionados:
+
+- chunks próximos não podiam perder prioridade para chunks distantes;
+- FPS/renderização de chunks havia regredido fortemente, com fog permanecendo perto demais porque o renderer não acompanhava o streaming.
+
+Contrato visual importante: **render distance configurado continua sendo a verdade visual**. Não mascarar problemas de performance reduzindo secretamente a distância efetiva, aproximando fog ou deixando de renderizar chunks que deveriam estar visíveis.
+
+Regra de processo atual: **não rodar tests/CI sem pedido explícito**. As mudanças abaixo receberam revisão estática incremental, mas este checkpoint NÃO significa compile/test/CI-confirmed.
+
+### Prioridade de chunks
+
+A prioridade foi corrigida nos dois estágios:
+
+- geração: distância horizontal agora vence direção do movimento;
+- initial mesh/ready: distância também vence direção;
+- chunks críticos/imediatos continuam primeiro;
+- direção do movimento virou desempate/preload, não prioridade superior à proximidade.
+
+Commits iniciais desse ajuste:
+
+- `f0f7b54dc77714988543ea3913de854d455e2408` — nearby chunks before movement direction no ready/initial mesh;
+- `04ef838b796846e9e10a9685d2a2ddb5e9f8803f` — generation distance before movement direction;
+- `8d52c2390e6c568e88f4b06ce0ba5064e846adfb` — alinhamento do teste com visible radius.
+
+Observação ainda válida: geração é assíncrona. Mesmo quando tasks são **agendadas** nearest-first, uma task distante pode terminar antes de uma próxima se o custo do chunk variar. Se runtime ainda mostrar buracos estritamente fora de ordem, investigar gating por distância/ring no **publish**, não voltar a privilegiar direção.
+
+### Correções de regressão de residency / frame pressure
+
+Foram removidas duas regressões que estavam ampliando muito o custo em RD alto:
+
+- hide margin deixou de crescer proporcionalmente de forma exagerada;
+- mesh residency deixou de escalar quadraticamente para centenas de MiB em RD24;
+- streaming/meshing voltaram a respeitar o `WorldFrameWorkBudget`;
+- diagnostics ganharam contagem de render entities, remesh queues/tasks e pressão do renderer.
+
+Principais commits dessa base:
+
+- `aed151acdd97314c5a308d885a465941792d7907` — visibility hysteresis menor;
+- `9648401c4cd2d892e86271c1f4afd095711144a2` — residency fixa 192/160/128 MiB;
+- `0819289f9f18736aaff028057d297c4a98ea11a6`, `7fd85a17eeb4754271d7195c277c83dc0554c375`, `3775ff31853bb3264386b886e80f27b2966b022a` — frame deadline restaurado;
+- `0325cb7fb911985c96f25f2138c7ac39620f2531` / `900198db0bde511bb7d97e2ec7cfa36829297bf0` — remesh coalescing/diagnostics;
+- `7b8d8ebcd402834ecf3f2e39fc252ecf2b351e01` — stale remesh outputs não são enviados ao GPU;
+- `9c39e938177a5f9008eec846327c8a76ec116117` / `3e9007d21f58a3c028a3a560d211aa39f4011edc` — render entity/remesh diagnostics.
+
+### Partial remesh / meshlets 8³
+
+A maior mudança de CPU foi tornar remesh local de verdade:
+
+- terrain, fluid, chisel/layers e lighting invalidation usam `ChunkMeshletMask` 8³;
+- partial remesh não escaneia mais os 4096 voxels do chunk inteiro;
+- snapshot de partial remesh captura apenas os halo chunks realmente necessários pelo meshlet;
+- initial catchup acumula máscara exata em vez de promover automaticamente para `ALL`;
+- chunk load/unload invalida apenas os boundary meshlets que encostam no halo alterado;
+- dependency revision de conteúdo também foi estreitada à máscara dirty;
+- partial remesh evita materializar o shell 18³ completo quando não é full rebuild;
+- tasks de remesh/initial mesh obsoletas são canceladas quando a render residency termina.
+
+O patch de mesh preserva handles/entities quando possível e troca apenas os assets tocados. CPU mesh data é explicitamente mantida com `MAIN_WORLD | RENDER_WORLD` para tornar esse patch seguro.
+
+### Shared async work / throughput
+
+Generation, initial mesh e remesh deixaram de possuir limites independentes capazes de saturar juntos o `AsyncComputeTaskPool`.
+
+Existe agora um `ChunkAsyncWorkLimiter` compartilhado:
+
+- generation não pode consumir a última capacidade disponível para render/meshing;
+- initial mesh tem capacidade reservada;
+- limiter adapta concorrência a frame pressure durante gameplay;
+- o piso adaptativo preserva throughput de streaming (não cai para 1 worker em máquinas com base >= 2);
+- redução exige frames lentos sustentados, não um spike isolado;
+- diagnostics registram `async_chunk_work=current/limit`;
+- profiling por permit registra count/average/max para generation, initial mesh e remesh.
+
+Commits recentes relacionados incluem:
+
+- `b6285b92e3bf7801984f94db63373f9e6bd416f9` — preserve render throughput under frame pressure;
+- `d33ae883039b4ff15befeeda170497d0d6a9f2c1` — reserve async capacity for initial chunk meshing.
+
+### Texture array + draw-call reduction
+
+Terrain deixou de criar material/mesh por block texture/face na maioria dos casos.
+
+Infra atual:
+
+- runtime texture array compartilhada;
+- código de base texture + overlay + dye flags por face;
+- faces com até 2 texture layers usam o array;
+- 3+ layers mantêm fallback legacy;
+- grass/lamp base+overlay continuam em uma pass;
+- opaque terrain e foliage cutout padrão foram agrupados quando compatíveis;
+- foliage alpha-cutout agora pode participar de greedy meshing;
+- attached layer faces do mesmo layer/casts-shadow foram fundidas;
+- source PNG handles redundantes da texture array são liberados após a cópia;
+- texture array só libera initial meshing quando estiver pronta.
+
+Commits relevantes da fase agressiva:
+
+- `360418fa7eab0ae241849b5d0815e5fd987ac2e3` — true opaque terrain array material;
+- `f08a66de7c889277c7d304d46e462d6767cff088` — opaque terrain fora do alpha-mask pipeline;
+- `901d8d1718a967e7f2943cbb12551fd3ebf6edbb` / `a36b529d23379293b450e4beba381d88dccce72b` — PBR preparation reduzida no voxel terrain;
+- `e4d2e9c99dd9f97f365564b5094b6151e68b9917` — greedy mesh também para cube faces orientadas/rotacionadas.
+
+Impacto esperado especialmente na World Tree: logs X/Z dos galhos deixam de ser automaticamente excluídos do greedy meshing, e foliage cutout pode gerar retângulos maiores.
+
+### Vertex bandwidth / mesh memory — aggressive pass
+
+O layout de vértice voxel foi profundamente compactado.
+
+Originalmente havia:
+
+- position;
+- normal;
+- UV0;
+- UV1;
+- tangent usado como payload de tint;
+- COLOR float32x4.
+
+Agora:
+
+- `TANGENT` removido;
+- `NORMAL` removido;
+- normal axis-aligned (6 possibilidades) é codificada no payload;
+- tint é quantizado para RGB7 e empacotado junto da normal;
+- skylight 4-bit entra no mesmo `u32`;
+- block-light RGB + AO usam o ID padrão de `COLOR`, mas fisicamente como `Unorm8x4`;
+- material code continua codificado no domínio de UV0;
+- custom vertex shader reconstrói `world_normal` e `uv_b` esperados pelo fragment;
+- índices usam `u16` sempre que a mesh cabe, com fallback automático para `u32`;
+- meshlet patcher entende e preserva os formatos compactos.
+
+Layout atual esperado: aproximadamente **28 bytes/vértice**, contra ~72 bytes/vértice no layout antigo, sem perder interpolação independente de block-light/AO.
+
+Commits desta compactação incluem:
+
+- `80e83dfcf07e08078e1d17252bd922eac9eb6344` — normal packed with tint;
+- `67855bdd9599b1d2ef934a467f166226c09b6d45` — patch without normal attributes;
+- `6b194595ddccd1696e9fae8ffd97b52874a55727` / `12d9507fe43d9f55cc514b5886317159c0dffdde` — compact terrain vertex shader;
+- `f8392486d4736876b30bb2e4c98e5e34bf71ecfc`, `c989995d74fa00f866f065d417ff142db1354319`, `2dd0f239b12d87a350eb0ea8befe819ca59ce5dc` — normalized byte voxel light;
+- `bc943623435fc0c98de64719ea88abd96700733b`, `5cfc7db868687299b3944ca7624111dcb41cddf8`, `50afde019fe62c916e6ef3769840d3d1f8d4cc39` — packed payload word + shader decode;
+- `ddea64aad7aaadd93f27b6ec1403e5013d0edf1c` / `5f1c893ad58afd76ce858c49a2d9cfaadd039ca2` — compact prepass vertex shader.
+
+### GPU occlusion / prepass
+
+Bevy travado no `Cargo.lock` em **0.19.1**.
+
+A câmera 3D do mundo usa:
+
+- `DepthPrepass`;
+- `OcclusionCulling`.
+
+Chunk meshes usam `NoCpuCulling`, empurrando frustum/occlusion para o caminho GPU. A revisão da fonte do Bevy 0.19.1 confirmou que esse caminho também participa corretamente de shadow visibility.
+
+Terrain possui shaders dedicados:
+
+- main vertex shader compacto;
+- fragment shader terrain;
+- prepass vertex shader compacto;
+- prepass fragment shader mínimo.
+
+O prepass fragment existe principalmente para garantir que alpha-cutout de foliage escreva depth/shadow corretamente; folhas não viram placas sólidas falsas para occlusion.
+
+Bounds voltaram a ser os AABBs exatos calculados a partir do Mesh asset; não manter AABB fixo de chunk.
+
+Commits relevantes:
+
+- `fcdd1bbdd6165af6cd46afffb3b7f8c2de65ac50` — all chunk mesh culling moved to GPU;
+- `2cf8ee46d24a486f98db80098abbf27bd7ece125` — exact mesh bounds;
+- `6181f42c52aeeff50cb17821836e5e9ccdcb8385` — dedicated terrain depth prepass shader.
+
+### Mesher hot paths
+
+Além do desenho macro, vários custos por voxel/quad foram removidos:
+
+- terrain/fluid/layer batch buffers usam `SmallVec` em vez de HashMap no hot path;
+- tint de grass/leaf/foliage usa caches 16×16 sem hashing;
+- fluid tint usa cache por fluid id/coluna;
+- empty terrain/fluid builders saem via occupancy metadata;
+- terrain resolve source cell/block definition uma vez e reutiliza nas seis faces;
+- internal neighbor checks usam o próprio `VoxelChunk`; halo/snapshot só entra nas bordas;
+- fluid exposure/height usa local chunk samples quando possível;
+- fluid clipping contra microblocks foi restaurado explicitamente durante esse refactor;
+- microblock/chisel lighting é reutilizada por face;
+- attached layers reutilizam lighting/exposure por support face;
+- full mesh usa caches adaptativos/compartilhados de lighting;
+- block-light convertido e source light foram cacheados;
+- microblock occupancy foi compactado/otimizado;
+- mesh shell palettes deixaram busca linear e usam índice hash O(1);
+- partial patch buffers e quad buffers receberam preallocation;
+- occupied terrain buckets evitam trabalho sobre voxels vazios.
+
+A sequência mais recente do HEAD contém commits adicionais dessa limpeza, incluindo:
+
+- `29c3800d86d0d0fb6742964effb130a69e1a29cb` — shell palette hash maps;
+- `245c9032875a2553bbf3d80a86bb6b4be7319346` — block face metadata cache;
+- `519ad066adbddae95210f4d13bb42c9f9d34ffca` — terrain faces from occupied voxel buckets;
+- `4d7a09832f1139d553b4a12de739acdcb2f42853` — merge at final vertex precision;
+- `94b4e08f7e32ff0da31e10b098fea9b666a4b705` / `62eb3c67313781295f5ea3fe0322a846a47c24f1` / `f5c95bb01ed35b9fcefcb52c191a0519470263a2` / `ee54d004616f25abd6acac73d1aa8f5b64eb40f1` / `784253298cc084fdf76449e00a085be0b4af293d` — shared lighting caches;
+- `afb764e96516c799a088877dae8a86a9a24953f3` — voxel index/small visual cache reuse;
+- `ca6975d0dcb4bfee7c68330d8a4fcc832de10771` / `2675c2a43ce37164c75756abca5fe7ca5c1e727c` / `f48c5626b17644f693cdeebadd04ee19be48ba41` — halo materialization/storage cleanup;
+- `a70c2f7ed39ca9bcefaaafbf9cbb77117c337f37`, `262ebbc49af11bc5f804fd419862644e28b40beb`, `3a33f44ee61782cc5a15585812ba3159bd5ecdbf` — source light reuse;
+- `94ff955dfbedb5cdb69484e18539541f52129c1a` / `59b6dec54a7421d705dff2767c785ec272c6bf9b` — buffer preallocation;
+- `4877660f8160d7778608c520189bb3af670d9359` — compact layer mesh buffer alias.
+
+### Residency / movement
+
+Mesh pressure recovery foi tornada mais consciente:
+
+- recovery considera show radius e tamanho histórico do mesh;
+- evita recuperar um conjunto que ultrapasse imediatamente o target;
+- eviction protege hysteresis/visible chunks;
+- movimento influencia residency: chunks atrás podem ser aposentados antes de chunks equivalentes à frente;
+- recuperação prioriza chunks na direção do movimento.
+
+O objetivo é reduzir ciclos evict → remesh → upload enquanto o jogador anda, sem reduzir a distância visual configurada.
+
+### Lighting GPU — decisão atual
+
+Foi investigada a migração de lighting para buffer GPU global com `RenderQueue::write_buffer`.
+
+Tecnicamente é viável, mas **não foi aplicada** porque um light-field voxel/chunk em RD24 pode adicionar dezenas/centenas de MiB de residência GPU e reabrir o OOM do mesh allocator/VRAM.
+
+Decisão atual: manter lighting no vertex payload + partial meshlet remesh/caches agressivos. Revisitar GPU lighting somente com representação realmente compacta/sparse/pageada, não com um halo 18³ bruto por chunk.
+
+### Shadow path
+
+Directional shadows já estavam razoavelmente limitadas:
+
+- 3 cascades;
+- 1024 resolution;
+- cap aproximado de 8 chunks.
+
+Não reduzir isso só para ganhar FPS; o foco atual é otimização sem degradar o visual.
+
+O fragment terrain também evita cascade shadow lookup quando skylight/global sky light não pode afetar a superfície (ex.: cavernas/noite).
+
+### Diagnostics úteis para runtime QA
+
+Os logs periódicos agora permitem distinguir:
+
+- `render_entities` vs `pooled_meshes`;
+- `terrain_array_meshes` vs `terrain_legacy_meshes`;
+- layer/fluid mesh counts;
+- remesh tasks/geometry/lighting/fluid queues;
+- `async_chunk_work=current/limit`;
+- average/max async generation, initial mesh e remesh;
+- pressure-evicted mesh count;
+- mesh residency bytes;
+- Bevy mesh allocator slab pressure.
+
+Usar esses dados antes de voltar a mexer em fog/render distance.
+
+### Estado atual / validação
+
+Branch: `develop`.
+
+HEAD observado ao escrever este checkpoint:
+
+`4877660f8160d7778608c520189bb3af670d9359`
+
+**Não foram rodados tests/CI nesta leva**, por instrução explícita do usuário.
+
+A revisão estática foi feita incrementalmente e encontrou/corrigiu vários mismatches durante o trabalho (fluid clipping, packed vertex formats, prepass shader, AABB/culling assumptions etc.), mas o conjunto agressivo atual ainda deve ser tratado como **runtime/compile QA pendente** até o usuário executar ou solicitar validação automatizada.
+
+### Próximos passos
+
+1. Continuar auditoria agressiva de draw/shadow/prepass sem reduzir render distance.
+2. Confirmar se solid + non-shadow foliage podem ser unidos sem reintroduzir foliage shadow; só fazer se houver semântica limpa no shadow pass.
+3. Continuar reduzindo hot paths de full/initial mesh e allocations transitórias.
+4. Em runtime QA, observar principalmente:
+   - FPS parado e caminhando em RD24;
+   - tempo de initial mesh/remesh;
+   - quantidade de render entities/draw batches;
+   - slab/mesh bytes;
+   - World Tree inteira visível sem fog permanentemente próxima;
+   - foliage alpha correta no depth/occlusion;
+   - sombras sem regressão;
+   - fluids/chisel/layers sem buracos após partial remesh.
+5. Se chunks distantes ainda aparecerem antes dos próximos apesar da prioridade corrigida, implementar gate de **publish/render por distance shell**, preservando geração concorrente.
+
+---
+
 ## Checkpoint — 2026-09-21: Structure Sets + structure rotation + first Enchanted Heart
 
 ### Structure rotation
