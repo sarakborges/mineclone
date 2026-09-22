@@ -59,6 +59,7 @@ pub(in crate::hud::inventory) fn spawn_item_tooltip(root: &mut ChildSpawnerComma
             typography::caption(""),
             Node {
                 max_width: px(258),
+                margin: UiRect::top(px(6)),
                 ..default()
             },
             Visibility::Hidden,
