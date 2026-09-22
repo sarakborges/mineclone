@@ -14,6 +14,10 @@ use super::{HudSettings, TargetBlockPosition};
 
 const AVATAR_SIZE: f32 = 64.0;
 const AVATAR_IMAGE_SIZE: f32 = 54.0;
+const PLAYER_AVATAR_IMAGE_WIDTH: f32 = 96.0;
+const PLAYER_AVATAR_IMAGE_HEIGHT: f32 = 128.0;
+const PLAYER_AVATAR_IMAGE_LEFT: f32 = -18.0;
+const PLAYER_AVATAR_IMAGE_TOP: f32 = -6.0;
 const INFO_WIDTH: f32 = 180.0;
 const HEALTH_BAR_HEIGHT: f32 = 22.0;
 const HEALTH_FILL_COLOR: Color = Color::srgba(0.78, 0.16, 0.25, 0.94);
@@ -74,6 +78,7 @@ pub(super) fn spawn_entity_card(
                     border: UiRect::all(px(2)),
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::Center,
+                    overflow: Overflow::clip(),
                     ..default()
                 },
                 BackgroundColor(avatar_background),
@@ -82,13 +87,24 @@ pub(super) fn spawn_entity_card(
             ))
             .with_children(|avatar| {
                 if let Some(image) = portrait {
-                    avatar.spawn((
-                        ImageNode::new(image),
-                        Node {
+                    let image_node = match source {
+                        EntityCardSource::LocalPlayer => Node {
+                            position_type: PositionType::Absolute,
+                            left: px(PLAYER_AVATAR_IMAGE_LEFT),
+                            top: px(PLAYER_AVATAR_IMAGE_TOP),
+                            width: px(PLAYER_AVATAR_IMAGE_WIDTH),
+                            height: px(PLAYER_AVATAR_IMAGE_HEIGHT),
+                            ..default()
+                        },
+                        EntityCardSource::Target => Node {
                             width: px(AVATAR_IMAGE_SIZE),
                             height: px(AVATAR_IMAGE_SIZE),
                             ..default()
                         },
+                    };
+                    avatar.spawn((
+                        ImageNode::new(image),
+                        image_node,
                         Pickable::IGNORE,
                     ));
                 } else {
