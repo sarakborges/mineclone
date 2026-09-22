@@ -1,4 +1,5 @@
 pub(crate) mod camera;
+pub(crate) mod character_info;
 pub(crate) mod game_mode;
 pub(crate) mod hotbar;
 pub(crate) mod inventory;
@@ -32,6 +33,7 @@ pub(crate) const PLAYER_HEIGHT: f32 = 1.8;
 pub(crate) const PLAYER_EYE_HEIGHT: f32 = 1.62;
 pub(crate) const PLAYER_HALF_WIDTH: f32 = 0.3;
 pub(crate) const PLAYER_SKIN_TEXTURE_PATH: &str = "textures/entities/player.png";
+pub(crate) const PLAYER_DISPLAY_NAME: &str = "Yogg'Sara";
 
 #[derive(Component, Default)]
 pub(crate) struct PlayerEntity;
