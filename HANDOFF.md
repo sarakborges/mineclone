@@ -200,6 +200,25 @@ e `d2f027014f5b824e786924cccdece2329cd20c5d`, e ficou **verde** no
 `0.50.25`, runs push `35686029168` e PR `35686032079` para
 `97de4b3e6fa39628af2a5b6117110f5522cc6da2`.
 
+### P10 — cache exato das colunas ausentes da fog
+
+O cálculo do streaming guard da fog ainda reconstruía o disco de colunas ao
+redor do jogador sempre que sua posição horizontal mudava, inclusive movimento
+sub-chunk. Em RD24 isso significa milhares de offsets candidatos por frame de
+movimento, mesmo quando membership/radius/chunk central não mudaram.
+
+`FogDistanceState` agora mantém `missing_columns` e o `frontier_center`.
+A lista só é reconstruída quando muda a membership revision do render pool,
+a render distance ou o chunk XZ central. Movimento dentro do mesmo chunk
+recalcula apenas a distância geométrica até a lista já exata de gaps. O
+resultado é idêntico ao scan anterior porque o conjunto candidato permanece
+imutável sob esses inputs; somente a posição contínua do jogador muda.
+
+Commit: `79d92419604c5b5fa73ad0f55edb5f98e0317264`.
+VERSION: `0.50.26`, commit
+`6e269f52dbb66042328217fb94e50fccee8489b0`.
+CI de P10: aguardando.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
