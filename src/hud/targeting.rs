@@ -500,11 +500,11 @@ fn tool_category_names(
         .join(", ")
 }
 
-fn layer_face_name<'a>(
-    localization: &'a UiLocalization,
+fn layer_face_name(
+    localization: &UiLocalization,
     language: Language,
     face: LayerFace,
-) -> &'a str {
+) -> &str {
     let key = match face {
         LayerFace::Right => "hud.layerFace.right",
         LayerFace::Left => "hud.layerFace.left",
