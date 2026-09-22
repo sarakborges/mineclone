@@ -128,6 +128,9 @@ pub(super) type InventoryItemTooltipQuery<'w, 's> = Single<
     (
         With<InventoryItemTooltip>,
         Without<InventoryItemTooltipText>,
+        Without<InventoryItemTooltipId>,
+        Without<InventoryItemTooltipHint>,
+        Without<InventoryItemTooltipStats>,
     ),
 >;
 
