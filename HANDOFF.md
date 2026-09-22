@@ -470,7 +470,7 @@ terrain mesher `5530a8f8c7199a495285d4da5871c2762fd853f4`;
 regressão `abb27a862e101b3b7e9f141176dc9e6a3011f20a`.
 VERSION: `0.50.38`, commit
 `075cd121162cf754a01e47627187cbd986d1cb99`.
-CI de P22: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI de P22: **verde** nos runs push `35736022365` e PR `35736028540` para `075cd121162cf754a01e47627187cbd986d1cb99`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
