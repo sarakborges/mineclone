@@ -619,7 +619,12 @@ Commits: center exposto
 `fd5f83667c0e0d2a383cfe10d088b936a11c890b`.
 VERSION: `0.50.45`, commit
 `b14db1e116f176def99fa1ba1e4329be60955956`.
-CI de P29: aguardando. Nenhum `cargo test` foi adicionado/executado.
+A CI inicial (push `35739243309` / PR `35739247851`) falhou somente
+no Clippy `too_many_arguments` após adicionar o streaming center ao helper
+de dispatch. Corrigido sem supressão agrupando inputs imutáveis em
+`RemeshDispatchContext`, commit
+`b5ae6a2810b57ed4d69d5619ea712871d4541187`.
+CI final de P29: aguardando. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
