@@ -10481,3 +10481,34 @@ VERSION: `0.50.51`, commit
 Follow-up do tooltip de inventory: correção de largura/description em
 `0228405fd85b2311127b5449d24351cc828f4c75`; VERSION `0.50.54`
 (`78208eea98404f913811d315b2abcb9a94a07406`).
+
+
+## 2026-09-22 — Player 3D rigado e animado
+
+O placeholder de `src/player/model.rs` que montava o player com `Cuboid`
+hardcoded foi substituído por um asset glTF real e data-driven em
+`assets/models/entities/player/player.gltf`. `data/entities/player.json`
+agora aponta para o modelo e mapeia os estados de animação para clips nomeados.
+
+O modelo segue as proporções block-player modernas (1,80 m; cabeça 8×8×8,
+torso 8×12×4, braços 4×12×4 e pernas 4×12×4), com pivôs independentes para
+cabeça, torso, braços e pernas e uma camada externa de cabeça. Clips incluídos:
+`Idle`, `Walk`, `Run`, `Jump`, `Fall`, `Hit`, `Place`, `Break`,
+`Hurt` e `Death`.
+
+O loader do player agora segue o mesmo padrão glTF/AnimationGraph já usado pela
+infra de creatures/slime: `WorldAssetRoot`, `WorldInstanceReady`,
+`AnimationGraph` e `AnimationTransitions`. Terceira pessoa sincroniza yaw do
+corpo e pitch da cabeça. Locomoção escolhe idle/walk/jump/fall; ações do
+viewmodel disparam hit/place/break; perda de vida dispara hurt e vida zero
+dispara death. Ataques em creatures usam `hit` em vez de reutilizar `break`.
+
+Commits principais:
+- asset/model mapping: `9689c9035d6c9252a39c00cee0491f4ff5254dd2`,
+  `3374fcc76ba3ca6cd9167bf152909dc17e882532`,
+  `f0ede6fbcc5181da6855f58fbd28ff6b0cd37ab5`;
+- integração funcional: `a860c87fa985e0f7cac09c24f9ce746ca913060f`;
+- correções de validação: `7b16d88e8854f0107d64307307d38dcb2610529c`.
+
+CI funcional push `35748663144`: **verde** (localizações, Clippy e cargo
+check). VERSION: `0.50.62`.
