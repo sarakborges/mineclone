@@ -410,7 +410,7 @@ Commits: compactação `ad187b2f6cda30eb60bddb1b69ca98e528db0bf6`;
 regressão/size guard `64f6c4d28dc4b61e6ed90aa69b3841608f79100d`.
 VERSION: `0.50.35`, commit
 `737f5538387f93ce0d6151770089cb867cf57f7a`.
-CI de P19: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI de P19: **verde** nos runs push `35735017791` e PR `35735024683` para `737f5538387f93ce0d6151770089cb867cf57f7a`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
