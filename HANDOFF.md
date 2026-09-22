@@ -254,6 +254,25 @@ falhou no Clippy porque o import de
 supressão em `9edda5eb59569a34ef9c62be4d0d5ee9b5b0afe7`.
 CI final de P11: **verde** nos runs push `35731688269` e PR `35731694767` para `9edda5eb59569a34ef9c62be4d0d5ee9b5b0afe7`. Nenhum `cargo test` foi adicionado/executado.
 
+### P12 — remover filtro neutro da propagação de skylight
+
+`desired_light` ainda chamava `light_transmission(...)` para cada voxel
+não bloqueante e passava o skylight propagado por `filtered_level`, que fazia
+conversão para float, clamp e round. A implementação atual de
+`light_transmission` era um stub puro que retornava sempre `1.0`, portanto
+o filtro não alterava o nível de luz.
+
+O caminho foi simplificado para comparar diretamente o skylight direto com
+`propagated_neighbor_sky(...)`, preservando exatamente o resultado inteiro
+atual e removendo trabalho aritmético neutro do loop de relaxação. O helper
+constante foi removido para evitar manter uma abstração sem comportamento.
+
+Commits: propagação `4950cedf3d23f5bea506fbb389f88fb25dd704ba`;
+cleanup `be01520cf0f017a270f9d3f4e060d31b24118d89`.
+VERSION: `0.50.28`, commit
+`76a319034f57983efcb929d696d28086186cf2fb`.
+CI de P12: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
