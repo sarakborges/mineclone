@@ -392,6 +392,26 @@ VERSION: `0.50.34`, commit
 `7a9a6258c80e373b2694c310ef126eae406c2689`.
 CI de P18: **verde** nos runs push `35734080545` e PR `35734085263` para `7a9a6258c80e373b2694c310ef126eae406c2689`. Nenhum `cargo test` foi adicionado/executado.
 
+### P19 — compactar estado de lighting do greedy fluid top
+
+A máscara 16x16 do greedy de topo dos fluidos guardava um `FaceLighting`
+inteiro por candidato. Como esse caminho só aceita lighting uniforme, isso
+duplicava o mesmo valor quatro vezes em `channels`, `block_srgb` e
+`ambient_occlusion`, inflando a máscara e tornando cada comparação de merge
+mais cara.
+
+`FluidGreedyLighting` agora guarda somente a amostra uniforme única:
+`channels[2]`, `block_srgb[3]` e AO. Isso reduz o payload de lighting de
+96 bytes para 24 bytes por candidato, preservando os mesmos floats exatos e
+portanto as mesmas fronteiras de merge. Na emissão, o `FaceLighting`
+original é reconstruído com quatro cópias do valor uniforme.
+
+Commits: compactação `ad187b2f6cda30eb60bddb1b69ca98e528db0bf6`;
+regressão/size guard `64f6c4d28dc4b61e6ed90aa69b3841608f79100d`.
+VERSION: `0.50.35`, commit
+`737f5538387f93ce0d6151770089cb867cf57f7a`.
+CI de P19: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
