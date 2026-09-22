@@ -90,14 +90,13 @@ fn direct_seed_cache_refreshes_after_upper_chunk_content_changes() {
 }
 
 #[test]
-fn direct_seed_identifies_fully_opaque_non_emissive_chunk_as_stable() {
+fn direct_seed_empty_chunk_does_not_change_skylight_below() {
     let blocks = test_blocks();
     let fluids = test_fluids();
-    let mut world = VoxelWorld::default();
-    world.insert_chunk(IVec3::ZERO, opaque_chunk());
+    let mut world = empty_world();
     let mut pending = PendingLightingUpdates::default();
 
-    let requires_relaxation = pending.seed_chunk_direct_lighting(
+    let result = pending.seed_chunk_direct_lighting(
         &mut world,
         IVec3::ZERO,
         &blocks,
@@ -105,7 +104,28 @@ fn direct_seed_identifies_fully_opaque_non_emissive_chunk_as_stable() {
         &SecondaryPropertyRegistry::default(),
     );
 
-    assert!(!requires_relaxation);
+    assert!(result.requires_relaxation);
+    assert!(!result.changes_direct_sky_below);
+}
+
+#[test]
+fn direct_seed_identifies_fully_opaque_non_emissive_chunk_as_stable() {
+    let blocks = test_blocks();
+    let fluids = test_fluids();
+    let mut world = VoxelWorld::default();
+    world.insert_chunk(IVec3::ZERO, opaque_chunk());
+    let mut pending = PendingLightingUpdates::default();
+
+    let result = pending.seed_chunk_direct_lighting(
+        &mut world,
+        IVec3::ZERO,
+        &blocks,
+        &fluids,
+        &SecondaryPropertyRegistry::default(),
+    );
+
+    assert!(!result.requires_relaxation);
+    assert!(result.changes_direct_sky_below);
 }
 
 #[test]
@@ -123,7 +143,7 @@ fn direct_seed_keeps_emissive_chunk_on_relaxation_path() {
     world.insert_chunk(IVec3::ZERO, chunk);
     let mut pending = PendingLightingUpdates::default();
 
-    let requires_relaxation = pending.seed_chunk_direct_lighting(
+    let result = pending.seed_chunk_direct_lighting(
         &mut world,
         IVec3::ZERO,
         &blocks,
@@ -131,7 +151,8 @@ fn direct_seed_keeps_emissive_chunk_on_relaxation_path() {
         &SecondaryPropertyRegistry::default(),
     );
 
-    assert!(requires_relaxation);
+    assert!(result.requires_relaxation);
+    assert!(result.changes_direct_sky_below);
 }
 
 #[test]
