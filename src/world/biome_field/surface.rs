@@ -20,6 +20,24 @@ const MAX_WEIGHT_ENTRIES: usize = MAX_SURFACE_INFLUENCES;
 
 impl BiomeField {
     pub fn sample_surface(&self, position: Vec2) -> BiomeFieldSample<'_> {
+        if let Some(index) = self.single_surface_biome {
+            let biome = &self.surface_biomes[index];
+            let mut influences = ArrayVec::new();
+            influences.push(BiomeInfluence {
+                id: biome.id.as_str(),
+                weight: 1.0,
+                surface_index: index,
+                terrain_strength: 1.0,
+            });
+            return BiomeFieldSample {
+                primary_id: biome.id.as_str(),
+                primary_surface_index: index,
+                surface_margin_index: None,
+                identity_surface_index: index,
+                influences,
+            };
+        }
+
         let warped = warp_surface_position(position, self.seed);
         let center = IVec2::new(
             (warped.x / self.surface_site_spacing.x).round() as i32,

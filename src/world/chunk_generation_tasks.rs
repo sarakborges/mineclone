@@ -17,6 +17,7 @@ use super::{
     chunk_system_params::{ChunkContent, ChunkGeneration},
     chunk_task_queue::{ChunkTaskQueue, CompletedChunkTask},
     generation::{ChunkGenerationContext, generate_chunk},
+    new_world::WorldGenerationSettings,
     world_feature_fields::WorldFeatureFields,
 };
 
@@ -29,6 +30,7 @@ struct GenerationSnapshot {
     biomes: BiomeRegistry,
     structures: StructureRegistry,
     structure_sets: StructureSetRegistry,
+    world_generation: WorldGenerationSettings,
     biome_field: BiomeField,
     feature_fields: WorldFeatureFields,
 }
@@ -42,6 +44,7 @@ impl GenerationSnapshot {
             biomes: BiomeRegistry::clone(&content.biomes),
             structures: StructureRegistry::clone(&generation.structures),
             structure_sets: StructureSetRegistry::clone(&generation.structure_sets),
+            world_generation: *generation.world_generation,
             biome_field: content.biome_field.as_ref().clone(),
             feature_fields: generation.feature_fields.as_ref().clone(),
         }
@@ -55,6 +58,7 @@ impl GenerationSnapshot {
             biomes: &self.biomes,
             structures: &self.structures,
             structure_sets: &self.structure_sets,
+            world_generation: self.world_generation,
             biome_field: &self.biome_field,
             feature_fields: &self.feature_fields,
         }

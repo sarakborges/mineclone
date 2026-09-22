@@ -11,12 +11,13 @@ use crate::{
         cave_connectivity::CaveConnectivityRegion,
         density_sampling::{DensitySampleContext, sample_density},
         generation_region::{GenerationRegion, generation_region_coord},
+        new_world::WorldGenerationMode,
         terrain::{surface_height, surface_height_from_sample, terrain_density},
     },
 };
 
 use super::super::{
-    ChunkGenerationContext,
+    ChunkGenerationContext, flat_surface_height,
     caves::anchored_cave_region,
     surface_carvers::{
         SurfaceCarverColumn, SurfaceCarverResolveContext,
@@ -60,6 +61,20 @@ pub(super) fn compute_structure_origin_y(
     rotation: StructureRotation,
     context: &ChunkGenerationContext<'_>,
 ) -> Option<i32> {
+    if context.world_generation.mode() == WorldGenerationMode::Void {
+        return None;
+    }
+    if context.world_generation.mode() == WorldGenerationMode::Flat {
+        let ground_y = flat_surface_height(context.dimension) - 1;
+        return fit_structure_to_ground(
+            anchor,
+            &structure.support_offsets_for_rotation(rotation),
+            structure.min_y_offset(),
+            structure.restrictions.max_slope,
+            |_| Some(ground_y),
+        );
+    }
+
     let (region, anchored_caves) = structure_support_context(anchor, context);
     let support_offsets = structure.support_offsets_for_rotation(rotation);
     fit_structure_to_ground(

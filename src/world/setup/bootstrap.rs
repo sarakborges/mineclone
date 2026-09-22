@@ -19,7 +19,7 @@ use super::{
     system_params::{WorldBootstrapConfig, WorldBootstrapContent, WorldBootstrapPersistence},
 };
 use crate::world::{
-    WorldLoadMode,
+    WorldGenerationMode, WorldLoadMode,
     biome_field::BiomeField,
     chunk_rendering::{FluidMaterials, TerrainMaterials},
     generation::authored_surface_fluid_id_for_position,
@@ -101,7 +101,12 @@ pub(in crate::world) fn begin_world_loading(
         config.seed.0,
         biome_size_multiplier,
     );
-    if let Some(biome_id) = forced_spawn_biome.as_deref() {
+    if world_generation.single_biome() {
+        let biome_id = forced_spawn_biome
+            .as_deref()
+            .expect("single-biome world requires a selected surface biome");
+        biome_field.set_single_surface_biome(biome_id);
+    } else if let Some(biome_id) = forced_spawn_biome.as_deref() {
         biome_field.force_surface_biome(
             biome_id,
             DEFAULT_SPAWN_COLUMN.as_vec2() + Vec2::splat(0.5),
@@ -136,7 +141,13 @@ pub(in crate::world) fn begin_world_loading(
         &terrain_lighting,
         terrain_materials.texture_array_handle(),
     );
-    let spawn_column = if *persistence.load_mode == WorldLoadMode::Load {
+    let spawn_column = if world_generation.mode() != WorldGenerationMode::Normal {
+        persistence
+            .save
+            .player_position(LOCAL_PLAYER_ID)
+            .map(|position| IVec2::new(position.x.floor() as i32, position.z.floor() as i32))
+            .unwrap_or(DEFAULT_SPAWN_COLUMN)
+    } else if *persistence.load_mode == WorldLoadMode::Load {
         persistence
             .save
             .player_position(LOCAL_PLAYER_ID)
@@ -151,7 +162,11 @@ pub(in crate::world) fn begin_world_loading(
             forced_spawn_biome.is_some(),
         )
     };
-    let initial_center = if *persistence.load_mode == WorldLoadMode::Load {
+    let initial_center = if world_generation.mode() == WorldGenerationMode::Void
+        && persistence.save.player_position(LOCAL_PLAYER_ID).is_none()
+    {
+        IVec3::ZERO
+    } else if *persistence.load_mode == WorldLoadMode::Load {
         persistence
             .save
             .player_position(LOCAL_PLAYER_ID)
@@ -168,7 +183,11 @@ pub(in crate::world) fn begin_world_loading(
                 )
             })
     } else {
-        let surface_y = surface_height(spawn_column, dimension, biomes, &biome_field);
+        let surface_y = if world_generation.mode() == WorldGenerationMode::Flat {
+            dimension.sea_level.max(1)
+        } else {
+            surface_height(spawn_column, dimension, biomes, &biome_field)
+        };
         IVec3::new(
             spawn_column.x.div_euclid(CHUNK_SIZE as i32),
             surface_y.div_euclid(CHUNK_SIZE as i32),

@@ -85,6 +85,7 @@ pub struct BiomeField {
     pub(super) seed: u64,
     pub(super) surface_site_biomes: Arc<RwLock<HashMap<IVec2, SurfaceSiteCacheEntry>>>,
     forced_surface_biome: Option<ForcedSurfaceBiome>,
+    single_surface_biome: Option<usize>,
     ocean_surface_index: Option<usize>,
     pub(super) ocean_weight: f32,
 }
@@ -317,6 +318,7 @@ impl BiomeField {
             seed,
             surface_site_biomes: Arc::new(RwLock::new(HashMap::new())),
             forced_surface_biome: None,
+            single_surface_biome: None,
             ocean_surface_index,
             ocean_weight,
         }
@@ -338,6 +340,20 @@ impl BiomeField {
             );
         }
         climate
+    }
+
+    pub(crate) fn set_single_surface_biome(&mut self, biome_id: &str) {
+        let biome_index = self
+            .surface_biomes
+            .iter()
+            .position(|biome| biome.id == biome_id)
+            .unwrap_or_else(|| panic!("single biome is not a surface biome: {biome_id}"));
+        self.single_surface_biome = Some(biome_index);
+        self.forced_surface_biome = None;
+        self.surface_site_biomes
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clear();
     }
 
     pub(crate) fn force_surface_biome(&mut self, biome_id: &str, center: Vec2) {

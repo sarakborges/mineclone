@@ -12,6 +12,7 @@ use crate::{
     world::{
         generation_region::generation_region_coord,
         hydrology::HydrologyWaterKind,
+        new_world::WorldGenerationMode,
         terrain::surface_height_from_sample,
     },
 };
@@ -96,6 +97,23 @@ fn surface_block_matches(
     context: &ChunkGenerationContext<'_>,
     matches: impl Fn(&str) -> bool,
 ) -> bool {
+    if context.world_generation.mode() == WorldGenerationMode::Void {
+        return false;
+    }
+    if context.world_generation.mode() == WorldGenerationMode::Flat {
+        let surface = context
+            .biome_field
+            .sample_surface(position.as_vec2() + Vec2::splat(0.5));
+        let biome_id = context
+            .biome_field
+            .surface_biome_id(surface.identity_surface_index);
+        let biome = context
+            .biomes
+            .get(biome_id)
+            .unwrap_or_else(|| panic!("missing flat-world biome definition: {biome_id}"));
+        return biome.surface_block_at_depth(0).is_some_and(matches);
+    }
+
     let horizontal = position.as_vec2() + Vec2::splat(0.5);
     let surface = context.biome_field.sample_surface(horizontal);
     let surface_height =
@@ -275,6 +293,9 @@ fn surface_fluid_matches(
     target_fluid: &str,
     context: &ChunkGenerationContext<'_>,
 ) -> bool {
+    if context.world_generation.mode() != WorldGenerationMode::Normal {
+        return false;
+    }
     if authored_surface_fluid_id_at(position, context).is_some_and(|fluid| fluid == target_fluid) {
         return true;
     }
@@ -301,6 +322,10 @@ fn intersects_surface_fluid(
     origin_y: i32,
     context: &ChunkGenerationContext<'_>,
 ) -> bool {
+    if context.world_generation.mode() != WorldGenerationMode::Normal {
+        return false;
+    }
+
     structure.column_spans().iter().any(|span| {
         let position = anchor + rotation.rotate_horizontal(span.offset);
         let horizontal = position.as_vec2() + Vec2::splat(0.5);

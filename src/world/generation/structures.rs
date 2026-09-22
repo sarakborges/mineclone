@@ -23,7 +23,6 @@ use crate::{
         texture_rotation::TextureRotation,
     },
     world::{
-        terrain::surface_height,
         world_feature_fields::CachedStructureCandidate,
     },
 };
@@ -35,7 +34,7 @@ use self::{
     restrictions::candidate_satisfies_restrictions,
     support::compute_structure_origin_y,
 };
-use super::ChunkGenerationContext;
+use super::{ChunkGenerationContext, generation_surface_height};
 
 const COLUMN_INDEX_MIN_VOXELS: usize = 512;
 const STRUCTURE_OCCUPANCY_WORDS: usize = CHUNK_VOLUME.div_ceil(u64::BITS as usize);
@@ -283,12 +282,7 @@ pub(crate) fn located_structure_origins_in_chunk(
             if candidate.placement_id == structure_id
                 && context.structure_sets.get(structure_id).is_some()
             {
-                let surface_y = surface_height(
-                    candidate.placement_anchor,
-                    context.dimension,
-                    context.biomes,
-                    context.biome_field,
-                );
+                let surface_y = generation_surface_height(candidate.placement_anchor, context);
                 IVec3::new(
                     candidate.placement_anchor.x,
                     surface_y,
