@@ -28,13 +28,25 @@ pub(crate) struct VoxelMeshQuad {
     pub(crate) flip_diagonal: bool,
 }
 
-#[derive(Default)]
 pub(crate) struct VoxelMeshBuffer {
     positions: Vec<[f32; 3]>,
     uvs: Vec<[f32; 2]>,
     payloads: Vec<u32>,
     colors: Vec<[u8; 4]>,
     indices: Vec<u32>,
+}
+
+impl Default for VoxelMeshBuffer {
+    fn default() -> Self {
+        const INITIAL_QUAD_CAPACITY: usize = 64;
+        Self {
+            positions: Vec::with_capacity(INITIAL_QUAD_CAPACITY * 4),
+            uvs: Vec::with_capacity(INITIAL_QUAD_CAPACITY * 4),
+            payloads: Vec::with_capacity(INITIAL_QUAD_CAPACITY * 4),
+            colors: Vec::with_capacity(INITIAL_QUAD_CAPACITY * 4),
+            indices: Vec::with_capacity(INITIAL_QUAD_CAPACITY * 6),
+        }
+    }
 }
 
 impl VoxelMeshBuffer {
