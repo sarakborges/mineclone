@@ -234,7 +234,8 @@ pub(super) fn handle_hide_hints_toggle(
     mut settings: ResMut<HudSettings>,
 ) {
     if interactions.iter().any(|interaction| *interaction == Interaction::Pressed) {
-        settings.set_hide_hints(!settings.hide_hints());
+        let hide_hints = !settings.hide_hints();
+        settings.set_hide_hints(hide_hints);
     }
 }
 
@@ -246,7 +247,8 @@ pub(super) fn handle_hint_toggles(
         if *interaction != Interaction::Pressed {
             continue;
         }
-        settings.set_hint_preference(hint.0, !settings.hint_preference(hint.0));
+        let enabled = !settings.hint_preference(hint.0);
+        settings.set_hint_preference(hint.0, enabled);
     }
 }
 
@@ -382,7 +384,7 @@ pub(super) fn sync_target_block_position_options(
     let selected = settings.target_block_position();
     for (option, interaction, background, border) in &mut options {
         selectable::apply_colors(
-            selectable::colors(option.0 == selected, *interaction),
+            selectable::colors(*interaction, option.0 == selected),
             background,
             border,
         );
