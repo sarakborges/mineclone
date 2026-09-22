@@ -137,6 +137,30 @@ def make_mesh(name, cuboids, material, tile, front_tile=None):
     return len(meshes)-1
 
 
+def make_front_quad(name, width, height, z, material):
+    half_w, half_h = width / 2, height / 2
+    positions = [
+        half_w, -half_h, z,
+        -half_w, -half_h, z,
+        -half_w, half_h, z,
+        half_w, half_h, z,
+    ]
+    normals = [0, 0, -1] * 4
+    uvs = [0, 1, 1, 1, 1, 0, 0, 0]
+    indices = [0, 1, 2, 0, 2, 3]
+    attrs = {'POSITION': accessor(positions, bounds=True, target=34962),
+             'NORMAL': accessor(normals, target=34962),
+             'TEXCOORD_0': accessor(uvs, kind='VEC2', target=34962)}
+    mesh = {'name': name, 'primitives': [{
+        'attributes': attrs,
+        'indices': accessor(indices, kind='SCALAR', component=5123, target=34963),
+        'material': material,
+        'mode': 4,
+    }]}
+    meshes.append(mesh)
+    return len(meshes)-1
+
+
 def material(name, color, alpha=1., rough=.36, emission=None):
     mat = {'name': name, 'pbrMetallicRoughness': {
         'baseColorFactor': [*color, alpha],
@@ -155,7 +179,7 @@ materials = [
 ]
 shell = make_mesh('square_translucent_shell', [([.96,.90,.96], (0,0,0))], 0, (0,0))
 core = make_mesh('square_nucleus', [([.58,.62,.58], (0,0,0))], 1, (0,0))
-face = make_mesh('square_pixel_face', [([.96,.90,.02], (0,0,-.505))], 2, (0,0))
+face = make_front_quad('square_pixel_face', .96, .90, -.50, 2)
 
 
 def node(name, mesh=None, children=None, translation=None, scale=None, extras=None):
