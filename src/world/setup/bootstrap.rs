@@ -19,7 +19,7 @@ use super::{
     system_params::{WorldBootstrapConfig, WorldBootstrapContent, WorldBootstrapPersistence},
 };
 use crate::world::{
-    WorldGenerationMode, WorldLoadMode,
+    WorldGenerationMode, WorldGenerationSettings, WorldLoadMode,
     biome_field::BiomeField,
     chunk_rendering::{FluidMaterials, TerrainMaterials},
     generation::authored_surface_fluid_id_for_position,
