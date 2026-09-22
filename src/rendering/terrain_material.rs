@@ -15,26 +15,60 @@ const TERRAIN_PREPASS_VERTEX_SHADER_PATH: &str =
 pub(crate) type TerrainMaterial = ExtendedMaterial<StandardMaterial, TerrainMaterialExtension>;
 
 #[derive(Resource, Clone)]
-pub(crate) struct TerrainLightingBuffer(Handle<ShaderBuffer>);
+pub(crate) struct TerrainLightingBuffer {
+    handle: Handle<ShaderBuffer>,
+    sky_light_factor: f32,
+    dynamic_light_enabled: f32,
+}
 
 impl TerrainLightingBuffer {
     pub(crate) fn new(buffers: &mut Assets<ShaderBuffer>) -> Self {
-        Self(buffers.add(ShaderBuffer::from(vec![[1.0_f32, 0.0, 0.0, 0.0]])))
+        let sky_light_factor = 1.0;
+        let dynamic_light_enabled = 0.0;
+        Self {
+            handle: buffers.add(ShaderBuffer::from(vec![[
+                sky_light_factor,
+                dynamic_light_enabled,
+                0.0,
+                0.0,
+            ]])),
+            sky_light_factor,
+            dynamic_light_enabled,
+        }
     }
 
     pub(crate) fn handle(&self) -> Handle<ShaderBuffer> {
-        self.0.clone()
+        self.handle.clone()
     }
 
     pub(crate) fn set_sky_light_factor(
-        &self,
+        &mut self,
         buffers: &mut Assets<ShaderBuffer>,
         sky_light_factor: f32,
     ) {
+        self.sky_light_factor = sky_light_factor;
+        self.write(buffers);
+    }
+
+    pub(crate) fn set_dynamic_light_enabled(
+        &mut self,
+        buffers: &mut Assets<ShaderBuffer>,
+        enabled: bool,
+    ) {
+        self.dynamic_light_enabled = enabled as u8 as f32;
+        self.write(buffers);
+    }
+
+    fn write(&self, buffers: &mut Assets<ShaderBuffer>) {
         buffers
-            .get_mut(&self.0)
+            .get_mut(&self.handle)
             .expect("terrain lighting buffer must remain loaded while a world is active")
-            .set_data(vec![[sky_light_factor, 0.0, 0.0, 0.0]]);
+            .set_data(vec![[
+                self.sky_light_factor,
+                self.dynamic_light_enabled,
+                0.0,
+                0.0,
+            ]]);
     }
 }
 
