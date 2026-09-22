@@ -251,19 +251,19 @@ pub(super) fn render_player_preview(
     images: Res<PlayerPreviewImages>,
     mut render_state: ResMut<PlayerPreviewRenderState>,
     mut cameras: Query<
-        (&mut Camera, &mut RenderTarget, &mut Transform),
+        (&mut Camera, &mut RenderTarget, &mut Transform, &mut Projection),
         With<PlayerPreviewCamera>,
     >,
     mut models: Query<&mut Transform, (With<PlayerPreviewModel>, Without<PlayerPreviewCamera>)>,
 ) {
     let Some(kind) = render_state.pending else {
-        for (mut camera, _, _) in &mut cameras {
+        for (mut camera, _, _, _) in &mut cameras {
             camera.output_mode = CameraOutputMode::Skip;
         }
         return;
     };
 
-    let (target, center_y, distance, rotation) = match kind {
+    let (target, center_y, distance, aspect_ratio, rotation) = match kind {
         PlayerPreviewKind::Portrait => {
             let Some(target) = images.portrait() else {
                 return;
@@ -272,6 +272,7 @@ pub(super) fn render_player_preview(
                 target,
                 PLAYER_PORTRAIT_CENTER_Y,
                 PLAYER_PORTRAIT_CAMERA_DISTANCE,
+                1.0,
                 Quat::IDENTITY,
             )
         }
@@ -283,6 +284,7 @@ pub(super) fn render_player_preview(
                 target,
                 CHARACTER_PREVIEW_CENTER_Y,
                 CHARACTER_PREVIEW_CAMERA_DISTANCE,
+                CHARACTER_PREVIEW_WIDTH as f32 / CHARACTER_PREVIEW_HEIGHT as f32,
                 Quat::from_rotation_y(render_state.character_yaw),
             )
         }
@@ -292,10 +294,13 @@ pub(super) fn render_player_preview(
         model.rotation = rotation;
     }
 
-    for (mut camera, mut render_target, mut transform) in &mut cameras {
+    for (mut camera, mut render_target, mut transform, mut projection) in &mut cameras {
         *render_target = RenderTarget::Image(target.clone().into());
         *transform = Transform::from_xyz(0.0, center_y, distance)
             .looking_at(Vec3::new(0.0, center_y, 0.0), Vec3::Y);
+        if let Projection::Perspective(perspective) = &mut *projection {
+            perspective.aspect_ratio = aspect_ratio;
+        }
         camera.output_mode = CameraOutputMode::Write {
             blend_state: None,
             clear_color: ClearColorConfig::Custom(Color::NONE),
