@@ -668,6 +668,46 @@ VERSION: `0.50.47`, commit
 `e1ca796a05c7310d501b8d6b891f3699571699f3`.
 CI de P31: **verde** nos runs push `35740179698` e PR `35740185489` para `e1ca796a05c7310d501b8d6b891f3699571699f3`. Nenhum `cargo test` foi adicionado/executado.
 
+### Hotfix — estabilização do renderer após regressão de runtime
+
+QA em Windows reportou dois sintomas de runtime que o CI não cobre:
+1. o mundo deixou de renderizar blocos/chunks como esperado;
+2. as nuvens passaram a apresentar flicker.
+
+Como o workflow atual valida Rust/Clippy/check mas não executa o renderer/WGPU,
+foi feito rollback cirúrgico dos caminhos recentes capazes de afetar
+diretamente a publicação/execução visual, preservando as otimizações de CPU,
+streaming, fluids e remesh anteriores.
+
+Rollback aplicado:
+- `terrain_material.wgsl` voltou ao estado pré-P20/P21 do commit
+  `737f5538387f93ce0d6151770089cb867cf57f7a`; P20/P21 ficam
+  **suspensos/superseded** até QA GPU específica;
+- `src/voxel/mesh.rs` voltou ao estado do P29 final
+  `b5ae6a2810b57ed4d69d5619ea712871d4541187`, removendo P30;
+- `src/voxel/mesh_buffer.rs` voltou ao mesmo baseline P29, removendo P31;
+- `src/voxel/mesh_lighting.rs` voltou ao baseline P29 para retirar a
+  indexação direta de halo adicionada depois de P31.
+
+Commits do hotfix:
+- shader estável: `422fac59324d96c4e6e7f778b87b0142f5cd347b`;
+- terrain plane builder estável:
+  `8657b83b03fc8bce1843e68ec5cdac02ebe77bfb`;
+- voxel index builder estável:
+  `031e7bc5b914288ae928b72b70232a6a1c3c3433`;
+- dense lighting sampling estável:
+  `736e0a9b8fb652cd20b9777e7266b59f6b1373dc`.
+
+P29 e todos os blocos anteriores que não dependem desses arquivos permanecem.
+O flicker de cloud está sendo tratado como uma regressão separada: o último
+commit específico de cloud foi `eadb6ead648d8b8fe790d81b9be0f85a045835c4`
+(redução de draw calls/overdraw) e ainda requer isolamento próprio.
+
+VERSION: `0.50.49`, commit
+`909b1cd1884e9bb2983d0fcbbfcc2f94649baa87`.
+CI do hotfix: aguardando. QA runtime continua obrigatória porque ausência de
+erro no CI não valida WGSL/WGPU nem confirma publicação visual dos chunks.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
