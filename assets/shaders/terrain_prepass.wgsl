@@ -25,8 +25,8 @@ fn fragment(in: prepass_io::VertexOutput) -> prepass_io::FragmentOutput {
     var out: prepass_io::FragmentOutput;
 
     if terrain_material_extension.texture_array_enabled > 0.5 {
-        let material_code = u32(floor(in.uv.x / 16.0));
-        let base_index = material_code & 127u;
+        let base_and_flags = u32(floor(in.uv.x / 16.0));
+        let base_index = base_and_flags & 1023u;
         let texel = textureSample(
             terrain_texture_array,
             terrain_texture_array_sampler,
