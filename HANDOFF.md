@@ -11464,3 +11464,68 @@ CI funcional push `35794729858`: **verde**.
 Commit de versão: `05b97f07279d8900bbd998cdd67792260739f468`.
 CI de versão push `35794838984`: **verde**.
 VERSION: `0.50.92`.
+
+## 2026-09-22 — Player HUD / Character Info passam a usar viewports 3D diretos
+
+A investigação do desaparecimento do player preview mostrou que a regressão
+entrou quando o pipeline tentou representar o player através de render targets
+`Image` / `ImageNode` e, depois, por uma câmera offscreen olhando o modelo
+third-person em uma render layer separada.
+
+O requisito foi corrigido na raiz: **nenhuma UI do player usa mais
+`Handle<Image>` para mostrar o player**.
+
+Arquitetura final:
+- `src/player/model.rs` continua sendo a única fonte do modelo do player;
+- o mesmo `PlayerModelRoot` e os mesmos meshes/animações usados em terceira
+  pessoa são reutilizados;
+- meshes do player pertencem à render layer de preview e, quando a perspectiva
+  está em terceira pessoa, também à layer 0 do mundo;
+- em primeira pessoa o entity continua vivo, mas seus meshes saem apenas da
+  layer do mundo, permanecendo disponíveis para as views de UI;
+- não existe GLB duplicado, scene duplicada, proxy mesh ou target texture para
+  player HUD / Character Info;
+- duas câmeras 3D window-target enxergam o mesmo modelo real:
+  - uma para o player HUD;
+  - uma para Character Info;
+- ambas usam `Camera::viewport` calculado diretamente a partir de
+  `ComputedNode + UiGlobalTransform` do retângulo correspondente;
+- os viewports usam coordenadas físicas da janela, respeitando DPI / physical
+  window size;
+- as câmeras renderizam após a UI, com alpha blending e sem limpar o frame
+  inteiro; como o viewport coincide apenas com a área interna do card, a borda
+  e o restante da UI permanecem intactos;
+- o HUD continua visível quando Character Info abre;
+- o HUD usa um viewport quadrado pequeno, naturalmente recortando o modelo;
+- Character Info usa um viewport 3:4 maior para o corpo inteiro;
+- quando HUD está escondido por pause/settings ou Character Info está fechado,
+  a câmera correspondente usa `CameraOutputMode::Skip`; `Camera::is_active`
+  não é alternado, preservando o workaround DX12.
+
+Diagnóstico importante:
+- após a versão 0.50.92, o próprio HUD também parou de mostrar o player;
+- isso provou que o problema não era o layout do Character Info;
+- a regressão coincidia com a mudança da fonte de render do preview;
+- por isso o pipeline de player preview baseado em Image/RenderTarget foi
+  removido em vez de continuar sendo ajustado.
+
+Commits finais principais:
+- modelo third-person exposto à layer de preview:
+  `7085ad2ed5e8e9fbbbffaed176a015ae0a17b2be`;
+- viewports 3D diretos no lugar de target texture:
+  `c4dcebb6238b6693c65d2281dc65627e3444c108`;
+- Player HUD conectado ao viewport 3D:
+  `b4af0f090d0ff4a4883f2fe22b7bf3eb8899adeb`;
+- anchor 3D no avatar do HUD:
+  `4e887f2cf418f71f820637995f2afe53982e1948`;
+- anchor 3D no Character Info:
+  `c1b22e71bee32dc63f87def3029aaa972405e4f2`;
+- preservação do portrait de criaturas-alvo:
+  `8148caeb8ed14684ca0b780f7170cd98b102e713`;
+- ajuste final de queries/visibilidade para Clippy estrito:
+  `d0c2f56d037b69389a5b0afe4142197dcb9c2c04`.
+
+CI funcional push `35796952385`: **verde**.
+Commit de versão: `b0a1118d933f0b49f30629ef755eb2331f75e5f9`.
+CI de versão push `35797108145`: **verde**.
+VERSION: `0.50.93`.
