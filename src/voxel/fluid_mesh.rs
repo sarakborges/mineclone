@@ -11,7 +11,7 @@ use super::{
     fluid::FluidCell,
     mesh_buffer::VoxelMeshBuffer,
     mesh_lighting::{
-        ChunkLightingCache, face_lighting_with_cache, push_lit_quad,
+        ChunkLightingCache, FaceLighting, face_lighting_with_cache, push_lit_quad,
         surface_block_srgb_with_cache,
     },
     meshlet::ChunkMeshletMask,
@@ -34,10 +34,41 @@ struct FluidFaceHeights {
 }
 
 #[derive(Clone, Copy, PartialEq)]
+struct FluidGreedyLighting {
+    channels: [f32; 2],
+    block_srgb: [f32; 3],
+    ambient_occlusion: f32,
+}
+
+impl FluidGreedyLighting {
+    fn from_uniform(lighting: FaceLighting) -> Option<Self> {
+        (1..4)
+            .all(|index| {
+                lighting.channels[index] == lighting.channels[0]
+                    && lighting.block_srgb[index] == lighting.block_srgb[0]
+                    && lighting.ambient_occlusion[index] == lighting.ambient_occlusion[0]
+            })
+            .then_some(Self {
+                channels: lighting.channels[0],
+                block_srgb: lighting.block_srgb[0],
+                ambient_occlusion: lighting.ambient_occlusion[0],
+            })
+    }
+
+    fn expand(self) -> FaceLighting {
+        FaceLighting {
+            channels: [self.channels; 4],
+            block_srgb: [self.block_srgb; 4],
+            ambient_occlusion: [self.ambient_occlusion; 4],
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
 struct FluidGreedyTop {
     fluid_id: FluidId,
     tint: [f32; 3],
-    lighting: crate::voxel::mesh_lighting::FaceLighting,
+    lighting: FluidGreedyLighting,
     height: f32,
 }
 
@@ -357,7 +388,7 @@ fn emit_greedy_fluid_top_faces<W, F>(
                 continue;
             };
 
-            if !fluid_lighting_is_uniform(lighting) {
+            let Some(greedy_lighting) = FluidGreedyLighting::from_uniform(lighting) else {
                 push_lit_quad(
                     fluid_buffer(buffers, cell.fluid_id),
                     fluid_face_vertices(
@@ -374,12 +405,12 @@ fn emit_greedy_fluid_top_faces<W, F>(
                     0.0,
                 );
                 continue;
-            }
+            };
 
             mask[x + z * CHUNK_SIZE] = Some(FluidGreedyTop {
                 fluid_id: cell.fluid_id,
                 tint,
-                lighting,
+                lighting: greedy_lighting,
                 height,
             });
         }
@@ -451,7 +482,7 @@ fn emit_greedy_fluid_top_plane(
                     [0.0, 0.0],
                 ],
                 candidate.tint,
-                candidate.lighting,
+                candidate.lighting.expand(),
                 0.0,
             );
         }
@@ -463,16 +494,6 @@ fn flat_fluid_height(heights: FluidFaceHeights) -> Option<f32> {
         && heights.h00.to_bits() == heights.h11.to_bits()
         && heights.h00.to_bits() == heights.h01.to_bits())
         .then_some(heights.h00)
-}
-
-fn fluid_lighting_is_uniform(
-    lighting: crate::voxel::mesh_lighting::FaceLighting,
-) -> bool {
-    (1..4).all(|index| {
-        lighting.channels[index] == lighting.channels[0]
-            && lighting.block_srgb[index] == lighting.block_srgb[0]
-            && lighting.ambient_occlusion[index] == lighting.ambient_occlusion[0]
-    })
 }
 
 fn fluid_buffer(
