@@ -372,7 +372,7 @@ Commits: compactação `59f126224ed19626e44792a8e50e1cccff0d0874`;
 regressão `3976696292de3c791674fce05027dd5dc0703245`.
 VERSION: `0.50.33`, commit
 `86f08d7265e7eba6ff40f72e255063e0654e7519`.
-CI de P17: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI de P17: **verde** nos runs push `35733790227` e PR `35733796650` para `86f08d7265e7eba6ff40f72e255063e0654e7519`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
