@@ -941,20 +941,23 @@ chunks molhados.
 
 O collector agora classifica o output antes do insert. Chunks com fluido
 continuam staged e passam pelo `GeneratedFluidSettling` exatamente como antes.
-Chunks secos são inseridos, recebem seed de lighting, entram em `ready` e
+Chunks secos só pulam a barreira quando **nenhum dos 26 vizinhos já residentes
+contém fluido**. Nesse caso recebem seed de lighting, entram em `ready` e
 completam seu generation-wave target imediatamente.
 
-Isso não fecha o chunk para futuras mudanças de fluido: chunks residentes e
-não persistentes já podem ser adotados pelo settling como `mutable_chunks`.
-Se fluido de um vizinho staged invadir um chunk seco já publicado, a mudança é
-registrada em `changed_existing_positions` e segue pelo reconciliation/remesh
-existente.
+A checagem de vizinhos é conservadora e preserva o settling determinístico
+quando um fluido já residente poderia depender do chunk recém-carregado.
+Futuras waves molhadas ainda podem adotar um chunk seco já publicado como
+`mutable_chunk`; mudanças ficam em `changed_existing_positions` e seguem
+pelo reconciliation/remesh existente.
 
-Commit funcional/regressão:
-`498a08f7b4d928baf9740a9a697c6e3fc0c1e1ff`.
+Commit inicial/regressão:
+`498a08f7b4d928baf9740a9a697c6e3fc0c1e1ff`; refinamento determinístico:
+`73c01641857fde857e5bb09905aeab9c379aa817`.
 VERSION: `0.50.63`, commit
 `ad16428ce1db0b58bf92b229e70309e052844bbd`.
-CI de P39: aguardando. Nenhum `cargo test` foi adicionado/executado.
+A primeira versão passou no push `35749238218`; CI do refinamento final:
+aguardando. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
