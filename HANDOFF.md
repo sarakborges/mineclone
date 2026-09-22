@@ -889,7 +889,28 @@ Commit funcional/regressão:
 `fbd0785571ed41b35cdb0d75b513c75519281ab9`.
 VERSION: `0.50.59`, commit
 `9dd6c2f4e7985465c752fd80da61df9fc7d240da`.
-CI de P36: aguardando.
+CI de P36: **verde** nos runs push `35747431128` e PR `35747436525` para `9dd6c2f4e7985465c752fd80da61df9fc7d240da`.
+
+### P37 — restringir dependências diagonais ao edge/corner real
+
+O reconciliation de halo ainda aproximava offsets diagonais usando contadores
+da face inteira. Assim, conteúdo em pontos distintos das faces X/Y podia
+simular uma dependência no edge X+Y e disparar remesh parcial sem relação com
+a região realmente amostrada.
+
+`VoxelChunk` agora mantém o caminho O(1) dos contadores para offsets
+cardinais e, somente para edge/corner, verifica a região exata de 16/1 voxels.
+Streaming usa essas queries para geometry e fluid halo reconciliation. A
+regressão cobre o caso em que duas faces têm conteúdo mas o edge comum está
+vazio.
+
+Commits: query exata
+`848b9754035c1faf8cecbe9a49706c6a203bb359`; integração/regressão
+`b480674cde01226c31f78b6e018c36148fafbd3e`; fix de import
+`87ec4e0182bc866d67a8818c4a72db24b2a3e50a`.
+VERSION: `0.50.60`, commit
+`73b8827ab22ec52afe3a2029b1760faf965cfcac`.
+CI de P37: aguardando.
 
 ### Ordem de execução definida
 
