@@ -412,6 +412,27 @@ VERSION: `0.50.35`, commit
 `737f5538387f93ce0d6151770089cb867cf57f7a`.
 CI de P19: **verde** nos runs push `35735017791` e PR `35735024683` para `737f5538387f93ce0d6151770089cb867cf57f7a`. Nenhum `cargo test` foi adicionado/executado.
 
+### P20 — antecipar alpha discard antes de lighting/shadows
+
+O fragment shader de terrain resolvia `alpha_discard` somente depois de
+skylight, shadow cascades, clustered point lights, AO/hue math e composição de
+overlay. Em foliage/cutout, texels transparentes pagavam todo esse custo para
+ser descartados no fim.
+
+No Bevy 0.19.1, `alpha_discard` só normaliza/descarta o alpha conforme o
+modo Opaque/Mask/AlphaToCoverage; o RGB recebido não é transformado. O shader
+agora resolve primeiro todas as amostras de textura (base + overlay), preservando
+derivatives implícitas, monta a cor/material alpha e executa o discard antes
+de qualquer shadow/clustered lighting. Pixels sobreviventes mantêm os mesmos
+floats de RGB/alpha antes do lighting. O prepass já fazia discard cedo e não
+foi alterado.
+
+Shader: `41d7063bb4ba01cc17414146e8eddb570f28a053`.
+VERSION: `0.50.36`, commit
+`daa624500f25379aaa3f5b00694eb19ad592506c`.
+CI de P20: aguardando. Clippy/check não executam o WGSL em runtime; QA GPU de
+foliage/alpha mask/alpha-to-coverage continua obrigatória.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
