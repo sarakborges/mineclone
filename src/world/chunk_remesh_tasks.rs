@@ -223,15 +223,10 @@ impl ChunkRemeshTasks {
         );
         let task = AsyncComputeTaskPool::get().spawn(async move {
             let _permit = permit;
-            // Full rebuilds benefit from a flattened 18³ shell because they
-            // sample the halo heavily. Partial meshlet remeshes touch only a
-            // fraction of that boundary, so avoid paying to materialize the
-            // entire shell and read directly from the frozen neighbor clones.
-            let world = if meshlets.is_all() {
-                world.materialize_shell()
-            } else {
-                world
-            };
+            // Neighbor chunks captured in the snapshot are immutable for this
+            // task. Full builds now create their own compact lighting cache,
+            // while geometry only touches the halo at real chunk boundaries.
+            // Avoid duplicating that state into a flattened 18³ shell.
             let context = snapshot.context(&world);
             let meshes = match kind {
                 ChunkRemeshTaskKind::Geometry | ChunkRemeshTaskKind::Lighting => {
