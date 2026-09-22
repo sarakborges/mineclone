@@ -11188,3 +11188,41 @@ Commit de versão: `3bd4e50894b62136dab884289237368180be8673`.
 CI de versão push `35776025732`: **verde** (localizações, Clippy rigoroso e
 cargo check).
 VERSION: `0.50.85`.
+
+## 2026-09-22 — Workaround DX12 para resize após camera deactivation
+
+Foi investigado o crash:
+`wgpu_hal::dx12: ResizeBuffers failed ... surface configuration failed: window is in use`.
+
+Diagnóstico:
+- Bevy 0.19.1 possui um bug DX12 aberto, issue upstream `#25740`
+  (2026-09-09), reproduzido em GPU discreta: manter uma câmera viva após alternar
+  `Camera::is_active` pode deixar referências do swapchain presas e fazer
+  `ResizeBuffers` falhar no próximo resize;
+- o erro observado em Asteria corresponde ao mesmo caminho:
+  `ResizeBuffers -> window is in use -> Surface::configure -> Invalid surface`.
+
+Workaround aplicado no projeto:
+- Character Info não alterna mais `Camera::is_active`;
+- sua câmera offscreen permanece ativa, mas quando o preview está ocioso usa
+  `ClearColorConfig::None` e o modelo fica `Visibility::Hidden`, evitando
+  render contínuo sem desativar a câmera;
+- player portrait não é mais desativado ao esconder o HUD;
+- target/entity portrait não alterna mais `Camera::is_active`;
+- captura de thumbnail de mundo não desativa mais a `GameplayUiCamera`;
+  durante a captura usa temporariamente `CameraOutputMode::Skip` e restaura o
+  modo anterior depois, removendo o HUD da imagem sem desativar câmera ligada
+  ao window surface.
+
+Commits funcionais:
+- Character Info: `4e796619d00e8342ec985f97779b80f7af9c2565`;
+- player portrait: `39503e02f90d7fcbce188ba49e85a8063673f0ec`;
+- target portrait camera spawn: `81eb10dbaa0fec263d616da392a06d3faa4664c5`;
+- target portrait sync: `c57d1f93d0f32ad30e5e8882204961d2dbebb24f`;
+- world thumbnail: `066161b726e22539b0dcaaf34572aec3883e4f51`.
+
+CI funcional push `35777241144`: **verde** (localizações, Clippy rigoroso e
+cargo check).
+Commit de versão: `2a46a4661afc7962dda09dae07ca0f69eaaee1fb`.
+CI de versão push `35777457133`: **verde**.
+VERSION: `0.50.86`.
