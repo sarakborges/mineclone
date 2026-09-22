@@ -208,14 +208,17 @@ impl ChunkRemeshTasks {
                 }
 
                 let meshlets = ChunkMeshletMask::for_world_position(coord, position);
-                let entry = revisions.entry(coord).or_insert([0; 8]);
-                for (index, revision) in entry.iter_mut().enumerate() {
-                    if !meshlets.contains_index(index) {
-                        continue;
-                    }
-                    *revision = revision.wrapping_add(1).max(1);
-                }
+                bump_lighting_revision_mask(revisions, coord, meshlets);
             });
+        }
+    }
+
+    pub(crate) fn bump_lighting_revisions_for_meshlets(
+        &mut self,
+        changes: impl IntoIterator<Item = (IVec3, ChunkMeshletMask)>,
+    ) {
+        for (coord, meshlets) in changes {
+            bump_lighting_revision_mask(&mut self.lighting_revisions, coord, meshlets);
         }
     }
 
@@ -312,6 +315,23 @@ impl ChunkRemeshTasks {
             self.poll_fluid_first = !fluid_first;
         }
         ready
+    }
+}
+
+fn bump_lighting_revision_mask(
+    revisions: &mut HashMap<IVec3, [u64; 8]>,
+    coord: IVec3,
+    meshlets: ChunkMeshletMask,
+) {
+    if meshlets.is_empty() {
+        return;
+    }
+
+    let entry = revisions.entry(coord).or_insert([0; 8]);
+    for (index, revision) in entry.iter_mut().enumerate() {
+        if meshlets.contains_index(index) {
+            *revision = revision.wrapping_add(1).max(1);
+        }
     }
 }
 
