@@ -153,5 +153,6 @@
   "inventory.tool.stats": "Stats",
   "inventory.tool.speed": "Speed",
   "hud.requiredTools": "Required Tools",
-  "hud.preferredTools": "Preferred Tools"
+  "hud.preferredTools": "Preferred Tools",
+  "hud.breakingProgress": "Breaking Progress"
 }

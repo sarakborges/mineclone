@@ -153,5 +153,6 @@
   "inventory.tool.stats": "Atributos",
   "inventory.tool.speed": "Velocidade",
   "hud.requiredTools": "Ferramentas Necessárias",
-  "hud.preferredTools": "Ferramentas Preferidas"
+  "hud.preferredTools": "Ferramentas Preferidas",
+  "hud.breakingProgress": "Progresso de Quebra"
 }

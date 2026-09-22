@@ -4,10 +4,11 @@ use smallvec::SmallVec;
 use crate::{
     app::{game_state::GameState, pause_state::PauseState},
     content::{
+        block::DEFAULT_BLOCK_BREAK_TICKS,
         builtin_ids::DYED_PROPERTY_ID,
         layer::{LayerFace, LayerRegistry},
         secondary_property::SecondaryPropertyRegistry,
-        tool::ToolRegistry,
+        tool_category::ToolCategoryRegistry,
     },
     hud::block_icon::BlockIconMaterial,
     localization::{ActiveLanguage, Language, UiLocalization},
@@ -16,7 +17,10 @@ use crate::{
         block_tint::apply_secondary_property_tint,
         block_visual_content::BlockVisualContent,
     },
-    targeting::block::TargetedBlock,
+    targeting::{
+        BlockMiningState,
+        block::{BlockTargetingSet, TargetedBlock},
+    },
     ui::{selectable, typography, visibility::set_visibility},
     voxel::{secondary_properties::SecondaryProperties, world::VoxelWorld},
 };
@@ -37,8 +41,12 @@ impl Plugin for TargetHudPlugin {
             .add_systems(OnEnter(PauseState::Running), set_visibility::<TargetHudRoot, true>.run_if(in_state(GameState::Gameplay)))
             .add_systems(
                 Update,
-                (sync_target_hud_layout, update_target_hud)
-                    .chain()
+                sync_target_hud_layout.run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                Update,
+                update_target_hud
+                    .after(BlockTargetingSet::Interaction)
                     .run_if(in_state(GameState::Gameplay)),
             );
     }
@@ -74,6 +82,7 @@ struct TargetHudSnapshot {
     properties: SecondaryProperties,
     layers: SmallVec<[(LayerFace, &'static str); 8]>,
     light_level: u8,
+    breaking_progress: Option<u8>,
     language: Language,
 }
 
@@ -90,6 +99,7 @@ struct TargetHudState<'w> {
     localization: Res<'w, UiLocalization>,
     language: Res<'w, ActiveLanguage>,
     settings: Res<'w, HudSettings>,
+    mining: Res<'w, BlockMiningState>,
 }
 
 #[derive(SystemParam)]
@@ -97,7 +107,7 @@ struct TargetHudContent<'w> {
     visual: BlockVisualContent<'w>,
     layers: Res<'w, LayerRegistry>,
     secondary_properties: Res<'w, SecondaryPropertyRegistry>,
-    tools: Res<'w, ToolRegistry>,
+    tool_categories: Res<'w, ToolCategoryRegistry>,
 }
 
 #[derive(SystemParam)]
@@ -286,6 +296,16 @@ fn update_target_hud(
     });
     applied_layers.dedup();
 
+    let block = content.visual.blocks.get(hit.block_id);
+    let breaking_progress = block
+        .and_then(|block| {
+            let required_work = DEFAULT_BLOCK_BREAK_TICKS as f32 * block.mining.hardness;
+            state
+                .mining
+                .progress_for(hit.voxel, hit.block_id, required_work)
+        })
+        .map(|progress| (progress * 100.0).round().clamp(0.0, 100.0) as u8);
+
     let snapshot = TargetHudSnapshot {
         voxel: hit.voxel,
         block_id: hit.block_id,
@@ -293,13 +313,14 @@ fn update_target_hud(
         properties,
         layers: applied_layers.clone(),
         light_level,
+        breaking_progress,
         language,
     };
     let block_definitions_changed = content.visual.block_definitions_changed();
     let definitions_changed = content.visual.inputs_changed()
         || content.layers.is_changed()
         || content.secondary_properties.is_changed()
-        || content.tools.is_changed()
+        || content.tool_categories.is_changed()
         || state.language.is_changed();
 
     if cached.as_ref() == Some(&snapshot)
@@ -315,7 +336,6 @@ fn update_target_hud(
     }
 
     let mut target_text = target_text.into_inner();
-    let block = content.visual.blocks.get(hit.block_id);
     let block_name = block.map_or(hit.block_id, |block| block.name.text(language));
     let coordinates = state
         .localization
@@ -377,14 +397,22 @@ fn update_target_hud(
             lines.push(format!(
                 "{}: {}",
                 state.localization.text(language, "hud.requiredTools"),
-                mining_tool_names(&block.mining.required_tools, &content.tools, language),
+                tool_category_names(
+                    &block.mining.required_tools,
+                    &content.tool_categories,
+                    language,
+                ),
             ));
         }
         if !block.mining.preferred_tools.is_empty() {
             lines.push(format!(
                 "{}: {}",
                 state.localization.text(language, "hud.preferredTools"),
-                mining_tool_names(&block.mining.preferred_tools, &content.tools, language),
+                tool_category_names(
+                    &block.mining.preferred_tools,
+                    &content.tool_categories,
+                    language,
+                ),
             ));
         }
         if lines.is_empty() {
@@ -393,8 +421,16 @@ fn update_target_hud(
             format!("\n{}", lines.join("\n"))
         }
     });
+    let breaking_text = breaking_progress
+        .map(|progress| {
+            format!(
+                "\n{}: {progress}%",
+                state.localization.text(language, "hud.breakingProgress"),
+            )
+        })
+        .unwrap_or_default();
     let next_text = format!(
-        "{block_name}{properties_text}{layers_text}{mining_text}\n{}: {light_level}\n{coordinates}",
+        "{block_name}{properties_text}{layers_text}{mining_text}{breaking_text}\n{}: {light_level}\n{coordinates}",
         state.localization.text(language, "hud.light"),
     );
 
@@ -448,26 +484,20 @@ fn update_target_hud(
 }
 
 
-fn mining_tool_names(
-    tags: &[String],
-    tools: &ToolRegistry,
+fn tool_category_names(
+    category_ids: &[String],
+    categories: &ToolCategoryRegistry,
     language: Language,
 ) -> String {
-    let mut names = Vec::<String>::new();
-    for tag in tags {
-        let mut matched = false;
-        for tool in tools.iter().filter(|tool| tool.mining.has_tag(tag)) {
-            matched = true;
-            let name = tool.name.text(language).to_owned();
-            if !names.contains(&name) {
-                names.push(name);
-            }
-        }
-        if !matched && !names.contains(tag) {
-            names.push(tag.clone());
-        }
-    }
-    names.join(", ")
+    category_ids
+        .iter()
+        .map(|category_id| {
+            categories
+                .get(category_id)
+                .map_or(category_id.as_str(), |category| category.name.text(language))
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn layer_face_name<'a>(
