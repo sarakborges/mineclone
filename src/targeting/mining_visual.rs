@@ -146,7 +146,7 @@ fn update_breaking_overlay(
             overlay.stage = None;
             return;
         };
-        if let Some(mesh) = meshes.get_mut(&mesh_handle.0) {
+        if let Some(mut mesh) = meshes.get_mut(&mesh_handle.0) {
             *mesh = next_mesh;
         }
         transform.translation = hit.voxel.as_vec3();
