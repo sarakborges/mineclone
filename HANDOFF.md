@@ -708,6 +708,26 @@ VERSION: `0.50.49`, commit
 CI do hotfix: aguardando. QA runtime continua obrigatória porque ausência de
 erro no CI não valida WGSL/WGPU nem confirma publicação visual dos chunks.
 
+### Hotfix — fallback de chunk culling para CPU
+
+A investigação do sintoma “chunks/blocos parecem não estar carregados” mostrou
+que terrain/layers opacos estavam marcados com `NoCpuCulling`: o CPU deixava
+de fazer frustum culling e confiava integralmente no caminho de GPU culling.
+Esse tipo de falha de runtime não é coberto por Clippy/check e pode resultar em
+mesh existente no render pool mas invisível na frame final.
+
+Como medida de estabilização, `NoCpuCulling` foi removido dos chunk geometry
+entities. Terrain e layers voltam a usar o frustum culling padrão/CPU do Bevy;
+fluids já não usavam `NoCpuCulling` e permanecem inalterados. AABB/mesh
+identity também permanecem intactos.
+
+Commit funcional: `dc1c6896d1b32a64eae2824ab974e29b575c662a`.
+VERSION: `0.50.50`, commit
+`ff26e987856ee458b8b4e9cf4f667b0bfcda9093`.
+CI: aguardando. QA runtime é obrigatória; se chunks voltarem a aparecer, GPU
+culling deve ser tratado como incompatível/instável até ser reintroduzido com
+detecção e fallback.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
