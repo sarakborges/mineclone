@@ -10977,3 +10977,36 @@ Commits:
 - ajuste de lint: `62360dd81e64508ca31c84a13e5d44dbfc459db9`.
 
 CI push `35767423349`: **verde** (localizações, Clippy rigoroso e cargo check).
+
+## 2026-09-22 — Thumbnails de mundos no save
+
+A seleção de mundos agora exibe uma thumbnail 16:9 do último POV salvo do
+jogador.
+
+Implementação:
+- os três saves existentes continuam sendo os únicos pontos de persistência:
+  `Leave World`, `Exit Game` e fechamento da janela;
+- nenhum autosave foi adicionado;
+- após o snapshot do mundo ser publicado, a `GameplayUiCamera` é desativada
+  durante a captura para remover HUD/pause overlay sem criar uma segunda câmera
+  de gameplay;
+- a captura usa o frame atual da janela, portanto respeita diretamente o POV da
+  câmera única, inclusive first/third person;
+- o screenshot é central-cropped para 16:9, reduzido para 320×180 e salvo em
+  `worlds/<world>/thumbnail.png`;
+- falha ao gerar a thumbnail não invalida um save de mundo já concluído;
+- saves antigos sem `thumbnail.png` continuam compatíveis e mostram o fallback
+  visual do card;
+- thumbnails são decodificadas em `Assets<Image>` somente para a world
+  selection e liberadas apenas depois que essa tela já foi desmontada, evitando
+  remover assets ainda referenciados por entidades de UI.
+
+O primeiro CI da implementação apontou somente `clippy::too_many_arguments`
+nos systems de pause menu e scan da world selection. Os parâmetros foram
+agrupados em `SystemParam`, sem `#[allow]`.
+
+Commit funcional final: `db8209660bf6245b935835bd4cc4643d7b2a72fd`.
+Commit de versão: `b3078787cda30c41310c69f1a7981b48c83d21fd`.
+CI final push `35770201357`: **verde** (localizações, Clippy rigoroso e
+cargo check).
+VERSION: `0.50.79`.
