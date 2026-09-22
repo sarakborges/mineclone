@@ -39,6 +39,7 @@ struct PlayerHudRoot;
 #[derive(Component)]
 struct InventoryHint;
 
+#[allow(clippy::too_many_arguments)]
 fn spawn_player_hud(
     mut commands: Commands,
     settings: Res<HudSettings>,
