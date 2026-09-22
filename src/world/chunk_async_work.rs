@@ -153,11 +153,7 @@ impl ChunkAsyncStageMetrics {
         let max_nanos = self.max_nanos.swap(0, Ordering::Relaxed);
         ChunkAsyncStageDiagnostic {
             count,
-            average_micros: if count == 0 {
-                0
-            } else {
-                total_nanos / count / 1_000
-            },
+            average_micros: total_nanos.checked_div(count).unwrap_or(0) / 1_000,
             max_micros: max_nanos / 1_000,
         }
     }
