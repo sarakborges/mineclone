@@ -806,7 +806,7 @@ Commits: câmera principal
 `d52eaf80eb892e81d8baf978fe8c78c2561a234c`.
 VERSION: `0.50.55`, commit
 `08ed8682ff4a9b56c019e706b49ba84c484035ed`.
-CI: aguardando. QA runtime visual é obrigatória porque o CI não executa WGPU.
+CI: **verde** nos runs push `35744168335` e PR `35744175702` para `08ed8682ff4a9b56c019e706b49ba84c484035ed`. QA runtime visual continua obrigatória porque o CI não executa WGPU.
 
 ### Ordem de execução definida
 
