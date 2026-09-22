@@ -181,12 +181,8 @@ fn fragment(
         terrain_material_extension.texture_array_enabled > 0.5;
 
     // Every voxel terrain material is unlit and the terrain shader samples
-    // its base/overlay textures itself. Avoid StandardMaterial's full PBR
-    // preparation and keep only the fields used by alpha discard and fog.
-    var pbr_input = pbr_input_from_vertex_output(in, is_front, false);
-    pbr_input.material.flags = pbr_bindings::material.flags;
-    pbr_input.material.base_color = pbr_bindings::material.base_color;
-    pbr_input.material.alpha_cutoff = pbr_bindings::material.alpha_cutoff;
+    // its base/overlay textures itself. Delay PbrInput construction until after
+    // alpha discard so masked-out fragments avoid view/normal preparation too.
 
     // Greedy terrain quads carry UVs larger than 1 so each merged voxel face
     // keeps the original per-block texture scale. The integer UV0.x region also
@@ -277,9 +273,14 @@ fn fragment(
         texel.a * pbr_bindings::material.base_color.a,
     );
     material_color = alpha_discard(
-        pbr_input.material,
+        pbr_bindings::material,
         material_color,
     );
+
+    var pbr_input = pbr_input_from_vertex_output(in, is_front, false);
+    pbr_input.material.flags = pbr_bindings::material.flags;
+    pbr_input.material.base_color = pbr_bindings::material.base_color;
+    pbr_input.material.alpha_cutoff = pbr_bindings::material.alpha_cutoff;
 
     let sky_light = pow(sky_level, SKY_LIGHT_GAMMA) * terrain_global_lighting[0].x;
 
