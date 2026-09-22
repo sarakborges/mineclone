@@ -1,4 +1,4 @@
-use bevy::{input_focus::InputFocus, prelude::*};
+use bevy::{ecs::system::SystemParam, input_focus::InputFocus, prelude::*};
 
 use crate::{
     app::{
@@ -70,27 +70,36 @@ impl Plugin for PlayerInventoryPlugin {
     }
 }
 
-fn toggle_inventory(
-    keys: Res<ButtonInput<KeyCode>>,
-    keybinds: Res<Keybinds>,
-    inventory_state: Res<State<InventoryState>>,
-    chat: Res<ChatState>,
-    focus: Res<InputFocus>,
-    mut next_inventory_state: ResMut<NextState<InventoryState>>,
-    mut next_character_info: ResMut<NextState<CharacterInfoState>>,
-    mut next_brush_palette: ResMut<NextState<BrushPaletteState>>,
-) {
-    if chat.is_open() || focus.get().is_some() {
+#[derive(SystemParam)]
+struct InventoryModalInput<'w> {
+    keys: Res<'w, ButtonInput<KeyCode>>,
+    keybinds: Res<'w, Keybinds>,
+    inventory_state: Res<'w, State<InventoryState>>,
+    chat: Res<'w, ChatState>,
+    focus: Res<'w, InputFocus>,
+    next_inventory_state: ResMut<'w, NextState<InventoryState>>,
+    next_character_info: ResMut<'w, NextState<CharacterInfoState>>,
+    next_brush_palette: ResMut<'w, NextState<BrushPaletteState>>,
+}
+
+fn toggle_inventory(mut input: InventoryModalInput) {
+    if input.chat.is_open() || input.focus.get().is_some() {
         return;
     }
-    match inventory_state.get() {
-        InventoryState::Closed if keys.just_pressed(keybinds.key_code(KeybindAction::Inventory)) => {
-            next_character_info.set(CharacterInfoState::Closed);
-            next_brush_palette.set(BrushPaletteState::Closed);
-            next_inventory_state.set(InventoryState::Open);
+    match input.inventory_state.get() {
+        InventoryState::Closed
+            if input
+                .keys
+                .just_pressed(input.keybinds.key_code(KeybindAction::Inventory)) =>
+        {
+            input
+                .next_character_info
+                .set(CharacterInfoState::Closed);
+            input.next_brush_palette.set(BrushPaletteState::Closed);
+            input.next_inventory_state.set(InventoryState::Open);
         }
-        InventoryState::Open if keys.just_pressed(KeyCode::Escape) => {
-            next_inventory_state.set(InventoryState::Closed);
+        InventoryState::Open if input.keys.just_pressed(KeyCode::Escape) => {
+            input.next_inventory_state.set(InventoryState::Closed);
         }
         _ => {}
     }
