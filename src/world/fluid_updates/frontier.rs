@@ -166,6 +166,24 @@ fn visit_neighbor_boundary_spread_targets(
     let size = CHUNK_SIZE as i32;
     let origin = coord * size;
 
+    if chunk.fluid_count() <= CHUNK_SIZE * CHUNK_SIZE {
+        chunk.visit_fluid_voxels(|local_x, local_y, local_z, fluid| {
+            let local_position =
+                IVec3::new(local_x as i32, local_y as i32, local_z as i32);
+            if !fluid_voxel_touches_boundary(local_position, direction) {
+                return;
+            }
+
+            visit_spread_targets_from_fluid(
+                world,
+                origin + local_position,
+                fluid,
+                visit,
+            );
+        });
+        return;
+    }
+
     if direction.x != 0 {
         let local_x = if direction.x < 0 { 0 } else { size - 1 };
         for local_y in 0..size {
@@ -218,6 +236,25 @@ fn visit_neighbor_boundary_spread_targets(
     }
 }
 
+fn fluid_voxel_touches_boundary(local_position: IVec3, direction: IVec3) -> bool {
+    let last = CHUNK_SIZE as i32 - 1;
+    if direction.x < 0 {
+        local_position.x == 0
+    } else if direction.x > 0 {
+        local_position.x == last
+    } else if direction.y < 0 {
+        local_position.y == 0
+    } else if direction.y > 0 {
+        local_position.y == last
+    } else if direction.z < 0 {
+        local_position.z == 0
+    } else if direction.z > 0 {
+        local_position.z == last
+    } else {
+        false
+    }
+}
+
 fn visit_spread_targets_from_fluid(
     world: &VoxelWorld,
     position: IVec3,
@@ -245,5 +282,27 @@ fn visit_spread_targets_from_fluid(
         }
 
         visit(source_fluid.fluid_id, target, offset == IVec3::NEG_Y);
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fluid_boundary_filter_matches_each_cardinal_face() {
+        let last = CHUNK_SIZE as i32 - 1;
+        for (direction, on_face, off_face) in [
+            (IVec3::NEG_X, IVec3::new(0, 4, 5), IVec3::new(1, 4, 5)),
+            (IVec3::X, IVec3::new(last, 4, 5), IVec3::new(last - 1, 4, 5)),
+            (IVec3::NEG_Y, IVec3::new(4, 0, 5), IVec3::new(4, 1, 5)),
+            (IVec3::Y, IVec3::new(4, last, 5), IVec3::new(4, last - 1, 5)),
+            (IVec3::NEG_Z, IVec3::new(4, 5, 0), IVec3::new(4, 5, 1)),
+            (IVec3::Z, IVec3::new(4, 5, last), IVec3::new(4, 5, last - 1)),
+        ] {
+            assert!(fluid_voxel_touches_boundary(on_face, direction));
+            assert!(!fluid_voxel_touches_boundary(off_face, direction));
+        }
     }
 }
