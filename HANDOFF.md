@@ -356,6 +356,24 @@ VERSION: `0.50.32`, commit
 `194d984f8c6b080d2dd74d159ffb4a7923c17801`.
 CI de P16: **verde** nos runs push `35733417379` e PR `35733424714` para `194d984f8c6b080d2dd74d159ffb4a7923c17801`. Nenhum `cargo test` foi adicionado/executado.
 
+### P17 — compactar buckets de planos do greedy terrain
+
+O mesher terrain mantinha 16 `Vec<u32>` por eixo X/Y/Z para agrupar voxels
+normais antes das seis passadas de faces: 48 vetores heap por build/remesh,
+mesmo quando vários planos ficavam vazios.
+
+`VoxelMeshSource` agora guarda a posição local compactada em 12 bits. Após a
+coleta, cada eixo é agrupado por counting-sort estável em um único `Vec<u32>`
+com 17 offsets de plano. São três buffers contíguos no lugar de 48 buckets,
+com o mesmo volume total de entries e a mesma ordem interna de candidatos por
+plano. A regressão compilável verifica explicitamente essa estabilidade.
+
+Commits: compactação `59f126224ed19626e44792a8e50e1cccff0d0874`;
+regressão `3976696292de3c791674fce05027dd5dc0703245`.
+VERSION: `0.50.33`, commit
+`86f08d7265e7eba6ff40f72e255063e0654e7519`.
+CI de P17: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
