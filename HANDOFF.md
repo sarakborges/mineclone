@@ -220,6 +220,35 @@ VERSION: `0.50.26`, commit
 CI de P10: **verde** nos runs push `35686223977` e PR `35686227796` para
 `6e269f52dbb66042328217fb94e50fccee8489b0`.
 
+### P11 — agregar invalidação de lighting por chunk/meshlet
+
+O hot path de lighting percorria o halo de cada voxel alterado duas vezes:
+uma para avançar as revisions de remesh e outra para enfileirar refresh de
+terrain/fluid. Com o teto atual de 4.096 voxels de lighting por frame, isso
+multiplicava visitas de halo, consultas de chunk e unions/hash updates
+redundantes justamente antes do remesh.
+
+O sistema agora agrega uma única vez `coord -> ChunkMeshletMask` para o batch
+de lighting. A mesma máscara agregada é reutilizada para:
+- avançar o token de revision dos meshlets afetados;
+- enfileirar lighting remesh de terrain;
+- enfileirar fluid remesh quando o chunk contém fluido.
+
+A revision continua sendo apenas um token monotônico de staleness: um bump por
+meshlet afetado no batch preserva a propriedade necessária de desigualdade
+contra tasks capturadas antes da mudança, sem precisar contar cada voxel
+individualmente. APIs antigas por voxel ficaram restritas a `#[cfg(test)]`.
+
+Commits: revision por máscara `d2b37d67eb4a09e7574bfce8f430d5419ad2bfc5`;
+enqueue por máscara `617db367175d9930b0197b2ac9698ae49d9f4c3f`;
+agregação no hot path `9fc50e7b5ae8eff7e1b0ee246eff87be47f9e624`;
+cleanup/entry `c9d3ab4156d73c91d871f0865b72006a448b60a4`,
+`bbbfd0b27c1b73c8a4becb6d2bea594077b1cb11`,
+`5d530f2b4fa02dd827cd3df280070a5ce259c5bf`.
+VERSION: `0.50.27`, commit
+`9d38f94fad521c67ccec0c6a76a777d9943048c9`.
+CI de P11: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
