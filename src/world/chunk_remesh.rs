@@ -30,6 +30,7 @@ const REMESH_RESULT_INTEGRATION_BUDGET: Duration = Duration::from_millis(1);
 const MAX_REMESH_TASKS_DISPATCHED_PER_FRAME: usize = 4;
 const MAX_REMESH_RESULTS_COLLECTED_PER_FRAME: usize = 4;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn process_chunk_remesh_queue(
     content: ChunkContent,
     mut renderer: ChunkRenderer,
