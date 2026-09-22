@@ -5,6 +5,10 @@ use bevy::{
     render::render_resource::{PrimitiveTopology, VertexFormat},
 };
 
+use crate::rendering::block_texture::{
+    TERRAIN_TEXTURE_FLAG_SHIFT, TERRAIN_TEXTURE_INDEX_BITS, TERRAIN_TEXTURE_INDEX_MASK,
+};
+
 use super::{
     chunk::CHUNK_SIZE,
     meshlet::CHUNK_MESHLET_EDGE,
@@ -56,16 +60,18 @@ impl VoxelMeshBuffer {
         let packed_tint_normal = encode_tint_and_normal(quad.tint, quad.normal);
         let meshlet_index = quad_meshlet_index(quad.vertices, quad.normal);
         self.positions.extend(quad.vertices);
-        self.uvs.extend(std::array::from_fn(|index| {
+        let encoded_uvs: [[f32; 2]; 4] = std::array::from_fn(|index| {
             encode_material_uv(quad.uvs[index], quad.light_uvs[index][1])
-        }));
-        self.payloads.extend(std::array::from_fn(|index| {
+        });
+        let payloads: [u32; 4] = std::array::from_fn(|index| {
             encode_vertex_payload(
                 packed_tint_normal,
                 quad.light_uvs[index][0],
                 meshlet_index,
             )
-        }));
+        });
+        self.uvs.extend(encoded_uvs);
+        self.payloads.extend(payloads);
         self.colors.extend(quad.colors.map(encode_voxel_light));
         self.indices
             .extend(quad_triangle_indices(base, quad.flip_diagonal));
