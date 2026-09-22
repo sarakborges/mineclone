@@ -315,7 +315,7 @@ não vazios permanecem no caminho conservador.
 Commit funcional: `6147a8f44a3e99eed3b304cca5fa3879c15351e3`.
 VERSION: `0.50.30`, commit
 `f2b1ee8c03e65f85177029c62100bae0664178c8`.
-CI de P14: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI de P14: **verde** nos runs push `35732870883` e PR `35732876927` para `f2b1ee8c03e65f85177029c62100bae0664178c8`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
