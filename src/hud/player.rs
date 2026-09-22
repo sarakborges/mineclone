@@ -1,3 +1,5 @@
+mod portrait;
+
 use bevy::prelude::*;
 
 use crate::{
@@ -7,6 +9,7 @@ use crate::{
         pause_state::PauseState,
         settings_state::SettingsState,
     },
+    content::player::PlayerDefinition,
     localization::{ActiveLanguage, UiLocalization},
     player::inventory::InventoryState,
     ui::typography,
@@ -26,7 +29,12 @@ impl Plugin for PlayerHudPlugin {
         app.add_systems(OnEnter(GameState::Gameplay), spawn_player_hud)
             .add_systems(
                 Update,
-                (sync_player_hud_visibility, sync_inventory_hint)
+                (
+                    portrait::attach_player_portrait_model,
+                    sync_player_hud_visibility,
+                    sync_inventory_hint,
+                )
+                    .chain()
                     .run_if(in_state(GameState::Gameplay)),
             );
     }
@@ -49,7 +57,16 @@ fn spawn_player_hud(
     inventory_state: Res<State<InventoryState>>,
     pause_state: Res<State<PauseState>>,
     settings_state: Res<State<SettingsState>>,
+    mut images: ResMut<Assets<Image>>,
+    player_definition: Res<PlayerDefinition>,
+    asset_server: Res<AssetServer>,
 ) {
+    let portrait_image = portrait::spawn_player_portrait(
+        &mut commands,
+        &mut images,
+        &player_definition,
+        &asset_server,
+    );
     let hint_kind = inventory_hint_kind(*inventory_state.get());
     let hint_visibility = if settings.hint_enabled(hint_kind) {
         Visibility::Inherited
@@ -76,7 +93,11 @@ fn spawn_player_hud(
             DespawnOnExit(GameState::Gameplay),
         ))
         .with_children(|root| {
-            spawn_entity_card(root, EntityCardSource::LocalPlayer, None);
+            spawn_entity_card(
+                root,
+                EntityCardSource::LocalPlayer,
+                Some(portrait_image.clone()),
+            );
             root.spawn((
                 InventoryHint,
                 typography::crosshair_hint(
@@ -102,11 +123,19 @@ fn sync_player_hud_visibility(
     pause: Res<State<PauseState>>,
     settings: Res<State<SettingsState>>,
     mut roots: Query<&mut Visibility, With<PlayerHudRoot>>,
+    mut portrait_cameras: Query<&mut Camera, With<portrait::PlayerPortraitCamera>>,
 ) {
     let next = player_hud_visibility(*pause.get(), *settings.get());
     for mut visibility in &mut roots {
         if *visibility != next {
             *visibility = next;
+        }
+    }
+
+    let active = next == Visibility::Visible;
+    for mut camera in &mut portrait_cameras {
+        if camera.is_active != active {
+            camera.is_active = active;
         }
     }
 }
