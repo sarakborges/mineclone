@@ -666,7 +666,7 @@ Commit funcional/regressões:
 `c660c6a271e46386ae4195c906eadecc2eadcb07`.
 VERSION: `0.50.47`, commit
 `e1ca796a05c7310d501b8d6b891f3699571699f3`.
-CI de P31: aguardando. Nenhum `cargo test` foi adicionado/executado.
+CI de P31: **verde** nos runs push `35740179698` e PR `35740185489` para `e1ca796a05c7310d501b8d6b891f3699571699f3`. Nenhum `cargo test` foi adicionado/executado.
 
 ### Ordem de execução definida
 
