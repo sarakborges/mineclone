@@ -132,6 +132,13 @@ impl ChunkGenerationTasks {
         self.pending.insert(coord, revision, task)
     }
 
+    pub(crate) fn cancel_where(
+        &mut self,
+        predicate: impl FnMut(IVec3) -> bool,
+    ) -> Vec<IVec3> {
+        self.pending.cancel_where(predicate)
+    }
+
     pub(crate) fn poll_ready(&mut self) -> Option<CompletedChunkTask<VoxelChunk>> {
         self.pending.poll_ready()
     }
