@@ -55,7 +55,11 @@ impl TerrainLightingBuffer {
         buffers: &mut Assets<ShaderBuffer>,
         enabled: bool,
     ) {
-        self.dynamic_light_enabled = enabled as u8 as f32;
+        let next = enabled as u8 as f32;
+        if self.dynamic_light_enabled == next {
+            return;
+        }
+        self.dynamic_light_enabled = next;
         self.write(buffers);
     }
 
