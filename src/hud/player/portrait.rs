@@ -27,16 +27,36 @@ const CHARACTER_PREVIEW_CENTER_Y: f32 = 0.90;
 const CHARACTER_PREVIEW_CAMERA_DISTANCE: f32 = 3.15;
 
 #[derive(Component)]
-struct PlayerHudPreviewCamera;
+pub(super) struct PlayerHudPreviewCamera;
 
 #[derive(Component)]
-struct CharacterInfoPreviewCamera;
+pub(super) struct CharacterInfoPreviewCamera;
 
 #[derive(Component)]
 pub(crate) struct PlayerHudPreviewViewport;
 
 #[derive(Component)]
 pub(crate) struct CharacterInfoPreviewViewport;
+
+type HudPreviewCameraQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Camera, &'static mut Transform),
+    (
+        With<PlayerHudPreviewCamera>,
+        Without<CharacterInfoPreviewCamera>,
+    ),
+>;
+
+type CharacterPreviewCameraQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Camera, &'static mut Transform),
+    (
+        With<CharacterInfoPreviewCamera>,
+        Without<PlayerHudPreviewCamera>,
+    ),
+>;
 
 pub(super) fn spawn_player_preview_cameras(mut commands: Commands) {
     commands.spawn((
@@ -81,14 +101,8 @@ pub(super) fn sync_player_preview_cameras(
     pause: Res<State<PauseState>>,
     settings: Res<State<SettingsState>>,
     character_info: Res<State<CharacterInfoState>>,
-    mut hud_camera: Query<
-        (&mut Camera, &mut Transform),
-        (With<PlayerHudPreviewCamera>, Without<CharacterInfoPreviewCamera>),
-    >,
-    mut character_camera: Query<
-        (&mut Camera, &mut Transform),
-        (With<CharacterInfoPreviewCamera>, Without<PlayerHudPreviewCamera>),
-    >,
+    mut hud_camera: HudPreviewCameraQuery,
+    mut character_camera: CharacterPreviewCameraQuery,
 ) {
     let Some(model_transform) = model.iter().next() else {
         skip_cameras(&mut hud_camera);
