@@ -301,6 +301,22 @@ VERSION: `0.50.29`, commit
 `b8b8b94cf901d4ad7e802fe8c9b3becc3627c614`.
 CI de P13: **verde** nos runs push `35732619224` e PR `35732623902` para `b8b8b94cf901d4ad7e802fe8c9b3becc3627c614`. Nenhum `cargo test` foi adicionado/executado.
 
+### P14 — pular relight inferior ao descarregar seção vazia
+
+O unload de qualquer seção chamava `enqueue_loaded_column_below` depois de
+arquivar o chunk. Para uma seção vazia isso é trabalho sem efeito: remover ar
+não altera o skylight direto que a ausência daquela seção já representa.
+
+Antes do archive, o unload agora registra se o chunk é não vazio. Se for vazio,
+a invalidação vertical das seções inferiores é pulada; halo reconciliation,
+boundary lighting e todo o restante do cleanup continuam inalterados. Chunks
+não vazios permanecem no caminho conservador.
+
+Commit funcional: `6147a8f44a3e99eed3b304cca5fa3879c15351e3`.
+VERSION: `0.50.30`, commit
+`f2b1ee8c03e65f85177029c62100bae0664178c8`.
+CI de P14: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
