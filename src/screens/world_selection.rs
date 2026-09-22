@@ -17,6 +17,7 @@ use crate::{
     world::{
         InMemoryWorldSave,
         save_catalog::{SaveRegistries, WorldSummary, delete_world, open_worlds_directory},
+        thumbnail::load_world_thumbnail,
     },
 };
 
@@ -38,7 +39,10 @@ impl Plugin for WorldSelectionPlugin {
                 OnEnter(GameState::WorldSelection),
                 (refresh_world_list, spawn_world_selection).chain(),
             )
-            .add_systems(OnExit(GameState::WorldSelection), abandon_world_load)
+            .add_systems(
+                OnExit(GameState::WorldSelection),
+                (abandon_world_load, release_world_thumbnail_images).chain(),
+            )
             .add_systems(
                 Update,
                 // Consume Back before a worker result. A completed load in the
@@ -56,6 +60,7 @@ struct WorldSelectionState {
     error: String,
     scan: Option<PendingWorldScan>,
     loading: Option<PendingWorldLoad>,
+    thumbnail_images: Vec<Handle<Image>>,
 }
 
 #[derive(Component, Clone)]
@@ -128,6 +133,7 @@ fn poll_world_scan(
     language: Res<ActiveLanguage>,
     dimensions: Res<DimensionRegistry>,
     biomes: Res<BiomeRegistry>,
+    mut images: ResMut<Assets<Image>>,
 ) {
     let Some(scan) = state.scan.as_ref() else {
         return;
@@ -139,10 +145,35 @@ fn poll_world_scan(
     state.scan = None;
     match result {
         Ok(worlds) => {
+            for handle in state.thumbnail_images.drain(..) {
+                let _ = images.remove(&handle);
+            }
             state.worlds = worlds;
+
+            let mut entries = Vec::with_capacity(state.worlds.len());
+            for world in state.worlds.clone() {
+                let thumbnail = if world.compatible {
+                    match load_world_thumbnail(&world.id) {
+                        Ok(Some(image)) => {
+                            let handle = images.add(image);
+                            state.thumbnail_images.push(handle.clone());
+                            Some(handle)
+                        }
+                        Ok(None) => None,
+                        Err(error) => {
+                            warn!("Could not load thumbnail for world {}: {error}", world.id);
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
+                entries.push((world, thumbnail));
+            }
+
             for list_entity in &list {
                 commands.entity(list_entity).with_children(|parent| {
-                    for world in &state.worlds {
+                    for (world, thumbnail) in &entries {
                         spawn_world_entry(
                             parent,
                             world,
@@ -150,6 +181,7 @@ fn poll_world_scan(
                             language.get(),
                             &dimensions,
                             &biomes,
+                            thumbnail.clone(),
                         );
                     }
                 });
@@ -252,6 +284,15 @@ fn poll_world_load(
 fn abandon_world_load(state: Res<WorldSelectionState>) {
     if let Some(pending) = state.loading.as_ref() {
         pending.abandon();
+    }
+}
+
+fn release_world_thumbnail_images(
+    mut state: ResMut<WorldSelectionState>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    for handle in state.thumbnail_images.drain(..) {
+        let _ = images.remove(&handle);
     }
 }
 
