@@ -6,8 +6,11 @@ use bevy::{
 };
 
 use crate::{
-    voxel::coordinates::{
-        chunk_coord_from_world, visit_chunk_coords_whose_voxel_halo_contains,
+    voxel::{
+        chunk::VoxelChunk,
+        coordinates::{
+            chunk_coord_from_world, visit_chunk_coords_whose_voxel_halo_contains,
+        },
     },
     world::{
         chunk_generation_tasks::MAX_GENERATION_TASKS_IN_FLIGHT,
@@ -102,8 +105,22 @@ pub(super) fn collect_generated_chunks(
             continue;
         }
 
+        let requires_fluid_settling =
+            generated_chunk_requires_fluid_settling(&completed.output);
         work.world.insert_chunk(completed.coord, completed.output);
-        work.state.stage_generated_chunk(completed.coord);
+        if requires_fluid_settling {
+            work.state.stage_generated_chunk(completed.coord);
+        } else {
+            seed_loaded_chunk_lighting(
+                completed.coord,
+                content,
+                work,
+                queues,
+                current_tick,
+            );
+            work.state.mark_ready(completed.coord);
+            work.state.complete_generation_wave_target(completed.coord);
+        }
     }
 
     if work.generation_tasks.pending_count() > 0
@@ -329,6 +346,10 @@ pub(super) fn dispatch_generation_tasks(
     }
 }
 
+fn generated_chunk_requires_fluid_settling(chunk: &VoxelChunk) -> bool {
+    chunk.has_fluid()
+}
+
 fn generation_wave_target_limit(state: &super::ChunkStreamingState) -> usize {
     let Some(center) = state.center else {
         return MAX_GENERATION_TASKS_IN_FLIGHT;
@@ -392,6 +413,17 @@ fn select_generation_wave(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::voxel::fluid::FluidCell;
+
+    #[test]
+    fn dry_generated_chunks_do_not_wait_for_fluid_settling() {
+        let dry = VoxelChunk::empty();
+        assert!(!generated_chunk_requires_fluid_settling(&dry));
+
+        let mut wet = VoxelChunk::empty();
+        wet.set_fluid(4, 5, 6, Some(FluidCell::source(0, 8)));
+        assert!(generated_chunk_requires_fluid_settling(&wet));
+    }
 
     #[test]
     fn critical_generation_frontier_uses_smaller_publication_waves() {
