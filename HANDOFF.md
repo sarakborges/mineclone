@@ -63,7 +63,27 @@ CI inicial de P3: FAIL no run `35682445814`, commit
 `bbb28521c5e549394f48320dcb0f361c00ef2afa`, por
 `clippy::chunks_exact_to_as_chunks` (Rust 1.98.1). Corrigido com
 `as_chunks::<4>().0.iter()`, sem supressão. VERSION permanece `0.50.18`
-porque é a correção do mesmo bloco. CI da correção: aguardando conclusão.
+porque é a correção do mesmo bloco. CI da correção: **verde**, commit
+`b1ecc328e299821cc4652554cceba715a440af5e`, run de push `35682552612`.
+
+### P4 — pular planos vazios no greedy terrain/fluid
+
+Terrain deixa de criar/varrer a máscara greedy nos pares face/depth sem
+qualquer voxel normal candidato; os voxels sculpted continuam pelo caminho
+micro-mesh independente. Em um chunk esparso isso elimina planos que não
+podem emitir quad sem alterar exposição, lighting, tint, material ou ordem
+dos planos ativos. Commit terrain:
+`1d7a09905ea5d17bf2647e61a5ea12f24812d4a8`.
+
+O greedy de topo dos fluidos também ignora níveis Y cujo bucket está vazio,
+evitando a varredura 16x16 e o fill da máscara nesses níveis. Níveis com
+fluido mantêm exatamente o mesmo caminho. Commit fluid:
+`1ae5725db9b50ac84b72480764156c7031999b06`.
+
+VERSION: `0.50.20`, commit
+`efd9223e5ae0409a53dc208d1f49e59b0d1ae808`.
+CI de P4: aguardando o run do SHA acumulado. Nenhum `cargo test` foi
+adicionado/executado; QA Windows/FPS continua pendente.
 
 ### Ordem de execução definida
 
