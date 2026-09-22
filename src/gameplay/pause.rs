@@ -3,7 +3,7 @@ use bevy::{prelude::*, window::WindowFocused};
 use crate::{
     app::{game_state::GameState, pause_state::PauseState, settings_state::SettingsState},
     hud::chat::ChatState,
-    player::inventory::InventoryState,
+    player::{character_info::CharacterInfoState, inventory::InventoryState},
     tools::BrushPaletteState,
     ui::transition::{ScreenTransition, ScreenTransitionTarget},
 };
@@ -18,7 +18,8 @@ impl Plugin for PausePlugin {
                 toggle_pause
                     .run_if(in_state(SettingsState::Closed))
                     .run_if(in_state(InventoryState::Closed))
-                    .run_if(in_state(BrushPaletteState::Closed)),
+                    .run_if(in_state(BrushPaletteState::Closed))
+                    .run_if(in_state(CharacterInfoState::Closed)),
                 pause_on_focus_lost.run_if(in_state(InventoryState::Closed)),
             )
                 .run_if(in_state(GameState::Gameplay)),
