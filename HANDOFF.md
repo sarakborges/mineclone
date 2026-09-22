@@ -570,6 +570,26 @@ VERSION: `0.50.43`, commit
 `e6c024326e17851555d43ff4dc01d5d1f4455469`.
 CI de P27: **verde** nos runs push `35738074188` e PR `35738079264` para `e6c024326e17851555d43ff4dc01d5d1f4455469`. Nenhum `cargo test` foi adicionado/executado.
 
+### P28 — acesso local direto para luz de terrain/layers
+
+Terrain e layers ainda acessavam luz de voxels fonte por `light_at(i32)`
+mesmo depois de obter coordenadas locais válidas. Layers ainda faziam
+`cell_at` e `light_at` separadamente para o mesmo índice de suporte.
+
+`VoxelChunk::light_at_local` agora resolve luz com `usize` e
+`debug_assert` de contrato; o accessor checked delega para ele depois da
+validação. Terrain usa o acesso local direto em `compute_cell_visual`.
+Layers usam `sample_local_at` uma vez para obter bloco de suporte + luz.
+Geometria, exposição, tint, AO e material permanecem inalterados.
+
+Commits: accessor `f15c8fa9c44879386d5bb0e7c3a811ee63d91f18`;
+terrain `6e3b329298e2254311251b49c2fb80f034b5335b`;
+layers `aa13f2530025939f5e92b180a44c338420ff483f`;
+regressão `36e26227c98674492de4f136b9dfe5fa8af777fa`.
+VERSION: `0.50.44`, commit
+`623e219dd22ec59aeba15ab5a1ac80c711c3c2e4`.
+CI de P28: aguardando. Nenhum `cargo test` foi adicionado/executado.
+
 ### Ordem de execução definida
 
 1. P1: cobrar tentativas de remesh no orçamento e parar sob backpressure.
