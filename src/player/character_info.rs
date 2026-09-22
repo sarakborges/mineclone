@@ -40,9 +40,7 @@ impl Plugin for PlayerCharacterInfoPlugin {
                 Update,
                 toggle_character_info
                     .run_if(in_state(GameState::Gameplay))
-                    .run_if(in_state(PauseState::Running))
-                    .run_if(in_state(InventoryState::Closed))
-                    .run_if(in_state(BrushPaletteState::Closed)),
+                    .run_if(in_state(PauseState::Running)),
             )
             .add_systems(
                 OnEnter(PauseState::Paused),
@@ -62,6 +60,8 @@ fn toggle_character_info(
     chat: Res<ChatState>,
     mut input_state: ResMut<CharacterInfoInputState>,
     mut next_state: ResMut<NextState<CharacterInfoState>>,
+    mut next_inventory: ResMut<NextState<InventoryState>>,
+    mut next_brush_palette: ResMut<NextState<BrushPaletteState>>,
 ) {
     if !keys.just_pressed(KeyCode::Escape) {
         input_state.escape_consumed = false;
@@ -73,6 +73,8 @@ fn toggle_character_info(
     let toggle_pressed = keys.just_pressed(keybinds.key_code(KeybindAction::CharacterInfo));
     match state.get() {
         CharacterInfoState::Closed if toggle_pressed => {
+            next_inventory.set(InventoryState::Closed);
+            next_brush_palette.set(BrushPaletteState::Closed);
             next_state.set(CharacterInfoState::Open);
         }
         CharacterInfoState::Open if toggle_pressed || keys.just_pressed(KeyCode::Escape) => {
