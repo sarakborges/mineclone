@@ -15,6 +15,7 @@ use crate::{
     },
     creatures::{CreatureInstance, PendingCreatureRestores, SavedCreature},
     entity::EntityHealth,
+    hud::GameplayUiCamera,
     player::{
         camera::GameplayCamera, game_mode::GameMode, hotbar::PlayerHotbar,
         movement::flight::FlightState, player_id::PlayerId,
@@ -32,6 +33,9 @@ use super::{
     fluid_updates::PendingFluidUpdates,
     save_catalog::{SaveRegistries, SavedPlayer, SnapshotSource, WorldSnapshot, save_world},
     seed::WorldSeed,
+    thumbnail::{
+        WorldThumbnailCapture, WorldThumbnailCompletion, begin_world_thumbnail_capture,
+    },
     tick::WorldTickClock,
 };
 
@@ -255,12 +259,18 @@ pub(crate) fn restore_loaded_clock(
 /// before the process exits. On failure the close request is consumed and the
 /// window remains open, matching Leave World / Exit Game retry semantics.
 pub(crate) fn save_on_gameplay_window_close(
+    mut commands: Commands,
     mut close_requests: MessageReader<WindowCloseRequested>,
     session: Res<WorldSession>,
     snapshot: WorldSaveContext,
+    mut ui_cameras: Query<&mut Camera, With<GameplayUiCamera>>,
+    thumbnail_captures: Query<(), With<WorldThumbnailCapture>>,
     mut app_exit: MessageWriter<AppExit>,
 ) {
     if close_requests.read().next().is_none() {
+        return;
+    }
+    if !thumbnail_captures.is_empty() {
         return;
     }
 
@@ -269,7 +279,22 @@ pub(crate) fn save_on_gameplay_window_close(
         return;
     }
 
-    app_exit.write(AppExit::Success);
+    let Some(world_id) = session.id() else {
+        error!("World was saved without an active world session id");
+        app_exit.write(AppExit::Success);
+        return;
+    };
+    let Ok(mut ui_camera) = ui_cameras.single_mut() else {
+        warn!("World saved, but gameplay UI camera is unavailable for thumbnail capture");
+        app_exit.write(AppExit::Success);
+        return;
+    };
+    begin_world_thumbnail_capture(
+        &mut commands,
+        &mut ui_camera,
+        world_id,
+        WorldThumbnailCompletion::ExitGame,
+    );
 }
 
 /// Keep consuming close requests while Gameplay owns the save-specific reader,
