@@ -1,8 +1,14 @@
 {
   "id": "asteria:stone",
-  "name": { "english": "Stone", "portuguese_brazil": "Pedra", "spanish": "Piedra" },
+  "name": {
+    "english": "Stone",
+    "portuguese_brazil": "Pedra",
+    "spanish": "Piedra"
+  },
   "category": "stone_blocks",
-  "tags": ["fragmentable"],
+  "tags": [
+    "fragmentable"
+  ],
   "textures": {
     "top": "textures/blocks/stone.png",
     "bottom": "textures/blocks/stone.png",
@@ -12,5 +18,11 @@
     "back": "textures/blocks/stone.png"
   },
   "lightDampening": 15,
-  "castsShadow": true
+  "castsShadow": true,
+  "mining": {
+    "hardness": 1,
+    "requiredTools": [
+      "pickaxe"
+    ]
+  }
 }
