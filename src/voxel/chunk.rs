@@ -1425,6 +1425,7 @@ mod tests {
             chunk.sample_local_at(7, 8, 9),
             chunk.sample_local(7, 8, 9).unwrap(),
         );
+        assert_eq!(chunk.light_at_local(7, 8, 9), chunk.light_at(7, 8, 9));
         assert!(chunk.sample_local(-1, 0, 0).is_none());
     }
 
