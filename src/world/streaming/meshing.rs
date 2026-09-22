@@ -288,7 +288,9 @@ fn notify_loaded_chunk_neighbors(
 mod tests {
     use super::*;
     use crate::voxel::{
-        cell::VoxelCell, chunk::VoxelChunk, texture_rotation::TextureRotation,
+        cell::VoxelCell,
+        chunk::{CHUNK_SIZE, VoxelChunk},
+        texture_rotation::TextureRotation,
     };
 
     #[test]
