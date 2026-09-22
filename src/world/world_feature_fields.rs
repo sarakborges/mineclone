@@ -57,7 +57,7 @@ impl WorldFeatureFields {
     pub(crate) fn clone_with_fresh_caches(&self) -> Self {
         Self {
             hydrology: self.hydrology.clone(),
-            cave_connectivity: self.cave_connectivity.clone(),
+            cave_connectivity: self.cave_connectivity,
             caches: Arc::new(FeatureCaches::new()),
         }
     }
