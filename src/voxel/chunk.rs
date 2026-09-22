@@ -680,7 +680,12 @@ impl VoxelChunk {
             return VoxelLight::DARK;
         }
 
-        self.light[index(x as usize, y as usize, z as usize)]
+        self.light_at_local(x as usize, y as usize, z as usize)
+    }
+
+    pub(crate) fn light_at_local(&self, x: usize, y: usize, z: usize) -> VoxelLight {
+        debug_assert!(x < CHUNK_SIZE && y < CHUNK_SIZE && z < CHUNK_SIZE);
+        self.light[index(x, y, z)]
     }
 
     pub(crate) fn sample_local_at(
