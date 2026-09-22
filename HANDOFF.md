@@ -1,4 +1,167 @@
 # HANDOFF — Asteria / Mineclone
+## Checkpoint 182 — 2026-09-21/22: pós-overhaul — worldgen/controls + nova rodada de meshing/render [IN PROGRESS]
+
+### Estado da branch / regra de validação
+
+Branch: `develop`.
+
+HEAD funcional imediatamente antes deste commit documental:
+
+`de1b97a81f78ed4954fa9c065ddc550362c80486`
+
+Regra de processo continua válida: **não rodar tests/CI sem pedido explícito**. Esta leva recebeu revisão estática incremental, inclusive contra a fonte travada do Bevy 0.19.1, mas continua sem compile/test/runtime QA automatizado nesta conversa.
+
+Este checkpoint registra o delta que entrou depois do checkpoint 181. Quando houve tentativa intermediária posteriormente corrigida/superseded, o estado final é o que vale abaixo.
+
+### Player / controls / HUD
+
+Entraram mudanças de gameplay/UI paralelas ao trabalho de renderer:
+
+- `1dba969d6c9959774bb2e207482bec69203cffac` — game rule de spawn de creatures;
+- `e50f91d401f93bb9c58a3a181192464eb31bbc38` — controles de teclado remapeáveis centralizados;
+- `82a0ce795eb85a1a30614184839430876cf382a2` — seção de keybinds nas settings;
+- `5e691654309fcdcef34e4772f90f734caca975c4` / `a488ada669e6522062a28bb998b328851b6afbe9` — controles de HUD hints e labels ligados à key realmente bound;
+- `ce3255df14bd3c8c7d56fe108de60f3923daf896` — toggle de câmera em terceira pessoa;
+- `e0fa61e4a407d72eaa5d1fe5144d49f6eaebd227` — modelo blocky de player.
+
+Contrato atual do input continua: WASD/hotbar e botões do mouse não entram no sistema de keybind remapeável.
+
+### World generation / game rules
+
+A branch também ganhou a nova infraestrutura de world generation:
+
+- `c32fc05bbe0d714e99f97fef709e9b4abbcf1f0d` — controles de world generation;
+- `2ef835402bf043412d16c052b683269dcafbb04a` — modos de world generation;
+- `c910e7edb368aa928ac77b1a6bc9d3955c368220` — persistência dessas settings;
+- `b9ccc61b8be3dca2772afdc634d1be6de9348203` — floating islands sparse;
+- `ee17486c9da6f305a2fb9f6897e3087bc82779c8` — wasteland com dirt na superfície;
+- `dec14c16580317f05a9ed31b29bf6718cb138632` / `21365f383c507ac04ffebff440f6b03d9d43589e` — terrain generation game rules;
+- `cfa6f8753e06750345d6f67b7617d069a67e48fb` — refresh dos caches de worldgen quando rules mudam;
+- `94a71f69dc94ceff4abd9a86db4e2013aabcdefc` / `284d6d4b464ba83dd05caf7403b470c4b483fdcb` — toggles de terrain movidos para world generation UI e tornados authoritative;
+- `27880079f902d6dd7ab8e73215fca123e074f8c9` / `6c110a63ebebaf90ac048bdf135e38347f0ea7cd` — remoção do caminho procedural antigo de oceans e labels/rules obsoletas.
+
+### Worldgen / streaming CPU
+
+A geração recebeu vários cortes de custo:
+
+- `325c15c015a698f2c37a175490bcd7b2e8a1cc02` — índice de palettes durante initial block generation;
+- `a31b6620ba452972b1ca132d2f0bb3582505f57a` / `be211f8573d874d75042841bcfc1f2d890377189` — construção inicial de fluid palette/frontier em bulk;
+- `84c955dd903fd0e115482222b65c7b81c159696e` / `99912f28210e35058616c0eaeb519dadb0c9f917` — edits/rasterização de structures em bulk;
+- `03bf7c4777c2e76557610c83bd00c9101b8a6762` — occupancy scan base só quando structures precisam;
+- `5502281ad2da80d7c29470f6d61caf4e358a56cc` / `e1f458f4b4eeefc66ff5d4a912455a3107932b7f` — geração obsoleta pode ser cancelada e tasks fora da seleção atual são descartadas;
+- `393eaa0d00c4610f68b05d57426b7664c2d45688` — generation context reutilizado na seleção;
+- `6fd7af706658620e7da660ddf812255553c7d09b` / `e4630fc6b0b7230458717390d1de57d5fb9f7f6d` — cache de surface support;
+- `be28a84faa31d3afdec951354584d45c28deaaa5` / `c611b58f31114ed7433bd51c849ca47693a1e52b` — cache de structure heights persistido/reutilizado;
+- `9156ea9b25603ae30820ed9bfe5351550ef0162e` / `379273607f3306aa76793962c23228502c511b29` — cache da prioridade de render/missing chunk e invalidação sob pressure.
+
+### Fluid / lighting / shadow hot paths
+
+Entraram otimizações adicionais sem reduzir render distance:
+
+- `98a630f58ec6ce915e485148134c3f79c0d96952` — greedy mesh para superfícies planas de fluid;
+- `015b0fc4e4f2b8e973b2395df1549d1b00c6ea47` — fluid sparse permanece no single-pass path;
+- `901fe6fd55a59ae1ba3da117642a8101135e5ed1` — evita upload redundante do shared terrain lighting buffer;
+- `3d44abb8e6cce90c3f810dbf0d7e6bbaa6e5e7ed` / `6be419906b0c19a6a75ff270552a0cb2976887e6` — active dynamic lighting passa pelo shared terrain buffer;
+- `a4e43910a3fdbb3f02ccad11f9088be7a7aa41cd` / `cc12a6f703f0a8945cf1928c914dfde9f48c83f3` — terrain/clustered point-light path é pulado quando held light está inativo;
+- `9cc21f49741115e5e57a90a517afb34efa5d562c` / `a9f8b4723be7c5159e8a42bbb34b9fc2efbe7f76` — custo de shadow map da luz segurada reduzido/desligado quando inativo;
+- `88df61443a190ef522f6a00e9b8f701a9e394061` — fluid deixa de pagar shadow receiver work.
+
+### Remesh terrain: geometry + lighting
+
+Geometry e Lighting usam o mesmo terrain mesher. A fila agora coalesce ambos antes do dispatch:
+
+- `92eff4a0fd6e34a107f1f05c4c9dffe44ba3ac49` — geometry/lighting pendentes do mesmo chunk são unidos;
+- `d99fb89037767b21692027c5bafea383c6d1b845` — dispatch usa o work coalescido e a union das meshlet masks.
+
+Isso evita duas terrain tasks equivalentes quando as duas invalidações chegam antes do dispatch. Fluid continua independente.
+
+### AABB / GPU culling — estado final
+
+Durante a auditoria foi testada invalidation manual do `Aabb` após mutation de Mesh:
+
+- `b3a6fd339bb4a3d5398ed46158eefdb29f25814f` / `7000250a6becd42f0d29009f7b9e6d6b5503fc7c` introduziram a invalidação explícita;
+- revisão da fonte do Bevy 0.19.1 confirmou que `Assets<Mesh>::get_mut` emite `AssetEvent::Modified`, `mark_3d_meshes_as_changed_if_their_assets_changed` marca `Mesh3d` como changed, e `calculate_bounds` recalcula o AABB;
+- portanto a invalidação manual era redundante e foi removida por `83dde696d9abc322a6b5cd2d4ab119f63d520d3a` + `fdf257a60bc8a7cca2c840a5aeee81433c4b9e0d`.
+
+**Estado final:** bounds continuam exatos e são atualizados pelo lifecycle oficial do Bevy, sem churn ECS manual.
+
+Também foi refinado o uso de GPU culling:
+
+- fonte do Bevy 0.19.1 confirma que `PbrPlugin::default()` habilita `use_gpu_instance_buffer_builder`;
+- `NoCpuCulling` fica apenas em geometry opaque/alpha-mask, onde GPU culling substitui o trabalho CPU;
+- fluid e outros alpha-blend/sorted transparent ficam com frustum culling CPU;
+- commit final desse ajuste: `79910b845ccc2ab6b2789a3edfab456699d008e3`.
+
+### Terrain mesher — zero-copy e menos allocator/cache traffic
+
+Mudanças desta rodada:
+
+- `1b9cb512ee9c72766252797532301af3f46169cf` — `PaletteStorage::get_ref` / `VoxelChunk::cell_ref_at` permitem leitura zero-copy da palette;
+- `dc951ad8ef6681f31ab63a4f28a2253258c5db0e` — active terrain cells passam a ser guardadas por referência, sem copiar `VoxelCell` grande por voxel;
+- `640dff9f5c6a72e92b0006bb2f7a0882c7da12c3` — buckets X/Y/Z do terrain mesher são pré-alocados;
+- `869ecf0d3fa5f2e847329028972a38fee135a7eb` — shell palettes usam o HashMap rápido do Bevy em vez do `std::HashMap`/SipHash;
+- `0efcf851300194b1ed70cc8208b504826bf370d5` — dense `ChunkLightingCache` 18³ só é criado a partir de 512 content voxels; chunks esparsos (árvores/structures) usam leitura direta e deixam de pagar 5.832 samples upfront;
+- `ad351a9d41a457c5fe29ebc37fe8177bc0ec6228` — máscara de greedy terrain deixa de carregar `FaceLighting` grande por célula e passa a uma key compacta inteira com a mesma quantização final;
+- `de1b97a81f78ed4954fa9c065ddc550362c80486` — active source record remove referência duplicada ao `BlockDefinition` e usa `u16` para o block-visual index.
+
+A compactação do greedy preserva a semântica: só faces com lighting uniforme após a mesma quantização usada no vertex output são elegíveis ao merge.
+
+### Terrain material code / texture array — estado final
+
+Houve uma sequência intermediária de packing 7-bit/16-bit:
+
+- `12853aa70e991d4e38fbe0bd048adb85e867c0c2`;
+- `009234efa5be83c765bb9fb03b49689ba8886da3`;
+- `a41947ea55b68ef2cb5193ccbcde9c63a883ecc0`;
+- `0908fb99ccac12dd54ee9d8b4c202229a38b92d5`.
+
+Ela foi **superseded** depois da auditoria de precisão/capacidade.
+
+Estado final:
+
+- o material code é dividido entre os dois componentes de UV: base index + flags em U, overlay index em V;
+- isso mantém os offsets pequenos o bastante para preservar exatamente os passos de 1/8 usados por chisel/greedy em `f32`;
+- cada texture-array index usa 8 bits;
+- layer 0 continua reservada e 255 é sentinel de “sem overlay”, resultando em até **254 block textures** data-driven;
+- o limite fica dentro do mínimo portátil de 256 array layers;
+- vertex layout continua em aproximadamente **28 B/vértice**.
+
+Commits finais:
+
+- `4c1a89728936cf24472e3c73af1bfcb0b66dea8e` — split do material code entre U/V;
+- `bbdfadbd34aac172c370130d52b9cb6c32bb2169` / `8df480d1830978d0a41f6520f3eee28d06f5b740` — decode correspondente nos shaders;
+- `9904dbb2350656e9eed9d6207d2e577bdaa1eb6a`, `103dbf6bd2c568c4986d75809dcff38ae2753d62`, `9f1baa8ed028e2292c4344feb92e7ce1446d6bc6` — largura final portátil de 8 bits.
+
+### Auditoria Bevy 0.19.1 / shaders
+
+Nesta rodada foram conferidos diretamente contra a tag Bevy 0.19.1:
+
+- IDs físicos dos atributos: UV1 = 3, COLOR = 5;
+- locations do forward/prepass usados pelos shaders custom;
+- `Unorm8x4` em COLOR é aceito usando o formato real armazenado no Mesh;
+- `prepass_alpha_discard(in)` é a assinatura correta **na 0.19.1**;
+- o resultado diferente encontrado na branch `main` do Bevy foi descartado por não corresponder à versão travada do projeto;
+- `PbrPlugin::default()` usa GPU instance buffer builder.
+
+Não alterar shaders baseado em assinatura da branch `main` sem comparar com 0.19.1.
+
+### Mining data-driven
+
+Também entraram, em paralelo:
+
+- `11d8821575020994fc3647912d0680c0363fe843` — definições data-driven de mining por bloco;
+- `a93782d9b2af244e59bea60f4d0ad86ee487db2c` — progressão de block mining em Survival.
+
+### Pendências imediatas
+
+- continuar a auditoria de render/meshing sem reduzir a render distance configurada;
+- solid + foliage só devem ser fundidos se houver discriminação limpa no shadow pass; não sacrificar `casts_shadow=false` das folhas para economizar um draw;
+- avaliar outros hot paths de CPU sem reintroduzir cópias/scan de 4096 voxels;
+- se o runtime ainda mostrar chunks distantes aparecendo antes dos próximos apesar do scheduler nearest-first, investigar completion/publish gating por ring, não direção;
+- runtime QA prioritário continua sendo RD24, World Tree inteira visível, foliage alpha/prepass correto, FPS parado/em movimento e ausência de OOM/slab churn.
+
+---
+
 ## Checkpoint 181 — 2026-09-21/22: rendering/meshing overhaul + aggressive renderer pass [IN PROGRESS]
 
 ### Context / constraints
