@@ -1,4 +1,4 @@
-use bevy::{input_focus::InputFocus, prelude::*};
+use bevy::{ecs::system::SystemParam, input_focus::InputFocus, prelude::*};
 
 use crate::{
     app::{
@@ -53,36 +53,43 @@ impl Plugin for PlayerCharacterInfoPlugin {
     }
 }
 
-fn toggle_character_info(
-    keys: Res<ButtonInput<KeyCode>>,
-    keybinds: Res<Keybinds>,
-    state: Res<State<CharacterInfoState>>,
-    chat: Res<ChatState>,
-    focus: Res<InputFocus>,
-    mut input_state: ResMut<CharacterInfoInputState>,
-    mut next_state: ResMut<NextState<CharacterInfoState>>,
-    mut next_inventory: ResMut<NextState<InventoryState>>,
-    mut next_brush_palette: ResMut<NextState<BrushPaletteState>>,
-) {
-    if !keys.just_pressed(KeyCode::Escape) {
-        input_state.escape_consumed = false;
+#[derive(SystemParam)]
+struct CharacterInfoModalInput<'w> {
+    keys: Res<'w, ButtonInput<KeyCode>>,
+    keybinds: Res<'w, Keybinds>,
+    state: Res<'w, State<CharacterInfoState>>,
+    chat: Res<'w, ChatState>,
+    focus: Res<'w, InputFocus>,
+    input_state: ResMut<'w, CharacterInfoInputState>,
+    next_state: ResMut<'w, NextState<CharacterInfoState>>,
+    next_inventory: ResMut<'w, NextState<InventoryState>>,
+    next_brush_palette: ResMut<'w, NextState<BrushPaletteState>>,
+}
+
+fn toggle_character_info(mut input: CharacterInfoModalInput) {
+    if !input.keys.just_pressed(KeyCode::Escape) {
+        input.input_state.escape_consumed = false;
     }
-    if chat.is_open() || focus.get().is_some() {
+    if input.chat.is_open() || input.focus.get().is_some() {
         return;
     }
 
-    let toggle_pressed = keys.just_pressed(keybinds.key_code(KeybindAction::CharacterInfo));
-    match state.get() {
+    let toggle_pressed = input
+        .keys
+        .just_pressed(input.keybinds.key_code(KeybindAction::CharacterInfo));
+    match input.state.get() {
         CharacterInfoState::Closed if toggle_pressed => {
-            next_inventory.set(InventoryState::Closed);
-            next_brush_palette.set(BrushPaletteState::Closed);
-            next_state.set(CharacterInfoState::Open);
+            input.next_inventory.set(InventoryState::Closed);
+            input.next_brush_palette.set(BrushPaletteState::Closed);
+            input.next_state.set(CharacterInfoState::Open);
         }
-        CharacterInfoState::Open if toggle_pressed || keys.just_pressed(KeyCode::Escape) => {
-            if keys.just_pressed(KeyCode::Escape) {
-                input_state.escape_consumed = true;
+        CharacterInfoState::Open
+            if toggle_pressed || input.keys.just_pressed(KeyCode::Escape) =>
+        {
+            if input.keys.just_pressed(KeyCode::Escape) {
+                input.input_state.escape_consumed = true;
             }
-            next_state.set(CharacterInfoState::Closed);
+            input.next_state.set(CharacterInfoState::Closed);
         }
         _ => {}
     }
