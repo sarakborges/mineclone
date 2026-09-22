@@ -29,6 +29,7 @@ struct ChunkAsyncStageMetrics {
     max_nanos: AtomicU64,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct ChunkAsyncStageDiagnostic {
     pub(crate) count: u64,
