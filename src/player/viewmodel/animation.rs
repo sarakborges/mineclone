@@ -9,6 +9,7 @@ use crate::{
 };
 
 const BREAK_ANIMATION_DURATION_TICKS: u64 = 22;
+const FAST_BREAK_ANIMATION_DURATION_TICKS: u64 = 8;
 const HIT_ANIMATION_DURATION_TICKS: u64 = 17;
 const PLACE_ANIMATION_DURATION_TICKS: u64 = 19;
 pub(super) const ITEM_SWITCH_ANIMATION_DURATION_TICKS: u64 = 12;
@@ -27,30 +28,37 @@ enum ViewModelAction {
 pub(crate) struct ViewModelAnimation {
     action: Option<ViewModelAction>,
     elapsed_ticks: u64,
+    duration_ticks: u64,
+    playback_speed: f32,
     revision: u64,
 }
 
 impl ViewModelAnimation {
     pub(crate) fn play_break(&mut self) {
-        self.play(ViewModelAction::Break);
+        self.play(ViewModelAction::Break, BREAK_ANIMATION_DURATION_TICKS, 1.0);
+    }
+
+    pub(crate) fn play_break_fast(&mut self) {
+        self.play(
+            ViewModelAction::Break,
+            FAST_BREAK_ANIMATION_DURATION_TICKS,
+            BREAK_ANIMATION_DURATION_TICKS as f32 / FAST_BREAK_ANIMATION_DURATION_TICKS as f32,
+        );
     }
 
     pub(crate) fn play_hit(&mut self) {
-        self.play(ViewModelAction::Hit);
+        self.play(ViewModelAction::Hit, HIT_ANIMATION_DURATION_TICKS, 1.0);
     }
 
     pub(crate) fn play_place(&mut self) {
-        self.play(ViewModelAction::Place);
+        self.play(ViewModelAction::Place, PLACE_ANIMATION_DURATION_TICKS, 1.0);
     }
 
-    fn play(&mut self, action: ViewModelAction) {
-        // Repeated input while the same clip is active must not restart it.
-        // The next press is accepted immediately after the animation finishes.
-        if self.action == Some(action) {
-            return;
-        }
+    fn play(&mut self, action: ViewModelAction, duration_ticks: u64, playback_speed: f32) {
         self.action = Some(action);
         self.elapsed_ticks = 0;
+        self.duration_ticks = duration_ticks;
+        self.playback_speed = playback_speed;
         self.revision = self.revision.wrapping_add(1);
     }
 
@@ -65,6 +73,17 @@ impl ViewModelAnimation {
 
     pub(crate) fn revision(&self) -> u64 {
         self.revision
+    }
+
+    pub(crate) fn playback_speed(&self) -> f32 {
+        self.playback_speed.max(f32::EPSILON)
+    }
+
+    fn progress(&self) -> Option<(ViewModelAction, f32)> {
+        let action = self.action?;
+        let duration_ticks = self.duration_ticks.max(1);
+        let progress = (self.elapsed_ticks as f32 / duration_ticks as f32).clamp(0.0, 1.0);
+        Some((action, progress))
     }
 }
 
@@ -128,32 +147,33 @@ pub(super) fn advance_item_switch(
     }
 }
 
-pub(super) fn animate_viewmodel(
+pub(super) fn advance_viewmodel_animation(
     world_ticks: Res<WorldTickClock>,
     mut animation: ResMut<ViewModelAnimation>,
+) {
+    if animation.action.is_none() {
+        return;
+    }
+    animation.elapsed_ticks = animation
+        .elapsed_ticks
+        .saturating_add(world_ticks.ticks_this_frame() as u64);
+    if animation.elapsed_ticks >= animation.duration_ticks.max(1) {
+        animation.action = None;
+        animation.elapsed_ticks = 0;
+        animation.duration_ticks = 0;
+        animation.playback_speed = 1.0;
+    }
+}
+
+pub(super) fn animate_viewmodel(
+    animation: Res<ViewModelAnimation>,
     item_switch: Res<ViewModelItemSwitch>,
     mut viewmodels: Query<&mut Transform, With<PlayerViewModel>>,
     mut was_animating: Local<bool>,
 ) {
-    let interaction = animation.action.and_then(|action| {
-        animation.elapsed_ticks = animation
-            .elapsed_ticks
-            .saturating_add(world_ticks.ticks_this_frame() as u64);
-        let duration_ticks = match action {
-            ViewModelAction::Break => BREAK_ANIMATION_DURATION_TICKS,
-            ViewModelAction::Hit => HIT_ANIMATION_DURATION_TICKS,
-            ViewModelAction::Place => PLACE_ANIMATION_DURATION_TICKS,
-        };
-        let progress = (animation.elapsed_ticks as f32 / duration_ticks as f32).clamp(0.0, 1.0);
-
-        if progress >= 1.0 {
-            animation.action = None;
-            animation.elapsed_ticks = 0;
-            None
-        } else {
-            Some((action, (progress * PI).sin()))
-        }
-    });
+    let interaction = animation
+        .progress()
+        .map(|(action, progress)| (action, (progress * PI).sin()));
 
     let switch_active = item_switch.is_active();
     let switch_wave = if switch_active {

@@ -12,7 +12,10 @@ use crate::{
 };
 
 pub(crate) use animation::ViewModelAnimation;
-use animation::{PlayerViewModel, ViewModelItemSwitch, advance_item_switch, animate_viewmodel};
+use animation::{
+    PlayerViewModel, ViewModelItemSwitch, advance_item_switch, advance_viewmodel_animation,
+    animate_viewmodel,
+};
 use held_brush::{setup_held_brush_assets, spawn_held_brush, sync_held_brush};
 use held_chisel::{setup_held_chisel_assets, spawn_held_chisel, sync_held_chisel};
 use model::{attach_viewmodel_arm_model, spawn_viewmodel, sync_held_block};
@@ -48,8 +51,12 @@ impl Plugin for PlayerViewModelPlugin {
                     sync_viewmodel_visibility,
                 )
                     .chain()
-                    .after(BlockTargetingSet::PlacementState)
+                    .after(BlockTargetingSet::Interaction)
                     .run_if(in_state(GameState::Gameplay)),
+            )
+            .add_systems(
+                PostUpdate,
+                advance_viewmodel_animation.run_if(in_state(GameState::Gameplay)),
             );
     }
 }

@@ -83,6 +83,7 @@ struct PlayerModelAnimationState {
     name: String,
     revision: u64,
     action_revision: u64,
+    playback_speed: f32,
     hold_seconds: f32,
     last_health: Option<f32>,
 }
@@ -152,6 +153,7 @@ impl Default for PlayerModelAnimationState {
             name: "idle".to_owned(),
             revision: 0,
             action_revision: 0,
+            playback_speed: 1.0,
             hold_seconds: 0.0,
             last_health: None,
         }
@@ -160,15 +162,21 @@ impl Default for PlayerModelAnimationState {
 
 impl PlayerModelAnimationState {
     fn set(&mut self, name: &str) {
-        if self.name == name {
+        if self.name == name && self.playback_speed == 1.0 {
             return;
         }
         self.name = name.to_owned();
+        self.playback_speed = 1.0;
         self.revision = self.revision.wrapping_add(1);
     }
 
     fn trigger(&mut self, name: &str, hold_seconds: f32) {
+        self.trigger_at_speed(name, hold_seconds, 1.0);
+    }
+
+    fn trigger_at_speed(&mut self, name: &str, hold_seconds: f32, playback_speed: f32) {
         self.name = name.to_owned();
+        self.playback_speed = playback_speed;
         self.revision = self.revision.wrapping_add(1);
         self.hold_seconds = hold_seconds;
     }
@@ -387,7 +395,7 @@ fn sync_player_model(
             let action_revision = viewmodel_animation.revision();
             if state.name != action || state.action_revision != action_revision {
                 state.action_revision = action_revision;
-                state.trigger(action, 0.0);
+                state.trigger_at_speed(action, 0.0, viewmodel_animation.playback_speed());
             }
             continue;
         }
@@ -445,7 +453,13 @@ fn sync_player_model_animations(
         // Let AnimationTransitions own the handoff between clips. Resetting
         // animated transforms manually here produced a visible one-frame rest
         // pose between states.
-        let animation = transitions.play(&mut player, index, Duration::from_millis(80));
+        let transition = if matches!(state.name.as_str(), "break" | "hit" | "place") {
+            Duration::ZERO
+        } else {
+            Duration::from_millis(80)
+        };
+        let animation = transitions.play(&mut player, index, transition);
+        animation.set_speed(state.playback_speed);
         if matches!(
             state.name.as_str(),
             "idle" | "walk" | "run" | "fall"

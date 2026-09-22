@@ -18,7 +18,7 @@ use crate::{
 
 use super::block::{BlockTargetingSet, TargetedBlock};
 
-const MINING_SWING_INTERVAL_TICKS: u64 = 6;
+const MINING_SWING_INTERVAL_TICKS: u64 = 8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct MiningTarget {
@@ -120,7 +120,7 @@ fn advance_survival_mining(
     let started = mining.target != Some(target);
     if started {
         mining.begin(target);
-        viewmodel.play_break();
+        viewmodel.play_break_fast();
     }
 
     let elapsed_ticks = world_ticks.ticks_this_frame() as u64;
@@ -128,7 +128,7 @@ fn advance_survival_mining(
         mining.swing_ticks = mining.swing_ticks.saturating_add(elapsed_ticks);
         if mining.swing_ticks >= MINING_SWING_INTERVAL_TICKS {
             mining.swing_ticks %= MINING_SWING_INTERVAL_TICKS;
-            viewmodel.play_break();
+            viewmodel.play_break_fast();
         }
     }
 
@@ -152,7 +152,7 @@ fn advance_survival_mining(
 
     if runtime.set_block(hit.voxel, None).is_some() {
         targeted.0 = None;
-        viewmodel.play_break();
+        viewmodel.play_break_fast();
     }
     mining.reset();
 }
