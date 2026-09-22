@@ -10556,12 +10556,21 @@ O braço de primeira pessoa:
 - continua herdando as animações de ação já aplicadas ao root do viewmodel;
 - teve o grip de bloco/Brush/Chisel reajustado ao comprimento real do braço.
 
-A câmera dedicada do viewmodel ganhou marker próprio e agora também tem
-`Camera::is_active = false` em terceira pessoa (e durante pause), além do root
-do viewmodel ficar oculto. Assim o braço/held item não aparece em terceira
-pessoa e o render pass vazio também deixa de rodar.
+O root do viewmodel fica `Hidden` em terceira pessoa (e durante pause), então
+braço e held item não aparecem fora da primeira pessoa. A câmera overlay do
+viewmodel, porém, deve permanecer ativa: as câmeras de mundo usam
+`CameraOutputMode::Skip`, e essa câmera finaliza/apresenta o stack. Desativá-la
+causava tela completamente preta em terceira pessoa; isso foi corrigido em
+`193d2e72966b00d468dc699029ebc40580d5e88c`.
 
 Commit funcional: `5ef4ba3e03f29b948266287ad5e117c24fae0fac`.
 Correção de validação: `1b1b1d79900aaa4dd15376ba2f55b0257d83ac4a`.
 CI push `35749600060`: **verde** (localizações, Clippy rigoroso e cargo check).
 VERSION: `0.50.64`.
+
+
+Follow-up câmera terceira pessoa: `193d2e72966b00d468dc699029ebc40580d5e88c`
+mantém a câmera overlay ativa e esconde apenas o `PlayerViewModel`, corrigindo
+a tela preta sem reintroduzir o braço em terceira pessoa. CI push
+`35750321132`: localizações, Clippy e cargo check **verdes**. VERSION
+`0.50.65`.
