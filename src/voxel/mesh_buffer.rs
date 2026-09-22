@@ -104,13 +104,19 @@ const MATERIAL_UV_STRIDE: f32 = 16.0;
 const _: () = assert!(CHUNK_MESHLET_EDGE < MATERIAL_UV_STRIDE as usize);
 
 fn encode_material_uv(uv: [f32; 2], material_code: f32) -> [f32; 2] {
-    let material_code = material_code.round().max(0.0);
-    debug_assert!(material_code <= u16::MAX as f32);
-    // With a 16-bit material code this offset remains below 2^20, where f32
-    // still represents the 1/8-block UV steps used by sculpted geometry exactly.
+    let material_code = material_code.round().max(0.0) as u32;
+    let base_index = material_code & TERRAIN_TEXTURE_INDEX_MASK;
+    let overlay_index =
+        (material_code >> TERRAIN_TEXTURE_INDEX_BITS) & TERRAIN_TEXTURE_INDEX_MASK;
+    let flags = (material_code >> TERRAIN_TEXTURE_FLAG_SHIFT) & 3;
+    let base_and_flags = base_index | (flags << TERRAIN_TEXTURE_INDEX_BITS);
+
+    // Split the material code across U and V. Even with 10-bit texture indices,
+    // each integer offset stays small enough that f32 exactly preserves the
+    // 1/8-block UV steps used by sculpted geometry.
     [
-        uv[0] + material_code * MATERIAL_UV_STRIDE,
-        uv[1],
+        uv[0] + base_and_flags as f32 * MATERIAL_UV_STRIDE,
+        uv[1] + overlay_index as f32 * MATERIAL_UV_STRIDE,
     ]
 }
 
