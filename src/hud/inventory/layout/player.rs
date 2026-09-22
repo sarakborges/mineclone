@@ -1,24 +1,34 @@
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    text::{EditableText, FontWeight},
+};
 
 use crate::{
     player::hotbar::{HOTBAR_INVENTORY_OFFSET, HOTBAR_SLOT_COUNT, PlayerHotbar},
-    ui::{selectable, surface, theme, typography},
+    ui::{
+        button::{self, ButtonVariant},
+        selectable, surface, text_input, theme, typography,
+    },
 };
 
 use super::{
-    InventoryItemView,
+    InventoryItemView, InventoryLayoutState,
     item::spawn_inventory_item,
     super::state::{
-        InventorySlot, InventoryTrashButton, PANEL_PADDING, SECTION_GAP, SLOT_GAP, SLOT_SIZE,
+        InventorySearchBar, InventorySearchFrame, InventorySearchText, InventorySlot,
+        InventorySortButton, InventorySortTooltip, InventoryTrashButton, PANEL_PADDING,
+        PLAYER_HEADER_GAP, PLAYER_SEARCH_WIDTH, SEARCH_HEIGHT, SECTION_GAP, SLOT_GAP, SLOT_SIZE,
         TRASH_GAP,
     },
 };
 
 pub(super) fn spawn_player_inventory_panel(
     root: &mut ChildSpawnerCommands,
-    hotbar: &PlayerHotbar,
+    state: &InventoryLayoutState<'_>,
     items: &mut InventoryItemView<'_>,
 ) {
+    let hotbar = state.hotbar;
+
     root.spawn(surface::hud_container(Node {
         flex_direction: FlexDirection::Column,
         align_items: AlignItems::FlexStart,
@@ -29,7 +39,36 @@ pub(super) fn spawn_player_inventory_panel(
     }))
     .insert(Pickable::IGNORE)
     .with_children(|panel| {
-        panel.spawn((typography::hud_subheading("Inventory"), Pickable::IGNORE));
+        panel
+            .spawn((
+                Node {
+                    width: px(player_panel_content_width()),
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::SpaceBetween,
+                    column_gap: px(PLAYER_HEADER_GAP),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ))
+            .with_children(|header| {
+                header.spawn((typography::hud_subheading("Inventory"), Pickable::IGNORE));
+
+                header
+                    .spawn((
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            column_gap: px(PLAYER_HEADER_GAP),
+                            ..default()
+                        },
+                        Pickable::IGNORE,
+                    ))
+                    .with_children(|controls| {
+                        spawn_inventory_search_field(controls, state, items);
+                        spawn_inventory_sort_button(controls, state, items);
+                    });
+            });
 
         panel
             .spawn((
@@ -97,6 +136,116 @@ pub(super) fn spawn_player_inventory_panel(
                 spawn_inventory_trash_button(footer);
             });
     });
+}
+
+fn spawn_inventory_search_field(
+    parent: &mut ChildSpawnerCommands,
+    state: &InventoryLayoutState<'_>,
+    items: &InventoryItemView<'_>,
+) {
+    let placeholder_visible =
+        state.player_view.search_query().is_empty() && !state.player_view.search_focused();
+    let placeholder = state
+        .localization
+        .text(items.language, "inventory.searchPlaceholder");
+
+    parent
+        .spawn((
+            Button,
+            InventorySearchFrame,
+            Node {
+                position_type: PositionType::Relative,
+                width: px(PLAYER_SEARCH_WIDTH),
+                height: px(SEARCH_HEIGHT),
+                padding: UiRect::horizontal(px(text_input::INPUT_PADDING_X)),
+                border: UiRect::all(px(1)),
+                align_items: AlignItems::Center,
+                overflow: Overflow::clip(),
+                ..default()
+            },
+            text_input::frame_surface(state.player_view.search_focused()),
+        ))
+        .with_children(|frame| {
+            frame.spawn((
+                InventorySearchBar,
+                EditableText {
+                    max_characters: Some(128),
+                    ..EditableText::new(state.player_view.search_query())
+                },
+                text_input::editor_style(17.0, FontWeight::NORMAL),
+                Node {
+                    width: percent(100),
+                    min_width: px(0),
+                    height: px(text_input::INPUT_EDITOR_HEIGHT),
+                    align_items: AlignItems::Center,
+                    overflow: Overflow::clip(),
+                    ..default()
+                },
+                Pickable::IGNORE,
+            ));
+            frame.spawn((
+                InventorySearchText,
+                typography::hud(placeholder),
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(text_input::INPUT_PADDING_X + 1.0),
+                    top: px(text_input::centered_text_top(SEARCH_HEIGHT)),
+                    ..default()
+                },
+                if placeholder_visible {
+                    Visibility::Inherited
+                } else {
+                    Visibility::Hidden
+                },
+                Pickable::IGNORE,
+            ));
+        });
+}
+
+fn spawn_inventory_sort_button(
+    parent: &mut ChildSpawnerCommands,
+    state: &InventoryLayoutState<'_>,
+    items: &InventoryItemView<'_>,
+) {
+    let tooltip = state
+        .localization
+        .text(items.language, "inventory.sortBackpack");
+
+    parent
+        .spawn(button::icon_button(
+            InventorySortButton,
+            SEARCH_HEIGHT,
+            ButtonVariant::Normal,
+        ))
+        .with_children(|button| {
+            button.spawn((
+                typography::button_label_light("⇅"),
+                TextLayout::justify(Justify::Center),
+                Pickable::IGNORE,
+            ));
+            button
+                .spawn((
+                    InventorySortTooltip,
+                    surface::hud_container(Node {
+                        position_type: PositionType::Absolute,
+                        right: px(0),
+                        bottom: px(SEARCH_HEIGHT + 8.0),
+                        padding: UiRect::axes(px(9), px(6)),
+                        border: UiRect::all(px(1)),
+                        ..default()
+                    }),
+                    Visibility::Hidden,
+                    GlobalZIndex(210),
+                    Pickable::IGNORE,
+                ))
+                .with_children(|hint| {
+                    hint.spawn((
+                        typography::caption(tooltip),
+                        TextLayout::no_wrap(),
+                        Pickable::IGNORE,
+                    ));
+                });
+        });
 }
 
 fn spawn_inventory_trash_button(parent: &mut ChildSpawnerCommands) {
@@ -197,4 +346,11 @@ fn spawn_slot(
                 spawn_inventory_item(slot, item_id, items);
             }
         });
+}
+
+fn player_panel_content_width() -> f32 {
+    HOTBAR_SLOT_COUNT as f32 * SLOT_SIZE
+        + (HOTBAR_SLOT_COUNT - 1) as f32 * SLOT_GAP
+        + TRASH_GAP
+        + SLOT_SIZE
 }
