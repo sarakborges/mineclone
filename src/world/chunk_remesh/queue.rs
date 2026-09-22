@@ -337,12 +337,18 @@ impl ChunkRemeshQueue {
     fn pop_renderable_geometry(
         &mut self,
         render_pool: &ChunkRenderPool,
+        center: Option<IVec3>,
     ) -> Option<(IVec3, ChunkMeshletMask)> {
-        let coord = pop_renderable_from(
-            &mut self.queue,
-            &mut self.geometry_scan_miss,
-            render_pool,
-        )?;
+        let coord = if let Some(center) = center {
+            self.geometry_priority
+                .pop_nearest(&mut self.queue, render_pool, center)
+        } else {
+            pop_renderable_from(
+                &mut self.queue,
+                &mut self.geometry_scan_miss,
+                render_pool,
+            )
+        }?;
         let meshlets = self
             .geometry_meshlets
             .remove(&coord)
@@ -353,8 +359,14 @@ impl ChunkRemeshQueue {
     fn pop_renderable_fluid(
         &mut self,
         render_pool: &ChunkRenderPool,
+        center: Option<IVec3>,
     ) -> Option<(IVec3, ChunkMeshletMask)> {
-        let coord = pop_renderable_from(&mut self.fluid, &mut self.fluid_scan_miss, render_pool)?;
+        let coord = if let Some(center) = center {
+            self.fluid_priority
+                .pop_nearest(&mut self.fluid, render_pool, center)
+        } else {
+            pop_renderable_from(&mut self.fluid, &mut self.fluid_scan_miss, render_pool)
+        }?;
         let meshlets = self
             .fluid_meshlets
             .remove(&coord)
@@ -365,12 +377,18 @@ impl ChunkRemeshQueue {
     fn pop_renderable_lighting(
         &mut self,
         render_pool: &ChunkRenderPool,
+        center: Option<IVec3>,
     ) -> Option<(IVec3, ChunkMeshletMask)> {
-        let coord = pop_renderable_from(
-            &mut self.lighting,
-            &mut self.lighting_scan_miss,
-            render_pool,
-        )?;
+        let coord = if let Some(center) = center {
+            self.lighting_priority
+                .pop_nearest(&mut self.lighting, render_pool, center)
+        } else {
+            pop_renderable_from(
+                &mut self.lighting,
+                &mut self.lighting_scan_miss,
+                render_pool,
+            )
+        }?;
         let meshlets = self
             .lighting_meshlets
             .remove(&coord)
@@ -415,6 +433,7 @@ impl ChunkRemeshQueue {
     pub(super) fn pop_renderable_background(
         &mut self,
         render_pool: &ChunkRenderPool,
+        center: Option<IVec3>,
         allow_terrain: bool,
         allow_fluid: bool,
     ) -> Option<(IVec3, ChunkRemeshTaskKind, ChunkMeshletMask)> {
@@ -424,13 +443,13 @@ impl ChunkRemeshQueue {
             let kind_index = (self.next_background_kind + offset) % KIND_COUNT;
             let next = match kind_index {
                 0 if allow_fluid => self
-                    .pop_renderable_fluid(render_pool)
+                    .pop_renderable_fluid(render_pool, center)
                     .map(|(coord, meshlets)| (coord, ChunkRemeshTaskKind::Fluid, meshlets)),
                 1 if allow_terrain => self
-                    .pop_renderable_lighting(render_pool)
+                    .pop_renderable_lighting(render_pool, center)
                     .map(|(coord, meshlets)| (coord, ChunkRemeshTaskKind::Lighting, meshlets)),
                 2 if allow_terrain => self
-                    .pop_renderable_geometry(render_pool)
+                    .pop_renderable_geometry(render_pool, center)
                     .map(|(coord, meshlets)| (coord, ChunkRemeshTaskKind::Geometry, meshlets)),
                 0..=2 => None,
                 _ => unreachable!("background remesh kind index must stay in range"),
